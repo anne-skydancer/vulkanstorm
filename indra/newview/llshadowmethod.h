@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+/**
+ * @file llshadowmethod.h
+ * @brief The shadow method setting (RenderShadowMethod: 0 = Legacy, 1 = PCSS) and the pure rules
+ *        that carry the old RenderShadowPCSS checkbox over to it.
+ *
+ * Renderer-free (no GL, no viewer types): LLAppViewer::initConfiguration uses migrateOnStartup
+ * once per install, LLPresetsManager::loadPreset uses presetNeedsMapping for graphic preset
+ * files written before the switch, and indra/newview/tests/llshadowmethod_test.cpp checks both.
+ */
+
+#ifndef LL_LLSHADOWMETHOD_H
+#define LL_LLSHADOWMETHOD_H
+
+#include <cstdint>
+
+namespace LLShadowMethod
+{
+    constexpr std::uint32_t LEGACY = 0;  // Firestorm 7.2.5 cascades and filtering
+    constexpr std::uint32_t PCSS = 1;    // stable cascades, soft shadows, the later shadow stages
+
+    // The method a retired RenderShadowPCSS value stands for.
+    constexpr std::uint32_t fromPCSSFlag(bool pcss) { return pcss ? PCSS : LEGACY; }
+
+    // Clamps a stored value (a hand-edited settings file) to a valid method.
+    constexpr std::uint32_t sanitize(std::uint32_t method) { return method > PCSS ? PCSS : method; }
+
+    struct Migration
+    {
+        bool setMethod;       // write 'method' to RenderShadowMethod
+        std::uint32_t method;
+        bool markMigrated;    // set RenderShadowMethodMigrated
+    };
+
+    // One-time migration at startup, after the user settings were read and before the command
+    // line is applied. An existing install takes the method from its RenderShadowPCSS checkbox;
+    // a fresh install gets the feature table's value at window creation instead. The flag is set
+    // in every case, so the migration never runs again and never touches a later choice.
+    constexpr Migration migrateOnStartup(bool already_migrated, bool first_run, bool old_pcss_flag)
+    {
+        if (already_migrated)
+        {
+            return { false, LEGACY, false };
+        }
+        if (first_run)
+        {
+            return { false, LEGACY, true };
+        }
+        return { true, fromPCSSFlag(old_pcss_flag), true };
+    }
+
+    // A graphic preset file that carries the old checkbox but not the new setting is a preset from
+    // before the switch: on becomes PCSS, off Legacy. A file with the new setting wins.
+    constexpr bool presetNeedsMapping(bool file_has_old_flag, bool file_has_method)
+    {
+        return file_has_old_flag && !file_has_method;
+    }
+}
+
+#endif  // LL_LLSHADOWMETHOD_H

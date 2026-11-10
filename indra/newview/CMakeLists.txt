@@ -1580,6 +1580,7 @@ set(viewer_HEADER_FILES
     llselectmgr.h
     llsetkeybinddialog.h
     llshadowcascadefit.h
+    llshadowmethod.h
     llsettingspicker.h
     llsettingsvo.h
     llsidepanelappearance.h
