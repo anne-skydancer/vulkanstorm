@@ -993,12 +993,18 @@ struct PrimaryLightSetup
     double adaptation_depth_deg = 6.0;   // RenderMoonAdaptationDepth, limited to [1, 18]
     double cloud_height_km = 1.5;        // the cloud layer the cloud light is taken at
     bool   physical = true;              // RenderAtmospherePhysicalLight: the physical T, or today's airmass
+    // The colour the cloud shader multiplies the cloud transmittance with: the sky's RAW sunlight_color (not normalised,
+    // up to 3, sRGB; times the auto-adjust scale), which differs from sky.source for dim and bright skies. Its
+    // transmittances are built from it so that lin(raw) x T is what the old exp gave. Unset: sky.source.
+    Vec3   cloud_source;
+    bool   has_cloud_source = false;
 };
 
 struct PrimaryLightRig
 {
     PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, ratio
     Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
+    Vec3   cloud_dir;          // the clouds' own light direction (the glow near the light), unit, z up
     double cloud_moon_weight = 0.0; // the clouds' own handover t_cloud: primary_light() on the cloud-layer transmittances
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
     double gain = 0.0;         // moon_brightness x moon_compensation
@@ -1017,6 +1023,14 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     const double sun_disc = disc_sin(s.sun_scale), moon_disc = disc_sin(s.moon_scale);
     const double sun_z = finite_or(s.sun_dir.z, 1.0), moon_z = finite_or(s.moon_dir.z, -1.0);
 
+    LegacySky cloud_sky = s.sky; // the clouds' light is made of the colour their shader has
+    if (s.has_cloud_source)
+    {
+        cloud_sky.source = s.cloud_source;
+    }
+    const Vec3 cloud_src_lin = srgb_to_linear(Vec3{ std::max(finite_or(cloud_sky.source.x, 0.0), 0.0), std::max(finite_or(cloud_sky.source.y, 0.0), 0.0),
+                                                     std::max(finite_or(cloud_sky.source.z, 0.0), 0.0) });
+
     Vec3 sun_T, moon_T, sun_Tc, moon_Tc;
     if (s.physical)
     {
@@ -1025,15 +1039,16 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
         sun_T = atm.transmittance(0.0, sun_z, sun_disc, 1.0);
         moon_T = atm.transmittance(0.0, moon_z, moon_disc, 1.0);
         // the cloud light thins through the cloud layer's altitude (and keeps half of the legacy path for a clamped rig)
-        sun_Tc = atm.transmittance(h_cloud, sun_z, sun_disc, 0.5);
-        moon_Tc = atm.transmittance(h_cloud, moon_z, moon_disc, 0.5);
+        const LLAtmosphere atm_c = s.has_cloud_source ? LLAtmosphere::fromLegacy(cloud_sky, s.bounds) : atm;
+        sun_Tc = atm_c.transmittance(h_cloud, sun_z, sun_disc, 0.5);
+        moon_Tc = atm_c.transmittance(h_cloud, moon_z, moon_disc, 0.5);
     }
     else
     { // A/B: today's airmass
         sun_T = legacy_transmittance(s.sky, sun_z, 1.0);
         moon_T = legacy_transmittance(s.sky, moon_z, 1.0);
-        sun_Tc = legacy_transmittance(s.sky, sun_z, 0.5);
-        moon_Tc = legacy_transmittance(s.sky, moon_z, 0.5);
+        sun_Tc = legacy_transmittance(cloud_sky, sun_z, 0.5);
+        moon_Tc = legacy_transmittance(cloud_sky, moon_z, 0.5);
     }
 
     const double ev = std::min(std::max(finite_or(s.compensation_ev, -3.0), -8.0), -2.0); // never more than a quarter of a sun
@@ -1061,8 +1076,10 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     PrimaryLightInputs cin = in;
     cin.sun_T = sun_Tc;
     cin.moon_T = moon_Tc;
+    cin.source = cloud_src_lin;
     const PrimaryLight cl = primary_light(cin, s.params);
     rig.cloud_moon_weight = cl.moon_weight;
+    rig.cloud_dir = cl.dir;
     rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
                     std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
     rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)

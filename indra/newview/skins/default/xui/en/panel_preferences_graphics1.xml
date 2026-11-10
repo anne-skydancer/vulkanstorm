@@ -2207,7 +2207,7 @@ If you do not understand the distinction then leave this control alone."
        name="SkyTuningNote"
        top="8"
        width="360">
-        Tuning panel: values found here become the defaults.
+        Values found here become the defaults.
       </text>
       <text
        follows="left|top"
