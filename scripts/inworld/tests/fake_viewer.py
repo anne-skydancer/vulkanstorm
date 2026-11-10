@@ -12,6 +12,7 @@ import os
 import pathlib
 import sys
 import threading
+import urllib.parse
 import uuid
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -214,8 +215,9 @@ class FakeViewer:
                       "haze_horizon", "haze_density", "scene_gamma"):
                 out += [base + n, base + n + "/slider_bar", base + n + "/value_editor"]
         if self.floaters["env_fixed_environmentent_sky"]:
-            base = FL + "env_fixed_environmentent_sky/"
-            out += [FL + "env_fixed_environmentent_sky", base + "htab_panel_settings_sky_hbodies"]
+            # the view is named by the floater XML ("Fixed Environment"), not by its LLFloaterReg name
+            base = FL + "Fixed Environment/"
+            out += [FL + "Fixed Environment", base + "htab_panel_settings_sky_hbodies"]
             if self.fixed_tab_sun:
                 for n in ("sun_azimuth", "sun_elevation", "moon_brightness"):
                     out += [base + n, base + n + "/value_editor"]
@@ -228,6 +230,7 @@ class FakeViewer:
             under = d.get("under", "")
             if under.startswith("//"):
                 floater, _, widget = under[2:].partition("//")
+                floater = urllib.parse.unquote(floater)      # LLUI::resolvePath unescapes each part
                 if widget:
                     sel = [p for p in paths if p.startswith(FL + floater) and (
                         p.rsplit("/", 1)[-1] == widget or ("/" + widget + "/") in p)]

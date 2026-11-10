@@ -435,8 +435,6 @@ class LeapSession:
         self._pending = {}      # reqid -> reply (or None while waiting)
         self._events = []       # (pump, data) not matched to a request
         self._discard = set()   # reqids of fire() operations: their replies are only checked for errors
-        self._until_ping = set()  # reqids of fire(scalar_reply=True) operations: a success reply is a bare non-map value
-                                  # that carries no reqid and so never removes its entry; settle() clears them after a ping
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
@@ -498,19 +496,20 @@ class LeapSession:
                         self._nonmap_dropped += 1
                         if type(data).__name__ not in self._nonmap_types:
                             self._nonmap_types.add(type(data).__name__)
-                            self._log("debug: unstamped non-map reply %r (%s) on the reply pump dropped (the first of each "
+                            self._log("debug: unstamped non-map reply %.200r (%s) on the reply pump dropped (the first of each "
                                       "type is logged; the count is in a timeout message)" % (data, type(data).__name__))
                         continue
                     reqid = data.get("reqid") if isinstance(data, dict) else None
                     if pump == self.reply_pump and reqid is not None:
                         if reqid in self._pending:
                             self._pending[reqid] = data
-                        elif reqid in self._discard or reqid in self._until_ping:
+                        elif reqid in self._discard:
                             self._discard.discard(reqid)
-                            self._until_ping.discard(reqid)
                             if data.get("error"):
                                 self._fired_errors.append(str(data["error"]))
-                        # else: a late reply to a request that timed out: dropped
+                        elif data.get("error"):
+                            # a late reply to a request that timed out (or one whose entry was cleared): dropped
+                            self._log("debug: late error reply for unknown reqid %r dropped: %s" % (reqid, str(data["error"])[:200]))
                     else:
                         self._events.append((pump, data))
                     self._cv.notify_all()
@@ -567,26 +566,27 @@ class LeapSession:
             except (BrokenPipeError, OSError) as exc:
                 raise ViewerGone("write failed: %s" % exc) from exc
 
-    def fire(self, pump, op, /, scalar_reply=False, **args):
+    def fire(self, pump, op, /, **args):
         """Send an operation whose reply we do not wait for. A reply key is still sent: an operation the viewer
         rejects (bad name or arguments) throws in the viewer's dispatcher when there is no reply pump to tell; the
-        reply is dropped by the reader and only its error, if any, is kept (see take_errors).
-        scalar_reply=True is for an operation whose success reply is a bare non-map value (no reqid, so it can never
-        remove its own entry): its reqid is tracked only until the next settle(), so an error map, which does carry
-        the reqid, is still caught."""
+        reply is dropped by the reader and only its error, if any, is kept (see take_errors). The reqid stays in
+        _discard until the reply with it arrives or forget_fired() is called: an operation with no reply, or a bare
+        non-map reply (no reqid), would otherwise leave it there forever."""
         with self._cv:
             reqid = self._next_id
             self._next_id += 1
-            (self._until_ping if scalar_reply else self._discard).add(reqid)
+            self._discard.add(reqid)
         data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         self.post(pump, data)
 
-    def settle(self):
-        """Forget the scalar_reply fire() operations still waiting for a reply: call it after a ping, which the viewer
-        answers after all of their replies."""
+    def forget_fired(self):
+        """Forget the fire() operations still waiting for a reply. Call it only after a ping reply: it follows every
+        earlier reply on the wire (LLLeap posts each frame synchronously in order), so an error map for a fired
+        operation has already been recorded for take_errors(). Single-threaded callers only; if the ping times out the
+        set is left as it is and a late error is reported at the next barrier."""
         with self._cv:
-            self._until_ping.clear()
+            self._discard.clear()
 
     def take_errors(self):
         """Errors reported by fire() operations since the last call."""
@@ -601,6 +601,7 @@ class LeapSession:
             reqid = self._next_id
             self._next_id += 1
             self._pending[reqid] = None
+            dropped_at_start = self._nonmap_dropped
         data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         try:
@@ -612,8 +613,8 @@ class LeapSession:
                         raise self.gone("%s.%s" % (pump, op))
                     left = deadline - time.monotonic()
                     if left <= 0:
-                        extra = (" (%d unstamped non-map replies were dropped)" % self._nonmap_dropped
-                                 if self._nonmap_dropped else "")
+                        n = self._nonmap_dropped - dropped_at_start
+                        extra = " (%d unstamped non-map replies were dropped)" % n if n > 0 else ""
                         raise LeapTimeout("no reply to %s.%s in %.0f s%s" % (pump, op, timeout, extra))
                     self._cv.wait(left)
                 reply = self._pending[reqid]

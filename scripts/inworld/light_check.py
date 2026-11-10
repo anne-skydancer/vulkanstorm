@@ -52,7 +52,10 @@ OPTIONAL_OPS = {"LLStats": ["getPerfData"]}      # needed only with record_fps
 
 PHOTOTOOLS = "phototools"            # floater with the sky combo box (floater_phototools.xml)
 PERSONAL = "env_adjust_snapshot"     # Personal Lighting (floater_adjust_environment.xml)
-FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer)
+FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer): the LLFloaterReg name
+# The view of that floater is named by its XUI (floater_fixedenvironment.xml: name="Fixed Environment"), so widget
+# paths use that name (escaped, as LLUI::resolvePath unescapes each part), not the registry name.
+FIXED_SKY_VIEW = "Fixed%20Environment"
 ENV_TAB_BUTTON = "htab_EnvironmentTab"      # tab button of the Phototools Environment tab
 FIXED_TAB_BUTTONS = ["htab_panel_settings_sky_hbodies", "htab_panel_fs_settings_sky_hbodies"]
 REGION_BUTTONS = ["Revert to Region Default", "ResetToRegionDefault"]
@@ -194,23 +197,19 @@ class Viewer:
         pump = self.s.command_pump if api == "LLLeap" else api
         self.s.fire(pump, op, **args)
 
-    def fire_scalar(self, api, op, /, **args):
-        """Like fire() for an operation whose success reply is a bare non-map value (see LeapSession.fire)."""
-        pump = self.s.command_pump if api == "LLLeap" else api
-        self.s.fire(pump, op, scalar_reply=True, **args)
 
     def select_by_value(self, path, value):
         """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean (false when the combo
         or the value is not found), which LLReqID::stamp cannot give a reqid, so request() would wait for a reply that
         never matches: fire it and wait for a ping instead. A refusal is therefore NOT reported here; callers read the
         combo back with value_of."""
-        self.fire_scalar("UI", "setSelectedByValue", path=path, value=value)
+        self.fire("UI", "setSelectedByValue", path=path, value=value)
         self.barrier()
 
     def barrier(self):
         """Everything sent before has been handled; raises if a fire-and-forget operation reported an error."""
         self.s.ping(timeout=60)
-        self.s.settle()
+        self.s.forget_fired()
         errs = self.s.take_errors()
         if errs:
             raise LeapError("viewer reported: " + "; ".join(errs[:3]))
@@ -654,6 +653,10 @@ class Run:
         for k, val in {**sc["settings"], **self.args.set_values}.items():
             self.change(k, val)
         self.change("FSEnvironmentManualTransitionTime", 0.0)
+        for key in knob_values:             # the effective values, after the settings and --set overrides too
+            cur = self.v.try_control(key)
+            if cur is not None:
+                knob_values[key] = cur.get("value")
         self.run_info["knobs"] = knob_values
         cam = self.v.try_control("CameraAngle")
         self.run_info["fov_deg"] = math.degrees(float(cam["value"])) if cam else 60.0
@@ -821,7 +824,7 @@ class Run:
                 self.floaters_opened.append(FIXED_SKY)
                 self.save_restore()
             self.select_fixed_tab(spec.get("tab_buttons", FIXED_TAB_BUTTONS))
-            return FIXED_SKY
+            return FIXED_SKY_VIEW
         v.show_floater(PERSONAL)
         if PERSONAL not in self.floaters_opened:
             self.floaters_opened.append(PERSONAL)
@@ -835,13 +838,13 @@ class Run:
         v = self.v
         tried = []
         for name in buttons:
-            p = v.find_widget(FIXED_SKY, name, required=False)
+            p = v.find_widget(FIXED_SKY_VIEW, name, required=False)
             tried.append(name)
             if not p:
                 continue
             v.mouse_click(p)
-            v.forget(FIXED_SKY)
-            sl = v.find_widget(FIXED_SKY, "sun_elevation", required=False)
+            v.forget(FIXED_SKY_VIEW)
+            sl = v.find_widget(FIXED_SKY_VIEW, "sun_elevation", required=False)
             if sl is None or not v.widget_info(sl).get("available"):
                 raise LeapError("clicked %s but the sun sliders are not available" % name)
             return name
@@ -1252,7 +1255,7 @@ def dry_run_ui(v, sc, rep, run, args):
                     run.floaters_opened.append(FIXED_SKY)
                     tab = run.select_fixed_tab(FIXED_TAB_BUTTONS)
                     rep.add("fixed editor tab", True, tab)
-                    check_widgets(v, rep, FIXED_SKY, ["sun_azimuth", "sun_elevation", "moon_brightness"])
+                    check_widgets(v, rep, FIXED_SKY_VIEW, ["sun_azimuth", "sun_elevation", "moon_brightness"])
                 except LeapError as exc:
                     rep.add("fixed editor tab", False, str(exc))
                 finally:
@@ -1262,7 +1265,9 @@ def dry_run_ui(v, sc, rep, run, args):
     else:
         rep.add("floater %s widgets" % PERSONAL, True,
                 "not checked: opening Personal Lighting freezes the sky into the local environment (use --deep)", warn=True)
-        rep.add("fixed sky editor tab", True, "not checked (use --deep)", warn=True)
+        fixed = [sp["id"] for sp in sc["skies"] if sp.get("editor") == "fixed"]
+        rep.add("fixed sky editor tab", True, "%s needs the fixed sky editor; checked only with --deep" % (
+            ", ".join(fixed) or "no sky"), warn=True)
     # skies: highlight only, put back afterwards
     combo = v.find_widget(PHOTOTOOLS, "WLPresetsCombo", required=False)
     before = orig.get("sky_combo")
@@ -1301,9 +1306,13 @@ def dry_run_ui(v, sc, rep, run, args):
             v.select_by_value(combo, as_value(before))
             now = v.value_of(combo)
             if str(now).lower() != str(before).lower():
-                log("WARNING the original sky combo value %r was not restored (it reads %r)" % (before, now))
+                msg = "the original sky combo value %r was not restored (it reads %r)" % (before, now)
+                log("WARNING " + msg)
+                rep.add("restore sky combo", True, msg, warn=True)
         except LeapError as exc:
-            log("WARNING the original sky combo value %r was not restored: %s" % (before, exc))
+            msg = "the original sky combo value %r was set but could not be read back: %s" % (before, exc)
+            log("WARNING " + msg)
+            rep.add("restore sky combo", True, msg, warn=True)
 
 
 def slider_checks(v, rep):
