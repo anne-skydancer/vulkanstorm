@@ -25,7 +25,7 @@
 //   - the clouds hand over by their own light (primary_light on the cloud-layer transmittances): the clouds' sun term
 //     (1 - t_cloud) Y(cloud_T) is continuous per 0.01 degree;
 //   - the handover sweeps through the whole chain (physical and A/B, moon high / opposite / none): unit finite directions,
-//     jumps of direction, shadow or glow only where the ground light is dark, continuity across the cut ratios;
+//     the swing and the shadow fades spread over the sun-elevation band (no jumps), the ratio still continuous;
 //   - the moon never exceeds its cap (a quarter of the sun's colour), a sky with no moon has no direct light at night,
 //     nothing is NaN at the horizon or with hostile settings.
 
@@ -312,7 +312,7 @@ struct SweepResult
     double max_light_step_sun_up = 0.0; // the same, while the sun disc is not yet set (sun_z > -disc)
     double min_dir_z = 1.0;
     double fade_start_at = 99.0;      // the sun elevation (degrees) where the shadow strength first falls below 0.99
-    double jump_light_level = 0.0;    // the ground light (share of the source's luminance) at the biggest jumps of direction or shadow
+    int outside_band_wrong = 0;       // steps where the direction is not the sun's above +0.3 (or the moon's below -0.3, the moon high: a moon rising from the horizon takes over as its light grows), or the shadow is not 0 inside the band
     bool all_unit = true, all_finite = true;
 };
 
@@ -347,6 +347,22 @@ SweepResult sunset_sweep(const LLAtmosphericLight::LLAtmosphere& atm, const LLAt
         {
             r.min_dir_z = std::min(r.min_dir_z, pl.dir.z);
         }
+        if (e > 0.31 && !(angle_between_deg(pl.dir, in.sun_dir) < 1e-6))
+        {
+            ++r.outside_band_wrong;
+        }
+        if (e < -0.31 && moon == 0 && !(angle_between_deg(pl.dir, in.moon_dir) < 1e-6))
+        {
+            ++r.outside_band_wrong;
+        }
+        if (moon == 2 && !(angle_between_deg(pl.dir, in.sun_dir) < 1e-6))
+        {
+            ++r.outside_band_wrong; // no moon: the sun's direction all the way
+        }
+        if (std::fabs(e) < 0.29 && pl.shadow_strength != 0.0)
+        {
+            ++r.outside_band_wrong;
+        }
         if (r.fade_start_at == 99.0 && pl.shadow_strength < 0.99)
         {
             r.fade_start_at = e;
@@ -355,10 +371,6 @@ SweepResult sunset_sweep(const LLAtmosphericLight::LLAtmosphere& atm, const LLAt
         {
             r.max_angle_step = std::max(r.max_angle_step, angle_between_deg(last_dir, pl.dir));
             r.max_shadow_step = std::max(r.max_shadow_step, std::fabs(pl.shadow_strength - last_shadow));
-            if (angle_between_deg(last_dir, pl.dir) > 5.0 || std::fabs(pl.shadow_strength - last_shadow) > 0.25)
-            {
-                r.jump_light_level = std::max(r.jump_light_level, std::max(luminance(last_light), luminance(light)) / luminance(source));
-            }
             const double y0 = luminance(last_light), y1 = luminance(light), ys = luminance(source);
             if (std::max(y0, y1) > 1e-3 * ys)
             {
@@ -381,7 +393,9 @@ SweepResult sunset_sweep(const LLAtmosphericLight::LLAtmosphere& atm, const LLAt
 // limits of the sunset sweep's steps (per 0.01 degree of sun travel, i.e. 0.4 s of a 4-hour day cycle)
 const double SWEEP_LIGHT_STEP = 0.06;  // relative step of the ground light while the sun disc is up (measured at most 0.028)
 const double SWEEP_CLOUD_STEP = 0.05;  // absolute step of the clouds' sun term (1 - t_cloud) Y(cloud_T) per 0.01 degree (Y(cloud_T) is at most 1)
-const double SWEEP_JUMP_LIGHT = 0.005; // the ground light at a jump of direction (> 5 degrees) or shadow (> 0.25) (measured at most 0.0020)
+const double SWEEP_SHADOW_STEP = 0.06; // the shadow per 0.01 degree: smoothstep's slope 1.5 / 0.3 degree is 0.05
+const double SWEEP_CLOUD_GLOW_STEP = 0.25; // the same with the glow near the light: the clouds' own handover now spans the same 0.6 degree band as the ground's, while the sun still lights the cloud layer (measured at most 0.22, thin air)
+const double SWEEP_ANGLE_STEP = 15.0;  // degrees of direction per 0.01 degree of sun travel: an opposite moon is swung 180 degrees over the 0.6 degree band, bent over the zenith (measured at most 11.7)
 } // namespace
 
 int main()
@@ -1093,37 +1107,119 @@ int main()
         check(near(cf.x, 0.5 * 1.0 + 0.5 * 0.25 * 0.5) && near(cf.z, 0.5 * 0.6 + 0.5 * 0.25 * 0.5), "cross_fade");
         check(cross_fade({ 1, 1, 1 }, { 1, 1, 1 }, 0.3, 0.0).x == 1.0 && near(cross_fade({ 1, 1, 1 }, { 1, 1, 1 }, 0.3, 1.0).x, 0.3), "cross_fade ends");
 
-        // the phases, on the Default sky, by prescribing the ratio through the moon's gain
+        // The handover follows the sun's elevation (r is reported but drives nothing): the swing from +0.3 (all sun) to -0.3
+        // degrees (all moon), the sun's shadow fading out from +0.6 to +0.3, the moon's in from -0.3 to -0.6 degrees.
         {
             PrimaryLightInputs in;
-            in.sun_dir = dir_of(40.0);
             in.moon_dir = dir_of(20.0, 120.0);
             in.sun_T = { 1.0, 1.0, 1.0 };
             in.moon_T = { 1.0, 1.0, 1.0 };
             in.source = { 1.0, 1.0, 1.0 };
+            in.moon_gain = 0.2; // an available moon
             const PrimaryLightParams p;
-            struct Row { double r, shadow, t; } rows[] = {
-                { 0.05, 1.0, 0.0 }, { 0.10, 1.0, 0.0 }, { 0.25, 0.5, 0.0 }, { 0.40, 0.0, 0.0 }, { 0.5, 0.0, 0.5 }, { 0.60, 0.0, 1.0 }, { 0.75, 0.5, 1.0 }, { 0.90, 1.0, 1.0 }, { 0.95, 1.0, 1.0 } };
+            check(p.swing == 0.3 && p.fade == 0.3, "default swing and fade: 0.3 degree each");
+            // smoothstep(0.3, -0.3, e) at e = +-0.15 is 3 x 0.0625 - 2 x 0.015625 = 0.15625 / 0.84375
+            struct Row { double e, shadow, t; } rows[] = {
+                { 5.0, 1.0, 0.0 }, { 0.6, 1.0, 0.0 }, { 0.45, 0.5, 0.0 }, { 0.3, 0.0, 0.0 }, { 0.15, 0.0, 0.15625 }, { 0.0, 0.0, 0.5 },
+                { -0.15, 0.0, 0.84375 }, { -0.3, 0.0, 1.0 }, { -0.45, 0.5, 1.0 }, { -0.6, 1.0, 1.0 }, { -5.0, 1.0, 1.0 } };
             for (const Row& row : rows)
             {
-                in.moon_gain = row.r / (1.0 - row.r); // E_m / E_s
+                in.sun_dir = dir_of(row.e);
                 const PrimaryLight a = primary_light(in, p);
-                check(near(a.ratio, row.r, 1e-12), "ratio", a.ratio, row.r);
-                // smoothstep(0.1, 0.4, r) etc. at the middle of a window is 0.5
-                check(near(a.moon_weight, row.t, 1e-9, 1e-12), "phase b weight", a.moon_weight, row.t);
-                check(near(a.shadow_strength, row.shadow, 1e-9, 1e-12), "phase a/c shadow", a.shadow_strength, row.shadow);
+                check(near(a.moon_weight, row.t, 1e-9, 1e-12), "band weight", a.moon_weight, row.e);
+                check(near(a.shadow_strength, row.shadow, 1e-9, 1e-12), "shadow outside the band", a.shadow_strength, row.e);
+                check(a.ratio >= 0.0 && a.ratio <= 1.0, "the ratio is still reported", a.ratio);
             }
+            // monotonic and C1 (the slope changes by at most |t''| x step = 10 x 0.001 per degree: no kink at the ends or the middle)
+            double last_t = 0.0, last_slope = 0.0;
+            bool mono = true, c1 = true;
+            for (int i = 0; i <= 800; ++i)
+            {
+                in.sun_dir = dir_of(0.4 - 0.001 * i);
+                const double t = primary_light(in, p).moon_weight;
+                const double slope = (t - last_t) / 0.001;
+                mono = mono && (i == 0 || t >= last_t - 1e-12);
+                c1 = c1 && (i < 2 || std::fabs(slope - last_slope) < 0.05); // t'' is at most 6 / 0.6^2 = 16.7 per degree^2: 0.017 per step
+                last_t = t;
+                last_slope = slope;
+            }
+            check(mono, "the moon weight rises monotonically as the sun sinks");
+            check(c1, "the moon weight is C1 (no kink at the band's ends or middle)");
+            // the direction is the sun's above the band and the moon's below it
+            in.sun_dir = dir_of(0.31);
+            check(angle_between_deg(primary_light(in, p).dir, in.sun_dir) < 1e-9, "the sun's direction above the band");
+            in.sun_dir = dir_of(-0.31);
+            check(angle_between_deg(primary_light(in, p).dir, in.moon_dir) < 1e-9, "the moon's direction below the band");
             // stateless: the same inputs, the same output
-            in.moon_gain = 0.7;
             const PrimaryLight x = primary_light(in, p), y = primary_light(in, p);
             check(x.dir.x == y.dir.x && x.dir.z == y.dir.z && x.T.x == y.T.x && x.shadow_strength == y.shadow_strength && x.moon_weight == y.moon_weight, "primary_light is stateless");
-            // the windows are clamped to 0.49
-            PrimaryLightParams wide;
-            wide.swing = 0.4;
-            wide.fade = 0.4;
-            in.moon_gain = 1.0;
-            const PrimaryLight w = primary_light(in, wide);
-            check(std::isfinite(w.shadow_strength) && w.shadow_strength >= 0.0 && w.shadow_strength <= 1.0 && std::isfinite(w.moon_weight), "wide windows are clamped");
+            // widths are in degrees and are limited: swing 0.05 .. 5, fade 0 .. 5
+            PrimaryLightParams q;
+            q.swing = 1.0;
+            q.fade = 0.0;
+            in.sun_dir = dir_of(1.001);
+            check(primary_light(in, q).moon_weight == 0.0 && primary_light(in, q).shadow_strength == 1.0, "swing 1 degree, no fade: the sun's side");
+            in.sun_dir = dir_of(0.999);
+            check(primary_light(in, q).shadow_strength == 0.0, "no fade: the shadow ends at the band's edge");
+            in.sun_dir = dir_of(-0.999);
+            check(primary_light(in, q).shadow_strength == 0.0 && primary_light(in, q).moon_weight > 0.99, "no fade: the moon's shadow starts at the band's edge");
+            in.sun_dir = dir_of(-1.001);
+            check(primary_light(in, q).shadow_strength == 1.0 && primary_light(in, q).moon_weight == 1.0, "no fade: the moon's shadow is full below the band");
+            q.swing = 0.0; // limited to 0.05
+            in.sun_dir = dir_of(0.06);
+            check(primary_light(in, q).moon_weight == 0.0, "swing is limited to 0.05 degree");
+            q.swing = 1e9;
+            q.fade = 1e9;
+            in.sun_dir = dir_of(4.9);
+            check(std::isfinite(primary_light(in, q).moon_weight) && primary_light(in, q).moon_weight < 1.0, "swing is limited to 5 degrees");
+        }
+
+        // No moon (below the horizon, or too dim): the light stays with the sun and fades to dark; a moon rising or setting
+        // through the band takes over smoothly, scaled by its availability
+        {
+            const LLAtmosphere atm0 = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]));
+            const Vec3 src0 = srgb_to_linear(legacy_of(kSkies[0]).source);
+            const double depth0 = std::sin(6.0 * 3.14159265358979323846 / 180.0);
+            auto light_at = [&](double sun_e, double moon_e, double mb) {
+                PrimaryLightInputs in;
+                in.sun_dir = dir_of(sun_e, 0.0);
+                in.moon_dir = dir_of(moon_e, 180.0);
+                in.sun_T = atm0.transmittance(0.0, in.sun_dir.z, 0.0047);
+                in.moon_T = atm0.transmittance(0.0, in.moon_dir.z, 0.0045);
+                in.source = src0;
+                in.moon_gain = mb * moon_compensation(0.125, in.sun_dir.z, depth0);
+                return std::make_pair(primary_light(in, PrimaryLightParams{}), in);
+            };
+            // a moonless sunset (the moon well below the horizon, or moon_brightness 0): the sun's direction, no moon weight,
+            // no moon shadow, the sun's shadow fading as before
+            for (double mb : { 0.5, 0.0 })
+            {
+                const double moon_e = mb > 0.0 ? -40.0 : 40.0;
+                for (double e : { 0.5, 0.3, 0.1, 0.0, -0.1, -0.3, -0.6, -3.0 })
+                {
+                    const auto r = light_at(e, moon_e, mb);
+                    check(r.first.moon_weight == 0.0 && angle_between_deg(r.first.dir, r.second.sun_dir) < 1e-9, "no moon: the direction stays with the sun", e, mb);
+                    check(e > 0.3 + 1e-6 || r.first.shadow_strength < 1e-9, "no moon: no shadow once the sun's is gone", e, mb);
+                }
+            }
+            // a moon rising through the band: the weight follows its availability smoothly (no jump), none while it is far below
+            double last_t = -1.0, max_step = 0.0;
+            for (int i = 0; i <= 600; ++i)
+            {
+                const auto r = light_at(-0.2, -1.0 + 0.004 * i, 0.5); // the moon at -1 .. +1.4 degrees, rising
+                if (last_t >= 0.0)
+                {
+                    max_step = std::max(max_step, std::fabs(r.first.moon_weight - last_t));
+                }
+                last_t = r.first.moon_weight;
+                check(r.first.moon_weight >= 0.0 && r.first.moon_weight <= 1.0 && finite_unit(r.first.dir), "a rising moon: sane values");
+            }
+            check(max_step < 0.05, "a moon rising during the band: no jump in the moon weight", max_step);
+            check(light_at(-0.2, -5.0, 0.5).first.moon_weight == 0.0 && light_at(-0.2, 20.0, 0.5).first.moon_weight > 0.7,
+                  "a moon rising during the band: the weight follows the moon's availability");
+            // the moon's shadow fade-in is scaled by availability too
+            check(light_at(-0.6, -5.0, 0.5).first.shadow_strength == 0.0 && light_at(-0.6, 20.0, 0.5).first.shadow_strength > 0.99,
+                  "the moon's shadow needs the moon");
         }
 
         // the dark fallback: both lights black, the sun's side while it is up
@@ -1137,10 +1233,11 @@ int main()
             check(a.ratio == 0.0 && a.moon_weight == 0.0 && a.shadow_strength == 1.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-9, "dark: the sun while it is up");
             in.sun_dir = dir_of(-20.0);
             a = primary_light(in, PrimaryLightParams{});
-            check(a.ratio == 1.0 && a.moon_weight == 1.0 && angle_between_deg(a.dir, in.moon_dir) < 1e-9, "dark: the moon when the sun is down");
+            // the ratio follows the sun's disc (reported); the direction stays with the sun: this moon has no light (moon_T is 0)
+            check(a.ratio == 1.0 && a.moon_weight == 0.0 && angle_between_deg(a.dir, in.sun_dir) < 1e-9, "dark: no usable moon, the sun's direction stays");
             in.sun_dir = dir_of(0.0);
             a = primary_light(in, PrimaryLightParams{});
-            check(near(a.ratio, 0.5, 1e-12) && near(a.moon_weight, 0.5, 1e-9), "dark: even at the horizon", a.ratio);
+            check(near(a.ratio, 0.5, 1e-12) && a.moon_weight == 0.0, "dark: even at the horizon", a.ratio);
             in.source = { 0.0, 0.0, 0.0 }; // a black source
             a = primary_light(in, PrimaryLightParams{});
             check(std::isfinite(a.ratio) && std::isfinite(a.shadow_strength) && finite_unit(a.dir), "a black source is safe");
@@ -1206,13 +1303,15 @@ int main()
                 for (int moon = 0; moon < 3; ++moon)
                 {
                     const SweepResult r = sunset_sweep(a, c.sky.source, moon);
-                    std::printf("  %-9s %-14s: shadow fades from %6.2f deg, max step: direction %.2f deg, shadow %.3f, light %.4f (sun up %.4f); light at the jumps %.4f\n", c.name,
-                                moons[moon], r.fade_start_at, r.max_angle_step, r.max_shadow_step, r.max_light_step, r.max_light_step_sun_up, r.jump_light_level);
+                    std::printf("  %-9s %-14s: shadow fades from %6.2f deg, max step: direction %.2f deg, shadow %.3f, light %.4f (sun up %.4f)\n", c.name,
+                                moons[moon], r.fade_start_at, r.max_angle_step, r.max_shadow_step, r.max_light_step, r.max_light_step_sun_up);
                     check(r.all_unit && r.all_finite, "sweep: unit directions, finite values");
-                    check(r.jump_light_level < SWEEP_JUMP_LIGHT, "sweep: the ground light is dark at the jumps", r.jump_light_level);
+                    check(r.max_shadow_step < SWEEP_SHADOW_STEP, "sweep: the shadow fades smoothly", r.max_shadow_step);
+                    check(r.max_angle_step < SWEEP_ANGLE_STEP, "sweep: the direction swings smoothly", r.max_angle_step);
+                    check(r.fade_start_at > 0.5 && r.fade_start_at <= 0.6, "sweep: the sun's shadow fades from +0.6 degree", r.fade_start_at);
+                    check(r.outside_band_wrong == 0, "sweep: the sun's direction above the band, the moon's below, no shadow inside", r.outside_band_wrong);
                     check(r.max_light_step_sun_up < SWEEP_LIGHT_STEP, "sweep: light step while the sun disc is up", r.max_light_step_sun_up);
                     check(moon == 2 || r.min_dir_z >= -0.1, "sweep: the route stays above -0.1", r.min_dir_z);
-                    check(moon == 2 || r.fade_start_at <= 1.0, "sweep: the sun's shadow lasts to the horizon", r.fade_start_at);
                 }
             }
         }
@@ -1331,7 +1430,7 @@ int main()
                     {
                         PrimaryLightRig last = {};
                         bool have_last = false;
-                        double max_cloud_glow = 0.0, max_cloud_abs = 0.0, max_angle = 0.0, max_shadow = 0.0, max_glow = 0.0, max_cloud = 0.0, jump_level = 0.0, max_light_up = 0.0;
+                        double max_cloud_glow = 0.0, max_cloud_abs = 0.0, max_angle = 0.0, max_shadow = 0.0, max_glow = 0.0, max_cloud = 0.0, max_light_up = 0.0;
                         double min_z = 1.0;
                         bool all_ok = true;
                         const double ys = luminance(srgb_to_linear(c.sky.source));
@@ -1382,11 +1481,6 @@ int main()
                                     const auto a = term(last, e + 0.01), c = term(r, e);
                                     max_cloud_glow = std::max(max_cloud_glow, std::fabs(c.first - a.first) / std::max(c.second, a.second));
                                 }
-                                // a jump of the direction, the shadow or the glow only where the ground light is dark
-                                if (ang > 5.0 || dsh > 0.25 || dgl > 0.25)
-                                {
-                                    jump_level = std::max(jump_level, std::max(y0, y1) / ys);
-                                }
                                 if (std::max(y0, y1) > 1e-3 * ys && e > 0.3)
                                 {
                                     max_light_up = std::max(max_light_up, std::fabs(y1 - y0) / std::max(y0, y1));
@@ -1395,13 +1489,14 @@ int main()
                             last = r;
                             have_last = true;
                         }
-                        std::printf("  %-9s %-8s %-13s: max step: direction %.2f deg, shadow %.3f, glow %.3f, cloud sun term step %.3f (abs %.4f, with glow %.4f), ground light (sun up) %.4f; light at the jumps %.4f\n",
-                                    c.name, physical ? "physical" : "A/B", moons[moon], max_angle, max_shadow, max_glow, max_cloud, max_cloud_abs, max_cloud_glow, max_light_up, jump_level);
+                        std::printf("  %-9s %-8s %-13s: max step: direction %.2f deg, shadow %.3f, glow %.3f, cloud sun term step %.3f (abs %.4f, with glow %.4f), ground light (sun up) %.4f\n",
+                                    c.name, physical ? "physical" : "A/B", moons[moon], max_angle, max_shadow, max_glow, max_cloud, max_cloud_abs, max_cloud_glow, max_light_up);
                         // the clouds' sun term (1 - t_cloud) Y(cloud_T) per 0.01 degree: no pop (with t from the ground light it fell by 0.2-0.4 in one step)
                         check(max_cloud_abs < SWEEP_CLOUD_STEP, "AT1 sweep: the clouds' sun term is continuous", max_cloud_abs);
-                        check(max_cloud_glow < SWEEP_CLOUD_STEP, "AT1 sweep: the clouds' sun term with its glow is continuous (3, 10, 20 degrees from the sun)", max_cloud_glow);
+                        check(max_cloud_glow < SWEEP_CLOUD_GLOW_STEP, "AT1 sweep: the clouds' sun term with its glow is continuous (3, 10, 20 degrees from the sun)", max_cloud_glow);
                         check(all_ok, "AT1 sweep: unit directions, finite values in range");
-                        check(jump_level < SWEEP_JUMP_LIGHT, "AT1 sweep: direction, shadow and glow jump only where the ground light is dark", jump_level);
+                        // the swing is spread over the 0.6 degree band: no step beyond the smoothstep's slope (A/B's airmass steps at the horizon by itself)
+                        check(!physical || (max_angle < SWEEP_ANGLE_STEP && max_shadow < SWEEP_SHADOW_STEP && max_glow < 0.1), "AT1 sweep: direction, shadow and glow change smoothly across the band", max_angle, max_glow);
                         // the A/B airmass is today's exp(-x / mu): steep by itself in a thin-air sky near the horizon, not bounded here
                         check(!physical || max_light_up < SWEEP_LIGHT_STEP, "AT1 sweep: the ground light is continuous while the sun is up", max_light_up);
                         check(moon == 2 || min_z >= -0.1, "AT1 sweep: the route stays above -0.1", min_z);
