@@ -293,6 +293,32 @@ for rel,defines in alpha_programs.items():
         fn('glDeleteShader',None,U)(shader);compiled+=1
 print(f'{compiled} alpha fragment shaders compile, plain and as their stochastic variants')
 
+# ---- the sun N.L helper (sunShadowedDiffuse): every program that calls it, and deferredUtil.glsl that
+# defines it, compile in every combination of blend / no blend, with / without HAS_SUN_SHADOW,
+# with / without SHADOW_NL_MULTIPLY (compile only)
+nl_matrix=[]
+for rel,base in (('class2/deferred/alphaF.glsl',['USE_VERTEX_COLOR','HAS_ALPHA_MASK','USE_INDEXED_TEX']),
+                 ('class3/deferred/materialF.glsl',['HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_ALPHA_MASK']),
+                 ('class3/deferred/softenLightF.glsl',[]),
+                 ('class1/deferred/deferredUtil.glsl',[])):
+    text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
+    for blend in ((0,1) if 'materialF' in rel else (1,)):
+        for sun in (0,1):
+            for mult in (0,1):
+                defs=list(base)+(['DIFFUSE_ALPHA_MODE 1'] if blend else ['DIFFUSE_ALPHA_MODE 0'])
+                if sun: defs.append('HAS_SUN_SHADOW')
+                if mult: defs.append('SHADOW_NL_MULTIPLY')
+                extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defs)
+                extra+='#define DIFFUSE_ALPHA_MODE_NONE 0\n#define DIFFUSE_ALPHA_MODE_BLEND 1\n#define DIFFUSE_ALPHA_MODE_MASK 2\n#define DIFFUSE_ALPHA_MODE_EMISSIVE 3\n'
+                extra+='#define GBUFFER_FLAG_SKIP_ATMOS 0.0\n#define GBUFFER_FLAG_HAS_ATMOS 0.34\n#define GBUFFER_FLAG_HAS_PBR 0.67\n#define GBUFFER_FLAG_HAS_HDRI 1.0\n#define GET_GBUFFER_FLAG(data, flag) (abs(data-flag)< 0.1)\nstruct GBufferInfo { vec4 albedo; vec4 specular; vec3 normal; vec4 emissive; float gbufferFlag; float envIntensity; };\n'
+                extra+='vec4 diffuseLookup(vec2 texcoord);\n'
+                source='#version 420\n'+text.replace('#extension GL_ARB_shader_image_load_store : enable','').replace('/*[EXTRA_CODE_HERE]*/',extra)
+                shader=create_shader(0x8B30);src=C.c_char_p(source.encode());source_shader(shader,1,C.byref(src),None);compile_shader(shader)
+                ok=I();shader_iv(shader,0x8B81,C.byref(ok));log=C.create_string_buffer(16384);shader_log(shader,len(log),None,log)
+                assert ok.value,(rel,defs,log.value.decode()[:2000])
+                fn('glDeleteShader',None,U)(shader);nl_matrix.append((rel,blend,sun,mult))
+print(f'{len(nl_matrix)} sun N.L shader variants compile (alphaF, materialF, softenLightF, deferredUtil; blend, sun shadow, multiply)')
+
 checks=0
 def L(z,a,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.): return (z,a,rgb,seed,glow,slope)
 
@@ -467,6 +493,7 @@ void waterClip(vec3 pos) {}
 float getAmbientClamp() { return 1.0; }
 vec4 encodeNormal(vec3 n, float env, float flag) { return vec4(n, env); }
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen) { return 1.0; }
+float sunShadowedDiffuse(float da, float s) { return min(da, s); }
 void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv, vec2 tc, vec3 pos,
     vec3 norm, float glossiness, float envIntensity, bool transparent, vec3 amblit)
 { ambenv = amblit; glossenv = vec3(0.5); legacyenv = vec3(0.8); }
