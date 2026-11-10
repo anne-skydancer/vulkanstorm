@@ -220,6 +220,7 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
 extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation (optional)
+extern LLGLSLShader         gAlphaStochasticCurrentProgram; // its averaging pre-pass (with the resolve)
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>
 
