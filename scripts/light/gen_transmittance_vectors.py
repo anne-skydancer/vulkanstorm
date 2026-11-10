@@ -8,7 +8,7 @@ item-4 plan). CI runs only the C++ test; this script is what ties the vectors to
     python scripts/light/gen_transmittance_vectors.py            # rewrite the .inc file
     python scripts/light/gen_transmittance_vectors.py --check    # fail if the GLSL no longer produces it
 
-Needs Windows and a GPU. The GLSL is float, so --check allows 1e-4 relative + 1e-7 absolute.
+Needs Windows and a GPU. The GLSL is float, so --check allows 1e-4 relative + 1e-9 absolute.
 """
 import random
 import sys
@@ -126,7 +126,7 @@ cs = cases()
 text = render(cs, evaluate(cs))
 if '--check' in sys.argv:
     old, new = numbers(OUT.read_text()), numbers(text)
-    bad = [(i, a, b) for i, (a, b) in enumerate(zip(old, new)) if abs(a - b) > 1e-4 * max(abs(a), abs(b)) + 1e-7]
+    bad = [(i, a, b) for i, (a, b) in enumerate(zip(old, new)) if abs(a - b) > 1e-4 * max(abs(a), abs(b)) + 1e-9]
     print('numbers:', len(new), 'mismatches:', len(bad), bad[:5])
     sys.exit(1 if bad or len(old) != len(new) else 0)
 with open(OUT, 'w', encoding='utf8', newline='\n') as f:

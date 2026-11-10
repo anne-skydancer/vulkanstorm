@@ -61,7 +61,9 @@ float pa_density(PADensityProfile p, float h_km)
 {
     float h = h_km * 1000.0;
     int i = (p.count > 1 && h >= p.width[0]) ? 1 : 0;
-    float d = p.exp_term[i] * exp(p.exp_scale[i] * h) + p.linear_term[i] * h + p.constant_term[i];
+    // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
+    float e = p.exp_term[i] != 0.0 ? p.exp_term[i] * exp(clamp(p.exp_scale[i] * h, -80.0, 80.0)) : 0.0;
+    float d = e + p.linear_term[i] * h + p.constant_term[i];
     return clamp(d, 0.0, 1.0);
 }
 
