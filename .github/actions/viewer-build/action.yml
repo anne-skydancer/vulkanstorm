@@ -328,31 +328,55 @@ runs:
         mv "${packages[0]}" "$renamed"
         echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
 
-    # The volumetric clouds' noise file is required (the viewer exits at start-up without it): open the
-    # package that will be uploaded and check the file in it against the hash in indra/cmake/CloudNoise.cmake,
-    # and that its licence texts are there.
-    - name: Check the cloud noise file in the installer
-      if: env.VIEWER_PACKAGE == 'ON'
+    # The volumetric clouds' noise file is required (the viewer exits at start-up without it). Every build checks
+    # the file in the staged viewer against the hash in indra/cmake/CloudNoise.cmake and that its licence texts
+    # are staged: this covers autobuild -> CMake -> viewer_manifest.py.
+    - name: Check the staged cloud noise file
+      shell: bash
+      run: |
+        set -euo pipefail
+        mapfile -t noise < <(find "${{ inputs.directory }}/newview" -path '*/app_settings/clouds/cloud_noise.vkcn')
+        test "${#noise[@]}" = 1 || { echo "Expected one staged cloud_noise.vkcn, found ${#noise[@]}" >&2; exit 1; }
+        root="$(dirname "$(dirname "$(dirname "${noise[0]}")")")"
+        python scripts/clouds/check_cloud_noise.py "${noise[0]}" --licences "$root/licenses"
+
+    # Package builds: open what will be uploaded. The Windows installer is run (silently, on the runner) and the
+    # installed file must be right and read-only; the uninstaller must remove it. The Linux tarball is extracted.
+    - name: Check the cloud noise file in the Windows installer
+      if: env.VIEWER_PACKAGE == 'ON' && runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $installers = @(Get-ChildItem "${{ inputs.directory }}/newview/Release/*_Setup.exe")
+        if ($installers.Count -ne 1) { throw "Expected one installer, found $($installers.Count)" }
+        $dest = Join-Path $env:RUNNER_TEMP 'installed-viewer'
+        $install = Start-Process -FilePath $installers[0].FullName -Wait -PassThru `
+          -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dest"
+        if ($install.ExitCode -ne 0) { throw "The installer exited with $($install.ExitCode)" }
+        $noise = Join-Path $dest 'app_settings/clouds/cloud_noise.vkcn'
+        python scripts/clouds/check_cloud_noise.py $noise --licences (Join-Path $dest 'licenses') --read-only
+        if ($LASTEXITCODE -ne 0) { throw 'The installed cloud noise file is wrong' }
+        $uninstaller = @(Get-ChildItem (Join-Path $dest 'unins*.exe'))[0]
+        Start-Process -FilePath $uninstaller.FullName -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+        # the uninstaller finishes in a copy of itself: wait for the file to go
+        for ($i = 0; $i -lt 60 -and (Test-Path $noise); $i++) { Start-Sleep -Seconds 1 }
+        if (Test-Path $noise) { throw 'The uninstaller left the read-only cloud noise file behind' }
+
+    - name: Check the cloud noise file in the Linux package
+      if: env.VIEWER_PACKAGE == 'ON' && runner.os == 'Linux'
       shell: bash
       run: |
         set -euo pipefail
         shopt -s nullglob
-        dest="$RUNNER_TEMP/installer-contents"
+        packages=("${{ inputs.directory }}"/newview/*.tar.xz)
+        test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
+        dest="$RUNNER_TEMP/package-contents"
         rm -rf "$dest"; mkdir -p "$dest"
-        if [ "$RUNNER_OS" = Windows ]; then
-          choco install innoextract --yes --no-progress
-          installers=("${{ inputs.directory }}"/newview/Release/*_Setup.exe)
-          test "${#installers[@]}" = 1 || { echo "Expected one installer, found ${#installers[@]}" >&2; exit 1; }
-          innoextract --silent --extract --output-dir "$dest" "${installers[0]}"
-        else
-          packages=("${{ inputs.directory }}"/newview/*.tar.xz)
-          test "${#packages[@]}" = 1 || { echo "Expected one Linux package, found ${#packages[@]}" >&2; exit 1; }
-          tar -xJf "${packages[0]}" -C "$dest"
-        fi
+        tar -xJf "${packages[0]}" -C "$dest"
         mapfile -t noise < <(find "$dest" -path '*/app_settings/clouds/cloud_noise.vkcn')
         test "${#noise[@]}" = 1 || { echo "Expected one cloud_noise.vkcn in the package, found ${#noise[@]}" >&2; exit 1; }
-        licences="$(dirname "$(dirname "$(dirname "${noise[0]}")")")/licenses"
-        python scripts/clouds/check_cloud_noise.py "${noise[0]}" --licences "$licences"
+        root="$(dirname "$(dirname "$(dirname "${noise[0]}")")")"
+        python scripts/clouds/check_cloud_noise.py "${noise[0]}" --licences "$root/licenses" --read-only
 
     - name: Keep qualification builds free of installers
       if: env.VIEWER_PACKAGE != 'ON'
