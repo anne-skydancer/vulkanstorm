@@ -70,6 +70,9 @@ def _velopack_pack_version(version):
     return pack_version
 
 
+# <Vulkanstorm> the volumetric clouds' noise file (llcloudnoise.h, indra/cmake/CloudNoise.cmake)
+CLOUD_NOISE_FILE_NAME = 'cloud_noise.vkcn'
+
 class ViewerManifest(LLManifest,FSViewerManifest):
     def is_packaging_viewer(self):
         # Some commands, files will only be included
@@ -89,6 +92,15 @@ class ViewerManifest(LLManifest,FSViewerManifest):
             self.path('websocketpp.txt')
             self.path('lsl_definitions.txt')
         self.path('luau.txt', 'licenses/luau.txt')
+        # <Vulkanstorm> The volumetric clouds' noise file (the cloudnoise package, indra/cmake/CloudNoise.cmake
+        # checks its hash at configure time and the viewer again at start-up) and the licences of what made it.
+        # No fallback: the viewer stops with a "reinstall" message when the file is missing.
+        with self.prefix(src=os.path.join(pkgdir, 'clouds'), dst='app_settings/clouds'):
+            self.path(CLOUD_NOISE_FILE_NAME)
+        with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+            for licence in ('TileableVolumeNoise.txt', 'glm.txt', 'cloudnoise.txt'):
+                self.path(licence, dst=licence)
+        # </Vulkanstorm>
         with self.prefix(src=pkgdir, dst="app_settings"):
             self.path("dictionaries")
         # <Vulkanstorm> The package's ru_RU dictionary is not under a free licence
@@ -1082,8 +1094,11 @@ class Windows_x86_64_Manifest(ViewerManifest):
             rel_file = os.path.relpath(pkg_file, self.get_dst_prefix())
             destination = os.path.dirname(rel_file).replace('/', '\\')
             destination = "{app}" if not destination else "{app}\\" + destination
-            result.append('Source: "%s"; DestDir: "%s"; Flags: ignoreversion' %
-                          (quote(os.path.normpath(pkg_file)), quote(destination)))
+            # <Vulkanstorm> the cloud noise file is read-only on disk (a stray edit is caught by the
+            # start-up hash check anyway)
+            attribs = '; Attribs: readonly' if os.path.basename(pkg_file) == CLOUD_NOISE_FILE_NAME else ''
+            result.append('Source: "%s"; DestDir: "%s"; Flags: ignoreversion%s' %
+                          (quote(os.path.normpath(pkg_file)), quote(destination), attribs))
 
         return '\n'.join(result)
 
@@ -2509,6 +2524,10 @@ class LinuxManifest(ViewerManifest):
             self.run_command(['find', self.get_dst_prefix(),
                               '-type', 'f', '-perm', old,
                               '-exec', 'chmod', new, '{}', ';'])
+        # <Vulkanstorm> the cloud noise file is read-only; the tarball keeps the mode
+        noise_file = os.path.join(self.get_dst_prefix(), 'app_settings', 'clouds', CLOUD_NOISE_FILE_NAME)
+        if os.path.isfile(noise_file):
+            os.chmod(noise_file, 0o444)
         self.package_file = installer_name + '.tar.xz'
 
         # temporarily move directory tree so that it has the right

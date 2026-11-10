@@ -50,6 +50,7 @@ include(UI)
 include(Velopack)
 include(InnoSetup)
 include(ViewerMiscLibs)
+include(CloudNoise) # <Vulkanstorm> the volumetric clouds' noise file; stops CMake if it is missing or wrong
 #include(ViewerManager) # <FS:Ansariel> Remove VMP
 include(VisualLeakDetector)
 include(VulkanGltf)
@@ -263,6 +264,7 @@ set(viewer_SOURCE_FILES
     llchiclet.cpp
     llchicletbar.cpp
     llclassifiedinfo.cpp
+    llcloudnoise.cpp
     llcloudshadowmap.cpp
     llcofwearables.cpp
     llcolorswatch.cpp
@@ -1134,6 +1136,7 @@ set(viewer_HEADER_FILES
     llchiclet.h
     llchicletbar.h
     llclassifiedinfo.h
+    llcloudnoise.h
     llcloudshadow.h
     llcloudshadowmap.h
     llcofwearables.h
@@ -1868,6 +1871,14 @@ set_source_files_properties(
 #         Instead of doing that, we use the configure tool to build
 #         fsversionstrings.h with the right numbers in it.
 #   COMPILE_DEFINITIONS "${VIEWER_CHANNEL_VERSION_DEFINES}" # see BuildVersion.cmake
+   )
+
+# <Vulkanstorm> The hash start-up check of app_settings/clouds/cloud_noise.vkcn compares against the one
+# CloudNoise.cmake checked at configure time, so that there is one place to change.
+set_source_files_properties(
+   llcloudnoise.cpp
+   PROPERTIES
+   COMPILE_DEFINITIONS "LL_CLOUD_NOISE_SHA256=\"${CLOUD_NOISE_SHA256}\""
    )
 
 if (DARWIN)
