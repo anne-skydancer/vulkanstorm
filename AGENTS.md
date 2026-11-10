@@ -22,7 +22,7 @@
 
 These complete the rules above for every agent (planner, surveyor, coder, reviewer, auditor, checker) and for anyone else working in this repo.
 
-- Git: never force-push, on any branch. Bring base changes into a branch only by cherry-picking (`-x`) or by re-cutting the branch: a new branch from the base tip with the PR's commits cherry-picked, and a new PR that supersedes the old one. Once a PR is open, add commits only when the owner asks.
+- Git: never force-push, on any branch. Bring base changes into a branch only by cherry-picking (`-x`) or by re-cutting the branch: a new branch from the base tip with the PR's commits cherry-picked, and a new PR that supersedes the old one. Once a PR is open, add commits only when the owner asks. The review pipeline's own fix commits (reviewer and auditor findings applied by the coder, then the checker) are part of producing the PR and are allowed until it is handed to the owner; after hand-off, add commits only when the owner asks.
 - Worktrees go in `<repo>\work\<name>`, never beside the repository.
 - Compiled fixture and integration tests run with `TMPDIR` (POSIX) or `TEMP`/`TMP` (Windows) pointing to the repo's `.fixture-tmp` folder, which is excluded from Defender.
 - Smoke launches use a scratch APPDATA/LOCALAPPDATA with no saved credentials, so they can never log in. Changes that touch rendering, shutdown or login need a Release build that reaches the world (owner-assisted) before they are called safe.
