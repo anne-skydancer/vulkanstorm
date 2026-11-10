@@ -318,16 +318,22 @@ class FakeViewer:
                 return self._reply(d, {"value": float(self.sliders[last])})
             return self._reply(d, {})
         if op == "setSelectedByValue":
-            if last in ("WaterPresetsCombo", "DCPresetsCombo"):
-                if last == "WaterPresetsCombo":
-                    self.water_combo = d["value"]
-                else:
-                    self.dc_combo = d["value"]
-                return self._reply(d, {})
-            if last == "WLPresetsCombo" and d["value"] in [s[0] for s in SKIES.values()] + [REGION_DEFAULT]:
-                self.combo = d["value"]       # no commit, as in the viewer
-                return self._reply(d, {})     # the real reply loses the bool (stamp() on a scalar)
-            return self._reply(d, {})
+            ok = self._select_by_value(last, d)
+            if "reply" in d:      # as the real viewer: a bare boolean, no reqid (LLReqID::stamp leaves a scalar alone)
+                self._send(d["reply"], bool(ok))
+            return
+
+    def _select_by_value(self, last, d):
+        if last == "WaterPresetsCombo":
+            self.water_combo = d["value"]
+            return True
+        if last == "DCPresetsCombo":
+            self.dc_combo = d["value"]
+            return True
+        if last == "WLPresetsCombo" and d["value"] in [s[0] for s in SKIES.values()] + [REGION_DEFAULT]:
+            self.combo = d["value"]       # no commit, as in the viewer
+            return True
+        return False
 
     def api_LLAgent(self, op, d):
         if op == "getPosition":

@@ -126,7 +126,7 @@ How things are done (LEAP has no environment API, and its UI API cannot set a sl
 
 | Need | Route |
 |---|---|
-| Select a sky | inventory lookup by name (`LLInventory.collectDescendantsIf`, type `settings`, your inventory and the library root) gives the asset id; `UI.setSelectedByValue` moves the Phototools `WLPresetsCombo` highlight (it does not apply), then `WLNextPreset` and `WLPrevPreset` end on the same sky and apply it. Fallback: the quick-environment button named in the scenario (`Noon`, `Sunset`) |
+| Select a sky | inventory lookup by name (`LLInventory.collectDescendantsIf`, type `settings`, your inventory and the library root) gives the asset id; `UI.setSelectedByValue` moves the Phototools `WLPresetsCombo` highlight (it does not apply; the viewer's reply is a bare boolean without reqid, so the script fires it and waits with a ping instead of waiting for a reply), then `WLNextPreset` and `WLPrevPreset` end on the same sky and apply it. Fallback: the quick-environment button named in the scenario (`Noon`, `Sunset`) |
 | Click a button | `LLFloaterReg.clickButton` (calls the button's commit); mouse events on the widget path if refused; a mouse event the widget does not handle is an error |
 | PBR or classic | Personal Lighting `probe_ambiance` (1 = PBR sky, 0 = classic; `doc/light/light-reference-numbers.md` explains why no shipped sky is PBR) |
 | Sun elevation, moon position | Personal Lighting `sun_elevation`, `moon_azimuth`, `moon_elevation`: the slider's text field is focused, emptied with Backspace, filled with `LLWindow.pasteText` and committed with Enter (`LLWindow.keyDown path=...`); the value is read back with `UI.getValue` and must match to 0.006 degrees, else the step fails |

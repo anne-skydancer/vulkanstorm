@@ -194,6 +194,13 @@ class Viewer:
         pump = self.s.command_pump if api == "LLLeap" else api
         self.s.fire(pump, op, **args)
 
+    def select_by_value(self, path, value):
+        """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean, which LLReqID::stamp
+        cannot give a reqid, so request() would wait for a reply that never matches: fire it and wait for a ping
+        instead. Callers check the result by reading the combo with value_of."""
+        self.fire("UI", "setSelectedByValue", path=path, value=value)
+        self.barrier()
+
     def barrier(self):
         """Everything sent before has been handled; raises if a fire-and-forget operation reported an error."""
         self.s.ping(timeout=60)
@@ -694,7 +701,7 @@ class Run:
         commit), so step Next then Prev: the pair ends on the same preset and applies it."""
         v = self.v
         path = v.find_widget(PHOTOTOOLS, combo)
-        v.req("UI", "setSelectedByValue", path=path, value=as_value(value))
+        v.select_by_value(path, as_value(value))
         if str(v.value_of(path)).lower() != str(value).lower():
             return False
         v.press(PHOTOTOOLS, next_button)
@@ -1258,7 +1265,7 @@ def dry_run_ui(v, sc, rep, run, args):
             for name, aid in find_settings_items(v, run.roots, nm):
                 if not combo:
                     break
-                v.req("UI", "setSelectedByValue", path=combo, value=uuid.UUID(aid))
+                v.select_by_value(combo, uuid.UUID(aid))
                 in_combo = str(v.value_of(combo)).lower() == aid.lower()
                 found.append((name, aid, in_combo))
                 if in_combo:
@@ -1284,7 +1291,7 @@ def dry_run_ui(v, sc, rep, run, args):
                         spec.get("names"), close[:8] or "none", fb))
     if combo and before not in (None, "None"):
         try:
-            v.req("UI", "setSelectedByValue", path=combo, value=as_value(before))
+            v.select_by_value(combo, as_value(before))
         except LeapError:
             pass
 

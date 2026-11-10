@@ -440,6 +440,7 @@ class LeapSession:
         self._closed = False
         self.diag_dir = None     # where a protocol error writes bad_frame.bin / bad_frame.txt
         self._prev_frame = None
+        self._scalar_noted = False
         self._broken = None      # why the connection was given up on (protocol error), None if it was EOF
         self._thread = None
 
@@ -487,6 +488,13 @@ class LeapSession:
                         if self.command_pump is None:
                             self._log("bad handshake: %r" % (msg,))
                         self._cv.notify_all()
+                        continue
+                    if pump == self.reply_pump and not isinstance(data, dict):
+                        # A scalar reply (the viewer's LLReqID::stamp cannot add a reqid to one, e.g. UI.setSelectedByValue):
+                        # it can match no request, so it is dropped rather than queued as an event.
+                        if not self._scalar_noted:
+                            self._scalar_noted = True
+                            self._log("debug: unstamped scalar reply %r on the reply pump ignored (further ones are silent)" % (data,))
                         continue
                     reqid = data.get("reqid") if isinstance(data, dict) else None
                     if pump == self.reply_pump and reqid is not None:

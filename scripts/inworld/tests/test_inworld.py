@@ -12,6 +12,7 @@ import json
 import pathlib
 import sys
 import tempfile
+import time
 import unittest
 import uuid
 
@@ -441,6 +442,45 @@ class FullRunTest(unittest.TestCase):
             self.assertTrue(any("RenderLightHandoverSwing" in w for w in info["warnings"]), info["warnings"])
             self.assertEqual(info["knobs"]["RenderMoonAdaptationDepth"], 8.0)
             self.assertEqual(fv.settings["RenderMoonAdaptationDepth"][1], 6.0)   # restored
+
+
+
+class ScalarReplyTest(unittest.TestCase):
+    """The real UI.setSelectedByValue answers with a bare boolean that has no reqid; it must never cost a timeout."""
+
+    def test_the_reader_ignores_a_scalar_reply(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        msgs = []
+        s._log = msgs.append
+        for _ in range(3):
+            s.fire("UI", "setSelectedByValue", path="x/WLPresetsCombo", value=SKIES["Default"][0])
+        s.ping()
+        self.assertEqual(s.take_errors(), [])
+        self.assertIsNone(s._broken)
+        self.assertEqual(len([m for m in msgs if "scalar" in m]), 1)
+
+    def test_select_by_value_is_prompt_and_a_value_that_did_not_take_is_seen(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        s.default_timeout = 3
+        v = lc.Viewer(s)
+        t0 = time.monotonic()
+        v.select_by_value("a/b/WLPresetsCombo", SKIES["Sunset"][0])
+        self.assertLess(time.monotonic() - t0, 2.0)
+        self.assertEqual(fv.combo, SKIES["Sunset"][0])
+        v.select_by_value("a/b/WLPresetsCombo", "not-a-sky")       # the viewer refuses (false) and the combo stays
+        self.assertEqual(fv.combo, SKIES["Sunset"][0])
+        self.assertNotEqual(str(fv.combo), "not-a-sky")
+
+    def test_dry_run_and_full_run_with_scalar_replies_complete_promptly(self):
+        for extra in (["--dry-run"], []):
+            fv = FakeViewer()
+            with tempfile.TemporaryDirectory() as tmp:
+                t0 = time.monotonic()
+                code, run, _ = run_main(fv, tmp, extra=extra)
+                self.assertEqual(code, 0)
+                self.assertLess(time.monotonic() - t0, 25)
 
 
 class DryRunTest(unittest.TestCase):
