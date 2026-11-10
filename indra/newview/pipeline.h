@@ -350,6 +350,16 @@ public:
     void postDeferredGammaCorrect(LLRenderTarget* screen_target);
 
     void generateSunShadow(LLCamera& camera);
+    // <Vulkanstorm> shadow method: the Legacy (Firestorm 7.2.5) and PCSS (stable) sun cascades
+    bool computeSunSplitsLegacy(LLCamera& camera, const LLVector3& lightDir, const glm::mat4& saved_view,
+        bool skip_avatar_update, LLVector3& out_up, F32& out_near_clip);
+    void generateSunCascadesLegacy(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+        const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+        glm::mat4 (&view)[6], glm::mat4 (&proj)[6]);
+    void generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+        const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+        glm::mat4 (&view)[6], glm::mat4 (&proj)[6]);
+    // </Vulkanstorm>
     LLRenderTarget* getSunShadowTarget(U32 i);
     LLRenderTarget* getSpotShadowTarget(U32 i);
 
