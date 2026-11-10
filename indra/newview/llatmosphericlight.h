@@ -1030,7 +1030,7 @@ struct PrimaryLightRig
                                // moon availability
     Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
     Vec3   cloud_dir;          // the clouds' own light direction (the glow near the light), unit, z up
-    double cloud_moon_weight = 0.0; // the clouds' own band weight: primary_light() on the cloud-layer transmittances, the band
+    double cloud_band_weight = 0.0; // the clouds' own band weight: primary_light() on the cloud-layer transmittances, the band
                                     // centred on -dip
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
     double gain = 0.0;         // moon_brightness x moon_compensation
@@ -1113,7 +1113,7 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     }
     const PrimaryLight cl = primary_light(cin, cparams);
     // the clouds' sun term ends with the band (as at night before), the glow direction follows cl.dir
-    rig.cloud_moon_weight = cl.band_weight;
+    rig.cloud_band_weight = cl.band_weight;
     rig.cloud_dir = cl.dir;
     rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
                     std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
