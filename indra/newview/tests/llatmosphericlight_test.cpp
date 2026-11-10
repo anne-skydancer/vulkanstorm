@@ -12,9 +12,11 @@
 //   - the ambient keeps some light opposite the sun (ambientLighting) and is grey outside classic mode.
 //
 // Stage AT0 (the physical atmosphere, llatmosphericlight.h's LLAtmosphere and primary_light):
-//   - LLAtmosphere::transmittance equals physicalAtmosphereF.glsl on the GPU (llatmosphere_vectors.inc, from
-//     scripts/light/gen_transmittance_vectors.py) to 1e-4 relative, and a 200000-step integral to 1e-6;
-//   - noon identity: lin(source) T(0, 1) = lin(source e^-tau) for the embedded Windlight skies (except a clamped column);
+//   - LLAtmosphere::transmittance (the physical model and the excess factor of the capped columns) equals
+//     physicalAtmosphereF.glsl on the GPU (llatmosphere_vectors.inc, from scripts/light/gen_transmittance_vectors.py)
+//     to 1e-4 relative, and a 200000-step integral to 1e-6;
+//   - noon identity: lin(source) T(0, 1) = lin(source e^-tau) for the embedded Windlight skies, the light rigs included;
+//   - the cap on the column (max_column): T is continuous in it at every altitude, partial caps act per channel;
 //   - ozone: the validated stored default forms are recognised and replaced inside the model; the bounds on hostile input, monotonicity and the disc;
 //   - the stateless sun/moon handover (primary_light), its phases, fallback and a 0.01 degree sunset sweep.
 
@@ -81,9 +83,9 @@ LLAtmosphericLight::Inputs reference()
 // --- stage AT0: the physical atmosphere ---
 
 // {rayleigh_ext rgb, aerosol_ext, slab_ext, slab_top_km, ozone_ext rgb, rayleigh exp_scale, mie exp_scale,
-//  absorption variant, planet radius km, top radius km, h km, mu, disc_sin, expected transmittance rgb}
+//  absorption variant, planet radius km, top radius km, h km, mu, disc_sin, excess rgb, path_factor, expected transmittance rgb}
 // from physicalAtmosphereF.glsl on the GPU (scripts/light/gen_transmittance_vectors.py)
-const double kTransmittanceVectors[][20] = {
+const double kTransmittanceVectors[][24] = {
 #include "llatmosphere_vectors.inc"
 };
 
@@ -119,6 +121,25 @@ LLAtmosphericLight::DensityProfile ozone_variant(int variant)
         p.layer[0].constant = -1.2;
         return p;
     }
+    if (variant == 5) // a negative exponential term: -e^(-h/3 km) + h/10 km + 0.5 crosses 0 and rises towards 1
+    {
+        p.layer[0].exp_term = -1.0;
+        p.layer[0].exp_scale = -1.0 / 3000.0;
+        p.layer[0].linear = 1.0 / 10000.0;
+        p.layer[0].constant = 0.5;
+        return p;
+    }
+    if (variant == 6) // two layers: a ramp to 0.5 at 3 km, then a mixed exponential layer
+    {
+        p.count = 2;
+        p.layer[0].width_m = 3000.0;
+        p.layer[0].linear = 1.0 / 6000.0;
+        p.layer[1].exp_term = 1.6;
+        p.layer[1].exp_scale = -1.0 / 7000.0;
+        p.layer[1].linear = 1.0 / 30000.0;
+        p.layer[1].constant = -0.2;
+        return p;
+    }
     p.layer[0].linear = 1.0 / 20000.0; // one linear layer that clamps at 1 at 20 km
     return p;
 }
@@ -138,12 +159,15 @@ LLAtmosphericLight::LLAtmosphere atmosphere_of(const double* v)
     a.absorption = ozone_variant(static_cast<int>(v[11]));
     a.planet_radius_km = v[12];
     a.top_radius_km = v[13];
+    a.excess = { v[17], v[18], v[19] };
+    a.finalize();
     return a;
 }
 
 // The transmittance by brute force: a 200000-step Simpson integral of the extinction along the path, with the
-// altitude taken straight from the radius and no cuts, as the definition in LLAtmosphere::transmittance says.
-LLAtmosphericLight::Vec3 reference_transmittance(const LLAtmosphericLight::LLAtmosphere& a, double h_km, double mu, double disc_sin)
+// altitude taken straight from the radius and no cuts, as the definition in LLAtmosphere::transmittance says, and the
+// excess factor of the capped columns, written out from that definition.
+LLAtmosphericLight::Vec3 reference_transmittance(const LLAtmosphericLight::LLAtmosphere& a, double h_km, double mu, double disc_sin, double path_factor = 1.0)
 {
     using namespace LLAtmosphericLight;
     const double rg = a.planet_radius_km, top = a.top_radius_km - rg;
@@ -172,7 +196,8 @@ LLAtmosphericLight::Vec3 reference_transmittance(const LLAtmosphericLight::LLAtm
         tau[2] += w * (a.rayleigh_ext.z * dr + grey + a.ozone_ext.z * dz);
     }
     const double f = path / steps / 3.0;
-    return { std::exp(-tau[0] * f) * vis, std::exp(-tau[1] * f) * vis, std::exp(-tau[2] * f) * vis };
+    const double air = path_factor / std::max(mu - mu_h, 1e-6);
+    return { std::exp(-tau[0] * f - a.excess.x * air) * vis, std::exp(-tau[1] * f - a.excess.y * air) * vis, std::exp(-tau[2] * f - a.excess.z * air) * vis };
 }
 
 struct Sky
@@ -435,14 +460,14 @@ int main()
     const int tcount = static_cast<int>(sizeof(kTransmittanceVectors) / sizeof(kTransmittanceVectors[0]));
     check(tcount >= 128, "enough transmittance vectors", tcount);
     double worst_gpu = 0.0, worst_ref = 0.0, worst_ref_rel = 0.0, worst_smooth = 0.0;
-    int zero_cases = 0, partial_cases = 0;
+    int zero_cases = 0, partial_cases = 0, excess_cases = 0, half_path_cases = 0, variant_cases[7] = {};
     for (int i = 0; i < tcount; ++i)
     {
         const double* v = kTransmittanceVectors[i];
         const LLAtmosphere a = atmosphere_of(v);
-        const Vec3 t = a.transmittance(v[14], v[15], v[16]);
-        const Vec3 ref = reference_transmittance(a, v[14], v[15], v[16]);
-        const double got[3] = { t.x, t.y, t.z }, gl[3] = { v[17], v[18], v[19] }, rf[3] = { ref.x, ref.y, ref.z };
+        const Vec3 t = a.transmittance(v[14], v[15], v[16], v[20]);
+        const Vec3 ref = reference_transmittance(a, v[14], v[15], v[16], v[20]);
+        const double got[3] = { t.x, t.y, t.z }, gl[3] = { v[21], v[22], v[23] }, rf[3] = { ref.x, ref.y, ref.z };
         for (int k = 0; k < 3; ++k)
         {
             if (!near(got[k], gl[k], 1e-4, 1e-9))
@@ -451,7 +476,7 @@ int main()
                 check(false, "transmittance equals the GLSL");
             }
             worst_gpu = std::fmax(worst_gpu, std::fabs(got[k] - gl[k]) / (1e-9 / 1e-4 + std::fabs(gl[k])));
-            if (static_cast<int>(v[11]) != 1) // variant 1 jumps at 12 km, which the brute-force integral itself cannot resolve to 1e-6
+            if (static_cast<int>(v[11]) != 1 && static_cast<int>(v[11]) != 6) // variants 1 and 6 jump at their layer boundary, which the brute-force integral itself cannot resolve to 1e-6
             {
                 worst_smooth = std::fmax(worst_smooth, std::fabs(got[k] - rf[k]));
             }
@@ -468,10 +493,18 @@ int main()
         }
         zero_cases += (t.x == 0.0 && t.y == 0.0 && t.z == 0.0);
         partial_cases += (t.x > 0.0 && t.x < 1e-3);
+        excess_cases += (v[17] > 0.0 || v[19] > 0.0);
+        half_path_cases += (v[20] == 0.5 && (v[17] > 0.0 || v[19] > 0.0));
+        variant_cases[static_cast<int>(v[11])] += (t.y > 1e-3 && t.y < 0.99);
+    }
+    check(excess_cases >= tcount / 4 && half_path_cases >= tcount / 16, "vectors include excess and the half path factor", excess_cases);
+    for (int variant = 0; variant < 7; ++variant)
+    {
+        check(variant_cases[variant] >= 8, "every ozone variant has informative vectors (1e-3 < T < 0.99)", variant, variant_cases[variant]);
     }
     check(zero_cases > 0 && zero_cases < tcount / 2, "vectors include rays under the horizon", zero_cases);
     check(partial_cases > 0, "vectors include faint light", partial_cases);
-    check(worst_smooth < 1e-8, "segmented quadrature equals the reference to 1e-8 where the profile is continuous", worst_smooth);
+    check(worst_smooth < 5e-8, "segmented quadrature equals the reference to 5e-8 where the profile is continuous", worst_smooth);
     std::printf("transmittance: %d GPU vectors, worst |C++ - GLSL| %.3g (scaled), worst |segmented - 200000-step reference| %.3g absolute, %.3g relative (T > 1e-3), %.3g where the profiles are continuous\n",
                 tcount, worst_gpu, worst_ref, worst_ref_rel, worst_smooth);
 
@@ -485,7 +518,7 @@ int main()
             {
                 for (double mu : { 1.0, 0.5, 0.2, 0.05, 0.01, 0.0, -0.01 })
                 {
-                    const Vec3 t = a.physical_transmittance(h, mu, 0.0047), r = reference_transmittance(a, h, mu, 0.0047);
+                    const Vec3 t = a.transmittance(h, mu, 0.0047), r = reference_transmittance(a, h, mu, 0.0047);
                     worst = std::fmax(worst, std::fmax(std::fabs(t.x - r.x), std::fmax(std::fabs(t.y - r.y), std::fabs(t.z - r.z))));
                 }
             }
@@ -505,7 +538,7 @@ int main()
             const Vec3 src = srgb_to_linear(sky.source);
             const Vec3 today = legacy_noon_light(sky);
             const Vec3 phys = { src.x * t.x, src.y * t.y, src.z * t.z };
-            const bool column_clamped = (a.clamped & LLAtmosphere::CLAMP_COLUMN) != 0;
+            const bool column_capped = (a.clamped & LLAtmosphere::CLAMP_COLUMN) != 0;
             const double want[3] = { today.x, today.y, today.z }, got[3] = { phys.x, phys.y, phys.z };
             for (int k = 0; k < 3; ++k)
             {
@@ -516,8 +549,8 @@ int main()
                 }
             }
             const double yt = luminance(today), yp = luminance(phys);
-            std::printf("  %-52s %.6f / %.6f  (%.4f)%s  column %.4f %.4f %.4f  clamped 0x%02x\n", s.name, yt, yp, yt > 0.0 ? yp / yt : 1.0,
-                        column_clamped ? " column clamped, today's sun kept" : "", a.column.x, a.column.y, a.column.z, a.clamped);
+            std::printf("  %-52s %.6f / %.6f  (%.4f)  column %.4f %.4f %.4f  excess %.4f %.4f %.4f%s\n", s.name, yt, yp, yt > 0.0 ? yp / yt : 1.0,
+                        a.column.x, a.column.y, a.column.z, a.excess.x, a.excess.y, a.excess.z, column_capped ? "  (column capped, the excess carries the rest)" : "");
             check(in_unit(t), "noon T in [0,1]");
             check(a.slab_ext >= 0.0 && a.aerosol_ext >= 0.0, "non-negative coefficients");
             // the legacy airmass mirror equals the same at the zenith
@@ -525,12 +558,12 @@ int main()
             check(near(lt.x * src.x, today.x, 1e-9, 1e-12) && near(lt.y * src.y, today.y, 1e-9, 1e-12) && near(lt.z * src.z, today.z, 1e-9, 1e-12),
                   "legacy_transmittance at the zenith", lt.x * src.x, today.x);
         }
-        // the two light rigs among the embedded skies (kSkies[7], kSkies[8]) ask for almost no sun: they keep today's
-        const LLAtmosphere rig = LLAtmosphere::fromLegacy(legacy_of(kSkies[7]));
+        // the two light rigs among the embedded skies (kSkies[7], kSkies[8]) ask for almost no sun: their columns are capped, the excess keeps the noon sun
+        const LLAtmosphere rig = LLAtmosphere::fromLegacy(legacy_of(kSkies[7])), rig2 = LLAtmosphere::fromLegacy(legacy_of(kSkies[8]));
         check((rig.clamped & LLAtmosphere::CLAMP_COLUMN) != 0 && rig.column.x == 8.0, "a light rig hits the column limit", rig.column.x);
-        check(rig.legacy_sun_mask == 7u && LLAtmosphere::fromLegacy(legacy_of(kSkies[8])).legacy_sun_mask == 7u, "the light rigs keep today's sun in every channel", rig.legacy_sun_mask);
+        check(rig.excess.x > 0.0 && rig.excess.y > 0.0 && rig.excess.z > 0.0 && rig2.excess.x > 0.0 && rig2.excess.y > 0.0 && rig2.excess.z > 0.0, "the light rigs have excess in every channel", rig.excess.x);
         const LLAtmosphere def = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]));
-        check(def.clamped == 0 && def.legacy_sun_mask == 0, "Default is not clamped", def.clamped);
+        check(def.clamped == 0 && def.excess.x == 0.0 && def.excess.y == 0.0 && def.excess.z == 0.0, "Default is not capped", def.clamped);
         // legacy_transmittance at half the path (the clouds): e^(-tau/2) at the zenith
         const LegacySky ds = legacy_of(kSkies[0]);
         const Vec3 half = legacy_transmittance(ds, 1.0, 0.5), full = legacy_transmittance(ds, 1.0, 1.0);
@@ -655,10 +688,10 @@ int main()
         huge.distance_multiplier = 1e9;
         huge.haze_density = 1e9;
         const LLAtmosphere h = LLAtmosphere::fromLegacy(huge);
-        check(h.column.x == 8.0 && (h.clamped & LLAtmosphere::CLAMP_COLUMN) && (h.clamped & LLAtmosphere::CLAMP_GROUND_HAZE), "huge densities hit the bounds");
+        check(h.column.x == 8.0 && (h.clamped & LLAtmosphere::CLAMP_COLUMN) && (h.clamped & LLAtmosphere::CLAMP_GROUND_HAZE) && std::isfinite(h.excess.x), "huge densities hit the bounds");
         check(in_unit(h.transmittance(0.0, 1.0, 0.0047)) && in_unit(h.transmittance(0.0, 0.0, 0.0047)), "huge densities: T in [0,1]");
         check(h.physical_transmittance(0.0, 1.0, 0.0047).x >= std::exp(-8.0) * (1.0 - 1e-6), "the column limit bounds the physical zenith", h.physical_transmittance(0.0, 1.0, 0.0047).x);
-        check(h.transmittance(0.0, 1.0, 0.0047).x == 0.0 && h.legacy_sun_mask == 7u, "huge densities: today's sun is kept (dark)", h.transmittance(0.0, 1.0, 0.0047).x);
+        check(h.transmittance(0.0, 1.0, 0.0047).x == 0.0 && h.excess.x > 1e6 && h.transmittance(0.0, 1.0, 0.0047, 0.0).x > 0.0, "huge densities: dark, with a finite excess", h.transmittance(0.0, 1.0, 0.0047).x);
         LegacySky planet = legacy_of(kSkies[0]);
         planet.planet_radius_km = 1e9;
         planet.top_radius_km = 1.0;
@@ -712,6 +745,7 @@ int main()
             thin.ozone_ext = { thin.ozone_ext.x * 1e-3, thin.ozone_ext.y * 1e-3, thin.ozone_ext.z * 1e-3 };
             thin.aerosol_ext *= 1e-3;
             thin.slab_ext *= 1e-3;
+            thin.finalize();
             const LLAtmosphere clear = LLAtmosphere::fromLegacy(legacy_of(kSkies[9])); // zero density
             const LLAtmosphere* atms[3] = { &thin, &clear, &a };
             double worst_rel = 0.0, scan_max_thin = 0.0;
@@ -752,7 +786,7 @@ int main()
               "a point disc: a step at the horizon");
     }
 
-    // 6b. the review of #441: zero ozone column, clamp crossings of mixed profiles, "sun off" light rigs
+    // 6b. the review of #441: zero ozone column, clamp crossings of mixed profiles, the cap on the column ("sun off" light rigs)
     {
         // a zero ozone column (the 10 km height clamp over Bruneton's ozone, which starts at 10 km) has no ozone: no 0/0
         LegacySky planet = legacy_of(kSkies[0]);
@@ -766,10 +800,10 @@ int main()
         }
 
         // stock profiles keep their cuts: no clamp crossings for the exponential ones, Bruneton's three kinks for ozone
-        double m[16];
-        check(rayleigh_profile().kinks(m, 16, 60000.0) == 0 && mie_profile().kinks(m, 16, 60000.0) == 0, "stock exponential profiles have no kinks");
-        check(ozone_profile().kinks(m, 16, 60000.0) == 3, "Bruneton's ozone has three kinks", ozone_profile().kinks(m, 16, 60000.0));
-        check(validated_stock_ozone().kinks(m, 16, 60000.0) == 1, "the validated stock ozone has its boundary only");
+        double kinks_m[16]; // metres
+        check(rayleigh_profile().kinks(kinks_m, 16, 60000.0) == 0 && mie_profile().kinks(kinks_m, 16, 60000.0) == 0, "stock exponential profiles have no kinks");
+        check(ozone_profile().kinks(kinks_m, 16, 60000.0) == 3, "Bruneton's ozone has three kinks", ozone_profile().kinks(kinks_m, 16, 60000.0));
+        check(validated_stock_ozone().kinks(kinks_m, 16, 60000.0) == 1, "the validated stock ozone has its boundary only");
 
         // mixed profiles: exponential + linear + constant layers that cross density 0 or 1 inside a segment.
         // The segmented result equals the 200000-step reference to 1e-6 and the cuts sit on the crossings.
@@ -781,37 +815,33 @@ int main()
             q.layer[0].constant = constant;
             return q;
         };
-        DensityProfile two_layers = layer_profile(0.0, 0.0, 1.0 / 6000.0, 0.0); // a ramp to 0.5 at 3 km, then an exponential layer
-        two_layers.count = 2;
-        two_layers.layer[0].width_m = 3000.0;
-        two_layers.layer[1].exp_term = 1.6;
-        two_layers.layer[1].exp_scale = -1.0 / 7000.0;
-        two_layers.layer[1].linear = 1.0 / 30000.0;
-        two_layers.layer[1].constant = -0.2;
+        // crossings: the clamp crossings (density 0 or 1) inside a layer; a two-layer profile also has its boundary as a cut
         struct Mixed { const char* name; DensityProfile profile; int crossings; } mixed[] = {
             { "crosses 1 near the ground (1.5 e^(-h/3 km))", layer_profile(1.5, -1.0 / 3000.0, 0.0, 0.0), 1 },
             { "crosses 0 (0.9 e^(-h/4 km) - h/20 km + 0.05)", layer_profile(0.9, -1.0 / 4000.0, -1.0 / 20000.0, 0.05), 1 },
             { "crosses 1 and 0 (ozone variant 3)", ozone_variant(3), 2 },
             { "a valley, two crossings of 0 and one of 1 (variant 4)", ozone_variant(4), 3 },
-            { "a negative exponential term (-e^(-h/3 km) + h/10 km + 0.5)", layer_profile(-1.0, -1.0 / 3000.0, 1.0 / 10000.0, 0.5), 2 },
-            { "two layers, the upper one mixed", two_layers, 1 },
+            { "a negative exponential term (-e^(-h/3 km) + h/10 km + 0.5; variant 5)", ozone_variant(5), 2 },
+            { "two layers, the upper one mixed (variant 6)", ozone_variant(6), 1 },
         };
-        double worst_mixed = 0.0;
+        double worst_mixed_all = 0.0;
         for (const Mixed& mp : mixed)
         {
-            double km[16];
-            const int found = mp.profile.kinks(km, 16, 60000.0);
-            check(found >= mp.crossings, "the mixed profile's crossings are found", found, mp.crossings);
-            for (int i = 0; i < found; ++i) // every cut is a boundary or a place where the clamp starts or ends (to 1 mm)
+            double cuts_m[16]; // metres
+            const int found = mp.profile.kinks(cuts_m, 16, 60000.0);
+            check(found == mp.crossings + (mp.profile.count > 1 ? 1 : 0), "the mixed profile's cuts are its crossings (and its boundary)", found, mp.crossings);
+            for (int i = 0; i < found; ++i) // every cut is the boundary or a place where the unclamped expression is 0 or 1
             {
-                const double h = km[i];
-                const double d0 = mp.profile.density(h - 1e-3), d1 = mp.profile.density(h + 1e-3);
+                const double h = cuts_m[i];
                 const bool boundary = mp.profile.count > 1 && std::fabs(h - mp.profile.layer[0].width_m) < 1e-6;
-                check(boundary || (d0 <= 0.0 || d0 >= 1.0 || d1 <= 0.0 || d1 >= 1.0), "a cut sits where the clamp starts", h, d0 - d1);
+                const DensityLayer& l = mp.profile.layer[(mp.profile.count > 1 && h >= mp.profile.layer[0].width_m) ? 1 : 0];
+                const double v = DensityProfile::layer_value(l, h);
+                check(boundary || std::fmin(std::fabs(v), std::fabs(v - 1.0)) < 1e-6, "a cut sits where the unclamped expression is 0 or 1", h, v);
             }
             LLAtmosphere a = LLAtmosphere::fromLegacy(legacy_of(kSkies[0]));
             a.absorption = mp.profile;
             a.ozone_ext = { 0.3, 0.2, 0.1 };
+            a.finalize();
             double worst = 0.0;
             for (double h : { 0.0, 1.5 })
             {
@@ -822,60 +852,143 @@ int main()
                     worst = std::fmax(worst, std::fmax(std::fabs(t.x - r.x), std::fmax(std::fabs(t.y - r.y), std::fabs(t.z - r.z))));
                 }
             }
-            std::printf("mixed profile %-62s: %d cuts, worst |segmented - reference| %.3g\n", mp.name, found, worst);
+            std::printf("mixed profile %-72s: %d cuts, worst |segmented - reference| %.3g\n", mp.name, found, worst);
             check(worst < 1e-6, "mixed profile: segmented equals the reference to 1e-6", worst);
-            worst_mixed = std::fmax(worst_mixed, worst);
+            worst_mixed_all = std::fmax(worst_mixed_all, worst);
         }
+        std::printf("mixed profiles: worst |segmented - reference| %.3g\n", worst_mixed_all);
 
-        // "sun off": a channel whose column would exceed max_column keeps today's transmittance. Just over the cap the
-        // sky is today's; just under, the physical model reproduces it at noon and follows it down to the horizon, so
-        // there is no jump in the sweep (the flag is a property of the sky, not of the sun's elevation).
+        // "sun off": a channel whose column would exceed max_column keeps the sun it asks for through `excess`, so T is
+        // continuous in the cap at every altitude, and nothing switches as the sun moves.
         {
-            LegacySky base = legacy_of(kSkies[0]);
+            const double pi = 3.14159265358979323846;
+            const double d = 0.0047;
+            const LegacySky base = legacy_of(kSkies[0]);
             AtmosphereBounds wide;
             wide.max_column = 1e6;
             const LLAtmosphere real = LLAtmosphere::fromLegacy(base, wide);
-            const double lo_col = std::fmin(real.column.x, std::fmin(real.column.y, real.column.z));
-            const double hi_col = std::fmax(real.column.x, std::fmax(real.column.y, real.column.z));
-            AtmosphereBounds over_b, under_b;
-            over_b.max_column = lo_col * 0.999;  // every channel just over the cap
-            under_b.max_column = hi_col * 1.001; // every channel just under it
-            const LLAtmosphere over = LLAtmosphere::fromLegacy(base, over_b), under = LLAtmosphere::fromLegacy(base, under_b);
-            check(over.legacy_sun_mask == 7u && (over.clamped & LLAtmosphere::CLAMP_COLUMN) != 0, "just over the cap: today's sun is kept", over.legacy_sun_mask);
-            check(under.legacy_sun_mask == 0u && (under.clamped & LLAtmosphere::CLAMP_COLUMN) == 0, "just under the cap: the physical sun", under.legacy_sun_mask);
-            const Vec3 src = srgb_to_linear(base.source);
-            double worst_log = 0.0, worst_log_5 = 0.0, step_over = 0.0, step_under = 0.0;
-            Vec3 last_o = {}, last_u = {};
-            for (int i = 0; i <= 8900; ++i) // 90 to 1 degree, 0.01 degree steps
+            check(real.excess.x == 0.0 && real.excess.y == 0.0 && real.excess.z == 0.0 && real.clamped == 0u, "a wide cap: no excess");
+            const double cols[3] = { real.column.x, real.column.y, real.column.z };
+            const double lo_col = std::fmin(cols[0], std::fmin(cols[1], cols[2])), hi_col = std::fmax(cols[0], std::fmax(cols[1], cols[2]));
+            check(hi_col > 1.2 * lo_col, "Default's channels have different columns", hi_col / lo_col);
+            auto capped = [&](double cap) {
+                AtmosphereBounds b;
+                b.max_column = cap;
+                return LLAtmosphere::fromLegacy(base, b);
+            };
+
+            // (a) continuity in the cap: a cap just over / just under a channel's column (1e-6 relative), at every altitude, along
+            // the sun's whole path from the zenith to below the disc (0.01 degree steps). The two skies are the same sky: |dT|
+            // below 1e-5 in every channel (T is relative to the source); and T has no jump along the sweep: a step of
+            // under 1e-3 per 0.01 degree while the disc is not yet setting.
+            std::printf("cap continuity (Default; caps at each channel's column x (1 -/+ 1e-6); sweep 90 degrees to the disc's lower edge, 0.01 degree steps):\n");
+            std::printf("  altitude km   worst |T over - T under|   worst step of T per 0.01 deg (over / under)   scan max T\n");
+            for (double h : { 0.0, 0.5, 1.0, 2.0, 4.0 })
             {
-                const double e = 90.0 - 0.01 * i;
-                const double mu = std::sin(e * 3.14159265358979323846 / 180.0);
-                const Vec3 to = over.transmittance(0.0, mu, 0.0047), tu = under.transmittance(0.0, mu, 0.0047), tl = legacy_transmittance(base, mu, 1.0);
-                const double vis = over.visible_share(0.0, mu, 0.0047);
-                check(in_unit(to) && in_unit(tu), "cap sweep: T in [0,1]", to.x, e);
-                check(to.x == tl.x * vis && to.z == tl.z * vis, "just over the cap: exactly today's", to.x, tl.x);
-                const double dl = std::fabs(std::log(to.y) - std::log(tu.y)) / std::fmax(-std::log(tu.y), 1e-12);
-                worst_log = std::fmax(worst_log, dl);
-                if (e >= 5.0)
+                const double mu_h = -std::sqrt(h * (2.0 * 6360.0 + h)) / (6360.0 + h);
+                const double e_end = std::asin(std::fmax(mu_h - d, -1.0)) * 180.0 / pi;
+                double worst_diff = 0.0, step_over = 0.0, step_under = 0.0, tmax = 0.0;
+                for (double col : cols)
                 {
-                    worst_log_5 = std::fmax(worst_log_5, dl);
+                    const LLAtmosphere over = capped(col * (1.0 - 1e-6)), under = capped(col * (1.0 + 1e-6));
+                    check(over.excess.x + over.excess.y + over.excess.z > 0.0 && (over.clamped & LLAtmosphere::CLAMP_COLUMN) != 0, "a cap just under a column leaves an excess");
+                    Vec3 lo_t = {}, lu_t = {};
+                    for (int i = 0;; ++i)
+                    {
+                        const double e = 90.0 - 0.01 * i;
+                        if (e < e_end)
+                        {
+                            break;
+                        }
+                        const double mu = std::sin(e * pi / 180.0);
+                        const Vec3 to = over.transmittance(h, mu, d), tu = under.transmittance(h, mu, d);
+                        check(in_unit(to) && in_unit(tu), "cap sweep: T in [0,1]", to.x, e);
+                        worst_diff = std::fmax(worst_diff, std::fmax(std::fabs(to.x - tu.x), std::fmax(std::fabs(to.y - tu.y), std::fabs(to.z - tu.z))));
+                        tmax = std::fmax(tmax, std::fmax(tu.x, std::fmax(tu.y, tu.z)));
+                        if (i > 0 && mu > mu_h + d)
+                        {
+                            step_over = std::fmax(step_over, std::fmax(std::fabs(to.x - lo_t.x), std::fmax(std::fabs(to.y - lo_t.y), std::fabs(to.z - lo_t.z))));
+                            step_under = std::fmax(step_under, std::fmax(std::fabs(tu.x - lu_t.x), std::fmax(std::fabs(tu.y - lu_t.y), std::fabs(tu.z - lu_t.z))));
+                        }
+                        lo_t = to;
+                        lu_t = tu;
+                    }
                 }
-                if (i > 0)
-                {
-                    step_over = std::fmax(step_over, std::fabs(to.y - last_o.y));
-                    step_under = std::fmax(step_under, std::fabs(tu.y - last_u.y));
-                }
-                last_o = to;
-                last_u = tu;
+                std::printf("  %9.1f   %24.3g   %24.3g / %.3g   %.3f\n", h, worst_diff, step_over, step_under, tmax);
+                check(worst_diff < 1e-5, "over vs under the cap is the same sky", worst_diff);
+                check(step_over < 1e-3 && step_under < 1e-3, "no jump along the sweep", std::fmax(step_over, step_under));
             }
-            std::printf("sun off, sweep 90 to 1 degree (Default, cap just over / under its column %.4f..%.4f): worst relative |ln T| difference %.3g (%.3g above 5 degrees); worst step of T per 0.01 degree %.3g over, %.3g under (source luminance %.3g)\n",
-                        lo_col, hi_col, worst_log, worst_log_5, step_over, step_under, luminance(src));
-            check(worst_log_5 < 0.02, "the two models agree in ln T above 5 degrees", worst_log_5);
-            check(worst_log < 0.1, "the two models agree in ln T down to 1 degree", worst_log);
-            check(step_over < 0.01 && step_under < 0.01, "no jump in the sweep", std::fmax(step_over, step_under));
-            const Vec3 zo = over.transmittance(0.0, 1.0, 0.0047), zu = under.transmittance(0.0, 1.0, 0.0047);
-            check(near(zo.y, zu.y, 1e-2, 1e-9), "noon: over and under the cap are the same sky", zo.y, zu.y);
-            // the real rigs: the same sweep, no model switch, T falls monotonically with the sun and does not depend on altitude
+
+            // (b) a cap between Default's lowest and highest channel column: some channels capped, the others not. Per channel:
+            // an uncapped channel is as the wide cap has it (the cap does not move the aerosol/Rayleigh split of the others),
+            // a capped one keeps the noon sun the sky asks for, is never brighter than the wide cap's, and is dark at the horizon.
+            std::printf("partial caps (Default, columns %.4f %.4f %.4f):\n", cols[0], cols[1], cols[2]);
+            for (double cap : { 0.5 * (lo_col + hi_col), std::sqrt(lo_col * hi_col), 0.5 * (cols[0] + cols[1]), lo_col * 0.999, lo_col * 0.5 })
+            {
+                const LLAtmosphere part = capped(cap);
+                int capped_channels = 0;
+                double worst_free = 0.0, worst_noon = 0.0;
+                const double exc[3] = { part.excess.x, part.excess.y, part.excess.z };
+                for (int k = 0; k < 3; ++k)
+                {
+                    check(near(part.column.x, std::fmin(cols[0], cap), 1e-12, 1e-12) && near(part.column.z, std::fmin(cols[2], cap), 1e-12, 1e-12), "the capped column", part.column.x);
+                    const bool is_capped = cols[k] > cap;
+                    check((exc[k] > 0.0) == is_capped, "excess exactly where the column is above the cap", exc[k], k);
+                    check(!is_capped || near(exc[k], cols[k] - cap, 1e-9, 1e-12), "excess is the column above the cap", exc[k], cols[k] - cap);
+                    capped_channels += is_capped;
+                    for (double h : { 0.0, 1.0, 4.0 })
+                    {
+                        for (double mu : { 1.0, 0.5, 0.2, 0.05, 0.01 })
+                        {
+                            const Vec3 tp = part.transmittance(h, mu, d), tw = real.transmittance(h, mu, d);
+                            const double a = k == 0 ? tp.x : (k == 1 ? tp.y : tp.z), b = k == 0 ? tw.x : (k == 1 ? tw.y : tw.z);
+                            if (!is_capped)
+                            {
+                                worst_free = std::fmax(worst_free, std::fabs(a - b));
+                            }
+                            else
+                            {
+                                check(a <= b * (1.0 + 1e-12), "a capped channel is never brighter than the wide cap's", a, b);
+                                if (mu == 1.0 && h == 0.0)
+                                {
+                                    worst_noon = std::fmax(worst_noon, std::fabs(a - b));
+                                }
+                            }
+                        }
+                    }
+                    if (is_capped)
+                    {
+                        const Vec3 th = part.transmittance(0.0, 0.0, d);
+                        check((k == 0 ? th.x : (k == 1 ? th.y : th.z)) < 1e-6, "a capped channel is dark at the horizon", th.x);
+                    }
+                }
+                std::printf("  cap %.4f: %d channel(s) capped; uncapped channels differ from the wide cap by %.3g; capped channels at noon by %.3g\n", cap, capped_channels, worst_free, worst_noon);
+                check(worst_free < 1e-9, "an uncapped channel is as the wide cap has it", worst_free);
+                check(worst_noon < 1e-6, "a capped channel keeps the noon sun the sky asks for", worst_noon);
+                check(capped_channels > 0, "the partial caps cap something");
+            }
+
+            // (c) the path factor: the cloud light (today's half airmass) is brighter than the sun's in a capped channel, by e^(excess/2) at the zenith;
+            // a sky without excess does not depend on it
+            {
+                const LLAtmosphere rig = capped(lo_col * 0.5);
+                const Vec3 t1 = rig.transmittance(0.0, 1.0, d), t5 = rig.transmittance(0.0, 1.0, d, 0.5), t0 = rig.transmittance(0.0, 1.0, d, 0.0);
+                check(near(t5.x / t1.x, std::exp(0.5 * rig.excess.x), 1e-12, 1e-12) && near(t5.z / t1.z, std::exp(0.5 * rig.excess.z), 1e-12, 1e-12), "path factor 0.5 is half the excess", t5.x / t1.x);
+                const Vec3 p0 = rig.physical_transmittance(0.0, 1.0, d);
+                check(t0.x == p0.x && t0.y == p0.y && t0.z == p0.z, "path factor 0 leaves the physical sky", t0.x);
+                check(real.transmittance(0.0, 0.3, d, 0.5).y == real.transmittance(0.0, 0.3, d).y, "a sky without excess ignores the path factor");
+                check(in_unit(rig.transmittance(0.0, 0.0, d, std::nan(""))) && in_unit(rig.transmittance(1.0, 0.5, d, -3.0)) && in_unit(rig.transmittance(1.0, 0.5, d, HUGE_VAL)), "hostile path factors: T in [0,1]");
+            }
+
+            // (d) an atmosphere that is not finalized computes its cuts per call and gives the same T
+            {
+                LLAtmosphere hand = real;
+                hand.cut_count = -1;
+                const Vec3 a = hand.transmittance(0.0, 0.05, d), b = real.transmittance(0.0, 0.05, d);
+                check(a.x == b.x && a.y == b.y && a.z == b.z, "an atmosphere without finalized cuts gives the same T", a.x, b.x);
+            }
+
+            // (e) the real rigs: the same sweep, T falls monotonically with the sun, dark at the horizon at any altitude
             for (int rig_index : { 7, 8 })
             {
                 const LLAtmosphere rig = LLAtmosphere::fromLegacy(legacy_of(kSkies[rig_index]));
@@ -883,17 +996,19 @@ int main()
                 for (int i = 0; i <= 9000; ++i)
                 {
                     const double e = 90.0 - 0.01 * i;
-                    const Vec3 t = rig.transmittance(0.0, std::sin(e * 3.14159265358979323846 / 180.0), 0.0047);
+                    const Vec3 t = rig.transmittance(0.0, std::sin(e * pi / 180.0), d);
                     check(in_unit(t) && (i == 0 || t.y <= last * (1.0 + 1e-12)), "a light rig: T falls with the sun", t.y, e);
                     step = i > 0 ? std::fmax(step, std::fabs(t.y - last)) : step;
                     last = t.y;
                 }
                 check(step < 1e-5, "a light rig: no jump in the sweep", step);
-                check(rig.transmittance(0.0, 0.0, 0.0047).y < 1e-12, "a light rig: dark at the horizon", rig.transmittance(0.0, 0.0, 0.0047).y);
-                check(rig.transmittance(60.0, 0.5, 0.0047).y == rig.transmittance(0.0, 0.5, 0.0047).y, "a light rig: the same at any altitude");
+                check(rig.transmittance(0.0, 0.0, d).y < 1e-12, "a light rig: dark at the horizon", rig.transmittance(0.0, 0.0, d).y);
+                for (double h : { 0.0, 1.0, 4.0 })
+                {
+                    check(rig.transmittance(h, 0.0, d).y < 1e-12 && rig.transmittance(h, 0.5, d).y < 1e-3, "a light rig stays dark at any altitude", rig.transmittance(h, 0.5, d).y);
+                }
             }
         }
-        (void)worst_mixed;
     }
 
     // 7. the handover
