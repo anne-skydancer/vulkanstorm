@@ -2232,10 +2232,14 @@ void LLFloaterPreference::refreshEnabledState()
 
     ctrl_shadow->setEnabled(enabled);
 
-    // <Vulkanstorm> PCSS soft shadows: only with shadows on
-    getChild<LLCheckBoxCtrl>("ShadowPCSS")->setEnabled(enabled
+    // <Vulkanstorm> shadow method (Legacy / PCSS): selectable with shadows on
+    const bool shadow_method_enabled = enabled
         && gSavedSettings.getS32("RenderShadowDetail") > 0
-        && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowPCSS"));
+        && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
+    getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
+    // the light size only applies to the PCSS method
+    getChild<LLSliderCtrl>("ShadowPCSSLightSize")->setEnabled(shadow_method_enabled
+        && gSavedSettings.getU32("RenderShadowMethod") == 1);
     // </Vulkanstorm>
 
     enabled = false;
@@ -2370,13 +2374,11 @@ void LLFloaterPreference::disableUnavailableSettings()
         ctrl_shadows->setValue(0);
     }
 
-    // <Vulkanstorm> PCSS soft shadows
-    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowPCSS")
+    // <Vulkanstorm> shadow method: disable the combo, keep the saved value
+    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod")
         || !LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowDetail"))
     {
-        LLCheckBoxCtrl* ctrl_pcss = getChild<LLCheckBoxCtrl>("ShadowPCSS");
-        ctrl_pcss->setEnabled(false);
-        ctrl_pcss->setValue(false);
+        getChild<LLComboBox>("ShadowMethod")->setEnabled(false);
     }
     // </Vulkanstorm>
 
