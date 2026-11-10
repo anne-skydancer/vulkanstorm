@@ -187,16 +187,80 @@ struct DensityProfile
     double density(double h_m) const
     {
         const DensityLayer& l = (count > 1 && h_m < layer[0].width_m) ? layer[0] : layer[count > 1 ? 1 : 0];
-        // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
-        const double e = l.exp_term != 0.0 ? l.exp_term * std::exp(std::min(std::max(l.exp_scale * h_m, -80.0), 80.0)) : 0.0;
-        const double d = e + l.linear * h_m + l.constant;
+        const double d = layer_value(l, h_m);
         return !(d >= 0.0) ? 0.0 : (d > 1.0 ? 1.0 : d); // NaN gives 0
     }
 
-    // The altitudes (metres, in no particular order) where density() is not smooth: the layer boundary
-    // and the clamps of the linear layers (h where linear h + constant = 0 or 1, inside the layer).
-    // Returns the number written, at most max_count.
-    int kinks(double* out_m, int max_count) const
+    // a layer's expression before the clamp
+    static double layer_value(const DensityLayer& l, double h_m)
+    {
+        // no exp when exp_term is 0 (0 * inf is NaN); the exponent is bounded so e^x stays finite
+        const double e = l.exp_term != 0.0 ? l.exp_term * std::exp(std::min(std::max(l.exp_scale * h_m, -80.0), 80.0)) : 0.0;
+        return e + l.linear * h_m + l.constant;
+    }
+
+    // The h in (lo, hi) (metres) where a layer's unclamped expression crosses density 0 or 1, for a layer with an
+    // exponential term. f = exp_term e^(exp_scale h) + linear h + constant has f'' of the sign of exp_term, so at most one
+    // stationary point (linear = -exp_term exp_scale e^(exp_scale h)); split there, each part is monotone, so a sign change
+    // of f - level across it holds exactly one crossing, found by 32 bisections (physicalAtmosphereF.glsl does the same).
+    static int layer_crossings(const DensityLayer& l, double lo, double hi, double* out, int max_count)
+    {
+        double br[3];
+        int nb = 0;
+        br[nb++] = lo;
+        if (l.exp_scale != 0.0 && l.linear != 0.0)
+        {
+            const double q = -l.linear / (l.exp_term * l.exp_scale);
+            if (q > 0.0 && std::isfinite(q))
+            {
+                const double x = std::log(q) / l.exp_scale;
+                if (x > lo && x < hi)
+                {
+                    br[nb++] = x;
+                }
+            }
+        }
+        br[nb++] = hi;
+        int n = 0;
+        for (int j = 0; j + 1 < nb; ++j)
+        {
+            for (double level : { 0.0, 1.0 })
+            {
+                double a = br[j], b = br[j + 1];
+                double ga = layer_value(l, a) - level;
+                const double gb = layer_value(l, b) - level;
+                if (!((ga < 0.0 && gb > 0.0) || (ga > 0.0 && gb < 0.0)))
+                {
+                    continue;
+                }
+                for (int it = 0; it < 32; ++it)
+                {
+                    const double m = 0.5 * (a + b);
+                    const double gm = layer_value(l, m) - level;
+                    if ((gm < 0.0) == (ga < 0.0))
+                    {
+                        a = m;
+                        ga = gm;
+                    }
+                    else
+                    {
+                        b = m;
+                    }
+                }
+                if (n < max_count)
+                {
+                    out[n++] = 0.5 * (a + b);
+                }
+            }
+        }
+        return n;
+    }
+
+    // The altitudes (metres, in no particular order) where density() is not smooth: the layer boundary and the clamps
+    // (h where the unclamped expression is 0 or 1, inside the layer and below top_m). A linear layer has them in closed
+    // form; a layer with an exponential term by layer_crossings, except the stock forms (exp_term in (0, 1], decaying, no
+    // linear or constant term: always within [0, 1]), which have none. Returns the number written, at most max_count.
+    int kinks(double* out_m, int max_count, double top_m) const
     {
         int n = 0;
         auto add = [&](double h) {
@@ -221,18 +285,30 @@ struct DensityProfile
         for (int i = 0; i < layers; ++i)
         {
             const DensityLayer& l = layer[i];
-            if (l.exp_term != 0.0 || l.linear == 0.0)
-            {
-                continue;
-            }
             const double lo = (i == 0) ? 0.0 : layer[0].width_m;
-            const double hi = (layers == 2 && i == 0) ? layer[0].width_m : 1e30;
-            for (double level : { 0.0, 1.0 })
+            const double hi = (layers == 2 && i == 0) ? layer[0].width_m : top_m;
+            if (l.exp_term == 0.0)
             {
-                const double h = (level - l.constant) / l.linear;
-                if (h > lo && h < hi)
+                if (l.linear == 0.0)
                 {
-                    add(h);
+                    continue;
+                }
+                for (double level : { 0.0, 1.0 })
+                {
+                    const double h = (level - l.constant) / l.linear;
+                    if (h > lo && h < hi)
+                    {
+                        add(h);
+                    }
+                }
+            }
+            else if (!(l.linear == 0.0 && l.constant == 0.0 && l.exp_scale <= 0.0 && l.exp_term > 0.0 && l.exp_term <= 1.0))
+            {
+                double c[4];
+                const int k = layer_crossings(l, lo, hi, c, 4);
+                for (int j = 0; j < k; ++j)
+                {
+                    add(c[j]);
                 }
             }
         }
@@ -345,13 +421,13 @@ inline double dot(const Vec3& a, const Vec3& b)
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-// The altitudes (km, inside (0, top_km)) where a profile needs a cut: its kinks and, for an
+// The altitudes (km, inside (0, top_km)) where a profile needs a cut: its kinks (layer boundary, clamp crossings) and, for an
 // exponential layer, the EXP_CUT_SCALES multiples of its scale height (so no segment spans many e-foldings).
 inline int profile_cuts_km(const DensityProfile& p, double top_km, double* out, int max_count)
 {
-    double m[8];
+    double m[16];
     int n = 0;
-    const int k = p.kinks(m, 8);
+    const int k = p.kinks(m, 16, top_km * 1e3);
     for (int i = 0; i < k && n < max_count; ++i)
     {
         const double h = m[i] * 1e-3;
@@ -400,6 +476,28 @@ inline double profile_column_km(const DensityProfile& p, double top_km)
 }
 } // namespace detail
 
+// today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
+// per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
+// path_scale 1: atmosphericsFuncs.glsl:111-112; 0.5: cloudsV.glsl:177-179
+inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
+{
+    using detail::finite_or;
+    const double src[3] = { std::max(finite_or(sky.source.x, 0.0), 0.0), std::max(finite_or(sky.source.y, 0.0), 0.0),
+                            std::max(finite_or(sky.source.z, 0.0), 0.0) };
+    const double bd[3] = { sky.blue_density.x, sky.blue_density.y, sky.blue_density.z };
+    const double air = 1.0 / std::max(1e-6, finite_or(mu, 0.0));
+    double t[3];
+    for (int k = 0; k < 3; ++k)
+    {
+        double x = (finite_or(bd[k], 0.0) + finite_or(sky.haze_density, 0.0) * 0.25) * finite_or(sky.density_multiplier, 0.0)
+                 * finite_or(sky.max_y, 0.0) * finite_or(path_scale, 1.0) * air;
+        x = std::max(x, 0.0);
+        const double lin = srgb_to_linear(src[k]);
+        t[k] = lin > 1e-9 ? srgb_to_linear(src[k] * std::exp(-x)) / lin : std::exp(-2.4 * x);
+    }
+    return { t[0], t[1], t[2] };
+}
+
 // --- the physical atmosphere mapped from the legacy fields ---
 struct LLAtmosphere
 {
@@ -417,7 +515,8 @@ struct LLAtmosphere
 
     // The legacy fields mapped onto Rayleigh, aerosol, ground haze slab and ozone. At noon (the sun at the
     // zenith, observer on the ground) T(0, 1) equals today's lin(source e^-tau) / lin(source) in every
-    // channel, except where CLAMP_COLUMN applied.
+    // channel. A channel whose column would exceed max_column (CLAMP_COLUMN; a light rig asking for almost no sun) keeps
+    // today's transmittance altogether (legacy_sun_mask): see transmittance().
     static LLAtmosphere fromLegacy(const LegacySky& sky, const AtmosphereBounds& bounds = {})
     {
         LLAtmosphere a;
@@ -472,6 +571,8 @@ struct LLAtmosphere
         const double max_column = (bounds.max_column >= 0.0 && std::isfinite(bounds.max_column)) ? bounds.max_column : defaults.max_column;
         const double max_ground_haze = (bounds.max_ground_haze >= 0.0 && std::isfinite(bounds.max_ground_haze)) ? bounds.max_ground_haze : defaults.max_ground_haze;
 
+        a.legacy_air = { { src[0], src[1], src[2] }, { bd[0], bd[1], bd[2] }, hd, dm, my };
+
         // 1. the column, per channel, as today's sunlight reaches the ground at noon
         double column[3];
         for (int k = 0; k < 3; ++k)
@@ -487,6 +588,7 @@ struct LLAtmosphere
             {
                 c = max_column;
                 clamped |= CLAMP_COLUMN;
+                a.legacy_sun_mask |= 1u << k; // this channel asks for (almost) no sun: it keeps today's transmittance
             }
             column[k] = c;
         }
@@ -512,7 +614,8 @@ struct LLAtmosphere
             tau_r[k] = std::max(column[k] - tau_m - tau_o[k], 0.0);
         }
         a.rayleigh_ext = { tau_r[0] / he_r, tau_r[1] / he_r, tau_r[2] / he_r };
-        a.ozone_ext = { tau_o[0] / he_o, tau_o[1] / he_o, tau_o[2] / he_o };
+        // a profile with no column (a layer above the atmosphere, or the 10 km height clamp over ozone_profile: 2e-31 of round-off, or 0) has no ozone; tau_o / he_o would be 0/0
+        a.ozone_ext = he_o > 1e-9 ? Vec3{ tau_o[0] / he_o, tau_o[1] / he_o, tau_o[2] / he_o } : Vec3{};
 
         // 3. the ground haze slab: what the legacy distance haze has beyond the exponential profiles, taken
         //    from the aerosol column (never added to it)
@@ -548,9 +651,49 @@ struct LLAtmosphere
     // Segmented 8-point Gauss-Legendre along the path, cut at every profile kink, at the slab's 0.75H and H,
     // at EXP_CUT_SCALES scale heights of each exponential layer, where a ray crosses the ground and at the
     // perigee of a downward ray. Accuracy: about 1e-9 absolute for the stock profiles (exponential Rayleigh and
-    // aerosol, Bruneton's ozone), as measured by the test; other profiles are not guaranteed that.
+    // aerosol, Bruneton's ozone), as measured by the test; profiles with clamp crossings inside a segment are cut at them
+    // (1e-6 against the reference, measured); other profiles are not guaranteed that.
+    // The channels in legacy_sun_mask return legacy_transmittance(path_scale 1) x the visible share instead (any altitude),
+    // so a sky that asked for no sun stays as authored; that is a property of the sky, so nothing switches as the sun moves.
     // A non-finite argument gives 0.
     Vec3 transmittance(double h_km, double mu, double disc_sin) const
+    {
+        const Vec3 t = physical_transmittance(h_km, mu, disc_sin);
+        if (legacy_sun_mask == 0 || !std::isfinite(h_km) || !std::isfinite(mu) || !std::isfinite(disc_sin))
+        {
+            return t;
+        }
+        const double vis = visible_share(h_km, mu, disc_sin);
+        if (!(vis > 0.0))
+        {
+            return {};
+        }
+        LegacySky l;
+        l.source = legacy_air.source;
+        l.blue_density = legacy_air.blue_density;
+        l.haze_density = legacy_air.haze_density;
+        l.density_multiplier = legacy_air.density_multiplier;
+        l.max_y = legacy_air.max_y;
+        const Vec3 lt = legacy_transmittance(l, std::min(std::max(mu, -1.0), 1.0), 1.0);
+        return { (legacy_sun_mask & 1u) ? lt.x * vis : t.x, (legacy_sun_mask & 2u) ? lt.y * vis : t.y,
+                 (legacy_sun_mask & 4u) ? lt.z * vis : t.z };
+    }
+
+    // the share of the body's disc above the horizon (the factor transmittance() ends with)
+    double visible_share(double h_km, double mu, double disc_sin) const
+    {
+        const double rg = planet_radius_km;
+        const double top = top_radius_km - rg;
+        const double h0 = std::min(std::max(h_km, 0.0), top);
+        mu = std::min(std::max(mu, -1.0), 1.0);
+        const double d = std::min(std::max(disc_sin, 0.0), 1.0);
+        const double r0 = rg + h0;
+        const double mu_h = -std::sqrt(h0 * (2.0 * rg + h0)) / r0;
+        return d > 0.0 ? smoothstep(mu_h - d, mu_h + d, mu) : (mu >= mu_h ? 1.0 : 0.0);
+    }
+
+    // the physical model alone (what transmittance() is for the channels that do not keep today's)
+    Vec3 physical_transmittance(double h_km, double mu, double disc_sin) const
     {
         if (!std::isfinite(h_km) || !std::isfinite(mu) || !std::isfinite(disc_sin))
         {
@@ -692,29 +835,20 @@ struct LLAtmosphere
                    absorption = ozone_profile(); // ozone_profile() if the stored default was the broken one
     double planet_radius_km = 6360.0, top_radius_km = 6420.0;   // clamped: Rg in [1000, 100000], Rt - Rg in [10, 1000]
     unsigned clamped = 0;               // bit mask of Clamp: the bounds that applied
-};
 
-// today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
-// per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
-// path_scale 1: atmosphericsFuncs.glsl:111-112; 0.5: cloudsV.glsl:177-179
-inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
-{
-    using detail::finite_or;
-    const double src[3] = { std::max(finite_or(sky.source.x, 0.0), 0.0), std::max(finite_or(sky.source.y, 0.0), 0.0),
-                            std::max(finite_or(sky.source.z, 0.0), 0.0) };
-    const double bd[3] = { sky.blue_density.x, sky.blue_density.y, sky.blue_density.z };
-    const double air = 1.0 / std::max(1e-6, finite_or(mu, 0.0));
-    double t[3];
-    for (int k = 0; k < 3; ++k)
+    // Channels whose column would have exceeded max_column (a light rig that asks for almost no sun, "sun off"): the
+    // sun and moon light in these channels is today's transmittance (legacy_transmittance, path_scale 1, times the
+    // body's visible share), whatever the altitude, so the sky stays as authored. They are a property of the sky, so no
+    // switch between the two models happens as the sun moves.
+    struct LegacyAir
     {
-        double x = (finite_or(bd[k], 0.0) + finite_or(sky.haze_density, 0.0) * 0.25) * finite_or(sky.density_multiplier, 0.0)
-                 * finite_or(sky.max_y, 0.0) * finite_or(path_scale, 1.0) * air;
-        x = std::max(x, 0.0);
-        const double lin = srgb_to_linear(src[k]);
-        t[k] = lin > 1e-9 ? srgb_to_linear(src[k] * std::exp(-x)) / lin : std::exp(-2.4 * x);
-    }
-    return { t[0], t[1], t[2] };
-}
+        Vec3 source;
+        Vec3 blue_density;
+        double haze_density = 0.0, density_multiplier = 0.0, max_y = 0.0;
+    };
+    LegacyAir legacy_air;
+    unsigned legacy_sun_mask = 0;       // bit k: channel k (x, y, z) keeps today's transmittance
+};
 
 // --- L3: the sun/moon handover (stateless) ---
 constexpr double MOON_PHYSICAL = 2.5e-6;   // full moon / sun illuminance (0.25 lx / 100 klx)
