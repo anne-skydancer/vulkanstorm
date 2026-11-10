@@ -209,6 +209,7 @@ def check():
                         ('blue_horizon', (0.5, 0.5, 0.6)), ('blue_density', (0.25, 0.45, 0.76)), ('glow', (5, 0.001, -0.5)), ('cloud_color', (0.4, 0.4, 0.4))):
             u(sky, name, *v)
         u(sky, 'haze_horizon', 0.19); u(sky, 'haze_density', 0.7); u(sky, 'density_multiplier', 0.0002); u(sky, 'sun_up_factor', 1); u(sky, 'sun_moon_blend', 0.0)
+        u(sky, 'cloud_light_transmittance', 1.0, 1.0, 1.0); u(sky, 'cloud_moon_blend', 0.0)
         common(sky)
         attrib3f(0, hit[0] / 1.0, hit[1] / 1.0, hit[2] / 1.0); attrib2f(1, (-z0 + 1) / 2, (-x0 + 1) / 2)
         draw(0, 0, 1)   # GL_POINTS
@@ -238,6 +239,49 @@ def check():
     ok = worst <= 2e-3 and informative >= 15
     print('check:', 'OK' if ok else 'FAILED')
     return ok
+
+
+# --- stage L3: the lookup follows primary_shadow_strength --------------------------------------
+STRENGTH_FILL = """
+layout(location = 0) out vec4 out_a;
+void main() { out_a = vec4(gl_FragCoord.x < 256.0 ? 0.1 : 0.9, 0.0, 0.0, 1.0); }
+"""
+STRENGTH_MAIN = """
+layout(location = 0) out vec4 out_a;
+void main() { out_a = vec4(cloudShadowTransmittance(vec3(0.0)), 0.0, 0.0, 1.0); }
+"""
+
+
+def check_strength():
+    """cloudShadowTransmittance: the map's weight follows primary_shadow_strength. A map of 0.1 (left half) and 0.9 (right half),
+    mean 0.5, read at the left quarter: strength 1 gives the map (0.1), 0 the mean (0.5), 0.5 halfway (0.3)."""
+    useprog = fn('glUseProgram', None, U)
+    head = "#version 400 compatibility" + chr(10) + "#define FRAGMENT_SHADER 1" + chr(10)
+    fill = build(LOOKUP_VS, head + STRENGTH_FILL)
+    look = build(LOOKUP_VS, head + read('class1/environment/srgbF.glsl') + read('class1/windlight/atmosphericsFuncs.glsl') + STRENGTH_MAIN)
+    tmap, fmap = target(512, 512, 0x8229, mips=True)
+    tout, fout = target(1, 1)
+    bindfbo(0x8D40, fmap); viewport(0, 0, 512, 512); useprog(fill); draw(4, 0, 3)
+    bindtex(TEX2D, tmap); genmip(TEX2D)
+    ok = True
+    for strength, want in ((1.0, 0.1), (0.0, 0.5), (0.5, 0.3)):
+        bindfbo(0x8D40, fout); viewport(0, 0, 1, 1); useprog(look)
+        u(look, 'cloud_shadow_params', 1.0, 0.0, 0.0625, 0.0)
+        m = (F * 16)(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.25, 0.5, 0, 1)
+        um4(loc(look, b'cloud_shadow_mat'), 1, 0, m)
+        u(look, 'cloud_shadow_map', 0)
+        u(look, 'primary_shadow_strength', strength)
+        active(0x84C0); bindtex(TEX2D, tmap)
+        draw(4, 0, 3)
+        got = read_pixel(tout)[0]
+        good = abs(got - want) < 3e-3
+        ok = ok and good
+        print(f'check: primary_shadow_strength {strength}: cloudShadowTransmittance {got:.4f} (expected {want}) {"ok" if good else "FAILED"}')
+    # the sun's shadow (shadowUtil.glsl sampleDirectionalShadow) is mixed the same way: 1 - strength (1 - shadow)
+    src = read('class1/deferred/shadowUtil.glsl')
+    mixed = 'return mix(1.0, shadow, primary_shadow_strength);' in src
+    print('check: shadowUtil mixes the sun shadow with primary_shadow_strength:', 'ok' if mixed else 'FAILED')
+    return ok and mixed
 
 
 # --- cost ------------------------------------------------------------------------------------
@@ -326,7 +370,7 @@ def bench():
     print(f'1080p, map + lookups with clouds: {total:.4f} ms (gate 0.05 ms); with no clouds the map pass does not run and the lookup branch is off (see "no clouds")')
 
 
-if DO_CHECK and not check():
+if DO_CHECK and not (check() and check_strength()):
     sys.exit(1)
 if DO_BENCH:
     bench()

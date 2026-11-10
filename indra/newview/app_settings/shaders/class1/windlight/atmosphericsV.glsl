@@ -44,7 +44,7 @@ void calcAtmospherics(vec3 inPositionEye) {
     vec3 tmpamblit = vec3(1);
     vec3 tmpaddlit = vec3(1);
     vec3 tmpattenlit = vec3(1);
-    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
     calcAtmosphericVars(inPositionEye, light_dir, 1, tmpsunlit, tmpamblit, tmpaddlit, tmpattenlit);
     setSunlitColor(tmpsunlit);
     setAmblitColor(tmpamblit);
