@@ -1,0 +1,96 @@
+//! Reference excerpt "sun-splits" for scripts/shadows/check_legacy_shadows.py.
+//! Source: indra/newview/pipeline.cpp (LLPipeline::generateSunShadow) of Firestorm 7.2.5, upstream ref
+//! upstream/Firestorm_7.2.5 at 4ac201fdc5 (identical at e3cd40d016), lines 10973-11063.
+//! Linden Lab / Firestorm code, LGPL-2.1 (see LICENSE-LGPL-2.1 and doc/licensing.md); stored unchanged
+//! as the oracle for the Legacy shadow method. Lines starting with //! are not part of the excerpt.
+    //create light space camera matrix
+    LLVector3 at = lightDir;
+
+    LLVector3 up = camera.getAtAxis();
+
+    if (fabsf(up*lightDir) > 0.75f)
+    {
+        up = camera.getUpAxis();
+    }
+
+    up.normVec();
+    at.normVec();
+
+
+    LLCamera main_camera = camera;
+
+    F32 near_clip = 0.f;
+    {
+        //get visible point cloud
+        std::vector<LLVector3> fp;
+
+        main_camera.calcAgentFrustumPlanes(main_camera.mAgentFrustum);
+
+        LLVector3 min,max;
+        getVisiblePointCloud(main_camera,min,max,fp);
+
+        if (fp.empty())
+        {
+            if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+            {
+                mShadowCamera[0] = main_camera;
+                mShadowExtents[0][0] = min;
+                mShadowExtents[0][1] = max;
+
+                mShadowFrustPoints[0].clear();
+                mShadowFrustPoints[1].clear();
+                mShadowFrustPoints[2].clear();
+                mShadowFrustPoints[3].clear();
+            }
+            popRenderTypeMask();
+
+            if (!skip_avatar_update)
+            {
+                gAgentAvatarp->updateAttachmentVisibility(gAgentCamera.getCameraMode());
+            }
+
+            return;
+        }
+
+        //get good split distances for frustum
+        for (U32 i = 0; i < fp.size(); ++i)
+        {
+            glm::vec3 v(fp[i]);
+            v = mul_mat4_vec3(saved_view, v);
+            fp[i] = LLVector3(v);
+        }
+
+        min = fp[0];
+        max = fp[0];
+
+        //get camera space bounding box
+        for (U32 i = 1; i < fp.size(); ++i)
+        {
+            update_min_max(min, max, fp[i]);
+        }
+
+        near_clip    = llclamp(-max.mV[2], 0.01f, 4.0f);
+        F32 far_clip = llclamp(-min.mV[2]*2.f, 16.0f, 512.0f);
+
+        //far_clip = llmin(far_clip, 128.f);
+        far_clip = llmin(far_clip, camera.getFar());
+
+        F32 range = far_clip-near_clip;
+
+        LLVector3 split_exp = RenderShadowSplitExponent;
+
+        F32 da = 1.f-llmax( fabsf(lightDir*up), fabsf(lightDir*camera.getLeftAxis()) );
+
+        da = powf(da, split_exp.mV[2]);
+
+        F32 sxp = split_exp.mV[1] + (split_exp.mV[0]-split_exp.mV[1])*da;
+
+        for (U32 i = 0; i < 4; ++i)
+        {
+            F32 x = (F32)(i+1)/4.f;
+            x = powf(x, sxp);
+            mSunClipPlanes.mV[i] = near_clip+range*x;
+        }
+
+        mSunClipPlanes.mV[0] *= 1.25f; //bump back first split for transition padding
+    }
