@@ -968,16 +968,65 @@ int main()
                 check(capped_channels > 0, "the partial caps cap something");
             }
 
-            // (c) the path factor: the cloud light (today's half airmass) is brighter than the sun's in a capped channel, by e^(excess/2) at the zenith;
+            // (c) the path factor scales the excess only (the cloud light's thinner air in the physical model comes from taking T at the
+            // cloud layer's altitude; the excess has none, so a rig's cloud light passes 0.5 to have today's half airmass): half the
+            // path factor is the square root of the excess factor, e^(excess/2) brighter than the sun's at the zenith;
             // a sky without excess does not depend on it
             {
                 const LLAtmosphere rig = capped(lo_col * 0.5);
                 const Vec3 t1 = rig.transmittance(0.0, 1.0, d), t5 = rig.transmittance(0.0, 1.0, d, 0.5), t0 = rig.transmittance(0.0, 1.0, d, 0.0);
-                check(near(t5.x / t1.x, std::exp(0.5 * rig.excess.x), 1e-12, 1e-12) && near(t5.z / t1.z, std::exp(0.5 * rig.excess.z), 1e-12, 1e-12), "path factor 0.5 is half the excess", t5.x / t1.x);
+                check(near(t5.x / t1.x, std::exp(0.5 * rig.excess.x), 1e-12, 1e-12) && near(t5.z / t1.z, std::exp(0.5 * rig.excess.z), 1e-12, 1e-12), "path factor 0.5 halves the excess factor only", t5.x / t1.x);
                 const Vec3 p0 = rig.physical_transmittance(0.0, 1.0, d);
                 check(t0.x == p0.x && t0.y == p0.y && t0.z == p0.z, "path factor 0 leaves the physical sky", t0.x);
                 check(real.transmittance(0.0, 0.3, d, 0.5).y == real.transmittance(0.0, 0.3, d).y, "a sky without excess ignores the path factor");
                 check(in_unit(rig.transmittance(0.0, 0.0, d, std::nan(""))) && in_unit(rig.transmittance(1.0, 0.5, d, -3.0)) && in_unit(rig.transmittance(1.0, 0.5, d, HUGE_VAL)), "hostile path factors: T in [0,1]");
+            }
+
+            // (c2) the cap does not move the other channels: on Bangko 1 and Default, caps at 0.3, 0.5 and 0.9 of each channel's column;
+            // every channel under the cap equals the uncapped sky, across mu down to the horizon, at the ground and at altitude
+            {
+                double worst = 0.0;
+                int uncapped_checked = 0;
+                for (int sky_index : { 0, 2 })
+                {
+                    const LegacySky sk = legacy_of(kSkies[sky_index]);
+                    const LLAtmosphere free_sky = LLAtmosphere::fromLegacy(sk, wide);
+                    const double fc[3] = { free_sky.column.x, free_sky.column.y, free_sky.column.z };
+                    for (int ch = 0; ch < 3; ++ch)
+                    {
+                        for (double frac : { 0.3, 0.5, 0.9 })
+                        {
+                            AtmosphereBounds b;
+                            b.max_column = frac * fc[ch];
+                            const LLAtmosphere cp = LLAtmosphere::fromLegacy(sk, b);
+                            const double cc[3] = { cp.column.x, cp.column.y, cp.column.z };
+                            const double ex[3] = { cp.excess.x, cp.excess.y, cp.excess.z };
+                            for (int k = 0; k < 3; ++k)
+                            {
+                                // the model's column plus the excess is always the sky's column
+                                check(near(cc[k] + ex[k], fc[k], 1e-12, 1e-12), "capped atmosphere: column + excess is the sky's column", cc[k] + ex[k], fc[k]);
+                            }
+                            for (double h : { 0.0, 1.5 })
+                            {
+                                for (double mu : { 1.0, 0.5, 0.2, 0.05, 0.01, 0.003, 0.0 })
+                                {
+                                    const Vec3 tp = cp.transmittance(h, mu, d), tf = free_sky.transmittance(h, mu, d);
+                                    const double a[3] = { tp.x, tp.y, tp.z }, f[3] = { tf.x, tf.y, tf.z };
+                                    for (int k = 0; k < 3; ++k)
+                                    {
+                                        if (ex[k] == 0.0)
+                                        {
+                                            worst = std::fmax(worst, std::fabs(a[k] - f[k]));
+                                            ++uncapped_checked;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                std::printf("uncapped channels vs the uncapped sky (Default, Bangko 1; caps 0.3, 0.5, 0.9 of each column): %d values, worst %.3g\n", uncapped_checked, worst);
+                check(uncapped_checked > 0 && worst < 1e-9, "an uncapped channel equals the uncapped sky", worst);
             }
 
             // (d) an atmosphere that is not finalized computes its cuts per call and gives the same T
