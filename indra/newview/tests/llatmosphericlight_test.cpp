@@ -1505,6 +1505,70 @@ int main()
             }
         }
 
+        // 2b. the clouds' band is centred on -dip, dip = acos(R / (R + h)) of the cloud layer's horizon; the ground's stays on 0
+        {
+            const double dip15 = horizon_dip_degrees(6360.0, 1.5);
+            check(near(dip15, 1.2443, 1e-3, 1e-3), "horizon dip at 1.5 km on 6360 km is 1.24 degrees", dip15);
+            check(horizon_dip_degrees(6360.0, 0.0) == 0.0 && horizon_dip_degrees(6360.0, -1.0) == 0.0 && horizon_dip_degrees(6360.0, std::nan("")) == 0.0
+                      && horizon_dip_degrees(0.0, 1.5) == 0.0 && horizon_dip_degrees(std::nan(""), 1.5) == 0.0 && horizon_dip_degrees(6360.0, HUGE_VAL) == 0.0,
+                  "horizon dip: 0 for h <= 0, R <= 0 or non-finite inputs");
+            PrimaryLightInputs in;
+            in.moon_dir = dir_of(20.0, 120.0);
+            in.sun_T = { 1.0, 1.0, 1.0 };
+            in.moon_T = { 1.0, 1.0, 1.0 };
+            in.source = { 1.0, 1.0, 1.0 };
+            in.moon_gain = 0.2;
+            PrimaryLightParams ground, cloud;
+            cloud.horizon_dip_deg = dip15;
+            for (double e : { 3.0, 0.31, 0.0, -0.31, -1.0, -dip15 + 0.3, -dip15, -dip15 - 0.3, -3.0 })
+            {
+                in.sun_dir = dir_of(e);
+                const PrimaryLight g = primary_light(in, ground), c = primary_light(in, cloud);
+                const double u = std::min(std::max((-e - dip15 + 0.3) / 0.6, 0.0), 1.0);
+                check(near(c.moon_weight, u * u * (3.0 - 2.0 * u), 1e-9, 1e-12), "cloud band is centred on -dip", c.moon_weight, e);
+                check(g.shadow_strength == c.shadow_strength, "the shadow fades are not shifted by the dip", e);
+                PrimaryLightParams zero = ground;
+                zero.horizon_dip_deg = 0.0;
+                const PrimaryLight z = primary_light(in, zero);
+                check(z.moon_weight == g.moon_weight && z.dir.x == g.dir.x && z.dir.z == g.dir.z && z.shadow_strength == g.shadow_strength, "dip 0 is the ground band", e);
+            }
+            in.sun_dir = dir_of(-dip15);
+            check(near(primary_light(in, cloud).moon_weight, 0.5, 1e-9), "t_cloud is 0.5 at -dip");
+            in.sun_dir = dir_of(-dip15 + 0.31);
+            check(primary_light(in, cloud).moon_weight == 0.0, "t_cloud is 0 above -dip + swing");
+            in.sun_dir = dir_of(-dip15 - 0.31);
+            check(primary_light(in, cloud).moon_weight == 1.0, "t_cloud is 1 below -dip - swing");
+
+            // the chain: a sunset with the moon high; the ground has switched to the moon while the clouds are still the sun's
+            LegacySky sky = legacy_of(kSkies[0]);
+            auto rig_at = [&](double e, double cloud_h_km) {
+                PrimaryLightSetup s = setup_of(sky, dir_of(e), dir_of(30.0, 100.0));
+                s.cloud_height_km = cloud_h_km;
+                return compute_primary_light(s);
+            };
+            const PrimaryLightRig dusk = rig_at(-0.5, 1.5);
+            check(dusk.light.moon_weight == 1.0 && dusk.cloud_moon_weight == 0.0, "dusk: the clouds are still sunlit after the ground switched to the moon", dusk.light.moon_weight, dusk.cloud_moon_weight);
+            check(rig_at(-0.5, 0.0).cloud_moon_weight == 1.0, "h = 0: the clouds hand over with the ground");
+            const PrimaryLightRig mid = rig_at(-dip15, 1.5);
+            check(near(mid.cloud_moon_weight, 0.5, 0.02), "the clouds are half way at -dip", mid.cloud_moon_weight);
+            check(rig_at(-dip15 - 0.5, 1.5).cloud_moon_weight == 1.0, "the clouds are the moon's below -dip - swing");
+            double last = 0.0, step = 0.0, ground_diff = 0.0;
+            for (int i = 0; i <= 600; ++i)
+            {
+                const double e = 1.0 - 0.005 * i; // dusk and dawn mirror: 1 to -2 degrees
+                const PrimaryLightRig a = rig_at(e, 1.5), z = rig_at(e, 0.0);
+                if (i > 0)
+                {
+                    step = std::max(step, std::fabs(a.cloud_moon_weight - last));
+                }
+                last = a.cloud_moon_weight;
+                ground_diff = std::max(ground_diff, std::fabs(a.light.moon_weight - z.light.moon_weight) + std::fabs(a.light.shadow_strength - z.light.shadow_strength)
+                                                       + std::fabs(a.light.dir.x - z.light.dir.x) + std::fabs(a.light.dir.z - z.light.dir.z));
+            }
+            check(step < 0.02, "the clouds' handover with the dip is smooth", step);
+            check(ground_diff == 0.0, "the ground does not depend on the cloud height", ground_diff);
+        }
+
         // 3. continuity across the cuts r = 0.10 / 0.40 / 0.60 / 0.90 (default parameters): primary_light is continuous in
         //    the ratio, on both sides of each cut
         {
