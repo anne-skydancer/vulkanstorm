@@ -880,9 +880,9 @@ constexpr double MOON_PHYSICAL = 2.5e-6;   // full moon / sun illuminance (0.25 
 
 struct PrimaryLightParams
 {
-    double swing = 0.10;   // half-width of the direction/colour swing around r = 0.5      (RenderLightHandoverSwing)
-    double fade  = 0.30;   // width of each shadow fade beside the swing                    (RenderLightHandoverFade)
-                           // swing + fade is clamped to 0.49
+    double swing = 0.30;   // half-width of the direction/colour swing, degrees of sun elevation: all sun at +swing, all moon at -swing (RenderLightHandoverSwing, 0.05 .. 5)
+    double fade  = 0.30;   // width of each shadow fade outside the swing, degrees: the sun's from swing + fade to swing, the moon's
+                           // from -swing to -swing - fade                                   (RenderLightHandoverFade, 0 .. 5)
     double dark  = 1e-4;   // E_sun + E_moon below dark x luminance(source): both are dark (fallback)
 };
 
@@ -902,7 +902,7 @@ struct PrimaryLight
     Vec3   T;                // its transmittance: ground light = source x T (cross-faded, moon gain included)
     double shadow_strength;  // 1 full, 0 none
     double moon_weight;      // t: 0 the sun, 1 the moon (dome colour, glow, cloud light, light size)
-    double ratio;            // r = E_moon / (E_sun + E_moon), after the dark fallback
+    double ratio;            // r = E_moon / (E_sun + E_moon), after the dark fallback (reported; it no longer drives t or the shadow)
 };
 
 // nlerp, bent over the zenith when the two face apart; never through zero, never below the horizon for two lights above it:
@@ -958,12 +958,21 @@ inline PrimaryLight primary_light(const PrimaryLightInputs& in, const PrimaryLig
     const double known = (p.dark * y_src > 0.0 && sum > 0.0) ? smoothstep(0.0, p.dark * y_src, sum) : 0.0;
     const double r = std::min(std::max(r_fb + (r_phys - r_fb) * known, 0.0), 1.0);
 
-    const double swing = std::min(std::max(finite_or(p.swing, 0.1), 0.0), 0.49);
-    const double fade = std::min(std::max(finite_or(p.fade, 0.3), 0.0), 0.49 - swing);
-    const double a0 = 0.5 - swing - fade, b0 = 0.5 - swing, b1 = 0.5 + swing, c1 = 0.5 + swing + fade;
-    const double t = smoothstep(b0, b1, r); // phase b: direction and colour
-    // phase a: the sun's shadow 1 -> 0; phase c: the moon's 0 -> 1
-    const double s = std::max(1.0 - smoothstep(a0, b0, r), smoothstep(b1, c1, r));
+    // The swing and the shadow fades follow the sun's elevation (not r, which goes 0 -> 1 within +-0.1 degree because the sun's
+    // light collapses at the horizon): t is a smoothstep from all sun at +swing to all moon at -swing. The moon only takes over as
+    // far as it is available (up and bright enough): with no usable moon the light stays with the sun and fades to dark.
+    constexpr double RAD2DEG = 180.0 / 3.14159265358979323846;
+    const double elev = std::asin(std::min(std::max(sun_z, -1.0), 1.0)) * RAD2DEG;
+    const double swing = std::min(std::max(finite_or(p.swing, 0.3), 0.05), 5.0);
+    const double fade = std::min(std::max(finite_or(p.fade, 0.3), 0.0), 5.0);
+    // the moon's availability: its light before the compensation against the dark threshold (the disc's visibility is in moon_T, so a
+    // moon rising or setting fades smoothly), and its gain (a sky with moon_brightness 0 has no moon)
+    const double e_m_raw = luminance({ src.x * moon_T.x, src.y * moon_T.y, src.z * moon_T.z });
+    const double avail = (p.dark * y_src > 0.0 ? smoothstep(0.0, p.dark * y_src, e_m_raw) : 0.0)
+                       * smoothstep(0.0, 0.01 * MOON_PHYSICAL, gain);
+    const double t = smoothstep(swing, -swing, elev) * avail; // direction and colour
+    // the sun's shadow 1 -> 0 from swing + fade to swing; the moon's 0 -> 1 from -swing to -swing - fade, scaled by its availability
+    const double s = std::max(smoothstep(swing, swing + fade, elev), avail * (1.0 - smoothstep(-swing - fade, -swing, elev)));
 
     PrimaryLight out;
     out.dir = route_direction(in.sun_dir, in.moon_dir, t);
@@ -1085,8 +1094,9 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)
                     + t * std::min(std::max(finite_or(s.moon_scale, 1.0), 0.0), 100.0);
 
-    // the dome's glow: the sun's, handing over to the moon's (a quarter of its brightness, once the moon is up)
-    rig.haze_glow_factor = (1.0 - t) + t * mb * 0.25 * smoothstep(-moon_disc, moon_disc, moon_z);
+    // the dome's glow: the sun's (gone with its disc, which matters when no moon takes over), handing over to the moon's
+    // (a quarter of its brightness, once the moon is up)
+    rig.haze_glow_factor = (1.0 - t) * smoothstep(-sun_disc, sun_disc, sun_z) + t * mb * 0.25 * smoothstep(-moon_disc, moon_disc, moon_z);
 
     const Vec3 ground = { in.source.x * rig.light.T.x, in.source.y * rig.light.T.y, in.source.z * rig.light.T.z };
     rig.color = linear_to_srgb(ground);
