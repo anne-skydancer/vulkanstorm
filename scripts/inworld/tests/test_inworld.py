@@ -14,6 +14,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 import uuid
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -24,7 +25,7 @@ import analyze_light_check as alc  # noqa: E402
 import viewer_cmdline as vc  # noqa: E402
 import light_check as lc  # noqa: E402
 from fake_viewer import FakeViewer, REGION_DEFAULT, SKIES  # noqa: E402
-from leap_client import (ConnectionLost, LeapError, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
+from leap_client import (LeapError, LeapTimeout, LeapSession, ProtocolError, ViewerGone, binary_dumps, llsd_loads, notation_dumps,  # noqa: E402
                          read_frame, write_frame)
 
 SCENARIO = HERE.parent / "scenarios" / "l3_at1_handover.json"
@@ -308,6 +309,7 @@ class FullRunTest(unittest.TestCase):
             self.assertFalse(any(fv.floaters.values()), fv.floaters)
             self.assertFalse(fv.frozen)
             self.assertIs(info["args"]["set_values"]["RenderAtmospherePhysicalLight"], False)
+            self.assertIs(info["knobs"]["RenderAtmospherePhysicalLight"], False)      # the effective value, after --set
             # the analysis finds the injected pop in Sunset only
             result, text = alc.analyse(run)
             self.assertTrue(any(p["region"] == "ground" for p in result["skies"]["pbr_sunset_crescent_high"]["pops"]), text)
@@ -431,6 +433,15 @@ class FullRunTest(unittest.TestCase):
             self.assertEqual(info["skies"]["no_moon"]["selected"]["item"], "Default")
             self.assertFalse(any(fv.floaters.values()), fv.floaters)
 
+    def test_run_json_knobs_are_the_effective_values_after_all_overrides(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp, knobs={"RenderMoonAdaptationDepth": 8.0},
+                                     extra=["--set", "RenderMoonAdaptationDepth=3.0"])
+            self.assertEqual(code, 0)
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(info["knobs"]["RenderMoonAdaptationDepth"], 3.0)
+
     def test_knob_missing_on_the_baseline_viewer_is_skipped(self):
         fv = FakeViewer()
         del fv.settings["RenderLightHandoverSwing"]
@@ -444,6 +455,36 @@ class FullRunTest(unittest.TestCase):
             self.assertEqual(fv.settings["RenderMoonAdaptationDepth"][1], 6.0)   # restored
 
 
+class WriteJsonAtomicTest(unittest.TestCase):
+    def test_a_briefly_denied_replace_is_retried(self):
+        real = lc.os.replace
+        calls = []
+
+        def flaky(src, dst):
+            calls.append(1)
+            if len(calls) <= 2:
+                raise PermissionError(13, "Access is denied")
+            return real(src, dst)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "restore.json"
+            with mock.patch.object(lc.os, "replace", flaky):
+                lc.write_json_atomic(target, {"a": 1})
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"a": 1})
+            self.assertEqual(len(calls), 3)
+            self.assertFalse((pathlib.Path(tmp) / "restore.json.tmp").exists())
+
+    def test_a_replace_that_is_always_denied_raises_and_leaves_no_tmp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "restore.json"
+            t0 = time.monotonic()
+            with mock.patch.object(lc.os, "replace", side_effect=PermissionError(13, "Access is denied")) as m:
+                with self.assertRaises(PermissionError):
+                    lc.write_json_atomic(target, {"a": 1})
+            self.assertEqual(m.call_count, 10)
+            self.assertLess(time.monotonic() - t0, 3.0)
+            self.assertFalse(target.exists())
+            self.assertFalse((pathlib.Path(tmp) / "restore.json.tmp").exists())
+
 
 class ScalarReplyTest(unittest.TestCase):
     """The real UI.setSelectedByValue answers with a bare boolean that has no reqid; it must never cost a timeout."""
@@ -455,23 +496,99 @@ class ScalarReplyTest(unittest.TestCase):
         s._log = msgs.append
         for _ in range(3):
             s.fire("UI", "setSelectedByValue", path="x/WLPresetsCombo", value=SKIES["Default"][0])
+        fv._send(s.reply_pump, "a string")              # a second non-map type: logged once more
+        fv._send(s.reply_pump, {"type": "error"})      # a map without reqid is still an event
         s.ping()
         self.assertEqual(s.take_errors(), [])
         self.assertIsNone(s._broken)
-        self.assertEqual(len([m for m in msgs if "scalar" in m]), 1)
+        self.assertEqual(len([m for m in msgs if "non-map" in m]), 2)
+        self.assertEqual(s.drain_events(), [(s.reply_pump, {"type": "error"})])
+        self.assertEqual(s._nonmap_dropped, 4)
+
+    def test_the_timeout_message_counts_the_non_map_replies_dropped_during_the_request(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        with self.assertRaises(LeapTimeout) as cm:
+            s.request("LLFloaterReg", "hideInstance", name="x", timeout=0.5)
+        self.assertNotIn("dropped", str(cm.exception))
+        for _ in range(2):
+            s.fire("UI", "setSelectedByValue", path="x/WLPresetsCombo", value=SKIES["Default"][0])
+        s.ping()
+        with self.assertRaises(LeapTimeout) as cm:             # dropped before this request started: not counted
+            s.request("LLFloaterReg", "hideInstance", name="x", timeout=0.5)
+        self.assertNotIn("dropped", str(cm.exception))
+        orig = s.post
+
+        def post_and_drop(pump, data):
+            orig(pump, data)
+            if data.get("op") == "hideInstance":
+                for _ in range(2):
+                    fv._send(s.reply_pump, True)
+        s.post = post_and_drop
+        with self.assertRaises(LeapTimeout) as cm:
+            s.request("LLFloaterReg", "hideInstance", name="x", timeout=0.5)
+        self.assertIn("2 unstamped non-map replies were dropped", str(cm.exception))
+
+    def test_a_fired_error_map_reaches_the_barrier(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        v = lc.Viewer(s)
+        v.fire("UI", "setSelectedByValue", path="a/b/WLPresetsCombo", value=SKIES["Sunset"][0])
+        fv._send(s.reply_pump, {"reqid": s._next_id - 1, "error": "x"})
+        with self.assertRaises(LeapError) as cm:
+            v.barrier()
+        self.assertIn("viewer reported", str(cm.exception))
+        self.assertEqual(s._discard, set())
+
+    def test_a_late_error_for_a_forgotten_fire_is_still_reported_and_unknown_ones_are_logged(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        msgs = []
+        s._log = msgs.append
+        v = lc.Viewer(s)
+        v.fire("LLFloaterReg", "hideInstance", name="x")        # never answered
+        reqid = s._next_id - 1
+        v.barrier()                                              # forgotten here
+        self.assertEqual(s._discard, set())
+        fv._send(s.reply_pump, {"reqid": reqid, "error": "late"})
+        with self.assertRaises(LeapError) as cm:
+            v.barrier()
+        self.assertIn("late", str(cm.exception))
+        for i in range(7):
+            fv._send(s.reply_pump, {"reqid": 9000 + i, "error": "unknown"})
+        s.ping()
+        self.assertEqual(s.late_errors, 7)
+        self.assertEqual(len([m for m in msgs if m.startswith("WARNING error reply for unknown reqid")]), 5)
+
+    def test_a_barrier_empties_the_discard_set_and_a_failed_ping_keeps_it(self):
+        fv = FakeViewer()
+        s = session_for(fv)
+        v = lc.Viewer(s)
+        v.fire("LLFloaterReg", "hideInstance", name="x")        # never answered
+        v.fire("UI", "setSelectedByValue", path="a/b/WLPresetsCombo", value=SKIES["Sunset"][0])   # bare boolean
+        self.assertEqual(len(s._discard), 2)
+        real_ping = s.ping
+
+        def failing_ping(timeout=None):
+            raise LeapTimeout("no reply to ping")
+        s.ping = failing_ping
+        with self.assertRaises(LeapTimeout):
+            v.barrier()
+        self.assertEqual(len(s._discard), 2)
+        s.ping = real_ping
+        v.barrier()
+        self.assertEqual(s._discard, set())
 
     def test_select_by_value_is_prompt_and_a_value_that_did_not_take_is_seen(self):
         fv = FakeViewer()
         s = session_for(fv)
-        s.default_timeout = 3
         v = lc.Viewer(s)
         t0 = time.monotonic()
         v.select_by_value("a/b/WLPresetsCombo", SKIES["Sunset"][0])
         self.assertLess(time.monotonic() - t0, 2.0)
-        self.assertEqual(fv.combo, SKIES["Sunset"][0])
+        self.assertEqual(v.value_of("a/b/WLPresetsCombo"), SKIES["Sunset"][0])
         v.select_by_value("a/b/WLPresetsCombo", "not-a-sky")       # the viewer refuses (false) and the combo stays
-        self.assertEqual(fv.combo, SKIES["Sunset"][0])
-        self.assertNotEqual(str(fv.combo), "not-a-sky")
+        self.assertEqual(v.value_of("a/b/WLPresetsCombo"), SKIES["Sunset"][0])
 
     def test_dry_run_and_full_run_with_scalar_replies_complete_promptly(self):
         for extra in (["--dry-run"], []):
@@ -516,6 +633,58 @@ class DryRunTest(unittest.TestCase):
             self.assertNotIn("env_fixed_environmentent_sky", fv.shown)
             self.assertEqual(fv.sky_applied_count, 0)
             self.assertFalse(any(fv.floaters.values()))
+
+    def test_fixed_editor_widgets_are_found_by_the_floaters_view_name(self):
+        """The view is named "Fixed Environment" (floater_fixedenvironment.xml), not by its LLFloaterReg name."""
+        fv = FakeViewer()
+        v = lc.Viewer(session_for(fv))
+        v.show_floater(lc.FIXED_SKY, key="new")
+        self.assertIsNone(v.find_widget(lc.FIXED_SKY, "htab_panel_settings_sky_hbodies", required=False))
+        self.assertTrue(v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies"))
+
+    def test_the_fixed_water_editor_is_refused_while_open_and_a_shadowed_sky_editor_is_explained(self):
+        for kind in ("open", "shadowed"):
+            fv = FakeViewer()
+            if kind == "open":
+                fv.floaters["env_fixed_environmentent_water"] = True
+            else:
+                fv.shown.append("env_fixed_environmentent_water")     # built earlier, now hidden: still found first
+            with tempfile.TemporaryDirectory() as tmp:
+                code, run, _ = run_main(fv, tmp, skies=only("no_moon") + only("pbr_default"))
+                info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                text = " ".join(info["warnings"])
+                self.assertIn("fixed water editor is open" if kind == "open" else "restart the viewer", text)
+
+    def test_hiding_and_showing_the_fixed_editor_drops_the_cached_widget_paths(self):
+        fv = FakeViewer()
+        v = lc.Viewer(session_for(fv))
+        v.show_floater(lc.FIXED_SKY, key="new")
+        v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies")
+        key = ("widget", lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies")
+        self.assertIn(key, v._paths)
+        v.hide_floater(lc.FIXED_SKY)
+        self.assertNotIn(key, v._paths)
+        v.show_floater(lc.FIXED_SKY, key="new")
+        self.assertTrue(v.find_widget(lc.FIXED_SKY_VIEW, "htab_panel_settings_sky_hbodies"))
+
+    def test_dry_run_reports_an_original_sky_combo_value_that_did_not_come_back(self):
+        fv = FakeViewer()
+        fv.refuse_values.add(REGION_DEFAULT)          # the restore of the original combo value is refused
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"])
+            rows = json.loads((run / "dry_run.json").read_text())
+            row = [r for r in rows if r["check"] == "restore sky combo"][0]
+            self.assertTrue(row["detail"].startswith("WARN: "), row)
+            self.assertIn("was not restored", row["detail"])
+
+    def test_dry_run_without_deep_warns_that_no_moon_needs_the_fixed_editor(self):
+        fv = FakeViewer()
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, _ = run_main(fv, tmp, extra=["--dry-run"], skies=only("no_moon") + only("pbr_default"))
+            rows = json.loads((run / "dry_run.json").read_text())
+            row = [r for r in rows if r["check"] == "fixed sky editor tab"][0]
+            self.assertIn("no_moon needs the fixed sky editor; checked only with --deep", row["detail"])
+            self.assertTrue(row["detail"].startswith("WARN: "), row)
 
     def test_deep_dry_run_restores_the_environment(self):
         fv = FakeViewer()

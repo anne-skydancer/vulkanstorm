@@ -19,7 +19,6 @@ log). Only the standard library is used.
 
 import datetime
 import io
-import queue
 import struct
 import threading
 import time
@@ -435,12 +434,15 @@ class LeapSession:
         self._pending = {}      # reqid -> reply (or None while waiting)
         self._events = []       # (pump, data) not matched to a request
         self._discard = set()   # reqids of fire() operations: their replies are only checked for errors
+        self._recent = set()    # reqids forgotten by the last forget_fired(): a late error reply for one is still reported
+        self.late_errors = 0    # error replies for unknown reqids (the first 5 are logged at WARN)
         self._fired_errors = []
         self._next_id = 1
         self._closed = False
         self.diag_dir = None     # where a protocol error writes bad_frame.bin / bad_frame.txt
         self._prev_frame = None
-        self._scalar_noted = False
+        self._nonmap_dropped = 0       # unstamped non-map replies dropped by the reader
+        self._nonmap_types = set()     # their types seen so far (the first of each type is logged)
         self._broken = None      # why the connection was given up on (protocol error), None if it was EOF
         self._thread = None
 
@@ -490,11 +492,13 @@ class LeapSession:
                         self._cv.notify_all()
                         continue
                     if pump == self.reply_pump and not isinstance(data, dict):
-                        # A scalar reply (the viewer's LLReqID::stamp cannot add a reqid to one, e.g. UI.setSelectedByValue):
-                        # it can match no request, so it is dropped rather than queued as an event.
-                        if not self._scalar_noted:
-                            self._scalar_noted = True
-                            self._log("debug: unstamped scalar reply %r on the reply pump ignored (further ones are silent)" % (data,))
+                        # A non-map reply (the viewer's LLReqID::stamp cannot add a reqid to one, e.g. UI.setSelectedByValue):
+                        # it can match no request, so it is counted and dropped rather than queued as an event.
+                        self._nonmap_dropped += 1
+                        if type(data).__name__ not in self._nonmap_types:
+                            self._nonmap_types.add(type(data).__name__)
+                            self._log("debug: unstamped non-map reply %.200r (%s) on the reply pump dropped (the first of each "
+                                      "type is logged; the count is in a timeout message)" % (data, type(data).__name__))
                         continue
                     reqid = data.get("reqid") if isinstance(data, dict) else None
                     if pump == self.reply_pump and reqid is not None:
@@ -504,7 +508,17 @@ class LeapSession:
                             self._discard.discard(reqid)
                             if data.get("error"):
                                 self._fired_errors.append(str(data["error"]))
-                        # else: a late reply to a request that timed out: dropped
+                        elif reqid in self._recent:
+                            self._recent.discard(reqid)
+                            if data.get("error"):
+                                self._fired_errors.append(str(data["error"]))
+                        elif data.get("error"):
+                            # a late reply to a request that timed out: dropped, but an error is worth a line
+                            self.late_errors += 1
+                            if self.late_errors <= 5:
+                                self._log("WARNING error reply for unknown reqid %r dropped: %s%s" % (
+                                    reqid, str(data["error"])[:200],
+                                    " (further ones are only counted)" if self.late_errors == 5 else ""))
                     else:
                         self._events.append((pump, data))
                     self._cv.notify_all()
@@ -564,7 +578,9 @@ class LeapSession:
     def fire(self, pump, op, /, **args):
         """Send an operation whose reply we do not wait for. A reply key is still sent: an operation the viewer
         rejects (bad name or arguments) throws in the viewer's dispatcher when there is no reply pump to tell; the
-        reply is dropped by the reader and only its error, if any, is kept (see take_errors)."""
+        reply is dropped by the reader and only its error, if any, is kept (see take_errors). The reqid stays in
+        _discard until the reply with it arrives or forget_fired() is called: an operation with no reply, or a bare
+        non-map reply (no reqid), would otherwise leave it there forever."""
         with self._cv:
             reqid = self._next_id
             self._next_id += 1
@@ -572,6 +588,16 @@ class LeapSession:
         data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         self.post(pump, data)
+
+    def forget_fired(self):
+        """Forget the fire() operations still waiting for a reply. Call it only after a ping reply: it follows every
+        earlier reply on the wire (LLLeap posts each frame synchronously in order), so an error map for a fired
+        operation has already been recorded for take_errors(). Single-threaded callers only; if the ping times out the
+        set is left as it is and a late error is reported at the next barrier. The forgotten reqids are kept in
+        _recent until the following call, so an error that still arrives late is reported by take_errors() too."""
+        with self._cv:
+            self._recent = self._discard
+            self._discard = set()
 
     def take_errors(self):
         """Errors reported by fire() operations since the last call."""
@@ -586,6 +612,7 @@ class LeapSession:
             reqid = self._next_id
             self._next_id += 1
             self._pending[reqid] = None
+            dropped_at_start = self._nonmap_dropped
         data = {"op": op, "reply": self.reply_pump, "reqid": reqid}
         data.update(args)
         try:
@@ -597,7 +624,9 @@ class LeapSession:
                         raise self.gone("%s.%s" % (pump, op))
                     left = deadline - time.monotonic()
                     if left <= 0:
-                        raise LeapTimeout("no reply to %s.%s in %.0f s" % (pump, op, timeout))
+                        n = self._nonmap_dropped - dropped_at_start
+                        extra = " (%d unstamped non-map replies were dropped)" % n if n > 0 else ""
+                        raise LeapTimeout("no reply to %s.%s in %.0f s%s" % (pump, op, timeout, extra))
                     self._cv.wait(left)
                 reply = self._pending[reqid]
         finally:

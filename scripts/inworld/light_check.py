@@ -52,7 +52,11 @@ OPTIONAL_OPS = {"LLStats": ["getPerfData"]}      # needed only with record_fps
 
 PHOTOTOOLS = "phototools"            # floater with the sky combo box (floater_phototools.xml)
 PERSONAL = "env_adjust_snapshot"     # Personal Lighting (floater_adjust_environment.xml)
-FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer)
+FIXED_SKY = "env_fixed_environmentent_sky"  # fixed sky editor (spelling as in the viewer): the LLFloaterReg name
+# The view of that floater is named by its XUI (floater_fixedenvironment.xml: name="Fixed Environment"), so widget
+# paths use that name (escaped, as LLUI::resolvePath unescapes each part), not the registry name.
+FIXED_SKY_VIEW = "Fixed%20Environment"
+FIXED_WATER = "env_fixed_environmentent_water"   # built from the same XML: its view has the same name
 ENV_TAB_BUTTON = "htab_EnvironmentTab"      # tab button of the Phototools Environment tab
 FIXED_TAB_BUTTONS = ["htab_panel_settings_sky_hbodies", "htab_panel_fs_settings_sky_hbodies"]
 REGION_BUTTONS = ["Revert to Region Default", "ResetToRegionDefault"]
@@ -100,7 +104,21 @@ def write_json_atomic(path, obj):
         json.dump(obj, f, indent=2, default=str)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+    delay = 0.02
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            # Windows: another process (a concurrent run, a virus scanner) briefly holds the target. About 1 s in all.
+            if attempt == 9:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+            time.sleep(delay)
+            delay = min(delay * 1.5, 0.2)
 
 
 class Aborted(Exception):
@@ -195,15 +213,17 @@ class Viewer:
         self.s.fire(pump, op, **args)
 
     def select_by_value(self, path, value):
-        """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean, which LLReqID::stamp
-        cannot give a reqid, so request() would wait for a reply that never matches: fire it and wait for a ping
-        instead. Callers check the result by reading the combo with value_of."""
+        """UI.setSelectedByValue moves a combo highlight. The viewer answers with a bare boolean (false when the combo
+        or the value is not found), which LLReqID::stamp cannot give a reqid, so request() would wait for a reply that
+        never matches: fire it and wait for a ping instead. A refusal is therefore NOT reported here; callers read the
+        combo back with value_of."""
         self.fire("UI", "setSelectedByValue", path=path, value=value)
         self.barrier()
 
     def barrier(self):
         """Everything sent before has been handled; raises if a fire-and-forget operation reported an error."""
         self.s.ping(timeout=60)
+        self.s.forget_fired()
         errs = self.s.take_errors()
         if errs:
             raise LeapError("viewer reported: " + "; ".join(errs[:3]))
@@ -264,7 +284,8 @@ class Viewer:
 
     def forget(self, floater):
         """Drop the cached widget paths of a floater (they change when it is shown, hidden or switches tab)."""
-        for k in [k for k in self._paths if (isinstance(k, tuple) and k[1] == floater)]:
+        names = {floater, FIXED_SKY_VIEW} if floater == FIXED_SKY else {floater}   # cached under the view name
+        for k in [k for k in self._paths if (isinstance(k, tuple) and k[1] in names)]:
             del self._paths[k]
         self._paths.pop("info", None)
 
@@ -647,6 +668,12 @@ class Run:
         for k, val in {**sc["settings"], **self.args.set_values}.items():
             self.change(k, val)
         self.change("FSEnvironmentManualTransitionTime", 0.0)
+        for key in knob_values:             # the effective values, after the settings and --set overrides too (the extra
+            cur = self.v.try_control(key)   # round trip per knob is intentional)
+            if cur is not None:
+                knob_values[key] = cur.get("value")
+            elif knob_values[key] is not None:
+                self.warn("knob %s could not be read back after the overrides; run.json keeps %r" % (key, knob_values[key]))
         self.run_info["knobs"] = knob_values
         cam = self.v.try_control("CameraAngle")
         self.run_info["fov_deg"] = math.degrees(float(cam["value"])) if cam else 60.0
@@ -807,6 +834,9 @@ class Run:
             if v.floater_visible(FIXED_SKY):
                 raise LeapError("the fixed sky editor is already open (closing it would discard your edit); "
                                 "close it and run again")
+            if v.floater_visible(FIXED_WATER):
+                raise LeapError("the fixed water editor is open: its view has the same name as the sky editor's "
+                                "(\"Fixed Environment\"), so widget paths would reach the wrong one; close it and run again")
             if v.floater_visible(PERSONAL):
                 v.hide_floater(PERSONAL)
             v.show_floater(FIXED_SKY, key="new")
@@ -814,7 +844,7 @@ class Run:
                 self.floaters_opened.append(FIXED_SKY)
                 self.save_restore()
             self.select_fixed_tab(spec.get("tab_buttons", FIXED_TAB_BUTTONS))
-            return FIXED_SKY
+            return FIXED_SKY_VIEW
         v.show_floater(PERSONAL)
         if PERSONAL not in self.floaters_opened:
             self.floaters_opened.append(PERSONAL)
@@ -828,17 +858,19 @@ class Run:
         v = self.v
         tried = []
         for name in buttons:
-            p = v.find_widget(FIXED_SKY, name, required=False)
+            p = v.find_widget(FIXED_SKY_VIEW, name, required=False)
             tried.append(name)
             if not p:
                 continue
             v.mouse_click(p)
-            v.forget(FIXED_SKY)
-            sl = v.find_widget(FIXED_SKY, "sun_elevation", required=False)
+            v.forget(FIXED_SKY_VIEW)
+            sl = v.find_widget(FIXED_SKY_VIEW, "sun_elevation", required=False)
             if sl is None or not v.widget_info(sl).get("available"):
                 raise LeapError("clicked %s but the sun sliders are not available" % name)
             return name
-        raise LeapError("none of the tab buttons %s exists in the fixed sky editor" % tried)
+        raise LeapError("none of the tab buttons %s exists in the fixed sky editor (view \"Fixed Environment\"). If the "
+                        "fixed water editor was opened in this viewer session, its view of the same name is found first "
+                        "and hides the sky editor's: restart the viewer" % tried)
 
     def prepare_sky(self, spec):
         v = self.v
@@ -1237,15 +1269,15 @@ def dry_run_ui(v, sc, rep, run, args):
             slider_checks(v, rep)
             v.hide_floater(PERSONAL)
             run.floaters_opened.remove(PERSONAL)
-            if v.floater_visible(FIXED_SKY):
-                rep.add("fixed sky editor", True, "already open: not touched", warn=True)
+            if v.floater_visible(FIXED_SKY) or v.floater_visible(FIXED_WATER):
+                rep.add("fixed sky editor", True, "a fixed sky or water editor is already open: not touched", warn=True)
             else:
                 try:
                     v.show_floater(FIXED_SKY, key="new")
                     run.floaters_opened.append(FIXED_SKY)
                     tab = run.select_fixed_tab(FIXED_TAB_BUTTONS)
                     rep.add("fixed editor tab", True, tab)
-                    check_widgets(v, rep, FIXED_SKY, ["sun_azimuth", "sun_elevation", "moon_brightness"])
+                    check_widgets(v, rep, FIXED_SKY_VIEW, ["sun_azimuth", "sun_elevation", "moon_brightness"])
                 except LeapError as exc:
                     rep.add("fixed editor tab", False, str(exc))
                 finally:
@@ -1255,7 +1287,9 @@ def dry_run_ui(v, sc, rep, run, args):
     else:
         rep.add("floater %s widgets" % PERSONAL, True,
                 "not checked: opening Personal Lighting freezes the sky into the local environment (use --deep)", warn=True)
-        rep.add("fixed sky editor tab", True, "not checked (use --deep)", warn=True)
+        fixed = [sp["id"] for sp in sc["skies"] if sp.get("editor") == "fixed"]
+        rep.add("fixed sky editor tab", True, "%s needs the fixed sky editor; checked only with --deep" % (
+            ", ".join(fixed) or "no sky"), warn=True)
     # skies: highlight only, put back afterwards
     combo = v.find_widget(PHOTOTOOLS, "WLPresetsCombo", required=False)
     before = orig.get("sky_combo")
@@ -1292,8 +1326,15 @@ def dry_run_ui(v, sc, rep, run, args):
     if combo and before not in (None, "None"):
         try:
             v.select_by_value(combo, as_value(before))
-        except LeapError:
-            pass
+            now = v.value_of(combo)
+            if str(now).lower() != str(before).lower():
+                msg = "the original sky combo value %r was not restored (it reads %r)" % (before, now)
+                log("WARNING " + msg)
+                rep.add("restore sky combo", True, msg, warn=True)
+        except LeapError as exc:
+            msg = "the original sky combo value %r could not be restored or read back: %s" % (before, exc)
+            log("WARNING " + msg)
+            rep.add("restore sky combo", True, msg, warn=True)
 
 
 def slider_checks(v, rep):
