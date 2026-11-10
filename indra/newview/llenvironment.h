@@ -193,9 +193,9 @@ public:
     struct PrimaryLightState
     {
         LLVector3 dir = LLVector3(0.f, 0.f, 1.f); // agent frame (z up), unit: the light's direction
-        LLVector3 ground_T = LLVector3(1.f, 1.f, 1.f); // cross-faded transmittance at the ground, moon gain included
-        LLVector3 cloud_T = LLVector3(1.f, 1.f, 1.f);  // the same at the cloud layer (flat clouds' sun)
-        LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x ground_T)
+        LLVector3 cloud_T = LLVector3(1.f, 1.f, 1.f);  // the sun's transmittance at the cloud layer (flat clouds' sun)
+        F32 cloud_moon_weight = 0.f;      // the clouds' own handover t_cloud (the clouds' sun fades with the light at their height)
+        LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x the light's transmittance)
         F32 shadow_strength = 1.f;        // 1 full, 0 none
         F32 moon_weight = 0.f;            // t: 0 the sun, 1 the moon
         F32 haze_glow_factor = 1.f;       // SUN_MOON_GLOW_FACTOR, continuous
@@ -205,8 +205,8 @@ public:
     };
     const PrimaryLightState&    getPrimaryLight() const { return mPrimary; }
     // The sky's sunlight as the deferred pass sends it: normalised to a maximum of 1, clamped, and scaled when the
-    // legacy sky is auto-adjusted (what bindDeferredShader used to compute; setupHWLights uses it without the scale).
-    LLColor3                    getDeferredSunlight(bool with_auto_adjust) const;
+    // legacy sky is auto-adjusted. LLPipeline::setupHWLights stores it in mSunDiffuse, which bindDeferredShader sends.
+    LLColor3                    getDeferredSunlight() const;
     // </Vulkanstorm>
 
     // Returns either sun or moon direction (depending on which is up and stronger)
@@ -216,13 +216,13 @@ public:
     LLVector3                   getMoonDirection() const;
 
     // Returns light direction converted to CFR coord system
-    LLVector4                   getLightDirectionCFR() const; // returns sun or moon depending on which is up
+    LLVector4                   getLightDirectionCFR() const; // the primary light (the sun/moon handover)
     LLVector4                   getSunDirectionCFR() const;
     LLVector4                   getMoonDirectionCFR() const;
 
     // Returns light direction converted to OGL coord system
     // and clamped above -0.1f in Y to avoid render artifacts in sky shaders
-    LLVector4                   getClampedLightNorm() const; // returns sun or moon depending on which is up
+    LLVector4                   getClampedLightNorm() const; // the primary light (the sun/moon handover)
     LLVector4                   getClampedSunNorm() const;
     LLVector4                   getClampedMoonNorm() const;
 

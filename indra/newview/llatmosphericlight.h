@@ -124,7 +124,7 @@ inline Result calc_sunlit_amblit(const Inputs& in, double n_dot_l)
 }
 
 // ---------------------------------------------------------------------------------------------------
-// Stage AT0: the physical atmosphere and the sun/moon handover (nothing in the viewer calls these yet)
+// Stage AT0: the physical atmosphere and the sun/moon handover (stage AT1/L3 below puts them to use)
 // ---------------------------------------------------------------------------------------------------
 
 // --- colour helpers ---
@@ -471,7 +471,7 @@ inline double profile_column_km(const DensityProfile& p, double top_km)
 
 // today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
 // per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
-// path_scale 1: atmosphericsFuncs.glsl:111-112; 0.5: cloudsV.glsl:177-179
+// path_scale 1: the ground light (atmosphericsFuncs.glsl before L3); 0.5: the clouds' sun (cloudsV.glsl before L3)
 inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
 {
     using detail::finite_or;
@@ -676,8 +676,8 @@ struct LLAtmosphere
     // path_factor scales the excess only. In the physical model a light that is lower in the air than the sun's (the cloud light)
     // gets its thinner air from the altitude: T is taken AT THE CLOUD LAYER (h_km = the cloud height setting, 1500 m), not by
     // halving the path. The excess has no altitude dependence, so path_factor is there only for it: the legacy cloud light
-    // (cloudsV.glsl:177-179) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
-    // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light (atmosphericsFuncs.glsl:111-112) use 1.
+    // (cloudsV.glsl, before L3) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
+    // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light on the ground use 1.
     // A non-finite argument gives 0 (a non-finite path_factor counts as 1, as in the GLSL).
     Vec3 transmittance(double h_km, double mu, double disc_sin, double path_factor = 1.0) const
     {
@@ -998,7 +998,8 @@ struct PrimaryLightSetup
 struct PrimaryLightRig
 {
     PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, ratio
-    Vec3   cloud_T;            // the cross-faded transmittance at the cloud layer
+    Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
+    double cloud_moon_weight = 0.0; // the clouds' own handover t_cloud: primary_light() on the cloud-layer transmittances
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
     double gain = 0.0;         // moon_brightness x moon_compensation
     double light_scale = 1.0;  // mix(sun_scale, moon_scale, moon weight)
@@ -1054,7 +1055,16 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     rig.light = primary_light(in, s.params);
 
     const double t = rig.light.moon_weight;
-    rig.cloud_T = cross_fade(sun_Tc, moon_Tc, rig.gain, t);
+    // The clouds hand over by their own light: at 1.5 km the sun is still seen after the ground's sunset (the horizon dips
+    // 1.24 degrees there), so t from the ground light would take the clouds' sun away while it still shines on them. The
+    // shader multiplies the sun term by (1 - t_cloud) and shows no moon term, so only the sun's transmittance is passed.
+    PrimaryLightInputs cin = in;
+    cin.sun_T = sun_Tc;
+    cin.moon_T = moon_Tc;
+    const PrimaryLight cl = primary_light(cin, s.params);
+    rig.cloud_moon_weight = cl.moon_weight;
+    rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
+                    std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
     rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)
                     + t * std::min(std::max(finite_or(s.moon_scale, 1.0), 0.0), 100.0);
 
