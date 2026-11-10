@@ -37,6 +37,28 @@ class InnoPayloadTest(unittest.TestCase):
             self.assertNotIn('.pdb', commands)
             self.assertNotIn('stray-Setup.exe', commands)
 
+    def test_cloud_noise_file_is_read_only_and_replaceable(self):
+        # the cloud noise file is read-only: Inno needs overwritereadonly (upgrades) and uninsremovereadonly
+        # (uninstall); no other file gets these
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            names = ['app_settings/clouds/cloud_noise.vkcn', 'app_settings/other.xml']
+            for name in names:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(b'fixture')
+            manifest = object.__new__(Windows_x86_64_Manifest)
+            manifest.get_dst_prefix = lambda: str(root)
+            manifest.file_list = [('source', str(root / name)) for name in names]
+            lines = manifest.inno_file_commands().splitlines()
+            self.assertEqual(len(lines), 2)
+            noise = [line for line in lines if 'cloud_noise.vkcn' in line]
+            other = [line for line in lines if 'cloud_noise.vkcn' not in line]
+            self.assertEqual(len(noise), 1)
+            self.assertIn('Flags: ignoreversion overwritereadonly uninsremovereadonly', noise[0])
+            self.assertIn('Attribs: readonly', noise[0])
+            self.assertIn(r'DestDir: "{app}\app_settings\clouds"', noise[0])
+            self.assertTrue(other[0].endswith('Flags: ignoreversion'), other[0])
+
     def test_licence_texts_copy_beside_the_viewer(self):
         newview = Path(__file__).resolve().parents[2] / 'indra/newview'
         with tempfile.TemporaryDirectory() as directory:

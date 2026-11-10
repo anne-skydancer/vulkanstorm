@@ -26,9 +26,10 @@
 //
 // Container (little endian, uncompressed), 8,585,472 bytes:
 //   header, 256 bytes: magic "VKCLDNZ1", u32 format_version (1), u32 header_bytes (256), u32 entry_count (3),
-//                      32 bytes of generator id, then the entries, zero padded to 256 bytes;
+//                      32 bytes of generator id, then the three entries;
 //   entry, 68 bytes:   u32 kind (1 base, 2 erosion, 3 curl), u32 format (1 = RGBA8 UNORM), u32 width, height,
-//                      depth, u64 offset, u64 length, 32 bytes SHA-256 of the entry's bytes;
+//                      depth, u64 offset, u64 length, 32 bytes SHA-256 of the entry's bytes (the header is exactly
+//                      52 + 3 x 68 = 256 bytes, no padding);
 //   payload:           base 128^3, erosion 32^3, curl 128^2 (texels RGBA8, x fastest), in that order.
 //
 // The file is required. The viewer compares the SHA-256 of the whole file with the one compiled in

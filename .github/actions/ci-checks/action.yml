@@ -74,6 +74,7 @@ runs:
     - name: Check the cloud noise container reader
       shell: bash
       run: |
+        test -f /usr/include/openssl/evp.h || sudo apt-get install -y --no-install-recommends libssl-dev
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudnoise_test.cpp -o "$RUNNER_TEMP/cloud-noise-test" -lcrypto
         "$RUNNER_TEMP/cloud-noise-test"
     - name: Keep development hooks out of release
