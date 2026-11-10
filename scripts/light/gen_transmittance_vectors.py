@@ -24,11 +24,16 @@ N = 128
 # The absorption (ozone) profile variants; the C++ test builds the same ones.
 #   0: Bruneton's ozone (two linear layers)             1: a ramp, then a lower exponential layer (a jump at 12 km)
 #   2: one linear layer that clamps at 1 at 20 km
+#   3: exp + linear + constant crossing 1 at 0.33 km and 0 at 6.2 km (clamp crossings inside a layer)
+#   4: a valley (2 e^(-h/3000) + h/8000 - 1.2): two crossings of 0 around its minimum, then 1 at 17.6 km
+#   Variants 3 and 4 are given a hundred times the ozone coefficients, so that the crossings show in T.
 # layer = (width m, exp_term, exp_scale 1/m, linear 1/m, constant)
 OZONE_LAYERS = {
     0: [(25000.0, 0.0, 0.0, 1.0 / 15000.0, -2.0 / 3.0), (0.0, 0.0, 0.0, -1.0 / 15000.0, 8.0 / 3.0)],
     1: [(12000.0, 0.0, 0.0, 1.0 / 12000.0, 0.0), (0.0, 0.8, -1.0 / 6000.0, 0.0, 0.0)],
     2: [(0.0, 0.0, 0.0, 1.0 / 20000.0, 0.0)],
+    3: [(0.0, 1.0, -1.0 / 4000.0, -1.0 / 20000.0, 0.1)],
+    4: [(0.0, 2.0, -1.0 / 3000.0, 1.0 / 8000.0, -1.2)],
 }
 
 MAIN = """
@@ -55,9 +60,9 @@ def cases():
             aerosol_ext=round(u() * 0.4, 6) if i % 5 else 0.0,
             slab_ext=round(u() * 1.2, 6) if i % 3 else 0.0,
             slab_top_km=round(0.05 + u() * 0.5, 4),
-            ozone_ext=[round(x * (u() * 3.0), 6) for x in (0.00065, 0.001881, 0.000085)],
+            ozone_ext=[round(x * (u() * 3.0) * (100.0 if i % 5 >= 3 else 1.0), 6) for x in (0.00065, 0.001881, 0.000085)],
             rayleigh_scale=-1.0 / round(6000 + u() * 4000), mie_scale=-1.0 / round(800 + u() * 1200),
-            absorption=i % 3, planet_radius_km=rg, top_radius_km=rg + height,
+            absorption=i % 5, planet_radius_km=rg, top_radius_km=rg + height,
             h_km=round(u() * 3.0, 4) if i % 2 else 0.0, mu=mu,
             disc_sin=round(0.002 + u() * 0.008, 5) if i % 4 else 0.0))
     return out
