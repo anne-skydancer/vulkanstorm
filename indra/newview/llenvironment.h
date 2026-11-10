@@ -138,6 +138,7 @@ public:
 
     // prepare settings to be applied to shaders (call whenever settings are updated)
     void                        updateSettingsUniforms();
+    void                        updatePrimaryLight(); // <Vulkanstorm/> stage L3: main thread, once per frame
 
     void                        setSelectedEnvironment(EnvSelection_t env, LLSettingsBase::Seconds transition = TRANSITION_DEFAULT, bool forced = false);
     EnvSelection_t              getSelectedEnvironment() const                  { return mSelectedEnvironment; }
@@ -185,9 +186,32 @@ public:
     void                        saveBeaconsState();
     void                        revertBeaconsState();
 
+    // <Vulkanstorm> stage L3 (item 4): the one light the scene is lit and shadowed by. The sun and the moon hand
+    // over smoothly, driven by the physical atmosphere (llatmosphericlight.h: LLAtmosphere, primary_light).
+    // Computed once per main-thread frame by updatePrimaryLight() (from updateSettingsUniforms()), and reused by
+    // the cube snapshots of that frame. Every reader runs on the main (render) thread.
+    struct PrimaryLightState
+    {
+        LLVector3 dir = LLVector3(0.f, 0.f, 1.f); // agent frame (z up), unit: the light's direction
+        LLVector3 ground_T = LLVector3(1.f, 1.f, 1.f); // cross-faded transmittance at the ground, moon gain included
+        LLVector3 cloud_T = LLVector3(1.f, 1.f, 1.f);  // the same at the cloud layer (flat clouds' sun)
+        LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x ground_T)
+        F32 shadow_strength = 1.f;        // 1 full, 0 none
+        F32 moon_weight = 0.f;            // t: 0 the sun, 1 the moon
+        F32 haze_glow_factor = 1.f;       // SUN_MOON_GLOW_FACTOR, continuous
+        F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): PCSS size and the cloud shadow penumbra
+        bool shadow_visible = true;       // the sun shadow pass has something to show
+        bool valid = false;
+    };
+    const PrimaryLightState&    getPrimaryLight() const { return mPrimary; }
+    // The sky's sunlight as the deferred pass sends it: normalised to a maximum of 1, clamped, and scaled when the
+    // legacy sky is auto-adjusted (what bindDeferredShader used to compute; setupHWLights uses it without the scale).
+    LLColor3                    getDeferredSunlight(bool with_auto_adjust) const;
+    // </Vulkanstorm>
+
     // Returns either sun or moon direction (depending on which is up and stronger)
     // Light direction in +x right, +z up, +y at internal coord sys
-    LLVector3                   getLightDirection() const; // returns sun or moon depending on which is up
+    LLVector3                   getLightDirection() const; // returns the primary light (the sun/moon handover; the sun or moon while it is not valid)
     LLVector3                   getSunDirection() const;
     LLVector3                   getMoonDirection() const;
 
@@ -374,6 +398,8 @@ private:
 
     static const F32            SUN_DELTA_YAW;
     F32                         mLastCamYaw = 0.0f;
+
+    PrimaryLightState           mPrimary; // <Vulkanstorm/> stage L3
 
     LLVector2                   mCloudScrollDelta;  // cumulative cloud delta
     bool                        mCloudScrollPaused;

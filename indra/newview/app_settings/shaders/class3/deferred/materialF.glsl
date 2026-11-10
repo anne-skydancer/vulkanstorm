@@ -40,7 +40,6 @@ int alpha_stochastic_mask(float a);
 #define DIFFUSE_ALPHA_MODE_EMISSIVE 3
 
 uniform float emissive_brightness;  // fullbright flag, 1.0 == fullbright, 0.0 otherwise
-uniform int sun_up_factor;
 uniform int classic_mode;
 
 vec4 applySkyAndWaterFog(vec3 pos, vec3 additive, vec3 atten, vec4 color);
@@ -82,8 +81,7 @@ uniform mat3 env_mat;
 
 uniform float is_mirror;
 
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 uniform mat4 proj_mat;
 uniform mat4 inv_proj;
@@ -345,7 +343,7 @@ void main()
 
     vec3 color = vec3(0,0,0);
 
-    vec3 light_dir = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the sun/moon handover\'s light
 
     float bloom = 0.0;
     vec3 sunlit;
