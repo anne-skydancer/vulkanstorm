@@ -37,8 +37,8 @@ uniform sampler2DShadow shadowMap4;
 uniform sampler2DShadow shadowMap5;
 #endif
 
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
+uniform float primary_shadow_strength; // <Vulkanstorm/> L3: 1 full shadow, 0 none (also in windlight/atmosphericsFuncs.glsl)
 uniform vec2 shadow_res;
 uniform vec2 proj_shadow_res;
 uniform mat4 shadow_matrix[6];
@@ -50,7 +50,6 @@ uniform float spot_shadow_offset;
 uniform float spot_shadow_reach; // <Vulkanstorm/> metres: the projector shadows fade out towards this camera distance
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
-uniform int sun_up_factor;
 
 // <Vulkanstorm> receiver-plane depth bias of the sun PCF: the depth slope of the receiver in
 // shadow texture space (d depth / d uv), from two 5 cm tangent steps of the view space position
@@ -420,7 +419,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 {
 #if defined(SUN_SHADOW)
     float shadow = 0.0f;
-    vec3 light_dir = normalize((sun_up_factor == 1) ? sun_dir : moon_dir);
+    vec3 light_dir = normalize(primary_light_dir); // <Vulkanstorm/> L3: the primary light
 
     float dp_directional_light = max(0.0, dot(norm.xyz, light_dir));
           dp_directional_light = clamp(dp_directional_light, 0.0, 1.0);
@@ -531,7 +530,9 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         return 1.0f; // lit beyond the far split...
     }
     //shadow = min(dp_directional_light,shadow);
-    return shadow;
+    // <Vulkanstorm> the sun's shadow fades out while the light hands over to the moon, and in again for the moon (L3)
+    return mix(1.0, shadow, primary_shadow_strength);
+    // </Vulkanstorm>
 #else
     return 1.0;
 #endif

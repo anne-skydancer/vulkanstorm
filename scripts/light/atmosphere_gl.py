@@ -133,7 +133,19 @@ def atmosphere_program(main_body, extra=''):
     return program([(VERT, VERTEX), (FRAG, frag)])
 
 
+def legacy_primary_light(p):
+    """The ground light as it was before stage L3: the sun's (or the moon's) colour through today's airmass,
+    exp(-(blue_density + haze_density/4) density_multiplier max_y / lightnorm.y) (atmosphericsFuncs.glsl, old lines 98-112)."""
+    light = p['sunlight_color'] if p['sun_up'] else p.get('moonlight_color', p['sunlight_color'])
+    haze, f = p['haze_density'] * 0.25, 1.0 / max(1e-6, p['light_y'])
+    return [c * math.exp(-(bd + haze) * (p['density_multiplier'] * p['max_y']) * f) for c, bd in zip(light, p['blue_density'])]
+
+
 def set_atmosphere_uniforms(prog, p):
+    """Since stage L3 the GLSL's ground light is primary_light_color (the sun's or the moon's colour with its path through the
+    atmosphere taken); p['primary_light_color'] sets it, else it is derived from the sun/moon colour with today's airmass."""
+    uniform(prog, 'primary_light_color', *p.get('primary_light_color', legacy_primary_light(p)))
+    uniform(prog, 'primary_shadow_strength', float(p.get('primary_shadow_strength', 1.0)))
     uniform(prog, 'lightnorm', 0.0, p['light_y'], math.sqrt(max(0.0, 1.0 - p['light_y'] ** 2)))
     uniform(prog, 'sunlight_color', *p['sunlight_color']); uniform(prog, 'moonlight_color', *p.get('moonlight_color', p['sunlight_color']))
     uniform(prog, 'sun_up_factor', int(p['sun_up'])); uniform(prog, 'ambient_color', *p['ambient'])

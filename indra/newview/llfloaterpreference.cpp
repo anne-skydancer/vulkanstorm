@@ -490,7 +490,9 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
     {
         for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent",
-                                  "RenderShadowBlurSize", "RenderShadowPCSSLightSize" })
+                                  "RenderShadowBlurSize", "RenderShadowPCSSLightSize",
+                                  "RenderLightHandoverSwing", "RenderLightHandoverFade", "RenderMoonlightCompensation",
+                                  "RenderMoonAdaptationDepth", "RenderAtmosphereHazeSlab", "RenderAtmospherePhysicalLight" })
         {
             gSavedSettings.getControl(name)->resetToDefault(true);
         }

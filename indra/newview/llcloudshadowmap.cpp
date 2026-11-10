@@ -147,7 +147,9 @@ void LLCloudShadowMap::update()
     mOriginAgent[1] = origin_agent.mV[VY];
 
     // the edge softness: a layer H_pen up and a light of angular size 0.0093 * sun_scale, as a mip level
-    const F32 light_scale = psky->getIsSunUp() ? psky->getSunScale() : psky->getMoonScale();
+    // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
+    const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+    const F32 light_scale = primary.valid ? primary.light_scale : (psky->getIsSunUp() ? psky->getSunScale() : psky->getMoonScale());
     const F64 penumbra = (F64) penumbra_height * SUN_ANGULAR_TAN * llmax(light_scale, 0.f);
     mLod = (F32) llmax(0.0, std::log2(llmax(penumbra, 1e-3) / mLayout.texel()));
     mStrength = llclamp((F32) strength, 0.f, 1.f);
