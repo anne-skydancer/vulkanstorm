@@ -524,7 +524,11 @@ void LLViewerTexture::updateClass()
 
     // get an estimate of how much video memory we're using
     // NOTE: our metrics miss about half the vram we use, so this biases high but turns out to typically be within 5% of the real number
-    F32 used = (F32)ll_round(texture_bytes_alloc + vertex_bytes_alloc);
+    // <Vulkanstorm> the stochastic engine's render targets are counted at their real size (1 MiB
+    // is 1 MB, not the 2 of the estimate above), so that streaming makes room for them
+    const F64 exact_bytes_alloc = LLImageGL::getTextureBytesAllocatedExact() / 1024.0 / 1024.0;
+    F32 used = (F32)ll_round(texture_bytes_alloc + vertex_bytes_alloc + exact_bytes_alloc);
+    // </Vulkanstorm>
 
     // <FS:Ansariel> Expose max texture VRAM setting
     // For debugging purposes, it's useful to be able to set the VRAM budget manually.
