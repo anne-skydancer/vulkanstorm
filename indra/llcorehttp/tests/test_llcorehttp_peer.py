@@ -37,7 +37,9 @@ import struct
 import getopt
 import zlib
 from io import StringIO
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 
 
 import llsd
@@ -69,6 +71,12 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
                            "Content-Range: bytes 0-75/2983",
                            "Content-Length: 76"
     -- '/bug2295/inv_cont_range/0/'  Generates HE_INVALID_CONTENT_RANGE error in llcorehttp.
+    - '/sleep/'         Answers after 5 seconds.
+    - '/hang/'          Accepts the request and never answers (until the
+                        client closes the connection, at most 60 s); each
+                        one is counted.
+    - '/hanghits/'      Answers with the number of /hang/ requests received
+                        so far, as plain text.
     - '/503/'           Generate 503 responses with various kinds
                         of 'retry-after' headers
     -- '/503/0/'            "Retry-After: 2"
@@ -83,6 +91,10 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
     you from that.
     """
     ignore_exceptions = (Exception,)
+
+    # <Vulkanstorm> /hang/ requests received, for /hanghits/
+    hang_hits = 0
+    hang_lock = threading.Lock()
 
     def read(self):
         # The following logic is adapted from the library module
@@ -161,10 +173,23 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
         if "/sleep/" in self.path:
             time.sleep(5)
 
+        if "/hanghits/" in self.path:
+            # <Vulkanstorm> how many /hang/ requests reached this server
+            body = str(TestHTTPRequestHandler.hang_hits).encode("ascii")
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if withdata:
+                self.wfile.write(body)
+            return
+
         if "/hang/" in self.path:
-            # <Vulkanstorm> Accept the request and never answer: wait until the
+            # <Vulkanstorm> Count the request, then accept the request and never answer: wait until the
             # client closes the connection (a quitting viewer closes it), at
             # most 60 s so a broken client cannot wedge the server.
+            with TestHTTPRequestHandler.hang_lock:
+                TestHTTPRequestHandler.hang_hits += 1
             self.connection.settimeout(60)
             try:
                 while self.connection.recv(4096):
@@ -377,7 +402,12 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
             # Suppress error output as well
             pass
 
-class Server(HTTPServer):
+class Server(ThreadingMixIn, HTTPServer):
+    # <Vulkanstorm> One thread per request, so a /hang/ or /sleep/ request does
+    # not block the others; daemon threads, so a hung one never keeps the
+    # server (or the test run) from ending.
+    daemon_threads = True
+
     # This pernicious flag is on by default in HTTPServer. But proper
     # operation of freeport() absolutely depends on it being off.
     allow_reuse_address = False

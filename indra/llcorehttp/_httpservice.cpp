@@ -347,6 +347,16 @@ HttpService::ELoopSpeed HttpService::processRequestQueue(ELoopSpeed loop)
             // Stage
             op->stageFromRequest(this);
         }
+        else
+        {
+            // Stopping: an operation dequeued after the exit flag is not
+            // staged, but it is not dropped silently either. cancel() is what
+            // shutdown() does for the operations still on the queue: a request
+            // is answered with a canceled status on the reply queue, which the
+            // owner's HttpRequest::update() delivers to its handler (the reply
+            // queue outlives this thread); other operation types do nothing.
+            op->cancel();
+        }
 
         // Done with operation
         op.reset();
