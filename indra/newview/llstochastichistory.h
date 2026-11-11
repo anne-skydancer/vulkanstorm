@@ -45,7 +45,7 @@ namespace LLStochasticEngine
     bool deviceSupported();
 
     // Which resolve this device runs, decided by the device alone and never changed at run time: the
-    // compute resolve (GL 4.3 and GLSL 4.30; 144 B/px) or, on GL 4.0 to 4.2, the fragment resolve with
+    // compute resolve (GL 4.3, GLSL 4.30 and the compute entry points loaded; 144 B/px) or, on GL 4.0 to 4.2, the fragment resolve with
     // its pre-pass target (option P; 160 B/px). The two are the same method and give the same image
     // (bit for bit on the measured NVIDIA). A shader set of the selected path that does not build is an
     // error (logged, retried at the next shader reload); the other path is never taken in its place.
