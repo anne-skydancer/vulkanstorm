@@ -8644,6 +8644,13 @@ bool LLPipeline::beginShadowStochastic()
     {
         return false;
     }
+#if LL_WINDOWS && !LL_MESA
+    if (LLStochasticEngine::computeResolve() && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
+    {   // GL 4.3 reports them all; a driver that does not load them is an error, not another path
+        LL_WARNS_ONCE("Pipeline") << "Stochastic shadows: the compute resolve's entry points are missing; the sun pass keeps its 8 rays per pixel without accumulation" << LL_ENDL;
+        return false;
+    }
+#endif
     const U32 w = mRT->deferredLight.getWidth();
     const U32 h = mRT->deferredLight.getHeight();
     if (mShadowSTHistory.isAllocated() && !mShadowSTHistory.matches(w, h))
@@ -8653,7 +8660,7 @@ bool LLPipeline::beginShadowStochastic()
     if (!mShadowSTHistory.isAllocated() && w && h && !(mShadowSTFailedWidth == w && mShadowSTFailedHeight == h))
     {
         while (glGetError() != GL_NO_ERROR) {}
-        bool ok = mShadowSTHistory.allocate(w, h, true);   // the resolve is a fragment pass: the history has framebuffers
+        bool ok = mShadowSTHistory.allocate(w, h, !LLStochasticEngine::computeResolve());   // a fragment resolve draws into the history: framebuffers
         ok = ok && glGetError() == GL_NO_ERROR;
         glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
         if (ok)
@@ -8716,10 +8723,15 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     const U32 w = raw.getWidth();
     const U32 h = raw.getHeight();
 
-    // the resolve: raw + the last frame's history -> the history the other texture holds
-    glBindFramebuffer(GL_FRAMEBUFFER, mShadowSTHistory.writeFramebuffer());
-    glDrawBuffer(GL_COLOR_ATTACHMENT0);
-    glViewport(0, 0, w, h);
+    // the resolve: raw + the last frame's history -> the history the other texture holds; a compute
+    // dispatch with the history as an image (GL 4.3 and later), or a fragment pass into its framebuffer
+    const bool compute = LLStochasticEngine::computeResolve();
+    if (!compute)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, mShadowSTHistory.writeFramebuffer());
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        glViewport(0, 0, w, h);
+    }
     LLGLSLShader& resolve = gShadowStochasticResolveProgram;
     bindDeferredShader(resolve);
     mShadowSTHistory.setResolveUniforms(resolve);
@@ -8734,6 +8746,13 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     {
         gGL.getTexUnit(history_unit)->bindManual(LLTexUnit::TT_TEXTURE, mShadowSTHistory.readTexture());
     }
+    if (compute)
+    {
+        mShadowSTHistory.bindWriteImage();   // never the texture bound for reading above
+        glDispatchCompute((w + 15) / 16, (h + 15) / 16, 1);   // the shader's 16 x 16 local size
+        mShadowSTHistory.endComputeWrite();  // the barrier that makes the stores visible to the light map pass and the next frame
+    }
+    else
     {
         LLGLDisable blend(GL_BLEND);
         LLGLDepthTest depth(GL_FALSE);
@@ -8748,7 +8767,10 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
         }
     }
     unbindDeferredShader(resolve);
-    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    if (!compute)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    }
     mShadowSTHistory.endFrame();
 
     // the light map: the resolved sun and projector channels, this frame's AO
