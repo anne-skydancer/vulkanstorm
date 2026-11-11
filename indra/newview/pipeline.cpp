@@ -8610,14 +8610,6 @@ bool LLPipeline::beginShadowStochastic()
         mShadowSTHistory.beginFrame(false);   // not accumulating: seedFrame() reads 0 (fixed rays)
         return false;
     }
-#if LL_WINDOWS && !LL_MESA
-    if (LLStochasticEngine::computeResolve() && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
-    {   // GL 4.3 reports them all; a driver that does not load them is an error, not another path
-        LL_WARNS_ONCE("Pipeline") << "Stochastic shadows: the compute resolve's entry points are missing; the sun pass keeps its 8 rays per pixel without accumulation" << LL_ENDL;
-        mShadowSTHistory.beginFrame(false);
-        return false;
-    }
-#endif
     const U32 w = mRT->deferredLight.getWidth();
     const U32 h = mRT->deferredLight.getHeight();
     if (mShadowSTHistory.isAllocated() && !mShadowSTHistory.matches(w, h))

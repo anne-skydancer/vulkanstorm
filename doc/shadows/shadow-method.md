@@ -97,8 +97,8 @@ them from. The resolve is the transparency's: the device decides once (`LLStocha
 dispatch on GL 4.3 and later (`shadowStochasticResolveC.glsl`, the history written as an image) or a fragment
 pass on GL 4.0 to 4.2 (`shadowStochasticResolveF.glsl`, into the history's framebuffer). Both run the same
 resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and
-the offline bench finds their histories bit identical frame after frame. A driver that lacks the compute
-entry points (Windows) leaves the accumulation off, with a log line, never another path.
+the offline bench finds their histories bit identical frame after frame. A Windows driver that does not load the compute
+entry points takes the fragment resolve, the engine's capability choice (`computeResolve`).
 
 ## Shared by all methods
 
