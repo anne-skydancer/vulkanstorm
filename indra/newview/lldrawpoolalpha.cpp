@@ -229,16 +229,19 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         !LLPipeline::sReflectionRender &&
         !gCubeSnapshot;
 
-    // Sorted alpha where stochastic transparency is not available on the device (a capability, not a
-    // fallback). The targets are made when the method is selected or the screen buffers are
-    // (LLPipeline::allocateAlphaStochastic), never here; if an allocation failed, the blended faces
-    // of the main view wait for the retry at the next screen buffer allocation.
+    // Sorted alpha only where the device cannot run stochastic transparency (the capability gate,
+    // sRenderAlphaStochasticSupported). Past it nothing else is selected: if the engine is not
+    // ready (targets missing or of another size, a shader that did not build; logged by
+    // beginAlphaStochastic), the blended faces and the GLTF scene's blended assets are not drawn
+    // this frame. The targets are made when the method is selected or the screen buffers are
+    // (LLPipeline::allocateAlphaStochastic) and retried by LLPipeline::retryAlphaStochastic, never here.
     const bool use_stochastic = alpha_method == 1 && oit_view_eligible && LLPipeline::sRenderAlphaStochasticSupported;
+    bool stochastic_drawn = false;
     if (use_stochastic)
     {
-        // the GLTF scene's blended assets are drawn inside the passes (forwardRender), so nothing
-        // blended is drawn when the engine is not ready (beginAlphaStochastic)
-        if (renderStochastic())
+        // the GLTF scene's blended assets are drawn inside the passes (forwardRender)
+        stochastic_drawn = renderStochastic();
+        if (stochastic_drawn)
         {
             renderOITResidual();
         }
@@ -256,8 +259,10 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     }
     // </Vulkanstorm>
 
-    // final pass, render to depth for depth of field effects
-    if (!LLPipeline::sImpostorRender && LLPipeline::RenderDepthOfField && !gCubeSnapshot && !LLPipeline::sRenderingHUDs && getType() == LLDrawPool::POOL_ALPHA_POST_WATER)
+    // final pass, render to depth for depth of field effects (not when stochastic transparency was
+    // selected and drew nothing: blended surfaces that were not drawn must not blur the scene)
+    if (!LLPipeline::sImpostorRender && LLPipeline::RenderDepthOfField && !gCubeSnapshot && !LLPipeline::sRenderingHUDs && getType() == LLDrawPool::POOL_ALPHA_POST_WATER &&
+        (!use_stochastic || stochastic_drawn))
     {
         //update depth buffer sampler
         simple_shader = fullbright_shader = &gDeferredFullbrightAlphaMaskProgram;
@@ -272,6 +277,14 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         // We don't want the nearly invisible objects to cause of DoF effects
         renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX | LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 | LLVertexBuffer::MAP_TEXCOORD2,
             true); // <--- discard mostly transparent faces
+
+        // <Vulkanstorm> the GLTF scene's blended assets contribute as the blended faces do: the same
+        // cut, depth only (the faces' rigged variants are not in this pass, nor are the GLTF ones)
+        if (use_stochastic)
+        {
+            drawGLTFSceneDepth(false, 0.33f);
+        }
+        // </Vulkanstorm>
 
         gGL.setColorMask(true, false);
     }
@@ -373,11 +386,6 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
 // forwardRender set for the phase (blend factors, depth writes in the depth pass only)
 void LLDrawPoolAlpha::drawGLTFScene(EAlphaOITPhase oit_phase)
 {
-    if (getType() != LLDrawPool::POOL_ALPHA_POST_WATER)
-    {
-        return;
-    }
-
     LL::GLTFSceneManager::StochasticPass pass = LL::GLTFSceneManager::ST_NONE;
     switch (oit_phase)
     {
@@ -392,6 +400,30 @@ void LLDrawPoolAlpha::drawGLTFScene(EAlphaOITPhase oit_phase)
     scene.render(false, true, false, pass, mStochasticMasks);
     scene.render(false, false, true, pass, mStochasticMasks);
     scene.render(false, true, true, pass, mStochasticMasks);
+}
+
+// A depth-only draw of the GLTF scene's blended assets (colour writes already masked by the caller):
+// the alpha-only variant in its mode 3 (every sample, fragments under min_alpha discarded). Only
+// where the blended faces contribute depth too (the depth of field pass, the rigged depth restore).
+void LLDrawPoolAlpha::drawGLTFSceneDepth(bool rigged, F32 min_alpha)
+{
+    static const LLStaticHashedString sMode("st_mode");
+    static const LLStaticHashedString sMinAlpha("st_min_alpha");
+    for (LLGLSLShader& base : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
+    {
+        LLGLSLShader* program = base.mStochasticVariant;
+        if (program && program->mProgramObject)
+        {
+            program->bind();
+            program->uniform1i(sMode, 3);
+            program->uniform1f(sMinAlpha, min_alpha);
+        }
+    }
+    LLGLSLShader::unbind();
+
+    LL::GLTFSceneManager& scene = LL::GLTFSceneManager::instance();
+    scene.render(false, rigged, false, LL::GLTFSceneManager::ST_DEPTH_ONLY);
+    scene.render(false, rigged, true, LL::GLTFSceneManager::ST_DEPTH_ONLY);
 }
 // </Vulkanstorm>
 
@@ -411,6 +443,10 @@ void LLDrawPoolAlpha::renderOITResidual()
                         LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 |
                         LLVertexBuffer::MAP_TEXCOORD2,
                     true, true, ALPHA_OIT_NONE);
+        // <Vulkanstorm> and the GLTF scene's rigged blended assets, as the stock path draws them with
+        // the rigged faces (same minimum alpha as the faces' shaders)
+        drawGLTFSceneDepth(true, MINIMUM_ALPHA);
+        // </Vulkanstorm>
         gGL.setColorMask(true, false);
     }
 
@@ -454,21 +490,18 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
     apply(simple_shader);
     apply(fullbright_shader);
     apply(pbr_shader);
-    // the GLTF scene's blended variants
-    for (U32 i = 0; i < LLGLSLShader::NUM_GLTF_VARIANTS; ++i)
+    // the GLTF scene's blended variants (their base variants point at their alpha-only ones)
+    for (LLGLSLShader& base : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
     {
-        if (i & LLGLSLShader::GLTFVariant::ALPHA_BLEND)
+        LLGLSLShader* program = base.mStochasticVariant;
+        if (program && program->mProgramObject)
         {
-            LLGLSLShader* program = gGLTFAlphaStochasticProgram[i].mProgramObject ? &gGLTFAlphaStochasticProgram[i] : nullptr;
-            if (program)
-            {
-                program->bind();
-                program->uniform1i(sMode, mode);
-                program->uniform1i(sSamplesHW, samples_hw);
-                program->uniform1i(sSamples, samples);
-                program->uniform1i(sIteration, (S32)iteration);
-                program->uniform1i(sFrame, frame);
-            }
+            program->bind();
+            program->uniform1i(sMode, mode);
+            program->uniform1i(sSamplesHW, samples_hw);
+            program->uniform1i(sSamples, samples);
+            program->uniform1i(sIteration, (S32)iteration);
+            program->uniform1i(sFrame, frame);
         }
     }
     LLGLSLShader* material_shader = gDeferredMaterialProgram;

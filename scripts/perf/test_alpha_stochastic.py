@@ -349,12 +349,7 @@ for rel,defines in alpha_programs_all:
         assert ok.value,(rel,'stochastic' if as_variant else 'plain',log.value.decode()[:2000])
         fn('glDeleteShader',None,U)(shader);compiled+=1
 print(f'{compiled} alpha fragment shaders compile, plain and as their stochastic variants')
-# the GLTF variant's alpha-only output is the alpha its shaded output carries: the lit shader multiplies
-# in the vertex alpha a second time (a = basecolor.a*vertex_color.a), the unlit one does not
-gltf_text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
-assert 'float st_alpha = basecolor.a * vertex_color.a;' in gltf_text and 'float a = basecolor.a*vertex_color.a;' in gltf_text
-assert gltf_text.index('alpha_stochastic_mask(st_alpha)')<gltf_text.index('vec3 vNt =')   # returns before any lighting
-print('GLTF blended variants: alpha-only output matches the shaded alpha')
+# (the GLTF blended variants run in the mask model below: lit and unlit, the viewer's own shader)
 
 # ---- the sun N.L helper (sunShadowedDiffuse): every program that calls it, and deferredUtil.glsl that
 # defines it, compile in every combination of blend / no blend, with / without HAS_SUN_SHADOW,
@@ -403,6 +398,113 @@ for total,n in ((16,8),(8,8),(4,4)):
         mean=sum(counts)/len(counts);assert abs(mean-a*total)<=0.05*total+1e-9,('mean R',total,a,mean)
         checks+=1
 print(f'{checks} coverage cases: every sample as the model predicts (16 in two passes of 8, 8, 4), R = floor or ceil of alpha S, mean alpha S')
+
+
+# ---- the GLTF scene's blended variants (pbrmetallicroughnessF.glsl itself, ALPHA_BLEND + ALPHA_STOCHASTIC, lit
+# with HAS_SUN_SHADOW as the viewer builds it, and UNLIT): the alpha-only output through the same mask model.
+# The lit shader multiplies in the vertex alpha a second time (a = basecolor.a * vertex_color.a), the unlit one
+# does not; the model is given the alpha each shaded output carries. The lighting functions the shader links
+# in the viewer are stand-ins here (they are not reached before the alpha-only return).
+GLTF_STUBS='''#version 420
+void mirrorClip(vec3 pos) {}
+void waterClip(vec3 pos) {}
+vec4 encodeNormal(vec3 n, float env, float flag) { return vec4(n, env); }
+vec3 srgb_to_linear(vec3 c) { return c; }
+vec3 linear_to_srgb(vec3 c) { return c; }
+void calcAtmosphericVarsLinear(vec3 p, vec3 n, vec3 l, out vec3 sunlit, out vec3 amblit, out vec3 atten, out vec3 additive)
+{ sunlit = vec3(1.0); amblit = vec3(0.3); atten = vec3(1.0); additive = vec3(0.0); }
+vec4 applySkyAndWaterFog(vec3 pos, vec3 additive, vec3 atten, vec4 color) { return color; }
+void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist)
+{ l = normalize(lv); h = normalize(l + v); nh = nl = nv = vh = 1.0; lightDist = length(lv); }
+float calcLegacyDistanceAttenuation(float distance, float falloff) { return 1.0; }
+float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen) { return 1.0; }
+void sampleReflectionProbes(inout vec3 ambenv, inout vec3 glossenv, vec2 tc, vec3 pos, vec3 norm, float glossiness, bool transparent, vec3 amblit)
+{ ambenv = amblit; glossenv = vec3(0.5); }
+void calcDiffuseSpecular(vec3 baseColor, float metallic, inout vec3 diffuseColor, inout vec3 specularColor) { diffuseColor = baseColor; specularColor = vec3(0.04); }
+vec3 pbrBaseLight(vec3 diffuseColor, vec3 specularColor, float metallic, vec3 pos, vec3 norm, float perceptualRoughness, vec3 light_dir,
+                  vec3 sunlit, float scol, vec3 radiance, vec3 irradiance, vec3 colorEmissive, float ao, vec3 additive, vec3 atten)
+{ return diffuseColor * sunlit * scol; }
+vec3 pbrCalcPointLightOrSpotLight(vec3 diffuseColor, vec3 specularColor, float perceptualRoughness, float metallic, vec3 n, vec3 p, vec3 v,
+                                  vec3 lp, vec3 ld, vec3 lightColor, float lightSize, float falloff, float is_pointlight, float ambiance)
+{ return vec3(0.0); }
+'''
+GLTF_VARYINGS='''out vec3 vary_position; out vec4 vertex_color; out vec2 base_color_uv; out vec2 emissive_uv;
+out vec3 vary_normal; out vec3 vary_tangent; flat out float vary_sign; out vec2 normal_uv; out vec2 metallic_roughness_uv;
+out vec2 occlusion_uv; out vec3 vary_fragcoord;
+void gltf_varyings(vec2 p, vec2 uv, float alpha, float zz)
+{
+    vary_position = vec3(p, -2.0); vertex_color = vec4(1.0, 1.0, 1.0, alpha);
+    base_color_uv = uv; emissive_uv = uv; normal_uv = uv; metallic_roughness_uv = uv; occlusion_uv = uv;
+    vary_normal = vec3(0.0, 0.0, 1.0); vary_tangent = vec3(1.0, 0.0, 0.0); vary_sign = 1.0; vary_fragcoord = vec3(p, 1.0);
+    gl_Position = vec4(p, zz, 1.0);
+}
+'''
+GLTF_VERTEX='#version 420\n'+GLTF_VARYINGS+'''uniform float z; uniform float slope; uniform float slope_y; uniform float test_alpha;
+void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gltf_varyings(p, p*0.5+0.5, test_alpha, z+slope*p.x+slope_y*p.y); }'''
+GLTF_LATTICE_VERTEX='#version 420\n'+GLTF_VARYINGS+'''uniform float z; uniform int cells; uniform vec2 goff; uniform float test_alpha;
+void main(){ int cell=gl_VertexID/6; int k=gl_VertexID%6; int cx=cell%cells; int cy=cell/cells;
+ vec2 c[6]=vec2[6](vec2(0,0),vec2(1,0),vec2(0,1),vec2(1,0),vec2(1,1),vec2(0,1));
+ vec2 p=(vec2(cx,cy)+c[k])/float(cells)*2.5-1.25+goff; gltf_varyings(p, c[k], test_alpha, z); }'''
+gltf_text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
+def gltf_alpha_only(unlit,vertex=GLTF_VERTEX,text=gltf_text):
+    """make_gltf_variant's blended variant as its alpha-only (ALPHA_STOCHASTIC) program"""
+    defines=['MAX_NODES_PER_GLTF_OBJECT 64','MAX_MATERIALS_PER_GLTF_OBJECT 64','MAX_UBO_VEC4S 1024','ALPHA_BLEND','ALPHA_STOCHASTIC']
+    defines+=['UNLIT'] if unlit else ['HAS_SUN_SHADOW']
+    extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defines)
+    src='#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/',extra)
+    prog=program([(0x8B31,vertex),(0x8B30,src),(0x8B30,GLTF_STUBS),(0x8B30,helper),(0x8B30,engine)])
+    use(prog);uniform1i(loc(prog,b'gltf_material_id'),-1);uniform1i(loc(prog,b'diffuseMap'),12)
+    return prog
+gltf_white=U();gentex(1,C.byref(gltf_white));bindtex(TEX2D,gltf_white)
+teximage(TEX2D,0,0x8058,2,2,0,RGBA,0x1401,(C.c_ubyte*16)(*([255]*16)))
+texparam(TEX2D,MIN,NEAREST);texparam(TEX2D,MAG,NEAREST);texparam(TEX2D,0x2802,0x812D);texparam(TEX2D,0x2803,0x812D)   # clamp to the (transparent) border
+bind_unit(12,TEX2D,gltf_white)
+gltf_variants={'lit':gltf_alpha_only(False),'unlit':gltf_alpha_only(True)}
+def gltf_alpha(kind,a):
+    a32=f32(a)
+    return f32(a32*a32) if kind=='lit' else a32
+
+gltf_cases=0
+for kind,gprog in gltf_variants.items():
+    saved_variant=variant;variant=gprog
+    try:
+        for total,n in ((16,8),(8,8),(4,4)):
+            for a in (0.0,0.3,0.5,0.77,1.0):
+                set_opaque(1.0)
+                _,bits=stochastic([L(0.5,a,seed=12345)],total,n,read_bits=True)
+                eff=gltf_alpha(kind,a)
+                for y in range(H):
+                    for x in range(W):
+                        full=model_mask(x,y,12345,0,eff,total,tables[total])
+                        for it in range(total//n):
+                            want=(full>>(it*n))&((1<<n)-1)
+                            assert bits[it][y*W+x]==want,('GLTF coverage bits',kind,total,n,a,x,y,it,hex(bits[it][y*W+x]),hex(want))
+                gltf_cases+=1
+        # total alpha of two layers: 1 - prod(1 - alpha_eff), whatever the visibility
+        set_opaque(1.0)
+        pix=stochastic([L(0.3,0.6,seed=7),L(0.6,0.5,seed=9)],8,8)
+        want=1-(1-gltf_alpha(kind,0.6))*(1-gltf_alpha(kind,0.5))
+        worst=max(abs(p[c]-want) for p in pix for c in range(3))
+        assert worst<2e-3,('GLTF total alpha',kind,worst,want);gltf_cases+=1
+        # mode 3 (the depth of field pass, the rigged depth restore): every sample, under the cut nothing
+        for a,cut in ((0.2,0.33),(0.5,0.33),(0.004,0.004),(0.003,0.004)):
+            eff=gltf_alpha(kind,a);n=4;set_opaque(1.0)
+            f=targets[n][0];bindfbo(FB,f);enable(MULTISAMPLE);drawbuffer(NONE);spread(n,expand)
+            disable(BLEND);enable(DEPTH_TEST);depthmask(1);disable(POLY_OFFSET)
+            use(gprog);uniform1i(loc(gprog,b'st_mode'),3);uniform1f(loc(gprog,b'st_min_alpha'),cut)
+            uniform1i(loc(gprog,b'st_samples_hw'),n);uniform1i(loc(gprog,b'st_samples'),n)
+            layer(gprog,0.5,a,seed=1)
+            bindfbo(FB,bits_fbo);disable(DEPTH_TEST);disable(MULTISAMPLE)
+            use(readmask);bind_unit(2,TEXMS,targets[n][3]);bind_unit(3,TEX2D,opaque_depth)
+            uniform1i(loc(readmask,b'st_depth'),2);uniform1i(loc(readmask,b'opaque'),3);uniform1i(loc(readmask,b'samples'),n)
+            draw(4,0,3);px=(U*(W*H))();readpixels(0,0,W,H,RED_INT,UINT,px)
+            enable(DEPTH_TEST);enable(MULTISAMPLE)
+            expect=(1<<n)-1 if eff>=f32(cut) else 0
+            assert set(px)=={expect},('GLTF depth-only mode',kind,a,cut,set(px),expect);gltf_cases+=1
+    finally:
+        variant=saved_variant
+print(f"{gltf_cases} GLTF blended variant cases (the viewer's pbrmetallicroughnessF.glsl, lit and unlit): every sample as the model predicts "
+      '(S = 16, 8, 4), total alpha, and the depth-only mode with its cut')
 
 # different face seeds: unrelated masks; the same seed: the same mask
 set_opaque(1.0)
@@ -839,12 +941,40 @@ for rel in ('class2/deferred/alphaF.glsl','class1/deferred/fullbrightF.glsl','cl
     plain=_re.findall(r'^[ \t]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M)
     assert not plain,(rel,'fragment inputs without centroid',plain)
     assert 'centroid in ' in text,rel
-# the GLTF scene's blended variants: the same, through the ST_IN macro (`centroid in` with ALPHA_BLEND)
-text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
-assert not _re.findall(r'^[ 	]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M),'gltf fragment inputs without ST_IN'
-assert '#define ST_IN centroid in' in text and len(_re.findall(r'^ST_IN ',text,_re.M))>=10
+# the GLTF scene's blended variants, the viewer's own shader (its ST_IN macro) on the same lattice: the
+# 2x2 diffuse texture is opaque inside the island and transparent outside it (clamp to border), so a
+# sample shaded at an extrapolated coordinate has alpha 0 and its pixel loses the island's samples; the
+# scene behind shows through as white. Without centroid (ST_IN replaced by `in`) pixels leak.
+def glat_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
+    i=1   # one layer, its lattice off the pixel grid: a hole in it shows the scene
+    use(prog);uniform1f(loc(prog,b'z'),z);uniform1i(loc(prog,b'cells'),CELLS_L)
+    fn('glUniform2f',None,I,C.c_float,C.c_float)(loc(prog,b'goff'),(i*0.37%1.0)*2.5/CELLS_L,(i*0.61%1.0)*2.5/CELLS_L)
+    uniform1f(loc(prog,b'test_alpha'),alpha)
+    if prog in glat_variants: uniform1i(loc(prog,b'st_seed'),seed)
+    draw(4,0,6*CELLS_L*CELLS_L)
+assert '#define ST_IN centroid in' in gltf_text
+glat_centroid=gltf_alpha_only(True,GLTF_LATTICE_VERTEX)
+glat_smooth=gltf_alpha_only(True,GLTF_LATTICE_VERTEX,gltf_text.replace('#define ST_IN centroid in','#define ST_IN in'))
+glat_variants=[glat_centroid,glat_smooth]
+def gltf_lattice_white(gprog,total,n):
+    global layer,variant,shade
+    saved=(layer,variant,shade);layer,variant,shade=glat_layer,gprog,lat_centroid
+    lat_calls[0]=0;lat_layers[0]=1
+    try:
+        set_opaque(1.0)
+        pix=stochastic([L(0.5,1.0,seed=900)],total,n,scene_rgba=(1.,1.,1.,0.))
+    finally:
+        layer,variant,shade=saved
+    return sum(1 for p in pix if abs(p[0]-0.3)>0.01)   # not the island's grey: some of the white scene showing through
+glat_report=[]
+for total,n in ((4,4),(8,8),(16,8)):
+    leaks=gltf_lattice_white(glat_smooth,total,n);clean=gltf_lattice_white(glat_centroid,total,n)
+    assert leaks>0,('without centroid the GLTF variant should leak at the island edges',total,leaks)
+    assert clean==0,('the GLTF blended variant must not shade outside its island',total,clean)
+    glat_report.append((total,leaks,clean))
 checks+=1
-print('alpha programs: every interpolated fragment input is `centroid in`')
+print('alpha programs: every interpolated fragment input is `centroid in`; the GLTF blended variant (the viewer\'s own shader) on the lattice: '
+      +', '.join(f'S = {t}: {l} -> {c} leaking pixels' for t,l,c in glat_report)+' (without ST_IN centroid -> with)')
 
 # ---- two layers whose rotations meet on one table entry (the subset of the mask table)
 # The subset of a fragment was the table column of fract(pixel value + the layer's rotation), so
