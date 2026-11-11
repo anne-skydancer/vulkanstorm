@@ -57,8 +57,10 @@ uniform float primary_shadow_strength;
 // </Vulkanstorm>
 
 // <Vulkanstorm> cloud shadows (stage L2 of the light study): the cloud transmittance map, a
-// world-anchored 512x512 R8 map of the share of the sun's or the moon's light the flat cloud layer
-// lets through, built every frame by deferred/cloudShadowMapF.glsl (LLCloudShadowMap).
+// world-anchored 512x512 RG8 map of the light the flat cloud layer lets through, built every frame by
+// deferred/cloudShadowMapF.glsl (LLCloudShadowMap): R the direct beam (the shadow; this lookup), G the
+// diffuse light under the cloud (stage L4; nothing reads it yet). The map's G is 1 in the white texture bound
+// when the map is off, so a reader of G must return 0 when cloud_shadow_params.x <= 0.
 //   cloud_shadow_mat    eye space position -> map coordinate (xy)
 //   cloud_shadow_params x strength (0: off), y 1: use the map's mean (probes, cube snapshots),
 //                       z width of the fade to the mean at the map's edge, w the tap's mip level
@@ -185,11 +187,6 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     // brightness of surface both sunlight and ambient
 
     sunlit = sunlight.rgb;
-#ifdef FRAGMENT_SHADER
-    // <Vulkanstorm> the clouds dim the direct light (L2); the haze above is as it was
-    sunlit *= cloudShadowTransmittance(inPositionEye);
-    // </Vulkanstorm>
-#endif
     amblit = pow(tmpAmbient.rgb, vec3(0.9)) * 0.57;
 
     additive *= vec3(1.0 - combined_haze);
@@ -225,6 +222,13 @@ void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, ou
         amblit = vec3(dot(amblit, vec3(0.2126, 0.7152, 0.0722)));
         sunlit = srgb_to_linear(sunlit);
     }
+
+#ifdef FRAGMENT_SHADER
+    // <Vulkanstorm> the clouds dim the direct light (L2). L2b: the beam multiplies LINEAR light, the sun's and the moon's
+    // alike (the map's value is a share of the light's energy). The classic mode keeps sunlit encoded, as it always did.
+    sunlit *= cloudShadowTransmittance(inPositionEye);
+    // </Vulkanstorm>
+#endif
 
     // multiply to get similar colors as when the "scaleSoftClip" implementation was doubling color values
     // (allows for mixing of light sources other than sunlight e.g. reflection probes)

@@ -23,6 +23,7 @@
 
 #include "llagent.h"
 #include "llagentcamera.h"
+#include "llcloudoptics.h"
 #include "llcloudshadow.h"
 #include "lldrawpoolwlsky.h"
 #include "llenvironment.h"
@@ -60,6 +61,7 @@ void LLCloudShadowMap::update()
     static LLCachedControl<F32> strength(gSavedSettings, "RenderCloudShadowStrength", 1.f);
     static LLCachedControl<F32> penumbra_height(gSavedSettings, "RenderCloudShadowPenumbraHeight", 1500.f);
     static LLCachedControl<F32> extent_setting(gSavedSettings, "RenderCloudShadowExtent", 4096.f);
+    static LLCachedControl<F32> optical_depth(gSavedSettings, "RenderCloudOpticalDepth", (F32) LLCloudOptics::DEFAULT_VISUAL_DEPTH);
 
     const U64 frame = LLFrameTimer::getFrameCount();
     if (mBuiltFrame == frame)
@@ -87,7 +89,7 @@ void LLCloudShadowMap::update()
 
     if (!mAllocated)
     {
-        mAllocated = mTarget.allocate(LLCloudShadow::MAP_RESOLUTION, LLCloudShadow::MAP_RESOLUTION, GL_R8, false, LLTexUnit::TT_TEXTURE, LLTexUnit::TMG_AUTO);
+        mAllocated = mTarget.allocate(LLCloudShadow::MAP_RESOLUTION, LLCloudShadow::MAP_RESOLUTION, GL_RG8, false, LLTexUnit::TT_TEXTURE, LLTexUnit::TMG_AUTO);
         if (!mAllocated)
         {
             return;
@@ -130,9 +132,13 @@ void LLCloudShadowMap::update()
         static const LLStaticHashedString sTc0("ctm_tc0");
         static const LLStaticHashedString sSpan("ctm_tc_span");
         static const LLStaticHashedString sAlt("ctm_altitude_blend");
+        static const LLStaticHashedString sOptics("ctm_optics");
         gCloudShadowMapProgram.uniform2f(sTc0, (F32) tc0.x, (F32) tc0.y);
         gCloudShadowMapProgram.uniform2f(sSpan, (F32) k, (F32) -k);
         gCloudShadowMapProgram.uniform1f(sAlt, (F32) LLCloudShadow::altitude_blend(L, psky->getMaxY()));
+        // stage L2b: the optics of the layer (llcloudoptics.h), tau_v from the debug setting
+        const LLCloudOptics::ShaderParams optics = LLCloudOptics::shader_params(llclamp((F64) optical_depth, 1.0, 30.0));
+        gCloudShadowMapProgram.uniform4f(sOptics, optics.visual_depth, optics.beam_coefficient, optics.total_coefficient, optics.alpha_step);
 
         gPipeline.mScreenTriangleVB->setBuffer();
         gPipeline.mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
