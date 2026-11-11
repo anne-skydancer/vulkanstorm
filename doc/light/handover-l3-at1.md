@@ -97,9 +97,13 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
   `moon_glow_norm` with `moon_glow_factor` = band weight x moon_brightness / 4 x the moon disc's visibility. The sum is
   `sun_moon_glow_factor` as before. By day `moon_glow_factor` is 0 and the sun's share is exactly the factor, 1.
 - Halo and rainbow (`skyF.glsl`): the sun's at the sun, weighted (1 - band weight), the moon's at the moon, weighted
-  `moon_halo_weight` = band weight x the moon disc's visibility. The weight is 1 by day.
+  `moon_halo_weight` = band weight x the moon disc's visibility x (moon_brightness > 0, a smoothstep from 0 to 0.01). The weight
+  is 1 by day; a moonless night (moon_brightness 0, or the moon down) has no halo and no rainbow.
 - Clouds: the glow direction `cloud_light_dir` is the sun's direction (`cloud_dir`), through the whole handover, and the
   sun's attenuation through the atmosphere (`off_axis`) uses the sun's elevation; the clouds' band weight fades the term.
+- The haze glow is damped by its own body's direction (`sun_dir`, `moon_dir`, eye space, the same uniforms the deferred pass
+  binds), not by the blended light's, which at mid-handover points at neither body. A caller that passes no light direction
+  (fullbright passes vec3(0)) is not damped, as before.
 - Unchanged on purpose: the sunlight attenuation of the dome (`off_axis` in `skyV.glsl`) and the water fog still use
   `lightnorm`, the cloud self-shade offset and the cloud map the ground's light direction; the sun and moon discs are drawn at
   their own directions (`LLVOSky`).
@@ -154,10 +158,16 @@ sun shadow pass is skipped while the shadow is invisible.
   colour; no moon, no direct light at night; 2033 horizon, NaN and hostile-setting cases are finite.
 - Every edge of the bands (0, +-swing, +-(swing + fade), each shifted by 0, the cloud dip and 20 degrees; offsets 0, +-1e-12,
   +-1e-9, +-1e-6; widths 0 .. 5 degrees; 12 skies, physical and A/B) with no moon, moon_brightness 0, the moon below the horizon and
-  the moon up: all outputs finite and in range (145152 cases). A fully black frame at exactly -0.6 degree seen in-world (no_moon
-  sky) is not reproduced by this: the rig is finite there and the state is the same as at -0.5 and -0.7 degrees; the frame is a
-  uniformly black 2560 x 1329 PNG, which points at a one-frame capture or history glitch, not at the light. The analysis now
-  reports fully black frames as capture failures and leaves them out of the pop search.
+  the moon up: all outputs finite and in range (60480 cases). The fully black frame at -0.6 degree in the first in-world run (sky
+  no_moon) was not the light: the viewer log shows the window minimized or backgrounded from 21:54:57 to 21:55:01, `display()`
+  returns early then, and `rawSnapshot` reads back the cleared buffer. The light check now waits while the window is minimized
+  (Windows), takes a black frame, or one with a run of all-zero rows of at least 5 % of the height, again up to three times, and
+  the analysis flags such frames as bad data (kept in the table with `bad_frame`, left out of the series, the pop search and the
+  step count). Do not touch the desktop during a run.
+- The shader math of the glow (the per-body damping, the halo weights) has no GPU test; the harnesses in `scripts/light` set the
+  new uniforms so that they stay equivalent for the sun (no moon glow).
+- Thumbnails of the frame differences have one size for any frame size (a gradient at two heights agrees); mixed sizes, bad
+  frames and the retake are tested against a fake viewer.
 - The glow of each body stays at the body: the clouds' light is the sun's direction through the handover (moon high and 90
   degrees away), the glow shares add up, no moon glow for moon_brightness 0.
 - The test passes at -O2 and at -O0 (the direction checks are in 1e-6 degree).

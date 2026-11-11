@@ -23,7 +23,6 @@
  * $/LicenseInfo$
  */
 
-uniform vec3  lightnorm;
 uniform vec3  sunlight_color;
 uniform vec3  moonlight_color;
 uniform int   sun_up_factor;
@@ -43,6 +42,8 @@ uniform float sun_moon_glow_factor;
 uniform vec3  sun_glow_norm;
 uniform vec3  moon_glow_norm;
 uniform float moon_glow_factor; // the moon's share of sun_moon_glow_factor
+uniform vec3  sun_dir;          // eye space, unit (LLPipeline::bindDeferredShader): each glow is damped by its own body
+uniform vec3  moon_dir;
 // </Vulkanstorm>
 uniform float sky_sunlight_scale;
 uniform float sky_ambient_scale;
@@ -130,8 +131,11 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     atten = combined_haze.rgb;
 
     // compute haze glow
-    // <Vulkanstorm> L3: the sun's glow at the sun, weighted with what is left of the factor, and the moon's at the moon
-    float dampen = max(0.0f, dot(light_dir, rel_pos_norm));
+    // <Vulkanstorm> L3: the sun's glow at the sun, weighted with what is left of the factor, and the moon's at the moon, each
+    // damped by its own body's direction (not the blended light's, which points at neither). A caller that passes no light
+    // direction (fullbright passes vec3(0)) gets no damping to 0, as before.
+    bool  has_light = dot(light_dir, light_dir) > 1e-6;
+    float dampen = has_light ? max(0.0f, dot(sun_dir, rel_pos_norm)) : 0.0;
     float haze_glow = dot(rel_pos_norm, sun_glow_norm.xyz);
 
     // dampen sun additive contrib when not facing it...
@@ -151,12 +155,12 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     // add "minimum anti-solar illumination"
     haze_glow += .25;
 
-    // <Vulkanstorm> L3: the sun's share is exactly the factor by day (the moon's is 0)
+    // <Vulkanstorm> L3: the sun's share (the factor less the moon's) is exactly the factor by day (the moon's is 0)
     haze_glow *= sun_moon_glow_factor - moon_glow_factor;
 
     if (moon_glow_factor > 0.0)
     {
-        float moon_glow = dot(rel_pos_norm, moon_glow_norm.xyz) * dampen;
+        float moon_glow = dot(rel_pos_norm, moon_glow_norm.xyz) * (has_light ? max(0.0f, dot(moon_dir, rel_pos_norm)) : 0.0);
         moon_glow = 1. - moon_glow;
         moon_glow = max(moon_glow, .001);
         moon_glow *= glow.x;

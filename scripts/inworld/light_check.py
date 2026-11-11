@@ -92,9 +92,63 @@ def as_value(text):
         return str(text)
 
 
+MAX_RETAKES = 3
+
+
 def log(msg):
     sys.stderr.write("LIGHTCHECK %s %s\n" % (dt.datetime.now().strftime("%H:%M:%S"), msg))
     sys.stderr.flush()
+
+
+def viewer_window_state(pid=None):
+    """The viewer's window as the OS sees it: 'minimized', 'background' (open, but not the foreground window), 'foreground', or
+    None when it cannot be told (not Windows, or no window found for the viewer process, which is this script's parent).
+    The viewer does not render while it is minimized, and a snapshot then reads back the cleared buffer."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+        user32 = ctypes.windll.user32
+        pid = pid or os.getppid()
+        found = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def callback(hwnd, _lparam):
+            owner = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value == pid and user32.IsWindowVisible(hwnd) and not user32.GetWindow(hwnd, 4) and user32.GetWindowTextLengthW(hwnd) > 0:
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(callback, 0)
+        if not found:
+            return None
+        if all(user32.IsIconic(h) for h in found):
+            return "minimized"
+        return "foreground" if user32.GetForegroundWindow() in found else "background"
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+BAD_ROW_FRACTION = 0.05   # a run of all-zero rows this long (of the height) makes a snapshot bad data (see analyze_light_check.py)
+
+
+def frame_is_bad(path):
+    """True for a snapshot that is fully black or has a run of all-zero rows of at least BAD_ROW_FRACTION of its height (the
+    viewer read back the cleared buffer). None when Pillow or numpy is missing."""
+    try:
+        import numpy as np  # noqa: PLC0415
+        from PIL import Image  # noqa: PLC0415
+    except ImportError:
+        return None
+    with Image.open(path) as im:
+        zero = np.asarray(im.convert("RGB")).max(axis=(1, 2)) == 0
+    best = cur = 0
+    for z in zero:
+        cur = cur + 1 if z else 0
+        best = max(best, cur)
+    return best >= max(1, int(math.ceil(BAD_ROW_FRACTION * len(zero)))) if len(zero) else False
 
 
 def write_json_atomic(path, obj):
@@ -411,6 +465,23 @@ class Viewer:
             return (sum(fps) / len(fps) if fps else None, sum(ms) / len(ms) if ms else None)
         except LeapError:
             return (None, None)
+
+    def wait_window_visible(self, what, timeout=60.0):
+        """Wait while the viewer window is minimized (it does not render then). Warn once when it is not the foreground window."""
+        state = viewer_window_state()
+        waited = 0.0
+        while state == "minimized" and waited < timeout:
+            if waited == 0.0:
+                log("the viewer window is minimized before %s: waiting for it to be restored (up to %.0f s)" % (what, timeout))
+            self.sleep(1.0)
+            waited += 1.0
+            state = viewer_window_state()
+        if state == "minimized":
+            log("WARNING the viewer window stayed minimized for %.0f s before %s" % (timeout, what))
+        elif state == "background" and not getattr(self, "_background_warned", False):
+            self._background_warned = True
+            log("the viewer is not the foreground window: leave the desktop alone during a run")
+        return state
 
     def snapshot(self, filename, width=None, height=None):
         args = {"filename": filename, "showui": False, "showhud": False, "rebuild": False}
@@ -945,8 +1016,20 @@ class Run:
         fps, ms = v.perf() if self.sc["record_fps"] else (None, None)
         base = "%s_%03d_%s" % (spec["id"], step, fmt_elev(elev))
         bmp = self.out / "snapshots" / (base + ".bmp")
-        v.snapshot(str(bmp).replace("\\", "/"), self.sc["snapshot"].get("width"), self.sc["snapshot"].get("height"))
-        final = self.finish_image(bmp)
+        # A snapshot taken while the window is minimized or covered reads back the cleared buffer (a black frame, or a band of
+        # black rows): wait for the window, and take a bad frame again, up to MAX_RETAKES times.
+        for attempt in range(MAX_RETAKES + 1):
+            v.wait_window_visible("the snapshot of %s" % base)
+            v.snapshot(str(bmp).replace("\\", "/"), self.sc["snapshot"].get("width"), self.sc["snapshot"].get("height"))
+            final = self.finish_image(bmp)
+            if not frame_is_bad(final):
+                break
+            if attempt == MAX_RETAKES:
+                self.warn("%s is still black or has black rows after %d retakes; it stays in the run as bad data" % (final.name, MAX_RETAKES))
+                break
+            log("%s is black or has black rows (window state: %s): taking it again (%d of %d)" % (
+                final.name, viewer_window_state() or "unknown", attempt + 1, MAX_RETAKES))
+            v.sleep(self.sc["settle"]["per_step_s"])
         row = {"sky": spec["id"], "step": step, "kind": kind, "sun_elevation_deg": elev,
                "sun_elevation_readback": got, "sun_azimuth_deg": az,
                "snapshot": final.relative_to(self.out).as_posix(),

@@ -410,10 +410,13 @@ void main()
         float optic_d = rel_pos_lightnorm;
         // <Vulkanstorm> L3: the sun's halo and rainbow at the sun, fading with the band; the moon's at the moon, fading in
         // (weight 1 by day, so the sun's are as before)
-        vec3  halo_22 = halo22(optic_d);
         float sun_halo = 1.0 - sun_moon_blend;
-        color.rgb += sun_halo * rainbow(optic_d);
-        color.rgb += sun_halo * halo_22;
+        if (sun_halo > 0.0)
+        {
+            vec3 halo_22 = halo22(optic_d);
+            color.rgb += sun_halo * rainbow(optic_d);
+            color.rgb += sun_halo * halo_22;
+        }
         if (moon_halo_weight > 0.0)
         {
             float moon_d = vary_MoonNormPosDot;

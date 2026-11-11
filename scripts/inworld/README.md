@@ -12,6 +12,12 @@ Needs Python 3.9+ (written for 3.13; the tests pass on 3.15). Pillow converts th
 run the analysis. Without Pillow a run still works but leaves BMP files (see below) and the analysis cannot run.
 The scripts install nothing.
 
+**Do not touch the desktop during a run.** Do not minimize the viewer, cover it, or let a notification resize the 3D view: the
+viewer does not render while it is minimized, and a snapshot then reads back the cleared buffer (a black frame; the first
+in-world run had one at -0.6 degree). On Windows the script waits while the viewer window is minimized and takes a black
+frame, or one with a run of all-zero rows (5 % of the height or more), again up to three times, logging each retake. The
+analysis reports any frame that is still bad as bad data (`bad_frame` in the CSV, left out of the series and the pop search).
+
 ## Launch (PowerShell)
 
 Close the running viewer first: LEAP is read once at startup.

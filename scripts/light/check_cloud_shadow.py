@@ -194,6 +194,7 @@ def check():
             u(prog, 'cloud_scale', scale); u(prog, 'cloud_shadow', shadow); u(prog, 'cloud_variance', variance)
             u(prog, 'cloud_pos_density1', *density1); u(prog, 'cloud_pos_density2', *density2); u(prog, 'blend_factor', blend)
             u(prog, 'lightnorm', *lightnorm)
+            u(prog, 'sun_glow_norm', *lightnorm); u(prog, 'moon_glow_norm', *lightnorm)   # L3: the sun is the only body
             u(prog, 'cloud_noise_texture', 0); u(prog, 'cloud_noise_texture_next', 1)
             active(0x84C0); bindtex(TEX2D, na); active(0x84C1); bindtex(TEX2D, nb); active(0x84C0)
 
@@ -205,7 +206,7 @@ def check():
         um = (F * 16)(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1)   # gl_Position = (0, 0, 0, 1)
         um4(loc(sky, b'modelview_projection_matrix'), 1, 0, um)
         u(sky, 'camPosLocal', 0.0, OFFSET * R, 0.0); u(sky, 'max_y', max_y); u(sky, 'cloud_parallax', *par)
-        for name, v in (('lightnorm', lightnorm), ('sunlight_color', (1, 1, 1)), ('moonlight_color', (1, 1, 1)), ('ambient_color', (0.3, 0.3, 0.3)),
+        for name, v in (('lightnorm', lightnorm), ('sun_glow_norm', lightnorm), ('moon_glow_norm', lightnorm), ('sunlight_color', (1, 1, 1)), ('moonlight_color', (1, 1, 1)), ('ambient_color', (0.3, 0.3, 0.3)),
                         ('blue_horizon', (0.5, 0.5, 0.6)), ('blue_density', (0.25, 0.45, 0.76)), ('glow', (5, 0.001, -0.5)), ('cloud_color', (0.4, 0.4, 0.4))):
             u(sky, name, *v)
         u(sky, 'haze_horizon', 0.19); u(sky, 'haze_density', 0.7); u(sky, 'density_multiplier', 0.0002); u(sky, 'sun_up_factor', 1); u(sky, 'sun_moon_blend', 0.0)
@@ -303,7 +304,11 @@ DEFAULT_UNIFORMS = dict(lightnorm=(0.3, 0.8, 0.5), sunlight_color=(0.73, 0.78, 0
                         ambient_color=(1.05, 1.05, 1.05), blue_horizon=(0.5, 0.5, 0.6), blue_density=(0.24, 0.45, 0.76), haze_horizon=0.19,
                         haze_density=0.7, cloud_shadow=0.27, density_multiplier=0.00018, distance_multiplier=0.8, max_y=1605.0,
                         glow=(5.0, 0.001, -0.5), scene_light_strength=1.0, sun_moon_glow_factor=1.0, sky_sunlight_scale=1.0,
-                        sky_ambient_scale=1.0, classic_mode=0)
+                        sky_ambient_scale=1.0, classic_mode=0,
+                        # L3 (glow at each body): the sun's glow at the light, damped by the light direction the shader passes
+                        # (normalize(0.3, 0.8, 0.5)); no moon glow
+                        sun_glow_norm=(0.3, 0.8, 0.5), moon_glow_norm=(0.3, 0.8, 0.5), moon_glow_factor=0.0, moon_halo_weight=0.0,
+                        sun_dir=(0.3 / 0.9899494937, 0.8 / 0.9899494937, 0.5 / 0.9899494937), moon_dir=(0.0, -1.0, 0.0))
 
 
 def lookup_program(funcs_text):

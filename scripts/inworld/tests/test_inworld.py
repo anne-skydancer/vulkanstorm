@@ -275,7 +275,9 @@ def run_main(fv, tmp, extra=(), **over):
     out = pathlib.Path(tmp) / "run"
     args = lc.parse_args(["--scenario", str(p), "--out", str(out)] + list(extra))
     s = session_for(fv)
-    code = lc.execute(s, args, lc.load_scenario(p), out)
+    # the window of the process that started the test run is not a viewer: no window state
+    with mock.patch.object(lc, "viewer_window_state", return_value=None):
+        code = lc.execute(s, args, lc.load_scenario(p), out)
     return code, out, sc
 
 
@@ -857,16 +859,27 @@ class MixedFrameSizeTest(unittest.TestCase):
     """The 3D view's height changes when a notification or the chat bar appears: the frames of one run differ in size, and a
     fully black frame is a failed capture."""
 
-    def _run(self, tmp, sizes, black_at=None):
+    def _run(self, tmp, sizes, bad=None):
+        """A run of len(sizes) sweep steps whose frames have a ramp (non-uniform content); `bad` maps a step to 'black' or 'band'."""
         from PIL import Image
         run = pathlib.Path(tmp)
         (run / "snapshots").mkdir()
         (run / "run.json").write_text(json.dumps({}), encoding="utf-8")
         rows = []
         for i, (w, h) in enumerate(sizes):
-            level = 0 if i == black_at else 90
+            im = Image.new("RGB", (w, h))
+            px = im.load()
+            for y in range(h):
+                for x in range(w):
+                    level = int(60 + 120 * x / w + 40 * y / h)
+                    px[x, y] = (level, level, level)
+            kind = (bad or {}).get(i)
+            if kind:
+                for y in range(h if kind == "black" else int(h * 0.3)):
+                    for x in range(w):
+                        px[x, y] = (0, 0, 0)
             rel = "snapshots/s_%03d.png" % i
-            Image.new("RGB", (w, h), (level, level, level)).save(run / rel)
+            im.save(run / rel)
             rows.append({"step": i, "kind": "sweep", "sun_elevation_deg": "%.1f" % (1.0 - 0.1 * i), "fps": "60",
                          "sky": "s", "snapshot": rel})
         with open(run / "manifest.csv", "w", newline="", encoding="utf-8") as f:
@@ -882,14 +895,32 @@ class MixedFrameSizeTest(unittest.TestCase):
             self.assertEqual(t.shape, (alc.THUMB_H, alc.THUMB_W), (w, h))
             self.assertTrue(np.allclose(t, 0.25))
 
+    def test_thumbnails_of_a_gradient_agree_across_frame_sizes(self):
+        import numpy as np
+
+        def gradient(w, h):   # horizontal ramp plus a vertical ramp: every cell is different
+            return (np.linspace(0.0, 0.6, w)[None, :] + np.linspace(0.0, 0.4, h)[:, None])
+        a, b = alc.thumbnail(gradient(2560, 1329)), alc.thumbnail(gradient(2560, 1369))
+        self.assertLess(float(np.abs(a - b).max()), 0.01)             # the same scene at two heights
+        self.assertGreater(float(a[-1, -1] - a[0, 0]), 0.9)           # and it is not flat
+        c = alc.thumbnail(gradient(128, 72))
+        self.assertLess(float(np.abs(a - c).max()), 0.03)
+        # the vectorised average is the mean of each cell
+        y = np.arange(36 * 64, dtype=float).reshape(36, 64)
+        self.assertTrue(np.allclose(alc.thumbnail(y), y))
+        z = np.arange(72 * 128, dtype=float).reshape(72, 128)
+        self.assertAlmostEqual(float(alc.thumbnail(z)[0, 0]), float(z[:2, :2].mean()))
+
     def test_mixed_sizes_do_not_crash_and_warn_once(self):
         sizes = [(256, 133), (256, 137)] * 6 + [(256, 133)] * 4
         with tempfile.TemporaryDirectory() as tmp:
             run = self._run(tmp, sizes)
             result, text = alc.analyse(run)
-            self.assertEqual(text.count("the frames differ in size"), 1, text)
+            self.assertEqual(text.count("differ in size"), 1, text)
             self.assertEqual(result["skies"]["s"]["frame_sizes"], [(256, 133), (256, 137)])
             self.assertEqual(result["skies"]["s"]["frame_diff"]["pops"], [], text)
+            self.assertEqual(result["skies"]["s"]["steps"], len(sizes))
+            self.assertEqual(result["skies"]["s"]["bad_frames"], [])
 
     def test_two_skies_warn_once_per_run(self):
         sizes = [(128, 70), (128, 72)] * 3
@@ -906,17 +937,102 @@ class MixedFrameSizeTest(unittest.TestCase):
                 w.writeheader()
                 w.writerows(rows)
             result, text = alc.analyse(run)
-            self.assertEqual(text.count("the frames differ in size"), 1, text)
+            self.assertEqual(text.count("differ in size"), 1, text)
             self.assertIn("t", result["skies"])
 
-    def test_a_black_frame_is_a_capture_failure_not_a_pop(self):
+    def test_only_the_bad_frames_are_excluded(self):
+        sizes = [(128, 72)] * 14
         with tempfile.TemporaryDirectory() as tmp:
-            run = self._run(tmp, [(128, 72)] * 12, black_at=6)
+            run = self._run(tmp, sizes, bad={4: "black", 9: "band"})
             result, text = alc.analyse(run)
-            self.assertEqual(result["skies"]["s"]["black_frames"], ["snapshots/s_006.png"])
-            self.assertIn("fully black", text)
-            self.assertEqual(result["skies"]["s"]["pops"], [], text)
-            self.assertEqual(result["skies"]["s"]["frame_diff"]["pops"], [], text)
+            sky = result["skies"]["s"]
+            self.assertEqual([b["snapshot"] for b in sky["bad_frames"]], ["snapshots/s_004.png", "snapshots/s_009.png"])
+            self.assertEqual(sky["black_frames"], ["snapshots/s_004.png"])
+            self.assertEqual(sky["steps"], 12)                       # the bad frames do not count
+            self.assertIn("is bad data: fully black", text)
+            self.assertIn("rows are all zero", text)
+            self.assertEqual(sky["pops"], [], text)                   # the good frames agree with each other
+            self.assertEqual(sky["frame_diff"]["pops"], [], text)
+            # the table keeps every frame, with the marker
+            with open(run / "analysis_s.csv", encoding="utf-8") as f:
+                table = list(csv.DictReader(f))
+            self.assertEqual(len(table), 14)
+            self.assertEqual([r["snapshot"] for r in table if r["bad_frame"] == "1"], ["snapshots/s_004.png", "snapshots/s_009.png"])
+            # the warnings come right after the sky's header
+            lines = text.splitlines()
+            head = next(i for i, l in enumerate(lines) if l.startswith("== s"))
+            self.assertIn("WARNING", lines[head + 1])
+
+    def test_a_short_run_of_black_rows_is_not_bad_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from PIL import Image
+            im = Image.new("RGB", (100, 100), (90, 90, 90))
+            for y in range(4):                                       # 4 % of the rows: below the 5 % limit
+                for x in range(100):
+                    im.putpixel((x, y), (0, 0, 0))
+            p = pathlib.Path(tmp) / "a.png"
+            im.save(p)
+            m, _ = alc.measure(p, {"ground": [0, 0.6, 1, 0.9], "horizon_sky": [0, 0.1, 1, 0.4], "cloud": [0, 0.4, 1, 0.5]})
+            self.assertFalse(m["bad"])
+            for y in range(4, 6):
+                for x in range(100):
+                    im.putpixel((x, y), (0, 0, 0))
+            im.save(p)
+            m, _ = alc.measure(p, {"ground": [0, 0.6, 1, 0.9], "horizon_sky": [0, 0.1, 1, 0.4], "cloud": [0, 0.4, 1, 0.5]})
+            self.assertTrue(m["bad"])
+
+
+class RetakeTest(unittest.TestCase):
+    """A snapshot taken while the window is minimized reads back the cleared buffer: the light check takes it again."""
+
+    def _frames(self, run):
+        with open(run / "manifest.csv", encoding="utf-8") as mf:
+            return list(csv.DictReader(mf))
+
+    def test_a_black_frame_is_taken_again(self):
+        fv = FakeViewer(bad_takes={5}, bad_kind="black")
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp)
+            self.assertEqual(code, 0)
+            rows = self._frames(run)
+            elevs = lc.sweep_elevations(4.0, -4.0, 2.0, 0.5, 1.0)
+            self.assertEqual(len(rows), 3 * (1 + len(elevs)))         # one row per step, the retake is not a step
+            self.assertEqual(fv.takes, len(rows) + 1)                 # exactly one retake
+            self.assertFalse(any(lc.frame_is_bad(run / r["snapshot"]) for r in rows))
+
+    def test_a_band_of_black_rows_is_taken_again(self):
+        fv = FakeViewer(bad_takes={3}, bad_kind="band")
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp)
+            self.assertEqual(code, 0)
+            rows = self._frames(run)
+            self.assertEqual(fv.takes, len(rows) + 1)
+            self.assertFalse(any(lc.frame_is_bad(run / r["snapshot"]) for r in rows))
+
+    def test_it_gives_up_after_three_retakes_and_keeps_the_frame_as_bad_data(self):
+        fv = FakeViewer(bad_takes={4, 5, 6, 7}, bad_kind="black")
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run, sc = run_main(fv, tmp)
+            self.assertEqual(code, 0)
+            rows = self._frames(run)
+            self.assertEqual(fv.takes, len(rows) + 3)                 # 3 retakes, then it moves on
+            bad = [r["snapshot"] for r in rows if lc.frame_is_bad(run / r["snapshot"])]
+            self.assertEqual(len(bad), 1)
+            info = json.loads((run / "run.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("retakes" in w for w in info["warnings"]), info["warnings"])
+
+    def test_a_minimized_window_is_waited_for(self):
+        fv = FakeViewer()
+        states = iter(["minimized", "minimized", "foreground"] + ["foreground"] * 1000)
+        with tempfile.TemporaryDirectory() as tmp:
+            p, sc = scenario_file(tmp)
+            out = pathlib.Path(tmp) / "run"
+            args = lc.parse_args(["--scenario", str(p), "--out", str(out)])
+            s = session_for(fv)
+            with mock.patch.object(lc, "viewer_window_state", side_effect=lambda *a, **k: next(states)):
+                code = lc.execute(s, args, lc.load_scenario(p), out)
+            self.assertEqual(code, 0)
+            self.assertGreaterEqual(fv.takes, 1)
 
 
 if __name__ == "__main__":
