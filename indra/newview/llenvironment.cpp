@@ -2021,6 +2021,8 @@ void LLEnvironment::updatePrimaryLight()
     st.band_weight = (F32)llclamp(rig.light.band_weight, 0.0, 1.0);
     st.moon_avail = (F32)llclamp(rig.light.moon_avail, 0.0, 1.0);
     st.haze_glow_factor = (F32)rig.haze_glow_factor;
+    st.moon_glow_factor = (F32)llclamp(rig.moon_glow_factor, 0.0, 1.0);
+    st.moon_halo_weight = (F32)llclamp(rig.moon_halo_weight, 0.0, 1.0);
     st.light_scale = (F32)rig.light_scale;
     st.shadow_visible = rig.shadow_visible;
     st.valid = true;

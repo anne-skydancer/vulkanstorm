@@ -26,6 +26,7 @@
 // Inputs
 in vec3 vary_HazeColor;
 in float vary_LightNormPosDot;
+in float vary_MoonNormPosDot; // <Vulkanstorm/> L3
 
 #ifdef HAS_HDRI
 in vec4 vary_position;
@@ -38,6 +39,8 @@ uniform sampler2D environmentMap;
 uniform sampler2D rainbow_map;
 uniform sampler2D halo_map;
 
+uniform float sun_moon_blend;   // <Vulkanstorm/> L3
+uniform float moon_halo_weight; // <Vulkanstorm/> L3
 uniform float moisture_level;
 uniform float droplet_radius;
 uniform float ice_level;
@@ -405,9 +408,18 @@ void main()
 
         float  rel_pos_lightnorm = vary_LightNormPosDot;
         float optic_d = rel_pos_lightnorm;
+        // <Vulkanstorm> L3: the sun's halo and rainbow at the sun, fading with the band; the moon's at the moon, fading in
+        // (weight 1 by day, so the sun's are as before)
         vec3  halo_22 = halo22(optic_d);
-        color.rgb += rainbow(optic_d);
-        color.rgb += halo_22;
+        float sun_halo = 1.0 - sun_moon_blend;
+        color.rgb += sun_halo * rainbow(optic_d);
+        color.rgb += sun_halo * halo_22;
+        if (moon_halo_weight > 0.0)
+        {
+            float moon_d = vary_MoonNormPosDot;
+            color.rgb += moon_halo_weight * (rainbow(moon_d) + halo22(moon_d));
+        }
+        // </Vulkanstorm>
         color.rgb *= 2.;
         color.rgb = clamp(color.rgb, vec3(0), vec3(5));
 
