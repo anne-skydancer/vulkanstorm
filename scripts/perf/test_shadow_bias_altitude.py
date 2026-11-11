@@ -263,9 +263,15 @@ def acne_wall(z, rows):
         nw = nrm[:, :, :3] @ rv                       # world normal = R^T n_view
         walls = (np.abs(nw[:, :, 1]) < 0.01) & (np.abs(nw[:, :, 0]) > 0.99) & (pos[:, :, 3] > 0.5) & (ndl > 0.05)
         assert walls.sum() > 1000, f'wall mask too small: {walls.sum()}'
+        # PCSS (stage S2): the receiver plane is the wall's, and it does not continue across the crease
+        # where the wall meets the ground, so the row of pixels within 3 cm of the ground is left out of
+        # the PCSS acne count; the other methods are counted over the whole wall
+        iv = np.array(sc.inv_view, dtype=np.float32)
+        wall_y = pos[:, :, 0] * iv[1, 0] + pos[:, :, 1] * iv[1, 1] + pos[:, :, 2] * iv[1, 2] + iv[1, 3] - ALT[0]
         for variant in ('base', 'tree', 'pcss'):
-            img_new = light_map(sc, prog(variant), NEW_BIAS)[walls]
-            img_old = light_map(sc, prog(variant), old_bias(z))[walls]
+            mask = walls & (wall_y > 0.03) if variant == 'pcss' else walls
+            img_new = light_map(sc, prog(variant), NEW_BIAS)[mask]
+            img_old = light_map(sc, prog(variant), old_bias(z))[mask]
             new = float(np.mean(img_new < 0.999)) * 100
             old = float(np.mean(img_old < 0.999)) * 100
             print(f'    wall {z:6.0f} m {label:11s} {variant:4s}: new mean {img_new.mean():.3f}, <0.5 {np.mean(img_new < 0.5) * 100:.2f} %, min {img_new.min():.3f} | '

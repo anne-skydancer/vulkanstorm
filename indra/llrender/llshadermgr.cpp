@@ -1488,6 +1488,8 @@ void LLShaderMgr::initAttribsAndUniforms()
     // <Vulkanstorm> PCSS
     mReservedUniforms.push_back("shadowDepth0");
     mReservedUniforms.push_back("shadowDepth1");
+    mReservedUniforms.push_back("shadowDepth2");
+    mReservedUniforms.push_back("shadowDepth3");
     mReservedUniforms.push_back("shadowDepth4");
     mReservedUniforms.push_back("shadowDepth5");
 
