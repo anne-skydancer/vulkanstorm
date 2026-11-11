@@ -76,7 +76,8 @@ public:
 
     void renderDebugAlpha();
 
-    void drawGLTFScene();
+    // the GLTF scene's blended assets in a stochastic pass (the same engine as the faces; a phase of ALPHA_ST_*)
+    void drawGLTFScene(EAlphaOITPhase oit_phase);
 
     void renderGroupAlpha(LLSpatialGroup* group, U32 type, U32 mask, bool texture = true);
     // <FS> void renderAlpha(U32 mask, bool depth_only = false, bool rigged = false);
