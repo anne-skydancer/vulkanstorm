@@ -714,7 +714,7 @@ int main()
         check(worst_texel < 1e-12, "table texels are physical_transmittance", worst_texel);
         check(worst_lookup < 2e-3, "table lookup within 2e-3 of the exact transmittance", worst_lookup);
         check(worst_sun < 0.01, "the sun's colour from the table is AT1's within 1 % above 2 degrees", worst_sun);
-    
+
         // ground_distance: an observer on the ground below its horizon is AT the ground, not at the far side of the chord through the planet
         {
             const LLScatter sc = scatter_of(kSkies[SKY_DEFAULT], 30.0);
