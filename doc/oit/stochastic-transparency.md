@@ -63,8 +63,8 @@ while the method is selected and freed otherwise; nothing grows with the depth o
 `LLDrawPoolAlpha::renderStochastic` (`pipeline.cpp` holds the targets, the spread and the
 composite):
 
-1. the GLTF scene into the scene depth (as before), the targets cleared, the opaque depth spread
-   to every sample (`alphaStochasticExpandF.glsl`);
+1. the targets cleared, the opaque depth spread to every sample (`alphaStochasticExpandF.glsl`);
+   the GLTF scene's blended assets join passes 2 to 4 with the faces (see below), not the scene depth;
 2. **total alpha**: every captured draw through its program's alpha-only variant into the red
    of the transparency target, blend ZERO, ONE_MINUS_SRC_ALPHA, against the spread depth;
 3. per iteration: **stochastic depth**, the alpha-only variants writing `gl_SampleMask` with
@@ -101,6 +101,21 @@ then the variant shades in full and is given what the shaded pass is given (the 
 shadow maps and probes, and the face's own normal map, whose alpha scales the glossiness, and
 specular map, whose alpha scales the environment intensity), so that its alpha is the shaded
 pass's alpha. The ordinary programs are unchanged, so sorted alpha draws as before.
+
+The GLTF scene's blended variants (`pbrmetallicroughnessF.glsl` with `ALPHA_BLEND`, lit and unlit,
+single and multi-UV, static and rigged: eight) have alpha-only variants of their own
+(`gGLTFAlphaStochasticProgram`, built by `make_gltf_variant`), drawn by `GLTFSceneManager::render`
+in the same three passes. A GLTF blended asset behaves exactly like a blended prim face: wherever
+the faces contribute depth, the asset does the same through a depth-only, colour-masked draw of its
+alpha-only variant in its mode 3 (every sample; fragments under the cut discarded): the depth of
+field pass (the faces' non-rigged draw, with the same 0.33 cut) and the rigged depth restore before
+the residual (the faces' rigged draw, the same minimum alpha). Where the faces contribute nothing
+(the rigged draw of the depth of field pass), neither does the asset. The GLTF variants do not gate
+the engine: a GLTF alpha-only variant that does not build fails the GLTF shader set like a failed
+base variant (`RenderCanUseGLTFPBROpaqueShaders` off, the GLTF blended set not drawn, logged) and
+leaves the prims' transparency ready. The raw `glBindTexture` calls of `GLTFSceneManager::bindTexture`
+do not go through `LLTexUnit`: the mask table is bound after resynchronising the active unit and
+forgetting the unit's cached texture, and the active unit is restored after each GLTF draw.
 
 Until 1.0.1.81943 those two maps were never bound in the alpha-only passes, so a glaring material
 read the maps another face had left on those units: a near-invisible blended layer whose own maps
@@ -325,7 +340,7 @@ Exactly the draws PPLL captured, with the same exclusions:
 | particles, faces with a custom blend function | stock path after the composite (as PPLL) |
 | pre-water alpha, mirrors and hero probes, water reflections, cube snapshots, HUDs, impostors | sorted alpha (as PPLL) |
 | selection highlight ("show transparent" and the selection outline) | stock path after the composite (as PPLL) |
-| depth of field depth | stock pass after everything (as PPLL) |
+| depth of field depth | stock pass after everything (as PPLL), skipped when the engine was selected and drew nothing; the GLTF blended assets add their non-rigged depth with the same cut |
 
 ## Settings
 
@@ -352,10 +367,12 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
 textures; GL 4.3 and GLSL 4.30 select the compute resolve: `imageStore`, `glMemoryBarrier`), at least
-2 samples for the three formats, and every alpha-only variant built. A device without the first three has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). Between GL 4.0 and 4.2 the
-fragment resolve runs (160 bytes a pixel); from 4.3 the compute resolve (144 bytes a pixel). There is
-no fallback otherwise: a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
+2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
+sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). Between GL 4.0 and 4.2, and
+on a GL 4.3 device whose driver did not load the compute entry points, the fragment resolve runs (160 bytes a
+pixel); otherwise from 4.3 the compute resolve (144 bytes a pixel). There is no fallback otherwise (a history or
+temporal resolve that fails only drops the accumulation, each frame keeps its 8 samples; particles and
+custom-blend draws are hidden while the engine is not ready): a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
 30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
 then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
 if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
