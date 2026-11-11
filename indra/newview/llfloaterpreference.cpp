@@ -490,7 +490,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     // <Vulkanstorm/> Sky tuning tab: reset its settings to their defaults
     mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
     {
-        for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent",
+        for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent", "RenderCloudOpticalDepth",
                                   "RenderShadowBlurSize", "RenderShadowPCSSLightSize",
                                   "RenderLightHandoverSwing", "RenderLightHandoverFade", "RenderMoonlightCompensation",
                                   "RenderMoonAdaptationDepth", "RenderAtmosphereHazeSlab", "RenderAtmospherePhysicalLight" })
