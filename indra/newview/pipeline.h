@@ -458,6 +458,7 @@ public:
     bool beginShadowStochastic();                  // once a frame in the lighting pass: the history made or freed, the frame begun; true: the sun pass writes raw rays
     void releaseShadowStochasticHistory();
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
+    void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
     // </Vulkanstorm>
 
     // </FS>
@@ -844,6 +845,8 @@ public:
     // slots, two full-size RGBA16F colours, counted in the texture memory; and what the resolve compares
     // with last frame to tell a light that changed (its channel then takes this frame's rays alone)
     LLStochasticHistory mShadowSTHistory{ GL_RGBA16F, 1.f / 8.f };
+    mutable F32 mShadowLightSize = 0.f;              // getShadowLightSize(), computed once a frame
+    mutable U32 mShadowLightSizeFrame = 0xffffffffu;
     U32 mShadowSTFailedWidth = 0;       // the size whose allocation failed (logged once; tried again at another size)
     U32 mShadowSTFailedHeight = 0;
     bool mShadowSTLightKnown = false;

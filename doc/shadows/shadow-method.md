@@ -21,9 +21,11 @@ Stochastic is the third method. It replaces PCSS, and the PCSS code is removed a
 nothing with PCSS: not the blocker search, the filter, the gather taps or any `PCSS_*` define. It uses
 the stable cascades and square sun maps of stage S1, only the method-neutral helpers of stage S2 (the
 `SHADOW_COMMON` block of `shadowUtil.glsl`), and the light's disc size from the same `shadow_light_size`
-uniform (EEP `sun_scale` times `RenderShadowPCSSLightSize`). It mirrors the stochastic transparency: the
-engine's `LLStochasticHistory` and resolve object, 8 rays per pixel, the 1/8 history weight, camera
-reprojection and the 3x3 clamp, full resolution, no other mode and no user setting. There is no fallback
+uniform (EEP `sun_scale` times `RenderShadowPCSSLightSize`). It is built on the stochastic transparency's
+engine: `LLStochasticHistory` and the resolve object (the history, camera reprojection and the 3x3 clamp,
+weight 1/8). The estimator's noise is its own (interleaved gradient noise of the pixel and the frame), not
+the transparency's hash and mask table. 8 rays per pixel in every program (the forward ones too, with fixed
+rays), full resolution, no other mode and no user setting. There is no fallback
 to another method: if the history cannot be allocated (or the resolve shaders do not build), only the
 accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel, still Stochastic.
 
@@ -46,9 +48,9 @@ M0 to M2 ship as one PR.
   from `addShadowCommonDefines`) and linked next to it, in two builds: for the deferred sun programs
   (permutation `STOCHASTIC_SHADOW_SUN`, which read the depth buffer for the geometric receiver plane) and
   with `SHADOW_COMMON_NO_DEPTH` for every other program (the shading normal is the plane; no
-  `getPosition`, so programs without `deferredUtil.glsl` link). No `SHADOW_*` define is global; a marker
-  define `SHADOW_UTIL_STOCHASTIC` keeps the program binary cache apart from PCSS's (the cache hashes
-  defines, not attached objects). `bindDeferredShader` sends `shadow_light_size` to every program, the
+  `getPosition`, so programs without `deferredUtil.glsl` link). None of the groundwork's `SHADOW_*` defines is global (the neutral block's go to its two builds only). The
+  program binary cache hashes defines, not attached objects, so the method is part of the program hash
+  (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy and PCSS keep their cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
   probe pass included.
 - The combo has the item "Stochastic". No feature-table row recommends it: every table value is the
   minimum over the applied lists, and `all` says 1. `scripts/tests/test_shadow_method_tables.py`
@@ -71,8 +73,10 @@ weights of the other methods' blend bands. A projector is the same estimator tow
 as PCSS), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel).
 
-`shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history; every other
-program leaves it at 0, which fixes each pixel's rays (a static grain, 6 to 9 % in a penumbra).
+`shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
+accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a
+static grain, 6 to 9 % in a penumbra). The reference depth of a read is the receiver's plane at the texel
+actually read (S2's signed one-sided form), so a lit plane under a low sun stays lit.
 
 ### M2: the history
 
@@ -85,8 +89,11 @@ agrees (a revealed surface has none; under a quarter kept, none), clamped per ch
 of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
 than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
-direction changed. Cube snapshots, mirrors and snapshots have no history (fixed seeds, the sun pass writes
-the light map). With SSAO on the light-map blur still runs, for the AO channel only. The resolve is the transparency's: the device decides once (`LLStochasticEngine::computeResolve`), a compute
+direction changed. Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light
+map). A snapshot sums 8 sun passes of different rays (`shadow_st_frame` 1 to 8) and averages them (the light
+map pass divides by 8). With SSAO on the light-map blur still runs, for the AO channel only when the
+history or the snapshot's passes made the shadow channels, and for all channels when there is no history to take
+them from. The resolve is the transparency's: the device decides once (`LLStochasticEngine::computeResolve`), a compute
 dispatch on GL 4.3 and later (`shadowStochasticResolveC.glsl`, the history written as an image) or a fragment
 pass on GL 4.0 to 4.2 (`shadowStochasticResolveF.glsl`, into the history's framebuffer). Both run the same
 resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and

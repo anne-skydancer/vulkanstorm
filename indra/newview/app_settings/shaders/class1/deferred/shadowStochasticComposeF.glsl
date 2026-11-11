@@ -15,11 +15,12 @@ out vec4 frag_color;
 // the resolved r, b and a, and this frame's AO (the AO is blurred afterwards, not accumulated).
 uniform sampler2D shadow_st_raw;
 uniform sampler2D shadow_st_resolved;
+uniform float shadow_st_scale;   // 1; a snapshot's 8 summed passes 1/8 (raw and resolved are then the sum)
 
 void main()
 {
     ivec2 px = ivec2(gl_FragCoord.xy);
     vec4 raw = texelFetch(shadow_st_raw, px, 0);
     vec4 res = texelFetch(shadow_st_resolved, px, 0);
-    frag_color = vec4(res.r, raw.g, res.b, res.a);
+    frag_color = vec4(res.r, raw.g, res.b, res.a) * shadow_st_scale;
 }

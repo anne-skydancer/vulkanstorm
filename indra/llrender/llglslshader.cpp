@@ -60,6 +60,7 @@ bool LLGLSLShader::sProfileEnabled = false;
 bool LLGLSLShader::sCanProfile = true;
 std::set<LLGLSLShader*> LLGLSLShader::sInstances;
 LLGLSLShader::defines_map_t LLGLSLShader::sGlobalDefines;
+U32 LLGLSLShader::sShadowUtilVariant = 0;   // <Vulkanstorm/>
 U64 LLGLSLShader::sTotalTimeElapsed = 0;
 U32 LLGLSLShader::sTotalTrianglesDrawn = 0;
 U64 LLGLSLShader::sTotalSamplesDrawn = 0;
@@ -2075,6 +2076,10 @@ LLUUID LLGLSLShader::hash()
         hash_obj.update(define_pair.first);
         hash_obj.update(define_pair.second);
 
+    }
+    if (sShadowUtilVariant != 0)   // <Vulkanstorm/>
+    {
+        hash_obj.update(&sShadowUtilVariant, sizeof(sShadowUtilVariant));
     }
     hash_obj.update(&mFeatures, sizeof(LLShaderFeatures));
     hash_obj.update(gGLManager.mGLVendor);
