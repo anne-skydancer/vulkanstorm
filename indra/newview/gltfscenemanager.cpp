@@ -575,7 +575,7 @@ void GLTFSceneManager::update()
     }
 }
 
-void GLTFSceneManager::render(bool opaque, bool rigged, bool unlit)
+void GLTFSceneManager::render(bool opaque, bool rigged, bool unlit, StochasticPass pass, U32 masks)
 {
     U8 variant = 0;
     if (rigged)
@@ -591,10 +591,34 @@ void GLTFSceneManager::render(bool opaque, bool rigged, bool unlit)
         variant |= LLGLSLShader::GLTFVariant::UNLIT;
     }
 
-    render(variant);
+    render(variant, pass, masks);
 }
 
-void GLTFSceneManager::render(U8 variant)
+// <Vulkanstorm> a face's identity for the stochastic depth pass: the object (never the region's local
+// id) and the batch and primitive of the asset, FNV-1a and a final mix like the faces' seeds
+static U32 gltf_stochastic_seed(const LLUUID& id, U32 a, U32 b)
+{
+    U32 h = 0x811c9dc5u;
+    for (S32 i = 0; i < UUID_BYTES; ++i)
+    {
+        h = (h ^ (U32)id.mData[i]) * 0x01000193u;
+    }
+    for (U32 v : { a, b })
+    {
+        for (U32 i = 0; i < 4; ++i)
+        {
+            h = (h ^ ((v >> (8 * i)) & 0xffu)) * 0x01000193u;
+        }
+    }
+    h ^= h >> 16;
+    h *= 0x7feb352du;
+    h ^= h >> 15;
+    h *= 0x846ca68bu;
+    return h ^ (h >> 16);
+}
+// </Vulkanstorm>
+
+void GLTFSceneManager::render(U8 variant, StochasticPass pass, U32 masks)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
     // just render the whole scene by traversing the whole scenegraph
@@ -605,7 +629,7 @@ void GLTFSceneManager::render(U8 variant)
     // HACK -- implicitly render multi-uv variant
     if (!(variant & LLGLSLShader::GLTFVariant::MULTI_UV))
     {
-        render((U8) (variant | LLGLSLShader::GLTFVariant::MULTI_UV));
+        render((U8) (variant | LLGLSLShader::GLTFVariant::MULTI_UV), pass, masks);
     }
 
     bool rigged = variant & LLGLSLShader::GLTFVariant::RIGGED;
@@ -629,13 +653,13 @@ void GLTFSceneManager::render(U8 variant)
         gGL.loadMatrix(gGLModelView);
         gGL.multMatrix(mat.getF32ptr());
 
-        render(*asset, variant);
+        render(*asset, variant, pass, masks, pass == ST_DEPTH ? gltf_stochastic_seed(mObjects[i]->getID(), 0, 0) : 0);
 
         gGL.popMatrix();
     }
 }
 
-void GLTFSceneManager::render(Asset& asset, U8 variant)
+void GLTFSceneManager::render(Asset& asset, U8 variant, StochasticPass pass, U32 masks, U32 seed)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;
 
@@ -651,6 +675,26 @@ void GLTFSceneManager::render(Asset& asset, U8 variant)
         llassert(false); // mGLTFVariants should have been initialized
         return;
     }
+
+    // <Vulkanstorm> a stochastic pass draws the blended variants only, with their alpha-only variant
+    // in the first two passes (total alpha, stochastic depth)
+    const bool alpha_only = pass == ST_ALPHA || pass == ST_DEPTH;
+    LLGLSLShader* stochastic_shader = nullptr;
+    if (pass != ST_NONE)
+    {
+        if (!(variant & LLGLSLShader::GLTFVariant::ALPHA_BLEND))
+        {
+            return;
+        }
+        stochastic_shader = gGLTFPBRMetallicRoughnessProgram.mGLTFVariants[variant].mStochasticVariant;
+        if (alpha_only && (!stochastic_shader || !stochastic_shader->mProgramObject))
+        {
+            // the engine is ready only with every blended variant's alpha-only variant (gAlphaStochasticShadersReady)
+            llassert(false);
+            return;
+        }
+    }
+    // </Vulkanstorm>
 
     for (U32 ds = 0; ds < 2; ++ds)
     {
@@ -681,6 +725,21 @@ void GLTFSceneManager::render(Asset& asset, U8 variant)
                 if (opaque)
                 {
                     gGLTFPBRMetallicRoughnessProgram.bind(variant);
+                }
+                else if (alpha_only)
+                {
+                    // <Vulkanstorm> the alpha-only variant reads no light function, shadow map or reflection
+                    // probe: a plain bind, with the mask table on the unit it gives it
+                    stochastic_shader->bind();
+                    if (pass == ST_DEPTH && masks)
+                    {
+                        const S32 channel = stochastic_shader->enableTexture(LLShaderMgr::STOCH_MASKS);
+                        if (channel > -1)
+                        {
+                            gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, masks);
+                        }
+                    }
+                    // </Vulkanstorm>
                 }
                 else
                 { // alpha shaders need all the shadow map setup etc
@@ -723,6 +782,12 @@ void GLTFSceneManager::render(Asset& asset, U8 variant)
             for (auto& pdata : batches[i].mPrimitives)
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_GLTF("GLTF draw call");
+                if (pass == ST_DEPTH)
+                {
+                    // <Vulkanstorm> a different mask for every primitive (gl_PrimitiveID restarts with each draw)
+                    LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::ALPHA_ST_SEED,
+                        (S32)(seed ^ gltf_stochastic_seed(LLUUID::null, (ds << 16) ^ i, (pdata.mNodeIndex << 16) ^ pdata.mPrimitiveIndex)));
+                }
                 Node& node = asset.mNodes[pdata.mNodeIndex];
                 Mesh& mesh = asset.mMeshes[node.mMesh];
                 Primitive& primitive = mesh.mPrimitives[pdata.mPrimitiveIndex];

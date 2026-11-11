@@ -217,6 +217,7 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 
 // <Vulkanstorm> stochastic transparency: the depth spread, the composite, and whether every
 // alpha program has its alpha-only variant (LLGLSLShader::mStochasticVariant)
+extern LLGLSLShader         gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // alpha-only variants of the GLTF scene's blended variants, by variant bits
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
 extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: compute (GL 4.3+) or fragment resolve

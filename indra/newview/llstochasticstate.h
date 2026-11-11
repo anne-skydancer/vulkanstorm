@@ -35,6 +35,41 @@ namespace LLStochasticEngine
                                          // the one table the engine makes, and every producer, is for 8
     constexpr uint32_t SEEDS = 2048;     // columns of the table (STOCH_SEEDS in stochasticSampleF.glsl)
 
+    // What the main view's passes need, all at once (LLPipeline::alphaStochasticReady): the device
+    // supports the method, the targets exist at the screen's size, the scene's depth is there, and
+    // every program built. Anything missing means the blended faces (and the GLTF scene's blended
+    // assets) are not drawn this frame: there is no other method to draw them with.
+    struct PassInputs
+    {
+        bool supported = false;
+        bool targets = false;       // the framebuffer exists
+        bool sized = false;         // ... at the screen's size
+        bool depth = false;         // the scene's depth buffer
+        bool programs = false;      // the depth spread and the composite
+        bool shaders_ready = false; // every alpha program's alpha-only variant (the GLTF scene's too)
+    };
+    inline bool passesReady(const PassInputs& in)
+    {
+        return in.supported && in.targets && in.sized && in.depth && in.programs && in.shaders_ready;
+    }
+
+    // What the once-a-frame retry (LLPipeline::retryAlphaStochastic) has to make again. A history that
+    // is missing is asked for only when the setting wants it and the resolve program exists, and its
+    // absence stops only the temporal accumulation (8 samples per frame): the passes do not wait for it.
+    enum class Retry { Nothing, Targets, History };
+    inline Retry retryNeeded(bool supported, bool targets, bool sized, bool history_wanted, bool history_allocated)
+    {
+        if (!supported)
+        {
+            return Retry::Nothing;
+        }
+        if (!targets || !sized)
+        {
+            return Retry::Targets;
+        }
+        return (history_wanted && !history_allocated) ? Retry::History : Retry::Nothing;
+    }
+
     // The table of masks for `samples` bits: entry [r * SEEDS + seed] is a random r-subset of the
     // bits, from a fixed generator (splitmix64, a partial Fisher-Yates shuffle), the same on every
     // launch: the author's Aurora Viewer, oit_stochastic.rs mask_table.
