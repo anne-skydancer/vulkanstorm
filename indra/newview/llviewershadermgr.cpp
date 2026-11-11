@@ -1074,14 +1074,9 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     }
     // </Vulkanstorm>
 
-    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): the program binary cache hashes
-    // the defines, not the attached objects, and every program that links a shadow util has the
-    // same defines under PCSS and Stochastic. This marker (nothing in any shader reads it) keeps
-    // their cached binaries apart.
-    if (use_stochastic_shadows())
-    {
-        attribs["SHADOW_UTIL_STOCHASTIC"] = "1";
-    }
+    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): every program that links a shadow util takes the
+    // Stochastic one, which the program binary cache cannot tell from the defines; the hash takes it
+    LLGLSLShader::sShadowUtilVariant = use_stochastic_shadows() ? 1 : 0;
     // </Vulkanstorm>
 
     { // PBR terrain
@@ -1130,7 +1125,10 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/deferredUtil.glsl",                    1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/gbufferUtil.glsl",                    1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/globalF.glsl",                          1));
-    index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/shadowUtil.glsl",                      1) );
+    if (!use_stochastic_shadows())   // <Vulkanstorm/> the Stochastic method links its own util (below)
+    {
+        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/shadowUtil.glsl",                      1) );
+    }
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/aoUtil.glsl",                          1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/pbrterrainUtilF.glsl",                 1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/tonemapUtilF.glsl",                    1) );
@@ -1191,7 +1189,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         std::map<std::string, std::string> common_attribs = attribs;
         addShadowCommonDefines(common_attribs);
         const std::string util = "deferred/shadowUtil.glsl";
-        const GLuint plain = mFragmentShaderObjects[util];
         S32 level = 1;
         std::map<std::string, std::string> depth_attribs = common_attribs;
         depth_attribs["SHADOW_COMMON_ONLY"] = "1";
@@ -1199,9 +1196,13 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         std::map<std::string, std::string> no_depth_attribs = depth_attribs;
         no_depth_attribs["SHADOW_COMMON_NO_DEPTH"] = "1";
         const GLuint no_depth = with_depth ? loadShaderFile(util, level, GL_FRAGMENT_SHADER, &no_depth_attribs, -1) : 0;
-        mFragmentShaderObjects[util] = plain;
+        mFragmentShaderObjects.erase(util);   // the stock util is not part of this method's shader set
         if (with_depth == 0 || no_depth == 0)
         {
+            if (with_depth)
+            {
+                glDeleteShader(with_depth);
+            }
             LL_WARNS("Shader") << "Failed to load fragment shader " << util << " with SHADOW_COMMON_ONLY" << LL_ENDL;
             return util;
         }

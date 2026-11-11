@@ -13,8 +13,7 @@
 // so that the fragment resolve (GL 4.0 to 4.2) and the compute resolve (GL 4.3 and later) run this one
 // source and give the same result. Each adds its own main: shadowStochasticResolveF.glsl and
 // shadowStochasticResolveC.glsl.
-
-
+//
 // The Stochastic shadow method's part of the stochastic engine's temporal resolve
 // (stochasticResolveUtilF.glsl, attached as the STOCH_RESOLVE object). This frame's sun pass
 // (shadow_st_raw: r sun, g AO, b and a the two projector slots; 8 rays per pixel) is blended with
@@ -29,13 +28,13 @@ uniform sampler2D shadow_st_history;
 uniform sampler2D depthMap;
 uniform vec3 shadow_st_channel_valid;   // the sun, projector slot 0 and 1: the channel's history is the same light as last frame's
 uniform float stoch_weight;             // the engine's: this frame's weight (1/8)
+uniform mat4 inv_proj;                  // the projection's inverse: set by the pipeline for both resolve paths
 
 bool stoch_has_history();
 bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv);
 float stoch_history_bilinear(sampler2D history, vec2 puv, ivec2 size, float w_expected, int depth_channel, out vec4 hist);
 void stoch_neighbourhood(ivec2 px, ivec2 size, vec4 cur, out vec4 mn, out vec4 mx);
 vec4 stoch_accumulate_w(vec4 hist, vec4 mn, vec4 mx, vec4 cur, vec4 weight);
-uniform mat4 inv_proj;
 
 #define SHADOW_ST_MIN_KEPT 0.25   // less of the 4 history texels kept than this: no history
 

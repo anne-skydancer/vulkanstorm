@@ -143,9 +143,10 @@ bool deviceSupported()
     const bool ok = gGLManager.mGLVersion >= 3.99f && gGLManager.mGLSLVersionMajor >= 4;
     if (!ok)
     {
-        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs OpenGL 4.0; this device reports GL "
+        LL_INFOS_ONCE("Pipeline") << "The stochastic engine needs OpenGL 4.0; this device reports GL "
                                   << gGLManager.mGLVersion << ", GLSL " << gGLManager.mGLSLVersionMajor << "."
-                                  << gGLManager.mGLSLVersionMinor << ": sorted alpha is used" << LL_ENDL;
+                                  << gGLManager.mGLSLVersionMinor << ": stochastic transparency is off (sorted alpha is used),"
+                                  << " and the Stochastic shadows' sun pass has no accumulation" << LL_ENDL;
     }
     return ok;
 }
