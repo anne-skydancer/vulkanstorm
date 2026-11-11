@@ -26,6 +26,8 @@
 
 #include "_httpservice.h"
 
+#include <chrono>
+
 #include <boost/bind.hpp>
 
 #include "_httpoperation.h"
@@ -80,39 +82,33 @@ HttpService::~HttpService()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     mExitRequested = 1U;
-    if (RUNNING == sState)
+    if (mRequestQueue)
     {
-        // Trying to kill the service object with a running thread
-        // is a bit tricky.
-        if (mRequestQueue)
+        mRequestQueue->stopQueue();
+    }
+
+    if (mThread)
+    {
+        // The worker always stops by itself once asked to; wait for it.
+        // There is deliberately no time limit and no forced termination:
+        // the worker may be in a DNS lookup or a connection shutdown.
+        const auto start(std::chrono::steady_clock::now());
+        auto next_warn(std::chrono::seconds(5));
+        while (! mThread->timedJoin(1000))
         {
-            if (mRequestQueue->stopQueue())
+            const auto waited(std::chrono::steady_clock::now() - start);
+            if (waited >= next_warn)
             {
-                // Now wait a bit for the thread to exit
-                S32       counter  = 0;
-                const S32 MAX_WAIT = 600;
-                while (counter < MAX_WAIT)
-                {
-                    if (STOPPED == sState)
-                    {
-                        break;
-                    }
-                    // Sleep for a tenth of a second
-                    ms_sleep(100);
-                    std::this_thread::yield();
-                    counter++;
-                }
+                LL_WARNS(LOG_CORE) << "Waiting for HTTP worker to stop ("
+                                   << std::chrono::duration_cast<std::chrono::seconds>(waited).count()
+                                   << " s, state: " << S32(sState)
+                                   << ", last policy: " << U32(mLastPolicy)
+                                   << ")" << LL_ENDL;
+                next_warn = std::chrono::duration_cast<std::chrono::seconds>(waited) + std::chrono::seconds(10);
             }
         }
-
-        if (mThread && RUNNING == sState)
-        {
-            // Failed to shutdown, expect problems ahead so do a hard termination.
-            LL_WARNS(LOG_CORE) << "Destroying HttpService with running thread.  Expect problems." << LL_NEWLINE << "State: " << S32(sState)
-                               << " Last policy: " << U32(mLastPolicy) << LL_ENDL;
-
-            mThread->cancel();
-        }
+        const auto total(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start));
+        LL_INFOS(LOG_CORE) << "HTTP worker stopped after " << total.count() << " ms" << LL_ENDL;
     }
 
     if (mRequestQueue)
@@ -151,21 +147,7 @@ void HttpService::term()
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
     if (sInstance)
     {
-        if (RUNNING == sState && sInstance->mThread)
-        {
-            // Unclean termination.  Thread appears to be running.  We'll
-            // try to give the worker thread a chance to cancel using the
-            // exit flag...
-            sInstance->mExitRequested = 1U;
-            sInstance->mRequestQueue->stopQueue();
-
-            // And a little sleep
-            for (int i(0); i < 10 && RUNNING == sState; ++i)
-            {
-                ms_sleep(100);
-            }
-        }
-
+        // The destructor asks the worker to stop and joins it.
         delete sInstance;
         sInstance = NULL;
     }
@@ -206,6 +188,9 @@ void HttpService::startThread()
 
     if (mThread)
     {
+        // Restart after STOPPED: the old worker has committed to exiting,
+        // make sure it has really returned before dropping it.
+        mThread->join();
         mThread.reset();
     }
 
@@ -214,7 +199,7 @@ void HttpService::startThread()
     mTransport->start(mLastPolicy + 1);
 
     mThread = std::make_unique<LLCoreInt::HttpThread>(boost::bind(&HttpService::threadRun, this, _1));
-    mThread->detach(); // Detach thread to let it clean its self up
+    // Not detached: the destructor joins the worker before freeing what it uses
     sState = RUNNING;
 }
 
