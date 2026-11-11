@@ -49,13 +49,26 @@ namespace LL
         void uploadSelection(); // decompose selected asset and upload to simulator
 
         void update();
-        void render(bool opaque, bool rigged = false, bool unlit = false);
+        // <Vulkanstorm> a pass of stochastic transparency over the blended variants
+        // (LLDrawPoolAlpha::drawGLTFScene): total alpha and stochastic depth draw the alpha-only
+        // variants (the depth pass with the face seed and the mask table, masks), the accumulation
+        // the ordinary ones; ST_NONE is the stock draw
+        enum StochasticPass : U8
+        {
+            ST_NONE = 0,
+            ST_ALPHA,
+            ST_DEPTH,
+            ST_ACCUM,
+        };
+
+        void render(bool opaque, bool rigged = false, bool unlit = false, StochasticPass pass = ST_NONE, U32 masks = 0);
 
         // render the given variant of all assets
         // variant - bitmask according to LLGLSLShader::GLTFVariant flags
-        void render(U8 variant);
+        void render(U8 variant, StochasticPass pass = ST_NONE, U32 masks = 0);
 
-        void render(LL::GLTF::Asset& asset, U8 variant);
+        void render(LL::GLTF::Asset& asset, U8 variant, StochasticPass pass = ST_NONE, U32 masks = 0, U32 seed = 0);
+        // </Vulkanstorm>
 
         // bind the given material for rendering
         void bind(LL::GLTF::Asset& asset, LL::GLTF::Material& material);

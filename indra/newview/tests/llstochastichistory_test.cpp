@@ -134,12 +134,42 @@ namespace
         s.reset(1280, 720);
         check(s.begin(true, 112) && !s.used(), "a history made after a release has no past");
     }
+
+    // The main view's passes and the once-a-frame retry (LLPipeline::alphaStochasticReady, retryAlphaStochastic):
+    // nothing blended is drawn unless every input is there, a history that is missing never stops the
+    // passes and a size mismatch is retried like missing targets.
+    void test_passes()
+    {
+        using namespace LLStochasticEngine;
+        PassInputs in;
+        in.supported = in.targets = in.sized = in.depth = in.programs = in.shaders_ready = true;
+        check(passesReady(in), "everything there: the passes run");
+        for (bool PassInputs::*field : { &PassInputs::supported, &PassInputs::targets, &PassInputs::sized,
+                                         &PassInputs::depth, &PassInputs::programs, &PassInputs::shaders_ready })
+        {
+            PassInputs missing = in;
+            missing.*field = false;
+            check(!passesReady(missing), "any missing input: no blended draw at all");
+        }
+        check(!passesReady(PassInputs()), "nothing there");
+
+        // supported, targets, sized, history wanted, history there
+        check(retryNeeded(true, true, true, true, true) == Retry::Nothing, "all there: nothing to retry");
+        check(retryNeeded(true, false, false, true, false) == Retry::Targets, "no targets: retry them");
+        check(retryNeeded(true, true, false, true, true) == Retry::Targets, "targets of another size: retried like missing ones");
+        check(retryNeeded(true, true, true, true, false) == Retry::History, "history missing and wanted: retry it");
+        check(retryNeeded(true, true, true, false, false) == Retry::Nothing, "history not wanted (setting off, or no resolve program): nothing");
+        check(retryNeeded(false, false, false, true, false) == Retry::Nothing, "unsupported device: nothing is made");
+        // a failed history (no accumulation) leaves the passes ready: 8 samples per frame
+        check(passesReady(in) && retryNeeded(true, true, true, true, false) == Retry::History, "a history failure does not stop the passes");
+    }
 }
 
 int main()
 {
     test_masks();
     test_state();
+    test_passes();
     if (failures == 0)
     {
         std::printf("llstochastichistory_test: all checks passed\n");
