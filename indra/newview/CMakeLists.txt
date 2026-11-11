@@ -1980,9 +1980,18 @@ if (WINDOWS)
          growlmanager.cpp
          growlnotifierwin.cpp
          llappviewerwin32.cpp
+         llcpucheck_win.cpp
          llvelopack.cpp
          llwindebug.cpp
          )
+    # CPU check run as the exe entry point (/ENTRY:vkstormEntry), before the
+    # CRT and any static initialiser: it must contain no AVX2 code.
+    set_source_files_properties(
+      llcpucheck_win.cpp
+      PROPERTIES
+      COMPILE_OPTIONS "/arch:SSE2;/GS-;/GL-"
+      SKIP_PRECOMPILE_HEADERS TRUE
+      )
     set_source_files_properties(
       llappviewerwin32.cpp
       llvelopack.cpp
@@ -2304,7 +2313,7 @@ if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
         # *TODO -reenable this once we get server usage sorted out
-        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
+        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
         LINK_FLAGS_DEBUG "/NODEFAULTLIB:\"LIBCMT;LIBCMTD;MSVCRT\" /INCREMENTAL:NO /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         LINK_FLAGS_RELEASE "/FORCE:MULTIPLE /MAP\"secondlife-bin.MAP\" /OPT:REF /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         )
