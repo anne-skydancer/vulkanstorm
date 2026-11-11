@@ -397,6 +397,10 @@ public:
         CLOUD_LIGHT_TRANSMITTANCE,          //  "cloud_light_transmittance"
         CLOUD_MOON_BLEND,                   //  "cloud_moon_blend"
         CLOUD_LIGHT_DIR,                    //  "cloud_light_dir"
+        SUN_GLOW_NORM,                      //  "sun_glow_norm"
+        MOON_GLOW_NORM,                     //  "moon_glow_norm"
+        MOON_GLOW_FACTOR,                   //  "moon_glow_factor"
+        MOON_HALO_WEIGHT,                   //  "moon_halo_weight"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
