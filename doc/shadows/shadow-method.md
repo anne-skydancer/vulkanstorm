@@ -66,6 +66,11 @@ ones: no more 4 mm in cascade 0 to 70 cm in cascade 3), a search and a filter th
 (visible only in cascade 1 under a large sun scale; it was 41 cm), and a wider caster guard at the cascade
 edges (26 cm in the finest cascade instead of 9 cm). The filter itself (rotated 12 taps, light-map blur) stays until stage S3.
 
+Cost, offline bench (`scripts/perf/bench_shadow_pcss.py`, sun light pass, median of 30 frames, same GPU,
+devel-tip PCSS against this tree's PCSS): +0.014 ms at 1080p with sun and spot shadows (+0.012 ms sun
+only), +0.024 / +0.021 ms at 1440p. The gate is +0.015 ms at 1080p; stage S2 is the only cost added so far.
+Its percentage of the `windows-latest` 82080 PCSS-on frame is not known yet: that baseline capture is still owed.
+
 ## Where the method is read
 
 `LLPipeline::RenderShadowMethod` is a cached setting refreshed on change. A change calls
