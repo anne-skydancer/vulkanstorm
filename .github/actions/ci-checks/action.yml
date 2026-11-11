@@ -79,6 +79,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudshadow_test.cpp -o "$RUNNER_TEMP/cloud-shadow-test"
         "$RUNNER_TEMP/cloud-shadow-test"
+    - name: Check the cloud optics (beam and diffuse transmittance of the flat layer)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudoptics_test.cpp -o "$RUNNER_TEMP/cloud-optics-test"
+        "$RUNNER_TEMP/cloud-optics-test"
     - name: Check the cloud noise container reader
       shell: bash
       run: |
