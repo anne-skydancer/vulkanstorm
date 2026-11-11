@@ -221,6 +221,7 @@ def local_base_ahead_of_origin(r):
     r.git("checkout", "-q", "codex/a")
     code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge vkstorm-rust"})
     expect("hook: a local base line ahead of origin is refused", code, 1, out)
+    expect("hook: the refusal advises rebasing", int("Rebase" in out), 1, out)
 
 
 def update_branch_style(r):
@@ -232,6 +233,7 @@ def update_branch_style(r):
     r.merge("codex/a", "origin/vkstorm-rust", "Merge branch 'vkstorm-rust' into codex/a")
     code, out = r.check("origin/vkstorm-rust", "codex/a")
     expect("CI: an 'Update branch' merge is rejected", code, 1, out)
+    expect("CI: the rejection advises rebasing", int("rebas" in out), 1, out)
 
 
 def clean_feature(r):
