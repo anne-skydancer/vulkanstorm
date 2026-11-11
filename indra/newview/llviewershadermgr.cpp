@@ -1067,7 +1067,8 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // <Vulkanstorm> the stochastic engine's sampling and temporal resolve, and the transparency's
     // coverage masks, attached to the alpha programs' alpha-only variants and to the resolve
     // program (LLShaderMgr::attachShaderFeatures). Optional: without the sampling or the masks the
-    // variants are not built and sorted alpha is used; without the resolve there is no temporal
+    // variants are not built and stochastic transparency is unavailable (an unsupported device or a
+    // broken shader set, not a fallback to choose); without the resolve there is no temporal
     // accumulation; the viewer starts either way.
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
@@ -1078,8 +1079,9 @@ std::string LLViewerShaderMgr::loadBasicShaders()
             if (loadShaderFile(*helper, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
             {
                 mFragmentShaderObjects.erase(*helper);
-                LL_WARNS("Shader") << "Stochastic transparency unavailable: " << *helper
-                                   << " failed to build; sorted alpha is used" << LL_ENDL;
+                LL_WARNS("Shader") << "Stochastic engine object " << *helper << " failed to build"
+                                   << (helper == &STOCH_RESOLVE_HELPER ? "; there is no temporal accumulation"
+                                                                       : "; stochastic transparency is unavailable") << LL_ENDL;
             }
         }
     }

@@ -141,7 +141,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 - `alphaStochasticCurrentF.glsl`, one full-screen pass after the accumulation, averages the samples of
   this frame's accumulated colour (alpha x colour, alpha) once into an RGBA32F target; the resolve reads
   its pixel and its 3 x 3 neighbourhood from there instead of summing the samples nine times (bit for
-  bit the same image; the resolve pass takes 0.05 to 0.16 ms less at 1080p and 0.07 to 0.25 ms less at 1440p on an RTX 5070 Ti,
+  bit the same image; the resolve pass takes 0.05 to 0.16 ms less at 1080p and 0.07 to 0.23 ms less at 1440p on an RTX 5070 Ti,
   the pre-pass included).
 - `alphaStochasticResolveF.glsl`, one full-screen pass after it: this frame's averaged colour, blended 1/8 with the last frame's blended
   colour taken where this pixel's nearest transparent surface was (the minimum of the stochastic depth
@@ -153,7 +153,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 - No history on the first frame, after a resize, when the setting or the method is switched, or when the
   frame before did not run the method (the history stamp is the frame counter).
 - Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
-  1080, 59 MB at 2560 x 1440, and the full-size RGBA32F target of the averaged samples, 16 bytes a pixel
+  1080, 59 MB (56 MiB) at 2560 x 1440, and the full-size RGBA32F target of the averaged samples, 16 bytes a pixel
   more: 33 MB at 1920 x 1080 (66 MB with the history), allocated only while the setting is on, up front
   (method selected, resize). The passes' own targets are as before. All of it, the 8-sample targets and the
   mask table included, is counted in the viewer's texture memory (`LLImageGLMemory::alloc_tex_image`).
@@ -320,8 +320,10 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
 `gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
-alpha-only variant built. Otherwise, or when the targets cannot be allocated, sorted alpha runs
-(logged once).
+alpha-only variant built. Otherwise (a device or shader set without them) sorted alpha runs: a capability
+gate. There is no fallback for a failed allocation: it is logged and tried again at the next screen buffer
+allocation (method selected, resize), and until then the main view's blended faces are not drawn (a
+missing history only costs the accumulation: the frames draw with their 8 samples).
 
 ## Tests and measurements
 

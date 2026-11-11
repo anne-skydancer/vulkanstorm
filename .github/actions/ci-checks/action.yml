@@ -71,6 +71,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudshadow_test.cpp -o "$RUNNER_TEMP/cloud-shadow-test"
         "$RUNNER_TEMP/cloud-shadow-test"
+    - name: Check the stochastic engine's frame rules and mask table
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochastichistory_test.cpp -o "$RUNNER_TEMP/stochastic-history-test"
+        "$RUNNER_TEMP/stochastic-history-test"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')

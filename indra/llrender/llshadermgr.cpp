@@ -193,9 +193,15 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
     // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
     // coverage mask; a producer's temporal resolve program (STOCH_RESOLVE) takes its resolve.
-    if (shader->mDefines.count("ALPHA_STOCHASTIC") &&
-        (!shader->attachFragmentObject(STOCH_SAMPLE_OBJECT) ||
-         !shader->attachFragmentObject("deferred/alphaStochasticF.glsl")))
+    // STOCH_SAMPLE: any producer's program that samples (ALPHA_STOCHASTIC implies it; the shadow
+    // producer sets STOCH_SAMPLE alone).
+    const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
+    if ((alpha_stochastic || shader->mDefines.count("STOCH_SAMPLE")) &&
+        !shader->attachFragmentObject(STOCH_SAMPLE_OBJECT))
+    {
+        return false;
+    }
+    if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
     {
         return false;
     }
