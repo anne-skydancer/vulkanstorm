@@ -1661,6 +1661,110 @@ int main()
             }
         }
 
+        // 2d. every edge of the bands, with no moon, moon_brightness 0 and the moon below the horizon. (The in-world run had a fully black
+        //     frame at -0.6 degree, -swing - fade; its cause was the window being minimised during that capture, not the light. The
+        //     edges are still where a division could go wrong.) All outputs of the rig and of the uniforms are finite and in range,
+        //     the glow of each body stays at the body, the clouds' glow is the sun's, and a sky with moon_brightness 0 has no moon halo
+        {
+            const double dip = horizon_dip_degrees(6360.0, 1.5);
+            struct Widths { double swing, fade; };
+            const Widths widths[] = { { 0.3, 0.3 }, { 0.05, 0.0 }, { 1.0, 0.0 }, { 5.0, 5.0 }, { 0.3, 5.0 }, { 0.0, 0.0 } };
+            int cases = 0;
+            bool all_ok = true, glow_ok = true;
+            auto in_range = [](double x, double lo, double hi) { return std::isfinite(x) && x >= lo && x <= hi; };
+            for (const Sky& sky_def : kSkies)
+            {
+                const LegacySky sky = legacy_of(sky_def);
+                for (const Widths& w : widths)
+                {
+                    // the band's edges: the ground's (0, +-swing, +-(swing + fade)) and the clouds' (the same shifted down by the dip,
+                    // the dip limit of 20 degrees included)
+                    const double sw = std::min(std::max(w.swing, 0.05), 5.0), fd = std::min(std::max(w.fade, 0.0), 5.0);
+                    std::vector<double> edges;
+                    for (double shift : { 0.0, dip, 20.0 })
+                    {
+                        for (double edge : { 0.0, sw, -sw, sw + fd, -sw - fd })
+                        {
+                            edges.push_back(edge - shift);
+                        }
+                    }
+                    for (double edge : edges)
+                    {
+                        for (double off : { 0.0, 1e-12, -1e-12, 1e-9, -1e-9, 1e-6, -1e-6 })
+                        {
+                            for (int variant = 0; variant < 4; ++variant) // moon up, moon_brightness 0, moon down, moon straight down
+                            {
+                                const double e = edge + off;
+                                const double moon_el = variant == 2 ? -30.0 : (variant == 3 ? -90.0 : 40.0);
+                                PrimaryLightSetup su = setup_of(sky, dir_of(e), dir_of(moon_el, 100.0));
+                                su.params.swing = w.swing;
+                                su.params.fade = w.fade;
+                                su.moon_brightness = variant == 1 ? 0.0 : 0.5;
+                                for (int physical = 0; physical < 2; ++physical)
+                                {
+                                    su.physical = physical != 0;
+                                    const PrimaryLightRig r = compute_primary_light(su);
+                                    ++cases;
+                                    const bool ok = finite_unit(r.light.dir) && finite_unit(r.cloud_dir) && in_unit(r.light.T) && in_unit(r.cloud_T)
+                                        && in_range(r.light.shadow_strength, 0.0, 1.0) && in_range(r.light.band_weight, 0.0, 1.0)
+                                        && in_range(r.light.moon_weight, 0.0, 1.0) && in_range(r.light.moon_avail, 0.0, 1.0)
+                                        && in_range(r.cloud_band_weight, 0.0, 1.0) && in_range(r.haze_glow_factor, 0.0, 1.0)
+                                        && in_range(r.moon_glow_factor, 0.0, 1.0) && in_range(r.moon_halo_weight, 0.0, 1.0)
+                                        && std::isfinite(r.color.x + r.color.y + r.color.z) && r.color.x >= 0.0 && r.color.y >= 0.0 && r.color.z >= 0.0
+                                        && in_range(r.light_scale, 0.0, 100.0) && std::isfinite(r.gain);
+                                    all_ok = all_ok && ok;
+                                    if (!ok)
+                                    {
+                                        std::printf("  non-finite or out of range: sky %s swing %g fade %g e %.15g variant %d physical %d\n", sky_def.name, w.swing,
+                                                    w.fade, e, variant, physical);
+                                    }
+                                    // the glow of each body at the body: the clouds' light is the sun's, the shares add up, and a moon of
+                                    // brightness 0 has neither glow nor halo
+                                    glow_ok = glow_ok && angle_between_deg(r.cloud_dir, su.sun_dir) < 1e-6
+                                        && near(r.haze_glow_factor, (1.0 - r.light.band_weight) + r.moon_glow_factor, 1e-12, 1e-12)
+                                        && r.moon_halo_weight <= r.light.band_weight + 1e-12
+                                        && (variant != 1 || (r.moon_glow_factor == 0.0 && r.moon_halo_weight == 0.0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            std::printf("AT1 band edges: %d cases (no moon, moon_brightness 0, moon below the horizon; widths 0 .. 5 degrees), all finite and in range\n", cases);
+            check(all_ok, "band edges: every output finite and in range with no moon, moon_brightness 0 and a moon below the horizon");
+            check(glow_ok, "band edges: the clouds' glow is the sun's, the glow shares add up, no moon glow or halo with moon_brightness 0");
+        }
+
+        // 2e. the glow of each body stays at the body: the clouds' light is the sun's direction through the whole handover (a moon high
+        //     and 90 degrees away from the setting sun: no phantom glow in the empty sky between them), the dome's factors are the
+        //     sun's share (1 - band weight) plus the moon's, by day exactly 1 and 0
+        {
+            const LegacySky sky = legacy_of(kSkies[0]);
+            double worst = 0.0;
+            for (int i = 0; i <= 700; ++i)
+            {
+                const double e = 3.0 - 0.01 * i;
+                PrimaryLightSetup su = setup_of(sky, dir_of(e), dir_of(55.0, 90.0));
+                const PrimaryLightRig r = compute_primary_light(su);
+                worst = std::max(worst, angle_between_deg(r.cloud_dir, su.sun_dir));
+                if (e > 0.31)
+                {
+                    check(r.haze_glow_factor == 1.0 && r.moon_glow_factor == 0.0 && r.moon_halo_weight == 0.0, "by day: the sun's glow only", e);
+                }
+                if (e < -0.31)
+                {
+                    check(r.moon_halo_weight > 0.99 && r.moon_glow_factor > 0.0 && r.haze_glow_factor == r.moon_glow_factor, "below the band: the moon's glow only", e);
+                }
+            }
+            check(worst < 1e-6, "the clouds' glow stays at the sun through the handover (moon high, 90 degrees away)", worst);
+            // a sky with no moon (moon_brightness 0) has neither moon glow nor halo or rainbow at night; a dim moon_brightness 0.01 has them
+            PrimaryLightSetup night = setup_of(sky, dir_of(-30.0), dir_of(40.0, 100.0));
+            night.moon_brightness = 0.0;
+            check(compute_primary_light(night).moon_halo_weight == 0.0 && compute_primary_light(night).moon_glow_factor == 0.0, "moon_brightness 0: no moon halo, no moon glow");
+            night.moon_brightness = 0.01;
+            check(compute_primary_light(night).moon_halo_weight > 0.99, "moon_brightness 0.01: the moon's halo is full", compute_primary_light(night).moon_halo_weight);
+        }
+
         // 3. the moon's availability is continuous in its light: the sun well below the band, the moon's transmittance swept across the
         //    dark threshold (1e-4 of the source) and its gain across 1 % of the physical moon
         {

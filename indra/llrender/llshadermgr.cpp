@@ -1634,6 +1634,10 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("cloud_light_transmittance");
     mReservedUniforms.push_back("cloud_moon_blend");
     mReservedUniforms.push_back("cloud_light_dir");
+    mReservedUniforms.push_back("sun_glow_norm");
+    mReservedUniforms.push_back("moon_glow_norm");
+    mReservedUniforms.push_back("moon_glow_factor");
+    mReservedUniforms.push_back("moon_halo_weight");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

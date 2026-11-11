@@ -33,7 +33,11 @@ SETTINGS_FOLDER = "33333333-0000-0000-0000-000000000001"
 
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
-                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False):
+                 water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
+                 bad_takes=(), bad_kind="black"):
+        self.bad_takes = set(bad_takes)   # 1-based numbers of the saveSnapshot calls that read back the cleared buffer
+        self.bad_kind = bad_kind          # 'black': the whole frame; 'band': the top 40 % of its rows
+        self.takes = 0
         self.crowd = crowd             # inventory items named 'Default Day nnn' that come before the exact ones
         self.inv_queries = []
         self.break_after_ops = break_after_ops
@@ -377,6 +381,7 @@ class FakeViewer:
         name = next((n for n, s in SKIES.items() if s[0] == self.current_sky), "")
         if self.snapshot_fails_for and name == self.snapshot_fails_for:
             return self._reply(d, {"ok": False})
+        self.takes += 1
         el = self.sun_el
         glow = max(0.0, math.sin(math.radians(max(el + 4.0, 0.0)))) * 0.8 + 0.05
         ground = 0.1 + 0.5 * glow
@@ -388,6 +393,10 @@ class FakeViewer:
             for x in range(320):
                 v = ground if y > 120 else (glow * 0.9 + 0.1 if y > 80 else 0.2 + 0.4 * glow)
                 px[x, y] = tuple(int(255 * min(1.0, max(0.0, v))) for _ in range(3))
+        if self.takes in self.bad_takes:
+            for y in range(180 if self.bad_kind == "black" else 72):
+                for x in range(320):
+                    px[x, y] = (0, 0, 0)
         buf = io.BytesIO()
         im.save(buf, "BMP")
         pathlib.Path(d["filename"]).parent.mkdir(parents=True, exist_ok=True)

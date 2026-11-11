@@ -55,11 +55,43 @@ def measure(path, regions):
         sl = region_slice(rgb.shape, regions[name])
         out[name] = (float(y[sl].mean()), float(lin[sl].mean()))
     out["frame"] = (float(y.mean()), float(lin.mean()))
-    # 64 columns wide luma thumbnail for frame differences
-    h, w = y.shape
-    step = max(1, w // 64)
-    small = y[: h - h % step, : w - w % step].reshape(h // step, step, w // step, step).mean(axis=(1, 3))
+    # A luma thumbnail of a fixed size for frame differences, whatever the frame's size: the 3D view's height changes when a
+    # notification or the chat bar appears, so the frames of one run can differ in size.
+    small = thumbnail(y)
+    out["size"] = (int(y.shape[1]), int(y.shape[0]))
+    # A failed capture reads back the cleared buffer: the whole frame black, or the rows of a band of it (the viewer window was
+    # minimised or covered while the snapshot was taken). Judged by the longest run of all-zero rows.
+    zero_rows = rgb.max(axis=(1, 2)) <= 0.0
+    out["black"] = bool(zero_rows.all())
+    out["zero_row_run"] = longest_run(zero_rows) / float(len(zero_rows))
+    out["bad"] = out["zero_row_run"] >= BAD_ROW_FRACTION
     return out, small
+
+
+BAD_ROW_FRACTION = 0.05  # a run of all-zero rows this long (of the frame's height) makes a frame bad data
+
+
+def longest_run(flags):
+    """Length of the longest run of True in a 1-D boolean array."""
+    best = cur = 0
+    for f in flags:
+        cur = cur + 1 if f else 0
+        best = max(best, cur)
+    return best
+
+
+THUMB_W, THUMB_H = 64, 36
+
+
+def thumbnail(y):
+    """Luma image (HxW, 0..1) -> THUMB_H x THUMB_W by averaging the pixels in each cell (every size gives the same shape)."""
+    h, w = y.shape
+    ys = np.linspace(0, h, THUMB_H + 1).astype(int)
+    xs = np.linspace(0, w, THUMB_W + 1).astype(int)
+    sums = np.add.reduceat(np.add.reduceat(y, ys[:-1], axis=0), xs[:-1], axis=1)
+    # a cell is at least one pixel (frames smaller than the thumbnail repeat the offsets: reduceat then returns that pixel)
+    counts = np.outer(np.maximum(np.diff(ys), 1), np.maximum(np.diff(xs), 1))
+    return sums / counts
 
 
 def find_pops(elevs, values, factor, floor):
@@ -134,6 +166,7 @@ def analyse(rundir, factor=4.0, floor=0.01):
              "regions (x0, y0, x1, y1 as fractions of the image): %s" % {k: [round(x, 3) for x in regions[k]] for k in ("ground", "horizon_sky", "cloud")},
              "pop = a step change above %.3f whose rate per degree is more than %.1fx the median rate of the neighbouring steps" % (floor, factor),
              ""]
+    size_warned = False  # one warning per run
     for sky in skies:
         srows = [r for r in rows if r["sky"] == sky]
         sweep = [r for r in srows if r["kind"] == "sweep"]
@@ -141,22 +174,42 @@ def analyse(rundir, factor=4.0, floor=0.01):
         series_lin = {n: [] for n in REGION_NAMES}
         smalls = []
         table = []
+        sizes = set()
+        sweep_elevs = []
+        bad = []
+        warnings = []
+        sweep_good = 0
         for r in srows:
             m, small = measure(rundir / r["snapshot"], regions)
+            sizes.add(m["size"])
+            if len(sizes) == 2 and not size_warned:
+                size_warned = True
+                warnings.append("  WARNING the frames of this run differ in size (%s); the thumbnails are resized to %dx%d" % (
+                    ", ".join("%dx%d" % s for s in sorted(sizes)), THUMB_W, THUMB_H))
             entry = {"step": int(r["step"]), "kind": r["kind"], "sun_elevation_deg": float(r["sun_elevation_deg"]),
-                     "fps": r["fps"], "snapshot": r["snapshot"]}
+                     "fps": r["fps"], "snapshot": r["snapshot"], "bad_frame": int(m["bad"])}
             for n in REGION_NAMES:
                 entry[n] = m[n][0]
                 entry[n + "_linear"] = m[n][1]
             table.append(entry)
+            if m["bad"]:
+                # bad data (a failed capture, not a lighting result): kept in the table with a marker, left out of every series
+                bad.append({"snapshot": r["snapshot"], "black": m["black"], "zero_row_fraction": m["zero_row_run"]})
+                warnings.append("  WARNING %s is bad data: %s; left out of the series and the pop search" % (
+                    r["snapshot"], "fully black" if m["black"] else "%.0f %% of its rows are all zero" % (100.0 * m["zero_row_run"])))
+                continue
             if r["kind"] == "sweep":
+                sweep_good += 1
                 for n in REGION_NAMES:
                     series[n].append(m[n][0])
                     series_lin[n].append(m[n][1])
                 smalls.append(small)
-        elevs = [float(r["sun_elevation_deg"]) for r in sweep]
-        sky_res = {"steps": len(sweep), "regions": {}, "pops": [], "frame_diff": None}
-        lines.append("== %s (%d snapshots, %d sweep steps)" % (sky, len(srows), len(sweep)))
+                sweep_elevs.append(float(r["sun_elevation_deg"]))
+        elevs = sweep_elevs
+        sky_res = {"steps": sweep_good, "regions": {}, "pops": [], "frame_diff": None,
+                   "bad_frames": bad, "black_frames": [b["snapshot"] for b in bad if b["black"]], "frame_sizes": sorted(sizes)}
+        lines.append("== %s (%d snapshots, %d sweep steps, %d bad)" % (sky, len(srows), sweep_good, len(bad)))
+        lines.extend(warnings)
         for n in REGION_NAMES:
             if len(series[n]) < 2:
                 continue
@@ -188,7 +241,7 @@ def analyse(rundir, factor=4.0, floor=0.01):
         if not sky_res["pops"] and not (sky_res["frame_diff"] or {}).get("pops"):
             lines.append("  no pops flagged")
         with open(rundir / ("analysis_%s.csv" % sky), "w", newline="", encoding="utf-8") as f:
-            cols = ["step", "kind", "sun_elevation_deg", "fps", "snapshot"] + REGION_NAMES + [n + "_linear" for n in REGION_NAMES]
+            cols = ["step", "kind", "sun_elevation_deg", "fps", "snapshot", "bad_frame"] + REGION_NAMES + [n + "_linear" for n in REGION_NAMES]
             w = csv.DictWriter(f, fieldnames=cols)
             w.writeheader()
             w.writerows(table)
