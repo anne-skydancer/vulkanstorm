@@ -17,10 +17,16 @@
 #include <cstdio>
 #include <set>
 
-// FNV-1a over the table's words, little endian. The Python test has the same function.
-// MASK_HASH_4 = 0xc162a2078068620a
-// MASK_HASH_8 = 0xd8062231acc3d415
-// MASK_HASH_16 = 0xa5bbb68bfab929d6
+// FNV-1a over the table's words, little endian (the Python test has the same function, and reads
+// these three literals from here: the one source).
+constexpr unsigned long long MASK_HASH_4 = 0xc162a2078068620aULL;
+constexpr unsigned long long MASK_HASH_8 = 0xd8062231acc3d415ULL;
+constexpr unsigned long long MASK_HASH_16 = 0xa5bbb68bfab929d6ULL;
+struct LLStochasticFrameStateTest
+{
+    static void setFrame(LLStochasticFrameState& s, uint32_t frame) { s.mFrame = frame; }
+};
+
 namespace
 {
     int failures = 0;
@@ -75,9 +81,9 @@ namespace
             check(table == maskTable(s), "the same table every time");
             std::printf("S = %u hash 0x%016llx\n", s, (unsigned long long)fnv(table));
         }
-        check(fnv(maskTable(4)) == 0xc162a2078068620aULL, "MASK_HASH_4");
-        check(fnv(maskTable(8)) == 0xd8062231acc3d415ULL, "MASK_HASH_8");
-        check(fnv(maskTable(16)) == 0xa5bbb68bfab929d6ULL, "MASK_HASH_16");
+        check(fnv(maskTable(4)) == MASK_HASH_4, "MASK_HASH_4");
+        check(fnv(maskTable(8)) == MASK_HASH_8, "MASK_HASH_8");
+        check(fnv(maskTable(16)) == MASK_HASH_16, "MASK_HASH_16");
     }
 
     void test_state()
@@ -116,7 +122,7 @@ namespace
         const uint32_t kept = s.frame();
         check(!s.begin(false, 108) && s.seedFrame() == 0 && s.frame() == kept, "not usable: a fixed field, the counter kept");
         // the counter never reads 0, across the wrap
-        s.setFrameForTest(0xfffffffeu);
+        LLStochasticFrameStateTest::setFrame(s, 0xfffffffeu);
         check(s.begin(true, 109) && s.seedFrame() == 0xffffffffu, "counter before the wrap");
         check(s.begin(true, 110) && s.seedFrame() == 1, "the counter skips 0 at the wrap");
         // a new history (resize, method re-selected) starts blank
