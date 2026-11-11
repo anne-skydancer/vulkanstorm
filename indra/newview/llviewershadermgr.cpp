@@ -1159,8 +1159,9 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
         mFragmentShaderObjects.erase(*helper);
-        // the shadow method's resolve is a fragment pass on every device: it needs the engine's resolve object whatever the transparency's path
-        const bool needed = helper == &STOCH_RESOLVE_HELPER ? (stochastic_transparency_shaders() && !LLStochasticEngine::computeResolve()) || stochastic_shadow_resolve_shaders()
+        // the fragment resolve (GL 4.0 to 4.2) attaches the engine's resolve object; the compute resolve compiles it as a compute object
+        const bool fragment_resolve = !LLStochasticEngine::computeResolve();
+        const bool needed = helper == &STOCH_RESOLVE_HELPER ? fragment_resolve && (stochastic_transparency_shaders() || stochastic_shadow_resolve_shaders())
                                                             : stochastic_transparency_shaders();
         if (needed)
         {
@@ -3551,12 +3552,25 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     if (success && stochastic_shadow_resolve_shaders())
     {
         gShadowStochasticResolveProgram.mName = "Shadow Stochastic Temporal Resolve";
-        gShadowStochasticResolveProgram.mFeatures.isDeferred = true;   // getPosition (deferredUtil.glsl)
+        // the device decides once which resolve runs (LLStochasticEngine::computeResolve), as for the transparency;
+        // both run the same resolve source (shadowStochasticResolveUtilF.glsl) with the engine's
+        const bool compute = LLStochasticEngine::computeResolve();
+        gShadowStochasticResolveProgram.mFeatures.attachNothing = compute;   // no fragment helpers in a compute link
         gShadowStochasticResolveProgram.mShaderFiles.clear();
         gShadowStochasticResolveProgram.clearPermutations();
-        gShadowStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
-        gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+        if (compute)
+        {
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveC.glsl", GL_COMPUTE_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/stochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
+        }
+        else
+        {
+            gShadowStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveUtilF.glsl", GL_FRAGMENT_SHADER));
+        }
         gShadowStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         gShadowStochasticComposeProgram.mName = "Shadow Stochastic Light Map";
@@ -3566,10 +3580,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gShadowStochasticComposeProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticComposeF.glsl", GL_FRAGMENT_SHADER));
         gShadowStochasticComposeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
-        if (!mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) || !gShadowStochasticResolveProgram.createShader() ||
+        if ((!compute && !mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER)) || !gShadowStochasticResolveProgram.createShader() ||
             !gShadowStochasticComposeProgram.createShader())
         {
-            LL_WARNS("Shader") << "Stochastic shadows: the temporal resolve failed to build; the sun pass keeps its 8 rays per frame "
+            LL_WARNS("Shader") << "Stochastic shadows: the temporal resolve (" << (compute ? "compute" : "fragment") << ") failed to build; the sun pass keeps its 8 rays per frame "
                                   "without accumulation (the next shader reload tries again)" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
