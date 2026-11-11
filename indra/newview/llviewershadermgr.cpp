@@ -304,7 +304,7 @@ static bool stochastic_transparency_shaders()
 
 // The alpha-only variant of an alpha program (ALPHA_STOCHASTIC: the shader returns once its
 // alpha is known). A variant that fails to build leaves the method unavailable, never the
-// viewer without its shaders: sorted alpha runs instead.
+// viewer without its shaders (the error is logged, and the next shader reload tries again).
 static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
 {
     shader.mStochasticVariant = nullptr;
@@ -3383,7 +3383,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
-            LL_WARNS("Shader") << "Stochastic transparency unavailable: a shader failed to build; sorted alpha is used" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the blended faces are not drawn until the "
+                                  "shaders build (the next shader reload tries again)" << LL_ENDL;
         }
     }
     else
