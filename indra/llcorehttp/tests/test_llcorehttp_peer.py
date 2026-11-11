@@ -161,6 +161,18 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
         if "/sleep/" in self.path:
             time.sleep(5)
 
+        if "/hang/" in self.path:
+            # <Vulkanstorm> Accept the request and never answer: wait until the
+            # client closes the connection (a quitting viewer closes it), at
+            # most 60 s so a broken client cannot wedge the server.
+            self.connection.settimeout(60)
+            try:
+                while self.connection.recv(4096):
+                    pass
+            except OSError:
+                pass
+            return
+
         if "/503/" in self.path:
             # Tests for various kinds of 'Retry-After' header parsing
             body = None
