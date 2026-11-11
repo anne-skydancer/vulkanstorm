@@ -137,6 +137,20 @@ void deleteTexture(U32& name)
     name = 0;
 }
 
+bool deviceSupported()
+{
+    // 4.29 as llgl.cpp: mGLVersion is a float
+    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
+    const bool ok = gGLManager.mGLVersion >= 4.29f && glsl;
+    if (!ok)
+    {
+        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs OpenGL 4.3 (GLSL 4.30, the compute resolve); this device reports GL "
+                                  << gGLManager.mGLVersion << ", GLSL " << gGLManager.mGLSLVersionMajor << "."
+                                  << gGLManager.mGLSLVersionMinor << ": sorted alpha is used" << LL_ENDL;
+    }
+    return ok;
+}
+
 bool acquireMasks()
 {
     if (!sMasks)
@@ -180,12 +194,7 @@ bool LLStochasticHistory::allocate(U32 width, U32 height)
     {
         mTexture[i] = LLStochasticEngine::newTexture2D(mFormat, width, height, mFormat);
         ok = ok && mTexture[i];
-        glGenFramebuffers(1, &mFramebuffer[i]);
-        glBindFramebuffer(GL_FRAMEBUFFER, mFramebuffer[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTexture[i], 0);
-        ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
     if (!ok || glGetError() != GL_NO_ERROR)
     {
         release();
@@ -201,11 +210,6 @@ void LLStochasticHistory::release()
 {
     for (U32 i = 0; i < 2; ++i)
     {
-        if (mFramebuffer[i])
-        {
-            glDeleteFramebuffers(1, &mFramebuffer[i]);
-            mFramebuffer[i] = 0;
-        }
         LLStochasticEngine::deleteTexture(mTexture[i]);
     }
     mWidth = mHeight = 0;
@@ -224,6 +228,19 @@ LLStochasticHistory::~LLStochasticHistory()
     {
         LL_WARNS("Pipeline") << "Stochastic history destroyed while allocated (release() it with the GL context current)" << LL_ENDL;
     }
+}
+
+void LLStochasticHistory::bindWriteImage(U32 unit) const
+{
+    // alphaStochasticResolveC.glsl declares layout(rgba16f)
+    llassert(mFormat == GL_RGBA16F);
+    glBindImageTexture(unit, mTexture[1 - mState.index()], 0, GL_FALSE, 0, GL_WRITE_ONLY, mFormat);
+}
+
+void LLStochasticHistory::endComputeWrite(U32 unit) const
+{
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    glBindImageTexture(unit, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, mFormat);
 }
 
 void LLStochasticHistory::setCamera(const glm::mat4& modelview, const glm::mat4& projection)

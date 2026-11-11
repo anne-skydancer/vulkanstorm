@@ -591,6 +591,16 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     S32 major_version = gGLManager.mGLSLVersionMajor;
     S32 minor_version = gGLManager.mGLSLVersionMinor;
 
+    // <Vulkanstorm> compute shaders are GLSL 4.30 (GL 4.3). The caller gates on the device; an older
+    // GLSL here is an error, never a different shader.
+    if (type == GL_COMPUTE_SHADER && (major_version < 4 || (major_version == 4 && minor_version < 30)))
+    {
+        LL_WARNS("ShaderLoading") << "A compute shader needs GLSL 4.30, this device has " << major_version << "."
+                                  << minor_version << ": " << open_file_name << LL_ENDL;
+        fclose(file);
+        return 0;
+    }
+
     if (major_version == 1 && minor_version < 30)
     {
         llassert(false); // GL 3.1 or later required
@@ -599,18 +609,9 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     {
         if (major_version >= 4)
         {
-            //set version to 400 or 420 (430 for a compute shader)
+            //set version to 400 or 420 (430 for a compute shader, checked above)
             if (type == GL_COMPUTE_SHADER)
             {
-                // <Vulkanstorm> compute shaders are GLSL 4.30 (GL 4.3). The caller gates on the device; an
-                // older GLSL here is an error, never a different shader.
-                if (minor_version < 30)
-                {
-                    LL_WARNS("ShaderLoading") << "A compute shader needs GLSL 4.30, this device has " << major_version << "."
-                                              << minor_version << ": " << open_file_name << LL_ENDL;
-                    fclose(file);
-                    return 0;
-                }
                 shader_code_text[shader_code_count++] = strdup("#version 430\n");
             }
             else if (minor_version >= 20)

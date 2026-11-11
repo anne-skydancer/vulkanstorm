@@ -286,18 +286,16 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 }
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
-// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures; like PPLL before
-// it, a Windows and Linux feature.
+// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
+// resolve is a compute shader with imageStore (GL 4.3, GLSL 4.30): the device gate is GL 4.3
+// (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
 
 static bool stochastic_transparency_shaders()
 {
 #if LL_WINDOWS || LL_LINUX
-    // GL 4.3: the temporal resolve is a compute shader, the one resolve (a device capability, as GL 4.0
-    // was; no second path). GLSL 4.30 is the compute shaders' version.
-    return gGLManager.mGLVersion >= 4.29f && gGLManager.mGLSLVersionMajor >= 4 &&
-           (gGLManager.mGLSLVersionMajor > 4 || gGLManager.mGLSLVersionMinor >= 30);
+    return LLStochasticEngine::deviceSupported();
 #else
     return false;
 #endif
@@ -3335,8 +3333,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticCompositeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
-        // the temporal accumulation: optional, without it the method runs as before (a failure is
-        // logged; the next shader reload tries again). The resolve is one compute program: the
+        // The temporal resolve is part of the method, as the other stochastic shaders are: a build
+        // failure is an error (the blended faces wait until a shader reload builds it), never a
+        // mode without history. The resolve is one compute program: the
         // transparency's part (this frame's samples averaged into a shared tile) and the engine's
         // (stochasticResolveUtilF.glsl), both compiled as compute objects. attachNothing: the
         // fragment helpers LLShaderMgr::attachShaderFeatures would attach (globalF.glsl) have no
@@ -3348,17 +3347,12 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveC.glsl", GL_COMPUTE_SHADER));
         gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/stochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
         gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        if (ready && gAlphaStochasticResolveProgram.createShader())
+        if (ready && !gAlphaStochasticResolveProgram.createShader())
         {
-            // built
-        }
-        else
-        {
-            if (ready)
-            {
-                LL_WARNS("Shader") << "Stochastic transparency's temporal accumulation unavailable: its resolve shaders failed to build" << LL_ENDL;
-            }
+            LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve (compute) failed to build; the blended faces are not drawn "
+                                  "until it does (the next shader reload tries again)" << LL_ENDL;
             gAlphaStochasticResolveProgram.unload();
+            ready = false;
         }
         LLGLSLShader* bases[] = { &gDeferredAlphaProgram, &gDeferredSkinnedAlphaProgram,
                                   &gDeferredFullbrightAlphaMaskAlphaProgram, &gDeferredSkinnedFullbrightAlphaMaskAlphaProgram,
