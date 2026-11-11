@@ -127,7 +127,7 @@ namespace LLShadowCascadeFit
         return { cz - r, cz + r + headroom * r };
     }
 
-    // Stage S2, shared by the PCSS and the Stochastic shadow methods (never by Legacy). The shader
+    // Stage S2, shared by every shadow method that calls the method-neutral block of shadowUtil.glsl (SHADOW_COMMON). The shader
     // manager passes these to the shaders as defines (SHADOW_FOOTPRINT_M and the others, same names),
     // so the constants live only here.
     //   - SHADOW_FOOTPRINT_M: how far a modern method's filter may reach from the receiver, metres. It
@@ -139,10 +139,13 @@ namespace LLShadowCascadeFit
     //     this many texels times sin(angle to the light).
     //   - SHADOW_PLANE_BIAS_MAX_TEXELS: the receiver-plane bias of one tap never exceeds this many
     //     texels (a plane edge-on to the light has no usable slope).
+    //   - SHADOW_GRAD_MAX: the largest depth gradient (depth per uv) of a receiver plane; a plane edge-on to
+    //     the light is clamped to it.
     constexpr float SHADOW_FOOTPRINT_M = 0.25f;
     constexpr float SHADOW_BIAS_TEXELS = 1.0f;
     constexpr float SHADOW_NORMAL_OFFSET_TEXELS = 1.0f;
     constexpr float SHADOW_PLANE_BIAS_MAX_TEXELS = 8.0f;
+    constexpr float SHADOW_GRAD_MAX = 10000.0f;
 
     // Width of the border, metres, around a cascade's slice inside which casters are still drawn into
     // the cascade: the larger of 16 texels (the filter kernels of the wide cascades) and the footprint
