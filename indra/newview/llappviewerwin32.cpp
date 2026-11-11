@@ -100,7 +100,7 @@
 #include "llvoavatarself.h"         // for agent name
 #pragma optimize( "", off )
 
-// <Vulkanstorm> llwebrtc.dll, openjp2.dll, opengl32.dll and glu32.dll are
+// <Vulkanstorm> llwebrtc.dll, opengl32.dll and glu32.dll are
 // delay-loaded (see CMakeLists.txt). If one is missing or cannot be loaded,
 // the default is an SEH exception (0xC06D007E) in the middle of a session
 // that tells the user nothing: log it, say which file, and exit.
