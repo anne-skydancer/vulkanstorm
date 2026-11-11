@@ -31,6 +31,7 @@
 
 // Viewer includes
 #include "llversioninfo.h"
+#include "llcloudnoise.h" // <Vulkanstorm> the volumetric clouds' noise file
 #include "llfeaturemanager.h"
 #include "lluictrlfactory.h"
 #include "lltexteditor.h"
@@ -1184,11 +1185,34 @@ bool LLAppViewer::init()
 
     // *Note: this is where gViewerStats used to be created.
 
+    // <Vulkanstorm> The volumetric clouds' noise file is part of the installation and is required: if it is
+    // missing or is not the file this build was made with, say so and quit cleanly (no crash report), like
+    // the cache below. It needs only the application directory and the strings, so it comes first; checked on
+    // every machine, before any window or GL context exists. The verified bytes are not needed until the
+    // clouds draw (L7-2), which load and verify again: do not keep 8.6 MB for the whole session.
+    {
+        std::string noise_path, noise_error;
+        const bool noise_ok = LLCloudNoise::loadAndVerify(noise_path, noise_error);
+        LLCloudNoise::release();
+        if (!noise_ok)
+        {
+            LL_WARNS("InitInfo") << "Cloud noise file " << noise_path << ": " << noise_error << LL_ENDL;
+            std::string msg = LLTrans::getString("MBCloudNoiseDamaged");
+            OSMessageBox(msg.c_str(), LLStringUtil::null, OSMB_OK);
+            removeMarkerFiles(); // a clean exit: the next start must not report an unknown last exit
+            LL_PROFILER_FRAME_END;
+            return false;
+        }
+        LL_INFOS("InitInfo") << "Cloud noise file verified: " << noise_path << LL_ENDL;
+    }
+    // </Vulkanstorm>
+
     if (!initCache())
     {
         std::string msg = LLTrans::getString("MBUnableToAccessFile");
         OSMessageBox(msg.c_str(), LLStringUtil::null, OSMB_OK);
         LL_WARNS("InitInfo") << "Failed to init cache" << LL_ENDL;
+        removeMarkerFiles(); // <Vulkanstorm> a clean exit leaves no exec marker behind
         // quit immediately
         LL_PROFILER_FRAME_END;
         return false;

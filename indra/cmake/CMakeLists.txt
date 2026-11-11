@@ -13,6 +13,7 @@ set(cmake_SOURCE_FILES
         bugsplat.cmake
         BuildVersion.cmake
         CEFPlugin.cmake
+        CloudNoise.cmake
         CMakeCopyIfDifferent.cmake
         ConfigurePkgConfig.cmake
         CURL.cmake
