@@ -278,6 +278,28 @@ HttpLibcurl::~HttpLibcurl()
 
 void HttpLibcurl::shutdown()
 {
+    // What can hold up a stop, and what bounds it:
+    // - transfers in progress: the progress callback aborts them as soon as
+    //   the service is asked to stop (HttpOpRequest::xferInfoCallback);
+    // - connects: shortened to one second below;
+    // - DNS: the libcurl package (8.23.0, packages/LICENSES/curl-buildinfo.json)
+    //   uses the threaded resolver. A lookup still running when its handle is
+    //   cleaned up is not waited for: libcurl detaches the resolver thread,
+    //   which frees its own data when getaddrinfo() returns, so the lookup is
+    //   bounded only by the operating system's resolver timeout and never by
+    //   this thread. (Taken from libcurl's documented threaded-resolver
+    //   behaviour; the 8.23 sources are not in this tree.)
+    // CURLOPT_QUICK_EXIT is deliberately not used.
+    //
+    // Pending connects must not hold up the stop: give them one second.
+    for (const HttpOpRequest::ptr_t & active_op : mActiveOps)
+    {
+        if (active_op->mCurlHandle)
+        {
+            curl_easy_setopt(active_op->mCurlHandle, CURLOPT_CONNECTTIMEOUT, 1L);
+        }
+    }
+
     while (! mActiveOps.empty())
     {
         HttpOpRequest::ptr_t op(* mActiveOps.begin());

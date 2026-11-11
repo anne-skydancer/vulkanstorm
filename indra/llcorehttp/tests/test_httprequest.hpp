@@ -109,11 +109,27 @@ public:
             {
                 mState->mHandlerCalls++;
             }
-            if (! mHeadersRequired.empty() || ! mHeadersDisallowed.empty())
+            if (! mHeadersRequired.empty() || ! mHeadersDisallowed.empty() || ! mHeaderCounts.empty())
             {
                 ensure("Response required with header check", response != NULL);
                 HttpHeaders::ptr_t header(response->getHeaders());  // Will not hold onto this
                 ensure("Some quantity of headers returned", header != NULL);
+
+                for (size_t i(0); i < mHeaderCounts.size(); ++i)
+                {
+                    int found(0);
+                    for (HttpHeaders::const_iterator iter(header->begin()); header->end() != iter; ++iter)
+                    {
+                        if (boost::regex_match((*iter).first, mHeaderCounts[i].first))
+                        {
+                            ++found;
+                        }
+                    }
+                    std::ostringstream str;
+                    str << "Header count #" << i << " " << mHeaderCounts[i].first
+                        << ": wanted " << mHeaderCounts[i].second << ", found " << found;
+                    ensure(str.str(), found == mHeaderCounts[i].second);
+                }
 
                 if (! mHeadersRequired.empty())
                 {
@@ -185,6 +201,8 @@ public:
     std::string mCheckContentType;
     regex_container_t mHeadersRequired;
     regex_container_t mHeadersDisallowed;
+    // Header names (regex) that must appear exactly this many times
+    std::vector<std::pair<boost::regex, int> > mHeaderCounts;
 };
 
 typedef test_group<HttpRequestTestData> HttpRequestTestGroupType;
@@ -2201,10 +2219,12 @@ void HttpRequestTestObjectType::test<19>()
 
         // Issue a GET with modified headers
         mStatus = HttpStatus(200);
-        handler.mHeadersRequired.push_back(
+        // The caller set Keep-Alive but not Connection: no default Connection
+        // header is sent either (the two defaults go together).
+        handler.mHeadersDisallowed.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-connection", boost::regex::icase),
-                boost::regex("keep-alive", boost::regex::icase)));
+                boost::regex(".*", boost::regex::icase)));
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept", boost::regex::icase),
@@ -2388,10 +2408,12 @@ void HttpRequestTestObjectType::test<20>()
 
         // Issue a default POST
         mStatus = HttpStatus(200);
-        handler.mHeadersRequired.push_back(
+        // The caller set Keep-Alive but not Connection: no default Connection
+        // header is sent either (the two defaults go together).
+        handler.mHeadersDisallowed.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-connection", boost::regex::icase),
-                boost::regex("keep-alive", boost::regex::icase)));
+                boost::regex(".*", boost::regex::icase)));
         handler.mHeadersRequired.push_back(
             regex_container_t::value_type(
                 boost::regex("X-Reflect-accept", boost::regex::icase),
@@ -3240,6 +3262,104 @@ void HttpRequestTestObjectType::test<24>()
     catch (...)
     {
         stop_thread(req);
+        delete req;
+        HttpRequest::destroyService();
+        throw;
+    }
+}
+
+
+// Test that a caller-supplied Connection header replaces both default
+// Connection/Keep-alive headers and is not duplicated
+template <> template <>
+void HttpRequestTestObjectType::test<25>()
+{
+    ScopedCurlInit ready;
+
+    set_test_name("Header generation for HttpRequest GET with caller Connection: close");
+
+    std::string url_base(get_base_url());
+
+    TestHandler2 handler(this, "handler");
+    LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
+    mHandlerCalls = 0;
+
+    HttpRequest * req = NULL;
+    HttpOptions::ptr_t options;
+    HttpHeaders::ptr_t headers;
+
+    try
+    {
+        HttpRequest::createService();
+        HttpRequest::startThread();
+        req = new HttpRequest();
+
+        options = HttpOptions::ptr_t(new HttpOptions());
+        options->setWantHeaders(true);
+
+        headers = HttpHeaders::ptr_t(new HttpHeaders);
+        headers->append("connection", "close");
+
+        mStatus = HttpStatus(200);
+        handler.mHeadersRequired.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-connection", boost::regex::icase),
+                boost::regex("close", boost::regex::icase)));
+        handler.mHeadersDisallowed.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-connection", boost::regex::icase),
+                boost::regex("keep-alive", boost::regex::icase)));
+        handler.mHeadersDisallowed.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-keep-alive", boost::regex::icase),
+                boost::regex(".*", boost::regex::icase)));
+        // exactly one Connection header: no duplicate default
+        handler.mHeaderCounts.push_back(
+            std::make_pair(boost::regex("X-Reflect-connection", boost::regex::icase), 1));
+
+        HttpHandle handle = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                            url_base + "reflect/",
+                                            options,
+                                            headers,
+                                            handlerp);
+        ensure("Valid handle returned for get request", handle != LLCORE_HTTP_HANDLE_INVALID);
+
+        int count(0);
+        int limit(LOOP_COUNT_LONG);
+        while (count++ < limit && mHandlerCalls < 1)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Request executed in reasonable time", count < limit);
+        ensure("One handler invocation for request", mHandlerCalls == 1);
+
+        mStatus = HttpStatus();
+        handler.mHeadersRequired.clear();
+        handler.mHeadersDisallowed.clear();
+        handler.mHeaderCounts.clear();
+        handle = req->requestStopThread(handlerp);
+        ensure("Valid handle returned for second request", handle != LLCORE_HTTP_HANDLE_INVALID);
+
+        count = 0;
+        while (count++ < limit && mHandlerCalls < 2)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Second handler invocation", mHandlerCalls == 2);
+
+        options.reset();
+        headers.reset();
+        delete req;
+        req = NULL;
+        HttpRequest::destroyService();
+    }
+    catch (...)
+    {
+        stop_thread(req);
+        options.reset();
+        headers.reset();
         delete req;
         HttpRequest::destroyService();
         throw;
