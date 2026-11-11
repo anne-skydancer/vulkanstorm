@@ -44,9 +44,11 @@ namespace LLStochasticEngine
     // below it cannot (sorted alpha is used there: a capability gate, not a run-time fallback).
     bool deviceSupported();
 
-    // Which resolve this device runs, decided by the device alone and never changed at run time: the
-    // compute resolve (GL 4.3 and GLSL 4.30; 144 B/px) or, on GL 4.0 to 4.2, the fragment resolve with
-    // its pre-pass target (option P; 160 B/px). The two are the same method and give the same image
+    // Which resolve this device runs, decided by the device alone (its GL and GLSL versions, and on
+    // Windows whether its driver loaded the compute entry points) and never changed at run time: the
+    // compute resolve (GL 4.3, GLSL 4.30, entry points loaded; 144 B/px) or, on GL 4.0 to 4.2 and on a
+    // GL 4.3 device without the entry points, the fragment resolve with its pre-pass target (option P;
+    // 160 B/px). The two are the same method and give the same image
     // (bit for bit on the measured NVIDIA). A shader set of the selected path that does not build is an
     // error (logged, retried at the next shader reload); the other path is never taken in its place.
     // Debug only, for tests on a GL 4.3 GPU: the environment variable VKSTORM_STOCH_FRAGMENT_RESOLVE=1

@@ -35,6 +35,42 @@ namespace LLStochasticEngine
                                          // the one table the engine makes, and every producer, is for 8
     constexpr uint32_t SEEDS = 2048;     // columns of the table (STOCH_SEEDS in stochasticSampleF.glsl)
 
+    // The identity of a blended fragment's face for the stochastic depth pass: a hash of its object's
+    // full id (16 bytes, never the region's local id) and of two words (a prim's face is (face, 0); a
+    // GLTF primitive is (mixIndex(side, batch), mixIndex(node, primitive))), the same on every launch
+    // whatever the order the objects arrived in (from the author's Aurora Viewer, types.rs oit_tie:
+    // FNV-1a, then a final mix). Shared by LLVolumeGeometryManager and GLTFSceneManager.
+    inline uint32_t mixBits(uint32_t h)
+    {
+        h ^= h >> 16;
+        h *= 0x7feb352du;
+        h ^= h >> 15;
+        h *= 0x846ca68bu;
+        return h ^ (h >> 16);
+    }
+    // Two indices into one word without packing them in bit fields (a packed pair aliases once an
+    // index outgrows its field); for every a, a bijection of b
+    inline uint32_t mixIndex(uint32_t a, uint32_t b)
+    {
+        return mixBits(a * 0x9e3779b1u + mixBits(b ^ 0x85ebca6bu));
+    }
+    inline uint32_t faceSeed(const uint8_t* id16, uint32_t a, uint32_t b)
+    {
+        uint32_t h = 0x811c9dc5u;
+        for (int i = 0; i < 16; ++i)
+        {
+            h = (h ^ (uint32_t)id16[i]) * 0x01000193u;
+        }
+        for (uint32_t v : { a, b })
+        {
+            for (uint32_t i = 0; i < 4; ++i)
+            {
+                h = (h ^ ((v >> (8 * i)) & 0xffu)) * 0x01000193u;
+            }
+        }
+        return mixBits(h);
+    }
+
     // The table of masks for `samples` bits: entry [r * SEEDS + seed] is a random r-subset of the
     // bits, from a fixed generator (splitmix64, a partial Fisher-Yates shuffle), the same on every
     // launch: the author's Aurora Viewer, oit_stochastic.rs mask_table.

@@ -418,7 +418,7 @@ PPLL capture today.
 | Materials (normal/spec, blend), `materialF.glsl` | captured | same | same |
 | PBR alpha blend (object faces), `pbralphaF.glsl` | captured | same | same |
 | Rigged variants of the above | captured, then depth-only replay | D + A with skinning in both | D + capture, skinning in both |
-| glTF scene assets (`drawGLTFScene`, `pbrmetallicroughnessF.glsl`) | excluded (drawn before the capture with depth writes) | excluded | excluded |
+| glTF scene assets (`drawGLTFScene`, `pbrmetallicroughnessF.glsl`) | excluded (drawn before the capture with depth writes) | excluded | excluded (2026-11-11, `stochastic-transparency.md`: the shipped engine draws the blended assets in its passes with alpha-only variants, like the faces) |
 | Emissive / glow | residual replay into `screen.a` | unchanged | unchanged |
 | Particles, HUD particles | residual, legacy sorted | unchanged (stochastic is at its best on smoke; a later option) | unchanged |
 | Custom blend functions | residual | unchanged | unchanged |
