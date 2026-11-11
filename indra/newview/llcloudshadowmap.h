@@ -27,10 +27,11 @@ class LLGLSLShader;
 
 // Stage L2 of the light study (doc/light/light-model-study.md section 3). Once a frame the flat
 // layer's opacity (cloudsF.glsl's alpha1) is evaluated for a 512x512 patch of the world, anchored
-// in the world and snapped (llcloudshadow.h), into an R8 map holding the share of the sun's or the
-// moon's light that gets through. Every shader that lights with the sun looks it up in
-// calcAtmosphericVars (atmosphericsFuncs.glsl) and multiplies sunlit by it; probes read the map's
-// mean. RenderCloudShadowStrength 0 turns all of it off: no pass, no tap, and the sky is drawn as it
+// in the world and snapped (llcloudshadow.h), into an RG8 map of the light the layer lets through
+// (stage L2b, llcloudoptics.h): R the direct beam, G the diffuse light under the cloud. Every shader
+// that lights with the sun looks R up in calcAtmosphericVarsLinear (atmosphericsFuncs.glsl) and
+// multiplies the linear sunlit by it, the moon's light as much as the sun's; probes read the map's
+// mean. G waits for the overcast veil (stage L4). RenderCloudShadowStrength 0 turns all of it off: no pass, no tap, and the sky is drawn as it
 // was.
 class LLCloudShadowMap
 {
