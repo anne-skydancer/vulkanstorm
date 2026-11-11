@@ -2236,14 +2236,14 @@ void LLFloaterPreference::refreshEnabledState()
 
     ctrl_shadow->setEnabled(enabled);
 
-    // <Vulkanstorm> shadow method (Legacy / PCSS): selectable with shadows on
+    // <Vulkanstorm> shadow method (Legacy / PCSS / Stochastic): selectable with shadows on
     const bool shadow_method_enabled = enabled
         && gSavedSettings.getS32("RenderShadowDetail") > 0
         && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
-    // the light size only applies to the PCSS method
+    // the light size applies to the PCSS and Stochastic methods
     getChild<LLSliderCtrl>("ShadowPCSSLightSize")->setEnabled(shadow_method_enabled
-        && LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::PCSS);
+        && LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod"))));
     // </Vulkanstorm>
 
     enabled = false;
