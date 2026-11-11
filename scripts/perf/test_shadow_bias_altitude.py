@@ -17,8 +17,8 @@ Part 1 (numpy, float32 as the viewer computes it): the precision loss the altitu
   the two depths, in metres along the light, is the self-shadowing error the bias must cover.
   Reported at 0, 25, 500, 1000, 2000, 3000 and 4000 m against the bias in metres.
 
-Part 2 (GL, the viewer's class2 deferred/sunLightF.glsl + class1 deferred/shadowUtil.glsl, PCSS
-off and on, scene machinery of bench_shadow_pcss.py): the whole scene is placed at each
+Part 2 (GL, the viewer's class2 deferred/sunLightF.glsl + class1 deferred/shadowUtil.glsl, the
+stock text and this tree's, scene machinery of bench_shadow_legacy.py): the whole scene is placed at each
 altitude (ground plane, boxes, camera and light view at height z, so every shader computes with
 the real magnitudes; the shadow matrices are composed in float32), cascades fitted like the
 viewer's (orthographic box around the receivers, no depth margin, light view at the camera):
@@ -37,9 +37,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-bench_src = (HERE / 'bench_shadow_pcss.py').read_text()
+bench_src = (HERE / 'bench_shadow_legacy.py').read_text()
 bench_src = bench_src.split('\nfailures = []')[0]   # the bench's definitions only, not its run
-exec(compile(bench_src, str(HERE / 'bench_shadow_pcss.py'), 'exec'))
+exec(compile(bench_src, str(HERE / 'bench_shadow_legacy.py'), 'exec'))
 
 W, H = 1920, 1080
 BIAS = -0.002            # RenderShadowBias
@@ -230,9 +230,9 @@ def sun_from(elev, azim):
     return [math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a)]
 
 PROGS = {}
-# base: stock pcfShadow (git BASE_REF of bench_shadow_pcss.py), i.e. the term removed alone;
-# tree: this tree's pcfShadow (with the receiver-plane bias); pcss: PCSS on
-VNAME = {'base': 'stock PCF        ', 'tree': 'PCF + plane bias  ', 'pcss': 'PCSS             '}
+# base: stock pcfShadow (git BASE_REF of bench_shadow_legacy.py), i.e. the term removed alone;
+# tree: this tree's pcfShadow (with the receiver-plane bias)
+VNAME = {'base': 'stock PCF        ', 'tree': 'PCF + plane bias  '}
 def prog(variant):
     if variant not in PROGS:
         PROGS[variant] = sun_program(variant, False)
@@ -244,13 +244,11 @@ def acne_floor(z, rows):
             sc = make([DUMMY], [0.0, 1.7, 0.0], [0.0, 0.0, -12.0], sun_from(elev, 40.0), clip)
             pos, nrm = gbuffer(sc)
             floor = (nrm[:, :, 1] > 0.99) & (pos[:, :, 3] > 0.5)
-            for variant in ('base', 'tree', 'pcss'):
+            for variant in ('base', 'tree'):
                 new = float(np.mean(light_map(sc, prog(variant), NEW_BIAS)[floor] < 0.999)) * 100
                 old = float(np.mean(light_map(sc, prog(variant), old_bias(z))[floor] < 0.999)) * 100
                 rows.append(('floor', z, elev, label, variant, new, old))
             sc.release()
-
-FOOT_BAND_MAX = 5.0   # %: measured 2.3 to 4.3 % of the foot band at 0 to 4000 m (the crease limitation, see doc/shadows/shadow-method.md)
 
 def acne_wall(z, rows):
     # a 2 m box; its +x wall lit 75 degrees off its normal by a 10 degree sun
@@ -265,13 +263,8 @@ def acne_wall(z, rows):
         nw = nrm[:, :, :3] @ rv                       # world normal = R^T n_view
         walls = (np.abs(nw[:, :, 1]) < 0.01) & (np.abs(nw[:, :, 0]) > 0.99) & (pos[:, :, 3] > 0.5) & (ndl > 0.05)
         assert walls.sum() > 1000, f'wall mask too small: {walls.sum()}'
-        # PCSS (stage S2): the receiver plane is the wall's and does not continue across the crease where the
-        # wall meets the ground. The band of pixels within 3 cm of the ground is counted apart ('foot') with
-        # its own bound, FOOT_BAND_MAX; the rest of the wall must be free of acne like the other methods' walls
-        iv = np.array(sc.inv_view, dtype=np.float32)
-        wall_y = pos[:, :, 0] * iv[1, 0] + pos[:, :, 1] * iv[1, 1] + pos[:, :, 2] * iv[1, 2] + iv[1, 3] - ALT[0]
-        for variant in ('base', 'tree', 'pcss'):
-            mask = walls & (wall_y > 0.03) if variant == 'pcss' else walls
+        for variant in ('base', 'tree'):
+            mask = walls
             img_new = light_map(sc, prog(variant), NEW_BIAS)[mask]
             img_old = light_map(sc, prog(variant), old_bias(z))[mask]
             new = float(np.mean(img_new < 0.999)) * 100
@@ -279,12 +272,6 @@ def acne_wall(z, rows):
             print(f'    wall {z:6.0f} m {label:11s} {variant:4s}: new mean {img_new.mean():.3f}, <0.5 {np.mean(img_new < 0.5) * 100:.2f} %, min {img_new.min():.3f} | '
                   f'old mean {img_old.mean():.3f}, <0.5 {np.mean(img_old < 0.5) * 100:.2f} %', flush=True)
             rows.append(('wall', z, 10.0, label, variant, new, old))
-            if variant == 'pcss':
-                band = walls & (wall_y <= 0.03)
-                assert band.sum() > 10, f'wall foot band too small: {band.sum()}'
-                rows.append(('foot', z, 10.0, label, variant,
-                             float(np.mean(light_map(sc, prog(variant), NEW_BIAS)[band] < 0.999)) * 100,
-                             float(np.mean(light_map(sc, prog(variant), old_bias(z))[band] < 0.999)) * 100))
         sc.release()
 
 def contact(z, results):
@@ -301,7 +288,7 @@ def contact(z, results):
             except AssertionError:
                 pix.append(None)
         texel_cm = None
-        for variant in ('base', 'tree', 'pcss'):
+        for variant in ('base', 'tree'):
             gaps = {}
             for name, b in (('new', NEW_BIAS), ('old', old_bias(z))):
                 img = light_map(sc, prog(variant), b)
@@ -315,7 +302,7 @@ def contact(z, results):
         sc.release()
 
 def part2():
-    print('\nPart 2: GL, the scene at each altitude (viewer shaders; PCF = PCSS off)')
+    print('\nPart 2: GL, the scene at each altitude (viewer shaders)')
     rows = []; contacts = {}
     for z in ALTITUDES:
         ALT[0] = z
@@ -326,8 +313,6 @@ def part2():
         line = f'{kind:5s} {z:6.0f} m  sun {elev:4.0f} deg  {label:11s} {name}: new {new:.3f} %   (old {old:.3f} %)'
         if variant == 'base':
             print('  info ' + line)
-        elif kind == 'foot':
-            ok(new <= FOOT_BAND_MAX, line + f'   (the crease limit: at most {FOOT_BAND_MAX} %)')
         else:
             ok(new == 0.0, line)
     print('\n  contact: lit gap between a 10 cm wall and its shadow, cascade-0 distance (new bias | old bias)')

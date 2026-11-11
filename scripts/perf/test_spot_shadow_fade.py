@@ -20,8 +20,8 @@ Every combination must give the same shadow value with the new shader (the old o
 value changes with the splits), and the value must be the spot shadow itself (0) up to 80 % of the
 reach and 1 beyond it, with the fade in between.
 
-Uses the viewer's class2 deferred/sunLightF.glsl + shadowUtil.glsl, PCF and PCSS, and
-bench_shadow_pcss.py's ray-cast scene. Exit status 0 when all checks pass. The OLD shader is the stored
+Uses the viewer's class2 deferred/sunLightF.glsl + shadowUtil.glsl, PCF, and
+bench_shadow_legacy.py's ray-cast scene. Exit status 0 when all checks pass. The OLD shader is the stored
 reference scripts/perf/reference/shadowUtil_before_spot_fade.glsl (shadowUtil.glsl before the fix,
 so the check keeps working once the fix is in HEAD), the NEW one the working tree.
 """
@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-exec(compile((HERE / 'bench_shadow_pcss.py').read_text().split('\nfailures = []')[0], str(HERE / 'bench_shadow_pcss.py'), 'exec'))
+exec(compile((HERE / 'bench_shadow_legacy.py').read_text().split('\nfailures = []')[0], str(HERE / 'bench_shadow_legacy.py'), 'exec'))
 
 W, H = 1920, 1080
 SPLITS = {'looking out': (5.3, 32.2, 108.1, 256.0), 'tilted down': (0.7, 2.9, 9.2, 21.4), 'skybox room': (0.6, 2.2, 6.9, 16.0)}
@@ -74,8 +74,8 @@ def main():
     print('GL:', get_string(0x1F01).decode(), flush=True)
     old_text = (HERE / 'reference' / 'shadowUtil_before_spot_fade.glsl').read_text()
     new_text = (root / UTIL_F).read_text()
-    for variant in ('tree', 'pcss'):
-        name = 'PCF ' if variant == 'tree' else 'PCSS'
+    for variant in ('tree',):
+        name = 'PCF '
         old_prog, new_prog = util_program(old_text, variant), util_program(new_text, variant)
         print(f'\n{name}: shadow value at the umbra, by distance (columns: splits set; rows: old | new), azimuth 0')
         print('  distance   ' + '   '.join(f'{k:>26s}' for k in SPLITS))

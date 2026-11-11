@@ -318,9 +318,9 @@ public:
     typedef std::map<std::string, std::string> defines_map_t; //NOTE: this must be an ordered map to maintain hash consistency
     defines_map_t mDefines;
     static defines_map_t sGlobalDefines;
-    // <Vulkanstorm> a variant of the shadow util that every shadow program links (0: the stock one, PCSS's programs
-    // differ by their own permutation). Hashed when not 0: the cached binary of a program does not tell which util
-    // was attached, and Legacy and PCSS keep the hashes (and the cached binaries) they had.
+    // <Vulkanstorm> a variant of the shadow util that every shadow program links (0: the stock one). Hashed when
+    // not 0: the cached binary of a program does not tell which util was attached, and Legacy keeps the hash
+    // (and the cached binaries) it had.
     static U32 sShadowUtilVariant;
     // </Vulkanstorm>
     LLUUID mShaderHash;
