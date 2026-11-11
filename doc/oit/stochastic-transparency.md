@@ -74,7 +74,7 @@ composite):
    glowing faces' glow (`emissiveF.glsl`, `pbrglowF.glsl`, which now write the glow in green as
    well) into the green of the transparency target; the depth spread again before the next
    iteration;
-4. **temporal resolve** (`resolveAlphaStochasticTemporal`, `alphaStochasticResolveC.glsl`, compute; on GL 4.0 to 4.2 `alphaStochasticCurrentF.glsl` + `alphaStochasticResolveF.glsl`): this
+4. **temporal resolve** (`resolveAlphaStochasticTemporal`, fragment resolve on every device: `alphaStochasticCurrentF.glsl` + `alphaStochasticResolveF.glsl`; the compute `alphaStochasticResolveC.glsl` is kept for A/B tests and the Vulkan renderer): this
    frame's accumulation averaged over the samples, blended with the last frame's into the history
    (see Temporal accumulation);
 5. **composite** (`alphaStochasticCompositeF.glsl`) over the scene: the scene dimmed by the
@@ -158,8 +158,9 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 
 - The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
   face identities stay stable, so layers keep their roles).
-- `alphaStochasticResolveC.glsl`, one compute dispatch after the accumulation (the resolve of GL 4.3 and later; GL 4.0 to 4.2 run the
-  fragment pair described below).
+- `alphaStochasticResolveC.glsl`, one compute dispatch after the accumulation (the compute resolve: not run by the OpenGL viewer, kept compiled
+  for A/B tests with `VKSTORM_STOCH_COMPUTE_RESOLVE=1` and for the Vulkan renderer, where compute is
+  async; the fragment pair described below is the shipped resolve).
   A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
   once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
   resolve's 3 x 3 neighbourhood reads the tile instead of summing the samples nine times and no full-size
@@ -184,24 +185,29 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   orders the stores of the frame after next (the history textures alternate) after those fetches. Nothing
   else reads the history (no framebuffer or texture-update access), and the dispatch's own reads, the
   accumulation and depth targets written by rendering, need no barrier.
-- Two resolve paths, one method: the path is chosen by the device alone (`LLStochasticEngine::computeResolve`:
-  GL 4.3 and GLSL 4.30), once, and never changes at run time. GL 4.3 and later run the compute resolve above.
-  GL 4.0 to 4.2 run the fragment pair: `alphaStochasticCurrentF.glsl` averages the samples once into an
+- Two resolve paths, one method: the OpenGL viewer runs the fragment resolve on every device
+  (`LLStochasticEngine::computeResolve` is false), decided once, and never changes at run time. Reason: an
+  OpenGL compute dispatch and the `glMemoryBarrier` it needs between graphics passes stall the frame while the
+  camera or avatar moves (seen with this compute resolve in a devel build, and earlier with compute for
+  OpenJPEG and geometry), and OpenGL has no async compute; compute belongs in the Vulkan renderer. The fragment
+  resolve is bit-identical to the compute one and was faster in the offline bench. The compute resolve above
+  stays compiled but unused. The fragment pair: `alphaStochasticCurrentF.glsl` averages the samples once into an
   RGBA32F target (`mAlphaSTCurrent`, option P), and `alphaStochasticResolveF.glsl` (with the engine's resolve
   attached as a fragment object, `STOCH_RESOLVE`) draws the blend into the history's framebuffer that was not read
   (the history has framebuffers only on this path; rendering needs no memory barrier). The two give the same
   image (compared bit for bit offline on the measured NVIDIA, 24 frames, 4 scenes, 3 resolutions). A shader set of
   the selected path that fails to build is an error, logged and retried at the next shader reload; the other path is
-  never taken in its place. For tests on a GL 4.3 GPU, the environment variable `VKSTORM_STOCH_FRAGMENT_RESOLVE=1`
-  selects the fragment path (debug only, not a setting).
+  never taken in its place. For A/B tests on a GL 4.3 GPU, the environment variable `VKSTORM_STOCH_COMPUTE_RESOLVE=1`
+  selects the compute path (debug only, not a setting).
 - No history on the first frame, after a resize, when the setting or the method is switched, or when the
   frame before did not run the method (the history stamp is the frame counter).
 - Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
   1080, 59 MB (56 MiB) at 2560 x 1440, allocated only while the setting is on, up front
   (method selected, resize). With the passes' 8-sample targets (128 bytes a pixel) the method holds
-  144 bytes a pixel on the compute path: 285 MiB at 1920 x 1080, 506 MiB at 2560 x 1440, 1139 MiB at
-  3840 x 2160; on the fragment path (GL 4.0 to 4.2) a full-size RGBA32F target of the averaged samples
-  (16 bytes a pixel, counted at its real size) makes it 160 bytes a pixel: 316 / 563 / 1266 MiB.
+  160 bytes a pixel on the shipped fragment path, which also holds a full-size RGBA32F target of the averaged
+  samples (16 bytes a pixel, always allocated, counted at its real size): 316 MiB at 1920 x 1080, 563 MiB at
+  2560 x 1440, 1266 MiB at 3840 x 2160. The compute path (A/B tests only) needs no such target: 144 bytes a
+  pixel, 285 / 506 / 1139 MiB.
   All of it, the 8-sample targets and the
   mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
   If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
@@ -366,11 +372,10 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 1.38-1.46x).
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
-textures; GL 4.3 and GLSL 4.30 select the compute resolve: `imageStore`, `glMemoryBarrier`), at least
+textures; the compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
 2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). Between GL 4.0 and 4.2, and
-on a GL 4.3 device whose driver did not load the compute entry points, the fragment resolve runs (160 bytes a
-pixel); otherwise from 4.3 the compute resolve (144 bytes a pixel). There is no fallback otherwise (a history or
+sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (160 bytes a
+pixel); the compute resolve (144 bytes a pixel) only when `VKSTORM_STOCH_COMPUTE_RESOLVE=1` forces it on a GL 4.3 device. There is no fallback otherwise (a history or
 temporal resolve that fails only drops the accumulation, each frame keeps its 8 samples; particles and
 custom-blend draws are hidden while the engine is not ready): a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
 30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
@@ -379,7 +384,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 
 ## Tests and measurements
 
-- `scripts/perf/test_alpha_stochastic.py`: offscreen (a GL 4.3 context for the compute resolve; `STOCH_TEST_RESOLVE=fragment` runs the GL 4.0 to 4.2 pair, `STOCH_TEST_SIZE=70x37` partial workgroups; `test_alpha_stochastic_edges.py` checks the compute resolve against a CPU model), the viewer's shaders with the viewer's pass
+- `scripts/perf/test_alpha_stochastic.py`: offscreen (the fragment resolve by default; `STOCH_TEST_RESOLVE=compute` runs the GL 4.3 compute resolve, `STOCH_TEST_SIZE=70x37` partial workgroups; `test_alpha_stochastic_edges.py` checks the compute resolve against a CPU model), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (16 in two
   passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,
   a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands
