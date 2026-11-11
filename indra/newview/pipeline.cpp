@@ -1228,6 +1228,12 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+                // <Vulkanstorm> Stochastic reads the stored depth itself (texelFetch), no comparison
+                if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
+                {
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+                }
+                // </Vulkanstorm>
             }
         }
     }
@@ -1245,6 +1251,12 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+                // <Vulkanstorm> Stochastic reads the stored depth itself (texelFetch), no comparison
+                if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
+                {
+                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
+                }
+                // </Vulkanstorm>
             }
         }
     }
@@ -1496,6 +1508,8 @@ void LLPipeline::releaseShadowBuffers()
 void LLPipeline::releaseScreenBuffers()
 {
     releaseAlphaStochastic(); // <Vulkanstorm/> stochastic transparency's targets
+    releaseShadowStochasticHistory(); // <Vulkanstorm/> Stochastic shadows' history
+    mShadowSTFailedWidth = mShadowSTFailedHeight = 0;
 
     mRT->screen.release();
     mRT->deferredScreen.release();
@@ -3258,6 +3272,7 @@ void LLPipeline::shiftObjects(const LLVector3 &offset)
     // The saved stochastic-transparency view is in the old agent frame; the shift would
     // otherwise read as camera motion and reproject unrelated history.
     mAlphaSTHistory.invalidate();
+    mShadowSTHistory.invalidate(); // <Vulkanstorm/> the same for the Stochastic shadows' history
 
     LLVector4a offseta;
     offseta.load3(offset.mV);
@@ -8606,6 +8621,168 @@ void LLPipeline::resolveAlphaStochasticTemporalFragment()
     mAlphaSTHistory.endFrame();
 }
 
+// <Vulkanstorm> The Stochastic shadow method's temporal accumulation. The main view's sun pass writes its
+// 8 rays per pixel as they are (mRT->screen), the resolve blends them with the last frame's result in the
+// engine's history, and the light map is made from that. Cube snapshots and snapshots have no history: their
+// sun pass writes the light map directly, with each pixel's rays fixed. A history that cannot be allocated
+// (logged once per size) or a resolve that did not build stops the accumulation only: the sun pass keeps its
+// 8 rays per pixel, fixed per pixel, and the method stays Stochastic.
+void LLPipeline::releaseShadowStochasticHistory()
+{
+    mShadowSTHistory.release();
+}
+
+bool LLPipeline::beginShadowStochastic()
+{
+    if (RenderShadowMethod != LLShadowMethod::STOCHASTIC || RenderShadowDetail <= 0)
+    {
+        releaseShadowStochasticHistory();
+        mShadowSTFailedWidth = mShadowSTFailedHeight = 0;
+        return false;
+    }
+    if (mRT != &mMainRT || gCubeSnapshot || gSnapshot || !LLStochasticEngine::deviceSupported())
+    {
+        return false;
+    }
+    const U32 w = mRT->deferredLight.getWidth();
+    const U32 h = mRT->deferredLight.getHeight();
+    if (mShadowSTHistory.isAllocated() && !mShadowSTHistory.matches(w, h))
+    {
+        releaseShadowStochasticHistory();
+    }
+    if (!mShadowSTHistory.isAllocated() && w && h && !(mShadowSTFailedWidth == w && mShadowSTFailedHeight == h))
+    {
+        while (glGetError() != GL_NO_ERROR) {}
+        bool ok = mShadowSTHistory.allocate(w, h, true);   // the resolve is a fragment pass: the history has framebuffers
+        ok = ok && glGetError() == GL_NO_ERROR;
+        glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+        if (ok)
+        {
+            LL_INFOS("Pipeline") << "Stochastic shadows: temporal accumulation (" << (mShadowSTHistory.bytes() >> 20) << " MiB of history, " << w << "x" << h << ")" << LL_ENDL;
+            mShadowSTFailedWidth = mShadowSTFailedHeight = 0;
+        }
+        else
+        {
+            releaseShadowStochasticHistory();
+            mShadowSTFailedWidth = w;
+            mShadowSTFailedHeight = h;
+            LL_WARNS("Pipeline") << "Stochastic shadows: the history could not be allocated (" << w << "x" << h
+                                 << "); the sun pass keeps its 8 rays per pixel without accumulation" << LL_ENDL;
+        }
+    }
+    const bool programs = gShadowStochasticResolveProgram.mProgramObject && gShadowStochasticComposeProgram.mProgramObject;
+    return mShadowSTHistory.beginFrame(programs && mShadowSTHistory.isAllocated());
+}
+
+void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    LL_PROFILE_GPU_ZONE("shadow stochastic resolve");
+
+    // which lights are the same as last frame: a channel whose light moved or changed has no history
+    LLVector3 valid(1.f, 1.f, 1.f);
+    {
+        const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+        LLVector3 dir = primary.valid ? primary.dir
+                                      : (LLEnvironment::instance().getIsSunUp() ? LLVector3(mSunDir.mV) : LLVector3(mMoonDir.mV));
+        dir.normalize();
+        static const F32 cos_half_degree = cosf(0.5f * DEG_TO_RAD);   // the sun's own motion is far slower; a handover or an editor drag is not
+        valid.mV[0] = (mShadowSTLightKnown && dir * mShadowSTLightDir >= cos_half_degree) ? 1.f : 0.f;
+        mShadowSTLightDir = dir;
+        mShadowSTLightKnown = true;
+        static const F32 cos_quarter_degree = cosf(0.25f * DEG_TO_RAD);   // a quaternion's dot is cos(angle / 2)
+        for (U32 i = 0; i < 2; ++i)
+        {
+            const LLDrawable* light = mShadowSpotLight[i].get();
+            bool same = false;
+            LLVector3 pos;
+            LLQuaternion rot;
+            if (light)
+            {
+                pos = light->getPositionAgent();
+                rot = light->getWorldRotation();
+                const LLQuaternion& was = mShadowSTSpotRot[i];
+                same = light == mShadowSTSpot[i] && (pos - mShadowSTSpotPos[i]).magVecSquared() < 1.0e-4f &&
+                       fabsf(rot.mQ[0] * was.mQ[0] + rot.mQ[1] * was.mQ[1] + rot.mQ[2] * was.mQ[2] + rot.mQ[3] * was.mQ[3]) >= cos_quarter_degree;
+            }
+            valid.mV[1 + i] = same ? 1.f : 0.f;
+            mShadowSTSpot[i] = light;
+            mShadowSTSpotPos[i] = pos;
+            mShadowSTSpotRot[i] = rot;
+        }
+    }
+
+    static const LLStaticHashedString sChannelValid("shadow_st_channel_valid");
+    const U32 w = raw.getWidth();
+    const U32 h = raw.getHeight();
+
+    // the resolve: raw + the last frame's history -> the history the other texture holds
+    glBindFramebuffer(GL_FRAMEBUFFER, mShadowSTHistory.writeFramebuffer());
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glViewport(0, 0, w, h);
+    LLGLSLShader& resolve = gShadowStochasticResolveProgram;
+    bindDeferredShader(resolve);
+    mShadowSTHistory.setResolveUniforms(resolve);
+    resolve.uniform3fv(sChannelValid, 1, valid.mV);
+    const S32 raw_unit = resolve.enableTexture(LLShaderMgr::SHADOW_ST_RAW, LLTexUnit::TT_TEXTURE);
+    if (raw_unit > -1)
+    {
+        raw.bindTexture(0, raw_unit, LLTexUnit::TFO_POINT);
+    }
+    const S32 history_unit = resolve.enableTexture(LLShaderMgr::SHADOW_ST_HISTORY, LLTexUnit::TT_TEXTURE);
+    if (history_unit > -1)
+    {
+        gGL.getTexUnit(history_unit)->bindManual(LLTexUnit::TT_TEXTURE, mShadowSTHistory.readTexture());
+    }
+    {
+        LLGLDisable blend(GL_BLEND);
+        LLGLDepthTest depth(GL_FALSE);
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
+    for (S32 unit : { raw_unit, history_unit })
+    {
+        if (unit > -1)
+        {
+            gGL.getTexUnit(unit)->unbind(LLTexUnit::TT_TEXTURE);
+        }
+    }
+    unbindDeferredShader(resolve);
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    mShadowSTHistory.endFrame();
+
+    // the light map: the resolved sun and projector channels, this frame's AO
+    LLGLSLShader& compose = gShadowStochasticComposeProgram;
+    light_map.bindTarget();
+    compose.bind();
+    const S32 c_raw = compose.enableTexture(LLShaderMgr::SHADOW_ST_RAW, LLTexUnit::TT_TEXTURE);
+    if (c_raw > -1)
+    {
+        raw.bindTexture(0, c_raw, LLTexUnit::TFO_POINT);
+    }
+    const S32 c_res = compose.enableTexture(LLShaderMgr::SHADOW_ST_RESOLVED, LLTexUnit::TT_TEXTURE);
+    if (c_res > -1)
+    {
+        gGL.getTexUnit(c_res)->bindManual(LLTexUnit::TT_TEXTURE, mShadowSTHistory.latestTexture());
+    }
+    {
+        LLGLDisable blend(GL_BLEND);
+        LLGLDepthTest depth(GL_FALSE);
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
+    for (S32 unit : { c_raw, c_res })
+    {
+        if (unit > -1)
+        {
+            gGL.getTexUnit(unit)->unbind(LLTexUnit::TT_TEXTURE);
+        }
+    }
+    compose.unbind();
+    light_map.flush();
+}
+// </Vulkanstorm>
+
 void LLPipeline::compositeAlphaStochastic(bool glow)
 {
     LL_PROFILE_GPU_ZONE("alpha stochastic composite");
@@ -9890,6 +10067,19 @@ void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
 }
 // </Vulkanstorm>
 
+// <Vulkanstorm> The shadowing light's angular size, L = 2 tan(half angle): the physical sun (0.53 degrees)
+// times the size scale of the light the scene is lit by (stage L3: handing over from the sun's scale to the
+// moon's) times RenderShadowPCSSLightSize.
+F32 LLPipeline::getShadowLightSize() const
+{
+    static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
+    const LLEnvironment::PrimaryLightState& primary_light = LLEnvironment::instance().getPrimaryLight();
+    LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
+    const F32 sun_scale = primary_light.valid ? primary_light.light_scale : (sky ? sky->getSunScale() : 1.f);
+    return sun_angular_size * sun_scale * RenderShadowPCSSLightSize;
+}
+// </Vulkanstorm>
+
 void LLPipeline::bindDeferredShaderFast(LLGLSLShader& shader)
 {
     if (shader.mCanBindFast)
@@ -10113,6 +10303,12 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     shader.uniform3fv(LLShaderMgr::PRIMARY_LIGHT_DIR, 1, mTransformedPrimaryDir.mV); // <Vulkanstorm/> stage L3
     shader.uniform2f(LLShaderMgr::DEFERRED_SHADOW_RES, (GLfloat)mRT->shadow[0].getWidth(), (GLfloat)mRT->shadow[0].getHeight());
     shader.uniform2f(LLShaderMgr::DEFERRED_PROJ_SHADOW_RES, (GLfloat)mSpotShadow[0].getWidth(), (GLfloat)mSpotShadow[0].getHeight());
+    // <Vulkanstorm> Stochastic: the disc its rays go toward, in every program that links its util
+    if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
+    {
+        shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, getShadowLightSize());
+    }
+    // </Vulkanstorm>
     shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
     shader.uniform1f(LLShaderMgr::DEFERRED_NORM_CUTOFF, RenderEdgeNormCutoff);
 
@@ -10215,10 +10411,16 @@ void LLPipeline::renderDeferredLighting()
         mTransformedPrimaryDir.set(tc_primary);
         // </Vulkanstorm>
 
+        // <Vulkanstorm> Stochastic shadows: with the history, the sun pass writes its rays as they are
+        // into mRT->screen and the resolve makes the light map of them and of the last frame
+        const bool stochastic_shadows = RenderShadowMethod == LLShadowMethod::STOCHASTIC && RenderShadowDetail > 0;
+        const bool stochastic_temporal = beginShadowStochastic();
+        LLRenderTarget* sun_target = stochastic_temporal ? screen_target : deferred_light_target;
+        // </Vulkanstorm>
         if ((RenderDeferredSSAO && !gCubeSnapshot) || RenderShadowDetail > 0)
         {
             LL_PROFILE_GPU_ZONE("sun program");
-            deferred_light_target->bindTarget();
+            sun_target->bindTarget();
             {  // paint shadow/SSAO light map (direct lighting lightmap)
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - sun shadow");
 
@@ -10226,12 +10428,17 @@ void LLPipeline::renderDeferredLighting()
                 bindDeferredShader(sun_shader, deferred_light_target);
                 mScreenTriangleVB->setBuffer();
                 glClearColor(1, 1, 1, 1);
-                deferred_light_target->clear(GL_COLOR_BUFFER_BIT);
+                sun_target->clear(GL_COLOR_BUFFER_BIT);
                 glClearColor(0, 0, 0, 0);
 
                 sun_shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES,
-                                              (GLfloat)deferred_light_target->getWidth(),
-                                              (GLfloat)deferred_light_target->getHeight());
+                                              (GLfloat)sun_target->getWidth(),
+                                              (GLfloat)sun_target->getHeight());
+                if (stochastic_shadows)
+                {   // the frame of the rays' seeds: 0 (fixed per pixel) unless the history accumulates them
+                    static const LLStaticHashedString sShadowSTFrame("shadow_st_frame");
+                    sun_shader.uniform1i(sShadowSTFrame, (S32)mShadowSTHistory.seedFrame());
+                }
 
                 // <Vulkanstorm> PCSS and Stochastic: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
@@ -10239,14 +10446,7 @@ void LLPipeline::renderDeferredLighting()
                 // toward points of the disc of this size.
                 if (LLShadowMethod::usesStableCascades(RenderShadowMethod) && !gCubeSnapshot)
                 {
-                    static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
-                    // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's
-                    // <Vulkanstorm>
-                    const LLEnvironment::PrimaryLightState& primary_light = LLEnvironment::instance().getPrimaryLight();
-                    LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
-                    const F32 sun_scale = primary_light.valid ? primary_light.light_scale : (sky ? sky->getSunScale() : 1.f);
-                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, sun_angular_size * sun_scale * RenderShadowPCSSLightSize);
-                    // </Vulkanstorm>
+                    sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, getShadowLightSize());
                 }
                 // the blocker search reads cascades 0-1 and both spot maps a second time as
                 // plain depth, through a sampler object (only the PCSS sun program has these units)
@@ -10269,11 +10469,16 @@ void LLPipeline::renderDeferredLighting()
                 }
                 unbindDeferredShader(sun_shader);
             }
-            deferred_light_target->flush();
+            sun_target->flush();
+        }
+        if (stochastic_temporal)
+        {
+            resolveShadowStochastic(*screen_target, *deferred_light_target);
         }
 
         // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
         // without SSAO too, and a blur size of 0 skips both passes. Unchanged with the Legacy method.
+        // Stochastic denoises with its history instead: the blur runs with SSAO alone, for the AO channel only.
         const bool pcss_shadows = RenderShadowMethod == LLShadowMethod::PCSS && RenderShadowDetail > 0;
         const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
         if (blur_light_map && !gCubeSnapshot)
@@ -10329,11 +10534,21 @@ void LLPipeline::renderDeferredLighting()
 
             gDeferredBlurLightProgram.uniform2f(sDelta, 0.f, 1.f);
 
+            // <Vulkanstorm> Stochastic: the shadow channels are the resolved ones; only the AO channel is blurred
+            if (stochastic_shadows)
+            {
+                glColorMask(GL_FALSE, GL_TRUE, GL_FALSE, GL_FALSE);
+            }
+            // </Vulkanstorm>
             {
                 LLGLDisable   blend(GL_BLEND);
                 LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                 mScreenTriangleVB->setBuffer();
                 mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+            }
+            if (stochastic_shadows)
+            {
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);   // the state gGL caches here
             }
             deferred_light_target->flush();
             unbindDeferredShader(gDeferredBlurLightProgram);

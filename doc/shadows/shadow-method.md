@@ -10,7 +10,7 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 |---|---|---|---|
 | Sun/moon cascades | Firestorm 7.2.5's: split distances from the visible point cloud, the camera-angle blend of the split exponent (x, y, z), each cascade fitted to the visible receivers, orthographic or perspective-warped | Stable (stage S1, `llshadowcascadefit.h`): splits from the shadow distance, each cascade the bounding sphere of its frustum slice, texel-snapped on a world-anchored grid, orthographic | As PCSS |
 | Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) | As PCSS |
-| Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening | 8 rays per pixel toward the light's disc, accumulated over time (M1, M2) |
+| Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening | 8 rays per pixel toward the light's disc, accumulated over time |
 | Sun N·L under shadow | Legacy `min(N·L, shadow)` | N·L × shadow (`SHADOW_NL_MULTIPLY`) | N·L × shadow |
 | Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; forward receivers (alpha, PBR, water) still use the Legacy build until D11 | Yes |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` | As PCSS |
@@ -19,14 +19,17 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 
 Stochastic is the third method. It replaces PCSS, and the PCSS code is removed afterwards, so it shares
 nothing with PCSS: not the blocker search, the filter, the gather taps or any `PCSS_*` define. It uses
-the stable cascades and square sun maps of stage S1, only the method-neutral helpers of stage S2, and
-the light's disc size from the same `shadow_light_size` uniform (EEP `sun_scale` times
-`RenderShadowPCSSLightSize`). The estimator is 8 rays per pixel toward points on the disc, accumulated
-over time with the stochastic engine of the transparency (mask table, camera reprojection, 3x3 clamp,
-S=8, full resolution). There is no fallback to another method: if the history allocation fails, only
-the accumulation is turned off (logged) and the 8 rays per frame stay, still Stochastic.
+the stable cascades and square sun maps of stage S1, only the method-neutral helpers of stage S2 (the
+`SHADOW_COMMON` block of `shadowUtil.glsl`), and the light's disc size from the same `shadow_light_size`
+uniform (EEP `sun_scale` times `RenderShadowPCSSLightSize`). It mirrors the stochastic transparency: the
+engine's `LLStochasticHistory` and resolve object, 8 rays per pixel, the 1/8 history weight, camera
+reprojection and the 3x3 clamp, full resolution, no other mode and no user setting. There is no fallback
+to another method: if the history cannot be allocated (or the resolve shaders do not build), only the
+accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel, still Stochastic.
 
-Stage M0 is the plumbing (the estimator is M1, the history M2; M0 to M2 ship as one PR):
+M0 to M2 ship as one PR.
+
+### M0: the plumbing
 
 - `LLShadowMethod::STOCHASTIC = 2`. `sanitize` keeps 2 and maps a larger value to `DEFAULT`, which is
   PCSS today. The PR that removes PCSS sets `DEFAULT = STOCHASTIC` and migrates a stored 1 to
@@ -35,18 +38,57 @@ Stage M0 is the plumbing (the estimator is M1, the history M2; M0 to M2 ship as 
   `shadow_light_size` uniform of the sun pass, and the light-size slider. The cascades already took the
   stable branch for every method but Legacy. The blocker-search depth fetch (`pcss_depth_fetch`) and
   the light-map blur gate (`pcss_shadows`) in `renderDeferredLighting` stay PCSS-only: Stochastic's own
-  denoising is the temporal accumulation (M2), not the blur, and not SSAO-dependent.
+  denoising is the temporal accumulation (M2), independent of SSAO.
 - `shadowStochasticUtil.glsl` is Stochastic's shadow util. `loadBasicShaders` builds it only when the
   method is Stochastic, and `LLShaderMgr::attachShaderFeatures` then links it, instead of
-  `shadowUtil.glsl`, into every program that links a shadow util (sun, probe, spot and forward). A
-  marker define `SHADOW_UTIL_STOCHASTIC` keeps the program binary cache apart from PCSS's (the cache
-  hashes defines, not attached objects). `shadow_light_size` must reach every program that links the
-  util, the probe path included, by M1.
+  `shadowUtil.glsl`, into every program that links a shadow util (sun, probe, spot and forward). The
+  method-neutral block is built alone from `shadowUtil.glsl` (`SHADOW_COMMON_ONLY`, with the S2 defines
+  from `addShadowCommonDefines`) and linked next to it, in two builds: for the deferred sun programs
+  (permutation `STOCHASTIC_SHADOW_SUN`, which read the depth buffer for the geometric receiver plane) and
+  with `SHADOW_COMMON_NO_DEPTH` for every other program (the shading normal is the plane; no
+  `getPosition`, so programs without `deferredUtil.glsl` link). No `SHADOW_*` define is global; a marker
+  define `SHADOW_UTIL_STOCHASTIC` keeps the program binary cache apart from PCSS's (the cache hashes
+  defines, not attached objects). `bindDeferredShader` sends `shadow_light_size` to every program, the
+  probe pass included.
 - The combo has the item "Stochastic". No feature-table row recommends it: every table value is the
   minimum over the applied lists, and `all` says 1. `scripts/tests/test_shadow_method_tables.py`
-  checks that, the combo, and that the util has no PCSS code and the defines no groundwork defines.
-- No debug settings yet: the ray count (8), the history weight and the resolution are fixed by design.
+  checks that, the combo, and that the util has no PCSS code and the build no groundwork defines.
+- No debug settings: the ray count (8), the history weight and the resolution are fixed by design.
 - Legacy is untouched (`scripts/shadows/check_legacy_shadows.py`).
+
+### M1: the estimator
+
+Per pixel, 8 rays toward points on the light's disc (a Vogel spiral, rotated per pixel and frame by
+interleaved gradient noise of the pixel and `shadow_st_frame`), each marched through the cascade's
+depth map in 2 to 8 steps. The maps are read as plain depth (`texelFetch`): `allocateShadowBuffer` sets
+their compare mode off in this method, so every program that samples them is a Stochastic program. A ray
+is blocked when it crosses a stored surface between two march nodes (the first interval starts at the
+receiver), or is still behind one at the end of the march. The pixel's value is the fraction of free
+rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
+footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
+plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
+weights of the other methods' blend bands. A projector is the same estimator toward its emitter (0.15 m,
+as PCSS), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
+width on the bench (within one map texel plus one pixel).
+
+`shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history; every other
+program leaves it at 0, which fixes each pixel's rays (a static grain, 6 to 9 % in a penumbra).
+
+### M2: the history
+
+`LLStochasticHistory` (two full-size RGBA16F colours, counted in the texture memory: r sun, g linear view
+depth, b and a the two projector slots) is made on the main view when the method is Stochastic, freed
+otherwise and at a size change. The sun pass writes its rays as they are into `mRT->screen`;
+`shadowStochasticResolveF.glsl` blends them with the last frame's history (weight 1/8) after the engine's
+camera reprojection, reading the history from the 4 nearest texels, each kept only where its stored depth
+agrees (a revealed surface has none; under a quarter kept, none), clamped per channel to the 3x3 neighbourhood
+of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
+A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
+than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
+direction changed. Cube snapshots, mirrors and snapshots have no history (fixed seeds, the sun pass writes
+the light map). With SSAO on the light-map blur still runs, for the AO channel only. The resolve is a fragment
+pass on every device that runs the engine (GL 4.0); a compute resolve for GL 4.3 and later, as the
+transparency has, is not implemented here.
 
 ## Shared by all methods
 
