@@ -19,7 +19,8 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// Attached to each producer's resolve program (STOCH_RESOLVE, LLShaderMgr::attachShaderFeatures).
+// Listed among each producer's resolve program's own shader files and compiled with it, as the
+// program's stage (a compute object for the transparency, alphaStochasticResolveC.glsl).
 // The producer defines stoch_current() (its value of this frame at a pixel: the averaged samples
 // of the transparency) and its main(); the engine gives the camera reprojection, the history
 // reads, the 3 x 3 neighbourhood and the blend. The design and the weights are the author's
