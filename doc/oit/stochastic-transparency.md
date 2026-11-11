@@ -156,9 +156,10 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   1080, 59 MB (56 MiB) at 2560 x 1440, and the full-size RGBA32F target of the averaged samples, 16 bytes a pixel
   more: 33 MB at 1920 x 1080 (66 MB with the history), allocated only while the setting is on, up front
   (method selected, resize). The passes' own targets are as before. All of it, the 8-sample targets and the
-  mask table included, is counted in the viewer's texture memory (`LLImageGLMemory::alloc_tex_image`).
-  If the history cannot be made the accumulation is dropped (a warning, `RenderAlphaStochasticTemporal`
-  off) and the method keeps its 8 samples.
+  mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
+  If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
+  allocation is tried again (1 s, doubling to 30 s, logged at that cadence). Switching the setting
+  off releases the history and stops the accumulation at once.
 - Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
   history ghosts, limited by the clamp.
 
@@ -300,7 +301,6 @@ Exactly the draws PPLL captured, with the same exclusions:
 |---|---|---|
 | `RenderAlphaSortMethod` | 0 sorted alpha, 1 stochastic transparency | 1 |
 | `RenderAlphaStochasticTemporal` | debug only, not persisted: accumulate over the frames | TRUE |
-| `RenderAlphaStochasticAvailable` | runtime flag, not persisted | |
 
 Preferences › Graphics › Rendering 2: "Alpha rendering method" (Sorted alpha / Stochastic
 transparency) only. Stochastic transparency is the same on every line (owner decision, 2026-11-08):
@@ -320,10 +320,11 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
 `gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
-alpha-only variant built. Otherwise (a device or shader set without them) sorted alpha runs: a capability
-gate. There is no fallback for a failed allocation: it is logged and tried again at the next screen buffer
-allocation (method selected, resize), and until then the main view's blended faces are not drawn (a
-missing history only costs the accumulation: the frames draw with their 8 samples).
+alpha-only variant built. A device without the first three has sorted alpha: a capability gate. There is
+no fallback otherwise: a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
+30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
+then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
+if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
 
 ## Tests and measurements
 
