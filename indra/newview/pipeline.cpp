@@ -8112,9 +8112,8 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //      times total alpha over accumulated alpha; the glow then added to the scene alpha.
 // Two different things keep the passes from running:
 //   - The capability gate (sRenderAlphaStochasticSupported, LLStochasticEngine::deviceSupported):
-//     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is a compute shader on GL 4.3
-//     and later, or a fragment pass with a pre-pass target on 4.0 to 4.2 and on a 4.3 device without
-//     the compute entry points, chosen by the device). Below it sorted alpha runs: a device that cannot
+//     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is a fragment pass with a pre-pass target on every device;
+//     the compute resolve is kept for A/B tests only, LLStochasticEngine::computeResolve). Below it sorted alpha runs: a device that cannot
 //     run the method, not a fallback.
 //   - Not ready (alphaStochasticReady), on a supported device: the targets are missing or of another
 //     size (an allocation that failed, or a screen buffer resized without them), or an alpha program's
@@ -8359,9 +8358,9 @@ bool LLPipeline::alphaStochasticResolveReady() const
 
 // The temporal accumulation's two full-size colours, made while the setting asks for it and the
 // resolve shader built, freed otherwise (or when the size changed: the history is then lost).
-// They are counted in the texture memory. On the compute path this frame's averaged samples are not
+// They are counted in the texture memory. On the compute path (A/B tests only) this frame's averaged samples are not
 // a target: the resolve keeps them in shared memory (alphaStochasticResolveC.glsl). On the fragment
-// path (GL 4.0 to 4.2) a full-size RGBA32F target holds them (alphaStochasticCurrentF.glsl, option P,
+// path (the default on every device) a full-size RGBA32F target holds them (alphaStochasticCurrentF.glsl, option P,
 // 16 bytes a pixel more), also counted at its real size.
 void LLPipeline::updateAlphaStochasticHistory()
 {

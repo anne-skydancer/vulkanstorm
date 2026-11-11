@@ -290,8 +290,9 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
-// resolve is a compute shader with imageStore on GL 4.3 (GLSL 4.30) and a fragment pass with a
-// pre-pass target on GL 4.0 to 4.2 (LLStochasticEngine::computeResolve, decided by the device). The
+// resolve is a fragment pass with a pre-pass target on every device (LLStochasticEngine::computeResolve:
+// GL compute stalls the frame in motion); the compute shader with imageStore (GL 4.3, GLSL 4.30) is kept
+// for A/B tests (VKSTORM_STOCH_COMPUTE_RESOLVE=1) and the Vulkan renderer. The
 // device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
@@ -3421,7 +3422,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
         else
         {
-            // GL 4.0 to 4.2: the averaging pre-pass (this frame's samples averaged once into an RGBA32F
+            // The default on every device: the averaging pre-pass (this frame's samples averaged once into an RGBA32F
             // target) and the resolve (the engine's, with the transparency's value of this frame)
             gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
             gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
