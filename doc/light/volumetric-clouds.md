@@ -31,7 +31,7 @@ mismatch; CI generates twice and compares the bytes and the pinned SHA-256.
 | CMake stops if the file is missing or is not the file the source tree names | `indra/cmake/CloudNoise.cmake`; `CLOUD_NOISE_SHA256` there is the one place the whole-file hash is written |
 | Staged next to the other app data, with the licence texts; read-only | `viewer_manifest.py` (`app_settings/clouds/`, `licenses/`; Inno `Attribs: readonly`; mode 0444 in the Linux tarball) |
 | CI checks the staged file and licences of every build, and for package builds installs the Windows installer silently (file, licences, read-only attribute, removal by the uninstaller) or extracts the Linux tarball | `.github/actions/viewer-build/action.yml`, `scripts/clouds/check_cloud_noise.py` |
-| Start-up check: SHA-256 of the whole file against the compiled-in hash, then the container and every entry's hash | `LLCloudNoise::loadAndVerify`, called from `LLAppViewer::init` after the cache |
+| Start-up check: SHA-256 of the whole file against the compiled-in hash, then the container and every entry's hash | `LLCloudNoise::loadAndVerify`, called from `LLAppViewer::init` before the cache |
 
 If the file is missing or damaged the viewer shows "A file [APP_NAME] needs is damaged or missing
 (app_settings/clouds/cloud_noise.vkcn). Please reinstall [APP_NAME]." (`MBCloudNoiseDamaged`; the owner approved this
