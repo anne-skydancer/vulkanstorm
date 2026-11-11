@@ -36,6 +36,8 @@ DEEP = root / SHADERS / 'class1/deferred/'
 UTIL_ST = (DEEP / 'shadowStochasticUtil.glsl').read_text()
 UTIL_COMMON = (root / UTIL_F).read_text()
 RESOLVE_ST = (DEEP / 'shadowStochasticResolveF.glsl').read_text()
+RESOLVE_C = (DEEP / 'shadowStochasticResolveC.glsl').read_text()
+RESOLVE_UTIL = (DEEP / 'shadowStochasticResolveUtilF.glsl').read_text()
 COMPOSE_ST = (DEEP / 'shadowStochasticComposeF.glsl').read_text()
 ENGINE_RESOLVE = (DEEP / 'stochasticResolveUtilF.glsl').read_text()
 COMMON_DEFINES = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + S2_DEFINES
@@ -85,10 +87,14 @@ def read_rgba(fbo, w, h):
 
 class Resolve:
     """The viewer's resolve and light map passes: raw rays + history -> history (the other texture) -> light map."""
-    def __init__(self, sc):
-        self.sc = sc; W, H = sc.W, sc.H
+    def __init__(self, sc, compute=False):
+        self.sc = sc; W, H = sc.W, sc.H; self.compute = compute
         engine = stage(ENGINE_RESOLVE, [])
-        self.prog = program([(0x8B31, VERTEX), (0x8B30, stage(RESOLVE_ST, [])), (0x8B30, engine), (0x8B30, STUBS_F)])
+        util = stage(RESOLVE_UTIL, [])
+        if compute:   # GL 4.3: the compute resolve, the history written as an image
+            self.prog = program([(0x91B9, stage(RESOLVE_C, [])), (0x91B9, util), (0x91B9, engine)])
+        else:         # GL 4.0 to 4.2: the fragment resolve into the history's framebuffer
+            self.prog = program([(0x8B31, VERTEX), (0x8B30, stage(RESOLVE_ST, [])), (0x8B30, util), (0x8B30, engine)])
         self.compose = program([(0x8B31, VERTEX), (0x8B30, stage(COMPOSE_ST, []))])
         self.hist = [make_tex(0x881A, W, H) for _ in range(2)]
         self.fbo = [make_fbo([t]) for t in self.hist]
@@ -115,7 +121,12 @@ class Resolve:
         for unit, tex in enumerate((raw, self.hist[self.idx], sc.gdepth)):
             active(0x84C0 + unit); bindtex(TEX2D, tex); bindsampler(unit, 0)
         active(0x84C0)
-        bindfbo(FB, self.fbo[1 - self.idx]); viewport(0, 0, sc.W, sc.H); draw(4, 0, 3)
+        if self.compute:
+            fn('glBindImageTexture', None, U, U, I, C.c_ubyte, I, U, U)(0, self.hist[1 - self.idx], 0, 0, 0, 0x88B9, 0x881A)
+            fn('glDispatchCompute', None, U, U, U)((sc.W + 15) // 16, (sc.H + 15) // 16, 1)
+            fn('glMemoryBarrier', None, U)(0x8 | 0x20 | 0x400)   # texture fetch, image access (the engine's endComputeWrite), framebuffer (the bench's read)
+        else:
+            bindfbo(FB, self.fbo[1 - self.idx]); viewport(0, 0, sc.W, sc.H); draw(4, 0, 3)
         self.idx = 1 - self.idx; self.valid = True
 
     def light_map(self, raw=None):
@@ -194,6 +205,9 @@ for (W, H) in RESOLUTIONS:
     RES[(W, H, 0, 'resolve')] = timed(lambda f: rs.run())
     RES[(W, H, 0, 'compose')] = timed(lambda f: rs.light_map())
     rs.release()
+    rs = Resolve(sc, compute=True)
+    RES[(W, H, 0, 'resolve compute')] = timed(lambda f: rs.run())
+    rs.release()
 
     # lit exactly 1, umbra exactly 0 (frame 1, 8 rays)
     prog = stoch_program(True); bind_stoch(prog, sc, LIGHT_SIZE, 1)
@@ -233,6 +247,20 @@ for (W, H) in RESOLUTIONS:
         rs.release()
     fn('glDeleteProgram', None, U)(prog)
     sc.release()
+
+# --- the compute and the fragment resolve give the same history, frame after frame ------------------------
+W, H = RESOLUTIONS[0]
+sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+prog = stoch_program(True)
+frag, comp = Resolve(sc), Resolve(sc, compute=True)
+worst = 0.0; same = True
+for f in range(1, 25):
+    bind_stoch(prog, sc, LIGHT_SIZE, f); draw(4, 0, 3)
+    frag.run(); comp.run()
+    a, b = frag.read_history(), comp.read_history()
+    same = same and np.array_equal(a, b); worst = max(worst, float(np.max(np.abs(a - b))))
+check(same, f'compute and fragment resolve: the history is bit identical over 24 frames (max difference {worst:g})', 'resolve: ')
+frag.release(); comp.release(); fn('glDeleteProgram', None, U)(prog); sc.release()
 
 # --- penumbra: converged width and temporal noise, through the real resolve ---------------------------------
 PEN_L = 0.1; PEN_SPOT_SIZE = 0.15; T = 0.05
@@ -301,6 +329,7 @@ for (W, H) in RESOLUTIONS:
         print(f'{f"{W}x{H}":<11}{d:<8}' + ''.join(f'{RES[(W, H, d, l)]:>8.3f}' for l in ('tree', 'pcss', 'stoch')))
     pcss = RES[(W, H, 2, 'pcss')] + RES[(W, H, 0, 'blur')]
     stoch = RES[(W, H, 2, 'stoch')] + RES[(W, H, 0, 'resolve')] + RES[(W, H, 0, 'compose')]
+    print(f'{"":<19}compute resolve {RES[(W, H, 0, "resolve compute")]:.3f} ms (fragment resolve below)')
     print(f'{"":<19}resolve {RES[(W, H, 0, "resolve")]:.3f} + light map {RES[(W, H, 0, "compose")]:.3f}; today\'s PCSS sun pass + blur {pcss:.3f} ms, '
           f'Stochastic sun pass + resolve + light map {stoch:.3f} ms ({stoch - pcss:+.3f}); with SSAO the AO blur adds the blur\'s {RES[(W, H, 0, "blur")]:.3f} to the Stochastic side')
 gl.wglMakeCurrent(None, None); gl.wglDeleteContext(context); user.ReleaseDC(window, hdc); user.DestroyWindow(window)
