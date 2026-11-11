@@ -11,8 +11,20 @@
  *
  * This file provides the executable's real entry point (/ENTRY:vkstormEntry).
  * It runs before the C runtime starts and before every static initialiser,
- * so nothing AVX2 can have executed yet. llwebrtc.dll, whose own initialisers
- * are built with /arch:AVX2, is delay-loaded for the same reason.
+ * so nothing AVX2 can have executed yet. llwebrtc.dll and openjp2.dll, whose
+ * own initialisers are built with /arch:AVX2, are delay-loaded for the same
+ * reason.
+ *
+ * The executable's TLS callbacks (.CRT$XLC __dyn_tls_init, .CRT$XLD
+ * __dyn_tls_dtor) do run before the entry point, with DLL_PROCESS_ATTACH, but
+ * run no thread_local initialiser then: __dyn_tls_init acts on
+ * DLL_THREAD_ATTACH only (VC/Tools/MSVC/<ver>/crt/src/vcruntime/tlsdyn.cpp,
+ * "Only calls the initializers on DLL_THREAD_ATTACH and not
+ * DLL_PROCESS_ATTACH") and the CRT itself calls it for the primary thread from
+ * __scrt_common_main_seh (exe_common.inl), after this check. __dyn_tls_dtor
+ * acts on thread and process detach only. No thread exists before the entry
+ * point to receive DLL_THREAD_ATTACH. scripts/tests/check_cpucheck_obj.py
+ * (run by CI after the build) fails if this object holds a VEX instruction.
  *
  * Constraints that keep it safe on any x86-64 processor:
  *  - compiled with /arch:SSE2 /GS- /GL- (see CMakeLists.txt) and the function

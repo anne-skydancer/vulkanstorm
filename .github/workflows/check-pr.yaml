@@ -59,6 +59,7 @@ jobs:
       - run: python3 scripts/tests/check_release_hooks.py
         if: github.base_ref != 'vkstorm-devel' && !startsWith(github.base_ref, 'codex/')
       - run: python3 scripts/tests/test_wrapper_cpu_check.py
+      - run: python3 scripts/tests/check_cpucheck_obj.py --selftest
       - run: python3 scripts/tests/test_glod_retired.py
         env:
           GLOD_DIFF_BASE: HEAD^1
