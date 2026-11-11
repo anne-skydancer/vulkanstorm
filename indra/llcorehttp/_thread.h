@@ -91,12 +91,14 @@ public:
         : RefCounted(true), // implicit reference
           mThreadFunc(threadFunc)
         {
-            ++sLiveCount;
             // this creates a boost thread that will call HttpThread::run on this instance
             // and pass it the threadfunc callable...
             boost::function<void()> f = boost::bind(&HttpThread::run, this);
 
             mThread = new boost::thread(f);
+            // Counted only once the thread exists: a constructor that throws
+            // never runs the destructor, so counting earlier would leak a count.
+            ++sLiveCount;
         }
 
     inline void join()
