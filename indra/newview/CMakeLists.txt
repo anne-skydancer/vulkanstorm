@@ -1139,6 +1139,7 @@ set(viewer_HEADER_FILES
     llchicletbar.h
     llclassifiedinfo.h
     llcloudnoise.h
+    llcloudoptics.h
     llcloudshadow.h
     llcloudshadowmap.h
     llcofwearables.h
