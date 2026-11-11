@@ -2049,7 +2049,7 @@ If you do not understand the distinction then leave this control alone."
        top_delta="-2"
        width="200"
        name="ShadowMethod"
-       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). PCSS: stable cascades and square sun maps, with soft, contact-hardening shadows. Stochastic: the same cascades and maps, with 8 rays per pixel toward the sun or moon's disc, accumulated over time. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
+       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). PCSS: stable cascades and square sun maps, with soft, contact-hardening shadows. Stochastic: the same cascades and maps, with soft shadows from rays toward the sun or moon's disc, accumulated over time. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
        <combo_box.commit_callback
         function="Pref.RenderOptionUpdate" />
        <combo_box.item
@@ -2331,7 +2331,7 @@ If you do not understand the distinction then leave this control alone."
        follows="left|top"
        height="16"
        increment="0.05"
-       label="Soft shadow light size (PCSS, Stochastic)"
+       label="Soft shadow light size"
        label_width="170"
        layout="topleft"
        left="10"

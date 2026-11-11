@@ -63,6 +63,9 @@ runs:
       run: |
         python3 scripts/tests/test_check_legacy_shadows.py
         python3 scripts/shadows/check_legacy_shadows.py
+    - name: Check the Stochastic shadow method's plumbing (no recommendation, combo, no PCSS code)
+      shell: bash
+      run: python3 scripts/tests/test_shadow_method_tables.py
     - name: Check the sun and sky light terms against the GLSL
       shell: bash
       run: |
