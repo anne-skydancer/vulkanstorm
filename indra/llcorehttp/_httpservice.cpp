@@ -90,8 +90,10 @@ HttpService::~HttpService()
     if (mThread)
     {
         // The worker always stops by itself once asked to; wait for it.
-        // There is deliberately no time limit and no forced termination:
-        // the worker may be in a DNS lookup or a connection shutdown.
+        // There is deliberately no time limit and no forced termination.
+        // Every blocking call it can be in, and what ends it, is listed at
+        // HttpLibcurl::shutdown(); the only wait not under our control is a
+        // getaddrinfo() still running when libcurl is cleaned up.
         const auto start(std::chrono::steady_clock::now());
         auto next_warn(std::chrono::seconds(5));
         while (! mThread->timedJoin(1000))
