@@ -29,7 +29,11 @@
 
 #include "linden_common.h"
 
+#include <atomic>
+#include <chrono>
 #include <functional>
+#include <future>
+#include <memory>
 #include <thread>
 
 #include "_refcounted.h"
@@ -49,6 +53,8 @@ private:
     { // THREAD CONTEXT
         // run the thread function
         mThreadFunc(this);
+        // the thread function has returned: timedJoin() can now succeed
+        mDone.set_value();
     } // THREAD CONTEXT
 
 public:
@@ -63,15 +69,33 @@ public:
         // and pass it the threadfunc callable...
         std::function<void()> f = std::bind(&HttpThread::run, this);
 
+        mDoneFuture = mDone.get_future();
         mThread = std::make_unique<std::thread>(f);
-        mNativeHandle = mThread->native_handle();
+        // Counted only once the thread exists: a constructor that throws
+        // never runs the destructor, so counting earlier would leak a count.
+        ++sLiveCount;
     }
 
-    ~HttpThread() = default;
+    ~HttpThread()
+    {
+        --sLiveCount;
+    }
 
     inline void join()
     {
         mThread->join();
+    }
+
+    /// Waits up to @a millis for the thread function to return and, if it
+    /// did, joins the thread.  Returns true when the thread has been joined.
+    inline bool timedJoin(S32 millis)
+    {
+        if (mDoneFuture.wait_for(std::chrono::milliseconds(millis)) != std::future_status::ready)
+        {
+            return false;
+        }
+        mThread->join();
+        return true;
     }
 
     inline bool joinable() const
@@ -84,20 +108,20 @@ public:
         mThread->detach();
     }
 
-    // A very hostile method to force a thread to quit
-    inline void cancel()
+    /// Number of HttpThread objects currently alive (tests use this to
+    /// check that nothing leaks).
+    static int liveCount()
     {
-#if LL_WINDOWS
-        TerminateThread(mNativeHandle, 0);
-#else
-        pthread_cancel(mNativeHandle);
-#endif
+        return sLiveCount.load();
     }
 
 private:
+    static inline std::atomic<int> sLiveCount{0};
+
     std::function<void(HttpThread *)> mThreadFunc;
+    std::promise<void> mDone;
+    std::future<void> mDoneFuture;
     std::unique_ptr<std::thread> mThread;
-    std::thread::native_handle_type mNativeHandle;
 }; // end class HttpThread
 
 } // end namespace LLCoreInt

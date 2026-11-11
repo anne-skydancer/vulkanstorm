@@ -126,6 +126,9 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
         try:
             self.answer(dict(reply="success", status=200,
                              reason="Your GET operation worked"))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # the client went away (e.g. a cancelled request): nothing to answer
+            pass
         except self.ignore_exceptions as e:
             print("Exception during GET (ignoring): %s" % str(e), file=sys.stderr)
 
@@ -135,6 +138,9 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
         try:
             self.answer(dict(reply="success", status=200,
                              reason=self.read()))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # the client went away (e.g. a cancelled request): nothing to answer
+            pass
         except self.ignore_exceptions as e:
             print("Exception during POST (ignoring): %s" % str(e), file=sys.stderr)
 
@@ -144,13 +150,16 @@ class TestHTTPRequestHandler(BaseHTTPRequestHandler):
         try:
             self.answer(dict(reply="success", status=200,
                              reason=self.read()))
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # the client went away (e.g. a cancelled request): nothing to answer
+            pass
         except self.ignore_exceptions as e:
             print("Exception during PUT (ignoring): %s" % str(e), file=sys.stderr)
 
     def answer(self, data, withdata=True):
         debug("%s.answer(%s): self.path = %r", self.__class__.__name__, data, self.path)
         if "/sleep/" in self.path:
-            time.sleep(30)
+            time.sleep(5)
 
         if "/503/" in self.path:
             # Tests for various kinds of 'Retry-After' header parsing

@@ -259,7 +259,7 @@ public:
 class HttpOpSpin : public HttpOperation
 {
 public:
-    // 0 does a hard spin in the operation
+    // 0 does a hard spin in the operation until the service is asked to stop
     // 1 does a soft spin continuously requeuing itself
     HttpOpSpin(int mode);
     virtual ~HttpOpSpin();
