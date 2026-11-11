@@ -1128,6 +1128,11 @@ int HttpOpRequest::sslCertVerifyCallback(X509_STORE_CTX *ctx, void *param)
 
     if (op->mCallbackSSLVerify)
     {
+        // Two stop checks, kept both: this one is the library's own (HttpService
+        // exit flag, set when the worker is asked to stop, also in tests and
+        // tools with no viewer); LLAppCoreHttp::sslVerify() additionally
+        // refuses once the viewer is disconnected (gDisconnected), which can
+        // be set earlier than the worker's stop and for other reasons.
         if (op->mCurlService && op->mCurlService->isExitRequested())
         {
             // Stopping: do not enter the viewer's certificate code (it is not

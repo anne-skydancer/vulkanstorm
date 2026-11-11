@@ -376,7 +376,7 @@ void LLAppCoreHttp::cleanup()
         }
         if (! mStopped)
         {
-            LL_WARNS("Cleanup") << "Attempting to cleanup HTTP services with thread shutdown incomplete"
+            LL_WARNS("Cleanup") << "HTTP thread has not reported its stop within the wait; destroyService() below stops and joins it"
                                 << LL_ENDL;
         }
     }
