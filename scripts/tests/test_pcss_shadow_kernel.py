@@ -17,8 +17,13 @@ SHADER = (ROOT / 'indra/newview/app_settings/shaders/class1/deferred/shadowUtil.
 
 
 def pcss_block():
-    begin = SHADER.index('#if defined(PCSS_SHADOW)')
+    # the #if that opens the PCSS stage 1 block, which follows the stage S2 shared block (that has its own #if)
+    begin = SHADER.rindex('#if defined(PCSS_SHADOW)', 0, SHADER.index('// <Vulkanstorm> PCSS stage 1'))
     return SHADER[begin:SHADER.index('// </Vulkanstorm>', begin)]
+
+
+FOOTPRINT_M = float(re.search(r'constexpr float SHADOW_FOOTPRINT_M = ([0-9.]+)f;',
+                              (ROOT / 'indra/newview/llshadowcascadefit.h').read_text()).group(1))
 
 
 def define(name):
@@ -130,11 +135,14 @@ def blocker_depth(depth_at, c, z_bias, grad, extent, rot):
 def sun_extents(s_uv, s_z, z_receiver, z_blocker, light_size, d_max, texel, scale=1.0):
     """search and PCF half axes (uv) of pcssSunContactShadow; PCF None for the early out"""
     r_max = define('PCSS_PCF_RADIUS_MAX') * scale
-    search = clamp_extent([s * light_size * d_max for s in s_uv], texel, define('PCSS_SEARCH_RADIUS_MIN'), r_max)
+    # stage S2: neither the search nor the filter reaches past the footprint (the caster cull guard's radius)
+    reach = [max(s * FOOTPRINT_M, t * define('PCSS_SEARCH_RADIUS_MIN')) for s, t in zip(s_uv, texel)]
+    search = [min(e, r) for e, r in zip(clamp_extent([s * light_size * d_max for s in s_uv], texel, define('PCSS_SEARCH_RADIUS_MIN'), r_max), reach)]
     if z_blocker < 0.0:
         return search, None
     w_world = max(z_receiver - z_blocker, 0.0) / max(s_z, 1.0e-8) * light_size
-    return search, clamp_extent([0.5 * w_world * s for s in s_uv], texel, define('PCSS_PCF_RADIUS_MIN'), r_max)
+    pcf = clamp_extent([0.5 * w_world * s for s in s_uv], texel, define('PCSS_PCF_RADIUS_MIN'), r_max)
+    return search, [min(e, r) for e, r in zip(pcf, reach)]
 
 
 def det3(q):
@@ -275,8 +283,13 @@ class ContactHardeningTest(unittest.TestCase):
         for scale in (1.0, 2.0):
             search, wide = sun_extents(self.S_UV, self.S_Z, 0.6, 0.0, 10.0, 8.0, self.TEXEL, scale)
             cap = [t * define('PCSS_PCF_RADIUS_MAX') * scale for t in self.TEXEL]
-            self.assertEqual(wide, cap)
-            self.assertEqual(search, cap)
+            # ... and never past the footprint (stage S2), which is the tighter limit at scale 2
+            reach = [max(u * FOOTPRINT_M, e * define('PCSS_SEARCH_RADIUS_MIN')) for u, e in zip(self.S_UV, self.TEXEL)]
+            want = [min(c, r) for c, r in zip(cap, reach)]
+            self.assertEqual(wide, want)
+            self.assertEqual(search, want)
+            if scale == 2.0:
+                self.assertEqual(want, reach)
         self.assertEqual(res_scale((1936, 1088), (1920, 1080)), 1936 / 1920)
         self.assertEqual(res_scale((3856, 2176), (1920, 1080)), 3856 / 1920)
         self.assertEqual(res_scale((1000, 500), (1920, 1080)), 1.0)

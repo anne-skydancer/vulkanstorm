@@ -241,6 +241,123 @@ namespace
         check(LLShadowCascadeFit::snapShadowDistance(std::nanf("")) == 32.f, "NaN distance snaps to 32");
     }
 
+
+    // Stage S2: the cull guard covers the filter's reach (SHADOW_FOOTPRINT_M plus a bilinear texel, or
+    // 16 texels) and the sample's normal offset, at every texel size a cascade can have
+    void test_cull_margin()
+    {
+        using namespace LLShadowCascadeFit;
+        check(SHADOW_FOOTPRINT_M == 0.25f, "the footprint is one radius of 25 cm", SHADOW_FOOTPRINT_M, 0.25f);
+        float prev = 0.f;
+        for (float texel : { 0.001f, 0.0058f, 0.02f, 0.0344f, 0.116f, 0.275f, 0.5f, 1.f })
+        {
+            const float offset = SHADOW_NORMAL_OFFSET_TEXELS * texel;
+            const float margin = casterCullMargin(texel, offset);
+            check(margin >= SHADOW_FOOTPRINT_M + texel + offset, "margin covers the footprint, a texel and the normal offset", margin, SHADOW_FOOTPRINT_M + texel + offset);
+            check(margin >= 16.f * texel + offset, "margin covers 16 texels and the normal offset", margin, 16.f * texel + offset);
+            check(margin >= prev, "margin grows with the texel size", margin, prev);
+            // exactly one of the two terms decides it
+            const float want = std::max(16.f * texel, SHADOW_FOOTPRINT_M + texel) + offset;
+            check(std::fabs(margin - want) < 1e-6f, "margin is the larger term plus the offset", margin, want);
+            // the farthest a filter reaches from the sample (shadowUtil.glsl: the search and the filter extent are
+            // clamped to max(footprint, 2 texels), and the bilinear compare adds a texel), moved by the normal offset
+            const float reach = std::max(SHADOW_FOOTPRINT_M, 2.f * texel) + texel + offset;
+            check(reach <= margin, "the filter reach stays inside the cull margin", reach, margin);
+            prev = margin;
+        }
+        // the finest cascade (0.58 cm texels): the footprint decides, 26 cm instead of 14 cm (16 texels plus 5 cm)
+        const float fine = casterCullMargin(0.0058f, 0.0058f);
+        check(fine > 0.26f && fine < 0.27f, "finest cascade margin is about 26 cm", fine, 0.26f);
+        // the coarse cascades (11.6 cm texels and up) are texel limited: 16 texels decide
+        check(casterCullMargin(0.116f, 0.116f) == 16.f * 0.116f + 0.116f, "texel limited cascade margin is 16 texels plus the offset");
+        check(casterCullMargin(0.275f, 0.275f) == 16.f * 0.275f + 0.275f, "coarse cascade margin is 16 texels plus the offset");
+    }
+
+    // a 4x4 matrix in doubles, row major, for the cascade matrix as pipeline.cpp builds it
+    struct M4
+    {
+        double m[4][4];
+    };
+    M4 mmul(const M4& a, const M4& b)
+    {
+        M4 r{};
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                for (int k = 0; k < 4; ++k)
+                    r.m[i][j] += a.m[i][k] * b.m[k][j];
+        return r;
+    }
+
+    // Stage S2: the receiver plane's signed depth gradient that shadowUtil.glsl's shadowPlaneGradient computes
+    // (np = (r0.n / r0.r0, r1.n / r1.r1, r2.n / r2.r2), g = -np.xy / np.z, clamped to SHADOW_GRAD_MAX) against
+    // the plane measured by two tangent steps through the matrix (pcssDepthGradient). The matrix is the one
+    // generateSunCascadesStable builds: bias(0.5, 0.5) * ortho(snappedSquare box, depthRange) * light view.
+    void test_plane_gradient()
+    {
+        std::mt19937 rng(20261111);
+        std::uniform_real_distribution<double> u(-1.0, 1.0);
+        double worst = 0.0;
+        int tested = 0;
+        int clamped = 0;
+        for (int trial = 0; trial < 600; ++trial)
+        {
+            // light direction away from the pole, cascade box and depth range of a random cascade
+            D3 light = norm({ u(rng), 0.2 + 0.8 * std::fabs(u(rng)), u(rng) });
+            const auto up_f = LLShadowCascadeFit::lightUp({ (float)light.x, (float)light.y, (float)light.z });
+            const D3 up = norm({ up_f.x, up_f.y, up_f.z });
+            const D3 right = norm(cross(up, light));
+            const D3 back = cross(right, up); // the view z axis (towards the light), re-orthogonalised
+            const double radius = 2.0 + 60.0 * std::fabs(u(rng));
+            const auto box = LLShadowCascadeFit::snappedSquare(0.f, 0.f, (float)radius, 1456.f, 1456.f, 0.f, 0.f);
+            const auto dr = LLShadowCascadeFit::depthRange(0.f, (float)radius);
+            const M4 view = { { { right.x, right.y, right.z, 0 }, { up.x, up.y, up.z, 0 }, { back.x, back.y, back.z, 0 }, { 0, 0, 0, 1 } } };
+            // glm::ortho(l, r, b, t, n, f) with n = -z_max and f = -z_min, as pipeline.cpp calls it
+            const double l = box.min_x, r = box.max_x, b = box.min_y, tp = box.max_y, n = -dr.z_max, f = -dr.z_min;
+            const M4 ortho = { { { 2 / (r - l), 0, 0, -(r + l) / (r - l) }, { 0, 2 / (tp - b), 0, -(tp + b) / (tp - b) },
+                                 { 0, 0, -2 / (f - n), -(f + n) / (f - n) }, { 0, 0, 0, 1 } } };
+            const M4 bias = { { { 0.5, 0, 0, 0.5 }, { 0, 0.5, 0, 0.5 }, { 0, 0, 0.5, 0.5 }, { 0, 0, 0, 1 } } };
+            const M4 mat = mmul(bias, mmul(ortho, view));
+            const D3 r0 = { mat.m[0][0], mat.m[0][1], mat.m[0][2] };
+            const D3 r1 = { mat.m[1][0], mat.m[1][1], mat.m[1][2] };
+            const D3 r2 = { mat.m[2][0], mat.m[2][1], mat.m[2][2] };
+            const D3 point = { 10.0 * u(rng), 10.0 * u(rng), 10.0 * u(rng) };
+            auto project = [&](D3 p) { return D3{ dot(r0, p), dot(r1, p), dot(r2, p) }; };
+            // every fourth case is nearly edge-on to the light
+            D3 nrm = norm({ u(rng), u(rng), u(rng) });
+            if (trial % 4 == 0)
+            {
+                nrm = norm(add(nrm, mul(back, -dot(nrm, back) * (1.0 - 1e-9))));
+            }
+            const D3 t1 = norm(cross(nrm, std::fabs(nrm.x) < 0.9 ? D3{ 1, 0, 0 } : D3{ 0, 1, 0 }));
+            const D3 t2 = cross(nrm, t1);
+            const D3 c = project(point);
+            const D3 d1 = sub(project(add(point, mul(t1, 0.05))), c);
+            const D3 d2 = sub(project(add(point, mul(t2, 0.05))), c);
+            const double det = d1.x * d2.y - d1.y * d2.x;
+            const double gx = (d1.z * d2.y - d1.y * d2.z) / det;
+            const double gy = (d1.x * d2.z - d1.z * d2.x) / det;
+            // shadowPlaneGradient, in doubles
+            const D3 np = { dot(r0, nrm) / dot(r0, r0), dot(r1, nrm) / dot(r1, r1), dot(r2, nrm) / dot(r2, r2) };
+            const double nz = std::fabs(np.z) < 1e-7 ? (np.z < 0 ? -1e-7 : 1e-7) : np.z;
+            const double gmax = LLShadowCascadeFit::SHADOW_GRAD_MAX;
+            const double hx = std::clamp(-np.x / nz, -gmax, gmax), hy = std::clamp(-np.y / nz, -gmax, gmax);
+            check(std::fabs(hx) <= gmax && std::fabs(hy) <= gmax, "the shader gradient never exceeds SHADOW_GRAD_MAX", hx, hy);
+            if (!(std::fabs(gx) < gmax && std::fabs(gy) < gmax)) // also catches an infinite or NaN measured slope
+            {
+                // edge-on beyond the limit: the shader value is the clamp, not the measured slope
+                ++clamped;
+                check(std::fabs(hx) == gmax || std::fabs(hy) == gmax, "an edge-on plane is clamped to SHADOW_GRAD_MAX", hx, hy);
+                continue;
+            }
+            const double scale = std::max({ 1.0, std::fabs(gx), std::fabs(gy) });
+            worst = std::max(worst, std::max(std::fabs(gx - hx), std::fabs(gy - hy)) / scale);
+            ++tested;
+        }
+        check(tested > 300, "plane gradient: enough non-degenerate cases", (double)tested, 300.0);
+        check(clamped > 20, "plane gradient: edge-on cases reach the clamp", (double)clamped, 20.0);
+        check(worst < 1e-6, "plane gradient from the matrix rows equals the two tangent steps", worst, 1e-6);
+    }
+
     void test_depth()
     {
         const auto z = LLShadowCascadeFit::depthRange(-3.f, 5.f);
@@ -256,6 +373,8 @@ int main()
     test_snap();
     test_up();
     test_depth();
+    test_cull_margin();
+    test_plane_gradient();
     test_distance_steps();
     if (failures)
     {
