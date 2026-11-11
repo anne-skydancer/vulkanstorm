@@ -16,7 +16,7 @@
  * shadow_light_size, as PCSS; a projector: its emitter), each marched in a few steps through the
  * cascade's depth map, which is read as plain depth (the method switches the maps' compare mode off).
  * A ray is blocked when it crosses a stored surface between two nodes of its march, or is still behind
- * one at the end of it. The pixel's value is the fraction of free rays. The deferred sun pass
+ * one at the end of it, the surface nearer the light than the receiver's plane at the texel read. The pixel's value is the fraction of free rays. The deferred sun pass
  * changes the rays every frame (shadow_st_frame) and the temporal resolve averages the frames; every
  * other program keeps shadow_st_frame at 0, which fixes each pixel's rays.
  */
@@ -27,6 +27,9 @@
 #define ST_SPOT_STEPS 4
 #define ST_SPOT_EMITTER 0.15   // metres: width of a projector emitter
 #define ST_SPOT_MARCH 4.0      // metres: the longest march toward a projector
+// the constants below were PCSS's for the projectors; they are this method's own copies (PCSS is removed afterwards)
+#define ST_SPOT_BIAS_SCALE 0.8 // of spot_shadow_bias
+#define ST_SPOT_RPDB_MAX 0.004 // cap of the projectors' receiver-plane bias, shadow depth units
 
 uniform sampler2D shadowMap0; // plain depth: the method sets the maps' compare mode off
 uniform sampler2D shadowMap1;
@@ -94,20 +97,27 @@ vec2 stSpotGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
     return clamp(vec2(d1.z * d2.y - d1.y * d2.z, d1.x * d2.z - d1.z * d2.x) / det, vec2(-1.0e4), vec2(1.0e4));
 }
 
-float stDepthAt(sampler2D m, vec2 uv, vec2 res, vec2 jit)
+// One read of the map near uv (offset by up to half a texel per ray): the stored depth zs, and the receiver's
+// reference depth at the centre of the texel read: the receiver's depth with the constant bias taken off, and
+// the signed plane (S2's form, d depth / d uv = g) lowering it where the plane is nearer the light over the
+// offset from the receiver, never raising it (past a crease the extrapolated plane is not the surface).
+float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, float z_bias, float rp_max, out float zs)
 {
     ivec2 p = clamp(ivec2(floor(uv * res + jit)), ivec2(0), ivec2(res) - 1);
-    return texelFetch(m, p, 0).r;
+    zs = texelFetch(m, p, 0).r;
+    vec2 d = (vec2(p) + 0.5) / res - c.xy;
+    return c.z - z_bias + clamp(dot(g, d), -rp_max, 0.0);
 }
 
 // The march. s(t) = s0 + t ds[k] is linear in t for orthographic and perspective maps. The nodes
 // are t_0 = 0 (the receiver), jittered nodes denser near it, and t_max. A ray is blocked when the
 // stored surface at its position at t_i lies between its depths at t_i and t_{i+1} (a surface
-// crossed on the way), or when it is still behind the stored surface at t_max. Each read is one
+// crossed on the way), or when it is still behind the stored surface at t_max; in both the surface
+// must be nearer the light than the receiver's plane at that texel (stReference). Each read is one
 // texel, offset by up to half a texel per ray, so the frames' average is the texel-box filtered
-// visibility. z_bias: the constant bias that moves the receiver's reference depth towards the light;
-// rp_max: the cap of the receiver-plane bias.
-float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 grad, float z_bias, float rp_max, vec4 ds[ST_RAYS], float t_max, int steps, float jitter)
+// visibility. g: the signed plane gradient; z_bias: the constant bias that moves the receiver's
+// reference depth towards the light; rp_max: the cap of the plane's offset.
+float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max, vec4 ds[ST_RAYS], float t_max, int steps, float jitter)
 {
     vec3 c = s0.xyz / s0.w;
     float vis = 0.0;
@@ -123,11 +133,10 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 grad, float z_bias, float rp_
             float un = i + 1 < steps ? (float(i + 1) + j) * inv_n1 : 1.0;
             vec4 sn = s0 + (t_max * un * un) * ds[k];
             vec3 qn = sn.xyz / sn.w;
-            // not the receiver itself: nearer the light than the receiver plane at that point
-            float rp = min(dot(grad, abs(q.xy - c.xy)), rp_max);
-            float zs = stDepthAt(m, q.xy, res, jit);
+            float zs;
+            float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
             float slack = 0.25 * (q.z - qn.z) + 1.0e-4;
-            if (zs < c.z - z_bias - rp && zs < q.z && zs > qn.z - slack)
+            if (zs < ref && zs < q.z && zs > qn.z - slack)
             {
                 blocked = 1.0;
             }
@@ -135,9 +144,9 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 grad, float z_bias, float rp_
         }
         if (blocked == 0.0)
         {
-            float rp = min(dot(grad, abs(q.xy - c.xy)), rp_max);
-            float zs = stDepthAt(m, q.xy, res, jit);
-            if (zs < q.z && zs < c.z - z_bias - rp)
+            float zs;
+            float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
+            if (zs < q.z && zs < ref)
             {
                 blocked = 1.0;
             }
@@ -171,7 +180,7 @@ float stCascade(sampler2D map, int j, vec3 spos, vec3 ng, float sin_theta, vec3 
     float z_bias = shadowWorldBias(texel_m, s_z, SHADOW_BIAS_TEXELS);
     float rp_max = shadowWorldBias(texel_m, s_z, SHADOW_PLANE_BIAS_MAX_TEXELS);
     vec4 s0 = m * vec4(shadowNormalOffsetPos(spos, ng, sin_theta, texel_m), 1.0);
-    vec2 grad = abs(shadowPlaneGradient(m, ng));
+    vec2 grad = shadowPlaneGradient(m, ng);
     vec4 ds[ST_RAYS];
     stSunRays(m, L, 6.28318531 * nz.x, ds);
     // the reach of the march: 4, 8, 16 and 32 m, and no farther than a ray can wander from the
@@ -264,7 +273,7 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     {
         return 1.0;
     }
-    vec2 grad = abs(stSpotGradient(m, pos, norm, s0.xyz / s0.w));
+    vec2 grad = stSpotGradient(m, pos, norm, s0.xyz / s0.w);
     vec3 eye = stProjectorEye(m);
     vec3 to_eye = eye - pos;
     float dist = length(to_eye);
@@ -282,9 +291,9 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
         ds[k] = m * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
     }
     float t_max = min(ST_SPOT_MARCH, 0.9 * dist) / dist;
-    float z_bias = -spot_shadow_bias * 0.8; // spot_shadow_bias is negative: the reference moves towards the light
+    float z_bias = -spot_shadow_bias * ST_SPOT_BIAS_SCALE; // spot_shadow_bias is negative: the reference moves towards the light
     float shadow = index == 0
-        ? stMarch(shadowMap4, proj_shadow_res, s0, grad, z_bias, 0.004, ds, t_max, ST_SPOT_STEPS, nz.y)
-        : stMarch(shadowMap5, proj_shadow_res, s0, grad, z_bias, 0.004, ds, t_max, ST_SPOT_STEPS, nz.y);
+        ? stMarch(shadowMap4, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y)
+        : stMarch(shadowMap5, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y);
     return mix(1.0, shadow, fade);
 }
