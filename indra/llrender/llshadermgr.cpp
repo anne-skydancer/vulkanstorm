@@ -192,7 +192,7 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 
     // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
     // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
-    // coverage mask; the fragment resolve program (STOCH_RESOLVE, the GL 4.0 to 4.2 path) takes the
+    // coverage mask; the fragment resolve program (STOCH_RESOLVE, the default path on every device) takes the
     // engine's resolve. (The compute resolve lists stochasticResolveUtilF.glsl among its own shader files.)
     // STOCH_SAMPLE: any producer's program that samples (ALPHA_STOCHASTIC implies it; the shadow
     // producer sets STOCH_SAMPLE alone).

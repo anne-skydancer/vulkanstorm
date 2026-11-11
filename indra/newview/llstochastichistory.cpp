@@ -152,6 +152,24 @@ bool deviceSupported()
 
 bool computeResolve()
 {
+    // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
+    // glMemoryBarrier it needs between graphics passes stall the frame while the camera or avatar
+    // moves, and OpenGL has no async compute. The compute resolve stays compiled for A/B tests
+    // (VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a GL 4.3 device, read once) and for the Vulkan renderer.
+    static const bool force_compute = []() {
+        const char* v = getenv("VKSTORM_STOCH_COMPUTE_RESOLVE");
+        return v && v[0] == '1';
+    }();
+    if (!force_compute)
+    {
+        static bool logged_default = false;   // main render thread, the pipeline's allocation
+        if (!logged_default && gGLManager.mGLVersion >= 3.99f)
+        {
+            logged_default = true;
+            LL_INFOS("Pipeline") << "Stochastic transparency: fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)" << LL_ENDL;
+        }
+        return false;
+    }
     const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
     bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
 #if LL_WINDOWS && !LL_MESA
@@ -162,27 +180,23 @@ bool computeResolve()
     // resolve (an A/B test only; the fragment resolve is the default everywhere)
     if (capable && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
     {
-        LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: the compute resolve's entry points are missing; the compute A/B test is unavailable, the fragment resolve is used" << LL_ENDL;
         capable = false;
     }
 #endif
-    // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
-    // glMemoryBarrier it needs between graphics passes stall the frame while the camera or avatar
-    // moves, and OpenGL has no async compute. The compute resolve stays compiled for A/B tests
-    // (VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a GL 4.3 device, read once) and for the Vulkan renderer.
-    static const bool force_compute = []() {
-        const char* v = getenv("VKSTORM_STOCH_COMPUTE_RESOLVE");
-        return v && v[0] == '1';
-    }();
-    const bool compute = capable && force_compute;
     static bool logged = false;   // main render thread, the pipeline's allocation
     if (!logged && gGLManager.mGLVersion >= 3.99f)
     {
         logged = true;
-        LL_INFOS("Pipeline") << "Stochastic transparency: " << (compute ? "compute resolve (GL 4.3 and later, 144 B/px), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test"
-                                                                          : "fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)")
-                             << LL_ENDL;
+        if (capable)
+        {
+            LL_INFOS("Pipeline") << "Stochastic transparency: compute resolve (GL 4.3 and later, 144 B/px), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test" << LL_ENDL;
+        }
+        else
+        {
+            LL_WARNS("Pipeline") << "Stochastic transparency: VKSTORM_STOCH_COMPUTE_RESOLVE is set but the compute resolve is not available (needs GL 4.3, GLSL 4.30 and the compute entry points); the fragment resolve is used" << LL_ENDL;
+        }
     }
+    const bool compute = capable;
     return compute;
 }
 
