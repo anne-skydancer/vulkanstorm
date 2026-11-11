@@ -124,6 +124,20 @@ jobs:
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
+          # The container has had no name resolution on some runs (the host's
+          # resolver, not the image), which apt reports only as missing
+          # packages. Wait a bounded time for it, then fail with the cause.
+          resolved=0
+          for attempt in 1 2 3 4 5 6; do
+            if getent hosts archive.ubuntu.com >/dev/null; then resolved=1; break; fi
+            echo "archive.ubuntu.com does not resolve (attempt $attempt of 6)"
+            sleep 10
+          done
+          if [ "$resolved" != 1 ]; then
+            echo "::error::the container cannot resolve archive.ubuntu.com; its /etc/resolv.conf follows"
+            cat /etc/resolv.conf
+            exit 1
+          fi
           apt-get -o Acquire::Retries=3 update
           apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             sudo git ca-certificates curl wget file xz-utils bzip2 zstd unzip \
