@@ -1,9 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Copyright (C) 2026, Anne Skydancer (Vulkanstorm) -->
-# Shadow method: Legacy and PCSS
+# Shadow method: Legacy, PCSS and Stochastic
 
 `RenderShadowMethod` (U32, saved, default 0) selects how the sun and moon shadows are fitted and
-filtered. Preferences > Graphics > Rendering 2 shows it as a "Legacy / PCSS" combo next to the
+filtered. Preferences > Graphics > Rendering 2 shows it as a "Legacy / PCSS / Stochastic" combo next to the
 Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPCSS`).
 
 | | Legacy (0) | PCSS (1) |
@@ -15,7 +15,36 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 | Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; forward receivers (alpha, PBR, water) still use the Legacy build until D11 |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` |
 
-## Shared by both methods
+## Stochastic (2): stage M0, the plumbing
+
+Stochastic is the third method. Once it lands it replaces PCSS (the PCSS code is then removed), so it
+shares nothing with PCSS: not the blocker search, the filter, the gather taps or the `PCSS_*` defines.
+It uses the stable cascades and square sun maps of stage S1 and the method-neutral `SHADOW_COMMON`
+block of stage S2, and takes the light's disc size from the same `shadow_light_size` uniform
+(EEP `sun_scale` times `RenderShadowPCSSLightSize`). The designed estimator is 8 rays per pixel toward
+points on the disc, accumulated over time with the stochastic engine of the transparency
+(mask table, camera reprojection, 3x3 clamp, S=8, full resolution), with no fallback to another
+method: a failed history allocation turns off only the accumulation.
+
+Stage M0 is the plumbing, and no estimator yet (M1 adds it, M2 the history):
+
+- `LLShadowMethod::STOCHASTIC = 2`; `sanitize` keeps 2 and reads any other value above it as PCSS
+  (an older viewer reading 2 gives PCSS the same way); `usesStableCascades` is true for every method but Legacy.
+- Gates widened from "PCSS" to "not Legacy": the square sun maps (`allocateShadowBuffer`), the
+  `shadow_light_size` uniform of the sun pass, and the light-size slider. The cascades already took the
+  stable branch for every method but Legacy, and the blocker-search units stay PCSS only.
+- `use_stochastic_shadows()` (`llviewershadermgr.cpp`) adds `STOCHASTIC_SHADOW`, `SHADOW_MODERN` and the
+  `SHADOW_*` constants to the global defines, so the one build of `shadowUtil.glsl` that every shadow
+  consumer links (sun, probe, spot and forward programs) is the Stochastic one. Until M1 its two
+  entry points `sampleDirectionalShadow` and `sampleSpotShadow` return 1 (lit).
+- The combo has the item "Stochastic". No feature-table row recommends it: every table value is the
+  minimum over the applied lists, so a level recommends 2 only if `all` does, and `all` says 1.
+  `scripts/tests/test_shadow_method_tables.py` checks that no list does.
+- No debug settings yet: the ray count (8), the history weight and the resolution are fixed by design,
+  and the march settings arrive with the estimator.
+- Legacy is untouched (`scripts/shadows/check_legacy_shadows.py`).
+
+## Shared by all methods
 
 These are not gated by the method:
 

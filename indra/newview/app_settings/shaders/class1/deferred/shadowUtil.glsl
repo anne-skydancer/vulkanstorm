@@ -632,6 +632,25 @@ float pcssSpotShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 pos, v
 // </Vulkanstorm>
 #endif
 
+#if defined(STOCHASTIC_SHADOW)
+// <Vulkanstorm> Stochastic shadow method (RenderShadowMethod 2), stage M0: the plumbing only. This
+// build is selected for every shadow consumer when the method is Stochastic; it shares nothing with
+// the PCSS code above (no blocker search, filter or PCSS defines) and uses the method-neutral
+// SHADOW_COMMON block. The estimator (8 rays per pixel toward the light's disc) is stage M1; until it
+// lands both entry points report the surface lit.
+uniform float shadow_light_size; // the shadowing light's angular size, L = 2 tan(half angle), as for PCSS
+
+float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
+{
+    return 1.0;
+}
+
+float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+{
+    return 1.0;
+}
+// </Vulkanstorm>
+#else
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 {
 #if defined(SUN_SHADOW)
@@ -834,4 +853,4 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     return 1.0;
 #endif
 }
-
+#endif // STOCHASTIC_SHADOW
