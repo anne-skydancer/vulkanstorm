@@ -138,24 +138,39 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 
 - The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
   face identities stay stable, so layers keep their roles).
-- `alphaStochasticCurrentF.glsl`, one full-screen pass after the accumulation, averages the samples of
-  this frame's accumulated colour (alpha x colour, alpha) once into an RGBA32F target; the resolve reads
-  its pixel and its 3 x 3 neighbourhood from there instead of summing the samples nine times (bit for
-  bit the same image; the resolve pass takes 0.05 to 0.16 ms less at 1080p and 0.07 to 0.23 ms less at 1440p on an RTX 5070 Ti,
-  the pre-pass included).
-- `alphaStochasticResolveF.glsl`, one full-screen pass after it: this frame's averaged colour, blended 1/8 with the last frame's blended
+- `alphaStochasticResolveC.glsl`, one compute dispatch after the accumulation (GL 4.3; the only resolve).
+  A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
+  once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
+  resolve's 3 x 3 neighbourhood reads the tile instead of summing the samples nine times and no full-size
+  target holds the average (the sum is the same, in the same order: the image is bit for bit that of the
+  fragment pre-pass it replaced; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
+  0.34 to 0.36 ms at 4K in the scenes with much transparency, and 0.02, 0.02 and 0.04 ms more in a sparse one,
+  on an RTX 5070 Ti, NVIDIA 621.14, offline harness). Then this frame's
+  averaged colour is blended 1/8 with the last frame's blended
   colour taken where this pixel's nearest transparent surface was (the minimum of the stochastic depth
   over the samples), moved by the camera alone (this frame's clip space to the last frame's, from the
   matrices the history object keeps itself, `LLStochasticHistory`) and clamped
-  to the 3 x 3 minimum and maximum of this frame, as a TAA's history is. The result is the next frame's
-  history and the composite's accumulated colour; the alpha correction there is this frame's total alpha
+  to the 3 x 3 minimum and maximum of this frame, as a TAA's history is. The result is written with
+  `imageStore` into the history texture that was not read, and is the next frame's history and the
+  composite's accumulated colour; the alpha correction there is this frame's total alpha
   over its alpha, so an alpha change is never ghosted. The glow keeps the current frame's accumulation.
+  The program is `stochasticResolveUtilF.glsl` (the engine's part) and the transparency's file, both
+  compiled as compute objects (`LLShaderMgr::loadShaderFile`: `#version 430`, `COMPUTE_SHADER`), linked
+  with `attachNothing`.
+- Memory model: the stores are incoherent. `LLPipeline::resolveAlphaStochasticTemporal` issues
+  `glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)` after the dispatch:
+  the first makes the stores visible to the composite's and the next frame's texture fetches, the second
+  orders the stores of the frame after next (the history textures alternate) after those fetches. Nothing
+  else reads the history (no framebuffer or texture-update access), and the dispatch's own reads, the
+  accumulation and depth targets written by rendering, need no barrier.
 - No history on the first frame, after a resize, when the setting or the method is switched, or when the
   frame before did not run the method (the history stamp is the frame counter).
 - Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
-  1080, 59 MB (56 MiB) at 2560 x 1440, and the full-size RGBA32F target of the averaged samples, 16 bytes a pixel
-  more: 33 MB at 1920 x 1080 (66 MB with the history), allocated only while the setting is on, up front
-  (method selected, resize). The passes' own targets are as before. All of it, the 8-sample targets and the
+  1080, 59 MB (56 MiB) at 2560 x 1440, allocated only while the setting is on, up front
+  (method selected, resize). With the passes' 8-sample targets (128 bytes a pixel) the method holds
+  144 bytes a pixel: 285 MiB at 1920 x 1080, 506 MiB at 2560 x 1440, 1139 MiB at 3840 x 2160 (160 bytes
+  and 316 / 563 / 1266 MiB when a full-size RGBA32F target held the averaged samples for the resolve).
+  All of it, the 8-sample targets and the
   mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
   If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
   allocation is tried again (1 s, doubling to 30 s, logged at that cadence). Switching the setting
@@ -318,9 +333,12 @@ with a faint speckle on dark hair cards and more grain on broad glass; S = 16 ru
 accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted alpha, S = 16
 1.38-1.46x).
 
-Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
-`gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
-alpha-only variant built. A device without the first three has sorted alpha: a capability gate. There is
+Requirements: Windows or Linux, OpenGL 4.3 (GLSL 4.30: the compute resolve, `imageStore`,
+`glMemoryBarrier`; GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample textures), at least
+2 samples for the three formats, and every alpha-only variant built. A device without the first three has
+sorted alpha: a capability gate, as GL below 4.0 was (the GL 4.0 to 4.2 devices, mostly old AMD and legacy
+drivers, and Mesa or virtual GPUs that stop below 4.3, lose stochastic transparency; Intel below GL 4.6
+already runs as GL 3.3 and had none). There is one resolve, the compute one, and no second path. There is
 no fallback otherwise: a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
 30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
 then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
