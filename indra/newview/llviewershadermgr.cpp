@@ -32,6 +32,7 @@
 #include "llfeaturemanager.h"
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llviewershadermgr.h"
+#include "llshadowcascadefit.h" // <Vulkanstorm/> S2 constants
 
 // <FS> Vulkanstorm: shader source digest for the shader binary cache version
 #include <algorithm>
@@ -1131,6 +1132,17 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         const GLuint plain = mFragmentShaderObjects[util];
         std::map<std::string, std::string> pcss_attribs = attribs;
         pcss_attribs["PCSS_SHADOW"] = "1";
+        // stage S2: the groundwork shared with the Stochastic method (SHADOW_MODERN), its constants from
+        // llshadowcascadefit.h (one source of truth), and the gather tap on GL 4.0 and later
+        pcss_attribs["SHADOW_MODERN"] = "1";
+        pcss_attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
+        pcss_attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
+        pcss_attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
+        pcss_attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
+        if (gGLManager.mGLVersion >= 3.99f)
+        {
+            pcss_attribs["SHADOW_GATHER"] = "1";
+        }
         if (gGLManager.mGLVersion >= 3.29f)
         {   // sampler objects (GL 3.3): plain depth reads for the blocker search; without
             // them the PCSS build is the fixed-radius rotated PCF

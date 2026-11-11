@@ -18,21 +18,35 @@ queries for
                the removed sun-bias altitude term stay in both methods. It is a labelled alias
                of "tree": the same shaders and defines, identical by construction (it is timed
                and checked like the others, but nothing compares it with "tree")
-  * "pcss1" -- this working tree, PCSS_SHADOW: stage 1, the fixed radius rotated PCF (what the
-               viewer compiles below GL 3.3, without sampler objects)
-  * "pcss"  -- this working tree, PCSS_SHADOW and PCSS_SHADOW_FETCH: stage 2, blocker search and
-               contact hardening on cascades 0-1 and the spots; shadowDepth0/1/4/5 are the same
+  * "pcss0" -- the devel tip's PCSS (git ref PCSS_BENCH_BASE_REF, PCSS_SHADOW and PCSS_SHADOW_FETCH):
+               the cost and the image PCSS had before stage S2
+  * "pcss1" -- this working tree, PCSS_SHADOW: the fixed radius rotated PCF (what the viewer
+               compiles below GL 3.3, without sampler objects), with the stage S2 receiver plane
+               and world unit bias
+  * "pcss33" -- this working tree, PCSS_SHADOW and PCSS_SHADOW_FETCH, no SHADOW_GATHER: blocker
+               search and contact hardening on cascades 0-1 and the spots (GL 3.3: the no-blocker
+               tap is a hardware compare)
+  * "pcss"  -- as "pcss33" plus SHADOW_GATHER (GL 4.0 and later, the viewer's usual case): the
+               no-blocker tap is the signed plane gather tap; shadowDepth0-5 are the same
                depth maps bound a second time with a sampler object (compare off, nearest), as
                LLPipeline::bindShadowDepthFetch binds them
-and reports the median ms per pass. Timing uses the physical sun, L = 2 tan(0.265 deg).
-getPosition/getNorm are the benchmark's: they read the synthetic G-buffer (RGBA32F) instead of
-decoding the viewer's depth and packed normal, the same for every variant.
+The stage S2 constants (SHADOW_FOOTPRINT_M, ...) are read from indra/newview/llshadowcascadefit.h,
+the way the shader manager passes them. The timing interleaves the variants frame by frame (the GPU
+clock drifts by tens of microseconds between sequential runs) and reports the median ms per pass. Timing uses the physical sun, L = 2 tan(0.265 deg).
+getNorm is the benchmark's: it reads the synthetic G-buffer's normal (RGBA32F) instead of decoding the
+viewer's packed one. getPosition is the viewer's (deferredUtil.glsl): a 24 bit depth texture, nearest, and
+inv_proj, so the depth reconstruction of stage S2 (4 neighbour reads) costs and quantises as in the viewer.
+The camera's planes are 0.25 and 256 m.
 
 Checks on the light map (RGBA16F, read back):
   * slanted sun scene: lit ground far from the boxes is 1.0 (for "pcss": no blocker in the
-    search, the early out), ground in the middle of a floating box's shadow is 0.0, "tree"
-    equals "base" bit for bit, and the PCSS shadow edges (averaged along the edge) rise
-    monotonically;
+    search, the early out), ground in the middle of a floating box's shadow is 0.0, "tree" and
+    "legacy" equal "base" (the devel tip) bit for bit, and the PCSS shadow edges (averaged along
+    the edge) rise monotonically;
+  * acne (stage S2): a lit ground plane and a lit wall at sun elevations of 15, 30 and 60 degrees
+    show no pixel below 0.99 with the stage S2 PCSS variants (Legacy is reported);
+  * contact (stage S2): a box standing on the ground at sun elevations of 20, 40 and 60 degrees:
+    the shadow starts at the box's foot within 1.5 map texels plus one screen pixel;
   * penumbra scene (1080p, sun overhead, thin floating boxes): the 10-90 % width of the shadow
     edge across the ground. A disc light of angular size L behind an edge at height h gives a
     penumbra of full width w = h L whose profile is a disc's segment area, 10-90 % = 0.687 w;
@@ -50,8 +64,8 @@ from pathlib import Path
 bootstrap = Path(__file__).with_name('gl_test_context.py').read_text()
 exec(compile(bootstrap, 'gl_test_bootstrap', 'exec'))
 root = Path(__file__).resolve().parents[2]
-# pre-PCSS devel tip (the #294 merge): the last shadowUtil.glsl without PCSS_SHADOW
-BASE_REF = os.environ.get('PCSS_BENCH_BASE_REF', '6ceaf3196c')
+# the devel tip stage S2 was cut from (the #453 merge): the Legacy shadowUtil.glsl it must equal, and today's PCSS
+BASE_REF = os.environ.get('PCSS_BENCH_BASE_REF', 'b9e01a2ca2')
 FRAMES = int(os.environ.get('PCSS_BENCH_FRAMES', 30)); WARMUP = 5
 RESOLUTIONS = [tuple(int(v) for v in r.split('x')) for r in os.environ.get('PCSS_BENCH_RES', '1920x1080,2560x1440').split(',')]
 SHADERS = 'indra/newview/app_settings/shaders/'
@@ -157,14 +171,17 @@ in vec2 vary_fragcoord;
 uniform mat4 inv_proj; uniform mat4 view; uniform mat4 inv_view;
 layout(location = 0) out vec4 out_pos;
 layout(location = 1) out vec4 out_norm;
+uniform mat4 proj;
 %s
 void main()
 {
+    gl_FragDepth = 1.0;
     vec4 p = inv_proj * vec4(vary_fragcoord * 2.0 - 1.0, -1.0, 1.0);
     vec3 dir_v = normalize(p.xyz / p.w);
     vec3 o = (inv_view * vec4(0, 0, 0, 1)).xyz, d = normalize((inv_view * vec4(dir_v, 0)).xyz);
     float t; vec3 n;
-    if (trace(o, d, 1000.0, t, n)) { out_pos = view * vec4(o + d * t, 1.0); out_norm = vec4(normalize((view * vec4(n, 0)).xyz), 0.0); }
+    if (trace(o, d, 1000.0, t, n)) { out_pos = view * vec4(o + d * t, 1.0); out_norm = vec4(normalize((view * vec4(n, 0)).xyz), 0.0);
+        vec4 c = proj * out_pos; gl_FragDepth = c.z / c.w * 0.5 + 0.5; }
     else { out_pos = vec4(dir_v * 1000.0, 1.0); out_norm = vec4(0.0); }
 }
 '''
@@ -186,22 +203,39 @@ void main()
 }
 '''
 STUBS_F = '''#version 430 core
-uniform sampler2D gbuf_pos;
+uniform sampler2D depthMap;
 uniform sampler2D normalMap;
-vec4 getPosition(vec2 pos_screen) { return texture(gbuf_pos, pos_screen); }
+uniform mat4 inv_proj;
+vec4 getPosition(vec2 pos_screen)   // deferredUtil.glsl
+{
+    float depth = texture(depthMap, pos_screen).r;
+    vec4 ndc = vec4(pos_screen * 2.0 - 1.0, 2.0 * depth - 1.0, 1.0);
+    vec4 pos = inv_proj * ndc;
+    pos /= pos.w;
+    pos.w = 1.0;
+    return pos;
+}
 vec4 getNorm(vec2 pos_screen) { return vec4(texture(normalMap, pos_screen).xyz, 0.0); }
 '''
-VARIANTS = ['base', 'tree', 'legacy', 'pcss1', 'pcss']
-VARIANT_DEFINES = {'base': [], 'tree': [], 'legacy': [], 'pcss1': ['PCSS_SHADOW'], 'pcss': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH']}
+# stage S2 constants, as the shader manager passes them (llshadowcascadefit.h is the one source)
+S2_CONSTANTS = {m.group(1): m.group(2) for m in re.finditer(r'constexpr float (SHADOW_\w+) = ([0-9.]+)f;', (root/'indra/newview/llshadowcascadefit.h').read_text())}
+assert set(S2_CONSTANTS) >= {'SHADOW_FOOTPRINT_M', 'SHADOW_BIAS_TEXELS', 'SHADOW_NORMAL_OFFSET_TEXELS', 'SHADOW_PLANE_BIAS_MAX_TEXELS'}, S2_CONSTANTS
+S2_DEFINES = [f'{k}={v}' for k, v in S2_CONSTANTS.items()]
+VARIANTS = ['base', 'tree', 'legacy', 'pcss0', 'pcss1', 'pcss33', 'pcss']
+VARIANT_DEFINES = {'base': [], 'tree': [], 'legacy': [], 'pcss0': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH'],
+                   'pcss1': ['PCSS_SHADOW'] + S2_DEFINES, 'pcss33': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH'] + S2_DEFINES,
+                   'pcss': ['PCSS_SHADOW', 'PCSS_SHADOW_FETCH', 'SHADOW_GATHER'] + S2_DEFINES}
+FROM_REF = ('base', 'pcss0')   # these two use the git ref's shaders, the others the working tree's
+S2_VARIANTS = ('pcss1', 'pcss33', 'pcss')
 
 def git_show(ref, path):
     return subprocess.run(['git', 'show', f'{ref}:{path}'], cwd=root, capture_output=True, text=True, check=True).stdout
 def stage(text, defines):
-    head = '#version 430 core\n#define FRAGMENT_SHADER 1\n' + ''.join(f'#define {d} 1\n' for d in defines)
+    head = '#version 430 core\n#define FRAGMENT_SHADER 1\n' + ''.join('#define ' + (d.replace('=', ' ') if '=' in d else d + ' 1') + '\n' for d in defines)
     return head + text.replace('/*[EXTRA_CODE_HERE]*/', '')
 def sun_program(variant, spot, overrides={}):
-    sun = git_show(BASE_REF, SUN_F) if variant == 'base' else (root/SUN_F).read_text()
-    util = git_show(BASE_REF, UTIL_F) if variant == 'base' else (root/UTIL_F).read_text()
+    sun = git_show(BASE_REF, SUN_F) if variant in FROM_REF else (root/SUN_F).read_text()
+    util = git_show(BASE_REF, UTIL_F) if variant in FROM_REF else (root/UTIL_F).read_text()
     for name, value in overrides.items():
         util, n = re.subn(r'(#define %s\s+)[-0-9.eE]+' % name, r'\g<1>%s' % value, util)
         assert n == 1, name
@@ -232,15 +266,18 @@ class Scene:
     def __init__(self, W, H, boxes, eye, target, sun, spots, clip, fovy=math.radians(60.0)):
         self.W, self.H, self.boxes, self.sun, self.spots_def, self.clip = W, H, boxes, normalize(sun), spots, clip
         self.view = look_at(eye, target); self.inv_view = inverse(self.view)
-        self.proj = perspective(fovy, W / H, 0.5, 512.0); self.fovy = fovy
+        self.proj = perspective(fovy, W / H, 0.25, 256.0); self.fovy = fovy
         self.sw, self.sh = blur_happy(W), blur_happy(H); self.spot_res = W
         glsl = scene_glsl(boxes)
         gprog = program([(0x8B31, VERTEX), (0x8B30, GBUFFER_F % glsl)])
         sprog = program([(0x8B31, VERTEX), (0x8B30, SHADOW_F % glsl)])
         self.gpos = make_tex(0x8814, W, H); self.gnorm = make_tex(0x8814, W, H)
-        self.gfbo = make_fbo([self.gpos, self.gnorm]); viewport(0, 0, W, H); use(gprog)
+        self.gdepth = make_tex(0x81A6, W, H)       # GL_DEPTH_COMPONENT24, nearest, as the viewer's depth buffer
+        self.gfbo = make_fbo([self.gpos, self.gnorm], self.gdepth); viewport(0, 0, W, H); use(gprog)
         set_mat(gprog, 'inv_proj', [inverse(self.proj)]); set_mat(gprog, 'view', [self.view]); set_mat(gprog, 'inv_view', [self.inv_view])
-        draw(4, 0, 3)
+        set_mat(gprog, 'proj', [self.proj])
+        enable(0x0B71); depthfunc(0x0207); depthmask(1)
+        draw(4, 0, 3); disable(0x0B71)
         self.cascades = self.cascade_matrices()
         self.spots = [mmul(perspective(math.radians(60.0), 1.0, 0.1, 20.0), look_at(p, t, (0.0, 0.0, -1.0))) for p, t in spots]
         self.maps = []
@@ -279,8 +316,8 @@ class Scene:
 
     def bind(self, prog, light_size):
         use(prog)
-        units = [('gbuf_pos', self.gpos), ('normalMap', self.gnorm)] + [(f'shadowMap{i}', self.maps[i]) for i in range(6)]
-        units += [(f'shadowDepth{i}', self.maps[i]) for i in (0, 1, 4, 5)]
+        units = [('depthMap', self.gdepth), ('normalMap', self.gnorm)] + [(f'shadowMap{i}', self.maps[i]) for i in range(6)]
+        units += [(f'shadowDepth{i}', self.maps[i]) for i in range(6)]
         for unit, (name, tex) in enumerate(units):
             active(0x84C0 + unit); bindtex(TEX2D, tex); u1i(loc(prog, name.encode()), unit)
             bindsampler(unit, depth_fetch.value if name.startswith('shadowDepth') else 0)
@@ -297,7 +334,7 @@ class Scene:
         bindfbo(FB, self.lfbo); viewport(0, 0, self.W, self.H)
 
     def unbind(self):
-        for unit in range(12): bindsampler(unit, 0)
+        for unit in range(16): bindsampler(unit, 0)
 
     def project(self, point):
         c = mvec(self.proj, mvec(self.view, list(point) + [1.0]))
@@ -314,7 +351,7 @@ class Scene:
         buf = (F*4)(); readpixels(x, y, 1, 1, 0x1908, 0x1406, C.byref(buf)); return list(buf)
     def release(self):
         bindfbo(FB, 0); fbos = (U*2)(self.gfbo, self.lfbo); delfbo(2, fbos)
-        tex = (U*(4 + len(self.maps)))(self.gpos, self.gnorm, self.light_map, 0, *self.maps); deltex(len(tex), tex)
+        tex = (U*(4 + len(self.maps)))(self.gpos, self.gnorm, self.light_map, self.gdepth, *self.maps); deltex(len(tex), tex)
 
 failures = []
 def check(cond, msg, label=''):
@@ -332,17 +369,20 @@ for (W, H) in RESOLUTIONS:
     sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
     images = {}
     for spot in (True, False):
-        for variant in VARIANTS:
-            prog = sun_program(variant, spot); sc.bind(prog, LIGHT_SIZE)
-            samples = []
-            for f in range(WARMUP + FRAMES):
+        progs = {variant: sun_program(variant, spot) for variant in VARIANTS}
+        samples = {variant: [] for variant in VARIANTS}
+        for f in range(WARMUP + FRAMES):         # round robin: every variant sees the same GPU clock
+            for variant in VARIANTS:
+                sc.bind(progs[variant], LIGHT_SIZE)
                 beginq(TIME_ELAPSED, queries[0]); draw(4, 0, 3); endq(TIME_ELAPSED)
                 v = C.c_uint64(); qresult(queries[0], QUERY_RESULT, C.byref(v))
-                if f >= WARMUP: samples.append(v.value / 1e6)
-            finish(); assert geterror() == 0
-            results[(W, H, spot, variant)] = statistics.median(samples)
-            if spot: images[variant] = sc.read_channel(0x1903)
-            sc.unbind(); fn('glDeleteProgram', None, U)(prog)
+                if f >= WARMUP: samples[variant].append(v.value / 1e6)
+                if f == 0 and spot: images[variant] = sc.read_channel(0x1903)
+                sc.unbind()
+        finish(); assert geterror() == 0
+        for variant in VARIANTS:
+            results[(W, H, spot, variant)] = statistics.median(samples[variant])
+            fn('glDeleteProgram', None, U)(progs[variant])
 
     label = f'{W}x{H}: '
     def at(img, x, y): return img[y * W + x]
@@ -358,25 +398,24 @@ for (W, H) in RESOLUTIONS:
         want = 0.0 if p in umbra else 1.0
         for v in VARIANTS:
             r = at(images[v], x, y)
-            exact = v == 'pcss' and want == 1.0     # no blocker in the search: the early out gives exactly 1
+            exact = v in ('pcss', 'pcss33', 'pcss0') and want == 1.0     # no blocker in the search: the early out gives exactly 1
             check(r == want if exact else abs(r - want) < 1e-3, f'{v}: light map R at {p} = {r:.4f}, expected {want}{" exactly" if exact else ""}', label)
-    same = 0 if bytes(images['base']) == bytes(images['tree']) else sum(1 for i in range(W*H) if images['base'][i] != images['tree'][i])
-    # PCSS off differs from the base only by pcfShadow's receiver-plane bias (the altitude-bias
-    # hotfix): on slanted lit surfaces, where the base had acne between the taps
-    check(same <= W * H // 1000, f'tree (PCSS off) equals base except the receiver-plane bias ({same} pixels differ, at most 0.1 %)', label)
-    for v in ('pcss1', 'pcss'):
+    for v in ('tree', 'legacy'):
+        same = 0 if bytes(images['base']) == bytes(images[v]) else sum(1 for i in range(W*H) if images['base'][i] != images[v][i])
+        check(same == 0, f'{v} (Legacy) light map equals the devel tip bit for bit ({same} pixels differ)', label)
+    for v in ('pcss0', 'pcss1', 'pcss33', 'pcss'):
         differ = sum(1 for i in range(W*H) if images['base'][i] != images[v][i])
         print(f'  info {v} differs from base in {differ} of {W*H} pixels')
     # across the right (+x) edge of box 2's shadow at z = -19.6, averaged along z
     lo, hi = TIMING_BOXES[1]
     edge_x = hi[0] - sc.sun[0] / sc.sun[1] * hi[1]
-    for v in ('base', 'legacy', 'pcss1', 'pcss'):
+    for v in ('base', 'legacy', 'pcss0', 'pcss1', 'pcss33', 'pcss'):
         xs = [edge_x - 0.5 + 0.01 * i for i in range(101)]
         prof = [sum(at(images[v], *sc.project((gx, 0.0, -20.2 + 1.2 * zi / 47))) for zi in range(48)) / 48 for gx in xs]
         worst = max(prof[i] - prof[i+1] for i in range(len(prof) - 1))
         lo10 = next(xs[i] for i, p in enumerate(prof) if p >= 0.1); hi90 = next(xs[i] for i, p in enumerate(prof) if p >= 0.9)
         msg = f'{v}: edge profile {prof[0]:.3f} -> {prof[-1]:.3f}, 10-90% width {100*(hi90-lo10):.1f} cm, largest step back {worst:.4f}'
-        if v != 'base': check(worst <= 0.01 and prof[0] < 0.05 and prof[-1] > 0.95, msg + ' (monotonic within 0.01)', label)
+        if v not in ('base', 'legacy'): check(worst <= 0.01 and prof[0] < 0.05 and prof[-1] > 0.95, msg + ' (monotonic within 0.01)', label)
         else: print('  info ' + msg)
     sc.release()
 
@@ -444,13 +483,77 @@ lit = (-6.0, 0.0, -3.0); x, y = sc.project(lit)
 check(red[y * W + x] == 1.0, f'no blocker in the search region (ground {lit}): R = {red[y * W + x]} exactly 1', 'penumbra: ')
 fn('glDeleteProgram', None, U)(prog); sc.release()
 
+# --- stage S2: acne on lit slanted planes, and the shadow starting at a box's foot -------------
+def render_variant(sc, variant, light_size=LIGHT_SIZE, overrides={}):
+    prog = sun_program(variant, False, overrides); sc.bind(prog, light_size)
+    draw(4, 0, 3); finish()
+    img = sc.read_channel(0x1903)
+    sc.unbind(); fn('glDeleteProgram', None, U)(prog)
+    return img
+
+def read_gbuffer(sc):
+    """world position (list of x, y, z) and world normal of every pixel, from the synthetic G-buffer"""
+    out = []
+    for attachment in (0, 1):
+        bindfbo(FB, sc.gfbo); readbuffer(COLOR0 + attachment)
+        buf = (F*(sc.W*sc.H*4))(); readpixels(0, 0, sc.W, sc.H, 0x1908, 0x1406, C.byref(buf)); out.append(buf)
+    return out
+
+ACNE_ANGLES = (15, 30, 60)
+ACNE_VARIANTS = ('legacy', 'pcss0') + S2_VARIANTS
+W, H = RESOLUTIONS[0]
+print(f'\nacne checks at {W}x{H}: lit ground and a lit wall, sun elevation {ACNE_ANGLES}, share of masked pixels below 0.99 in the light map')
+WALL = ((-3.0, 0.0, -10.0), (3.0, 3.0, -9.8))
+for elev in ACNE_ANGLES:
+    e = math.radians(elev)
+    sc = Scene(W, H, [WALL], [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [0.6*math.cos(e), math.sin(e), 0.8*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0))
+    pos, nrm = read_gbuffer(sc)
+    ground, wall = [], []
+    for i in range(W*H):
+        p = pos[4*i:4*i+4]; n = nrm[4*i:4*i+4]
+        if n[0] == 0.0 and n[1] == 0.0 and n[2] == 0.0: continue
+        wp = mvec(sc.inv_view, [p[0], p[1], p[2], 1.0]); wn = mvec(sc.inv_view, [n[0], n[1], n[2], 0.0])
+        if abs(wp[1]) < 0.02 and wn[1] > 0.9 and wp[2] > -9.5 and 3.0 < sc.view_depth(wp[:3]) < 90.0: ground.append(i)
+        elif abs(wp[2] + 9.8) < 0.01 and wn[2] > 0.9 and 0.15 < wp[1] < 2.85 and abs(wp[0]) < 2.8: wall.append(i)
+    check(len(ground) > 10000 and len(wall) > 2000, f'elevation {elev}: {len(ground)} ground and {len(wall)} wall pixels in the masks', 'acne: ')
+    for v in ACNE_VARIANTS:
+        img = render_variant(sc, v)
+        bad_g = sum(1 for i in ground if img[i] < 0.99); bad_w = sum(1 for i in wall if img[i] < 0.99)
+        msg = f'elevation {elev:>2}, {v:<6}: ground {100*bad_g/len(ground):.4f} % and wall {100*bad_w/len(wall):.4f} % of pixels below 0.99'
+        if v in S2_VARIANTS: check(bad_g == 0 and bad_w == 0, msg + ' (none allowed)', 'acne: ')
+        else: print('  info ' + msg)
+    sc.release()
+
+CONTACT_BOX = ((-1.0, 0.0, -6.0), (1.0, 1.5, -4.0))
+print(f'\ncontact checks at {W}x{H}: a box standing on the ground, shadow falling to its right; the shadow starts at the foot')
+for elev in (20, 40, 60):
+    e = math.radians(elev)
+    sc = Scene(W, H, [CONTACT_BOX], [4.0, 8.0, 4.0], [1.0, 0.0, -10.0], [-0.95*math.cos(e), math.sin(e), 0.31*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0))
+    depth = sc.view_depth((1.0, 0.0, -5.3))
+    j = next(k for k in range(4) if depth <= sc.clip[k] * 0.75)
+    m = sc.cascades[j]; ax = math.sqrt(sum(v * v for v in m[0][:3])); ay = math.sqrt(sum(v * v for v in m[1][:3]))
+    texel = max(2.0 / ax / sc.sw, 2.0 / ay / sc.sh)
+    pa, pb = sc.project((1.1, 0.0, -5.3)), sc.project((1.3, 0.0, -5.3)); pixel = 0.2 / max(math.hypot(pb[0]-pa[0], pb[1]-pa[1]), 1e-6)
+    tol = 1.5 * texel + pixel
+    zs = [-5.6 + 0.1 * k for k in range(7)]
+    for v in ('legacy', 'pcss0') + S2_VARIANTS:
+        img = render_variant(sc, v)
+        xs = [1.0 + 0.002 * i for i in range(151)]
+        prof = [sum(img[sc.project((gx, 0.0, gz))[1] * W + sc.project((gx, 0.0, gz))[0]] for gz in zs) / len(zs) for gx in xs]
+        start = next((xs[i] for i, p in enumerate(prof) if p < 0.5), xs[-1]) - 1.0
+        msg = f'elevation {elev}, {v:<6}: cascade {j}, the shadow starts {100*start:.1f} cm from the foot (texel {100*texel:.2f} cm, pixel {100*pixel:.2f} cm, allowed {100*tol:.1f} cm)'
+        if v in S2_VARIANTS: check(start <= tol, msg, 'contact: ')
+        else: print('  info ' + msg)
+    sc.release()
+
 print(f'\nmedian ms per sun light pass, {FRAMES} frames after {WARMUP} warmup; base = {BASE_REF} '
       f'({subprocess.run(["git", "rev-parse", "--short", BASE_REF], cwd=root, capture_output=True, text=True).stdout.strip()})')
-print(f'{"resolution":<12}{"detail":<8}' + ''.join(f'{v:>9}' for v in VARIANTS) + f'{"pcss/base":>11}')
+print(f'{"resolution":<12}{"detail":<8}' + ''.join(f'{v:>9}' for v in VARIANTS) + f'{"pcss-pcss0":>12}{"pcss/legacy":>13}')
 for (W, H) in RESOLUTIONS:
     for spot in (True, False):
         row = [results[(W, H, spot, v)] for v in VARIANTS]
-        print(f'{f"{W}x{H}":<12}{(2 if spot else 1):<8}' + ''.join(f'{t:>9.3f}' for t in row) + f'{row[-1]/row[0]:>10.2f}x')
+        r = dict(zip(VARIANTS, row))
+        print(f'{f"{W}x{H}":<12}{(2 if spot else 1):<8}' + ''.join(f'{t:>9.3f}' for t in row) + f'{r["pcss"] - r["pcss0"]:>+12.3f}{r["pcss"]/r["legacy"]:>12.2f}x')
 gl.wglMakeCurrent(None, None); gl.wglDeleteContext(context); user.ReleaseDC(window, hdc); user.DestroyWindow(window)
 if failures:
     print('\nFAILED:\n' + '\n'.join(failures)); sys.exit(1)

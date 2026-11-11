@@ -9877,14 +9877,14 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
     }
 }
 
-// <Vulkanstorm> PCSS: bind (or release) shadowDepth0/1/4/5, the same depth maps as shadowMap0/1/4/5
+// <Vulkanstorm> PCSS: bind (or release) shadowDepth0-5, the same depth maps as shadowMap0-5
 // on their own units with the depth fetch sampler, so the shader can read raw depth there while
 // the compare sampler stays on shadowMapN. Programs without these uniforms are left untouched.
 void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
 {
-    static const S32 maps[4] = { 0, 1, 4, 5 };
+    static const S32 maps[6] = { 0, 1, 2, 3, 4, 5 };
     const U32 sampler = bind ? gGL.getDepthFetchSampler() : 0;
-    for (S32 k = 0; k < 4; ++k)
+    for (S32 k = 0; k < 6; ++k)
     {
         const S32 uniform = LLShaderMgr::DEFERRED_SHADOW_DEPTH0 + k;
         if (bind)
@@ -12256,8 +12256,8 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         // set of visible objects: a caster can shadow a pixel of this cascade only if its
         // light-space footprint overlaps the slice's (the shader picks the cascade by the
         // pixel's view depth, inside this slice), so the cull box is the stable box narrowed
-        // to the slice corners' light-space bounds plus 16 texels (filter kernels) and 5 cm
-        // (shadow_offset), from the slice's far side up to the light. Only which casters
+        // to the slice corners' light-space bounds plus a margin (casterCullMargin: 16 texels, or the
+        // filter footprint, plus the normal offset), from the slice's far side up to the light. Only which casters
         // are drawn depends on the view, never where the map sits.
         glm::mat4 cull_proj = proj[j];
         {
@@ -12269,7 +12269,11 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
                 lo = glm::min(lo, q);
                 hi = glm::max(hi, q);
             }
-            const F32 margin = 16.f * (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f) + 0.05f;
+            // <Vulkanstorm> S2: every caster within the filter footprint (SHADOW_FOOTPRINT_M, the one
+            // radius the shaders' filters also stay inside) and the sample's normal offset
+            const F32 texel_m = (box.max_x - box.min_x) / llmax((F32)mRT->shadow[j].getWidth(), 1.f);
+            const F32 margin = LLShadowCascadeFit::casterCullMargin(texel_m, LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS * texel_m);
+            // </Vulkanstorm>
             const F32 cx0 = llmax(box.min_x, lo.x - margin), cx1 = llmin(box.max_x, hi.x + margin);
             const F32 cy0 = llmax(box.min_y, lo.y - margin), cy1 = llmin(box.max_y, hi.y + margin);
             const F32 cz0 = llmax(depth.z_min, lo.z - margin);

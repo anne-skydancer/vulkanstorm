@@ -127,6 +127,33 @@ namespace LLShadowCascadeFit
         return { cz - r, cz + r + headroom * r };
     }
 
+    // Stage S2, shared by the PCSS and the Stochastic shadow methods (never by Legacy). The shader
+    // manager passes these to the shaders as defines (SHADOW_FOOTPRINT_M and the others, same names),
+    // so the constants live only here.
+    //   - SHADOW_FOOTPRINT_M: how far a modern method's filter may reach from the receiver, metres. It
+    //     is also the caster cull guard (casterCullMargin): a caster that can reach a pixel's filter is
+    //     always drawn into the cascade. One radius for both, so they cannot drift apart.
+    //   - SHADOW_BIAS_TEXELS: the constant depth bias, in texels of the cascade at the pixel, which the
+    //     shader converts with the map's depth scale: the same length in metres in every cascade.
+    //   - SHADOW_NORMAL_OFFSET_TEXELS: the sample position moves along the surface's geometric normal by
+    //     this many texels times sin(angle to the light).
+    //   - SHADOW_PLANE_BIAS_MAX_TEXELS: the receiver-plane bias of one tap never exceeds this many
+    //     texels (a plane edge-on to the light has no usable slope).
+    constexpr float SHADOW_FOOTPRINT_M = 0.25f;
+    constexpr float SHADOW_BIAS_TEXELS = 1.0f;
+    constexpr float SHADOW_NORMAL_OFFSET_TEXELS = 1.0f;
+    constexpr float SHADOW_PLANE_BIAS_MAX_TEXELS = 8.0f;
+
+    // Width of the border, metres, around a cascade's slice inside which casters are still drawn into
+    // the cascade: the larger of 16 texels (the filter kernels of the wide cascades) and the footprint
+    // plus a texel (the bilinear tap at its edge), plus the normal offset of the sample position.
+    inline float casterCullMargin(float texel_m, float normal_offset_m)
+    {
+        const float kernel = 16.f * texel_m;
+        const float footprint = SHADOW_FOOTPRINT_M + texel_m;
+        return (kernel > footprint ? kernel : footprint) + normal_offset_m;
+    }
+
     // The shadow distance takes only the steps 32, 64, ... 256 m: any other value (an older
     // setting, a preset, the debug settings) is rounded to the nearest step and clamped.
     constexpr float SHADOW_DISTANCE_STEP = 32.f;
