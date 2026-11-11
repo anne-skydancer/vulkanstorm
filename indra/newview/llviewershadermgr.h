@@ -224,6 +224,10 @@ extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accu
 extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (the default on every device)
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>
+// <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method
+extern LLGLSLShader         gShadowStochasticResolveProgram;
+extern LLGLSLShader         gShadowStochasticComposeProgram;
+// </Vulkanstorm>
 
 // Deferred rendering shaders
 extern LLGLSLShader         gDeferredImpostorProgram;

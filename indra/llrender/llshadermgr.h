@@ -34,8 +34,13 @@
 // objects (the same file with PCSS_SHADOW defined); see LLViewerShaderMgr::loadBasicShaders
 #define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
 // <Vulkanstorm> the Stochastic shadow method's own shadow util; when it is built (RenderShadowMethod 2)
-// every program that links a shadow util takes it instead of deferred/shadowUtil.glsl
+// every program that links a shadow util takes it instead of deferred/shadowUtil.glsl, with the
+// method-neutral block of shadowUtil.glsl built alone (SHADOW_COMMON_ONLY) next to it: the
+// programs with the STOCHASTIC_SHADOW_SUN permutation (the deferred sun programs, which have the
+// depth buffer behind them) take the build that reads it, the others the one that does not
 #define STOCHASTIC_SHADOW_UTIL "deferred/shadowStochasticUtil.glsl"
+#define STOCHASTIC_SHADOW_COMMON_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON_NO_DEPTH"
+#define STOCHASTIC_SHADOW_COMMON_DEPTH_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON"
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
 #define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (the default on every device)
@@ -410,6 +415,11 @@ public:
         MOON_GLOW_NORM,                     //  "moon_glow_norm"
         MOON_GLOW_FACTOR,                   //  "moon_glow_factor"
         MOON_HALO_WEIGHT,                   //  "moon_halo_weight"
+        // </Vulkanstorm>
+        // <Vulkanstorm> the Stochastic shadow method's temporal resolve (deferred/shadowStochasticResolveF.glsl)
+        SHADOW_ST_RAW,                      //  "shadow_st_raw"
+        SHADOW_ST_HISTORY,                  //  "shadow_st_history"
+        SHADOW_ST_RESOLVED,                 //  "shadow_st_resolved"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;

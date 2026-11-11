@@ -41,13 +41,21 @@ class StochasticShaderIsolation(unittest.TestCase):
         self.assertIsNone(re.search(r'pcss', code, re.I), 'the Stochastic util must not use PCSS code or defines')
         self.assertNotIn('SHADOW_MODERN', code)
 
-    def test_stochastic_defines_are_not_the_groundwork_defines(self):
+    def test_stochastic_build_has_no_pcss_or_modern_defines(self):
         mgr = (NEWVIEW / 'llviewershadermgr.cpp').read_text()
-        block = mgr[mgr.index('if (use_stochastic_shadows())'):]
-        block = block[:block.index('// </Vulkanstorm>')]
-        for bad in ('PCSS_', 'SHADOW_GATHER', 'SHADOW_MODERN', 'SHADOW_FOOTPRINT'):
-            self.assertNotIn(bad, block)
+        for start in ('attribs["SHADOW_UTIL_STOCHASTIC"]', 'mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_UTIL)'):
+            block = mgr[mgr.index(start):]
+            block = block[:block.index('// </Vulkanstorm>')]
+            for bad in ('PCSS_', 'SHADOW_GATHER', 'SHADOW_MODERN'):
+                self.assertNotIn(bad, block)
+            self.assertNotIn('SHADOW_MODERN', block)
 
+    def test_common_block_is_attached_with_the_util(self):
+        mgr = (ROOT / 'indra/llrender/llshadermgr.cpp').read_text()
+        block = mgr[mgr.index('STOCHASTIC_SHADOW_COMMON_DEPTH_KEY'):]
+        block = block[:block.index('else')]
+        self.assertIn('attachFragmentObject(common)', block)
+        self.assertIn('attachFragmentObject(STOCHASTIC_SHADOW_UTIL)', block)
 
 if __name__ == '__main__':
     unittest.main()
