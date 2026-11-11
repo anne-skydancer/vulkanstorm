@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Stage L2 of the light study: the cloud shadow map against the sky, and its cost, offline (no viewer).
+"""Stages L2 and L2b of the light study: the cloud shadow map against the sky, its optics and its cost, offline (no viewer).
 
 The viewer's own shaders are compiled in a hidden OpenGL context, unmodified:
 
@@ -12,14 +12,21 @@ The viewer's own shaders are compiled in a hidden OpenGL context, unmodified:
          coordinates of the map come from the formulas of indra/newview/llcloudshadow.h (written
          here again in Python from the dome's geometry), so the altitude fade of the C++ unit is
          tested against the vertex shader too. 60 random cases, a camera anywhere within 300 km.
+         Stage L2b: the map is RG8, R the direct beam and G the diffuse light of the flat layer's
+         optics (indra/newview/llcloudoptics.h). The check runs the shader with neutral optics (R =
+         1 - alpha, the L2 check) and with the real ones against a Python mirror whose constants are
+         parsed from the header (<= 1e-5); clear texels are exactly (1, 0); strength 0 and a map of
+         T = 1 give the pixels of the lookup before the stage, bit for bit, in classic mode 0 and 1;
+         and the beam multiplies the LINEAR light: a map of 0.5 leaves 0.5 of the sun's and of a dim
+         moon's light alike.
 
-  bench  GL_TIME_ELAPSED medians (RTX-class GPU, GL 4.6): the map's pass (512x512, R8, with the mip
-         chain), and the lookup, a 1920x1080 and a 2560x1440 pass running the viewer's
+  bench  GL_TIME_ELAPSED medians (RTX-class GPU, GL 4.6): the map's pass (512x512, RG8, with the mip
+         chain; and devel's, R8), and the lookup, a 1920x1080 and a 2560x1440 pass running the viewer's
          calcAtmosphericVarsLinear (atmosphericsFuncs.glsl) with the cloud shadow lookup at
          full strength against the same pass with the strength at 0 and against the same pass
          with the file as it was before the stage (git ref CLOUD_BENCH_BASE_REF, default
          origin/vkstorm-devel). The stage's gate is the map plus the lookups <= 0.05 ms at
-         1080p, and 0 with no clouds.
+         1080p and at most +0.002 ms against the base ref's map and lookups, and 0 with no clouds.
 
     python scripts/light/check_cloud_shadow.py [--check] [--bench]     (both by default)
 
@@ -66,6 +73,36 @@ genq = fn('glGenQueries', None, I, C.POINTER(U)); beginq = fn('glBeginQuery', No
 qresult = fn('glGetQueryObjectui64v', None, U, U, C.POINTER(C.c_uint64)); finish = fn('glFinish', None)
 geterror = fn('glGetError', U)
 R = 15000.0; OFFSET = 0.96
+
+
+def optics_constants():
+    """The constants of llcloudoptics.h (the single source), parsed from the header."""
+    import re
+    names = {}
+    text = (ROOT / 'indra' / 'newview' / 'llcloudoptics.h').read_text()
+    for m in re.finditer(r'constexpr\s+double\s+(\w+)\s*=\s*([^;]+);', text):
+        names[m.group(1)] = eval(m.group(2), {}, dict(names))
+    return names
+
+
+OPT = optics_constants()
+
+
+def optics_mirror(alpha, tau_v):
+    """llcloudoptics.h in Python: (beam, diffuse) of a layer drawn with opacity alpha."""
+    tau = -tau_v * math.log(max(1.0 - alpha, OPT['ALPHA_STEP']))
+    beam = math.exp(-(1.0 - OPT['F_PEAK']) * tau)
+    total = 1.0 / (1.0 + OPT['EDDINGTON_TOTAL'] * (1.0 - OPT['G_WATER']) * tau)
+    return beam, max(total - beam, 0.0)
+
+
+def set_optics(prog, tau_v=None, probe=False):
+    """ctm_optics = (tau_v, 1 - g^2, 3/4 (1 - g), alpha step), as LLCloudShadowMap sets it; the probe is neutral: R = 1 - alpha."""
+    if probe:
+        u(prog, 'ctm_optics', 1.0, 1.0, 0.0, 1e-12)
+    else:
+        u(prog, 'ctm_optics', tau_v if tau_v is not None else OPT['DEFAULT_VISUAL_DEPTH'], 1.0 - OPT['F_PEAK'],
+          OPT['EDDINGTON_TOTAL'] * (1.0 - OPT['G_WATER']), OPT['ALPHA_STEP'])
 
 EXTRA = ("#define GBUFFER_FLAG_SKIP_ATMOS 0.0\n#define FRAGMENT_SHADER 1\n")
 
@@ -178,7 +215,7 @@ def check():
     na, nb = noise_texture(1), noise_texture(2)
     tsky, fsky = target(1, 1); tmap, fmap = target(1, 1)
     rnd = random.Random(20261108)
-    worst = 0.0; cases = 0; informative = 0
+    worst = 0.0; cases = 0; informative = 0; worst_opt = 0.0; clear_cases = 0; clear_bad = 0
     for case in range(60):
         L = random_dir(rnd, 0.0 if case % 5 == 0 else 0.03)
         cam = (rnd.uniform(-300000, 300000), rnd.uniform(-300000, 300000))
@@ -230,14 +267,41 @@ def check():
         bindfbo(0x8D40, fmap); viewport(0, 0, 1, 1); useprog(mp)
         u(mp, 'ctm_tc0', *tc_layer); u(mp, 'ctm_tc_span', 0.0, 0.0); u(mp, 'ctm_altitude_blend', alt)
         common(mp)
+        set_optics(mp, probe=True)
         draw(4, 0, 3)
         t_map = read_pixel(tmap)[0]
-        err = abs(alpha_sky - (1.0 - t_map))
+        alpha_map = 1.0 - t_map
+        # the real optics on the same drawn opacity: R = beam, G = diffuse, against the mirror
+        tau_v = rnd.choice([OPT['DEFAULT_VISUAL_DEPTH'], 3.0, 15.0])
+        set_optics(mp, tau_v)
+        common(mp)   # read_pixel bound the target on unit 0
+        draw(4, 0, 3)
+        px = read_pixel(tmap)
+        want = optics_mirror(alpha_map, tau_v)
+        worst_opt = max(worst_opt, abs(px[0] - want[0]), abs(px[1] - want[1]))
+        if t_map == 1.0:
+            clear_cases += 1
+            if px[0] != 1.0 or px[1] != 0.0:
+                clear_bad += 1
+        err = abs(alpha_sky - alpha_map)
         worst = max(worst, err); cases += 1; informative += 1 if 0.02 < alpha_sky < 0.98 else 0
         if err > 2e-3:
             print(f'case {case}: sky alpha1 {alpha_sky:.5f} map 1-T {1 - t_map:.5f} err {err:.2e} L {L} cam {cam} scale {scale:.3f}')
     print(f'check: {cases} cases, {informative} with a partly covered sky, worst |alpha1 - (1 - T)| = {worst:.2e}')
-    ok = worst <= 2e-3 and informative >= 15
+    print(f'check: optics, shader against the mirror of llcloudoptics.h: worst |R, G error| = {worst_opt:.2e} (gate 1e-5)')
+    # clear texels are exactly (1, 0): the altitude fade at 0 clears the layer
+    bindfbo(0x8D40, fmap); viewport(0, 0, 1, 1); useprog = fn('glUseProgram', None, U); useprog(mp)
+    u(mp, 'ctm_tc0', 0.3, 0.7); u(mp, 'ctm_tc_span', 0.0, 0.0); u(mp, 'ctm_altitude_blend', 0.0)
+    u(mp, 'cloud_scale', 0.4); u(mp, 'cloud_shadow', 0.5); u(mp, 'cloud_variance', 0.3)
+    u(mp, 'cloud_pos_density1', 1.0, 1.0, 1.0); u(mp, 'cloud_pos_density2', 1.0, 1.0, 0.125); u(mp, 'blend_factor', 0.0)
+    u(mp, 'lightnorm', 0.3, 0.8, 0.5); u(mp, 'cloud_noise_texture', 0); u(mp, 'cloud_noise_texture_next', 1)
+    active(0x84C0); bindtex(TEX2D, na); active(0x84C1); bindtex(TEX2D, nb); active(0x84C0)
+    set_optics(mp)
+    draw(4, 0, 3)
+    px = read_pixel(tmap)
+    clear_ok = px[0] == 1.0 and px[1] == 0.0 and clear_bad == 0
+    print(f'check: a clear texel is exactly (R, G) = ({px[0]!r}, {px[1]!r}); {clear_cases} clear texels among the cases, {clear_bad} not exact:', 'ok' if clear_ok else 'FAILED')
+    ok = worst <= 2e-3 and informative >= 15 and worst_opt <= 1e-5 and clear_ok
     print('check:', 'OK' if ok else 'FAILED')
     return ok
 
@@ -260,7 +324,7 @@ def check_strength():
     head = "#version 400 compatibility" + chr(10) + "#define FRAGMENT_SHADER 1" + chr(10)
     fill = build(LOOKUP_VS, head + STRENGTH_FILL)
     look = build(LOOKUP_VS, head + read('class1/environment/srgbF.glsl') + read('class1/windlight/atmosphericsFuncs.glsl') + STRENGTH_MAIN)
-    tmap, fmap = target(512, 512, 0x8229, mips=True)
+    tmap, fmap = target(512, 512, 0x822B, mips=True)   # GL_RG8
     tout, fout = target(1, 1)
     bindfbo(0x8D40, fmap); viewport(0, 0, 512, 512); useprog(fill); draw(4, 0, 3)
     bindtex(TEX2D, tmap); genmip(TEX2D)
@@ -283,6 +347,102 @@ def check_strength():
     mixed = 'return mix(1.0, shadow, primary_shadow_strength);' in src
     print('check: shadowUtil mixes the sun shadow with primary_shadow_strength:', 'ok' if mixed else 'FAILED')
     return ok and mixed
+
+
+# --- stage L2b: identity when off, and the beam multiplies linear light ------------------------
+CONST_FILL = """
+uniform float value;
+layout(location = 0) out vec4 out_a;
+void main() { out_a = vec4(value, 0.0, 0.0, 1.0); }
+"""
+SUNLIT_MAIN = """
+uniform vec3 probe_light;
+layout(location = 0) out vec4 out_a;
+void main() {
+    vec3 sunlit, amblit, additive, atten;
+    calcAtmosphericVarsLinear(vec3(10.0, -5.0, -80.0), vec3(0.0, 1.0, 0.0), normalize(vec3(0.3, 0.8, 0.5)), sunlit, amblit, additive, atten);
+    out_a = vec4(sunlit, 1.0);
+}
+"""
+
+
+def base_atmospherics():
+    base_ref = os.environ.get('CLOUD_BENCH_BASE_REF', 'origin/vkstorm-devel')
+    return subprocess.run(['git', 'show', base_ref + ':indra/newview/app_settings/shaders/class1/windlight/atmosphericsFuncs.glsl'],
+                          cwd=ROOT, capture_output=True, text=True, check=True, env=dict(os.environ, MSYS2_ARG_CONV_EXCL='*')).stdout
+
+
+def set_lookup(prog, **over):
+    for k, v in {**DEFAULT_UNIFORMS, **over}.items():
+        u(prog, k, *(v if isinstance(v, tuple) else (v,)))
+
+
+def read_all(t, w, h):
+    bindtex(TEX2D, t); buf = (F * (w * h * 4))(); getteximage(TEX2D, 0, 0x1908, 0x1406, buf); return bytes(buf)
+
+
+def check_lookup():
+    useprog = fn('glUseProgram', None, U)
+    head = "#version 400 compatibility" + chr(10) + "#define FRAGMENT_SHADER 1" + chr(10)
+    fill = build(LOOKUP_VS, head + CONST_FILL)
+    new = lookup_program(read('class1/windlight/atmosphericsFuncs.glsl')); old = lookup_program(base_atmospherics())
+    tmap, fmap = target(512, 512, 0x822B, mips=True)   # GL_RG8
+    ok = True
+
+    def fill_map(value):
+        bindfbo(0x8D40, fmap); viewport(0, 0, 512, 512); useprog(fill); u(fill, 'value', value); draw(4, 0, 3)
+        bindtex(TEX2D, tmap); genmip(TEX2D)
+
+    def render(prog, w, h, t, f, strength, **over):
+        bindfbo(0x8D40, f); viewport(0, 0, w, h); useprog(prog)
+        set_lookup(prog, **over); u(prog, 'screen', float(w), float(h))
+        if strength is not None:
+            u(prog, 'cloud_shadow_params', strength, 0.0, 0.0625, 0.8)
+            m = (F * 16)(1.0 / 600.0, 0, 0, 0, 0, 1.0 / 300.0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 1)
+            um4(loc(prog, b'cloud_shadow_mat'), 1, 0, m)
+            u(prog, 'cloud_shadow_map', 0)
+            active(0x84C0); bindtex(TEX2D, tmap)
+        draw(4, 0, 3)
+        return read_all(t, w, h)
+
+    # (c) strength 0, and a map of T = 1, give the pixels of the lookup before the stage, bit for bit
+    w, h = 256, 144
+    t, f = target(w, h)
+    fill_map(1.0)
+    for classic in (0, 1):
+        before = render(old, w, h, t, f, None, classic_mode=classic)
+        off = render(new, w, h, t, f, 0.0, classic_mode=classic)
+        full = render(new, w, h, t, f, 1.0, classic_mode=classic)
+        good = before == off and before == full
+        ok = ok and good
+        print(f'check: classic_mode {classic}: strength 0 and a map of T = 1 are bit-identical to the lookup before the stage:', 'ok' if good else 'FAILED')
+
+    # (e) the beam multiplies the LINEAR light: a map of 0.5 leaves 0.5 of the sun's and of a dim moon's light alike
+    probe = build(LOOKUP_VS, head + read('class1/environment/srgbF.glsl') + read('class1/windlight/atmosphericsFuncs.glsl') + SUNLIT_MAIN)
+    to, fo = target(1, 1)
+    fill_map(0.5)
+    allr = []   # the map is 8 bit: 0.5 is stored as 127/255 or 128/255
+    for name, light in (('sun', (0.9, 0.85, 0.8)), ('dim', (0.2, 0.2, 0.3)), ('moon', (0.06, 0.07, 0.1))):
+        a = read_all(to, 1, 1)
+        for strength in (0.0, 1.0):
+            bindfbo(0x8D40, fo); viewport(0, 0, 1, 1); useprog(probe)
+            set_lookup(probe, primary_light_color=light, classic_mode=0, sky_sunlight_scale=1.0)
+            u(probe, 'cloud_shadow_params', strength, 0.0, 0.0625, 0.8)
+            m = (F * 16)(1.0 / 600.0, 0, 0, 0, 0, 1.0 / 300.0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 1)
+            um4(loc(probe, b'cloud_shadow_mat'), 1, 0, m); u(probe, 'cloud_shadow_map', 0)
+            active(0x84C0); bindtex(TEX2D, tmap)
+            draw(4, 0, 3)
+            px = read_pixel(to)
+            if strength == 0.0:
+                ref = px
+            else:
+                ratios = [px[i] / ref[i] for i in range(3)]
+                allr += ratios
+                print(f'check: {name} light: sunlit with a map of 0.5 / without = {ratios[0]:.5f} {ratios[1]:.5f} {ratios[2]:.5f} (0.5, 8 bit)')
+    good = all(abs(r - 0.5) <= 0.5 / 255 for r in allr) and max(allr) - min(allr) < 1e-5
+    ok = ok and good
+    print('check: the beam multiplies linear light, the same for every light:', 'ok' if good else 'FAILED')
+    return ok
 
 
 # --- cost ------------------------------------------------------------------------------------
@@ -327,34 +487,40 @@ def bench():
     def median(work):
         return statistics.median([timed(work) for _ in range(WARMUP + FRAMES)][WARMUP:])
 
+    def git_show(rel):
+        base_ref = os.environ.get('CLOUD_BENCH_BASE_REF', 'origin/vkstorm-devel')
+        return subprocess.run(['git', 'show', base_ref + ':indra/newview/app_settings/shaders/class1/' + rel],
+                              cwd=ROOT, capture_output=True, text=True, check=True, env=dict(os.environ, MSYS2_ARG_CONV_EXCL='*')).stdout
+
     na, nb = noise_texture(1), noise_texture(2)
-    mp = build(MAP_VS, MAP_FS)
-    tmap, fmap = target(512, 512, 0x8229, mips=True)   # GL_R8
-    bindtex(TEX2D, tmap)
+    mp_new = build(MAP_VS, MAP_FS)
+    mp_old = build(MAP_VS, "#version 400 compatibility\n" + EXTRA + git_show('deferred/cloudShadowMapF.glsl').replace('/*[EXTRA_CODE_HERE]*/', ''))
+    tmap, fmap = target(512, 512, 0x822B, mips=True)   # GL_RG8
+    tmap_old, fmap_old = target(512, 512, 0x8229, mips=True)   # GL_R8, as the base ref has it
     useprog = fn('glUseProgram', None, U)
 
-    def map_pass():
-        bindfbo(0x8D40, fmap); viewport(0, 0, 512, 512); useprog(mp)
-        u(mp, 'cloud_scale', 0.42); u(mp, 'cloud_shadow', 0.45); u(mp, 'cloud_variance', 0.4); u(mp, 'cloud_pos_density1', 1.7, 0.5, 1.0)
-        u(mp, 'cloud_pos_density2', 1.7, 0.5, 0.125); u(mp, 'blend_factor', 0.3); u(mp, 'lightnorm', 0.3, 0.8, 0.5)
-        u(mp, 'ctm_tc0', -1.0, 0.2); u(mp, 'ctm_tc_span', 0.0065, -0.0065); u(mp, 'ctm_altitude_blend', 1.0)
-        u(mp, 'cloud_noise_texture', 0); u(mp, 'cloud_noise_texture_next', 1)
+    def map_pass(prog, fbo, tex):
+        bindfbo(0x8D40, fbo); viewport(0, 0, 512, 512); useprog(prog)
+        set_optics(prog)
+        u(prog, 'cloud_scale', 0.42); u(prog, 'cloud_shadow', 0.45); u(prog, 'cloud_variance', 0.4); u(prog, 'cloud_pos_density1', 1.7, 0.5, 1.0)
+        u(prog, 'cloud_pos_density2', 1.7, 0.5, 0.125); u(prog, 'blend_factor', 0.3); u(prog, 'lightnorm', 0.3, 0.8, 0.5)
+        u(prog, 'ctm_tc0', -1.0, 0.2); u(prog, 'ctm_tc_span', 0.0065, -0.0065); u(prog, 'ctm_altitude_blend', 1.0)
+        u(prog, 'cloud_noise_texture', 0); u(prog, 'cloud_noise_texture_next', 1)
         active(0x84C0); bindtex(TEX2D, na); active(0x84C1); bindtex(TEX2D, nb); active(0x84C0)
         draw(4, 0, 3)
-        bindtex(TEX2D, tmap); genmip(TEX2D)
-    build_ms = median(map_pass)
-    print(f'map build 512x512 R8 + mips: {build_ms:.4f} ms')
+        bindtex(TEX2D, tex); genmip(TEX2D)
+    # alternate the two so a clock drift hits both alike
+    build_ms = median(lambda: map_pass(mp_new, fmap, tmap))
+    build_old_ms = median(lambda: map_pass(mp_old, fmap_old, tmap_old))
+    print(f'map build 512x512 + mips: RG8 with the optics {build_ms:.4f} ms; base ref (R8) {build_old_ms:.4f} ms; delta {build_ms - build_old_ms:+.4f} ms')
 
-    base_ref = os.environ.get('CLOUD_BENCH_BASE_REF', 'origin/vkstorm-devel')
-    base_funcs = subprocess.run(['git', 'show', base_ref + ':indra/newview/app_settings/shaders/class1/windlight/atmosphericsFuncs.glsl'],
-                                cwd=ROOT, capture_output=True, text=True, check=True, env=dict(os.environ, MSYS2_ARG_CONV_EXCL='*')).stdout
-    new = lookup_program(read('class1/windlight/atmosphericsFuncs.glsl')); old = lookup_program(base_funcs)
-    ident = (F * 16)(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+    new = lookup_program(read('class1/windlight/atmosphericsFuncs.glsl')); old = lookup_program(git_show('windlight/atmosphericsFuncs.glsl'))
     print('lookup, ms per pass (median of %d), calcAtmosphericVarsLinear on every pixel:' % FRAMES)
-    print(f'{"size":>10} {"before the stage":>17} {"strength 0":>11} {"strength 1":>11} {"lookup (1 - 0)":>15} {"no clouds (0 - before)":>23}')
+    print(f'{"size":>10} {"before the stage":>17} {"strength 0":>11} {"strength 1":>11} {"lookup (1 - 0)":>15} {"no clouds (0 - before)":>23} {"base ref, strength 1":>21}')
+    total = total_old = 0.0
     for w, h in ((1920, 1080), (2560, 1440)):
         t, f = target(w, h); results = {}
-        for name, prog, strength in (('before', old, None), ('off', new, 0.0), ('on', new, 1.0)):
+        for name, prog, strength, tex in (('before', old, None, tmap_old), ('off', new, 0.0, tmap), ('on', new, 1.0, tmap), ('old_on', old, 1.0, tmap_old)):
             def work():
                 bindfbo(0x8D40, f); viewport(0, 0, w, h); useprog(prog)
                 for k, v in DEFAULT_UNIFORMS.items():
@@ -366,16 +532,20 @@ def bench():
                     m = (F * 16)(1.0 / 600.0, 0, 0, 0, 0, 1.0 / 300.0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 1)
                     um4(l, 1, 0, m)
                     u(prog, 'cloud_shadow_map', 0)
-                    active(0x84C0); bindtex(TEX2D, tmap)
+                    active(0x84C0); bindtex(TEX2D, tex)
                 draw(4, 0, 3)
             results[name] = median(work)
-        print(f'{w}x{h:>5} {results["before"]:>17.4f} {results["off"]:>11.4f} {results["on"]:>11.4f} {results["on"] - results["off"]:>15.4f} {results["off"] - results["before"]:>23.4f}')
+        print(f'{w}x{h:>5} {results["before"]:>17.4f} {results["off"]:>11.4f} {results["on"]:>11.4f} {results["on"] - results["off"]:>15.4f} {results["off"] - results["before"]:>23.4f} {results["old_on"]:>21.4f}')
         if h == 1080:
             total = build_ms + max(0.0, results['on'] - results['before'])
-    print(f'1080p, map + lookups with clouds: {total:.4f} ms (gate 0.05 ms); with no clouds the map pass does not run and the lookup branch is off (see "no clouds")')
+            total_old = build_old_ms + max(0.0, results['old_on'] - results['before'])
+    ok = total <= 0.05 and total - total_old <= 0.002
+    print(f'1080p, map + lookups with clouds: {total:.4f} ms (gate 0.05 ms); the base ref\'s: {total_old:.4f} ms; delta {total - total_old:+.4f} ms (gate +0.002 ms):', 'ok' if ok else 'FAILED')
+    print('with no clouds the map pass does not run and the lookup branch is off ("no clouds" column)')
+    return ok
 
 
-if DO_CHECK and not (check() and check_strength()):
+if DO_CHECK and not (check() and check_strength() and check_lookup()):
     sys.exit(1)
-if DO_BENCH:
-    bench()
+if DO_BENCH and not bench():
+    sys.exit(1)

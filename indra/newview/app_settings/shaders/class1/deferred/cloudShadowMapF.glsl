@@ -31,6 +31,8 @@ uniform vec3 lightnorm;
 uniform vec2 ctm_tc0;
 uniform vec2 ctm_tc_span;
 uniform float ctm_altitude_blend;
+// L2b (llcloudoptics.h): (tau_v, 1 - g^2, 3/4 (1 - g), the drawn opacity's step)
+uniform vec4 ctm_optics;
 
 vec4 cloudNoise(vec2 uv)
 {
@@ -43,7 +45,7 @@ void main()
 {
     if (cloud_scale < 0.001)
     {
-        frag_color = vec4(1.0);
+        frag_color = vec4(1.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -82,5 +84,11 @@ void main()
     alpha1 *= ctm_altitude_blend;
     alpha1 = clamp(alpha1, 0.0, 1.0);
 
-    frag_color = vec4(1.0 - alpha1);
+    // L2b (llcloudoptics.h): the drawn opacity as an optical depth, then the light that gets through:
+    // R the direct beam (what casts the shadow), G the diffuse light under the cloud (total - beam).
+    // A clear texel is exactly (1, 0).
+    float tau = -ctm_optics.x * log(max(1.0 - alpha1, ctm_optics.w));
+    float t_beam = exp(-ctm_optics.y * tau);
+    float t_total = 1.0 / (1.0 + ctm_optics.z * tau);
+    frag_color = vec4(t_beam, max(t_total - t_beam, 0.0), 0.0, 1.0);
 }
