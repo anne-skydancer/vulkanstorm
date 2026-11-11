@@ -27,11 +27,13 @@
 class LLGLSLShader;
 
 // The stochastic engine is shared by the producers that sample stochastically and accumulate over
-// the frames: stochastic transparency now (doc/oit/stochastic-transparency.md), the Stochastic
-// shadow method later. Its GLSL half is deferred/stochasticSampleF.glsl (the hash, the per-frame
-// seed, the mask lookup in the table below) and deferred/stochasticResolveUtilF.glsl (the temporal
-// resolve); a producer adds its own stoch_current() and main(). Its C++ half is this file: the
-// S = 8 mask table, textures counted in the viewer's texture memory, and LLStochasticHistory.
+// the frames: stochastic transparency (doc/oit/stochastic-transparency.md) and the Stochastic shadow
+// method (doc/shadows/shadow-method.md). Its GLSL half is deferred/stochasticSampleF.glsl (the hash,
+// the per-frame seed, the mask lookup in the table below: the transparency's) and
+// deferred/stochasticResolveUtilF.glsl (the temporal resolve, shared); a producer adds its own
+// stoch_current() and main(). The shadows' rays have their own noise; they take the history, the
+// reprojection and the clamp from here. Its C++ half is this file: the S = 8 mask table, textures counted
+// in the viewer's texture memory, and LLStochasticHistory.
 //
 // Main render thread only: everything here is made, used and freed by LLPipeline (the screen
 // buffer allocation and release, the alpha pool's passes, shiftObjects).
@@ -93,7 +95,7 @@ namespace LLStochasticEngine
 class LLStochasticHistory
 {
 public:
-    // format: GL_RGBA16F for the transparency. weight: this producer's blend weight of the current frame.
+    // format: GL_RGBA16F for the transparency and the shadows. weight: this producer's blend weight of the current frame.
     explicit LLStochasticHistory(GLenum format, F32 weight = 1.f / 8.f) : mFormat(format), mWeight(weight) {}
     // no GL in the destructor (the pipeline is a global that outlives the context): release() first;
     // the destructor warns if it was not
