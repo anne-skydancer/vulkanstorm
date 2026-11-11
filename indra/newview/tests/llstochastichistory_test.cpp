@@ -15,6 +15,7 @@
 
 #include <bit>
 #include <cstdio>
+#include <cstring>
 #include <set>
 
 // FNV-1a over the table's words, little endian (the Python test has the same function, and reads
@@ -135,33 +136,67 @@ namespace
         check(s.begin(true, 112) && !s.used(), "a history made after a release has no past");
     }
 
-    // The main view's passes and the once-a-frame retry (LLPipeline::alphaStochasticReady, retryAlphaStochastic):
-    // nothing blended is drawn unless every input is there, a history that is missing never stops the
-    // passes and a size mismatch is retried like missing targets.
-    void test_passes()
+    // The face seed (faceSeed, mixIndex): deterministic, and distinct across the objects, faces and
+    // GLTF primitives of a scene
+    void test_seeds()
     {
         using namespace LLStochasticEngine;
-        PassInputs in;
-        in.supported = in.targets = in.sized = in.depth = in.programs = in.shaders_ready = true;
-        check(passesReady(in), "everything there: the passes run");
-        for (bool PassInputs::*field : { &PassInputs::supported, &PassInputs::targets, &PassInputs::sized,
-                                         &PassInputs::depth, &PassInputs::programs, &PassInputs::shaders_ready })
-        {
-            PassInputs missing = in;
-            missing.*field = false;
-            check(!passesReady(missing), "any missing input: no blended draw at all");
-        }
-        check(!passesReady(PassInputs()), "nothing there");
+        uint8_t id[16];
+        for (int i = 0; i < 16; ++i) id[i] = (uint8_t)(i * 17 + 3);
+        check(faceSeed(id, 5, 0) == faceSeed(id, 5, 0), "the seed is deterministic");
 
-        // supported, targets, sized, history wanted, history there
-        check(retryNeeded(true, true, true, true, true) == Retry::Nothing, "all there: nothing to retry");
-        check(retryNeeded(true, false, false, true, false) == Retry::Targets, "no targets: retry them");
-        check(retryNeeded(true, true, false, true, true) == Retry::Targets, "targets of another size: retried like missing ones");
-        check(retryNeeded(true, true, true, true, false) == Retry::History, "history missing and wanted: retry it");
-        check(retryNeeded(true, true, true, false, false) == Retry::Nothing, "history not wanted (setting off, or no resolve program): nothing");
-        check(retryNeeded(false, false, false, true, false) == Retry::Nothing, "unsupported device: nothing is made");
-        // a failed history (no accumulation) leaves the passes ready: 8 samples per frame
-        check(passesReady(in) && retryNeeded(true, true, true, true, false) == Retry::History, "a history failure does not stop the passes");
+        std::set<uint32_t> seen;
+        size_t count = 0;
+        for (int obj = 0; obj < 64; ++obj)
+        {
+            uint8_t other[16];
+            std::memcpy(other, id, 16);
+            other[obj % 16] ^= (uint8_t)(1 + obj / 16);
+            for (uint32_t face = 0; face < 16; ++face)
+            {
+                seen.insert(faceSeed(other, face, 0));
+                ++count;
+            }
+        }
+        check(seen.size() == count, "prim faces: distinct across objects and faces");
+
+        // GLTF primitives of one object: sides, batches, nodes and primitives, past the old 16-bit packing
+        seen.clear();
+        count = 0;
+        for (uint32_t side = 0; side < 2; ++side)
+        {
+            for (uint32_t batch : { 0u, 1u, 2u, 15u, 16u, 255u, 256u, 65535u, 65536u, 70000u })
+            {
+                for (uint32_t node : { 0u, 1u, 2u, 255u, 256u, 65535u, 65536u, 131072u })
+                {
+                    for (uint32_t prim : { 0u, 1u, 2u, 65535u, 65536u })
+                    {
+                        seen.insert(faceSeed(id, mixIndex(side, batch), mixIndex(node, prim)));
+                        ++count;
+                    }
+                }
+            }
+        }
+        check(seen.size() == count, "GLTF primitives: distinct, no aliasing of large indices");
+
+        check(mixIndex(1, 2) != mixIndex(2, 1), "mixIndex is ordered");
+        // for every a a bijection of b; across the 32-bit outputs of 40000 pairs a chance collision is
+        // possible (about 0.2 expected), so the grid may lose at most one
+        std::set<uint32_t> pairs;
+        bool rows_distinct = true;
+        for (uint32_t a = 0; a < 200; ++a)
+        {
+            std::set<uint32_t> row;
+            for (uint32_t b = 0; b < 200; ++b)
+            {
+                row.insert(mixIndex(a, b));
+                pairs.insert(mixIndex(a, b));
+            }
+            rows_distinct = rows_distinct && row.size() == 200u;
+        }
+        check(rows_distinct, "mixIndex: a bijection of b for each a");
+        check(pairs.size() >= 200u * 200u - 1u, "mixIndex: (almost) no collision on a 200 x 200 grid");
+        check(faceSeed(id, 1, 0) != faceSeed(id, 0, 1), "the two words are not interchangeable");
     }
 }
 
@@ -169,7 +204,7 @@ int main()
 {
     test_masks();
     test_state();
-    test_passes();
+    test_seeds();
     if (failures == 0)
     {
         std::printf("llstochastichistory_test: all checks passed\n");

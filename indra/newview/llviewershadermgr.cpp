@@ -306,16 +306,19 @@ static bool stochastic_transparency_shaders()
 }
 
 // The alpha-only variant of an alpha program (ALPHA_STOCHASTIC: the shader returns once its
-// alpha is known). A variant that fails to build leaves the method unavailable, never the
-// viewer without its shaders (the error is logged, and the next shader reload tries again).
-static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
+// alpha is known). A variant that fails to build leaves the method not ready (the blended faces
+// are not drawn, never another method) and never the viewer without its shaders (the error is
+// logged, and the next shader reload tries again).
+// Returns false only when a variant was due and did not build; true when it was built or is not due
+// (an unsupported device, or the helper objects missing, which loadBasicShaders logged).
+static bool make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
 {
     shader.mStochasticVariant = nullptr;
     if (!stochastic_transparency_shaders() ||
         !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER) ||
         !LLShaderMgr::instance()->mFragmentShaderObjects.count(STOCH_SAMPLE_HELPER))
     {
-        return;   // the coverage mask helper did not build (loadBasicShaders): no variant, so the method is not ready (an error, logged there)
+        return true;   // no variant: the method is not ready (an unsupported device, or an error logged by loadBasicShaders)
     }
     variant.mName = llformat("Stochastic %s", shader.mName.c_str());
     variant.mFeatures = shader.mFeatures;
@@ -330,13 +333,12 @@ static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
         variant.mTexture[LLShaderMgr::STOCH_MASKS] >= 0)
     {
         shader.mStochasticVariant = &variant;
+        return true;
     }
-    else
-    {
-        LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
-                           << " failed to build with its coverage mask" << LL_ENDL;
-        variant.unload();
-    }
+    LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
+                       << " failed to build with its coverage mask" << LL_ENDL;
+    variant.unload();
+    return false;
 }
 
 // The alpha programs set calculatesLighting/hasLighting after creation (LLRender::syncMatrices
@@ -369,6 +371,11 @@ static void unload_stochastic_shaders()
     for (LLGLSLShader& shader : gGLTFAlphaStochasticProgram)
     {
         shader.unload();
+    }
+    // the GLTF base variants point at the programs just unloaded
+    for (LLGLSLShader& variant : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
+    {
+        variant.mStochasticVariant = nullptr;
     }
 }
 // </Vulkanstorm>
@@ -455,9 +462,12 @@ static bool make_gltf_variant(LLGLSLShader& shader, LLGLSLShader& variant, LLGLS
         // <Vulkanstorm> stochastic transparency's alpha-only variant of this blended variant (the
         // GLTF scene's blended assets are drawn by the same engine as the faces); it reads no
         // light, so it keeps the features without the alpha lighting hack below
-        if (success)
+        // (a variant that fails to build fails the GLTF shaders like a failed base variant:
+        // make_gltf_variants, the caller logs and disables them; it does not gate the prims' transparency)
+        if (success && !make_stochastic_variant(variant, stochastic))
         {
-            make_stochastic_variant(variant, stochastic);
+            LL_WARNS("Shader") << "GLTF blended variant " << variant.mName << ": its stochastic alpha-only variant failed to build" << LL_ENDL;
+            success = false;
         }
         // </Vulkanstorm>
 
@@ -1093,7 +1103,8 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // to the alpha programs' alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional:
     // without them the variants are not built, the method is not ready (logged) and the blended
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
-    // method); the viewer starts either way. The engine's resolve object is the fragment path's (GL 4.0 to 4.2); the compute resolve
+    // method); the viewer starts either way. The engine's resolve object is the fragment path's
+    // (GL 4.0 to 4.2, or a GL 4.3 device without the compute entry points); the compute resolve
     // compiles its own objects.
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
@@ -3392,9 +3403,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
         if (ready && !resolve_built)
         {
-            LL_WARNS_ONCE("Shader") << "Stochastic transparency: its temporal resolve (" << (LLStochasticEngine::computeResolve() ? "compute" : "fragment")
-                                       << ") failed to build; the temporal accumulation is off and each frame keeps its "
-                                       << LLStochasticEngine::SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve (" << (LLStochasticEngine::computeResolve() ? "compute" : "fragment")
+                                    << ") failed to build; the temporal accumulation is off and each frame keeps its "
+                                    << LLStochasticEngine::SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
             gAlphaStochasticCurrentProgram.unload();
             gAlphaStochasticResolveProgram.unload();
         }
@@ -3412,17 +3423,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
                 ready = ready && gDeferredMaterialProgram[i].mStochasticVariant;
             }
         }
-        // the GLTF scene's blended variants, when it has them (the GLTF shaders are optional)
-        if (!gGLTFPBRMetallicRoughnessProgram.mGLTFVariants.empty() && gSavedSettings.getBOOL("RenderCanUseGLTFPBROpaqueShaders"))
-        {
-            for (U32 i = 0; i < LLGLSLShader::NUM_GLTF_VARIANTS; ++i)
-            {
-                if (i & LLGLSLShader::GLTFVariant::ALPHA_BLEND)
-                {
-                    ready = ready && gGLTFPBRMetallicRoughnessProgram.mGLTFVariants[i].mStochasticVariant;
-                }
-            }
-        }
+        // (the GLTF scene's alpha-only variants do not gate the prims' transparency: a GLTF variant
+        // that fails to build disables the GLTF shaders, make_gltf_variants)
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {

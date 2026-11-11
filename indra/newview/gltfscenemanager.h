@@ -52,13 +52,16 @@ namespace LL
         // <Vulkanstorm> a pass of stochastic transparency over the blended variants
         // (LLDrawPoolAlpha::drawGLTFScene): total alpha and stochastic depth draw the alpha-only
         // variants (the depth pass with the face seed and the mask table, masks), the accumulation
-        // the ordinary ones; ST_NONE is the stock draw
+        // the ordinary ones; ST_DEPTH_ONLY writes depth alone with the alpha-only variant's mode 3
+        // (the depth of field pass, the rigged depth restore: colour writes are masked by the caller);
+        // ST_NONE is the stock draw
         enum StochasticPass : U8
         {
             ST_NONE = 0,
             ST_ALPHA,
             ST_DEPTH,
             ST_ACCUM,
+            ST_DEPTH_ONLY,
         };
 
         void render(bool opaque, bool rigged = false, bool unlit = false, StochasticPass pass = ST_NONE, U32 masks = 0);
@@ -67,7 +70,7 @@ namespace LL
         // variant - bitmask according to LLGLSLShader::GLTFVariant flags
         void render(U8 variant, StochasticPass pass = ST_NONE, U32 masks = 0);
 
-        void render(LL::GLTF::Asset& asset, U8 variant, StochasticPass pass = ST_NONE, U32 masks = 0, U32 seed = 0);
+        void render(LL::GLTF::Asset& asset, U8 variant, StochasticPass pass = ST_NONE, U32 masks = 0, const LLUUID& object_id = LLUUID::null);
         // </Vulkanstorm>
 
         // bind the given material for rendering
