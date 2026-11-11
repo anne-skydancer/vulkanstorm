@@ -98,7 +98,7 @@ def fnv1a(words):
 import re
 cpp_test=(root/'indra/newview/tests/llstochastichistory_test.cpp').read_text()
 for s,t in tables.items():
-    m=re.search(r'MASK_HASH_%d = 0x([0-9a-f]+)'%s,cpp_test);assert m,('MASK_HASH in the C++ test',s)
+    m=re.search(r'constexpr unsigned long long MASK_HASH_%d = 0x([0-9a-f]+)ULL;'%s,cpp_test);assert m,('MASK_HASH in the C++ test',s)
     assert int(m.group(1),16)==fnv1a(t),('the Python mask table differs from the C++ one',s,hex(fnv1a(t)))
 print('mask tables: rows of exactly r bits for S = 4, 8, 16, varied and reproducible')
 

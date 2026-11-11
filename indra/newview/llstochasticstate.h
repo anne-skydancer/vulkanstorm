@@ -127,9 +127,8 @@ public:
     uint32_t frame() const { return mFrame; }
     uint32_t seedFrame() const { return mTemporal ? mFrame : 0; }   // 0: a fixed field
 
-    void setFrameForTest(uint32_t frame) { mFrame = frame; }
-
 private:
+    friend struct LLStochasticFrameStateTest;   // tests/llstochastichistory_test.cpp
     uint32_t mWidth = 0;
     uint32_t mHeight = 0;
     uint32_t mIndex = 0;        // the latest

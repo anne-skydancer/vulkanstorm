@@ -436,6 +436,8 @@ public:
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
+    bool alphaStochasticMissing() const;           // selected and supported, but its targets are not there
+    void retryAlphaStochastic();                   // once a frame from the display path: failed allocations, with backoff
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history and the averaged-samples target freed
@@ -822,6 +824,8 @@ public:
     LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
     U32 mAlphaSTCurrent = 0;
     U32 mAlphaSTCurrentFBO = 0;
+    F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
+    F64 mAlphaSTRetryTime = 0.0;
     // </Vulkanstorm>
 
     // </FS>
