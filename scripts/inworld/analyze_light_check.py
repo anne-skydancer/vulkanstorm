@@ -55,11 +55,28 @@ def measure(path, regions):
         sl = region_slice(rgb.shape, regions[name])
         out[name] = (float(y[sl].mean()), float(lin[sl].mean()))
     out["frame"] = (float(y.mean()), float(lin.mean()))
-    # 64 columns wide luma thumbnail for frame differences
-    h, w = y.shape
-    step = max(1, w // 64)
-    small = y[: h - h % step, : w - w % step].reshape(h // step, step, w // step, step).mean(axis=(1, 3))
+    # A luma thumbnail of a fixed size for frame differences, whatever the frame's size: the 3D view's height changes when a
+    # notification or the chat bar appears, so the frames of one run can differ in size.
+    small = thumbnail(y)
+    out["size"] = (int(y.shape[1]), int(y.shape[0]))
+    out["black"] = bool(rgb.max() <= 0.0)
     return out, small
+
+
+THUMB_W, THUMB_H = 64, 36
+
+
+def thumbnail(y):
+    """Luma image (HxW, 0..1) -> THUMB_H x THUMB_W by averaging the pixels in each cell (every size gives the same shape)."""
+    h, w = y.shape
+    ys = np.linspace(0, h, THUMB_H + 1).astype(int)
+    xs = np.linspace(0, w, THUMB_W + 1).astype(int)
+    small = np.empty((THUMB_H, THUMB_W), dtype=np.float64)
+    for i in range(THUMB_H):
+        row = y[ys[i]:max(ys[i + 1], ys[i] + 1)]
+        for j in range(THUMB_W):
+            small[i, j] = row[:, xs[j]:max(xs[j + 1], xs[j] + 1)].mean()
+    return small
 
 
 def find_pops(elevs, values, factor, floor):
@@ -134,6 +151,7 @@ def analyse(rundir, factor=4.0, floor=0.01):
              "regions (x0, y0, x1, y1 as fractions of the image): %s" % {k: [round(x, 3) for x in regions[k]] for k in ("ground", "horizon_sky", "cloud")},
              "pop = a step change above %.3f whose rate per degree is more than %.1fx the median rate of the neighbouring steps" % (floor, factor),
              ""]
+    size_warned = False  # one warning per run
     for sky in skies:
         srows = [r for r in rows if r["sky"] == sky]
         sweep = [r for r in srows if r["kind"] == "sweep"]
@@ -141,8 +159,22 @@ def analyse(rundir, factor=4.0, floor=0.01):
         series_lin = {n: [] for n in REGION_NAMES}
         smalls = []
         table = []
+        sizes = set()
+        sweep_elevs = []
+        black = []
         for r in srows:
             m, small = measure(rundir / r["snapshot"], regions)
+            sizes.add(m["size"])
+            if len(sizes) == 2 and not size_warned:
+                size_warned = True
+                lines.append("  WARNING %s: the frames differ in size (%s); the thumbnails are resized to %dx%d" % (
+                    sky, ", ".join("%dx%d" % s for s in sorted(sizes)), THUMB_W, THUMB_H))
+            if m["black"] and r["kind"] == "sweep":
+                # a fully black frame is a failed capture (not a lighting result): kept in the table, left out of the series
+                black.append(r)
+                lines.append("  WARNING %s: %s is fully black (a capture failure?); left out of the pop search" % (
+                    sky, r["snapshot"]))
+                continue
             entry = {"step": int(r["step"]), "kind": r["kind"], "sun_elevation_deg": float(r["sun_elevation_deg"]),
                      "fps": r["fps"], "snapshot": r["snapshot"]}
             for n in REGION_NAMES:
@@ -154,8 +186,10 @@ def analyse(rundir, factor=4.0, floor=0.01):
                     series[n].append(m[n][0])
                     series_lin[n].append(m[n][1])
                 smalls.append(small)
-        elevs = [float(r["sun_elevation_deg"]) for r in sweep]
-        sky_res = {"steps": len(sweep), "regions": {}, "pops": [], "frame_diff": None}
+                sweep_elevs.append(float(r["sun_elevation_deg"]))
+        elevs = sweep_elevs
+        sky_res = {"steps": len(sweep), "regions": {}, "pops": [], "frame_diff": None,
+                   "black_frames": [r["snapshot"] for r in black], "frame_sizes": sorted(sizes)}
         lines.append("== %s (%d snapshots, %d sweep steps)" % (sky, len(srows), len(sweep)))
         for n in REGION_NAMES:
             if len(series[n]) < 2:

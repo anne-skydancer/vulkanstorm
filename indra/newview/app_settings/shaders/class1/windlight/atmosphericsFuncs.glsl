@@ -39,6 +39,11 @@ uniform float max_y;
 uniform vec3  glow;
 uniform float scene_light_strength;
 uniform float sun_moon_glow_factor;
+// <Vulkanstorm> L3: each body's glow at the body, not at the blended light (lightnorm) between them
+uniform vec3  sun_glow_norm;
+uniform vec3  moon_glow_norm;
+uniform float moon_glow_factor; // the moon's share of sun_moon_glow_factor
+// </Vulkanstorm>
 uniform float sky_sunlight_scale;
 uniform float sky_ambient_scale;
 uniform int classic_mode;
@@ -125,12 +130,15 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     atten = combined_haze.rgb;
 
     // compute haze glow
-    float haze_glow = dot(rel_pos_norm, lightnorm.xyz);
+    // <Vulkanstorm> L3: the sun's glow at the sun, weighted with what is left of the factor, and the moon's at the moon
+    float dampen = max(0.0f, dot(light_dir, rel_pos_norm));
+    float haze_glow = dot(rel_pos_norm, sun_glow_norm.xyz);
 
     // dampen sun additive contrib when not facing it...
     // SL-13539: This "if" clause causes an "additive" white artifact at roughly 77 degreees.
     //    if (length(light_dir) > 0.01)
-    haze_glow *= max(0.0f, dot(light_dir, rel_pos_norm));
+    haze_glow *= dampen;
+    // </Vulkanstorm>
 
     haze_glow = 1. - haze_glow;
     // haze_glow is 0 at the sun and increases away from sun
@@ -143,7 +151,20 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     // add "minimum anti-solar illumination"
     haze_glow += .25;
 
-    haze_glow *= sun_moon_glow_factor;
+    // <Vulkanstorm> L3: the sun's share is exactly the factor by day (the moon's is 0)
+    haze_glow *= sun_moon_glow_factor - moon_glow_factor;
+
+    if (moon_glow_factor > 0.0)
+    {
+        float moon_glow = dot(rel_pos_norm, moon_glow_norm.xyz) * dampen;
+        moon_glow = 1. - moon_glow;
+        moon_glow = max(moon_glow, .001);
+        moon_glow *= glow.x;
+        moon_glow = clamp(pow(moon_glow, glow.z), -100000, 100000);
+        moon_glow += .25;
+        haze_glow += moon_glow * moon_glow_factor;
+    }
+    // </Vulkanstorm>
 
     vec3 amb_color = ambient_color;
 

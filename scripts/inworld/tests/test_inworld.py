@@ -853,5 +853,71 @@ class AnalysisTest(unittest.TestCase):
             self.assertAlmostEqual(m["frame"][1], 0.5, places=2)
 
 
+class MixedFrameSizeTest(unittest.TestCase):
+    """The 3D view's height changes when a notification or the chat bar appears: the frames of one run differ in size, and a
+    fully black frame is a failed capture."""
+
+    def _run(self, tmp, sizes, black_at=None):
+        from PIL import Image
+        run = pathlib.Path(tmp)
+        (run / "snapshots").mkdir()
+        (run / "run.json").write_text(json.dumps({}), encoding="utf-8")
+        rows = []
+        for i, (w, h) in enumerate(sizes):
+            level = 0 if i == black_at else 90
+            rel = "snapshots/s_%03d.png" % i
+            Image.new("RGB", (w, h), (level, level, level)).save(run / rel)
+            rows.append({"step": i, "kind": "sweep", "sun_elevation_deg": "%.1f" % (1.0 - 0.1 * i), "fps": "60",
+                         "sky": "s", "snapshot": rel})
+        with open(run / "manifest.csv", "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=["step", "kind", "sun_elevation_deg", "fps", "sky", "snapshot"])
+            w.writeheader()
+            w.writerows(rows)
+        return run
+
+    def test_thumbnails_have_one_size_whatever_the_frame_size(self):
+        import numpy as np
+        for w, h in ((2560, 1329), (2560, 1369), (100, 100), (64, 36), (50, 20), (1, 1)):
+            t = alc.thumbnail(np.full((h, w), 0.25))
+            self.assertEqual(t.shape, (alc.THUMB_H, alc.THUMB_W), (w, h))
+            self.assertTrue(np.allclose(t, 0.25))
+
+    def test_mixed_sizes_do_not_crash_and_warn_once(self):
+        sizes = [(256, 133), (256, 137)] * 6 + [(256, 133)] * 4
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self._run(tmp, sizes)
+            result, text = alc.analyse(run)
+            self.assertEqual(text.count("the frames differ in size"), 1, text)
+            self.assertEqual(result["skies"]["s"]["frame_sizes"], [(256, 133), (256, 137)])
+            self.assertEqual(result["skies"]["s"]["frame_diff"]["pops"], [], text)
+
+    def test_two_skies_warn_once_per_run(self):
+        sizes = [(128, 70), (128, 72)] * 3
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self._run(tmp, sizes)
+            with open(run / "manifest.csv", encoding="utf-8") as mf:
+                rows = list(csv.DictReader(mf))
+            for r in list(rows):
+                r2 = dict(r)
+                r2["sky"] = "t"
+                rows.append(r2)
+            with open(run / "manifest.csv", "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=list(rows[0]))
+                w.writeheader()
+                w.writerows(rows)
+            result, text = alc.analyse(run)
+            self.assertEqual(text.count("the frames differ in size"), 1, text)
+            self.assertIn("t", result["skies"])
+
+    def test_a_black_frame_is_a_capture_failure_not_a_pop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = self._run(tmp, [(128, 72)] * 12, black_at=6)
+            result, text = alc.analyse(run)
+            self.assertEqual(result["skies"]["s"]["black_frames"], ["snapshots/s_006.png"])
+            self.assertIn("fully black", text)
+            self.assertEqual(result["skies"]["s"]["pops"], [], text)
+            self.assertEqual(result["skies"]["s"]["frame_diff"]["pops"], [], text)
+
+
 if __name__ == "__main__":
     unittest.main()
