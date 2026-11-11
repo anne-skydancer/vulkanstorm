@@ -27,7 +27,7 @@
   },
   "linux-lts": {
     "title": "Linux LTS (Ubuntu 24.04)",
-    "_note": "Published on demand; its workflow runs on every pull request and on dispatch only. Built and linked inside ubuntu:24.04 (glibc 2.39, GCC 14) with the 24.04-built packages of scripts/linux_lts_packages.json, so it runs on Ubuntu 24.04 and newer; CI fails it on anything newer than glibc 2.39 or GLIBCXX_3.4.33. The host's preinstalled toolchains are mounted under /host-free so that the disk step can remove them.",
+    "_note": "Published on demand; its workflow runs on every pull request and on dispatch only. Built and linked inside ubuntu:24.04 (glibc 2.39, GCC 14) with the 24.04-built packages of scripts/linux_lts_packages.json, so it runs on Ubuntu 24.04 and newer; CI fails it on anything newer than glibc 2.39 or GLIBCXX_3.4.33. The host's preinstalled toolchains are mounted under /host-free so that the disk step can remove them. Its container has explicit DNS servers (the GitHub-hosted runners' Azure resolver first, then 8.8.8.8 and 1.1.1.1): without them the container once resolved no names; do not remove them as redundant.",
     "automatic": false,
     "package": { "subdirectory": "", "suffix": "-ubuntu24.04.tar.xz" },
     "tags": { "main": "linux-lts", "line": "linux-lts" },

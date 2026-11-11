@@ -225,6 +225,7 @@ test('planPlatform: each platform workflow plans its own build and tag', () => {
     // Pull requests and other lines never publish; forks never publish.
     const pr = at('pull_request', 'refs/pull/7/merge', 'linux-lts');
     assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);
+    assert.match(pr.entry.container.options, /--dns/);
     assert.equal(at('push', 'refs/heads/vkstorm-rust', 'linux').tag, '');
     assert.equal(planPlatform({ eventName: 'push', ref: 'refs/heads/vkstorm-release', repository: 'someone/fork', platform: 'windows' }).tag, '');
     // A tag never builds a Release package or publishes.
