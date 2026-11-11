@@ -19,8 +19,9 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// Listed among each producer's resolve program's own shader files and compiled with it, as the
-// program's stage (a compute object for the transparency, alphaStochasticResolveC.glsl). The file is
+// Compiled with each producer's resolve program as its stage: listed among the program's own shader
+// files (a compute object, alphaStochasticResolveC.glsl, GL 4.3) or attached as a fragment object
+// (STOCH_RESOLVE, LLShaderMgr::attachShaderFeatures; alphaStochasticResolveF.glsl). The file is
 // stage-neutral: it uses no stage built-ins (only uniforms, texelFetch and functions), so the same
 // source serves a compute or a fragment producer.
 // The producer defines stoch_current() (its value of this frame at a pixel: the averaged samples
