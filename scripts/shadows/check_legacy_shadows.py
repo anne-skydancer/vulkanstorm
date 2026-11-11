@@ -107,7 +107,7 @@ LEGACY_TEST = 'RenderShadowMethod == LLShadowMethod::LEGACY'
 
 
 def check_call_sites(text):
-    """The Legacy helpers are called under the Legacy test, not elsewhere or under PCSS."""
+    """The Legacy helpers are called under the Legacy test, not elsewhere or under another method."""
     problems = []
     lines = text.splitlines()
     start = next((i for i, l in enumerate(lines) if 'void LLPipeline::generateSunShadow(' in l), None)

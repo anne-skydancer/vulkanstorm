@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""The Stochastic shadow method (RenderShadowMethod 2): no feature-table list recommends it, the combo
-offers the three methods, and its shader stays free of PCSS code and of the groundwork defines."""
+"""The shadow methods (RenderShadowMethod 0 Legacy, 2 Stochastic; 1 was PCSS and is unused): the feature-table
+lists recommend 0 or 2 and never 1, the combo offers the two methods, and the Stochastic shader stays free of
+removed PCSS code and of the groundwork defines."""
 from pathlib import Path
 import re
 import unittest
@@ -17,7 +18,7 @@ def strip_comments(text):
 
 
 class ShadowMethodTables(unittest.TestCase):
-    def test_no_list_recommends_stochastic(self):
+    def test_lists_recommend_legacy_or_stochastic_never_pcss(self):
         tables = sorted(NEWVIEW.glob('featuretable*.txt'))
         self.assertGreaterEqual(len(tables), 3)
         for table in tables:
@@ -25,14 +26,30 @@ class ShadowMethodTables(unittest.TestCase):
             self.assertTrue(rows, table.name)
             for row in rows:
                 self.assertEqual(3, len(row), (table.name, row))
-                self.assertIn(row[2], ('0', '1'), (table.name, row))
+                self.assertIn(row[2], ('0', '2'), (table.name, row))
 
     def test_combo_items(self):
         xml = (NEWVIEW / 'skins/default/xui/en/panel_preferences_graphics1.xml').read_text()
         combo = xml[xml.index('name="ShadowMethod"'):]
         combo = combo[:combo.index('</combo_box>')]
-        self.assertEqual([('Legacy', '0'), ('PCSS', '1'), ('Stochastic', '2')],
+        self.assertEqual([('Legacy', '0'), ('Stochastic', '2')],
                          re.findall(r'label="([^"]+)"\s+name="\d"\s+value="(\d)"', combo))
+
+
+class PcssIsRemoved(unittest.TestCase):
+    """PCSS (RenderShadowMethod 1) is gone from the shaders and the shader manager; archive/pcss/2026-11-11 holds it."""
+    def test_shaders_and_manager_have_no_pcss_build(self):
+        deferred = NEWVIEW / 'app_settings/shaders/class1/deferred'
+        code = strip_comments((deferred / 'shadowUtil.glsl').read_text())
+        for gone in ('PCSS', 'pcss', 'SHADOW_MODERN', 'SHADOW_GATHER', 'shadowDepth0', 'shadowDepth1', 'shadowDepth4', 'shadowDepth5'):
+            self.assertNotIn(gone, code)
+        for path in ('indra/newview/llviewershadermgr.cpp', 'indra/llrender/llshadermgr.cpp', 'indra/llrender/llshadermgr.h'):
+            self.assertNotIn('PCSS_SHADOW', (ROOT / path).read_text(), path)
+
+    def test_method_one_is_unused(self):
+        header = (NEWVIEW / 'llshadowmethod.h').read_text()
+        self.assertIn('RETIRED_PCSS = 1', header)
+        self.assertIn('DEFAULT = STOCHASTIC', header)
 
 
 class StochasticShaderIsolation(unittest.TestCase):

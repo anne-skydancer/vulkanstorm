@@ -532,6 +532,8 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
     // shadows checkbox (RenderShadowPCSS) instead of RenderShadowMethod; map it after loading
     bool map_old_pcss = false;
     bool old_pcss = false;
+    bool map_old_light_size = false;
+    F32 old_light_size = 1.f;
     if (PRESETS_GRAPHIC == subdirectory)
     {
         llifstream preset_file(full_path.c_str());
@@ -540,6 +542,8 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
         const LLShadowMethod::PresetMapping mapping = LLShadowMethod::readPreset(parsed, preset_settings);
         map_old_pcss = mapping.apply;
         old_pcss = mapping.pcss;
+        map_old_light_size = mapping.apply_light_size;
+        old_light_size = (F32)mapping.light_size;
     }
     // </Vulkanstorm>
 
@@ -562,6 +566,12 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
             {
                 gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::fromPCSSFlag(old_pcss));
             }
+            if (map_old_light_size)
+            {
+                gSavedSettings.setF32("RenderShadowLightSize", old_light_size);
+            }
+            // a preset that stores the removed PCSS method (1) selects Stochastic
+            gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")));
             // </Vulkanstorm>
 
             // <FS:Ansariel> Update indirect controls
