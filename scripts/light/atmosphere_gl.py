@@ -155,5 +155,13 @@ def set_atmosphere_uniforms(prog, p):
     uniform(prog, 'distance_multiplier', float(p['distance_multiplier'])); uniform(prog, 'max_y', float(p['max_y']))
     uniform(prog, 'glow', *p['glow']); uniform(prog, 'scene_light_strength', 1.0)
     uniform(prog, 'sun_moon_glow_factor', float(p.get('sun_moon_glow_factor', 1.0)))
+    # L3 (glow at each body): the harness has one light, the sun's: its glow is at lightnorm, damped by the light direction the
+    # callers pass (0, 0, 1 in gen_atmosphere_vectors.py); no moon glow, no moon halo
+    uniform(prog, 'sun_glow_norm', 0.0, p['light_y'], math.sqrt(max(0.0, 1.0 - p['light_y'] ** 2)))
+    uniform(prog, 'moon_glow_norm', 0.0, p['light_y'], math.sqrt(max(0.0, 1.0 - p['light_y'] ** 2)))
+    uniform(prog, 'moon_glow_factor', float(p.get('moon_glow_factor', 0.0)))
+    uniform(prog, 'moon_halo_weight', float(p.get('moon_halo_weight', 0.0)))
+    uniform(prog, 'sun_dir', *p.get('sun_dir_eye', (0.0, 0.0, 1.0)))
+    uniform(prog, 'moon_dir', *p.get('moon_dir_eye', (0.0, 0.0, -1.0)))
     uniform(prog, 'sky_sunlight_scale', float(p['sky_sunlight_scale'])); uniform(prog, 'sky_ambient_scale', float(p['sky_ambient_scale']))
     uniform(prog, 'classic_mode', int(p['classic_mode']))
