@@ -224,9 +224,11 @@ public:
         DEFERRED_SHADOW3,                   //  "shadowMap3"
         DEFERRED_SHADOW4,                   //  "shadowMap4"
         DEFERRED_SHADOW5,                   //  "shadowMap5"
-        // <Vulkanstorm> PCSS: plain depth reads (sampler object) of shadowMap0/1/4/5
+        // <Vulkanstorm> PCSS: plain depth reads (sampler object) of shadowMap0-5, contiguous in the map order
         DEFERRED_SHADOW_DEPTH0,             //  "shadowDepth0"
         DEFERRED_SHADOW_DEPTH1,             //  "shadowDepth1"
+        DEFERRED_SHADOW_DEPTH2,             //  "shadowDepth2"
+        DEFERRED_SHADOW_DEPTH3,             //  "shadowDepth3"
         DEFERRED_SHADOW_DEPTH4,             //  "shadowDepth4"
         DEFERRED_SHADOW_DEPTH5,             //  "shadowDepth5"
         // </Vulkanstorm>
