@@ -64,8 +64,7 @@ RenderReflectionProbeLevel  1   3
 RenderDeferred				1	1
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-// RenderShadowMethod: 0 Legacy, 1 PCSS. 2 (Stochastic) is selectable only: every value is the minimum of the applied
-// lists, so a level can recommend 2 only if every list says 2, and none does (scripts/tests/test_shadow_method_tables.py)
+// RenderShadowMethod: 0 Legacy, 1 PCSS; 2 (Stochastic) is chosen by the user only, never recommended.
 RenderShadowMethod			1	1
 RenderShadowDistance		1	256
 RenderUseStreamVBO			1	1
