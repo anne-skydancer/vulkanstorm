@@ -66,6 +66,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericlight_test.cpp -o "$RUNNER_TEMP/atmospheric-light-test"
         "$RUNNER_TEMP/atmospheric-light-test"
+    - name: Check the scattering core of the physical atmosphere (bounds, tables, GLSL vectors, march accuracy)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericscatter_test.cpp -o "$RUNNER_TEMP/atmospheric-scatter-test"
+        "$RUNNER_TEMP/atmospheric-scatter-test"
     - name: Check the cloud shadow map layout and its coupling to the sky
       shell: bash
       run: |
