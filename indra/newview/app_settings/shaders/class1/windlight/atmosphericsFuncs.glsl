@@ -208,7 +208,7 @@ float ambientLighting(vec3 norm, vec3 light_dir)
     return ambient;
 }
 
-// return lit amblit in linear space, leave sunlit and additive in sRGB space
+// return amblit and sunlit in linear space (sunlit stays in sRGB space only when classic_mode is on), additive in sRGB space
 void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, out vec3 sunlit, out vec3 amblit, out vec3 additive,
                          out vec3 atten)
 {
