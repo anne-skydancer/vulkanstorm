@@ -278,22 +278,34 @@ HttpLibcurl::~HttpLibcurl()
 
 // Transport shutdown, on the worker thread once it was asked to stop
 // (HttpService::threadRun() leaves its loop, then HttpService::shutdown()).
+// ~HttpLibcurl calls it again on the main thread after the worker was joined;
+// by then mActiveOps is empty and every multi handle is NULL, so that call
+// does nothing.
 //
 // Every transfer still active is removed from its multi handle
 // (curl_multi_remove_handle) and delivered to its handler as canceled; the
 // handles are then recycled and each multi handle is cleaned up. That is how
-// libcurl closes its own transfers and connections: a connection with a
-// transfer in flight is not reused but shut down on a single non-blocking
-// attempt (HTTP and HTTPS have no blocking disconnect handler, and
-// curl_multi_cleanup() gives connection shutdown no waiting time), and a
-// transfer waiting for a name lookup only loses its place in the resolver's
-// queue. No transfer needs to be aborted first: libcurl is only entered from
-// processTransport() on this thread, and a call there never waits on the
-// network.
+// libcurl closes its own transfers and connections. Nothing is killed and no
+// thread is abandoned: the worker is always joined, and every call below ends
+// by itself within the bound stated for it.
 //
-// Every call that can block the HTTP worker thread, and what ends it
-// (libcurl 8.23.0, packages/LICENSES/curl-buildinfo.json; sources read in
-// lib/multi.c, lib/cshutdn.c, lib/thrdpool.c, lib/vdns/asyn-thrdd.c):
+// Source of the libcurl claims below: the curl 8.23.0 source tree (the version
+// and SHA-256 recorded in packages/LICENSES/curl-buildinfo.json, as
+// unpacked from the release tarball), file:line in its lib/ directory.
+//
+// libcurl is entered from these places, all on the HTTP worker thread:
+//  - addOp()/prepareRequest(): curl_easy_setopt() and curl_multi_add_handle()
+//    (starts the transfer; the name lookup is queued to the resolver pool,
+//    nothing waits for it). Memory only.
+//  - cancel()/cancelRequest() and the loop in this function:
+//    curl_multi_remove_handle(). It does not wait for a lookup: for a transfer
+//    whose lookup is queued it only clears that queued item, one that already
+//    started keeps running on its pool thread (vdns/asyn-thrdd.c:290-302).
+//  - completeRequest(): curl_multi_info_read() and curl_multi_remove_handle().
+//  - processTransport(): curl_multi_perform(), see below.
+//  - this function: curl_multi_cleanup(), see below.
+//
+// Every call that can block the HTTP worker thread, and what ends it:
 //  - waiting for a request (HttpRequestQueue::fetchAll): condition variable,
 //    woken by HttpRequestQueue::stopQueue(), which ~HttpService calls after
 //    setting the exit flag; the check and the wait are under one mutex.
@@ -302,38 +314,51 @@ HttpLibcurl::~HttpLibcurl()
 //  - HttpOpSpin mode 0 (test and diagnostic only): polls the exit flag every
 //    10 ms.
 //  - curl_multi_perform(): never waits for the network (non-blocking sockets,
-//    threaded resolver). It runs our callbacks, each local and short:
-//    write/read/seek/header (memory only), debug (logging), and the SSL
-//    context and certificate verification callbacks. The certificate callback
-//    enters the viewer (LLAppCoreHttp::sslVerify: gSecAPIHandler, the local
-//    certificate store file and OpenSSL chain checks; no network and no lock
-//    shared with another thread, apart from the logging mutex); it is skipped
-//    once the exit flag is set (HttpOpRequest::sslCertVerifyCallback), so at
-//    most one verification in progress delays the stop, bounded by its CPU
-//    and file work.
+//    threaded resolver), but it does local work: reading the CA bundle file
+//    for a new TLS context, and the callbacks below. Our callbacks are local
+//    and short: write/read/seek/header (memory only), debug (logging), and the
+//    SSL context and certificate verification callbacks. The certificate
+//    callback enters the viewer (LLAppCoreHttp::sslVerify: gSecAPIHandler, the
+//    local certificate store file and OpenSSL chain checks; no network and no
+//    lock shared with another thread, apart from the logging mutex); it is
+//    skipped once the exit flag is set (HttpOpRequest::sslCertVerifyCallback),
+//    so at most one verification in progress delays the stop, bounded by its
+//    CPU and file work.
 //  - proxy setup (LLProxy::applyProxySettings, in prepareRequest): takes
 //    LLProxy::mProxyMutex, which the main thread holds only to copy settings.
 //    It contacts nothing: libcurl does the proxy connection and handshake
 //    inside curl_multi_perform().
 //  - policy and queue work (HttpPolicy::processReadyQueue, HttpService::
 //    processRequestQueue): in-memory queues; operations dequeued after the
-//    exit flag is set are dropped, not staged.
+//    exit flag is set are not staged but cancelled (a request is answered as
+//    canceled on the reply queue).
 //  - name lookups: libcurl's threaded resolver runs getaddrinfo() on its own
 //    pool threads, so the HTTP worker never waits for one while transferring,
 //    and a transfer's lookup is limited by its CURLOPT_CONNECTTIMEOUT
 //    (default 30 s, HttpOptions::setTimeout()), after which the transfer
-//    fails and is removed. The one wait is curl_multi_cleanup() below: in libcurl
-//    8.23 it joins the resolver pool (Curl_async_thrdd_multi_destroy with
-//    join, as CURLMOPT_QUICK_EXIT is not set), so a getaddrinfo() still
-//    running at that moment, for this multi handle, is waited for. getaddrinfo()
-//    cannot be interrupted; its bound is the operating system's resolver
-//    timeout, which this code does not control. Lookups in progress at stop
-//    are rare (a request issued just before quitting, to a name whose server
-//    does not answer), and each multi handle is cleaned up in turn.
-//    CURLMOPT_QUICK_EXIT would make libcurl abandon those threads instead; it
-//    is deliberately not used.
+//    fails and is removed. The one wait is curl_multi_cleanup() below: it
+//    calls Curl_async_thrdd_multi_destroy(multi, !multi->quick_exit)
+//    (multi.c:3033), which, as CURLMOPT_QUICK_EXIT is not set, destroys the
+//    resolver queue and pool with join (asyn-thrdd.c:511-521,
+//    thrdqueue.c:244-250) and waits until every pool thread has ended
+//    (thrdpool.c:357-385, Curl_cond_wait on the slots). So a getaddrinfo()
+//    that has started, for this multi handle, is waited for; only lookups
+//    still queued and not started are dropped. getaddrinfo() cannot be
+//    interrupted; its bound is the operating system's resolver timeout,
+//    which this code does not control. Lookups in progress at stop are rare
+//    (a request issued just before quitting, to a name whose server does not
+//    answer), and each multi handle is cleaned up in turn.
+//    CURLMOPT_QUICK_EXIT would make libcurl detach those threads instead
+//    (thrdpool.c:370-379); it is deliberately not used.
+//  - connection shutdown at curl_multi_cleanup(): best effort with a 0 ms
+//    timeout. The connections are moved to the shutdown list and
+//    Curl_cshutdn_destroy() runs cshutdn_terminate_all() with timeout_ms = 0
+//    (cshutdn.c:421-441; conncache.c:260-285 for the pool being discarded), so
+//    a TLS close_notify or similar is attempted once without waiting and the
+//    sockets are then closed. HTTP and HTTPS have no blocking disconnect
+//    handler.
 //  - TLS: handshakes and closes are non-blocking inside curl_multi_perform();
-//    the close at shutdown is one best-effort attempt (see above).
+//    the close at shutdown is the best-effort attempt above.
 //  - curl_easy_cleanup() (HandleCache destructor): handles outside any multi
 //    handle own no connection and no lookup; memory only.
 //  - the reply queue and HttpOperation notifiers: short mutexes, no waits on
