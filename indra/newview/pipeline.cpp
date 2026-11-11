@@ -711,6 +711,14 @@ void LLPipeline::init()
             gPipeline.selectAlphaStochastic(control->getValue().asInteger() == 1);
         });
     }
+    LLPointer<LLControlVariable> alpha_temporal_ptr = gSavedSettings.getControl("RenderAlphaStochasticTemporal");
+    if (alpha_temporal_ptr.notNull())
+    {
+        alpha_temporal_ptr->getCommitSignal()->connect([](LLControlVariable* control, const LLSD& value, const LLSD& previous)
+        {
+            gPipeline.updateAlphaStochasticHistory(); // made, or released with the accumulation stopped
+        });
+    }
     // </Vulkanstorm>
 
     LLPointer<LLControlVariable> cntrl_ptr = gSavedSettings.getControl("CollectFontVertexBuffers");
@@ -1027,22 +1035,6 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
 
     mRT->deferredScreen.shareDepthBuffer(mRT->screen);
 
-    // <Vulkanstorm> stochastic transparency: main view only, at the render resolution; sized
-    // with the scene while it is selected, freed otherwise
-    if (mRT == &mMainRT)
-    {
-        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
-        {
-            mAlphaSTRetryAt = 0.0; // a new screen buffer tries at once
-            allocateAlphaStochastic(resX, resY);
-        }
-        else
-        {
-            releaseAlphaStochastic();
-        }
-    }
-    // </Vulkanstorm>
-
     // <FS:Beq> restore setSphere
     // if (hdr || shadow_detail > 0 || ssao || RenderDepthOfField))
     if (hdr || shadow_detail > 0 || ssao || RenderDepthOfField || RlvActions::hasPostProcess())
@@ -1136,6 +1128,22 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
     gGL.getTexUnit(0)->disable();
 
     stop_glerror();
+
+    // <Vulkanstorm> stochastic transparency: main view only, at the render resolution; made last,
+    // when the mandatory screen buffers are there (its failure never fails them, and is tried again:
+    // retryAlphaStochastic), sized with the scene while it is selected, freed otherwise
+    if (mRT == &mMainRT)
+    {
+        if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
+        {
+            allocateAlphaStochastic(resX, resY);
+        }
+        else
+        {
+            releaseAlphaStochastic();
+        }
+    }
+    // </Vulkanstorm>
 
     return true;
 }
@@ -8117,8 +8125,8 @@ namespace
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // The device gate only (owner decision Q8, 2026-11-13: no switch of method on a failure): a shader
-    // that did not build is "not ready", handled below, and never changes the gate or the setting.
+    // the device only (GL 4.0, enough samples): a shader set that did not build is an error, not a
+    // reason to select another method (beginAlphaStochastic logs it, a shader reload retries it)
     sRenderAlphaStochasticSupported = gGLManager.mGLVersion >= 4.0f;
 #else
     sRenderAlphaStochasticSupported = false;
@@ -8150,7 +8158,6 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
         }
         sRenderAlphaStochasticSupported = false;
     }
-    gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", sRenderAlphaStochasticSupported);
     if (!sRenderAlphaStochasticSupported)
     {
         releaseAlphaStochastic();
@@ -8217,6 +8224,51 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     const U64 bytes = (U64)w * h * pass * 16;
     LL_INFOS("Pipeline") << "Stochastic transparency: " << w << "x" << h << ", " << samples << " samples in "
                          << samples / pass << " pass(es) of " << pass << " (" << (bytes >> 20) << " MiB)" << LL_ENDL;
+}
+
+// Whether the main view needs stochastic targets it does not have.
+bool LLPipeline::alphaStochasticMissing() const
+{
+    return sRenderAlphaStochasticSupported && gSavedSettings.getU32("RenderAlphaSortMethod") == 1 && !mAlphaSTFBO;
+}
+
+// Once a frame from the display path: an allocation that failed (the targets, or the history while
+// the setting asks for it) is tried again, after 1 s, 2 s, 4 s ... 30 s, and the failure is logged at
+// that cadence. Nothing else is selected in the meantime.
+void LLPipeline::retryAlphaStochastic()
+{
+    if (mRT != &mMainRT || gSavedSettings.getU32("RenderAlphaSortMethod") != 1 ||
+        !mMainRT.screen.getWidth() || !mMainRT.screen.getHeight())
+    {
+        return;
+    }
+    static LLCachedControl<bool> temporal_setting(gSavedSettings, "RenderAlphaStochasticTemporal", true);
+    const bool history_wanted = temporal_setting && gAlphaStochasticResolveProgram.mProgramObject &&
+                                gAlphaStochasticCurrentProgram.mProgramObject;
+    const bool missing = !mAlphaSTFBO || (history_wanted && !mAlphaSTHistory.isAllocated());
+    if (!missing || !sRenderAlphaStochasticSupported)
+    {
+        mAlphaSTRetryInterval = 0.0;
+        return;
+    }
+    const F64 now = LLTimer::getElapsedSeconds();
+    if (mAlphaSTRetryInterval == 0.0)
+    {
+        // the first failure was logged by the allocation itself; wait before the first retry
+        mAlphaSTRetryInterval = 1.0;
+        mAlphaSTRetryTime = now + mAlphaSTRetryInterval;
+        return;
+    }
+    if (now < mAlphaSTRetryTime)
+    {
+        return;
+    }
+    LL_INFOS("Pipeline") << "Stochastic transparency: trying the allocation again ("
+                         << (mAlphaSTFBO ? "history" : "targets") << ", " << mMainRT.screen.getWidth() << "x"
+                         << mMainRT.screen.getHeight() << ")" << LL_ENDL;
+    allocateAlphaStochastic(mMainRT.screen.getWidth(), mMainRT.screen.getHeight());
+    mAlphaSTRetryInterval = llmin(mAlphaSTRetryInterval * 2.0, 30.0);
+    mAlphaSTRetryTime = LLTimer::getElapsedSeconds() + mAlphaSTRetryInterval;
 }
 
 // The alpha method was chosen: the main view's targets made at the screen's size, or freed.
@@ -8315,8 +8367,14 @@ bool LLPipeline::beginAlphaStochastic()
 {
     if (!mAlphaSTFBO || !sRenderAlphaStochasticSupported || !mRT->deferredScreen.getDepth() ||
         mRT->screen.getWidth() != mAlphaSTWidth || mRT->screen.getHeight() != mAlphaSTHeight ||
-        !gAlphaStochasticExpandProgram.mProgramObject || !gAlphaStochasticCompositeProgram.mProgramObject)
+        !gAlphaStochasticExpandProgram.mProgramObject || !gAlphaStochasticCompositeProgram.mProgramObject ||
+        !gAlphaStochasticShadersReady)
     {
+        if (mAlphaSTFBO && sRenderAlphaStochasticSupported && !gAlphaStochasticShadersReady)
+        {
+            LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build, the blended faces are not drawn "
+                                         "until they do (the next shader reload tries again)" << LL_ENDL;
+        }
         return false;
     }
     LL_PROFILE_GPU_ZONE("alpha stochastic begin");
