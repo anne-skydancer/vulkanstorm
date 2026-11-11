@@ -31,8 +31,8 @@ class LLGLSLShader;
 // (stage L2b, llcloudoptics.h): R the direct beam, G the diffuse light under the cloud. Every shader
 // that lights with the sun looks R up in calcAtmosphericVarsLinear (atmosphericsFuncs.glsl) and
 // multiplies the linear sunlit by it, the moon's light as much as the sun's; probes read the map's
-// mean. G waits for the overcast veil (stage L4). RenderCloudShadowStrength 0 turns all of it off: no pass, no tap, and the sky is drawn as it
-// was.
+// mean. G waits for the overcast veil (stage L4). RenderCloudShadowStrength 0 turns all of it off:
+// no pass, no tap, and the sky is drawn as it was.
 class LLCloudShadowMap
 {
 public:
