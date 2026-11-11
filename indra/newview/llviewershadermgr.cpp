@@ -665,10 +665,33 @@ S32 LLViewerShaderMgr::getShaderLevel(S32 type)
 // binary under the same program name. Fold a digest of every file under app_settings/shaders
 // (relative path + bytes, in sorted order) into the cache version: any shader change purges
 // the cache once, release builds are unaffected (their version changes anyway).
+// <Vulkanstorm> S2: the defines of the method-neutral shadow block (SHADOW_COMMON in shadowUtil.glsl): the
+// switch and every constant the block reads, taken from llshadowcascadefit.h, the one source. Any
+// shadow method calls this for the shadowUtil.glsl build it wants the block in (PCSS now, Stochastic and
+// Legacy later); the shader cache version hashes the same list.
+static void addShadowCommonDefines(std::map<std::string, std::string>& attribs)
+{
+    attribs["SHADOW_COMMON"] = "1";
+    attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
+    attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
+    attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
+    attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
+    attribs["SHADOW_GRAD_MAX"] = llformat("%.1f", LLShadowCascadeFit::SHADOW_GRAD_MAX);
+}
+// </Vulkanstorm>
+
 static LLUUID shader_source_digest()
 {
     namespace fs = std::filesystem;
     HBXXH128 hash_obj;
+    {   // <Vulkanstorm> S2: constants that reach the shaders as defines are part of their text
+        std::map<std::string, std::string> shadow_defines;
+        addShadowCommonDefines(shadow_defines);
+        for (const auto& define : shadow_defines)
+        {
+            hash_obj.update(define.first + "=" + define.second + ";");
+        }
+    }
     const std::string root_utf8 = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders");
 #if LL_WINDOWS
     const fs::path root(ll_convert_string_to_wide(root_utf8));
@@ -1132,13 +1155,10 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         const GLuint plain = mFragmentShaderObjects[util];
         std::map<std::string, std::string> pcss_attribs = attribs;
         pcss_attribs["PCSS_SHADOW"] = "1";
-        // stage S2: the groundwork shared with the Stochastic method (SHADOW_MODERN), its constants from
-        // llshadowcascadefit.h (one source of truth), and the gather tap on GL 4.0 and later
+        // stage S2: the method-neutral block and its constants, SHADOW_MODERN (the PCSS and Stochastic
+        // code), and the gather tap on GL 4.0 and later
+        addShadowCommonDefines(pcss_attribs);
         pcss_attribs["SHADOW_MODERN"] = "1";
-        pcss_attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
-        pcss_attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
-        pcss_attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
-        pcss_attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
         if (gGLManager.mGLVersion >= 3.99f)
         {
             pcss_attribs["SHADOW_GATHER"] = "1";
