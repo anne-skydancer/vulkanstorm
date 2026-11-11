@@ -25,6 +25,12 @@
  * and the excess factor of the capped columns), held equal by the vectors of
  * scripts/light/gen_transmittance_vectors.py.
  *
+ * Stage AT2-0 (the end of this file) adds the scattering core on top of LLAtmosphere's extinction: LLScatter (albedos, phase
+ * functions, multiple-scattering scale, the lights' irradiance, all bounded), the transmittance / multiple-scattering / sky
+ * irradiance tables' parameterisations and texels, and the march (atmosphere_ap) the aerial perspective and the cloud trace share.
+ * class1/windlight/atmosphereCommonF.glsl is its GLSL twin, held equal by scripts/light/gen_atmosphere_scatter_vectors.py;
+ * indra/newview/tests/llatmosphericscatter_test.cpp is the test; doc/light/atmosphere-scattering-core.md the description.
+ *
  * Ozone: the EEP default absorption layer (llsettingssky.cpp absorptionConfigDefault) has a rising
  * zone of slope -1/25000, which is 0 everywhere, and the sky validator clamps layer slopes and
  * constants in place (llsettingssky.cpp:211-232, llsettingsbase.cpp verifyFloatRange), so the
@@ -1594,7 +1600,8 @@ struct LLScatter
 
     // atmosphereAP (the GLSL's name): the in-scattered radiance and transmittance from an observer at h_obs_km along d (unit, z up) for
     // dist_km, in `steps` steps. The march is split where the ray leaves the 0.25 km haze slab (a uniform march skips the slab: it is off
-    // by up to 99 % at 40 km in fog) and is quadratic beyond it, uniform inside it. 12 steps meet 1 % of a converged march.
+    // by up to 99 % at 40 km in fog) and is quadratic beyond it, power AP_INSIDE_POWER inside it. 12 steps meet 1 % of a converged march on
+    // Default, Foggy and Sunset (doc/light/atmosphere-scattering-core.md has the figures, and the extreme skies that do not).
     void atmosphere_ap(const Vec3& d, double dist_km, double h_obs_km, int steps, const ScatterLights& lt, Vec3& Lin, Vec3& T) const
     {
         Lin = {};
@@ -1616,11 +1623,23 @@ struct LLScatter
         atmosphere_ap(d, dist_km, h_obs_km, steps, lights, Lin, T);
     }
 
+    // The distance to the planet's ground along d from o, -1 if the ray does not meet it. An observer on the ground (h = 0) looking below
+    // its horizon is AT the ground: 0, not the far side of the chord through the planet (ray_sphere's first hit ahead).
+    double ground_distance(const Vec3& o, const Vec3& d) const
+    {
+        const double rg = atm.planet_radius_km;
+        if (detail::dot(o, o) <= rg * rg)
+        {
+            return detail::dot(o, d) < 0.0 ? 0.0 : -1.0;
+        }
+        return detail::ray_sphere(o, d, rg);
+    }
+
     // the distance to the planet's ground along d from o, else to the top of the atmosphere
     double ray_length(const Vec3& o, const Vec3& d) const
     {
-        const double tg = detail::ray_sphere(o, d, atm.planet_radius_km);
-        return tg > 0.0 ? tg : std::max(detail::ray_sphere(o, d, atm.top_radius_km), 0.0);
+        const double tg = ground_distance(o, d);
+        return tg >= 0.0 ? tg : std::max(detail::ray_sphere(o, d, atm.top_radius_km), 0.0);
     }
 
     // --- the multiple-scattering texel (r, mu_s) per unit irradiance (Hillaire 2020): the second-order radiance L2 of a uniformly
@@ -1741,11 +1760,11 @@ struct LLScatter
     Vec3 sky_radiance(const Vec3& d, double h_obs_km, int steps = 32) const
     {
         const Vec3 o = { 0.0, 0.0, atm.planet_radius_km + std::max(h_obs_km, 0.0) };
-        const double tg = detail::ray_sphere(o, d, atm.planet_radius_km);
-        const double tmax = tg > 0.0 ? tg : std::max(detail::ray_sphere(o, d, atm.top_radius_km), 0.0);
+        const double tg = ground_distance(o, d);
+        const double tmax = ray_length(o, d);
         Vec3 Lin, T = { 1.0, 1.0, 1.0 };
         march_seg(o, d, 0.0, tmax, steps, 1.0, lights, Lin, T);
-        if (tg > 0.0)
+        if (tg >= 0.0)
         {
             const Vec3 p = o + d * tg, n = p * (1.0 / detail::len(p));
             Vec3 E;
