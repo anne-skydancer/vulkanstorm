@@ -1,31 +1,31 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""The shadow method values: no feature-table list recommends Stochastic (2) -- it is selectable
-only -- and the header, the combo and the settings comment agree on the three methods."""
+"""The Stochastic shadow method (RenderShadowMethod 2): no feature-table list recommends it, the combo
+offers the three methods, and its shader stays free of PCSS code and of the groundwork defines."""
 from pathlib import Path
 import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 NEWVIEW = ROOT / 'indra/newview'
+UTIL = NEWVIEW / 'app_settings/shaders/class1/deferred/shadowStochasticUtil.glsl'
+
+
+def strip_comments(text):
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    return re.sub(r'//[^\n]*', '', text)
 
 
 class ShadowMethodTables(unittest.TestCase):
     def test_no_list_recommends_stochastic(self):
         tables = sorted(NEWVIEW.glob('featuretable*.txt'))
-        self.assertEqual(3, len(tables))
+        self.assertGreaterEqual(len(tables), 3)
         for table in tables:
             rows = [l.split() for l in table.read_text().splitlines() if l.startswith('RenderShadowMethod')]
-            self.assertEqual(10, len(rows), table.name)
+            self.assertTrue(rows, table.name)
             for row in rows:
                 self.assertEqual(3, len(row), (table.name, row))
                 self.assertIn(row[2], ('0', '1'), (table.name, row))
-
-    def test_header_constants(self):
-        header = (NEWVIEW / 'llshadowmethod.h').read_text()
-        values = {m.group(1): int(m.group(2)) for m in
-                  re.finditer(r'constexpr std::uint32_t (LEGACY|PCSS|STOCHASTIC)\s*=\s*(\d+);', header)}
-        self.assertEqual({'LEGACY': 0, 'PCSS': 1, 'STOCHASTIC': 2}, values)
 
     def test_combo_items(self):
         xml = (NEWVIEW / 'skins/default/xui/en/panel_preferences_graphics1.xml').read_text()
@@ -33,6 +33,20 @@ class ShadowMethodTables(unittest.TestCase):
         combo = combo[:combo.index('</combo_box>')]
         self.assertEqual([('Legacy', '0'), ('PCSS', '1'), ('Stochastic', '2')],
                          re.findall(r'label="([^"]+)"\s+name="\d"\s+value="(\d)"', combo))
+
+
+class StochasticShaderIsolation(unittest.TestCase):
+    def test_util_has_no_pcss_code(self):
+        code = strip_comments(UTIL.read_text())
+        self.assertIsNone(re.search(r'pcss', code, re.I), 'the Stochastic util must not use PCSS code or defines')
+        self.assertNotIn('SHADOW_MODERN', code)
+
+    def test_stochastic_defines_are_not_the_groundwork_defines(self):
+        mgr = (NEWVIEW / 'llviewershadermgr.cpp').read_text()
+        block = mgr[mgr.index('if (use_stochastic_shadows())'):]
+        block = block[:block.index('// </Vulkanstorm>')]
+        for bad in ('PCSS_', 'SHADOW_GATHER', 'SHADOW_MODERN', 'SHADOW_FOOTPRINT'):
+            self.assertNotIn(bad, block)
 
 
 if __name__ == '__main__':

@@ -39,6 +39,9 @@ namespace
         check(LLShadowMethod::sanitize(4000000000u) == 1, "sanitize huge");
         check(!LLShadowMethod::usesStableCascades(0) && LLShadowMethod::usesStableCascades(1)
             && LLShadowMethod::usesStableCascades(2), "stable cascades for every method but Legacy");
+        check(LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(3))
+            && LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(4000000000u)), "an unknown value is a stable-cascade method");
+        check(LLShadowMethod::DEFAULT == LLShadowMethod::PCSS, "unknown values read as the default, PCSS");
     }
 
     void test_migration()

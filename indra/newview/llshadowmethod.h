@@ -24,9 +24,13 @@ namespace LLShadowMethod
     // The method a retired RenderShadowPCSS value stands for.
     constexpr std::uint32_t fromPCSSFlag(bool pcss) { return pcss ? PCSS : LEGACY; }
 
-    // Clamps a stored value (a hand-edited settings file) to a valid method. An unknown value is
-    // PCSS, as before Stochastic existed (an older viewer reading 2 gives PCSS the same way).
-    constexpr std::uint32_t sanitize(std::uint32_t method) { return method > STOCHASTIC ? PCSS : method; }
+    // The method an unknown stored value stands for. The PR that removes PCSS sets this to STOCHASTIC
+    // and migrates a stored 1 to Stochastic (never to Legacy).
+    constexpr std::uint32_t DEFAULT = PCSS;
+
+    // Clamps a stored value (a hand-edited settings file) to a valid method; an older viewer reading 2
+    // gives PCSS the same way.
+    constexpr std::uint32_t sanitize(std::uint32_t method) { return method > STOCHASTIC ? DEFAULT : method; }
 
     // The methods that fit the sun cascades as stable, world-anchored squares (llshadowcascadefit.h):
     // every method but Legacy. Takes a sanitized value.

@@ -33,6 +33,9 @@
 // <Vulkanstorm> key of the PCSS build of deferred/shadowUtil.glsl among the compiled fragment
 // objects (the same file with PCSS_SHADOW defined); see LLViewerShaderMgr::loadBasicShaders
 #define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
+// <Vulkanstorm> the Stochastic shadow method's own shadow util; when it is built (RenderShadowMethod 2)
+// every program that links a shadow util takes it instead of deferred/shadowUtil.glsl
+#define STOCHASTIC_SHADOW_UTIL "deferred/shadowStochasticUtil.glsl"
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
 #define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (the default on every device)
