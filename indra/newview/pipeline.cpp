@@ -1333,7 +1333,7 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
-    RenderShadowMethod = LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")); // <Vulkanstorm/> shadow method, one clamp for every gate
+    RenderShadowMethod = LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()); // <Vulkanstorm/> shadow method, one clamp for every gate
     RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -8603,7 +8603,8 @@ void LLPipeline::resolveAlphaStochasticTemporalFragment()
 // engine's history, and the light map is made from that. Cube snapshots and snapshots have no history: their
 // sun pass writes the light map directly, with each pixel's rays fixed. A history that cannot be allocated
 // (logged once per size) or a resolve that did not build stops the accumulation only: the sun pass keeps its
-// 8 rays per pixel, fixed per pixel, and the method stays Stochastic.
+// 8 rays per pixel, fixed per pixel, and the method stays Stochastic. The same holds for a snapshot when the
+// compose program did not build: it is taken in one pass (8 fixed rays) instead of the summed 8.
 void LLPipeline::releaseShadowStochasticHistory()
 {
     mShadowSTHistory.release();
@@ -8765,6 +8766,10 @@ void LLPipeline::composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 
 {
     static const LLStaticHashedString sScale("shadow_st_scale");
     LLGLSLShader& compose = gShadowStochasticComposeProgram;
+    if (!compose.mProgramObject)
+    {
+        return;   // not built (logged at the shader load): bind() would assert; the callers check it too
+    }
     light_map.bindTarget();
     compose.bind();
     compose.uniform1f(sScale, scale);
@@ -10435,8 +10440,11 @@ void LLPipeline::renderDeferredLighting()
         // into mRT->screen and the resolve makes the light map of them and of the last frame
         const bool stochastic_shadows = RenderShadowMethod == LLShadowMethod::STOCHASTIC && RenderShadowDetail > 0;
         const bool stochastic_temporal = beginShadowStochastic();
-        // a snapshot has no history: it sums 8 sun passes of different rays (shadow_st_frame 1..8) and averages them
-        const bool stochastic_snapshot = stochastic_shadows && gSnapshot && !gCubeSnapshot && !stochastic_temporal;
+        // a snapshot has no history: it sums 8 sun passes of different rays (shadow_st_frame 1..8) and averages them with
+        // the compose program; when that did not build (the shader set failed) the snapshot takes the single-pass route:
+        // 8 fixed rays (shadow_st_frame 0), the light map written directly, the blur on all channels
+        const bool stochastic_snapshot = stochastic_shadows && gSnapshot && !gCubeSnapshot && !stochastic_temporal
+                                         && gShadowStochasticComposeProgram.mProgramObject != 0;
         LLRenderTarget* sun_target = (stochastic_temporal || stochastic_snapshot) ? screen_target : deferred_light_target;
         // </Vulkanstorm>
         if ((RenderDeferredSSAO && !gCubeSnapshot) || RenderShadowDetail > 0)

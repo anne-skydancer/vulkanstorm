@@ -41,6 +41,14 @@ namespace
             && LLShadowMethod::usesStableCascades(2), "stable cascades for every method but Legacy");
         check(LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(3))
             && LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(4000000000u)), "an unknown value is a stable-cascade method");
+        for (std::uint32_t v : { 0u, 1u, 2u, 3u, 4000000000u })
+        {
+            check(LLShadowMethod::effective(v, true) == LLShadowMethod::sanitize(v), "a capable device runs the sanitized method");
+        }
+        check(LLShadowMethod::effective(2, false) == LLShadowMethod::LEGACY, "Stochastic on a device below GL 4.0 is Legacy");
+        check(LLShadowMethod::effective(1, false) == LLShadowMethod::PCSS && LLShadowMethod::effective(0, false) == LLShadowMethod::LEGACY,
+              "the other methods are unchanged on such a device");
+        check(LLShadowMethod::effective(3, false) == LLShadowMethod::PCSS, "an unknown value is the default, not Legacy, on such a device");
         check(LLShadowMethod::DEFAULT == LLShadowMethod::PCSS, "unknown values read as the default, PCSS");
     }
 
