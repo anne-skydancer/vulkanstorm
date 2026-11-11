@@ -34,10 +34,12 @@
 #include "httpoptions.h"
 #include "_httpservice.h"
 #include "_httprequestqueue.h"
+#include "_thread.h"
 
 #include <curl/curl.h>
 #include <boost/regex.hpp>
 #include <sstream>
+#include <chrono>
 
 #include "llcorehttp_test.h"
 
@@ -454,13 +456,9 @@ void HttpRequestTestObjectType::test<4>()
 template <> template <>
 void HttpRequestTestObjectType::test<5>()
 {
-#ifndef LL_WINDOWS
-    skip("Skip due to issues with testing pthread cancellation");
-#endif
-
     ScopedCurlInit ready;
 
-    set_test_name("HttpRequest Spin (soft) + NoOp + hard termination");
+    set_test_name("HttpRequest Spin (soft) + NoOp + destroy with running thread");
 
     // Handler can be stack-allocated *if* there are no dangling
     // references to it after completion of this method.
@@ -505,8 +503,10 @@ void HttpRequestTestObjectType::test<5>()
         delete req;
         req = NULL;
 
-        // Shut down service
+        // Shut down service with the worker still running (it is
+        // soft-spinning): destroyService() stops and joins it.
         HttpRequest::destroyService();
+        ensure("No HttpThread left alive", HttpThread::liveCount() == 0);
     }
     catch (...)
     {
@@ -521,12 +521,9 @@ void HttpRequestTestObjectType::test<5>()
 template <> template <>
 void HttpRequestTestObjectType::test<6>()
 {
-#ifndef LL_WINDOWS
-    skip("Skip due to issues with testing pthread cancellation");
-#endif
     ScopedCurlInit ready;
 
-    set_test_name("HttpRequest Spin + NoOp + hard termination");
+    set_test_name("HttpRequest hard Spin + NoOp + cooperative stop");
 
     // Handler can be stack-allocated *if* there are no dangling
     // references to it after completion of this method.
@@ -572,8 +569,42 @@ void HttpRequestTestObjectType::test<6>()
         delete req;
         req = NULL;
 
-        // Shut down service
+        // Shut down service while the worker is in the hard spin: the
+        // spin ends when the service is asked to stop, so this must
+        // return promptly and leave no thread behind.
+        const auto t0(std::chrono::steady_clock::now());
         HttpRequest::destroyService();
+        const auto elapsed(std::chrono::steady_clock::now() - t0);
+        ensure("destroyService() returned in under 5 s", elapsed < std::chrono::seconds(5));
+        ensure("No HttpThread left alive", HttpThread::liveCount() == 0);
+
+        // The library must be usable again afterwards.
+        mHandlerCalls = 0;
+        HttpRequest::createService();
+        HttpRequest::startThread();
+        req = new HttpRequest();
+        handle = req->requestNoOp(handlerp);
+        ensure("Valid handle returned for second NoOp", handle != LLCORE_HTTP_HANDLE_INVALID);
+        count = 0;
+        while (count++ < limit && mHandlerCalls < 1)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Second NoOp notification received", mHandlerCalls == 1);
+        handle = req->requestStopThread(handlerp);
+        ensure("Valid handle returned for stop request", handle != LLCORE_HTTP_HANDLE_INVALID);
+        count = 0;
+        while (count++ < limit && mHandlerCalls < 2)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("Stop notification received", mHandlerCalls == 2);
+        delete req;
+        req = NULL;
+        HttpRequest::destroyService();
+        ensure("No HttpThread left alive after restart", HttpThread::liveCount() == 0);
     }
     catch (...)
     {
@@ -1321,7 +1352,7 @@ void HttpRequestTestObjectType::test<14>()
     // Create before memory record as the string copy will bump numbers.
     TestHandler2 handler(this, "handler");
     LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
-    std::string url_base(get_base_url() + "/sleep/");   // path to a 30-second sleep
+    std::string url_base(get_base_url() + "/sleep/");   // path to a 5-second sleep
     mHandlerCalls = 0;
 
     HttpRequest * req = NULL;
@@ -2125,17 +2156,6 @@ void HttpRequestTestObjectType::test<18>()
 template <> template <>
 void HttpRequestTestObjectType::test<19>()
 {
-    // It appears that HttpRequest is fully capable of sending duplicate header values in violation of
-    // this test's expectations. Something needs to budge: is sending duplicate header values desired?
-    //
-    // Test server /reflect/ response headers (mirrored from request)
-    //
-    // X-Reflect-content-type: text/plain
-    // X-Reflect-content-type: text/html
-    // X-Reflect-content-type: application/llsd+xml
-    //
-    skip("FIXME: Bad assertions or broken functionality.");
-
     ScopedCurlInit ready;
 
     // Warmup boost::regex to pre-alloc memory for memory size tests
@@ -2315,17 +2335,6 @@ void HttpRequestTestObjectType::test<19>()
 template <> template <>
 void HttpRequestTestObjectType::test<20>()
 {
-    // It appears that HttpRequest is fully capable of sending duplicate header values in violation of
-    // this test's expectations. Something needs to budge: is sending duplicate header values desired?
-    //
-    // Test server /reflect/ response headers (mirrored from request)
-    //
-    // X-Reflect-content-type: text/plain
-    // X-Reflect-content-type: text/html
-    // X-Reflect-content-type: application/llsd+xml
-    //
-    skip("FIXME: Bad assertions or broken functionality.");
-
     ScopedCurlInit ready;
 
     // Warmup boost::regex to pre-alloc memory for memory size tests
@@ -2530,17 +2539,6 @@ void HttpRequestTestObjectType::test<20>()
 template <> template <>
 void HttpRequestTestObjectType::test<21>()
 {
-    // It appears that HttpRequest is fully capable of sending duplicate header values in violation of
-    // this test's expectations. Something needs to budge: is sending duplicate header values desired?
-    //
-    // Test server /reflect/ response headers (mirrored from request)
-    //
-    // X-Reflect-content-type: text/plain
-    // X-Reflect-content-type: text/html
-    // X-Reflect-content-type: application/llsd+xml
-    //
-    skip("FIXME: Bad assertions or broken functionality.");
-
     ScopedCurlInit ready;
 
     // Warmup boost::regex to pre-alloc memory for memory size tests
@@ -2620,6 +2618,18 @@ void HttpRequestTestObjectType::test<21>()
             regex_container_t::value_type(
                 boost::regex("X-Reflect-content-type", boost::regex::icase),
                 boost::regex("application/llsd\\+xml", boost::regex::icase)));
+        // The three content-type appends above are all sent, in the order
+        // appended, as three separate Content-Type header lines, and the test
+        // server reflects each as its own X-Reflect-content-type header.
+        // Each must be present; their relative order is not asserted.
+        handler.mHeadersRequired.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-content-type", boost::regex::icase),
+                boost::regex("text/plain", boost::regex::icase)));
+        handler.mHeadersRequired.push_back(
+            regex_container_t::value_type(
+                boost::regex("X-Reflect-content-type", boost::regex::icase),
+                boost::regex("text/html", boost::regex::icase)));
 
         handler.mHeadersDisallowed.push_back(
             regex_container_t::value_type(
@@ -2649,14 +2659,6 @@ void HttpRequestTestObjectType::test<21>()
             regex_container_t::value_type(
                 boost::regex("X-Reflect-transfer-encoding", boost::regex::icase),
                 boost::regex(".*", boost::regex::icase)));
-        handler.mHeadersDisallowed.push_back(
-            regex_container_t::value_type(
-                boost::regex("X-Reflect-content-type", boost::regex::icase),
-                boost::regex("text/plain", boost::regex::icase)));
-        handler.mHeadersDisallowed.push_back(
-            regex_container_t::value_type(
-                boost::regex("X-Reflect-content-type", boost::regex::icase),
-                boost::regex("text/html", boost::regex::icase)));
         HttpHandle handle = req->requestPut(HttpRequest::DEFAULT_POLICY_ID,
                                             url_base + "reflect/",
                                             ba,
@@ -2744,13 +2746,6 @@ void HttpRequestTestObjectType::test<22>()
 
     set_test_name("BUG-2295");
 
-#if LL_WINDOWS && ADDRESS_SIZE == 64
-    // teamcity win64 builds freeze on this test, if you figure out the cause, please fix it
-    if (getenv("TEAMCITY_PROJECT_NAME"))
-    {
-        skip("BUG-2295 - partial load on W64 causes freeze");
-    }
-#endif
     // Handler can be stack-allocated *if* there are no dangling
     // references to it after completion of this method.
     // Create before memory record as the string copy will bump numbers.
@@ -2985,14 +2980,6 @@ void HttpRequestTestObjectType::test<23>()
     ScopedCurlInit ready;
 
     set_test_name("HttpRequest GET 503s with 'Retry-After'");
-
-#if LL_WINDOWS && ADDRESS_SIZE == 64
-    // teamcity win64 builds freeze on this test, if you figure out the cause, please fix it
-    if (getenv("TEAMCITY_PROJECT_NAME"))
-    {
-        skip("llcorehttp 503-with-retry test hangs on Windows 64");
-    }
-#endif
 
     // This tests mainly that the code doesn't fall over if
     // various well- and mis-formed Retry-After headers are

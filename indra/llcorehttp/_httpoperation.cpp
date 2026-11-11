@@ -287,10 +287,10 @@ void HttpOpSpin::stageFromRequest(HttpService * service)
 {
     if (0 == mMode)
     {
-        // Spin forever
-        while (true)
+        // Hard spin: occupy the worker until the service is asked to stop
+        while (! service->isExitRequested())
         {
-            ms_sleep(100);
+            ms_sleep(10);
         }
     }
     else
