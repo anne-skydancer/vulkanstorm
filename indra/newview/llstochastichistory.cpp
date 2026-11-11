@@ -139,16 +139,36 @@ void deleteTexture(U32& name)
 
 bool deviceSupported()
 {
-    // 4.29 as llgl.cpp: mGLVersion is a float
-    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
-    const bool ok = gGLManager.mGLVersion >= 4.29f && glsl;
+    // 3.99 / 4.29 as llgl.cpp: mGLVersion is a float
+    const bool ok = gGLManager.mGLVersion >= 3.99f && gGLManager.mGLSLVersionMajor >= 4;
     if (!ok)
     {
-        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs OpenGL 4.3 (GLSL 4.30, the compute resolve); this device reports GL "
+        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs OpenGL 4.0; this device reports GL "
                                   << gGLManager.mGLVersion << ", GLSL " << gGLManager.mGLSLVersionMajor << "."
                                   << gGLManager.mGLSLVersionMinor << ": sorted alpha is used" << LL_ENDL;
     }
     return ok;
+}
+
+bool computeResolve()
+{
+    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
+    const bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
+    // debug only: force the fragment path on a GL 4.3 device (tests), read once
+    static const bool force_fragment = []() {
+        const char* v = getenv("VKSTORM_STOCH_FRAGMENT_RESOLVE");
+        return v && v[0] == '1';
+    }();
+    const bool compute = capable && !force_fragment;
+    static bool logged = false;   // main render thread, the pipeline's allocation
+    if (!logged && gGLManager.mGLVersion >= 3.99f)
+    {
+        logged = true;
+        LL_INFOS("Pipeline") << "Stochastic transparency: " << (compute ? "compute resolve (GL 4.3 and later, 144 B/px)"
+                                                                          : "fragment resolve with the pre-pass target (GL 4.0 to 4.2, 160 B/px)")
+                             << (force_fragment ? ", forced by VKSTORM_STOCH_FRAGMENT_RESOLVE" : "") << LL_ENDL;
+    }
+    return compute;
 }
 
 bool acquireMasks()
@@ -181,7 +201,7 @@ U32 getMasks()
 
 } // namespace LLStochasticEngine
 
-bool LLStochasticHistory::allocate(U32 width, U32 height)
+bool LLStochasticHistory::allocate(U32 width, U32 height, bool framebuffers)
 {
     release();
     if (!width || !height)
@@ -194,6 +214,17 @@ bool LLStochasticHistory::allocate(U32 width, U32 height)
     {
         mTexture[i] = LLStochasticEngine::newTexture2D(mFormat, width, height, mFormat);
         ok = ok && mTexture[i];
+        if (framebuffers)
+        {
+            glGenFramebuffers(1, &mFramebuffer[i]);
+            glBindFramebuffer(GL_FRAMEBUFFER, mFramebuffer[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTexture[i], 0);
+            ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        }
+    }
+    if (framebuffers)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
     }
     if (!ok || glGetError() != GL_NO_ERROR)
     {
@@ -210,6 +241,11 @@ void LLStochasticHistory::release()
 {
     for (U32 i = 0; i < 2; ++i)
     {
+        if (mFramebuffer[i])
+        {
+            glDeleteFramebuffers(1, &mFramebuffer[i]);
+            mFramebuffer[i] = 0;
+        }
         LLStochasticEngine::deleteTexture(mTexture[i]);
     }
     mWidth = mHeight = 0;
