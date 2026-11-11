@@ -12,7 +12,7 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 | Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) |
 | Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening |
 | Sun N·L under shadow | Legacy `min(N·L, shadow)` | PCSS and Stochastic: N·L × shadow (`SHADOW_NL_MULTIPLY`) |
-| Later shadow stages (S2-S9, S7b) | No | Yes (S2 below) |
+| Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; forward receivers (alpha, PBR, water) still use the Legacy build until D11 |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` |
 
 ## Shared by both methods
@@ -30,46 +30,70 @@ So Legacy is Firestorm 7.2.5's cascade fit and map sizes with the PCF shader as 
 (the shader program is the one PCSS-off used before the switch); only the cascades and the map
 size differ in the C++ code. The one shader difference is the sun's N·L under shadow: every method but Legacy defines `SHADOW_NL_MULTIPLY` (a global define set in `loadBasicShaders`, `llviewershadermgr.cpp`, where the method is read), which switches `sunShadowedDiffuse` in `deferredUtil.glsl` from Firestorm's `min(N·L, shadow)` to `N·L × clamp(shadow, 0, 1)`. Legacy never defines it and keeps `min()`. In classic-mode PBR (`pbrBaseLight`) the multiply form applies the shadow once, where `min()` applied it twice. The define changes the shader text, so the shader cache is rebuilt once after the update.
 
-## Stage S2: the shared groundwork of PCSS and Stochastic
+## Stage S2: the method-neutral groundwork
 
-Written once as a method-neutral block (`SHADOW_COMMON`, GLSL 1.50, no `textureGather`; `SHADOW_MODERN`, set by the PCSS build of `shadowUtil.glsl` and,
-when it exists, the Stochastic build, implies it, and the Legacy stages after S2 can define it to reuse the helpers). Only `shadowPlaneTap` and the PCSS code stay under `SHADOW_MODERN`. Legacy defines neither today and its shader code and cascade culling
-are untouched (the offline bench shows its light map bit-identical to the devel tip it was cut from).
-The constants are in `llshadowcascadefit.h` and reach the shader as defines of the same names, so
-there is one source for each:
+`shadowUtil.glsl` has a block that no method owns, `SHADOW_COMMON` (GLSL 1.50, no `textureGather`).
+`SHADOW_MODERN` (the PCSS build, and the Stochastic build when it exists) implies it. The Legacy
+stages that follow S2 can define it to call the same helpers; today Legacy defines neither, nothing in
+Legacy calls the block, and its light map stays bit-identical to the devel tip (offline bench). The shader
+manager emits the define and every constant the block reads from one place (`addShadowCommonDefines`,
+`llviewershadermgr.cpp`), the constants come from `llshadowcascadefit.h`, and the shader cache version
+hashes the same list, so changing a constant rebuilds the cached shaders. The bench compiles the block
+alone as GLSL 1.50.
 
 - `SHADOW_FOOTPRINT_M` (0.25 m): how far a filter may reach from the receiver, and the same radius as
   the caster cull guard. `casterCullMargin(texel, normal_offset)` is `max(16 texels, footprint +
-  1 texel) + normal offset` (`pipeline.cpp`, `generateSunCascadesStable`). The finest cascade's margin
-  grows from 9 cm to 26 cm, the coarse ones change by one texel; the unit test checks the formula.
-- Receiver plane: `shadowGeometricNormal` rebuilds the surface normal from the depth buffer (per screen
-  axis the neighbour with the smaller depth difference; the G-buffer normal only where both neighbours
-  of an axis jump). It replaces the G-buffer normal, which is the normal-mapped normal and would
-  extrapolate the bumps. `shadowPlaneGradient` turns it into the signed d depth / d uv of the cascade
-  from the rows of the (orthographic) cascade matrix; `llshadowcascadefit_test.cpp` checks it against
-  the two-tangent-step plane the PCSS filter used.
+  1 texel) + normal offset` (`pipeline.cpp`, `generateSunCascadesStable`). The finest cascade (0.58 cm
+  texels) goes from 14 cm (16 texels plus 5 cm) to 26 cm; the coarse cascades (11.6 cm texels and up)
+  are texel limited and change by one texel. The unit test checks the formula and that the filter's
+  reach stays inside it.
+- Receiver plane: `shadowGeometricNormal` rebuilds the surface normal from the depth buffer instead of
+  taking the G-buffer normal, which is the normal-mapped one and would extrapolate the bumps. Per screen
+  axis `shadowAxisStep` picks the neighbour that lies in the surface: the step that is clearly flatter in
+  depth (a crease or fold), and where the two are alike the one nearer the G-buffer normal's tangent plane,
+  which only breaks the tie (either lies in the surface). So a normal map that tilts a flat wall by 35
+  degrees does not bend the plane (the bench checks acne and the shadow's start at the foot with tilted
+  normals). The G-buffer normal is the result only where an axis has no usable neighbour (screen edge, depth
+  edge on both sides) or the two steps are parallel (tested on unit steps, so it does not depend on the
+  pixel size). `shadowPlaneGradient` turns the normal into the signed d depth / d uv of the cascade from
+  the rows of the (orthographic) cascade matrix, clamped to `SHADOW_GRAD_MAX`;
+  `llshadowcascadefit_test.cpp` checks it against the two-tangent-step plane, with the matrix built the
+  way `generateSunCascadesStable` builds it.
 - World-unit bias: `SHADOW_BIAS_TEXELS` (1 texel of the cascade at the pixel, times the map's depth scale),
   the normal offset `SHADOW_NORMAL_OFFSET_TEXELS` x sin(angle to the light) along the geometric normal
   (per cascade, replacing the light-direction offset), and the cap of one tap's plane bias,
-  `SHADOW_PLANE_BIAS_MAX_TEXELS`. The same length in metres in every cascade. Under PCSS
-  `RenderShadowBias` and `RenderShadowOffset` no longer act on the sun cascades (Legacy keeps them);
-  the projector shadows keep their own bias.
-- `shadowPlaneTap` (`SHADOW_GATHER`, GL 4.0 and later): one bilinear compare tap with the signed plane
-  through `textureGather`; the PCSS no-blocker tap uses it. GL 3.3 keeps the hardware compare.
-- `shadowDepth0` to `shadowDepth5`: `bindShadowDepthFetch` binds all six maps (shadowDepth2/3 are
-  declared for stage S3 and the Stochastic method; the compiler drops them until something reads them).
+  `SHADOW_PLANE_BIAS_MAX_TEXELS`. The same length in metres in every cascade. `shadowCascadeSetup` computes
+  the per-cascade scales, bias and cap once, and `shadowReceiverGeometry` the normal and its angle to the
+  light once per pixel, only inside the shadow distance (sky and far pixels skip the four depth reads);
+  PCSS calls them, and so can any other method. Under PCSS `RenderShadowBias` and `RenderShadowOffset` no
+  longer act on the deferred sun pass (they stay for Legacy); the forward receivers (alpha, PBR materials,
+  water) still link the Legacy build and use them until decision D11, and the projector shadows keep their
+  own bias.
+- `shadowPlaneTap` (`SHADOW_GATHER`, GL 4.0 and later, under `SHADOW_MODERN`): one bilinear compare tap
+  with the signed plane through `textureGather`; the PCSS no-blocker tap uses it. The plane only ever lowers
+  the reference (one-sided), because past a crease the extrapolated plane is not the surface. GL 3.3
+  keeps the hardware compare.
+- The sun contact path keeps `foot`, half a shadow texel added to the plane term of the blocker search and the
+  filter, so a tap anywhere inside its texel is covered.
 
 What changes in the PCSS image with stage S2 alone: no per-pixel bump pattern in the receiver plane (a
 normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
 the same length in metres in every cascade (smaller than before in the near cascades, larger in the far
 ones: no more 4 mm in cascade 0 to 70 cm in cascade 3), a search and a filter that stop at 25 cm
 (visible only in cascade 1 under a large sun scale; it was 41 cm), and a wider caster guard at the cascade
-edges (26 cm in the finest cascade instead of 9 cm). The filter itself (rotated 12 taps, light-map blur) stays until stage S3.
+edges (26 cm in the finest cascade instead of 14 cm). The filter itself (rotated 12 taps, light-map blur)
+is unchanged.
 
-Cost, offline bench (`scripts/perf/bench_shadow_pcss.py`, sun light pass, median of 30 frames, same GPU,
-devel-tip PCSS against this tree's PCSS): +0.014 ms at 1080p with sun and spot shadows (+0.012 ms sun
-only), +0.024 / +0.021 ms at 1440p. The gate is +0.015 ms at 1080p; stage S2 is the only cost added so far.
-Its percentage of the `windows-latest` 82080 PCSS-on frame is not known yet: that baseline capture is still owed.
+Known limit: at a crease (a wall's foot on the ground) the plane of one surface does not continue into
+the other. `test_shadow_bias_altitude.py` counts the 3 cm band above the ground apart from the rest of the
+wall and bounds it (measured 2.3 to 4.3 % of that band's pixels, at most 5 %); the rest of the wall has no acne.
+
+Cost, offline bench (`scripts/perf/bench_shadow_pcss.py`, sun light pass, median of 30 frames, 3 rounds,
+same GPU, devel-tip PCSS against this tree's PCSS): +0.014 ms at 1080p with sun and spot shadows
+(+0.013 ms sun only), +0.022 / +0.023 ms at 1440p; the GL 3.3 path (`pcss33`) is +0.011 / +0.010 ms at 1080p. In a view that is
+74 % sky it is +0.003 ms or less at 1080p. The gate is +0.015 ms at 1080p. Stage S2 is the only cost added so
+far, so the running total is the same +0.014 ms; its percentage of the `windows-latest` 82080 PCSS-on frame is
+not known yet, because that baseline capture is still owed.
 
 ## Where the method is read
 
