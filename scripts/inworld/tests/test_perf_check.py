@@ -36,9 +36,9 @@ def session_for(fake):
 def scenario_file(tmp, **over):
     sc = json.loads(SCENARIO.read_text(encoding="utf-8"))
     sc["settle"] = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_teleport_s": 0.0, "login_timeout_s": 20,
-                    "window_timeout_s": 10.0, "compare_wait_s": 2.0}
+                    "window_timeout_s": 10.0, "compare_wait_s": 2.0, "after_setting_s": 0.0}
     sc["window"] = {"frames": 5, "gpu": True}
-    sc["overhead"] = {"probe_s": 0.2, "bench_iterations": 1000}
+    sc["overhead"] = {"probe_s": 0.2, "probe_repeats": 3, "bench_iterations": 1000}
     sc.update(over)
     p = pathlib.Path(tmp) / "sc.json"
     p.write_text(json.dumps(sc), encoding="utf-8")
@@ -314,11 +314,11 @@ class VariantsTest(unittest.TestCase):
             real = pc.Run.one_preset
             calls = []
 
-            def spy(self, preset, variant=None, set_camera=True):
+            def spy(self, preset, variant=None, set_camera=True, fps_samples=None):
                 calls.append(variant["id"])
                 if len(calls) == 2:
                     raise lc.Aborted("test stop")
-                real(self, preset, variant, set_camera)
+                real(self, preset, variant, set_camera, fps_samples)
             sc = json.loads(ALPHA_CROWD.read_text(encoding="utf-8"))
             with mock.patch.object(pc.Run, "one_preset", spy):
                 code, run = self._run_variants(tmp, fv, sc["variants"])
@@ -332,10 +332,10 @@ class VariantsTest(unittest.TestCase):
             orig = dict(fv.settings)
             real = pc.Run.one_preset
 
-            def spy(self, preset, variant=None, set_camera=True):
+            def spy(self, preset, variant=None, set_camera=True, fps_samples=None):
                 if variant["id"] == "m1":
                     raise KeyboardInterrupt()
-                real(self, preset, variant, set_camera)
+                real(self, preset, variant, set_camera, fps_samples)
             sc = json.loads(ALPHA_CROWD.read_text(encoding="utf-8"))
             with mock.patch.object(pc.Run, "one_preset", spy):
                 code, _ = self._run_variants(tmp, fv, sc["variants"])
@@ -350,8 +350,8 @@ class VariantsTest(unittest.TestCase):
             seen = []
             real = pc.Run.one_preset
 
-            def spy(self, preset, variant=None, set_camera=True):
-                real(self, preset, variant, set_camera)
+            def spy(self, preset, variant=None, set_camera=True, fps_samples=None):
+                real(self, preset, variant, set_camera, fps_samples)
                 seen.append((variant["id"], fv.settings["RenderGlow"][1]))
             with mock.patch.object(pc.Run, "one_preset", spy):
                 code, _ = run_main(fv, tmp, presets=[{"id": "current", "camera": None}], variants=variants, compare=NO_COMPARE,
@@ -372,6 +372,71 @@ class VariantsTest(unittest.TestCase):
                              else "slower_not_explained", text)
             self.assertGreater(facts["frame_pct"], 3.0)
             self.assertEqual(facts["alpha_cpu_delta_ms"], 0.5)
+
+    def test_a_u32_control_that_reads_back_as_a_string_is_accepted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, u32_as_string=True)
+            orig = dict(fv.settings)
+            sc = json.loads(ALPHA_CROWD.read_text(encoding="utf-8"))
+            code, run = self._run_variants(tmp, fv, sc["variants"])
+            self.assertEqual(code, 0)
+            self.assertEqual(fv.settings["RenderAlphaSortMethod"], orig["RenderAlphaSortMethod"])
+
+    def test_the_frame_rate_is_probed_three_times_per_variant_alternating(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            seen = []
+            real = pc.Run.measure_fps_off
+
+            def spy(self):
+                seen.append(int(fv.settings["RenderAlphaSortMethod"][1]))
+                return real(self)
+            sc = json.loads(ALPHA_CROWD.read_text(encoding="utf-8"))
+            with mock.patch.object(pc.Run, "measure_fps_off", spy):
+                code, run = run_main(fv, tmp, presets=sc["presets"][:2], variants=sc["variants"], compare=NO_COMPARE)
+            self.assertEqual(code, 0)
+            self.assertEqual(seen[:6], [0, 1, 1, 0, 0, 1])      # preset 0: m0 m1, m1 m0, m0 m1
+            self.assertEqual(seen[6:], [1, 0, 0, 1, 1, 0])      # preset 1 starts with the other method
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            for key in ("current__m0", "current__m1", "north__m0", "north__m1"):
+                pr = index["presets"][key]["fps_probe"]
+                self.assertEqual(len(pr["samples"]), 3)
+                self.assertIn("spread_pct", pr)
+                self.assertEqual(index["presets"][key]["fps_stats_off"], sorted(pr["samples"])[1])    # the median
+            self.assertIn("window_geometry", index)
+
+    def test_implausible_alpha_samples_are_dropped_with_a_warning(self):
+        w = window_with(1.0, samples=2.07e17)
+        notes = []
+        info = {"preset": "p", "variant": "m0", "window_geometry": {"width": 1920, "height": 1080}}
+        a = apc.alpha_sums(w, info, notes)
+        self.assertNotIn("samples", a)
+        self.assertEqual(a["cpu_ms"], 1.0)
+        self.assertEqual(len(notes), 1)
+        self.assertIn("ignored", notes[0])
+        ok = apc.alpha_sums(window_with(1.0, samples=5.0e6), info, [])      # 5 M samples over 400 draws at 1080p: fine
+        self.assertEqual(ok["samples"], 5.0e6)
+        # and the report says so instead of printing the number
+        e = {"window": w, "info": dict(info, fps_stats_off=60.0)}
+        e1 = {"window": window_with(1.0), "info": dict(info, variant="m1", variant_settings={"RenderAlphaSortMethod": 1}, fps_stats_off=60.0)}
+        e["info"]["variant_settings"] = {"RenderAlphaSortMethod": 0}
+        text = "\n".join(apc.report_methods({"p__m0": e, "p__m1": e1}))
+        self.assertIn("WARNING implausible alpha samples", text)
+        self.assertNotIn("2.07e", text)
+
+    def test_a_difference_inside_the_probe_noise_is_inconclusive(self):
+        def noisy(method, fps, cpu, spread):
+            e = entry(method, fps, cpu)
+            e["info"]["fps_probe"] = {"samples": [fps * 0.9, fps, fps * 1.1], "spread_pct": spread}
+            return e
+        # 5 % slower, but the probes of the same window scatter by 20 %
+        run = {"p": {0: noisy(0, 100.0, 1.0, 20.0), 1: noisy(1, 95.0, 3.0, 20.0)}}
+        text, facts = apc.verdict(run)
+        self.assertEqual(facts["result"], "inconclusive", text)
+        self.assertIn("noise", text)
+        # the same difference with quiet probes is a finding
+        run = {"p": {0: noisy(0, 100.0, 1.0, 1.0), 1: noisy(1, 95.0, 3.0, 1.0)}}
+        self.assertEqual(apc.verdict(run)[1]["result"], "slower_explained")
 
     def test_verdict_rule(self):
         # 4 % slower and the alpha CPU delta explains it (0.5 ms of a ~0.69 ms difference): slower

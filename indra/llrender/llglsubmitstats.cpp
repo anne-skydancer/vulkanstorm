@@ -49,7 +49,8 @@ namespace
     uint64_t sFrameNo = 0;
     bool sGpuThisFrame = false;
 
-    std::vector<GLuint> sFreeQueries;
+    std::vector<GLuint> sFreeQueries;       // timestamp queries (target GL_TIMESTAMP)
+    std::vector<GLuint> sFreeSampleQueries; // GL_SAMPLES_PASSED queries: a query object keeps the target of its first use, so the two pools must never mix
 
     // The mergeable-run tracker.
     LLGLSubmitMath::RunTracker sRun;
@@ -89,6 +90,24 @@ namespace
     }
 
     void releaseQuery(uint32_t id) { sFreeQueries.push_back(id); }
+
+    uint32_t acquireSampleQuery()
+    {
+        if (sFreeSampleQueries.empty())
+        {
+            GLuint ids[16];
+            glGenQueries(16, ids);
+            for (GLuint id : ids)
+            {
+                sFreeSampleQueries.push_back(id);
+            }
+        }
+        GLuint id = sFreeSampleQueries.back();
+        sFreeSampleQueries.pop_back();
+        return id;
+    }
+
+    void releaseSampleQuery(uint32_t id) { sFreeSampleQueries.push_back(id); }
 
     LLGLSubmitStats::Record* recordFor(LLGLSubmitStats::Frame& f, const std::string& view, const std::string& pass)
     {
@@ -405,7 +424,7 @@ void LLGLSubmitStats::dropOldest()
     f->insts.clear();
     for (const Frame::SampleInst& si : f->sampleInsts)
     {
-        releaseQuery(si.query);
+        releaseSampleQuery(si.query);
     }
     f->sampleInsts.clear();
     f->gpuResolved = false;
@@ -415,6 +434,7 @@ void LLGLSubmitStats::dropOldest()
 void LLGLSubmitStats::resetGL(bool contextValid)
 {
     std::vector<GLuint> ids = sFreeQueries;
+    ids.insert(ids.end(), sFreeSampleQueries.begin(), sFreeSampleQueries.end());
     for (const auto& f : sPending)
     {
         for (const Frame::Inst& in : f->insts)
@@ -465,6 +485,7 @@ void LLGLSubmitStats::resetGL(bool contextValid)
         glDeleteQueries((GLsizei)ids.size(), ids.data());
     }
     sFreeQueries.clear();
+    sFreeSampleQueries.clear();
     sPending.clear();
 }
 
@@ -496,7 +517,7 @@ void LLGLSubmitStats::resolveGpu(bool blockForGpu)
             GLuint64 n = 0;
             glGetQueryObjectui64v(si.query, GL_QUERY_RESULT, &n);
             si.rec->samples += n;
-            releaseQuery(si.query);
+            releaseSampleQuery(si.query);
         }
         f->sampleInsts.clear();
         f->insts.clear();
@@ -579,7 +600,7 @@ void LLGLSubmitStats::enterPass(const char* name, int index)
     // Frame Profile and per-shader profiling hold the GL_SAMPLES_PASSED target themselves (one query per target at a time)
     if (e.timed && !sSamplesOpen && !LLGLSLShader::sProfileEnabled && isAlphaPass(name))
     {
-        e.qSamples = acquireQuery();
+        e.qSamples = acquireSampleQuery();
         glBeginQuery(GL_SAMPLES_PASSED, e.qSamples);
         sSamplesOpen = true;
     }

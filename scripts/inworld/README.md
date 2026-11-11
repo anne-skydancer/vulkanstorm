@@ -306,6 +306,11 @@ from `GL_SAMPLES_PASSED`: samples, not fragments) are the gate for weak GPUs. So
 without OpenGL 4 (iGPUs, older GPUs, Intel chips capped at GL 3.3), so a later stage must not raise those counters in a crowd.
 Method 1's samples (multisample targets, several passes) are not comparable to method 0's. An active sample query can perturb
 early-Z, so the frame rate measured with nothing collecting (`fps_stats_off`, the "frame ms" column) is the clean figure.
+That frame rate is the median of 3 probes of 5 s per method (the methods alternate between probes); the report shows the spread of the
+probes per window (`fps spread %`), and the verdict is `inconclusive` when the difference is no larger than that noise. `perf.json`
+records the viewer window size and whether it is maximised (`window_geometry`, checked again at the end of the run); keep it the same
+between runs you compare. Alpha sample counts above width x height x 8 x draws are dropped with a warning (they are a measurement
+defect, not a finding).
 
 The scenario takes four camera presets (the current view and three headings), and for each preset one 120-frame window with
 method 0 and one with method 1 (`variants`; the order alternates from preset to preset), GPU timers on, no image compare.
@@ -342,7 +347,7 @@ Set-Location (Split-Path $exe)
 & $exe --leap $run --leap $noop
 ```
 
-Log in by hand, go to the scene, wait for the crowd to rez. A run takes roughly 5 to 10 minutes (8 windows plus settling). Then, for each run folder:
+Log in by hand, go to the scene, wait for the crowd to rez. A run takes roughly 5 to 8 minutes (per preset: 3 frame rate probes of 5 s per method, alternating, then one 120-frame window per method). Then, for each run folder:
 
 ```powershell
 python "$scripts/analyze_perf_check.py" "$caps/alpha-C-<stamp>"

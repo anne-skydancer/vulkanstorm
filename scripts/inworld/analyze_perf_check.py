@@ -145,18 +145,48 @@ def frame_ms(info):
     return 1000.0 / float(fps) if fps else None
 
 
-def alpha_sums(window):
+MAX_MSAA = 8
+FALLBACK_SIZE = (7680, 4320)     # when the window size was not recorded: 8K
+
+
+def sample_limit(info, draws):
+    """The most samples one alpha pass can plausibly pass per frame: width x height x MSAA x draws (at least one draw)."""
+    geo = info.get("window_geometry") or {}
+    w, h = geo.get("width") or FALLBACK_SIZE[0], geo.get("height") or FALLBACK_SIZE[1]
+    return float(w) * float(h) * MAX_MSAA * max(float(draws or 0.0), 1.0)
+
+
+def alpha_sums(window, info=None, notes=None):
     """Per-frame sums over the alpha passes of the main view (these passes do not nest in each other); None if none found.
-    A key that no alpha pass reports is left out (the dump drops zero counters; 'samples' is absent when not measured)."""
+    A key that no alpha pass reports is left out (the dump drops zero counters; 'samples' is absent when not measured).
+    With 'info' (the run's record of the window, for its size) a samples value above sample_limit is dropped with a note in
+    'notes' instead of being summed: such a number is a defect of the measurement, not a finding."""
     out = {}
     found = False
     for p in window.get("passes", []):
         if p.get("view") == "main" and ALPHA_PASS.search(p.get("pass") or ""):
             found = True
             for key, _ in ALPHA_COLUMNS:
-                if key in p:
-                    out[key] = out.get(key, 0.0) + num(p.get(key))
+                if key not in p:
+                    continue
+                if key == "samples" and info is not None and num(p.get(key)) > sample_limit(info, p.get("draws")):
+                    if notes is not None:
+                        notes.append("%s: %s samples per frame in %s is more than width x height x %d x draws (%s): ignored" % (
+                            info.get("preset", "?") + "__" + info.get("variant", "?"), fmt(p.get(key)), p.get("pass"), MAX_MSAA,
+                            fmt(sample_limit(info, p.get("draws")))))
+                    continue
+                out[key] = out.get(key, 0.0) + num(p.get(key))
     return out if found else None
+
+
+def entry_alpha(e, notes=None):
+    return alpha_sums(e["window"], e["info"], notes)
+
+
+def probe_spread_pct(info):
+    """(max - min) / median of the fps probes of one window, in percent; None when there was a single probe."""
+    pr = info.get("fps_probe") or {}
+    return pr.get("spread_pct") if len(pr.get("samples", [])) > 1 else None
 
 
 def main_view(window):
@@ -195,7 +225,7 @@ def paired(m, getter):
 
 def alpha_value(key):
     def get(e):
-        a = alpha_sums(e["window"])
+        a = entry_alpha(e)
         return None if a is None or key not in a else a[key]
     return get
 
@@ -209,8 +239,8 @@ def method_warnings(both):
     """Presets in which method 1 looks like it did not run stochastic: its alpha draws are 0 or the same as method 0's."""
     out = []
     for pid, m in both.items():
-        d0 = (alpha_sums(m[0]["window"]) or {}).get("draws", 0.0)
-        d1 = (alpha_sums(m[1]["window"]) or {}).get("draws", 0.0)
+        d0 = (entry_alpha(m[0]) or {}).get("draws", 0.0)
+        d1 = (entry_alpha(m[1]) or {}).get("draws", 0.0)
         if d1 == 0 or (d0 and d1 == d0):
             out.append("preset %s: method 1 has %s alpha draws against %s for method 0; check that stochastic transparency was "
                        "really in use (RenderAlphaSortMethod=1 needs OpenGL 4 and the stochastic path enabled)" % (
@@ -240,16 +270,27 @@ def verdict(runs):
     cpu_delta = median([paired(both[pid], alpha_value("cpu_ms")) for pid in ids])
     gpu_main = median([paired(both[pid], main_gpu) for pid in ids])
     gpu_alpha = median([paired(both[pid], alpha_value("gpu_ms")) for pid in ids])
-    facts = {"frame_ms_0": ft0, "frame_delta_ms": med_d, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "main_gpu_delta_ms": gpu_main,
+    noises = []
+    for pid in ids:
+        sp = [probe_spread_pct(both[pid][0]["info"]), probe_spread_pct(both[pid][1]["info"])]
+        sp = [x for x in sp if x is not None]
+        if sp:
+            noises.append(max(sp))
+    noise = median(noises)
+    facts = {"frame_ms_0": ft0, "noise_pct": noise, "frame_delta_ms": med_d, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "main_gpu_delta_ms": gpu_main,
              "alpha_gpu_delta_ms": gpu_alpha, "presets": len(ids), "pct_min": min(pcts), "pct_max": max(pcts),
              "warnings": method_warnings(both)}
     spread = "per preset %+.1f%% to %+.1f%%" % (min(pcts), max(pcts))
     gpu = "main view GPU %s ms, alpha passes GPU %s ms (median deltas)" % (
         "n/a" if gpu_main is None else "%+.2f" % gpu_main, "n/a" if gpu_alpha is None else "%+.2f" % gpu_alpha)
-    head = "median frame time delta %+.2f ms on %.2f ms (%+.1f%%, limit +%.0f%%; %s; %d presets)" % (
-        med_d, ft0, pct, SLOWER_PCT, spread, len(ids))
+    noise_txt = "" if noise is None else "; fps probe spread %.1f%% (median over presets)" % noise
+    head = "median frame time delta %+.2f ms on %.2f ms (%+.1f%%, limit +%.0f%%; %s%s; %d presets)" % (
+        med_d, ft0, pct, SLOWER_PCT, spread, noise_txt, len(ids))
     if pct <= SLOWER_PCT:
         return "stochastic is NOT slower: %s; %s" % (head, gpu), dict(facts, result="not_slower")
+    if noise is not None and pct <= noise:
+        return ("INCONCLUSIVE: %s; the difference is within the noise of the frame rate probes; %s" % (head, gpu),
+                dict(facts, result="inconclusive"))
     if len(ids) > 1 and min(d_ft.values()) < 0 < max(d_ft.values()):
         return ("INCONCLUSIVE: %s; the presets disagree in sign, so the median is not a finding; %s" % (head, gpu),
                 dict(facts, result="inconclusive"))
@@ -273,15 +314,18 @@ def report_methods(entries):
              "alpha columns are the main view's ALPHA passes, per frame; '-' = not reported", ""]
     head = ["preset", "method", "frame ms", "main cpu", "main gpu", "draws", "shader"] + [lab for _, lab in ALPHA_COLUMNS]
     rows = []
+    notes = []
     for pid, m in runs.items():
         for method in sorted(m):
             e = m[method]
-            a = alpha_sums(e["window"]) or {}
+            a = entry_alpha(e, notes) or {}
             mv = main_view(e["window"])
             t = e["window"].get("totals", {})
             rows.append([pid, method, fmt(frame_ms(e["info"])), fmt(mv.get("cpu_ms")), fmt(mv.get("gpu_ms")), fmt(t.get("draws")),
-                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) for k, _ in ALPHA_COLUMNS])
-    lines.append(table(rows, head))
+                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) for k, _ in ALPHA_COLUMNS] + [fmt(probe_spread_pct(e["info"]))])
+    lines.append(table(rows, head + ["fps spread %"]))
+    for n in notes:
+        lines.append("WARNING implausible alpha samples: " + n)
     lines.append("")
     lines.append("median over the presets:")
     med = []
@@ -289,14 +333,15 @@ def report_methods(entries):
         es = [m[method] for m in runs.values() if method in m]
         if not es:
             continue
-        alphas = [alpha_sums(e["window"]) or {} for e in es]
+        alphas = [entry_alpha(e) or {} for e in es]
         med.append(["", method, fmt(median([frame_ms(e["info"]) for e in es])),
                     fmt(median([main_view(e["window"]).get("cpu_ms") for e in es])),
                     fmt(median([main_view(e["window"]).get("gpu_ms") for e in es])),
                     fmt(median([e["window"].get("totals", {}).get("draws") for e in es])),
                     fmt(median([e["window"].get("totals", {}).get("shaderBinds") for e in es]))] +
-                   [fmt(median([a.get(k) for a in alphas])) for k, _ in ALPHA_COLUMNS])
-    lines.append(table(med, head))
+                   [fmt(median([a.get(k) for a in alphas])) for k, _ in ALPHA_COLUMNS] +
+                   [fmt(median([probe_spread_pct(e["info"]) for e in es]))])
+    lines.append(table(med, head + ["fps spread %"]))
     lines.append("")
     text, facts = verdict(runs)
     lines.append("verdict (stochastic is slower when its median frame time is more than %.0f%% above sorted and the alpha pass "

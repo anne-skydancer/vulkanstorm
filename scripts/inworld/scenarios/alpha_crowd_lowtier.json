@@ -86,6 +86,7 @@
   "profile_frame": false,
   "overhead": {
     "probe_s": 5.0,
+    "probe_repeats": 3,
     "bench_iterations": 0
   },
   "compare": {

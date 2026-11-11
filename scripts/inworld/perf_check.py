@@ -31,6 +31,7 @@ import datetime as dt
 import json
 import os
 import pathlib
+import statistics
 import sys
 import time
 import traceback
@@ -61,9 +62,40 @@ DEFAULTS = {
     "camera": {"height_m": 2.5, "look_distance_m": 200.0},
     "presets": [{"id": "current", "camera": None}],
     "profile_frame": False,
-    "overhead": {"probe_s": 5.0, "bench_iterations": 2000000},
+    "overhead": {"probe_s": 5.0, "probe_repeats": 3, "bench_iterations": 2000000},
     "compare": {"enabled": True, "passes": [-1], "prove_with_injection": True},
 }
+
+
+def window_geometry(pid=None):
+    """Size of the viewer's client area in pixels and whether the window is maximised, from the OS (Windows only; None
+    elsewhere or when the window is not found). The viewer is this script's parent process."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+        user32 = ctypes.windll.user32
+        pid = pid or os.getppid()
+        found = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def callback(hwnd, _lparam):
+            owner = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value == pid and user32.IsWindowVisible(hwnd) and not user32.GetWindow(hwnd, 4) and user32.GetWindowTextLengthW(hwnd) > 0:
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(callback, 0)
+        if not found:
+            return None
+        rect = wintypes.RECT()
+        user32.GetClientRect(found[0], ctypes.byref(rect))
+        return {"width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top),
+                "maximized": bool(user32.IsZoomed(found[0])), "minimized": bool(user32.IsIconic(found[0]))}
+    except (OSError, AttributeError, ValueError):
+        return None
 
 
 def load_scenario(path):
@@ -154,6 +186,7 @@ class Run:
         self.camera_set = False
         self.variant_keys = set()
         self.preset_no = 0
+        self.current_variant = None
         self.base = {}          # the values the scenario's settings and --set gave (what a variant's other keys go back to)
         self.cleaned = False
         self.rows = []
@@ -284,6 +317,22 @@ class Run:
             return None
         return round((int(b["frame_count"]) - int(a["frame_count"])) / dt_s, 2)
 
+    def probe_variants(self, variants, preset_no):
+        """probe_repeats probes of the frame rate with nothing collecting per variant, the variants alternating in order between
+        repeats (no drift bias). Returns {variant id: [fps, ...]}. One 5 s probe was far too noisy at 130 to 420 fps."""
+        reps = max(1, int(self.sc["overhead"].get("probe_repeats", 1)))
+        out = {v["id"]: [] for v in variants}
+        for rep in range(reps):
+            order = variants if (rep + preset_no) % 2 == 0 else list(reversed(variants))
+            for variant in order:
+                self.v.check_abort()
+                self.apply_variant(variant)
+                self.v.wait_window_visible("the frame rate probe")
+                fps = self.measure_fps_off()
+                if fps is not None:
+                    out[variant["id"]].append(fps)
+        return out
+
     def fetch_profile(self, logs_dir, asked, pid):
         """The Frame Profile the next frame writes (profile.v*.json in the viewer's log folder): copied into the run folder."""
         if not logs_dir:
@@ -303,6 +352,8 @@ class Run:
         """Set the settings of this variant; a setting an earlier variant changed and this one does not name goes back to
         the value the scenario (and --set) gave it, else its original value, so each variant is measured against the same
         baseline. A variant setting the viewer does not have is an error: the window would not measure the variant."""
+        if self.current_variant == variant["id"]:
+            return
         wanted = variant.get("settings", {})
         for key in sorted(self.variant_keys):
             if key not in wanted and key in self.orig:
@@ -311,9 +362,10 @@ class Run:
             if not self.change(key, val):
                 raise LeapError("variant %s: the viewer has no setting %s" % (variant["id"], key))
             self.variant_keys.add(key)
+        self.current_variant = variant["id"]
         self.v.sleep(float(self.sc["settle"].get("after_setting_s", 3.0)))
 
-    def one_preset(self, preset, variant=None, set_camera=True):
+    def one_preset(self, preset, variant=None, set_camera=True, fps_samples=None):
         sc = self.sc
         pid = preset["id"]
         if variant is None:
@@ -332,7 +384,12 @@ class Run:
             self.v.sleep(sc["settle"]["after_camera_s"])
         self.v.wait_window_visible("the window of preset " + key)
 
-        fps_off = self.measure_fps_off()
+        if fps_samples:
+            fps_off = round(statistics.median(fps_samples), 2)
+            info["fps_probe"] = {"samples": fps_samples, "min": min(fps_samples), "max": max(fps_samples),
+                                 "spread_pct": round(100.0 * (max(fps_samples) - min(fps_samples)) / fps_off, 2) if fps_off else None}
+        else:
+            fps_off = self.measure_fps_off()
         start = time.monotonic()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
@@ -408,6 +465,8 @@ class Run:
             if cur is not None:
                 caps[k] = cur.get("value")
         self.index["frame_rate_caps"] = caps
+        self.index["window_geometry"] = window_geometry()
+        log("viewer window: %s" % (self.index["window_geometry"] or "unknown (not Windows, or not found)"))
         if caps.get("RenderVSyncEnable") or caps.get("FSLimitFramerate"):
             self.warn("vsync or the frame limiter is on (%s): the frame rates of this run are capped; turn them off for a measurement" % caps)
         st = v.req(API, "status")
@@ -439,11 +498,17 @@ class Run:
                 # the same view measured once per variant, back to back (the camera is placed once)
                 self.set_preset_camera(preset)
                 v.sleep(sc["settle"]["after_camera_s"])
+                samples = self.probe_variants(sc["variants"], self.preset_no)
                 order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
                 for variant in order:
                     v.check_abort()
-                    self.one_preset(preset, variant, set_camera=False)
+                    self.one_preset(preset, variant, set_camera=False, fps_samples=samples[variant["id"]])
             self.save_index()
+        end_geo = window_geometry()
+        self.index["window_geometry_end"] = end_geo
+        start_geo = self.index.get("window_geometry")
+        if start_geo and end_geo and (start_geo["width"], start_geo["height"]) != (end_geo["width"], end_geo["height"]):
+            self.warn("the viewer window changed size during the run (%s -> %s): the windows are not comparable" % (start_geo, end_geo))
         self.save_index()
         self.cleanup()
         return proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
