@@ -58,11 +58,11 @@ D24=0x81A6;DEPTH_COMP=0x1902;NEAREST=0x2600;MIN=0x2801;MAG=0x2800
 BLEND=0x0BE2;DEPTH_TEST=0x0B71;MULTISAMPLE=0x809D;POLY_OFFSET=0x8037;CULL=0x0B44
 ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x0207;NONE=0
 import os
-# STOCH_TEST_RESOLVE=fragment runs the GL 4.0 to 4.2 resolve (the pre-pass and the fragment resolve) on this GPU;
-# the default is the compute resolve (GL 4.3). Both give the same image.
-FRAGMENT_RESOLVE=os.environ.get("STOCH_TEST_RESOLVE","compute")=="fragment"
-print("temporal resolve path:","fragment (GL 4.0 to 4.2)" if FRAGMENT_RESOLVE else "compute (GL 4.3)")
-W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve on partial workgroups
+# The default is the fragment resolve (the pre-pass and the fragment resolve), the one the viewer ships on every
+# device; STOCH_TEST_RESOLVE=compute runs the compute resolve (GL 4.3, kept for A/B tests). Both give the same image.
+FRAGMENT_RESOLVE=os.environ.get("STOCH_TEST_RESOLVE","fragment")!="compute"
+print("temporal resolve path:","fragment (the shipped default)" if FRAGMENT_RESOLVE else "compute (A/B, GL 4.3)")
+W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve (STOCH_TEST_RESOLVE=compute) on partial workgroups
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 viewport(0,0,W,H);disable(CULL)
 getint(0x910F,C.byref(max_ms:=I()))   # GL_MAX_DEPTH_TEXTURE_SAMPLES
