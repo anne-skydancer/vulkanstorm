@@ -64,7 +64,8 @@ namespace LLStochasticEngine
 // counter of the producer's seeds, and the rules that make the last frame's colour usable.
 // A producer owns one instance. The frame protocol, in the producer's passes:
 //   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the resolve writes
-//   writeFramebuffer() with readTexture() bound and setResolveUniforms() set, and endFrame()
+//   writeFramebuffer() (a fragment resolve) or writeTexture() (a compute resolve's imageStore, with
+//   a glMemoryBarrier before the next fetch) with readTexture() bound and setResolveUniforms() set, and endFrame()
 //   makes the result the latest (latestTexture()).
 class LLStochasticHistory
 {
@@ -97,6 +98,7 @@ public:
 
     U32  readTexture() const { return mTexture[mState.index()]; }          // the last frame's colour
     U32  writeFramebuffer() const { return mFramebuffer[1 - mState.index()]; }
+    U32  writeTexture() const { return mTexture[1 - mState.index()]; }     // the same texture, for a compute resolve's imageStore
     U32  latestTexture() const { return mTexture[mState.index()]; }        // after endFrame: this frame's, the composite's input
 
     // stoch_reproj (this frame's clip space to the last frame's: last projection x last view x
