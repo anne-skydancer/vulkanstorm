@@ -701,6 +701,18 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("renderhighlights");
     // </FS:PP>
 
+    // <Vulkanstorm> stochastic transparency's targets are made when the method is selected, not
+    // when the alpha pool first needs them
+    LLPointer<LLControlVariable> alpha_method_ptr = gSavedSettings.getControl("RenderAlphaSortMethod");
+    if (alpha_method_ptr.notNull())
+    {
+        alpha_method_ptr->getCommitSignal()->connect([](LLControlVariable* control, const LLSD& value, const LLSD& previous)
+        {
+            gPipeline.selectAlphaStochastic(control->getValue().asInteger() == 1);
+        });
+    }
+    // </Vulkanstorm>
+
     LLPointer<LLControlVariable> cntrl_ptr = gSavedSettings.getControl("CollectFontVertexBuffers");
     if (cntrl_ptr.notNull())
     {
@@ -8089,8 +8101,10 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha; the glow then added to the scene alpha.
 // Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
-// variant (gAlphaStochasticShadersReady); a failure of either never switches the method (owner
-// decision Q8, 2026-11-13): the plain alpha pass draws the blended faces until a retry succeeds.
+// variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs. That is a capability gate, not
+// a fallback: an allocation that fails is logged and retried at the next screen buffer allocation
+// (method selected, resize), never answered with another method. The targets, the mask table, the
+// history and the averaged-samples target are all made up front there, never from the alpha pool.
 
 namespace
 {
@@ -8132,7 +8146,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
         if (sRenderAlphaStochasticSupported)
         {
             LL_WARNS_ONCE("Pipeline") << "Stochastic transparency unavailable: the device takes " << device
-                                      << " samples; sorted alpha is used" << LL_ENDL;
+                                      << " samples; stochastic transparency is not available on this device" << LL_ENDL;
         }
         sRenderAlphaStochasticSupported = false;
     }
@@ -8185,13 +8199,10 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR || !mAlphaSTAccum || !mAlphaSTTrans ||
         !mAlphaSTDepth || !mAlphaSTMasksHeld)
     {
-        // No method switch (owner decision Q8, 2026-11-13): the saved setting and the availability flag
-        // stay as they are, the plain alpha pass draws the blended faces, and the allocation is tried again.
-        mAlphaSTRetryDelay = llmin(mAlphaSTRetryDelay * 2.f, 30.f);
-        mAlphaSTRetryAt = LLTimer::getElapsedSeconds() + mAlphaSTRetryDelay;
+        // No other method takes its place: the blended faces wait (they are not drawn) until the
+        // next screen buffer allocation, which tries again.
         LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
-                             << ", GL error " << error << ", " << w << "x" << h
-                             << "); the method stays selected, it is tried again in " << mAlphaSTRetryDelay << " s" << LL_ENDL;
+                             << ", GL error " << error << ", " << w << "x" << h << "); it is tried again at the next screen buffer allocation" << LL_ENDL;
         releaseAlphaStochastic();
         return;
     }
@@ -8206,6 +8217,22 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     const U64 bytes = (U64)w * h * pass * 16;
     LL_INFOS("Pipeline") << "Stochastic transparency: " << w << "x" << h << ", " << samples << " samples in "
                          << samples / pass << " pass(es) of " << pass << " (" << (bytes >> 20) << " MiB)" << LL_ENDL;
+}
+
+// The alpha method was chosen: the main view's targets made at the screen's size, or freed.
+void LLPipeline::selectAlphaStochastic(bool stochastic)
+{
+    if (stochastic)
+    {
+        if (mMainRT.screen.getWidth() && mMainRT.screen.getHeight())
+        {
+            allocateAlphaStochastic(mMainRT.screen.getWidth(), mMainRT.screen.getHeight());
+        }
+    }
+    else
+    {
+        releaseAlphaStochastic();
+    }
 }
 
 void LLPipeline::releaseAlphaStochastic()
@@ -8272,8 +8299,10 @@ void LLPipeline::updateAlphaStochasticHistory()
     }
     if (!ok)
     {
-        LL_WARNS("Pipeline") << "Stochastic transparency's temporal accumulation unavailable: its history could not be allocated" << LL_ENDL;
-        gSavedSettings.setBOOL("RenderAlphaStochasticTemporal", false);
+        // The frames draw with their 8 samples alone until the history is there: it is tried again
+        // at the next screen buffer allocation (the setting stays on; nothing else is selected).
+        LL_WARNS("Pipeline") << "Stochastic transparency's temporal accumulation: its history could not be allocated ("
+                             << mAlphaSTWidth << "x" << mAlphaSTHeight << "); it is tried again at the next screen buffer allocation" << LL_ENDL;
         releaseAlphaStochasticHistory();
         return;
     }
@@ -8362,7 +8391,6 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     LLGLDisable blend(GL_BLEND);
     LLGLDisable scissor(GL_SCISSOR_TEST);
     gGL.setColorMask(true, true);
-    mScreenTriangleVB->setBuffer();
 
     {
         // the samples averaged, once for the pixel and its neighbourhood
@@ -8378,6 +8406,9 @@ void LLPipeline::resolveAlphaStochasticTemporal()
         {
             gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
         }
+        // the program is bound before the buffer is set (its attribute mask), and each bind()
+        // unbinds the vertex buffer: setBuffer() for every program
+        mScreenTriangleVB->setBuffer();
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
         if (accum > -1)
         {
@@ -8408,6 +8439,7 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     {
         gGL.getTexUnit(history)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTHistory.readTexture());
     }
+    mScreenTriangleVB->setBuffer();
     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
     if (stdepth > -1)
     {

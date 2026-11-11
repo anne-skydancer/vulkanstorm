@@ -429,13 +429,14 @@ public:
         ALPHA_ST_BUFFER_ACCUM,      // alpha x colour and alpha, additive
         ALPHA_ST_BUFFER_TRANS,      // red prod(1 - alpha), green the blended faces' glow
     };
-    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: sorted alpha
+    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: the targets are missing
     void spreadAlphaStochasticDepth(); // the opaque depth on every sample again (before an iteration)
     void setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer);
     void endAlphaStochastic();       // the scene target bound again
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
+    void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history and the averaged-samples target freed
     void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's
