@@ -39,6 +39,7 @@ uniform sampler2D environmentMap;
 uniform sampler2D rainbow_map;
 uniform sampler2D halo_map;
 
+uniform float moon_halo_weight; // <Vulkanstorm/> L3
 uniform float moisture_level;
 uniform float droplet_radius;
 uniform float ice_level;
@@ -62,6 +63,9 @@ uniform float max_y;
 uniform vec3  glow;
 // <Vulkanstorm> stage L3: 0 the sun, 1 the moon; the dome hands over with the ground light
 uniform float sun_moon_blend;
+// each body's glow at the body, not at the blended light (lightnorm) between them
+uniform vec3  sun_glow_norm;
+uniform vec3  moon_glow_norm;
 // </Vulkanstorm>
 
 uniform int cube_snapshot;
@@ -437,7 +441,9 @@ void main()
         float rel_pos_len  = length(rel_pos);
 
         // Grab this value and pass to frag shader for rainbows
-        float rel_pos_lightnorm_dot = dot(rel_pos_norm, lightnorm.xyz);
+        // <Vulkanstorm> L3: the sun's glow and halo at the sun, the moon's at the moon (lightnorm is the blended light between them)
+        float rel_pos_lightnorm_dot = dot(rel_pos_norm, sun_glow_norm.xyz);
+        // </Vulkanstorm>
 
         // Initialize temp variables
         // <Vulkanstorm> the sun's light handing over to the moon's with the ground light (L3), no switch at the horizon
@@ -504,10 +510,19 @@ void main()
         // At horizon, blend high altitude sky color towards the darker color below the clouds
         color += (add_below_cloud - color) * (1. - sqrt(combined_haze));
 
+        // <Vulkanstorm> L3: the sun's halo and rainbow at the sun, fading with the band; the moon's at the moon, fading in
+        // (weight 1 by day, so the sun's are as before)
         float optic_d = rel_pos_lightnorm_dot;
         vec3  halo_22 = halo22(optic_d);
-        color.rgb += rainbow(optic_d);
-        color.rgb += halo_22;
+        float sun_halo = 1.0 - sun_moon_blend;
+        color.rgb += sun_halo * rainbow(optic_d);
+        color.rgb += sun_halo * halo_22;
+        if (moon_halo_weight > 0.0)
+        {
+            float moon_d = dot(rel_pos_norm, moon_glow_norm.xyz);
+            color.rgb += moon_halo_weight * (rainbow(moon_d) + halo22(moon_d));
+        }
+        // </Vulkanstorm>
         color.rgb *= 2.;
         color.rgb = clamp(color.rgb, vec3(0), vec3(5));
 

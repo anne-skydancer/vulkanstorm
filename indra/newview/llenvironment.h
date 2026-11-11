@@ -201,6 +201,8 @@ public:
         F32 band_weight = 0.f;            // the swing band: 0 the sun, 1 the moon (or night, with no moon): the dome's blend and the HW light's pick
         F32 moon_avail = 1.f;             // 0 .. 1: how much of a moon there is to take over (up and bright enough)
         F32 haze_glow_factor = 1.f;       // SUN_MOON_GLOW_FACTOR, continuous
+        F32 moon_glow_factor = 0.f;       // MOON_GLOW_FACTOR: the moon's share of haze_glow_factor (the glow at the moon's direction)
+        F32 moon_halo_weight = 0.f;       // MOON_HALO_WEIGHT: the weight of the halo and rainbow around the moon
         F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): PCSS size and the cloud shadow penumbra
         bool shadow_visible = true;       // the sun shadow pass has something to show
         bool valid = false;

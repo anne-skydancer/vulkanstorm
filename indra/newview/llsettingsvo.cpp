@@ -875,6 +875,12 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
     {
         const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
         shader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, primary.valid ? primary.haze_glow_factor : getSunMoonGlowFactor());
+        // each body's glow stays at the body (the sun's fading with 1 - band weight, the moon's in with the band), not at the
+        // blended light's direction between them
+        shader->uniform3fv(LLShaderMgr::SUN_GLOW_NORM, LLVector3(LLEnvironment::instance().getClampedSunNorm().mV));
+        shader->uniform3fv(LLShaderMgr::MOON_GLOW_NORM, LLVector3(LLEnvironment::instance().getClampedMoonNorm().mV));
+        shader->uniform1f(LLShaderMgr::MOON_GLOW_FACTOR, primary.valid ? primary.moon_glow_factor : 0.f);
+        shader->uniform1f(LLShaderMgr::MOON_HALO_WEIGHT, primary.valid ? primary.moon_halo_weight : 0.f);
         // the ground light: the sun's or the moon's colour already through the atmosphere (sunlight_color's encoding),
         // for every shader that lights or hazes (classic and PBR skies alike); the direction is in eye space and is set
         // by LLPipeline::bindDeferredShader
