@@ -32,6 +32,15 @@ namespace LLShadowMethod
     // gives PCSS the same way.
     constexpr std::uint32_t sanitize(std::uint32_t method) { return method > STOCHASTIC ? DEFAULT : method; }
 
+    // The method a device runs for a stored value: sanitized, and Legacy for Stochastic on a device
+    // that cannot run it (OpenGL below 4.0: LLStochasticEngine::deviceSupported). A capability choice
+    // at load, never written back, so the stored choice survives a GPU upgrade; not a run-time fallback.
+    constexpr std::uint32_t effective(std::uint32_t method, bool stochastic_supported)
+    {
+        const std::uint32_t m = sanitize(method);
+        return (m == STOCHASTIC && !stochastic_supported) ? LEGACY : m;
+    }
+
     // The methods that fit the sun cascades as stable, world-anchored squares (llshadowcascadefit.h):
     // every method but Legacy. Takes a sanitized value.
     constexpr bool usesStableCascades(std::uint32_t method) { return method != LEGACY; }
