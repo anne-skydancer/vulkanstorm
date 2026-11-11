@@ -152,45 +152,69 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 //   * the 25 cm footprint SHADOW_FOOTPRINT_M a filter may reach (the caster cull guard of
 //     llshadowcascadefit.h keeps every caster inside that reach);
 // The signed-plane gather tap (SHADOW_GATHER) is not part of this block; it follows under SHADOW_MODERN.
-// The constants SHADOW_BIAS_TEXELS, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_PLANE_BIAS_MAX_TEXELS and
-// SHADOW_FOOTPRINT_M come from llshadowcascadefit.h through the shader manager (one source of truth).
+// The constants SHADOW_BIAS_TEXELS, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_PLANE_BIAS_MAX_TEXELS,
+// SHADOW_GRAD_MAX and SHADOW_FOOTPRINT_M come from llshadowcascadefit.h through the shader manager (one source of truth).
 
 vec4 getPosition(vec2 pos_screen); // deferredUtil.glsl: view space position of a screen position
 
-#define SHADOW_GRAD_MAX        1.0e4  // depth gradient used where the plane is edge-on to the light
 #define SHADOW_EDGE_REL        0.03   // a depth jump to the neighbour pixel beyond this fraction of the
 #define SHADOW_EDGE_ABS        0.02   //   depth plus this many metres is an edge, not a slope
-#define SHADOW_PLANAR_MAX      0.35   // a neighbour more than this (sine of the angle) off the G-buffer normal's tangent plane is another surface
+#define SHADOW_STEP_TIE        0.002  // metres: two steps whose depths differ less than this (and half) are alike
+#define SHADOW_PARALLEL_MIN    1.0e-4 // squared sine of the angle between two unit steps below which they are parallel
 
-// The geometric normal (view space, towards the eye) at the pixel pos_screen (position pos). Per screen
-// axis it takes the neighbour pixel that lies best in the tangent plane of the G-buffer normal gnorm (the
-// normal map's bumps are small against that test), so that neither a depth edge nor a crease (a wall's
-// foot, where one neighbour is the ground) on one side bends the plane. gnorm itself is the result only where
-// no neighbour of an axis fits (a thin or isolated surface) or at the screen's edge.
+// One screen axis of shadowGeometricNormal: the step (view space, to the neighbour pixel) that lies in the
+// surface. fwd and bwd are the steps to the next and the previous pixel and vf and vb tell whether each is on
+// the screen and on the same surface (no depth edge). Where one step is clearly flatter in depth than the
+// other (a crease or a fold: the other side is another surface) that one is taken. Where they are alike both
+// lie in the surface and the one nearer the tangent plane of the G-buffer normal gn is taken, which only
+// breaks the tie: the plane itself comes from the depth buffer, so a tilted normal map does not bend it.
+// ok is false where no neighbour is usable.
+vec3 shadowAxisStep(vec3 fwd, vec3 bwd, bool vf, bool vb, vec3 gn, out bool ok)
+{
+    ok = vf || vb;
+    if (!vb) return fwd;
+    if (!vf) return bwd;
+    float zf = abs(fwd.z);
+    float zb = abs(bwd.z);
+    float hi = max(zf, zb);
+    if (hi - min(zf, zb) > 0.5 * hi + SHADOW_STEP_TIE)
+    {
+        return zf < zb ? fwd : bwd;
+    }
+    float df = dot(fwd, gn);
+    float db = dot(bwd, gn);
+    return df * df * dot(bwd, bwd) < db * db * dot(fwd, fwd) ? fwd : bwd; // the smaller sine to gn, without roots
+}
+
+// The geometric normal (view space, towards the eye) at the pixel pos_screen (position pos), the plane through
+// the pixel and its neighbours in the depth buffer. Per screen axis shadowAxisStep picks the neighbour that
+// lies in the surface; the G-buffer normal gnorm (the normal-mapped one) is the result only where an axis has
+// no usable neighbour (a thin or isolated surface, the screen's edge) or the two steps are parallel.
 vec3 shadowGeometricNormal(vec2 pos_screen, vec3 pos, vec3 gnorm)
 {
     vec3 gn = dot(gnorm, gnorm) > 1.0e-8 ? normalize(gnorm) : vec3(0.0, 0.0, 1.0);
     vec2 px = 1.0 / screen_res;
     float tol = SHADOW_EDGE_REL * abs(pos.z) + SHADOW_EDGE_ABS;
-    float big = 1.0e30;
 
     vec3 xr = getPosition(pos_screen + vec2(px.x, 0.0)).xyz - pos;
     vec3 xl = pos - getPosition(pos_screen - vec2(px.x, 0.0)).xyz;
     vec3 yu = getPosition(pos_screen + vec2(0.0, px.y)).xyz - pos;
     vec3 yd = pos - getPosition(pos_screen - vec2(0.0, px.y)).xyz;
 
-    // how far each neighbour is off the tangent plane (sine), big where it is off the screen or across an edge
-    float sxr = pos_screen.x + px.x < 1.0 && abs(xr.z) <= tol ? abs(dot(xr, gn)) / max(length(xr), 1.0e-6) : big;
-    float sxl = pos_screen.x - px.x > 0.0 && abs(xl.z) <= tol ? abs(dot(xl, gn)) / max(length(xl), 1.0e-6) : big;
-    float syu = pos_screen.y + px.y < 1.0 && abs(yu.z) <= tol ? abs(dot(yu, gn)) / max(length(yu), 1.0e-6) : big;
-    float syd = pos_screen.y - px.y > 0.0 && abs(yd.z) <= tol ? abs(dot(yd, gn)) / max(length(yd), 1.0e-6) : big;
+    bool okx, oky;
+    vec3 ex = shadowAxisStep(xr, xl, pos_screen.x + px.x < 1.0 && abs(xr.z) <= tol, pos_screen.x - px.x > 0.0 && abs(xl.z) <= tol, gn, okx);
+    vec3 ey = shadowAxisStep(yu, yd, pos_screen.y + px.y < 1.0 && abs(yu.z) <= tol, pos_screen.y - px.y > 0.0 && abs(yd.z) <= tol, gn, oky);
+    if (!okx || !oky)
+    {
+        return gn;
+    }
 
-    vec3 ex = sxr < sxl ? xr : xl;
-    vec3 ey = syu < syd ? yu : yd;
-
+    // unit steps: the parallel test does not depend on the pixel size
+    ex *= inversesqrt(max(dot(ex, ex), 1.0e-12));
+    ey *= inversesqrt(max(dot(ey, ey), 1.0e-12));
     vec3 n = cross(ex, ey);
     float len2 = dot(n, n);
-    if (min(sxr, sxl) > SHADOW_PLANAR_MAX || min(syu, syd) > SHADOW_PLANAR_MAX || !(len2 > 1.0e-14))
+    if (!(len2 > SHADOW_PARALLEL_MIN))
     {
         return gn;
     }
@@ -249,6 +273,39 @@ float shadowWorldBias(float texel_m, float s_z, float texels)
 vec3 shadowNormalOffsetPos(vec3 pos, vec3 ng, float sin_theta, float texel_m)
 {
     return pos + ng * (SHADOW_NORMAL_OFFSET_TEXELS * texel_m * sin_theta);
+}
+
+// What every method needs of one sun cascade, from its matrix, once per pixel and cascade: the uv and depth
+// scales, and the constant bias and the cap of one tap's plane bias in depth units (positive; the reference
+// moves towards the light by the bias).
+struct ShadowCascade
+{
+    vec2 s_uv;
+    float s_z;
+    float texel_m;
+    float bias;
+    float plane_max;
+};
+
+ShadowCascade shadowCascadeSetup(mat4 m, vec2 res)
+{
+    ShadowCascade cs;
+    cs.s_uv = shadowUVScale(m);
+    cs.s_z = shadowDepthScale(m);
+    cs.texel_m = shadowTexelMetres(m, res);
+    cs.bias = shadowWorldBias(cs.texel_m, cs.s_z, SHADOW_BIAS_TEXELS);
+    cs.plane_max = shadowWorldBias(cs.texel_m, cs.s_z, SHADOW_PLANE_BIAS_MAX_TEXELS);
+    return cs;
+}
+
+// The receiver's geometry, once per pixel: the geometric normal and the sine of its angle to the light
+// (the normal offset's scale). light_dir: view space, towards the light.
+vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_dir, out float sin_theta)
+{
+    vec3 ng = shadowGeometricNormal(pos_screen, pos, gnorm);
+    float dp = clamp(dot(ng, light_dir), 0.0, 1.0);
+    sin_theta = sqrt(max(1.0 - dp * dp, 0.0));
+    return ng;
 }
 
 #endif // SHADOW_COMMON
@@ -396,8 +453,6 @@ float pcssPoissonPCF(sampler2DShadow shadowMap, vec4 stc, vec2 grad, float z_bia
 #if defined(SUN_SHADOW)
 uniform sampler2D shadowDepth0;
 uniform sampler2D shadowDepth1;
-uniform sampler2D shadowDepth2; // <Vulkanstorm/> S2: bound for the shared groundwork; unused (and dropped by the compiler) until stage S3
-uniform sampler2D shadowDepth3; // <Vulkanstorm/> S2: as shadowDepth2
 #endif
 #if defined(SPOT_SHADOW)
 uniform sampler2D shadowDepth4;
@@ -475,15 +530,14 @@ float pcssBlockerDepth(sampler2D depthMap, vec3 c, float z_bias, vec2 grad, vec2
 // takes that width as its diameter, which gives a disc light's edge profile. The map is orthographic,
 // so its scales come from the matrix (S2), and the search and the filter never reach past
 // SHADOW_FOOTPRINT_M, the distance the caster cull guard covers.
-float pcssSunContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, vec4 stc, vec3 ng, float d_max)
+float pcssSunContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, ShadowCascade cs, vec4 stc, vec3 ng, float d_max)
 {
     vec3 c = stc.xyz / stc.w;
     vec2 texel = 1.0 / shadow_res;
-    vec2 s_uv = shadowUVScale(m);
-    float s_z = shadowDepthScale(m);
-    float texel_m = shadowTexelMetres(m, shadow_res);
-    float z_bias = -shadowWorldBias(texel_m, s_z, SHADOW_BIAS_TEXELS);
-    float rpdb_max = shadowWorldBias(texel_m, s_z, SHADOW_PLANE_BIAS_MAX_TEXELS);
+    vec2 s_uv = cs.s_uv;
+    float s_z = cs.s_z;
+    float z_bias = -cs.bias;
+    float rpdb_max = cs.plane_max;
     vec2 g = shadowPlaneGradient(m, ng);
     vec2 grad = abs(g);
     vec2 foot = 0.5 * texel;
@@ -563,19 +617,9 @@ float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 
 #endif // PCSS_SHADOW_FETCH
 
 // sun cascade index (0-3), the fixed radius filter: the geometric plane (ng) and the world unit bias (S2)
-float pcssShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 ng)
+float pcssShadow(sampler2DShadow shadowMap, mat4 m, ShadowCascade cs, vec4 stc, vec3 ng)
 {
-    mat4 m = shadow_matrix[index];
-    float s_z = shadowDepthScale(m);
-    float texel_m = shadowTexelMetres(m, shadow_res);
-    return pcssPoissonPCF(shadowMap, stc, abs(shadowPlaneGradient(m, ng)), -shadowWorldBias(texel_m, s_z, SHADOW_BIAS_TEXELS), shadow_res,
-                          shadowWorldBias(texel_m, s_z, SHADOW_PLANE_BIAS_MAX_TEXELS), 0.5 / shadow_res);
-}
-
-// the sun cascade's sample position: the surface point moved along the geometric normal (S2)
-vec3 pcssCascadePos(int index, vec3 pos, vec3 ng, float sin_theta)
-{
-    return shadowNormalOffsetPos(pos, ng, sin_theta, shadowTexelMetres(shadow_matrix[index], shadow_res));
+    return pcssPoissonPCF(shadowMap, stc, abs(shadowPlaneGradient(m, ng)), -cs.bias, shadow_res, cs.plane_max, 0.5 / shadow_res);
 }
 
 // spot shadow index (4-5): the constant bias as pcfSpotShadow applies it
@@ -594,21 +638,14 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     float shadow = 0.0f;
     vec3 light_dir = normalize(primary_light_dir); // <Vulkanstorm/> L3: the primary light
 
+    vec3 shadow_pos = pos.xyz;
+
+#if !defined(PCSS_SHADOW)
     float dp_directional_light = max(0.0, dot(norm.xyz, light_dir));
           dp_directional_light = clamp(dp_directional_light, 0.0, 1.0);
 
-    vec3 shadow_pos = pos.xyz;
-
     vec3 offset = light_dir.xyz * (1.0 - dp_directional_light);
 
-#if defined(PCSS_SHADOW)
-    // <Vulkanstorm> S2: the receiver plane is the surface's geometric normal, rebuilt from the depth buffer,
-    // and each cascade moves the sample along it by texels of its own (no light direction offset)
-    vec3 ng = shadowGeometricNormal(pos_screen, pos, norm);
-    float dp_geometric = clamp(dot(ng, light_dir), 0.0, 1.0);
-    float sin_theta = sqrt(max(1.0 - dp_geometric * dp_geometric, 0.0));
-    // </Vulkanstorm>
-#else
     shadow_pos += offset * shadow_offset * 2.0;
 #endif
 
@@ -616,6 +653,14 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 
     if (spos.z > -shadow_clip.w)
     {
+#if defined(PCSS_SHADOW)
+        // <Vulkanstorm> S2: the receiver plane is the surface's geometric normal, rebuilt from the depth buffer,
+        // and each cascade moves the sample along it by texels of its own (no light direction offset). Only
+        // pixels inside the shadow distance pay the depth reads.
+        float sin_theta;
+        vec3 ng = shadowReceiverGeometry(pos_screen, pos, norm, light_dir, sin_theta);
+        // </Vulkanstorm>
+#endif
         vec4 lpos;
         vec4 near_split = shadow_clip*-0.75;
         vec4 far_split = shadow_clip*-1.25;
@@ -625,7 +670,8 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         if (spos.z < near_split.z)
         {
 #if defined(PCSS_SHADOW)
-            lpos = shadow_matrix[3]*vec4(pcssCascadePos(3, spos.xyz, ng, sin_theta), 1.0);
+            ShadowCascade cs3 = shadowCascadeSetup(shadow_matrix[3], shadow_res);
+            lpos = shadow_matrix[3]*vec4(shadowNormalOffsetPos(spos.xyz, ng, sin_theta, cs3.texel_m), 1.0);
 #else
             lpos = shadow_matrix[3]*spos;
 #endif
@@ -634,7 +680,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(spos.z-far_split.z, 0.0)/transition_domain.z;
             //w = clamp(w, 0.0, 1.0);
 #if defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap3, 3, lpos, ng)*w;
+            float contrib = pcssShadow(shadowMap3, shadow_matrix[3], cs3, lpos, ng)*w;
 #else
             float contrib = pcfShadow(shadowMap3, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[3], spos.xyz)*w;
 #endif
@@ -649,7 +695,8 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         if (spos.z < near_split.y && spos.z > far_split.z)
         {
 #if defined(PCSS_SHADOW)
-            lpos = shadow_matrix[2]*vec4(pcssCascadePos(2, spos.xyz, ng, sin_theta), 1.0);
+            ShadowCascade cs2 = shadowCascadeSetup(shadow_matrix[2], shadow_res);
+            lpos = shadow_matrix[2]*vec4(shadowNormalOffsetPos(spos.xyz, ng, sin_theta, cs2.texel_m), 1.0);
 #else
             lpos = shadow_matrix[2]*spos;
 #endif
@@ -659,7 +706,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(near_split.z-spos.z, 0.0)/transition_domain.z;
             //w = clamp(w, 0.0, 1.0);
 #if defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap2, 2, lpos, ng)*w;
+            float contrib = pcssShadow(shadowMap2, shadow_matrix[2], cs2, lpos, ng)*w;
 #else
             float contrib = pcfShadow(shadowMap2, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[2], spos.xyz)*w;
 #endif
@@ -673,7 +720,8 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         if (spos.z < near_split.x && spos.z > far_split.y)
         {
 #if defined(PCSS_SHADOW)
-            lpos = shadow_matrix[1]*vec4(pcssCascadePos(1, spos.xyz, ng, sin_theta), 1.0);
+            ShadowCascade cs1 = shadowCascadeSetup(shadow_matrix[1], shadow_res);
+            lpos = shadow_matrix[1]*vec4(shadowNormalOffsetPos(spos.xyz, ng, sin_theta, cs1.texel_m), 1.0);
 #else
             lpos = shadow_matrix[1]*spos;
 #endif
@@ -683,9 +731,9 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(near_split.y-spos.z, 0.0)/transition_domain.y;
             //w = clamp(w, 0.0, 1.0);
 #if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-            float contrib = pcssSunContactShadow(shadowMap1, shadowDepth1, shadow_matrix[1], lpos, ng, PCSS_BLOCKER_DIST1)*w;
+            float contrib = pcssSunContactShadow(shadowMap1, shadowDepth1, shadow_matrix[1], cs1, lpos, ng, PCSS_BLOCKER_DIST1)*w;
 #elif defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap1, 1, lpos, ng)*w;
+            float contrib = pcssShadow(shadowMap1, shadow_matrix[1], cs1, lpos, ng)*w;
 #else
             float contrib = pcfShadow(shadowMap1, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[1], spos.xyz)*w;
 #endif
@@ -699,7 +747,8 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         if (spos.z > far_split.x)
         {
 #if defined(PCSS_SHADOW)
-            lpos = shadow_matrix[0]*vec4(pcssCascadePos(0, spos.xyz, ng, sin_theta), 1.0);
+            ShadowCascade cs0 = shadowCascadeSetup(shadow_matrix[0], shadow_res);
+            lpos = shadow_matrix[0]*vec4(shadowNormalOffsetPos(spos.xyz, ng, sin_theta, cs0.texel_m), 1.0);
 #else
             lpos = shadow_matrix[0]*spos;
 #endif
@@ -708,9 +757,9 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(near_split.x-spos.z, 0.0)/transition_domain.x;
             //w = clamp(w, 0.0, 1.0);
 #if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-            float contrib = pcssSunContactShadow(shadowMap0, shadowDepth0, shadow_matrix[0], lpos, ng, PCSS_BLOCKER_DIST0)*w;
+            float contrib = pcssSunContactShadow(shadowMap0, shadowDepth0, shadow_matrix[0], cs0, lpos, ng, PCSS_BLOCKER_DIST0)*w;
 #elif defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap0, 0, lpos, ng)*w;
+            float contrib = pcssShadow(shadowMap0, shadow_matrix[0], cs0, lpos, ng)*w;
 #else
             float contrib = pcfShadow(shadowMap0, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[0], spos.xyz)*w;
 #endif
