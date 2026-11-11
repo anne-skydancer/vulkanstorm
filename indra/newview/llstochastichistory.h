@@ -39,6 +39,15 @@ namespace LLStochasticEngine
 {
     // SAMPLES (8), SEEDS (2048) and maskTable() are in llstochasticstate.h (GL-free, unit tested)
 
+    // The device runs the engine's compute resolve: GL 4.3 and GLSL 4.30 (a capability gate, as GL 4.0 was
+    // for the earlier resolve: there is no second resolve). One definition for the pipeline's allocation
+    // and the shader manager; logs once when a device below it cannot run stochastic transparency.
+    bool deviceSupported();
+
+    // The image unit a compute resolve writes the history through: the shader declares binding = 0
+    // (alphaStochasticResolveC.glsl); image units are not texture units, LLTexUnit does not see them.
+    constexpr U32 RESOLVE_IMAGE_UNIT = 0;
+
     // The one S = SAMPLES table (R32UI, SEEDS x (S + 1)), made by the first producer to ask and
     // freed with the last. False: it could not be made (nothing is kept).
     bool acquireMasks();
@@ -60,13 +69,14 @@ namespace LLStochasticEngine
 }
 
 // One producer's temporal history: two full-size colours (this frame's is written while the last
-// frame's is read) and their framebuffers, made up front (method select, resize), the frame
+// frame's is read), made up front (method select, resize), the frame
 // counter of the producer's seeds, and the rules that make the last frame's colour usable.
 // A producer owns one instance. The frame protocol, in the producer's passes:
-//   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the resolve writes
-//   writeFramebuffer() (a fragment resolve) or writeTexture() (a compute resolve's imageStore, with
-//   a glMemoryBarrier before the next fetch) with readTexture() bound and setResolveUniforms() set, and endFrame()
-//   makes the result the latest (latestTexture()).
+//   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the compute resolve runs with
+//   readTexture() bound, setResolveUniforms() set and bindWriteImage() bound, is dispatched, and
+//   endComputeWrite() follows it; endFrame() makes the result the latest (latestTexture()).
+// The history has no framebuffers: the compute resolve is its only writer. A future producer that
+// writes it by rendering needs its own, and, after compute stores, GL_FRAMEBUFFER_BARRIER_BIT.
 class LLStochasticHistory
 {
 public:
@@ -97,8 +107,23 @@ public:
     U32  seedFrame() const { return mState.seedFrame(); }   // the producer's frame counter, never 0 while temporal
 
     U32  readTexture() const { return mTexture[mState.index()]; }          // the last frame's colour
-    U32  writeFramebuffer() const { return mFramebuffer[1 - mState.index()]; }
-    U32  writeTexture() const { return mTexture[1 - mState.index()]; }     // the same texture, for a compute resolve's imageStore
+
+    // The compute resolve's write: bindWriteImage binds the texture that was not read as a write-only
+    // image at `unit` (the format is the shader's rgba16f; asserted); endComputeWrite follows the
+    // dispatch. Memory model (GL 4.3 section 7.12): imageStore writes are incoherent, no later command
+    // sees them until a barrier names the access that reads them:
+    //  - GL_TEXTURE_FETCH_BARRIER_BIT: texture fetches after the barrier see the stores, namely the
+    //    composite of this frame and the next frame's resolve (it reads this result as its history).
+    //  - GL_SHADER_IMAGE_ACCESS_BARRIER_BIT: image stores after the barrier wait for the accesses before
+    //    it, texture fetches included (write after read). The two textures alternate, so the texture
+    //    stored now is stored again two frames later, after this frame's composite and the next frame's
+    //    resolve fetched it; the next frame's barrier lies between those fetches and that store.
+    // Nothing else reads the history after the dispatch (no framebuffer, buffer or texture-update
+    // access); the dispatch's own reads of the accumulation and depth, written by rendering into a
+    // framebuffer, are ordered by the GL without a barrier (only image stores, atomics and storage
+    // buffers are incoherent).
+    void bindWriteImage(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
+    void endComputeWrite(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
     U32  latestTexture() const { return mTexture[mState.index()]; }        // after endFrame: this frame's, the composite's input
 
     // stoch_reproj (this frame's clip space to the last frame's: last projection x last view x
@@ -116,7 +141,6 @@ private:
     GLenum mFormat;
     F32 mWeight;
     U32 mTexture[2] = { 0, 0 };
-    U32 mFramebuffer[2] = { 0, 0 };
     U32 mWidth = 0;
     U32 mHeight = 0;
     LLStochasticFrameState mState;

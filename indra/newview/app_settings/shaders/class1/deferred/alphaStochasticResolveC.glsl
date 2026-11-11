@@ -35,7 +35,7 @@
 // memory, which the engine's neighbourhood reads through stoch_current(): the samples are summed
 // once per pixel (plus the border's 4 x 16 + 4 texels per group) and no full-size target holds the
 // average. The sum is the same, in the same order, as the fragment pre-pass made, so that the
-// result is bit for bit the same.
+// result is the same sum in the same order (identical on the measured NVIDIA).
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
