@@ -51,6 +51,11 @@ class LLWindow;
 namespace LLImageGLMemory
 {
     void alloc_tex_image(U32 width, U32 height, U32 intformat, U32 count);
+    // <Vulkanstorm> the same for a texture whose bytes are all there is (render targets the viewer
+    // knows exactly): counted by getTextureBytesAllocatedExact(), not in the estimate that the
+    // texture budget doubles (LLViewerTexture::updateClass). Freed by free_tex_image.
+    void alloc_tex_image_exact(U32 width, U32 height, U32 intformat, U32 count);
+    // </Vulkanstorm>
     void free_tex_image(U32 texName);
     void free_tex_images(U32 count, const U32* texNames);
     void free_cur_tex_image();
@@ -70,6 +75,7 @@ public:
     // NOTE: multiplying this number by two gives a good estimate for total
     // video memory usage based on testing in lagland against an NVIDIA GPU.
     static U64 getTextureBytesAllocated();
+    static U64 getTextureBytesAllocatedExact(); // <Vulkanstorm/> see LLImageGLMemory::alloc_tex_image_exact
 
     // These 2 functions replace glGenTextures() and glDeleteTextures()
     static void generateTextures(S32 numTextures, U32 *textures);
