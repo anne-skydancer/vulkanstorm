@@ -2278,6 +2278,22 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Width of the area around the camera covered by the cloud shadow map, in metres. Beyond it the mean cloud shadow applies."
        top_pad="8"
        width="500"/>
+      <slider
+       control_name="RenderCloudOpticalDepth"
+       decimal_digits="1"
+       follows="left|top"
+       height="16"
+       increment="0.1"
+       label="Cloud optical depth"
+       label_width="170"
+       layout="topleft"
+       left="10"
+       max_val="20"
+       min_val="3"
+       name="CloudOpticalDepth"
+       tool_tip="Optical depth of one e-fold of the drawn cloud opacity. Higher = thin and partly covered clouds let less light through. 7.6 = the visibility threshold of thin cirrus."
+       top_pad="8"
+       width="500"/>
       <text
        follows="left|top"
        font="SansSerifBold"
