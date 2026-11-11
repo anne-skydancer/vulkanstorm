@@ -306,6 +306,12 @@ class Viewer:
         got = reply.get("value")
         if isinstance(value, float) and isinstance(got, (int, float)):
             ok = abs(got - value) <= 1e-4 * max(1.0, abs(value))
+        elif isinstance(value, int) and not isinstance(value, bool) and isinstance(got, str):
+            # LLSD has no unsigned type: a U32 control reads back as a string ("0").
+            try:
+                ok = int(got) == value
+            except ValueError:
+                ok = False
         else:
             ok = got == value
         if not ok:
