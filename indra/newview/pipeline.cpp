@@ -8106,9 +8106,12 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //      stochastic depth; the glowing faces' glow likewise into the green of the RG16F target;
 //   with more samples than a pass holds, 2 and 3 run again with the next bits of the same mask
 //   (paper footnote 1), the depth spread anew before each run;
+//   3b. temporal resolve (compute, resolveAlphaStochasticTemporal): this frame's accumulation averaged
+//      over the samples, blended with the last frame's, into the history;
 //   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha; the glow then added to the scene alpha.
-// Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
+// Gated on GL 4.3 (the temporal resolve is a compute shader; gl_SampleMask and multisample textures
+// need 4.0) and on every alpha program's alpha-only
 // variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs. That is a capability gate, not
 // a fallback: an allocation that fails is logged and retried at the next screen buffer allocation
 // (method selected, resize), never answered with another method. The targets, the mask table and the
@@ -8127,8 +8130,8 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 #if LL_WINDOWS || LL_LINUX
     // the device only (GL 4.3 for the compute resolve, enough samples): a shader set that did not
     // build is an error, not a reason to select another method (beginAlphaStochastic logs it, a
-    // shader reload retries it). 4.29 as llgl.cpp: mGLVersion is a float.
-    sRenderAlphaStochasticSupported = gGLManager.mGLVersion >= 4.29f;
+    // shader reload retries it).
+    sRenderAlphaStochasticSupported = LLStochasticEngine::deviceSupported();
 #else
     sRenderAlphaStochasticSupported = false;
 #endif
@@ -8430,33 +8433,15 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     {
         gGL.getTexUnit(history)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTHistory.readTexture());
     }
-    // The history written this frame is an image, bound outside LLTexUnit (image units are not
-    // texture units; the shader declares binding = 0). It is never the texture bound for reading
-    // above: the two history textures alternate.
-    glBindImageTexture(0, mAlphaSTHistory.writeTexture(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+    // The history written this frame is an image, bound outside LLTexUnit (see LLStochasticHistory
+    // for the image unit and the memory model). It is never the texture bound for reading above.
+    mAlphaSTHistory.bindWriteImage();
 
     // 16 x 16 pixels per workgroup (the shader's local size)
     glDispatchCompute((mAlphaSTWidth + 15) / 16, (mAlphaSTHeight + 15) / 16, 1);
 
-    // Memory model (GL 4.3 section 7.12): writes by imageStore are incoherent, they are not visible
-    // to any later command until a barrier says which kind of access reads them. Two kinds do:
-    //  - GL_TEXTURE_FETCH_BARRIER_BIT: texture fetches after the barrier see the stores. That is
-    //    the composite of this frame (it samples the latest history) and the next frame's resolve
-    //    (it reads this frame's result as its history).
-    //  - GL_SHADER_IMAGE_ACCESS_BARRIER_BIT: image stores issued after the barrier wait for the
-    //    accesses issued before it, texture fetches included (write after read). The two history
-    //    textures alternate, so the texture stored here is stored again two frames later, after
-    //    this frame's composite and the next frame's resolve fetched it; the barrier of the next
-    //    frame's dispatch lies between those fetches and that store, and orders them. Without the
-    //    bit that order would be left to the implementation.
-    // Nothing else is needed: this dispatch's own reads (the accumulation and depth targets, written
-    // by rendering into a framebuffer) are ordered by the GL without a barrier, since only writes by
-    // shader image stores, atomics and storage buffers are incoherent. No framebuffer, buffer or
-    // texture-update access reads the history after the dispatch (the composite samples it; the
-    // history's framebuffers serve other producers' fragment resolves).
-    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-    glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+    // the barrier that makes the stores visible to the composite and the next frame, and the unbind
+    mAlphaSTHistory.endComputeWrite();
     if (accum > -1)
     {
         gGL.getTexUnit(accum)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);

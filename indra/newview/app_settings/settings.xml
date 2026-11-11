@@ -12106,7 +12106,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaSortMethod</key>
   <map>
     <key>Comment</key>
-    <string>Main-view post-water alpha method: 0 sorted alpha, 1 stochastic transparency (default; Windows/Linux, OpenGL 4.3+; doc/oit/stochastic-transparency.md). Unsupported methods fall back to sorted alpha. 1 meant PPLL until stochastic transparency replaced it.</string>
+    <string>Main-view post-water alpha method: 0 sorted alpha, 1 stochastic transparency (default; Windows/Linux, OpenGL 4.3+; doc/oit/stochastic-transparency.md). A device without OpenGL 4.3 uses sorted alpha. 1 meant PPLL until stochastic transparency replaced it.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
