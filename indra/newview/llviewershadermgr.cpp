@@ -399,7 +399,7 @@ static void unload_stochastic_shaders()
 // <Vulkanstorm> shadow methods PCSS (1) and Stochastic (2): whether the shader set is built for the method
 static bool use_shadow_method(U32 method)
 {
-    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == method && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) == method && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 static bool use_pcss_shadows() { return use_shadow_method(LLShadowMethod::PCSS); }
 static bool use_stochastic_shadows() { return use_shadow_method(LLShadowMethod::STOCHASTIC); }
@@ -1067,7 +1067,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     // <Vulkanstorm> every shadow method but Legacy multiplies N.L by the shadow (sunShadowedDiffuse
     // in deferredUtil.glsl); Legacy leaves it undefined and keeps min()
-    if (LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) != LLShadowMethod::LEGACY)
+    if (LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) != LLShadowMethod::LEGACY)
     {
         attribs["SHADOW_NL_MULTIPLY"] = "1";
     }
