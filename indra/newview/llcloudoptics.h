@@ -32,10 +32,11 @@
 namespace LLCloudOptics
 {
 // the asymmetry of water droplets (Stephens, AT622 notes section 15: 0.8 - 0.85)
-constexpr double G_WATER = 0.85;
+constexpr double G_WATER = 0.85; // (ice, 0.75, was only the rejected alternative: one g for the whole layer)
 // the forward peak of delta-Eddington (Joseph, Wiscombe & Weinman 1976)
 constexpr double F_PEAK = G_WATER * G_WATER;
-// Eddington's coefficient of the total transmittance for a collimated light
+// Eddington's coefficient of the total transmittance for a collimated light. Not verified at the source: the diffuse-incidence
+// two-stream form has 1/2 (Stephens, AT622 notes eq. 15.20b); 3/4 is the collimated form, kept by the owner's decision
 constexpr double EDDINGTON_TOTAL = 0.75;
 // the optical depth of one e-fold of drawn opacity (setting RenderCloudOpticalDepth)
 constexpr double DEFAULT_VISUAL_DEPTH = 7.6;
