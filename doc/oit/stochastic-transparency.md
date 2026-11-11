@@ -36,7 +36,7 @@ last frame's matrices, nearest and depth-checked bilinear history reads, the 3 x
 `stoch_reproj`, `stoch_weight`, `stoch_history_valid`; stage-neutral). The sampling object is compiled once
 and attached to the programs that sample (`STOCH_SAMPLE_OBJECT`, `LLShaderMgr::attachShaderFeatures`); the
 resolve util is listed in the producer's own `mShaderFiles` and compiled as that program's stage (a compute
-object for the transparency). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
+object for the transparency's A/B path; the fragment resolve, the default, attaches it as a fragment object). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
 `LLStochasticEngine` (the mask table, counted textures) and `LLStochasticHistory`, one instance per producer
 (`allocate`, `release`, `beginFrame`, `seedFrame`, `historyUsed`, `setResolveUniforms`, `endFrame`,
 `invalidate`).
@@ -164,8 +164,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
   once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
   resolve's 3 x 3 neighbourhood reads the tile instead of summing the samples nine times and no full-size
-  target holds the average (the sum is the same, in the same order as the fragment pre-pass it
-  replaced: identical on the measured NVIDIA; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
+  target holds the average (the sum is the same, in the same order as the shipped fragment pre-pass: identical on the measured NVIDIA; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
   0.34 to 0.36 ms at 4K in the scenes with much transparency, and 0.02, 0.02 and 0.04 ms more in a sparse one,
   on an RTX 5070 Ti, NVIDIA 621.14, offline harness). Then this frame's
   averaged colour is blended 1/8 with the last frame's blended
@@ -190,7 +189,8 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   OpenGL compute dispatch and the `glMemoryBarrier` it needs between graphics passes stall the frame while the
   camera or avatar moves (seen with this compute resolve in a devel build, and earlier with compute for
   OpenJPEG and geometry), and OpenGL has no async compute; compute belongs in the Vulkan renderer. The fragment
-  resolve is bit-identical to the compute one and was faster in the offline bench. The compute resolve above
+  resolve is bit-identical to the compute one (A/B in motion is pending; the offline harness, above, slightly favours
+  compute, so the choice rests on the owner-observed stall, not on a bench). Its VRAM cost is 160 against 144 bytes a pixel (below). The compute resolve above
   stays compiled but unused. The fragment pair: `alphaStochasticCurrentF.glsl` averages the samples once into an
   RGBA32F target (`mAlphaSTCurrent`, option P), and `alphaStochasticResolveF.glsl` (with the engine's resolve
   attached as a fragment object, `STOCH_RESOLVE`) draws the blend into the history's framebuffer that was not read
@@ -384,6 +384,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 
 ## Tests and measurements
 
+- Bit-identical check of the two resolves: run `python scripts/perf/test_alpha_stochastic.py` (fragment, default) and `STOCH_TEST_RESOLVE=compute python scripts/perf/test_alpha_stochastic.py`, each into a file, and diff them with the 'temporal resolve path' line removed (any other value of `STOCH_TEST_RESOLVE` exits with an error).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (the fragment resolve by default; `STOCH_TEST_RESOLVE=compute` runs the GL 4.3 compute resolve, `STOCH_TEST_SIZE=70x37` partial workgroups; `test_alpha_stochastic_edges.py` checks the compute resolve against a CPU model), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (16 in two
   passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,

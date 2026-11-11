@@ -35,7 +35,7 @@
 #define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
-#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (GL 4.0 to 4.2)
+#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (the default on every device)
 // </Vulkanstorm>
 
 class LLShaderMgr

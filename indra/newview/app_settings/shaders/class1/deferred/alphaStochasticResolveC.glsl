@@ -19,7 +19,7 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// GL 4.3 compute (the resolve of GL 4.3 and later; GL 4.0 to 4.2 run alphaStochasticResolveF.glsl). The transparency's part of the
+// GL 4.3 compute, A/B only in the OpenGL viewer (VKSTORM_STOCH_COMPUTE_RESOLVE=1; the fragment resolve, alphaStochasticResolveF.glsl, is the default on every device). The transparency's part of the
 // stochastic engine's temporal resolve (stochasticResolveUtilF.glsl, compiled as a second compute
 // object of this program). The accumulated colour of this frame (alpha x colour, alpha, averaged
 // over the samples) is blended with the last frame's blended colour where this pixel's nearest
@@ -34,7 +34,7 @@
 // clamped to the image, as the neighbourhood clamps its reads) once into an 18 x 18 tile of shared
 // memory, which the engine's neighbourhood reads through stoch_current(): the samples are summed
 // once per pixel (plus the border's 4 x 16 + 4 texels per group) and no full-size target holds the
-// average. The sum is the same, in the same order, as the fragment pre-pass made, so that the
+// average. The sum is the same, in the same order, as the fragment pre-pass makes, so that the
 // result is the same sum in the same order (identical on the measured NVIDIA).
 
 layout(local_size_x = 16, local_size_y = 16) in;
