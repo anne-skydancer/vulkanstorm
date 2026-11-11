@@ -34,6 +34,9 @@ in vec3 position;
 // Output parameters
 out vec3 vary_HazeColor;
 out float vary_LightNormPosDot;
+// <Vulkanstorm> L3: the halo and rainbow of the moon, at the moon (the sun's are at the sun)
+out float vary_MoonNormPosDot;
+// </Vulkanstorm>
 // <Vulkanstorm> view direction for the real night sky (skyF.glsl): the
 // dome's frame, y up (LLDrawPoolWLSky::renderDome)
 out vec3 vary_sky_dir;
@@ -64,6 +67,9 @@ uniform float max_y;
 uniform vec3  glow;
 // <Vulkanstorm> stage L3: 0 the sun, 1 the moon; the dome hands over with the ground light
 uniform float sun_moon_blend;
+// each body's glow at the body, not at the blended light (lightnorm) between them
+uniform vec3  sun_glow_norm;
+uniform vec3  moon_glow_norm;
 // </Vulkanstorm>
 
 uniform int cube_snapshot;
@@ -103,8 +109,11 @@ void main()
     float rel_pos_len  = length(rel_pos);
 
     // Grab this value and pass to frag shader for rainbows
-    float rel_pos_lightnorm_dot = dot(rel_pos_norm, lightnorm.xyz);
+    // <Vulkanstorm> L3: the sun's glow and halo at the sun, the moon's at the moon (lightnorm is the blended light between them)
+    float rel_pos_lightnorm_dot = dot(rel_pos_norm, sun_glow_norm.xyz);
     vary_LightNormPosDot = rel_pos_lightnorm_dot;
+    vary_MoonNormPosDot = dot(rel_pos_norm, moon_glow_norm.xyz);
+    // </Vulkanstorm>
 
     // Initialize temp variables
     // <Vulkanstorm> the sun's light handing over to the moon's with the ground light (L3), no switch at the horizon

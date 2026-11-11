@@ -1035,7 +1035,9 @@ struct PrimaryLightRig
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
     double gain = 0.0;         // moon_brightness x moon_compensation
     double light_scale = 1.0;  // mix(sun_scale, moon_scale, moon weight t)
-    double haze_glow_factor = 1.0;
+    double haze_glow_factor = 1.0; // the dome's and the haze's glow: the sun's share (1 - band weight) plus moon_glow_factor
+    double moon_glow_factor = 0.0; // the moon's share of it: band weight x moon_brightness / 4 x the moon disc's visibility
+    double moon_halo_weight = 0.0; // band weight x the moon disc's visibility: the weight of the halo and rainbow around the moon
     bool   shadow_visible = true;
 };
 
@@ -1114,7 +1116,9 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     const PrimaryLight cl = primary_light(cin, cparams);
     // the clouds' sun term ends with the band (as at night before), the glow direction follows cl.dir
     rig.cloud_band_weight = cl.band_weight;
-    rig.cloud_dir = cl.dir;
+    // the clouds' glow is the sun's only (the moon's half was never visible on them), so it stays at the sun, not at the route
+    // between the sun and the moon (a phantom glow in the empty sky between them)
+    rig.cloud_dir = route_direction(s.sun_dir, s.moon_dir, 0.0);
     rig.cloud_T = { std::min(std::max(finite_or(sun_Tc.x, 0.0), 0.0), 1.0), std::min(std::max(finite_or(sun_Tc.y, 0.0), 0.0), 1.0),
                     std::min(std::max(finite_or(sun_Tc.z, 0.0), 0.0), 1.0) };
     rig.light_scale = (1.0 - t) * std::min(std::max(finite_or(s.sun_scale, 1.0), 0.0), 100.0)
@@ -1122,7 +1126,12 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
 
     // the dome's glow: the sun's, handing over to the moon's with the band (a quarter of its brightness, once the moon is up):
     // 1 above the band exactly, 0 below it when there is no moon
-    rig.haze_glow_factor = (1.0 - tb) + tb * mb * 0.25 * smoothstep(-moon_disc, moon_disc, moon_z);
+    // Each body's glow stays at the body: the sun's at the sun, fading with (1 - tb), and the moon's at the moon, fading in with
+    // tb (the shaders get both directions), not at the blended light's direction between them.
+    const double moon_vis = smoothstep(-moon_disc, moon_disc, moon_z);
+    rig.moon_glow_factor = tb * mb * 0.25 * moon_vis;
+    rig.haze_glow_factor = (1.0 - tb) + rig.moon_glow_factor;
+    rig.moon_halo_weight = tb * moon_vis;
 
     const Vec3 ground = { in.source.x * rig.light.T.x, in.source.y * rig.light.T.y, in.source.z * rig.light.T.z };
     rig.color = linear_to_srgb(ground);
