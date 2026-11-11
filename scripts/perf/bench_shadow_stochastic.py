@@ -98,9 +98,9 @@ class Resolve:
         self.sc = sc; W, H = sc.W, sc.H; self.compute = compute
         engine = stage(ENGINE_RESOLVE, [])
         util = stage(RESOLVE_UTIL, [])
-        if compute:   # GL 4.3: the compute resolve, the history written as an image
+        if compute:   # A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1): the compute resolve, the history written as an image
             self.prog = program([(0x91B9, stage(RESOLVE_C, [])), (0x91B9, util), (0x91B9, engine)])
-        else:         # GL 4.0 to 4.2: the fragment resolve into the history's framebuffer
+        else:         # the shipped default on every device: the fragment resolve into the history's framebuffer
             self.prog = program([(0x8B31, VERTEX), (0x8B30, stage(RESOLVE_ST, [])), (0x8B30, util), (0x8B30, engine)])
         self.compose = program([(0x8B31, VERTEX), (0x8B30, stage(COMPOSE_ST, []))])
         self.hist = [make_tex(0x881A, W, H) for _ in range(2)]
@@ -441,8 +441,8 @@ for (W, H) in RESOLUTIONS:
     comp = RES[(W, H, 0, 'resolve compute')]; frag = RES[(W, H, 0, 'resolve')]; compose = RES[(W, H, 0, 'compose')]; blur = RES[(W, H, 0, 'blur')]
     sun_pcss = RES[(W, H, 2, 'pcss')]; sun_st = RES[(W, H, 2, 'stoch')]
     pcss = sun_pcss + blur                   # PCSS always runs its blur (shadow and AO channels in the same two passes)
-    print(f'{"":<19}resolve: compute (GL 4.3+, the path the viewer runs there) {comp:.3f}, fragment (GL 4.0 to 4.2) {frag:.3f}; light map pass {compose:.3f}; blur {blur:.3f}')
-    for path, resolve in (('compute', comp), ('fragment', frag)):
+    print(f'{"":<19}resolve: fragment (the shipped path on every device) {frag:.3f}, compute (A/B only, GL 4.3+) {comp:.3f}; light map pass {compose:.3f}; blur {blur:.3f}')
+    for path, resolve in (('fragment (shipped)', frag), ('compute (A/B)', comp)):
         off = sun_st + resolve + compose
         print(f'{"":<19}{path} resolve: Stochastic {off:.3f} ms vs PCSS (sun pass + blur) {pcss:.3f} ms: {off - pcss:+.3f} ms with SSAO off for Stochastic'
               f' (PCSS still pays its blur); SSAO on, both blur: {off + blur - pcss:+.3f} ms')

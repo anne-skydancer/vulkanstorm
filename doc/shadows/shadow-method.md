@@ -93,12 +93,15 @@ direction changed. Cube snapshots and mirrors have no history (fixed seeds, the 
 map). A snapshot sums 8 sun passes of different rays (`shadow_st_frame` 1 to 8) and averages them (the light
 map pass divides by 8). With SSAO on the light-map blur still runs, for the AO channel only when the
 history or the snapshot's passes made the shadow channels, and for all channels when there is no history to take
-them from. The resolve is the transparency's: the device decides once (`LLStochasticEngine::computeResolve`), a compute
-dispatch on GL 4.3 and later (`shadowStochasticResolveC.glsl`, the history written as an image) or a fragment
-pass on GL 4.0 to 4.2 (`shadowStochasticResolveF.glsl`, into the history's framebuffer). Both run the same
+them from. The resolve is the transparency's: the engine decides once (`LLStochasticEngine::computeResolve`), and the OpenGL viewer
+runs the fragment resolve on every device (`shadowStochasticResolveF.glsl`, into the history's framebuffer; it needs no
+extra target, the history stays 2 x RGBA16F, 8 bytes a pixel each). The compute resolve (`shadowStochasticResolveC.glsl`,
+the history written as an image) is kept compiled for A/B tests (`VKSTORM_STOCH_COMPUTE_RESOLVE=1` on a GL 4.3 device)
+and for the Vulkan renderer: an OpenGL compute dispatch and its `glMemoryBarrier` between graphics passes cost frame rate
+while the camera or avatar moves, and OpenGL has no async compute. Both run the same
 resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and
 the offline bench finds their histories bit identical frame after frame. A Windows driver that does not load the compute
-entry points takes the fragment resolve, the engine's capability choice (`computeResolve`).
+entry points cannot be forced to compute (the fragment resolve is the default everywhere anyway).
 
 ## Shared by all methods
 

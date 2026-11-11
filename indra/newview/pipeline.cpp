@@ -8692,8 +8692,8 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     const U32 w = raw.getWidth();
     const U32 h = raw.getHeight();
 
-    // the resolve: raw + the last frame's history -> the history the other texture holds; a compute
-    // dispatch with the history as an image (GL 4.3 and later), or a fragment pass into its framebuffer
+    // the resolve: raw + the last frame's history -> the history the other texture holds; a fragment
+    // pass into its framebuffer (the default), or for A/B tests a compute dispatch with the history as an image
     const bool compute = LLStochasticEngine::computeResolve();
     if (!compute)
     {

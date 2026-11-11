@@ -3553,7 +3553,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     if (success && stochastic_shadow_resolve_shaders())
     {
         gShadowStochasticResolveProgram.mName = "Shadow Stochastic Temporal Resolve";
-        // the device decides once which resolve runs (LLStochasticEngine::computeResolve), as for the transparency;
+        // the engine decides once which resolve runs (LLStochasticEngine::computeResolve: the fragment one, compute only for A/B), as for the transparency;
         // both run the same resolve source (shadowStochasticResolveUtilF.glsl) with the engine's
         const bool compute = LLStochasticEngine::computeResolve();
         gShadowStochasticResolveProgram.mFeatures.attachNothing = compute;   // no fragment helpers in a compute link
