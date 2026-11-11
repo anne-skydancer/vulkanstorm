@@ -1646,7 +1646,7 @@ int main()
             check(night.light.band_weight == 1.0 && night.light.moon_avail == 1.0 && night.light.moon_weight == 1.0 && night.haze_glow_factor > 0.0, "a moon at night is the light");
             // daytime is unchanged for every sun size: the glow factor is 1 and the weights are 0, exactly. Neither the shadow nor
             // the handover depends on sun_scale (a 16 times larger sun at 1 degree used to shadow at 0.451, now 1); the size only
-            // reaches light_scale (PCSS), which is limited to 100
+            // reaches light_scale (the shadow light size), which is limited to 100
             for (double scale : { 1.0, 4.0, 16.0, 100.0 })
             {
                 for (double e : { 1.0, 5.0 })
