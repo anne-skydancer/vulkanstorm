@@ -14,6 +14,7 @@
 #include "llstochasticstate.h"
 
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <set>
@@ -200,11 +201,45 @@ namespace
     }
 }
 
+namespace
+{
+    // the Stochastic shadow method's light-change rules (LLShadowLightChange)
+    void test_light_change()
+    {
+        const float pi = 3.14159265358979f;
+        auto dir = [pi](float degrees, float out[3]) { out[0] = std::cos(degrees * pi / 180.f); out[1] = std::sin(degrees * pi / 180.f); out[2] = 0.f; };
+        float a[3], b[3];
+        dir(0.f, a);
+        dir(0.4f, b);
+        check(LLShadowLightChange::sunUnchanged(true, b, a), "the sun turned 0.4 degrees: the same light");
+        dir(0.6f, b);
+        check(!LLShadowLightChange::sunUnchanged(true, b, a), "the sun turned 0.6 degrees: changed");
+        check(!LLShadowLightChange::sunUnchanged(false, a, a), "the first frame has no history");
+
+        const float pos[3] = { 10.f, 20.f, 30.f };
+        const float rot[4] = { 0.f, 0.f, 0.f, 1.f };
+        float moved[3] = { 10.005f, 20.f, 30.f };
+        check(LLShadowLightChange::projectorUnchanged(true, moved, pos, rot, rot), "a projector moved 0.5 cm: the same light");
+        moved[0] = 10.02f;
+        check(!LLShadowLightChange::projectorUnchanged(true, moved, pos, rot, rot), "moved 2 cm: changed");
+        check(!LLShadowLightChange::projectorUnchanged(false, pos, pos, rot, rot), "another light in the slot (a slot swap): changed");
+        auto turn = [pi](float degrees, float q[4]) { q[0] = std::sin(0.5f * degrees * pi / 180.f); q[1] = q[2] = 0.f; q[3] = std::cos(0.5f * degrees * pi / 180.f); };
+        float turned[4];
+        turn(0.4f, turned);
+        check(LLShadowLightChange::projectorUnchanged(true, pos, pos, turned, rot), "turned 0.4 degrees: the same light");
+        turn(0.6f, turned);
+        check(!LLShadowLightChange::projectorUnchanged(true, pos, pos, turned, rot), "turned 0.6 degrees: changed");
+        for (float& v : turned) v = -v;   // q and -q are one rotation
+        check(!LLShadowLightChange::projectorUnchanged(true, pos, pos, turned, rot), "the sign of the quaternion does not matter");
+    }
+}
+
 int main()
 {
     test_masks();
     test_state();
     test_seeds();
+    test_light_change();
     if (failures == 0)
     {
         std::printf("llstochastichistory_test: all checks passed\n");
