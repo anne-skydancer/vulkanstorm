@@ -158,27 +158,30 @@ bool computeResolve()
     // Only Windows (without Mesa) loads these as nullable function pointers (llglheaders.h, llgl.cpp);
     // Linux and Mesa declare them as linked prototypes (GL_GLEXT_PROTOTYPES), which are never null, so
     // there is nothing to test there.
-    // GL 4.3 reports the compute entry points; a driver that does not load them takes the fragment
-    // resolve (a capability choice made here, once, with the device's others)
+    // GL 4.3 reports the compute entry points; a driver that does not load them cannot be forced to the compute
+    // resolve (an A/B test only; the fragment resolve is the default everywhere)
     if (capable && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
     {
-        LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: the compute resolve's entry points are missing; the fragment resolve is used" << LL_ENDL;
+        LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: the compute resolve's entry points are missing; the compute A/B test is unavailable, the fragment resolve is used" << LL_ENDL;
         capable = false;
     }
 #endif
-    // debug only: force the fragment path on a GL 4.3 device (tests), read once
-    static const bool force_fragment = []() {
-        const char* v = getenv("VKSTORM_STOCH_FRAGMENT_RESOLVE");
+    // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
+    // glMemoryBarrier it needs between graphics passes stall the frame while the camera or avatar
+    // moves, and OpenGL has no async compute. The compute resolve stays compiled for A/B tests
+    // (VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a GL 4.3 device, read once) and for the Vulkan renderer.
+    static const bool force_compute = []() {
+        const char* v = getenv("VKSTORM_STOCH_COMPUTE_RESOLVE");
         return v && v[0] == '1';
     }();
-    const bool compute = capable && !force_fragment;
+    const bool compute = capable && force_compute;
     static bool logged = false;   // main render thread, the pipeline's allocation
     if (!logged && gGLManager.mGLVersion >= 3.99f)
     {
         logged = true;
-        LL_INFOS("Pipeline") << "Stochastic transparency: " << (compute ? "compute resolve (GL 4.3 and later, 144 B/px)"
-                                                                          : "fragment resolve with the pre-pass target (GL 4.0 to 4.2, 160 B/px)")
-                             << (force_fragment ? ", forced by VKSTORM_STOCH_FRAGMENT_RESOLVE" : "") << LL_ENDL;
+        LL_INFOS("Pipeline") << "Stochastic transparency: " << (compute ? "compute resolve (GL 4.3 and later, 144 B/px), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test"
+                                                                          : "fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)")
+                             << LL_ENDL;
     }
     return compute;
 }
