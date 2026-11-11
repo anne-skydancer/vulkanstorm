@@ -395,13 +395,21 @@ def base_ref():
     ref = os.environ.get('CLOUD_BENCH_BASE_REF')
     if ref:
         return ref
-    return subprocess.run(['git', 'merge-base', 'HEAD', 'origin/vkstorm-devel'], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    r = subprocess.run(['git', 'merge-base', 'HEAD', 'origin/vkstorm-devel'], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0 or not r.stdout.strip():
+        raise RuntimeError('no base ref: origin/vkstorm-devel is missing or has no merge base with HEAD '
+                           '(git fetch origin vkstorm-devel, or set CLOUD_BENCH_BASE_REF to a commit)')
+    return r.stdout.strip()
 
 
 def git_show(rel):
     """A shader of the base ref (rel under app_settings/shaders/class1/)."""
-    return subprocess.run(['git', 'show', base_ref() + ':indra/newview/app_settings/shaders/class1/' + rel],
-                          cwd=ROOT, capture_output=True, text=True, check=True, env=dict(os.environ, MSYS2_ARG_CONV_EXCL='*')).stdout
+    ref = base_ref()
+    r = subprocess.run(['git', 'show', ref + ':indra/newview/app_settings/shaders/class1/' + rel],
+                       cwd=ROOT, capture_output=True, text=True, env=dict(os.environ, MSYS2_ARG_CONV_EXCL='*'))
+    if r.returncode != 0:
+        raise RuntimeError(f'cannot read {rel} at the base ref {ref}: {r.stderr.strip()}')
+    return r.stdout
 
 
 def set_lookup(prog, **over):
@@ -417,9 +425,15 @@ def check_lookup():
     useprog = fn('glUseProgram', None, U)
     head = "#version 400 compatibility" + chr(10) + "#define FRAGMENT_SHADER 1" + chr(10)
     fill = build(LOOKUP_VS, head + CONST_FILL)
-    new = lookup_program(read('class1/windlight/atmosphericsFuncs.glsl')); old = lookup_program(git_show('windlight/atmosphericsFuncs.glsl'))
+    new = lookup_program(read('class1/windlight/atmosphericsFuncs.glsl'))
+    # only the comparisons with the lookup before the stage need the base ref; the rest of --check is self-contained
+    try:
+        old = lookup_program(git_show('windlight/atmosphericsFuncs.glsl'))
+    except RuntimeError as e:
+        print('check: FAILED, the comparisons with the lookup before the stage need a base ref:', e)
+        old = None
     tmap, fmap = target(512, 512, 0x822B, mips=True)   # GL_RG8
-    ok = True
+    ok = old is not None
 
     def fill_map(value):
         bindfbo(0x8D40, fmap); viewport(0, 0, 512, 512); useprog(fill); u(fill, 'value', value); draw(4, 0, 3)
@@ -441,7 +455,7 @@ def check_lookup():
     w, h = 256, 144
     t, f = target(w, h)
     fill_map(1.0)
-    for classic in (0, 1):
+    for classic in (0, 1) if old is not None else ():
         before = render(old, w, h, t, f, None, classic_mode=classic)
         off = render(new, w, h, t, f, 0.0, classic_mode=classic)
         full = render(new, w, h, t, f, 1.0, classic_mode=classic)
@@ -451,7 +465,7 @@ def check_lookup():
 
     # classic mode with a real map (0.5, strength 1): the encoded maths are the base ref's, bit for bit
     fill_map(0.5)
-    for classic in (0, 1):
+    for classic in (0, 1) if old is not None else ():
         before = render(old, w, h, t, f, 1.0, classic_mode=classic)
         now = render(new, w, h, t, f, 1.0, classic_mode=classic)
         same = before == now
@@ -634,5 +648,11 @@ def bench():
 
 if DO_CHECK and not (check() and check_strength() and check_lookup()):
     sys.exit(1)
-if DO_BENCH and not bench():
-    sys.exit(1)
+if DO_BENCH:
+    try:
+        bench_ok = bench()
+    except RuntimeError as e:   # the base ref is missing
+        print('bench: FAILED,', e)
+        sys.exit(1)
+    if not bench_ok:
+        sys.exit(1)
