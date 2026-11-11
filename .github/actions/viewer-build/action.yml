@@ -287,6 +287,12 @@ runs:
       shell: bash
       run: cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
 
+    # The exe's entry point (llcpucheck_win.cpp) must run on any x86-64 processor.
+    - name: Check the CPU-check object holds no AVX2 code
+      if: runner.os == 'Windows'
+      shell: bash
+      run: python scripts/tests/check_cpucheck_obj.py "${{ inputs.directory }}"
+
     # linux-lts fails if anything built or packaged needs more than Ubuntu
     # 24.04 has: glibc 2.39, and GLIBCXX_3.4.33 from GCC 14's libstdc++.
     # The ubuntu-26.04 build (linux-latest; no limits in its matrix entry) only reports.
