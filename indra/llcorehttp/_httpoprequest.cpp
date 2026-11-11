@@ -622,11 +622,6 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
 #endif
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOSIGNAL, 1);
-    // The progress callback exists only to abort the transfer once the
-    // service is asked to stop, so that shutdown never waits for a transfer.
-    check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 0);
-    check_curl_easy_setopt(mCurlHandle, CURLOPT_XFERINFOFUNCTION, xferInfoCallback);
-    check_curl_easy_setopt(mCurlHandle, CURLOPT_XFERINFODATA, this);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_URL, mReqURL.c_str());
     check_curl_easy_setopt(mCurlHandle, CURLOPT_PRIVATE, getHandle());
 
@@ -1017,14 +1012,6 @@ int HttpOpRequest::seekCallback(void *userdata, curl_off_t offset, int origin)
 }
 
 
-// Worker thread.  Returning non-zero makes libcurl abort the transfer.
-int HttpOpRequest::xferInfoCallback(void * userdata, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
-{
-    const HttpOpRequest * op(static_cast<const HttpOpRequest *>(userdata));
-    return (op && op->mCurlService && op->mCurlService->isExitRequested()) ? 1 : 0;
-}
-
-
 size_t HttpOpRequest::headerCallback(void * data, size_t size, size_t nmemb, void * userdata)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
@@ -1214,7 +1201,16 @@ int HttpOpRequest::sslCertVerifyCallback(X509_STORE_CTX *ctx, void *param)
 
     if (op->mCallbackSSLVerify)
     {
-        op->mStatus = op->mCallbackSSLVerify(op->mReqURL, op->mUserHandler, ctx);
+        if (op->mCurlService && op->mCurlService->isExitRequested())
+        {
+            // Stopping: do not enter the viewer's certificate code (it is not
+            // interruptible); fail the handshake, the transfer is cancelled.
+            op->mStatus = HttpStatus(HttpStatus::EXT_CURL_EASY, CURLE_ABORTED_BY_CALLBACK);
+        }
+        else
+        {
+            op->mStatus = op->mCallbackSSLVerify(op->mReqURL, op->mUserHandler, ctx);
+        }
     }
 
     return (op->mStatus) ? 1 : 0;
