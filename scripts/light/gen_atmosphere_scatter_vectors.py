@@ -3,13 +3,13 @@
 """Evaluate the viewer's class1/windlight/atmosphereCommonF.glsl (the scattering core of the physical atmosphere, stage AT2-0 of the
 item-4 plan; physicalAtmosphereF.glsl before it) on the GPU for fixed pseudo-random atmospheres and write
 indra/newview/tests/llatmosphere_scatter_vectors.inc, the vectors that llatmosphericscatter_test.cpp holds
-LLScatter (llatmosphericlight.h) to. CI runs only the C++ test; this script is what ties the vectors to the GLSL.
+LLScatter (llatmosphericlight.h) to. CI runs only the C++ test; this script is what ties the vectors to the GLSL; the .inc also holds the SHA-256 of both GLSL files, which the test checks.
 
     python scripts/light/gen_atmosphere_scatter_vectors.py            # rewrite the .inc file
     python scripts/light/gen_atmosphere_scatter_vectors.py --check    # fail if the GLSL no longer produces it
 
-Needs Windows and a GPU. The GLSL is float, so --check allows 1e-4 relative + 1e-6 absolute (the multiple-scattering texel and the
-sky irradiance sum hundreds of terms: 1e-3 relative).
+Needs Windows and a GPU. The GLSL is float, so --check allows 1e-3 relative + 1e-6 absolute between two runs on the same GPU (the test then holds the C++ to these numbers
+at 1e-4 to 1e-3, see llatmosphericscatter_test.cpp).
 
 The light transmittance is the exact pa_transmittance here (PA_LIGHT_T_EXACT) and the multiple scattering a smooth stand-in
 (PA_MS_OVERRIDE): the vectors hold the arithmetic of the march and the reference integrals, not a table lookup. AT2-1 holds the passes
@@ -34,9 +34,9 @@ OZONE = [(25000.0, 0.0, 0.0, 1.0 / 15000.0, -2.0 / 3.0), (0.0, 0.0, 0.0, -1.0 / 
 
 # the stand-in for the multiple-scattering table; llatmosphericscatter_test.cpp has the same formula
 MS_STUB = """
-vec3 pa_ms_at(float r, float mu_s)
+vec3 pa_ms_at(float h_km, float mu_s)
 {
-    float x = (r - pa_atm.planet_radius_km) / (pa_atm.top_radius_km - pa_atm.planet_radius_km);
+    float x = h_km / (pa_atm.top_radius_km - pa_atm.planet_radius_km);
     return vec3(0.02, 0.03, 0.05) * (0.5 + 0.5 * mu_s) * (1.0 - 0.5 * clamp(x, 0.0, 1.0));
 }
 """
@@ -54,9 +54,9 @@ void main() {
 """
 MAINS = {
     0: """    vec2 uv = pa_trans_uv(t_in0.x, t_in0.y);          // the parameterisation, both ways
-    float r; float mu;
-    pa_trans_rmu(t_in0.zw, r, mu);
-    out_a = vec4(uv, r, mu);""",
+    float h; float mu;
+    pa_trans_rmu(t_in0.zw, h, mu);
+    out_a = vec4(uv, h, mu);""",
     1: """    out_a = vec4(pa_trans_texel(ivec2(t_in0.xy), ivec2(t_in0.zw)), 1.0);   // a table texel""",
     2: """    vec3 lin; vec3 t;                                  // the aerial perspective
     atmosphereAP(normalize(t_in0.xyz), t_in0.w, t_in1.x, int(t_in1.y), lin, t);
@@ -70,7 +70,7 @@ MAINS = {
     7: """    vec3 s_r; float s_m; vec3 ext;                     // the medium
     pa_medium(t_in0.x, s_r, s_m, ext);
     out_a = vec4(s_r, s_m); out_b = vec4(ext, 0.0);""",
-    8: """    out_a = vec4(pa_light_T(t_in0.xyz, pa_lights, int(t_in0.w)), 0.0);   // the light transmittance""",
+    8: """    out_a = vec4(pa_light_T(t_in0.xyz, t_in1.x, pa_lights, int(t_in0.w)), 0.0);   // the light transmittance""",
 }
 
 
@@ -162,7 +162,7 @@ def set_atmosphere(prog, a):
     set3(prog, 'pa_glow_phase', a['glow'])
     setf(prog, 'pa_aniso', a['aniso'])
     setf(prog, 'pa_max_phase', 1e4)
-    setf(prog, 'pa_f_ms_max', 0.9)
+    setf(prog, 'pa_f_ms_max', 0.6)
     setf(prog, 'pa_ground_albedo', 0.2)
     lt = a['lights']
     for i in range(2):
@@ -177,35 +177,37 @@ def requests(a, rnd):
     u = rnd.random
     rg, rt = a['planet_radius_km'], a['top_radius_km']
     reqs = []
-    for _ in range(6):   # parameterisation: a point with mu above the horizon, and a texel
+    for _ in range(6):   # parameterisation: a point with mu above the horizon (inputs h, mu; u, v), and a texel
         h = u() * (rt - rg) * u()
-        r = rg + h
-        mu_h = -math.sqrt(max(0.0, 1.0 - (rg / r) ** 2))
-        reqs.append((0, [r, mu_h + (1.0 - mu_h) * u(), round(u(), 4), round(0.02 + 0.98 * u(), 4)], [0, 0, 0, 0]))
+        mu_h = -math.sqrt(max(0.0, 1.0 - (rg / (rg + h)) ** 2))
+        reqs.append((0, [h, mu_h + (1.0 - mu_h) * u(), round(u(), 4), round(0.02 + 0.98 * u(), 4)], [0, 0, 0, 0]))
     for _ in range(4):
         reqs.append((1, [float(int(u() * 256)), float(int(u() * 64)), 256.0, 64.0], [0, 0, 0, 0]))
     for _ in range(8):
         reqs.append((6, [round(2 * u() - 1, 5), 0, 0, 0], [0, 0, 0, 0]))
         reqs.append((7, [round(u() * (4.0 if _ % 2 else 0.6), 5), 0, 0, 0], [0, 0, 0, 0]))
-    for _ in range(6):   # light transmittance at points around the observer, towards each light
+    for _ in range(6):   # light transmittance at points around the observer, towards each light: in0 = position, light; in1 = altitude
         h = round(u() * 3.0, 4)
         r = rg + h
         ang = u() * 0.3
         x = [r * math.sin(ang), 0.0, r * math.cos(ang)]
-        reqs.append((8, x + [float(_ % 2)], [0, 0, 0, 0]))
-    for k in range(10):  # the aerial perspective; steps 6, 12, 24
-        el = round(-5.0 + u() * 95.0, 3)
+        reqs.append((8, x + [float(_ % 2)], [h, 0, 0, 0]))
+    heights = [0.0, 0.002, 0.0, 0.002, 0.1, 0.3, 2.0, 5.0]
+    for k in range(12):  # the aerial perspective; steps 6, 12, 24; the first four at h = 0 and 0.002 km (a camera on the ground)
+        el = round(-5.0 + u() * 95.0, 3) if k >= 4 else round(0.2 + u() * 6.0, 3)
         d = dir_of(el, round(u() * 360.0, 3))
         dist = round(0.1 + u() * (49.9 if k % 2 else 5.0), 4)
-        reqs.append((2, d + [dist], [round(u() * 3.0, 4), float((6, 12, 24)[k % 3]), 0, 0]))
+        h_obs = heights[k] if k < len(heights) else round(u() * 3.0, 4)
+        reqs.append((2, d + [dist], [h_obs, float((6, 12, 24)[k % 3]), 0, 0]))
     for _ in range(2):
-        r = rg + round(u() * 4.0, 4)
-        reqs.append((3, [r, round(2 * u() - 1, 4), 8.0, 20.0], [0, 0, 0, 0]))
+        reqs.append((3, [round(u() * 4.0, 4), round(2 * u() - 1, 4), 8.0, 20.0], [0, 0, 0, 0]))
+    reqs.append((3, [0.0, round(2 * u() - 1, 4), 8.0, 20.0], [0, 0, 0, 0]))   # on the ground: rays below the horizon end at the ground at once
     for _ in range(2):
         reqs.append((4, [round(u() * 12.0, 4), round(2 * u() - 1, 4), 8.0, 16.0], [0, 0, 0, 0]))
-    for k in range(4):   # the sky: up and down
+    for k in range(6):   # the sky: up and down; the first two from the ground
         el = round(-60.0 + u() * 150.0, 3)
-        reqs.append((5, dir_of(el, round(u() * 360.0, 3)) + [round(u() * 2.0, 4)], [32.0, 0, 0, 0]))
+        h_obs = (0.0, 0.002)[k] if k < 2 else round(u() * 2.0, 4)
+        reqs.append((5, dir_of(el if k >= 2 else -10.0 - 20.0 * u(), round(u() * 360.0, 3)) + [h_obs], [32.0, 0, 0, 0]))
     return reqs
 
 
@@ -232,6 +234,16 @@ def evaluate():
     return atms, rows
 
 
+def sha_lines():
+    """SHA-256 of the two GLSL files with the line ends normalised (the test recomputes them: a changed shader needs new vectors)."""
+    import hashlib
+    out = []
+    for rel in ('class1/windlight/physicalAtmosphereF.glsl', 'class1/windlight/atmosphereCommonF.glsl'):
+        data = shader_text(rel).replace('\r\n', '\n').replace('\r', '\n').encode('utf8')
+        out.append('SC_SHA("%s", "%s")' % (rel.split('/')[-1], hashlib.sha256(data).hexdigest()))
+    return out
+
+
 def fmt(x):
     return repr(float(x))
 
@@ -244,6 +256,7 @@ def render(atms, rows):
              '//        sun dir xyz, moon dir xyz, E_sun rgb, E_moon rgb, sun disc, moon disc, light count)',
              '// SC_VEC(atmosphere index, kind, in0[4], in1[4], out_a[4], out_b[4])   kinds: 0 uv/rmu, 1 table texel, 2 AP, 3 MS texel, 4 sky irradiance,',
              '//        5 sky radiance, 6 phase, 7 medium, 8 light T']
+    lines += sha_lines()
     for a in atms:
         lt = a['lights']
         v = (a['rayleigh_ext'] + [a['aerosol_ext'], a['slab_ext'], a['slab_top_km']] + a['ozone_ext'] + [a['rayleigh_scale'], a['mie_scale'], a['planet_radius_km'], a['top_radius_km']]
@@ -258,7 +271,7 @@ def render(atms, rows):
 def numbers(text):
     out = []
     for line in text.splitlines():
-        if line.startswith('SC_'):
+        if line.startswith('SC_') and not line.startswith('SC_SHA'):
             out += [float(x) for x in line[line.index('(') + 1:line.rindex(')')].split(',')]
     return out
 
@@ -266,7 +279,12 @@ def numbers(text):
 atms, rows = evaluate()
 text = render(atms, rows)
 if '--check' in sys.argv:
-    old, new = numbers(OUT.read_text()), numbers(text)
+    old_text = OUT.read_text()
+    old_sha = [l for l in old_text.splitlines() if l.startswith('SC_SHA')]
+    if old_sha != sha_lines():
+        print('the shaders changed since the vectors were made:', old_sha, sha_lines())
+        sys.exit(1)
+    old, new = numbers(old_text), numbers(text)
     bad = [(i, a, b) for i, (a, b) in enumerate(zip(old, new)) if abs(a - b) > 1e-3 * max(abs(a), abs(b)) + 1e-6]
     print('numbers:', len(new), 'mismatches:', len(bad), bad[:5])
     sys.exit(1 if bad or len(old) != len(new) else 0)
