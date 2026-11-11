@@ -2237,17 +2237,17 @@ void LLFloaterPreference::refreshEnabledState()
 
     ctrl_shadow->setEnabled(enabled);
 
-    // <Vulkanstorm> shadow method (Legacy / PCSS / Stochastic): selectable with shadows on
+    // <Vulkanstorm> shadow method (Legacy / Stochastic): selectable with shadows on
     const bool shadow_method_enabled = enabled
         && gSavedSettings.getS32("RenderShadowDetail") > 0
         && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
-    // the light size applies to the PCSS and Stochastic methods
-    getChild<LLSliderCtrl>("ShadowPCSSLightSize")->setEnabled(shadow_method_enabled
+    // the light size applies to the Stochastic method
+    getChild<LLSliderCtrl>("ShadowLightSize")->setEnabled(shadow_method_enabled
         && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported())));
     if (!LLStochasticEngine::deviceSupported())
     {
-        // Legacy is the only method below OpenGL 4.0 that Stochastic could replace: the item is not offered and a stored
+        // Legacy is the only method below OpenGL 4.0: the Stochastic item is not offered and a stored
         // 2 reads as Legacy (the setting itself is not written, so the choice survives a GPU upgrade)
         LLComboBox* method_combo = getChild<LLComboBox>("ShadowMethod");
         if (method_combo->remove("2"))

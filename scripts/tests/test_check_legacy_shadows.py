@@ -84,9 +84,9 @@ class LegacyShadowCheck(unittest.TestCase):
     def test_legacy_calls_must_sit_in_the_legacy_branch(self):
         for call in checker.LEGACY_CALLS:
             self.assertNotEqual(checker.check(TEXT.replace(call, 'somethingElse(')), [], call)
-        # swap the branch test so the calls sit under PCSS
+        # swap the branch test so the calls sit under Stochastic
         old = 'if (RenderShadowMethod == LLShadowMethod::LEGACY)\n    {\n        if (!computeSunSplitsLegacy'
-        swapped = TEXT.replace(old, old.replace('LEGACY', 'PCSS'))
+        swapped = TEXT.replace(old, old.replace('LEGACY', 'STOCHASTIC'))
         self.assertNotEqual(swapped, TEXT)
         self.assertNotEqual(checker.check(swapped), [])
 

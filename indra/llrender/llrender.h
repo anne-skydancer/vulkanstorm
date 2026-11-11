@@ -392,11 +392,6 @@ public:
     void resetVertexBuffer();
     void shutdown();
 
-    // <Vulkanstorm> sampler object (GL 3.3) that reads a depth texture as plain depth: compare
-    // mode off, nearest filtering, clamp to edge, whatever the texture's own state. Created on
-    // first use; 0 below GL 3.3.
-    U32 getDepthFetchSampler();
-    // </Vulkanstorm>
 
     // Refreshes renderer state to the cached values
     // Needed when the render context has changed and invalidated the current state
@@ -534,7 +529,6 @@ private:
     F32             mMaxLineWidthSmooth;
     F32             mMaxLineWidthAliased;
     // </FS:Ansariel>
-    U32             mDepthFetchSampler = 0; // <Vulkanstorm/> see getDepthFetchSampler()
 
     LLPointer<LLVertexBuffer>   mBuffer;
     LLStrider<LLVector4a>       mVerticesp;
