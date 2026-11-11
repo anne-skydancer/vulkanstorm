@@ -580,8 +580,10 @@ public:
     static HttpStatus createService();
 
     /// Shutdown of services prior to exit.  Stops and joins the worker
-    /// thread if it is still running; this may wait for in-flight DNS
-    /// lookups and connection shutdown to finish.
+    /// thread if it is still running; transfers and connections are closed
+    /// without waiting, but libcurl's cleanup waits for a name lookup
+    /// (getaddrinfo) still in progress, which ends by itself when the
+    /// operating system's resolver answers or times out.
     static HttpStatus destroyService();
 
     /// Called once after @see createService() to start the worker thread.
