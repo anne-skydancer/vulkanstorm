@@ -202,8 +202,8 @@ F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
 F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
-U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS, 2 Stochastic
-F32 LLPipeline::RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS
+U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 2 Stochastic
+F32 LLPipeline::RenderShadowLightSize;      // <Vulkanstorm/> light size (Stochastic)
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
 F32 LLPipeline::RenderSSAOFactor;
@@ -630,7 +630,7 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("RenderShadowNoise");
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
     connectRefreshCachedSettingsSafe("RenderShadowMethod");        // <Vulkanstorm/> shadow method
-    connectRefreshCachedSettingsSafe("RenderShadowPCSSLightSize"); // <Vulkanstorm/> PCSS
+    connectRefreshCachedSettingsSafe("RenderShadowLightSize"); // <Vulkanstorm/> light size (Stochastic)
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
     connectRefreshCachedSettingsSafe("RenderSSAOFactor");
@@ -1135,10 +1135,10 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
     S32 shadow_detail = RenderShadowDetail;
 
     F32 scale = gCubeSnapshot ? 1.0f : llmax(0.f, RenderShadowResolutionScale); // Don't scale probe shadow maps
-    // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; PCSS and Stochastic have square
+    // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; Stochastic has square
     // ones (the cascades are square boxes around their slice's bounding sphere) with the same texel count.
     // The Legacy lines are kept verbatim (checked against upstream), so they are computed first and
-    // the other methods override them.
+    // Stochastic overrides them.
     // <ShadowLegacy id="sun-map-size">
     U32 sun_shadow_map_width = BlurHappySize(resX, scale);
     U32 sun_shadow_map_height = BlurHappySize(resY, scale);
@@ -1334,7 +1334,7 @@ void LLPipeline::refreshCachedSettings()
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
     RenderShadowMethod = LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()); // <Vulkanstorm/> shadow method, one clamp for every gate
-    RenderShadowPCSSLightSize = gSavedSettings.getF32("RenderShadowPCSSLightSize");  // <Vulkanstorm/> PCSS
+    RenderShadowLightSize = gSavedSettings.getF32("RenderShadowLightSize");  // <Vulkanstorm/> light size (Stochastic)
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
     RenderSSAOFactor = gSavedSettings.getF32("RenderSSAOFactor");
@@ -10053,41 +10053,9 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
     }
 }
 
-// <Vulkanstorm> PCSS: bind (or release) shadowDepth0/1/4/5, the same depth maps as shadowMap0/1/4/5
-// on their own units with the depth fetch sampler, so the shader can read raw depth there while
-// the compare sampler stays on shadowMapN. Programs without these uniforms are left untouched.
-void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
-{
-    static const S32 maps[4] = { 0, 1, 4, 5 };
-    const U32 sampler = bind ? gGL.getDepthFetchSampler() : 0;
-    for (S32 k = 0; k < 4; ++k)
-    {
-        const S32 uniform = LLShaderMgr::DEFERRED_SHADOW_DEPTH0 + k;
-        if (bind)
-        {
-            LLRenderTarget* target = maps[k] < 4 ? getSunShadowTarget(maps[k]) : getSpotShadowTarget(maps[k] - 4);
-            const S32 channel = target ? shader.enableTexture(uniform) : -1;
-            if (channel > -1)
-            {
-                gGL.getTexUnit(channel)->bind(target, true);
-                gGL.getTexUnit(channel)->bindSampler(sampler);
-            }
-        }
-        else
-        {
-            const S32 channel = shader.disableTexture(uniform);
-            if (channel > -1)
-            {
-                gGL.getTexUnit(channel)->bindSampler(0);
-            }
-        }
-    }
-}
-// </Vulkanstorm>
-
 // <Vulkanstorm> The shadowing light's angular size, L = 2 tan(half angle): the physical sun (0.53 degrees)
 // times the size scale of the light the scene is lit by (stage L3: handing over from the sun's scale to the
-// moon's) times RenderShadowPCSSLightSize.
+// moon's) times RenderShadowLightSize.
 F32 LLPipeline::getShadowLightSize() const
 {
     const U32 frame = LLFrameTimer::getFrameCount();
@@ -10100,7 +10068,7 @@ F32 LLPipeline::getShadowLightSize() const
     const LLEnvironment::PrimaryLightState& primary_light = LLEnvironment::instance().getPrimaryLight();
     LLSettingsSky::ptr_t sky = LLEnvironment::instance().getCurrentSky();
     const F32 sun_scale = primary_light.valid ? primary_light.light_scale : (sky ? sky->getSunScale() : 1.f);
-    mShadowLightSize = sun_angular_size * sun_scale * RenderShadowPCSSLightSize;
+    mShadowLightSize = sun_angular_size * sun_scale * RenderShadowLightSize;
     return mShadowLightSize;
 }
 // </Vulkanstorm>
@@ -10470,20 +10438,13 @@ void LLPipeline::renderDeferredLighting()
                     sun_shader.uniform1i(sShadowSTFrame, stochastic_temporal ? (S32)mShadowSTHistory.seedFrame() : 0);
                 }
 
-                // <Vulkanstorm> PCSS and Stochastic: the shadowing light's angular size, L = 2 tan(half angle):
+                // <Vulkanstorm> Stochastic: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
-                // RenderShadowPCSSLightSize; the moon uses the same size. Stochastic draws its rays
+                // RenderShadowLightSize; the moon uses the same size. Stochastic draws its rays
                 // toward points of the disc of this size.
                 if (LLShadowMethod::usesStableCascades(RenderShadowMethod) && !gCubeSnapshot)
                 {
                     sun_shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, getShadowLightSize());
-                }
-                // the blocker search reads cascades 0-1 and both spot maps a second time as
-                // plain depth, through a sampler object (only the PCSS sun program has these units)
-                const bool pcss_depth_fetch = RenderShadowMethod == LLShadowMethod::PCSS && !gCubeSnapshot && gGLManager.mGLVersion >= 3.29f;
-                if (pcss_depth_fetch)
-                {
-                    bindShadowDepthFetch(sun_shader, true);
                 }
                 // </Vulkanstorm>
 
@@ -10506,10 +10467,6 @@ void LLPipeline::renderDeferredLighting()
                     mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                 }
 
-                if (pcss_depth_fetch)
-                {
-                    bindShadowDepthFetch(sun_shader, false); // <Vulkanstorm/> PCSS: release the units and the sampler
-                }
                 unbindDeferredShader(sun_shader);
             }
             sun_target->flush();
@@ -10525,12 +10482,9 @@ void LLPipeline::renderDeferredLighting()
         // the blur leaves the shadow channels alone when the history or the snapshot's passes made them
         const bool stochastic_resolved = stochastic_temporal || stochastic_snapshot;
 
-        // <Vulkanstorm> PCSS: the blur is the denoiser of the rotated shadow kernel, so it runs
-        // without SSAO too, and a blur size of 0 skips both passes. Unchanged with the Legacy method.
-        // Stochastic denoises with its history instead: the blur runs with SSAO alone, for the AO channel only
-        // (all channels when it has no history to take the shadow from).
-        const bool pcss_shadows = RenderShadowMethod == LLShadowMethod::PCSS && RenderShadowDetail > 0;
-        const bool blur_light_map = pcss_shadows ? RenderShadowBlurSize > 0.f : RenderDeferredSSAO;
+        // <Vulkanstorm> Stochastic denoises with its history: the blur runs with SSAO alone, for the AO channel only
+        // (all channels when it has no history to take the shadow from). Unchanged with the Legacy method.
+        const bool blur_light_map = RenderDeferredSSAO;
         if (blur_light_map && !gCubeSnapshot)
         // </Vulkanstorm>
         {
@@ -12398,7 +12352,7 @@ void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& li
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> shadow method PCSS: the stable sun cascades (stage S1)
+// <Vulkanstorm> shadow method Stochastic: the stable sun cascades (stage S1)
 void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
     glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
@@ -12715,7 +12669,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
     // <Vulkanstorm> shadow method (RenderShadowMethod): Legacy fits the cascades to what the camera sees, as
     // Firestorm 7.2.5 does (computeSunSplitsLegacy, generateSunCascadesLegacy: unchanged upstream code, checked by
-    // scripts/shadows/check_legacy_shadows.py); PCSS uses the stable cascades below.
+    // scripts/shadows/check_legacy_shadows.py); Stochastic uses the stable cascades below.
     LLVector3 up;
     F32 near_clip;
     if (RenderShadowMethod == LLShadowMethod::LEGACY)

@@ -263,10 +263,8 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 
     if (features->hasShadows)
     {
-        // <Vulkanstorm> a program with the PCSS_SHADOW permutation takes the PCSS build of
-        // shadowUtil.glsl (compiled by the viewer's basic shaders under its own key); with the
-        // Stochastic method (its util exists only then) every program takes that util and the
-        // method-neutral block built next to it
+        // <Vulkanstorm> with the Stochastic method (its util exists only then) every program takes that util
+        // and the method-neutral block built next to it; Legacy takes the stock shadowUtil.glsl
         if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
             const char* common = shader->mDefines.count("STOCHASTIC_SHADOW_SUN") ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
@@ -277,8 +275,7 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         }
         else
         {
-            const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY : "deferred/shadowUtil.glsl";
-            if (!shader->attachFragmentObject(shadow_util))
+            if (!shader->attachFragmentObject("deferred/shadowUtil.glsl"))
             {
                 return false;
             }
@@ -1458,7 +1455,7 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("depth_cutoff");
     mReservedUniforms.push_back("norm_cutoff");
     mReservedUniforms.push_back("shadow_target_width");
-    mReservedUniforms.push_back("shadow_light_size"); // <Vulkanstorm/> PCSS
+    mReservedUniforms.push_back("shadow_light_size"); // <Vulkanstorm/> light size (Stochastic)
 
     llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE + 1);
 
@@ -1497,15 +1494,6 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("shadowMap5");
 
     llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW5+1);
-
-    // <Vulkanstorm> PCSS
-    mReservedUniforms.push_back("shadowDepth0");
-    mReservedUniforms.push_back("shadowDepth1");
-    mReservedUniforms.push_back("shadowDepth4");
-    mReservedUniforms.push_back("shadowDepth5");
-
-    llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_DEPTH5+1);
-    // </Vulkanstorm>
 
     mReservedUniforms.push_back("positionMap");
     mReservedUniforms.push_back("diffuseRect");

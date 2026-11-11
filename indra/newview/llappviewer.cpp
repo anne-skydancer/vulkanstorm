@@ -3267,7 +3267,8 @@ bool LLAppViewer::initConfiguration()
     loadSettingsFromDirectory("User");
 
     // <Vulkanstorm> shadow method: once per install, an existing install's soft shadows checkbox
-    // (RenderShadowPCSS) becomes the shadow method; before the command line and window creation
+    // (RenderShadowPCSS) becomes the shadow method, and the retired PCSS method and light size setting move
+    // to Stochastic and RenderShadowLightSize; before the command line and window creation
     {
         const LLShadowMethod::Migration migration = LLShadowMethod::migrateOnStartup(
             gSavedSettings.getBOOL("RenderShadowMethodMigrated"), mIsFirstRun, gSavedSettings.getBOOL("RenderShadowPCSS"));
@@ -3278,6 +3279,27 @@ bool LLAppViewer::initConfiguration()
         if (migration.markMigrated)
         {
             gSavedSettings.setBOOL("RenderShadowMethodMigrated", true);
+        }
+        // PCSS (1) is removed: a stored 1, or any value that is no method, becomes Stochastic
+        const U32 stored_method = gSavedSettings.getU32("RenderShadowMethod");
+        if (LLShadowMethod::sanitize(stored_method) != stored_method)
+        {
+            gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::sanitize(stored_method));
+        }
+        // RenderShadowPCSSLightSize is now RenderShadowLightSize
+        LLControlVariable* old_size = gSavedSettings.getControl("RenderShadowPCSSLightSize");
+        LLControlVariable* new_size = gSavedSettings.getControl("RenderShadowLightSize");
+        if (old_size && new_size)
+        {
+            const LLShadowMethod::LightSizeMigration size_migration = LLShadowMethod::migrateLightSize(old_size->isDefault(), new_size->isDefault());
+            if (size_migration.copyToNew)
+            {
+                gSavedSettings.setF32("RenderShadowLightSize", gSavedSettings.getF32("RenderShadowPCSSLightSize"));
+            }
+            if (size_migration.resetOld)
+            {
+                old_size->resetToDefault();
+            }
         }
     }
     // </Vulkanstorm>
