@@ -1029,7 +1029,7 @@ struct PrimaryLightRig
     PrimaryLight light;        // direction, ground transmittance (moon gain included), shadow strength, moon weight, band weight,
                                // moon availability
     Vec3   cloud_T;            // the sun's transmittance at the cloud layer (the clouds' sun term; the moon's half is not used)
-    Vec3   cloud_dir;          // the clouds' own light direction (the glow near the light), unit, z up
+    Vec3   cloud_dir;          // the clouds' glow direction: the sun's (unit, z up), through the whole handover
     double cloud_band_weight = 0.0; // the clouds' own band weight: primary_light() on the cloud-layer transmittances, the band
                                     // centred on -dip
     Vec3   color;              // the ground light in sunlight_color's encoding: sRGB(lin(source) x light.T), not clamped
@@ -1037,7 +1037,8 @@ struct PrimaryLightRig
     double light_scale = 1.0;  // mix(sun_scale, moon_scale, moon weight t)
     double haze_glow_factor = 1.0; // the dome's and the haze's glow: the sun's share (1 - band weight) plus moon_glow_factor
     double moon_glow_factor = 0.0; // the moon's share of it: band weight x moon_brightness / 4 x the moon disc's visibility
-    double moon_halo_weight = 0.0; // band weight x the moon disc's visibility: the weight of the halo and rainbow around the moon
+    double moon_halo_weight = 0.0; // band weight x the moon disc's visibility x (moon_brightness > 0): the weight of the halo and
+                                   // rainbow around the moon
     bool   shadow_visible = true;
 };
 
@@ -1114,7 +1115,7 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
         cparams.horizon_dip_deg = horizon_dip_degrees(R, h_cloud);
     }
     const PrimaryLight cl = primary_light(cin, cparams);
-    // the clouds' sun term ends with the band (as at night before), the glow direction follows cl.dir
+    // the clouds' sun term ends with the band (as at night before)
     rig.cloud_band_weight = cl.band_weight;
     // the clouds' glow is the sun's only (the moon's half was never visible on them), so it stays at the sun, not at the route
     // between the sun and the moon (a phantom glow in the empty sky between them)
@@ -1131,7 +1132,7 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
     const double moon_vis = smoothstep(-moon_disc, moon_disc, moon_z);
     rig.moon_glow_factor = tb * mb * 0.25 * moon_vis;
     rig.haze_glow_factor = (1.0 - tb) + rig.moon_glow_factor;
-    rig.moon_halo_weight = tb * moon_vis;
+    rig.moon_halo_weight = tb * moon_vis * smoothstep(0.0, 0.01, mb); // no halo or rainbow around a moon of a sky with moon_brightness 0
 
     const Vec3 ground = { in.source.x * rig.light.T.x, in.source.y * rig.light.T.y, in.source.z * rig.light.T.z };
     rig.color = linear_to_srgb(ground);
