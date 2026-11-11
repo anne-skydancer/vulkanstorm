@@ -265,15 +265,25 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     {
         // <Vulkanstorm> a program with the PCSS_SHADOW permutation takes the PCSS build of
         // shadowUtil.glsl (compiled by the viewer's basic shaders under its own key); with the
-        // Stochastic method every program takes the Stochastic util, which exists only then
-        const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY
-            : mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL) ? STOCHASTIC_SHADOW_UTIL
-            : "deferred/shadowUtil.glsl";
-        if (!shader->attachFragmentObject(shadow_util))
-        // </Vulkanstorm>
+        // Stochastic method (its util exists only then) every program takes that util and the
+        // method-neutral block built next to it
+        if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
-            return false;
+            const char* common = shader->mDefines.count("STOCHASTIC_SHADOW_SUN") ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
+            if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL))
+            {
+                return false;
+            }
         }
+        else
+        {
+            const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY : "deferred/shadowUtil.glsl";
+            if (!shader->attachFragmentObject(shadow_util))
+            {
+                return false;
+            }
+        }
+        // </Vulkanstorm>
     }
 
     if (features->hasReflectionProbes)
@@ -1673,6 +1683,12 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("moon_glow_norm");
     mReservedUniforms.push_back("moon_glow_factor");
     mReservedUniforms.push_back("moon_halo_weight");
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the Stochastic shadow method's temporal resolve
+    mReservedUniforms.push_back("shadow_st_raw");
+    mReservedUniforms.push_back("shadow_st_history");
+    mReservedUniforms.push_back("shadow_st_resolved");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
