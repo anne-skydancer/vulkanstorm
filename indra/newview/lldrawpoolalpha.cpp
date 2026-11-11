@@ -236,7 +236,8 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     const bool use_stochastic = alpha_method == 1 && oit_view_eligible && LLPipeline::sRenderAlphaStochasticSupported;
     if (use_stochastic)
     {
-        drawGLTFScene();
+        // the GLTF scene's blended assets are drawn inside the passes (forwardRender), so nothing
+        // blended is drawn when the engine is not ready (beginAlphaStochastic)
         if (renderStochastic())
         {
             renderOITResidual();
@@ -327,7 +328,7 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
     gGL.blendFunc(mColorSFactor, mColorDFactor, mAlphaSFactor, mAlphaDFactor);
 
     // <FS> if (rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)
-    // Vulkanstorm: OIT passes draw the GLTF scene to depth via drawGLTFScene() beforehand
+    // Vulkanstorm: the stochastic passes draw the GLTF scene's blended assets with the faces (below)
     if (oit_phase == ALPHA_OIT_NONE && rigged && mType == LLDrawPool::POOL_ALPHA_POST_WATER)
     // </FS>
     { // draw GLTF scene to depth buffer before rigged alpha
@@ -338,6 +339,16 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
         LL::GLTFSceneManager::instance().render(false, false, true);
         LL::GLTFSceneManager::instance().render(false, true, true);
     }
+
+    // <Vulkanstorm> the GLTF scene's blended assets join the stochastic passes with the faces (one
+    // engine for all transparency of the main view; they write no scene depth, so the depth spread
+    // of the opaque scene needs no ordering against them)
+    if (!rigged && getType() == LLDrawPool::POOL_ALPHA_POST_WATER &&
+        (oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH || oit_phase == ALPHA_ST_ACCUM))
+    {
+        drawGLTFScene(oit_phase);
+    }
+    // </Vulkanstorm>
 
     // If the face is more than 90% transparent, then don't update the Depth buffer for Dof
     // We don't want the nearly invisible objects to cause of DoF effects
@@ -358,19 +369,31 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
     }
 }
 
-void LLDrawPoolAlpha::drawGLTFScene()
+// <Vulkanstorm> one pass of the stochastic engine over the GLTF scene's blended assets, in the state
+// forwardRender set for the phase (blend factors, depth writes in the depth pass only)
+void LLDrawPoolAlpha::drawGLTFScene(EAlphaOITPhase oit_phase)
 {
     if (getType() != LLDrawPool::POOL_ALPHA_POST_WATER)
     {
         return;
     }
 
-    LLGLDepthTest depth(GL_TRUE, GL_TRUE);
-    LL::GLTFSceneManager::instance().render(false, false);
-    LL::GLTFSceneManager::instance().render(false, true);
-    LL::GLTFSceneManager::instance().render(false, false, true);
-    LL::GLTFSceneManager::instance().render(false, true, true);
+    LL::GLTFSceneManager::StochasticPass pass = LL::GLTFSceneManager::ST_NONE;
+    switch (oit_phase)
+    {
+    case ALPHA_ST_ALPHA: pass = LL::GLTFSceneManager::ST_ALPHA; break;
+    case ALPHA_ST_DEPTH: pass = LL::GLTFSceneManager::ST_DEPTH; break;
+    case ALPHA_ST_ACCUM: pass = LL::GLTFSceneManager::ST_ACCUM; break;
+    default: return;
+    }
+
+    LL::GLTFSceneManager& scene = LL::GLTFSceneManager::instance();
+    scene.render(false, false, false, pass, mStochasticMasks);
+    scene.render(false, true, false, pass, mStochasticMasks);
+    scene.render(false, false, true, pass, mStochasticMasks);
+    scene.render(false, true, true, pass, mStochasticMasks);
 }
+// </Vulkanstorm>
 
 // <Vulkanstorm> the end of an order-independent method: the OIT passes cannot write the shared
 // scene depth (it would reject transparent fragments before they are composited). Restore the
@@ -431,6 +454,23 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
     apply(simple_shader);
     apply(fullbright_shader);
     apply(pbr_shader);
+    // the GLTF scene's blended variants
+    for (U32 i = 0; i < LLGLSLShader::NUM_GLTF_VARIANTS; ++i)
+    {
+        if (i & LLGLSLShader::GLTFVariant::ALPHA_BLEND)
+        {
+            LLGLSLShader* program = gGLTFAlphaStochasticProgram[i].mProgramObject ? &gGLTFAlphaStochasticProgram[i] : nullptr;
+            if (program)
+            {
+                program->bind();
+                program->uniform1i(sMode, mode);
+                program->uniform1i(sSamplesHW, samples_hw);
+                program->uniform1i(sSamples, samples);
+                program->uniform1i(sIteration, (S32)iteration);
+                program->uniform1i(sFrame, frame);
+            }
+        }
+    }
     LLGLSLShader* material_shader = gDeferredMaterialProgram;
     for (S32 i = 0; i < LLMaterial::SHADER_COUNT * 2; ++i)
     {
