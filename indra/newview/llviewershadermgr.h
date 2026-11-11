@@ -220,8 +220,8 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 extern LLGLSLShader         gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // alpha-only variants of the GLTF scene's blended variants, by variant bits
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
-extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: compute (GL 4.3+) or fragment resolve
-extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (GL 4.0 to 4.2)
+extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
+extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (the default on every device)
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>
 
