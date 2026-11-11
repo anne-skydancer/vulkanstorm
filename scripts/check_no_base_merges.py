@@ -6,7 +6,9 @@
 Changes flow one way: a feature or PR branch is merged into its base line
 (vkstorm-*) through its PR. Merging a base line into a feature branch
 ("Merge vkstorm-rust into codex/...", GitHub's "Update branch") is not used in
-this repository (AGENTS.md).
+this repository (AGENTS.md). To bring base changes into a branch, rebase it
+onto the base (preferred), or cherry-pick the base commits, or land the branch and
+follow up.
 
 What counts as merging a base line: a merge whose incoming parent is a commit
 of a base line's own history, its first-parent chain (each tip it has had).
@@ -120,8 +122,9 @@ def check_range(base, head):
         for merge, line in found:
             print("  %s  (brings in %s)" % (subject(merge), short_ref(line)))
         print("Changes flow from the branch into its base through the PR, never the "
-              "other way (AGENTS.md). Bring base changes in by cherry-pick, or land "
-              "the branch first and follow up.")
+              "other way (AGENTS.md). Bring base changes in by rebasing the branch onto "
+              "the base (preferred; push with --force-with-lease) or by cherry-pick, or "
+              "land the branch first and follow up.")
         return 1
     print("No merges of a base line in %s..%s." % (base, head))
     return 0
@@ -177,7 +180,7 @@ def check_pending():
             print("Refusing to merge %s into %s: it is on %s's own history." % (
                 subject(commit), branch, short_ref(owner[commit])))
             print("Feature branches are merged into their base line through the PR, "
-                  "never the other way (AGENTS.md). Use a cherry-pick instead, or set "
+                  "never the other way (AGENTS.md). Rebase onto the base (preferred) or cherry-pick instead, or set "
                   "VKS_ALLOW_BASE_MERGE=1 for a deliberate exception.")
             return 1
     return 0
