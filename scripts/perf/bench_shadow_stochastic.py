@@ -2,7 +2,7 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Offline GPU check and benchmark of the Stochastic shadow method, no viewer launch.
 
-Reuses the scenes, depth maps, G-buffer and GL context of bench_shadow_pcss.py. Runs the shipped
+Reuses the scenes, depth maps, G-buffer and GL context of bench_shadow_legacy.py. Runs the shipped
 shaders: the Stochastic shadow util (class1/deferred/shadowStochasticUtil.glsl) linked next to the
 method-neutral block of shadowUtil.glsl built alone (SHADOW_COMMON_ONLY), the deferred sun light pass
 (class2/deferred/sunLightF.glsl), and the temporal resolve and light map shaders with the stochastic
@@ -27,14 +27,14 @@ Checks (stage M2, the resolve, the same shaders the viewer runs):
   * the compute and the fragment resolve give bit identical histories.
 The viewer's uniform setup of the resolve is checked against the shaders' declarations by
 scripts/tests/test_shadow_method_tables.py (the compute path once missed inv_proj).
-Prints the cost of each pass against today's PCSS sun pass and light-map blur.
+Prints the cost of each pass against the Legacy sun pass and light-map blur.
 
-Environment: ST_FRAMES (default 40, timing), PCSS_BENCH_RES (as bench_shadow_pcss.py).
+Environment: ST_FRAMES (default 40, timing), SHADOW_BENCH_RES (as bench_shadow_legacy.py).
 """
 import math, os, statistics, sys
 from pathlib import Path
 import numpy as np
-_src = Path(__file__).with_name('bench_shadow_pcss.py').read_text()
+_src = Path(__file__).with_name('bench_shadow_legacy.py').read_text()
 exec(compile(_src.split('# --- timing + basic checks')[0], 'bench_prefix', 'exec'))
 
 FRAMES = int(os.environ.get('ST_FRAMES', 40))
@@ -183,14 +183,14 @@ for (W, H) in RESOLUTIONS:
     print(f'{W}x{H}: sun maps {sc.sw}x{sc.sh}, cascade texels (cm) ' + ', '.join(f'{100*t:.2f}' for t in cascade_texels(sc)))
     for spot in (True, False):
         d = 2 if spot else 1
-        for variant in ('tree', 'pcss'):
+        for variant in ('tree',):
             prog = sun_program(variant, spot); sc.bind(prog, LIGHT_SIZE)
             RES[(W, H, d, variant)] = timed(lambda f: draw(4, 0, 3)); sc.unbind(); fn('glDeleteProgram', None, U)(prog)
         prog = stoch_program(spot)
         bind_stoch(prog, sc, LIGHT_SIZE, 1)
         RES[(W, H, d, 'stoch')] = timed(lambda f: (u1i(loc(prog, b'shadow_st_frame'), f + 1), draw(4, 0, 3)))
         sc.unbind(); fn('glDeleteProgram', None, U)(prog)
-    # the light-map blur of today's PCSS (two passes, viewer defaults)
+    # the light-map blur Legacy runs with SSAO (two passes, viewer defaults)
     blur = program([(0x8B31, VERTEX), (0x8B30, stage((DEEP / 'blurLightF.glsl').read_text(), [])), (0x8B30, STUBS_F)])
     tmp = make_tex(0x881A, W, H); tfbo = make_fbo([tmp])
     def gauss(x, s): return math.exp(-x * x / (2 * s * s)) / math.sqrt(2 * math.pi * s * s) if s > 0 else (1.0 if x == 0 else 0.0)
@@ -434,18 +434,18 @@ for name, xr, zr, h in PEN_CASES:
 rs.release(); fn('glDeleteProgram', None, U)(prog); sc.release()
 
 print(f'\nmedian ms, {FRAMES} frames after {WARMUP} warmup')
-print(f'{"res":<11}{"detail":<8}{"tree":>8}{"pcss":>8}{"stoch":>8}   (the sun light pass)')
+print(f'{"res":<11}{"detail":<8}{"tree":>8}{"stoch":>8}   (the sun light pass; tree = Legacy)')
 for (W, H) in RESOLUTIONS:
     for d in (2, 1):
-        print(f'{f"{W}x{H}":<11}{d:<8}' + ''.join(f'{RES[(W, H, d, l)]:>8.3f}' for l in ('tree', 'pcss', 'stoch')))
+        print(f'{f"{W}x{H}":<11}{d:<8}' + ''.join(f'{RES[(W, H, d, l)]:>8.3f}' for l in ('tree', 'stoch')))
     comp = RES[(W, H, 0, 'resolve compute')]; frag = RES[(W, H, 0, 'resolve')]; compose = RES[(W, H, 0, 'compose')]; blur = RES[(W, H, 0, 'blur')]
-    sun_pcss = RES[(W, H, 2, 'pcss')]; sun_st = RES[(W, H, 2, 'stoch')]
-    pcss = sun_pcss + blur                   # PCSS always runs its blur (shadow and AO channels in the same two passes)
+    sun_legacy = RES[(W, H, 2, 'tree')]; sun_st = RES[(W, H, 2, 'stoch')]
+    legacy = sun_legacy                      # Legacy pays its blur only with SSAO on
     print(f'{"":<19}resolve: fragment (the shipped path on every device) {frag:.3f}, compute (A/B only, GL 4.3+) {comp:.3f}; light map pass {compose:.3f}; blur {blur:.3f}')
     for path, resolve in (('fragment (shipped)', frag), ('compute (A/B)', comp)):
         off = sun_st + resolve + compose
-        print(f'{"":<19}{path} resolve: Stochastic {off:.3f} ms vs PCSS (sun pass + blur) {pcss:.3f} ms: {off - pcss:+.3f} ms with SSAO off for Stochastic'
-              f' (PCSS still pays its blur); SSAO on, both blur: {off + blur - pcss:+.3f} ms')
+        print(f'{"":<19}{path} resolve: Stochastic {off:.3f} ms vs Legacy sun pass {legacy:.3f} ms: {off - legacy:+.3f} ms'
+              f' (with SSAO on both run the blur, {blur:.3f} ms)')
 print(f'\nforward programs (water, particles, glass layers: a full screen layer each), 8 fixed rays vs the stock PCF, ms per frame')
 for (W, H) in RESOLUTIONS:
     for layers in (1, 4):

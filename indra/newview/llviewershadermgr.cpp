@@ -396,13 +396,11 @@ static void unload_stochastic_shaders()
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> shadow methods PCSS (1) and Stochastic (2): whether the shader set is built for the method
-static bool use_shadow_method(U32 method)
+// <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
+static bool use_stochastic_shadows()
 {
-    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) == method && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
-static bool use_pcss_shadows() { return use_shadow_method(LLShadowMethod::PCSS); }
-static bool use_stochastic_shadows() { return use_shadow_method(LLShadowMethod::STOCHASTIC); }
 // </Vulkanstorm>
 
 static void add_common_permutations(LLGLSLShader* shader)
@@ -684,8 +682,8 @@ S32 LLViewerShaderMgr::getShaderLevel(S32 type)
 // the cache once, release builds are unaffected (their version changes anyway).
 // <Vulkanstorm> S2: the defines of the method-neutral shadow block (SHADOW_COMMON in shadowUtil.glsl): the
 // switch and every constant the block reads, taken from llshadowcascadefit.h, the one source. Any
-// shadow method calls this for the shadowUtil.glsl build it wants the block in (PCSS now, Stochastic and
-// Legacy later); the shader cache version hashes the same list.
+// shadow method calls this for the shadowUtil.glsl build it wants the block in (Stochastic now, Legacy
+// later); the shader cache version hashes the same list.
 static void addShadowCommonDefines(std::map<std::string, std::string>& attribs)
 {
     attribs["SHADOW_COMMON"] = "1";
@@ -1213,40 +1211,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
             LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_SHADOW_UTIL << LL_ENDL;
             return STOCHASTIC_SHADOW_UTIL;
         }
-    }
-    // </Vulkanstorm>
-
-    // <Vulkanstorm> PCSS: a second build of shadowUtil.glsl with PCSS_SHADOW defined, kept under
-    // its own key for the deferred sun program alone (LLShaderMgr::attachShaderFeatures); every
-    // other shadow consumer keeps the build above
-    if (use_pcss_shadows())
-    {
-        const std::string util = "deferred/shadowUtil.glsl";
-        const GLuint plain = mFragmentShaderObjects[util];
-        std::map<std::string, std::string> pcss_attribs = attribs;
-        pcss_attribs["PCSS_SHADOW"] = "1";
-        // stage S2: the method-neutral block and its constants, SHADOW_MODERN (the PCSS and Stochastic
-        // code), and the gather tap on GL 4.0 and later
-        addShadowCommonDefines(pcss_attribs);
-        pcss_attribs["SHADOW_MODERN"] = "1";
-        if (gGLManager.mGLVersion >= 3.99f)
-        {
-            pcss_attribs["SHADOW_GATHER"] = "1";
-        }
-        if (gGLManager.mGLVersion >= 3.29f)
-        {   // sampler objects (GL 3.3): plain depth reads for the blocker search; without
-            // them the PCSS build is the fixed-radius rotated PCF
-            pcss_attribs["PCSS_SHADOW_FETCH"] = "1";
-        }
-        S32 level = 1;
-        const GLuint pcss = loadShaderFile(util, level, GL_FRAGMENT_SHADER, &pcss_attribs, -1);
-        mFragmentShaderObjects[util] = plain;
-        if (pcss == 0)
-        {
-            LL_WARNS("Shader") << "Failed to load fragment shader " << util << " with PCSS_SHADOW" << LL_ENDL;
-            return util;
-        }
-        mFragmentShaderObjects[PCSS_SHADOW_UTIL_KEY] = pcss;
     }
     // </Vulkanstorm>
 
@@ -2104,12 +2068,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         add_common_permutations(&gDeferredSunProgram);
 
-        // <Vulkanstorm> PCSS: the sun program alone (not the probe variant) filters with
-        // the PCSS build of shadowUtil.glsl
-        if (use_pcss_shadows())
-        {
-            gDeferredSunProgram.addPermutation("PCSS_SHADOW", "1");
-        }
+        // <Vulkanstorm>
         if (use_stochastic_shadows())
         {   // the sun programs read the depth buffer for the receiver plane
             gDeferredSunProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");

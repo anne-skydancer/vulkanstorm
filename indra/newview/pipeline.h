@@ -321,7 +321,6 @@ public:
     void bindCloudShadow(LLGLSLShader& shader) { mCloudShadowMap.bind(shader); }
     LLCloudShadowMap mCloudShadowMap;
     // </Vulkanstorm>
-    void bindShadowDepthFetch(LLGLSLShader& shader, bool bind); // <Vulkanstorm/> PCSS raw depth units
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);
     void setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep);
@@ -351,7 +350,7 @@ public:
     void postDeferredGammaCorrect(LLRenderTarget* screen_target);
 
     void generateSunShadow(LLCamera& camera);
-    // <Vulkanstorm> shadow method: the Legacy (Firestorm 7.2.5) and PCSS (stable) sun cascades; only
+    // <Vulkanstorm> shadow method: the Legacy (Firestorm 7.2.5) and Stochastic (stable) sun cascades; only
     // generateSunShadow calls these
     bool computeSunSplitsLegacy(LLCamera& camera, const LLVector3& lightDir, const glm::mat4& saved_view,
         bool skip_avatar_update, LLVector3& out_up, F32& out_near_clip);
@@ -454,7 +453,7 @@ public:
     // </Vulkanstorm>
 
     // <Vulkanstorm> the Stochastic shadow method's temporal accumulation (the stochastic engine's history)
-    F32  getShadowLightSize() const;               // L = 2 tan(half angle) of the sun or moon, times RenderShadowPCSSLightSize
+    F32  getShadowLightSize() const;               // L = 2 tan(half angle) of the sun or moon, times RenderShadowLightSize
     bool beginShadowStochastic();                  // once a frame in the lighting pass: the history made or freed, the frame begun; true: the sun pass writes raw rays
     void releaseShadowStochasticHistory();
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
@@ -1232,8 +1231,8 @@ public:
     static F32 CameraFieldOfView;
     static F32 RenderShadowNoise;
     static F32 RenderShadowBlurSize;
-    static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS, 2 Stochastic
-    static F32 RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS light size multiplier
+    static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 2 Stochastic
+    static F32 RenderShadowLightSize;      // <Vulkanstorm/> light size multiplier (Stochastic)
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
     static F32 RenderSSAOFactor;
