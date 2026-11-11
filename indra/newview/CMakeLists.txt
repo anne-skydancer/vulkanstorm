@@ -2313,7 +2313,13 @@ if (WINDOWS)
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
         # *TODO -reenable this once we get server usage sorted out
-        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
+        # <Vulkanstorm> Link flags: /DELAYLOAD for opengl32 and glu32 (so
+        # selectGLBackend() runs before the first GL import), and for llwebrtc
+        # and openjp2 (so no code of theirs runs before the CPU check);
+        # /ENTRY:vkstormEntry is that CPU check (llcpucheck_win.cpp), which runs
+        # before the C runtime starts. A failed delay-load is reported by the
+        # hook in llappviewerwin32.cpp.
+        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /DELAYLOAD:openjp2.dll /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
         LINK_FLAGS_DEBUG "/NODEFAULTLIB:\"LIBCMT;LIBCMTD;MSVCRT\" /INCREMENTAL:NO /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         LINK_FLAGS_RELEASE "/FORCE:MULTIPLE /MAP\"secondlife-bin.MAP\" /OPT:REF /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         )

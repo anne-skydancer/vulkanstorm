@@ -100,6 +100,35 @@
 #include "llvoavatarself.h"         // for agent name
 #pragma optimize( "", off )
 
+// <Vulkanstorm> llwebrtc.dll, openjp2.dll, opengl32.dll and glu32.dll are
+// delay-loaded (see CMakeLists.txt). If one is missing or cannot be loaded,
+// the default is an SEH exception (0xC06D007E) in the middle of a session
+// that tells the user nothing: log it, say which file, and exit.
+#include <delayimp.h>
+namespace
+{
+    FARPROC WINAPI vkstormDelayLoadFailure(unsigned notify, PDelayLoadInfo info)
+    {
+        if (notify == dliFailLoadLib || notify == dliFailGetProc)
+        {
+            const char* dll = (info && info->szDll) ? info->szDll : "(unknown)";
+            const DWORD err = info ? info->dwLastError : 0;
+            LL_WARNS("Startup") << "Delay-loaded library " << dll
+                << (notify == dliFailLoadLib ? " could not be loaded" : " is missing a function")
+                << " (Windows error " << err << ")" << LL_ENDL;
+            std::string msg = std::string("Vulkanstorm cannot continue: the file ") + dll
+                + (notify == dliFailLoadLib ? " could not be loaded" : " does not match this version")
+                + " (Windows error " + std::to_string(err)
+                + "). Reinstall Vulkanstorm; if the problem remains, check that the file is present in the installation folder.";
+            MessageBoxA(NULL, msg.c_str(), "Vulkanstorm", MB_ICONERROR);
+            ExitProcess(1);
+        }
+        return NULL;
+    }
+}
+extern "C" const PfnDliHook __pfnDliFailureHook2 = vkstormDelayLoadFailure;
+// </Vulkanstorm>
+
 namespace FS
 {
     std::wstring LogfileIn;

@@ -2,6 +2,7 @@
  * @file llcpucheck_win.cpp
  * @brief Executable entry point that checks for an x86-64-v3 (AVX2) processor
  *
+ * Copyright (C) 2026 Vulkanstorm contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Vulkanstorm is built for x86-64-v3 (AVX2, FMA, BMI1/2, F16C, MOVBE, LZCNT).
@@ -17,7 +18,8 @@
  *  - compiled with /arch:SSE2 /GS- /GL- (see CMakeLists.txt) and the function
  *    is marked safebuffers: no stack cookie, no AVX code, no cross-module
  *    inlining of AVX code;
- *  - no static data and no C runtime calls before the check.
+ *  - no writable static data, no static initialisers and no C runtime calls
+ *    before the check.
  */
 
 #include <windows.h>
@@ -68,8 +70,10 @@ extern "C" __declspec(safebuffers) int vkstormEntry(void)
     if (!ok)
     {
         MessageBoxW(NULL,
-                    L"Vulkanstorm needs a processor with AVX2 (x86-64-v3): "
-                    L"Intel Haswell (2013) or newer, AMD Zen or Excavator or newer. "
+                    L"Vulkanstorm needs a processor with AVX2 (x86-64-v3). "
+                    L"Most Intel Core processors from Haswell (2013) on and AMD Zen or "
+                    L"Excavator and newer have it; some Pentium, Celeron and Atom models "
+                    L"and some virtual machines do not. "
                     L"This computer's processor does not support it.",
                     L"Vulkanstorm",
                     MB_ICONERROR);
