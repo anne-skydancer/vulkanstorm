@@ -855,7 +855,7 @@ if any(VARIANTS.values()):
 ST_SEEDS=2048;RG16F=0x822F
 ST_UNITS=dict(accum=10,trans=11,masks=12)   # clear of the units the stoch variants use
 def st_mask_table(s):
-    """LLPipeline::alphaStochasticMaskTable: row r holds 2048 random r-subsets of the S bits."""
+    """LLStochasticEngine::maskTable: row r holds 2048 random r-subsets of the S bits."""
     M=(1<<64)-1;state=(0x9e3779b97f4a7c15^s)&M;table=[]
     def nxt():
         nonlocal state
