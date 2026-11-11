@@ -192,7 +192,8 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 
     // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
     // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
-    // coverage mask; a producer's temporal resolve program (STOCH_RESOLVE) takes its resolve.
+    // coverage mask. (A producer's temporal resolve is its own compute or fragment program that lists
+    // stochasticResolveUtilF.glsl among its own shader files.)
     // STOCH_SAMPLE: any producer's program that samples (ALPHA_STOCHASTIC implies it; the shadow
     // producer sets STOCH_SAMPLE alone).
     const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
@@ -202,10 +203,6 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
     if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
-    {
-        return false;
-    }
-    if (shader->mDefines.count("STOCH_RESOLVE") && !shader->attachFragmentObject(STOCH_RESOLVE_OBJECT))
     {
         return false;
     }
@@ -602,8 +599,21 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     {
         if (major_version >= 4)
         {
-            //set version to 400 or 420
-            if (minor_version >= 20)
+            //set version to 400 or 420 (430 for a compute shader)
+            if (type == GL_COMPUTE_SHADER)
+            {
+                // <Vulkanstorm> compute shaders are GLSL 4.30 (GL 4.3). The caller gates on the device; an
+                // older GLSL here is an error, never a different shader.
+                if (minor_version < 30)
+                {
+                    LL_WARNS("ShaderLoading") << "A compute shader needs GLSL 4.30, this device has " << major_version << "."
+                                              << minor_version << ": " << open_file_name << LL_ENDL;
+                    fclose(file);
+                    return 0;
+                }
+                shader_code_text[shader_code_count++] = strdup("#version 430\n");
+            }
+            else if (minor_version >= 20)
             {
                 shader_code_text[shader_code_count++] = strdup("#version 420\n");
             }
@@ -650,6 +660,10 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     if (type == GL_FRAGMENT_SHADER)
     {
         extra_code_text[extra_code_count++] = strdup("#define FRAGMENT_SHADER 1\n");
+    }
+    else if (type == GL_COMPUTE_SHADER)
+    {
+        extra_code_text[extra_code_count++] = strdup("#define COMPUTE_SHADER 1\n");
     }
     else
     {
@@ -1630,7 +1644,6 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_depth");
     mReservedUniforms.push_back("alpha_st_history");
     mReservedUniforms.push_back("alpha_st_resolved");
-    mReservedUniforms.push_back("alpha_st_current");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the cloud transmittance map and its lookup
