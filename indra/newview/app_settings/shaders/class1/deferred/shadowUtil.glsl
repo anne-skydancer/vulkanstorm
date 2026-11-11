@@ -23,6 +23,11 @@
  * $/LicenseInfo$
  */
 
+#if defined(SHADOW_COMMON_ONLY)
+// <Vulkanstorm> the Stochastic method links the method-neutral block (SHADOW_COMMON below) next to its own
+// shadow util: this build is that block alone, with the screen size it reads. Nothing else of this file is in it.
+uniform vec2 screen_res;
+#else
 uniform sampler2D   normalMap;
 
 #if defined(SUN_SHADOW)
@@ -130,6 +135,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
     return 1.0;
 #endif
 }
+#endif // !SHADOW_COMMON_ONLY
 
 #if defined(PCSS_SHADOW) && !defined(SHADOW_MODERN)
 #define SHADOW_MODERN 1 // <Vulkanstorm/> the PCSS build is one of the modern methods
@@ -155,6 +161,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 // The constants SHADOW_BIAS_TEXELS, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_PLANE_BIAS_MAX_TEXELS,
 // SHADOW_GRAD_MAX and SHADOW_FOOTPRINT_M come from llshadowcascadefit.h through the shader manager (one source of truth).
 
+#if !defined(SHADOW_COMMON_NO_DEPTH)
 vec4 getPosition(vec2 pos_screen); // deferredUtil.glsl: view space position of a screen position
 
 #define SHADOW_EDGE_REL        0.03   // a depth jump to the neighbour pixel beyond this fraction of the
@@ -221,6 +228,8 @@ vec3 shadowGeometricNormal(vec2 pos_screen, vec3 pos, vec3 gnorm)
     n *= inversesqrt(len2);
     return dot(n, pos) > 0.0 ? -n : n; // facing the eye
 }
+
+#endif // !SHADOW_COMMON_NO_DEPTH
 
 // the rows of a cascade matrix: texture space (u, v, depth) of a view space point is (r0.p, r1.p, r2.p) + m[3].xyz
 vec3 shadowRow(mat4 m, int i)
@@ -302,7 +311,12 @@ ShadowCascade shadowCascadeSetup(mat4 m, vec2 res)
 // (the normal offset's scale). light_dir: view space, towards the light.
 vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_dir, out float sin_theta)
 {
+#if defined(SHADOW_COMMON_NO_DEPTH)
+    // no depth buffer behind this program (a forward surface, or one without deferredUtil.glsl): the shading normal is the plane
+    vec3 ng = dot(gnorm, gnorm) > 1.0e-8 ? normalize(gnorm) : vec3(0.0, 0.0, 1.0);
+#else
     vec3 ng = shadowGeometricNormal(pos_screen, pos, gnorm);
+#endif
     float dp = clamp(dot(ng, light_dir), 0.0, 1.0);
     sin_theta = sqrt(max(1.0 - dp * dp, 0.0));
     return ng;
@@ -310,6 +324,7 @@ vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_di
 
 #endif // SHADOW_COMMON
 
+#if !defined(SHADOW_COMMON_ONLY)
 #if defined(SHADOW_MODERN) && defined(SUN_SHADOW) && defined(SHADOW_GATHER)
 // One bilinear compare tap at c.xy against the receiver plane with the signed gradient g (d depth /
 // d uv): the four texels around c.xy are gathered as raw depth and each compared with the plane's depth at its
@@ -834,4 +849,4 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     return 1.0;
 #endif
 }
-
+#endif // !SHADOW_COMMON_ONLY

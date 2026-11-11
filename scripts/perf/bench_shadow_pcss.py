@@ -596,41 +596,6 @@ print('\nGLSL 1.50 compile of the method-neutral block (SHADOW_COMMON alone, no 
 compile_check(150, ['SUN_SHADOW', 'SHADOW_COMMON'] + S2_DEFINES, 'shadowUtil.glsl with SHADOW_COMMON')
 compile_check(150, ['SUN_SHADOW'], 'shadowUtil.glsl without it (Legacy)')
 
-# --- Stochastic shadow method (RenderShadowMethod 2): its own shadow util, linked on its own ----------
-# The util is a program's whole shadow code under the method: no getPosition, no PCSS, no groundwork
-# defines. Stage M0's entry points report the surface lit; this links the util with a main that calls both
-# and checks the result (stage M1 replaces the expectation with the estimator's own checks).
-STOCH_UTIL = root / SHADERS / 'class1/deferred/shadowStochasticUtil.glsl'
-STOCH_MAIN = '''#version 430 core
-in vec2 vary_fragcoord;
-layout(location = 0) out vec4 out_color;
-float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
-float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen);
-void main() { out_color = vec4(sampleDirectionalShadow(vec3(0.0, 0.0, -5.0), vec3(0.0, 0.0, 1.0), vary_fragcoord),
-                               sampleSpotShadow(vec3(0.0, 0.0, -5.0), vec3(0.0, 0.0, 1.0), 0, vary_fragcoord), 0.0, 1.0); }
-'''
-print('\nstochastic: the Stochastic shadow util on its own')
-stoch_progs = {}
-for spot in (True, False):
-    defines = ''.join(f'#define {d} 1\n' for d in (['SUN_SHADOW'] + (['SPOT_SHADOW'] if spot else [])))
-    util = '#version 430 core\n#define FRAGMENT_SHADER 1\n' + defines + STOCH_UTIL.read_text()
-    label = f'RenderShadowDetail {2 if spot else 1}'
-    try:
-        stoch_progs[spot] = program([(0x8B31, VERTEX), (0x8B30, STOCH_MAIN), (0x8B30, util)]); ok = True
-    except AssertionError as e:
-        ok = False; print(e)
-    check(ok, f'the Stochastic util links without any other shadow code at {label}', 'stochastic: ')
-stoch_tex = make_tex(0x8814, 64, 64); stoch_fbo = make_fbo([stoch_tex])
-for spot, prog in stoch_progs.items():
-    bindfbo(FB, stoch_fbo)
-    viewport(0, 0, 64, 64); fn('glUseProgram', None, U)(prog); draw(0x0004, 0, 3)
-    buf = (F*(64*64*4))(); readbuffer(COLOR0); readpixels(0, 0, 64, 64, 0x1908, 0x1406, C.byref(buf))
-    check(all(buf[4*i] == 1.0 and buf[4*i+1] == 1.0 for i in range(64*64)), f'the placeholder reports lit at RenderShadowDetail {2 if spot else 1}', 'stochastic: ')
-fn('glUseProgram', None, U)(0)
-bindfbo(FB, 0)
-for prog in stoch_progs.values(): fn('glDeleteProgram', None, U)(prog)
-delfbo(1, (U*1)(stoch_fbo.value)); deltex(1, (U*1)(stoch_tex))
-
 print(f'\nmedian ms per sun light pass, {FRAMES} frames after {WARMUP} warmup; base = {BASE_REF} '
       f'({subprocess.run(["git", "rev-parse", "--short", BASE_REF], cwd=root, capture_output=True, text=True).stdout.strip()})')
 print(f'{"resolution":<12}{"view":<8}{"detail":<8}' + ''.join(f'{v:>9}' for v in VARIANTS) + f'{"pcss-pcss0":>12}{"pcss33-pcss0":>14}{"spread":>9}{"pcss/legacy":>13}')
