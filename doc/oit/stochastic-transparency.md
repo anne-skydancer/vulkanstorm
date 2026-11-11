@@ -27,6 +27,18 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
   the other. stoch is less expensive in my experience with aurora, and comparable quality with
   the algorithm used there."
 
+## The stochastic engine
+
+The sampling and the temporal resolve are shared with the producers that will use them (the Stochastic
+shadow method, RenderShadowMethod 2, later): GLSL objects `stochasticSampleF.glsl` (hash, per-frame seed,
+mask lookup in the one S = 8 table, `stoch_masks`) and `stochasticResolveUtilF.glsl` (reprojection with the
+last frame's matrices, nearest and depth-checked bilinear history reads, the 3 x 3 clamp, the 1/8 blend,
+`stoch_reproj`, `stoch_weight`, `stoch_history_valid`), compiled once and attached to the programs that need
+them; the producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
+`LLStochasticEngine` (the mask table, counted textures) and `LLStochasticHistory`, one instance per producer
+(`allocate`, `release`, `beginFrame`, `seedFrame`, `historyUsed`, `setResolveUniforms`, `endFrame`,
+`invalidate`).
+
 ## The method in this viewer
 
 The deferred scene is single-sampled (FXAA or SMAA run after it), so the passes over the blended
@@ -41,7 +53,7 @@ faces run on their own multisampled targets, as Aurora does without MSAA:
 
 P, the samples of one pass, is the most the device takes for the three formats up to 8 (NVIDIA
 621.01 honours only the low 4 bits of a texture-fetched `gl_SampleMask` at 16 samples). S, the
-samples in all, is `RenderAlphaStochasticSamples`, a debug setting that takes 4, 8 or 16; 8 is the default on every line and there is no user-facing choice (see Settings); S / P iterations run the depth
+samples in all, is 8 (`LLStochasticEngine::SAMPLES`; the 4 and 16 of the former debug setting `RenderAlphaStochasticSamples` are gone with it); S / P iterations run the depth
 and accumulation passes with the next P bits of the same mask. Memory: 16 B per sample, 128 B per
 pixel at P = 8 (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render resolution
 while the method is selected and freed otherwise; nothing grows with the depth of the scene.
@@ -126,19 +138,28 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 
 - The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
   face identities stay stable, so layers keep their roles).
-- `alphaStochasticResolveF.glsl`, one full-screen pass after the accumulation: this frame's accumulated
-  colour (alpha x colour, alpha) averaged over the samples, blended 1/8 with the last frame's blended
+- `alphaStochasticCurrentF.glsl`, one full-screen pass after the accumulation, averages the samples of
+  this frame's accumulated colour (alpha x colour, alpha) once into an RGBA32F target; the resolve reads
+  its pixel and its 3 x 3 neighbourhood from there instead of summing the samples nine times (bit for
+  bit the same image; the resolve pass takes 0.05 to 0.16 ms less at 1080p and 0.07 to 0.23 ms less at 1440p on an RTX 5070 Ti,
+  the pre-pass included).
+- `alphaStochasticResolveF.glsl`, one full-screen pass after it: this frame's averaged colour, blended 1/8 with the last frame's blended
   colour taken where this pixel's nearest transparent surface was (the minimum of the stochastic depth
   over the samples), moved by the camera alone (this frame's clip space to the last frame's, from the
-  matrices the pipeline keeps itself, `mAlphaSTLastModelView` and `mAlphaSTLastProjection`) and clamped
+  matrices the history object keeps itself, `LLStochasticHistory`) and clamped
   to the 3 x 3 minimum and maximum of this frame, as a TAA's history is. The result is the next frame's
   history and the composite's accumulated colour; the alpha correction there is this frame's total alpha
   over its alpha, so an alpha change is never ghosted. The glow keeps the current frame's accumulation.
 - No history on the first frame, after a resize, when the setting or the method is switched, or when the
   frame before did not run the method (the history stamp is the frame counter).
 - Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
-  1080, 59 MB at 2560 x 1440, allocated only while the setting is on. The passes' own targets are as
-  before.
+  1080, 59 MB (56 MiB) at 2560 x 1440, and the full-size RGBA32F target of the averaged samples, 16 bytes a pixel
+  more: 33 MB at 1920 x 1080 (66 MB with the history), allocated only while the setting is on, up front
+  (method selected, resize). The passes' own targets are as before. All of it, the 8-sample targets and the
+  mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
+  If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
+  allocation is tried again (1 s, doubling to 30 s, logged at that cadence). Switching the setting
+  off releases the history and stops the accumulation at once.
 - Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
   history ghosts, limited by the clamp.
 
@@ -279,9 +300,7 @@ Exactly the draws PPLL captured, with the same exclusions:
 | Setting | Values | Default |
 |---|---|---|
 | `RenderAlphaSortMethod` | 0 sorted alpha, 1 stochastic transparency | 1 |
-| `RenderAlphaStochasticSamples` | debug only, not persisted: 4, 8, 16 (values in between take the next) | 8 |
 | `RenderAlphaStochasticTemporal` | debug only, not persisted: accumulate over the frames | TRUE |
-| `RenderAlphaStochasticAvailable` | runtime flag, not persisted | |
 
 Preferences › Graphics › Rendering 2: "Alpha rendering method" (Sorted alpha / Stochastic
 transparency) only. Stochastic transparency is the same on every line (owner decision, 2026-11-08):
@@ -301,8 +320,11 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and
 `gl_PrimitiveID`, multisample textures), at least 2 samples for the three formats, and every
-alpha-only variant built. Otherwise, or when the targets cannot be allocated, sorted alpha runs
-(logged once).
+alpha-only variant built. A device without the first three has sorted alpha: a capability gate. There is
+no fallback otherwise: a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
+30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
+then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
+if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
 
 ## Tests and measurements
 

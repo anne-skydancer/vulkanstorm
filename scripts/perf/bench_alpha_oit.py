@@ -100,8 +100,9 @@ viewing distance; blue noise should lower it more than the RMSE.
 
   * "st" -- stochastic transparency as the viewer draws it (LLDrawPoolAlpha::renderStochastic,
                doc/oit/stochastic-transparency.md), the paper's Sec. 3.4 multisampled form after
-               the author's Aurora Viewer: the viewer's own alphaStochasticF.glsl (coverage masks
-               from the 2048 x (S + 1) table, seeded by pixel, face and triangle),
+               the author's Aurora Viewer: the viewer's own alphaStochasticF.glsl and the stochastic
+               engine's stochasticSampleF.glsl (coverage masks from the 2048 x (S + 1) table, seeded by
+               pixel, face and triangle),
                alphaStochasticExpandF.glsl and alphaStochasticCompositeF.glsl from this working
                tree; targets at min(OIT_BENCH_ST_PASS, S) samples (default pass 8): RGBA16F
                accumulation, RG16F transparency, DEPTH_COMPONENT24 depth; S
@@ -854,7 +855,7 @@ if any(VARIANTS.values()):
 ST_SEEDS=2048;RG16F=0x822F
 ST_UNITS=dict(accum=10,trans=11,masks=12)   # clear of the units the stoch variants use
 def st_mask_table(s):
-    """LLPipeline::alphaStochasticMaskTable: row r holds 2048 random r-subsets of the S bits."""
+    """LLStochasticEngine::maskTable: row r holds 2048 random r-subsets of the S bits."""
     M=(1<<64)-1;state=(0x9e3779b97f4a7c15^s)&M;table=[]
     def nxt():
         nonlocal state
@@ -901,7 +902,7 @@ if 'st' in IMPLS:
         texparam(TEX2D,0x2801,0x2600);texparam(TEX2D,0x2800,0x2600);texsub(TEX2D,0,0,0,ST_SEEDS,s+1,RED_INT,UINT,words)
         st['masks'][s]=m.value
     activetex(0x84C0);bindtex(TEX2D,depth);bindfbo(0x8D40,fbo)
-    st['variant']=program([(0x8B31,ST_VERTEX),(0x8B30,ST_VARIANT),(0x8B30,st_viewer('alphaStochasticF.glsl'))])
+    st['variant']=program([(0x8B31,ST_VERTEX),(0x8B30,ST_VARIANT),(0x8B30,st_viewer('alphaStochasticF.glsl')),(0x8B30,st_viewer('stochasticSampleF.glsl'))])
     st['shade']=program([(0x8B31,ST_VERTEX),(0x8B30,ST_SHADE)])
     st['expand']=program([(0x8B31,ST_SCREEN),(0x8B30,st_viewer('alphaStochasticExpandF.glsl'))])
     st['composite']=program([(0x8B31,ST_SCREEN),(0x8B30,st_viewer('alphaStochasticCompositeF.glsl'))])
@@ -931,7 +932,7 @@ def frame_st(name, background, layers, samples):
     activetex(0x84C0+ST_UNITS['accum']);bindtex(TEX2DMS,tg['accum'])
     activetex(0x84C0+ST_UNITS['trans']);bindtex(TEX2DMS,tg['trans']);activetex(0x84C0);bindtex(TEX2D,depth)
     var=st['variant'];use(var)
-    uniform(uloc(var,'alpha_st_masks'),ST_UNITS['masks']);uniform(uloc(var,'st_samples_hw'),n);uniform(uloc(var,'st_samples'),samples)
+    uniform(uloc(var,'stoch_masks'),ST_UNITS['masks']);uniform(uloc(var,'st_samples_hw'),n);uniform(uloc(var,'st_samples'),samples)
     def spread():
         setbuf(0);disable(0x0BE2);disable(0x8037);enable(DEPTH_TEST);depthfunc(0x0207);depthmask(1)
         e=st['expand'];use(e);uniform(uloc(e,'depthMap'),0);draw(4,0,3);depthfunc(0x0203)

@@ -86,7 +86,8 @@ public:
     void renderAlphaHighlight();
 
     // <Vulkanstorm> stochastic transparency (LLPipeline::beginAlphaStochastic): the passes over the
-    // blended faces and the composite; false when the targets could not be bound (sorted alpha)
+    // blended faces and the composite; false when the targets are missing (the faces are not drawn
+    // until the allocation is retried; there is no other method)
     bool renderStochastic();
     void setStochasticUniforms(S32 mode, U32 iteration);
     void bindStochasticMasks(LLGLSLShader* shader);

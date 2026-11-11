@@ -229,13 +229,11 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         !LLPipeline::sReflectionRender &&
         !gCubeSnapshot;
 
-    // Sorted alpha where it is unavailable.
-    bool use_stochastic = alpha_method == 1 && oit_view_eligible;
-    if (use_stochastic)
-    {
-        gPipeline.allocateAlphaStochastic(gPipeline.mRT->screen.getWidth(), gPipeline.mRT->screen.getHeight());
-        use_stochastic = LLPipeline::sRenderAlphaStochasticSupported;
-    }
+    // Sorted alpha where stochastic transparency is not available on the device (a capability, not a
+    // fallback). The targets are made when the method is selected or the screen buffers are
+    // (LLPipeline::allocateAlphaStochastic), never here; if an allocation failed, the blended faces
+    // of the main view wait for the retry at the next screen buffer allocation.
+    const bool use_stochastic = alpha_method == 1 && oit_view_eligible && LLPipeline::sRenderAlphaStochasticSupported;
     if (use_stochastic)
     {
         drawGLTFScene();
@@ -243,19 +241,9 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         {
             renderOITResidual();
         }
-        else
-        {
-            forwardRender(true);
-            forwardRender();
-        }
     }
     else
     {
-        if (oit_view_eligible)
-        {
-            gPipeline.releaseAlphaStochastic(); // sorted alpha selected: the targets freed
-        }
-
         if (!LLPipeline::sRenderingHUDs)
         {
             // first pass, render rigged objects only and render to depth buffer
@@ -460,7 +448,7 @@ void LLDrawPoolAlpha::bindStochasticMasks(LLGLSLShader* shader)
 {
     if (shader && mStochasticMasks)
     {
-        const S32 channel = shader->enableTexture(LLShaderMgr::ALPHA_ST_MASKS);
+        const S32 channel = shader->enableTexture(LLShaderMgr::STOCH_MASKS);
         if (channel > -1)
         {
             gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mStochasticMasks);

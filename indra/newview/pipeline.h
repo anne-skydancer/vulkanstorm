@@ -38,6 +38,7 @@
 #include "llgl.h"
 #include "lldrawable.h"
 #include "llrendertarget.h"
+#include "llstochastichistory.h"
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
@@ -428,22 +429,25 @@ public:
         ALPHA_ST_BUFFER_ACCUM,      // alpha x colour and alpha, additive
         ALPHA_ST_BUFFER_TRANS,      // red prod(1 - alpha), green the blended faces' glow
     };
-    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: sorted alpha
+    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: the targets are missing
     void spreadAlphaStochasticDepth(); // the opaque depth on every sample again (before an iteration)
     void setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer);
     void endAlphaStochastic();       // the scene target bound again
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
+    bool alphaStochasticMissing() const;           // selected and supported, but its targets are not there
+    void retryAlphaStochastic();                   // once a frame from the display path: failed allocations, with backoff
+    void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
+    void releaseAlphaStochasticHistory();   // the history and the averaged-samples target freed
     void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
-    U32  getAlphaStochasticSamples() const { return mAlphaSTSamples; }
-    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? mAlphaSTSamples / mAlphaSTPassSamples : 0; }
-    U32  getAlphaStochasticMasks() const { return mAlphaSTMasks; }
+    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::SAMPLES; }
+    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? LLStochasticEngine::SAMPLES / mAlphaSTPassSamples : 0; }
+    U32  getAlphaStochasticMasks() const { return LLStochasticEngine::getMasks(); }
     // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
-    U32  getAlphaStochasticFrame() const { return mAlphaSTTemporal ? mAlphaSTFrame : 0; }
-    static std::vector<U32> alphaStochasticMaskTable(U32 samples); // [r * 2048 + seed]
+    U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
     // </Vulkanstorm>
 
     // </FS>
@@ -804,32 +808,24 @@ public:
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
-    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples; the mask table (R32UI,
-    // 2048 x (S + 1)) for S = mAlphaSTSamples samples in all
+    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 8 samples in all; the
+    // engine's mask table is held (mAlphaSTMasksHeld) while they are. All counted in the texture memory.
     U32 mAlphaSTFBO = 0;
     U32 mAlphaSTAccum = 0;
     U32 mAlphaSTTrans = 0;
     U32 mAlphaSTDepth = 0;
-    U32 mAlphaSTMasks = 0;
+    bool mAlphaSTMasksHeld = false;
     U32 mAlphaSTWidth = 0;
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
-    U32 mAlphaSTSamples = 0;
-    // the temporal accumulation: two full-size RGBA16F colours (the last frame's blended colour and
-    // this frame's), each with a framebuffer; mAlphaSTHistoryIndex holds the latest. The history is
-    // valid when the frame before ran the method at this size (mAlphaSTHistoryStamp + 1 == this frame).
-    U32 mAlphaSTHistory[2] = { 0, 0 };
-    U32 mAlphaSTHistoryFBO[2] = { 0, 0 };
-    U32 mAlphaSTHistoryIndex = 0;
-    U32 mAlphaSTHistoryWidth = 0;
-    U32 mAlphaSTHistoryHeight = 0;
-    U32 mAlphaSTHistoryStamp = 0;
-    U32 mAlphaSTFrame = 0;          // the frame counter of the seeds, never 0
-    bool mAlphaSTHistoryValid = false;
-    bool mAlphaSTTemporal = false;  // this frame accumulates over the frames
-    bool mAlphaSTHistoryUsed = false; // the history is read this frame
-    glm::mat4 mAlphaSTLastModelView = glm::mat4(1.f);
-    glm::mat4 mAlphaSTLastProjection = glm::mat4(1.f);
+    // the temporal accumulation: the transparency's history in the stochastic engine (two
+    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and the
+    // full-size RGBA32F target of this frame's averaged samples that its resolve reads
+    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
+    U32 mAlphaSTCurrent = 0;
+    U32 mAlphaSTCurrentFBO = 0;
+    F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
+    F64 mAlphaSTRetryTime = 0.0;
     // </Vulkanstorm>
 
     // </FS>

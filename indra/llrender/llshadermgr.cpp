@@ -190,10 +190,22 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
 
-    // <Vulkanstorm> stochastic transparency: the alpha programs' alpha-only variants
-    // (llviewershadermgr.cpp make_stochastic_variant) take the coverage mask helpers.
-    if (shader->mDefines.count("ALPHA_STOCHASTIC") &&
-        !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
+    // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
+    // coverage mask; a producer's temporal resolve program (STOCH_RESOLVE) takes its resolve.
+    // STOCH_SAMPLE: any producer's program that samples (ALPHA_STOCHASTIC implies it; the shadow
+    // producer sets STOCH_SAMPLE alone).
+    const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
+    if ((alpha_stochastic || shader->mDefines.count("STOCH_SAMPLE")) &&
+        !shader->attachFragmentObject(STOCH_SAMPLE_OBJECT))
+    {
+        return false;
+    }
+    if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    {
+        return false;
+    }
+    if (shader->mDefines.count("STOCH_RESOLVE") && !shader->attachFragmentObject(STOCH_RESOLVE_OBJECT))
     {
         return false;
     }
@@ -1609,15 +1621,16 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("night_sky_milky_way");
     // </Vulkanstorm>
 
-    // <Vulkanstorm> stochastic transparency: the mask table, the accumulation and the
+    // <Vulkanstorm> the stochastic engine's mask table and the transparency's accumulation and
     // transparency (samplers, bound by reserved index) and the face seed (set per draw)
-    mReservedUniforms.push_back("alpha_st_masks");
+    mReservedUniforms.push_back("stoch_masks");
     mReservedUniforms.push_back("alpha_st_accum");
     mReservedUniforms.push_back("alpha_st_trans");
     mReservedUniforms.push_back("st_seed");
     mReservedUniforms.push_back("alpha_st_depth");
     mReservedUniforms.push_back("alpha_st_history");
     mReservedUniforms.push_back("alpha_st_resolved");
+    mReservedUniforms.push_back("alpha_st_current");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the cloud transmittance map and its lookup

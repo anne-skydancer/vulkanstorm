@@ -27,51 +27,29 @@
 //   st_mode 2, stochastic depth: R = floor(alpha S + xi) of the S samples, a stratified
 //              S-choose-R subset from a fixed table, depth only.
 // The accumulation pass is the ordinary program (no sample mask, early depth test kept).
+// This file is the transparency's part of the stochastic engine: the identity of a fragment (the
+// face and the triangle) and the pass; the hash, the frame seed and the table lookup are the
+// engine's (stochasticSampleF.glsl).
 
-uniform usampler2D alpha_st_masks; // [r][seed]: a random r-subset of the S sample bits
 uniform int st_mode;               // 1 total alpha, 2 stochastic depth
 uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
-uniform int st_samples;            // samples in all (4, 8 or 16: the table's S)
+uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::SAMPLES)
 uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
 uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)
 
-#define ST_SEEDS 2048u
-
-uint st_hash(uint v)
-{
-    uint x = v * 747796405u + 2891336453u;
-    x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
-    return (x >> 22u) ^ x;
-}
+uint stoch_hash(uint v);
+uint stoch_frame_seed(uint seed, int frame);
+uint stoch_mask(float a, uint seed, uvec2 px, uint s);
 
 // The whole S-bit mask of a fragment of alpha a: the seed is the face's identity and the
-// triangle, which rotate the pixel's value for the dither of R; the choice of the subset is hashed
-// from the seed and the pixel, so the noise is a field fixed in screen space and uncorrelated
-// between fragments.
+// triangle.
 uint st_mask(float a)
 {
-    uint seed = st_hash(uint(st_seed) * 0x9e3779b9u + 0x7f4a7c15u);
-    seed = st_hash(seed ^ st_hash(uint(gl_PrimitiveID) + 0x632be5abu));
-    // with the temporal accumulation the field changes every frame, from stable identities
-    if (st_frame != 0)
-    {
-        seed = st_hash(seed + uint(st_frame) * 0x9e3779b9u);
-    }
-    uvec2 px = uvec2(gl_FragCoord.xy);
-    uint h = st_hash(px.x | (px.y << 16u));
-    vec2 pv = vec2(float(h >> 8u), float(st_hash(h) >> 8u)) / 16777216.0;
-    vec2 rot = vec2(float(seed >> 8u), float(st_hash(seed) >> 8u)) / 16777216.0;
-    vec2 v = fract(pv + rot);
-    // the subset is hashed from the layer's seed and the pixel, whatever the pixel values: two
-    // layers whose rotations met on one table index would otherwise share a subset over their
-    // whole overlap, and the layers behind them would see too few covered samples (the Aurora
-    // Viewer's fix of 2026-11-06, the author's own: object.wgsl st_mask)
-    v.y = float(st_hash(seed ^ h ^ 0x5bd1e995u) >> 8u) / 16777216.0;
-    uint s = uint(st_samples);
-    uint r = min(uint(floor(clamp(a, 0.0, 1.0) * float(s) + v.x)), s);
-    uint column = min(uint(v.y * float(ST_SEEDS)), ST_SEEDS - 1u);
-    return texelFetch(alpha_st_masks, ivec2(int(column), int(r)), 0).r;
+    uint seed = stoch_hash(uint(st_seed) * 0x9e3779b9u + 0x7f4a7c15u);
+    seed = stoch_hash(seed ^ stoch_hash(uint(gl_PrimitiveID) + 0x632be5abu));
+    seed = stoch_frame_seed(seed, st_frame);
+    return stoch_mask(a, seed, uvec2(gl_FragCoord.xy), uint(st_samples));
 }
 
 // The value for gl_SampleMask[0]: every sample for the total alpha, this iteration's bits of
