@@ -580,10 +580,14 @@ public:
     static HttpStatus createService();
 
     /// Shutdown of services prior to exit.  Stops and joins the worker
-    /// thread if it is still running; transfers and connections are closed
-    /// without waiting, but libcurl's cleanup waits for a name lookup
-    /// (getaddrinfo) still in progress, which ends by itself when the
-    /// operating system's resolver answers or times out.
+    /// thread if it is still running; it is always joined.  Transfers are
+    /// cancelled and connections closed on one non-blocking attempt, but
+    /// libcurl's cleanup waits for a name lookup (getaddrinfo) that has
+    /// already started, which ends by itself when the operating system's
+    /// resolver answers or times out (lookups still queued are dropped).
+    /// Every libcurl call on the worker has its own bound, listed with its
+    /// source in HttpLibcurl::shutdown() (_httplibcurl.cpp), checked against
+    /// the curl 8.23.0 sources.
     static HttpStatus destroyService();
 
     /// Called once after @see createService() to start the worker thread.

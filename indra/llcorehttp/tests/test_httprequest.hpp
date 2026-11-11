@@ -3370,28 +3370,93 @@ void HttpRequestTestObjectType::test<25>()
 }
 
 // Quit while a request is stuck in the network: the worker must end by
-// itself and destroyService() must return, without any forced stop.
+// itself and be joined, and destroyService() must return, without any forced
+// stop. The request is answered as canceled, or as failed if it ended first.
 namespace
 {
 class TestHandlerQuit : public LLCore::HttpHandler
 {
 public:
-    virtual void onCompleted(HttpHandle, HttpResponse *) { ++mCalls; }
+    virtual void onCompleted(HttpHandle, HttpResponse * response)
+    {
+        ++mCalls;
+        if (response)
+        {
+            mStatus = response->getStatus();
+        }
+    }
     int mCalls = 0;
+    HttpStatus mStatus;
 };
 
-// Issues a GET to `url`, lets the worker start on it, then destroys the
-// service. Returns the time destroyService() took.
-std::chrono::milliseconds quit_during_request(const std::string & url)
+// Reads the peer's /hanghits/ answer: the number of /hang/ requests it received.
+class TestHandlerHits : public LLCore::HttpHandler
+{
+public:
+    virtual void onCompleted(HttpHandle, HttpResponse * response)
+    {
+        mHits = -1;
+        BufferArray * body(response ? response->getBody() : NULL);
+        if (body && body->size())
+        {
+            std::string text(body->size(), '\0');
+            body->read(0, &text[0], text.size());
+            mHits = atoi(text.c_str());
+        }
+        ++mCalls;
+    }
+    int mCalls = 0;
+    int mHits = -1;
+};
+
+// Timing notes go to stdout only when LL_TEST_VERBOSE is set.
+void note_time(const char * what, std::chrono::milliseconds elapsed)
+{
+    if (getenv("LL_TEST_VERBOSE"))
+    {
+        std::cout << "[" << what << " took " << elapsed.count() << " ms] " << std::endl;
+    }
+}
+
+// Issues a GET to `url`, destroys the service, and returns how long
+// destroyService() took.
+//  wait_for_peer: the peer counts requests to /hang/; wait until it received
+//    this one, so the request is known to be in the transport and at the
+//    server, then check it is still unanswered. Otherwise the worker gets a
+//    short dwell to start on the request, nothing more is assumed about where
+//    it is (a lookup that fails at once has already completed).
+// `req` stays alive across destroyService(): one update() afterwards must
+// deliver exactly one handler call, canceled if the request was still pending.
+std::chrono::milliseconds quit_during_request(const std::string & url, bool wait_for_peer)
 {
     HttpRequest * req = NULL;
     TestHandlerQuit handler;
     LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
+    TestHandlerHits hits;
+    LLCore::HttpHandler::ptr_t hitsp(&hits, NoOpDeletor);
     try
     {
         HttpRequest::createService();
         HttpRequest::startThread();
         req = new HttpRequest();
+
+        const std::string hits_url(get_base_url() + "hanghits/");
+        int baseline(0);
+        if (wait_for_peer)
+        {
+            hits.mCalls = 0;
+            ensure("Valid handle for the hit count request",
+                   req->requestGet(HttpRequest::DEFAULT_POLICY_ID, hits_url,
+                                   HttpOptions::ptr_t(), HttpHeaders::ptr_t(), hitsp)
+                   != LLCORE_HTTP_HANDLE_INVALID);
+            for (int i(0); i < LOOP_COUNT_LONG && hits.mCalls < 1; ++i)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+            ensure("Hit count read", hits.mCalls == 1 && hits.mHits >= 0);
+            baseline = hits.mHits;
+        }
 
         HttpHandle handle = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
                                             url,
@@ -3400,21 +3465,50 @@ std::chrono::milliseconds quit_during_request(const std::string & url)
                                             handlerp);
         ensure("Valid handle returned for get request", handle != LLCORE_HTTP_HANDLE_INVALID);
 
-        // Let the worker issue the request and get into the network.
-        for (int i(0); i < 30; ++i)
+        if (wait_for_peer)
         {
-            req->update(1000000);
-            usleep(LOOP_SLEEP_INTERVAL);
+            // Ask the peer, over the same service, until it has seen the request.
+            int seen(baseline);
+            for (int i(0); i < LOOP_COUNT_LONG && seen <= baseline; ++i)
+            {
+                hits.mCalls = 0;
+                req->requestGet(HttpRequest::DEFAULT_POLICY_ID, hits_url,
+                                HttpOptions::ptr_t(), HttpHeaders::ptr_t(), hitsp);
+                for (int j(0); j < 100 && hits.mCalls < 1; ++j)
+                {
+                    req->update(1000000);
+                    usleep(LOOP_SLEEP_INTERVAL);
+                }
+                seen = (hits.mCalls == 1) ? hits.mHits : baseline;
+            }
+            ensure("The peer received the request", seen > baseline);
+            ensure("The request is still unanswered", handler.mCalls == 0);
         }
-        ensure("The request is still pending", handler.mCalls == 0);
+        else
+        {
+            for (int i(0); i < 30; ++i)
+            {
+                req->update(1000000);
+                usleep(LOOP_SLEEP_INTERVAL);
+            }
+        }
 
-        delete req;
-        req = NULL;
         const auto t0(std::chrono::steady_clock::now());
         HttpRequest::destroyService();
         const auto elapsed(std::chrono::duration_cast<std::chrono::milliseconds>(
                                std::chrono::steady_clock::now() - t0));
         ensure("No HttpThread left alive", HttpThread::liveCount() == 0);
+
+        // The reply queue outlives the worker: the request is answered now.
+        req->update(1000000);
+        ensure("One handler call for the request", handler.mCalls == 1);
+        if (wait_for_peer)
+        {
+            ensure("The request was canceled",
+                   handler.mStatus == HttpStatus(HttpStatus::LLCORE, HE_OP_CANCELED));
+        }
+        delete req;
+        req = NULL;
         return elapsed;
     }
     catch (...)
@@ -3435,25 +3529,27 @@ void HttpRequestTestObjectType::test<26>()
 
     set_test_name("HttpRequest quit during a request the server never answers");
 
-    const auto elapsed(quit_during_request(get_base_url() + "hang/"));
-    std::cout << "[destroyService with a hung server took " << elapsed.count() << " ms] ";
+    const auto elapsed(quit_during_request(get_base_url() + "hang/", true));
+    note_time("destroyService with a hung server", elapsed);
     ensure("destroyService() returned in under 5 s", elapsed < std::chrono::seconds(5));
 }
 
-// A name lookup in progress. A single-label name makes the Windows resolver
-// try LLMNR and NetBIOS after DNS, which takes seconds; elsewhere the lookup
-// fails at once and the test only checks that quitting is clean. The bound
-// is the resolver's: libcurl's cleanup waits for the lookup thread
-// (getaddrinfo() cannot be interrupted), see HttpLibcurl::shutdown().
+// Quitting while a name lookup may be in progress never hangs. The name is
+// under .invalid (RFC 6761: it never resolves). Where a lookup takes a while
+// it is still running at quit and libcurl's cleanup joins it (see
+// HttpLibcurl::shutdown()); where it fails at once the request has completed
+// before the quit. Both are fine: the test only asserts that the quit returns
+// within the resolver's bound, that the worker is joined, and that the
+// request got exactly one answer. It says nothing about where the request was.
 template <> template <>
 void HttpRequestTestObjectType::test<27>()
 {
     ScopedCurlInit ready;
 
-    set_test_name("HttpRequest quit during a name lookup");
+    set_test_name("HttpRequest quitting during a name lookup never hangs");
 
-    const auto elapsed(quit_during_request("http://vkstorm-stuck-lookup-probe/"));
-    std::cout << "[destroyService during a name lookup took " << elapsed.count() << " ms] ";
+    const auto elapsed(quit_during_request("http://vkstorm-stuck-lookup-probe.invalid/", false));
+    note_time("destroyService during a name lookup", elapsed);
     ensure("destroyService() returned within the resolver bound (60 s)", elapsed < std::chrono::seconds(60));
 }
 // </Vulkanstorm>
