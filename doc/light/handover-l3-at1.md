@@ -45,7 +45,7 @@ moon). With no moon the light keeps the sun's direction and fades to dark with t
 moonless night has no sun colour and no sun glow, as before.
 
 The shadow and the handover do not depend on `sun_scale` (the sun's size): they used to, through the sun disc's sine, and a
-sun_scale of 16 at 1 degree elevation shadowed at 0.451, now 1.0. The size only reaches `light_scale` (the PCSS light size and
+sun_scale of 16 at 1 degree elevation shadowed at 0.451, now 1.0. The size only reaches `light_scale` (the shadow light size and
 the cloud shadow's penumbra), limited to 100. The test covers sun_scale 1, 4, 16 and 100 by day; above +0.6 degree the shadow
 is full for every size.
 
@@ -123,7 +123,7 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
 | `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsV.glsl` |
 | `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyV.glsl`, `skyF.glsl`, `atmosphericsFuncs.glsl` |
 
-The shadow caster, the PCSS light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
+The shadow caster, the shadow light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.
 
 ## Debug settings (Preferences > Graphics > Sky, devel only)

@@ -43,7 +43,7 @@ shadows depend only on the world and the sky, never on the camera.
   direction (the primary light's), and its weight follows `primary_shadow_strength`: while the light swings
   from one body to the other the map's mean applies, so the shadows neither slide nor bump the light. The haze (`additive`)
   keeps `cloud_shadow` as it was.
-- **Combination.** The result multiplies the sun shadow map and PCSS (`scol`): independent occluders of one
+- **Combination.** The result multiplies the sun shadow map and its filtering (`scol`): independent occluders of one
   source. The shadow passes are untouched.
 - **Probes** (`gCubeSnapshot`) read the map's mean (the top mip), so a probe refreshed once in a while
   never bakes a passing shadow.

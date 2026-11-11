@@ -203,7 +203,7 @@ public:
         F32 haze_glow_factor = 1.f;       // SUN_MOON_GLOW_FACTOR, continuous
         F32 moon_glow_factor = 0.f;       // MOON_GLOW_FACTOR: the moon's share of haze_glow_factor (the glow at the moon's direction)
         F32 moon_halo_weight = 0.f;       // MOON_HALO_WEIGHT: the weight of the halo and rainbow around the moon
-        F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): PCSS size and the cloud shadow penumbra
+        F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): shadow light size and the cloud shadow penumbra
         bool shadow_visible = true;       // the sun shadow pass has something to show
         bool valid = false;
     };

@@ -11093,7 +11093,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowSplitExponent</key>
   <map>
     <key>Comment</key>
-    <string>Sun cascade split distribution (Phototools' shadow clarity). With the PCSS shadow method only y is used, as the exponent of the splits over [camera near, RenderShadowDistance]. With the Legacy method x, y and z are Firestorm's near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
+    <string>Sun cascade split distribution (Phototools' shadow clarity). With the Stochastic shadow method only y is used, as the exponent of the splits over [camera near, RenderShadowDistance]. With the Legacy method x, y and z are Firestorm's near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11950,7 +11950,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowBias</key>
   <map>
     <key>Comment</key>
-    <string>Bias value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the PCSS deferred sun pass uses a bias in texels of the cascade instead.</string>
+    <string>Bias value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the Stochastic deferred sun pass uses a bias in texels of the cascade instead.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11963,7 +11963,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowOffset</key>
   <map>
     <key>Comment</key>
-    <string>Offset value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the PCSS deferred sun pass offsets along the geometric normal by texels of the cascade instead.</string>
+    <string>Offset value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the Stochastic deferred sun pass offsets along the geometric normal by texels of the cascade instead.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12459,7 +12459,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowErrorCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Legacy shadow method only (unused with PCSS, whose cascades are always orthographic): cutoff error value to use ortho instead of perspective projection.</string>
+    <string>Legacy shadow method only (unused with Stochastic, whose cascades are always orthographic): cutoff error value to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12472,7 +12472,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowFOVCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Legacy shadow method only (unused with PCSS, whose cascades are always orthographic): cutoff FOV to use ortho instead of perspective projection.</string>
+    <string>Legacy shadow method only (unused with Stochastic, whose cascades are always orthographic): cutoff FOV to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12517,7 +12517,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowMethod</key>
   <map>
     <key>Comment</key>
-    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 1 = PCSS, stable world-anchored cascades, square sun maps, soft contact-hardening shadows and the later shadow stages; 2 = Stochastic, the same cascades and sun maps with soft shadows from rays toward the light's disc, accumulated over time. Any other value is read as 1. Default per graphics level in the feature table.</string>
+    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 2 = Stochastic, stable world-anchored cascades, square sun maps and soft shadows from rays toward the light's disc, accumulated over time. 1 was PCSS, which is removed: it is unused, and a stored 1 or any other value is read as 2 (Legacy on a device below OpenGL 4.0, without writing it back). Default per graphics level in the feature table.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12541,7 +12541,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowPCSS</key>
   <map>
     <key>Comment</key>
-    <string>Retired by RenderShadowMethod; read once by the migration and when loading old graphic presets.</string>
+    <string>Retired by RenderShadowMethod; read once by the migration and when loading old graphic presets (on becomes Stochastic).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>HideFromEditor</key>
@@ -12554,7 +12554,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowDistance</key>
   <map>
     <key>Comment</key>
-    <string>PCSS and Stochastic shadow methods only (Legacy fits its cascades to the view): distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees. Default per graphics level in the feature table. Debug setting only (no Preferences entry).</string>
+    <string>Stochastic shadow method only (Legacy fits its cascades to the view): distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees. Default per graphics level in the feature table. Debug setting only (no Preferences entry).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12562,11 +12562,24 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <real>128.0</real>
   </map>
+  <key>RenderShadowLightSize</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic shadow method only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size. Was RenderShadowPCSSLightSize.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>1.0</real>
+  </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>
     <key>Comment</key>
-    <string>PCSS and Stochastic shadow methods only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size.</string>
+    <string>Retired by RenderShadowLightSize; read once by the migration and when loading old graphic presets.</string>
     <key>Persist</key>
+    <integer>1</integer>
+    <key>HideFromEditor</key>
     <integer>1</integer>
     <key>Type</key>
     <string>F32</string>
