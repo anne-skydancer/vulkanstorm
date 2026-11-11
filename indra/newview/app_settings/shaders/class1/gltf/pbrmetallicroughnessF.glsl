@@ -120,6 +120,8 @@ uniform vec4 light_attenuation[8]; // linear, quadratic, is omni, unused, See: L
 uniform vec3 light_diffuse[8];
 uniform vec2 light_deferred_attenuation[8]; // light size and falloff
 
+uniform int classic_mode;
+
 uniform int sun_up_factor;
 uniform vec3 sun_dir;
 uniform vec3 moon_dir;
@@ -275,7 +277,13 @@ void main()
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);
 
 #ifndef UNLIT
-    vec3 sunlit_linear = srgb_to_linear(sunlit);
+    // <Vulkanstorm> calcAtmosphericVarsLinear already returns sunlit in linear light unless classic_mode is on (it was converted twice)
+    vec3 sunlit_linear = sunlit;
+    if (classic_mode > 0)
+    {
+        sunlit_linear = srgb_to_linear(sunlit);
+    }
+    // </Vulkanstorm>
 
     vec2 frag = vary_fragcoord.xy/vary_fragcoord.z*0.5+0.5;
 
