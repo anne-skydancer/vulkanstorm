@@ -2,7 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 /**
  * @file llshadowmethod.h
- * @brief The shadow method setting (RenderShadowMethod: 0 = Legacy, 1 = PCSS) and the pure rules
+ * @brief The shadow method setting (RenderShadowMethod: 0 = Legacy, 1 = PCSS, 2 = Stochastic) and the pure rules
  *        that carry the old RenderShadowPCSS checkbox over to it.
  *
  * Renderer-free (no GL, no viewer types): LLAppViewer::initConfiguration uses migrateOnStartup
@@ -19,12 +19,31 @@ namespace LLShadowMethod
 {
     constexpr std::uint32_t LEGACY = 0;  // Firestorm 7.2.5 cascades and filtering
     constexpr std::uint32_t PCSS = 1;    // stable cascades, soft shadows, the later shadow stages
+    constexpr std::uint32_t STOCHASTIC = 2; // stable cascades, 8 rays per pixel to the light's disc, temporal accumulation
 
     // The method a retired RenderShadowPCSS value stands for.
     constexpr std::uint32_t fromPCSSFlag(bool pcss) { return pcss ? PCSS : LEGACY; }
 
-    // Clamps a stored value (a hand-edited settings file) to a valid method.
-    constexpr std::uint32_t sanitize(std::uint32_t method) { return method > PCSS ? PCSS : method; }
+    // The method an unknown stored value stands for. The PR that removes PCSS sets this to STOCHASTIC
+    // and migrates a stored 1 to Stochastic (never to Legacy).
+    constexpr std::uint32_t DEFAULT = PCSS;
+
+    // Clamps a stored value (a hand-edited settings file) to a valid method; an older viewer reading 2
+    // gives PCSS the same way.
+    constexpr std::uint32_t sanitize(std::uint32_t method) { return method > STOCHASTIC ? DEFAULT : method; }
+
+    // The method a device runs for a stored value: sanitized, and Legacy for Stochastic on a device
+    // that cannot run it (OpenGL below 4.0: LLStochasticEngine::deviceSupported). A capability choice
+    // at load, never written back, so the stored choice survives a GPU upgrade; not a run-time fallback.
+    constexpr std::uint32_t effective(std::uint32_t method, bool stochastic_supported)
+    {
+        const std::uint32_t m = sanitize(method);
+        return (m == STOCHASTIC && !stochastic_supported) ? LEGACY : m;
+    }
+
+    // The methods that fit the sun cascades as stable, world-anchored squares (llshadowcascadefit.h):
+    // every method but Legacy. Takes a sanitized value.
+    constexpr bool usesStableCascades(std::uint32_t method) { return method != LEGACY; }
 
     struct Migration
     {
