@@ -12,6 +12,7 @@ import os
 import pathlib
 import sys
 import threading
+import time
 import urllib.parse
 import uuid
 
@@ -34,7 +35,17 @@ SETTINGS_FOLDER = "33333333-0000-0000-0000-000000000001"
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
-                 bad_takes=(), bad_kind="black"):
+                 bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
+                 logs_dir=None):
+        # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
+        # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
+        self.gl_stats = gl_stats
+        self.gl_catches = gl_stats_catches_injection
+        self.gl_diff_pass = gl_stats_diff_pass
+        self.logs_dir = logs_dir
+        self.gl_window = {"target": 0, "collected": 0, "gpu": 0}
+        self.gl_compare_pending = 0
+        self.gl_compare_results = []
         self.bad_takes = set(bad_takes)   # 1-based numbers of the saveSnapshot calls that read back the cleared buffer
         self.bad_kind = bad_kind          # 'black': the whole frame; 'band': the top 40 % of its rows
         self.takes = 0
@@ -61,6 +72,10 @@ class FakeViewer:
             "RenderMoonAdaptationDepth": 6.0, "RenderAtmosphereHazeSlab": 250.0, "CameraAngle": 1.047,
             "FSEnvironmentManualTransitionTime": 3.0}.items()}
         self.settings["RenderAtmospherePhysicalLight"] = ("Boolean", True)
+        if gl_stats:
+            self.settings.update({"RenderGLSubmitStats": ("Boolean", False), "RenderGLSubmitStatsGPU": ("Boolean", True),
+                                  "RenderGLSubmitCompare": ("S32", 0), "RenderGLSubmitCompareInject": ("S32", 0),
+                                  "RenderGLSubmitPath": ("S32", 0)})
         # environment
         self.current_sky = initial_combo
         self.combo = initial_combo
@@ -141,8 +156,15 @@ class FakeViewer:
             self._reply(d, {"status": True})
         elif op == "getAPIs":
             self._reply(d, {n: {"desc": n} for n in ("LLStartUp", "LLViewerControl", "LLFloaterReg", "UI", "LLWindow",
-                                                    "LLViewerWindow", "LLAgent", "LLInventory", "LLStats")})
+                                                    "LLViewerWindow", "LLAgent", "LLInventory", "LLStats")
+                            + (("GLSubmitStats",) if self.gl_stats else ())})
         elif op == "getAPI":
+            if d["api"] == "GLSubmitStats":
+                if not self.gl_stats:
+                    return self._reply(d, {"error": "no such API GLSubmitStats"})
+                return self._reply(d, {"name": "GLSubmitStats", "ops": [
+                    {"name": o} for o in ("status", "windowBegin", "windowStop", "summary", "dump", "compareArm",
+                                          "compareResults", "profileFrame", "selfBench") if o not in self.drop_ops]})
             ops = {"LLStartUp": ["postStartupState", "getStateTable"], "LLViewerControl": ["get", "set", "groups"],
                    "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible", "clickButton"],
                    "UI": ["getValue", "setSelectedByValue"],
@@ -372,6 +394,76 @@ class FakeViewer:
                     if name in n.lower() and len(items) < limit:
                         items[str(uuid.uuid4())] = {"name": n, "asset_id": aid, "asset_type": "settings"}
             self._reply(d, {"items": items})
+
+    # -- GLSubmitStats (a development build) -----------------------------------------------------
+    GL_PASSES = ["G-buffer", "sun cascade 0", "sun cascade 1", "sun cascade 2", "sun cascade 3", "spot shadow 0",
+                 "spot shadow 1", "post-deferred"]
+
+    def _gl_totals(self):
+        return {"draws": 4200.0, "drawTriangles": 1.5e6, "vbChanges": 3900.0, "attribRespecs": 3950.0, "iboBinds": 3900.0,
+                "shaderBinds": 60.0, "texBindFast": 5200.0, "texBindFastRedundant": 900.0, "texGLBind": 5300.0,
+                "uniformGL": 7400.0, "uniformBytes": 410000.0, "paletteUploads": 260.0, "paletteDistinct": 90.0,
+                "mdvSyncs": 1800.0, "bufSubData": 12.0, "stateToggles": 300.0, "occBlocking": 0.0, "runs": 2900.0,
+                "mergeableDraws": 1300.0, "cpu_ms": 9.5, "gpu_ms": 7.25}
+
+    def api_GLSubmitStats(self, op, d):
+        w = self.gl_window
+        if op == "status":
+            self._reply(d, {"compiled": True, "window_target": w["target"], "window_collected": w["collected"],
+                            "window_gpu_frames": w["gpu"], "window_active": w["collected"] < w["target"],
+                            "compare_armed": 0, "compare_results": len(self.gl_compare_results),
+                            "frame_count": int(time.monotonic() * 60)})
+        elif op == "windowBegin":
+            n = int(d.get("frames", 60))
+            self.gl_window = {"target": n, "collected": n, "gpu": n if d.get("gpu", True) else 0}
+            self._reply(d, {"frames": n})
+        elif op == "windowStop":
+            self._reply(d, {"collected": w["collected"]})
+        elif op == "summary":
+            self._reply(d, {"summary": {"totals": self._gl_totals(), "views": [{"view": "main", "draws": 3000.0}]},
+                            "frames": w["collected"], "gpu_frames": w["gpu"]})
+        elif op == "dump":
+            import json  # noqa: PLC0415
+            t = self._gl_totals()
+            doc = {"schema": 1, "kind": "window", "scale": "per_frame_mean", "frames": w["collected"], "gpu_frames": w["gpu"],
+                   "totals": dict(t, run_hist=[1400.0, 700.0, 500.0, 200.0, 80.0, 20.0]),
+                   "views": [{"view": "frame", "calls": 1.0, "cpu_ms": 9.5, "gpu_ms": 7.25, "draws": 0.0},
+                             {"view": "main", "calls": 3.0, "cpu_ms": 6.0, "gpu_ms": 5.0, "draws": 3000.0, "vbChanges": 2800.0}],
+                   "passes": [{"view": "main", "pass": "gbuffer", "calls": 1.0, "cpu_ms": 4.0, "gpu_ms": 3.5, "draws": 2500.0},
+                              {"view": "sun cascade 0", "pass": "shadow opaque 0", "calls": 1.0, "cpu_ms": 1.0, "gpu_ms": 0.9,
+                               "draws": 900.0}],
+                   "compare": []}
+            pathlib.Path(d["path"]).parent.mkdir(parents=True, exist_ok=True)
+            pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
+            self._reply(d, {"path": d["path"]})
+        elif op == "compareArm":
+            self.gl_compare_pending = int(d.get("pass", -1))
+            self.settings["RenderGLSubmitCompare"] = ("S32", self.gl_compare_pending)
+            self._reply(d, {"armed": self.gl_compare_pending})
+        elif op == "compareResults":
+            if self.gl_compare_pending:
+                # the next frame takes the arming; it compares, then the setting is back to 0
+                inject = self.settings["RenderGLSubmitCompareInject"][1]
+                results = []
+                for i, label in enumerate(self.GL_PASSES, 1):
+                    if self.gl_compare_pending not in (-1, i):
+                        continue
+                    differs = (inject and i == 1 and self.gl_catches) or (self.gl_diff_pass == label)
+                    results.append({"pass": i, "label": label, "ran": True, "identical": not differs, "attachments": [
+                        {"name": "color0", "pixels": 100, "mismatched_pixels": 1 if differs else 0}]})
+                self.gl_compare_results = results
+                self.gl_compare_pending = 0
+                self.settings["RenderGLSubmitCompare"] = ("S32", 0)
+            self._reply(d, {"armed": 0, "pending": 0, "frame": 1, "results": self.gl_compare_results})
+        elif op == "selfBench":
+            self._reply(d, {"iterations": d.get("iterations"), "hooks_per_draw": 20, "ns_per_draw_not_collecting": 9.0,
+                            "ns_per_draw_collecting": 80.0, "ns_per_hook_not_collecting": 0.45, "ns_per_hook_collecting": 4.0,
+                            "ns_per_scope_cpu_only": 400.0, "ns_per_scope_with_gpu_timers": 900.0})
+        elif op == "profileFrame":
+            if self.logs_dir:
+                p = pathlib.Path(self.logs_dir) / "profile.vfake.json"
+                p.write_text("{\"submit\": {}}", encoding="utf-8")
+            self._reply(d, {"logs_dir": str(self.logs_dir or "")})
 
     def api_LLStats(self, op, d):
         self._reply(d, {"stats": {"frametime": {"fps": [60.0] * 40, "frame_time_ms": [16.6] * 40}}})

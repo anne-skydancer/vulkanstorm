@@ -1,0 +1,18 @@
+{
+  "name": "gl_submit_g0",
+  "description": "G0 baseline of the OpenGL modernisation: per view and pass counters, CPU and GPU ms, the identical-image check. Four camera presets (the current view and three headings), 120 frames each.",
+  "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600, "window_timeout_s": 180.0, "compare_wait_s": 6.0},
+  "window": {"frames": 120, "gpu": true},
+  "teleport": null,
+  "settings": {},
+  "camera": {"height_m": 2.5, "look_distance_m": 200.0},
+  "presets": [
+    {"id": "current", "camera": null},
+    {"id": "north", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}},
+    {"id": "east", "camera": {"az_deg": 90.0, "pitch_deg": 0.0}},
+    {"id": "south", "camera": {"az_deg": 180.0, "pitch_deg": 0.0}}
+  ],
+  "profile_frame": true,
+  "overhead": {"probe_s": 5.0, "bench_iterations": 2000000},
+  "compare": {"enabled": true, "passes": [-1], "prove_with_injection": true}
+}
