@@ -79,6 +79,7 @@ vec3 atmosFragLightingLinear(vec3 light, vec3 additive, vec3 atten) { return lig
 """
 
 SKY_MAIN = """
+uniform vec3 lightnorm;       // atmosphericsFuncs.glsl no longer declares it (L3: the glow uses sun_glow_norm)
 uniform int n_az;
 uniform int n_el;
 uniform float sky_hdr_scale;
@@ -94,7 +95,7 @@ void main() {
     if (rel_pos.y > 0.) rel_pos *= (max_y / rel_pos.y);
     vec3 rel_pos_norm = normalize(rel_pos);
     float rel_pos_len = length(rel_pos);
-    float rel_pos_lightnorm_dot = dot(rel_pos_norm, lightnorm.xyz);
+    float rel_pos_lightnorm_dot = dot(rel_pos_norm, sun_glow_norm.xyz); // L3: the sun's glow at the sun (skyV.glsl)
     vec3 sunlight = (sun_up_factor == 1) ? sunlight_color : moonlight_color * 0.7;
     vec3 light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
     vec3 combined_haze = max(abs(blue_density) + vec3(abs(haze_density)), vec3(1e-6));

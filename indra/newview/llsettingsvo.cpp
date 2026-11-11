@@ -879,6 +879,8 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
         // blended light's direction between them
         shader->uniform3fv(LLShaderMgr::SUN_GLOW_NORM, LLVector3(LLEnvironment::instance().getClampedSunNorm().mV));
         shader->uniform3fv(LLShaderMgr::MOON_GLOW_NORM, LLVector3(LLEnvironment::instance().getClampedMoonNorm().mV));
+        // before the first primary light update (invalid): the legacy factor (1 sun, 0.25 moon) is all the sun's share, with no
+        // moon glow and no moon halo
         shader->uniform1f(LLShaderMgr::MOON_GLOW_FACTOR, primary.valid ? primary.moon_glow_factor : 0.f);
         shader->uniform1f(LLShaderMgr::MOON_HALO_WEIGHT, primary.valid ? primary.moon_halo_weight : 0.f);
         // the ground light: the sun's or the moon's colour already through the atmosphere (sunlight_color's encoding),
