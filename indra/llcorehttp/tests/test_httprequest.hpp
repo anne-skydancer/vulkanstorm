@@ -40,6 +40,7 @@
 #include <boost/regex.hpp>
 #include <sstream>
 #include <chrono>
+#include <iostream>
 
 #include "llcorehttp_test.h"
 
@@ -3364,6 +3365,94 @@ void HttpRequestTestObjectType::test<25>()
         HttpRequest::destroyService();
         throw;
     }
+}
+
+// Quit while a request is stuck in the network: the worker must end by
+// itself and destroyService() must return, without any forced stop.
+namespace
+{
+class TestHandlerQuit : public LLCore::HttpHandler
+{
+public:
+    virtual void onCompleted(HttpHandle, HttpResponse *) { ++mCalls; }
+    int mCalls = 0;
+};
+
+// Issues a GET to `url`, lets the worker start on it, then destroys the
+// service. Returns the time destroyService() took.
+std::chrono::milliseconds quit_during_request(const std::string & url)
+{
+    HttpRequest * req = NULL;
+    TestHandlerQuit handler;
+    LLCore::HttpHandler::ptr_t handlerp(&handler, NoOpDeletor);
+    try
+    {
+        HttpRequest::createService();
+        HttpRequest::startThread();
+        req = new HttpRequest();
+
+        HttpHandle handle = req->requestGet(HttpRequest::DEFAULT_POLICY_ID,
+                                            url,
+                                            HttpOptions::ptr_t(),
+                                            HttpHeaders::ptr_t(),
+                                            handlerp);
+        ensure("Valid handle returned for get request", handle != LLCORE_HTTP_HANDLE_INVALID);
+
+        // Let the worker issue the request and get into the network.
+        for (int i(0); i < 30; ++i)
+        {
+            req->update(1000000);
+            usleep(LOOP_SLEEP_INTERVAL);
+        }
+        ensure("The request is still pending", handler.mCalls == 0);
+
+        delete req;
+        req = NULL;
+        const auto t0(std::chrono::steady_clock::now());
+        HttpRequest::destroyService();
+        const auto elapsed(std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - t0));
+        ensure("No HttpThread left alive", HttpThread::liveCount() == 0);
+        return elapsed;
+    }
+    catch (...)
+    {
+        stop_thread(req);
+        delete req;
+        HttpRequest::destroyService();
+        throw;
+    }
+}
+}
+
+// A server that accepts the connection and never answers
+template <> template <>
+void HttpRequestTestObjectType::test<26>()
+{
+    ScopedCurlInit ready;
+
+    set_test_name("HttpRequest quit during a request the server never answers");
+
+    const auto elapsed(quit_during_request(get_base_url() + "hang/"));
+    std::cout << "[destroyService with a hung server took " << elapsed.count() << " ms] ";
+    ensure("destroyService() returned in under 5 s", elapsed < std::chrono::seconds(5));
+}
+
+// A name lookup in progress. A single-label name makes the Windows resolver
+// try LLMNR and NetBIOS after DNS, which takes seconds; elsewhere the lookup
+// fails at once and the test only checks that quitting is clean. The bound
+// is the resolver's: libcurl's cleanup waits for the lookup thread
+// (getaddrinfo() cannot be interrupted), see HttpLibcurl::shutdown().
+template <> template <>
+void HttpRequestTestObjectType::test<27>()
+{
+    ScopedCurlInit ready;
+
+    set_test_name("HttpRequest quit during a name lookup");
+
+    const auto elapsed(quit_during_request("http://vkstorm-stuck-lookup-probe/"));
+    std::cout << "[destroyService during a name lookup took " << elapsed.count() << " ms] ";
+    ensure("destroyService() returned within the resolver bound (60 s)", elapsed < std::chrono::seconds(60));
 }
 // </Vulkanstorm>
 
