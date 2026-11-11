@@ -39,6 +39,24 @@ namespace LLStochasticEngine
 {
     // SAMPLES (8), SEEDS (2048) and maskTable() are in llstochasticstate.h (GL-free, unit tested)
 
+    // The device runs stochastic transparency: GL 4.0 (gl_SampleMask, multisample textures) and GLSL 4.00.
+    // One definition for the pipeline's allocation and the shader manager; logs once when a device
+    // below it cannot (sorted alpha is used there: a capability gate, not a run-time fallback).
+    bool deviceSupported();
+
+    // Which resolve this device runs, decided by the device alone and never changed at run time: the
+    // compute resolve (GL 4.3 and GLSL 4.30; 144 B/px) or, on GL 4.0 to 4.2, the fragment resolve with
+    // its pre-pass target (option P; 160 B/px). The two are the same method and give the same image
+    // (bit for bit on the measured NVIDIA). A shader set of the selected path that does not build is an
+    // error (logged, retried at the next shader reload); the other path is never taken in its place.
+    // Debug only, for tests on a GL 4.3 GPU: the environment variable VKSTORM_STOCH_FRAGMENT_RESOLVE=1
+    // selects the fragment path (not a setting).
+    bool computeResolve();
+
+    // The image unit a compute resolve writes the history through: the shader declares binding = 0
+    // (alphaStochasticResolveC.glsl); image units are not texture units, LLTexUnit does not see them.
+    constexpr U32 RESOLVE_IMAGE_UNIT = 0;
+
     // The one S = SAMPLES table (R32UI, SEEDS x (S + 1)), made by the first producer to ask and
     // freed with the last. False: it could not be made (nothing is kept).
     bool acquireMasks();
@@ -60,12 +78,16 @@ namespace LLStochasticEngine
 }
 
 // One producer's temporal history: two full-size colours (this frame's is written while the last
-// frame's is read) and their framebuffers, made up front (method select, resize), the frame
+// frame's is read), made up front (method select, resize), the frame
 // counter of the producer's seeds, and the rules that make the last frame's colour usable.
 // A producer owns one instance. The frame protocol, in the producer's passes:
-//   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the resolve writes
-//   writeFramebuffer() with readTexture() bound and setResolveUniforms() set, and endFrame()
-//   makes the result the latest (latestTexture()).
+//   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the resolve runs with
+//   readTexture() bound and setResolveUniforms() set: a compute resolve with bindWriteImage() bound, is
+//   dispatched, and endComputeWrite() follows it; a fragment resolve draws into writeFramebuffer();
+//   endFrame() makes the result the latest (latestTexture()).
+// The framebuffers exist only where the producer's resolve is a fragment pass (allocate(w, h, true)).
+// A device runs one kind of writer for the history. A producer that writes by rendering after compute
+// stores would also need GL_FRAMEBUFFER_BARRIER_BIT (framebuffer reads and writes after the stores).
 class LLStochasticHistory
 {
 public:
@@ -79,7 +101,8 @@ public:
 
     // Both textures and their framebuffers, counted in the texture memory. False: nothing is kept,
     // and the producer drops its accumulation (the transparency keeps its S = 8 samples).
-    bool allocate(U32 width, U32 height);
+    // framebuffers: the producer's resolve is a fragment pass (writeFramebuffer()); a compute resolve needs none.
+    bool allocate(U32 width, U32 height, bool framebuffers = false);
     void release();                                         // freed, uncounted, invalid
     bool isAllocated() const { return mTexture[0] && mTexture[1]; }
     bool matches(U32 width, U32 height) const { return isAllocated() && mState.sized(width, height); }
@@ -96,7 +119,25 @@ public:
     U32  seedFrame() const { return mState.seedFrame(); }   // the producer's frame counter, never 0 while temporal
 
     U32  readTexture() const { return mTexture[mState.index()]; }          // the last frame's colour
-    U32  writeFramebuffer() const { return mFramebuffer[1 - mState.index()]; }
+
+    // The compute resolve's write: bindWriteImage binds the texture that was not read as a write-only
+    // image at `unit` (the format is the shader's rgba16f; asserted); endComputeWrite follows the
+    // dispatch. Memory model (GL 4.3 section 7.12): imageStore writes are incoherent, no later command
+    // sees them until a barrier names the access that reads them:
+    //  - GL_TEXTURE_FETCH_BARRIER_BIT: texture fetches after the barrier see the stores, namely the
+    //    composite of this frame and the next frame's resolve (it reads this result as its history).
+    //  - GL_SHADER_IMAGE_ACCESS_BARRIER_BIT: image stores after the barrier wait for the accesses before
+    //    it, texture fetches included (write after read). The two textures alternate, so the texture
+    //    stored now is stored again two frames later, after this frame's composite and the next frame's
+    //    resolve fetched it; the next frame's barrier lies between those fetches and that store.
+    // Nothing else reads the history after the dispatch (no framebuffer, buffer or texture-update
+    // access); the dispatch's own reads of the accumulation and depth, written by rendering into a
+    // framebuffer, are ordered by the GL without a barrier (only image stores, atomics and storage
+    // buffers are incoherent).
+    U32  writeFramebuffer() const { return mFramebuffer[1 - mState.index()]; }   // the fragment resolve's target
+
+    void bindWriteImage(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
+    void endComputeWrite(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
     U32  latestTexture() const { return mTexture[mState.index()]; }        // after endFrame: this frame's, the composite's input
 
     // stoch_reproj (this frame's clip space to the last frame's: last projection x last view x
@@ -114,7 +155,7 @@ private:
     GLenum mFormat;
     F32 mWeight;
     U32 mTexture[2] = { 0, 0 };
-    U32 mFramebuffer[2] = { 0, 0 };
+    U32 mFramebuffer[2] = { 0, 0 };    // only with allocate(w, h, true)
     U32 mWidth = 0;
     U32 mHeight = 0;
     LLStochasticFrameState mState;

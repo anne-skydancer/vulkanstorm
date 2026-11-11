@@ -19,7 +19,11 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// Attached to each producer's resolve program (STOCH_RESOLVE, LLShaderMgr::attachShaderFeatures).
+// Compiled with each producer's resolve program as its stage: listed among the program's own shader
+// files (a compute object, alphaStochasticResolveC.glsl, GL 4.3) or attached as a fragment object
+// (STOCH_RESOLVE, LLShaderMgr::attachShaderFeatures; alphaStochasticResolveF.glsl). The file is
+// stage-neutral: it uses no stage built-ins (only uniforms, texelFetch and functions), so the same
+// source serves a compute or a fragment producer.
 // The producer defines stoch_current() (its value of this frame at a pixel: the averaged samples
 // of the transparency) and its main(); the engine gives the camera reprojection, the history
 // reads, the 3 x 3 neighbourhood and the blend. The design and the weights are the author's

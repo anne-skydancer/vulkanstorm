@@ -137,6 +137,40 @@ void deleteTexture(U32& name)
     name = 0;
 }
 
+bool deviceSupported()
+{
+    // 3.99 / 4.29 as llgl.cpp: mGLVersion is a float
+    const bool ok = gGLManager.mGLVersion >= 3.99f && gGLManager.mGLSLVersionMajor >= 4;
+    if (!ok)
+    {
+        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs OpenGL 4.0; this device reports GL "
+                                  << gGLManager.mGLVersion << ", GLSL " << gGLManager.mGLSLVersionMajor << "."
+                                  << gGLManager.mGLSLVersionMinor << ": sorted alpha is used" << LL_ENDL;
+    }
+    return ok;
+}
+
+bool computeResolve()
+{
+    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
+    const bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
+    // debug only: force the fragment path on a GL 4.3 device (tests), read once
+    static const bool force_fragment = []() {
+        const char* v = getenv("VKSTORM_STOCH_FRAGMENT_RESOLVE");
+        return v && v[0] == '1';
+    }();
+    const bool compute = capable && !force_fragment;
+    static bool logged = false;   // main render thread, the pipeline's allocation
+    if (!logged && gGLManager.mGLVersion >= 3.99f)
+    {
+        logged = true;
+        LL_INFOS("Pipeline") << "Stochastic transparency: " << (compute ? "compute resolve (GL 4.3 and later, 144 B/px)"
+                                                                          : "fragment resolve with the pre-pass target (GL 4.0 to 4.2, 160 B/px)")
+                             << (force_fragment ? ", forced by VKSTORM_STOCH_FRAGMENT_RESOLVE" : "") << LL_ENDL;
+    }
+    return compute;
+}
+
 bool acquireMasks()
 {
     if (!sMasks)
@@ -167,7 +201,7 @@ U32 getMasks()
 
 } // namespace LLStochasticEngine
 
-bool LLStochasticHistory::allocate(U32 width, U32 height)
+bool LLStochasticHistory::allocate(U32 width, U32 height, bool framebuffers)
 {
     release();
     if (!width || !height)
@@ -180,12 +214,18 @@ bool LLStochasticHistory::allocate(U32 width, U32 height)
     {
         mTexture[i] = LLStochasticEngine::newTexture2D(mFormat, width, height, mFormat);
         ok = ok && mTexture[i];
-        glGenFramebuffers(1, &mFramebuffer[i]);
-        glBindFramebuffer(GL_FRAMEBUFFER, mFramebuffer[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTexture[i], 0);
-        ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        if (framebuffers)
+        {
+            glGenFramebuffers(1, &mFramebuffer[i]);
+            glBindFramebuffer(GL_FRAMEBUFFER, mFramebuffer[i]);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTexture[i], 0);
+            ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        }
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    if (framebuffers)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    }
     if (!ok || glGetError() != GL_NO_ERROR)
     {
         release();
@@ -224,6 +264,19 @@ LLStochasticHistory::~LLStochasticHistory()
     {
         LL_WARNS("Pipeline") << "Stochastic history destroyed while allocated (release() it with the GL context current)" << LL_ENDL;
     }
+}
+
+void LLStochasticHistory::bindWriteImage(U32 unit) const
+{
+    // alphaStochasticResolveC.glsl declares layout(rgba16f)
+    llassert(mFormat == GL_RGBA16F);
+    glBindImageTexture(unit, mTexture[1 - mState.index()], 0, GL_FALSE, 0, GL_WRITE_ONLY, mFormat);
+}
+
+void LLStochasticHistory::endComputeWrite(U32 unit) const
+{
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    glBindImageTexture(unit, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, mFormat);
 }
 
 void LLStochasticHistory::setCamera(const glm::mat4& modelview, const glm::mat4& projection)

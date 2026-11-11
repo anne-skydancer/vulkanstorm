@@ -35,7 +35,7 @@
 #define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
-#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"
+#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (GL 4.0 to 4.2)
 // </Vulkanstorm>
 
 class LLShaderMgr
@@ -379,7 +379,8 @@ public:
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
         // <Vulkanstorm> the stochastic engine (stochasticSampleF.glsl) and its transparency producer
-        // (alphaStochasticF.glsl, alphaStochasticResolveF.glsl, alphaStochasticCompositeF.glsl)
+        // (alphaStochasticF.glsl, alphaStochasticResolveC.glsl or alphaStochasticResolveF.glsl + alphaStochasticCurrentF.glsl,
+        // alphaStochasticCompositeF.glsl)
         STOCH_MASKS,                        //  "stoch_masks"
         ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
         ALPHA_ST_TRANS,                     //  "alpha_st_trans"
