@@ -1000,6 +1000,14 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         attribs["HERO_PROBES"] = "1";
     }
 
+    // <Vulkanstorm> every shadow method but Legacy multiplies N.L by the shadow (sunShadowedDiffuse
+    // in deferredUtil.glsl); Legacy leaves it undefined and keeps min()
+    if (LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) != LLShadowMethod::LEGACY)
+    {
+        attribs["SHADOW_NL_MULTIPLY"] = "1";
+    }
+    // </Vulkanstorm>
+
     { // PBR terrain
         const S32 mapping = clamp_terrain_mapping(gSavedSettings.getS32("RenderTerrainPBRPlanarSampleCount"));
         attribs["TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT"] = llformat("%d", mapping);

@@ -11,6 +11,7 @@ Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 | Sun/moon cascades | Firestorm 7.2.5's: split distances from the visible point cloud, the camera-angle blend of the split exponent (x, y, z), each cascade fitted to the visible receivers, orthographic or perspective-warped | Stable (stage S1, `llshadowcascadefit.h`): splits from the shadow distance, each cascade the bounding sphere of its frustum slice, texel-snapped on a world-anchored grid, orthographic |
 | Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) |
 | Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening |
+| Sun N·L under shadow | Legacy `min(N·L, shadow)` | PCSS and Stochastic: N·L × shadow (`SHADOW_NL_MULTIPLY`) |
 | Later shadow stages (S2-S9, S7b) | No | Yes |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` |
 
@@ -27,7 +28,7 @@ These are not gated by the method:
 
 So Legacy is Firestorm 7.2.5's cascade fit and map sizes with the PCF shader as it is today
 (the shader program is the one PCSS-off used before the switch); only the cascades and the map
-size differ in the C++ code. No shader define is needed (`SHADOW_LEGACY` does not exist).
+size differ in the C++ code. The one shader difference is the sun's N·L under shadow: every method but Legacy defines `SHADOW_NL_MULTIPLY` (a global define set in `loadBasicShaders`, `llviewershadermgr.cpp`, where the method is read), which switches `sunShadowedDiffuse` in `deferredUtil.glsl` from Firestorm's `min(N·L, shadow)` to `N·L × clamp(shadow, 0, 1)`. Legacy never defines it and keeps `min()`. In classic-mode PBR (`pbrBaseLight`) the multiply form applies the shadow once, where `min()` applied it twice. The define changes the shader text, so the shader cache is rebuilt once after the update.
 
 ## Where the method is read
 
