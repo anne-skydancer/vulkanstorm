@@ -46,7 +46,8 @@
 #include "lldirpicker.h"
 #include "lleventtimer.h"
 #include "llfeaturemanager.h"
-#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
+#include "llshadowmethod.h"
+#include "llstochastichistory.h" // <Vulkanstorm/> shadow method
 #include "llfocusmgr.h"
 //#include "llfirstuse.h"
 #include "llfloaterreg.h"
@@ -2240,7 +2241,17 @@ void LLFloaterPreference::refreshEnabledState()
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
     // the light size applies to the PCSS and Stochastic methods
     getChild<LLSliderCtrl>("ShadowPCSSLightSize")->setEnabled(shadow_method_enabled
-        && LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod"))));
+        && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported())));
+    if (!LLStochasticEngine::deviceSupported())
+    {
+        // Legacy is the only method below OpenGL 4.0 that Stochastic could replace: the item is not offered and a stored
+        // 2 reads as Legacy (the setting itself is not written, so the choice survives a GPU upgrade)
+        LLComboBox* method_combo = getChild<LLComboBox>("ShadowMethod");
+        if (method_combo->remove("2"))
+        {
+            method_combo->setValue(LLSD((LLSD::Integer)LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), false)));
+        }
+    }
     // </Vulkanstorm>
 
     enabled = false;
