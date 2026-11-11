@@ -924,6 +924,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                 gPipeline.resizeScreenTexture();
                 gResizeScreenTexture = false;
             }
+            if (!for_snapshot)
+            {
+                gPipeline.retryAlphaStochastic(); // <Vulkanstorm/> a failed allocation of stochastic transparency's targets
+            }
 
             gGL.setColorMask(true, true);
             glClearColor(0.f, 0.f, 0.f, 0.f);

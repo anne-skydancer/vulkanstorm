@@ -255,7 +255,11 @@ void LLStochasticHistory::setResolveUniforms(LLGLSLShader& shader)
 
 void LLStochasticHistory::endFrame()
 {
-    llassert(mCameraSet); // the camera of this frame is what the next frame reprojects from
+    if (!mCameraSet)
+    {
+        // the camera of this frame is what the next frame reprojects from
+        setCamera(get_current_modelview(), get_current_projection());
+    }
     mCameraSet = false;
     mState.end(LLFrameTimer::getFrameCount());
     mLastModelView = mModelView;
