@@ -29,13 +29,16 @@ namespace
 
     void test_values()
     {
-        static_assert(LLShadowMethod::LEGACY == 0 && LLShadowMethod::PCSS == 1);
+        static_assert(LLShadowMethod::LEGACY == 0 && LLShadowMethod::PCSS == 1 && LLShadowMethod::STOCHASTIC == 2);
         check(LLShadowMethod::fromPCSSFlag(true) == LLShadowMethod::PCSS, "flag on is PCSS");
         check(LLShadowMethod::fromPCSSFlag(false) == LLShadowMethod::LEGACY, "flag off is Legacy");
         check(LLShadowMethod::sanitize(0) == 0, "sanitize 0");
         check(LLShadowMethod::sanitize(1) == 1, "sanitize 1");
-        check(LLShadowMethod::sanitize(2) == 1, "sanitize 2");
+        check(LLShadowMethod::sanitize(2) == 2, "sanitize 2");
+        check(LLShadowMethod::sanitize(3) == 1, "sanitize 3");
         check(LLShadowMethod::sanitize(4000000000u) == 1, "sanitize huge");
+        check(!LLShadowMethod::usesStableCascades(0) && LLShadowMethod::usesStableCascades(1)
+            && LLShadowMethod::usesStableCascades(2), "stable cascades for every method but Legacy");
     }
 
     void test_migration()
