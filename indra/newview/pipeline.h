@@ -1211,7 +1211,7 @@ public:
     static F32 CameraFieldOfView;
     static F32 RenderShadowNoise;
     static F32 RenderShadowBlurSize;
-    static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS
+    static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS, 2 Stochastic
     static F32 RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS light size multiplier
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
