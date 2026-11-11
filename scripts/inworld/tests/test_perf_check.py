@@ -151,6 +151,16 @@ class RunTest(unittest.TestCase):
             self.assertTrue(any("did not finish" in w for w in index["warnings"]), index["warnings"])
             self.assertEqual(index["presets"]["current"]["gpu_frames"], 4)
 
+    def test_a_window_that_stops_short_fails_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_short_window=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}],
+                                 settle={"post_login_s": 0.0, "after_camera_s": 0.0, "after_teleport_s": 0.0, "login_timeout_s": 20,
+                                         "window_timeout_s": 1.0, "compare_wait_s": 2.0})
+            self.assertNotEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["window_failures"][0]["preset"], "current")
+
     def test_an_empty_gbuffer_is_noted(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(gl_stats=True, gl_empty_gbuffer=True, logs_dir=tmp)

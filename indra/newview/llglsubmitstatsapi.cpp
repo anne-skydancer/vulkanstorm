@@ -169,12 +169,44 @@ namespace
         }
     };
 
+    // Texture unit 0 as the harness found it: the readback and the restore bind other textures there, and the
+    // second render must start from the state the first one left.
+    struct TexUnit0State
+    {
+        U32 unit = 0;
+        U32 texture = 0;
+        LLTexUnit::eTextureType type = LLTexUnit::TT_TEXTURE;
+        bool mips = false;
+        TexUnit0State()
+        {
+            unit = gGL.getCurrentTexUnitIndex();
+            LLTexUnit* u = gGL.getTexUnit(0);
+            texture = u->getCurrTexture();
+            type = u->getCurrType();
+            mips = u->getHasMipMaps();
+        }
+        void restore() const
+        {
+            LLTexUnit* u = gGL.getTexUnit(0);
+            if (texture != 0)
+            {
+                u->bindManual(type, texture, mips);
+            }
+            else
+            {
+                u->unbind(LLTexUnit::TT_TEXTURE);
+            }
+            gGL.getTexUnit(unit)->activate();
+        }
+    };
+
     // Reads one 2D texture (level 0) as 8 bit RGBA, float RGBA or float depth: lossless for the formats the
     // renderer uses, so equal bits mean equal stored values.
     bool readTexture(Capture& c)
     {
         gGL.flush(); // anything batched must be drawn before the texture is read
         reportPendingGLErrors("a readback");
+        const TexUnit0State saved;
         gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, c.texture);
         GLint w = 0, h = 0, rs = 0, gs = 0, bs = 0, as = 0;
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
@@ -197,7 +229,7 @@ namespace
             glGetTexImage(GL_TEXTURE_2D, 0, c.depth ? GL_DEPTH_COMPONENT : GL_RGBA, c.f32 ? GL_FLOAT : GL_UNSIGNED_BYTE, c.data.data());
             ok = glGetError() == GL_NO_ERROR;
         }
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        saved.restore();
         if (!ok)
         {
             c.data.clear();
@@ -213,11 +245,12 @@ namespace
     {
         gGL.flush();
         reportPendingGLErrors("a restore");
+        const TexUnit0State saved;
         gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, c.texture);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, c.width, c.height, c.depth ? GL_DEPTH_COMPONENT : GL_RGBA,
                         c.f32 ? GL_FLOAT : GL_UNSIGNED_BYTE, c.data.data());
         const bool ok = glGetError() == GL_NO_ERROR;
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+        saved.restore();
         return ok;
     }
 
@@ -293,6 +326,7 @@ struct LLGLSubmitCompare::Run::Impl
     S32 pass = 0;
     LLRenderTarget* target = nullptr;
     bool restore = false;
+    bool restoreFailed = false; // the second render did not start from the first one's inputs: no valid comparison
     std::vector<Capture> inputs;
     std::vector<Capture> first;
 };
@@ -358,6 +392,7 @@ bool LLGLSubmitCompare::Run::next()
                 if (!writeTexture(c))
                 {
                     LL_WARNS(kTag) << "could not restore " << c.name << " for the second render" << LL_ENDL;
+                    m.restoreFailed = true;
                 }
             }
             std::vector<Capture>().swap(m.inputs);
@@ -375,7 +410,12 @@ bool LLGLSubmitCompare::Run::next()
     res.ran = true;
     PixelStore store;
     const std::vector<Attach> list = attachmentsOf(*m.target);
-    if (list.size() != m.first.size() || m.first.empty())
+    if (m.restoreFailed)
+    {
+        res.ran = false;
+        res.note = "the inputs could not be restored for the second render";
+    }
+    else if (list.size() != m.first.size() || m.first.empty())
     {
         res.ran = false;
         res.note = "attachments could not be read back";

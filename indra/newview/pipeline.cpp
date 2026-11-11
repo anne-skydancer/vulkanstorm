@@ -11117,7 +11117,39 @@ static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_TREE("Alpha Tree");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_GRASS("Alpha Grass");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_FULLBRIGHT_ALPHA_MASKED("Fullbright Alpha Masked");
 
+// The identical-image check (development only) wraps the shadow render here, not at the call sites: the Legacy cascade code
+// must stay textually identical to upstream. The target is the one the caller bound and cleared; the second render clears it again.
 void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+{
+#if VKS_GL_STATS
+    LLRenderTarget* target = LLRenderTarget::getCurrentBoundTarget();
+    S32 pass = 0;
+    S32 index = 0;
+    for (S32 k = 0; k < 4; ++k)
+    {
+        if (target == &mRT->shadow[k]) { pass = LLGLSubmitCompare::PASS_SUN_CASCADE0 + k; index = k; }
+    }
+    for (S32 k = 0; k < 2; ++k)
+    {
+        if (target == &mSpotShadow[k]) { pass = LLGLSubmitCompare::PASS_SPOT_SHADOW0 + k; index = k; }
+    }
+    if (pass != 0)
+    {
+        VKS_GLSTAT_VIEW(pass >= LLGLSubmitCompare::PASS_SPOT_SHADOW0 ? "spot shadow" : "sun cascade", index);
+        VKS_GLCMP_BEGIN(pass, target, false)
+        if (VKS_GLCMP_REPLAY())
+        {
+            target->clear();
+        }
+        renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+        VKS_GLCMP_END()
+        return;
+    }
+#endif
+    renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+}
+
+void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_SHADOW_RENDER);
     LL_PROFILE_GPU_ZONE("renderShadow");
@@ -12035,15 +12067,12 @@ void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& li
 
         mRT->shadow[j].bindTarget();
         mRT->shadow[j].getViewport(gGLViewport);
-        VKS_GLSTAT_VIEW("sun cascade", j);
-        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_SUN_CASCADE0 + j, &mRT->shadow[j], false)
         mRT->shadow[j].clear();
 
         {
             static LLCullResult result[4];
             renderShadow(view[j], proj[j], shadow_cam, result[j], true);
         }
-        VKS_GLCMP_END()
 
         mRT->shadow[j].flush();
 
@@ -12223,15 +12252,12 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
 
         mRT->shadow[j].bindTarget();
         mRT->shadow[j].getViewport(gGLViewport);
-        VKS_GLSTAT_VIEW("sun cascade", j);
-        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_SUN_CASCADE0 + j, &mRT->shadow[j], false)
         mRT->shadow[j].clear();
 
         {
             static LLCullResult result[4];
             renderShadow(view[j], proj[j], shadow_cam, result[j], true);
         }
-        VKS_GLCMP_END()
 
         mRT->shadow[j].flush();
 
@@ -12584,8 +12610,6 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
                 mSpotShadow[i].bindTarget();
                 mSpotShadow[i].getViewport(gGLViewport);
-                VKS_GLSTAT_VIEW("spot shadow", i);
-                VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_SPOT_SHADOW0 + i, &mSpotShadow[i], false)
                 mSpotShadow[i].clear();
 
                 static LLCullResult result[2];
@@ -12597,7 +12621,6 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 renderShadow(view[i + 4], proj[i + 4], shadow_cam, result[i], false);
 
                 RenderSpotLight = nullptr;
-                VKS_GLCMP_END()
 
                 mSpotShadow[i].flush();
             }

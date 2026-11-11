@@ -36,7 +36,7 @@ class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
-                 logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False):
+                 logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
         self.gl_stats = gl_stats
@@ -47,6 +47,7 @@ class FakeViewer:
         self.gl_not_run = gl_not_run          # every pass reports "not run"
         self.gl_gpu_lag = gl_gpu_lag          # the GPU times of the last window frame never arrive
         self.gl_empty_gbuffer = gl_empty_gbuffer
+        self.gl_short_window = gl_short_window  # the window never reaches its frame target
         self.gl_serial = 0
         self.gl_window = {"target": 0, "collected": 0, "gpu": 0}
         self.gl_compare_pending = 0
@@ -420,6 +421,10 @@ class FakeViewer:
                             "frame_count": int(time.monotonic() * 60)})
         elif op == "windowBegin":
             n = int(d.get("frames", 60))
+            if self.gl_short_window:
+                self.gl_window = {"target": n, "collected": n // 2, "gpu": n // 2}
+                self._reply(d, {"frames": n})
+                return
             self.gl_window = {"target": n, "collected": n, "gpu": (n - 1 if self.gl_gpu_lag else n) if d.get("gpu", True) else 0}
             self._reply(d, {"frames": n})
         elif op == "windowStop":

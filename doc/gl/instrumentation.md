@@ -52,7 +52,7 @@ collect a window across it** (`perf_check.py` runs the check after the window). 
 
 **GPU time** comes from `glQueryCounter(GL_TIMESTAMP)` pairs around every scope, in a ring of four frames, read without
 waiting (the result of frame N arrives when frame N+1..N+3 starts). Up to 4096 scopes per frame are timed; more are counted
-without GPU time (`gpu_truncated`). Timestamp queries do not nest-conflict with the `GL_TIME_ELAPSED` queries of Frame Profile.
+without GPU time (`gpu_truncated`). Timestamp queries are independent of the `GL_TIME_ELAPSED` query of Frame Profile (both can be active at once).
 
 **CPU time** is wall time on the main thread between the scope's entry and exit (`steady_clock`), not CPU time of the thread.
 

@@ -141,7 +141,8 @@ class Run:
         self.camera_set = False
         self.cleaned = False
         self.rows = []
-        self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": []}
+        self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
+                      "window_failures": []}
 
     def warn(self, msg):
         log("WARNING " + msg)
@@ -207,12 +208,18 @@ class Run:
         self.v.req(API, "compareArm", **{"pass": pass_id})
         end = time.monotonic() + self.sc["settle"]["compare_wait_s"] + 20.0
         # the setting stays set until a frame takes it; the frame disarms itself when it is over
+        finished = False
         while time.monotonic() < end:
             r = self.v.req(API, "compareResults")
             if int(r.get("pending", 1)) == 0 and int(r.get("armed", 1)) == 0:
+                finished = True
                 break
             self.v.sleep(0.3)
         r = self.v.req(API, "compareResults")
+        if not finished and not (int(r.get("pending", 1)) == 0 and int(r.get("armed", 1)) == 0):
+            if inject:
+                self.change("RenderGLSubmitCompareInject", 0)
+            raise LeapError("the check did not finish before the timeout (still armed or pending): no result to trust")
         if inject:
             self.change("RenderGLSubmitCompareInject", 0)
         if int(r.get("arm_serial", before)) == before:
@@ -284,6 +291,9 @@ class Run:
         start = time.monotonic()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
+        target = int(sc["window"]["frames"])
+        if collected < target:
+            self.index["window_failures"].append({"preset": pid, "collected": collected, "target": target})
         info.update({"frames": collected, "gpu_frames": gpu_frames, "wall_s": round(wall, 3),
                      "fps_wall": round(collected / wall, 2) if wall > 0 else None, "fps_stats_off": fps_off})
         if fps_off and info["fps_wall"]:
@@ -373,7 +383,7 @@ class Run:
             self.save_index()
         self.save_index()
         self.cleanup()
-        return proof_ok and not self.index["compare_failures"]
+        return proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
 
     def save_index(self):
         write_json_atomic(self.out / "perf.json", self.index)
