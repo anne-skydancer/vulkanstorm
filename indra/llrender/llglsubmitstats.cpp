@@ -41,9 +41,18 @@ namespace
     std::vector<GLuint> sFreeQueries;
 
     // The mergeable-run tracker.
-    LLGLSubmitStats::Record* sRunRec = nullptr;
-    uint32_t sRunLen = 0;
-    uint32_t sRunEpoch = 0;
+    LLGLSubmitMath::RunTracker sRun;
+
+    void creditRun(const LLGLSubmitMath::RunTracker::Closed& c)
+    {
+        if (c.rec && c.len)
+        {
+            auto* r = const_cast<LLGLSubmitStats::Record*>(static_cast<const LLGLSubmitStats::Record*>(c.rec));
+            r->c.runHist[LLGLSubmitMath::runBucket(c.len)]++;
+            r->c.runs++;
+            r->c.mergeableDraws += c.len - 1;
+        }
+    }
 
     // The window aggregate: sums over the frames of a window, in order of first appearance.
     std::vector<std::string> sAggOrder;
@@ -150,7 +159,7 @@ namespace
     {
         const bool integral = div == 1.0;
 #define VKS_GLSTAT_EMIT(name) \
-        if (!only_nonzero || c.name) { out.emplace(#name, number((double)c.name / div, integral)); }
+        if (!only_nonzero || c.name) { out.emplace(#name, number(LLGLSubmitMath::perFrameMean((double)c.name, div), integral)); }
         VKS_GLSTAT_COUNTER_LIST(VKS_GLSTAT_EMIT)
 #undef VKS_GLSTAT_EMIT
         bool any = false;
@@ -163,7 +172,7 @@ namespace
             boost::json::array hist;
             for (uint64_t h : c.runHist)
             {
-                hist.emplace_back(number((double)h / div, integral));
+                hist.emplace_back(number(LLGLSubmitMath::perFrameMean((double)h, div), integral));
             }
             out.emplace("run_hist", std::move(hist));
         }
@@ -255,8 +264,7 @@ namespace
     }
 }
 
-LLGLSubmitStats::Record* LLGLSubmitStats::sCur = nullptr;
-std::thread::id LLGLSubmitStats::sMainThread;
+std::atomic<LLGLSubmitStats::Record*> LLGLSubmitStats::sCurRec{nullptr};
 uint32_t LLGLSubmitStats::sEpoch = 0;
 std::shared_ptr<LLGLSubmitStats::Frame> LLGLSubmitStats::sLast;
 uint32_t LLGLSubmitStats::sWindowTarget = 0;
@@ -277,20 +285,12 @@ void LLGLSubmitCounters::add(const LLGLSubmitCounters& o)
 
 void LLGLSubmitStats::closeRun()
 {
-    if (sRunRec && sRunLen)
-    {
-        int bucket = sRunLen == 1 ? 0 : sRunLen == 2 ? 1 : sRunLen <= 4 ? 2 : sRunLen <= 8 ? 3 : sRunLen <= 16 ? 4 : 5;
-        sRunRec->c.runHist[bucket]++;
-        sRunRec->c.runs++;
-        sRunRec->c.mergeableDraws += sRunLen - 1;
-    }
-    sRunRec = nullptr;
-    sRunLen = 0;
+    creditRun(sRun.close());
 }
 
 bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
 {
-    sMainThread = std::this_thread::get_id();
+    sIsMain = true;
     if (sFrame)
     {
         return false; // nested: the outer frame goes on
@@ -298,7 +298,7 @@ bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
     resolveGpu(false);
     if (!collect)
     {
-        sCur = nullptr;
+        setCur(nullptr);
         return false;
     }
 
@@ -308,8 +308,7 @@ bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
     sFrame->gpuTimed = sGpuThisFrame;
     sFrameT0 = Clock::now();
     sStack.clear();
-    sRunRec = nullptr;
-    sRunLen = 0;
+    sRun = LLGLSubmitMath::RunTracker();
     sEpoch = 0;
     enterView("frame", -1);
     return true;
@@ -326,7 +325,7 @@ void LLGLSubmitStats::endFrame()
         leave();
     }
     closeRun();
-    sCur = nullptr;
+    setCur(nullptr);
 
     std::shared_ptr<Frame> f = std::move(sFrame);
     sFrame.reset();
@@ -358,7 +357,8 @@ void LLGLSubmitStats::endFrame()
         sPending.push_back(f);
         if (sPending.size() > kMaxPending)
         {
-            resolveGpu(true); // should not happen: the oldest frame is long finished
+            // The GPU is more than the ring behind: give up the oldest frame's GPU times (never wait for them).
+            dropOldest();
         }
     }
     else
@@ -367,12 +367,70 @@ void LLGLSubmitStats::endFrame()
     }
 }
 
+void LLGLSubmitStats::dropOldest()
+{
+    if (sPending.empty())
+    {
+        return;
+    }
+    std::shared_ptr<Frame> f = sPending.front();
+    sPending.erase(sPending.begin());
+    for (const Frame::Inst& in : f->insts)
+    {
+        releaseQuery(in.begin);
+        releaseQuery(in.end);
+    }
+    f->insts.clear();
+    f->gpuResolved = false;
+    f->gpuTruncated = true;
+}
+
+void LLGLSubmitStats::resetGL(bool contextValid)
+{
+    std::vector<GLuint> ids = sFreeQueries;
+    for (const auto& f : sPending)
+    {
+        for (const Frame::Inst& in : f->insts)
+        {
+            ids.push_back(in.begin);
+            ids.push_back(in.end);
+        }
+        f->insts.clear();
+        f->gpuResolved = false;
+    }
+    if (sFrame)
+    {
+        for (const Frame::Inst& in : sFrame->insts)
+        {
+            ids.push_back(in.begin);
+            ids.push_back(in.end);
+        }
+        for (StackEntry& e : sStack)
+        {
+            if (e.timed)
+            {
+                ids.push_back(e.qBegin);
+                e.timed = false;
+            }
+        }
+        sFrame->insts.clear();
+        sFrame->gpuTimed = false;
+        sGpuThisFrame = false;
+    }
+    if (contextValid && !ids.empty() && glDeleteQueries)
+    {
+        glDeleteQueries((GLsizei)ids.size(), ids.data());
+    }
+    sFreeQueries.clear();
+    sPending.clear();
+}
+
 void LLGLSubmitStats::resolveGpu(bool blockForGpu)
 {
     while (!sPending.empty())
     {
         std::shared_ptr<Frame> f = sPending.front();
-        if (!blockForGpu && sPending.size() <= kMaxPending)
+        if (!blockForGpu)
         {
             GLuint64 avail = 0;
             glGetQueryObjectui64v(f->insts.back().end, GL_QUERY_RESULT_AVAILABLE, &avail);
@@ -434,7 +492,7 @@ void LLGLSubmitStats::enterView(const char* name, int index)
     {
         sFrame->gpuTruncated = true;
     }
-    sCur = e.rec;
+    setCur(e.rec);
     sStack.push_back(std::move(e));
 }
 
@@ -467,7 +525,7 @@ void LLGLSubmitStats::enterPass(const char* name, int index)
     {
         sFrame->gpuTruncated = true;
     }
-    sCur = e.rec;
+    setCur(e.rec);
     sStack.push_back(std::move(e));
 }
 
@@ -487,32 +545,24 @@ void LLGLSubmitStats::leave()
         sFrame->insts.push_back({e.rec, e.qBegin, qe});
     }
     sStack.pop_back();
-    sCur = sStack.empty() ? nullptr : sStack.back().rec;
+    setCur(sStack.empty() ? nullptr : sStack.back().rec);
 }
 
 void LLGLSubmitStats::noteDraw(uint32_t indices)
 {
-    if (!sCur || !onMain())
+    Record* const rec = cur();
+    if (!rec || !onMain())
     {
         return;
     }
-    sCur->c.draws++;
-    sCur->c.drawIndices += indices;
-    if (sRunRec == sCur && sRunLen && sRunEpoch == sEpoch)
-    {
-        ++sRunLen;
-    }
-    else
-    {
-        closeRun();
-        sRunRec = sCur;
-        sRunLen = 1;
-    }
-    sRunEpoch = sEpoch;
+    rec->c.draws++;
+    rec->c.drawIndices += indices;
+    creditRun(sRun.draw(rec, sEpoch));
 }
 
 void LLGLSubmitStats::notePalette(const void* avatar, uint64_t skinHash, uint32_t bytes)
 {
+    Record* const sCur = cur();
     if (!sCur || !onMain())
     {
         return;
@@ -530,6 +580,7 @@ void LLGLSubmitStats::notePalette(const void* avatar, uint64_t skinHash, uint32_
 
 void LLGLSubmitStats::noteVBO(uint32_t name)
 {
+    Record* const sCur = cur();
     if (!sCur || !onMain())
     {
         return;
@@ -539,6 +590,7 @@ void LLGLSubmitStats::noteVBO(uint32_t name)
 
 void LLGLSubmitStats::noteUniform(uint32_t bytes, uint32_t count, bool matrix)
 {
+    Record* const sCur = cur();
     if (!sCur || !onMain())
     {
         return;

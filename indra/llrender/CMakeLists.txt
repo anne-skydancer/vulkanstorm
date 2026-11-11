@@ -20,7 +20,6 @@ set(llrender_SOURCE_FILES
     llfontregistry.cpp
     llgl.cpp
     llglslshader.cpp
-    llglsubmitstats.cpp
     llgltexture.cpp
     llimagegl.cpp
     llpostprocess.cpp
@@ -71,6 +70,11 @@ set(llrender_HEADER_FILES
     )
 
 list(APPEND llrender_SOURCE_FILES ${llrender_HEADER_FILES})
+
+# development only: an empty object file (LNK4221) is not made when the option is off
+if (VKS_GL_STATS)
+  list(APPEND llrender_SOURCE_FILES llglsubmitstats.cpp)
+endif()
 
 if (BUILD_HEADLESS)
   add_library (llrenderheadless

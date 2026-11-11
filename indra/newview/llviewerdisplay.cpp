@@ -1027,8 +1027,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("display - 4")
             LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
-            VKS_GLSTAT_PASS("state sort");
-            gPipeline.stateSort(camera, result); // <FS:Ansariel> Factor out calls to getInstance
+            {
+                VKS_GLSTAT_PASS("state sort");
+                gPipeline.stateSort(camera, result); // <FS:Ansariel> Factor out calls to getInstance
+            }
             stop_glerror();
 
             if (rebuild)
@@ -1128,7 +1130,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         VKS_GLSTAT_VIEW("main");
         VKS_GLSTAT_PASS("gbuffer");
         VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_GBUFFER, &gPipeline.mRT->deferredScreen, false)
-        gGL.setColorMask(true, true);
+        if (VKS_GLCMP_REPLAY())
+        {
+            gGL.setColorMask(true, true); // the first render left the alpha write off
+        }
         gPipeline.mRT->deferredScreen.clear();
 
         gGL.setColorMask(true, false);

@@ -6592,18 +6592,26 @@ void LLPipeline::setupHWLights()
             light_color.mV[3] = 0.0f;
 
             F32 fade = iter->fade;
+            bool advance_fade = true;
+            VKS_GLCMP_LIGHT_FADE(fade, advance_fade); // the second render of a compared pass sees the first one's fade
             if (fade < LIGHT_FADE_TIME)
             {
                 // fade in/out light
                 if (fade >= 0.f)
                 {
                     fade = fade / LIGHT_FADE_TIME;
-                    ((Light*) (&(*iter)))->fade += gFrameIntervalSeconds.value();
+                    if (advance_fade)
+                    {
+                        ((Light*) (&(*iter)))->fade += gFrameIntervalSeconds.value();
+                    }
                 }
                 else
                 {
                     fade = 1.f + fade / LIGHT_FADE_TIME;
-                    ((Light*) (&(*iter)))->fade -= gFrameIntervalSeconds.value();
+                    if (advance_fade)
+                    {
+                        ((Light*) (&(*iter)))->fade -= gFrameIntervalSeconds.value();
+                    }
                 }
                 fade = llclamp(fade,0.f,1.f);
                 light_color *= fade;
@@ -10572,8 +10580,9 @@ void LLPipeline::renderDeferredLighting()
                           LLPipeline::RENDER_TYPE_WATEREXCLUSION,
                           END_RENDER_TYPES);
 
-        // sorted alpha only: the stochastic engine keeps history between frames, so a second render would differ
-        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_POST_DEFERRED, mAlphaSTFBO ? nullptr : screen_target, true)
+        // Sorted alpha only: the stochastic engine keeps history between frames, so a second render would differ.
+        // Not with highlight faces pending either: the pass consumes that list and the second render would lack them.
+        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_POST_DEFERRED, (mAlphaSTFBO || !mHighlightFaces.empty()) ? nullptr : screen_target, true)
         renderGeomPostDeferred(*LLViewerCamera::getInstance());
         VKS_GLCMP_END()
         popRenderTypeMask();

@@ -36,13 +36,18 @@ class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
-                 logs_dir=None):
+                 logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
         self.gl_stats = gl_stats
         self.gl_catches = gl_stats_catches_injection
         self.gl_diff_pass = gl_stats_diff_pass
         self.logs_dir = logs_dir
+        self.gl_stale = gl_stale_results      # an arming no frame takes: the results (and the serial) never change
+        self.gl_not_run = gl_not_run          # every pass reports "not run"
+        self.gl_gpu_lag = gl_gpu_lag          # the GPU times of the last window frame never arrive
+        self.gl_empty_gbuffer = gl_empty_gbuffer
+        self.gl_serial = 0
         self.gl_window = {"target": 0, "collected": 0, "gpu": 0}
         self.gl_compare_pending = 0
         self.gl_compare_results = []
@@ -415,7 +420,7 @@ class FakeViewer:
                             "frame_count": int(time.monotonic() * 60)})
         elif op == "windowBegin":
             n = int(d.get("frames", 60))
-            self.gl_window = {"target": n, "collected": n, "gpu": n if d.get("gpu", True) else 0}
+            self.gl_window = {"target": n, "collected": n, "gpu": (n - 1 if self.gl_gpu_lag else n) if d.get("gpu", True) else 0}
             self._reply(d, {"frames": n})
         elif op == "windowStop":
             self._reply(d, {"collected": w["collected"]})
@@ -437,6 +442,8 @@ class FakeViewer:
             pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
             self._reply(d, {"path": d["path"]})
         elif op == "compareArm":
+            if self.gl_stale:
+                return self._reply(d, {"armed": int(d.get("pass", -1))})
             self.gl_compare_pending = int(d.get("pass", -1))
             self.settings["RenderGLSubmitCompare"] = ("S32", self.gl_compare_pending)
             self._reply(d, {"armed": self.gl_compare_pending})
@@ -448,13 +455,25 @@ class FakeViewer:
                 for i, label in enumerate(self.GL_PASSES, 1):
                     if self.gl_compare_pending not in (-1, i):
                         continue
-                    differs = (inject and i == 1 and self.gl_catches) or (self.gl_diff_pass == label)
-                    results.append({"pass": i, "label": label, "ran": True, "identical": not differs, "attachments": [
-                        {"name": "color0", "pixels": 100, "mismatched_pixels": 1 if differs else 0}]})
+                    if self.gl_not_run:
+                        results.append({"pass": i, "label": label, "ran": False, "identical": False, "note": "not run", "attachments": []})
+                        continue
+                    injected = bool(inject and i == 1 and self.gl_catches)
+                    other = self.gl_diff_pass == label
+                    distinct = 1 if (self.gl_empty_gbuffer and i == 1) else 50
+                    atts = [{"name": "color0", "pixels": 100, "mismatched_pixels": 1 if injected else 0, "distinct_values": distinct}]
+                    if injected:
+                        atts[0]["injected"] = True
+                    if i == 1:
+                        atts.append({"name": "depth", "pixels": 100, "mismatched_pixels": 5 if other else 0, "distinct_values": distinct})
+                    elif other:
+                        atts[0]["mismatched_pixels"] = 1
+                    results.append({"pass": i, "label": label, "ran": True, "identical": not (injected or other), "attachments": atts})
                 self.gl_compare_results = results
+                self.gl_serial += 1
                 self.gl_compare_pending = 0
                 self.settings["RenderGLSubmitCompare"] = ("S32", 0)
-            self._reply(d, {"armed": 0, "pending": 0, "frame": 1, "results": self.gl_compare_results})
+            self._reply(d, {"armed": 0, "pending": 0, "frame": 1, "arm_serial": self.gl_serial, "results": self.gl_compare_results})
         elif op == "selfBench":
             self._reply(d, {"iterations": d.get("iterations"), "hooks_per_draw": 20, "ns_per_draw_not_collecting": 9.0,
                             "ns_per_draw_collecting": 80.0, "ns_per_hook_not_collecting": 0.45, "ns_per_hook_collecting": 4.0,

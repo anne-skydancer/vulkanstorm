@@ -262,7 +262,10 @@ What a run does:
 1. `selfBench`: the cost of the hooks in this binary (ns per draw's worth of hooks, not collecting and collecting;
    ns per pass scope with and without GPU timers).
 2. The proof: the G-buffer is compared with **one bit flipped in the second readback**. The check must say DIFFERENT. If it
-   does not, the run fails (exit 4): an IDENTICAL from a check that cannot see a one-unit difference means nothing.
+   does not, the run fails (exit 4): an IDENTICAL from a check that cannot see a one-unit difference means nothing. It must be
+   exactly the injection: `color0` flagged injected with one differing pixel and no other attachment differing (a real difference
+   would otherwise hide the proof). A compare that no frame took (stale results), or a G-buffer that did not run in a preset, also fails the run.
+   Reflection probe faces are never compared; each result lists, per attachment, its distinct pixel values (an attachment with one is an empty pass).
 3. For each preset (`current` = where you stand, then three headings from your avatar, 2.5 m up): the camera is placed;
    the frame rate is measured for 5 s with nothing collecting; then a window of 120 frames is collected (counters per view
    and pass, CPU ms, GPU ms) and written to `window_<preset>.json`; a Frame Profile is written (`profile_<preset>.json`, with a
@@ -270,6 +273,9 @@ What a run does:
    post-deferred), each rendered twice in the same frame and compared bit for bit (`compare_<preset>.json`). Both renders use
    today's path, so **any DIFFERENT is a bug of the harness or of the pass** (exit 4), not a rendering change.
 4. Restores your settings and camera (also on error; `--restore RUNDIR` repeats it in a fresh viewer).
+
+Keep `--out` under a `.captures` folder (the default is `.captures` in the repository): the viewer writes the window files itself
+and refuses any `.json` path outside its log folder or a `.captures` folder (no relative paths, no `..`, no UNC paths).
 
 Output: `perf.json` (everything, with the hook bench and the overhead per preset), `manifest.csv` (one row per preset),
 `window_*.json`, `compare_*.json`, `profile_*.json`, `scenario.json`, `restore.json`, `viewer_log_excerpt.txt`.

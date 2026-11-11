@@ -5,15 +5,18 @@ Development tooling for the OpenGL modernisation (stage G0 of the study). It mea
 of the GL driver, per view and pass, and it checks that a changed submission path draws the same image. Every later stage
 (G1 to G7) uses it twice: the counters and timers show whether the stage paid, and the identical-image check is its gate.
 
-Nothing here changes a pixel and nothing here is part of a release.
+Nothing here changes a pixel and nothing here is part of a release. With the option off there is no behavioural change
+except five inert debug settings (nothing reads them).
 
 - **Build option:** `-DVKS_GL_STATS=ON` (off by default, off in CI, off on release). Off, every hook expands to nothing and the
   objects are the ones the code produced before. On, but not collecting, a hook is one pointer test.
 - **Where it lives:** `vkstorm-devel` and the feature branches built from it. The names (`VKS_GL_STATS`, `VKS_GLSTAT_*`,
   `VKS_GLCMP_*`, `LLGLSubmit*`, `RenderGLSubmit*`, `llglsubmitstats*`) are in the forbidden list of
   `scripts/tests/check_release_hooks.py`, which runs on every PR except those into `vkstorm-devel` and `codex/` branches.
-  An integration into release leaves these edits out (they are the `VKS_GLSTAT_*` / `VKS_GLCMP_*` lines, the two
-  `llglsubmitstats*` and `llglsubmitstatsapi*` source pairs, five debug settings and the CMake option).
+  An integration into release leaves these edits out: the `VKS_GLSTAT_*` / `VKS_GLCMP_*` lines, the two
+  `llglsubmitstats*` and `llglsubmitstatsapi*` file pairs (they are added to the CMake source lists only when the option
+  is on), the five debug settings, the CMake option, `indra/llrender/tests/llglsubmitimage_test.cpp` and the ci-checks step that
+  runs it, and the `check_release_hooks.py` names. The `check-pr.yaml` condition may stay.
 - **No Preferences entries.** Five debug settings, none persisted (see "How to read it").
 
 ## What is measured
@@ -33,7 +36,7 @@ them, so sums of times over a view's passes are not the view's time (the view's 
 | `vbosDistinct` | distinct array buffers set in the scope |
 | `shaderBinds`, `attribToggles` | program changes; `glEnable/DisableVertexAttribArray` |
 | `texBindFast`, `texBindFastRedundant` | `LLTexUnit::bindFast` calls (it always issues `glActiveTexture` + `glBindTexture`); those whose texture was already on the unit. This is the number that decides G2 |
-| `texBindOther`, `texBindOtherFiltered`, `texGLBind`, `texGLActive` | the cached `bind`/`bindManual` paths that reached GL, those the unit cache skipped, and all `glBindTexture` / `glActiveTexture` calls issued through `LLTexUnit` |
+| `texBindOther`, `texBindOtherFiltered`, `texGLBind`, `texGLActive` | `LLTexUnit::bind(LLTexture*)`, `bind(LLImageGL*)` and `bindManual` calls that reached GL, those the unit's cache skipped; `texGLBind` is the `glBindTexture` calls of `bindFast` and of those three paths together (not the cube map binds, `unbind`, or a `glBindTexture` made outside `LLTexUnit`); `texGLActive` the `glActiveTexture` calls of `bindFast` and `activate` |
 | `uniformRequests`, `uniformGL`, `uniformArrayGL`, `uniformMatrixGL`, `uniformBytes` | `LLGLSLShader::uniform*` calls; `glUniform*` calls that reached GL (the rest were filtered by the `mValue` cache); of those the array calls, the matrix calls (palettes included), the bytes |
 | `matrixSyncs`, `mdvSyncs`, `projSyncs`, `inverseMatrices` | `syncMatrices` calls with a shader bound; its modelview and projection branches; `glm::inverse` evaluations in it |
 | `modelMatrixCalls`, `modelMatrixChanges` | `applyModelMatrix` calls and those that changed the matrix |
@@ -43,6 +46,9 @@ them, so sums of times over a view's passes are not the view's time (the view's 
 | `occIssued`, `occPolled`, `occBlocking` | occlusion queries issued, polled, and read with a **blocking** `GL_QUERY_RESULT` (the timeout path: the only stall source in occlusion) |
 | `gltfBinds`, `gltfSameAsLast` | `LLFetchedGLTFMaterial::bind` calls and those for the same material, media override, shader and shadow state as the call before (G1) |
 | `runs`, `mergeableDraws`, `run_hist` | the **mergeable runs**: a draw continues the previous draw's run when nothing separates them but the vertex buffer: no program change, no texture change (a redundant bind does not count), no uniform that reached GL (the model matrix included), no `LLGLState` toggle. `mergeableDraws = draws - runs`; `run_hist` counts runs of 1, 2, 3-4, 5-8, 9-16, 17+ draws. It is the upper bound of what one `glMultiDrawElements*` per run (G6, G7) could merge over the arenas of G5 |
+
+A frame in which the identical-image check runs renders its passes twice, so its counts and times are about doubled: **do not
+collect a window across it** (`perf_check.py` runs the check after the window). Probe faces are never compared.
 
 **GPU time** comes from `glQueryCounter(GL_TIMESTAMP)` pairs around every scope, in a ring of four frames, read without
 waiting (the result of frame N arrives when frame N+1..N+3 starts). Up to 4096 scopes per frame are timed; more are counted
@@ -80,7 +86,7 @@ Replies are small on purpose (see `scripts/inworld/README.md`, "Big replies"); t
 | `status` | collection and compare state, `frame_count` |
 | `windowBegin {frames, gpu}` / `windowStop` | collect N frames, averaged per frame; poll `status` (`window_active`, `window_gpu_frames`) |
 | `summary {kind}` | headline totals and per-view draws and times of the window (`window`) or the last frame (`frame`) |
-| `dump {kind, path}` | the full JSON (`totals`, `views`, `passes`, run histograms, compare results) to `path` |
+| `dump {kind, path}` | the full JSON (`totals`, `views`, `passes`, run histograms, compare results) to `path`: an absolute `.json` path under the viewer's log folder or a `.captures` folder, no `..`, no UNC paths (a LEAP client cannot truncate other files) |
 | `compareArm {pass, inject}` / `compareResults` | arm the check for the next frame; read its results |
 | `profileFrame` | request a Frame Profile; the reply names the log folder |
 | `selfBench {iterations}` | the cost of the hooks in this binary (see "Overhead") |
@@ -103,10 +109,18 @@ inputs and compares the attachments **bit for bit**:
    (`GLSubmitCompare`) and `compareResults` say, per attachment, how many pixels differ, the largest difference per channel
    (8 bit: units; float: ulps) and the first pixel.
 
-Passes: 1 G-buffer (all colour attachments and depth), 2-5 the four sun cascades, 6-7 the spot shadows (depth), 8 the
+The check covers the **main view only** (reflection probe faces reach the same sites with other targets and are skipped) and each
+pass once per arming. Passes: 1 G-buffer (all colour attachments and depth), 2-5 the four sun cascades, 6-7 the spot shadows (depth), 8 the
 post-deferred geometry (alpha, glow, fullbright over the lit scene; sorted alpha only). While the pass is rendered the second
 time `LLGLSubmitCompare::replaying()` is true: culling, sorting and occlusion queries of the pass are not repeated, so only the
-submission is compared.
+submission is compared. State a pass advances while it renders is made the same for the second render: the fade of the nearby lights
+(`setupHWLights` advances it on every call; the first render's values are recorded and the second uses them). Anything else a pass
+consumes is a defect of the harness to find: the first owner run shows it as a DIFFERENT with both renders on today's path.
+
+Each result carries, per attachment, the number of distinct pixel values (capped at 1,024) and a hash of the first readback: an
+IDENTICAL on an attachment with one distinct value is an empty pass and says little (`perf_check.py` logs it). Memory: the first
+readback of the whole target is kept, the second is compared one attachment at a time; a 4K G-buffer needs about as much
+system memory again as its textures (several hundred MB) for the duration of the frame.
 
 **Proof that the check can see.** `perf_check.py` starts with a G-buffer compare in which one bit of the second readback is
 flipped, and requires DIFFERENT. A run where that is not caught fails.
@@ -118,9 +132,17 @@ flipped, and requires DIFFERENT. A run where that is not caught fails.
 - Post-deferred geometry with stochastic transparency: its accumulation history changes with every render. The check reports
   the pass as not run. The sorted-alpha method is checked.
 - Multisampled targets (the check reads plain 2D textures).
+- Post-deferred with highlight faces pending (the pass consumes that list); reported as not run.
 - Passes that are not drawn in the frame (no spot light, no cascades with shadows off) report "did not run".
 - GL state that a replay leaves different (it should not) would show as a difference: that is a harness bug and the first
   thing to rule out when a pass reports DIFFERENT with both renders on today's path.
+
+## GL context lifetime
+
+The timer queries are GL objects. `LLViewerWindow::stopGL` calls `LLGLSubmitStats::resetGL(true)`, which deletes them while the
+context is still valid and forgets the frames in flight (their GPU times are lost, `gpuResolved` false); the pool is then
+rebuilt on demand in the new context. If the GPU falls more than four frames behind, the oldest frame's GPU times are dropped
+without waiting; nothing in the statistics ever blocks on the GPU except Frame Profile and `selfBench`.
 
 ## Overhead
 
@@ -133,28 +155,28 @@ between the sites (without it the 20 tests collapse into one and the figure is t
 | | per site | per draw (20 sites) |
 |---|---|---|
 | compiled out (`VKS_GL_STATS` off) | 0 (the macro is empty) | 0 |
-| compiled in, not collecting | 0.11-0.14 ns (a load and a predictable branch) | 2.3-2.8 ns |
-| collecting | 1.16 ns | 23.1 ns |
+| compiled in, not collecting | 0.14-0.15 ns (a load and a predictable branch) | 2.8-3.1 ns |
+| collecting | 0.50 ns | 10.0-10.3 ns |
 
 | | per scope |
 |---|---|
-| a pass scope, collecting, CPU time only | 118 ns |
-| the same with GPU timers (two `glQueryCounter`) | 160 ns |
-| the first use of a query object (the driver allocates it) | 140-215 us, once per object |
+| a pass scope, collecting, CPU time only | 120-137 ns |
+| the same with GPU timers (two `glQueryCounter`) | 161 ns |
+| the first use of a query object (the driver allocates it) | 110-230 us, once per object |
 
 The last row means one hitch when the collection starts: a frame has about 600-1,200 timestamp queries, and they are
 created and then reused (a pool). Start the collection, let it run a few frames, then read the window; the first
 frames are the ones with the hitch (the window of `perf_check.py` is 120 frames after the camera has settled).
 
-For a frame of 20,000 draws in 1,000 scopes that is about 0.05 ms not collecting (under 0.5 % of a 10 ms frame) and
-about 0.6 ms collecting (about 6 %), before cache effects. A window therefore reads slightly slow frames; compare two
+For a frame of 20,000 draws in 1,000 scopes that is about 0.06 ms not collecting (under 1 % of a 10 ms frame) and
+about 0.36 ms collecting (about 4 %), before cache effects. A window therefore reads slightly slow frames; compare two
 runs only collecting against collecting. `perf_check.py` also measures the frame rate over 5 s with nothing collecting
 before every window (`fps_stats_off`) and reports `overhead_pct` per preset: the real in-world figure.
 
-At the login screen (70 draws, 3 rounds of 3,000-frame windows, all through the real LEAP API) the frame rate was 229 fps
-with nothing collecting, 213 fps collecting with GPU timers and 255 fps collecting without: the spread between rounds
-(124 to 337 fps, the login page loads in the background) is larger than any difference, so the login screen cannot resolve the overhead
-more finely than the figures above. The login screen frame, as counted: 70 draws, 80 vertex buffer changes, 120
+At the login screen (70 draws, windows of 1,500 to 3,000 frames, all through the real LEAP API) the frame rate varied from 124 to
+487 fps between rounds with nothing collecting, with GPU timers or without (the login page loads in the background, and a window
+that starts the GPU timers pays the one-time query allocation above): the spread is larger than any difference, so the login
+screen cannot resolve the overhead more finely than the figures above. The login screen frame, as counted: 70 draws, 80 vertex buffer changes, 120
 uniform requests of which 39 reached GL, 39 `glBindTexture`, 58 mergeable runs (1.2 draws per run).
 
 ## Owner's capture steps

@@ -95,6 +95,7 @@
 #include "llchicletbar.h"
 #include "llconsole.h"
 #include "llviewercontrol.h"
+#include "llglsubmitstats.h"
 #include "llcylinder.h"
 #include "lldebugview.h"
 #include "lldir.h"
@@ -7125,6 +7126,7 @@ void LLViewerWindow::stopGL()
     if (!gGLManager.mIsDisabled)
     {
         LL_INFOS() << "Shutting down GL..." << LL_ENDL;
+        VKS_GLSTAT_RESET_GL(true); // the timer queries of the GL submission statistics die with the context
 
         // Pause texture decode threads (will get unpaused during main loop)
         LLAppViewer::getTextureCache()->pause();

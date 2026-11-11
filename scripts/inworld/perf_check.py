@@ -89,6 +89,34 @@ def check_api(v):
     return ["operation %s.%s is missing" % (API, op) for op in REQUIRED_OPS if op not in ops]
 
 
+def thin_attachments(results):
+    """Attachments the pass left (nearly) empty: one distinct value, so an IDENTICAL says little. [(pass label, attachment)]."""
+    out = []
+    for r in results or []:
+        if r.get("ran") and r.get("identical"):
+            for a in r.get("attachments") or []:
+                if int(a.get("distinct_values", 2)) <= 1:
+                    out.append((str(r.get("label")), str(a.get("name"))))
+    return out
+
+
+def injection_caught(results):
+    """(ok, why): the G-buffer ran and exactly the injection differs: color0, flagged injected, one pixel, nothing else."""
+    g = next((r for r in results or [] if r.get("label") == "G-buffer"), None)
+    if g is None or not g.get("ran"):
+        return False, "the G-buffer did not run"
+    atts = g.get("attachments") or []
+    injected = [a for a in atts if a.get("injected")]
+    if len(injected) != 1 or injected[0].get("name") != "color0":
+        return False, "no injection into color0 was reported"
+    if int(injected[0].get("mismatched_pixels", 0)) != 1:
+        return False, "the injected bit changed %s pixels, not 1" % injected[0].get("mismatched_pixels")
+    others = [a.get("name") for a in atts if not a.get("injected") and int(a.get("mismatched_pixels", 1)) != 0]
+    if others:
+        return False, "attachments other than the injection differ: %s (a real difference hides the proof)" % others
+    return True, "caught"
+
+
 def passes_failed(results):
     """Compare results of one frame -> (identical passes, differing passes, passes that did not run)."""
     same, diff, skipped = [], [], []
@@ -175,6 +203,7 @@ class Run:
         """Arm the check for the next frame and read its results."""
         if inject:
             self.change("RenderGLSubmitCompareInject", inject)
+        before = int(self.v.req(API, "compareResults").get("arm_serial", 0))
         self.v.req(API, "compareArm", **{"pass": pass_id})
         end = time.monotonic() + self.sc["settle"]["compare_wait_s"] + 20.0
         # the setting stays set until a frame takes it; the frame disarms itself when it is over
@@ -186,15 +215,21 @@ class Run:
         r = self.v.req(API, "compareResults")
         if inject:
             self.change("RenderGLSubmitCompareInject", 0)
+        if int(r.get("arm_serial", before)) == before:
+            raise LeapError("the armed pass never ran: no frame took the arming (is the viewer rendering, not minimized?); "
+                            "the results are the previous ones")
         return r.get("results") or []
 
     def prove_injection(self):
-        results = self.compare_once(1, inject=1)
-        same, diff, skipped = passes_failed(results)
-        ok = "G-buffer" in diff
-        self.index["proof"] = {"ok": ok, "results": results}
-        log("PROOF %s: one flipped bit in the G-buffer readback %s" %
-            ("PASS" if ok else "FAIL", "was caught" if ok else "was NOT caught (%s)" % (results or "no result")))
+        try:
+            results = self.compare_once(1, inject=1)
+            ok, why = injection_caught(results)
+        except LeapError as exc:
+            results, ok, why = [], False, str(exc)
+        self.index["proof"] = {"ok": ok, "why": why, "results": results}
+        log("PROOF %s: one flipped bit in the G-buffer readback: %s" % ("PASS" if ok else "FAIL", why))
+        for label, name in thin_attachments(results):
+            log("note: %s %s holds one distinct value" % (label, name))
         return ok
 
     def set_preset_camera(self, preset):
@@ -283,12 +318,23 @@ class Run:
         if sc["compare"]["enabled"]:
             allres = {}
             for p in sc["compare"]["passes"]:
-                res = self.compare_once(int(p))
+                try:
+                    res = self.compare_once(int(p))
+                except LeapError as exc:
+                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [], "error": str(exc)})
+                    log("compare %s pass %s FAILED: %s" % (pid, p, exc))
+                    continue
                 same, diff, skipped = passes_failed(res)
                 allres[str(p)] = res
                 log("compare %s pass %s: identical %s; DIFFERENT %s; not run %s" % (pid, p, same or "-", diff or "-", skipped or "-"))
+                for label, name in thin_attachments(res):
+                    log("note: %s %s holds one distinct value (an empty attachment: IDENTICAL says little)" % (label, name))
                 if diff:
                     self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": diff})
+                if int(p) in (-1, 1) and "G-buffer" not in same + diff:
+                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [],
+                                                           "error": "the G-buffer did not run (%s)" % (skipped or "no result")})
+                    log("compare %s: the G-buffer did not run" % pid)
             info["compare"] = allres
             write_json_atomic(self.out / ("compare_%s.json" % pid), allres)
 
@@ -434,6 +480,9 @@ def execute(session, args, sc, outdir):
             sc["presets"] = [p for p in sc["presets"] if p["id"] in args.only]
             if not sc["presets"]:
                 raise LeapError("--only matches no preset")
+        if ".captures" not in outdir.parts:
+            log("WARNING the run folder is not under a .captures folder: the viewer refuses to write its dump files anywhere else "
+                "(GLSubmitStats.dump takes only the viewer log folder or a .captures folder)")
         write_json_atomic(outdir / "scenario.json", sc)
         run = Run(v, sc, outdir, args)
         clean = run.go()

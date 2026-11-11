@@ -111,6 +111,52 @@ class RunTest(unittest.TestCase):
             index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
             self.assertEqual(index["compare_failures"][0]["passes"], ["sun cascade 2"])
 
+    def test_a_proof_hidden_by_an_unrelated_difference_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_stats_diff_pass="G-buffer", logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}])
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["proof"]["ok"])
+            self.assertIn("other than the injection", index["proof"]["why"])
+
+    def test_stale_results_are_an_error_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(
+                gl_stats=True, gl_stale_results=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}])
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["proof"]["ok"])
+            self.assertIn("never ran", index["proof"]["why"])
+            self.assertTrue(index["compare_failures"] and "never ran" in index["compare_failures"][0]["error"])
+
+    def test_all_passes_not_run_fails_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_not_run=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}])
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertIn("did not run", index["proof"]["why"])
+            self.assertIn("G-buffer did not run", index["compare_failures"][0]["error"])
+
+    def test_a_lagging_window_warns_and_the_run_goes_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_gpu_lag=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}],
+                                 settle={"post_login_s": 0.0, "after_camera_s": 0.0, "after_teleport_s": 0.0, "login_timeout_s": 20,
+                                         "window_timeout_s": 1.0, "compare_wait_s": 2.0})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertTrue(any("did not finish" in w for w in index["warnings"]), index["warnings"])
+            self.assertEqual(index["presets"]["current"]["gpu_frames"], 4)
+
+    def test_an_empty_gbuffer_is_noted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_empty_gbuffer=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=[{"id": "current", "camera": None}])
+            self.assertEqual(code, 0)    # the run does not fail on it; the log says so
+
     def test_a_viewer_without_the_api_is_refused_with_the_reason(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(gl_stats=False)
@@ -142,6 +188,32 @@ class RunTest(unittest.TestCase):
             self.assertEqual(code, 0)
             index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
             self.assertEqual(list(index["presets"]), ["north"])
+
+
+class ProofRulesTest(unittest.TestCase):
+    GOOD = [{"label": "G-buffer", "ran": True, "attachments": [
+        {"name": "color0", "injected": True, "mismatched_pixels": 1}, {"name": "depth", "mismatched_pixels": 0}]}]
+
+    def test_exactly_the_injection(self):
+        self.assertEqual(pc.injection_caught(self.GOOD), (True, "caught"))
+
+    def test_not_run_wrong_count_or_other_differences(self):
+        self.assertFalse(pc.injection_caught([])[0])
+        self.assertFalse(pc.injection_caught([{"label": "G-buffer", "ran": False}])[0])
+        bad = json.loads(json.dumps(self.GOOD))
+        bad[0]["attachments"][0]["mismatched_pixels"] = 2
+        self.assertFalse(pc.injection_caught(bad)[0])
+        bad = json.loads(json.dumps(self.GOOD))
+        bad[0]["attachments"][1]["mismatched_pixels"] = 3
+        self.assertFalse(pc.injection_caught(bad)[0])
+        bad = json.loads(json.dumps(self.GOOD))
+        del bad[0]["attachments"][0]["injected"]
+        self.assertFalse(pc.injection_caught(bad)[0])
+
+    def test_thin_attachments(self):
+        res = [{"label": "sun cascade 0", "ran": True, "identical": True, "attachments": [{"name": "depth", "distinct_values": 1}]},
+               {"label": "G-buffer", "ran": True, "identical": True, "attachments": [{"name": "color0", "distinct_values": 40}]}]
+        self.assertEqual(pc.thin_attachments(res), [("sun cascade 0", "depth")])
 
 
 class AnalysisTest(unittest.TestCase):

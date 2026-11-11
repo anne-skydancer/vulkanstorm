@@ -11,6 +11,7 @@
 #if VKS_GL_STATS
 
 #include <boost/json.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 #include "stdtypes.h"
@@ -49,6 +50,11 @@ namespace LLGLSubmitCompare
     // occlusion queries) tests it.
     bool replaying();
 
+    // The fade of a nearby light: setupHWLights advances it by the frame time on every call, so the second render
+    // would see a different light. The first render records the fade it used, the second uses the same and does not
+    // advance. 'advance' is set to whether the caller advances the fade.
+    F32 lightFade(F32 fade, bool& advance);
+
     // The submission path in force: RenderGLSubmitPath for the pass being rendered normally and for the
     // second render of a compared pass, 0 (today's path) for the first one. Later stages read it.
     S32 activePath();
@@ -62,16 +68,20 @@ namespace LLGLSubmitCompare
     public:
         Run(S32 pass, LLRenderTarget* target, bool restore_inputs = false);
         ~Run();
+        Run(const Run&) = delete;
+        Run& operator=(const Run&) = delete;
         bool next();
     private:
         struct Impl;
-        Impl* mImpl;
+        int mStep = 0;
+        std::unique_ptr<Impl> mImpl;   // only when the pass is armed and has a target
     };
 }
 
 #define VKS_GLSTAT_DISPLAY_FRAME(profile) LLGLSubmitStatsApi::DisplayFrame vks_glstat_display_frame_(profile)
 #define VKS_GLSTAT_PROFILE(stats) LLGLSubmitStatsApi::addToProfile(stats)
 #define VKS_GLCMP_REPLAY() LLGLSubmitCompare::replaying()
+#define VKS_GLCMP_LIGHT_FADE(fade, advance) ((fade) = LLGLSubmitCompare::lightFade((fade), (advance)))
 #define VKS_GLCMP_BEGIN(pass, target, restore) for (LLGLSubmitCompare::Run vks_glcmp_run_((pass), (target), (restore)); vks_glcmp_run_.next(); ) {
 #define VKS_GLCMP_END() }
 
@@ -80,6 +90,7 @@ namespace LLGLSubmitCompare
 #define VKS_GLSTAT_DISPLAY_FRAME(profile) do { } while (0)
 #define VKS_GLSTAT_PROFILE(stats) do { } while (0)
 #define VKS_GLCMP_REPLAY() (false)
+#define VKS_GLCMP_LIGHT_FADE(fade, advance) do { } while (0)
 #define VKS_GLCMP_BEGIN(pass, target, restore) {
 #define VKS_GLCMP_END() }
 

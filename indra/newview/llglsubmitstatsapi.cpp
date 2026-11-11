@@ -8,9 +8,12 @@
 
 #if VKS_GL_STATS
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <fstream>
+#include <unordered_set>
 
 #include "lleventapi.h"
 #include "llfile.h"
@@ -27,6 +30,7 @@
 #include "lldate.h"
 
 extern bool gShaderProfileFrame; // llviewerdisplay.cpp
+extern bool gCubeSnapshot;       // llviewerdisplay.cpp: a reflection probe face is being rendered
 
 namespace
 {
@@ -37,6 +41,10 @@ namespace
     bool sReplay = false;                       // ... for the second time
     S32 sInject = 0;
     U64 sFramesSeen = 0;                        // display() and display_startup() frames, collected or not
+    U64 sArmSerial = 0;                         // counts the armings, so a client can tell a fresh result from a stale one
+    bool sPassDone[LLGLSubmitCompare::PASS_COUNT] = {}; // a pass is compared once per arming
+    std::vector<F32> sFadeLog;                  // the light fades the first render used, in the order it asked
+    size_t sFadeCursor = 0;
 
     struct Capture
     {
@@ -48,13 +56,19 @@ namespace
         bool depth = false;
         bool f32 = false;
         std::vector<uint8_t> data;
+        uint32_t distinct = 0;      // distinct pixel values in the first readback (counted up to kDistinctCap)
+        uint64_t hash = 0;          // FNV-1a of the first readback
     };
+
+    constexpr uint32_t kDistinctCap = 1024;
 
     struct AttachmentResult
     {
         std::string name;
         LLGLSubmitImage::Diff diff;
         bool injected = false;
+        uint32_t distinct = 0;
+        uint64_t hash = 0;
     };
 
     struct PassResult
@@ -87,9 +101,55 @@ namespace
         return pass >= 0 && pass < LLGLSubmitCompare::PASS_COUNT ? labels[pass] : "?";
     }
 
+    // The main view only (a probe face reaches the same sites with other targets and would duplicate the results
+    // under the main view's labels), each pass once per arming, never nested.
     bool armedFor(S32 pass)
     {
-        return sArmed != LLGLSubmitCompare::PASS_OFF && !sInRun && (sArmed == LLGLSubmitCompare::PASS_ALL || sArmed == pass);
+        return sArmed != LLGLSubmitCompare::PASS_OFF && !sInRun && !gCubeSnapshot && pass > 0 && pass < LLGLSubmitCompare::PASS_COUNT &&
+               !sPassDone[pass] && (sArmed == LLGLSubmitCompare::PASS_ALL || sArmed == pass);
+    }
+
+    // Errors that were pending before the check touched GL: reported once, not drained silently.
+    void reportPendingGLErrors(const char* where)
+    {
+        static bool reported = false;
+        GLenum e = glGetError();
+        if (e == GL_NO_ERROR)
+        {
+            return;
+        }
+        if (!reported)
+        {
+            reported = true;
+            LL_WARNS("GLSubmitCompare") << "GL error 0x" << std::hex << e << std::dec << " was pending before " << where
+                                        << " (reported once; later ones are cleared silently)" << LL_ENDL;
+        }
+        while (glGetError() != GL_NO_ERROR) {}
+    }
+
+    void summarize(Capture& c)
+    {
+        const size_t px = (size_t)c.channels * (c.f32 ? 4 : 1);
+        std::unordered_set<uint64_t> seen;
+        uint64_t h = 1469598103934665603ull;
+        for (uint8_t b : c.data)
+        {
+            h = (h ^ b) * 1099511628211ull;
+        }
+        if (px)
+        {
+            for (size_t off = 0; off + px <= c.data.size() && seen.size() < kDistinctCap; off += px)
+            {
+                uint64_t k = 1469598103934665603ull;
+                for (size_t i = 0; i < px; ++i)
+                {
+                    k = (k ^ c.data[off + i]) * 1099511628211ull;
+                }
+                seen.insert(k);
+            }
+        }
+        c.hash = h;
+        c.distinct = (uint32_t)seen.size();
     }
 
     struct PixelStore
@@ -113,7 +173,8 @@ namespace
     // renderer uses, so equal bits mean equal stored values.
     bool readTexture(Capture& c)
     {
-        while (glGetError() != GL_NO_ERROR) {}
+        gGL.flush(); // anything batched must be drawn before the texture is read
+        reportPendingGLErrors("a readback");
         gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, c.texture);
         GLint w = 0, h = 0, rs = 0, gs = 0, bs = 0, as = 0;
         glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
@@ -141,12 +202,17 @@ namespace
         {
             c.data.clear();
         }
+        else
+        {
+            summarize(c);
+        }
         return ok;
     }
 
     bool writeTexture(const Capture& c)
     {
-        while (glGetError() != GL_NO_ERROR) {}
+        gGL.flush();
+        reportPendingGLErrors("a restore");
         gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, c.texture);
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, c.width, c.height, c.depth ? GL_DEPTH_COMPONENT : GL_RGBA,
                         c.f32 ? GL_FLOAT : GL_UNSIGNED_BYTE, c.data.data());
@@ -155,37 +221,53 @@ namespace
         return ok;
     }
 
+    struct Attach
+    {
+        std::string name;
+        U32 texture;
+        bool depth;
+    };
+
+    std::vector<Attach> attachmentsOf(LLRenderTarget& rt)
+    {
+        std::vector<Attach> out;
+        for (U32 i = 0; i < rt.getNumTextures(); ++i)
+        {
+            out.push_back({"color" + std::to_string(i), rt.getTexture(i), false});
+        }
+        if (rt.getDepth())
+        {
+            out.push_back({"depth", rt.getDepth(), true});
+        }
+        return out;
+    }
+
+    Capture captureOf(const Attach& a, bool& ok)
+    {
+        Capture c;
+        c.name = a.name;
+        c.texture = a.texture;
+        c.depth = a.depth;
+        ok = readTexture(c);
+        if (!ok)
+        {
+            LL_WARNS("GLSubmitCompare") << "attachment " << a.name << " could not be read back" << LL_ENDL;
+        }
+        return c;
+    }
+
+    // Every attachment of a target (for the first readback and the inputs to restore).
     std::vector<Capture> captureTarget(LLRenderTarget& rt)
     {
         std::vector<Capture> out;
         PixelStore store;
-        for (U32 i = 0; i < rt.getNumTextures(); ++i)
+        for (const Attach& a : attachmentsOf(rt))
         {
-            Capture c;
-            c.name = "color" + std::to_string(i);
-            c.texture = rt.getTexture(i);
-            if (readTexture(c))
+            bool ok = false;
+            Capture c = captureOf(a, ok);
+            if (ok)
             {
                 out.push_back(std::move(c));
-            }
-            else
-            {
-                LL_WARNS("GLSubmitCompare") << "attachment " << c.name << " could not be read back" << LL_ENDL;
-            }
-        }
-        if (rt.getDepth())
-        {
-            Capture c;
-            c.name = "depth";
-            c.texture = rt.getDepth();
-            c.depth = true;
-            if (readTexture(c))
-            {
-                out.push_back(std::move(c));
-            }
-            else
-            {
-                LL_WARNS("GLSubmitCompare") << "depth could not be read back" << LL_ENDL;
             }
         }
         return out;
@@ -211,53 +293,53 @@ struct LLGLSubmitCompare::Run::Impl
     S32 pass = 0;
     LLRenderTarget* target = nullptr;
     bool restore = false;
-    bool active = false;
-    int step = 0;
     std::vector<Capture> inputs;
     std::vector<Capture> first;
 };
 
 LLGLSubmitCompare::Run::Run(S32 pass, LLRenderTarget* target, bool restore_inputs)
-    : mImpl(new Impl)
 {
-    mImpl->pass = pass;
-    mImpl->target = target;
-    mImpl->restore = restore_inputs;
     if (!armedFor(pass))
     {
         return;
     }
-    PassResult skipped;
-    skipped.pass = pass;
+    sPassDone[pass] = true;
     if (!target || target->getUsage() != LLTexUnit::TT_TEXTURE)
     {
-        skipped.note = "not run: no plain 2D target this frame (missing, multisampled, or stochastic transparency in use)";
+        PassResult skipped;
+        skipped.pass = pass;
+        skipped.note = "not run: no plain 2D target this frame (missing, multisampled, stochastic transparency in use, or highlight faces pending)";
         LL_INFOS(kTag) << passLabel(pass) << ": " << skipped.note << LL_ENDL;
         sResults.push_back(std::move(skipped));
         return;
     }
-    mImpl->active = true;
+    mImpl = std::make_unique<Impl>();
+    mImpl->pass = pass;
+    mImpl->target = target;
+    mImpl->restore = restore_inputs;
     sInRun = true;
+    sFadeLog.clear();
+    sFadeCursor = 0;
 }
 
 LLGLSubmitCompare::Run::~Run()
 {
-    if (mImpl->active)
+    if (mImpl)
     {
         sInRun = false;
         sReplay = false;
+        sFadeLog.clear();
     }
-    delete mImpl;
 }
 
 bool LLGLSubmitCompare::Run::next()
 {
-    Impl& m = *mImpl;
-    if (!m.active)
+    if (!mImpl)
     {
-        return m.step++ == 0;
+        return mStep++ == 0;
     }
-    switch (m.step++)
+    Impl& m = *mImpl;
+    switch (mStep++)
     {
     case 0:
         if (m.restore)
@@ -268,6 +350,7 @@ bool LLGLSubmitCompare::Run::next()
     case 1:
         m.first = captureTarget(*m.target);
         sReplay = true;
+        sFadeCursor = 0;
         if (m.restore)
         {
             for (const Capture& c : m.inputs)
@@ -277,36 +360,51 @@ bool LLGLSubmitCompare::Run::next()
                     LL_WARNS(kTag) << "could not restore " << c.name << " for the second render" << LL_ENDL;
                 }
             }
+            std::vector<Capture>().swap(m.inputs);
         }
         return true;
     default:
         break;
     }
 
-    // after the second render
+    // After the second render. The second readback is compared one attachment at a time and dropped, so the peak is
+    // the first readback of the whole target plus one attachment.
     sReplay = false;
     PassResult res;
     res.pass = m.pass;
     res.ran = true;
-    std::vector<Capture> second = captureTarget(*m.target);
-    if (second.size() != m.first.size() || m.first.empty())
+    PixelStore store;
+    const std::vector<Attach> list = attachmentsOf(*m.target);
+    if (list.size() != m.first.size() || m.first.empty())
     {
         res.ran = false;
         res.note = "attachments could not be read back";
     }
     else
     {
-        for (size_t i = 0; i < second.size(); ++i)
+        for (size_t i = 0; i < list.size(); ++i)
         {
+            bool ok = false;
+            Capture second = captureOf(list[i], ok);
+            const Capture& first = m.first[i];
+            if (!ok || second.width != first.width || second.height != first.height || second.channels != first.channels)
+            {
+                res.ran = false;
+                res.note = "an attachment could not be read back for the comparison";
+                res.attachments.clear();
+                break;
+            }
             AttachmentResult ar;
-            ar.name = second[i].name;
+            ar.name = second.name;
+            ar.distinct = first.distinct;
+            ar.hash = first.hash;
             if (sInject && i == 0)
             {
-                flipOneBit(second[i]);
+                flipOneBit(second);
                 ar.injected = true;
             }
-            ar.diff = LLGLSubmitImage::compare(m.first[i].data.data(), second[i].data.data(), (uint32_t)second[i].width,
-                                               (uint32_t)second[i].height, second[i].channels, second[i].f32);
+            ar.diff = LLGLSubmitImage::compare(first.data.data(), second.data.data(), (uint32_t)second.width,
+                                               (uint32_t)second.height, second.channels, second.f32);
             res.attachments.push_back(std::move(ar));
         }
     }
@@ -317,12 +415,30 @@ bool LLGLSubmitCompare::Run::next()
                        << (a.diff.identical() ? "" : " (max " + std::to_string(a.diff.maxDiff[0]) + "/" + std::to_string(a.diff.maxDiff[1]) +
                                                    "/" + std::to_string(a.diff.maxDiff[2]) + "/" + std::to_string(a.diff.maxDiff[3]) +
                                                    ", first at " + std::to_string(a.diff.firstX) + "," + std::to_string(a.diff.firstY) + ")")
+                       << " (content: " << (a.distinct >= kDistinctCap ? ">=" : "") << a.distinct << " distinct values)"
                        << (a.injected ? " [one bit injected into the second readback]" : "") << LL_ENDL;
     }
     sResults.push_back(std::move(res));
     sInRun = false;
-    m.active = false;
+    sFadeLog.clear();
+    mImpl.reset();
     return false;
+}
+
+F32 LLGLSubmitCompare::lightFade(F32 fade, bool& advance)
+{
+    advance = true;
+    if (!sInRun)
+    {
+        return fade;
+    }
+    if (!sReplay)
+    {
+        sFadeLog.push_back(fade);
+        return fade;
+    }
+    advance = false;
+    return sFadeCursor < sFadeLog.size() ? sFadeLog[sFadeCursor++] : fade;
 }
 
 bool LLGLSubmitCompare::replaying()
@@ -364,6 +480,8 @@ namespace
                 ao.emplace("name", a.name);
                 ao.emplace("pixels", (uint64_t)a.diff.pixels);
                 ao.emplace("mismatched_pixels", (uint64_t)a.diff.mismatchedPixels);
+                ao.emplace("distinct_values", (uint64_t)a.distinct);   // capped at 1024; 1 = the pass left the target empty
+                ao.emplace("content_hash", std::to_string(a.hash));
                 if (!a.diff.identical())
                 {
                     ao.emplace("max_diff", boost::json::array{a.diff.maxDiff[0], a.diff.maxDiff[1], a.diff.maxDiff[2], a.diff.maxDiff[3]});
@@ -425,6 +543,78 @@ namespace
         return out;
     }
 
+    // A LEAP client may only write .json files under the viewer's log folder or a ".captures" folder (where the scripts put
+    // their run folders): no relative paths, no "..", no UNC paths, so it cannot truncate arbitrary files.
+    bool dumpPathAllowed(const std::string& path, std::string& why)
+    {
+        std::string p = path;
+        for (char& ch : p)
+        {
+            if (ch == '\\')
+            {
+                ch = '/';
+            }
+        }
+        if (p.rfind("//", 0) == 0)
+        {
+            why = "UNC and device paths are not allowed";
+            return false;
+        }
+        const bool absolute = (p.size() > 2 && p[1] == ':' && p[2] == '/') || (!p.empty() && p[0] == '/');
+        if (!absolute)
+        {
+            why = "the path must be absolute";
+            return false;
+        }
+        std::vector<std::string> parts;
+        size_t start = 0;
+        while (start <= p.size())
+        {
+            size_t end = p.find('/', start);
+            if (end == std::string::npos)
+            {
+                end = p.size();
+            }
+            parts.push_back(p.substr(start, end - start));
+            start = end + 1;
+        }
+        bool captures = false;
+        for (size_t i = 0; i < parts.size(); ++i)
+        {
+            if (parts[i] == "..")
+            {
+                why = "\"..\" is not allowed";
+                return false;
+            }
+            captures = captures || (parts[i] == ".captures" && i + 1 < parts.size());
+        }
+        std::string lower = p;
+        for (char& ch : lower)
+        {
+            ch = (char)std::tolower((unsigned char)ch);
+        }
+        if (lower.size() < 6 || lower.compare(lower.size() - 5, 5, ".json") != 0)
+        {
+            why = "only .json files are written";
+            return false;
+        }
+        std::string logs = gDirUtilp->getExpandedFilename(LL_PATH_LOGS, "");
+        for (char& ch : logs)
+        {
+            ch = ch == '\\' ? '/' : (char)std::tolower((unsigned char)ch);
+        }
+        if (!logs.empty() && logs.back() != '/')
+        {
+            logs += '/';
+        }
+        if (captures || (!logs.empty() && lower.compare(0, logs.size(), logs) == 0))
+        {
+            return true;
+        }
+        why = "only the viewer log folder or a .captures folder";
+        return false;
+    }
+
     std::string defaultDumpPath(const std::string& kind)
     {
         std::string stamp = LLDate::now().toHTTPDateString("%Y%m%d-%H%M%S");
@@ -442,6 +632,7 @@ namespace
         r["window_active"] = LLGLSubmitStats::windowActive();
         r["compare_armed"] = (S32)sArmed;
         r["compare_results"] = (S32)sResults.size();
+        r["arm_serial"] = (F64)sArmSerial;
         r["frame_count"] = (F64)sFramesSeen;
         if (auto f = LLGLSubmitStats::lastFrame())
         {
@@ -518,7 +709,12 @@ namespace
         }
         doc.emplace("compare", resultsToJson());
         const std::string path = req.has("path") ? req["path"].asString() : defaultDumpPath(window ? "window" : "frame");
-        std::ofstream out(path, std::ios::binary);
+        std::string why;
+        if (!dumpPathAllowed(path, why))
+        {
+            return r.error("refused to write " + path + ": " + why);
+        }
+        llofstream out(path, std::ios::binary);
         if (!out)
         {
             return r.error("cannot write " + path);
@@ -532,7 +728,7 @@ namespace
     {
         LLEventAPI::Response r(LLSD(), req);
         const S32 pass = req.has("pass") ? req["pass"].asInteger() : LLGLSubmitCompare::PASS_ALL;
-        if (pass < LLGLSubmitCompare::PASS_ALL || pass >= LLGLSubmitCompare::PASS_COUNT)
+        if (pass == LLGLSubmitCompare::PASS_OFF || pass < LLGLSubmitCompare::PASS_ALL || pass >= LLGLSubmitCompare::PASS_COUNT)
         {
             return r.error("pass must be -1 (all) or 1..8");
         }
@@ -540,7 +736,7 @@ namespace
         {
             gSavedSettings.setS32("RenderGLSubmitCompareInject", req["inject"].asInteger());
         }
-        gSavedSettings.setS32("RenderGLSubmitCompare", pass == 0 ? 0 : pass);
+        gSavedSettings.setS32("RenderGLSubmitCompare", pass);
         r["armed"] = pass;
     }
 
@@ -550,6 +746,7 @@ namespace
         r["armed"] = (S32)sArmed;
         r["pending"] = gSavedSettings.getS32("RenderGLSubmitCompare");
         r["frame"] = (F64)sResultsFrame;
+        r["arm_serial"] = (F64)sArmSerial;
         r["results"] = LlsdFromJson(resultsToJson());
     }
 
@@ -605,6 +802,7 @@ namespace
 
         draw_mix(n / 10); // warm up
         const double off_ns = time_ns([&] { draw_mix(n); });
+        const auto saved_last = LLGLSubmitStats::lastFrame(); // the benchmark's frames must not replace the last real one
         LLGLSubmitStats::beginFrame(true, false);
         const double on_ns = time_ns([&] { draw_mix(n); });
         LLGLSubmitStats::endFrame();
@@ -617,6 +815,7 @@ namespace
         const double scope_gpu_ns = time_ns([&] { for (S32 i = 0; i < scopes; ++i) { VKS_GLSTAT_PASS("bench pass", i % 8); } });
         LLGLSubmitStats::endFrame();
         LLGLSubmitStats::resolveGpu(true);
+        LLGLSubmitStats::restoreLast(saved_last);
 
         r["iterations"] = n;
         r["hooks_per_draw"] = kHooksPerDraw;
@@ -692,6 +891,8 @@ LLGLSubmitStatsApi::DisplayFrame::DisplayFrame(bool profile_frame)
         sArmed = want;
         sResults.clear();
         sResultsFrame = gFrameCount;
+        ++sArmSerial;
+        std::fill(std::begin(sPassDone), std::end(sPassDone), false);
         gSavedSettings.setS32("RenderGLSubmitCompare", 0);
         LL_INFOS(kTag) << "armed for " << (want == LLGLSubmitCompare::PASS_ALL ? "all passes" : passLabel(want))
                        << " in frame " << gFrameCount << LL_ENDL;

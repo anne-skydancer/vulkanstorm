@@ -108,8 +108,61 @@ namespace LLGLSubmitImage
     }
 }
 
+// Pure helpers of the statistics (no GL), also compiled when the instrumentation is off so a test can use them.
+namespace LLGLSubmitMath
+{
+    // Bucket of a mergeable run of 'len' draws: 1, 2, 3-4, 5-8, 9-16, 17+.
+    inline int runBucket(uint32_t len)
+    {
+        return len <= 1 ? 0 : len == 2 ? 1 : len <= 4 ? 2 : len <= 8 ? 3 : len <= 16 ? 4 : 5;
+    }
+
+    // Mean per frame of a sum over a window.
+    inline double perFrameMean(double sum, double frames)
+    {
+        return frames > 0.0 ? sum / frames : 0.0;
+    }
+
+    // Mergeable runs: a draw continues the run of the previous draw when it is in the same record (view/pass scope)
+    // and the state epoch (bumped by every program, texture, uniform or state change that reached GL) is unchanged.
+    struct RunTracker
+    {
+        struct Closed { const void* rec; uint32_t len; };
+        const void* rec = nullptr;
+        uint32_t len = 0;
+        uint32_t epoch = 0;
+
+        // Note a draw; returns the run this draw closed (len 0: none).
+        Closed draw(const void* r, uint32_t e)
+        {
+            Closed closed{nullptr, 0};
+            if (r == rec && len && e == epoch)
+            {
+                ++len;
+            }
+            else
+            {
+                closed = close();
+                rec = r;
+                len = 1;
+            }
+            epoch = e;
+            return closed;
+        }
+
+        Closed close()
+        {
+            Closed closed{rec, len};
+            rec = nullptr;
+            len = 0;
+            return closed;
+        }
+    };
+}
+
 #if VKS_GL_STATS
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -207,16 +260,22 @@ public:
         std::unordered_set<uint64_t> palettesAll;
     };
 
-    // The record that hooks add to; null when not collecting.
-    static Record* sCur;
-    static std::thread::id sMainThread;
-    static bool onMain() { return std::this_thread::get_id() == sMainThread; }
+    // The record that hooks add to; null when not collecting. Relaxed atomics: hooks may run on any thread (they only
+    // count on the main one) while the main thread starts and ends scopes.
+    static Record* cur() { return sCurRec.load(std::memory_order_relaxed); }
+    static void setCur(Record* r) { sCurRec.store(r, std::memory_order_relaxed); }
+    // Set once, on the thread that starts frames (the main thread): a thread-local flag is a plain load, where comparing
+    // std::this_thread::get_id() is a call into the runtime.
+    static inline thread_local bool sIsMain = false;
+    static bool onMain() { return sIsMain; }
+    // A hook on the main thread of a collecting frame.
+    static bool active() { return cur() != nullptr && onMain(); }
 
     // A frame: collect == false makes every hook a no-op for this frame. Returns true when this call started the frame
     // (and so owns its end); false when a frame is already open (a nested display call), which it leaves alone.
     static bool beginFrame(bool collect, bool gpu);
     static void endFrame();   // idempotent
-    static bool collecting() { return sCur != nullptr; }
+    static bool collecting() { return cur() != nullptr; }
 
     // Scopes. A view starts a new group of passes; a pass is a path element inside the current view.
     static void enterView(const char* name, int index);
@@ -225,7 +284,7 @@ public:
 
     // Hooks with logic beyond a counter bump.
     static void noteDraw(uint32_t indices);                 // after the state of the draw was set
-    static void noteStateChange() { if (sCur && onMain()) { ++sEpoch; } }
+    static void noteStateChange() { if (active()) { ++sEpoch; } }
     static void notePalette(const void* avatar, uint64_t skinHash, uint32_t bytes);
     static void noteVBO(uint32_t name);
     static void noteUniform(uint32_t bytes, uint32_t count, bool matrix);
@@ -242,6 +301,9 @@ public:
 
     // Results. 'blockForGpu' waits for the GPU timers of the frames in flight (profile frames, tests).
     static void resolveGpu(bool blockForGpu);
+    // The GL context is going away or was made again: the query objects are gone. Deletes them while 'contextValid'.
+    static void resetGL(bool contextValid);
+    static void restoreLast(const std::shared_ptr<Frame>& f) { sLast = f; }
     static std::shared_ptr<Frame> lastFrame() { return sLast; }
     static boost::json::object frameToJson(const Frame& f);
     static boost::json::object windowToJson();      // per-frame means over the window
@@ -257,38 +319,41 @@ public:
     };
     struct ViewScope
     {
-        explicit ViewScope(const char* name, int index = -1) { if (sCur) { enterView(name, index); mOn = true; } }
+        explicit ViewScope(const char* name, int index = -1) { if (active()) { enterView(name, index); mOn = true; } }
         ~ViewScope() { if (mOn) { leave(); } }
         bool mOn = false;
     };
     struct PassScope
     {
-        explicit PassScope(const char* name, int index = -1) { if (sCur) { enterPass(name, index); mOn = true; } }
+        explicit PassScope(const char* name, int index = -1) { if (active()) { enterPass(name, index); mOn = true; } }
         ~PassScope() { if (mOn) { leave(); } }
         bool mOn = false;
     };
 
 private:
+    static std::atomic<Record*> sCurRec;
     static std::shared_ptr<Frame> sLast;
     static uint32_t sWindowTarget, sWindowCollected, sWindowGpuFrames;
     static bool sWindowGpu;
     static void closeRun();
+    static void dropOldest();
 };
 
 #define VKS_GLSTAT_CAT2(a, b) a##b
 #define VKS_GLSTAT_CAT(a, b) VKS_GLSTAT_CAT2(a, b)
 // Bump a counter of the current record.
-#define VKS_GLSTAT(field, n) do { if (LLGLSubmitStats::sCur && LLGLSubmitStats::onMain()) { LLGLSubmitStats::sCur->c.field += (n); } } while (0)
+#define VKS_GLSTAT(field, n) do { LLGLSubmitStats::Record* vks_glstat_rec_ = LLGLSubmitStats::cur(); if (vks_glstat_rec_ && LLGLSubmitStats::onMain()) { vks_glstat_rec_->c.field += (n); } } while (0)
 #define VKS_GLSTAT_INC(field) VKS_GLSTAT(field, 1)
 // A change of GL state between draws: ends a mergeable run.
 #define VKS_GLSTAT_STATE_CHANGE() LLGLSubmitStats::noteStateChange()
 #define VKS_GLSTAT_VIEW(...) LLGLSubmitStats::ViewScope VKS_GLSTAT_CAT(vks_glstat_view_, __LINE__)(__VA_ARGS__)
 #define VKS_GLSTAT_PASS(...) LLGLSubmitStats::PassScope VKS_GLSTAT_CAT(vks_glstat_pass_, __LINE__)(__VA_ARGS__)
-#define VKS_GLSTAT_DRAW(indices) do { if (LLGLSubmitStats::sCur) { LLGLSubmitStats::noteDraw(indices); } } while (0)
-#define VKS_GLSTAT_PALETTE(avatar, skinhash, bytes) do { if (LLGLSubmitStats::sCur) { LLGLSubmitStats::notePalette(avatar, skinhash, bytes); } } while (0)
-#define VKS_GLSTAT_VBO(name) do { if (LLGLSubmitStats::sCur) { LLGLSubmitStats::noteVBO(name); } } while (0)
-#define VKS_GLSTAT_UNIFORM(bytes, count, matrix) do { if (LLGLSubmitStats::sCur) { LLGLSubmitStats::noteUniform((uint32_t)(bytes), (uint32_t)(count), (matrix)); } } while (0)
-#define VKS_GLSTAT_ACTIVE() (LLGLSubmitStats::sCur != nullptr)
+#define VKS_GLSTAT_DRAW(indices) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::noteDraw(indices); } } while (0)
+#define VKS_GLSTAT_PALETTE(avatar, skinhash, bytes) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::notePalette(avatar, skinhash, bytes); } } while (0)
+#define VKS_GLSTAT_VBO(name) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::noteVBO(name); } } while (0)
+#define VKS_GLSTAT_UNIFORM(bytes, count, matrix) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::noteUniform((uint32_t)(bytes), (uint32_t)(count), (matrix)); } } while (0)
+#define VKS_GLSTAT_ACTIVE() (LLGLSubmitStats::active())
+#define VKS_GLSTAT_RESET_GL(valid) LLGLSubmitStats::resetGL(valid)
 
 #else // !VKS_GL_STATS
 
@@ -302,5 +367,6 @@ private:
 #define VKS_GLSTAT_VBO(name) do { } while (0)
 #define VKS_GLSTAT_UNIFORM(bytes, count, matrix) do { } while (0)
 #define VKS_GLSTAT_ACTIVE() (false)
+#define VKS_GLSTAT_RESET_GL(valid) do { } while (0)
 
 #endif // VKS_GL_STATS

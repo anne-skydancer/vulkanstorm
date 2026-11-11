@@ -97,6 +97,57 @@ int main()
         check(!d.identical(), "an unsupported channel count never passes");
     }
 
+    // 8 bit images of 2 and 3 channels, and a non-square float image: the strides must not mix rows or channels
+    {
+        std::vector<uint8_t> a(4 * 2 * 3, 9), b = a;
+        b[(1 * 4 + 2) * 3 + 1] = 10; // pixel (2, 1), green
+        Diff d = compare(a.data(), b.data(), 4, 2, 3, false);
+        check(d.mismatchedPixels == 1 && d.firstX == 2 && d.firstY == 1 && d.maxDiff[1] == 1 && d.maxDiff[0] == 0 && d.maxDiff[2] == 0,
+              "3 channel 8 bit");
+
+        std::vector<uint8_t> c(5 * 3 * 2, 0), e = c;
+        e[(2 * 5 + 4) * 2 + 1] = 255; // pixel (4, 2), second channel
+        d = compare(c.data(), e.data(), 5, 3, 2, false);
+        check(d.mismatchedPixels == 1 && d.firstX == 4 && d.firstY == 2 && d.maxDiff[1] == 255 && d.maxDiff[0] == 0, "2 channel 8 bit");
+
+        std::vector<float> f(7 * 2 * 4, 0.25f), g = f; // 7 wide, 2 high
+        g[(1 * 7 + 6) * 4 + 3] = fromBits(toBits(0.25f) + 3);
+        d = compare(f.data(), g.data(), 7, 2, 4, true);
+        check(d.mismatchedPixels == 1 && d.firstX == 6 && d.firstY == 1 && d.maxDiff[3] == 3 && d.pixels == 14, "non-square float");
+    }
+
+    // the run tracker and the bucket mapping behind the mergeable-run histogram
+    {
+        using namespace LLGLSubmitMath;
+        const int expect[] = {0, 0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5};
+        bool ok = true;
+        for (uint32_t len = 0; len < 20; ++len)
+        {
+            ok = ok && runBucket(len) == expect[len];
+        }
+        check(ok, "run buckets: 1, 2, 3-4, 5-8, 9-16, 17+");
+
+        int a = 0, b = 0;
+        RunTracker t;
+        auto c1 = t.draw(&a, 1);
+        check(c1.len == 0, "the first draw closes nothing");
+        check(t.draw(&a, 1).len == 0 && t.draw(&a, 1).len == 0, "same record and epoch continue the run");
+        auto c2 = t.draw(&a, 2); // a state change since the last draw
+        check(c2.rec == &a && c2.len == 3, "an epoch change closes the run of 3");
+        auto c3 = t.draw(&b, 2); // another scope, same epoch
+        check(c3.rec == &a && c3.len == 1, "a record change closes the run of 1");
+        auto c4 = t.close();
+        check(c4.rec == &b && c4.len == 1, "close returns the open run");
+        check(t.close().len == 0, "and only once");
+    }
+
+    // window averaging
+    {
+        using namespace LLGLSubmitMath;
+        check(perFrameMean(300.0, 120.0) == 2.5, "mean per frame");
+        check(perFrameMean(5.0, 0.0) == 0.0, "no frames, no division by zero");
+    }
+
     // ordering of the mapped bits
     check(orderedFloatBits(toBits(-1.0f)) < orderedFloatBits(toBits(0.0f)), "ordered bits: negative below zero");
     check(orderedFloatBits(toBits(1.0f)) < orderedFloatBits(toBits(2.0f)), "ordered bits: increasing");

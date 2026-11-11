@@ -230,7 +230,6 @@ set(viewer_SOURCE_FILES
     llagentdata.cpp
     llagentlanguage.cpp
     llagentlistener.cpp
-    llglsubmitstatsapi.cpp
     llagentpicksinfo.cpp
     llagentpilot.cpp
     llagentui.cpp
@@ -936,6 +935,11 @@ set(viewer_GLTF_SOURCE_FILES
 
 source_group("Source Files\\GLTF" FILES ${viewer_GLTF_SOURCE_FILES})
 list(APPEND viewer_SOURCE_FILES ${viewer_GLTF_SOURCE_FILES})
+
+# development only (OpenGL submission statistics): no empty object file when the option is off
+if (VKS_GL_STATS)
+  list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp)
+endif()
 # </FS:Ansariel> Group GLTF files into their subfolders
 
 if (OPENSIM)
