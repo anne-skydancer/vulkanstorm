@@ -11,9 +11,9 @@
  *
  * This file provides the executable's real entry point (/ENTRY:vkstormEntry).
  * It runs before the C runtime starts and before every static initialiser,
- * so nothing AVX2 can have executed yet. llwebrtc.dll and openjp2.dll, whose
- * own initialisers are built with /arch:AVX2, are delay-loaded for the same
- * reason.
+ * so nothing AVX2 can have executed yet. llwebrtc.dll, whose own
+ * initialisers are built with /arch:AVX2, is delay-loaded for the same reason
+ * (this line has no openjp2.dll).
  *
  * The executable's TLS callbacks (.CRT$XLC __dyn_tls_init, .CRT$XLD
  * __dyn_tls_dtor) do run before the entry point, with DLL_PROCESS_ATTACH, but
