@@ -241,6 +241,82 @@ namespace
         check(LLShadowCascadeFit::snapShadowDistance(std::nanf("")) == 32.f, "NaN distance snaps to 32");
     }
 
+
+    // Stage S2: the cull guard covers the filter's reach (SHADOW_FOOTPRINT_M plus a bilinear texel, or
+    // 16 texels) and the sample's normal offset, at every texel size a cascade can have
+    void test_cull_margin()
+    {
+        using namespace LLShadowCascadeFit;
+        check(SHADOW_FOOTPRINT_M == 0.25f, "the footprint is one radius of 25 cm", SHADOW_FOOTPRINT_M, 0.25f);
+        float prev = 0.f;
+        for (float texel : { 0.001f, 0.0058f, 0.02f, 0.0344f, 0.0344f, 0.116f, 0.275f, 0.5f, 1.f })
+        {
+            const float offset = SHADOW_NORMAL_OFFSET_TEXELS * texel;
+            const float margin = casterCullMargin(texel, offset);
+            check(margin >= SHADOW_FOOTPRINT_M + texel + offset, "margin covers the footprint, a texel and the normal offset", margin, SHADOW_FOOTPRINT_M + texel + offset);
+            check(margin >= 16.f * texel + offset, "margin covers 16 texels and the normal offset", margin, 16.f * texel + offset);
+            check(margin >= prev, "margin grows with the texel size", margin, prev);
+            // exactly one of the two terms decides it
+            const float want = std::max(16.f * texel, SHADOW_FOOTPRINT_M + texel) + offset;
+            check(std::fabs(margin - want) < 1e-6f, "margin is the larger term plus the offset", margin, want);
+            prev = margin;
+        }
+        // the finest cascade (0.58 cm texels): the footprint decides, 26 cm instead of Legacy's 9 cm
+        const float fine = casterCullMargin(0.0058f, 0.0058f);
+        check(fine > 0.26f && fine < 0.27f, "finest cascade margin is about 26 cm", fine, 0.26f);
+        // the coarsest (27.5 cm texels): 16 texels decide
+        check(casterCullMargin(0.275f, 0.275f) == 16.f * 0.275f + 0.275f, "coarse cascade margin is 16 texels plus the offset");
+    }
+
+    // Stage S2: the receiver plane's signed depth gradient that shadowUtil.glsl's shadowPlaneGradient
+    // computes (np = (r0.n / r0.r0, r1.n / r1.r1, r2.n / r2.r2), g = -np.xy / np.z) against the plane
+    // measured by two tangent steps through the matrix (pcssDepthGradient), for an orthographic
+    // cascade matrix built from the real cascade maths: rows of the light view, scaled by the box and the depth range.
+    void test_plane_gradient()
+    {
+        std::mt19937 rng(20261111);
+        std::uniform_real_distribution<double> u(-1.0, 1.0);
+        double worst = 0.0;
+        int tested = 0;
+        for (int trial = 0; trial < 400; ++trial)
+        {
+            // light direction away from the pole, cascade box and depth range of a random cascade
+            D3 light = norm({ u(rng), 0.2 + 0.8 * std::fabs(u(rng)), u(rng) });
+            const auto up_f = LLShadowCascadeFit::lightUp({ (float)light.x, (float)light.y, (float)light.z });
+            const D3 up = norm({ up_f.x, up_f.y, up_f.z });
+            const D3 right = norm(cross(up, light));
+            const D3 fwd = cross(right, up); // = light, re-orthogonalised
+            const double radius = 2.0 + 60.0 * std::fabs(u(rng));
+            const auto box = LLShadowCascadeFit::snappedSquare(0.f, 0.f, (float)radius, 1456.f, 1456.f, 0.f, 0.f);
+            const auto dr = LLShadowCascadeFit::depthRange(0.f, (float)radius);
+            // texture space: u = 0.5 + 0.5 * (2 x - (max + min)) / (max - min), depth likewise, z axis towards the light
+            const double sx = 1.0 / (box.max_x - box.min_x), sy = 1.0 / (box.max_y - box.min_y), sz = 1.0 / (dr.z_max - dr.z_min);
+            const D3 r0 = mul(right, sx), r1 = mul(up, sy), r2 = mul(fwd, -sz);
+            const D3 point = { 10.0 * u(rng), 10.0 * u(rng), 10.0 * u(rng) };
+            auto project = [&](D3 p) { return D3{ dot(r0, p), dot(r1, p), dot(r2, p) }; };
+            D3 n = norm({ u(rng), u(rng), u(rng) });
+            if (std::fabs(dot(n, fwd)) < 0.05) // edge-on to the light: the gradient is unbounded, the shader clamps it
+            {
+                continue;
+            }
+            const D3 t1 = norm(cross(n, std::fabs(n.x) < 0.9 ? D3{ 1, 0, 0 } : D3{ 0, 1, 0 }));
+            const D3 t2 = cross(n, t1);
+            const D3 c = project(point);
+            const D3 d1 = sub(project(add(point, mul(t1, 0.05))), c);
+            const D3 d2 = sub(project(add(point, mul(t2, 0.05))), c);
+            const double det = d1.x * d2.y - d1.y * d2.x;
+            const double gx = (d1.z * d2.y - d1.y * d2.z) / det;
+            const double gy = (d1.x * d2.z - d1.z * d2.x) / det;
+            const D3 np = { dot(r0, n) / dot(r0, r0), dot(r1, n) / dot(r1, r1), dot(r2, n) / dot(r2, r2) };
+            const double hx = -np.x / np.z, hy = -np.y / np.z;
+            const double scale = std::max({ 1.0, std::fabs(gx), std::fabs(gy) });
+            worst = std::max(worst, std::max(std::fabs(gx - hx), std::fabs(gy - hy)) / scale);
+            ++tested;
+        }
+        check(tested > 300, "plane gradient: enough non-degenerate cases", (double)tested, 300.0);
+        check(worst < 1e-9, "plane gradient from the matrix rows equals the two tangent steps", worst, 1e-9);
+    }
+
     void test_depth()
     {
         const auto z = LLShadowCascadeFit::depthRange(-3.f, 5.f);
@@ -256,6 +332,8 @@ int main()
     test_snap();
     test_up();
     test_depth();
+    test_cull_margin();
+    test_plane_gradient();
     test_distance_steps();
     if (failures)
     {

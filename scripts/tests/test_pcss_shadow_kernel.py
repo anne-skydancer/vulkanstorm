@@ -17,7 +17,8 @@ SHADER = (ROOT / 'indra/newview/app_settings/shaders/class1/deferred/shadowUtil.
 
 
 def pcss_block():
-    begin = SHADER.index('#if defined(PCSS_SHADOW)')
+    # after the stage S2 shared block, which has its own #if and closing marker
+    begin = SHADER.index('// <Vulkanstorm> PCSS stage 1') - len('#if defined(PCSS_SHADOW)') - 1
     return SHADER[begin:SHADER.index('// </Vulkanstorm>', begin)]
 
 
