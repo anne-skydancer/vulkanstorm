@@ -86,9 +86,12 @@ of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
 than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
 direction changed. Cube snapshots, mirrors and snapshots have no history (fixed seeds, the sun pass writes
-the light map). With SSAO on the light-map blur still runs, for the AO channel only. The resolve is a fragment
-pass on every device that runs the engine (GL 4.0); a compute resolve for GL 4.3 and later, as the
-transparency has, is not implemented here.
+the light map). With SSAO on the light-map blur still runs, for the AO channel only. The resolve is the transparency's: the device decides once (`LLStochasticEngine::computeResolve`), a compute
+dispatch on GL 4.3 and later (`shadowStochasticResolveC.glsl`, the history written as an image) or a fragment
+pass on GL 4.0 to 4.2 (`shadowStochasticResolveF.glsl`, into the history's framebuffer). Both run the same
+resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and
+the offline bench finds their histories bit identical frame after frame. A driver that lacks the compute
+entry points (Windows) leaves the accumulation off, with a log line, never another path.
 
 ## Shared by all methods
 
