@@ -454,6 +454,13 @@ public:
     U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
     // </Vulkanstorm>
 
+    // <Vulkanstorm> the Stochastic shadow method's temporal accumulation (the stochastic engine's history)
+    F32  getShadowLightSize() const;               // L = 2 tan(half angle) of the sun or moon, times RenderShadowPCSSLightSize
+    bool beginShadowStochastic();                  // once a frame in the lighting pass: the history made or freed, the frame begun; true: the sun pass writes raw rays
+    void releaseShadowStochasticHistory();
+    void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
+    // </Vulkanstorm>
+
     // </FS>
 
     void setRenderTypeMask(U32 type, ...);
@@ -830,6 +837,19 @@ public:
     U32 mAlphaSTCurrentFBO = 0;
     F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
     F64 mAlphaSTRetryTime = 0.0;
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the Stochastic shadow method's history: r sun, g linear view depth, b and a the projector
+    // slots, two full-size RGBA16F colours, counted in the texture memory; and what the resolve compares
+    // with last frame to tell a light that changed (its channel then takes this frame's rays alone)
+    LLStochasticHistory mShadowSTHistory{ GL_RGBA16F, 1.f / 8.f };
+    U32 mShadowSTFailedWidth = 0;       // the size whose allocation failed (logged once; tried again at another size)
+    U32 mShadowSTFailedHeight = 0;
+    bool mShadowSTLightKnown = false;
+    LLVector3 mShadowSTLightDir;        // the primary light's direction, world frame
+    const LLDrawable* mShadowSTSpot[2] = { nullptr, nullptr };   // identity only, never dereferenced
+    LLVector3 mShadowSTSpotPos[2];
+    LLQuaternion mShadowSTSpotRot[2];
     // </Vulkanstorm>
 
     // </FS>
