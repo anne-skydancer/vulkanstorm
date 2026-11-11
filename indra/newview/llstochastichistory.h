@@ -106,7 +106,7 @@ public:
     // Takes this frame's camera without a shader (setResolveUniforms does it; so does a unit test).
     void setCamera(const glm::mat4& modelview, const glm::mat4& projection);
     glm::mat4 reprojection() const;                         // the stoch_reproj of the camera set last
-    void endFrame();                                        // swap, valid, stamp, this frame's camera kept; the camera was set
+    void endFrame();                                        // swap, valid, stamp, this frame's camera kept (the current one if not set)
 
     U64  bytes() const;                                     // the two textures, as counted
 
