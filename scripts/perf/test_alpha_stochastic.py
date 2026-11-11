@@ -5,7 +5,7 @@
 Reuses the standalone Windows GL bootstrap and shader compiler (gl_test_context.py) and runs the
 viewer's own stochastic transparency shaders (the stochastic engine's stochasticSampleF.glsl and
 stochasticResolveUtilF.glsl, and the transparency's alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
-alphaStochasticResolveC.glsl (the temporal resolve, a GL 4.3 compute shader), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
+alphaStochasticResolveC.glsl (the temporal resolve on GL 4.3, a compute shader) or alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl (GL 4.0 to 4.2), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
 LLDrawPoolAlpha::renderStochastic on a small target:
   * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run;
@@ -53,11 +53,15 @@ readpixels=fn('glReadPixels',None,I,I,I,I,U,U,P);getint=fn('glGetIntegerv',None,
 clearcolor=fn('glClearColor',None,C.c_float,C.c_float,C.c_float,C.c_float);clear=fn('glClear',None,U)
 cleardepth=fn('glClearDepth',None,C.c_double)
 TEX2D=0x0DE1;TEXMS=0x9100;FB=0x8D40;COLOR0=0x8CE0;COLOR1=0x8CE1;DEPTH_ATT=0x8D00
-R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;RG16F=0x822F
+R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;RG16F=0x822F;RGBA32F=0x8814
 D24=0x81A6;DEPTH_COMP=0x1902;NEAREST=0x2600;MIN=0x2801;MAG=0x2800
 BLEND=0x0BE2;DEPTH_TEST=0x0B71;MULTISAMPLE=0x809D;POLY_OFFSET=0x8037;CULL=0x0B44
 ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x0207;NONE=0
 import os
+# STOCH_TEST_RESOLVE=fragment runs the GL 4.0 to 4.2 resolve (the pre-pass and the fragment resolve) on this GPU;
+# the default is the compute resolve (GL 4.3). Both give the same image.
+FRAGMENT_RESOLVE=os.environ.get("STOCH_TEST_RESOLVE","compute")=="fragment"
+print("temporal resolve path:","fragment (GL 4.0 to 4.2)" if FRAGMENT_RESOLVE else "compute (GL 4.3)")
 W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve on partial workgroups
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 viewport(0,0,W,H);disable(CULL)
@@ -166,7 +170,12 @@ bindimage=fn('glBindImageTexture',None,U,U,I,C.c_ubyte,I,U,U);dispatch=fn('glDis
 membarrier=fn('glMemoryBarrier',None,U)
 COMPUTE=0x91B9;WRITE_ONLY=0x88B9;TEXTURE_FETCH_BARRIER=0x8;IMAGE_ACCESS_BARRIER=0x20
 def viewer_compute(name): return viewer(name,430).replace('#version 430\n','#version 430\n#define COMPUTE_SHADER 1\n',1)
-resolve_prog=program([(COMPUTE,viewer_compute('alphaStochasticResolveC.glsl')),(COMPUTE,viewer_compute('stochasticResolveUtilF.glsl'))])
+if FRAGMENT_RESOLVE:
+    # this frame's samples averaged once (RGBA32F), then the transparency's resolve with the engine's resolve object
+    current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
+    resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
+else:
+    resolve_prog=program([(COMPUTE,viewer_compute('alphaStochasticResolveC.glsl')),(COMPUTE,viewer_compute('stochasticResolveUtilF.glsl'))])
 # per pixel, the samples of the stochastic depth nearer than the opaque depth, as bits
 readmask=program([(0x8B31,screen_vertex),(0x8B30,'''#version 420
 uniform sampler2DMS st_depth; uniform sampler2D opaque; uniform int samples; out uvec4 bits;
@@ -266,8 +275,22 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
-    # 3b. the temporal accumulation (alphaStochasticResolveC.glsl): this frame's colour blended with the history
-    if temporal is not None:
+    # 3b. the temporal accumulation: this frame's colour blended with the history
+    if temporal is not None and FRAGMENT_RESOLVE:
+        nxt=1-temporal['idx']
+        bindfbo(FB,temporal['curfbo']);drawbuffer(COLOR0);disable(BLEND);disable(DEPTH_TEST)
+        use(current_prog);bind_unit(4,TEXMS,accum);uniform1i(loc(current_prog,b'alpha_st_accum'),4)
+        uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
+        draw(4,0,3)
+        bindfbo(FB,temporal['fbo'][nxt]);drawbuffer(COLOR0)
+        use(resolve_prog);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur'])
+        uniform1i(loc(resolve_prog,b'alpha_st_current'),8);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
+        uniform1i(loc(resolve_prog,b'st_samples_hw'),n)
+        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
+        uniform1f(loc(resolve_prog,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'stoch_history_valid'),1 if temporal['valid'] else 0)
+        draw(4,0,3)
+        temporal['idx']=nxt;temporal['valid']=True
+    elif temporal is not None:
         nxt=1-temporal['idx']
         use(resolve_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']])
         uniform1i(loc(resolve_prog,b'alpha_st_accum'),4);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
@@ -632,7 +655,10 @@ assert before[2][2]==W*H,('the old binding should lose the shiny glass reflectio
 IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
 def new_temporal(reproj=IDENT):
     tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)]
-    return dict(tex=tex,idx=0,valid=False,reproj=list(reproj))
+    if not FRAGMENT_RESOLVE: return dict(tex=tex,idx=0,valid=False,reproj=list(reproj))
+    fbos=[fbo((COLOR0,TEX2D,x)) for x in tex]
+    cur=tex2d(RGBA32F,RGBA,FLOAT);curfbo=fbo((COLOR0,TEX2D,cur))   # this frame's averaged samples
+    return dict(tex=tex,fbo=fbos,cur=cur,curfbo=curfbo,idx=0,valid=False,reproj=list(reproj))
 def rmse(pix,want,cols=None):
     xs=range(W) if cols is None else cols
     return math.sqrt(sum((pix[y*W+x][c]-want[c])**2 for y in range(H) for x in xs for c in range(3))/(3*H*len(xs)))

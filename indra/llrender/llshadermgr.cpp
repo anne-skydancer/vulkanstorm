@@ -192,8 +192,8 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 
     // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
     // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
-    // coverage mask. (A producer's temporal resolve is its own compute or fragment program that lists
-    // stochasticResolveUtilF.glsl among its own shader files.)
+    // coverage mask; the fragment resolve program (STOCH_RESOLVE, the GL 4.0 to 4.2 path) takes the
+    // engine's resolve. (The compute resolve lists stochasticResolveUtilF.glsl among its own shader files.)
     // STOCH_SAMPLE: any producer's program that samples (ALPHA_STOCHASTIC implies it; the shadow
     // producer sets STOCH_SAMPLE alone).
     const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
@@ -203,6 +203,10 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
     if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    {
+        return false;
+    }
+    if (shader->mDefines.count("STOCH_RESOLVE") && !shader->attachFragmentObject(STOCH_RESOLVE_OBJECT))
     {
         return false;
     }
@@ -1645,6 +1649,7 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_depth");
     mReservedUniforms.push_back("alpha_st_history");
     mReservedUniforms.push_back("alpha_st_resolved");
+    mReservedUniforms.push_back("alpha_st_current");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the cloud transmittance map and its lookup
