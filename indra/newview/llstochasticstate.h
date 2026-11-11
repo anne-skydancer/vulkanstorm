@@ -25,6 +25,7 @@
 // use these.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -174,5 +175,37 @@ private:
     bool mTemporal = false;
     bool mUsed = false;
 };
+
+// The Stochastic shadow method's rules for a light that changed since the last frame (its history of that
+// light is then not the same light's): the pipeline passes the primary light's direction and each
+// projector slot's light, and a channel that changed takes this frame's rays alone. GL-free.
+namespace LLShadowLightChange
+{
+    constexpr float SUN_DEGREES = 0.5f;          // a sun or moon direction that turned by more than this
+    constexpr float PROJECTOR_METRES = 0.01f;    // a projector that moved by 1 cm or more
+    constexpr float PROJECTOR_HALF_DEGREES = 0.25f;   // or turned by 0.5 degrees (a quaternion's dot is cos of half the angle)
+
+    inline float dot3(const float a[3], const float b[3]) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
+    // unit directions (the world frame); false: the first frame, or the light turned
+    inline bool sunUnchanged(bool known, const float now[3], const float before[3])
+    {
+        return known && dot3(now, before) >= std::cos(SUN_DEGREES * 3.14159265358979f / 180.f);
+    }
+
+    // a projector slot's light: the same light (identity), moved less than PROJECTOR_METRES, turned less
+    // than twice PROJECTOR_HALF_DEGREES (unit quaternions x y z w)
+    inline bool projectorUnchanged(bool same_light, const float pos_now[3], const float pos_before[3],
+                                   const float rot_now[4], const float rot_before[4])
+    {
+        if (!same_light)
+        {
+            return false;
+        }
+        const float d[3] = { pos_now[0] - pos_before[0], pos_now[1] - pos_before[1], pos_now[2] - pos_before[2] };
+        const float q = std::fabs(rot_now[0] * rot_before[0] + rot_now[1] * rot_before[1] + rot_now[2] * rot_before[2] + rot_now[3] * rot_before[3]);
+        return dot3(d, d) < PROJECTOR_METRES * PROJECTOR_METRES && q >= std::cos(PROJECTOR_HALF_DEGREES * 3.14159265358979f / 180.f);
+    }
+}
 
 #endif // LL_LLSTOCHASTICSTATE_H
