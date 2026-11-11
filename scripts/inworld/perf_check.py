@@ -47,10 +47,11 @@ DEFAULTS = {
     "name": "gl_submit",
     "description": "",
     "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600,
-               "window_timeout_s": 180.0, "compare_wait_s": 6.0},
+               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0},
     "window": {"frames": 120, "gpu": True},
     "teleport": None,
     "settings": {},
+    "variants": [],
     "camera": {"height_m": 2.5, "look_distance_m": 200.0},
     "presets": [{"id": "current", "camera": None}],
     "profile_frame": False,
@@ -68,6 +69,9 @@ def load_scenario(path):
             sc[k].update(v)
         else:
             sc[k] = v
+    vids = [v.get("id") for v in sc["variants"]]
+    if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
+        raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' ('_' separates preset and variant)")
     ids = [p["id"] for p in sc["presets"]]
     if not ids or len(ids) != len(set(ids)):
         raise ValueError("the scenario needs at least one preset, with distinct ids")
@@ -139,6 +143,7 @@ class Run:
         self.args = args
         self.orig = {}
         self.camera_set = False
+        self.variant_keys = set()
         self.cleaned = False
         self.rows = []
         self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
@@ -279,13 +284,35 @@ class Run:
             self.v.sleep(0.5)
         return None
 
-    def one_preset(self, preset):
+    def apply_variant(self, variant):
+        """Set the settings of this variant; a setting an earlier variant changed and this one does not name goes back to
+        its original value (so each variant is measured against the same baseline settings)."""
+        wanted = variant.get("settings", {})
+        for key in list(self.variant_keys):
+            if key not in wanted and key in self.orig:
+                self.v.set_control(key, self.orig[key])
+        for key, val in wanted.items():
+            if self.change(key, val):
+                self.variant_keys.add(key)
+        self.v.sleep(float(self.sc["settle"].get("after_setting_s", 3.0)))
+
+    def one_preset(self, preset, variant=None, set_camera=True):
         sc = self.sc
         pid = preset["id"]
-        info = self.index["presets"].setdefault(pid, {})
-        self.set_preset_camera(preset)
-        self.v.sleep(sc["settle"]["after_camera_s"])
-        self.v.wait_window_visible("the window of preset " + pid)
+        if variant is None:
+            key = pid
+        else:
+            key = "%s__%s" % (pid, variant["id"])
+        info = self.index["presets"].setdefault(key, {})
+        if variant is not None:
+            info["preset"] = pid
+            info["variant"] = variant["id"]
+            info["variant_settings"] = variant.get("settings", {})
+            self.apply_variant(variant)
+        if set_camera:
+            self.set_preset_camera(preset)
+            self.v.sleep(sc["settle"]["after_camera_s"])
+        self.v.wait_window_visible("the window of preset " + key)
 
         fps_off = self.measure_fps_off()
         start = time.monotonic()
@@ -293,35 +320,35 @@ class Run:
         collected, gpu_frames, wall = self.wait_window(start)
         target = int(sc["window"]["frames"])
         if collected < target:
-            self.index["window_failures"].append({"preset": pid, "collected": collected, "target": target})
+            self.index["window_failures"].append({"preset": key, "collected": collected, "target": target})
         info.update({"frames": collected, "gpu_frames": gpu_frames, "wall_s": round(wall, 3),
                      "fps_wall": round(collected / wall, 2) if wall > 0 else None, "fps_stats_off": fps_off})
         if fps_off and info["fps_wall"]:
             info["overhead_pct"] = round(100.0 * (fps_off / info["fps_wall"] - 1.0), 2)
-            log("preset %s: %.1f fps with the statistics off, %.1f collecting (%+.1f%%)" % (pid, fps_off, info["fps_wall"], info["overhead_pct"]))
-        path = self.out / ("window_%s.json" % pid)
+            log("preset %s: %.1f fps with the statistics off, %.1f collecting (%+.1f%%)" % (key, fps_off, info["fps_wall"], info["overhead_pct"]))
+        path = self.out / ("window_%s.json" % key)
         self.v.req(API, "dump", kind="window", path=str(path).replace("\\", "/"))
         summary = self.v.req(API, "summary", kind="window")
         info["summary"] = summary.get("summary")
         info["window_file"] = path.name
         totals = (summary.get("summary") or {}).get("totals") or {}
-        self.rows.append({"preset": pid, "frames": collected, "gpu_frames": gpu_frames, "fps_wall": info["fps_wall"],
-                          "fps_stats_off": fps_off,
+        self.rows.append({"preset": key, "frames": collected, "gpu_frames": gpu_frames, "fps_wall": info["fps_wall"],
+                          "fps_stats_off": fps_off, "variant": variant["id"] if variant else "",
                           **{k: totals.get(k) for k in ("draws", "drawTriangles", "vbChanges", "attribRespecs", "iboBinds",
                                                          "shaderBinds", "texBindFast", "texBindFastRedundant", "texGLBind",
                                                          "uniformGL", "uniformBytes", "paletteUploads", "paletteDistinct",
                                                          "mdvSyncs", "bufSubData", "stateToggles", "occBlocking", "runs",
                                                          "mergeableDraws", "cpu_ms", "gpu_ms")}})
         log("preset %s: %d frames (%d with GPU time), %.1f fps wall, %s draws/frame, cpu %s ms, gpu %s ms" %
-            (pid, collected, gpu_frames, info["fps_wall"] or 0, totals.get("draws"), totals.get("cpu_ms"), totals.get("gpu_ms")))
+            (key, collected, gpu_frames, info["fps_wall"] or 0, totals.get("draws"), totals.get("cpu_ms"), totals.get("gpu_ms")))
 
         if sc["profile_frame"]:
             try:
                 asked = time.time() - 1.0
                 r = self.v.req(API, "profileFrame")
-                found = self.fetch_profile(r.get("logs_dir"), asked, pid)
+                found = self.fetch_profile(r.get("logs_dir"), asked, key)
                 info["profile_file"] = found
-                log("Frame Profile for %s: %s" % (pid, found or "not found"))
+                log("Frame Profile for %s: %s" % (key, found or "not found"))
             except LeapError as exc:
                 self.warn("Frame Profile not available: %s" % exc)
 
@@ -331,22 +358,22 @@ class Run:
                 try:
                     res = self.compare_once(int(p))
                 except LeapError as exc:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [], "error": str(exc)})
-                    log("compare %s pass %s FAILED: %s" % (pid, p, exc))
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": [], "error": str(exc)})
+                    log("compare %s pass %s FAILED: %s" % (key, p, exc))
                     continue
                 same, diff, skipped = passes_failed(res)
                 allres[str(p)] = res
-                log("compare %s pass %s: identical %s; DIFFERENT %s; not run %s" % (pid, p, same or "-", diff or "-", skipped or "-"))
+                log("compare %s pass %s: identical %s; DIFFERENT %s; not run %s" % (key, p, same or "-", diff or "-", skipped or "-"))
                 for label, name in thin_attachments(res):
                     log("note: %s %s holds one distinct value (an empty attachment: IDENTICAL says little)" % (label, name))
                 if diff:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": diff})
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": diff})
                 if int(p) in (-1, 1) and "G-buffer" not in same + diff:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [],
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": [],
                                                            "error": "the G-buffer did not run (%s)" % (skipped or "no result")})
-                    log("compare %s: the G-buffer did not run" % pid)
+                    log("compare %s: the G-buffer did not run" % key)
             info["compare"] = allres
-            write_json_atomic(self.out / ("compare_%s.json" % pid), allres)
+            write_json_atomic(self.out / ("compare_%s.json" % key), allres)
 
     def go(self):
         sc = self.sc
@@ -379,7 +406,15 @@ class Run:
             proof_ok = self.prove_injection()
         for preset in sc["presets"]:
             v.check_abort()
-            self.one_preset(preset)
+            if not sc["variants"]:
+                self.one_preset(preset)
+            else:
+                # the same view measured once per variant, back to back (the camera is placed once)
+                self.set_preset_camera(preset)
+                v.sleep(sc["settle"]["after_camera_s"])
+                for variant in sc["variants"]:
+                    v.check_abort()
+                    self.one_preset(preset, variant, set_camera=False)
             self.save_index()
         self.save_index()
         self.cleanup()

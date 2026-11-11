@@ -241,6 +241,7 @@ public:
         uint64_t calls = 0;             // times the scope was entered
         double cpuMs = 0.0;             // inclusive
         double gpuMs = 0.0;             // inclusive; valid when the frame's GPU results were read
+        uint64_t samples = 0;           // GL_SAMPLES_PASSED of the alpha passes (inclusive); valid with gpuMs
         std::unordered_set<uint64_t> palettes;
         std::unordered_set<uint32_t> vbos;
     };
@@ -257,6 +258,8 @@ public:
         std::unordered_map<std::string, Record*> byKey;
         struct Inst { Record* rec; uint32_t begin; uint32_t end; };
         std::vector<Inst> insts;
+        struct SampleInst { Record* rec; uint32_t query; };
+        std::vector<SampleInst> sampleInsts;    // GL_SAMPLES_PASSED queries of the alpha passes
         std::unordered_set<uint64_t> palettesAll;
     };
 

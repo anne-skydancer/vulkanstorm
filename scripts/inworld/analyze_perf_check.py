@@ -3,6 +3,7 @@
 """Report on a perf_check.py run folder (or on one window JSON written by GLSubmitStats.dump).
 
   python analyze_perf_check.py RUNDIR                 -> RUNDIR/report.txt (also printed)
+  (a run with "variants", e.g. alpha_crowd.json, also gets the sorted alpha vs stochastic table and the verdict)
   python analyze_perf_check.py RUNDIR --compare BASE  -> the totals of each preset against the same preset of BASE
                                                          (delta = RUNDIR minus BASE)
 
@@ -13,6 +14,8 @@ pass); cpu_ms and gpu_ms are inclusive of nested passes. Offline: needs only the
 import argparse
 import json
 import pathlib
+import re
+import statistics
 import sys
 
 TOTAL_COLUMNS = [
@@ -127,6 +130,134 @@ def report_compare(idx):
     return lines
 
 
+# -- sorted alpha (RenderAlphaSortMethod 0) against stochastic (1), from a run made with a scenario that has variants -------------
+METHOD_KEY = "RenderAlphaSortMethod"
+SLOWER_PCT = 3.0       # stochastic counts as slower when its median frame time is more than this above method 0 ...
+EXPLAINS_SHARE = 0.5   # ... and the alpha passes' CPU time delta is at least this share of the frame time delta
+ALPHA_PASS = re.compile(r"(^|/)ALPHA(_PRE_WATER|_POST_WATER)?( \d+)?$")
+ALPHA_COLUMNS = [("cpu_ms", "alpha cpu ms"), ("gpu_ms", "alpha gpu ms"), ("draws", "alpha draws"), ("shaderBinds", "alpha shader binds"),
+                 ("paletteUploads", "alpha palette uploads"), ("uniformBytes", "alpha uniform B"), ("samples", "alpha fragments")]
+
+
+def frame_ms(info):
+    """Frame time of a window in ms: from the frame rate with nothing collecting, else from the collecting window."""
+    fps = info.get("fps_stats_off") or info.get("fps_wall")
+    return 1000.0 / float(fps) if fps else None
+
+
+def alpha_sums(window):
+    """Per-frame sums over the alpha passes of the main view (these passes do not nest in each other); None if none found."""
+    out = {key: 0.0 for key, _ in ALPHA_COLUMNS}
+    found = False
+    for p in window.get("passes", []):
+        if p.get("view") == "main" and ALPHA_PASS.search(p.get("pass") or ""):
+            found = True
+            for key in out:
+                out[key] += num(p.get(key))
+    return out if found else None
+
+
+def main_view(window):
+    for v in window.get("views", []):
+        if v.get("view") == "main":
+            return v
+    return {}
+
+
+def method_of(info):
+    val = (info.get("variant_settings") or {}).get(METHOD_KEY)
+    return None if val is None else int(val)
+
+
+def method_runs(entries):
+    """{preset: {method: entry}} for the entries that carry a variant with a RenderAlphaSortMethod setting."""
+    out = {}
+    for entry in entries.values():
+        info = entry["info"]
+        m = method_of(info)
+        if info.get("variant") is not None and m is not None:
+            out.setdefault(info.get("preset"), {})[m] = entry
+    return out
+
+
+def median(vals):
+    vals = [v for v in vals if v is not None]
+    return statistics.median(vals) if vals else None
+
+
+def verdict(runs):
+    """The survey's rule over the presets that have both methods: stochastic (1) is slower than sorted (0) when the median
+    frame time over the presets is more than SLOWER_PCT above, and the alpha passes' CPU time delta (median over the
+    presets) is at least EXPLAINS_SHARE of the frame time delta. Returns (text, facts)."""
+    both = {pid: m for pid, m in runs.items() if 0 in m and 1 in m}
+    if not both:
+        return "no preset has both methods: no verdict", {}
+    ft0 = median([frame_ms(m[0]["info"]) for m in both.values()])
+    ft1 = median([frame_ms(m[1]["info"]) for m in both.values()])
+    if not ft0 or not ft1:
+        return "no frame rate in the windows: no verdict", {}
+    cpu_d = []
+    for m in both.values():
+        a0, a1 = alpha_sums(m[0]["window"]), alpha_sums(m[1]["window"])
+        if a0 is not None and a1 is not None:
+            cpu_d.append(a1["cpu_ms"] - a0["cpu_ms"])
+    cpu_delta = median(cpu_d)
+    pct = round(100.0 * (ft1 - ft0) / ft0, 6)
+    facts = {"frame_ms_0": ft0, "frame_ms_1": ft1, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "presets": len(both)}
+    if pct <= SLOWER_PCT:
+        return ("stochastic is NOT slower: median frame time %.2f ms against %.2f ms (%+.1f%%, limit +%.0f%%), %d presets"
+                % (ft1, ft0, pct, SLOWER_PCT, len(both)), dict(facts, slower=False))
+    if cpu_delta is None:
+        return ("stochastic is %+.1f%% in frame time but the alpha passes were not found in the windows: cannot say whether the "
+                "alpha pass CPU time explains it" % pct, dict(facts, slower=None))
+    explains = cpu_delta >= EXPLAINS_SHARE * (ft1 - ft0)
+    return ("stochastic is %s: median frame time %.2f ms against %.2f ms (%+.1f%%, limit +%.0f%%); the alpha passes' CPU time "
+            "changes by %+.2f ms (median) of the %.2f ms difference, which %s" % (
+                "SLOWER in this crowd" if explains else "slower but NOT because of the alpha pass CPU time", ft1, ft0, pct, SLOWER_PCT,
+                cpu_delta, ft1 - ft0, "explains it" if explains else "does not explain it"), dict(facts, slower=bool(explains)))
+
+
+def report_methods(entries):
+    runs = method_runs(entries)
+    if not runs:
+        return []
+    lines = ["=" * 100, "sorted alpha (method 0) against stochastic (method 1), per preset (medians over the presets below)",
+             "frame ms = 1000 / fps with nothing collecting; alpha columns are the main view's ALPHA passes, per frame", ""]
+    head = ["preset", "method", "frame ms", "main cpu", "main gpu", "draws", "shader"] + [lab for _, lab in ALPHA_COLUMNS]
+    rows = []
+    for pid, m in runs.items():
+        for method in sorted(m):
+            e = m[method]
+            a = alpha_sums(e["window"]) or {}
+            mv = main_view(e["window"])
+            t = e["window"].get("totals", {})
+            rows.append([pid, method, fmt(frame_ms(e["info"])), fmt(mv.get("cpu_ms")), fmt(mv.get("gpu_ms")), fmt(t.get("draws")),
+                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) if k in a else "-" for k, _ in ALPHA_COLUMNS])
+    lines.append(table(rows, head))
+    lines.append("")
+    lines.append("median over the presets:")
+    med = []
+    for method in (0, 1):
+        es = [m[method] for m in runs.values() if method in m]
+        if not es:
+            continue
+        alphas = [alpha_sums(e["window"]) or {} for e in es]
+        med.append(["", method, fmt(median([frame_ms(e["info"]) for e in es])),
+                    fmt(median([main_view(e["window"]).get("cpu_ms") for e in es])),
+                    fmt(median([main_view(e["window"]).get("gpu_ms") for e in es])),
+                    fmt(median([e["window"].get("totals", {}).get("draws") for e in es])),
+                    fmt(median([e["window"].get("totals", {}).get("shaderBinds") for e in es]))] +
+                   [fmt(median([a.get(k) for a in alphas if k in a])) for k, _ in ALPHA_COLUMNS])
+    lines.append(table(med, head))
+    lines.append("")
+    lines.append("verdict (stochastic is slower when its median frame time is more than %.0f%% above sorted and the alpha pass "
+                 "CPU time explains it):" % SLOWER_PCT)
+    lines.append("  " + verdict(runs)[0])
+    lines.append("  The ms figures come from one GPU; the counters (draws, shader binds, palette uploads, uniform bytes, fragments)")
+    lines.append("  do not depend on the hardware and are the gate for weak GPUs. Fragments are GL_SAMPLES_PASSED of the alpha passes.")
+    return lines
+
+
 def report_delta(new, base):
     lines = ["=" * 100, "against the baseline run (delta = this run minus baseline)"]
     for pid, entry in new.items():
@@ -157,6 +288,7 @@ def main(argv=None):
     lines = []
     for pid, entry in entries.items():
         lines += report_preset(pid, entry)
+    lines += report_methods(entries)
     lines += report_compare(idx)
     if args.compare:
         base, _ = load(args.compare)

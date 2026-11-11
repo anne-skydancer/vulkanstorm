@@ -25,6 +25,8 @@ from fake_viewer import FakeViewer  # noqa: E402
 from leap_client import LeapSession  # noqa: E402
 
 SCENARIO = HERE.parent / "scenarios" / "gl_submit_g0.json"
+ALPHA_CROWD = HERE.parent / "scenarios" / "alpha_crowd.json"
+ALPHA_CROWD_LOW = HERE.parent / "scenarios" / "alpha_crowd_lowtier.json"
 
 
 def session_for(fake):
@@ -224,6 +226,105 @@ class ProofRulesTest(unittest.TestCase):
         res = [{"label": "sun cascade 0", "ran": True, "identical": True, "attachments": [{"name": "depth", "distinct_values": 1}]},
                {"label": "G-buffer", "ran": True, "identical": True, "attachments": [{"name": "color0", "distinct_values": 40}]}]
         self.assertEqual(pc.thin_attachments(res), [("sun cascade 0", "depth")])
+
+
+def window_with(cpu, samples=1.0e6):
+    return {"totals": {"draws": 1000.0}, "views": [{"view": "main", "cpu_ms": 8.0, "gpu_ms": 5.0}],
+            "passes": [{"view": "main", "pass": "deferred lighting/geom post-deferred/ALPHA_POST_WATER 0", "cpu_ms": cpu, "draws": 400.0,
+                        "samples": samples},
+                       {"view": "main", "pass": "geom post-deferred/ALPHA_MASK 0", "cpu_ms": 99.0}]}
+
+
+def entry(method, fps, cpu):
+    return {"window": window_with(cpu), "info": {"preset": "p", "variant": "m%d" % method, "fps_stats_off": fps,
+                                                "variant_settings": {"RenderAlphaSortMethod": method}}}
+
+
+NO_COMPARE = {"enabled": False, "passes": [-1], "prove_with_injection": False}
+
+
+class VariantsTest(unittest.TestCase):
+    def test_shipped_scenarios_load_and_differ_only_in_the_tier(self):
+        a, b = pc.load_scenario(ALPHA_CROWD), pc.load_scenario(ALPHA_CROWD_LOW)
+        for sc in (a, b):
+            self.assertEqual([v["settings"]["RenderAlphaSortMethod"] for v in sc["variants"]], [0, 1])
+            self.assertFalse(sc["compare"]["enabled"])
+            self.assertEqual(len(sc["presets"]), 4)
+        self.assertEqual(a["settings"], {})
+        self.assertEqual(b["settings"]["RenderShadowDetail"], 0)
+        self.assertEqual(b["settings"]["RenderQualityPerformance"], 0)
+
+    def test_bad_variant_ids_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for variants in ([{"id": "a"}, {"id": "a"}], [{"id": "a_b"}], [{"id": ""}]):
+                p = pathlib.Path(tmp) / "s.json"
+                p.write_text(json.dumps({"variants": variants}), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    pc.load_scenario(p)
+
+    def test_a_run_measures_each_preset_with_each_method_and_restores(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            orig = dict(fv.settings)
+            sc = json.loads(ALPHA_CROWD.read_text(encoding="utf-8"))
+            code, run = run_main(fv, tmp, presets=sc["presets"][:2], variants=sc["variants"], compare=NO_COMPARE)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(list(index["presets"]), ["current__m0", "current__m1", "north__m0", "north__m1"])
+            self.assertEqual(index["presets"]["north__m1"]["variant"], "m1")
+            self.assertEqual(index["presets"]["north__m1"]["preset"], "north")
+            self.assertTrue((run / "window_north__m0.json").is_file())
+            self.assertEqual(fv.settings, orig)
+            self.assertIsNone(fv.follow_cam)
+            self.assertEqual(apc.main([str(run)]), 0)
+            text = (run / "report.txt").read_text(encoding="utf-8")
+            self.assertIn("sorted alpha (method 0) against stochastic (method 1)", text)
+            self.assertIn("verdict", text)
+
+    def test_the_other_variants_settings_are_put_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            fv.settings["RenderGlow"] = ("Boolean", True)
+            variants = [{"id": "a", "settings": {"RenderGlow": False}}, {"id": "b", "settings": {}}]
+            seen = []
+            real = pc.Run.one_preset
+
+            def spy(self, preset, variant=None, set_camera=True):
+                real(self, preset, variant, set_camera)
+                seen.append((variant["id"], fv.settings["RenderGlow"][1]))
+            with mock.patch.object(pc.Run, "one_preset", spy):
+                code, _ = run_main(fv, tmp, presets=[{"id": "current", "camera": None}], variants=variants, compare=NO_COMPARE)
+            self.assertEqual(code, 0)
+            self.assertEqual(seen, [("a", False), ("b", True)])
+            self.assertEqual(fv.settings["RenderGlow"][1], True)
+
+    def test_verdict_rule(self):
+        # 4 % slower and the alpha CPU delta explains it (0.5 ms of a 0.67 ms difference): slower
+        slow = {"p": {0: entry(0, 60.0, 1.0), 1: entry(1, 57.6, 1.5)}}
+        text, facts = apc.verdict(slow)
+        self.assertTrue(facts["slower"], text)
+        self.assertIn("SLOWER", text)
+        # 4 % slower but the alpha CPU time is unchanged: slower for another reason
+        other = {"p": {0: entry(0, 60.0, 1.0), 1: entry(1, 57.6, 1.0)}}
+        self.assertFalse(apc.verdict(other)[1]["slower"])
+        self.assertIn("NOT because", apc.verdict(other)[0])
+        # 2 % slower: inside the limit
+        fine = {"p": {0: entry(0, 60.0, 1.0), 1: entry(1, 58.8, 3.0)}}
+        self.assertFalse(apc.verdict(fine)[1]["slower"])
+        # exactly 3 % is not "more than 3 %"
+        edge = {"p": {0: entry(0, 100.0, 1.0), 1: entry(1, 100.0 / 1.03, 3.0)}}
+        self.assertFalse(apc.verdict(edge)[1]["slower"])
+        # the median over presets, not the mean: one slow outlier preset does not decide
+        runs = {"a": {0: entry(0, 60.0, 1.0), 1: entry(1, 60.0, 1.0)}, "b": {0: entry(0, 60.0, 1.0), 1: entry(1, 60.0, 1.0)},
+                "c": {0: entry(0, 60.0, 1.0), 1: entry(1, 30.0, 9.0)}}
+        self.assertFalse(apc.verdict(runs)[1]["slower"])
+        self.assertIn("no verdict", apc.verdict({"p": {0: entry(0, 60.0, 1.0)}})[0])
+
+    def test_alpha_sums_pick_only_the_alpha_pools(self):
+        a = apc.alpha_sums(window_with(2.0))
+        self.assertEqual(a["cpu_ms"], 2.0)       # ALPHA_MASK (99) is not an alpha pass
+        self.assertEqual(a["samples"], 1.0e6)
+        self.assertIsNone(apc.alpha_sums({"passes": [{"view": "main", "pass": "gbuffer"}]}))
 
 
 class AnalysisTest(unittest.TestCase):

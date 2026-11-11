@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include "llgl.h"
 #include "llglheaders.h"
 
@@ -29,7 +30,16 @@ namespace
         Clock::time_point t0;
         uint32_t qBegin = 0;
         bool timed = false;
+        uint32_t qSamples = 0;      // an open GL_SAMPLES_PASSED query (alpha passes only; one at a time)
     };
+
+    bool sSamplesOpen = false;
+
+    // The passes whose fragments are counted: the sorted-alpha pools. Samples queries cannot nest, so the first one open wins.
+    bool isAlphaPass(const char* name)
+    {
+        return std::strcmp(name, "ALPHA") == 0 || std::strcmp(name, "ALPHA_PRE_WATER") == 0 || std::strcmp(name, "ALPHA_POST_WATER") == 0;
+    }
 
     std::shared_ptr<LLGLSubmitStats::Frame> sFrame;                 // the frame being built
     std::vector<std::shared_ptr<LLGLSubmitStats::Frame>> sPending;  // finished frames awaiting GPU results
@@ -125,6 +135,7 @@ namespace
         else
         {
             dst.gpuMs += src.gpuMs;
+            dst.samples += src.samples;
         }
     }
 
@@ -202,6 +213,12 @@ namespace
         if (gpu_ok)
         {
             totals.emplace("gpu_ms", number(frame_gpu / div_gpu, false));
+            uint64_t alpha_samples = 0;
+            for (const auto* r : recs)
+            {
+                alpha_samples += r->samples;
+            }
+            totals.emplace("alpha_samples", number((double)alpha_samples / div_gpu, false));
         }
         root.emplace("totals", std::move(totals));
 
@@ -254,6 +271,10 @@ namespace
                 if (gpu_ok)
                 {
                     p.emplace("gpu_ms", number(r->gpuMs / div_gpu, false));
+                    if (r->samples)
+                    {
+                        p.emplace("samples", number((double)r->samples / div_gpu, false));
+                    }
                 }
                 countersJson(p, r->c, div_cpu, true);
                 passes.emplace_back(std::move(p));
@@ -381,6 +402,11 @@ void LLGLSubmitStats::dropOldest()
         releaseQuery(in.end);
     }
     f->insts.clear();
+    for (const Frame::SampleInst& si : f->sampleInsts)
+    {
+        releaseQuery(si.query);
+    }
+    f->sampleInsts.clear();
     f->gpuResolved = false;
     f->gpuTruncated = true;
 }
@@ -396,6 +422,11 @@ void LLGLSubmitStats::resetGL(bool contextValid)
             ids.push_back(in.end);
         }
         f->insts.clear();
+        for (const Frame::SampleInst& si : f->sampleInsts)
+        {
+            ids.push_back(si.query);
+        }
+        f->sampleInsts.clear();
         f->gpuResolved = false;
     }
     if (sFrame)
@@ -412,7 +443,18 @@ void LLGLSubmitStats::resetGL(bool contextValid)
                 ids.push_back(e.qBegin);
                 e.timed = false;
             }
+            if (e.qSamples)
+            {
+                ids.push_back(e.qSamples);
+                e.qSamples = 0;
+            }
         }
+        for (const Frame::SampleInst& si : sFrame->sampleInsts)
+        {
+            ids.push_back(si.query);
+        }
+        sFrame->sampleInsts.clear();
+        sSamplesOpen = false;
         sFrame->insts.clear();
         sFrame->gpuTimed = false;
         sGpuThisFrame = false;
@@ -448,6 +490,14 @@ void LLGLSubmitStats::resolveGpu(bool blockForGpu)
             releaseQuery(in.begin);
             releaseQuery(in.end);
         }
+        for (const Frame::SampleInst& si : f->sampleInsts)
+        {
+            GLuint64 n = 0;
+            glGetQueryObjectui64v(si.query, GL_QUERY_RESULT, &n);
+            si.rec->samples += n;
+            releaseQuery(si.query);
+        }
+        f->sampleInsts.clear();
         f->insts.clear();
         f->gpuResolved = true;
         sPending.erase(sPending.begin());
@@ -525,6 +575,12 @@ void LLGLSubmitStats::enterPass(const char* name, int index)
     {
         sFrame->gpuTruncated = true;
     }
+    if (e.timed && !sSamplesOpen && isAlphaPass(name))
+    {
+        e.qSamples = acquireQuery();
+        glBeginQuery(GL_SAMPLES_PASSED, e.qSamples);
+        sSamplesOpen = true;
+    }
     setCur(e.rec);
     sStack.push_back(std::move(e));
 }
@@ -538,6 +594,12 @@ void LLGLSubmitStats::leave()
     closeRun();
     StackEntry& e = sStack.back();
     e.rec->cpuMs += msSince(e.t0);
+    if (e.qSamples)
+    {
+        glEndQuery(GL_SAMPLES_PASSED);
+        sSamplesOpen = false;
+        sFrame->sampleInsts.push_back({e.rec, e.qSamples});
+    }
     if (e.timed)
     {
         uint32_t qe = acquireQuery();

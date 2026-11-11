@@ -1,0 +1,22 @@
+{
+  "name": "alpha_crowd",
+  "description": "Legacy-alpha stage 0: sorted alpha (RenderAlphaSortMethod=0) against stochastic (=1) in a crowded scene, at the viewer's own settings. Four camera presets (the current view and three headings), each measured with both methods back to back, 120 frames per window, GPU timers on, no image compare. Counters per alpha pass: CPU and GPU ms, draws, shader binds, palette uploads, uniform bytes, fragments (GL_SAMPLES_PASSED).",
+  "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600, "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 4.0},
+  "window": {"frames": 120, "gpu": true},
+  "teleport": null,
+  "settings": {},
+  "variants": [
+    {"id": "m0", "settings": {"RenderAlphaSortMethod": 0}},
+    {"id": "m1", "settings": {"RenderAlphaSortMethod": 1}}
+  ],
+  "camera": {"height_m": 2.5, "look_distance_m": 200.0},
+  "presets": [
+    {"id": "current", "camera": null},
+    {"id": "north", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}},
+    {"id": "east", "camera": {"az_deg": 90.0, "pitch_deg": 0.0}},
+    {"id": "south", "camera": {"az_deg": 180.0, "pitch_deg": 0.0}}
+  ],
+  "profile_frame": false,
+  "overhead": {"probe_s": 5.0, "bench_iterations": 0},
+  "compare": {"enabled": false, "passes": [-1], "prove_with_injection": false}
+}

@@ -78,6 +78,7 @@ class FakeViewer:
             "RenderMoonAdaptationDepth": 6.0, "RenderAtmosphereHazeSlab": 250.0, "CameraAngle": 1.047,
             "FSEnvironmentManualTransitionTime": 3.0}.items()}
         self.settings["RenderAtmospherePhysicalLight"] = ("Boolean", True)
+        self.settings["RenderAlphaSortMethod"] = ("U32", 1)
         if gl_stats:
             self.settings.update({"RenderGLSubmitStats": ("Boolean", False), "RenderGLSubmitStatsGPU": ("Boolean", True),
                                   "RenderGLSubmitCompare": ("S32", 0), "RenderGLSubmitCompareInject": ("S32", 0),
@@ -435,11 +436,15 @@ class FakeViewer:
         elif op == "dump":
             import json  # noqa: PLC0415
             t = self._gl_totals()
+            method = int(self.settings["RenderAlphaSortMethod"][1])
             doc = {"schema": 1, "kind": "window", "scale": "per_frame_mean", "frames": w["collected"], "gpu_frames": w["gpu"],
                    "totals": dict(t, run_hist=[1400.0, 700.0, 500.0, 200.0, 80.0, 20.0]),
                    "views": [{"view": "frame", "calls": 1.0, "cpu_ms": 9.5, "gpu_ms": 7.25, "draws": 0.0},
                              {"view": "main", "calls": 3.0, "cpu_ms": 6.0, "gpu_ms": 5.0, "draws": 3000.0, "vbChanges": 2800.0}],
                    "passes": [{"view": "main", "pass": "gbuffer", "calls": 1.0, "cpu_ms": 4.0, "gpu_ms": 3.5, "draws": 2500.0},
+                              {"view": "main", "pass": "deferred lighting/geom post-deferred/ALPHA_POST_WATER 0", "calls": 1.0,
+                               "cpu_ms": 1.0 if method == 0 else 1.5, "gpu_ms": 0.8, "draws": 400.0, "shaderBinds": 12.0,
+                               "paletteUploads": 30.0, "uniformBytes": 5000.0, "samples": 1.0e6 if method == 0 else 2.0e6},
                               {"view": "sun cascade 0", "pass": "shadow opaque 0", "calls": 1.0, "cpu_ms": 1.0, "gpu_ms": 0.9,
                                "draws": 900.0}],
                    "compare": []}

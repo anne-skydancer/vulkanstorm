@@ -293,3 +293,55 @@ binds, the mergeable run lengths, the views, the passes by GPU ms, and the ident
 By hand, without the script (the same API from any LEAP client, or the debug settings): `RenderGLSubmitStats` on collects
 every frame; `RenderGLSubmitCompare` set to a pass (-1 all) for one frame logs `GLSubmitCompare` lines and answers
 `GLSubmitStats.compareResults`; Develop > Render > Frame Profile writes the profile with the `submit` section.
+
+# Sorted alpha against stochastic in a crowd (`alpha_crowd.json`)
+
+Stage 0 of the legacy-alpha work: does `RenderAlphaSortMethod=1` (stochastic, S=8) cost more than `0` (sorted) when many avatars
+with rigged mesh are in view, and what do the sorted alpha passes cost in CPU, GPU, draws, state changes, uploads and fragments.
+Same build and launch as the section above (`-DVKS_GL_STATS=ON` viewer, `--leap` given twice, paths without spaces).
+
+**The numbers are from one machine: an RTX 5070 Ti.** Milliseconds are an upper-end view and say little about a weak GPU. The
+hardware-independent counters (draws, shader binds, palette uploads, uniform bytes, and the fragments the alpha passes
+pass, from `GL_SAMPLES_PASSED`) are the gate for weak GPUs. Sorted alpha is the only transparency path of a GPU without
+OpenGL 4 (iGPUs, older GPUs, Intel chips capped at GL 3.3), so a later stage must not raise those counters in a crowd.
+
+The scenario takes four camera presets (the current view and three headings), and for each preset one 120-frame window with
+method 0 and then one with method 1 (`variants`), GPU timers on, no image compare. `perf_check.py` restores
+`RenderAlphaSortMethod` and the other settings at the end. Stand where the crowd is and leave the viewer alone.
+
+Scenes, one run each:
+
+- **S1, local OpenSim with ~40 NPCs.** The repo has no tooling for it (no OpenSim region setup, no OAR, no NPC script). Use your own OpenSim
+  region with NPCs dressed in rigged mesh hair and clothing, and log in to it.
+- **C, a real crowded venue** with 30+ mesh avatars. **T, a heavy-transparency scene** (glass, foliage, particles).
+- **Low tier** (`alpha_crowd_lowtier.json`): the same scene, with the settings of a weak GPU (lowest quality level, no
+  shadows, reflections, SSAO or glow, 512 px textures). Make the viewer window **1920x1080** (windowed, not minimised) before the run;
+  `perf_check.py` cannot set the window size. On a GPU that has OpenGL 4 the low-tier method 1 still runs stochastic; the figure that
+  matters on the low tier is method 0. Run the low tier at least in C.
+
+```powershell
+$exe     = 'C:\Users\annes\source\repos\vulkanstorm\work\alpha-crowd\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe'
+$py      = 'C:/Users/annes/AppData/Local/Python/pythoncore-3.15-64/python.exe'
+$scripts = 'C:/Users/annes/source/repos/vulkanstorm/work/alpha-crowd/scripts/inworld'
+$caps    = 'C:/Users/annes/source/repos/vulkanstorm/.captures'
+$stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
+$noop    = "$py $scripts/perf_check.py --noop"
+$scene   = 'C'          # S1, C or T: names the run folder
+$tier    = ''           # '' for the default tier, '_lowtier' for the low tier (1920x1080 window)
+$sc      = "$scripts/scenarios/alpha_crowd$tier.json"
+$run     = "$py $scripts/perf_check.py --scenario $sc --out $caps/alpha-$scene$tier-$stamp"
+Set-Location (Split-Path $exe)
+& $exe --leap $run --leap $noop
+```
+
+Log in by hand, go to the scene, wait for the crowd to rez. A run takes about 6 minutes. Then, for each run folder:
+
+```powershell
+python "$scripts/analyze_perf_check.py" "$caps/alpha-C-<stamp>"
+```
+
+`report.txt` has, per preset and method, the frame time (from the frame rate with nothing collecting), the main view's CPU and GPU ms
+and, for the `ALPHA` passes, CPU ms, GPU ms, draws, shader binds, palette uploads, uniform bytes and fragments; the medians over the
+presets; and the verdict. **Rule:** stochastic is slower in a crowd when its median frame time over the presets is more than 3 % above
+sorted and the alpha passes' CPU time delta is at least half of the frame time difference; the question is answered by S1 and C both.
+Keep the run folders: later stages are gated by re-running this scenario and comparing (`--compare <baseline run>`).

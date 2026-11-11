@@ -54,6 +54,11 @@ collect a window across it** (`perf_check.py` runs the check after the window). 
 waiting (the result of frame N arrives when frame N+1..N+3 starts). Up to 4096 scopes per frame are timed; more are counted
 without GPU time (`gpu_truncated`). Timestamp queries are independent of the `GL_TIME_ELAPSED` query of Frame Profile (both can be active at once).
 
+**Fragments of the alpha passes.** Around the pools `ALPHA`, `ALPHA_PRE_WATER` and `ALPHA_POST_WATER` (not nested: one `GL_SAMPLES_PASSED` query
+at a time, core since OpenGL 1.5, so also on GL 3.3 hardware) the pass records `samples`, the fragments that passed the depth and stencil tests,
+and the window totals carry `alpha_samples`. It is a hardware-independent cost of overdraw. The query runs only in frames with GPU timers on, and
+not while Develop > Render > Frame Profile or per-shader profiling holds a `GL_SAMPLES_PASSED` query.
+
 **CPU time** is wall time on the main thread between the scope's entry and exit (`steady_clock`), not CPU time of the thread.
 
 Only the main thread counts (a hook on another thread, e.g. a worker with a shared context, is ignored).
