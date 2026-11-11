@@ -250,6 +250,8 @@ def acne_floor(z, rows):
                 rows.append(('floor', z, elev, label, variant, new, old))
             sc.release()
 
+FOOT_BAND_MAX = 5.0   # %: measured 2.3 to 4.3 % of the foot band at 0 to 4000 m (the crease limitation, see doc/shadows/shadow-method.md)
+
 def acne_wall(z, rows):
     # a 2 m box; its +x wall lit 75 degrees off its normal by a 10 degree sun
     box = ((-1.0, 0.0, -9.0), (1.0, 2.0, -7.0))
@@ -263,9 +265,9 @@ def acne_wall(z, rows):
         nw = nrm[:, :, :3] @ rv                       # world normal = R^T n_view
         walls = (np.abs(nw[:, :, 1]) < 0.01) & (np.abs(nw[:, :, 0]) > 0.99) & (pos[:, :, 3] > 0.5) & (ndl > 0.05)
         assert walls.sum() > 1000, f'wall mask too small: {walls.sum()}'
-        # PCSS (stage S2): the receiver plane is the wall's, and it does not continue across the crease
-        # where the wall meets the ground, so the row of pixels within 3 cm of the ground is left out of
-        # the PCSS acne count; the other methods are counted over the whole wall
+        # PCSS (stage S2): the receiver plane is the wall's and does not continue across the crease where the
+        # wall meets the ground. The band of pixels within 3 cm of the ground is counted apart ('foot') with
+        # its own bound, FOOT_BAND_MAX; the rest of the wall must be free of acne like the other methods' walls
         iv = np.array(sc.inv_view, dtype=np.float32)
         wall_y = pos[:, :, 0] * iv[1, 0] + pos[:, :, 1] * iv[1, 1] + pos[:, :, 2] * iv[1, 2] + iv[1, 3] - ALT[0]
         for variant in ('base', 'tree', 'pcss'):
@@ -277,6 +279,12 @@ def acne_wall(z, rows):
             print(f'    wall {z:6.0f} m {label:11s} {variant:4s}: new mean {img_new.mean():.3f}, <0.5 {np.mean(img_new < 0.5) * 100:.2f} %, min {img_new.min():.3f} | '
                   f'old mean {img_old.mean():.3f}, <0.5 {np.mean(img_old < 0.5) * 100:.2f} %', flush=True)
             rows.append(('wall', z, 10.0, label, variant, new, old))
+            if variant == 'pcss':
+                band = walls & (wall_y <= 0.03)
+                assert band.sum() > 10, f'wall foot band too small: {band.sum()}'
+                rows.append(('foot', z, 10.0, label, variant,
+                             float(np.mean(light_map(sc, prog(variant), NEW_BIAS)[band] < 0.999)) * 100,
+                             float(np.mean(light_map(sc, prog(variant), old_bias(z))[band] < 0.999)) * 100))
         sc.release()
 
 def contact(z, results):
@@ -318,6 +326,8 @@ def part2():
         line = f'{kind:5s} {z:6.0f} m  sun {elev:4.0f} deg  {label:11s} {name}: new {new:.3f} %   (old {old:.3f} %)'
         if variant == 'base':
             print('  info ' + line)
+        elif kind == 'foot':
+            ok(new <= FOOT_BAND_MAX, line + f'   (the crease limit: at most {FOOT_BAND_MAX} %)')
         else:
             ok(new == 0.0, line)
     print('\n  contact: lit gap between a 10 cm wall and its shadow, cascade-0 distance (new bias | old bias)')

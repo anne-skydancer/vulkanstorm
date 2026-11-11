@@ -172,6 +172,7 @@ uniform mat4 inv_proj; uniform mat4 view; uniform mat4 inv_view;
 layout(location = 0) out vec4 out_pos;
 layout(location = 1) out vec4 out_norm;
 uniform mat4 proj;
+uniform float bump_deg;   // tilts the stored normal like a normal map would, by this many degrees, in a pattern over the surface
 %s
 void main()
 {
@@ -180,7 +181,12 @@ void main()
     vec3 dir_v = normalize(p.xyz / p.w);
     vec3 o = (inv_view * vec4(0, 0, 0, 1)).xyz, d = normalize((inv_view * vec4(dir_v, 0)).xyz);
     float t; vec3 n;
-    if (trace(o, d, 1000.0, t, n)) { out_pos = view * vec4(o + d * t, 1.0); out_norm = vec4(normalize((view * vec4(n, 0)).xyz), 0.0);
+    if (trace(o, d, 1000.0, t, n)) { out_pos = view * vec4(o + d * t, 1.0);
+        vec3 w = o + d * t; vec3 nb = n;
+        if (bump_deg > 0.0) { vec3 a = abs(n.y) > 0.9 ? vec3(1, 0, 0) : vec3(0, 1, 0); vec3 u = normalize(cross(n, a)), v = cross(n, u);
+            float ph = 41.0 * dot(w, u) + 29.0 * dot(w, v), tilt = radians(bump_deg) * (0.75 + 0.25 * sin(7.0 * ph));
+            nb = normalize(n * cos(tilt) + (u * cos(ph) + v * sin(ph)) * sin(tilt)); }
+        out_norm = vec4(normalize((view * vec4(nb, 0)).xyz), 0.0);
         vec4 c = proj * out_pos; gl_FragDepth = c.z / c.w * 0.5 + 0.5; }
     else { out_pos = vec4(dir_v * 1000.0, 1.0); out_norm = vec4(0.0); }
 }
@@ -263,7 +269,7 @@ def blur_happy(x): return (x + 16) & ~0xF
 
 class Scene:
     """Boxes over a ground plane, a camera, a sun direction, two projectors; rendered at W x H."""
-    def __init__(self, W, H, boxes, eye, target, sun, spots, clip, fovy=math.radians(60.0)):
+    def __init__(self, W, H, boxes, eye, target, sun, spots, clip, fovy=math.radians(60.0), bump=0.0):
         self.W, self.H, self.boxes, self.sun, self.spots_def, self.clip = W, H, boxes, normalize(sun), spots, clip
         self.view = look_at(eye, target); self.inv_view = inverse(self.view)
         self.proj = perspective(fovy, W / H, 0.25, 256.0); self.fovy = fovy
@@ -275,7 +281,7 @@ class Scene:
         self.gdepth = make_tex(0x81A6, W, H)       # GL_DEPTH_COMPONENT24, nearest, as the viewer's depth buffer
         self.gfbo = make_fbo([self.gpos, self.gnorm], self.gdepth); viewport(0, 0, W, H); use(gprog)
         set_mat(gprog, 'inv_proj', [inverse(self.proj)]); set_mat(gprog, 'view', [self.view]); set_mat(gprog, 'inv_view', [self.inv_view])
-        set_mat(gprog, 'proj', [self.proj])
+        set_mat(gprog, 'proj', [self.proj]); u1f(loc(gprog, b'bump_deg'), bump)
         enable(0x0B71); depthfunc(0x0207); depthmask(1)
         draw(4, 0, 3); disable(0x0B71)
         self.cascades = self.cascade_matrices()
@@ -365,11 +371,16 @@ TIMING_BOXES = [((-5.0, 1.0, -15.0), (-3.0, 1.5, -13.0)),
 TIMING_SPOTS = [([-4.0, 6.0, -10.0], [-4.0, 0.0, -14.0]), ([1.0, 7.0, -15.0], [1.5, 0.0, -19.0])]
 queries = (U*1)(); genq(1, queries)
 results = {}
-for (W, H) in RESOLUTIONS:
-    sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+spread = {}
+REPEATS = 3
+
+def time_variants(sc, spot):
+    """interleaved timing of every variant: REPEATS rounds of FRAMES frames; returns the median of the round
+    medians, the spread (max - min of the round medians) and the first frame's light map of each variant"""
     images = {}
-    for spot in (True, False):
-        progs = {variant: sun_program(variant, spot) for variant in VARIANTS}
+    progs = {variant: sun_program(variant, spot) for variant in VARIANTS}
+    rounds = {variant: [] for variant in VARIANTS}
+    for rep_ in range(REPEATS):
         samples = {variant: [] for variant in VARIANTS}
         for f in range(WARMUP + FRAMES):         # round robin: every variant sees the same GPU clock
             for variant in VARIANTS:
@@ -377,12 +388,21 @@ for (W, H) in RESOLUTIONS:
                 beginq(TIME_ELAPSED, queries[0]); draw(4, 0, 3); endq(TIME_ELAPSED)
                 v = C.c_uint64(); qresult(queries[0], QUERY_RESULT, C.byref(v))
                 if f >= WARMUP: samples[variant].append(v.value / 1e6)
-                if f == 0 and spot: images[variant] = sc.read_channel(0x1903)
+                if f == 0 and rep_ == 0 and spot: images[variant] = sc.read_channel(0x1903)
                 sc.unbind()
-        finish(); assert geterror() == 0
+        for variant in VARIANTS: rounds[variant].append(statistics.median(samples[variant]))
+    finish(); assert geterror() == 0
+    for variant in VARIANTS: fn('glDeleteProgram', None, U)(progs[variant])
+    return ({v: statistics.median(r) for v, r in rounds.items()}, {v: max(r) - min(r) for v, r in rounds.items()}, images)
+
+for (W, H) in RESOLUTIONS:
+    sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+    images = {}
+    for spot in (True, False):
+        med, spr, imgs = time_variants(sc, spot)
+        images.update(imgs)
         for variant in VARIANTS:
-            results[(W, H, spot, variant)] = statistics.median(samples[variant])
-            fn('glDeleteProgram', None, U)(progs[variant])
+            results[(W, H, spot, variant)] = med[variant]; spread[(W, H, spot, variant)] = spr[variant]
 
     label = f'{W}x{H}: '
     def at(img, x, y): return img[y * W + x]
@@ -504,31 +524,32 @@ ACNE_VARIANTS = ('legacy', 'pcss0') + S2_VARIANTS
 W, H = RESOLUTIONS[0]
 print(f'\nacne checks at {W}x{H}: lit ground and a lit wall, sun elevation {ACNE_ANGLES}, share of masked pixels below 0.99 in the light map')
 WALL = ((-3.0, 0.0, -10.0), (3.0, 3.0, -9.8))
-for elev in ACNE_ANGLES:
+BUMPS = (0.0, 35.0)    # degrees: the G-buffer normal tilted like a strong normal map (the geometric plane must not follow it)
+for elev, bump in [(e_, b_) for b_ in BUMPS for e_ in ACNE_ANGLES]:
     e = math.radians(elev)
-    sc = Scene(W, H, [WALL], [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [0.6*math.cos(e), math.sin(e), 0.8*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0))
+    sc = Scene(W, H, [WALL], [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [0.6*math.cos(e), math.sin(e), 0.8*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0), bump=bump)
     pos, nrm = read_gbuffer(sc)
     ground, wall = [], []
     for i in range(W*H):
         p = pos[4*i:4*i+4]; n = nrm[4*i:4*i+4]
         if n[0] == 0.0 and n[1] == 0.0 and n[2] == 0.0: continue
         wp = mvec(sc.inv_view, [p[0], p[1], p[2], 1.0]); wn = mvec(sc.inv_view, [n[0], n[1], n[2], 0.0])
-        if abs(wp[1]) < 0.02 and wn[1] > 0.9 and wp[2] > -9.5 and 3.0 < sc.view_depth(wp[:3]) < 90.0: ground.append(i)
-        elif abs(wp[2] + 9.8) < 0.01 and wn[2] > 0.9 and 0.15 < wp[1] < 2.85 and abs(wp[0]) < 2.8: wall.append(i)
-    check(len(ground) > 10000 and len(wall) > 2000, f'elevation {elev}: {len(ground)} ground and {len(wall)} wall pixels in the masks', 'acne: ')
+        if abs(wp[1]) < 0.02 and wp[2] > -9.5 and 3.0 < sc.view_depth(wp[:3]) < 90.0: ground.append(i)
+        elif abs(wp[2] + 9.8) < 0.01 and 0.15 < wp[1] < 2.85 and abs(wp[0]) < 2.8: wall.append(i)
+    check(len(ground) > 10000 and len(wall) > 2000, f'elevation {elev}, normal tilt {bump:g}: {len(ground)} ground and {len(wall)} wall pixels in the masks', 'acne: ')
     for v in ACNE_VARIANTS:
         img = render_variant(sc, v)
         bad_g = sum(1 for i in ground if img[i] < 0.99); bad_w = sum(1 for i in wall if img[i] < 0.99)
-        msg = f'elevation {elev:>2}, {v:<6}: ground {100*bad_g/len(ground):.4f} % and wall {100*bad_w/len(wall):.4f} % of pixels below 0.99'
+        msg = f'elevation {elev:>2}, tilt {bump:>2g}, {v:<6}: ground {100*bad_g/len(ground):.4f} % and wall {100*bad_w/len(wall):.4f} % of pixels below 0.99'
         if v in S2_VARIANTS: check(bad_g == 0 and bad_w == 0, msg + ' (none allowed)', 'acne: ')
         else: print('  info ' + msg)
     sc.release()
 
 CONTACT_BOX = ((-1.0, 0.0, -6.0), (1.0, 1.5, -4.0))
 print(f'\ncontact checks at {W}x{H}: a box standing on the ground, shadow falling to its right; the shadow starts at the foot')
-for elev in (20, 40, 60):
+for elev, bump in [(e_, b_) for b_ in BUMPS for e_ in (20, 40, 60)]:
     e = math.radians(elev)
-    sc = Scene(W, H, [CONTACT_BOX], [4.0, 8.0, 4.0], [1.0, 0.0, -10.0], [-0.95*math.cos(e), math.sin(e), 0.31*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0))
+    sc = Scene(W, H, [CONTACT_BOX], [4.0, 8.0, 4.0], [1.0, 0.0, -10.0], [-0.95*math.cos(e), math.sin(e), 0.31*math.cos(e)], [([30.0, 8.0, 30.0], [30.0, 0.0, 30.0]), ([32.0, 8.0, 30.0], [32.0, 0.0, 30.0])], (10.0, 25.0, 60.0, 150.0), bump=bump)
     depth = sc.view_depth((1.0, 0.0, -5.3))
     j = next(k for k in range(4) if depth <= sc.clip[k] * 0.75)
     m = sc.cascades[j]; ax = math.sqrt(sum(v * v for v in m[0][:3])); ay = math.sqrt(sum(v * v for v in m[1][:3]))
@@ -541,19 +562,51 @@ for elev in (20, 40, 60):
         xs = [1.0 + 0.002 * i for i in range(151)]
         prof = [sum(img[sc.project((gx, 0.0, gz))[1] * W + sc.project((gx, 0.0, gz))[0]] for gz in zs) / len(zs) for gx in xs]
         start = next((xs[i] for i, p in enumerate(prof) if p < 0.5), xs[-1]) - 1.0
-        msg = f'elevation {elev}, {v:<6}: cascade {j}, the shadow starts {100*start:.1f} cm from the foot (texel {100*texel:.2f} cm, pixel {100*pixel:.2f} cm, allowed {100*tol:.1f} cm)'
+        msg = f'elevation {elev}, tilt {bump:>2g}, {v:<6}: cascade {j}, the shadow starts {100*start:.1f} cm from the foot (texel {100*texel:.2f} cm, pixel {100*pixel:.2f} cm, allowed {100*tol:.1f} cm)'
         if v in S2_VARIANTS: check(start <= tol, msg, 'contact: ')
         else: print('  info ' + msg)
     sc.release()
 
+# a sky-heavy view: the camera looks up at the horizon, most pixels are sky or beyond the shadow distance
+for (W, H) in RESOLUTIONS:
+    sc = Scene(W, H, TIMING_BOXES, [0.0, 2.0, 4.0], [0.0, 14.0, -40.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+    pos, nrm = read_gbuffer(sc)
+    sky = sum(1 for i in range(W*H) if nrm[4*i] == 0.0 and nrm[4*i+1] == 0.0 and nrm[4*i+2] == 0.0) / (W*H)
+    for spot in (True, False):
+        med, spr, _ = time_variants(sc, spot)
+        for variant in VARIANTS:
+            results[(W, H, spot, variant, 'sky')] = med[variant]; spread[(W, H, spot, variant, 'sky')] = spr[variant]
+    results[(W, H, 'skyshare')] = sky
+    sc.release()
+
+# the method-neutral block must compile as GLSL 1.50 without the PCSS or gather code
+def compile_check(version, defines, label):
+    util = (root/UTIL_F).read_text()
+    text = f'#version {version}\n#define FRAGMENT_SHADER 1\n' + ''.join(f'#define {d.replace("=", " ")}\n' for d in defines)
+    text += 'uniform sampler2D depthMap;\nvec4 getPosition(vec2 p) { return vec4(texture(depthMap, p).rgb, 1.0); }\n' + util.replace('/*[EXTRA_CODE_HERE]*/', '')
+    shader = fn('glCreateShader', U, U)(0x8B30); source = C.c_char_p(text.encode())
+    fn('glShaderSource', None, U, I, C.POINTER(C.c_char_p), P)(shader, 1, C.byref(source), None); fn('glCompileShader', None, U)(shader)
+    status = I(); fn('glGetShaderiv', None, U, U, C.POINTER(I))(shader, 0x8B81, C.byref(status))
+    log = C.create_string_buffer(8192); fn('glGetShaderInfoLog', None, U, I, P, C.c_char_p)(shader, len(log), None, log)
+    fn('glDeleteShader', None, U)(shader)
+    check(status.value == 1, f'{label} compiles as GLSL {version}' + ('' if status.value else ': ' + log.value.decode()), 'compile: ')
+print('\nGLSL 1.50 compile of the method-neutral block (SHADOW_COMMON alone, no PCSS or gather code):')
+compile_check(150, ['SUN_SHADOW', 'SHADOW_COMMON'] + S2_DEFINES, 'shadowUtil.glsl with SHADOW_COMMON')
+compile_check(150, ['SUN_SHADOW'], 'shadowUtil.glsl without it (Legacy)')
+
 print(f'\nmedian ms per sun light pass, {FRAMES} frames after {WARMUP} warmup; base = {BASE_REF} '
       f'({subprocess.run(["git", "rev-parse", "--short", BASE_REF], cwd=root, capture_output=True, text=True).stdout.strip()})')
-print(f'{"resolution":<12}{"detail":<8}' + ''.join(f'{v:>9}' for v in VARIANTS) + f'{"pcss-pcss0":>12}{"pcss/legacy":>13}')
+print(f'{"resolution":<12}{"view":<8}{"detail":<8}' + ''.join(f'{v:>9}' for v in VARIANTS) + f'{"pcss-pcss0":>12}{"pcss33-pcss0":>14}{"spread":>9}{"pcss/legacy":>13}')
 for (W, H) in RESOLUTIONS:
-    for spot in (True, False):
-        row = [results[(W, H, spot, v)] for v in VARIANTS]
-        r = dict(zip(VARIANTS, row))
-        print(f'{f"{W}x{H}":<12}{(2 if spot else 1):<8}' + ''.join(f'{t:>9.3f}' for t in row) + f'{r["pcss"] - r["pcss0"]:>+12.3f}{r["pcss"]/r["legacy"]:>12.2f}x')
+    for view in ('ground', 'sky'):
+        for spot in (True, False):
+            key = (lambda v: (W, H, spot, v)) if view == 'ground' else (lambda v: (W, H, spot, v, 'sky'))
+            row = [results[key(v)] for v in VARIANTS]
+            r = dict(zip(VARIANTS, row))
+            worst = max(spread[key(v)] for v in ('pcss0', 'pcss33', 'pcss'))    # run-to-run spread of the three timings that enter the difference
+            print(f'{f"{W}x{H}":<12}{view:<8}{(2 if spot else 1):<8}' + ''.join(f'{t:>9.3f}' for t in row)
+                  + f'{r["pcss"] - r["pcss0"]:>+12.3f}{r["pcss33"] - r["pcss0"]:>+14.3f}{worst:>9.3f}{r["pcss"]/r["legacy"]:>12.2f}x')
+    print(f'  ({W}x{H} sky view: {100 * results[(W, H, "skyshare")]:.0f} % of the pixels are sky; spread = max - min of {REPEATS} rounds of {FRAMES} frames, worst of pcss0/pcss33/pcss)')
 gl.wglMakeCurrent(None, None); gl.wglDeleteContext(context); user.ReleaseDC(window, hdc); user.DestroyWindow(window)
 if failures:
     print('\nFAILED:\n' + '\n'.join(failures)); sys.exit(1)

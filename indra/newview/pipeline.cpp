@@ -9877,14 +9877,14 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
     }
 }
 
-// <Vulkanstorm> PCSS: bind (or release) shadowDepth0-5, the same depth maps as shadowMap0-5
+// <Vulkanstorm> PCSS: bind (or release) shadowDepth0/1/4/5, the same depth maps as shadowMap0/1/4/5
 // on their own units with the depth fetch sampler, so the shader can read raw depth there while
 // the compare sampler stays on shadowMapN. Programs without these uniforms are left untouched.
 void LLPipeline::bindShadowDepthFetch(LLGLSLShader& shader, bool bind)
 {
-    static const S32 maps[6] = { 0, 1, 2, 3, 4, 5 };
+    static const S32 maps[4] = { 0, 1, 4, 5 };
     const U32 sampler = bind ? gGL.getDepthFetchSampler() : 0;
-    for (S32 k = 0; k < 6; ++k)
+    for (S32 k = 0; k < 4; ++k)
     {
         const S32 uniform = LLShaderMgr::DEFERRED_SHADOW_DEPTH0 + k;
         if (bind)
