@@ -33,9 +33,8 @@
 // <Vulkanstorm> key of the PCSS build of deferred/shadowUtil.glsl among the compiled fragment
 // objects (the same file with PCSS_SHADOW defined); see LLViewerShaderMgr::loadBasicShaders
 #define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
-// <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
+// <Vulkanstorm> the stochastic engine's shared fragment object (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
-#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"
 // </Vulkanstorm>
 
 class LLShaderMgr
@@ -379,7 +378,7 @@ public:
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
         // <Vulkanstorm> the stochastic engine (stochasticSampleF.glsl) and its transparency producer
-        // (alphaStochasticF.glsl, alphaStochasticResolveF.glsl, alphaStochasticCompositeF.glsl)
+        // (alphaStochasticF.glsl, alphaStochasticResolveC.glsl, alphaStochasticCompositeF.glsl)
         STOCH_MASKS,                        //  "stoch_masks"
         ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
         ALPHA_ST_TRANS,                     //  "alpha_st_trans"
@@ -387,7 +386,6 @@ public:
         ALPHA_ST_DEPTH,                     //  "alpha_st_depth"
         ALPHA_ST_HISTORY,                   //  "alpha_st_history"
         ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
-        ALPHA_ST_CURRENT,                   //  "alpha_st_current"
         // </Vulkanstorm>
         // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
         CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
