@@ -58,7 +58,7 @@ vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size)
     return texelFetch(history, ivec2(puv * vec2(size)), 0);
 }
 
-// Bilinear history from the 4 nearest texels, each kept only where its stored linear depth
+// For the shadow producer (not used by the transparency): bilinear history from the 4 nearest texels, each kept only where its stored linear depth
 // (channel depth_channel) agrees with the expected one (disocclusion); returns the kept weight.
 float stoch_history_bilinear(sampler2D history, vec2 puv, ivec2 size, float w_expected, int depth_channel, out vec4 hist)
 {
@@ -105,7 +105,7 @@ vec4 stoch_accumulate(vec4 hist, vec4 mn, vec4 mx, vec4 cur)
     return mix(clamp(hist, mn, mx), cur, stoch_weight);
 }
 
-// per channel weights: 1 passes this frame's value through (a channel the producer does not accumulate)
+// For the shadow producer (not used by the transparency): per channel weights: 1 passes this frame's value through (a channel the producer does not accumulate)
 vec4 stoch_accumulate_w(vec4 hist, vec4 mn, vec4 mx, vec4 cur, vec4 weight)
 {
     return mix(clamp(hist, mn, mx), cur, weight);
