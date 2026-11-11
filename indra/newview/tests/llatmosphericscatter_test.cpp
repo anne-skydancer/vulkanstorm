@@ -576,6 +576,7 @@ int main()
                 {
                     t.t_lut = nullptr;
                     t.ms_lut = nullptr;
+                    t.use_single_scattering_only(); // the documented opt-out: a march needs Psi bound
                 }
                 for (const Vec3& d : dirs)
                 {
@@ -731,6 +732,19 @@ int main()
             check(near(sc.ray_length(0.0, dir_of(90.0)), sc.atm.top_radius_km - sc.atm.planet_radius_km, 1e-9, 0.0), "straight up from the ground ends at the top", sc.ray_length(0.0, dir_of(90.0)));
             check(sc.ray_length(0.0, dir_of(-10.0)) == 0.0, "straight down: length 0");
         }
+    }
+
+    // 6b. the march's precondition: Psi is bound (ms_lut) or the caller says single scattering only; the opt-out leaves the multiple
+    //     scattering out, a bound table puts it in (an unbound march asserts, so it is not run here)
+    {
+        LLScatter sc = scatter_of(kSkies[SKY_DEFAULT], 40.0);
+        Tables tb;
+        bind_tables(sc, tb, 16, 16);
+        const Vec3 with_ms = sc.sky_radiance(dir_of(30.0, 90.0), 0.0, 24);
+        sc.ms_lut = nullptr;
+        sc.use_single_scattering_only();
+        const Vec3 single = sc.sky_radiance(dir_of(30.0, 90.0), 0.0, 24);
+        check(with_ms.y > single.y * 1.02 && single.y > 0.0, "the bound multiple scattering adds to the single scattering", with_ms.y, single.y);
     }
 
     // 7. multiple scattering: thick fog stays bounded, the ground is continuous, the table is smooth, the texel is close to a converged one
