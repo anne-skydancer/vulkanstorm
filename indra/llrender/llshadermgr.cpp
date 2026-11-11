@@ -264,8 +264,11 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     if (features->hasShadows)
     {
         // <Vulkanstorm> a program with the PCSS_SHADOW permutation takes the PCSS build of
-        // shadowUtil.glsl (compiled by the viewer's basic shaders under its own key)
-        const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY : "deferred/shadowUtil.glsl";
+        // shadowUtil.glsl (compiled by the viewer's basic shaders under its own key); with the
+        // Stochastic method every program takes the Stochastic util, which exists only then
+        const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY
+            : mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL) ? STOCHASTIC_SHADOW_UTIL
+            : "deferred/shadowUtil.glsl";
         if (!shader->attachFragmentObject(shadow_util))
         // </Vulkanstorm>
         {
