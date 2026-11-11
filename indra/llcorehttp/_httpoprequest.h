@@ -177,6 +177,9 @@ protected:
     static size_t readCallback(void * data, size_t size, size_t nmemb, void * userdata);
     static int seekCallback(void *data, curl_off_t offset, int origin);
     static size_t headerCallback(void * data, size_t size, size_t nmemb, void * userdata);
+
+    static int xferInfoCallback(void * userdata, curl_off_t dltotal, curl_off_t dlnow,
+                                curl_off_t ultotal, curl_off_t ulnow);
     static CURLcode curlSslCtxCallback(CURL *curl, void *ssl_ctx, void *userptr);
     static int sslCertVerifyCallback(X509_STORE_CTX *ctx, void *param);
 

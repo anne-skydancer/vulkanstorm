@@ -33,6 +33,7 @@ import re
 import errno
 import socket
 import subprocess
+import time
 
 VERBOSE = os.environ.get("INTEGRATION_TEST_VERBOSE", "0") # default to quiet
 # Support usage such as INTEGRATION_TEST_VERBOSE=off -- distressing to user if
@@ -173,11 +174,23 @@ def run(*args, **kwds):
 
     debug("Running %s...", " ".join(args))
 
+    # A hung child must not stall the build or CI forever: kill it after
+    # LL_TEST_TIMEOUT seconds (default 30 minutes) and report failure.
+    try:
+        time_limit = float(os.environ.get("LL_TEST_TIMEOUT", "1800"))
+    except ValueError:
+        time_limit = 1800.0
+    deadline = time.monotonic() + time_limit
+
     try:
         server_inst = kwds.pop("server_inst")
     except KeyError:
         # Without server_inst, this is very simple: just run child process.
-        rc = subprocess.call(args)
+        try:
+            rc = subprocess.call(args, timeout=time_limit)
+        except subprocess.TimeoutExpired:
+            print("%s timed out after %s seconds" % (args[0], time_limit), file=sys.stderr)
+            rc = 1
     else:
         # We're being asked to run a local server while the child process
         # runs. We used to launch a daemon thread calling
@@ -194,7 +207,15 @@ def run(*args, **kwds):
         server_inst.timeout = 0.5
 
         child = subprocess.Popen(args)
+        timed_out = False
         while child.poll() is None:
+            if time.monotonic() > deadline:
+                print("%s timed out after %s seconds; killing it" % (args[0], time_limit),
+                      file=sys.stderr)
+                timed_out = True
+                child.kill()
+                child.wait()
+                break
             # Setting server_inst.timeout is what keeps this handle_request()
             # call from blocking "forever." Interestingly, looping over
             # handle_request() with a timeout is very like the implementation
@@ -208,7 +229,7 @@ def run(*args, **kwds):
             server_inst.handle_request()
         # We don't bother to capture the rc returned by child.poll() because
         # poll() is already defined to capture that in its returncode attr.
-        rc = child.returncode
+        rc = 1 if timed_out else child.returncode
 
     debug("%s returned %s", args[0], rc)
     return rc

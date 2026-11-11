@@ -503,8 +503,10 @@ HttpStatus HttpRequest::destroyService()
 
     if (has_inited)
     {
-        HTTPStats::deleteSingleton();
+        // Stop and join the worker first: it uses HTTPStats until its
+        // last loop iteration.
         HttpService::term();
+        HTTPStats::deleteSingleton();
         HttpRequestQueue::term();
         has_inited = false;
     }

@@ -183,16 +183,11 @@ bool HttpService::isStopped()
 void HttpService::startThread()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_NETWORK;
-    llassert_always(! mThread || STOPPED == sState);
-    llassert_always(INITIALIZED == sState || STOPPED == sState);
-
-    if (mThread)
-    {
-        // Restart after STOPPED: the old worker has committed to exiting,
-        // make sure it has really returned before dropping it.
-        mThread->join();
-        mThread.reset();
-    }
+    // One-shot: a stopped service is not restarted (the exit flag and the
+    // request queue's stopped state are never reset); destroy it and create
+    // a new one instead.
+    llassert_always(! mThread);
+    llassert_always(INITIALIZED == sState);
 
     // Push current policy definitions, enable policy & transport components
     mPolicy->start();
