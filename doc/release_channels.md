@@ -19,7 +19,10 @@ Each run has three jobs: `checks` (the repository checks of
 whatever the other platforms' workflows do. `.github/build-platforms.json`
 holds the platform data (runner, container, packages, tags). The shared build
 steps are a composite action rather than a reusable workflow, so that each
-build's check is named exactly `windows`, `linux` or `linux-lts`.
+build's check is named exactly `windows`, `linux` or `linux-lts`. The linux-lts
+container is given explicit DNS servers (the GitHub-hosted runners' Azure
+resolver, then 8.8.8.8 and 1.1.1.1) because it once resolved no names; do not
+remove them as redundant.
 
 One run per pull request or line: a new push cancels the previous run of the
 same workflow. vkstorm-release pushes (they publish) never cancel,
