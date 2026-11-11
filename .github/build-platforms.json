@@ -42,6 +42,7 @@
       "max_glibcxx": "3.4.33",
       "container": {
         "image": "ubuntu:24.04",
+        "options": "--dns 168.63.129.16 --dns 8.8.8.8 --dns 1.1.1.1",
         "volumes": [
           "/usr/local/lib/android:/host-free/usr_local_lib_android",
           "/usr/share/dotnet:/host-free/usr_share_dotnet",
