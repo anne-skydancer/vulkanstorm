@@ -77,6 +77,7 @@
 #include "llviewermediafocus.h"
 #include "lldatapacker.h"
 #include "llviewershadermgr.h"
+#include "llstochasticstate.h" // <Vulkanstorm/>
 #include "llvoavatar.h"
 #include "llcontrolavatar.h"
 #include "llvoavatarself.h"
@@ -5580,8 +5581,7 @@ void LLVolumeGeometryManager::freeFaces()
 
 // <Vulkanstorm> stochastic transparency: the identity of a face, a hash of its object's full id
 // (never the region's local id) and of its texture entry, the same on every launch whatever the
-// order the objects arrived in (from the author's Aurora Viewer, types.rs oit_tie: FNV-1a, then a
-// final mix).
+// order the objects arrived in (LLStochasticEngine::faceSeed, shared with the GLTF scene's blended assets).
 static U32 stochastic_face_seed(const LLFace* facep)
 {
     const LLViewerObject* object = facep->getViewerObject();
@@ -5589,22 +5589,7 @@ static U32 stochastic_face_seed(const LLFace* facep)
     {
         return 0;
     }
-    U32 h = 0x811c9dc5u;
-    const LLUUID& id = object->getID();
-    for (S32 i = 0; i < UUID_BYTES; ++i)
-    {
-        h = (h ^ (U32)id.mData[i]) * 0x01000193u;
-    }
-    const U32 face = (U32)facep->getTEOffset();
-    for (U32 i = 0; i < 4; ++i)
-    {
-        h = (h ^ ((face >> (8 * i)) & 0xffu)) * 0x01000193u;
-    }
-    h ^= h >> 16;
-    h *= 0x7feb352du;
-    h ^= h >> 15;
-    h *= 0x846ca68bu;
-    return h ^ (h >> 16);
+    return LLStochasticEngine::faceSeed(object->getID().mData, (U32)facep->getTEOffset(), 0);
 }
 // </Vulkanstorm>
 

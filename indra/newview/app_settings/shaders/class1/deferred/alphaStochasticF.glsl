@@ -25,13 +25,16 @@
 //   st_mode 1, total alpha: every sample, the target keeps prod(1 - alpha) (blend ZERO,
 //              ONE_MINUS_SRC_ALPHA into the red of an RG16F target, cleared to 1);
 //   st_mode 2, stochastic depth: R = floor(alpha S + xi) of the S samples, a stratified
-//              S-choose-R subset from a fixed table, depth only.
+//              S-choose-R subset from a fixed table, depth only;
+//   st_mode 3, the opaque scene's depth (depth of field, the rigged depth restore): the fragment
+//              covers every sample of the default framebuffer, or is discarded under st_min_alpha.
 // The accumulation pass is the ordinary program (no sample mask, early depth test kept).
 // This file is the transparency's part of the stochastic engine: the identity of a fragment (the
 // face and the triangle) and the pass; the hash, the frame seed and the table lookup are the
 // engine's (stochasticSampleF.glsl).
 
-uniform int st_mode;               // 1 total alpha, 2 stochastic depth
+uniform int st_mode;               // 1 total alpha, 2 stochastic depth, 3 depth only
+uniform float st_min_alpha;        // mode 3: the cut under which a fragment is discarded
 uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
 uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::SAMPLES)
 uniform int st_iteration;          // the run of the depth and accumulation passes
@@ -56,6 +59,10 @@ uint st_mask(float a)
 // the mask, as the pass's samples, for the stochastic depth.
 int alpha_stochastic_mask(float a)
 {
+    if (st_mode == 3 && a < st_min_alpha)
+    {
+        discard;
+    }
     if (st_mode != 2)
     {
         return -1;
