@@ -139,8 +139,11 @@ begin
   Result := ({#IsOpenSim} <> 0);
 end;
 
-// Vulkanstorm is built for x86-64-v3 (AVX2). Refuse to install on a processor
-// without it, silent installs included, rather than leave an unusable viewer.
+// Vulkanstorm is built for x86-64-v3 (AVX2). Refuse to install on an x64
+// processor without it, silent installs included, rather than leave an
+// unusable viewer. Other architectures (ARM64 running x64 code in emulation)
+// are not judged here; the viewer's own CPUID check at start-up is the
+// authority.
 function IsProcessorFeaturePresent(Feature: Cardinal): Integer;
   external 'IsProcessorFeaturePresent@kernel32.dll stdcall';
 
@@ -148,10 +151,12 @@ function InitializeSetup: Boolean;
 begin
   Result := True;
   // 40 = PF_AVX2_INSTRUCTIONS_AVAILABLE
-  if IsProcessorFeaturePresent(40) = 0 then
+  if (ProcessorArchitecture = paX64) and (IsProcessorFeaturePresent(40) = 0) then
   begin
-    SuppressibleMsgBox('Vulkanstorm needs a processor with AVX2 (x86-64-v3): ' +
-      'Intel Haswell (2013) or newer, AMD Zen or Excavator or newer. ' +
+    SuppressibleMsgBox('Vulkanstorm needs a processor with AVX2 (x86-64-v3). ' +
+      'Most Intel Core processors from Haswell (2013) on and AMD Zen or ' +
+      'Excavator and newer have it; some Pentium, Celeron and Atom models ' +
+      'and some virtual machines do not. ' +
       'This computer''s processor does not support it.',
       mbCriticalError, MB_OK, IDOK);
     Result := False;
