@@ -5,7 +5,7 @@
 Reuses the standalone Windows GL bootstrap and shader compiler (gl_test_context.py) and runs the
 viewer's own stochastic transparency shaders (the stochastic engine's stochasticSampleF.glsl and
 stochasticResolveUtilF.glsl, and the transparency's alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
-alphaStochasticCurrentF.glsl, alphaStochasticResolveF.glsl, alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
+alphaStochasticResolveC.glsl (the temporal resolve, a GL 4.3 compute shader), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
 LLDrawPoolAlpha::renderStochastic on a small target:
   * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run;
@@ -123,9 +123,9 @@ def model_mask(px,py,seed,prim,a,s,table):
     return table[r*SEEDS+col]
 
 # ---- programs: the viewer's shaders as the viewer compiles them (#version 420, no extra code)
-def viewer(name):
+def viewer(name,version=420):
     text=(shaders/name).read_text()
-    return '#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/','')
+    return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
 engine=viewer('stochasticSampleF.glsl')   # the stochastic engine's sampling: the hash, the frame seed, the table lookup
 helper=viewer('alphaStochasticF.glsl')    # the transparency's part: the face's identity and the pass
 vertex='''#version 420
@@ -158,10 +158,14 @@ expand_before=program([(0x8B31,screen_vertex),(0x8B30,'#version 420\n'+subproces
 VIEWER_OFFSET=(-1/256,-1.,-2.,-3.)
 BEFORE_OFFSET=(-1.,-1.,-2.,-3.)
 composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
-# the temporal accumulation: this frame's samples averaged once (RGBA32F), then the transparency's resolve
-# with the engine's resolve object
-current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
-resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
+# the temporal accumulation: the transparency's compute resolve (this frame's samples averaged into a
+# shared tile) with the engine's resolve object compiled as a second compute object, as the viewer
+# links them (GL 4.3, #version 430, COMPUTE_SHADER)
+bindimage=fn('glBindImageTexture',None,U,U,I,C.c_ubyte,I,U,U);dispatch=fn('glDispatchCompute',None,U,U,U)
+membarrier=fn('glMemoryBarrier',None,U)
+COMPUTE=0x91B9;WRITE_ONLY=0x88B9;TEXTURE_FETCH_BARRIER=0x8;IMAGE_ACCESS_BARRIER=0x20
+def viewer_compute(name): return viewer(name,430).replace('#version 430\n','#version 430\n#define COMPUTE_SHADER 1\n',1)
+resolve_prog=program([(COMPUTE,viewer_compute('alphaStochasticResolveC.glsl')),(COMPUTE,viewer_compute('stochasticResolveUtilF.glsl'))])
 # per pixel, the samples of the stochastic depth nearer than the opaque depth, as bits
 readmask=program([(0x8B31,screen_vertex),(0x8B30,'''#version 420
 uniform sampler2DMS st_depth; uniform sampler2D opaque; uniform int samples; out uvec4 bits;
@@ -261,20 +265,19 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
-    # 3b. the temporal accumulation (alphaStochasticCurrentF.glsl, alphaStochasticResolveF.glsl): this frame's colour blended with the history
+    # 3b. the temporal accumulation (alphaStochasticResolveC.glsl): this frame's colour blended with the history
     if temporal is not None:
         nxt=1-temporal['idx']
-        bindfbo(FB,temporal['curfbo']);drawbuffer(COLOR0);disable(BLEND);disable(DEPTH_TEST)
-        use(current_prog);bind_unit(4,TEXMS,accum);uniform1i(loc(current_prog,b'alpha_st_accum'),4)
-        uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
-        draw(4,0,3)
-        bindfbo(FB,temporal['fbo'][nxt]);drawbuffer(COLOR0)
-        use(resolve_prog);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur'])
-        uniform1i(loc(resolve_prog,b'alpha_st_current'),8);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
-        uniform1i(loc(resolve_prog,b'st_samples_hw'),n)
+        use(resolve_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']])
+        uniform1i(loc(resolve_prog,b'alpha_st_accum'),4);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
+        uniform1i(loc(resolve_prog,b'st_samples_hw'),n);uniform1i(loc(resolve_prog,b'st_samples'),total)
         fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
         uniform1f(loc(resolve_prog,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'stoch_history_valid'),1 if temporal['valid'] else 0)
-        draw(4,0,3)
+        bindimage(0,temporal['tex'][nxt],0,0,0,WRITE_ONLY,RGBA16F)   # the shader's binding = 0
+        dispatch((W+15)//16,(H+15)//16,1)
+        # as LLPipeline::resolveAlphaStochasticTemporal: the stores are read by the composite's texture fetches and by the next
+        # frame's resolve; the image-access bit orders the stores of a later frame after the fetches of this one
+        membarrier(TEXTURE_FETCH_BARRIER|IMAGE_ACCESS_BARRIER);bindimage(0,0,0,0,0,WRITE_ONLY,RGBA16F)
         temporal['idx']=nxt;temporal['valid']=True
     # 4. composite over the scene, then the glow into its alpha
     bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
@@ -648,16 +651,14 @@ for name,worst,count in before:
 assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
 assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
 
-# ---- the temporal accumulation (alphaStochasticCurrentF.glsl and alphaStochasticResolveF.glsl with the
+# ---- the temporal accumulation (alphaStochasticResolveC.glsl, a compute shader, with the
 # engine's resolve; the composite's st_temporal)
 # 8 samples in one pass, the masks' seeds changing every frame (st_frame), the last frame's colour moved
 # by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.
 IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
 def new_temporal(reproj=IDENT):
     tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)]
-    fbos=[fbo((COLOR0,TEX2D,x)) for x in tex]
-    cur=tex2d(RGBA32F,RGBA,FLOAT);curfbo=fbo((COLOR0,TEX2D,cur))   # this frame's averaged samples
-    return dict(tex=tex,fbo=fbos,cur=cur,curfbo=curfbo,idx=0,valid=False,reproj=list(reproj))
+    return dict(tex=tex,idx=0,valid=False,reproj=list(reproj))
 def rmse(pix,want,cols=None):
     xs=range(W) if cols is None else cols
     return math.sqrt(sum((pix[y*W+x][c]-want[c])**2 for y in range(H) for x in xs for c in range(3))/(3*H*len(xs)))

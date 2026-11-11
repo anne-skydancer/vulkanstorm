@@ -8111,8 +8111,8 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 // Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
 // variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs. That is a capability gate, not
 // a fallback: an allocation that fails is logged and retried at the next screen buffer allocation
-// (method selected, resize), never answered with another method. The targets, the mask table, the
-// history and the averaged-samples target are all made up front there, never from the alpha pool.
+// (method selected, resize), never answered with another method. The targets, the mask table and the
+// history are made up front there, never from the alpha pool.
 
 namespace
 {
@@ -8125,14 +8125,16 @@ namespace
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // the device only (GL 4.0, enough samples): a shader set that did not build is an error, not a
-    // reason to select another method (beginAlphaStochastic logs it, a shader reload retries it)
-    sRenderAlphaStochasticSupported = gGLManager.mGLVersion >= 4.0f;
+    // the device only (GL 4.3 for the compute resolve, enough samples): a shader set that did not
+    // build is an error, not a reason to select another method (beginAlphaStochastic logs it, a
+    // shader reload retries it). 4.29 as llgl.cpp: mGLVersion is a float.
+    sRenderAlphaStochasticSupported = gGLManager.mGLVersion >= 4.29f;
 #else
     sRenderAlphaStochasticSupported = false;
 #endif
 #if LL_WINDOWS && !LL_MESA
-    sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers;
+    sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers &&
+                                      glDispatchCompute && glBindImageTexture && glMemoryBarrier;
 #endif
 
     // Samples in all: the stochastic engine's 8. Per pass: the most the device takes for the three
@@ -8243,8 +8245,7 @@ void LLPipeline::retryAlphaStochastic()
         return;
     }
     static LLCachedControl<bool> temporal_setting(gSavedSettings, "RenderAlphaStochasticTemporal", true);
-    const bool history_wanted = temporal_setting && gAlphaStochasticResolveProgram.mProgramObject &&
-                                gAlphaStochasticCurrentProgram.mProgramObject;
+    const bool history_wanted = temporal_setting && gAlphaStochasticResolveProgram.mProgramObject;
     const bool missing = !mAlphaSTFBO || (history_wanted && !mAlphaSTHistory.isAllocated());
     if (!missing || !sRenderAlphaStochasticSupported)
     {
@@ -8307,27 +8308,20 @@ void LLPipeline::releaseAlphaStochastic()
     releaseAlphaStochasticHistory();
 }
 
-// The temporal accumulation's two colours and the target of this frame's averaged samples.
+// The temporal accumulation's two colours.
 void LLPipeline::releaseAlphaStochasticHistory()
 {
     mAlphaSTHistory.release();
-    if (mAlphaSTCurrentFBO)
-    {
-        glDeleteFramebuffers(1, &mAlphaSTCurrentFBO);
-        mAlphaSTCurrentFBO = 0;
-    }
-    LLStochasticEngine::deleteTexture(mAlphaSTCurrent);
 }
 
-// The temporal accumulation's two full-size colours and the full-size target of this frame's
-// averaged samples (alphaStochasticCurrentF.glsl), made while the setting asks for it and the
-// resolve shaders built, freed otherwise (or when the size changed: the history is then lost).
-// All of it is counted in the texture memory.
+// The temporal accumulation's two full-size colours, made while the setting asks for it and the
+// resolve shader built, freed otherwise (or when the size changed: the history is then lost).
+// They are counted in the texture memory. This frame's averaged samples are not a target: the
+// resolve keeps them in shared memory (alphaStochasticResolveC.glsl).
 void LLPipeline::updateAlphaStochasticHistory()
 {
     static LLCachedControl<bool> temporal_setting(gSavedSettings, "RenderAlphaStochasticTemporal", true);
-    const bool wanted = temporal_setting && gAlphaStochasticResolveProgram.mProgramObject &&
-                        gAlphaStochasticCurrentProgram.mProgramObject && mAlphaSTFBO &&
+    const bool wanted = temporal_setting && gAlphaStochasticResolveProgram.mProgramObject && mAlphaSTFBO &&
                         mAlphaSTWidth && mAlphaSTHeight;
     if (!wanted || (mAlphaSTHistory.isAllocated() && !mAlphaSTHistory.matches(mAlphaSTWidth, mAlphaSTHeight)))
     {
@@ -8338,17 +8332,7 @@ void LLPipeline::updateAlphaStochasticHistory()
         return;
     }
     while (glGetError() != GL_NO_ERROR) {}
-    bool ok = mAlphaSTHistory.allocate(mAlphaSTWidth, mAlphaSTHeight);
-    if (ok)
-    {
-        mAlphaSTCurrent = LLStochasticEngine::newTexture2D(GL_RGBA32F, mAlphaSTWidth, mAlphaSTHeight, GL_RGBA32F);
-        glGenFramebuffers(1, &mAlphaSTCurrentFBO);
-        glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTCurrentFBO);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mAlphaSTCurrent, 0);
-        ok = mAlphaSTCurrent && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-        glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
-        ok = ok && glGetError() == GL_NO_ERROR;
-    }
+    bool ok = mAlphaSTHistory.allocate(mAlphaSTWidth, mAlphaSTHeight) && glGetError() == GL_NO_ERROR;
     if (!ok)
     {
         // The frames draw with their 8 samples alone until the history is there: it is tried again
@@ -8359,8 +8343,7 @@ void LLPipeline::updateAlphaStochasticHistory()
         return;
     }
     LL_INFOS("Pipeline") << "Stochastic transparency: temporal accumulation ("
-                         << ((mAlphaSTHistory.bytes() + (U64)mAlphaSTWidth * mAlphaSTHeight * 16) >> 20)
-                         << " MiB of history and averaged samples)" << LL_ENDL;
+                         << (mAlphaSTHistory.bytes() >> 20) << " MiB of history)" << LL_ENDL;
 }
 
 bool LLPipeline::beginAlphaStochastic()
@@ -8380,7 +8363,7 @@ bool LLPipeline::beginAlphaStochastic()
     LL_PROFILE_GPU_ZONE("alpha stochastic begin");
     // the temporal accumulation of this frame: the seeds change every frame, and the last frame's
     // colour is read when that frame ran the method at this size
-    mAlphaSTHistory.beginFrame(gAlphaStochasticResolveProgram.mProgramObject && gAlphaStochasticCurrentProgram.mProgramObject);
+    mAlphaSTHistory.beginFrame(gAlphaStochasticResolveProgram.mProgramObject != 0);
     gGL.flush();
     glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
 
@@ -8432,11 +8415,11 @@ void LLPipeline::endAlphaStochastic()
     glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
 }
 
-// This frame's accumulation (averaged over the samples once, into mAlphaSTCurrent) blended with
-// the last frame's, into the history texture that was not read, which then holds the latest
-// (alphaStochasticResolveF.glsl, with the stochastic engine's resolve). The camera's motion is
-// from the last frame's matrices, kept by the history: the pipeline's own copies are also written
-// by other renders.
+// This frame's accumulation (averaged over the samples once, in shared memory) blended with the
+// last frame's, into the history texture that was not read, which then holds the latest
+// (alphaStochasticResolveC.glsl, a compute shader, with the stochastic engine's resolve). The
+// camera's motion is from the last frame's matrices, kept by the history: the pipeline's own
+// copies are also written by other renders. Main render thread only, like the rest of the engine.
 void LLPipeline::resolveAlphaStochasticTemporal()
 {
     LL_PROFILE_GPU_ZONE("alpha stochastic temporal resolve");
@@ -8444,48 +8427,16 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     static const LLStaticHashedString sSamples("st_samples");
 
     gGL.flush();
-    LLGLDepthTest depth(GL_FALSE, GL_FALSE);
-    LLGLDisable cull(GL_CULL_FACE);
-    LLGLDisable blend(GL_BLEND);
-    LLGLDisable scissor(GL_SCISSOR_TEST);
-    gGL.setColorMask(true, true);
-
-    {
-        // the samples averaged, once for the pixel and its neighbourhood
-        LL_PROFILE_GPU_ZONE("alpha stochastic average");
-        glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTCurrentFBO);
-        glDrawBuffer(GL_COLOR_ATTACHMENT0);
-        LLGLSLShader& current = gAlphaStochasticCurrentProgram;
-        current.bind();
-        current.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
-        current.uniform1i(sSamples, (S32)LLStochasticEngine::SAMPLES);
-        const S32 accum = current.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
-        if (accum > -1)
-        {
-            gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
-        }
-        // the program is bound before the buffer is set (its attribute mask), and each bind()
-        // unbinds the vertex buffer: setBuffer() for every program
-        mScreenTriangleVB->setBuffer();
-        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-        if (accum > -1)
-        {
-            gGL.getTexUnit(accum)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
-        }
-        current.unbind();
-    }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTHistory.writeFramebuffer());
-    glDrawBuffer(GL_COLOR_ATTACHMENT0);
 
     LLGLSLShader& shader = gAlphaStochasticResolveProgram;
     shader.bind();
     shader.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+    shader.uniform1i(sSamples, (S32)LLStochasticEngine::SAMPLES);
     mAlphaSTHistory.setResolveUniforms(shader);
-    const S32 cur = shader.enableTexture(LLShaderMgr::ALPHA_ST_CURRENT, LLTexUnit::TT_TEXTURE);
-    if (cur > -1)
+    const S32 accum = shader.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (accum > -1)
     {
-        gGL.getTexUnit(cur)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTCurrent);
+        gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
     }
     const S32 stdepth = shader.enableTexture(LLShaderMgr::ALPHA_ST_DEPTH, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
     if (stdepth > -1)
@@ -8497,21 +8448,46 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     {
         gGL.getTexUnit(history)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTHistory.readTexture());
     }
-    mScreenTriangleVB->setBuffer();
-    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    // The history written this frame is an image, bound outside LLTexUnit (image units are not
+    // texture units; the shader declares binding = 0). It is never the texture bound for reading
+    // above: the two history textures alternate.
+    glBindImageTexture(0, mAlphaSTHistory.writeTexture(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+
+    // 16 x 16 pixels per workgroup (the shader's local size)
+    glDispatchCompute((mAlphaSTWidth + 15) / 16, (mAlphaSTHeight + 15) / 16, 1);
+
+    // Memory model (GL 4.3 section 7.12): writes by imageStore are incoherent, they are not visible
+    // to any later command until a barrier says which kind of access reads them. Two kinds do:
+    //  - GL_TEXTURE_FETCH_BARRIER_BIT: texture fetches after the barrier see the stores. That is
+    //    the composite of this frame (it samples the latest history) and the next frame's resolve
+    //    (it reads this frame's result as its history).
+    //  - GL_SHADER_IMAGE_ACCESS_BARRIER_BIT: image stores issued after the barrier wait for the
+    //    accesses issued before it, texture fetches included (write after read). The two history
+    //    textures alternate, so the texture stored here is stored again two frames later, after
+    //    this frame's composite and the next frame's resolve fetched it; the barrier of the next
+    //    frame's dispatch lies between those fetches and that store, and orders them. Without the
+    //    bit that order would be left to the implementation.
+    // Nothing else is needed: this dispatch's own reads (the accumulation and depth targets, written
+    // by rendering into a framebuffer) are ordered by the GL without a barrier, since only writes by
+    // shader image stores, atomics and storage buffers are incoherent. No framebuffer, buffer or
+    // texture-update access reads the history after the dispatch (the composite samples it; the
+    // history's framebuffers serve other producers' fragment resolves).
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+    glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    }
     if (stdepth > -1)
     {
         gGL.getTexUnit(stdepth)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
     }
-    for (S32 unit : { cur, history })
+    if (history > -1)
     {
-        if (unit > -1)
-        {
-            gGL.getTexUnit(unit)->unbind(LLTexUnit::TT_TEXTURE);
-        }
+        gGL.getTexUnit(history)->unbind(LLTexUnit::TT_TEXTURE);
     }
     shader.unbind();
-    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
 
     mAlphaSTHistory.endFrame();
 }

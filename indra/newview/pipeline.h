@@ -440,7 +440,7 @@ public:
     void retryAlphaStochastic();                   // once a frame from the display path: failed allocations, with backoff
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
-    void releaseAlphaStochasticHistory();   // the history and the averaged-samples target freed
+    void releaseAlphaStochasticHistory();   // the history freed
     void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
     U32  getAlphaStochasticSamples() const { return LLStochasticEngine::SAMPLES; }
@@ -738,7 +738,7 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.0+, its shaders built)
+    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.3+: the compute resolve)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
     static bool             sRenderGlow;
@@ -821,11 +821,8 @@ public:
     F64 mAlphaSTRetryAt = 0.0;      // no allocation attempt before this time (LLTimer::getElapsedSeconds)
     F32 mAlphaSTRetryDelay = 0.5f;  // doubled per failed attempt, at most 30 s
     // the temporal accumulation: the transparency's history in the stochastic engine (two
-    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and the
-    // full-size RGBA32F target of this frame's averaged samples that its resolve reads
+    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules)
     LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
-    U32 mAlphaSTCurrent = 0;
-    U32 mAlphaSTCurrentFBO = 0;
     F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
     F64 mAlphaSTRetryTime = 0.0;
     // </Vulkanstorm>
