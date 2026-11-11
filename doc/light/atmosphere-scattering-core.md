@@ -63,6 +63,9 @@ altitude. This took the C++ vs GLSL error of the march from 2.3e-3 to 1e-5.
   (`ground_distance`; it used to run through the planet: f_ms 0.81 against 0.34 a micrometre up). Within 3 % of a 48 x 48 x 400 texel (relative to the larger of the value and 0.01).
 - **Sky irradiance E(h, mu_s)**, 64 x 16 (x = mu_s, y = sqrt(h / top)): `sky_irradiance_texel`, 8 x 8 cosine-weighted directions, 16 quadratic steps, single
   scattering with the true phase plus Psi. For the clouds (AT2-4) and the probes. Within 0.6 % of a 64 x 64 x 512 integral on Default.
+- **Precondition of every march** (`atmosphere_ap`, `sky_radiance`, `sky_irradiance_texel`): the multiple-scattering table is bound (`ms_lut`, built by `build_ms_lut`).
+  `fromLegacy` leaves it unset, and an unbound march would silently leave the multiple scattering out, so it is enforced: an assertion (`llassert` in the viewer, `assert` elsewhere) and,
+  where assertions are compiled out, a warning once on stderr. `use_single_scattering_only()` is the documented opt-out (the reference of a test). There is no on-the-fly exact Psi.
 - Psi and E are built from the T **table** (AT2-1 builds them that way: `build_ms_lut` and `build_e_lut` with `t_lut` bound), the vectors from the exact transmittance.
 
 ## The march
