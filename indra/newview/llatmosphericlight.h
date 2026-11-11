@@ -1158,10 +1158,14 @@ inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
 // the sky irradiance texel, the sky radiance and the aerial-perspective march. class1/windlight/atmosphereCommonF.glsl
 // is their GLSL twin (held equal by scripts/light/gen_atmosphere_scatter_vectors.py), indra/newview/tests/
 // llatmosphericscatter_test.cpp the test. Hillaire 2020 (A Scalable and Production Ready Sky and Atmosphere Rendering
-// Technique) on Bruneton and Neyret's parameterisation; the model and its measurements are doc/light/atmosphere.md.
+// Technique) on Bruneton and Neyret's parameterisation; the model and its measurements are doc/light/atmosphere-scattering-core.md.
 //
 // Units: km; z is up (LLSettingsSky's frame); the observer is at (0, 0, Rg + h). Colours are linear. All the work is
 // per-channel (Vec3) except the grey aerosol and slab scattering.
+//
+// Altitudes are never taken as |x| - Rg (in float that is 0.5 m of resolution at 6360 km, and the haze slab is 250 m thick):
+// the march carries the observer's height h0 and takes the altitude of a point at path length t as q / (r + Rg), with
+// q = h0 (2 Rg + h0) + 2 b t + t^2 = |x|^2 - Rg^2 and b = (Rg + h0) d.z. The same forms are in the GLSL.
 // ---------------------------------------------------------------------------------------------------
 
 inline Vec3 operator+(const Vec3& a, const Vec3& b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
@@ -1177,19 +1181,30 @@ constexpr double SC_PI = 3.14159265358979323846;
 
 inline Vec3 vexp(const Vec3& a) { return { std::exp(a.x), std::exp(a.y), std::exp(a.z) }; }
 inline double vmax(const Vec3& a) { return std::max(a.x, std::max(a.y, a.z)); }
-inline double len(const Vec3& a) { return std::sqrt(detail::dot(a, a)); }
-inline double clampd(double x, double lo, double hi) { return x < lo ? lo : (x > hi ? hi : x); }
+inline double len(const Vec3& a) { return std::sqrt(dot(a, a)); }
+// NaN gives lo (a NaN would reach a static_cast<int> in the tables: undefined behaviour)
+inline double clampd(double x, double lo, double hi) { return !(x >= lo) ? lo : (x > hi ? hi : x); }
 
-// distance along d from o to the sphere of radius R (|d| = 1): the first hit ahead, else the far one, -1 if none
-inline double ray_sphere(const Vec3& o, const Vec3& d, double R)
+// a unit vector along v; `fallback` when v is not finite or has no length
+inline Vec3 sane_dir(const Vec3& v, const Vec3& fallback)
 {
-    const double b = detail::dot(o, d), c = detail::dot(o, o) - R * R, disc = b * b - c;
-    if (disc < 0.0)
+    const double l = std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    return (std::isfinite(l) && l > 1e-12) ? Vec3{ v.x / l, v.y / l, v.z / l } : fallback;
+}
+
+// the roots t0 <= t1 of t^2 + 2 b t + c = 0, without cancellation; false if there are none
+inline bool quad_roots(double b, double c, double& t0, double& t1)
+{
+    const double disc = b * b - c;
+    if (!(disc >= 0.0))
     {
-        return -1.0;
+        return false;
     }
-    const double s = std::sqrt(disc), t0 = -b - s, t1 = -b + s;
-    return t0 > 0.0 ? t0 : (t1 > 0.0 ? t1 : -1.0);
+    const double s = std::sqrt(disc), q = -(b + (b >= 0.0 ? s : -s));
+    const double r2 = q != 0.0 ? c / q : q;
+    t0 = std::min(q, r2);
+    t1 = std::max(q, r2);
+    return true;
 }
 } // namespace detail
 
@@ -1200,7 +1215,7 @@ struct ScatterFields
     double haze_horizon = 0.0;         // tints the aerosol albedo (the red channel, as the legacy dome)
     Vec3   ambient;                    // scales the multiple scattering
     double glow_x = 5.0, glow_z = -0.48; // the creator's glow lobe (glow.x, glow.z): (glow.x max(1 - cos, 0.001))^glow.z + 0.25
-    double mie_anisotropy = 0.8;       // EEP's Mie anisotropy (the phase when the glow is not a usable lobe)
+    double mie_anisotropy = 0.8;       // EEP's Mie anisotropy (the phase of an atmosphere built by hand without a glow lobe)
     double sky_sunlight_scale = 1.0;   // RenderHDRSkySunlightScale (the irradiance pbrBaseLight gives a sunlit surface is 3 x lin(source) x this)
     double sun_disc_sin = 0.0046, moon_disc_sin = 0.0046; // the lights' disc (sin of the angular radius), for the horizon cut-off
 };
@@ -1216,10 +1231,15 @@ struct ScatterBounds
     double max_rayleigh_albedo = 1.0;     // <= 1: energy conservation
     double max_aerosol_albedo = 0.95;
     double aerosol_albedo_at_ref = 0.9;   // the aerosol albedo of a sky whose haze_horizon is Default's
+    // The multiple scattering is scaled by ms_scale and summed as 1 / (1 - f_ms): the product is at most max_ms_scale / (1 - max_f_ms) =
+    // 4 / 0.4 = 10 (a scale of 4 with a series of 10 let a legal synthetic sky reach 1.43 x the white card across the open sky). No
+    // shipped sky is on the scale bound (the largest ambient / Default's is 2.86, the library check reports it); only a very thick fog
+    // reaches f_ms 0.6, where Hillaire's series is weak anyway.
     double max_ms_scale = 4.0;            // per channel
-    double max_f_ms = 0.9;                // the multiple-scattering series 1 / (1 - f_ms) amplifies by at most 10
+    double max_f_ms = 0.6;
     double max_phase = 1e4;               // the aerosol phase's peak, 1 / sr
-    double glow_z_min = -3.0, glow_z_max = 0.5; // the usable glow lobes
+    double glow_z_min = -3.0, glow_z_max = 0.5; // the glow lobes: glow.z and glow.x are clamped into these (a continuous clamp)
+    double glow_x_min = 0.01, glow_x_max = 1000.0;
     double max_sunlight_scale = 4.0;
     double max_moon_gain = 0.25;          // AT1's ev clamp: the moon is never more than a quarter of a sun
     double ground_albedo = 0.2;           // the planet's surface, for the multiple scattering and the sky below the horizon
@@ -1227,59 +1247,66 @@ struct ScatterBounds
 
 constexpr int MS_DIRS_DEFAULT = 8;       // 8 x 8 directions per multiple-scattering texel
 constexpr int MS_STEPS_DEFAULT = 20;
-// atmosphere_ap's step distribution (atmosphereCommonF.glsl has the same two numbers): the share of the steps spent from the observer to
-// where the ray leaves the 0.25 km haze slab (about 5 of 12), and the exponent of their spacing when the observer is inside the slab
-// (1 uniform, 2 quadratic; 1.25 meets 1 % in dense fog, where a uniform inner march is 1.7 % and a quadratic one 4 %)
-constexpr double AP_SLAB_STEP_SHARE = 0.4;
-constexpr double AP_INSIDE_POWER = 1.25;
+// atmosphere_ap's step placement (the same numbers are in the GLSL): the spacing exponents of its first and second segment, the floor of
+// the weights that share the steps between them, and the rule for which end of a segment the steps crowd to (ray_segment)
+constexpr double AP_POWER_NEAR = 1.2;
+constexpr double AP_POWER_FAR = 1.1;
+constexpr double AP_WEIGHT_FLOOR = 0.2;
+constexpr double AP_DENSE_RATIO = 2.0;
+constexpr double AP_DENSE_TAU = 2.0;
+constexpr int AP_MIN_STEPS = 4;          // atmosphere_ap marches at least this many steps
+constexpr int AP_MAX_STEPS = 1 << 16;
 
 struct ScatterLights
 {
     Vec3   dir[2];                        // unit, z up: 0 the sun, 1 the moon
-    Vec3   E[2];                          // irradiance above the atmosphere on a surface facing the light (linear)
+    Vec3   E[2];                          // irradiance above the atmosphere on a surface facing the light (linear): the one place E_sun and E_moon live
     double disc_sin[2] = { 0.0046, 0.0046 };
-    int    count = 2;                     // lights marched (1: the moon is skipped)
+    int    count = 2;                     // lights marched (1: the moon is skipped); clamped to [0, 2]
 };
 
 struct LLScatter;
 
-// Bruneton and Neyret's transmittance table T(r, mu), 256 x 64, built from LLAtmosphere::physical_transmittance (the twin of
+// Bruneton and Neyret's transmittance table T(h, mu), 256 x 64, built from LLAtmosphere::physical_transmittance (the twin of
 // pa_transmittance, the cut at the slab and every kink: a 40-step midpoint march misses the 0.25 km slab on grazing rays and is
 // off by 0.13). Holds the physical part only: the lights multiply the disc's visibility and the excess factor (light_T).
+// The table is of the exact transmittance of the physical atmosphere (AT2-1's pass builds it with pa_transmittance, the cuts
+// uploaded), and the multiple-scattering and sky irradiance tables are built from the table's lookups (build_ms_lut with t_lut bound).
 struct TransmittanceLUT
 {
     static constexpr int W = 256, H = 64;
     double rg = 0.0, rt = 0.0;
     std::vector<Vec3> texel;
 
-    // (r, mu) -> (u, v) in [0, 1]^2: u the distance to the atmosphere's top between its minimum (Rt - r) and the horizon's, v the
+    // (h, mu) -> (u, v) in [0, 1]^2: u the distance to the atmosphere's top between its minimum (Rt - r) and the horizon's, v the
     // square root of the horizon distance, sqrt(rho / H) (Bruneton and Neyret's is rho / H; the root puts the texels where the 0.25 km
     // slab is: linear in rho one texel is 14 km of horizon distance, 0.015 km of altitude, and a bilinear lookup in fog is off by 6e-3;
-    // with the root 1.4e-3). A ray below the horizon has u > 1 (clamped by lookup)
-    static void uv_of(double rg, double rt, double r, double mu, double& u, double& v)
+    // with the root 1.4e-3). A ray below the horizon has u > 1 (clamped by lookup). h is the altitude: r - Rg is never formed.
+    static void uv_of(double rg, double rt, double h, double mu, double& u, double& v)
     {
-        const double H2 = std::max(0.0, rt * rt - rg * rg), Hh = std::sqrt(H2);
-        const double rho = std::sqrt(std::max(0.0, r * r - rg * rg));
-        const double disc = r * r * (mu * mu - 1.0) + rt * rt;
+        const double top = rt - rg, hh = std::sqrt(std::max(0.0, top * (rt + rg)));
+        h = detail::clampd(h, 0.0, top);
+        const double r = rg + h, rho = std::sqrt(h * (2.0 * rg + h));
+        const double disc = (top - h) * (rt + r) + r * r * mu * mu; // Rt^2 - r^2 (1 - mu^2)
         const double d = std::max(0.0, -r * mu + std::sqrt(std::max(disc, 0.0)));
-        const double dmin = rt - r, dmax = rho + Hh;
+        const double dmin = top - h, dmax = rho + hh;
         u = (d - dmin) / std::max(dmax - dmin, 1e-6);
-        v = Hh > 0.0 ? std::sqrt(rho / Hh) : 0.0;
+        v = hh > 0.0 ? std::sqrt(rho / hh) : 0.0;
     }
-    static void rmu_of(double rg, double rt, double u, double v, double& r, double& mu)
+    static void rmu_of(double rg, double rt, double u, double v, double& h, double& mu)
     {
-        const double H2 = std::max(0.0, rt * rt - rg * rg), Hh = std::sqrt(H2);
-        const double rho = Hh * v * v;
-        r = std::sqrt(rho * rho + rg * rg);
-        const double dmin = rt - r, dmax = rho + Hh, d = dmin + u * (dmax - dmin);
-        mu = d == 0.0 ? 1.0 : detail::clampd((H2 - rho * rho - d * d) / (2.0 * r * d), -1.0, 1.0);
+        const double top = rt - rg, h2 = std::max(0.0, top * (rt + rg)), hh = std::sqrt(h2);
+        const double rho = hh * v * v, r = std::sqrt(rho * rho + rg * rg);
+        h = rho * rho / (r + rg);
+        const double dmin = top - h, dmax = rho + hh, d = dmin + u * (dmax - dmin);
+        mu = d == 0.0 ? 1.0 : detail::clampd((h2 - rho * rho - d * d) / (2.0 * r * d), -1.0, 1.0);
     }
 
-    // The texel's ray: (r, mu) with mu at least a hair above the horizon's (the table covers the lit side; the cut-off is the lights')
-    static void texel_ray(const LLAtmosphere& atm, int i, int j, double& r, double& mu)
+    // The texel's ray: mu at least a hair above the horizon's (the table covers the lit side; the cut-off is the lights')
+    static void texel_ray(const LLAtmosphere& atm, int i, int j, double& h, double& mu)
     {
-        rmu_of(atm.planet_radius_km, atm.top_radius_km, i / double(W - 1), j / double(H - 1), r, mu);
-        mu = std::max(mu, atm.horizon_mu(r - atm.planet_radius_km) + 1e-6);
+        rmu_of(atm.planet_radius_km, atm.top_radius_km, i / double(W - 1), j / double(H - 1), h, mu);
+        mu = std::max(mu, atm.horizon_mu(h) + 1e-6);
     }
 
     void build(const LLAtmosphere& atm)
@@ -1291,17 +1318,17 @@ struct TransmittanceLUT
         {
             for (int i = 0; i < W; ++i)
             {
-                double r, mu;
-                texel_ray(atm, i, j, r, mu);
-                texel[j * W + i] = atm.physical_transmittance(r - rg, mu, 0.0);
+                double h, mu;
+                texel_ray(atm, i, j, h, mu);
+                texel[j * W + i] = atm.physical_transmittance(h, mu, 0.0);
             }
         }
     }
 
-    Vec3 lookup(double r, double mu) const
+    Vec3 lookup(double h, double mu) const
     {
         double u, v;
-        uv_of(rg, rt, r, mu, u, v);
+        uv_of(rg, rt, h, mu, u, v);
         const double x = detail::clampd(u, 0.0, 1.0) * (W - 1), y = detail::clampd(v, 0.0, 1.0) * (H - 1);
         const int x0 = std::min(static_cast<int>(x), W - 2), y0 = std::min(static_cast<int>(y), H - 2);
         const double fx = x - x0, fy = y - y0;
@@ -1316,9 +1343,13 @@ struct Table2D
 {
     int w = 0, h = 0;
     std::vector<Vec3> texel;
-    void init(int w_, int h_) { w = w_; h = h_; texel.assign(static_cast<size_t>(w) * h, Vec3{}); }
+    void init(int w_, int h_) { w = std::max(w_, 2); h = std::max(h_, 2); texel.assign(static_cast<size_t>(w) * h, Vec3{}); }
     Vec3 lookup(double u, double v) const
     {
+        if (texel.empty())
+        {
+            return {};
+        }
         const double x = detail::clampd(u, 0.0, 1.0) * (w - 1), y = detail::clampd(v, 0.0, 1.0) * (h - 1);
         const int x0 = std::min(static_cast<int>(x), w - 2), y0 = std::min(static_cast<int>(y), h - 2);
         const double fx = x - x0, fy = y - y0;
@@ -1328,13 +1359,13 @@ struct Table2D
     }
 };
 
-// The multiple-scattering table Psi(r, mu_s) (per unit irradiance): x = mu_s, y = (r - Rg) / (Rt - Rg)
+// The multiple-scattering table Psi(h, mu_s) (per unit irradiance): x = mu_s, y = h / (Rt - Rg)
 struct MsLUT : Table2D
 {
-    double rg = 0.0, rt = 0.0;
+    double top_km = 0.0;
     static double mu_of(int i, int w) { return i / double(w - 1) * 2.0 - 1.0; }
-    static double r_of(double rg, double rt, int j, int h) { return rg + std::max(j / double(h - 1), 1e-3) * (rt - rg); }
-    Vec3 at(double r, double mu_s) const { return lookup(mu_s * 0.5 + 0.5, detail::clampd((r - rg) / (rt - rg), 0.0, 1.0)); }
+    static double h_of(double top, int j, int h) { return std::max(j / double(h - 1), 1e-3) * top; }
+    Vec3 at(double h_km, double mu_s) const { return lookup(mu_s * 0.5 + 0.5, h_km / top_km); }
 };
 
 // The sky irradiance table E(h, mu_s) (per unit irradiance of the sun): x = mu_s, y = sqrt(h / (Rt - Rg)): the light the sky
@@ -1351,7 +1382,7 @@ enum ScatterClamp : unsigned // which bounds applied (diagnostics, tests)
     SCLAMP_RAYLEIGH_ALBEDO = 1u << 0,  // blue_horizon / Default's left [0, max_rayleigh_albedo]
     SCLAMP_AEROSOL_ALBEDO  = 1u << 1,
     SCLAMP_MS_SCALE        = 1u << 2,
-    SCLAMP_GLOW_LOBE       = 1u << 3,  // the glow is not a usable lobe: Cornette-Shanks with the Mie anisotropy
+    SCLAMP_GLOW_LOBE       = 1u << 3,  // glow.x or glow.z was clamped into the usable lobes
     SCLAMP_PHASE_PEAK      = 1u << 4,  // the aerosol phase's peak is capped at max_phase
     SCLAMP_SUNLIGHT_SCALE  = 1u << 5,
     SCLAMP_MOON_GAIN       = 1u << 6,
@@ -1370,18 +1401,20 @@ struct LLScatter
     double aerosol_scat = 0.0;          // 1/km: albedo x aerosol_ext
     double slab_scat = 0.0;             // 1/km: albedo x slab_ext
     Vec3   ms_scale = { 1.0, 1.0, 1.0 };
-    double glow_x = 0.0, glow_z = 0.0, glow_norm = 0.0; // glow_norm 0: Cornette-Shanks
+    double glow_x = 0.0, glow_z = 0.0, glow_norm = 0.0; // glow_norm 0: Cornette-Shanks (an atmosphere built by hand)
     double anisotropy = 0.8;
     double max_phase = 1e4;
-    Vec3   E_sun, E_moon;               // irradiance above the atmosphere on a surface facing the body (linear)
-    ScatterLights lights;
+    ScatterLights lights;               // E[0] is E_sun and E[1] E_moon: there is no second copy
     unsigned scatter_clamped = 0;       // bit mask of ScatterClamp
+
+    Vec3 E_sun() const { return lights.E[0]; }
+    Vec3 E_moon() const { return lights.E[1]; }
 
     // what the tables are read from; unset (null): the exact value (physical_transmittance, no table). For tests and the vectors.
     const TransmittanceLUT* t_lut = nullptr;
     const MsLUT* ms_lut = nullptr;
     const SkyIrradianceLUT* e_lut = nullptr;
-    std::function<Vec3(double, double)> ms_override; // replaces the Psi lookup (r, mu_s), for the vectors
+    std::function<Vec3(double, double)> ms_override; // test hook: replaces the Psi lookup (h, mu_s); the GPU vectors use a smooth stand-in
 
     // The sky's scattering from the same legacy fields as the extinction. `moon_gain` is the moon's irradiance relative to the sun's
     // (AT1's rig.gain = moon_brightness x compensation).
@@ -1393,11 +1426,17 @@ struct LLScatter
         s.bounds = sb;
         s.atm = LLAtmosphere::fromLegacy(sky, ab);
         unsigned c = 0;
+        // NaN -> fallback; +-infinity -> the largest finite value of that sign (so the bound below it applies, not 0)
         auto fin = [&](double x, double fallback) {
-            if (!std::isfinite(x))
+            if (std::isnan(x))
             {
                 c |= SCLAMP_NON_FINITE;
                 return fallback;
+            }
+            if (std::isinf(x))
+            {
+                c |= SCLAMP_NON_FINITE;
+                return x > 0.0 ? 1e30 : -1e30;
             }
             return x;
         };
@@ -1431,21 +1470,14 @@ struct LLScatter
                        bounded(am[1] / sb.ref_ambient, 0.0, sb.max_ms_scale, SCLAMP_MS_SCALE),
                        bounded(am[2] / sb.ref_ambient, 0.0, sb.max_ms_scale, SCLAMP_MS_SCALE) };
 
-        // 3. the aerosol phase: the creator's glow lobe, normalised over the sphere; Cornette-Shanks when it is not a usable lobe
+        // 3. the aerosol phase: the creator's glow lobe, normalised over the sphere; glow.x and glow.z are clamped into the usable lobes
+        //    (a continuous, monotone clamp: the nearest usable lobe, never a switch to another phase function)
         s.max_phase = sb.max_phase;
         s.anisotropy = bounded(fin(f.mie_anisotropy, 0.8), -0.95, 0.95, SCLAMP_ANISOTROPY);
-        const double gx = fin(f.glow_x, 0.0), gz = fin(f.glow_z, 0.0);
-        if (gx > 0.0 && gz >= sb.glow_z_min && gz <= sb.glow_z_max)
-        {
-            s.glow_x = gx;
-            s.glow_z = gz;
-            s.glow_norm = 1.0 / glow_integral(gx, gz);
-        }
-        else
-        {
-            c |= SCLAMP_GLOW_LOBE;
-        }
-        if (s.phase_m_uncapped(1.0) > sb.max_phase) // the peak is at cos = 1, for both phases
+        s.glow_x = bounded(fin(f.glow_x, 0.0), sb.glow_x_min, sb.glow_x_max, SCLAMP_GLOW_LOBE);
+        s.glow_z = bounded(fin(f.glow_z, 0.0), sb.glow_z_min, sb.glow_z_max, SCLAMP_GLOW_LOBE);
+        s.glow_norm = 1.0 / glow_integral(s.glow_x, s.glow_z);
+        if (s.phase_peak() > sb.max_phase) // the lobe peaks at cos = 1 (glow.z < 0) or at cos = -1 (glow.z > 0)
         {
             c |= SCLAMP_PHASE_PEAK;
         }
@@ -1454,10 +1486,8 @@ struct LLScatter
         const double scale = bounded(fin(f.sky_sunlight_scale, 1.0), 0.0, sb.max_sunlight_scale, SCLAMP_SUNLIGHT_SCALE);
         const double src[3] = { bounded(fin(sky.source.x, 0.0), 0.0, 1.0, SCLAMP_SOURCE), bounded(fin(sky.source.y, 0.0), 0.0, 1.0, SCLAMP_SOURCE),
                                 bounded(fin(sky.source.z, 0.0), 0.0, 1.0, SCLAMP_SOURCE) };
-        s.E_sun = srgb_to_linear(Vec3{ src[0], src[1], src[2] }) * (3.0 * scale);
-        s.E_moon = s.E_sun * bounded(fin(moon_gain, 0.0), 0.0, sb.max_moon_gain, SCLAMP_MOON_GAIN);
-        s.lights.E[0] = s.E_sun;
-        s.lights.E[1] = s.E_moon;
+        s.lights.E[0] = srgb_to_linear(Vec3{ src[0], src[1], src[2] }) * (3.0 * scale);
+        s.lights.E[1] = s.lights.E[0] * bounded(fin(moon_gain, 0.0), 0.0, sb.max_moon_gain, SCLAMP_MOON_GAIN);
         s.lights.disc_sin[0] = clampd(fin(f.sun_disc_sin, 0.0046), 1e-5, 0.2);
         s.lights.disc_sin[1] = clampd(fin(f.moon_disc_sin, 0.0046), 1e-5, 0.2);
         s.lights.dir[0] = { 0.0, 0.0, 1.0 };
@@ -1489,8 +1519,8 @@ struct LLScatter
 
     void set_light_dirs(const Vec3& sun_dir, const Vec3& moon_dir)
     {
-        lights.dir[0] = sun_dir;
-        lights.dir[1] = moon_dir;
+        lights.dir[0] = detail::sane_dir(sun_dir, { 0.0, 0.0, 1.0 });
+        lights.dir[1] = detail::sane_dir(moon_dir, { 0.0, 0.0, -1.0 });
     }
 
     // --- phase functions (1 / sr) ---
@@ -1505,6 +1535,7 @@ struct LLScatter
         return 3.0 / (8.0 * detail::SC_PI) * ((1.0 - g2) * (1.0 + c * c)) / ((2.0 + g2) * std::pow(std::max(1.0 + g2 - 2.0 * g * c, 1e-4), 1.5));
     }
     double phase_m(double c) const { return std::min(phase_m_uncapped(c), max_phase); }
+    double phase_peak() const { return std::max(phase_m_uncapped(1.0), phase_m_uncapped(-1.0)); }
 
     // --- the medium at altitude h_km: scattering (Rayleigh, aerosol + slab) and extinction, per km ---
     void medium(double h_km, Vec3& s_r, double& s_m, Vec3& ext) const
@@ -1518,22 +1549,22 @@ struct LLScatter
         ext = atm.rayleigh_ext * dr + Vec3{ grey, grey, grey } + atm.ozone_ext * doz;
     }
 
-    // transmittance from x to the top of the atmosphere towards light i, 0 behind the planet (soft over the disc), the excess factor of
-    // the capped columns included. From the table when t_lut is set, else exact.
-    Vec3 light_T(const Vec3& x, const ScatterLights& lt, int i) const
+    // transmittance from the point x (at altitude h_km) to the top of the atmosphere towards light i, 0 behind the planet (soft over the
+    // disc), the excess factor of the capped columns included. From the table when t_lut is set, else exact.
+    Vec3 light_T(const Vec3& x, double h_km, const ScatterLights& lt, int i) const
     {
         const double r = detail::len(x), mu = detail::dot(x, lt.dir[i]) / r;
         if (!t_lut)
         {
-            return atm.transmittance(r - atm.planet_radius_km, mu, lt.disc_sin[i], 1.0);
+            return atm.transmittance(h_km, mu, lt.disc_sin[i], 1.0);
         }
-        const double mu_h = atm.horizon_mu(r - atm.planet_radius_km), d = lt.disc_sin[i];
+        const double mu_h = atm.horizon_mu(h_km), d = lt.disc_sin[i];
         const double vis = smoothstep(mu_h - d, mu_h + d, mu);
         if (!(vis > 0.0))
         {
             return {};
         }
-        Vec3 t = t_lut->lookup(r, mu) * vis;
+        Vec3 t = t_lut->lookup(h_km, mu) * vis;
         if (atm.excess.x > 0.0 || atm.excess.y > 0.0 || atm.excess.z > 0.0)
         {
             const double air = 1.0 / std::max(std::min(mu, 1.0) - mu_h, 1e-6);
@@ -1542,26 +1573,99 @@ struct LLScatter
         return t;
     }
 
-    Vec3 ms_at(double r, double mu_s) const
+    Vec3 ms_at(double h_km, double mu_s) const
     {
         if (ms_override)
         {
-            return ms_override(r, mu_s);
+            return ms_override(h_km, mu_s);
         }
-        return ms_lut ? ms_lut->at(r, mu_s) : Vec3{};
+        return ms_lut ? ms_lut->at(h_km, mu_s) : Vec3{};
     }
 
-    // --- the march: o + t d for t in [t0, t1] in n steps (step i ends at (i / n)^power of the segment: 1 uniform, 2 quadratic from t0), midpoints; accumulates in-scattered
-    //     radiance and the transmittance of the segment. The one march of the sky view, the froxels, the far table and the vectors.
-    void march_seg(const Vec3& o, const Vec3& d, double t0, double t1, int n, double power, const ScatterLights& lt, Vec3& Lin, Vec3& T) const
+    // --- geometry from the observer's height h0 (the observer is at (0, 0, Rg + h0)), in altitudes ---
+
+    // the point at path length t along d: its position (for the directions), its radius and its altitude
+    struct PathPoint
+    {
+        Vec3 x;
+        double h;
+    };
+    PathPoint path_point(double h0, const Vec3& d, double t) const
+    {
+        const double rg = atm.planet_radius_km;
+        const double q0 = h0 * (2.0 * rg + h0), b = (rg + h0) * d.z;
+        const double q = std::max(q0 + t * (2.0 * b + t), -rg * rg * 0.999999);
+        const double r = std::sqrt(rg * rg + q);
+        return { { d.x * t, d.y * t, rg + h0 + d.z * t }, q / (r + rg) };
+    }
+
+    // distance along d from the observer to the sphere of altitude `alt`: the first hit ahead, else the far one, -1 if none
+    double ray_alt(double h0, const Vec3& d, double alt) const
+    {
+        const double rg = atm.planet_radius_km;
+        double t0, t1;
+        if (!detail::quad_roots((rg + h0) * d.z, (h0 - alt) * (2.0 * rg + h0 + alt), t0, t1))
+        {
+            return -1.0;
+        }
+        return t0 > 0.0 ? t0 : (t1 > 0.0 ? t1 : -1.0);
+    }
+
+    // The distance to the planet's ground along d from the observer, -1 if the ray does not meet it. An observer on the ground (h0 = 0)
+    // looking below its horizon is AT the ground: 0, not the far side of the chord through the planet.
+    double ground_distance(double h0, const Vec3& d) const
+    {
+        if (!(h0 > 0.0))
+        {
+            return d.z < 0.0 ? 0.0 : -1.0;
+        }
+        return ray_alt(h0, d, 0.0);
+    }
+
+    // the distance to the planet's ground along d from the observer, else to the top of the atmosphere
+    double ray_length(double h0, const Vec3& d) const
+    {
+        const double tg = ground_distance(h0, d);
+        return tg >= 0.0 ? tg : std::max(ray_alt(h0, d, atm.top_radius_km - atm.planet_radius_km), 0.0);
+    }
+
+    // distance along d to the slab's top (the sphere of altitude slab_top_km), the first crossing ahead in (0, tmax), else -1
+    double slab_cross(double h0, const Vec3& d, double tmax) const
+    {
+        if (!(atm.slab_top_km > 0.0))
+        {
+            return -1.0;
+        }
+        const double rg = atm.planet_radius_km, H = atm.slab_top_km;
+        double t0, t1;
+        if (!detail::quad_roots((rg + h0) * d.z, (h0 - H) * (2.0 * rg + h0 + H), t0, t1))
+        {
+            return -1.0;
+        }
+        const double t = t0 > 1e-4 ? t0 : t1;
+        return (t > 1e-4 && t < tmax) ? t : -1.0;
+    }
+
+    static double spacing(double a, double power, bool dense_at_end)
+    {
+        const double x = dense_at_end ? 1.0 - a : a;
+        const double y = power == 1.0 ? x : (power == 2.0 ? x * x : std::pow(x, power));
+        return dense_at_end ? 1.0 - y : y;
+    }
+
+    // --- the march: from the observer's height h0 along d for t in [t0, t1] in n steps (step i ends at (i / n)^power of the segment: 1
+    //     uniform, 2 quadratic, dense at its start, or at its end when dense_at_end), midpoints; accumulates in-scattered radiance and the transmittance of the segment. The one
+    //     march of the sky view, the froxels, the far table and the vectors.
+    void march_seg(double h0, const Vec3& d, double t0, double t1, int n, double power, bool dense_at_end, const ScatterLights& lt, Vec3& Lin, Vec3& T) const
     {
         const double len = t1 - t0;
         if (n <= 0 || !(len > 0.0))
         {
             return;
         }
+        const int nl = std::min(std::max(lt.count, 0), 2);
         double pr[2], pm[2];
-        for (int i = 0; i < lt.count; ++i)
+        for (int i = 0; i < nl; ++i)
         {
             const double c = detail::dot(d, lt.dir[i]);
             pr[i] = phase_r(c);
@@ -1571,21 +1675,21 @@ struct LLScatter
         for (int i = 0; i < n; ++i)
         {
             const double a = double(i + 1) / double(n), am = (double(i) + 0.5) / double(n);
-            const double u = power == 1.0 ? a : (power == 2.0 ? a * a : std::pow(a, power)), um = power == 1.0 ? am : (power == 2.0 ? am * am : std::pow(am, power));
+            // step edges at a^power from t0 (dense at the start) or, mirrored, at 1 - (1 - a)^power (dense at the end)
+            const double u = spacing(a, power, dense_at_end), um = spacing(am, power, dense_at_end);
             const double dt = (u - prev) * len, t = t0 + um * len;
             prev = u;
-            const Vec3 x = o + d * t;
-            const double r = detail::len(x);
-            const Vec3 up = x * (1.0 / r);
+            const PathPoint p = path_point(h0, d, t);
+            const Vec3 up = p.x * (1.0 / detail::len(p.x));
             Vec3 s_r, ext;
             double s_m;
-            medium(r - atm.planet_radius_km, s_r, s_m, ext);
+            medium(p.h, s_r, s_m, ext);
             const Vec3 s_tot = s_r + Vec3{ s_m, s_m, s_m };
             Vec3 S;
-            for (int l = 0; l < lt.count; ++l)
+            for (int l = 0; l < nl; ++l)
             {
-                const Vec3 single = light_T(x, lt, l) * (s_r * pr[l] + Vec3{ s_m * pm[l], s_m * pm[l], s_m * pm[l] });
-                S += lt.E[l] * (single + ms_at(r, detail::dot(up, lt.dir[l])) * s_tot * ms_scale);
+                const Vec3 single = light_T(p.x, p.h, lt, l) * (s_r * pr[l] + Vec3{ s_m * pm[l], s_m * pm[l], s_m * pm[l] });
+                S += lt.E[l] * (single + ms_at(p.h, detail::dot(up, lt.dir[l])) * s_tot * ms_scale);
             }
             const Vec3 Ts = detail::vexp(ext * -dt);
             const Vec3 e = { std::max(ext.x, 1e-7), std::max(ext.y, 1e-7), std::max(ext.z, 1e-7) };
@@ -1595,71 +1699,74 @@ struct LLScatter
         }
     }
 
-    // distance along d from o to the sphere Rg + slab_top (the slab's top), the first crossing ahead in (0, tmax), else -1
-    double slab_cross(const Vec3& o, const Vec3& d, double tmax) const
+    // A part [a, b] of a ray: its optical depth (green channel, Simpson's rule on the medium's extinction) and which end the steps crowd
+    // to. The steps crowd to the end b when the air there is more than AP_DENSE_RATIO times as dense as at a and the part is thin
+    // (tau < AP_DENSE_TAU: the radiance comes from where the air is); in a thick part the radiance comes from where the light still is,
+    // the start, and the steps crowd there.
+    struct RaySegment
     {
-        const double R = atm.planet_radius_km + atm.slab_top_km;
-        const double b = detail::dot(o, d), c = detail::dot(o, o) - R * R, disc = b * b - c;
-        if (disc < 0.0)
-        {
-            return -1.0;
-        }
-        const double s = std::sqrt(disc), t0 = -b - s, t1 = -b + s, t = t0 > 1e-4 ? t0 : t1;
-        return (t > 1e-4 && t < tmax) ? t : -1.0;
+        double tau;
+        bool dense_at_end;
+    };
+    RaySegment ray_segment(double h0, const Vec3& d, double a, double b) const
+    {
+        auto ext_y = [&](double t) {
+            Vec3 s_r, ext;
+            double s_m;
+            medium(path_point(h0, d, t).h, s_r, s_m, ext);
+            return ext.y;
+        };
+        const double ea = ext_y(a), eb = ext_y(b);
+        const double tau = (ea + 4.0 * ext_y(0.5 * (a + b)) + eb) / 6.0 * (b - a);
+        return { tau, eb > AP_DENSE_RATIO * ea && tau < AP_DENSE_TAU };
     }
 
     // atmosphereAP (the GLSL's name): the in-scattered radiance and transmittance from an observer at h_obs_km along d (unit, z up) for
-    // dist_km, in `steps` steps. The march is split where the ray leaves the 0.25 km haze slab (a uniform march skips the slab: it is off
-    // by up to 99 % at 40 km in fog) and is quadratic beyond it, power AP_INSIDE_POWER inside it. 12 steps meet 1 % of a converged march on
-    // Default, Foggy and Sunset (doc/light/atmosphere-scattering-core.md has the figures, and the extreme skies that do not).
-    void atmosphere_ap(const Vec3& d, double dist_km, double h_obs_km, int steps, const ScatterLights& lt, Vec3& Lin, Vec3& T) const
+    // dist_km, in `steps` steps (at least AP_MIN_STEPS). The march is split where the ray leaves the 0.25 km haze slab (a uniform march
+    // skips the slab: it is off by up to 99 % at 40 km in fog) into two segments, or is one segment when it never crosses the slab's
+    // top. In each segment the steps are spaced as (i / n)^power from the start, or the end if that is the dense one (ray_segment): power
+    // AP_POWER_NEAR in the first segment, AP_POWER_FAR in the second (or the only) one. The steps are shared between the two segments by
+    // the radiance each can contribute, with a floor: with w1 = 1 - e^-tau1 and w2 = e^-tau1 (1 - e^-tau2) the first segment gets
+    // steps (w1 + c) / (w1 + w2 + 2c), c = AP_WEIGHT_FLOOR, at least 2 and at most steps - 2.
+    // 12 steps meet 1 % of a converged march over the domain doc/light/atmosphere-scattering-core.md names (observer 0 to 6 km, every
+    // elevation from -2 to 90 degrees, 2 to 40 km, ending below 12 km), not beyond it.
+    void atmosphere_ap(const Vec3& d_in, double dist_km, double h_obs_km, int steps, const ScatterLights& lt, Vec3& Lin, Vec3& T) const
     {
         Lin = {};
         T = { 1.0, 1.0, 1.0 };
-        const Vec3 o = { 0.0, 0.0, atm.planet_radius_km + std::max(h_obs_km, 0.0) };
-        const double tc = slab_cross(o, d, dist_km);
+        const Vec3 d = detail::sane_dir(d_in, { 0.0, 0.0, 1.0 });
+        const double h0 = detail::clampd(h_obs_km, 0.0, atm.top_radius_km - atm.planet_radius_km);
+        const double dist = detail::clampd(dist_km, 0.0, 1e4);
+        steps = std::min(std::max(steps, AP_MIN_STEPS), AP_MAX_STEPS);
+        const double tc = slab_cross(h0, d, dist);
         if (tc < 0.0)
         {
-            march_seg(o, d, 0.0, dist_km, steps, 2.0, lt, Lin, T);
+            march_seg(h0, d, 0.0, dist, steps, AP_POWER_FAR, ray_segment(h0, d, 0.0, dist).dense_at_end, lt, Lin, T);
             return;
         }
-        const int n0 = std::min(std::max(static_cast<int>(steps * AP_SLAB_STEP_SHARE + 0.5), 2), std::max(steps - 2, 2));
-        const bool inside = (detail::len(o) - atm.planet_radius_km) < atm.slab_top_km;
-        march_seg(o, d, 0.0, tc, n0, inside ? AP_INSIDE_POWER : 2.0, lt, Lin, T);
-        march_seg(o, d, tc, dist_km, steps - n0, 2.0, lt, Lin, T);
+        const RaySegment s1 = ray_segment(h0, d, 0.0, tc), s2 = ray_segment(h0, d, tc, dist);
+        const double w1 = 1.0 - std::exp(-s1.tau), w2 = std::exp(-s1.tau) * (1.0 - std::exp(-s2.tau));
+        const int n0 = std::min(std::max(static_cast<int>(steps * (w1 + AP_WEIGHT_FLOOR) / (w1 + w2 + 2.0 * AP_WEIGHT_FLOOR) + 0.5), 2), steps - 2);
+        march_seg(h0, d, 0.0, tc, n0, AP_POWER_NEAR, s1.dense_at_end, lt, Lin, T);
+        march_seg(h0, d, tc, dist, steps - n0, AP_POWER_FAR, s2.dense_at_end, lt, Lin, T);
     }
     void atmosphere_ap(const Vec3& d, double dist_km, double h_obs_km, int steps, Vec3& Lin, Vec3& T) const
     {
         atmosphere_ap(d, dist_km, h_obs_km, steps, lights, Lin, T);
     }
 
-    // The distance to the planet's ground along d from o, -1 if the ray does not meet it. An observer on the ground (h = 0) looking below
-    // its horizon is AT the ground: 0, not the far side of the chord through the planet (ray_sphere's first hit ahead).
-    double ground_distance(const Vec3& o, const Vec3& d) const
-    {
-        const double rg = atm.planet_radius_km;
-        if (detail::dot(o, o) <= rg * rg)
-        {
-            return detail::dot(o, d) < 0.0 ? 0.0 : -1.0;
-        }
-        return detail::ray_sphere(o, d, rg);
-    }
-
-    // the distance to the planet's ground along d from o, else to the top of the atmosphere
-    double ray_length(const Vec3& o, const Vec3& d) const
-    {
-        const double tg = ground_distance(o, d);
-        return tg >= 0.0 ? tg : std::max(detail::ray_sphere(o, d, atm.top_radius_km), 0.0);
-    }
-
-    // --- the multiple-scattering texel (r, mu_s) per unit irradiance (Hillaire 2020): the second-order radiance L2 of a uniformly
-    //     emitting medium over n x n directions and its transfer f_ms, summed as L2 / (1 - min(f_ms, max_f_ms)).
-    Vec3 ms_texel(double r, double mu_s, int n_dirs = MS_DIRS_DEFAULT, int n_steps = MS_STEPS_DEFAULT, double* f_ms_out = nullptr) const
+    // --- the multiple-scattering texel (h, mu_s) per unit irradiance (Hillaire 2020): the second-order radiance L2 of a uniformly
+    //     emitting medium over n x n directions (n_steps quadratic steps each) and its transfer f_ms, summed as L2 / (1 - min(f_ms, max_f_ms)). Rays from the
+    //     ground that go below the horizon end at the ground at once (ground_distance).
+    Vec3 ms_texel(double h_km, double mu_s, int n_dirs = MS_DIRS_DEFAULT, int n_steps = MS_STEPS_DEFAULT, double* f_ms_out = nullptr) const
     {
         using detail::SC_PI;
-        const Vec3 x0 = { 0.0, 0.0, r }, Ls = { std::sqrt(std::max(0.0, 1.0 - mu_s * mu_s)), 0.0, mu_s };
+        n_dirs = std::max(n_dirs, 1);
+        n_steps = std::max(n_steps, 1);
+        const double h0 = detail::clampd(h_km, 0.0, atm.top_radius_km - atm.planet_radius_km);
+        mu_s = detail::clampd(mu_s, -1.0, 1.0);
         ScatterLights lt;
-        lt.dir[0] = Ls;
+        lt.dir[0] = { std::sqrt(std::max(0.0, 1.0 - mu_s * mu_s)), 0.0, mu_s };
         lt.disc_sin[0] = lights.disc_sin[0];
         const double pu = 1.0 / (4.0 * SC_PI);
         Vec3 L2, fms;
@@ -1669,27 +1776,32 @@ struct LLScatter
             {
                 const double ct = 1.0 - 2.0 * (j + 0.5) / n_dirs, st = std::sqrt(1.0 - ct * ct), ph = 2.0 * SC_PI * (i + 0.5) / n_dirs;
                 const Vec3 d = { st * std::cos(ph), st * std::sin(ph), ct };
-                const double tg = detail::ray_sphere(x0, d, atm.planet_radius_km);
-                const double tmax = tg > 0.0 ? tg : std::max(detail::ray_sphere(x0, d, atm.top_radius_km), 0.0);
-                const double dt = tmax / n_steps;
+                const double tg = ground_distance(h0, d);
+                const double tmax = tg >= 0.0 ? tg : std::max(ray_alt(h0, d, atm.top_radius_km - atm.planet_radius_km), 0.0);
                 Vec3 T = { 1.0, 1.0, 1.0 }, L, Fi;
+                double prev = 0.0;
                 for (int k = 0; k < n_steps; ++k)
                 {
-                    const Vec3 x = x0 + d * ((k + 0.5) * dt);
+                    // quadratic steps: the chord to the top of a near-horizontal ray is a thousand kilometres, a uniform step of it 50
+                    const double a = double(k + 1) / n_steps, am = (k + 0.5) / n_steps;
+                    const double dt = (a * a - prev) * tmax;
+                    prev = a * a;
+                    const PathPoint p = path_point(h0, d, am * am * tmax);
                     Vec3 s_r, ext;
                     double s_m;
-                    medium(detail::len(x) - atm.planet_radius_km, s_r, s_m, ext);
+                    medium(p.h, s_r, s_m, ext);
                     const Vec3 s = s_r + Vec3{ s_m, s_m, s_m };
                     const Vec3 Ts = detail::vexp(ext * -dt);
                     const Vec3 w = { (1.0 - Ts.x) / std::max(ext.x, 1e-7), (1.0 - Ts.y) / std::max(ext.y, 1e-7), (1.0 - Ts.z) / std::max(ext.z, 1e-7) };
-                    L += T * s * light_T(x, lt, 0) * w * pu;
+                    L += T * s * light_T(p.x, p.h, lt, 0) * w * pu;
                     Fi += T * s * w;
                     T = T * Ts;
                 }
-                if (tg > 0.0)
+                if (tg >= 0.0)
                 {
-                    const Vec3 p = x0 + d * tg, n = p * (1.0 / detail::len(p));
-                    L += T * light_T(p, lt, 0) * (std::max(detail::dot(n, Ls), 0.0) * bounds.ground_albedo / SC_PI);
+                    const PathPoint p = path_point(h0, d, tg);
+                    const Vec3 n = p.x * (1.0 / detail::len(p.x));
+                    L += T * light_T(p.x, 0.0, lt, 0) * (std::max(detail::dot(n, lt.dir[0]), 0.0) * bounds.ground_albedo / SC_PI);
                 }
                 L2 += L;
                 fms += Fi * pu;
@@ -1712,7 +1824,9 @@ struct LLScatter
     Vec3 sky_irradiance_texel(double h_km, double mu_s, int n_dirs = 8, int steps = 16) const
     {
         using detail::SC_PI;
-        const Vec3 x0 = { 0.0, 0.0, atm.planet_radius_km + std::max(h_km, 0.0) };
+        n_dirs = std::max(n_dirs, 1);
+        const double h0 = detail::clampd(h_km, 0.0, atm.top_radius_km - atm.planet_radius_km);
+        mu_s = detail::clampd(mu_s, -1.0, 1.0);
         ScatterLights lt;
         lt.dir[0] = { std::sqrt(std::max(0.0, 1.0 - mu_s * mu_s)), 0.0, mu_s };
         lt.E[0] = { 1.0, 1.0, 1.0 };
@@ -1726,7 +1840,7 @@ struct LLScatter
                 const double ct = std::sqrt(1.0 - (j + 0.5) / n_dirs), st = std::sqrt((j + 0.5) / n_dirs), ph = 2.0 * SC_PI * (i + 0.5) / n_dirs;
                 const Vec3 d = { st * std::cos(ph), st * std::sin(ph), ct };
                 Vec3 Lin, T = { 1.0, 1.0, 1.0 };
-                march_seg(x0, d, 0.0, std::max(detail::ray_sphere(x0, d, atm.top_radius_km), 0.0), steps, 2.0, lt, Lin, T);
+                march_seg(h0, d, 0.0, std::max(ray_alt(h0, d, atm.top_radius_km - atm.planet_radius_km), 0.0), steps, 2.0, false, lt, Lin, T);
                 sum += Lin;
             }
         }
@@ -1736,17 +1850,16 @@ struct LLScatter
     // --- tables ---
     void build_t_lut(TransmittanceLUT& out) const { out.build(atm); }
 
-    // the Psi table, w x h texels (the pass is 32 x 32), from the exact or the bound transmittance
+    // the Psi table, w x h texels (the pass is 32 x 32), from the exact or the bound transmittance (AT2-1 builds it from the table)
     void build_ms_lut(MsLUT& out, int w = 32, int h = 32, int n_dirs = MS_DIRS_DEFAULT, int n_steps = MS_STEPS_DEFAULT) const
     {
         out.init(w, h);
-        out.rg = atm.planet_radius_km;
-        out.rt = atm.top_radius_km;
-        for (int j = 0; j < h; ++j)
+        out.top_km = atm.top_radius_km - atm.planet_radius_km;
+        for (int j = 0; j < out.h; ++j)
         {
-            for (int i = 0; i < w; ++i)
+            for (int i = 0; i < out.w; ++i)
             {
-                out.texel[static_cast<size_t>(j) * w + i] = ms_texel(MsLUT::r_of(out.rg, out.rt, j, h), MsLUT::mu_of(i, w), n_dirs, n_steps);
+                out.texel[static_cast<size_t>(j) * out.w + i] = ms_texel(MsLUT::h_of(out.top_km, j, out.h), MsLUT::mu_of(i, out.w), n_dirs, n_steps);
             }
         }
     }
@@ -1755,11 +1868,11 @@ struct LLScatter
     {
         out.init(w, h);
         out.top_km = atm.top_radius_km - atm.planet_radius_km;
-        for (int j = 0; j < h; ++j)
+        for (int j = 0; j < out.h; ++j)
         {
-            for (int i = 0; i < w; ++i)
+            for (int i = 0; i < out.w; ++i)
             {
-                out.texel[static_cast<size_t>(j) * w + i] = sky_irradiance_texel(SkyIrradianceLUT::h_of(out.top_km, j, h), MsLUT::mu_of(i, w), n_dirs, steps);
+                out.texel[static_cast<size_t>(j) * out.w + i] = sky_irradiance_texel(SkyIrradianceLUT::h_of(out.top_km, j, out.h), MsLUT::mu_of(i, out.w), n_dirs, steps);
             }
         }
     }
@@ -1767,22 +1880,26 @@ struct LLScatter
     // --- the sky: radiance along d (unit, z up) from an observer at h_obs_km, `steps` uniform midpoint steps to the ground or the top
     //     (the sky-view LUT's texel), plus the ground at ground_albedo where the ray meets it, lit by the lights' T and the sky
     //     irradiance E(0, mu) of the e_lut (or the exact texel).
-    Vec3 sky_radiance(const Vec3& d, double h_obs_km, int steps = 32) const
+    Vec3 sky_radiance(const Vec3& d_in, double h_obs_km, int steps = 32) const
     {
-        const Vec3 o = { 0.0, 0.0, atm.planet_radius_km + std::max(h_obs_km, 0.0) };
-        const double tg = ground_distance(o, d);
-        const double tmax = ray_length(o, d);
+        const Vec3 d = detail::sane_dir(d_in, { 0.0, 0.0, 1.0 });
+        const double h0 = detail::clampd(h_obs_km, 0.0, atm.top_radius_km - atm.planet_radius_km);
+        steps = std::min(std::max(steps, 1), AP_MAX_STEPS);
+        const double tg = ground_distance(h0, d);
+        const double tmax = ray_length(h0, d);
         Vec3 Lin, T = { 1.0, 1.0, 1.0 };
-        march_seg(o, d, 0.0, tmax, steps, 1.0, lights, Lin, T);
+        march_seg(h0, d, 0.0, tmax, steps, 1.0, false, lights, Lin, T);
         if (tg >= 0.0)
         {
-            const Vec3 p = o + d * tg, n = p * (1.0 / detail::len(p));
+            const PathPoint p = path_point(h0, d, tg);
+            const Vec3 n = p.x * (1.0 / detail::len(p.x));
             Vec3 E;
-            for (int l = 0; l < lights.count; ++l)
+            const int nl = std::min(std::max(lights.count, 0), 2);
+            for (int l = 0; l < nl; ++l)
             {
                 const double mu = detail::dot(n, lights.dir[l]);
                 const Vec3 sky_e = e_lut ? e_lut->at(0.0, mu) : sky_irradiance_texel(0.0, mu);
-                E += lights.E[l] * (light_T(p, lights, l) * std::max(mu, 0.0) + sky_e);
+                E += lights.E[l] * (light_T(p.x, 0.0, lights, l) * std::max(mu, 0.0) + sky_e);
             }
             Lin += T * E * (bounds.ground_albedo / detail::SC_PI);
         }
