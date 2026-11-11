@@ -327,8 +327,16 @@ alpha_programs={
     'class2/deferred/pbralphaF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_EMISSIVE_MAP','USE_VERTEX_COLOR','HAS_SUN_SHADOW'],
     'class3/deferred/materialF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_ALPHA_MASK','HAS_SUN_SHADOW'],
 }
+# the GLTF scene's blended variants (llviewershadermgr.cpp make_gltf_variant: ALPHA_BLEND, lit and
+# UNLIT, single and MULTI_UV) take part in the same engine
+gltf_blend=['MAX_NODES_PER_GLTF_OBJECT 64','MAX_MATERIALS_PER_GLTF_OBJECT 64','MAX_UBO_VEC4S 1024','ALPHA_BLEND']
+alpha_programs_all=list(alpha_programs.items())+[
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['HAS_SUN_SHADOW']),
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['HAS_SUN_SHADOW','MULTI_UV']),
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['UNLIT']),
+]
 compiled=0
-for rel,defines in alpha_programs.items():
+for rel,defines in alpha_programs_all:
     text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
     for as_variant in (False,True):
         extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defines)
@@ -341,6 +349,12 @@ for rel,defines in alpha_programs.items():
         assert ok.value,(rel,'stochastic' if as_variant else 'plain',log.value.decode()[:2000])
         fn('glDeleteShader',None,U)(shader);compiled+=1
 print(f'{compiled} alpha fragment shaders compile, plain and as their stochastic variants')
+# the GLTF variant's alpha-only output is the alpha its shaded output carries: the lit shader multiplies
+# in the vertex alpha a second time (a = basecolor.a*vertex_color.a), the unlit one does not
+gltf_text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
+assert 'float st_alpha = basecolor.a * vertex_color.a;' in gltf_text and 'float a = basecolor.a*vertex_color.a;' in gltf_text
+assert gltf_text.index('alpha_stochastic_mask(st_alpha)')<gltf_text.index('vec3 vNt =')   # returns before any lighting
+print('GLTF blended variants: alpha-only output matches the shaded alpha')
 
 # ---- the sun N.L helper (sunShadowedDiffuse): every program that calls it, and deferredUtil.glsl that
 # defines it, compile in every combination of blend / no blend, with / without HAS_SUN_SHADOW,
@@ -825,6 +839,10 @@ for rel in ('class2/deferred/alphaF.glsl','class1/deferred/fullbrightF.glsl','cl
     plain=_re.findall(r'^[ \t]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M)
     assert not plain,(rel,'fragment inputs without centroid',plain)
     assert 'centroid in ' in text,rel
+# the GLTF scene's blended variants: the same, through the ST_IN macro (`centroid in` with ALPHA_BLEND)
+text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
+assert not _re.findall(r'^[ 	]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M),'gltf fragment inputs without ST_IN'
+assert '#define ST_IN centroid in' in text and len(_re.findall(r'^ST_IN ',text,_re.M))>=10
 checks+=1
 print('alpha programs: every interpolated fragment input is `centroid in`')
 
