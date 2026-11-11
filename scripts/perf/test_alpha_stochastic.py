@@ -5,7 +5,7 @@
 Reuses the standalone Windows GL bootstrap and shader compiler (gl_test_context.py) and runs the
 viewer's own stochastic transparency shaders (the stochastic engine's stochasticSampleF.glsl and
 stochasticResolveUtilF.glsl, and the transparency's alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
-alphaStochasticResolveC.glsl (the temporal resolve on GL 4.3, a compute shader) or alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl (GL 4.0 to 4.2), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
+alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl (the temporal resolve, the default on every device) or, with STOCH_TEST_RESOLVE=compute, alphaStochasticResolveC.glsl (the GL 4.3 compute resolve, A/B only), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
 LLDrawPoolAlpha::renderStochastic on a small target:
   * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run;
@@ -57,10 +57,14 @@ R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;
 D24=0x81A6;DEPTH_COMP=0x1902;NEAREST=0x2600;MIN=0x2801;MAG=0x2800
 BLEND=0x0BE2;DEPTH_TEST=0x0B71;MULTISAMPLE=0x809D;POLY_OFFSET=0x8037;CULL=0x0B44
 ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x0207;NONE=0
-import os
+import os, sys
 # The default is the fragment resolve (the pre-pass and the fragment resolve), the one the viewer ships on every
-# device; STOCH_TEST_RESOLVE=compute runs the compute resolve (GL 4.3, kept for A/B tests). Both give the same image.
-FRAGMENT_RESOLVE=os.environ.get("STOCH_TEST_RESOLVE","fragment")!="compute"
+# device; STOCH_TEST_RESOLVE=compute runs the compute resolve (GL 4.3, kept for A/B tests). Both give the same image:
+# run the script once per mode and diff the outputs, minus the 'temporal resolve path' line (see the doc, Tests).
+RESOLVE_MODE=os.environ.get("STOCH_TEST_RESOLVE","fragment")
+if RESOLVE_MODE not in ("fragment","compute"):
+    sys.exit(f"STOCH_TEST_RESOLVE must be fragment or compute, not {RESOLVE_MODE!r}")
+FRAGMENT_RESOLVE=RESOLVE_MODE=="fragment"
 print("temporal resolve path:","fragment (the shipped default)" if FRAGMENT_RESOLVE else "compute (A/B, GL 4.3)")
 W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve (STOCH_TEST_RESOLVE=compute) on partial workgroups
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
@@ -791,7 +795,7 @@ for name,worst,count in before:
 assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
 assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
 
-# ---- the temporal accumulation (alphaStochasticResolveC.glsl, a compute shader, with the
+# ---- the temporal accumulation (the fragment pair by default, alphaStochasticResolveC.glsl with STOCH_TEST_RESOLVE=compute, with the
 # engine's resolve; the composite's st_temporal)
 # 8 samples in one pass, the masks' seeds changing every frame (st_frame), the last frame's colour moved
 # by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.

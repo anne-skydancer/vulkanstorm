@@ -1128,7 +1128,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // without them the variants are not built, the method is not ready (logged) and the blended
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
     // method); the viewer starts either way. The engine's resolve object is the fragment path's
-    // (GL 4.0 to 4.2, or a GL 4.3 device without the compute entry points); the compute resolve
+    // (the default on every device; compute is A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1); the compute resolve
     // compiles its own objects.
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
@@ -3394,8 +3394,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
         // The temporal resolve is only the accumulation across frames: a build failure turns that
         // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
-        // history), never the transparency and never another method. The device decides the path
-        // once (LLStochasticEngine::computeResolve) and exactly one is built.
+        // history), never the transparency and never another method. The path is decided once
+        // (LLStochasticEngine::computeResolve: the fragment resolve is the default on every device; compute is
+        // A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1) and exactly one is built.
         gAlphaStochasticResolveProgram.mName = "Alpha Stochastic Temporal Resolve";
         gAlphaStochasticResolveProgram.mShaderFiles.clear();
         gAlphaStochasticResolveProgram.clearPermutations();
