@@ -155,6 +155,9 @@ bool computeResolve()
     const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
     bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
 #if LL_WINDOWS && !LL_MESA
+    // Only Windows (without Mesa) loads these as nullable function pointers (llglheaders.h, llgl.cpp);
+    // Linux and Mesa declare them as linked prototypes (GL_GLEXT_PROTOTYPES), which are never null, so
+    // there is nothing to test there.
     // GL 4.3 reports the compute entry points; a driver that does not load them takes the fragment
     // resolve (a capability choice made here, once, with the device's others)
     if (capable && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
