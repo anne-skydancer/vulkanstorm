@@ -3,8 +3,13 @@
 //
 // The offline library check of stage AT2-0 (driven by scripts/light/check_atmosphere_library.py, which writes its input): every shipped
 // sky is translated by LLScatter::fromLegacy (llatmosphericlight.h) and its sky radiance is sampled; the measurable "no whiteout" is
-// that outside 10 degrees of the light (--exclude-deg), no sky radiance exceeds the white-card limit lum(E_light) / pi (a white Lambertian card facing
-// the light, with no atmosphere between: nothing the sky shows can be brighter than that without making light). Also reported: how
+// that outside 10 degrees of the light, no sky radiance exceeds the white-card limit lum(E_light) / pi (a white Lambertian card facing
+// the light, with no atmosphere between: nothing the sky shows can be brighter than that without making light).
+//
+// The owner's decision (2026-11-11): a hazy sky's aureole (10 to 20 degrees from the light) may exceed the card, as physical (a thick
+// forward-scattering haze near the sun is brighter than a white card), at most kAureoleMax times (a bound that catches a real whiteout);
+// beyond 20 degrees the rule is strict. Aureole exceedances are listed as AUREOLE lines (the Python driver compares them to its expected
+// set); any other exceedance is a WHITEOUT line and fails. Also reported: how
 // many skies hit each bound (clamp bits), the largest multiple-scattering amplification, and the aerial-perspective march's error
 // (12 steps against 1024) over the clouds' domain, relative to the larger of the reference and 1 % of the white-card radiance (a dark tail, as a sun on the horizon in dense fog, does not count).
 //
@@ -26,6 +31,8 @@ namespace
 {
 constexpr double PI = 3.14159265358979323846;
 constexpr double DEG = PI / 180.0;
+constexpr double kAureoleDeg = 20.0;   // the aureole: 10 to 20 degrees from the light
+constexpr double kAureoleMax = 2.0;    // an exceedance of the card by more than this is a whiteout even there
 
 struct SkyRow
 {
@@ -118,10 +125,12 @@ int main(int argc, char** argv)
         std::fclose(f);
     }
 
-    int violations = 0, nonfinite = 0, bits[12] = {};
+    int violations = 0, nonfinite = 0, aureole = 0, bits[12] = {};
+    double max_ambient = 0.0;
+    std::string max_ambient_name;
     double worst_ratio = 0.0, worst_amp = 1.0, worst_ratio_t = 0.0, worst_acc[3] = {};
     std::string worst_name, worst_amp_name, worst_acc_name[3];
-    int acc_skies = 0, acc_over = 0;
+    int acc_skies = 0, acc_over = 0, acc_over_rig = 0, rigs = 0, acc_over24 = 0, acc_over48 = 0;
     for (const SkyRow& r : skies)
     {
         const double* v = r.v;
@@ -144,6 +153,14 @@ int main(int argc, char** argv)
         f.glow_x = v[17];
         f.glow_z = v[18];
         const double file_el = std::asin(std::sin(v[19])) / DEG;
+        for (int c = 14; c < 17; ++c)
+        {
+            if (v[c] / sb.ref_ambient > max_ambient)
+            {
+                max_ambient = v[c] / sb.ref_ambient;
+                max_ambient_name = r.name;
+            }
+        }
 
         LLScatter base = LLScatter::fromLegacy(sky, f, 0.0, {}, sb);
         for (int b = 0; b < 10; ++b)
@@ -162,7 +179,7 @@ int main(int argc, char** argv)
             for (double mu : { -0.1, 0.3, 0.9 })
             {
                 double fms = 0.0;
-                base.ms_texel(base.atm.planet_radius_km + h, mu, 4, 12, &fms);
+                base.ms_texel(h, mu, 4, 12, &fms);
                 const double amp = 1.0 / (1.0 - std::min(fms, base.bounds.max_f_ms));
                 if (amp > worst_amp)
                 {
@@ -178,22 +195,21 @@ int main(int argc, char** argv)
         {
             LLScatter sc = base;
             const double gain = 0.5 * moon_compensation(0.125, std::sin(sun_el * DEG), std::sin(6.0 * DEG));
-            sc.E_moon = sc.E_sun * std::min(gain, 0.25);
-            sc.lights.E[0] = sc.E_sun;
-            sc.lights.E[1] = sc.E_moon;
+            sc.lights.E[1] = sc.lights.E[0] * std::min(gain, 0.25);
             const Vec3 sun = dir_of(sun_el);
             sc.set_light_dirs(sun, { -sun.x, -sun.y, -sun.z });
             sc.lights.count = sun_el < -6.0 ? 2 : 1; // by day the moon's irradiance is 1e-6 of the sun's
             const int lit = sun_el < -6.0 ? 1 : 0;
             const Vec3 light = sc.lights.dir[lit];
             const double limit = lum(sc.lights.E[lit]) / PI;
-            const double limit_t = lum(sc.lights.E[lit] * sc.light_T({ 0.0, 0.0, sc.atm.planet_radius_km }, sc.lights, lit)) / PI;
+            const double limit_t = lum(sc.lights.E[lit] * sc.light_T({ 0.0, 0.0, sc.atm.planet_radius_km }, 0.0, sc.lights, lit)) / PI;
             for (double el : { -3.0, 0.0, 3.0, 10.0, 30.0, 60.0, 90.0 })
             {
                 for (double az : { 0.0, 60.0, 120.0, 180.0, 240.0, 300.0 })
                 {
                     const Vec3 d = dir_of(el, az);
-                    if (std::acos(std::min(1.0, d.x * light.x + d.y * light.y + d.z * light.z)) < exclude_deg * DEG)
+                    const double sep = std::acos(std::min(1.0, d.x * light.x + d.y * light.y + d.z * light.z)) / DEG;
+                    if (sep < exclude_deg)
                     {
                         continue;
                     }
@@ -214,8 +230,16 @@ int main(int argc, char** argv)
                         }
                         if (ratio > 1.0)
                         {
-                            ++violations;
-                            std::printf("WHITEOUT %s sun %.1f dir %.0f/%.0f: radiance %.4f, limit %.4f (%.2fx)\n", r.name.c_str(), sun_el, el, az, lum(L), limit, ratio);
+                            if (sep < kAureoleDeg && ratio <= kAureoleMax)
+                            {
+                                ++aureole;
+                                std::printf("AUREOLE\t%s\tsun %.1f dir %.0f/%.0f\t%.2f degrees from the light\t%.3fx\n", r.name.c_str(), sun_el, el, az, sep, ratio);
+                            }
+                            else
+                            {
+                                ++violations;
+                                std::printf("WHITEOUT\t%s\tsun %.1f dir %.0f/%.0f: %.2f degrees from the light, radiance %.4f, limit %.4f (%.2fx)\n", r.name.c_str(), sun_el, el, az, sep, lum(L), limit, ratio);
+                            }
                         }
                         if (limit_t > 0.01 * limit)
                         {
@@ -230,9 +254,7 @@ int main(int argc, char** argv)
         {
             LLScatter sc = base;
             const double sun_el = file_el;
-            sc.E_moon = sc.E_sun * std::min(0.5 * moon_compensation(0.125, std::sin(sun_el * DEG), std::sin(6.0 * DEG)), 0.25);
-            sc.lights.E[0] = sc.E_sun;
-            sc.lights.E[1] = sc.E_moon;
+            sc.lights.E[1] = sc.lights.E[0] * std::min(0.5 * moon_compensation(0.125, std::sin(sun_el * DEG), std::sin(6.0 * DEG)), 0.25);
             const Vec3 sun = dir_of(sun_el);
             sc.set_light_dirs(sun, { -sun.x, -sun.y, -sun.z });
             double w[3] = {};
@@ -251,7 +273,7 @@ int main(int argc, char** argv)
                         Vec3 L12, T12, Lr, Tr;
                         sc.atmosphere_ap(dir_of(el, az), dists[q], 0.0, 12, L12, T12);
                         sc.atmosphere_ap(dir_of(el, az), dists[q], 0.0, 1024, Lr, Tr);
-                        const double mx = std::max(detail::vmax(Lr), 1e-12), floor_l = std::max(1e-3 * mx, 1e-2 * lum(sc.E_sun) / PI), a[3] = { L12.x, L12.y, L12.z }, b[3] = { Lr.x, Lr.y, Lr.z };
+                        const double mx = std::max(detail::vmax(Lr), 1e-12), floor_l = std::max(1e-3 * mx, 1e-2 * lum(sc.lights.E[0]) / PI), a[3] = { L12.x, L12.y, L12.z }, b[3] = { Lr.x, Lr.y, Lr.z };
                         for (int c = 0; c < 3; ++c)
                         {
                             w[q] = std::max(w[q], std::fabs(a[c] - b[c]) / std::max(std::fabs(b[c]), floor_l));
@@ -270,23 +292,55 @@ int main(int argc, char** argv)
                 }
                 over = over || w[q] > 0.01;
             }
+            const bool is_rig = sc.atm.excess.x > 0.0 || sc.atm.excess.y > 0.0 || sc.atm.excess.z > 0.0; // a light rig: a sun asked for almost not at all
+            rigs += is_rig;
             acc_over += over;
+            // the same at 24 and 48 steps: how many steps the whole library would need
+            for (int more : { 24, 48 })
+            {
+                double wm = 0.0;
+                for (double el : { 0.0, 2.0, 5.0, 10.0, 30.0, 90.0 })
+                {
+                    for (double az : { 0.0, 90.0, 180.0 })
+                    {
+                        for (int q = 0; q < 3; ++q)
+                        {
+                            const double end_alt = std::sqrt(6360.0 * 6360.0 + dists[q] * dists[q] + 2.0 * 6360.0 * dists[q] * std::sin(el * DEG)) - 6360.0;
+                            if (end_alt > 12.0)
+                            {
+                                continue;
+                            }
+                            Vec3 Lm, Tm, Lr, Tr;
+                            sc.atmosphere_ap(dir_of(el, az), dists[q], 0.0, more, Lm, Tm);
+                            sc.atmosphere_ap(dir_of(el, az), dists[q], 0.0, 1024, Lr, Tr);
+                            const double mx = std::max(detail::vmax(Lr), 1e-12), floor_l = std::max(1e-3 * mx, 1e-2 * lum(sc.E_sun()) / PI), a[3] = { Lm.x, Lm.y, Lm.z }, b[3] = { Lr.x, Lr.y, Lr.z };
+                            for (int c = 0; c < 3; ++c)
+                            {
+                                wm = std::max(wm, std::fabs(a[c] - b[c]) / std::max(std::fabs(b[c]), floor_l));
+                            }
+                        }
+                    }
+                }
+                (more == 24 ? acc_over24 : acc_over48) += wm > 0.01;
+            }
+            acc_over_rig += over && is_rig;
         }
     }
 
     std::printf("library: %d skies\n", static_cast<int>(skies.size()));
-    const char* names[10] = { "Rayleigh albedo", "aerosol albedo", "ms scale", "glow lobe -> Cornette-Shanks", "phase peak", "sunlight scale", "moon gain", "source", "non-finite", "anisotropy" };
+    const char* names[10] = { "Rayleigh albedo", "aerosol albedo", "ms scale", "glow.x or glow.z clamped    ", "phase peak", "sunlight scale", "moon gain", "source", "non-finite", "anisotropy" };
     for (int b = 0; b < 10; ++b)
     {
         std::printf("  bound %-30s applied on %d skies\n", names[b], bits[b]);
     }
+    std::printf("  largest ambient / Default's: %.2f (%s); the multiple-scattering scale bound is %.1f\n", max_ambient, max_ambient_name.c_str(), sb.max_ms_scale);
     std::printf("  largest multiple-scattering amplification %.2f (%s), bound 10\n", worst_amp, worst_amp_name.c_str());
-    std::printf("  no whiteout (outside %.0f degrees of the light): largest sky luminance / (E_light lum / pi) = %.3f (%s); %d violations, %d non-finite; against E T / pi where T > 1%% of 1: %.3f\n", exclude_deg, worst_ratio,
-                worst_name.c_str(), violations, nonfinite, worst_ratio_t);
+    std::printf("  no whiteout (outside %.0f degrees of the light): largest sky luminance / (E_light lum / pi) = %.3f (%s); %d violations, %d aureole exceedances accepted (10 to 20 degrees, at most 2x), %d non-finite; against E T / pi where T > 1%% of 1: %.3f\n", exclude_deg, worst_ratio,
+                worst_name.c_str(), violations, aureole, nonfinite, worst_ratio_t);
     if (acc)
     {
-        std::printf("  aerial perspective, 12 steps vs 1024 over the clouds' domain (sun at the file's elevation): worst %.2f / %.2f / %.2f %% at 2 / 10 / 40 km (%s / %s / %s); %d of %d skies over 1 %%\n",
-                    100.0 * worst_acc[0], 100.0 * worst_acc[1], 100.0 * worst_acc[2], worst_acc_name[0].c_str(), worst_acc_name[1].c_str(), worst_acc_name[2].c_str(), acc_over, acc_skies);
+        std::printf("  aerial perspective, 12 steps vs 1024 over the clouds' domain (sun at the file's elevation): worst %.2f / %.2f / %.2f %% at 2 / 10 / 40 km (%s / %s / %s); %d of %d skies over 1 %% (%d of the %d light rigs among them); at 24 steps %d, at 48 steps %d\n",
+                    100.0 * worst_acc[0], 100.0 * worst_acc[1], 100.0 * worst_acc[2], worst_acc_name[0].c_str(), worst_acc_name[1].c_str(), worst_acc_name[2].c_str(), acc_over, acc_skies, acc_over_rig, rigs, acc_over24, acc_over48);
     }
     return (violations || nonfinite) ? 1 : 0;
 }

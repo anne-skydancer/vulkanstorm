@@ -8,13 +8,18 @@
  * (llatmosphericlight.h). Functions only. It is NOT registered with the shader manager and no viewer shader includes it yet
  * (AT2-1 attaches it to the atmospherics features); it is compiled and run on the GPU by
  * scripts/light/gen_atmosphere_scatter_vectors.py, whose vectors hold the C++ equal to it
- * (indra/newview/tests/llatmosphericscatter_test.cpp).
+ * (indra/newview/tests/llatmosphericscatter_test.cpp, which also checks this file's SHA-256 against the one the vectors were made with).
  *
- * Needs physicalAtmosphereF.glsl before it (PAAtmosphere pa_atm, pa_transmittance, PA_GL_X): the extinction. This file adds what
- * a sky needs on top of it, the scattering. Units km, z up, the observer at (0, 0, Rg + h); linear colours.
+ * Needs physicalAtmosphereF.glsl before it (PAAtmosphere pa_atm, pa_transmittance, pa_density): the extinction. This file adds what
+ * a sky needs on top of it, the scattering. Units km, z up, the observer at (0, 0, Rg + h0); linear colours.
+ *
+ * ALTITUDES. A position at the planet's radius (6360 km) has 0.5 m of float resolution, and the haze slab is 250 m thick, so no
+ * function here forms r - Rg: the observer's height h0 is carried, and the altitude of the point at path length t is
+ * q / (r + Rg) with q = h0 (2 Rg + h0) + 2 b t + t^2 = |x|^2 - Rg^2 and b = (Rg + h0) d.z; the sphere intersections are quadratics
+ * in altitudes solved without cancellation. The transmittance table is indexed by the altitude h and mu.
  *
  * Switches for the test harness: PA_LIGHT_T_EXACT takes the lights' transmittance from pa_transmittance instead of the table;
- * PA_MS_OVERRIDE lets the harness define vec3 pa_ms_at(float r, float mu_s) (before this file) instead of the table lookup.
+ * PA_MS_OVERRIDE lets the harness define vec3 pa_ms_at(float h_km, float mu_s) (before this file) instead of the table lookup.
  *
  * pa_march_seg is the one march of the sky view, the froxels, the far table and the vectors; atmosphereAP is the aerial perspective
  * the froxel pass and the cloud trace share: the march is split where the ray leaves the 0.25 km haze slab (a uniform march skips
@@ -23,8 +28,11 @@
  */
 
 const float PA_PI = 3.14159265358979;
-const float PA_AP_SLAB_STEP_SHARE = 0.4;     // llatmosphericlight.h AP_SLAB_STEP_SHARE
-const float PA_AP_INSIDE_POWER = 1.25;       // AP_INSIDE_POWER
+const float PA_AP_POWER_NEAR = 1.2;          // llatmosphericlight.h AP_POWER_NEAR, AP_POWER_FAR, AP_WEIGHT_FLOOR, AP_DENSE_RATIO, AP_DENSE_TAU
+const float PA_AP_POWER_FAR = 1.1;
+const float PA_AP_WEIGHT_FLOOR = 0.2;
+const float PA_AP_DENSE_RATIO = 2.0;
+const float PA_AP_DENSE_TAU = 2.0;
 
 uniform vec3  pa_rayleigh_scat;              // 1/km at density 1 = albedo x rayleigh_ext
 uniform float pa_aerosol_scat;
@@ -33,7 +41,7 @@ uniform vec3  pa_ms_scale;
 uniform vec3  pa_glow_phase;                 // glow.x, glow.z, 1 / its integral over the sphere; z = 0: Cornette-Shanks
 uniform float pa_aniso;                      // the Mie anisotropy, for Cornette-Shanks
 uniform float pa_max_phase;
-uniform float pa_f_ms_max;                   // 0.9
+uniform float pa_f_ms_max;                   // 0.6 (ScatterBounds::max_f_ms)
 uniform float pa_ground_albedo;              // 0.2
 uniform sampler2D pa_trans_lut;              // 256 x 64
 uniform sampler2D pa_ms_lut;                 // 32 x 32 (the table's size is read from the texture)
@@ -51,83 +59,145 @@ uniform PALights pa_lights;
 // geometry and the transmittance table
 // ---------------------------------------------------------------------------------------------------
 
+float pa_top_height()
+{
+    return pa_atm.top_radius_km - pa_atm.planet_radius_km;
+}
+
 float pa_horizon_mu(float h_km)
 {
     float rg = pa_atm.planet_radius_km;
-    float h0 = clamp(h_km, 0.0, pa_atm.top_radius_km - rg);
+    float h0 = clamp(h_km, 0.0, pa_top_height());
     return -sqrt(h0 * (2.0 * rg + h0)) / (rg + h0);
 }
 
-// distance along d from o to the sphere of radius R: the first hit ahead, else the far one, -1 if none
-float pa_ray_sphere(vec3 o, vec3 d, float R)
+// the roots t0 <= t1 of t^2 + 2 b t + c = 0 without cancellation; false if there are none
+bool pa_quad_roots(float b, float c, out float t0, out float t1)
 {
-    float b = dot(o, d);
-    float c = dot(o, o) - R * R;
+    t0 = 0.0;
+    t1 = 0.0;
     float disc = b * b - c;
-    if (disc < 0.0)
+    if (!(disc >= 0.0))
+    {
+        return false;
+    }
+    float s = sqrt(disc);
+    float q = -(b + (b >= 0.0 ? s : -s));
+    float r2 = q != 0.0 ? c / q : q;
+    t0 = min(q, r2);
+    t1 = max(q, r2);
+    return true;
+}
+
+// distance along d from the observer (height h0) to the sphere of altitude `alt`: the first hit ahead, else the far one, -1 if none
+float pa_ray_alt(float h0, vec3 d, float alt)
+{
+    float rg = pa_atm.planet_radius_km;
+    float t0;
+    float t1;
+    if (!pa_quad_roots((rg + h0) * d.z, (h0 - alt) * (2.0 * rg + h0 + alt), t0, t1))
     {
         return -1.0;
     }
-    float s = sqrt(disc);
-    float t0 = -b - s;
-    float t1 = -b + s;
     return t0 > 0.0 ? t0 : (t1 > 0.0 ? t1 : -1.0);
 }
 
-// the distance to the planet's ground along d from o, -1 if the ray does not meet it; an observer on the ground looking below its
+// the distance to the planet's ground along d, -1 if the ray does not meet it; an observer on the ground looking below its
 // horizon is AT the ground (0), not at the far side of the chord through the planet
-float pa_ground_distance(vec3 o, vec3 d)
+float pa_ground_distance(float h0, vec3 d)
 {
-    float rg = pa_atm.planet_radius_km;
-    if (dot(o, o) <= rg * rg)
+    if (!(h0 > 0.0))
     {
-        return dot(o, d) < 0.0 ? 0.0 : -1.0;
+        return d.z < 0.0 ? 0.0 : -1.0;
     }
-    return pa_ray_sphere(o, d, rg);
+    return pa_ray_alt(h0, d, 0.0);
 }
 
-// (r, mu) -> (u, v): u the distance to the top between its minimum and the horizon's, v = sqrt(rho / H)
-vec2 pa_trans_uv(float r, float mu)
+// the ground, else the top of the atmosphere
+float pa_ray_length(float h0, vec3 d)
+{
+    float tg = pa_ground_distance(h0, d);
+    return tg >= 0.0 ? tg : max(pa_ray_alt(h0, d, pa_top_height()), 0.0);
+}
+
+// the slab's top: the first crossing ahead in (0, tmax), else -1
+float pa_slab_cross(float h0, vec3 d, float tmax)
+{
+    if (!(pa_atm.slab_top_km > 0.0))
+    {
+        return -1.0;
+    }
+    float rg = pa_atm.planet_radius_km;
+    float hs = pa_atm.slab_top_km;
+    float t0;
+    float t1;
+    if (!pa_quad_roots((rg + h0) * d.z, (h0 - hs) * (2.0 * rg + h0 + hs), t0, t1))
+    {
+        return -1.0;
+    }
+    float t = t0 > 1e-4 ? t0 : t1;
+    return (t > 1e-4 && t < tmax) ? t : -1.0;
+}
+
+// the point at path length t along d from the observer at height h0: its position (for the directions) and its altitude
+float pa_path_point(float h0, vec3 d, float t, out vec3 x)
+{
+    float rg = pa_atm.planet_radius_km;
+    float q0 = h0 * (2.0 * rg + h0);
+    float b = (rg + h0) * d.z;
+    float q = max(q0 + t * (2.0 * b + t), -rg * rg * 0.999999);
+    float r = sqrt(rg * rg + q);
+    x = vec3(d.x * t, d.y * t, rg + h0 + d.z * t);
+    return q / (r + rg);
+}
+
+// (h, mu) -> (u, v): u the distance to the top between its minimum and the horizon's, v = sqrt(rho / H)
+vec2 pa_trans_uv(float h, float mu)
 {
     float rg = pa_atm.planet_radius_km;
     float rt = pa_atm.top_radius_km;
-    float hh = sqrt(max(0.0, rt * rt - rg * rg));
-    float rho = sqrt(max(0.0, r * r - rg * rg));
-    float disc = r * r * (mu * mu - 1.0) + rt * rt;
+    float top = rt - rg;
+    float hh = sqrt(max(0.0, top * (rt + rg)));
+    h = clamp(h, 0.0, top);
+    float r = rg + h;
+    float rho = sqrt(h * (2.0 * rg + h));
+    float disc = (top - h) * (rt + r) + r * r * mu * mu;
     float d = max(0.0, -r * mu + sqrt(max(disc, 0.0)));
-    float dmin = rt - r;
+    float dmin = top - h;
     float dmax = rho + hh;
     return vec2((d - dmin) / max(dmax - dmin, 1e-6), hh > 0.0 ? sqrt(rho / hh) : 0.0);
 }
 
-void pa_trans_rmu(vec2 uv, out float r, out float mu)
+void pa_trans_rmu(vec2 uv, out float h, out float mu)
 {
     float rg = pa_atm.planet_radius_km;
     float rt = pa_atm.top_radius_km;
-    float h2 = max(0.0, rt * rt - rg * rg);
+    float top = rt - rg;
+    float h2 = max(0.0, top * (rt + rg));
     float hh = sqrt(h2);
     float rho = hh * uv.y * uv.y;
-    r = sqrt(rho * rho + rg * rg);
-    float dmin = rt - r;
+    float r = sqrt(rho * rho + rg * rg);
+    h = rho * rho / (r + rg);
+    float dmin = top - h;
     float dmax = rho + hh;
     float d = dmin + uv.x * (dmax - dmin);
     mu = d == 0.0 ? 1.0 : clamp((h2 - rho * rho - d * d) / (2.0 * r * d), -1.0, 1.0);
 }
 
 // the table texel (i, j)'s ray: mu at least a hair above the horizon's
-void pa_trans_texel_ray(ivec2 ij, ivec2 size, out float r, out float mu)
+void pa_trans_texel_ray(ivec2 ij, ivec2 size, out float h, out float mu)
 {
-    pa_trans_rmu(vec2(ij) / vec2(size - ivec2(1)), r, mu);
-    mu = max(mu, pa_horizon_mu(r - pa_atm.planet_radius_km) + 1e-6);
+    pa_trans_rmu(vec2(ij) / vec2(size - ivec2(1)), h, mu);
+    mu = max(mu, pa_horizon_mu(h) + 1e-6);
 }
 
 // what the table pass writes: the physical transmittance (no disc, no excess) at the texel's ray
 vec3 pa_trans_texel(ivec2 ij, ivec2 size)
 {
-    float r;
+    float h;
     float mu;
-    pa_trans_texel_ray(ij, size, r, mu);
-    return pa_transmittance(r - pa_atm.planet_radius_km, mu, 0.0, 0.0);
+    pa_trans_texel_ray(ij, size, h, mu);
+    return pa_transmittance(h, mu, 0.0, 0.0);
 }
 
 // bilinear on texel centres: uv in [0, 1] covers the texel centres, not the texture's edges
@@ -136,28 +206,27 @@ vec2 pa_lut_uv(vec2 uv, vec2 size)
     return (clamp(uv, 0.0, 1.0) * (size - vec2(1.0)) + vec2(0.5)) / size;
 }
 
-vec3 pa_T_lut(float r, float mu)
+vec3 pa_T_lut(float h, float mu)
 {
-    return texture(pa_trans_lut, pa_lut_uv(pa_trans_uv(r, mu), vec2(textureSize(pa_trans_lut, 0)))).rgb;
+    return texture(pa_trans_lut, pa_lut_uv(pa_trans_uv(h, mu), vec2(textureSize(pa_trans_lut, 0)))).rgb;
 }
 
-// transmittance from x to the top of the atmosphere towards light i, 0 behind the planet (soft over the disc), the excess factor of
-// the capped columns included
-vec3 pa_light_T(vec3 x, PALights lt, int i)
+// transmittance from the point x (at altitude h) to the top of the atmosphere towards light i, 0 behind the planet (soft over the
+// disc), the excess factor of the capped columns included
+vec3 pa_light_T(vec3 x, float h, PALights lt, int i)
 {
-    float r = length(x);
-    float mu = dot(x, lt.dir[i]) / r;
+    float mu = dot(x, lt.dir[i]) / length(x);
 #ifdef PA_LIGHT_T_EXACT
-    return pa_transmittance(r - pa_atm.planet_radius_km, mu, lt.disc[i], 1.0);
+    return pa_transmittance(h, mu, lt.disc[i], 1.0);
 #else
-    float mu_h = pa_horizon_mu(r - pa_atm.planet_radius_km);
+    float mu_h = pa_horizon_mu(h);
     float d = lt.disc[i];
     float vis = smoothstep(mu_h - d, mu_h + d, mu);
     if (!(vis > 0.0))
     {
         return vec3(0.0);
     }
-    vec3 t = pa_T_lut(r, mu) * vis;
+    vec3 t = pa_T_lut(h, mu) * vis;
     if (pa_atm.excess.x > 0.0 || pa_atm.excess.y > 0.0 || pa_atm.excess.z > 0.0)
     {
         t *= exp(-pa_atm.excess / max(min(mu, 1.0) - mu_h, 1e-6));
@@ -201,11 +270,10 @@ float pa_phase_m(float c)
 }
 
 #ifndef PA_MS_OVERRIDE
-// the multiple-scattering table Psi(r, mu_s): x = mu_s, y = (r - Rg) / (Rt - Rg)
-vec3 pa_ms_at(float r, float mu_s)
+// the multiple-scattering table Psi(h, mu_s): x = mu_s, y = h / (Rt - Rg)
+vec3 pa_ms_at(float h_km, float mu_s)
 {
-    float rg = pa_atm.planet_radius_km;
-    vec2 uv = vec2(mu_s * 0.5 + 0.5, clamp((r - rg) / (pa_atm.top_radius_km - rg), 0.0, 1.0));
+    vec2 uv = vec2(mu_s * 0.5 + 0.5, clamp(h_km / pa_top_height(), 0.0, 1.0));
     return texture(pa_ms_lut, pa_lut_uv(uv, vec2(textureSize(pa_ms_lut, 0)))).rgb;
 }
 #endif
@@ -214,18 +282,28 @@ vec3 pa_ms_at(float r, float mu_s)
 // the march
 // ---------------------------------------------------------------------------------------------------
 
-// o + t d for t in [t0, t1] in n steps, midpoints, step i ending at (i / n)^power of the segment (1 uniform, 2 quadratic from t0);
-// accumulates the in-scattered radiance and the transmittance of the segment
-void pa_march_seg(vec3 o, vec3 d, float t0, float t1, int n, float power, PALights lt, inout vec3 Lin, inout vec3 T)
+// the step edge at a in [0, 1]: a^power from the start, or mirrored (1 - (1 - a)^power) when the end is the dense one
+float pa_spacing(float a, float power, bool dense_at_end)
+{
+    float x = dense_at_end ? 1.0 - a : a;
+    float y = power == 1.0 ? x : (power == 2.0 ? x * x : pow(x, power));
+    return dense_at_end ? 1.0 - y : y;
+}
+
+// from the observer's height h0 along d for t in [t0, t1] in n steps, midpoints, step i ending at (i / n)^power of the segment
+// (1 uniform, 2 quadratic, dense at its start, or at its end when dense_at_end); accumulates the in-scattered radiance and the
+// transmittance of the segment
+void pa_march_seg(float h0, vec3 d, float t0, float t1, int n, float power, bool dense_at_end, PALights lt, inout vec3 Lin, inout vec3 T)
 {
     float len = t1 - t0;
     if (n <= 0 || !(len > 0.0))
     {
         return;
     }
+    int nl = min(max(lt.count, 0), 2);
     float pr[2];
     float pm[2];
-    for (int i = 0; i < lt.count; ++i)
+    for (int i = 0; i < nl; ++i)
     {
         float c = dot(d, lt.dir[i]);
         pr[i] = pa_phase_r(c);
@@ -236,24 +314,24 @@ void pa_march_seg(vec3 o, vec3 d, float t0, float t1, int n, float power, PALigh
     {
         float a = float(i + 1) / float(n);
         float am = (float(i) + 0.5) / float(n);
-        float u = power == 1.0 ? a : (power == 2.0 ? a * a : pow(a, power));
-        float um = power == 1.0 ? am : (power == 2.0 ? am * am : pow(am, power));
+        float u = pa_spacing(a, power, dense_at_end);
+        float um = pa_spacing(am, power, dense_at_end);
         float dt = (u - prev) * len;
         float t = t0 + um * len;
         prev = u;
-        vec3 x = o + d * t;
-        float r = length(x);
-        vec3 up = x / r;
+        vec3 x;
+        float h = pa_path_point(h0, d, t, x);
+        vec3 up = x / length(x);
         vec3 s_r;
         float s_m;
         vec3 ext;
-        pa_medium(r - pa_atm.planet_radius_km, s_r, s_m, ext);
+        pa_medium(h, s_r, s_m, ext);
         vec3 s_tot = s_r + vec3(s_m);
         vec3 S = vec3(0.0);
-        for (int l = 0; l < lt.count; ++l)
+        for (int l = 0; l < nl; ++l)
         {
-            vec3 single = pa_light_T(x, lt, l) * (s_r * pr[l] + vec3(s_m * pm[l]));
-            S += lt.E[l] * (single + pa_ms_at(r, dot(up, lt.dir[l])) * s_tot * pa_ms_scale);
+            vec3 single = pa_light_T(x, h, lt, l) * (s_r * pr[l] + vec3(s_m * pm[l]));
+            S += lt.E[l] * (single + pa_ms_at(h, dot(up, lt.dir[l])) * s_tot * pa_ms_scale);
         }
         vec3 Ts = exp(-ext * dt);
         Lin += T * (S - S * Ts) / max(ext, vec3(1e-7));
@@ -261,43 +339,62 @@ void pa_march_seg(vec3 o, vec3 d, float t0, float t1, int n, float power, PALigh
     }
 }
 
-// distance along d from o to the slab's top (the sphere Rg + slab_top_km), the first crossing ahead in (0, tmax), else -1
-float pa_slab_cross(vec3 o, vec3 d, float tmax)
+float pa_ext_y(float h0, vec3 d, float t)
 {
-    float R = pa_atm.planet_radius_km + pa_atm.slab_top_km;
-    float b = dot(o, d);
-    float c = dot(o, o) - R * R;
-    float disc = b * b - c;
-    if (disc < 0.0)
-    {
-        return -1.0;
-    }
-    float s = sqrt(disc);
-    float t0 = -b - s;
-    float t1 = -b + s;
-    float t = t0 > 1e-4 ? t0 : t1;
-    return (t > 1e-4 && t < tmax) ? t : -1.0;
+    vec3 x;
+    float h = pa_path_point(h0, d, t, x);
+    vec3 s_r;
+    float s_m;
+    vec3 ext;
+    pa_medium(h, s_r, s_m, ext);
+    return ext.y;
+}
+
+// A part [a, b] of a ray: its optical depth (green channel, Simpson's rule on the medium's extinction); dense_at_end: the steps crowd to
+// the end b when the air there is more than PA_AP_DENSE_RATIO times as dense as at a and the part is thin (llatmosphericlight.h ray_segment)
+float pa_ray_segment(float h0, vec3 d, float a, float b, out bool dense_at_end)
+{
+    float ea = pa_ext_y(h0, d, a);
+    float eb = pa_ext_y(h0, d, b);
+    float tau = (ea + 4.0 * pa_ext_y(h0, d, 0.5 * (a + b)) + eb) / 6.0 * (b - a);
+    dense_at_end = eb > PA_AP_DENSE_RATIO * ea && tau < PA_AP_DENSE_TAU;
+    return tau;
 }
 
 // The aerial perspective along d (unit, z up) from an observer at h_obs_km for dist_km: the in-scattered radiance and the
-// transmittance. 12 steps meet 1 % of a converged march (the C++ test, R-ACC).
+// transmittance (llatmosphericlight.h atmosphere_ap says how the steps are placed and the domain it meets 1 % over).
 void atmosphereAP(vec3 d, float dist_km, float h_obs_km, int steps, PALights lt, out vec3 Lin, out vec3 T)
 {
     Lin = vec3(0.0);
     T = vec3(1.0);
-    vec3 o = vec3(0.0, 0.0, pa_atm.planet_radius_km + max(h_obs_km, 0.0));
-    float tc = pa_slab_cross(o, d, dist_km);
+    float h0 = clamp(h_obs_km, 0.0, pa_top_height());
+    dist_km = clamp(dist_km, 0.0, 1e4);
+    steps = clamp(steps, 4, 65536);
+    float tc = pa_slab_cross(h0, d, dist_km);
     // one segment when the ray never meets the slab's top, else two: the observer to the top, the top to the end. One call site of the
     // march (a shader compiler inlines each, and each inlines pa_transmittance's cut search in the exact build).
-    int n0 = min(max(int(float(steps) * PA_AP_SLAB_STEP_SHARE + 0.5), 2), max(steps - 2, 2));
-    bool inside = (length(o) - pa_atm.planet_radius_km) < pa_atm.slab_top_km;
+    bool dense1 = false;
+    bool dense2 = false;
+    int n0 = steps;
+    if (tc >= 0.0)
+    {
+        float tau1 = pa_ray_segment(h0, d, 0.0, tc, dense1);
+        float tau2 = pa_ray_segment(h0, d, tc, dist_km, dense2);
+        float w1 = 1.0 - exp(-tau1);
+        float w2 = exp(-tau1) * (1.0 - exp(-tau2));
+        n0 = min(max(int(float(steps) * (w1 + PA_AP_WEIGHT_FLOOR) / (w1 + w2 + 2.0 * PA_AP_WEIGHT_FLOOR) + 0.5), 2), steps - 2);
+    }
+    else
+    {
+        pa_ray_segment(h0, d, 0.0, dist_km, dense2);
+    }
     for (int seg = 0; seg < (tc < 0.0 ? 1 : 2); ++seg)
     {
         float t0 = seg == 0 ? 0.0 : tc;
         float t1 = (seg == 0 && tc >= 0.0) ? tc : dist_km;
         int n = tc < 0.0 ? steps : (seg == 0 ? n0 : steps - n0);
-        float power = (seg == 0 && tc >= 0.0 && inside) ? PA_AP_INSIDE_POWER : 2.0;
-        pa_march_seg(o, d, t0, t1, n, power, lt, Lin, T);
+        bool dense_at_end = (seg == 0 && tc >= 0.0) ? dense1 : dense2;
+        pa_march_seg(h0, d, t0, t1, n, (seg == 0 && tc >= 0.0) ? PA_AP_POWER_NEAR : PA_AP_POWER_FAR, dense_at_end, lt, Lin, T);
     }
 }
 
@@ -310,11 +407,11 @@ void atmosphereAP(vec3 d, float dist_km, float h_obs_km, int steps, out vec3 Lin
 // the reference integrals the LUT passes are held to (single pass; AT2-1 splits them)
 // ---------------------------------------------------------------------------------------------------
 
-// the multiple-scattering texel (r, mu_s) per unit irradiance: L2 / (1 - min(f_ms, pa_f_ms_max)) over n x n uniform directions of
-// the sphere, 20 uniform steps each, the ground at pa_ground_albedo. f_ms_out: the largest channel of f_ms.
-vec3 pa_ms_texel(float r, float mu_s, int n_dirs, int n_steps, out float f_ms_out)
+// the multiple-scattering texel (h, mu_s) per unit irradiance: L2 / (1 - min(f_ms, pa_f_ms_max)) over n x n uniform directions of
+// the sphere, n_steps quadratic steps each, the ground at pa_ground_albedo. f_ms_out: the largest channel of f_ms.
+vec3 pa_ms_texel(float h_km, float mu_s, int n_dirs, int n_steps, out float f_ms_out)
 {
-    vec3 x0 = vec3(0.0, 0.0, r);
+    float h0 = clamp(h_km, 0.0, pa_top_height());
     PALights lt;
     lt.dir[0] = vec3(sqrt(max(0.0, 1.0 - mu_s * mu_s)), 0.0, mu_s);
     lt.dir[1] = vec3(0.0);
@@ -324,7 +421,6 @@ vec3 pa_ms_texel(float r, float mu_s, int n_dirs, int n_steps, out float f_ms_ou
     lt.disc[1] = pa_lights.disc[1];
     lt.count = 1;
     const float pu = 1.0 / (4.0 * PA_PI);
-    float rg = pa_atm.planet_radius_km;
     vec3 L2 = vec3(0.0);
     vec3 fms = vec3(0.0);
     for (int i = 0; i < n_dirs; ++i)
@@ -335,22 +431,28 @@ vec3 pa_ms_texel(float r, float mu_s, int n_dirs, int n_steps, out float f_ms_ou
             float st = sqrt(1.0 - ct * ct);
             float ph = 2.0 * PA_PI * (float(i) + 0.5) / float(n_dirs);
             vec3 d = vec3(st * cos(ph), st * sin(ph), ct);
-            float tg = pa_ray_sphere(x0, d, rg);
-            float tmax = tg > 0.0 ? tg : max(pa_ray_sphere(x0, d, pa_atm.top_radius_km), 0.0);
-            float dt = tmax / float(n_steps);
+            float tg = pa_ground_distance(h0, d);
+            float tmax = tg >= 0.0 ? tg : max(pa_ray_alt(h0, d, pa_top_height()), 0.0);
             vec3 T = vec3(1.0);
             vec3 L = vec3(0.0);
             vec3 Fi = vec3(0.0);
             // the steps, then the ground point as one more iteration (one call site of the light's transmittance)
+            float prev = 0.0;
             for (int k = 0; k <= n_steps; ++k)
             {
                 bool ground = k == n_steps;
-                if (ground && !(tg > 0.0))
+                if (ground && !(tg >= 0.0))
                 {
                     break;
                 }
-                vec3 x = ground ? x0 + d * tg : x0 + d * ((float(k) + 0.5) * dt);
-                vec3 lT = pa_light_T(x, lt, 0);
+                float a = float(k + 1) / float(n_steps);
+                float am = (float(k) + 0.5) / float(n_steps);
+                float dt = (a * a - prev) * tmax;
+                prev = a * a;
+                vec3 x;
+                float h = pa_path_point(h0, d, ground ? tg : am * am * tmax, x);
+                h = ground ? 0.0 : h;
+                vec3 lT = pa_light_T(x, h, lt, 0);
                 if (ground)
                 {
                     vec3 n = x / length(x);
@@ -360,7 +462,7 @@ vec3 pa_ms_texel(float r, float mu_s, int n_dirs, int n_steps, out float f_ms_ou
                 vec3 s_r;
                 float s_m;
                 vec3 ext;
-                pa_medium(length(x) - rg, s_r, s_m, ext);
+                pa_medium(h, s_r, s_m, ext);
                 vec3 s = s_r + vec3(s_m);
                 vec3 Ts = exp(-ext * dt);
                 vec3 w = (vec3(1.0) - Ts) / max(ext, vec3(1e-7));
@@ -383,7 +485,7 @@ vec3 pa_ms_texel(float r, float mu_s, int n_dirs, int n_steps, out float f_ms_ou
 // over n x n cosine-weighted directions of the upper hemisphere, `steps` quadratic steps to the top
 vec3 pa_sky_irradiance_texel(float h_km, float mu_s, int n_dirs, int steps)
 {
-    vec3 x0 = vec3(0.0, 0.0, pa_atm.planet_radius_km + max(h_km, 0.0));
+    float h0 = clamp(h_km, 0.0, pa_top_height());
     PALights lt;
     lt.dir[0] = vec3(sqrt(max(0.0, 1.0 - mu_s * mu_s)), 0.0, mu_s);
     lt.dir[1] = vec3(0.0);
@@ -403,7 +505,7 @@ vec3 pa_sky_irradiance_texel(float h_km, float mu_s, int n_dirs, int steps)
             vec3 d = vec3(st * cos(ph), st * sin(ph), ct);
             vec3 Lin = vec3(0.0);
             vec3 T = vec3(1.0);
-            pa_march_seg(x0, d, 0.0, max(pa_ray_sphere(x0, d, pa_atm.top_radius_km), 0.0), steps, 2.0, lt, Lin, T);
+            pa_march_seg(h0, d, 0.0, max(pa_ray_alt(h0, d, pa_top_height()), 0.0), steps, 2.0, false, lt, Lin, T);
             sum += Lin;
         }
     }
@@ -414,22 +516,22 @@ vec3 pa_sky_irradiance_texel(float h_km, float mu_s, int n_dirs, int steps)
 // plus the ground at pa_ground_albedo where the ray meets it, lit by the lights' T and the sky irradiance (exact texel here)
 vec3 pa_sky_radiance(vec3 d, float h_obs_km, int steps)
 {
-    float rg = pa_atm.planet_radius_km;
-    vec3 o = vec3(0.0, 0.0, rg + max(h_obs_km, 0.0));
-    float tg = pa_ground_distance(o, d);
-    float tmax = tg >= 0.0 ? tg : max(pa_ray_sphere(o, d, pa_atm.top_radius_km), 0.0);
+    float h0 = clamp(h_obs_km, 0.0, pa_top_height());
+    float tg = pa_ground_distance(h0, d);
+    float tmax = pa_ray_length(h0, d);
     vec3 Lin = vec3(0.0);
     vec3 T = vec3(1.0);
-    pa_march_seg(o, d, 0.0, tmax, steps, 1.0, pa_lights, Lin, T);
+    pa_march_seg(h0, d, 0.0, tmax, steps, 1.0, false, pa_lights, Lin, T);
     if (tg >= 0.0)
     {
-        vec3 p = o + d * tg;
+        vec3 p;
+        pa_path_point(h0, d, tg, p);
         vec3 n = p / length(p);
         vec3 E = vec3(0.0);
-        for (int l = 0; l < pa_lights.count; ++l)
+        for (int l = 0; l < min(max(pa_lights.count, 0), 2); ++l)
         {
             float mu = dot(n, pa_lights.dir[l]);
-            E += pa_lights.E[l] * (pa_light_T(p, pa_lights, l) * max(mu, 0.0) + pa_sky_irradiance_texel(0.0, mu, 8, 16));
+            E += pa_lights.E[l] * (pa_light_T(p, 0.0, pa_lights, l) * max(mu, 0.0) + pa_sky_irradiance_texel(0.0, mu, 8, 16));
         }
         Lin += T * E * (pa_ground_albedo / PA_PI);
     }
