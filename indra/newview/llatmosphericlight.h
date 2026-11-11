@@ -44,8 +44,17 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <vector>
+
+// the precondition check of LLScatter: the viewer's llassert when it is there, else assert
+#if defined(llassert)
+#define LL_ATMOS_REQUIRE(cond) llassert(cond)
+#else
+#include <cassert>
+#define LL_ATMOS_REQUIRE(cond) assert(cond)
+#endif
 
 namespace LLAtmosphericLight
 {
@@ -1563,14 +1572,33 @@ struct LLScatter
         return t;
     }
 
+    // Psi(h, mu_s). PRECONDITION of every march (atmosphere_ap, sky_radiance, sky_irradiance_texel): the multiple-scattering table is bound
+    // (ms_lut, built by build_ms_lut) or ms_override is set. fromLegacy() leaves both unset, and an unbound march would silently leave the
+    // multiple scattering out, so it is enforced: an assertion (llassert in the viewer, assert elsewhere) and, where assertions are compiled
+    // out, a warning once on stderr; the march then has no multiple scattering. A caller that wants single scattering only says so with
+    // use_single_scattering_only(). There is no on-the-fly exact Psi (a texel is 1300 light transmittances).
     Vec3 ms_at(double h_km, double mu_s) const
     {
         if (ms_override)
         {
             return ms_override(h_km, mu_s);
         }
-        return ms_lut ? ms_lut->at(h_km, mu_s) : Vec3{};
+        if (!ms_lut)
+        {
+            LL_ATMOS_REQUIRE(false && "LLScatter: bind ms_lut (build_ms_lut) before a march, or call use_single_scattering_only()");
+            static bool warned = false;
+            if (!warned)
+            {
+                warned = true;
+                std::fprintf(stderr, "LLScatter: a march without a bound multiple-scattering table leaves the multiple scattering out\n");
+            }
+            return {};
+        }
+        return ms_lut->at(h_km, mu_s);
     }
+
+    // the documented opt-out of the precondition above: marches then have the single scattering only (the reference of a test, not a sky)
+    void use_single_scattering_only() { ms_override = [](double, double) { return Vec3{}; }; }
 
     // --- geometry from the observer's height h0 (the observer is at (0, 0, Rg + h0)), in altitudes ---
 
