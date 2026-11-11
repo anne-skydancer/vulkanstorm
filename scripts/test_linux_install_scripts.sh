@@ -81,7 +81,11 @@ cp "$TOOLS/wrapper.sh" "$FIXTURE/launcher/firestorm"
 printf '#!/bin/bash\nprintf "%%s\\n" "$@" > "$FIXTURE/launched-args"\n' > "$FIXTURE/launcher/bin/do-not-directly-run-vulkanstorm-bin"
 chmod +x "$FIXTURE/launcher/bin/do-not-directly-run-vulkanstorm-bin"
 touch "$FIXTURE/launcher/FS_No_LD_Hacks.txt"
-bash "$FIXTURE/launcher/firestorm" --skip-gridargs -url "$url"
+# The launcher's AVX2 check must not depend on the host's processor: answer it
+# from a fixture (see scripts/tests/test_wrapper_cpu_check.py for the check itself).
+printf 'flags : fpu sse2 avx avx2 bmi1 bmi2 f16c fma movbe abm
+' > "$FIXTURE/cpuinfo"
+VKSTORM_ARCH=x86_64 VKSTORM_LD_SO='' VKSTORM_CPUINFO="$FIXTURE/cpuinfo"     bash "$FIXTURE/launcher/firestorm" --skip-gridargs -url "$url"
 mapfile -t args < "$FIXTURE/launched-args"
 [[ ${#args[@]} == 2 && ${args[0]} == -url && ${args[1]} == "$url" ]]
 echo 'PASS: packaged Vulkanstorm launcher'

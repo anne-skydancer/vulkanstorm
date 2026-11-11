@@ -41,7 +41,7 @@ linux-lts package list yet").
 
 | Platform | Built | Package | Floor |
 |---|---|---|---|
-| `windows` | windows-2025, MSVC; Inno Setup installer | `*_Setup.exe` | – |
+| `windows` | windows-2025, MSVC; Inno Setup installer | `*_Setup.exe` | Windows 10 (64-bit) |
 | `linux` | built and linked directly on GitHub's `ubuntu-26.04` (the newest GitHub runner, bumped by hand), with the newest GCC its Ubuntu ships and the packages of `autobuild.xml` (built on ubuntu-26.04) | `*-ubuntu-latest.tar.xz` | that runner's glibc, reported by CI |
 | `linux-lts` | built and linked inside `ubuntu:24.04` with GCC 14 and the 24.04-built packages of `scripts/linux_lts_packages.json` | `*-ubuntu24.04.tar.xz` | glibc 2.39 / GLIBCXX_3.4.33, enforced by CI: runs on Ubuntu 24.04 and newer |
 
@@ -49,6 +49,15 @@ The Release packages are Release, AVX2 and LTO builds. They no longer bundle
 the Mesa/Zink runtime (`USE_MESAZINK` off): Zink was withdrawn from the
 viewer, a Vulkan build will supersede it, and its code is kept (tag
 `archive/zink/2026-10-29`).
+
+**Minimum requirements.** Every package needs a processor with AVX2
+(x86-64-v3): most Intel Core processors from Haswell (2013) on and AMD Zen or
+Excavator and newer. Some Pentium, Celeron and Atom models and some virtual
+machines do not have it. On Windows the viewer checks this before anything
+else runs and shows a message if the processor lacks it; the installer
+refuses to install (silent installs too). The Linux launcher (`firestorm`
+wrapper script) checks it the same way. The Windows installer also needs
+Windows 10 or newer; Windows 7, 8 and 8.1 are no longer supported.
 
 Pull requests run all three workflows as RelWithDebInfo qualification
 builds, never published, so that the on-demand `linux-lts` build never rots.

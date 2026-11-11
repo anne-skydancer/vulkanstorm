@@ -1,5 +1,66 @@
 #!/bin/bash
 
+# Vulkanstorm is built for x86-64-v3 (AVX2). On an older processor the viewer
+# would die with an illegal-instruction fault and no explanation, so check
+# first, before anything is preloaded or started.
+#
+# Only a positive "x86-64-v3 (supported" from ld.so ends the check early. Any
+# other or unrecognised ld.so output falls through to the /proc/cpuinfo flags,
+# and the viewer is refused only when those are readable and lack a flag.
+#
+# For tests: VKSTORM_ARCH (instead of uname -m), VKSTORM_LD_SO (the ld.so to
+# ask; set but empty means none) and VKSTORM_CPUINFO (instead of
+# /proc/cpuinfo); VKSTORM_CPU_CHECK_ONLY=1 exits 0 after a passed check.
+vkstorm_cpu_ok() {
+	[ "${VKSTORM_ARCH:-`uname -m`}" = "x86_64" ] || return 0
+	local candidates candidate help_text flags f cpuinfo
+	if [ -n "${VKSTORM_LD_SO+x}" ]; then
+		candidates="$VKSTORM_LD_SO"
+	else
+		candidates="/lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"
+	fi
+	# glibc 2.33 and later list the supported x86-64 levels in "--help".
+	for candidate in $candidates; do
+		if [ -x "$candidate" ]; then
+			help_text="`"$candidate" --help 2>/dev/null`"
+			case "$help_text" in
+				*"x86-64-v3 (supported"*) return 0 ;;
+			esac
+			break
+		fi
+	done
+	# Otherwise look for every x86-64-v3 feature in the first "flags" line.
+	cpuinfo="${VKSTORM_CPUINFO:-/proc/cpuinfo}"
+	[ -r "$cpuinfo" ] || return 0
+	flags=" `grep -m1 '^flags' "$cpuinfo" 2>/dev/null` "
+	[ "$flags" = "  " ] && return 0
+	for f in avx avx2 bmi1 bmi2 f16c fma movbe abm; do
+		case "$flags" in
+			*" $f "*) ;;
+			*) return 1 ;;
+		esac
+	done
+	return 0
+}
+
+if ! vkstorm_cpu_ok; then
+	VKSTORM_CPU_MSG="Vulkanstorm needs a processor with AVX2 (x86-64-v3). Most Intel Core processors from Haswell (2013) on and AMD Zen or Excavator and newer have it; some Pentium, Celeron and Atom models and some virtual machines do not. This computer's processor does not support it."
+	echo "*** $VKSTORM_CPU_MSG ***" >&2
+	if [ -n "$DISPLAY$WAYLAND_DISPLAY" ]; then
+		if command -v zenity >/dev/null 2>&1; then
+			zenity --error --title="Vulkanstorm" --text="$VKSTORM_CPU_MSG"
+		elif command -v kdialog >/dev/null 2>&1; then
+			kdialog --title "Vulkanstorm" --error "$VKSTORM_CPU_MSG"
+		elif command -v xmessage >/dev/null 2>&1; then
+			xmessage -center "$VKSTORM_CPU_MSG"
+		elif command -v notify-send >/dev/null 2>&1; then
+			notify-send -u critical "Vulkanstorm" "$VKSTORM_CPU_MSG"
+		fi
+	fi
+	exit 1
+fi
+[ -n "$VKSTORM_CPU_CHECK_ONLY" ] && exit 0
+
 exportMutliArchDRIPath() {
 	MULTIARCH="$(dpkg-architecture -a$1 -qDEB_HOST_MULTIARCH 2>/dev/null)"
 	MULTIARCH_ERR=$?
@@ -172,51 +233,6 @@ for ARG in "$@"; do
         ARGS[${#ARGS[*]}]="$ARG"
     fi
 done
-
-# Vulkanstorm is built for x86-64-v3 (AVX2). On an older processor the viewer
-# would die with an illegal-instruction fault and no explanation, so check first.
-# VKSTORM_LD_SO and VKSTORM_CPUINFO exist so that the check can be tested.
-vkstorm_cpu_ok() {
-	[ "`uname -m`" = "x86_64" ] || return 0
-	local ldso="" candidate help_text flags f
-	for candidate in "${VKSTORM_LD_SO:-}" /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2; do
-		if [ -n "$candidate" ] && [ -x "$candidate" ]; then
-			ldso="$candidate"
-			break
-		fi
-	done
-	# glibc 2.33 and later list the supported x86-64 levels in "--help".
-	if [ -n "$ldso" ]; then
-		help_text="`"$ldso" --help 2>/dev/null`"
-		case "$help_text" in
-			*"x86-64-v3 (supported"*) return 0 ;;
-			*"x86-64-v3"*) return 1 ;;
-		esac
-	fi
-	# Older glibc: look for every x86-64-v3 feature in the first "flags" line.
-	local cpuinfo="${VKSTORM_CPUINFO:-/proc/cpuinfo}"
-	[ -r "$cpuinfo" ] || return 0
-	flags=" `grep -m1 '^flags' "$cpuinfo" 2>/dev/null` "
-	[ "$flags" = "  " ] && return 0
-	for f in avx avx2 bmi1 bmi2 f16c fma movbe abm; do
-		case "$flags" in
-			*" $f "*) ;;
-			*) return 1 ;;
-		esac
-	done
-	return 0
-}
-
-if ! vkstorm_cpu_ok; then
-	VKSTORM_CPU_MSG="Vulkanstorm needs a processor with AVX2 (x86-64-v3): Intel Haswell (2013) or newer, AMD Zen or Excavator or newer. This computer's processor does not support it."
-	echo "*** $VKSTORM_CPU_MSG ***" >&2
-	if [ -n "$DISPLAY$WAYLAND_DISPLAY" ] && command -v zenity >/dev/null 2>&1; then
-		zenity --error --title="Vulkanstorm" --text="$VKSTORM_CPU_MSG"
-	elif [ -n "$DISPLAY$WAYLAND_DISPLAY" ] && command -v kdialog >/dev/null 2>&1; then
-		kdialog --title "Vulkanstorm" --error "$VKSTORM_CPU_MSG"
-	fi
-	exit 1
-fi
 
 # Run the program.
 # Don't quote $LL_WRAPPER because, if empty, it should simply vanish from the
