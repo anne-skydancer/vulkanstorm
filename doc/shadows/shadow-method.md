@@ -89,11 +89,14 @@ the other. `test_shadow_bias_altitude.py` counts the 3 cm band above the ground 
 wall and bounds it (measured 2.3 to 4.3 % of that band's pixels, at most 5 %); the rest of the wall has no acne.
 
 Cost, offline bench (`scripts/perf/bench_shadow_pcss.py`, sun light pass, median of 30 frames, 3 rounds,
-same GPU, devel-tip PCSS against this tree's PCSS): +0.014 ms at 1080p with sun and spot shadows
-(+0.013 ms sun only), +0.022 / +0.023 ms at 1440p; the GL 3.3 path (`pcss33`) is +0.011 / +0.010 ms at 1080p. In a view that is
-74 % sky it is +0.003 ms or less at 1080p. The gate is +0.015 ms at 1080p. Stage S2 is the only cost added so
-far, so the running total is the same +0.014 ms; its percentage of the `windows-latest` 82080 PCSS-on frame is
-not known yet, because that baseline capture is still owed.
+same GPU, devel-tip PCSS against this tree's PCSS; the run-to-run spread of the medians is 0.001 ms at
+1080p, and three full runs gave +0.014 to +0.016 ms): +0.015 ms at 1080p with sun and spot shadows (+0.012 ms
+sun only), +0.023 ms at 1440p; the GL 3.3 path (`pcss33`) is +0.012 / +0.009 ms at 1080p. In a view that is
+74 % sky (the receiver geometry is skipped beyond the shadow distance) it is +0.001 / +0.004 ms at 1080p
+and +0.008 / +0.006 ms at 1440p. The gate is +0.015 ms at 1080p, so S2 is at the gate and not under it.
+S2 is the only cost added so far, so the running total of the light and shadow work is the same
++0.015 ms; its percentage of the `windows-latest` 82080 PCSS-on frame is not known yet, because that
+baseline capture is still owed.
 
 ## Where the method is read
 
