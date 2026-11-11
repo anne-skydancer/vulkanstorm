@@ -120,6 +120,7 @@ uniform vec4 light_attenuation[8]; // linear, quadratic, is omni, unused, See: L
 uniform vec3 light_diffuse[8];
 uniform vec2 light_deferred_attenuation[8]; // light size and falloff
 
+uniform int classic_mode;
 uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);
@@ -273,7 +274,13 @@ void main()
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);
 
 #ifndef UNLIT
-    vec3 sunlit_linear = srgb_to_linear(sunlit);
+    // <Vulkanstorm> calcAtmosphericVarsLinear already returns sunlit in linear light unless classic_mode is on (it was converted twice)
+    vec3 sunlit_linear = sunlit;
+    if (classic_mode > 0)
+    {
+        sunlit_linear = srgb_to_linear(sunlit);
+    }
+    // </Vulkanstorm>
 
     vec2 frag = vary_fragcoord.xy/vary_fragcoord.z*0.5+0.5;
 
