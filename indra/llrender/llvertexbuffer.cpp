@@ -35,6 +35,7 @@
 #include "llvector4a.h"
 #include "llshadermgr.h"
 #include "llglslshader.h"
+#include "llglsubmitstats.h"
 #include "llmemory.h"
 #include <glm/gtc/type_ptr.hpp>
 
@@ -451,6 +452,8 @@ public:
             LL_PROFILE_GPU_ZONE("vbo alloc");
 
             mMisses++;
+            VKS_GLSTAT_INC(bufAllocMiss);
+            VKS_GLSTAT(bufAllocMissBytes, size);
             name = gen_buffer();
             glBindBuffer(type, name);
             glBufferData(type, size, nullptr, GL_DYNAMIC_DRAW);
@@ -468,6 +471,7 @@ public:
         else
         {
             mHits++;
+            VKS_GLSTAT_INC(bufAllocHit);
             llassert(mReserved >= size); // assert if accounting gets messed up
             mReserved -= size;
 
@@ -749,6 +753,7 @@ void LLVertexBuffer::setupClientArrays(U32 data_mask)
             { //was enabled
                 if (!(data_mask & mask))
                 { //needs to be disabled
+                    VKS_GLSTAT_INC(attribToggles);
                     glDisableVertexAttribArray(loc);
                 }
             }
@@ -756,6 +761,7 @@ void LLVertexBuffer::setupClientArrays(U32 data_mask)
             {   //was disabled
                 if (data_mask & mask)
                 { //needs to be enabled
+                    VKS_GLSTAT_INC(attribToggles);
                     glEnableVertexAttribArray(loc);
                 }
             }
@@ -921,6 +927,8 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
     llassert(mGLIndices == sGLRenderIndices);
     gGL.syncMatrices();
     STOP_GLERROR;
+    VKS_GLSTAT_DRAW(count);
+    VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
         (GLvoid*) (indices_offset * (size_t) mIndicesStride));
     STOP_GLERROR;
@@ -928,6 +936,8 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
 
 void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
 {
+    VKS_GLSTAT_DRAW(count);
+    VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
         (GLvoid*)(indices_offset * (size_t)mIndicesStride));
 }
@@ -947,6 +957,9 @@ void LLVertexBuffer::drawArrays(U32 mode, U32 first, U32 count) const
 
     gGL.syncMatrices();
     STOP_GLERROR;
+    VKS_GLSTAT_DRAW(count);
+    VKS_GLSTAT_INC(drawArraysCalls);
+    VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
     glDrawArrays(sGLMode[mode], first, count);
     STOP_GLERROR;
 }
@@ -1032,6 +1045,7 @@ static std::vector<LLVertexBuffer*> sMappedBuffers;
 void LLVertexBuffer::flushBuffers()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    VKS_GLSTAT_INC(flushBuffers);
     // must only be called from main thread
     for (auto& buffer : sMappedBuffers)
     {
@@ -1401,6 +1415,8 @@ void LLVertexBuffer::flush_vbo(GLenum target, U32 start, U32 end, void* data, U8
                 //LL_PROFILE_GPU_ZONE("glBufferSubData");
                 U32 tend = llmin(i + block_size, end);
                 U32 size = tend - i + 1;
+                VKS_GLSTAT_INC(bufSubData);
+                VKS_GLSTAT(bufSubDataBytes, size);
                 glBufferSubData(target, i, size, (U8*) data + (i-start));
             }
         }
@@ -1695,13 +1711,18 @@ void LLVertexBuffer::setBuffer()
 
     U32 data_mask = LLGLSLShader::sCurBoundShaderPtr->mAttributeMask;
 
+    VKS_GLSTAT_INC(vbSetBuffer);
+
     // this Vertex Buffer must provide all necessary attributes for currently bound shader
     llassert_msg((data_mask & mTypeMask) == data_mask,
         "Attribute mask mismatch! mTypeMask should be a superset of data_mask.  data_mask: 0x"
                 << std::hex << data_mask << " mTypeMask: 0x" << mTypeMask << " Missing: 0x" << (data_mask & ~mTypeMask) <<  std::dec);
 
+    VKS_GLSTAT_VBO(mGLBuffer);
+
     if (sGLRenderBuffer != mGLBuffer)
     {
+        VKS_GLSTAT_INC(vbChanges);
         glBindBuffer(GL_ARRAY_BUFFER, mGLBuffer);
         sGLRenderBuffer = mGLBuffer;
 
@@ -1715,6 +1736,7 @@ void LLVertexBuffer::setBuffer()
 
     if (mGLIndices != sGLRenderIndices)
     {
+        VKS_GLSTAT_INC(iboBinds);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mGLIndices);
         sGLRenderIndices = mGLIndices;
     }
@@ -1730,6 +1752,23 @@ void LLVertexBuffer::setupVertexBuffer()
     U8* base = nullptr;
 
     U32 data_mask = LLGLSLShader::sCurBoundShaderPtr->mAttributeMask;
+
+#if VKS_GL_STATS
+    if (VKS_GLSTAT_ACTIVE())
+    {
+        U32 pointers = 0;
+        for (U32 m = data_mask; m; m &= m - 1)
+        {
+            ++pointers;
+        }
+        if ((data_mask & MAP_EMISSIVE) && !(data_mask & MAP_COLOR))
+        {
+            ++pointers; // emissive is also mapped to the colour attribute
+        }
+        VKS_GLSTAT_INC(attribRespecs);
+        VKS_GLSTAT(attribPointers, pointers);
+    }
+#endif
 
     if (data_mask & MAP_NORMAL)
     {

@@ -33,6 +33,7 @@
 #include "llselectmgr.h"
 #include "llshadermgr.h"
 #include "pipeline.h"
+#include "llglsubmitstats.h"
 
 //static
 LLFetchedGLTFMaterial LLFetchedGLTFMaterial::sDefault;
@@ -68,6 +69,26 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     F32 min_alpha = -1.0;
 
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
+
+#if VKS_GL_STATS
+    if (VKS_GLSTAT_ACTIVE())
+    {
+        // how often the previous call bound this very material (same shader, same media override, same shadow state)
+        static const LLFetchedGLTFMaterial* sLastMaterial = nullptr;
+        static const LLViewerTexture* sLastMedia = nullptr;
+        static const LLGLSLShader* sLastShader = nullptr;
+        static bool sLastShadow = false;
+        VKS_GLSTAT_INC(gltfBinds);
+        if (sLastMaterial == this && sLastMedia == media_tex && sLastShader == shader && sLastShadow == LLPipeline::sShadowRender)
+        {
+            VKS_GLSTAT_INC(gltfSameAsLast);
+        }
+        sLastMaterial = this;
+        sLastMedia = media_tex;
+        sLastShader = shader;
+        sLastShadow = LLPipeline::sShadowRender;
+    }
+#endif
 
     // override emissive and base color textures with media tex if present
     LLViewerTexture* baseColorTex = media_tex ? media_tex : mBaseColorTexture;

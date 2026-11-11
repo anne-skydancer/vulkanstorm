@@ -12038,6 +12038,61 @@ Change of this parameter will affect the layout of buttons in notification toast
     <integer>1</integer>
   </map>
 
+  <key>RenderGLSubmitStats</key>
+  <map>
+    <key>Comment</key>
+    <string>Debug only, development builds with VKS_GL_STATS: collect the OpenGL submission statistics (draws, buffer and texture binds, uniform uploads, CPU and GPU time per view and pass) every frame. Read them over LEAP (GLSubmitStats) or with Frame Profile. Off costs one pointer test per hook.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderGLSubmitStatsGPU</key>
+  <map>
+    <key>Comment</key>
+    <string>Debug only, development builds with VKS_GL_STATS: time every pass on the GPU (timestamp query pairs, read four frames later without waiting) while the statistics are collected.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
+  <key>RenderGLSubmitCompare</key>
+  <map>
+    <key>Comment</key>
+    <string>Debug only, development builds with VKS_GL_STATS: the identical-image check. Set to a pass for ONE frame (it returns to 0): the pass is rendered twice and the attachments compared bit for bit. -1 all, 1 G-buffer, 2-5 sun cascades, 6-7 spot shadows, 8 post-deferred (sorted alpha). The result is in the log (GLSubmitCompare) and over LEAP (GLSubmitStats.compareResults).</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>S32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderGLSubmitCompareInject</key>
+  <map>
+    <key>Comment</key>
+    <string>Debug only, development builds with VKS_GL_STATS: nonzero flips one bit of the second readback of a compared pass, to prove the check catches a one-unit difference.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>S32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderGLSubmitPath</key>
+  <map>
+    <key>Comment</key>
+    <string>Debug only: the OpenGL submission path. 0 is today's path (the reference). Later stages register candidate paths under other values; the identical-image check renders the first pass with 0 and the second with this value.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>S32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
   <key>RenderAlphaStochasticTemporal</key>
   <map>
     <key>Comment</key>

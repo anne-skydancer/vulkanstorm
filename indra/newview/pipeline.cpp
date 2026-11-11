@@ -100,6 +100,7 @@
 #include "llworld.h"
 #include "llcubemap.h"
 #include "llviewershadermgr.h"
+#include "llglsubmitstatsapi.h"
 #include "llviewerstats.h"
 #include "llviewerjoystick.h"
 #include "llviewerdisplay.h"
@@ -375,6 +376,39 @@ bool    LLPipeline::sRenderTextures = true;
 
 // EventHost API LLPipeline listener.
 static LLPipelineListener sPipelineListener;
+
+#if VKS_GL_STATS
+// names of the draw pool types for the GL submission statistics pass scopes
+static const char* vks_pool_name(U32 type)
+{
+    switch (type)
+    {
+    case LLDrawPool::POOL_SKY: return "SKY";
+    case LLDrawPool::POOL_WATEREXCLUSION: return "WATEREXCLUSION";
+    case LLDrawPool::POOL_WL_SKY: return "WL_SKY";
+    case LLDrawPool::POOL_SIMPLE: return "SIMPLE";
+    case LLDrawPool::POOL_FULLBRIGHT: return "FULLBRIGHT";
+    case LLDrawPool::POOL_BUMP: return "BUMP";
+    case LLDrawPool::POOL_MATERIALS: return "MATERIALS";
+    case LLDrawPool::POOL_GLTF_PBR: return "GLTF_PBR";
+    case LLDrawPool::POOL_TERRAIN: return "TERRAIN";
+    case LLDrawPool::POOL_GRASS: return "GRASS";
+    case LLDrawPool::POOL_GLTF_PBR_ALPHA_MASK: return "GLTF_PBR_ALPHA_MASK";
+    case LLDrawPool::POOL_TREE: return "TREE";
+    case LLDrawPool::POOL_ALPHA_MASK: return "ALPHA_MASK";
+    case LLDrawPool::POOL_FULLBRIGHT_ALPHA_MASK: return "FULLBRIGHT_ALPHA_MASK";
+    case LLDrawPool::POOL_AVATAR: return "AVATAR";
+    case LLDrawPool::POOL_CONTROL_AV: return "CONTROL_AV";
+    case LLDrawPool::POOL_GLOW: return "GLOW";
+    case LLDrawPool::POOL_ALPHA_PRE_WATER: return "ALPHA_PRE_WATER";
+    case LLDrawPool::POOL_VOIDWATER: return "VOIDWATER";
+    case LLDrawPool::POOL_WATER: return "WATER";
+    case LLDrawPool::POOL_ALPHA_POST_WATER: return "ALPHA_POST_WATER";
+    case LLDrawPool::POOL_ALPHA: return "ALPHA";
+    default: return "POOL?";
+    }
+}
+#endif
 
 static LLCullResult* sCull = NULL;
 
@@ -4286,6 +4320,7 @@ void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
     LLAppViewer::instance()->pingMainloopTimeout("Pipeline:RenderGeomDeferred");
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_GEOMETRY);
     LL_PROFILE_GPU_ZONE("renderGeomDeferred");
+    VKS_GLSTAT_PASS("geom deferred");
 
     llassert(!sRenderingHUDs);
 
@@ -4310,7 +4345,7 @@ void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
         gGLInverseDeltaModelView = n;
     }
 
-    bool occlude = LLPipeline::sUseOcclusion > 1 && do_occlusion && !LLGLSLShader::sProfileEnabled;
+    bool occlude = LLPipeline::sUseOcclusion > 1 && do_occlusion && !LLGLSLShader::sProfileEnabled && !VKS_GLCMP_REPLAY();
 
     setupHWLights();
 
@@ -4370,6 +4405,7 @@ void LLPipeline::renderGeomDeferred(LLCamera& camera, bool do_occlusion)
 
                 for( S32 i = 0; i < poolp->getNumDeferredPasses(); i++ )
                 {
+                    VKS_GLSTAT_PASS(vks_pool_name(cur_type), i);
                     LLVertexBuffer::unbind();
                     poolp->beginDeferredPass(i);
                     for (iter2 = iter1; iter2 != mPools.end(); iter2++)
@@ -4424,6 +4460,7 @@ void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
     LL_PROFILE_GPU_ZONE("renderGeomPostDeferred");
+    VKS_GLSTAT_PASS("geom post-deferred");
 
     if (gUseWireframe)
     {
@@ -4506,6 +4543,7 @@ void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
 
             for( S32 i = 0; i < poolp->getNumPostDeferredPasses(); i++ )
             {
+                VKS_GLSTAT_PASS(vks_pool_name(cur_type), i);
                 LLVertexBuffer::unbind();
                 poolp->beginPostDeferredPass(i);
                 for (iter2 = iter1; iter2 != mPools.end(); iter2++)
@@ -4590,6 +4628,7 @@ void LLPipeline::renderGeomShadow(LLCamera& camera)
 
             for( S32 i = 0; i < poolp->getNumShadowPasses(); i++ )
             {
+                VKS_GLSTAT_PASS(vks_pool_name(cur_type), i);
                 LLVertexBuffer::unbind();
                 poolp->beginShadowPass(i);
                 for (iter2 = iter1; iter2 != mPools.end(); iter2++)
@@ -6553,18 +6592,26 @@ void LLPipeline::setupHWLights()
             light_color.mV[3] = 0.0f;
 
             F32 fade = iter->fade;
+            bool advance_fade = true;
+            VKS_GLCMP_LIGHT_FADE(fade, advance_fade); // the second render of a compared pass sees the first one's fade
             if (fade < LIGHT_FADE_TIME)
             {
                 // fade in/out light
                 if (fade >= 0.f)
                 {
                     fade = fade / LIGHT_FADE_TIME;
-                    ((Light*) (&(*iter)))->fade += gFrameIntervalSeconds.value();
+                    if (advance_fade)
+                    {
+                        ((Light*) (&(*iter)))->fade += gFrameIntervalSeconds.value();
+                    }
                 }
                 else
                 {
                     fade = 1.f + fade / LIGHT_FADE_TIME;
-                    ((Light*) (&(*iter)))->fade -= gFrameIntervalSeconds.value();
+                    if (advance_fade)
+                    {
+                        ((Light*) (&(*iter)))->fade -= gFrameIntervalSeconds.value();
+                    }
                 }
                 fade = llclamp(fade,0.f,1.f);
                 light_color *= fade;
@@ -10614,7 +10661,11 @@ void LLPipeline::renderDeferredLighting()
                           LLPipeline::RENDER_TYPE_WATEREXCLUSION,
                           END_RENDER_TYPES);
 
+        // Sorted alpha only: the stochastic engine keeps history between frames, so a second render would differ.
+        // Not with highlight faces pending either: the pass consumes that list and the second render would lack them.
+        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_POST_DEFERRED, (mAlphaSTFBO || !mHighlightFaces.empty()) ? nullptr : screen_target, true)
         renderGeomPostDeferred(*LLViewerCamera::getInstance());
+        VKS_GLCMP_END()
         popRenderTypeMask();
     }
 
@@ -11147,7 +11198,39 @@ static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_TREE("Alpha Tree");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_ALPHA_GRASS("Alpha Grass");
 static LLTrace::BlockTimerStatHandle FTM_SHADOW_FULLBRIGHT_ALPHA_MASKED("Fullbright Alpha Masked");
 
+// The identical-image check (development only) wraps the shadow render here, not at the call sites: the Legacy cascade code
+// must stay textually identical to upstream. The target is the one the caller bound and cleared; the second render clears it again.
 void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+{
+#if VKS_GL_STATS
+    LLRenderTarget* target = LLRenderTarget::getCurrentBoundTarget();
+    S32 pass = 0;
+    S32 index = 0;
+    for (S32 k = 0; k < 4; ++k)
+    {
+        if (target == &mRT->shadow[k]) { pass = LLGLSubmitCompare::PASS_SUN_CASCADE0 + k; index = k; }
+    }
+    for (S32 k = 0; k < 2; ++k)
+    {
+        if (target == &mSpotShadow[k]) { pass = LLGLSubmitCompare::PASS_SPOT_SHADOW0 + k; index = k; }
+    }
+    if (pass != 0)
+    {
+        VKS_GLSTAT_VIEW(pass >= LLGLSubmitCompare::PASS_SPOT_SHADOW0 ? "spot shadow" : "sun cascade", index);
+        VKS_GLCMP_BEGIN(pass, target, false)
+        if (VKS_GLCMP_REPLAY())
+        {
+            target->clear();
+        }
+        renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+        VKS_GLCMP_END()
+        return;
+    }
+#endif
+    renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+}
+
+void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_SHADOW_RENDER);
     LL_PROFILE_GPU_ZONE("renderShadow");
@@ -11183,9 +11266,14 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
 
     LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_LESS);
 
-    updateCull(shadow_cam, result);
+    // the second render of a compared pass reuses the cull and sort of the first: only the submission repeats
+    if (!VKS_GLCMP_REPLAY())
+    {
+        VKS_GLSTAT_PASS("shadow cull and sort");
+        updateCull(shadow_cam, result);
 
-    stateSort(shadow_cam, result);
+        stateSort(shadow_cam, result);
+    }
 
     //generate shadow map
     gGL.matrixMode(LLRender::MM_PROJECTION);
@@ -11229,6 +11317,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
 
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow simple"); //LL_RECORD_BLOCK_TIME(FTM_SHADOW_SIMPLE);
         LL_PROFILE_GPU_ZONE("shadow simple");
+        VKS_GLSTAT_PASS("shadow opaque", j);
         gGL.getTexUnit(0)->disable();
 
         for (U32 type : types)
@@ -11243,18 +11332,21 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
 
     if (LLPipeline::sUseOcclusion > 1)
     { // do occlusion culling against non-masked only to take advantage of hierarchical Z
+        VKS_GLSTAT_PASS("shadow occlusion");
         doOcclusion(shadow_cam);
     }
 
 
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow geom");
+        VKS_GLSTAT_PASS("shadow geom");
         renderGeomShadow(shadow_cam);
     }
 
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha");
         LL_PROFILE_GPU_ZONE("shadow alpha");
+        VKS_GLSTAT_PASS("shadow alpha");
         const S32 sun_up = LLEnvironment::instance().getIsSunUp() ? 1 : 0;
         U32 target_width = LLRenderTarget::sCurResX;
 
@@ -11265,6 +11357,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha masked");
                 LL_PROFILE_GPU_ZONE("shadow alpha masked");
+                VKS_GLSTAT_PASS("masked", i);
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
@@ -11274,12 +11367,14 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha blend");
                 LL_PROFILE_GPU_ZONE("shadow alpha blend");
+                VKS_GLSTAT_PASS("blend", i);
                 renderAlphaObjects(rigged);
             }
 
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow fullbright alpha masked");
                 LL_PROFILE_GPU_ZONE("shadow alpha masked");
+                VKS_GLSTAT_PASS("fullbright masked", i);
                 gDeferredShadowFullbrightAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
@@ -11289,6 +11384,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha grass");
                 LL_PROFILE_GPU_ZONE("shadow alpha grass");
+                VKS_GLSTAT_PASS("grass and materials", i);
                 gDeferredTreeShadowProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
 
@@ -11311,6 +11407,7 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
         for (int i = 0; i < 2; ++i)
         {
             bool rigged = i == 1;
+            VKS_GLSTAT_PASS("gltf masked", i);
             gDeferredShadowGLTFAlphaMaskProgram.bind(rigged);
             LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
             LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);

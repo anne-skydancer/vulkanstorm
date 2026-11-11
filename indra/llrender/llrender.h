@@ -225,6 +225,7 @@ public:
     eTextureType getCurrType(void) { return mCurrTexType; }
 
     void setHasMipMaps(bool hasMips) { mHasMipMaps = hasMips; }
+    bool getHasMipMaps() const { return mHasMipMaps; }
 
     // <Vulkanstorm> GL 3.3 sampler objects: bind a sampler object to this unit, where it
     // overrides the bound texture's own filtering, wrap and compare state; 0 restores the

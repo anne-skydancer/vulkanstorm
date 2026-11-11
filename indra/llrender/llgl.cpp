@@ -49,6 +49,7 @@
 
 #include "llglheaders.h"
 #include "llglslshader.h"
+#include "llglsubmitstats.h"
 
 #include "glm/glm.hpp"
 #include <glm/gtc/matrix_access.hpp>
@@ -2573,12 +2574,16 @@ void LLGLState::setEnabled(S32 enabled)
     }
     else if (enabled == ENABLED_STATE && sStateMap[mState] != GL_TRUE)
     {
+        VKS_GLSTAT_INC(stateToggles);
+        VKS_GLSTAT_STATE_CHANGE();
         gGL.flush();
         glEnable(mState);
         sStateMap[mState] = GL_TRUE;
     }
     else if (enabled == DISABLED_STATE && sStateMap[mState] != GL_FALSE)
     {
+        VKS_GLSTAT_INC(stateToggles);
+        VKS_GLSTAT_STATE_CHANGE();
         gGL.flush();
         glDisable(mState);
         sStateMap[mState] = GL_FALSE;
@@ -2608,6 +2613,8 @@ LLGLState::~LLGLState()
 
         if (mIsEnabled != mWasEnabled)
         {
+            VKS_GLSTAT_INC(stateToggles);
+            VKS_GLSTAT_STATE_CHANGE();
             gGL.flush();
             if (mWasEnabled)
             {

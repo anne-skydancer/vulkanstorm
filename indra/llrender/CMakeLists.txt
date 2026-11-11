@@ -51,6 +51,7 @@ set(llrender_HEADER_FILES
     llglheaders.h
     llglslshader.h
     llglstates.h
+    llglsubmitstats.h
     llgltexture.h
     llgltypes.h
     llimagegl.h
@@ -69,6 +70,11 @@ set(llrender_HEADER_FILES
     )
 
 list(APPEND llrender_SOURCE_FILES ${llrender_HEADER_FILES})
+
+# development only: an empty object file (LNK4221) is not made when the option is off
+if (VKS_GL_STATS)
+  list(APPEND llrender_SOURCE_FILES llglsubmitstats.cpp)
+endif()
 
 if (BUILD_HEADLESS)
   add_library (llrenderheadless

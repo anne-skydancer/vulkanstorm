@@ -36,6 +36,7 @@
 #include "lltexture.h"
 #include "llshadermgr.h"
 #include "hbxxh.h"
+#include "llglsubmitstats.h"
 #include "glm/gtc/type_ptr.hpp"
 
 #if LL_WINDOWS
@@ -164,6 +165,7 @@ void LLTexUnit::activate(void)
     if ((S32)gGL.mCurrTextureUnitIndex != mIndex || gGL.mDirty)
     {
         gGL.flush();
+        VKS_GLSTAT_INC(texGLActive);
         glActiveTexture(GL_TEXTURE0 + mIndex);
         gGL.mCurrTextureUnitIndex = mIndex;
     }
@@ -201,6 +203,23 @@ void LLTexUnit::bindFast(LLTexture* texture)
 {
     LLImageGL* gl_tex = texture->getGLTexture();
     texture->setActive();
+#if VKS_GL_STATS
+    if (VKS_GLSTAT_ACTIVE())
+    {
+        const U32 name = gl_tex->getTexName();
+        VKS_GLSTAT_INC(texBindFast);
+        VKS_GLSTAT_INC(texGLBind);
+        VKS_GLSTAT_INC(texGLActive);
+        if (name && mCurrTexture == name && mCurrTexType == gl_tex->getTarget())
+        {
+            VKS_GLSTAT_INC(texBindFastRedundant);
+        }
+        else
+        {
+            VKS_GLSTAT_STATE_CHANGE();
+        }
+    }
+#endif
     glActiveTexture(GL_TEXTURE0 + mIndex);
     gGL.mCurrTextureUnitIndex = mIndex;
     mCurrTexture = gl_tex->getTexName();
@@ -240,6 +259,9 @@ bool LLTexUnit::bind(LLTexture* texture, bool for_rendering, bool forceBind)
                 //in audit, replace the selected texture by the default one.
                 if ((mCurrTexture != gl_tex->getTexName()) || forceBind)
                 {
+                    VKS_GLSTAT_INC(texBindOther);
+                    VKS_GLSTAT_INC(texGLBind);
+                    VKS_GLSTAT_STATE_CHANGE();
                     activate();
                     enable(gl_tex->getTarget());
                     mCurrTexture = gl_tex->getTexName();
@@ -256,6 +278,10 @@ bool LLTexUnit::bind(LLTexture* texture, bool for_rendering, bool forceBind)
                         setTextureAddressMode(gl_tex->mAddressMode);
                         setTextureFilteringOption(gl_tex->mFilterOption);
                     }
+                }
+                else
+                {
+                    VKS_GLSTAT_INC(texBindOtherFiltered);
                 }
             }
             else
@@ -313,6 +339,9 @@ bool LLTexUnit::bind(LLImageGL* texture, bool for_rendering, bool forceBind, S32
 
     if ((mCurrTexture != texname) || forceBind)
     {
+        VKS_GLSTAT_INC(texBindOther);
+        VKS_GLSTAT_INC(texGLBind);
+        VKS_GLSTAT_STATE_CHANGE();
         gGL.flush();
         stop_glerror();
         activate();
@@ -408,6 +437,9 @@ bool LLTexUnit::bindManual(eTextureType type, U32 texture, bool hasMips)
 
     if(mCurrTexture != texture)
     {
+        VKS_GLSTAT_INC(texBindOther);
+        VKS_GLSTAT_INC(texGLBind);
+        VKS_GLSTAT_STATE_CHANGE();
         gGL.flush();
 
         activate();
@@ -415,6 +447,10 @@ bool LLTexUnit::bindManual(eTextureType type, U32 texture, bool hasMips)
         mCurrTexture = texture;
         glBindTexture(sGLTextureType[type], texture);
         mHasMipMaps = hasMips;
+    }
+    else
+    {
+        VKS_GLSTAT_INC(texBindOtherFiltered);
     }
     return true;
 }
@@ -1071,15 +1107,18 @@ void LLRender::syncMatrices()
     if (shader)
     {
         bool mvp_done = false;
+        VKS_GLSTAT_INC(matrixSyncs);
 
         U32 i = MM_MODELVIEW;
         if (mMatHash[MM_MODELVIEW] != shader->mMatHash[MM_MODELVIEW])
         { //update modelview, normal, and MVP
             const glm::mat4& mat = mMatrix[MM_MODELVIEW][mMatIdx[MM_MODELVIEW]];
+            VKS_GLSTAT_INC(mdvSyncs);
 
             // if MDV has changed, update the cached inverse as well
             if (cached_mvp_mdv_hash != mMatHash[MM_MODELVIEW])
             {
+                VKS_GLSTAT_INC(inverseMatrices);
                 cached_inv_mdv = glm::inverse(mat);
             }
 
@@ -1136,12 +1175,14 @@ void LLRender::syncMatrices()
         if (mMatHash[MM_PROJECTION] != shader->mMatHash[MM_PROJECTION])
         { //update projection matrix, normal, and MVP
             const glm::mat4& mat = mMatrix[MM_PROJECTION][mMatIdx[MM_PROJECTION]];
+            VKS_GLSTAT_INC(projSyncs);
 
             // GZ: This was previously disabled seemingly due to a bug involving the deferred renderer's regular pushing and popping of mats.
             // We're reenabling this and cleaning up the code around that - that would've been the appropriate course initially.
             // Anything beyond the standard proj and inv proj mats are special cases.  Please setup special uniforms accordingly in the future.
             if (shader->getUniformLocation(LLShaderMgr::INVERSE_PROJECTION_MATRIX))
             {
+                VKS_GLSTAT_INC(inverseMatrices);
                 glm::mat4 inv_proj = glm::inverse(mat);
                 shader->uniformMatrix4fv(LLShaderMgr::INVERSE_PROJECTION_MATRIX, 1, false, glm::value_ptr(inv_proj));
             }

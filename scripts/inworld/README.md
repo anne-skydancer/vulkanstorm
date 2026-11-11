@@ -240,3 +240,56 @@ and class names, whether the `End`/`Backsp`/`Enter` key names and the focus hand
 the fixed-editor `no_moon` path and its tab click, the Phototools sky names, `STATE_STARTED` handling, `LLStats` field
 names, the log excerpt lookup, snapshot timing, and the `--leap` launch line itself (simulated only). The dry run (and `--deep`) is the quick check
 of most of these.
+
+# In-world OpenGL submission capture (`perf_check.py`)
+
+Dev tooling for the OpenGL modernisation (stage G0, `doc/gl/instrumentation.md`). It needs a **development viewer
+built with `-DVKS_GL_STATS=ON`**: that build has the LEAP API `GLSubmitStats`. Release and the other lines do not,
+and `perf_check.py` says so and stops. It uses the same launch lines and quoting rules as `light_check.py` above
+(`--leap` twice, paths without spaces, forward slashes); only the script and its arguments change:
+
+```powershell
+$run = "$py $scripts/perf_check.py --scenario $scripts/scenarios/gl_submit_g0.json --out C:/Users/annes/source/repos/vulkanstorm/.captures/glsubmit-$stamp"
+& $exe --leap $run --leap $noop
+```
+
+Log in by hand, stand where the scene is worth measuring and leave the viewer alone (no minimizing, no UI use). The run
+takes about ten minutes for the shipped scenario. `--dry-run` (at the login screen with `--no-login-wait`, or in-world)
+only checks that the API, its operations and the settings exist.
+
+What a run does:
+
+1. `selfBench`: the cost of the hooks in this binary (ns per draw's worth of hooks, not collecting and collecting;
+   ns per pass scope with and without GPU timers).
+2. The proof: the G-buffer is compared with **one bit flipped in the second readback**. The check must say DIFFERENT. If it
+   does not, the run fails (exit 4): an IDENTICAL from a check that cannot see a one-unit difference means nothing. It must be
+   exactly the injection: `color0` flagged injected with one differing pixel and no other attachment differing (a real difference
+   would otherwise hide the proof). A compare that no frame took (stale results), or a G-buffer that did not run in a preset, also fails the run.
+   Reflection probe faces are never compared; each result lists, per attachment, its distinct pixel values (an attachment with one is an empty pass).
+3. For each preset (`current` = where you stand, then three headings from your avatar, 2.5 m up): the camera is placed;
+   the frame rate is measured for 5 s with nothing collecting; then a window of 120 frames is collected (counters per view
+   and pass, CPU ms, GPU ms) and written to `window_<preset>.json`; a Frame Profile is written (`profile_<preset>.json`, with a
+   `submit` section); then the identical-image check runs on every pass the frame has (G-buffer, sun cascades, spot shadows,
+   post-deferred), each rendered twice in the same frame and compared bit for bit (`compare_<preset>.json`). Both renders use
+   today's path, so **any DIFFERENT is a bug of the harness or of the pass** (exit 4), not a rendering change.
+4. Restores your settings and camera (also on error; `--restore RUNDIR` repeats it in a fresh viewer).
+
+Keep `--out` under a `.captures` folder (the default is `.captures` in the repository): the viewer writes the window files itself
+and refuses any `.json` path outside its log folder or a `.captures` folder (no relative paths, no `..`, no UNC paths).
+
+Output: `perf.json` (everything, with the hook bench and the overhead per preset), `manifest.csv` (one row per preset),
+`window_*.json`, `compare_*.json`, `profile_*.json`, `scenario.json`, `restore.json`, `viewer_log_excerpt.txt`.
+
+```powershell
+python "$scripts/analyze_perf_check.py" C:/Users/annes/source/repos/vulkanstorm/.captures/glsubmit-<stamp>
+# against another run (a candidate stage against the baseline); delta = new minus baseline
+python "$scripts/analyze_perf_check.py" <new run> --compare <baseline run>
+```
+
+`report.txt` has, per preset: the per-frame totals, what each draw costs the driver (vertex buffer changes, attribute
+respecifications, `glBindTexture`, uniform uploads, state toggles per draw), the redundant share of unfiltered texture
+binds, the mergeable run lengths, the views, the passes by GPU ms, and the identical-image results.
+
+By hand, without the script (the same API from any LEAP client, or the debug settings): `RenderGLSubmitStats` on collects
+every frame; `RenderGLSubmitCompare` set to a pass (-1 all) for one frame logs `GLSubmitCompare` lines and answers
+`GLSubmitStats.compareResults`; Develop > Render > Frame Profile writes the profile with the `submit` section.
