@@ -22,9 +22,18 @@
  * "Only calls the initializers on DLL_THREAD_ATTACH and not
  * DLL_PROCESS_ATTACH") and the CRT itself calls it for the primary thread from
  * __scrt_common_main_seh (exe_common.inl), after this check. __dyn_tls_dtor
- * acts on thread and process detach only. No thread exists before the entry
- * point to receive DLL_THREAD_ATTACH. scripts/tests/check_cpucheck_obj.py
- * (run by CI after the build) fails if this object holds a VEX instruction.
+ * acts on thread and process detach only. No thread is created by the loader
+ * or the CRT before the entry point, so none receives DLL_THREAD_ATTACH. The
+ * one known, narrow exception is a DLL injected into the process (an overlay
+ * or shell extension, say) that starts a thread from its DllMain: that thread
+ * would run __dyn_tls_init, and so any dynamic thread_local initialiser built
+ * with /arch:AVX2, before this check. It is not guarded against.
+ * scripts/tests/check_cpucheck_obj.py (run by CI after the build) fails if
+ * this object holds any instruction that needs more than baseline x86-64
+ * (VEX/AVX/FMA/BMI, LZCNT, TZCNT, MOVBE, POPCNT, SSSE3, SSE4.x, CRC32,
+ * PCLMULQDQ, AES-NI, ADCX/ADOX, RDRAND/RDSEED, CMPXCHG16B), and if the
+ * executable's TLS callback list differs from the three expected (these two
+ * and the Boost one).
  *
  * Constraints that keep it safe on any x86-64 processor:
  *  - compiled with /arch:SSE2 /GS- /GL- (see CMakeLists.txt) and the function
