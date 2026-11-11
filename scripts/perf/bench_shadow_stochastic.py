@@ -14,13 +14,19 @@ Checks (stage M1, the estimator):
   * the converged 10-90 % width of the penumbra of thin boxes at known heights against a disc light's
     (cascades 0 and 1, and a projector), within one map texel plus one pixel;
   * the Stochastic util links on its own, with and without the depth buffer behind the program
-    (SHADOW_COMMON_NO_DEPTH, the build the forward programs take).
+    (SHADOW_COMMON_NO_DEPTH, the build the forward programs take);
+  * a lit slanted plane under a low sun (25, 15 degrees) reads exactly 1 everywhere: no self-shadowing.
 Checks (stage M2, the resolve, the same shaders the viewer runs):
   * a static scene converges: the temporal standard deviation of the penumbra after the history is
     below 0.03 (the raw 8-ray pass is printed for comparison);
   * the 3 x 3 clamp snaps a lit area to exactly 1 and an umbra to exactly 0 in one frame, whatever the history held;
   * a history whose stored depth disagrees with the surface (a revealed surface) is rejected: this frame's rays alone;
-  * a channel whose light changed (shadow_st_channel_valid 0) takes this frame's rays alone.
+  * a channel whose light changed (shadow_st_channel_valid 0) takes this frame's rays alone;
+  * a camera move (a non-identity reprojection): the history is kept where its depth agrees with the surface
+    and rejected where the move disoccluded it;
+  * the compute and the fragment resolve give bit identical histories.
+The viewer's uniform setup of the resolve is checked against the shaders' declarations by
+scripts/tests/test_shadow_method_tables.py (the compute path once missed inv_proj).
 Prints the cost of each pass against today's PCSS sun pass and light-map blur.
 
 Environment: ST_FRAMES (default 40, timing), PCSS_BENCH_RES (as bench_shadow_pcss.py).
@@ -44,13 +50,14 @@ COMMON_DEFINES = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + S2_DEFINES
 bindsampler_ = bindsampler
 
 
-def stoch_program(spot, depth=True):
+def stoch_program(spot, depth=True, consts=None):
     """The deferred sun light pass with the Stochastic shadow util (the viewer's STOCHASTIC_SHADOW_SUN programs)."""
     sun = (root / SUN_F).read_text()
     defines = ['SUN_SHADOW'] + (['SPOT_SHADOW'] if spot else [])
-    common = COMMON_DEFINES + ([] if depth else ['SHADOW_COMMON_NO_DEPTH'])
+    consts = consts or S2_DEFINES
+    common = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + consts + ([] if depth else ['SHADOW_COMMON_NO_DEPTH'])
     return program([(0x8B31, VERTEX), (0x8B30, stage(sun, [])), (0x8B30, stage(UTIL_COMMON, defines + common)),
-                    (0x8B30, stage(UTIL_ST, defines + S2_DEFINES)), (0x8B30, STUBS_F)])
+                    (0x8B30, stage(UTIL_ST, defines + consts)), (0x8B30, STUBS_F)])
 
 
 def bind_stoch(prog, sc, light_size, frame):
@@ -248,6 +255,108 @@ for (W, H) in RESOLUTIONS:
     fn('glDeleteProgram', None, U)(prog)
     sc.release()
 
+# --- a lit slanted plane under a low sun reads exactly 1: no self-shadowing -------------------------------
+W, H = RESOLUTIONS[0]
+FAR_BOX = [((60.0, 0.0, 60.0), (61.0, 1.0, 61.0))]    # outside every cascade: the ground is all lit
+# also with the constant bias cut to a quarter texel and no normal offset: the per texel plane alone keeps a lit plane lit
+WEAK_BIAS = [d for d in S2_DEFINES if not d.startswith(('SHADOW_BIAS_TEXELS', 'SHADOW_NORMAL_OFFSET_TEXELS'))] + ['SHADOW_BIAS_TEXELS=0.25', 'SHADOW_NORMAL_OFFSET_TEXELS=0.0']
+for elevation, consts, label in [(40.0, None, ''), (25.0, None, ''), (15.0, None, ''), (25.0, WEAK_BIAS, ' (bias 0.25 texel, no normal offset)'), (15.0, WEAK_BIAS, ' (bias 0.25 texel, no normal offset)')]:
+    e = math.radians(elevation)
+    sc = Scene(W, H, FAR_BOX, [0.0, 3.0, 4.0], [0.0, 0.0, -14.0], [-math.cos(e), math.sin(e), 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+    prog = stoch_program(True, consts=consts)
+    worst = 1.0; dark = 0; ground = 0
+    gpos = read_rgba(sc.gfbo, W, H)
+    for frame in (1, 2, 3, 4):
+        bind_stoch(prog, sc, LIGHT_SIZE, frame); draw(4, 0, 3); finish()
+        img = read_rgba(sc.lfbo, W, H)[:, :, 0]
+        ground_mask = (np.abs(gpos[..., 1]) < 1.0e30) & (gpos[..., 3] == 1.0)
+        # the ground is the surface the harness's view space position maps to world y = 0
+        wy = (np.linalg.inv(np.array(sc.view, np.float64)) @ np.concatenate([gpos[..., :3].reshape(-1, 3), np.ones((W * H, 1))], axis=1).T).T[:, 1].reshape(H, W)
+        ground_mask = ground_mask & (np.abs(wy) < 0.02) & (-gpos[..., 2] < 60.0)
+        ground = int(ground_mask.sum()); dark += int((img[ground_mask] < 1.0).sum()); worst = min(worst, float(img[ground_mask].min()))
+    check(ground > 100000 and dark == 0, f'sun elevation {elevation:g} degrees{label}: {ground} lit ground pixels, {dark} below 1 (min {worst:.4f})', 'low sun: ')
+    fn('glDeleteProgram', None, U)(prog); sc.release()
+
+# --- the forward programs: 8 fixed rays per layer against the stock PCF, full screen layers -----------------
+FWD_MAIN = '''#version 430 core
+in vec2 vary_fragcoord;
+layout(location = 0) out vec4 out_color;
+uniform sampler2D gbuf_pos;
+uniform sampler2D normalMap;
+float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
+void main()
+{
+    vec4 p = texture(gbuf_pos, vary_fragcoord);
+    vec3 n = texture(normalMap, vary_fragcoord).xyz;
+    out_color = vec4(sampleDirectionalShadow(p.xyz, n, vary_fragcoord));
+}
+'''
+for (W, H) in RESOLUTIONS:
+    sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+    for label, parts in (('stock PCF', [(0x8B30, stage(UTIL_COMMON, ['SUN_SHADOW']))]),
+                         ('Stochastic, 8 fixed rays', [(0x8B30, stage(UTIL_COMMON, ['SUN_SHADOW'] + COMMON_DEFINES + ['SHADOW_COMMON_NO_DEPTH'])), (0x8B30, stage(UTIL_ST, ['SUN_SHADOW'] + S2_DEFINES))])):
+        prog = program([(0x8B31, VERTEX), (0x8B30, FWD_MAIN)] + parts)
+        sc.bind(prog, LIGHT_SIZE)
+        for unit in range(2, 8): bindsampler(unit, depth_fetch.value if label.startswith('Stoch') else 0)
+        u1i(loc(prog, b'shadow_st_frame'), 0)
+        for unit, (name, tex) in enumerate((('gbuf_pos', sc.gpos), ('normalMap', sc.gnorm)), start=8):
+            active(0x84C0 + unit); bindtex(TEX2D, tex); u1i(loc(prog, name.encode()), unit); bindsampler(unit, 0)
+        active(0x84C0)
+        for layers in (1, 4):
+            RES[(W, H, 'fwd', label, layers)] = timed(lambda f: [draw(4, 0, 3) for _ in range(layers)])
+        sc.unbind(); fn('glDeleteProgram', None, U)(prog)
+    sc.release()
+
+# --- a camera move: the reprojected history is kept where its depth agrees, rejected where disoccluded --------
+W, H = RESOLUTIONS[0]
+scA = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+gposA = read_rgba(scA.gfbo, W, H)
+scB = Scene(W, H, TIMING_BOXES, [1.2, 8.0, 4.0], [1.2, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
+gposB = read_rgba(scB.gfbo, W, H)
+prog = stoch_program(True); bind_stoch(prog, scB, LIGHT_SIZE, 3); draw(4, 0, 3); finish()
+rawB = read_rgba(scB.lfbo, W, H)
+rs = Resolve(scB)
+# this frame's clip space to the last frame's, as LLStochasticHistory::reprojection: last proj x last view x inverse(proj x view)
+PV_A = np.array(mmul(scA.proj, scA.view), np.float64); PV_B = np.array(mmul(scB.proj, scB.view), np.float64)
+reproj = PV_A @ np.linalg.inv(PV_B)
+use(rs.prog); set_mat(rs.prog, 'stoch_reproj', [reproj.tolist()])
+wA = -gposA[..., 2].astype(np.float64)
+data = np.zeros((H, W, 4), np.float32); data[..., 0] = 0.5; data[..., 1] = wA; data[..., 2] = 0.5; data[..., 3] = 0.5
+bindtex(TEX2D, rs.hist[rs.idx]); fn('glTexSubImage2D', None, U, I, I, I, I, I, U, U, P)(TEX2D, 0, 0, 0, W, H, 0x1908, 0x1406, data.ctypes.data_as(C.c_void_p))
+rs.run(raw=scB.light_map, history_valid=True)
+out = rs.read_history()
+# numpy model of which pixels find their history: the surface's reprojection against the stored depth
+yy, xx = np.mgrid[0:H, 0:W]
+clip = np.stack([(xx + 0.5) / W * 2 - 1, (yy + 0.5) / H * 2 - 1, np.zeros_like(xx, np.float64), np.ones_like(xx, np.float64)], axis=-1)
+depthB = np.array(read_rgba(scB.gfbo, W, H))   # position buffer: used for the expected depth
+wB = -gposB[..., 2].astype(np.float64)
+world = (np.linalg.inv(np.array(scB.view, np.float64)) @ np.concatenate([gposB[..., :3].reshape(-1, 3).astype(np.float64), np.ones((W * H, 1))], axis=1).T).T
+last = (np.array(scA.view, np.float64) @ world.T).T
+w_expected = (-last[:, 2]).reshape(H, W)
+lc = (np.array(scA.proj, np.float64) @ last.T).T
+u = (lc[:, 0] / lc[:, 3] * 0.5 + 0.5).reshape(H, W) * W; v = (lc[:, 1] / lc[:, 3] * 0.5 + 0.5).reshape(H, W) * H
+inside = (u >= 1) & (u < W - 1) & (v >= 1) & (v < H - 1) & (wB < 150.0) & (wB > 0.5)
+bx = np.floor(u - 0.5).astype(int); by = np.floor(v - 0.5).astype(int)
+tap_agree = []
+for oy in (0, 1):
+    for ox in (0, 1):
+        tx = np.clip(bx + ox, 0, W - 1); ty = np.clip(by + oy, 0, H - 1)
+        tap_agree.append(np.abs(wA[ty, tx] - w_expected) <= 0.02 * w_expected + 0.02)   # the shader's test, per bilinear tap
+tap_agree = np.stack(tap_agree)
+kept_region = inside & tap_agree.all(axis=0); rejected_region = inside & ~tap_agree.any(axis=0)
+cur = rawB[..., 0]
+lo = cur.copy(); hi = cur.copy()
+for dy in (-1, 0, 1):
+    for dx in (-1, 0, 1):
+        sh = np.roll(np.roll(cur, dy, 0), dx, 1); lo = np.minimum(lo, sh); hi = np.maximum(hi, sh)
+penumbra = (lo < 0.5) & (hi > 0.5)                     # the clamp box holds the history's 0.5
+kept = kept_region & penumbra; rejected = rejected_region & penumbra
+want_kept = 0.5 * 0.875 + cur * 0.125
+print(f'  info camera move: {int(kept.sum())} penumbra pixels with agreeing history, {int(rejected.sum())} with a disoccluded one')
+check(kept.sum() > 20 and np.max(np.abs(out[..., 0][kept] - want_kept[kept])) < 2.0e-3, f'camera move: the reprojected history is blended where its depth agrees (max error {np.max(np.abs(out[..., 0][kept] - want_kept[kept])) if kept.sum() else -1:.4f} over {int(kept.sum())} pixels)', 'resolve: ')
+check(rejected.sum() > 20 and np.max(np.abs(out[..., 0][rejected] - cur[rejected])) < 1.0e-6, f'camera move: a disoccluded pixel takes this frame alone ({int(rejected.sum())} pixels)', 'resolve: ')
+rs.release(); fn('glDeleteProgram', None, U)(prog); scA.release(); scB.release()
+
 # --- the compute and the fragment resolve give the same history, frame after frame ------------------------
 W, H = RESOLUTIONS[0]
 sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
@@ -314,8 +423,10 @@ for name, xr, zr, h in PEN_CASES:
     xm = sum(xs_mid) / len(xs_mid); pa, pb = sc.project((xm, 0.0, edge)), sc.project((xm, 0.0, edge + 0.2))
     pixel = 0.2 / math.hypot(pb[0] - pa[0], pb[1] - pa[1])
     measured = hi90 - lo10; expected = DISC_10_90 * w; tol = texel + pixel
-    check(prof[0] < 0.02 and prof[-1] > 0.98 and abs(measured - expected) <= tol,
-          f'{name}, h {h}: converged 10-90 % {100*measured:.1f} cm, disc {100*expected:.1f} cm (+-{100*tol:.1f}); ends {prof[0]:.3f}/{prof[-1]:.3f}', 'penumbra: ')
+    # the converged width is about 0.85 of a disc light's (the quadratic node spacing); a bound of 25 % under or over
+    relative = abs(measured / expected - 1.0) <= 0.25 if name != 'spot' else True
+    check(prof[0] < 0.02 and prof[-1] > 0.98 and abs(measured - expected) <= tol and relative,
+          f'{name}, h {h}: converged 10-90 % {100*measured:.1f} cm, disc {100*expected:.1f} cm (+-{100*tol:.1f}, ratio {measured/expected:.2f}); ends {prof[0]:.3f}/{prof[-1]:.3f}', 'penumbra: ')
     if not estd:
         print(f'  info {name}, h {h}: no pixel of the mean profile between 0.1 and 0.9 (the penumbra is under {100*0.002:.1f} cm wide)'); continue
     check(np.mean(estd) < 0.03, f'{name}, h {h}: penumbra temporal std after the history {np.mean(estd):.3f} (max {np.max(estd):.3f}) < 0.03; raw {np.mean(rstd):.3f}', 'resolve: ')
@@ -327,11 +438,19 @@ print(f'{"res":<11}{"detail":<8}{"tree":>8}{"pcss":>8}{"stoch":>8}   (the sun li
 for (W, H) in RESOLUTIONS:
     for d in (2, 1):
         print(f'{f"{W}x{H}":<11}{d:<8}' + ''.join(f'{RES[(W, H, d, l)]:>8.3f}' for l in ('tree', 'pcss', 'stoch')))
-    pcss = RES[(W, H, 2, 'pcss')] + RES[(W, H, 0, 'blur')]
-    stoch = RES[(W, H, 2, 'stoch')] + RES[(W, H, 0, 'resolve')] + RES[(W, H, 0, 'compose')]
-    print(f'{"":<19}compute resolve {RES[(W, H, 0, "resolve compute")]:.3f} ms (fragment resolve below)')
-    print(f'{"":<19}resolve {RES[(W, H, 0, "resolve")]:.3f} + light map {RES[(W, H, 0, "compose")]:.3f}; today\'s PCSS sun pass + blur {pcss:.3f} ms, '
-          f'Stochastic sun pass + resolve + light map {stoch:.3f} ms ({stoch - pcss:+.3f}); with SSAO the AO blur adds the blur\'s {RES[(W, H, 0, "blur")]:.3f} to the Stochastic side')
+    comp = RES[(W, H, 0, 'resolve compute')]; frag = RES[(W, H, 0, 'resolve')]; compose = RES[(W, H, 0, 'compose')]; blur = RES[(W, H, 0, 'blur')]
+    sun_pcss = RES[(W, H, 2, 'pcss')]; sun_st = RES[(W, H, 2, 'stoch')]
+    pcss = sun_pcss + blur                   # PCSS always runs its blur (shadow and AO channels in the same two passes)
+    print(f'{"":<19}resolve: compute (GL 4.3+, the path the viewer runs there) {comp:.3f}, fragment (GL 4.0 to 4.2) {frag:.3f}; light map pass {compose:.3f}; blur {blur:.3f}')
+    for path, resolve in (('compute', comp), ('fragment', frag)):
+        off = sun_st + resolve + compose
+        print(f'{"":<19}{path} resolve: Stochastic {off:.3f} ms vs PCSS (sun pass + blur) {pcss:.3f} ms: {off - pcss:+.3f} ms with SSAO off for Stochastic'
+              f' (PCSS still pays its blur); SSAO on, both blur: {off + blur - pcss:+.3f} ms')
+print(f'\nforward programs (water, particles, glass layers: a full screen layer each), 8 fixed rays vs the stock PCF, ms per frame')
+for (W, H) in RESOLUTIONS:
+    for layers in (1, 4):
+        stock = RES[(W, H, 'fwd', 'stock PCF', layers)]; st = RES[(W, H, 'fwd', 'Stochastic, 8 fixed rays', layers)]
+        print(f'{f"{W}x{H}":<11}{layers} layer(s): stock PCF {stock:.3f}, Stochastic {st:.3f} ({st - stock:+.3f}); of a 60 fps frame {100 * (st - stock) / 16.67:.1f} %')
 gl.wglMakeCurrent(None, None); gl.wglDeleteContext(context); user.ReleaseDC(window, hdc); user.DestroyWindow(window)
 if failures:
     print('\nFAILED:\n' + '\n'.join(failures)); sys.exit(1)
