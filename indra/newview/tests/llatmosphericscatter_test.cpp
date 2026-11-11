@@ -562,8 +562,12 @@ int main()
         const Vec3 e_lo = d.sky_irradiance_texel(0.0, 0.2), e_hi = d.sky_irradiance_texel(0.0, mu_s), e_conv = d.sky_irradiance_texel(0.0, mu_s, 64, 512);
         check(e_lo.x > 0.0 && e_hi.x > e_lo.x, "sky irradiance rises with the sun", e_lo.x, e_hi.x);
         const double err = std::fabs(lum(e_hi) - lum(e_conv)) / lum(e_conv);
-        std::printf("sky irradiance on a horizontal surface, Default at %.1f degrees: E_sky %.4f %.4f %.4f per unit sun (lum %.4f, x E_sun lum %.4f); 8x8 dirs x 16 steps vs 64x64 x 512: %.3g\n",
-                    sun_elevation_of(kSkies[SKY_DEFAULT]), e_hi.x, e_hi.y, e_hi.z, lum(e_hi), lum(e_hi * d.E_sun), err);
+        // lum(E_sky x E_sun) / pi is the "capture irradiance" of the study (doc/light/atmosphere-study.md): 0.096 for Default there, against
+        // 0.115 for today's probe sky. A regression number, not a gate.
+        const double capture = lum(e_hi * d.E_sun) / PI;
+        std::printf("sky irradiance on a horizontal surface, Default at %.1f degrees: E_sky %.4f %.4f %.4f per unit sun; capture irradiance lum(E_sky E_sun)/pi = %.4f (study 0.096, today 0.115); 8x8 dirs x 16 steps vs 64x64 x 512: %.3g\n",
+                    sun_elevation_of(kSkies[SKY_DEFAULT]), e_hi.x, e_hi.y, e_hi.z, capture, err);
+        check(capture > 0.085 && capture < 0.11, "Default's capture irradiance stays near the study's 0.096", capture);
         check(err < 0.02, "the sky irradiance texel (8x8 directions, 16 steps) is within 2 % of a converged one", err);
     }
 
