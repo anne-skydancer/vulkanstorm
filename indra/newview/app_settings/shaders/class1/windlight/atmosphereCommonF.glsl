@@ -74,6 +74,18 @@ float pa_ray_sphere(vec3 o, vec3 d, float R)
     return t0 > 0.0 ? t0 : (t1 > 0.0 ? t1 : -1.0);
 }
 
+// the distance to the planet's ground along d from o, -1 if the ray does not meet it; an observer on the ground looking below its
+// horizon is AT the ground (0), not at the far side of the chord through the planet
+float pa_ground_distance(vec3 o, vec3 d)
+{
+    float rg = pa_atm.planet_radius_km;
+    if (dot(o, o) <= rg * rg)
+    {
+        return dot(o, d) < 0.0 ? 0.0 : -1.0;
+    }
+    return pa_ray_sphere(o, d, rg);
+}
+
 // (r, mu) -> (u, v): u the distance to the top between its minimum and the horizon's, v = sqrt(rho / H)
 vec2 pa_trans_uv(float r, float mu)
 {
@@ -404,12 +416,12 @@ vec3 pa_sky_radiance(vec3 d, float h_obs_km, int steps)
 {
     float rg = pa_atm.planet_radius_km;
     vec3 o = vec3(0.0, 0.0, rg + max(h_obs_km, 0.0));
-    float tg = pa_ray_sphere(o, d, rg);
-    float tmax = tg > 0.0 ? tg : max(pa_ray_sphere(o, d, pa_atm.top_radius_km), 0.0);
+    float tg = pa_ground_distance(o, d);
+    float tmax = tg >= 0.0 ? tg : max(pa_ray_sphere(o, d, pa_atm.top_radius_km), 0.0);
     vec3 Lin = vec3(0.0);
     vec3 T = vec3(1.0);
     pa_march_seg(o, d, 0.0, tmax, steps, 1.0, pa_lights, Lin, T);
-    if (tg > 0.0)
+    if (tg >= 0.0)
     {
         vec3 p = o + d * tg;
         vec3 n = p / length(p);
