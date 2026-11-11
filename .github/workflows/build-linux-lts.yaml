@@ -124,18 +124,23 @@ jobs:
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           echo "DEBIAN_FRONTEND=noninteractive" >> "$GITHUB_ENV"
-          # The container has had no name resolution on some runs (the host's
-          # resolver, not the image), which apt reports only as missing
-          # packages. Wait a bounded time for it, then fail with the cause.
+          # Seen when the host/Docker resolver stopped resolving: apt then
+          # reports only missing packages. Mitigation: the explicit upstream
+          # DNS servers in .github/build-platforms.json. This check waits a
+          # bounded time for resolution and fails with the evidence.
           resolved=0
           for attempt in 1 2 3 4 5 6; do
-            if getent hosts archive.ubuntu.com >/dev/null; then resolved=1; break; fi
-            echo "archive.ubuntu.com does not resolve (attempt $attempt of 6)"
-            sleep 10
+            if timeout 15 getent hosts archive.ubuntu.com >/dev/null               && timeout 15 getent hosts security.ubuntu.com >/dev/null               && timeout 15 getent hosts github.com >/dev/null; then
+              resolved=1
+              break
+            fi
+            echo "archive.ubuntu.com, security.ubuntu.com or github.com does not resolve (attempt $attempt of 6)"
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
           done
           if [ "$resolved" != 1 ]; then
-            echo "::error::the container cannot resolve archive.ubuntu.com; its /etc/resolv.conf follows"
+            echo "::error::the container cannot resolve archive.ubuntu.com, security.ubuntu.com or github.com; resolver evidence follows"
             cat /etc/resolv.conf
+            timeout 15 getent hosts archive.ubuntu.com || true
             exit 1
           fi
           apt-get -o Acquire::Retries=3 update
