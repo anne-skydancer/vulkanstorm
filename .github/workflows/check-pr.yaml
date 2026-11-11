@@ -56,6 +56,7 @@ jobs:
       - run: python3 scripts/tests/test_chat_link_defaults.py
       - run: python3 scripts/tests/check_release_hooks.py
       - run: python3 scripts/tests/test_wrapper_cpu_check.py
+      - run: python3 scripts/tests/check_cpucheck_obj.py --selftest
       - run: python3 scripts/tests/test_glod_retired.py
         env:
           GLOD_DIFF_BASE: HEAD^1
