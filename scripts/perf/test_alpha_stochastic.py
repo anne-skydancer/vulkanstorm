@@ -87,6 +87,19 @@ for s,t in tables.items():
         assert all(bin(m).count('1')==r and m>>s==0 for m in row),('table row',s,r)
         if 0<r<s: assert len(set(row))>1,('row not varied',s,r)
 assert mask_table(8)==tables[8]
+# the C++ generator (LLStochasticEngine::maskTable, llstochasticstate.h) makes the same tables: the
+# FNV-1a hashes in its standalone test (indra/newview/tests/llstochastichistory_test.cpp, in ci-checks)
+def fnv1a(words):
+    h=0xcbf29ce484222325
+    for w in words:
+        for i in range(4):
+            h^=(w>>(8*i))&0xff;h=(h*0x100000001b3)&M64
+    return h
+import re
+cpp_test=(root/'indra/newview/tests/llstochastichistory_test.cpp').read_text()
+for s,t in tables.items():
+    m=re.search(r'MASK_HASH_%d = 0x([0-9a-f]+)'%s,cpp_test);assert m,('MASK_HASH in the C++ test',s)
+    assert int(m.group(1),16)==fnv1a(t),('the Python mask table differs from the C++ one',s,hex(fnv1a(t)))
 print('mask tables: rows of exactly r bits for S = 4, 8, 16, varied and reproducible')
 
 # ---- the Python model of st_mask (alphaStochasticF.glsl), float32 at every step
