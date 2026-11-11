@@ -32,8 +32,8 @@ size differ in the C++ code. The one shader difference is the sun's N·L under s
 
 ## Stage S2: the shared groundwork of PCSS and Stochastic
 
-Written once for the modern methods (`SHADOW_MODERN`, set by the PCSS build of `shadowUtil.glsl` and,
-when it exists, the Stochastic build); Legacy never defines it and its shader code and cascade culling
+Written once as a method-neutral block (`SHADOW_COMMON`, GLSL 1.50, no `textureGather`; `SHADOW_MODERN`, set by the PCSS build of `shadowUtil.glsl` and,
+when it exists, the Stochastic build, implies it, and the Legacy stages after S2 can define it to reuse the helpers). Only `shadowPlaneTap` and the PCSS code stay under `SHADOW_MODERN`. Legacy defines neither today and its shader code and cascade culling
 are untouched (the offline bench shows its light map bit-identical to the devel tip it was cut from).
 The constants are in `llshadowcascadefit.h` and reach the shader as defines of the same names, so
 there is one source for each:

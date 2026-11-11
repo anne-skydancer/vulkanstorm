@@ -134,10 +134,15 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 #if defined(PCSS_SHADOW) && !defined(SHADOW_MODERN)
 #define SHADOW_MODERN 1 // <Vulkanstorm/> the PCSS build is one of the modern methods
 #endif
+#if defined(SHADOW_MODERN) && !defined(SHADOW_COMMON)
+#define SHADOW_COMMON 1 // <Vulkanstorm/> a modern method uses the method-neutral block below
+#endif
 
-#if defined(SHADOW_MODERN) && defined(SUN_SHADOW)
-// <Vulkanstorm> Stage S2: groundwork shared by the PCSS and the Stochastic shadow methods (SHADOW_MODERN
-// is set by both; Legacy never sets it and keeps its own code above untouched). Written once for
+#if defined(SHADOW_COMMON) && defined(SUN_SHADOW)
+// <Vulkanstorm> Stage S2: method-neutral groundwork (SHADOW_COMMON). Any shadow method may use it:
+// SHADOW_MODERN (PCSS, Stochastic) implies it, and the Legacy build can define it to call the helpers
+// (nothing in Legacy does yet, and without the define the Legacy text below is untouched). The block
+// needs no textureGather (GLSL 1.50). Written once for
 // the orthographic sun cascades of stage S1 (their matrices rotate and scale only: the rows of the
 // matrix are orthogonal, and the rows' lengths are the map's scales). Licensed LGPL-2.1 or GPL-3.
 //   * the receiver plane: the geometric normal of the surface, rebuilt from the depth buffer, instead
@@ -146,7 +151,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 //     at the pixel, times the map's depth scale), the same in every cascade;
 //   * the 25 cm footprint SHADOW_FOOTPRINT_M a filter may reach (the caster cull guard of
 //     llshadowcascadefit.h keeps every caster inside that reach);
-//   * a signed-plane bilinear compare tap through textureGather (SHADOW_GATHER).
+// The signed-plane gather tap (SHADOW_GATHER) is not part of this block; it follows under SHADOW_MODERN.
 // The constants SHADOW_BIAS_TEXELS, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_PLANE_BIAS_MAX_TEXELS and
 // SHADOW_FOOTPRINT_M come from llshadowcascadefit.h through the shader manager (one source of truth).
 
@@ -246,7 +251,9 @@ vec3 shadowNormalOffsetPos(vec3 pos, vec3 ng, float sin_theta, float texel_m)
     return pos + ng * (SHADOW_NORMAL_OFFSET_TEXELS * texel_m * sin_theta);
 }
 
-#if defined(SHADOW_GATHER)
+#endif // SHADOW_COMMON
+
+#if defined(SHADOW_MODERN) && defined(SUN_SHADOW) && defined(SHADOW_GATHER)
 // One bilinear compare tap at c.xy against the receiver plane with the signed gradient g (d depth /
 // d uv): the four texels around c.xy are gathered as raw depth and each compared with the plane's depth at its
 // own centre, then weighted bilinearly. c.z: the receiver's depth with the constant bias added.
@@ -271,7 +278,6 @@ float shadowPlaneTap(sampler2D depthMap, vec3 c, vec2 g, vec2 res, float plane_m
 }
 #endif
 // </Vulkanstorm>
-#endif
 
 #if defined(PCSS_SHADOW)
 // <Vulkanstorm> PCSS stage 1: rotated Poisson PCF with a receiver-plane depth bias.
