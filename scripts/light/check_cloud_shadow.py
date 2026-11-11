@@ -486,36 +486,51 @@ def check_lookup():
     ok = ok and good
     print('check: the beam multiplies linear light, the same for every light:', 'ok' if good else 'FAILED')
 
-    # a caller that linearises again: the glTF alpha-blend shader's own lines (gltf/pbrmetallicroughnessF.glsl), cut out of the file
-    # and run as they are. calcAtmosphericVarsLinear returns linear light unless classic_mode is on, so they must not convert twice.
+    # the glTF alpha-blend shader against pbralphaF.glsl (the owner's reference): the lines after calcAtmosphericVarsLinear are cut out
+    # of each file and run as they are. calcAtmosphericVarsLinear returns the light ready to use (linear in normal mode), so neither
+    # converts it again, and both give the same sunlit_linear in both modes (classic: x 1.35); the final_scale lines are the same text.
     import re
-    src = read('class1/gltf/pbrmetallicroughnessF.glsl')
-    m = re.search(r'calcAtmosphericVarsLinear\(pos\.xyz, norm, light_dir, sunlit, amblit, additive, atten\);\n(.*?)\n\s*vec2 frag', src, re.S)
-    assert m, 'the glTF shader no longer has the expected lines'
-    lines = [ln for ln in m.group(1).split('\n') if not ln.lstrip().startswith('#')]
-    gltf_main = ('layout(location = 0) out vec4 out_a;\nvoid main() {\n'
-                 ' vec3 pos = vec3(10.0, -5.0, -80.0); vec3 norm = vec3(0.0, 1.0, 0.0);\n'
-                 ' vec3 light_dir = normalize(vec3(0.3, 0.8, 0.5)); vec3 sunlit, amblit, additive, atten;\n'
-                 ' calcAtmosphericVarsLinear(pos, norm, light_dir, sunlit, amblit, additive, atten);\n'
-                 + '\n'.join(lines) + '\n out_a = vec4(sunlit_linear, 1.0);\n}\n')
-    gprobe = build(LOOKUP_VS, head + read('class1/environment/srgbF.glsl') + read('class1/windlight/atmosphericsFuncs.glsl') + gltf_main)
-    gok = True
+    after_call = r'calcAtmosphericVarsLinear\(pos\.xyz, norm, light_dir, sunlit, amblit, additive, atten\);\n(.*?)\n\s*vec2 frag'
+
+    def caller_probe(rel):
+        src = read(rel)
+        m = re.search(after_call, src, re.S)
+        assert m, rel + ' no longer has the expected lines'
+        lines = [ln for ln in m.group(1).split('\n') if not ln.lstrip().startswith('#')]
+        main = ('layout(location = 0) out vec4 out_a;\nvoid main() {\n'
+                ' vec3 pos = vec3(10.0, -5.0, -80.0); vec3 norm = vec3(0.0, 1.0, 0.0);\n'
+                ' vec3 light_dir = normalize(vec3(0.3, 0.8, 0.5)); vec3 sunlit, amblit, additive, atten;\n'
+                ' calcAtmosphericVarsLinear(pos, norm, light_dir, sunlit, amblit, additive, atten);\n'
+                + '\n'.join(lines) + '\n out_a = vec4(sunlit_linear, 1.0);\n}\n')
+        return build(LOOKUP_VS, head + read('class1/environment/srgbF.glsl') + read('class1/windlight/atmosphericsFuncs.glsl') + main)
+
+    def final_scale_text(rel):
+        m = re.search(r'float final_scale = 1;\n\s*if \(classic_mode > 0\)\n\s*final_scale = 1\.1;\n\s*frag_color = max\(vec4\(color\.rgb \* final_scale,a\), vec4\(0\)\);', read(rel))
+        return bool(m)
+
+    gprobe = caller_probe('class1/gltf/pbrmetallicroughnessF.glsl')
+    pprobe = caller_probe('class2/deferred/pbralphaF.glsl')
+    gok = final_scale_text('class1/gltf/pbrmetallicroughnessF.glsl') and final_scale_text('class2/deferred/pbralphaF.glsl')
+    print('check: the glTF alpha-blend shader has pbralphaF.glsl\'s final_scale lines:', 'ok' if gok else 'FAILED')
     for classic in (0, 1):
-        res = []
-        for strength in (0.0, 1.0):
-            bindfbo(0x8D40, fo); viewport(0, 0, 1, 1); useprog(gprobe)
-            set_lookup(gprobe, primary_light_color=(0.9, 0.85, 0.8), classic_mode=classic, sky_sunlight_scale=1.0)
-            u(gprobe, 'cloud_shadow_params', strength, 0.0, 0.0625, 0.8)
-            m4 = (F * 16)(1.0 / 600.0, 0, 0, 0, 0, 1.0 / 300.0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 1)
-            um4(loc(gprobe, b'cloud_shadow_mat'), 1, 0, m4); u(gprobe, 'cloud_shadow_map', 0)
-            active(0x84C0); bindtex(TEX2D, tmap)
-            draw(4, 0, 3)
-            res.append(read_pixel(to))
-        r = res[1][0] / res[0][0]
-        # normal mode: the map's 0.5 once, in linear light; classic mode: the encoded light is converted by this caller, as it always was
-        good = abs(r - 0.5) <= 0.5 / 255 if classic == 0 else 0.05 < r < 0.5
+        got = {}
+        for name, prog in (('glTF', gprobe), ('pbralpha', pprobe)):
+            res = []
+            for strength in (0.0, 1.0):
+                bindfbo(0x8D40, fo); viewport(0, 0, 1, 1); useprog(prog)
+                set_lookup(prog, primary_light_color=(0.9, 0.85, 0.8), classic_mode=classic, sky_sunlight_scale=1.0)
+                u(prog, 'cloud_shadow_params', strength, 0.0, 0.0625, 0.8)
+                m4 = (F * 16)(1.0 / 600.0, 0, 0, 0, 0, 1.0 / 300.0, 0, 0, 0, 0, 0, 0, 0.5, 0.5, 0, 1)
+                um4(loc(prog, b'cloud_shadow_mat'), 1, 0, m4); u(prog, 'cloud_shadow_map', 0)
+                active(0x84C0); bindtex(TEX2D, tmap)
+                draw(4, 0, 3)
+                res.append(read_pixel(to))
+            got[name] = res
+        r = got['glTF'][1][0] / got['glTF'][0][0]
+        # the map's 0.5 once (in classic mode on the encoded light, as it always was), and the same pixels as pbralphaF
+        good = got['glTF'] == got['pbralpha'] and abs(r - 0.5) <= 0.5 / 255
         gok = gok and good
-        print(f'check: glTF alpha-blend caller, classic_mode {classic}: sunlit_linear with a map of 0.5 / without = {r:.5f}', 'ok' if good else 'FAILED')
+        print(f'check: glTF alpha-blend caller, classic_mode {classic}: sunlit_linear with a map of 0.5 / without = {r:.5f}, identical to pbralphaF:', 'ok' if good else 'FAILED')
     ok = ok and gok
     return ok
 
