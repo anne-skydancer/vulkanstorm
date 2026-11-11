@@ -622,7 +622,11 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     check_curl_easy_setopt(mCurlHandle, CURLOPT_HTTP_VERSION, (long)CURL_HTTP_VERSION_1_1);
 #endif
     check_curl_easy_setopt(mCurlHandle, CURLOPT_NOSIGNAL, 1);
-    check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 1);
+    // The progress callback exists only to abort the transfer once the
+    // service is asked to stop, so that shutdown never waits for a transfer.
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_NOPROGRESS, 0);
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_XFERINFOFUNCTION, xferInfoCallback);
+    check_curl_easy_setopt(mCurlHandle, CURLOPT_XFERINFODATA, this);
     check_curl_easy_setopt(mCurlHandle, CURLOPT_URL, mReqURL.c_str());
     check_curl_easy_setopt(mCurlHandle, CURLOPT_PRIVATE, getHandle());
 
@@ -816,12 +820,12 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
             }
         }
     }
-    if (!caller_connection)
+    // Connection and Keep-alive belong together ("Keep-alive: 300" is
+    // meaningless next to "Connection: close"): if the caller sets either,
+    // neither default is sent.
+    if (!caller_connection && !caller_keep_alive)
     {
         mCurlHeaders = curl_slist_append(mCurlHeaders, "Connection: keep-alive");
-    }
-    if (!caller_keep_alive)
-    {
         mCurlHeaders = curl_slist_append(mCurlHeaders, "Keep-alive: 300");
     }
 
@@ -1010,6 +1014,14 @@ int HttpOpRequest::seekCallback(void *userdata, curl_off_t offset, int origin)
     op->mCurlBodyPos = (size_t)newPos;
 
     return 0;
+}
+
+
+// Worker thread.  Returning non-zero makes libcurl abort the transfer.
+int HttpOpRequest::xferInfoCallback(void * userdata, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
+{
+    const HttpOpRequest * op(static_cast<const HttpOpRequest *>(userdata));
+    return (op && op->mCurlService && op->mCurlService->isExitRequested()) ? 1 : 0;
 }
 
 

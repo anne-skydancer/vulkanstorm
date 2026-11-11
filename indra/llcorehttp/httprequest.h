@@ -284,7 +284,9 @@ public:
     /// request in other requests (like cancellation) and will be an
     /// argument when any HttpHandler object is invoked.
     ///
-    /// Headers supplied by default (each unless the caller supplies it):
+    /// Headers supplied by default (each unless the caller supplies it;
+    /// Connection and Keep-alive are both left out if the caller supplies
+    /// either of them):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -343,7 +345,9 @@ public:
     /// request in other requests (like cancellation) and will be an
     /// argument when any HttpHandler object is invoked.
     ///
-    /// Headers supplied by default (each unless the caller supplies it):
+    /// Headers supplied by default (each unless the caller supplies it;
+    /// Connection and Keep-alive are both left out if the caller supplies
+    /// either of them):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -379,7 +383,9 @@ public:
     /// be provided.  Caller is responsible for escaping and
     /// encoding and communicating the content types.
     ///
-    /// Headers supplied by default (each unless the caller supplies it):
+    /// Headers supplied by default (each unless the caller supplies it;
+    /// Connection and Keep-alive are both left out if the caller supplies
+    /// either of them):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -418,7 +424,9 @@ public:
     /// be provided.  Caller is responsible for escaping and
     /// encoding and communicating the content types.
     ///
-    /// Headers supplied by default (each unless the caller supplies it):
+    /// Headers supplied by default (each unless the caller supplies it;
+    /// Connection and Keep-alive are both left out if the caller supplies
+    /// either of them):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
