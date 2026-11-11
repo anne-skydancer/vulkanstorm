@@ -85,6 +85,25 @@ the sun attenuation of the below-cloud haze (`off_axis` in `cloudsV.glsl`) follo
 keeps `lightnorm`. The L2 cloud map composes: its weight is multiplied by `primary_shadow_strength`
 (`atmosphericsFuncs.glsl`).
 
+## Glow and halo: each body at its own direction
+
+The light's direction between the sun and the moon (`lightnorm`, `primary_light_dir`) is the route the ground light and the
+shadow take; it points at nothing visible. The glows and the halo around a body are drawn at the body: the first in-world run
+(a setting sun, a moon 55 degrees up and 90 degrees away) showed a large glow and a streak in the empty sky between them
+while the light swung, because the dome, the haze, the halo and the clouds' glow followed the route.
+
+- Dome (`skyV.glsl`) and the scene haze (`atmosphericsFuncs.glsl`): the sun's glow is centred on `sun_glow_norm` (the clamped
+  sun direction) with the weight (1 - band weight); the moon's glow (haze only; the dome never had one) is centred on
+  `moon_glow_norm` with `moon_glow_factor` = band weight x moon_brightness / 4 x the moon disc's visibility. The sum is
+  `sun_moon_glow_factor` as before. By day `moon_glow_factor` is 0 and the sun's share is exactly the factor, 1.
+- Halo and rainbow (`skyF.glsl`): the sun's at the sun, weighted (1 - band weight), the moon's at the moon, weighted
+  `moon_halo_weight` = band weight x the moon disc's visibility. The weight is 1 by day.
+- Clouds: the glow direction `cloud_light_dir` is the sun's direction (`cloud_dir`), through the whole handover, and the
+  sun's attenuation through the atmosphere (`off_axis`) uses the sun's elevation; the clouds' band weight fades the term.
+- Unchanged on purpose: the sunlight attenuation of the dome (`off_axis` in `skyV.glsl`) and the water fog still use
+  `lightnorm`, the cloud self-shade offset and the cloud map the ground's light direction; the sun and moon discs are drawn at
+  their own directions (`LLVOSky`).
+
 ## Limitations
 
 - The cloud self-shade offset (`vary_texcoord1` in `cloudsV.glsl`) stays on `lightnorm`, the ground's light
@@ -97,7 +116,8 @@ keeps `lightnorm`. The L2 cloud map composes: its weight is multiplied by `prima
 | `primary_light_dir` (eye space) | `LLPipeline::bindDeferredShader` | the shaders that took `sun_dir`/`moon_dir` by `sun_up_factor` |
 | `primary_light_color`, `primary_shadow_strength` | `LLSettingsVOSky::applySpecial` (every shader) | `atmosphericsFuncs.glsl` (`sunlit`, the haze), `shadowUtil.glsl` |
 | `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyV.glsl` |
-| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` | `applySpecial` (sky group) | `cloudsV.glsl` |
+| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsV.glsl` |
+| `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyV.glsl`, `skyF.glsl`, `atmosphericsFuncs.glsl` |
 
 The shadow caster, the PCSS light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.
@@ -132,6 +152,14 @@ sun shadow pass is skipped while the shadow is invisible.
 - Night with no moon: band weight 1, no availability, no ground light, no glow; daytime weights 0, shadow 1 and glow
   factor exactly 1 for any sun size (1 to 100); the availability is continuous; the moon never above a quarter of the sun's
   colour; no moon, no direct light at night; 2033 horizon, NaN and hostile-setting cases are finite.
+- Every edge of the bands (0, +-swing, +-(swing + fade), each shifted by 0, the cloud dip and 20 degrees; offsets 0, +-1e-12,
+  +-1e-9, +-1e-6; widths 0 .. 5 degrees; 12 skies, physical and A/B) with no moon, moon_brightness 0, the moon below the horizon and
+  the moon up: all outputs finite and in range (145152 cases). A fully black frame at exactly -0.6 degree seen in-world (no_moon
+  sky) is not reproduced by this: the rig is finite there and the state is the same as at -0.5 and -0.7 degrees; the frame is a
+  uniformly black 2560 x 1329 PNG, which points at a one-frame capture or history glitch, not at the light. The analysis now
+  reports fully black frames as capture failures and leaves them out of the pop search.
+- The glow of each body stays at the body: the clouds' light is the sun's direction through the handover (moon high and 90
+  degrees away), the glow shares add up, no moon glow for moon_brightness 0.
 - The test passes at -O2 and at -O0 (the direction checks are in 1e-6 degree).
 - `scripts/light/gen_atmosphere_vectors.py` (GLSL against C++ for `sunlit`/`amblit`), `check_cloud_shadow.py --check`
   (the lookup follows `primary_shadow_strength`) need a GPU.
