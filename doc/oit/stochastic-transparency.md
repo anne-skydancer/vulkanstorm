@@ -33,8 +33,10 @@ The sampling and the temporal resolve are shared with the producers that will us
 shadow method, RenderShadowMethod 2, later): GLSL objects `stochasticSampleF.glsl` (hash, per-frame seed,
 mask lookup in the one S = 8 table, `stoch_masks`) and `stochasticResolveUtilF.glsl` (reprojection with the
 last frame's matrices, nearest and depth-checked bilinear history reads, the 3 x 3 clamp, the 1/8 blend,
-`stoch_reproj`, `stoch_weight`, `stoch_history_valid`), compiled once and attached to the programs that need
-them; the producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
+`stoch_reproj`, `stoch_weight`, `stoch_history_valid`; stage-neutral). The sampling object is compiled once
+and attached to the programs that sample (`STOCH_SAMPLE_OBJECT`, `LLShaderMgr::attachShaderFeatures`); the
+resolve util is listed in the producer's own `mShaderFiles` and compiled as that program's stage (a compute
+object for the transparency). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
 `LLStochasticEngine` (the mask table, counted textures) and `LLStochasticHistory`, one instance per producer
 (`allocate`, `release`, `beginFrame`, `seedFrame`, `historyUsed`, `setResolveUniforms`, `endFrame`,
 `invalidate`).
@@ -72,7 +74,10 @@ composite):
    glowing faces' glow (`emissiveF.glsl`, `pbrglowF.glsl`, which now write the glow in green as
    well) into the green of the transparency target; the depth spread again before the next
    iteration;
-4. **composite** (`alphaStochasticCompositeF.glsl`) over the scene: the scene dimmed by the
+4. **temporal resolve** (`resolveAlphaStochasticTemporal`, `alphaStochasticResolveC.glsl`, compute): this
+   frame's accumulation averaged over the samples, blended with the last frame's into the history
+   (see Temporal accumulation);
+5. **composite** (`alphaStochasticCompositeF.glsl`) over the scene: the scene dimmed by the
    pixel's transparency (its glow in alpha dimmed alike), the accumulated colour added times the
    alpha correction (total alpha over accumulated alpha); the faces' glow, corrected the same
    way, added to the scene alpha;
@@ -142,8 +147,8 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
   once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
   resolve's 3 x 3 neighbourhood reads the tile instead of summing the samples nine times and no full-size
-  target holds the average (the sum is the same, in the same order: the image is bit for bit that of the
-  fragment pre-pass it replaced; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
+  target holds the average (the sum is the same, in the same order as the fragment pre-pass it
+  replaced: identical on the measured NVIDIA; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
   0.34 to 0.36 ms at 4K in the scenes with much transparency, and 0.02, 0.02 and 0.04 ms more in a sparse one,
   on an RTX 5070 Ti, NVIDIA 621.14, offline harness). Then this frame's
   averaged colour is blended 1/8 with the last frame's blended
@@ -157,7 +162,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   The program is `stochasticResolveUtilF.glsl` (the engine's part) and the transparency's file, both
   compiled as compute objects (`LLShaderMgr::loadShaderFile`: `#version 430`, `COMPUTE_SHADER`), linked
   with `attachNothing`.
-- Memory model: the stores are incoherent. `LLPipeline::resolveAlphaStochasticTemporal` issues
+- Memory model: the stores are incoherent. `LLStochasticHistory::endComputeWrite` (called by `LLPipeline::resolveAlphaStochasticTemporal`) issues
   `glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)` after the dispatch:
   the first makes the stores visible to the composite's and the next frame's texture fetches, the second
   orders the stores of the frame after next (the history textures alternate) after those fetches. Nothing
@@ -336,9 +341,10 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 Requirements: Windows or Linux, OpenGL 4.3 (GLSL 4.30: the compute resolve, `imageStore`,
 `glMemoryBarrier`; GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample textures), at least
 2 samples for the three formats, and every alpha-only variant built. A device without the first three has
-sorted alpha: a capability gate, as GL below 4.0 was (the GL 4.0 to 4.2 devices, mostly old AMD and legacy
-drivers, and Mesa or virtual GPUs that stop below 4.3, lose stochastic transparency; Intel below GL 4.6
-already runs as GL 3.3 and had none). There is one resolve, the compute one, and no second path. There is
+sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`), as GL below 4.0 was. Devices that report
+GL 4.0 to 4.2 lose stochastic transparency; Intel below GL 4.6 already runs as GL 3.3 and Tesla (GL 3.3) was
+excluded already. Which AMD, Mesa or virtual devices report below 4.3 is likely but not measured here. There
+is one resolve, the compute one, and no second path. There is
 no fallback otherwise: a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
 30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
 then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
@@ -346,7 +352,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 
 ## Tests and measurements
 
-- `scripts/perf/test_alpha_stochastic.py`: offscreen, the viewer's shaders with the viewer's pass
+- `scripts/perf/test_alpha_stochastic.py`: offscreen (a GL 4.3 context: the compute resolve), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (16 in two
   passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,
   a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands

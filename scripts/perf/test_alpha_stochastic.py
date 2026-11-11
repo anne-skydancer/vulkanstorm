@@ -53,11 +53,12 @@ readpixels=fn('glReadPixels',None,I,I,I,I,U,U,P);getint=fn('glGetIntegerv',None,
 clearcolor=fn('glClearColor',None,C.c_float,C.c_float,C.c_float,C.c_float);clear=fn('glClear',None,U)
 cleardepth=fn('glClearDepth',None,C.c_double)
 TEX2D=0x0DE1;TEXMS=0x9100;FB=0x8D40;COLOR0=0x8CE0;COLOR1=0x8CE1;DEPTH_ATT=0x8D00
-R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;RG16F=0x822F;RGBA32F=0x8814
+R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;RG16F=0x822F
 D24=0x81A6;DEPTH_COMP=0x1902;NEAREST=0x2600;MIN=0x2801;MAG=0x2800
 BLEND=0x0BE2;DEPTH_TEST=0x0B71;MULTISAMPLE=0x809D;POLY_OFFSET=0x8037;CULL=0x0B44
 ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x0207;NONE=0
-W,H=64,32
+import os
+W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve on partial workgroups
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 viewport(0,0,W,H);disable(CULL)
 getint(0x910F,C.byref(max_ms:=I()))   # GL_MAX_DEPTH_TEXTURE_SAMPLES
@@ -122,7 +123,7 @@ def model_mask(px,py,seed,prim,a,s,table):
     col=min(int(f32(v[1]*SEEDS)),SEEDS-1)
     return table[r*SEEDS+col]
 
-# ---- programs: the viewer's shaders as the viewer compiles them (#version 420, no extra code)
+# ---- programs: the viewer's shaders as the viewer compiles them (#version 420; 430 and COMPUTE_SHADER for the compute resolve)
 def viewer(name,version=420):
     text=(shaders/name).read_text()
     return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
