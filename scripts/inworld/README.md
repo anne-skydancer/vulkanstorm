@@ -297,27 +297,35 @@ every frame; `RenderGLSubmitCompare` set to a pass (-1 all) for one frame logs `
 # Sorted alpha against stochastic in a crowd (`alpha_crowd.json`)
 
 Stage 0 of the legacy-alpha work: does `RenderAlphaSortMethod=1` (stochastic, S=8) cost more than `0` (sorted) when many avatars
-with rigged mesh are in view, and what do the sorted alpha passes cost in CPU, GPU, draws, state changes, uploads and fragments.
+with rigged mesh are in view, and what do the sorted alpha passes cost in CPU, GPU, draws, state changes, uploads and samples.
 Same build and launch as the section above (`-DVKS_GL_STATS=ON` viewer, `--leap` given twice, paths without spaces).
 
 **The numbers are from one machine: an RTX 5070 Ti.** Milliseconds are an upper-end view and say little about a weak GPU. The
-hardware-independent counters (draws, shader binds, palette uploads, uniform bytes, and the fragments the alpha passes
-pass, from `GL_SAMPLES_PASSED`) are the gate for weak GPUs. Sorted alpha is the only transparency path of a GPU without
-OpenGL 4 (iGPUs, older GPUs, Intel chips capped at GL 3.3), so a later stage must not raise those counters in a crowd.
+hardware-independent counters of **method 0** (draws, shader binds, palette uploads, uniform bytes, and the alpha samples
+from `GL_SAMPLES_PASSED`: samples, not fragments) are the gate for weak GPUs. Sorted alpha is the only transparency path of a GPU
+without OpenGL 4 (iGPUs, older GPUs, Intel chips capped at GL 3.3), so a later stage must not raise those counters in a crowd.
+Method 1's samples (multisample targets, several passes) are not comparable to method 0's. An active sample query can perturb
+early-Z, so the frame rate measured with nothing collecting (`fps_stats_off`, the "frame ms" column) is the clean figure.
 
 The scenario takes four camera presets (the current view and three headings), and for each preset one 120-frame window with
-method 0 and then one with method 1 (`variants`), GPU timers on, no image compare. `perf_check.py` restores
-`RenderAlphaSortMethod` and the other settings at the end. Stand where the crowd is and leave the viewer alone.
+method 0 and one with method 1 (`variants`; the order alternates from preset to preset), GPU timers on, no image compare.
+`perf_check.py` restores `RenderAlphaSortMethod` and the other settings at the end, also on Ctrl-C. `RenderAlphaSortMethod` is
+persisted, so after a crash or a killed viewer run `perf_check.py --restore <run folder>` (the same `--leap` line with `--restore`)
+in a fresh viewer. Stand where the crowd is and leave the viewer alone. **Turn vsync and any frame limiter off first**
+(Preferences > Graphics): the run records `RenderVSyncEnable`, `FramePerSecondLimit` and `FSLimitFramerate` in `perf.json` and warns
+when one is on, because a capped frame rate hides the difference.
 
 Scenes, one run each:
 
 - **S1, local OpenSim with ~40 NPCs.** The repo has no tooling for it (no OpenSim region setup, no OAR, no NPC script). Use your own OpenSim
   region with NPCs dressed in rigged mesh hair and clothing, and log in to it.
 - **C, a real crowded venue** with 30+ mesh avatars. **T, a heavy-transparency scene** (glass, foliage, particles).
-- **Low tier** (`alpha_crowd_lowtier.json`): the same scene, with the settings of a weak GPU (lowest quality level, no
-  shadows, reflections, SSAO or glow, 512 px textures). Make the viewer window **1920x1080** (windowed, not minimised) before the run;
-  `perf_check.py` cannot set the window size. On a GPU that has OpenGL 4 the low-tier method 1 still runs stochastic; the figure that
-  matters on the low tier is method 0. Run the low tier at least in C.
+- **Low tier** (`alpha_crowd_lowtier.json`): the same scene with the Low list of `featuretable.txt` for the settings that matter in a
+  crowd (3 non-impostor avatars, complexity cap 35000, LODs, far clip 64, no shadows, reflections or SSAO, 512 px textures). A crowd
+  that is all full avatars is the worst case for alpha; this tier does not show it. Make the viewer window **1920x1080** (windowed, not
+  minimised) before the run, because `perf_check.py` cannot set the size. `RenderMaxTextureResolution` only applies to textures fetched
+  afterwards: set it before login, or relog after changing it. On a GPU that has OpenGL 4 the low-tier method 1 still runs
+  stochastic; the figure that matters on the low tier is method 0. Run the low tier at least in C.
 
 ```powershell
 $exe     = 'C:\Users\annes\source\repos\vulkanstorm\work\alpha-crowd\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe'
@@ -334,14 +342,17 @@ Set-Location (Split-Path $exe)
 & $exe --leap $run --leap $noop
 ```
 
-Log in by hand, go to the scene, wait for the crowd to rez. A run takes about 6 minutes. Then, for each run folder:
+Log in by hand, go to the scene, wait for the crowd to rez. A run takes roughly 5 to 10 minutes (8 windows plus settling). Then, for each run folder:
 
 ```powershell
 python "$scripts/analyze_perf_check.py" "$caps/alpha-C-<stamp>"
 ```
 
 `report.txt` has, per preset and method, the frame time (from the frame rate with nothing collecting), the main view's CPU and GPU ms
-and, for the `ALPHA` passes, CPU ms, GPU ms, draws, shader binds, palette uploads, uniform bytes and fragments; the medians over the
-presets; and the verdict. **Rule:** stochastic is slower in a crowd when its median frame time over the presets is more than 3 % above
-sorted and the alpha passes' CPU time delta is at least half of the frame time difference; the question is answered by S1 and C both.
+and, for the `ALPHA` passes, CPU ms, GPU ms, draws, shader binds, palette uploads, uniform bytes and samples; the medians over the
+presets; and the verdict. **Rule:** per preset the delta of method 1 minus method 0; stochastic is slower in a crowd when the median
+frame time delta is more than 3 % of the median sorted frame time and the median alpha passes' CPU time delta is **at least half** of it.
+The result is one of `not_slower`, `slower_explained` (by the alpha pass CPU time), `slower_not_explained` (a GPU-side or other cost: the
+report always shows the main view and alpha pass GPU deltas) or `inconclusive` (the presets disagree in sign). It warns when method 1
+shows no alpha draws or the same as method 0, which means stochastic probably was not in use. The question is answered by S1 and C both.
 Keep the run folders: later stages are gated by re-running this scenario and comparing (`--compare <baseline run>`).

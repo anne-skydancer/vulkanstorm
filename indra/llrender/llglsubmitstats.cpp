@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstring>
 #include "llgl.h"
+#include "llglslshader.h"
 #include "llglheaders.h"
 
 namespace
@@ -454,11 +455,11 @@ void LLGLSubmitStats::resetGL(bool contextValid)
             ids.push_back(si.query);
         }
         sFrame->sampleInsts.clear();
-        sSamplesOpen = false;
         sFrame->insts.clear();
         sFrame->gpuTimed = false;
         sGpuThisFrame = false;
     }
+    sSamplesOpen = false;   // a query left open in a lost context is gone with it
     if (contextValid && !ids.empty() && glDeleteQueries)
     {
         glDeleteQueries((GLsizei)ids.size(), ids.data());
@@ -575,7 +576,8 @@ void LLGLSubmitStats::enterPass(const char* name, int index)
     {
         sFrame->gpuTruncated = true;
     }
-    if (e.timed && !sSamplesOpen && isAlphaPass(name))
+    // Frame Profile and per-shader profiling hold the GL_SAMPLES_PASSED target themselves (one query per target at a time)
+    if (e.timed && !sSamplesOpen && !LLGLSLShader::sProfileEnabled && isAlphaPass(name))
     {
         e.qSamples = acquireQuery();
         glBeginQuery(GL_SAMPLES_PASSED, e.qSamples);

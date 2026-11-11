@@ -136,7 +136,7 @@ SLOWER_PCT = 3.0       # stochastic counts as slower when its median frame time 
 EXPLAINS_SHARE = 0.5   # ... and the alpha passes' CPU time delta is at least this share of the frame time delta
 ALPHA_PASS = re.compile(r"(^|/)ALPHA(_PRE_WATER|_POST_WATER)?( \d+)?$")
 ALPHA_COLUMNS = [("cpu_ms", "alpha cpu ms"), ("gpu_ms", "alpha gpu ms"), ("draws", "alpha draws"), ("shaderBinds", "alpha shader binds"),
-                 ("paletteUploads", "alpha palette uploads"), ("uniformBytes", "alpha uniform B"), ("samples", "alpha fragments")]
+                 ("paletteUploads", "alpha palette uploads"), ("uniformBytes", "alpha uniform B"), ("samples", "alpha samples")]
 
 
 def frame_ms(info):
@@ -146,14 +146,16 @@ def frame_ms(info):
 
 
 def alpha_sums(window):
-    """Per-frame sums over the alpha passes of the main view (these passes do not nest in each other); None if none found."""
-    out = {key: 0.0 for key, _ in ALPHA_COLUMNS}
+    """Per-frame sums over the alpha passes of the main view (these passes do not nest in each other); None if none found.
+    A key that no alpha pass reports is left out (the dump drops zero counters; 'samples' is absent when not measured)."""
+    out = {}
     found = False
     for p in window.get("passes", []):
         if p.get("view") == "main" and ALPHA_PASS.search(p.get("pass") or ""):
             found = True
-            for key in out:
-                out[key] += num(p.get(key))
+            for key, _ in ALPHA_COLUMNS:
+                if key in p:
+                    out[key] = out.get(key, 0.0) + num(p.get(key))
     return out if found else None
 
 
@@ -185,36 +187,81 @@ def median(vals):
     return statistics.median(vals) if vals else None
 
 
+def paired(m, getter):
+    """getter(method 1 entry) - getter(method 0 entry) for one preset, None when either is missing."""
+    a, b = getter(m[0]), getter(m[1])
+    return None if a is None or b is None else b - a
+
+
+def alpha_value(key):
+    def get(e):
+        a = alpha_sums(e["window"])
+        return None if a is None or key not in a else a[key]
+    return get
+
+
+def main_gpu(e):
+    v = main_view(e["window"]).get("gpu_ms")
+    return None if v is None else float(v)
+
+
+def method_warnings(both):
+    """Presets in which method 1 looks like it did not run stochastic: its alpha draws are 0 or the same as method 0's."""
+    out = []
+    for pid, m in both.items():
+        d0 = (alpha_sums(m[0]["window"]) or {}).get("draws", 0.0)
+        d1 = (alpha_sums(m[1]["window"]) or {}).get("draws", 0.0)
+        if d1 == 0 or (d0 and d1 == d0):
+            out.append("preset %s: method 1 has %s alpha draws against %s for method 0; check that stochastic transparency was "
+                       "really in use (RenderAlphaSortMethod=1 needs OpenGL 4 and the stochastic path enabled)" % (
+                           pid, fmt(d1), fmt(d0)))
+    return out
+
+
 def verdict(runs):
-    """The survey's rule over the presets that have both methods: stochastic (1) is slower than sorted (0) when the median
-    frame time over the presets is more than SLOWER_PCT above, and the alpha passes' CPU time delta (median over the
-    presets) is at least EXPLAINS_SHARE of the frame time delta. Returns (text, facts)."""
+    """The survey's rule over the presets that have both methods. Per preset the paired delta (method 1 minus method 0) of the
+    frame time and of the alpha passes' CPU time; the medians of the deltas decide. Stochastic is slower when the median frame
+    time delta is more than SLOWER_PCT of the median sorted frame time and the median alpha CPU delta is at least
+    EXPLAINS_SHARE of it. The result is 'not_slower', 'slower_explained' (by the alpha pass CPU time), 'slower_not_explained',
+    'inconclusive' (the presets disagree in sign) or 'no_verdict'. Returns (text, facts)."""
     both = {pid: m for pid, m in runs.items() if 0 in m and 1 in m}
     if not both:
-        return "no preset has both methods: no verdict", {}
-    ft0 = median([frame_ms(m[0]["info"]) for m in both.values()])
-    ft1 = median([frame_ms(m[1]["info"]) for m in both.values()])
-    if not ft0 or not ft1:
-        return "no frame rate in the windows: no verdict", {}
-    cpu_d = []
-    for m in both.values():
-        a0, a1 = alpha_sums(m[0]["window"]), alpha_sums(m[1]["window"])
-        if a0 is not None and a1 is not None:
-            cpu_d.append(a1["cpu_ms"] - a0["cpu_ms"])
-    cpu_delta = median(cpu_d)
-    pct = round(100.0 * (ft1 - ft0) / ft0, 6)
-    facts = {"frame_ms_0": ft0, "frame_ms_1": ft1, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "presets": len(both)}
+        return "no preset has both methods: no verdict", {"result": "no_verdict"}
+    fts0 = {pid: frame_ms(m[0]["info"]) for pid, m in both.items()}
+    fts1 = {pid: frame_ms(m[1]["info"]) for pid, m in both.items()}
+    ids = [pid for pid in both if fts0[pid] and fts1[pid]]
+    if not ids:
+        return "no frame rate in the windows: no verdict", {"result": "no_verdict"}
+    d_ft = {pid: fts1[pid] - fts0[pid] for pid in ids}
+    ft0 = median([fts0[pid] for pid in ids])
+    med_d = median(list(d_ft.values()))
+    pcts = [100.0 * d_ft[pid] / fts0[pid] for pid in ids]
+    pct = round(100.0 * med_d / ft0, 6)
+    cpu_delta = median([paired(both[pid], alpha_value("cpu_ms")) for pid in ids])
+    gpu_main = median([paired(both[pid], main_gpu) for pid in ids])
+    gpu_alpha = median([paired(both[pid], alpha_value("gpu_ms")) for pid in ids])
+    facts = {"frame_ms_0": ft0, "frame_delta_ms": med_d, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "main_gpu_delta_ms": gpu_main,
+             "alpha_gpu_delta_ms": gpu_alpha, "presets": len(ids), "pct_min": min(pcts), "pct_max": max(pcts),
+             "warnings": method_warnings(both)}
+    spread = "per preset %+.1f%% to %+.1f%%" % (min(pcts), max(pcts))
+    gpu = "main view GPU %s ms, alpha passes GPU %s ms (median deltas)" % (
+        "n/a" if gpu_main is None else "%+.2f" % gpu_main, "n/a" if gpu_alpha is None else "%+.2f" % gpu_alpha)
+    head = "median frame time delta %+.2f ms on %.2f ms (%+.1f%%, limit +%.0f%%; %s; %d presets)" % (
+        med_d, ft0, pct, SLOWER_PCT, spread, len(ids))
     if pct <= SLOWER_PCT:
-        return ("stochastic is NOT slower: median frame time %.2f ms against %.2f ms (%+.1f%%, limit +%.0f%%), %d presets"
-                % (ft1, ft0, pct, SLOWER_PCT, len(both)), dict(facts, slower=False))
+        return "stochastic is NOT slower: %s; %s" % (head, gpu), dict(facts, result="not_slower")
+    if len(ids) > 1 and min(d_ft.values()) < 0 < max(d_ft.values()):
+        return ("INCONCLUSIVE: %s; the presets disagree in sign, so the median is not a finding; %s" % (head, gpu),
+                dict(facts, result="inconclusive"))
     if cpu_delta is None:
-        return ("stochastic is %+.1f%% in frame time but the alpha passes were not found in the windows: cannot say whether the "
-                "alpha pass CPU time explains it" % pct, dict(facts, slower=None))
-    explains = cpu_delta >= EXPLAINS_SHARE * (ft1 - ft0)
-    return ("stochastic is %s: median frame time %.2f ms against %.2f ms (%+.1f%%, limit +%.0f%%); the alpha passes' CPU time "
-            "changes by %+.2f ms (median) of the %.2f ms difference, which %s" % (
-                "SLOWER in this crowd" if explains else "slower but NOT because of the alpha pass CPU time", ft1, ft0, pct, SLOWER_PCT,
-                cpu_delta, ft1 - ft0, "explains it" if explains else "does not explain it"), dict(facts, slower=bool(explains)))
+        return ("stochastic is slower but the alpha passes were not found in the windows, so the alpha pass CPU time cannot be "
+                "checked: %s; %s" % (head, gpu), dict(facts, result="slower_not_explained"))
+    explains = cpu_delta >= EXPLAINS_SHARE * med_d
+    return ("stochastic is %s: %s; the alpha passes' CPU time changes by %+.2f ms (median), which %s (limit: at least half of the "
+            "frame time delta); %s" % (
+                "SLOWER in this crowd" if explains else "slower but NOT because of the alpha pass CPU time", head, cpu_delta,
+                "explains it" if explains else "does not explain it", gpu),
+            dict(facts, result="slower_explained" if explains else "slower_not_explained"))
 
 
 def report_methods(entries):
@@ -222,7 +269,8 @@ def report_methods(entries):
     if not runs:
         return []
     lines = ["=" * 100, "sorted alpha (method 0) against stochastic (method 1), per preset (medians over the presets below)",
-             "frame ms = 1000 / fps with nothing collecting; alpha columns are the main view's ALPHA passes, per frame", ""]
+             "frame ms = 1000 / fps with nothing collecting (the clean figure: the sample queries can perturb early-Z while collecting);",
+             "alpha columns are the main view's ALPHA passes, per frame; '-' = not reported", ""]
     head = ["preset", "method", "frame ms", "main cpu", "main gpu", "draws", "shader"] + [lab for _, lab in ALPHA_COLUMNS]
     rows = []
     for pid, m in runs.items():
@@ -232,7 +280,7 @@ def report_methods(entries):
             mv = main_view(e["window"])
             t = e["window"].get("totals", {})
             rows.append([pid, method, fmt(frame_ms(e["info"])), fmt(mv.get("cpu_ms")), fmt(mv.get("gpu_ms")), fmt(t.get("draws")),
-                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) if k in a else "-" for k, _ in ALPHA_COLUMNS])
+                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) for k, _ in ALPHA_COLUMNS])
     lines.append(table(rows, head))
     lines.append("")
     lines.append("median over the presets:")
@@ -247,14 +295,18 @@ def report_methods(entries):
                     fmt(median([main_view(e["window"]).get("gpu_ms") for e in es])),
                     fmt(median([e["window"].get("totals", {}).get("draws") for e in es])),
                     fmt(median([e["window"].get("totals", {}).get("shaderBinds") for e in es]))] +
-                   [fmt(median([a.get(k) for a in alphas if k in a])) for k, _ in ALPHA_COLUMNS])
+                   [fmt(median([a.get(k) for a in alphas])) for k, _ in ALPHA_COLUMNS])
     lines.append(table(med, head))
     lines.append("")
+    text, facts = verdict(runs)
     lines.append("verdict (stochastic is slower when its median frame time is more than %.0f%% above sorted and the alpha pass "
-                 "CPU time explains it):" % SLOWER_PCT)
-    lines.append("  " + verdict(runs)[0])
-    lines.append("  The ms figures come from one GPU; the counters (draws, shader binds, palette uploads, uniform bytes, fragments)")
-    lines.append("  do not depend on the hardware and are the gate for weak GPUs. Fragments are GL_SAMPLES_PASSED of the alpha passes.")
+                 "CPU time explains it, i.e. is at least half of the frame time delta):" % SLOWER_PCT)
+    lines.append("  [%s] %s" % (facts.get("result"), text))
+    for w in facts.get("warnings", []):
+        lines.append("  WARNING " + w)
+    lines.append("  The ms figures come from one GPU. Only method 0's counters (draws, shader binds, palette uploads, uniform bytes,")
+    lines.append("  alpha samples) are the gate for weak GPUs: method 1 draws other passes into multisample targets, so its samples are")
+    lines.append("  not comparable to method 0's. Alpha samples are GL_SAMPLES_PASSED (samples, not fragments).")
     return lines
 
 

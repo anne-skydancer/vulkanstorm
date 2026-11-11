@@ -13,7 +13,11 @@ scene has settled, then:
      Profile, and runs the identical-image check on every pass it supports (the pass is rendered twice in one
      frame and compared bit for bit; today both renders use the same path, so any difference is a harness bug).
 
-It restores your settings and camera at the end and on error. Dev tooling only: nothing here is part of the viewer.
+A scenario may list "variants" (each with its own settings, e.g. RenderAlphaSortMethod 0 and 1): every preset is
+measured once per variant, back to back, the order alternating from preset to preset (no order bias), and the other
+variants' settings are put back to the scenario's values in between.
+
+It restores your settings and camera at the end and on error (also on Ctrl-C; after a crash use --restore RUNDIR). Dev tooling only: nothing here is part of the viewer.
 stdout is the LEAP channel: this script only ever logs to stderr (the viewer copies it into its log).
 
 Modes: (default) run | --dry-run (read-only: the API, its operations, the settings) | --noop | --restore RUNDIR.
@@ -41,7 +45,9 @@ from light_check import (Aborted, Viewer, camera_params, default_capture_root, f
 API = "GLSubmitStats"
 REQUIRED_OPS = ["status", "windowBegin", "windowStop", "summary", "dump", "compareArm", "compareResults", "profileFrame"]
 SETTINGS = ["RenderGLSubmitStats", "RenderGLSubmitStatsGPU", "RenderGLSubmitCompare", "RenderGLSubmitCompareInject",
-            "RenderGLSubmitPath"]
+            "RenderGLSubmitPath", "RenderAlphaSortMethod"]
+# what can cap the frame rate: recorded in perf.json, so a capped run can be recognised
+CAP_SETTINGS = ["RenderVSyncEnable", "FramePerSecondLimit", "FSLimitFramerate"]
 
 DEFAULTS = {
     "name": "gl_submit",
@@ -69,9 +75,12 @@ def load_scenario(path):
             sc[k].update(v)
         else:
             sc[k] = v
+    for v in sc["variants"]:
+        if not isinstance(v, dict) or not isinstance(v.get("settings", {}), dict):
+            raise ValueError("each variant must be an object with an id and a settings object")
     vids = [v.get("id") for v in sc["variants"]]
     if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
-        raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' ('_' separates preset and variant)")
+        raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' (they are joined to the preset id with '__')")
     ids = [p["id"] for p in sc["presets"]]
     if not ids or len(ids) != len(set(ids)):
         raise ValueError("the scenario needs at least one preset, with distinct ids")
@@ -144,6 +153,8 @@ class Run:
         self.orig = {}
         self.camera_set = False
         self.variant_keys = set()
+        self.preset_no = 0
+        self.base = {}          # the values the scenario's settings and --set gave (what a variant's other keys go back to)
         self.cleaned = False
         self.rows = []
         self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
@@ -172,6 +183,10 @@ class Run:
             return
         self.cleaned = True
         self.v.abort_file = None
+        try:
+            self.save_index()       # what was measured before the stop or the error
+        except OSError as exc:
+            log("could not write perf.json: %s" % exc)
         log("restoring the viewer")
         try:
             self.v.req(API, "windowStop")
@@ -286,14 +301,16 @@ class Run:
 
     def apply_variant(self, variant):
         """Set the settings of this variant; a setting an earlier variant changed and this one does not name goes back to
-        its original value (so each variant is measured against the same baseline settings)."""
+        the value the scenario (and --set) gave it, else its original value, so each variant is measured against the same
+        baseline. A variant setting the viewer does not have is an error: the window would not measure the variant."""
         wanted = variant.get("settings", {})
-        for key in list(self.variant_keys):
+        for key in sorted(self.variant_keys):
             if key not in wanted and key in self.orig:
-                self.v.set_control(key, self.orig[key])
+                self.v.set_control(key, self.base.get(key, self.orig[key]))
         for key, val in wanted.items():
-            if self.change(key, val):
-                self.variant_keys.add(key)
+            if not self.change(key, val):
+                raise LeapError("variant %s: the viewer has no setting %s" % (variant["id"], key))
+            self.variant_keys.add(key)
         self.v.sleep(float(self.sc["settle"].get("after_setting_s", 3.0)))
 
     def one_preset(self, preset, variant=None, set_camera=True):
@@ -303,12 +320,13 @@ class Run:
             key = pid
         else:
             key = "%s__%s" % (pid, variant["id"])
+        if variant is not None:
+            self.apply_variant(variant)     # raises before anything is recorded when a setting cannot be applied
         info = self.index["presets"].setdefault(key, {})
         if variant is not None:
             info["preset"] = pid
             info["variant"] = variant["id"]
             info["variant_settings"] = variant.get("settings", {})
-            self.apply_variant(variant)
         if set_camera:
             self.set_preset_camera(preset)
             self.v.sleep(sc["settle"]["after_camera_s"])
@@ -382,7 +400,16 @@ class Run:
         # the collection itself needs no setting (a window collects by itself); these keep the GPU timers on
         # for the whole run and make the run's settings explicit
         for k, val in {**sc["settings"], **self.args.set_values}.items():
-            self.change(k, val)
+            if self.change(k, val):
+                self.base[k] = val
+        caps = {}
+        for k in CAP_SETTINGS:
+            cur = v.try_control(k)
+            if cur is not None:
+                caps[k] = cur.get("value")
+        self.index["frame_rate_caps"] = caps
+        if caps.get("RenderVSyncEnable") or caps.get("FSLimitFramerate"):
+            self.warn("vsync or the frame limiter is on (%s): the frame rates of this run are capped; turn them off for a measurement" % caps)
         st = v.req(API, "status")
         self.index["status_at_start"] = st
         if sc["teleport"]:
@@ -404,7 +431,7 @@ class Run:
         proof_ok = True
         if sc["compare"]["enabled"] and sc["compare"]["prove_with_injection"]:
             proof_ok = self.prove_injection()
-        for preset in sc["presets"]:
+        for self.preset_no, preset in enumerate(sc["presets"]):
             v.check_abort()
             if not sc["variants"]:
                 self.one_preset(preset)
@@ -412,7 +439,8 @@ class Run:
                 # the same view measured once per variant, back to back (the camera is placed once)
                 self.set_preset_camera(preset)
                 v.sleep(sc["settle"]["after_camera_s"])
-                for variant in sc["variants"]:
+                order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
+                for variant in order:
                     v.check_abort()
                     self.one_preset(preset, variant, set_camera=False)
             self.save_index()
@@ -538,6 +566,11 @@ def execute(session, args, sc, outdir):
             code = 4
     except Aborted as exc:
         log("aborted: %s" % exc)
+        code = 2
+        if run is not None:
+            run.cleanup()
+    except KeyboardInterrupt:
+        log("interrupted: restoring the viewer")
         code = 2
         if run is not None:
             run.cleanup()
