@@ -49,7 +49,7 @@ DisableProgramGroupPage=auto
 ; Require 64-bit Windows and install in 64-bit mode.
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-MinVersion=6.1sp1
+MinVersion=10.0
 ; Show the licence page before anything else: a short explanation of the
 ; licence followed by the GPL-3.0 text (licence_texts.py).
 LicenseFile={#LicenseFile}
@@ -137,4 +137,23 @@ Root: HKCR; Subkey: "hop\shell\open\command"; ValueType: expandsz; ValueName: ""
 function IsOpenSimBuild: Boolean;
 begin
   Result := ({#IsOpenSim} <> 0);
+end;
+
+// Vulkanstorm is built for x86-64-v3 (AVX2). Refuse to install on a processor
+// without it, silent installs included, rather than leave an unusable viewer.
+function IsProcessorFeaturePresent(Feature: Cardinal): Integer;
+  external 'IsProcessorFeaturePresent@kernel32.dll stdcall';
+
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  // 40 = PF_AVX2_INSTRUCTIONS_AVAILABLE
+  if IsProcessorFeaturePresent(40) = 0 then
+  begin
+    SuppressibleMsgBox('Vulkanstorm needs a processor with AVX2 (x86-64-v3): ' +
+      'Intel Haswell (2013) or newer, AMD Zen or Excavator or newer. ' +
+      'This computer''s processor does not support it.',
+      mbCriticalError, MB_OK, IDOK);
+    Result := False;
+  end;
 end;
