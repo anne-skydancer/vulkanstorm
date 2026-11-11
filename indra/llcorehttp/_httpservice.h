@@ -143,6 +143,15 @@ public:
     /// Threading:  callable by worker thread.
     void stopRequested();
 
+    /// True once the service has been asked to stop (stopRequested(),
+    /// term() or destruction).
+    ///
+    /// Threading:  callable by any thread.
+    bool isExitRequested() const
+        {
+            return mExitRequested.CurrentValue() != 0U;
+        }
+
     /// Threading:  callable by worker thread.
     void shutdown();
 

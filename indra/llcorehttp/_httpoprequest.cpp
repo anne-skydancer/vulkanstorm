@@ -795,9 +795,35 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     }
 
 
-    // *TODO: Should this be 'Keep-Alive' ?
-    mCurlHeaders = curl_slist_append(mCurlHeaders, "Connection: keep-alive");
-    mCurlHeaders = curl_slist_append(mCurlHeaders, "Keep-alive: 300");
+    // Default headers, each added only if the caller did not supply it
+    // (compared case-insensitively).  One scan of the caller's headers.
+    bool caller_connection(false), caller_keep_alive(false), caller_accept_encoding(false);
+    if (mReqHeaders)
+    {
+        for (HttpHeaders::const_iterator it(mReqHeaders->begin()); it != mReqHeaders->end(); ++it)
+        {
+            if (LLStringUtil::compareInsensitive((*it).first, "Connection") == 0)
+            {
+                caller_connection = true;
+            }
+            else if (LLStringUtil::compareInsensitive((*it).first, "Keep-Alive") == 0)
+            {
+                caller_keep_alive = true;
+            }
+            else if (LLStringUtil::compareInsensitive((*it).first, "Accept-Encoding") == 0)
+            {
+                caller_accept_encoding = true;
+            }
+        }
+    }
+    if (!caller_connection)
+    {
+        mCurlHeaders = curl_slist_append(mCurlHeaders, "Connection: keep-alive");
+    }
+    if (!caller_keep_alive)
+    {
+        mCurlHeaders = curl_slist_append(mCurlHeaders, "Keep-alive: 300");
+    }
 
     // Tracing
     if (mTracing >= HTTP_TRACE_CURL_HEADERS)
@@ -885,15 +911,7 @@ HttpStatus HttpOpRequest::prepareRequest(HttpService * service)
     {
         // <Vulkanstorm> what libcurl 7.54.1's CURLOPT_ENCODING "" sent,
         // unless the caller gave its own, which libcurl let win
-        bool caller_set(false);
-        if (mReqHeaders)
-        {
-            for (HttpHeaders::const_iterator it(mReqHeaders->begin()); it != mReqHeaders->end(); ++it)
-            {
-                caller_set = caller_set || LLStringUtil::compareInsensitive((*it).first, "Accept-Encoding") == 0;
-            }
-        }
-        if (!caller_set)
+        if (!caller_accept_encoding)
         {
             mCurlHeaders = curl_slist_append(mCurlHeaders, "Accept-Encoding: deflate, gzip");
         }

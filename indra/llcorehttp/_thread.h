@@ -29,6 +29,7 @@
 
 #include "linden_common.h"
 
+#include <atomic>
 #include <boost/thread.hpp>
 #include <boost/function.hpp>
 #include <boost/date_time/posix_time/posix_time_types.hpp>
@@ -77,6 +78,7 @@ private:
 protected:
     virtual ~HttpThread()
         {
+            --sLiveCount;
             delete mThread;
         }
 
@@ -89,6 +91,7 @@ public:
         : RefCounted(true), // implicit reference
           mThreadFunc(threadFunc)
         {
+            ++sLiveCount;
             // this creates a boost thread that will call HttpThread::run on this instance
             // and pass it the threadfunc callable...
             boost::function<void()> f = boost::bind(&HttpThread::run, this);
@@ -111,18 +114,16 @@ public:
             return mThread->joinable();
         }
 
-    // A very hostile method to force a thread to quit
-    inline void cancel()
+    /// Number of HttpThread objects currently alive (tests use this to
+    /// check that nothing leaks).
+    static int liveCount()
         {
-            boost::thread::native_handle_type thread(mThread->native_handle());
-#if     LL_WINDOWS
-            TerminateThread(thread, 0);
-#else
-            pthread_cancel(thread);
-#endif
+            return sLiveCount.load();
         }
 
 private:
+    static inline std::atomic<int> sLiveCount{0};
+
     boost::function<void(HttpThread *)> mThreadFunc;
     boost::thread * mThread;
 }; // end class HttpThread

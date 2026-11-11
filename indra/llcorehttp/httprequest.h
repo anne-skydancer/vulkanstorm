@@ -284,7 +284,7 @@ public:
     /// request in other requests (like cancellation) and will be an
     /// argument when any HttpHandler object is invoked.
     ///
-    /// Headers supplied by default:
+    /// Headers supplied by default (each unless the caller supplies it):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -343,7 +343,7 @@ public:
     /// request in other requests (like cancellation) and will be an
     /// argument when any HttpHandler object is invoked.
     ///
-    /// Headers supplied by default:
+    /// Headers supplied by default (each unless the caller supplies it):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -379,7 +379,7 @@ public:
     /// be provided.  Caller is responsible for escaping and
     /// encoding and communicating the content types.
     ///
-    /// Headers supplied by default:
+    /// Headers supplied by default (each unless the caller supplies it):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -418,7 +418,7 @@ public:
     /// be provided.  Caller is responsible for escaping and
     /// encoding and communicating the content types.
     ///
-    /// Headers supplied by default:
+    /// Headers supplied by default (each unless the caller supplies it):
     /// - Connection: keep-alive
     /// - Accept: */*
     /// - Accept-Encoding: deflate, gzip
@@ -571,8 +571,9 @@ public:
     /// or after policy setup.
     static HttpStatus createService();
 
-    /// Mostly clean shutdown of services prior to exit.  Caller is expected
-    /// to have stopped a running worker thread before calling this.
+    /// Shutdown of services prior to exit.  Stops and joins the worker
+    /// thread if it is still running; this may wait for in-flight DNS
+    /// lookups and connection shutdown to finish.
     static HttpStatus destroyService();
 
     /// Called once after @see createService() to start the worker thread.
@@ -602,7 +603,8 @@ public:
     /// DEBUG/TESTING ONLY.  This puts the worker into a CPU spin for
     /// test purposes.
     ///
-    /// @param  mode            0 for hard spin, 1 for soft spin
+    /// @param  mode            0 for hard spin (spins until the service is
+    ///                         asked to stop), 1 for soft spin
     /// @return                 Standard handle return cases.
     ///
     HttpHandle requestSpin(int mode);
