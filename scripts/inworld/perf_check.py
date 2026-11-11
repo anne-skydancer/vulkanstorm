@@ -13,7 +13,11 @@ scene has settled, then:
      Profile, and runs the identical-image check on every pass it supports (the pass is rendered twice in one
      frame and compared bit for bit; today both renders use the same path, so any difference is a harness bug).
 
-It restores your settings and camera at the end and on error. Dev tooling only: nothing here is part of the viewer.
+A scenario may list "variants" (each with its own settings, e.g. RenderAlphaSortMethod 0 and 1): every preset is
+measured once per variant, back to back, the order alternating from preset to preset (no order bias), and the other
+variants' settings are put back to the scenario's values in between.
+
+It restores your settings and camera at the end and on error (also on Ctrl-C; after a crash use --restore RUNDIR). Dev tooling only: nothing here is part of the viewer.
 stdout is the LEAP channel: this script only ever logs to stderr (the viewer copies it into its log).
 
 Modes: (default) run | --dry-run (read-only: the API, its operations, the settings) | --noop | --restore RUNDIR.
@@ -27,6 +31,7 @@ import datetime as dt
 import json
 import os
 import pathlib
+import statistics
 import sys
 import time
 import traceback
@@ -41,22 +46,56 @@ from light_check import (Aborted, Viewer, camera_params, default_capture_root, f
 API = "GLSubmitStats"
 REQUIRED_OPS = ["status", "windowBegin", "windowStop", "summary", "dump", "compareArm", "compareResults", "profileFrame"]
 SETTINGS = ["RenderGLSubmitStats", "RenderGLSubmitStatsGPU", "RenderGLSubmitCompare", "RenderGLSubmitCompareInject",
-            "RenderGLSubmitPath"]
+            "RenderGLSubmitPath", "RenderAlphaSortMethod"]
+# what can cap the frame rate: recorded in perf.json, so a capped run can be recognised
+CAP_SETTINGS = ["RenderVSyncEnable", "FramePerSecondLimit", "FSLimitFramerate"]
 
 DEFAULTS = {
     "name": "gl_submit",
     "description": "",
     "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600,
-               "window_timeout_s": 180.0, "compare_wait_s": 6.0},
+               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0},
     "window": {"frames": 120, "gpu": True},
     "teleport": None,
     "settings": {},
+    "variants": [],
     "camera": {"height_m": 2.5, "look_distance_m": 200.0},
     "presets": [{"id": "current", "camera": None}],
     "profile_frame": False,
-    "overhead": {"probe_s": 5.0, "bench_iterations": 2000000},
+    "overhead": {"probe_s": 5.0, "probe_repeats": 3, "bench_iterations": 2000000},
     "compare": {"enabled": True, "passes": [-1], "prove_with_injection": True},
 }
+
+
+def window_geometry(pid=None):
+    """Size of the viewer's client area in pixels and whether the window is maximised, from the OS (Windows only; None
+    elsewhere or when the window is not found). The viewer is this script's parent process."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes  # noqa: PLC0415
+        from ctypes import wintypes  # noqa: PLC0415
+        user32 = ctypes.windll.user32
+        pid = pid or os.getppid()
+        found = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def callback(hwnd, _lparam):
+            owner = wintypes.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value == pid and user32.IsWindowVisible(hwnd) and not user32.GetWindow(hwnd, 4) and user32.GetWindowTextLengthW(hwnd) > 0:
+                found.append(hwnd)
+            return True
+
+        user32.EnumWindows(callback, 0)
+        if not found:
+            return None
+        rect = wintypes.RECT()
+        user32.GetClientRect(found[0], ctypes.byref(rect))
+        return {"width": int(rect.right - rect.left), "height": int(rect.bottom - rect.top),
+                "maximized": bool(user32.IsZoomed(found[0])), "minimized": bool(user32.IsIconic(found[0]))}
+    except (OSError, AttributeError, ValueError):
+        return None
 
 
 def load_scenario(path):
@@ -68,6 +107,12 @@ def load_scenario(path):
             sc[k].update(v)
         else:
             sc[k] = v
+    for v in sc["variants"]:
+        if not isinstance(v, dict) or not isinstance(v.get("settings", {}), dict):
+            raise ValueError("each variant must be an object with an id and a settings object")
+    vids = [v.get("id") for v in sc["variants"]]
+    if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
+        raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' (they are joined to the preset id with '__')")
     ids = [p["id"] for p in sc["presets"]]
     if not ids or len(ids) != len(set(ids)):
         raise ValueError("the scenario needs at least one preset, with distinct ids")
@@ -139,6 +184,10 @@ class Run:
         self.args = args
         self.orig = {}
         self.camera_set = False
+        self.variant_keys = set()
+        self.preset_no = 0
+        self.current_variant = None
+        self.base = {}          # the values the scenario's settings and --set gave (what a variant's other keys go back to)
         self.cleaned = False
         self.rows = []
         self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
@@ -167,6 +216,10 @@ class Run:
             return
         self.cleaned = True
         self.v.abort_file = None
+        try:
+            self.save_index()       # what was measured before the stop or the error
+        except OSError as exc:
+            log("could not write perf.json: %s" % exc)
         log("restoring the viewer")
         try:
             self.v.req(API, "windowStop")
@@ -264,6 +317,22 @@ class Run:
             return None
         return round((int(b["frame_count"]) - int(a["frame_count"])) / dt_s, 2)
 
+    def probe_variants(self, variants, preset_no):
+        """probe_repeats probes of the frame rate with nothing collecting per variant, the variants alternating in order between
+        repeats (no drift bias). Returns {variant id: [fps, ...]}. One 5 s probe was far too noisy at 130 to 420 fps."""
+        reps = max(1, int(self.sc["overhead"].get("probe_repeats", 1)))
+        out = {v["id"]: [] for v in variants}
+        for rep in range(reps):
+            order = variants if (rep + preset_no) % 2 == 0 else list(reversed(variants))
+            for variant in order:
+                self.v.check_abort()
+                self.apply_variant(variant)
+                self.v.wait_window_visible("the frame rate probe")
+                fps = self.measure_fps_off()
+                if fps is not None:
+                    out[variant["id"]].append(fps)
+        return out
+
     def fetch_profile(self, logs_dir, asked, pid):
         """The Frame Profile the next frame writes (profile.v*.json in the viewer's log folder): copied into the run folder."""
         if not logs_dir:
@@ -279,49 +348,82 @@ class Run:
             self.v.sleep(0.5)
         return None
 
-    def one_preset(self, preset):
+    def apply_variant(self, variant):
+        """Set the settings of this variant; a setting an earlier variant changed and this one does not name goes back to
+        the value the scenario (and --set) gave it, else its original value, so each variant is measured against the same
+        baseline. A variant setting the viewer does not have is an error: the window would not measure the variant."""
+        if self.current_variant == variant["id"]:
+            return
+        wanted = variant.get("settings", {})
+        for key in sorted(self.variant_keys):
+            if key not in wanted and key in self.orig:
+                self.v.set_control(key, self.base.get(key, self.orig[key]))
+        for key, val in wanted.items():
+            if not self.change(key, val):
+                raise LeapError("variant %s: the viewer has no setting %s" % (variant["id"], key))
+            self.variant_keys.add(key)
+        self.current_variant = variant["id"]
+        self.v.sleep(float(self.sc["settle"].get("after_setting_s", 3.0)))
+
+    def one_preset(self, preset, variant=None, set_camera=True, fps_samples=None):
         sc = self.sc
         pid = preset["id"]
-        info = self.index["presets"].setdefault(pid, {})
-        self.set_preset_camera(preset)
-        self.v.sleep(sc["settle"]["after_camera_s"])
-        self.v.wait_window_visible("the window of preset " + pid)
+        if variant is None:
+            key = pid
+        else:
+            key = "%s__%s" % (pid, variant["id"])
+        if variant is not None:
+            self.apply_variant(variant)     # raises before anything is recorded when a setting cannot be applied
+        info = self.index["presets"].setdefault(key, {})
+        if variant is not None:
+            info["preset"] = pid
+            info["variant"] = variant["id"]
+            info["variant_settings"] = variant.get("settings", {})
+        if set_camera:
+            self.set_preset_camera(preset)
+            self.v.sleep(sc["settle"]["after_camera_s"])
+        self.v.wait_window_visible("the window of preset " + key)
 
-        fps_off = self.measure_fps_off()
+        if fps_samples:
+            fps_off = round(statistics.median(fps_samples), 2)
+            info["fps_probe"] = {"samples": fps_samples, "min": min(fps_samples), "max": max(fps_samples),
+                                 "spread_pct": round(100.0 * (max(fps_samples) - min(fps_samples)) / fps_off, 2) if fps_off else None}
+        else:
+            fps_off = self.measure_fps_off()
         start = time.monotonic()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
         target = int(sc["window"]["frames"])
         if collected < target:
-            self.index["window_failures"].append({"preset": pid, "collected": collected, "target": target})
+            self.index["window_failures"].append({"preset": key, "collected": collected, "target": target})
         info.update({"frames": collected, "gpu_frames": gpu_frames, "wall_s": round(wall, 3),
                      "fps_wall": round(collected / wall, 2) if wall > 0 else None, "fps_stats_off": fps_off})
         if fps_off and info["fps_wall"]:
             info["overhead_pct"] = round(100.0 * (fps_off / info["fps_wall"] - 1.0), 2)
-            log("preset %s: %.1f fps with the statistics off, %.1f collecting (%+.1f%%)" % (pid, fps_off, info["fps_wall"], info["overhead_pct"]))
-        path = self.out / ("window_%s.json" % pid)
+            log("preset %s: %.1f fps with the statistics off, %.1f collecting (%+.1f%%)" % (key, fps_off, info["fps_wall"], info["overhead_pct"]))
+        path = self.out / ("window_%s.json" % key)
         self.v.req(API, "dump", kind="window", path=str(path).replace("\\", "/"))
         summary = self.v.req(API, "summary", kind="window")
         info["summary"] = summary.get("summary")
         info["window_file"] = path.name
         totals = (summary.get("summary") or {}).get("totals") or {}
-        self.rows.append({"preset": pid, "frames": collected, "gpu_frames": gpu_frames, "fps_wall": info["fps_wall"],
-                          "fps_stats_off": fps_off,
+        self.rows.append({"preset": key, "frames": collected, "gpu_frames": gpu_frames, "fps_wall": info["fps_wall"],
+                          "fps_stats_off": fps_off, "variant": variant["id"] if variant else "",
                           **{k: totals.get(k) for k in ("draws", "drawTriangles", "vbChanges", "attribRespecs", "iboBinds",
                                                          "shaderBinds", "texBindFast", "texBindFastRedundant", "texGLBind",
                                                          "uniformGL", "uniformBytes", "paletteUploads", "paletteDistinct",
                                                          "mdvSyncs", "bufSubData", "stateToggles", "occBlocking", "runs",
                                                          "mergeableDraws", "cpu_ms", "gpu_ms")}})
         log("preset %s: %d frames (%d with GPU time), %.1f fps wall, %s draws/frame, cpu %s ms, gpu %s ms" %
-            (pid, collected, gpu_frames, info["fps_wall"] or 0, totals.get("draws"), totals.get("cpu_ms"), totals.get("gpu_ms")))
+            (key, collected, gpu_frames, info["fps_wall"] or 0, totals.get("draws"), totals.get("cpu_ms"), totals.get("gpu_ms")))
 
         if sc["profile_frame"]:
             try:
                 asked = time.time() - 1.0
                 r = self.v.req(API, "profileFrame")
-                found = self.fetch_profile(r.get("logs_dir"), asked, pid)
+                found = self.fetch_profile(r.get("logs_dir"), asked, key)
                 info["profile_file"] = found
-                log("Frame Profile for %s: %s" % (pid, found or "not found"))
+                log("Frame Profile for %s: %s" % (key, found or "not found"))
             except LeapError as exc:
                 self.warn("Frame Profile not available: %s" % exc)
 
@@ -331,22 +433,22 @@ class Run:
                 try:
                     res = self.compare_once(int(p))
                 except LeapError as exc:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [], "error": str(exc)})
-                    log("compare %s pass %s FAILED: %s" % (pid, p, exc))
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": [], "error": str(exc)})
+                    log("compare %s pass %s FAILED: %s" % (key, p, exc))
                     continue
                 same, diff, skipped = passes_failed(res)
                 allres[str(p)] = res
-                log("compare %s pass %s: identical %s; DIFFERENT %s; not run %s" % (pid, p, same or "-", diff or "-", skipped or "-"))
+                log("compare %s pass %s: identical %s; DIFFERENT %s; not run %s" % (key, p, same or "-", diff or "-", skipped or "-"))
                 for label, name in thin_attachments(res):
                     log("note: %s %s holds one distinct value (an empty attachment: IDENTICAL says little)" % (label, name))
                 if diff:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": diff})
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": diff})
                 if int(p) in (-1, 1) and "G-buffer" not in same + diff:
-                    self.index["compare_failures"].append({"preset": pid, "pass": p, "passes": [],
+                    self.index["compare_failures"].append({"preset": key, "pass": p, "passes": [],
                                                            "error": "the G-buffer did not run (%s)" % (skipped or "no result")})
-                    log("compare %s: the G-buffer did not run" % pid)
+                    log("compare %s: the G-buffer did not run" % key)
             info["compare"] = allres
-            write_json_atomic(self.out / ("compare_%s.json" % pid), allres)
+            write_json_atomic(self.out / ("compare_%s.json" % key), allres)
 
     def go(self):
         sc = self.sc
@@ -355,7 +457,18 @@ class Run:
         # the collection itself needs no setting (a window collects by itself); these keep the GPU timers on
         # for the whole run and make the run's settings explicit
         for k, val in {**sc["settings"], **self.args.set_values}.items():
-            self.change(k, val)
+            if self.change(k, val):
+                self.base[k] = val
+        caps = {}
+        for k in CAP_SETTINGS:
+            cur = v.try_control(k)
+            if cur is not None:
+                caps[k] = cur.get("value")
+        self.index["frame_rate_caps"] = caps
+        self.index["window_geometry"] = window_geometry()
+        log("viewer window: %s" % (self.index["window_geometry"] or "unknown (not Windows, or not found)"))
+        if caps.get("RenderVSyncEnable") or caps.get("FSLimitFramerate"):
+            self.warn("vsync or the frame limiter is on (%s): the frame rates of this run are capped; turn them off for a measurement" % caps)
         st = v.req(API, "status")
         self.index["status_at_start"] = st
         if sc["teleport"]:
@@ -377,10 +490,25 @@ class Run:
         proof_ok = True
         if sc["compare"]["enabled"] and sc["compare"]["prove_with_injection"]:
             proof_ok = self.prove_injection()
-        for preset in sc["presets"]:
+        for self.preset_no, preset in enumerate(sc["presets"]):
             v.check_abort()
-            self.one_preset(preset)
+            if not sc["variants"]:
+                self.one_preset(preset)
+            else:
+                # the same view measured once per variant, back to back (the camera is placed once)
+                self.set_preset_camera(preset)
+                v.sleep(sc["settle"]["after_camera_s"])
+                samples = self.probe_variants(sc["variants"], self.preset_no)
+                order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
+                for variant in order:
+                    v.check_abort()
+                    self.one_preset(preset, variant, set_camera=False, fps_samples=samples[variant["id"]])
             self.save_index()
+        end_geo = window_geometry()
+        self.index["window_geometry_end"] = end_geo
+        start_geo = self.index.get("window_geometry")
+        if start_geo and end_geo and (start_geo["width"], start_geo["height"]) != (end_geo["width"], end_geo["height"]):
+            self.warn("the viewer window changed size during the run (%s -> %s): the windows are not comparable" % (start_geo, end_geo))
         self.save_index()
         self.cleanup()
         return proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
@@ -503,6 +631,11 @@ def execute(session, args, sc, outdir):
             code = 4
     except Aborted as exc:
         log("aborted: %s" % exc)
+        code = 2
+        if run is not None:
+            run.cleanup()
+    except KeyboardInterrupt:
+        log("interrupted: restoring the viewer")
         code = 2
         if run is not None:
             run.cleanup()

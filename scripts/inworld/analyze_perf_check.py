@@ -3,6 +3,7 @@
 """Report on a perf_check.py run folder (or on one window JSON written by GLSubmitStats.dump).
 
   python analyze_perf_check.py RUNDIR                 -> RUNDIR/report.txt (also printed)
+  (a run with "variants", e.g. alpha_crowd.json, also gets the sorted alpha vs stochastic table and the verdict)
   python analyze_perf_check.py RUNDIR --compare BASE  -> the totals of each preset against the same preset of BASE
                                                          (delta = RUNDIR minus BASE)
 
@@ -13,6 +14,8 @@ pass); cpu_ms and gpu_ms are inclusive of nested passes. Offline: needs only the
 import argparse
 import json
 import pathlib
+import re
+import statistics
 import sys
 
 TOTAL_COLUMNS = [
@@ -127,6 +130,231 @@ def report_compare(idx):
     return lines
 
 
+# -- sorted alpha (RenderAlphaSortMethod 0) against stochastic (1), from a run made with a scenario that has variants -------------
+METHOD_KEY = "RenderAlphaSortMethod"
+SLOWER_PCT = 3.0       # stochastic counts as slower when its median frame time is more than this above method 0 ...
+EXPLAINS_SHARE = 0.5   # ... and the alpha passes' CPU time delta is at least this share of the frame time delta
+ALPHA_PASS = re.compile(r"(^|/)ALPHA(_PRE_WATER|_POST_WATER)?( \d+)?$")
+ALPHA_COLUMNS = [("cpu_ms", "alpha cpu ms"), ("gpu_ms", "alpha gpu ms"), ("draws", "alpha draws"), ("shaderBinds", "alpha shader binds"),
+                 ("paletteUploads", "alpha palette uploads"), ("uniformBytes", "alpha uniform B"), ("samples", "alpha samples")]
+
+
+def frame_ms(info):
+    """Frame time of a window in ms: from the frame rate with nothing collecting, else from the collecting window."""
+    fps = info.get("fps_stats_off") or info.get("fps_wall")
+    return 1000.0 / float(fps) if fps else None
+
+
+MAX_MSAA = 8
+FALLBACK_SIZE = (7680, 4320)     # when the window size was not recorded: 8K
+
+
+def sample_limit(info, draws):
+    """The most samples one alpha pass can plausibly pass per frame: width x height x MSAA x draws (at least one draw)."""
+    geo = info.get("window_geometry") or {}
+    w, h = geo.get("width") or FALLBACK_SIZE[0], geo.get("height") or FALLBACK_SIZE[1]
+    return float(w) * float(h) * MAX_MSAA * max(float(draws or 0.0), 1.0)
+
+
+def alpha_sums(window, info=None, notes=None):
+    """Per-frame sums over the alpha passes of the main view (these passes do not nest in each other); None if none found.
+    A key that no alpha pass reports is left out (the dump drops zero counters; 'samples' is absent when not measured).
+    With 'info' (the run's record of the window, for its size) a samples value above sample_limit is dropped with a note in
+    'notes' instead of being summed: such a number is a defect of the measurement, not a finding."""
+    out = {}
+    found = False
+    for p in window.get("passes", []):
+        if p.get("view") == "main" and ALPHA_PASS.search(p.get("pass") or ""):
+            found = True
+            for key, _ in ALPHA_COLUMNS:
+                if key not in p:
+                    continue
+                if key == "samples" and info is not None and num(p.get(key)) > sample_limit(info, p.get("draws")):
+                    if notes is not None:
+                        notes.append("%s: %s samples per frame in %s is more than width x height x %d x draws (%s): ignored" % (
+                            info.get("preset", "?") + "__" + info.get("variant", "?"), fmt(p.get(key)), p.get("pass"), MAX_MSAA,
+                            fmt(sample_limit(info, p.get("draws")))))
+                    continue
+                out[key] = out.get(key, 0.0) + num(p.get(key))
+    return out if found else None
+
+
+def entry_alpha(e, notes=None):
+    return alpha_sums(e["window"], e["info"], notes)
+
+
+def probe_spread_pct(info):
+    """(max - min) / median of the fps probes of one window, in percent; None when there was a single probe."""
+    pr = info.get("fps_probe") or {}
+    return pr.get("spread_pct") if len(pr.get("samples", [])) > 1 else None
+
+
+def main_view(window):
+    for v in window.get("views", []):
+        if v.get("view") == "main":
+            return v
+    return {}
+
+
+def method_of(info):
+    val = (info.get("variant_settings") or {}).get(METHOD_KEY)
+    return None if val is None else int(val)
+
+
+def method_runs(entries):
+    """{preset: {method: entry}} for the entries that carry a variant with a RenderAlphaSortMethod setting."""
+    out = {}
+    for entry in entries.values():
+        info = entry["info"]
+        m = method_of(info)
+        if info.get("variant") is not None and m is not None:
+            out.setdefault(info.get("preset"), {})[m] = entry
+    return out
+
+
+def median(vals):
+    vals = [v for v in vals if v is not None]
+    return statistics.median(vals) if vals else None
+
+
+def paired(m, getter):
+    """getter(method 1 entry) - getter(method 0 entry) for one preset, None when either is missing."""
+    a, b = getter(m[0]), getter(m[1])
+    return None if a is None or b is None else b - a
+
+
+def alpha_value(key):
+    def get(e):
+        a = entry_alpha(e)
+        return None if a is None or key not in a else a[key]
+    return get
+
+
+def main_gpu(e):
+    v = main_view(e["window"]).get("gpu_ms")
+    return None if v is None else float(v)
+
+
+def method_warnings(both):
+    """Presets in which method 1 looks like it did not run stochastic: its alpha draws are 0 or the same as method 0's."""
+    out = []
+    for pid, m in both.items():
+        d0 = (entry_alpha(m[0]) or {}).get("draws", 0.0)
+        d1 = (entry_alpha(m[1]) or {}).get("draws", 0.0)
+        if d1 == 0 or (d0 and d1 == d0):
+            out.append("preset %s: method 1 has %s alpha draws against %s for method 0; check that stochastic transparency was "
+                       "really in use (RenderAlphaSortMethod=1 needs OpenGL 4 and the stochastic path enabled)" % (
+                           pid, fmt(d1), fmt(d0)))
+    return out
+
+
+def verdict(runs):
+    """The survey's rule over the presets that have both methods. Per preset the paired delta (method 1 minus method 0) of the
+    frame time and of the alpha passes' CPU time; the medians of the deltas decide. Stochastic is slower when the median frame
+    time delta is more than SLOWER_PCT of the median sorted frame time and the median alpha CPU delta is at least
+    EXPLAINS_SHARE of it. The result is 'not_slower', 'slower_explained' (by the alpha pass CPU time), 'slower_not_explained',
+    'inconclusive' (the presets disagree in sign) or 'no_verdict'. Returns (text, facts)."""
+    both = {pid: m for pid, m in runs.items() if 0 in m and 1 in m}
+    if not both:
+        return "no preset has both methods: no verdict", {"result": "no_verdict"}
+    fts0 = {pid: frame_ms(m[0]["info"]) for pid, m in both.items()}
+    fts1 = {pid: frame_ms(m[1]["info"]) for pid, m in both.items()}
+    ids = [pid for pid in both if fts0[pid] and fts1[pid]]
+    if not ids:
+        return "no frame rate in the windows: no verdict", {"result": "no_verdict"}
+    d_ft = {pid: fts1[pid] - fts0[pid] for pid in ids}
+    ft0 = median([fts0[pid] for pid in ids])
+    med_d = median(list(d_ft.values()))
+    pcts = [100.0 * d_ft[pid] / fts0[pid] for pid in ids]
+    pct = round(100.0 * med_d / ft0, 6)
+    cpu_delta = median([paired(both[pid], alpha_value("cpu_ms")) for pid in ids])
+    gpu_main = median([paired(both[pid], main_gpu) for pid in ids])
+    gpu_alpha = median([paired(both[pid], alpha_value("gpu_ms")) for pid in ids])
+    noises = []
+    for pid in ids:
+        sp = [probe_spread_pct(both[pid][0]["info"]), probe_spread_pct(both[pid][1]["info"])]
+        sp = [x for x in sp if x is not None]
+        if sp:
+            noises.append(max(sp))
+    noise = median(noises)
+    facts = {"frame_ms_0": ft0, "noise_pct": noise, "frame_delta_ms": med_d, "frame_pct": pct, "alpha_cpu_delta_ms": cpu_delta, "main_gpu_delta_ms": gpu_main,
+             "alpha_gpu_delta_ms": gpu_alpha, "presets": len(ids), "pct_min": min(pcts), "pct_max": max(pcts),
+             "warnings": method_warnings(both)}
+    spread = "per preset %+.1f%% to %+.1f%%" % (min(pcts), max(pcts))
+    gpu = "main view GPU %s ms, alpha passes GPU %s ms (median deltas)" % (
+        "n/a" if gpu_main is None else "%+.2f" % gpu_main, "n/a" if gpu_alpha is None else "%+.2f" % gpu_alpha)
+    noise_txt = "" if noise is None else "; fps probe spread %.1f%% (median over presets)" % noise
+    head = "median frame time delta %+.2f ms on %.2f ms (%+.1f%%, limit +%.0f%%; %s%s; %d presets)" % (
+        med_d, ft0, pct, SLOWER_PCT, spread, noise_txt, len(ids))
+    if pct <= SLOWER_PCT:
+        return "stochastic is NOT slower: %s; %s" % (head, gpu), dict(facts, result="not_slower")
+    if noise is not None and pct <= noise:
+        return ("INCONCLUSIVE: %s; the difference is within the noise of the frame rate probes; %s" % (head, gpu),
+                dict(facts, result="inconclusive"))
+    if len(ids) > 1 and min(d_ft.values()) < 0 < max(d_ft.values()):
+        return ("INCONCLUSIVE: %s; the presets disagree in sign, so the median is not a finding; %s" % (head, gpu),
+                dict(facts, result="inconclusive"))
+    if cpu_delta is None:
+        return ("stochastic is slower but the alpha passes were not found in the windows, so the alpha pass CPU time cannot be "
+                "checked: %s; %s" % (head, gpu), dict(facts, result="slower_not_explained"))
+    explains = cpu_delta >= EXPLAINS_SHARE * med_d
+    return ("stochastic is %s: %s; the alpha passes' CPU time changes by %+.2f ms (median), which %s (limit: at least half of the "
+            "frame time delta); %s" % (
+                "SLOWER in this crowd" if explains else "slower but NOT because of the alpha pass CPU time", head, cpu_delta,
+                "explains it" if explains else "does not explain it", gpu),
+            dict(facts, result="slower_explained" if explains else "slower_not_explained"))
+
+
+def report_methods(entries):
+    runs = method_runs(entries)
+    if not runs:
+        return []
+    lines = ["=" * 100, "sorted alpha (method 0) against stochastic (method 1), per preset (medians over the presets below)",
+             "frame ms = 1000 / fps with nothing collecting (the clean figure: the sample queries can perturb early-Z while collecting);",
+             "alpha columns are the main view's ALPHA passes, per frame; '-' = not reported", ""]
+    head = ["preset", "method", "frame ms", "main cpu", "main gpu", "draws", "shader"] + [lab for _, lab in ALPHA_COLUMNS]
+    rows = []
+    notes = []
+    for pid, m in runs.items():
+        for method in sorted(m):
+            e = m[method]
+            a = entry_alpha(e, notes) or {}
+            mv = main_view(e["window"])
+            t = e["window"].get("totals", {})
+            rows.append([pid, method, fmt(frame_ms(e["info"])), fmt(mv.get("cpu_ms")), fmt(mv.get("gpu_ms")), fmt(t.get("draws")),
+                         fmt(t.get("shaderBinds"))] + [fmt(a.get(k)) for k, _ in ALPHA_COLUMNS] + [fmt(probe_spread_pct(e["info"]))])
+    lines.append(table(rows, head + ["fps spread %"]))
+    for n in notes:
+        lines.append("WARNING implausible alpha samples: " + n)
+    lines.append("")
+    lines.append("median over the presets:")
+    med = []
+    for method in (0, 1):
+        es = [m[method] for m in runs.values() if method in m]
+        if not es:
+            continue
+        alphas = [entry_alpha(e) or {} for e in es]
+        med.append(["", method, fmt(median([frame_ms(e["info"]) for e in es])),
+                    fmt(median([main_view(e["window"]).get("cpu_ms") for e in es])),
+                    fmt(median([main_view(e["window"]).get("gpu_ms") for e in es])),
+                    fmt(median([e["window"].get("totals", {}).get("draws") for e in es])),
+                    fmt(median([e["window"].get("totals", {}).get("shaderBinds") for e in es]))] +
+                   [fmt(median([a.get(k) for a in alphas])) for k, _ in ALPHA_COLUMNS] +
+                   [fmt(median([probe_spread_pct(e["info"]) for e in es]))])
+    lines.append(table(med, head + ["fps spread %"]))
+    lines.append("")
+    text, facts = verdict(runs)
+    lines.append("verdict (stochastic is slower when its median frame time is more than %.0f%% above sorted and the alpha pass "
+                 "CPU time explains it, i.e. is at least half of the frame time delta):" % SLOWER_PCT)
+    lines.append("  [%s] %s" % (facts.get("result"), text))
+    for w in facts.get("warnings", []):
+        lines.append("  WARNING " + w)
+    lines.append("  The ms figures come from one GPU. Only method 0's counters (draws, shader binds, palette uploads, uniform bytes,")
+    lines.append("  alpha samples) are the gate for weak GPUs: method 1 draws other passes into multisample targets, so its samples are")
+    lines.append("  not comparable to method 0's. Alpha samples are GL_SAMPLES_PASSED (samples, not fragments).")
+    return lines
+
+
 def report_delta(new, base):
     lines = ["=" * 100, "against the baseline run (delta = this run minus baseline)"]
     for pid, entry in new.items():
@@ -157,6 +385,7 @@ def main(argv=None):
     lines = []
     for pid, entry in entries.items():
         lines += report_preset(pid, entry)
+    lines += report_methods(entries)
     lines += report_compare(idx)
     if args.compare:
         base, _ = load(args.compare)

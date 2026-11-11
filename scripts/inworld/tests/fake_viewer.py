@@ -36,7 +36,8 @@ class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
-                 logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False):
+                 logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False,
+                 gl_m1_fps_factor=1.0, u32_as_string=False):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
         self.gl_stats = gl_stats
@@ -50,6 +51,9 @@ class FakeViewer:
         self.gl_short_window = gl_short_window  # the window never reaches its frame target
         self.gl_serial = 0
         self.gl_window = {"target": 0, "collected": 0, "gpu": 0}
+        self.u32_as_string = u32_as_string          # LLSD has no unsigned type: the real viewer returns a U32 as a string
+        self.gl_m1_fps_factor = gl_m1_fps_factor    # the frame rate while RenderAlphaSortMethod is 1 (a slower stochastic)
+        self._fc = (time.monotonic(), 0.0)
         self.gl_compare_pending = 0
         self.gl_compare_results = []
         self.bad_takes = set(bad_takes)   # 1-based numbers of the saveSnapshot calls that read back the cleared buffer
@@ -78,6 +82,7 @@ class FakeViewer:
             "RenderMoonAdaptationDepth": 6.0, "RenderAtmosphereHazeSlab": 250.0, "CameraAngle": 1.047,
             "FSEnvironmentManualTransitionTime": 3.0}.items()}
         self.settings["RenderAtmospherePhysicalLight"] = ("Boolean", True)
+        self.settings["RenderAlphaSortMethod"] = ("U32", 1)
         if gl_stats:
             self.settings.update({"RenderGLSubmitStats": ("Boolean", False), "RenderGLSubmitStatsGPU": ("Boolean", True),
                                   "RenderGLSubmitCompare": ("S32", 0), "RenderGLSubmitCompareInject": ("S32", 0),
@@ -201,6 +206,8 @@ class FakeViewer:
         if op == "set":
             val = d["value"]
             self.settings[key] = (typ, val)
+        if self.u32_as_string and typ == "U32":
+            val = str(val)
         self._reply(d, {"name": key, "type": typ, "value": val, "comment": ""})
 
     def api_LLFloaterReg(self, op, d):
@@ -412,13 +419,22 @@ class FakeViewer:
                 "mdvSyncs": 1800.0, "bufSubData": 12.0, "stateToggles": 300.0, "occBlocking": 0.0, "runs": 2900.0,
                 "mergeableDraws": 1300.0, "cpu_ms": 9.5, "gpu_ms": 7.25}
 
+    def _frame_count(self):
+        """Frames rendered so far: 60 per second, times gl_m1_fps_factor while RenderAlphaSortMethod is 1."""
+        now = time.monotonic()
+        t0, n = self._fc
+        rate = 60.0 * (self.gl_m1_fps_factor if int(self.settings["RenderAlphaSortMethod"][1]) == 1 else 1.0)
+        n += (now - t0) * rate
+        self._fc = (now, n)
+        return n
+
     def api_GLSubmitStats(self, op, d):
         w = self.gl_window
         if op == "status":
             self._reply(d, {"compiled": True, "window_target": w["target"], "window_collected": w["collected"],
                             "window_gpu_frames": w["gpu"], "window_active": w["collected"] < w["target"],
                             "compare_armed": 0, "compare_results": len(self.gl_compare_results),
-                            "frame_count": int(time.monotonic() * 60)})
+                            "frame_count": int(self._frame_count())})
         elif op == "windowBegin":
             n = int(d.get("frames", 60))
             if self.gl_short_window:
@@ -435,11 +451,15 @@ class FakeViewer:
         elif op == "dump":
             import json  # noqa: PLC0415
             t = self._gl_totals()
+            method = int(self.settings["RenderAlphaSortMethod"][1])
             doc = {"schema": 1, "kind": "window", "scale": "per_frame_mean", "frames": w["collected"], "gpu_frames": w["gpu"],
                    "totals": dict(t, run_hist=[1400.0, 700.0, 500.0, 200.0, 80.0, 20.0]),
                    "views": [{"view": "frame", "calls": 1.0, "cpu_ms": 9.5, "gpu_ms": 7.25, "draws": 0.0},
                              {"view": "main", "calls": 3.0, "cpu_ms": 6.0, "gpu_ms": 5.0, "draws": 3000.0, "vbChanges": 2800.0}],
                    "passes": [{"view": "main", "pass": "gbuffer", "calls": 1.0, "cpu_ms": 4.0, "gpu_ms": 3.5, "draws": 2500.0},
+                              {"view": "main", "pass": "deferred lighting/geom post-deferred/ALPHA_POST_WATER 0", "calls": 1.0,
+                               "cpu_ms": 1.0 if method == 0 else 1.5, "gpu_ms": 0.8, "draws": 400.0 if method == 0 else 300.0, "shaderBinds": 12.0,
+                               "paletteUploads": 30.0, "uniformBytes": 5000.0, "samples": 1.0e6 if method == 0 else 2.0e6},
                               {"view": "sun cascade 0", "pass": "shadow opaque 0", "calls": 1.0, "cpu_ms": 1.0, "gpu_ms": 0.9,
                                "draws": 900.0}],
                    "compare": []}
