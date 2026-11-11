@@ -736,8 +736,8 @@ set(viewer_SOURCE_FILES
     #llslurl.cpp #<FS:AW optional opensim support>
     llsnapshotlivepreview.cpp
     llspatialpartition.cpp
-    llstochastichistory.cpp
     llstatslistener.cpp
+    llstochastichistory.cpp
     llspeakers.cpp
     llspeakingindicatormanager.cpp
     llsplitbutton.cpp
@@ -1602,8 +1602,9 @@ set(viewer_HEADER_FILES
     llsnapshotlivepreview.h
     llsnapshotmodel.h
     llspatialpartition.h
-    llstochastichistory.h
     llstatslistener.h
+    llstochastichistory.h
+    llstochasticstate.h
     llspeakers.h
     llspeakingindicatormanager.h
     llsplitbutton.h

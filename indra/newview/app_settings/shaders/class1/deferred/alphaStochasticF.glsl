@@ -33,7 +33,7 @@
 
 uniform int st_mode;               // 1 total alpha, 2 stochastic depth
 uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
-uniform int st_samples;            // samples in all (the table's S, 8)
+uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::SAMPLES)
 uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
 uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)
