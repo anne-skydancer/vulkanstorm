@@ -11466,7 +11466,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderCloudOpticalDepth</key>
     <map>
       <key>Comment</key>
-      <string>Debug: the optical depth of one e-fold of the flat cloud layer's drawn opacity (opacity = 1 - exp(-depth / this)); sets how much of the light the layer's thin and partly covered parts let through (1 .. 30, the Sky tab slider goes to 20). 7.6 = the visibility threshold of thin cirrus (depth 0.03) at one 8-bit step of opacity. The Sky tab (devel).</string>
+      <string>Debug: the optical depth of one e-fold of the flat cloud layer's drawn opacity (opacity = 1 - exp(-depth / this)); sets how much of the light the layer's thin and partly covered parts let through (clamped to 3 .. 30; the Sky tab slider goes 3 .. 20). 7.6 = the visibility threshold of thin cirrus (depth 0.03) at one 8-bit step of opacity. The Sky tab (devel).</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

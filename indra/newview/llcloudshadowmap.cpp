@@ -137,7 +137,7 @@ void LLCloudShadowMap::update()
         gCloudShadowMapProgram.uniform2f(sSpan, (F32) k, (F32) -k);
         gCloudShadowMapProgram.uniform1f(sAlt, (F32) LLCloudShadow::altitude_blend(L, psky->getMaxY()));
         // stage L2b: the optics of the layer (llcloudoptics.h), tau_v from the debug setting
-        const LLCloudOptics::ShaderParams optics = LLCloudOptics::shader_params(llclamp((F64) optical_depth, 1.0, 30.0));
+        const LLCloudOptics::ShaderParams optics = LLCloudOptics::shader_params(std::isfinite(optical_depth) ? llclamp((F64) optical_depth, 3.0, 30.0) : LLCloudOptics::DEFAULT_VISUAL_DEPTH);
         gCloudShadowMapProgram.uniform4f(sOptics, optics.visual_depth, optics.beam_coefficient, optics.total_coefficient, optics.alpha_step);
 
         gPipeline.mScreenTriangleVB->setBuffer();
