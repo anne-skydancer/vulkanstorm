@@ -382,17 +382,13 @@ static void unload_stochastic_shaders()
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> shadow method PCSS (RenderShadowMethod 1): the deferred sun program's shadow filter
-static bool use_pcss_shadows()
+// <Vulkanstorm> shadow methods PCSS (1) and Stochastic (2): whether the shader set is built for the method
+static bool use_shadow_method(U32 method)
 {
-    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::PCSS && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == method && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
-
-// shadow method Stochastic (RenderShadowMethod 2): the shadow sampling of shadowUtil.glsl for every shadow consumer
-static bool use_stochastic_shadows()
-{
-    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
-}
+static bool use_pcss_shadows() { return use_shadow_method(LLShadowMethod::PCSS); }
+static bool use_stochastic_shadows() { return use_shadow_method(LLShadowMethod::STOCHASTIC); }
 // </Vulkanstorm>
 
 static void add_common_permutations(LLGLSLShader* shader)
@@ -1063,19 +1059,13 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     }
     // </Vulkanstorm>
 
-    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): every program that links
-    // shadowUtil.glsl (the deferred sun program, the probe and spot variants, and the forward
-    // programs) gets the Stochastic sampling from this one build, so a session holds one method's
-    // programs only (a method change reloads every shader). SHADOW_MODERN brings the method-neutral
-    // block (SHADOW_COMMON) with the constants of llshadowcascadefit.h, as for PCSS.
+    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): the program binary cache hashes
+    // the defines, not the attached objects, and every program that links a shadow util has the
+    // same defines under PCSS and Stochastic. This marker (nothing in any shader reads it) keeps
+    // their cached binaries apart.
     if (use_stochastic_shadows())
     {
-        attribs["STOCHASTIC_SHADOW"] = "1";
-        attribs["SHADOW_MODERN"] = "1";
-        attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
-        attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
-        attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
-        attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
+        attribs["SHADOW_UTIL_STOCHASTIC"] = "1";
     }
     // </Vulkanstorm>
 
@@ -1164,6 +1154,21 @@ std::string LLViewerShaderMgr::loadBasicShaders()
                 LL_WARNS("Shader") << "Stochastic engine object " << *helper << " failed to build"
                                    << "; stochastic transparency does not run until it builds" << LL_ENDL;
             }
+        }
+    }
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> Stochastic: its own shadow util replaces shadowUtil.glsl for every program that
+    // links one (LLShaderMgr::attachShaderFeatures picks it by name); a session holds one method's
+    // programs only, since a method change reloads every shader. Not built for the other methods.
+    mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_UTIL);
+    if (use_stochastic_shadows())
+    {
+        S32 level = 1;
+        if (loadShaderFile(STOCHASTIC_SHADOW_UTIL, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+        {
+            LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_SHADOW_UTIL << LL_ENDL;
+            return STOCHASTIC_SHADOW_UTIL;
         }
     }
     // </Vulkanstorm>
