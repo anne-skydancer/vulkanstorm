@@ -387,6 +387,12 @@ static bool use_pcss_shadows()
 {
     return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::PCSS && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
+
+// shadow method Stochastic (RenderShadowMethod 2): the shadow sampling of shadowUtil.glsl for every shadow consumer
+static bool use_stochastic_shadows()
+{
+    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
+}
 // </Vulkanstorm>
 
 static void add_common_permutations(LLGLSLShader* shader)
@@ -1055,6 +1061,22 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     if (LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) != LLShadowMethod::LEGACY)
     {
         attribs["SHADOW_NL_MULTIPLY"] = "1";
+    }
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): every program that links
+    // shadowUtil.glsl (the deferred sun program, the probe and spot variants, and the forward
+    // programs) gets the Stochastic sampling from this one build, so a session holds one method's
+    // programs only (a method change reloads every shader). SHADOW_MODERN brings the method-neutral
+    // block (SHADOW_COMMON) with the constants of llshadowcascadefit.h, as for PCSS.
+    if (use_stochastic_shadows())
+    {
+        attribs["STOCHASTIC_SHADOW"] = "1";
+        attribs["SHADOW_MODERN"] = "1";
+        attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
+        attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
+        attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
+        attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
     }
     // </Vulkanstorm>
 

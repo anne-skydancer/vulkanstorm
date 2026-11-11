@@ -213,7 +213,7 @@ F32 LLPipeline::CameraFocalLength;
 F32 LLPipeline::CameraFieldOfView;
 F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
-U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS
+U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 1 PCSS, 2 Stochastic
 F32 LLPipeline::RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
@@ -1157,15 +1157,15 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
     S32 shadow_detail = RenderShadowDetail;
 
     F32 scale = gCubeSnapshot ? 1.0f : llmax(0.f, RenderShadowResolutionScale); // Don't scale probe shadow maps
-    // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; PCSS has square ones (the
-    // cascades are square boxes around their slice's bounding sphere) with the same texel count.
+    // <Vulkanstorm> shadow method: Legacy keeps the screen-sized sun maps; PCSS and Stochastic have square
+    // ones (the cascades are square boxes around their slice's bounding sphere) with the same texel count.
     // The Legacy lines are kept verbatim (checked against upstream), so they are computed first and
-    // PCSS overrides them.
+    // the other methods override them.
     // <ShadowLegacy id="sun-map-size">
     U32 sun_shadow_map_width = BlurHappySize(resX, scale);
     U32 sun_shadow_map_height = BlurHappySize(resY, scale);
     // </ShadowLegacy>
-    if (RenderShadowMethod == LLShadowMethod::PCSS)
+    if (LLShadowMethod::usesStableCascades(RenderShadowMethod))
     {
         sun_shadow_map_width = BlurHappySize((U32)sqrtf((F32)resX * (F32)resY), scale);
         sun_shadow_map_height = sun_shadow_map_width;
@@ -10233,10 +10233,11 @@ void LLPipeline::renderDeferredLighting()
                                               (GLfloat)deferred_light_target->getWidth(),
                                               (GLfloat)deferred_light_target->getHeight());
 
-                // <Vulkanstorm> PCSS: the shadowing light's angular size, L = 2 tan(half angle):
+                // <Vulkanstorm> PCSS and Stochastic: the shadowing light's angular size, L = 2 tan(half angle):
                 // the physical sun (0.53 degrees) times the sky's sun scale times
-                // RenderShadowPCSSLightSize; the moon uses the same size
-                if (RenderShadowMethod == LLShadowMethod::PCSS && !gCubeSnapshot)
+                // RenderShadowPCSSLightSize; the moon uses the same size. Stochastic draws its rays
+                // toward points of the disc of this size.
+                if (LLShadowMethod::usesStableCascades(RenderShadowMethod) && !gCubeSnapshot)
                 {
                     static const F32 sun_angular_size = 2.f * tanf(0.5f * 0.53f * DEG_TO_RAD);
                     // stage L3: the size of the light the scene is lit by, handing over from the sun's scale to the moon's

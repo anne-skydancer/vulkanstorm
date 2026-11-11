@@ -12539,7 +12539,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowMethod</key>
   <map>
     <key>Comment</key>
-    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 1 = PCSS, stable world-anchored cascades, square sun maps, soft contact-hardening shadows and the later shadow stages. Default per graphics level in the feature table.</string>
+    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 1 = PCSS, stable world-anchored cascades, square sun maps, soft contact-hardening shadows and the later shadow stages; 2 = Stochastic, the same stable cascades and square sun maps with 8 rays per pixel toward the light's disc, accumulated over time (selectable only: no graphics level recommends it, since the feature table keeps the minimum of its lists). Any other value is read as 1. Default per graphics level in the feature table.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12576,7 +12576,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowDistance</key>
   <map>
     <key>Comment</key>
-    <string>PCSS shadow method only (Legacy fits its cascades to the view): distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees. Default per graphics level in the feature table. Debug setting only (no Preferences entry).</string>
+    <string>PCSS and Stochastic shadow methods only (Legacy fits its cascades to the view): distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees. Default per graphics level in the feature table. Debug setting only (no Preferences entry).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12587,7 +12587,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowPCSSLightSize</key>
   <map>
     <key>Comment</key>
-    <string>PCSS shadow method only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size.</string>
+    <string>PCSS and Stochastic shadow methods only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
