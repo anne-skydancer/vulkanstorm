@@ -32,6 +32,13 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_ll_build_flags}")
 
 # Portable compilation flags.
 add_compile_definitions( ADDRESS_SIZE=${ADDRESS_SIZE})
+
+# Development only (never on in CI or release): OpenGL submission statistics, GPU pass timers and the in-frame
+# identical-image check. See doc/gl/instrumentation.md.
+option(VKS_GL_STATS "OpenGL submission instrumentation (development builds only)" OFF)
+if (VKS_GL_STATS)
+  add_compile_definitions(VKS_GL_STATS=1)
+endif()
 # Because older versions of Boost.Bind dumped placeholders _1, _2 et al. into
 # the global namespace, Boost now requires either BOOST_BIND_NO_PLACEHOLDERS
 # to avoid that or BOOST_BIND_GLOBAL_PLACEHOLDERS to state that we require it

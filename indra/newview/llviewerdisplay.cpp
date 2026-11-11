@@ -110,6 +110,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include "llglsubmitstatsapi.h"
+
 extern LLPointer<LLViewerTexture> gStartTexture;
 extern bool gShiftFrame;
 
@@ -168,6 +170,8 @@ void display_startup()
     {
         return;
     }
+
+    VKS_GLSTAT_DISPLAY_FRAME(false);
 
     gPipeline.updateGL();
 
@@ -639,6 +643,8 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
     }
 
 
+    VKS_GLSTAT_DISPLAY_FRAME(gShaderProfileFrame);
+
     if (gShaderProfileFrame)
     {
         LLGLSLShader::initProfile();
@@ -880,6 +886,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Update Geom");
+            VKS_GLSTAT_PASS("update geom");
             const F32 max_geom_update_time = 0.005f*10.f*gFrameIntervalSeconds.value(); // 50 ms/second update time
             gPipeline.createObjects(max_geom_update_time);
             gPipeline.processPartitionQ();
@@ -911,7 +918,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
         LLPipeline::sUnderWaterRender = LLViewerCamera::getInstance()->cameraUnderWater();
-        gPipeline.updateCull(*LLViewerCamera::getInstance(), result);
+        {
+            VKS_GLSTAT_PASS("update cull");
+            gPipeline.updateCull(*LLViewerCamera::getInstance(), result);
+        }
         stop_glerror();
 
         LLGLState::checkStates();
@@ -940,6 +950,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                 if (gFrameCount > 1 && !for_snapshot)
                 { //for some reason, ATI 4800 series will error out if you
                   //try to generate a shadow before the first frame is through
+                    VKS_GLSTAT_PASS("shadows");
                     gPipeline.generateSunShadow(*LLViewerCamera::getInstance());
                 }
 
@@ -1016,6 +1027,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("display - 4")
             LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
+            VKS_GLSTAT_PASS("state sort");
             gPipeline.stateSort(camera, result); // <FS:Ansariel> Factor out calls to getInstance
             stop_glerror();
 
@@ -1112,6 +1124,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         {
             glClearColor(1, 0, 1, 1);
         }
+        {
+        VKS_GLSTAT_VIEW("main");
+        VKS_GLSTAT_PASS("gbuffer");
+        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_GBUFFER, &gPipeline.mRT->deferredScreen, false)
+        gGL.setColorMask(true, true);
         gPipeline.mRT->deferredScreen.clear();
 
         gGL.setColorMask(true, false);
@@ -1149,6 +1166,8 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             gGL.setColorMask(true, true);
             gPipeline.renderGeomDeferred(*LLViewerCamera::getInstance(), true);
         }
+        VKS_GLCMP_END()
+        }
 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Texture Unbind");
@@ -1169,6 +1188,8 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         if (LLPipeline::sRenderDeferred)
         {
+            VKS_GLSTAT_VIEW("main");
+            VKS_GLSTAT_PASS("deferred lighting");
             gPipeline.renderDeferredLighting();
         }
 
@@ -1207,6 +1228,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         gShaderProfileFrame = false;
         boost::json::value stats{ boost::json::object_kind };
         getProfileStatsContext(stats.as_object());
+        VKS_GLSTAT_PROFILE(stats.as_object());
         LLGLSLShader::finishProfile(stats);
 
         auto report_name = getProfileStatsFilename();
@@ -1293,6 +1315,7 @@ void display_cube_face()
 {
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Render Cube Face");
     LL_PROFILE_GPU_ZONE("display cube face");
+    VKS_GLSTAT_VIEW("probe face");
 
     llassert(!gSnapshot);
     llassert(!gTeleportDisplay);
@@ -1493,7 +1516,11 @@ void render_hud_attachments()
 
         gPipeline.stateSort(hud_cam, result);
 
-        gPipeline.renderGeomPostDeferred(hud_cam);
+        {
+            VKS_GLSTAT_VIEW("hud");
+            VKS_GLSTAT_PASS("geom post-deferred");
+            gPipeline.renderGeomPostDeferred(hud_cam);
+        }
 
         LLSpatialGroup::sNoDelete = false;
         //gPipeline.clearReferences();
@@ -1641,7 +1668,11 @@ void render_ui(F32 zoom_factor, int subfield)
     }
 
     // apply gamma correction and post effects
-    gPipeline.renderFinalize();
+    {
+        VKS_GLSTAT_VIEW("main");
+        VKS_GLSTAT_PASS("finalize");
+        gPipeline.renderFinalize();
+    }
 
     {
         LLGLState::checkStates();

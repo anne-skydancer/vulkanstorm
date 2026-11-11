@@ -53,6 +53,7 @@
 #include "llglcommonfunc.h"
 #include "llvoavatar.h"
 #include "llviewershadermgr.h"
+#include "llglsubmitstats.h"
 
 S32 LLDrawPool::sNumDrawPools = 0;
 
@@ -557,8 +558,10 @@ void LLRenderPass::applyModelMatrix(const LLDrawInfo& params)
 
 void LLRenderPass::applyModelMatrix(const LLMatrix4* model_matrix)
 {
+    VKS_GLSTAT_INC(modelMatrixCalls);
     if (model_matrix != gGLLastMatrix)
     {
+        VKS_GLSTAT_INC(modelMatrixChanges);
         gGLLastMatrix = model_matrix;
         gGL.matrixMode(LLRender::MM_MODELVIEW);
         gGL.loadMatrix(gGLModelView);
@@ -672,6 +675,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
         return false;
     }
 
+    VKS_GLSTAT_PALETTE(avatar, skinInfo ? skinInfo->mHash : 0, count * 48);
     LLGLSLShader::sCurBoundShaderPtr->uniformMatrix3x4fv(LLViewerShaderMgr::AVATAR_MATRIX,
         count,
         false,
@@ -708,6 +712,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
 
     if (!skipLastSkin)
     {
+        VKS_GLSTAT_PALETTE(avatar, skinInfo->mHash, count * 48);
         LLGLSLShader::sCurBoundShaderPtr->uniformMatrix3x4fv(LLViewerShaderMgr::AVATAR_MATRIX,
             count,
             false,
@@ -746,6 +751,7 @@ bool LLRenderPass::uploadMatrixPalette(LLVOAvatar* avatar, const LLMeshSkinInfo*
 
     if (!skipLastSkin)
     {
+        VKS_GLSTAT_PALETTE(avatar, skinInfo->mHash, count * 48);
         LLGLSLShader::sCurBoundShaderPtr->uniformMatrix3x4fv(LLViewerShaderMgr::AVATAR_MATRIX,
             count,
             false,

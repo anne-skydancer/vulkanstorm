@@ -33,6 +33,7 @@
 #include "llglslshader.h"
 #include "llviewershadermgr.h"
 #include "lldrawpoolwater.h"
+#include "llglsubmitstats.h"
 
 //-----------------------------------------------------------------------------------
 //static variables definitions
@@ -1132,6 +1133,7 @@ void LLOcclusionCullingGroup::checkOcclusion()
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("co - query available");
                 glGetQueryObjectuiv(mOcclusionQuery[LLViewerCamera::sCurCameraID], GL_QUERY_RESULT_AVAILABLE, &available);
+                VKS_GLSTAT_INC(occPolled);
                 mOcclusionCheckCount[LLViewerCamera::sCurCameraID]++;
             }
 
@@ -1145,6 +1147,10 @@ void LLOcclusionCullingGroup::checkOcclusion()
                     LL_PROFILE_ZONE_NAMED_CATEGORY_OCTREE("co - query result");
                     // Ping watchdog before a blocking GL_QUERY_RESULT GPU call
                     LLAppViewer::instance()->pingMainloopTimeout("Display:CullQueryResult");
+                    if (!available)
+                    {
+                        VKS_GLSTAT_INC(occBlocking); // the timeout path: the driver waits for the query
+                    }
                     glGetQueryObjectuiv(mOcclusionQuery[LLViewerCamera::sCurCameraID], GL_QUERY_RESULT, &query_result);
                 }
 #if LL_TRACK_PENDING_OCCLUSION_QUERIES
@@ -1238,6 +1244,7 @@ void LLOcclusionCullingGroup::doOcclusion(LLCamera* camera, const LLVector4a* sh
                             //get an occlusion query that hasn't been used in awhile
                             releaseOcclusionQueryObjectName(mOcclusionQuery[LLViewerCamera::sCurCameraID]);
                             mOcclusionQuery[LLViewerCamera::sCurCameraID] = getNewOcclusionQueryObjectName();
+                            VKS_GLSTAT_INC(occIssued);
                             glBeginQuery(mode, mOcclusionQuery[LLViewerCamera::sCurCameraID]);
                         }
 

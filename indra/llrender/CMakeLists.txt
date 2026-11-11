@@ -20,6 +20,7 @@ set(llrender_SOURCE_FILES
     llfontregistry.cpp
     llgl.cpp
     llglslshader.cpp
+    llglsubmitstats.cpp
     llgltexture.cpp
     llimagegl.cpp
     llpostprocess.cpp
@@ -51,6 +52,7 @@ set(llrender_HEADER_FILES
     llglheaders.h
     llglslshader.h
     llglstates.h
+    llglsubmitstats.h
     llgltexture.h
     llgltypes.h
     llimagegl.h

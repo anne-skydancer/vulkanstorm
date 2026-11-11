@@ -230,6 +230,7 @@ set(viewer_SOURCE_FILES
     llagentdata.cpp
     llagentlanguage.cpp
     llagentlistener.cpp
+    llglsubmitstatsapi.cpp
     llagentpicksinfo.cpp
     llagentpilot.cpp
     llagentui.cpp
@@ -1101,6 +1102,7 @@ set(viewer_HEADER_FILES
     llagentdata.h
     llagentlanguage.h
     llagentlistener.h
+    llglsubmitstatsapi.h
     llagentpicksinfo.h
     llagentpilot.h
     llagentui.h
