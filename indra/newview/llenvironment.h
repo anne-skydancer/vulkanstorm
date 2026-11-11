@@ -194,7 +194,7 @@ public:
     {
         LLVector3 dir = LLVector3(0.f, 0.f, 1.f); // agent frame (z up), unit: the light's direction
         LLVector3 cloud_T = LLVector3(1.f, 1.f, 1.f);  // the sun's transmittance at the cloud layer (flat clouds' sun)
-        LLVector3 cloud_dir = LLVector3(0.f, 0.f, 1.f); // the clouds' own light direction (agent frame, unit)
+        LLVector3 cloud_dir = LLVector3(0.f, 0.f, 1.f); // the clouds' glow direction: the sun's (agent frame, unit)
         F32 cloud_band_weight = 0.f;      // the clouds' own band weight (the band is centred on -dip, the cloud layer's horizon dip)
         LLColor3  color;                  // the ground light in sunlight_color's encoding: sRGB(lin(deferred sunlight) x the light's transmittance)
         F32 shadow_strength = 1.f;        // 1 full, 0 none
