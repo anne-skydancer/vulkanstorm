@@ -219,7 +219,8 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 // alpha program has its alpha-only variant (LLGLSLShader::mStochasticVariant)
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
-extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation (optional)
+extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: compute (GL 4.3+) or fragment resolve
+extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (GL 4.0 to 4.2)
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>
 

@@ -19,7 +19,7 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// GL 4.3 compute (the only resolve of stochastic transparency). The transparency's part of the
+// GL 4.3 compute (the resolve of GL 4.3 and later; GL 4.0 to 4.2 run alphaStochasticResolveF.glsl). The transparency's part of the
 // stochastic engine's temporal resolve (stochasticResolveUtilF.glsl, compiled as a second compute
 // object of this program). The accumulated colour of this frame (alpha x colour, alpha, averaged
 // over the samples) is blended with the last frame's blended colour where this pixel's nearest
