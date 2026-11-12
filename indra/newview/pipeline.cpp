@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 
@@ -1355,7 +1356,7 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
-    RenderShadowMethod = LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()); // <Vulkanstorm/> shadow method, one clamp for every gate
+    RenderShadowMethod = LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()); // <Vulkanstorm/> shadow method, one clamp for every gate
     RenderShadowLightSize = gSavedSettings.getF32("RenderShadowLightSize");  // <Vulkanstorm/> light size (Stochastic)
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -8121,20 +8122,22 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //      stochastic depth; the glowing faces' glow likewise into the green of the RG16F target;
 //   with more samples than a pass holds, 2 and 3 run again with the next bits of the same mask
 //   (paper footnote 1), the depth spread anew before each run;
-//   3b. temporal resolve (compute or fragment, resolveAlphaStochasticTemporal): this frame's accumulation averaged
+//   3b. temporal resolve (the fragment pair in the OpenGL viewer, resolveAlphaStochasticTemporal): this frame's accumulation averaged
 //      over the samples, blended with the last frame's, into the history;
 //   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha; the glow then added to the scene alpha.
 // Two different things keep the passes from running:
 //   - The capability gate (sRenderAlphaStochasticSupported, LLStochasticEngine::deviceSupported):
 //     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is a fragment pass with a pre-pass target on every device;
-//     the compute resolve is kept for A/B tests only, LLStochasticEngine::computeResolve). Below it sorted alpha runs: a device that cannot
-//     run the method, not a fallback.
+//     the compute resolve is kept compiled for the Vulkan renderer, never selected by the OpenGL viewer). Below it sorted alpha runs: a device that cannot
+//     run the method.
 //   - Not ready (alphaStochasticReady), on a supported device: the targets are missing or of another
 //     size (an allocation that failed, or a screen buffer resized without them), or an alpha program's
-//     alpha-only variant did not build (gAlphaStochasticShadersReady). It is logged, the blended faces
-//     and the GLTF scene's blended assets are not drawn, and no other method is selected; the targets
-//     are made again by retryAlphaStochastic (with a backoff), the shaders by the next shader reload.
+//     alpha-only variant did not build (gAlphaStochasticShadersReady). It is logged once, and
+//     sorted alpha draws the blended faces and the GLTF scene's blended assets meanwhile (a run-time
+//     fallback by owner decision, 2026-11-12; the saved setting is not changed); the targets are made again
+//     by retryAlphaStochastic (with a backoff), the shaders by the next shader reload, and stochastic
+//     transparency returns by itself.
 // A history that fails (or a temporal resolve that did not build) only stops the temporal
 // accumulation: the passes run and each frame keeps its 8 samples. The targets, the mask table and the
 // history are made up front there, never from the alpha pool.
@@ -8156,9 +8159,8 @@ namespace
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // the device only (GL 4.0, enough samples): a shader set that did not
-    // build is an error, not a reason to select another method (beginAlphaStochastic logs it, a
-    // shader reload retries it).
+    // the device only (GL 4.0, enough samples): a shader set that did not build does not clear this
+    // flag; LLDrawPoolAlpha draws sorted alpha until alphaStochasticReady (a shader reload retries it).
     sRenderAlphaStochasticSupported = LLStochasticEngine::deviceSupported();
 #else
     sRenderAlphaStochasticSupported = false;
@@ -8239,8 +8241,9 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR || !mAlphaSTAccum || !mAlphaSTTrans ||
         !mAlphaSTDepth || !mAlphaSTMasksHeld)
     {
-        // No other method takes its place: the blended faces wait (they are not drawn) until the
-        // next screen buffer allocation, which tries again.
+        // Sorted alpha and Legacy shadows run (LLStochasticEngine::requestFallback) until a retry
+        // succeeds; the saved settings are not changed.
+        LLStochasticEngine::requestFallback("the targets could not be allocated", true);
         LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
                              << ", GL error " << error << ", " << w << "x" << h << "); it is tried again at the next screen buffer allocation" << LL_ENDL;
         releaseAlphaStochastic();
@@ -8252,6 +8255,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     mAlphaSTWidth = w;
     mAlphaSTHeight = h;
     mAlphaSTPassSamples = pass;
+    LLStochasticEngine::restoreFromFallback();   // a retry that succeeds brings the engine back
     updateAlphaStochasticHistory();
     // 8 + 4 + 4 bytes per sample (DEPTH_COMPONENT24 is stored in 32 bits)
     const U64 bytes = (U64)w * h * pass * 16;
@@ -8279,9 +8283,23 @@ bool LLPipeline::alphaStochasticReady() const
 
 // Once a frame from the display path: an allocation that failed (the targets, or the history while
 // the setting asks for it) is tried again, after 1 s, 2 s, 4 s ... 30 s, and the failure is logged at
-// that cadence. Nothing else is selected in the meantime.
+// that cadence. Sorted alpha draws the blended faces in the meantime.
 void LLPipeline::retryAlphaStochastic()
 {
+    // The run-time fallback of the stochastic model (LLStochasticEngine::requestFallback): once per session
+    // the notice, and the shader set rebuilt for the effective methods (sorted alpha and Legacy shadows, or
+    // the engine again after a successful retry). The saved settings are not touched.
+    if (LLStochasticEngine::takeNoticePending())
+    {
+        LLNotificationsUtil::add("StochasticFallback");
+    }
+    if (LLStochasticEngine::takeReloadPending())
+    {
+        LLStochasticEngine::setFallbackReloading(true);
+        handleSetShaderChanged(LLSD());
+        LLStochasticEngine::setFallbackReloading(false);
+        requestResizeShadowTexture();   // the sun maps' shape follows the effective method
+    }
     if (mRT != &mMainRT || gSavedSettings.getU32("RenderAlphaSortMethod") != 1 ||
         !mMainRT.screen.getWidth() || !mMainRT.screen.getHeight())
     {
@@ -8364,7 +8382,7 @@ void LLPipeline::releaseAlphaStochasticHistory()
     LLStochasticEngine::deleteTexture(mAlphaSTCurrent);
 }
 
-// The selected resolve's program(s) are built: the compute resolve alone, or the fragment pair.
+// The selected resolve's program(s) are built: the fragment pair (the compute branch is never taken by the OpenGL viewer).
 bool LLPipeline::alphaStochasticResolveReady() const
 {
     return gAlphaStochasticResolveProgram.mProgramObject &&
@@ -8373,9 +8391,9 @@ bool LLPipeline::alphaStochasticResolveReady() const
 
 // The temporal accumulation's two full-size colours, made while the setting asks for it and the
 // resolve shader built, freed otherwise (or when the size changed: the history is then lost).
-// They are counted in the texture memory. On the compute path (A/B tests only) this frame's averaged samples are not
+// They are counted in the texture memory. On the compute path (kept for the Vulkan renderer, never taken here) this frame's averaged samples are not
 // a target: the resolve keeps them in shared memory (alphaStochasticResolveC.glsl). On the fragment
-// path (the default on every device) a full-size RGBA32F target holds them (alphaStochasticCurrentF.glsl, option P,
+// path (the one path in the OpenGL viewer) a full-size RGBA32F target holds them (alphaStochasticCurrentF.glsl, option P,
 // 16 bytes a pixel more), also counted at its real size.
 void LLPipeline::updateAlphaStochasticHistory()
 {
@@ -8425,7 +8443,7 @@ bool LLPipeline::beginAlphaStochastic()
         {
             if (!gAlphaStochasticShadersReady)
             {
-                LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build, the blended faces are not drawn "
+                LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build, sorted alpha is drawn "
                                              "until they do (the next shader reload tries again)" << LL_ENDL;
             }
             else if (!alphaStochasticSized(mRT->screen, mAlphaSTWidth, mAlphaSTHeight))
@@ -8433,7 +8451,7 @@ bool LLPipeline::beginAlphaStochastic()
                 // retryAlphaStochastic (once a frame, display path) makes the targets again at the screen's size
                 LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its targets are " << mAlphaSTWidth << "x" << mAlphaSTHeight
                                           << ", the screen " << mRT->screen.getWidth() << "x" << mRT->screen.getHeight()
-                                          << "; the blended faces are not drawn until the targets are made again" << LL_ENDL;
+                                          << "; sorted alpha is drawn until the targets are made again" << LL_ENDL;
             }
         }
         return false;
@@ -8735,7 +8753,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     const U32 h = raw.getHeight();
 
     // the resolve: raw + the last frame's history -> the history the other texture holds; a fragment
-    // pass into its framebuffer (the default), or for A/B tests a compute dispatch with the history as an image
+    // pass into its framebuffer (the one path in the OpenGL viewer; the compute dispatch with the history as an image is never taken here)
     const bool compute = LLStochasticEngine::computeResolve();
     if (!compute)
     {

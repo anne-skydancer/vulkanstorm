@@ -36,7 +36,7 @@ last frame's matrices, nearest and depth-checked bilinear history reads, the 3 x
 `stoch_reproj`, `stoch_weight`, `stoch_history_valid`; stage-neutral). The sampling object is compiled once
 and attached to the programs that sample (`STOCH_SAMPLE_OBJECT`, `LLShaderMgr::attachShaderFeatures`); the
 resolve util is listed in the producer's own `mShaderFiles` and compiled as that program's stage (a compute
-object for the transparency's A/B path; the fragment resolve, the default, attaches it as a fragment object). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
+object for the compute resolve, kept compiled for the Vulkan renderer and never selected by the OpenGL viewer; the fragment resolve attaches it as a fragment object). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
 `LLStochasticEngine` (the mask table, counted textures) and `LLStochasticHistory`, one instance per producer
 (`allocate`, `release`, `beginFrame`, `seedFrame`, `historyUsed`, `setResolveUniforms`, `endFrame`,
 `invalidate`).
@@ -74,7 +74,7 @@ composite):
    glowing faces' glow (`emissiveF.glsl`, `pbrglowF.glsl`, which now write the glow in green as
    well) into the green of the transparency target; the depth spread again before the next
    iteration;
-4. **temporal resolve** (`resolveAlphaStochasticTemporal`, fragment resolve on every device: `alphaStochasticCurrentF.glsl` + `alphaStochasticResolveF.glsl`; the compute `alphaStochasticResolveC.glsl` is kept for A/B tests and the Vulkan renderer): this
+4. **temporal resolve** (`resolveAlphaStochasticTemporal`, fragment resolve on every device: `alphaStochasticCurrentF.glsl` + `alphaStochasticResolveF.glsl`; the compute `alphaStochasticResolveC.glsl` is kept compiled for the Vulkan renderer and never selected by the OpenGL viewer): this
    frame's accumulation averaged over the samples, blended with the last frame's into the history
    (see Temporal accumulation);
 5. **composite** (`alphaStochasticCompositeF.glsl`) over the scene: the scene dimmed by the
@@ -205,7 +205,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   (method selected, resize). With the passes' 8-sample targets (128 bytes a pixel) the method holds
   160 bytes a pixel on the shipped fragment path, which also holds a full-size RGBA32F target of the averaged
   samples (16 bytes a pixel, always allocated, counted at its real size): 316 MiB at 1920 x 1080, 563 MiB at
-  2560 x 1440, 1266 MiB at 3840 x 2160. The compute path (A/B tests only) needs no such target: 144 bytes a
+  2560 x 1440, 1266 MiB at 3840 x 2160. The compute path (kept compiled for the Vulkan renderer, never selected by the OpenGL viewer) needs no such target: 144 bytes a
   pixel, 285 / 506 / 1139 MiB.
   All of it, the 8-sample targets and the
   mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
@@ -371,14 +371,18 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 1.38-1.46x).
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
-textures; the compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
+textures; the compute resolve, kept compiled for the Vulkan renderer and never selected by the OpenGL viewer, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
 2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
 sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (160 bytes a
-pixel); the compute resolve (144 bytes a pixel) never in the OpenGL viewer. There is no fallback otherwise (a history or
-temporal resolve that fails only drops the accumulation, each frame keeps its 8 samples; particles and
-custom-blend draws are hidden while the engine is not ready): a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
-30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
-then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
+pixel); the compute resolve (144 bytes a pixel) never in the OpenGL viewer. A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+allocation, a resize, a shader set that did not build) draws sorted alpha for as long as that lasts, and
+Legacy shadows when a stochastic shadow shader failed or the targets could not be made
+(`LLStochasticEngine::requestFallback`): a run-time fallback by owner decision (2026-11-12), an explicit
+exception to the no-fallback rule. It is logged once, the notice `StochasticFallback` ("Stochastic model could not
+load, falling back to legacy alpha and shadow processing.") is shown once per session, the saved
+`RenderAlphaSortMethod` and `RenderShadowMethod` are not rewritten, a failed allocation is tried again (every frame loop: 1 s, doubling to
+30 s) and a shader set at the next shader reload, and stochastic transparency returns by itself when they succeed.
+A history or temporal resolve that fails only drops the accumulation: each frame keeps its 8 samples. A snapshot larger than the window is taken in tiles
 if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
 
 ## Tests and measurements
