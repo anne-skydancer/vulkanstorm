@@ -441,7 +441,7 @@ public:
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history (and the fragment path's averaged-samples target) freed
-    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's (the fragment pair by default; compute is A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1)
+    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's (the fragment pair; compute is never chosen in the OpenGL viewer)
     void resolveAlphaStochasticTemporalFragment();
     bool alphaStochasticResolveReady() const; // the selected resolve's programs are built
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }

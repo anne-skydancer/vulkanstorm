@@ -294,7 +294,7 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
 // resolve is a fragment pass with a pre-pass target on every device (LLStochasticEngine::computeResolve:
 // GL compute stalls the frame in motion); the compute shader with imageStore (GL 4.3, GLSL 4.30) is kept
-// for A/B tests (VKSTORM_STOCH_COMPUTE_RESOLVE=1) and the Vulkan renderer. The
+// compiled for the Vulkan renderer; the OpenGL viewer never selects it. The
 // device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
@@ -1150,7 +1150,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // without them the variants are not built, the method is not ready (logged) and the blended
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
     // method); the viewer starts either way. The engine's resolve object is the fragment path's
-    // (the default on every device; compute is A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1); the compute resolve
+    // (the one path on every device); the compute resolve
     // compiles its own objects.
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
@@ -3433,8 +3433,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         // The temporal resolve is only the accumulation across frames: a build failure turns that
         // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
         // history), never the transparency and never another method. The path is decided once
-        // (LLStochasticEngine::computeResolve: the fragment resolve is the default on every device; compute is
-        // A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1) and exactly one is built.
+        // (LLStochasticEngine::computeResolve: the fragment resolve on every device;
+        // compute is never chosen in the OpenGL viewer) and exactly one is built.
         gAlphaStochasticResolveProgram.mName = "Alpha Stochastic Temporal Resolve";
         gAlphaStochasticResolveProgram.mShaderFiles.clear();
         gAlphaStochasticResolveProgram.clearPermutations();
