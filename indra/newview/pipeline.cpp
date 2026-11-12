@@ -9100,6 +9100,11 @@ void LLPipeline::releaseLocalLightRatio()
     mLocalRatioTex = 0;
     mLocalRatioLights.clear();
     LLStochasticEngine::deleteTexture(mLocalLightTableTex);
+    if (mLocalLightTableUBO)
+    {
+        glDeleteBuffers(1, &mLocalLightTableUBO);
+        mLocalLightTableUBO = 0;
+    }
     LLStochasticEngine::deleteTexture(mLocalLightTilesTex);
     mLocalLightTilesW = mLocalLightTilesH = 0;
     mLocalLightTableFailed = false;
@@ -9108,6 +9113,11 @@ void LLPipeline::releaseLocalLightRatio()
     mLocalLightRowCount = 0;
     sProjectorLuminance.clear();
 }
+
+// The share of a light's radius the ratio's tile lists cover: beyond it the weight (1 - d / s)^2 n.l is under 0.5 % of the light's
+// peak, and the light is lit unshadowed there (1 - sqrt(0.005)). The worn lights' reach is localLightWeightUtil.glsl's WORN_REACH.
+static constexpr F32 LL_RATIO_RADIUS = 0.9293f;
+static constexpr F32 LL_RATIO_WORN_REACH = 6.f;
 
 // The table of the lights the passes draw, the same set and the same rules as the loop of renderDeferredLighting (keep
 // them together): the same cut by RenderLocalLightCount, nearby, not muted, attached lights if shown, radius and colour not
@@ -9195,11 +9205,22 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
             const glm::vec3 tc = mul_mat4_vec3(mat, glm::vec3(agent.mV[0], agent.mV[1], agent.mV[2]));
             F32* row = &mLocalLightRows[size_t(mLocalLightRowCount) * ROW_TEXELS * 4];
             row[0] = tc.x; row[1] = tc.y; row[2] = tc.z; row[3] = s;
-            row[4] = col.mV[0]; row[5] = col.mV[1]; row[6] = col.mV[2]; row[7] = volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF);
+            // a worn light follows #437's caps for shadow purposes: its weight's colour is capped at 1.0 (the light passes keep
+            // the real light) and it casts within WORN_REACH (localLightWeightUtil.glsl); beyond that it is lit unshadowed
+            const bool worn = volume->isAttachment();
+            F32 cap = 1.f;
+            if (worn)
+            {
+                cap = 1.f / llmax(1.f, llmax(col.mV[0], llmax(col.mV[1], col.mV[2])));
+            }
+            row[4] = col.mV[0] * cap; row[5] = col.mV[1] * cap; row[6] = col.mV[2] * cap; row[7] = volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF);
             row[8] = tc.x; row[9] = tc.y; row[10] = tc.z; row[11] = 0.f;
             row[12] = 1.f;   // the projector's texture, as its average luminance
             // the emitter: the disc its rays go toward (radius s) and the exclusion zone of its own prim, from its scale (lllocallight.h)
             const LLVector3 scale = volume->getScale();
+            bool projector = false;
+            glm::vec3 projector_eye(0.f);
+            glm::mat4 to_view(1.f);
             if (volume->isLightSpotlight())
             {
                 LLSpotProjection sp;
@@ -9209,18 +9230,70 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
                 row[13] = LLLocalLight::projectorEmitterRadius(scale.mV[VX], scale.mV[VY]);
                 row[14] = LLLocalLight::projectorExclusion(scale.mV[VY], volume->getSpotLightParams().mV[0]);
                 memcpy(&row[16], glm::value_ptr(sp.screen_to_light), sizeof(F32) * 16);
+                projector = true;
+                projector_eye = sp.origin;
+                to_view = glm::inverse(sp.screen_to_light);
             }
             else
             {
                 row[13] = LLLocalLight::pointEmitterRadius(scale.mV[VX], scale.mV[VY], scale.mV[VZ]);
                 row[14] = LLLocalLight::exclusionRadius(drawablep->getRadius(), row[13]);
             }
+            row[15] = worn ? 1.f : 0.f;
             if (slot >= 0)
             {
                 mLocalSlotLight[slot] = (F32)mLocalLightRowCount;
                 mLocalSlotChanged[slot] = mShadowSTSpotUnchanged[slot] ? 0.f : 1.f;
             }
-            entries.push_back({ drawablep, sphereScreenRect(glm::value_ptr(tc), s, glm::value_ptr(proj), (S32)width, (S32)height) });
+            // the screen rectangle the light can reach: its sphere cut at LOCAL_RATIO_RADIUS of its reach (beyond it the weight is
+            // under 0.5 % of the light's peak and the light is lit unshadowed), WORN_REACH at most for a worn light, and for a
+            // projector also its frustum, the four far corners at that reach from the eye (the weight cuts at no far plane)
+            const F32 reach = worn ? llmin(s, LL_RATIO_WORN_REACH) : s;
+            const F32 eff = reach * LL_RATIO_RADIUS;
+            Rect rect = sphereScreenRect(glm::value_ptr(tc), eff, glm::value_ptr(proj), (S32)width, (S32)height);
+            if (projector && !rect.empty())
+            {
+                const F32 far_d = glm::length(tc - projector_eye) + eff;
+                F32 fx0 = 1.0e9f, fy0 = 1.0e9f, fx1 = -1.0e9f, fy1 = -1.0e9f;
+                bool bounded = true;
+                const glm::vec4 apex = proj * glm::vec4(projector_eye, 1.f);
+                if (apex.w <= 1.0e-4f)
+                {
+                    bounded = false;
+                }
+                for (int corner = 0; corner < 4 && bounded; ++corner)
+                {
+                    const glm::vec4 v = to_view * glm::vec4((corner & 1) ? 1.02f : -0.02f, (corner & 2) ? 1.02f : -0.02f, 1.f, 1.f);
+                    if (v.w == 0.f)
+                    {
+                        bounded = false;
+                        break;
+                    }
+                    const glm::vec3 dir = glm::normalize(glm::vec3(v) / v.w - projector_eye);
+                    const glm::vec4 c = proj * glm::vec4(projector_eye + dir * far_d, 1.f);
+                    if (c.w <= 1.0e-4f)
+                    {
+                        bounded = false;
+                        break;
+                    }
+                    const F32 sx = (c.x / c.w * 0.5f + 0.5f) * (F32)width;
+                    const F32 sy = (c.y / c.w * 0.5f + 0.5f) * (F32)height;
+                    fx0 = llmin(fx0, sx); fx1 = llmax(fx1, sx);
+                    fy0 = llmin(fy0, sy); fy1 = llmax(fy1, sy);
+                }
+                if (bounded)
+                {
+                    const F32 ax = (apex.x / apex.w * 0.5f + 0.5f) * (F32)width;
+                    const F32 ay = (apex.y / apex.w * 0.5f + 0.5f) * (F32)height;
+                    fx0 = llmin(fx0, ax); fx1 = llmax(fx1, ax);
+                    fy0 = llmin(fy0, ay); fy1 = llmax(fy1, ay);
+                    rect.x0 = llmax(rect.x0, (S32)llclamp(floorf(fx0) - 1.f, 0.f, (F32)width));
+                    rect.y0 = llmax(rect.y0, (S32)llclamp(floorf(fy0) - 1.f, 0.f, (F32)height));
+                    rect.x1 = llmin(rect.x1, (S32)llclamp(ceilf(fx1) + 1.f, 0.f, (F32)width));
+                    rect.y1 = llmin(rect.y1, (S32)llclamp(ceilf(fy1) + 1.f, 0.f, (F32)height));
+                }
+            }
+            entries.push_back({ drawablep, rect });
             ++mLocalLightRowCount;
         }
     }
@@ -9347,7 +9420,14 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
 
     // upload: the table (made once), the tile list (made again when the screen's size changes), the tiles of the rectangle only
     using namespace LLLocalLightTable;
-    if (!mLocalLightTableTex && !mLocalLightTableFailed)
+    if (gLocalLightTableUBO)
+    {
+        if (!mLocalLightTableUBO)
+        {
+            glGenBuffers(1, &mLocalLightTableUBO);
+        }
+    }
+    else if (!mLocalLightTableTex && !mLocalLightTableFailed)
     {
         mLocalLightTableTex = LLStochasticEngine::newTexture2D(GL_RGBA32F, ROW_TEXELS, MAX_LIGHTS, GL_RGBA32F);
         mLocalLightTableFailed = mLocalLightTableTex == 0;
@@ -9360,23 +9440,32 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
     }
     if (!mLocalLightTilesTex && !(mLocalLightTilesFailedW == tiles_w && mLocalLightTilesFailedH == tiles_h))
     {
-        mLocalLightTilesTex = LLStochasticEngine::newTexture2D(GL_R8UI, tiles_w, tiles_h, GL_R8, nullptr, GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+        // zeroed: the tiles outside the rectangle are never uploaded and the shader reads their count
+        const std::vector<U8> zeros(size_t(tiles_w) * size_t(tiles_h), 0);
+        mLocalLightTilesTex = LLStochasticEngine::newTexture2D(GL_R8UI, tiles_w, tiles_h, GL_R8, zeros.data(), GL_RED_INTEGER, GL_UNSIGNED_BYTE);
         mLocalLightTilesW = mLocalLightTilesTex ? tiles_w : 0;
         mLocalLightTilesH = mLocalLightTilesTex ? tiles_h : 0;
         mLocalLightTilesFailedW = mLocalLightTilesTex ? 0 : tiles_w;
         mLocalLightTilesFailedH = mLocalLightTilesTex ? 0 : tiles_h;
     }
-    if (!mLocalLightTableTex || !mLocalLightTilesTex)
+    if ((gLocalLightTableUBO ? !mLocalLightTableUBO : !mLocalLightTableTex) || !mLocalLightTilesTex)
     {
         LL_WARNS_ONCE("Pipeline") << "Stochastic shadows: the local light table could not be allocated; the projectors cast no shadow" << LL_ENDL;
         return false;
     }
     gGL.flush();
-    GLint prev_alignment = 4;
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_alignment);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ROW_TEXELS, (GLsizei)mLocalLightRowCount, GL_RGBA, GL_FLOAT, mLocalLightRows.data());
+    // (the viewer sets GL_UNPACK_ALIGNMENT 1 globally, llrender.cpp)
+    if (gLocalLightTableUBO)
+    {   // orphaned: the previous frame's draw may still read the old storage
+        glBindBuffer(GL_UNIFORM_BUFFER, mLocalLightTableUBO);
+        glBufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)(mLocalLightRows.size() * sizeof(F32)), mLocalLightRows.data(), GL_STREAM_DRAW);
+        glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    }
+    else
+    {
+        gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ROW_TEXELS, (GLsizei)mLocalLightRowCount, GL_RGBA, GL_FLOAT, mLocalLightRows.data());
+    }
     {
         const S32 tx0 = mLocalRatioRect[0] / TILE, ty0 = mLocalRatioRect[1] / TILE;
         const S32 tx1 = (mLocalRatioRect[2] - 1) / TILE, ty1 = (mLocalRatioRect[3] - 1) / TILE;
@@ -9386,7 +9475,6 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
                         mLocalLightTiles.data() + size_t(ty0) * size_t(tiles_w) + size_t(tx0) * TILE_ROW);
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     }
-    glPixelStorei(GL_UNPACK_ALIGNMENT, prev_alignment);
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
     static const LLStaticHashedString sShadowSTFrame("shadow_st_frame");
@@ -9419,20 +9507,27 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
         shader.uniform2fv(sSlotLight, 1, mLocalSlotLight);
         shader.uniform2fv(sSlotChanged, 1, mLocalSlotChanged);
         shader.uniform2fv(sSlotFade, 1, mLocalSlotFade);
-        // unified lighting U2: the screen march's projection, its most steps (the survey's clamp(ceil(px / 32), 2, 6)) and its
-        // rays per pixel (2 of the 8 by default; the floor tier shoots 1). Debug settings: structural, no Preferences entry.
+        // unified lighting U2: the screen march's projection, its most steps (the survey's clamp(ceil(px / 32), 2, N), N 4 by default, 2 to 8) and its
+        // rays per pixel (2 of the 8 by default; the floor tier shoots 1: fewer rays, a little cheaper, more noise). Debug settings: structural, no Preferences entry.
         static const LLStaticHashedString sMarchProj("st_march_proj");
         static const LLStaticHashedString sStepsMax("ratio_steps_max");
         static const LLStaticHashedString sRatioRays("ratio_rays");
-        static LLCachedControl<S32> steps_max(gSavedSettings, "RenderLocalShadowStepsMax", 6);
+        static LLCachedControl<S32> steps_max(gSavedSettings, "RenderLocalShadowStepsMax", 4);
         static LLCachedControl<bool> floor_tier(gSavedSettings, "RenderLocalShadowFloorTier", false);
         shader.uniformMatrix4fv(sMarchProj, 1, GL_FALSE, glm::value_ptr(get_current_projection()));
         shader.uniform1i(sStepsMax, llclamp((S32)steps_max, 2, 8));
         shader.uniform1i(sRatioRays, floor_tier ? 1 : 2);
-        const S32 table_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
-        if (table_unit > -1)
+        if (gLocalLightTableUBO)
         {
-            gGL.getTexUnit(table_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+            glBindBufferBase(GL_UNIFORM_BUFFER, LLGLSLShader::UB_LOCAL_LIGHT_TABLE, mLocalLightTableUBO);
+        }
+        else
+        {
+            const S32 table_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
+            if (table_unit > -1)
+            {
+                gGL.getTexUnit(table_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+            }
         }
         const S32 tiles_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TILES);
         if (tiles_unit > -1)
@@ -9461,7 +9556,10 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
                 mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
             }
         }
-        shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
+        if (!gLocalLightTableUBO)
+        {
+            shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
+        }
         shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TILES);
         unbindDeferredShader(shader);
     }

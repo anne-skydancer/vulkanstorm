@@ -159,7 +159,7 @@ void main()
 #if defined(LOCAL_LIGHT_RATIO)
     if (local_ratio_on != 0)
     {
-        final_color *= texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale;
+        final_color *= clamp(texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale, vec3(0.0), vec3(1.0));
     }
 #endif
     float final_scale = 1.0;

@@ -163,6 +163,7 @@ LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Sto
 LLGLSLShader            gLocalLightRatioProgram;           // <Vulkanstorm/> unified lighting U1: the shadow pool's local light ratio
 LLGLSLShader            gLocalLightRatioResolveProgram;    // <Vulkanstorm/> and its temporal resolve
 bool                    gAlphaStochasticShadersReady = false;
+bool                    gLocalLightTableUBO = false;   // <Vulkanstorm/> unified lighting U2: the ratio pass reads the light table from a uniform block
 // </Vulkanstorm>
 
 // Deferred rendering shaders
@@ -3613,6 +3614,15 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gLocalLightRatioProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gLocalLightRatioProgram);
         gLocalLightRatioProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");   // it reads the depth buffer, as the sun pass does
+        {   // the table (256 rows x 8 vec4 = 32 KB) in a std140 uniform block where the device's blocks hold it, else in a texture
+            GLint max_block = 0;
+            glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &max_block);
+            gLocalLightTableUBO = max_block >= 32768;
+            if (gLocalLightTableUBO)
+            {
+                gLocalLightRatioProgram.addPermutation("LOCAL_LIGHT_TABLE_UBO", "1");
+            }
+        }
 
         gLocalLightRatioResolveProgram.mName = "Local Light Ratio Resolve";
         gLocalLightRatioResolveProgram.mShaderFiles.clear();

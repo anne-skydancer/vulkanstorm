@@ -30,7 +30,8 @@ uniform sampler2D depthMap;
 uniform vec2 screen_res;
 uniform mat4 st_march_proj;
 
-#define ST_SCREEN_THICK_MIN 0.5    // metres: the thickness a surface in the depth buffer is taken to have, at least
+#define ST_SCREEN_THICK_MIN 0.3   // metres: the thickness a surface in the depth buffer is taken to have, at least (a pole 0.35 m in front of a wall throws no halo; 0.5 does)
+#define ST_SCREEN_THICK_REL 0.0   // and this share of the receiver's distance (0.04 with 0.2 measured no better)
 
 // view-space distance in front of the camera of a depth buffer value (the clip w of the standard projection)
 float stLinearDepth(float z)
@@ -39,11 +40,12 @@ float stLinearDepth(float z)
 }
 
 // One ray from the receiver p (view space, already off its surface) to the emitter point e: 1 when blocked, 0 when free.
-// c0: the receiver in clip space. The ray ends xr short of e (the light's exclusion zone: its own prim) and no farther than
-// `reach` from the receiver, and in front of the near plane. The steps (at least 2, at most `steps_max`) grow with the ray's
-// length on screen, clamp(ceil(px / 32)), are spaced densely near the receiver, and start at a jitter in [0, 1) that the
-// ray index k rotates.
-float stMarchRayScreen(vec3 p, vec4 c0, vec3 e, float xr, float reach, float jitter, int k, int steps_max)
+// c0: the receiver in clip space; eye, rej: the emitter's eye and the distance from it within which a hit is the light's own
+// housing. The ray ends xr short of e (the light's exclusion zone: its own prim) and no farther than `reach` from the receiver,
+// and in front of the near plane (read from the projection). The steps (at least 2, at most `steps_max`) grow with the ray's
+// length on screen, clamp(ceil(px / 32)), are spaced densely near the receiver, and start at a jitter in [0, 1) that the ray
+// index k rotates.
+float stMarchRayScreen(vec3 p, vec4 c0, vec3 e, float xr, float reach, float jitter, int k, int steps_max, vec3 eye, float rej)
 {
     vec3 dir = e - p;
     float len = length(dir);
@@ -51,17 +53,19 @@ float stMarchRayScreen(vec3 p, vec4 c0, vec3 e, float xr, float reach, float jit
     float tmax = min(len - xr, reach);
     if (dir.z > 0.0)
     {
-        tmax = min(tmax, (-0.26 - p.z) / dir.z);
+        float near_z = st_march_proj[3][2] / (st_march_proj[2][2] - 1.0);   // the near plane's distance
+        tmax = min(tmax, (-1.05 * near_z - p.z) / dir.z);
     }
     if (tmax <= 0.0)
     {
         return 0.0;
     }
-    vec4 c1 = st_march_proj * vec4(p + dir * tmax, 1.0);
+    vec3 q = p + dir * tmax;
+    vec4 c1 = st_march_proj * vec4(q, 1.0);
     float lpx = length((c1.xy / c1.w - c0.xy / c0.w) * 0.5 * screen_res);
     int steps = clamp(int(ceil(lpx / 32.0)), 2, steps_max);
     float j = fract(jitter + 0.618034 * float(k));
-    float thick = max(ST_SCREEN_THICK_MIN, 2.0 * abs(c1.w - c0.w) / float(steps));
+    float thick = max(max(ST_SCREEN_THICK_MIN, ST_SCREEN_THICK_REL * c0.w), 2.0 * abs(c1.w - c0.w) / float(steps));
     for (int i = 0; i < steps; ++i)
     {
         float u = (float(i) + j) / float(steps);
@@ -75,7 +79,11 @@ float stMarchRayScreen(vec3 p, vec4 c0, vec3 e, float xr, float reach, float jit
         float ls = stLinearDepth(texelFetch(depthMap, ivec2(uv * screen_res), 0).r);
         if (c.w > ls + 0.002 * c.w && c.w - ls < thick)
         {
-            return 1.0;
+            vec3 d = mix(p, q, u) * (ls / c.w) - eye;   // the surface point on the pixel's view ray
+            if (dot(d, d) > rej * rej)
+            {
+                return 1.0;
+            }
         }
     }
     return 0.0;

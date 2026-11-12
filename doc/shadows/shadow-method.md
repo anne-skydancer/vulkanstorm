@@ -223,33 +223,47 @@ The ratio pass no longer needs a mapped projector. Every local light of the tabl
 stochastic pick per pixel and a screen-space march (Stochastic only; Legacy and the sun are untouched).
 
 - **The estimator** (`localLightRatioF.glsl`, the shadow pool). Over the pixel's tile list the pixel computes each light's weight
-  (`localLightWR`: the light pool's, with the light's share of its own peak; a light under 2 % of its peak at the pixel is left
-  out) and picks ONE light j with probability p_j = ws_j / sum ws (a stratified reservoir; LOCAL_PICK stream). It shoots 2 of the
-  8 rays at j's emitter disc (the pixel's lane of its 2 x 2 quad; the quad shares the rays' rotation, LOCAL_RAYS stream), each a
-  march through the camera's depth buffer (`stMarchRayScreen`, in the core: `stochasticScreenMarchUtil.glsl`) and, where j is one of
-  the two mapped projectors, also through its depth map ("blocked by either": a map only adds shadow). The occluded part of the
-  pixel's light is D_c = (blocked / rays) w_jc / p_j, R_c = 1 - D_c / sum_i w_ic: unbiased (every light that reaches the pixel has
-  p > 0). The quad's four pixels average their D over the pixels with light at the same depth (3 %, derivatives; a pixel with no
-  light is R = 1). The resolve (unchanged) averages the frames.
-- **The march.** Steps clamp(ceil(px length / 32), 2, `RenderLocalShadowStepsMax` (debug, 6)), dense near the receiver, a jitter per
-  ray; a surface in the depth buffer blocks where the ray is behind it by at most 0.5 m (`ST_SCREEN_THICK_MIN`) or the step's
-  depth span. It sees only what the depth buffer holds: occluders off screen, back sides of thick objects and things thinner than
-  the step spacing are missed or caught partially (the hint tier of a later stage covers some). `RenderLocalShadowFloorTier` (debug)
-  shoots 1 ray per pixel instead of 2 (the floor of the effort budget; the budget controller itself is U3, so the tier is fixed
-  until then, default off; the 4 x 4 block floor the owner chose is not built, this is the cheaper approximation of it).
-- **Emitter and exclusion** (table texel 3, y and z; `lllocallight.h`). Point lights: radius s = half the median scale, exclusion
-  radius = half the drawable's radius (the scale diagonal), clamped to s .. 1 m; the march ends that far short of the centre, so the
-  own prim is excluded and linked parts cast. Projectors: s from the face (`projectorEmitterRadius`, replacing U0's fixed 0.075 m
-  also for the maps) and U0's stretch to the face + 5 cm.
+  (`localLightWeight`: the light pool's) and picks ONE light j with probability p_j = ws_j / sum ws: a reservoir with one uniform
+  number, remapped after each candidate (u = take ? u / pp : (u - pp) / (1 - pp)) so the draws are independent and the pick is
+  exactly proportional (a golden-step version was off by up to 43 % per list position; the gate measures under 0.5 %). It shoots 2
+  of the 8 rays at j's emitter disc (the pixel's lane of its 2 x 2 quad; the quad shares the rays' rotation, LOCAL_RAYS stream),
+  each a march through the camera's depth buffer (`stMarchRayScreen`, in the core: `stochasticScreenMarchUtil.glsl`) and, where j is
+  one of the two mapped projectors, also through its depth map ("blocked by either": a map only adds shadow; the slot's fade-in
+  now weights the map's blocked rays, where U1 clamped visibility + fade). The occluded part of the pixel's light is
+  D_c = a (blocked / rays) w_jc / p_j, R_c = 1 - D_c / sum_i w_ic, unbiased. The quad's four pixels average D over the pixels with
+  light at the same depth (3 %, `dFdxFine`; without `GL_ARB_derivative_control` or GLSL 4.50 the program keeps each pixel's own
+  estimate). The resolve (unchanged) averages the frames.
+- **No pop.** There is no per-light cut at a share of its own peak. A pick under 0.5 % of the pixel's total light is lit
+  unshadowed, weighted by a = smoothstep(0.5 t, t, ws_j), t = 1 % of the total, and its march is skipped: continuous along a light's
+  radius (the first version's 2 %-of-peak cut popped the ratio by 0.8 where the true shadow was 0.2 to 0.4).
+- **Signed estimate, wide history.** A single pick's share of a channel can exceed the channel's total, so the estimate is written
+  unclamped; the ratio history is RGBA16F and the light passes clamp on read. (The clamp had biased a red lamp's shadow by +0.013.)
+  The engine's shared 3 x 3 neighbourhood clamp in the resolve is unchanged; with a noisy raw it cuts the history's skewed tail and
+  biases a coloured shadow by about +0.018 (measured by the shader expert on a red/blue scene): known, for the engine's owner.
+- **The march.** Steps clamp(ceil(px length / 32), 2, `RenderLocalShadowStepsMax` (debug, 4 by default, clamped to 2 to 8)), dense
+  near the receiver, a jitter per ray, stopped at the near plane read from the projection. A surface in the depth buffer blocks where
+  the ray is behind it by at most 0.3 m (`ST_SCREEN_THICK_MIN`) or the step's depth span, and a hit within r_excl + 5 cm of the
+  emitter's eye is the light's own housing and does not block. Thickness 0.5 m threw a halo (a pole 0.35 m in front of a wall
+  shadowed the wall: mean 1-R 0.07); 0.3 m passes (0.003) and 0.15 m is exact but catches a thin shelf less. Club acne is
+  independent of it (the step span dominates on long rays). It sees only what the depth buffer holds: occluders off screen, back
+  sides of thick objects and things thinner than the step spacing are missed or caught partially (a 2 cm shelf: mean R 0.83 in its
+  umbra). `RenderLocalShadowFloorTier` (debug) shoots 1 ray per pixel: fewer rays, a little cheaper, more noise; the owner's 4 x 4
+  block floor is not built.
+- **Emitter and exclusion** (table texel 3; `lllocallight.h`). Point lights: s = half the median scale, exclusion radius = half the
+  drawable's radius (the scale diagonal) clamped to s .. 1 m: the own prim is excluded and linked parts cast. Projectors: s from the
+  face (`projectorEmitterRadius`, replacing U0's fixed 0.075 m also for the maps) and U0's stretch to the face + 5 cm.
+- **Worn lights** cast under #437's caps, for shadow purposes only: the table's colour is capped at max component 1.0, the weights
+  and the march reach stop at 6 m, and beyond 6 m the light is lit unshadowed (out of the pixel's weights); the light passes keep
+  the real light. The code had no other worn-light limit: attachments pass the same filters as any light.
 - **Noise.** LOCAL_RAYS and LOCAL_PICK have their own streams: the pixel lattice turned by a per-stream angle with its own
-  multiplier, R2 offset and phase (a mere shift would leave a stream a fixed function of another). SUN_RAYS is unchanged (the sun
-  pass is bit identical to U1). The gate measures all pairwise correlations (pixels, frames, quad corners) under 1 to 2 %.
-- **Table and tiles.** Every light is in the table (the mapped projectors first); the screen rectangle is the union of the lights'
-  rectangles instead of the projectors' frustums.
-- **Worn lights.** The code has no worn-light cap: attachments pass the same filters as any light (`RenderAttachedLights`, avatars
-  too complex, muted or too slow, HUDs, `RenderLocalLightCount`, the 256 table and 32 tile caps) and cast on the same terms.
-  #437's proposed caps (1.0 U, reach 6 m) and its "worn, tiny and dim lights do not cast" are not in this tree and are not applied.
-- **Gates** (`scripts/perf/test_local_light_u2.py`) and measured costs: see the PR.
+  multiplier, R2 offset and phase. SUN_RAYS is unchanged (the sun pass is bit identical to U1).
+- **Table and tiles.** Every light is in the table (the mapped projectors first), in a std140 uniform block of 256 rows (32 KB,
+  orphaned each frame; a texture on a device whose blocks hold less): a warp reads one row, which the constant cache broadcasts
+  (the texture pipe was the loop's bound). The screen rectangle of a light is its sphere at 0.9293 of its reach (beyond it the weight
+  is under 0.5 % of the light's peak), cut by a projector's frustum with the four far corners at that reach from the eye; the
+  ratio's rectangle is the union. The 32-per-tile rule on the CPU lists is unchanged (a light that misses a tile leaves the ratio).
+  A GPU depth-bounds tile cull was studied (club 0.64 to 0.46 ms) and is not in this stage.
+- Gates, costs and what is not verified: the PR.
 
 ## Shared by all methods
 

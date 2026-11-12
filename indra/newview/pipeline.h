@@ -868,11 +868,12 @@ public:
     // unified lighting U1: the shadow pool's local light ratio (rgb, 10 bits) in the stochastic engine's history, the
     // light pool's table (8 RGBA32F texels per light) and its 32 x 32 screen tile list (R8UI rows). All render thread only:
     // made and read in renderDeferredLighting, freed in releaseScreenBuffers.
-    LLStochasticHistory mLocalRatioHistory{ GL_RGB10_A2, 1.f / 8.f };
+    LLStochasticHistory mLocalRatioHistory{ GL_RGBA16F, 1.f / 8.f };   // signed, unclamped ratio (the light passes clamp on read)
     U32 mLocalRatioFailedWidth = 0;
     U32 mLocalRatioFailedHeight = 0;
     bool mLocalRatioActive = false;
-    U32 mLocalLightTableTex = 0;
+    U32 mLocalLightTableTex = 0;        // the table as a texture (a device whose uniform blocks hold less than 32 KB)
+    U32 mLocalLightTableUBO = 0;        // or as a std140 uniform block (gLocalLightTableUBO), orphaned each frame
     U32 mLocalLightTilesTex = 0;
     S32 mLocalLightTilesW = 0;          // the tile texture's size, texels
     S32 mLocalLightTilesH = 0;
