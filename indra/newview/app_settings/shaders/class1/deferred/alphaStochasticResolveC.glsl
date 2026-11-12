@@ -19,7 +19,7 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// GL 4.3 compute, A/B only in the OpenGL viewer (VKSTORM_STOCH_COMPUTE_RESOLVE=1; the fragment resolve, alphaStochasticResolveF.glsl, is the default on every device). The transparency's part of the
+// GL 4.3 compute, never selected by the OpenGL viewer (the fragment resolve, alphaStochasticResolveF.glsl, is used on every device). The transparency's part of the
 // stochastic engine's temporal resolve (stochasticResolveUtilF.glsl, compiled as a second compute
 // object of this program). The accumulated colour of this frame (alpha x colour, alpha, averaged
 // over the samples) is blended with the last frame's blended colour where this pixel's nearest

@@ -19,7 +19,8 @@ FORBIDDEN = re.compile(
     r"FocusMemory|TextureDeliveryTest|FocusRenderProbe|RenderAlphaOITProfile|OITProfileSample|"
     r"sCompletionPending|sampleSourceMemory|accumulateSourceMemory|"
     r"getOwnedRawBytes|getPeakOwnedRawBytes|getOwnedOtherImageBytes|getDetachedRawBytes|"
-    r"getCPUVertexBytes|getCPUIndexBytes|USE_TRACY_MEMORY)\b"
+    r"getCPUVertexBytes|getCPUIndexBytes|USE_TRACY_MEMORY|"
+    r"VKS_GL_STATS|VKS_GL(?:STAT|CMP)\w*|LLGLSubmit\w+|RenderGLSubmit\w+|llglsubmitstats\w*)\b"
 )
 
 
