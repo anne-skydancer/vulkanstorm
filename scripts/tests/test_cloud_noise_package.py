@@ -144,13 +144,11 @@ class CloudNoisePackageWiringTest(unittest.TestCase):
         text = (ROOT / 'indra/newview/llappviewer.cpp').read_text(encoding='utf-8')
         start = text.index('LLCloudNoise::loadAndVerify')
         block = text[start:text.index('// </Vulkanstorm>', start)]
-        self.assertIn('MBCloudNoiseDamaged', block)
-        self.assertIn('OSMessageBox', block)
-        self.assertIn('return false;', block)
-        self.assertIn('removeMarkerFiles()', block)
+        # until L7-2 draws the clouds, a missing or damaged file is a warning, not an exit
+        self.assertIn('LL_WARNS("InitInfo")', block)
+        self.assertNotIn('OSMessageBox', block)
+        self.assertNotIn('return false;', block)
         self.assertNotIn('LL_ERRS', block)
-        strings = (ROOT / 'indra/newview/skins/default/xui/en/strings.xml').read_text(encoding='utf-8')
-        self.assertIn('name="MBCloudNoiseDamaged"', strings)
 
 
 if __name__ == '__main__':

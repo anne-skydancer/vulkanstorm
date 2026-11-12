@@ -375,11 +375,15 @@ Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `g
 textures; the compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
 2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
 sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (160 bytes a
-pixel); the compute resolve (144 bytes a pixel) only when `VKSTORM_STOCH_COMPUTE_RESOLVE=1` forces it on a GL 4.3 device. There is no fallback otherwise (a history or
-temporal resolve that fails only drops the accumulation, each frame keeps its 8 samples; particles and
-custom-blend draws are hidden while the engine is not ready): a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
-30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
-then the main view's blended faces are not drawn. A snapshot larger than the window is taken in tiles
+pixel); the compute resolve (144 bytes a pixel) only when `VKSTORM_STOCH_COMPUTE_RESOLVE=1` forces it on a GL 4.3 device. A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+allocation, a resize, a shader set that did not build) draws sorted alpha for as long as that lasts, and
+Legacy shadows when a stochastic shadow shader failed or the targets could not be made
+(`LLStochasticEngine::requestFallback`): a run-time fallback by owner decision (2026-11-12), an explicit
+exception to the no-fallback rule. It is logged once, the notice `StochasticFallback` ("Stochastic model could not
+load, falling back to legacy alpha and shadow processing.") is shown once per session, the saved
+`RenderAlphaSortMethod` and `RenderShadowMethod` are not rewritten, a failed allocation is tried again (every frame loop: 1 s, doubling to
+30 s) and a shader set at the next shader reload, and stochastic transparency returns by itself when they succeed.
+A history or temporal resolve that fails only drops the accumulation: each frame keeps its 8 samples. A snapshot larger than the window is taken in tiles
 if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
 
 ## Tests and measurements

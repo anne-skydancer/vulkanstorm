@@ -320,7 +320,7 @@ runs:
         mv "${packages[0]}" "$renamed"
         echo "Linux package: $(basename "$renamed")" >> "$GITHUB_STEP_SUMMARY"
 
-    # The volumetric clouds' noise file is required (the viewer exits at start-up without it). Every build checks
+    # The volumetric clouds' noise file is part of the package (the viewer only warns when it is missing, until the clouds draw). Every build checks
     # the file in the staged viewer against the hash in indra/cmake/CloudNoise.cmake and that its licence texts
     # are staged: this covers autobuild -> CMake -> viewer_manifest.py.
     - name: Check the staged cloud noise file

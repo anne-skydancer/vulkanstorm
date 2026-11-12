@@ -399,7 +399,7 @@ static void unload_stochastic_shaders()
 // <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
 static bool use_stochastic_shadows()
 {
-    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 // </Vulkanstorm>
 
@@ -747,6 +747,7 @@ void LLViewerShaderMgr::setShaders()
     }
 
     mShaderList.clear();
+    LLStochasticEngine::clearFallbackForReload();   // <Vulkanstorm/> a full reload starts from the stochastic engine again
 
     if (!gGLManager.mHasRequirements)
     {
@@ -1065,7 +1066,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     // <Vulkanstorm> every shadow method but Legacy multiplies N.L by the shadow (sunShadowedDiffuse
     // in deferredUtil.glsl); Legacy leaves it undefined and keeps min()
-    if (LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()) != LLShadowMethod::LEGACY)
+    if (LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) != LLShadowMethod::LEGACY)
     {
         attribs["SHADOW_NL_MULTIPLY"] = "1";
     }
@@ -3496,6 +3497,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
+            if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
+            {
+                LLStochasticEngine::requestFallback("a stochastic transparency shader did not build", false);
+            }
             LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the blended faces are not drawn until the "
                                   "shaders build (the next shader reload tries again)" << LL_ENDL;
         }
@@ -3546,6 +3551,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
                                   "without accumulation (the next shader reload tries again)" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
+            LLStochasticEngine::requestFallback("a stochastic shadow shader did not build", false);
         }
     }
     // </Vulkanstorm>

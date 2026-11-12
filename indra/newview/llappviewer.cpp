@@ -1185,25 +1185,23 @@ bool LLAppViewer::init()
 
     // *Note: this is where gViewerStats used to be created.
 
-    // <Vulkanstorm> The volumetric clouds' noise file is part of the installation and is required: if it is
-    // missing or is not the file this build was made with, say so and quit cleanly (no crash report), like
-    // the cache below. It needs only the application directory and the strings, so it comes first; checked on
-    // every machine, before any window or GL context exists. The verified bytes are not needed until the
-    // clouds draw (L7-2), which load and verify again: do not keep 8.6 MB for the whole session.
+    // <Vulkanstorm> The volumetric clouds' noise file is part of the installation. Nothing reads it before the
+    // clouds draw (L7-2), so until then a missing or damaged file is only logged and the viewer starts. It needs
+    // only the application directory, so it is checked here, on every machine, before any window or GL context
+    // exists. The verified bytes are not kept: the clouds load and verify again (do not hold 8.6 MB all session).
     {
         std::string noise_path, noise_error;
         const bool noise_ok = LLCloudNoise::loadAndVerify(noise_path, noise_error);
         LLCloudNoise::release();
         if (!noise_ok)
         {
-            LL_WARNS("InitInfo") << "Cloud noise file " << noise_path << ": " << noise_error << LL_ENDL;
-            std::string msg = LLTrans::getString("MBCloudNoiseDamaged");
-            OSMessageBox(msg.c_str(), LLStringUtil::null, OSMB_OK);
-            removeMarkerFiles(); // a clean exit: the next start must not report an unknown last exit
-            LL_PROFILER_FRAME_END;
-            return false;
+            LL_WARNS("InitInfo") << "Cloud noise file " << noise_path << ": " << noise_error
+                                 << " (the volumetric clouds are not drawn yet; reinstall the viewer)" << LL_ENDL;
         }
-        LL_INFOS("InitInfo") << "Cloud noise file verified: " << noise_path << LL_ENDL;
+        else
+        {
+            LL_INFOS("InitInfo") << "Cloud noise file verified: " << noise_path << LL_ENDL;
+        }
     }
     // </Vulkanstorm>
 
