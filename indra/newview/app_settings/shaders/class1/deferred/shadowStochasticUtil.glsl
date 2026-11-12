@@ -112,7 +112,13 @@ float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, floa
 // are t_0 = 0 (the receiver), jittered nodes denser near it, and t_max. A ray is blocked when the
 // stored surface at its position at t_i lies between its depths at t_i and t_{i+1} (a surface
 // crossed on the way), or when it is still behind the stored surface at t_max; in both the surface
-// must be nearer the light than the receiver's plane at that texel (stReference). Each read is one
+// must be nearer the light than the receiver's plane at that texel (stReference). The map holds one
+// layer: a higher caster (a canopy, a bird) hides a lower one (a roof) under it, so a ray that passed
+// the roof's height beneath the higher caster reads no crossing there, and drifts out of its outline
+// to find the roof "below" it. Such a ray is behind the stored surface at some step (the surface is
+// nearer the light than the step's far end); once it is, a texel holding a surface nearer the light
+// than the receiver that the ray has already passed (deeper than the ray) counts as blocking too.
+// Each read is one
 // texel, offset by up to half a texel per ray, so the frames' average is the texel-box filtered
 // visibility. g: the signed plane gradient; z_bias: the constant bias that moves the receiver's
 // reference depth towards the light; rp_max: the cap of the plane's offset.
@@ -126,6 +132,7 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max
         float j = fract(jitter + 0.618034 * float(k));
         vec2 jit = vec2(fract(j * 7.31 + 0.137 * float(k)), fract(j * 3.17 + 0.711 * float(k))) - 0.5;
         float blocked = 0.0;
+        bool behind = false; // the ray was behind the stored surface at an earlier step (a surface hid the ones below it)
         vec3 q = c; // the first interval starts at the receiver
         for (int i = 0; i < steps && blocked == 0.0; ++i)
         {
@@ -139,13 +146,18 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max
             {
                 blocked = 1.0;
             }
+            else if (behind && zs < ref && zs > q.z)
+            {
+                blocked = 1.0; // the ray passed this surface's depth beneath the surface that hid it
+            }
+            behind = behind || zs < qn.z - slack;
             q = qn;
         }
         if (blocked == 0.0)
         {
             float zs;
             float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
-            if (zs < q.z && zs < ref)
+            if ((zs < q.z || (behind && zs > q.z)) && zs < ref)
             {
                 blocked = 1.0;
             }
