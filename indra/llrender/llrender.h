@@ -226,13 +226,6 @@ public:
 
     void setHasMipMaps(bool hasMips) { mHasMipMaps = hasMips; }
 
-    // <Vulkanstorm> GL 3.3 sampler objects: bind a sampler object to this unit, where it
-    // overrides the bound texture's own filtering, wrap and compare state; 0 restores the
-    // texture's state. Whoever binds a sampler must bind 0 again after its pass.
-    void bindSampler(U32 sampler);
-    U32 getCurrSampler() const { return mCurrSampler; }
-    // </Vulkanstorm>
-
 protected:
     friend class LLRender;
 
@@ -240,7 +233,6 @@ protected:
     U32                 mCurrTexture;
     eTextureType        mCurrTexType;
     bool                mHasMipMaps;
-    U32                 mCurrSampler = 0; // <Vulkanstorm/> sampler object bound to this unit
 
     void debugTextureUnit(void);
     GLint getTextureSource(eTextureBlendSrc src);
@@ -391,7 +383,6 @@ public:
     void initVertexBuffer();
     void resetVertexBuffer();
     void shutdown();
-
 
     // Refreshes renderer state to the cached values
     // Needed when the render context has changed and invalidated the current state

@@ -177,9 +177,11 @@ alone as GLSL 1.50.
   `SHADOW_PLANE_BIAS_MAX_TEXELS`. The same length in metres in every cascade. `shadowCascadeSetup` computes
   the per-cascade scales, bias and cap once, and `shadowReceiverGeometry` the normal and its angle to the
   light once per pixel, only inside the shadow distance (sky and far pixels skip the four depth reads);
-  Stochastic calls them, and so can any other method. Under Stochastic `RenderShadowBias` and `RenderShadowOffset` no
-  longer act on the deferred sun pass (they stay for Legacy and the forward receivers' Legacy-style terms), and the
-  projector shadows keep their own bias.
+  Stochastic calls them, and so can any other method. Under Stochastic nothing reads `RenderShadowBias` and
+  `RenderShadowOffset`: every program that links a shadow util (the sun and probe passes, and the forward
+  `alphaF`, `pbralphaF`, `materialF`, `waterF` and `pbrmetallicroughnessF`) links Stochastic's util, which uses the
+  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. The projector shadows keep
+  their own bias (`spot_shadow_bias`, `spot_shadow_offset`) in both methods.
 
 What stage S2 changed in the image of the stable-cascade methods: no per-pixel bump pattern in the receiver
 plane (a normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
