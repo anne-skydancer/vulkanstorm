@@ -216,6 +216,41 @@ light-pool results into the shadow pool.
 - **Sun.** The sun pass drops the projector channels (the light map's b and a are 1); the sun history is RG16F.
 - **Threads.** Render thread only: the table and tiles are built in `renderDeferredLighting` and freed with the screen buffers.
 
+
+### Unified lighting U2: every light casts
+
+The ratio pass no longer needs a mapped projector. Every local light of the table that lights a visible pixel casts, by one
+stochastic pick per pixel and a screen-space march (Stochastic only; Legacy and the sun are untouched).
+
+- **The estimator** (`localLightRatioF.glsl`, the shadow pool). Over the pixel's tile list the pixel computes each light's weight
+  (`localLightWR`: the light pool's, with the light's share of its own peak; a light under 2 % of its peak at the pixel is left
+  out) and picks ONE light j with probability p_j = ws_j / sum ws (a stratified reservoir; LOCAL_PICK stream). It shoots 2 of the
+  8 rays at j's emitter disc (the pixel's lane of its 2 x 2 quad; the quad shares the rays' rotation, LOCAL_RAYS stream), each a
+  march through the camera's depth buffer (`stMarchRayScreen`, in the core: `stochasticScreenMarchUtil.glsl`) and, where j is one of
+  the two mapped projectors, also through its depth map ("blocked by either": a map only adds shadow). The occluded part of the
+  pixel's light is D_c = (blocked / rays) w_jc / p_j, R_c = 1 - D_c / sum_i w_ic: unbiased (every light that reaches the pixel has
+  p > 0). The quad's four pixels average their D over the pixels with light at the same depth (3 %, derivatives; a pixel with no
+  light is R = 1). The resolve (unchanged) averages the frames.
+- **The march.** Steps clamp(ceil(px length / 32), 2, `RenderLocalShadowStepsMax` (debug, 6)), dense near the receiver, a jitter per
+  ray; a surface in the depth buffer blocks where the ray is behind it by at most 0.5 m (`ST_SCREEN_THICK_MIN`) or the step's
+  depth span. It sees only what the depth buffer holds: occluders off screen, back sides of thick objects and things thinner than
+  the step spacing are missed or caught partially (the hint tier of a later stage covers some). `RenderLocalShadowFloorTier` (debug)
+  shoots 1 ray per pixel instead of 2 (the floor of the effort budget; the budget controller itself is U3, so the tier is fixed
+  until then, default off; the 4 x 4 block floor the owner chose is not built, this is the cheaper approximation of it).
+- **Emitter and exclusion** (table texel 3, y and z; `lllocallight.h`). Point lights: radius s = half the median scale, exclusion
+  radius = half the drawable's radius (the scale diagonal), clamped to s .. 1 m; the march ends that far short of the centre, so the
+  own prim is excluded and linked parts cast. Projectors: s from the face (`projectorEmitterRadius`, replacing U0's fixed 0.075 m
+  also for the maps) and U0's stretch to the face + 5 cm.
+- **Noise.** LOCAL_RAYS and LOCAL_PICK have their own streams: the pixel lattice turned by a per-stream angle with its own
+  multiplier, R2 offset and phase (a mere shift would leave a stream a fixed function of another). SUN_RAYS is unchanged (the sun
+  pass is bit identical to U1). The gate measures all pairwise correlations (pixels, frames, quad corners) under 1 to 2 %.
+- **Table and tiles.** Every light is in the table (the mapped projectors first); the screen rectangle is the union of the lights'
+  rectangles instead of the projectors' frustums.
+- **Worn lights.** The code has no worn-light cap: attachments pass the same filters as any light (`RenderAttachedLights`, avatars
+  too complex, muted or too slow, HUDs, `RenderLocalLightCount`, the 256 table and 32 tile caps) and cast on the same terms.
+  #437's proposed caps (1.0 U, reach 6 m) and its "worn, tiny and dim lights do not cast" are not in this tree and are not applied.
+- **Gates** (`scripts/perf/test_local_light_u2.py`) and measured costs: see the PR.
+
 ## Shared by all methods
 
 These are not gated by the method:

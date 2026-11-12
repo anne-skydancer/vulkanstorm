@@ -287,40 +287,68 @@ vec3 stProjectorEye(mat4 m)
     return -vec3(r0.w, r1.w, r3.w) * inverse(rows_t);
 }
 
-// The visibility of one local light (here a projector's emitter) at a receiver: the fraction of 8 rays that reach the
-// disc of radius `radius` around the light's eye (a Vogel spiral, turned per pixel and frame). Each ray is marched
-// through the light's depth map m (matrix mat) to r_excl short of the eye. r_excl ends just past the prim's face: the
-// stretch from the eye to the face is near-clipped out of the map, and the light's own prim is not drawn into it.
-// What stored depth lies nearer the eye than r_excl along the receiver's line (a margin past the face) is no occluder,
-// so the face's own rim does not shade the light; every other surface casts, linked parts of a fixture included.
-// pos: the receiver (view space, already offset along its geometric normal ng).
-float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps)
+// The rays k0 .. k0 + kn - 1 (of the 8) of one local light's visibility (here a projector's emitter) at a receiver, as a mask
+// (bit i: ray k0 + i is blocked): the rays go to points of the disc of radius `radius` around the light's eye (a Vogel
+// spiral rotated by theta), each marched through the light's depth map m (matrix mat) to r_excl short of the eye. r_excl ends
+// just past the prim's face: the stretch from the eye to the face is near-clipped out of the map, and the light's own prim is
+// not drawn into it. What stored depth lies nearer the eye than r_excl along the receiver's line (a margin past the face) is
+// no occluder, so the face's own rim does not shade the light; every other surface casts, linked parts of a fixture included.
+// pos: the receiver (view space, already offset along its geometric normal ng); nz: the noise of the LOCAL_RAYS stream.
+int stTransmittanceRays(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps, vec2 nz, int k0, int kn)
 {
     vec3 to_eye = eye - pos;
     float dist = length(to_eye);
     r_excl = max(r_excl, 1.0e-3);
     vec4 s0 = mat * vec4(pos, 1.0);
-    vec2 grad = stSpotGradient(mat, pos, ng, s0.xyz / s0.w);
+    vec3 c = s0.xyz / s0.w;
+    vec2 grad = stSpotGradient(mat, pos, ng, c);
     vec3 ld = to_eye / dist;
     vec3 t1 = normalize(cross(ld, abs(ld.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(ld, t1);
-    vec2 nz = stNoise(ST_STREAM_LOCAL_RAYS);
     float theta = 6.28318531 * nz.x;
-    vec4 ds[ST_RAYS];
-    for (int k = 0; k < ST_RAYS; ++k)
+    float t_max = min(march_max, max(dist - r_excl, 1.0e-3)) / dist; // a receiver within r_excl marches its sliver only
+    vec4 sx = mat * vec4(eye - ld * r_excl, 1.0); // the edge of the exclusion zone on the receiver's line to the eye
+    float z_floor = sx.z / sx.w;
+    int mask = 0;
+    for (int i = 0; i < kn; ++i)
     {
+        int k = k0 + i;
         float r = sqrt((float(k) + 0.5) / float(ST_RAYS));
         float phi = float(k) * ST_GOLDEN + theta;
         vec3 ek = eye + (radius * r) * (cos(phi) * t1 + sin(phi) * t2);
-        ds[k] = mat * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
+        vec4 ds_k = mat * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
+        if (stMarchRay(m, res, s0, c, grad, z_bias, rp_max, z_floor, ds_k, k, t_max, steps, nz.y) > 0.0)
+        {
+            mask |= 1 << i;
+        }
     }
-    float t_max = min(march_max, max(dist - r_excl, 1.0e-3)) / dist; // a receiver within r_excl marches its sliver only
-    vec4 sx = mat * vec4(eye - ld * r_excl, 1.0); // the edge of the exclusion zone on the receiver's line to the eye
-    return stMarch(m, res, s0, grad, z_bias, rp_max, sx.z / sx.w, ds, t_max, steps, nz.y);
+    return mask;
 }
 
-float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+// the number of rays a mask marks (at most the 8)
+float stMaskCount(int mask)
 {
+    float n = 0.0;
+    for (int i = 0; i < ST_RAYS; ++i)
+    {
+        n += float((mask >> i) & 1);
+    }
+    return n;
+}
+
+// The visibility of one local light at a receiver: the fraction of the 8 rays that reach its emitter disc
+float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps)
+{
+    int mask = stTransmittanceRays(m, res, mat, pos, ng, eye, radius, r_excl, z_bias, rp_max, march_max, steps, stNoise(ST_STREAM_LOCAL_RAYS), 0, ST_RAYS);
+    return 1.0 - stMaskCount(mask) / float(ST_RAYS);
+}
+
+// The blocked rays (a mask as stTransmittanceRays, rays k0 .. k0 + kn - 1) of projector slot `index` at a receiver, and the
+// weight `fade` of the map's verdict (it fades out with the camera distance, over the last 20 % of spot_shadow_reach).
+// 0 rays and fade 1 where the receiver is outside the projector's frustum.
+int sampleSpotShadowRays(vec3 pos, vec3 norm, int index, vec2 pos_screen, vec2 nz, int k0, int kn, out float fade)
+{
+    fade = 1.0;
     mat4 m = shadow_matrix[4 + index];
     // clearly outside the projector's frustum (a margin of 0.05 of its extent, more than the 4 cm normal offset moves a
     // receiver except very near the eye) it lights nothing: no march and no depth-buffer normal, so the pixels in
@@ -328,14 +356,13 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     vec4 s0 = m * vec4(pos, 1.0);
     if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.55))))
     {
-        return 1.0;
+        return 0;
     }
-    // fades out with the camera distance, over the last 20 % of spot_shadow_reach
     float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
-    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
+    fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
     if (fade <= 0.0)
     {
-        return 1.0;
+        return 0;
     }
     vec3 eye = stProjectorEye(m);
     // the receiver's geometric normal (from the depth buffer, like the sun's), not the shading normal: a bump or normal
@@ -346,13 +373,20 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     s0 = m * vec4(pos, 1.0);
     if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.5))))
     {
-        return 1.0;
+        fade = 1.0;
+        return 0;
     }
     float z_bias = -spot_shadow_bias * ST_SPOT_BIAS_SCALE; // spot_shadow_bias is negative: the reference moves towards the light
     float radius = index == 0 ? spot_emitter_radius.x : spot_emitter_radius.y;
     float r_excl = index == 0 ? spot_shadow_excl.x : spot_shadow_excl.y;
-    float shadow = index == 0
-        ? stTransmittance(shadowMap4, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS)
-        : stTransmittance(shadowMap5, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS);
-    return mix(1.0, shadow, fade);
+    return index == 0
+        ? stTransmittanceRays(shadowMap4, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS, nz, k0, kn)
+        : stTransmittanceRays(shadowMap5, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS, nz, k0, kn);
+}
+
+float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+{
+    float fade;
+    int mask = sampleSpotShadowRays(pos, norm, index, pos_screen, stNoise(ST_STREAM_LOCAL_RAYS), 0, ST_RAYS, fade);
+    return mix(1.0, 1.0 - stMaskCount(mask) / float(ST_RAYS), fade);
 }

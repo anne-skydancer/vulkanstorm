@@ -29,12 +29,15 @@ uniform sampler2D local_light_table;
 
 float calcLegacyDistanceAttenuation(float distance, float falloff);
 
-// the light's unshadowed contribution to a pixel at pos with the unit normal n, per colour channel
-vec3 localLightW(int idx, vec3 pos, vec3 n)
+// the light's unshadowed contribution to a pixel at pos with the unit normal n, per colour channel; rel is its share of the
+// light's own peak (the attenuation and n.l, no colour or texture): the ratio pass leaves out a light under 2 % of its peak
+// at a pixel (it keeps the light's share of the pixel's weights, not its brightness, in the estimator)
+vec3 localLightWR(int idx, vec3 pos, vec3 n, out float rel)
 {
+    rel = 0.0;
     vec4 a = texelFetch(local_light_table, ivec2(0, idx), 0);   // centre, size
     vec4 b = texelFetch(local_light_table, ivec2(1, idx), 0);   // colour, falloff
-    vec4 c = texelFetch(local_light_table, ivec2(2, idx), 0);   // origin, kind
+    vec4 c = texelFetch(local_light_table, ivec2(2, idx), 0);   // origin, kind (fetched together: independent loads overlap)
     vec3 lv = a.xyz - pos;
     float dist = length(lv);
     if (dist >= a.w)
@@ -61,5 +64,29 @@ vec3 localLightW(int idx, vec3 pos, vec3 n)
     }
     float atten = calcLegacyDistanceAttenuation(dist / a.w, b.w);
     float nl = max(dot(n, normalize(lv)), 0.0);
+    rel = atten / calcLegacyDistanceAttenuation(0.0, b.w) * nl;
     return b.rgb * (atten * nl * tex);
+}
+
+vec3 localLightW(int idx, vec3 pos, vec3 n)
+{
+    float rel;
+    return localLightWR(idx, pos, n, rel);
+}
+
+// the light's emitter: the eye of a projector or the centre of a point light, the radius s of its disc, and r_excl, the
+// distance from the eye within which the screen march stops (the light's own prim)
+void localLightEmitter(int idx, out vec3 eye, out float radius, out float r_excl)
+{
+    vec4 c = texelFetch(local_light_table, ivec2(2, idx), 0);
+    vec4 d = texelFetch(local_light_table, ivec2(3, idx), 0);
+    eye = c.xyz;
+    radius = d.y;
+    r_excl = d.z;
+}
+
+// the light's reach (the radius of its volume)
+float localLightReach(int idx)
+{
+    return texelFetch(local_light_table, ivec2(0, idx), 0).w;
 }

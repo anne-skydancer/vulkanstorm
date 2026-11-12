@@ -9043,10 +9043,11 @@ F32 projectorTextureLuminance(LLViewerTexture* img)
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> Unified lighting U1: the shadow pool's local light ratio (doc/shadows/shadow-method.md).
+// <Vulkanstorm> Unified lighting U1/U2: the shadow pool's local light ratio (doc/shadows/shadow-method.md).
 //
 // The light pool publishes a table of the visible local lights and a 32 x 32 screen tile list (lllocallighttable.h); the
-// shadow pool's ratio pass (localLightRatioF.glsl) turns the mapped projectors' visibility into the ratio R of the local
+// shadow pool's ratio pass (localLightRatioF.glsl) turns the lights' visibility (U2: every light's, by one stochastic pick per
+// pixel and a screen-space march, the two mapped projectors' maps as a hint) into the ratio R of the local
 // lights' light that the shadows leave, per colour channel; the light passes multiply their direct light by it. Data flows
 // one way: G-buffer -> shadow pool (sun, ratio) -> light pool.
 //  - Main view: the ratio pass draws into the screen target (scratch until the lighting clears it) and a temporal resolve keeps
@@ -9054,7 +9055,7 @@ F32 projectorTextureLuminance(LLViewerTexture* img)
 //  - No history (the history could not be allocated, a mirror, a hero probe, a reflection probe): one pass with fixed seeds
 //    (frame 0) into an RGBA16F target of the view's size, which the light passes read as it is.
 //  - A snapshot: 8 additive passes (shadow_st_frame 1 to 8) into that target, read with the scale 1/8, as the sun's 8.
-// The ratio is made only when a projector holds a shadow map and is in the table; with none every light is unshadowed and the
+// The ratio is made when a light is in the table and reaches the screen; with none every light is unshadowed and the
 // passes skip the fetch.
 //
 // A light's pass multiplies by R only if the light is in the ratio (mLocalRatioLights): a light the table or a tile could not
@@ -9111,8 +9112,8 @@ void LLPipeline::releaseLocalLightRatio()
 // The table of the lights the passes draw, the same set and the same rules as the loop of renderDeferredLighting (keep
 // them together): the same cut by RenderLocalLightCount, nearby, not muted, attached lights if shown, radius and colour not
 // negligible, in the frustum. The mapped projectors come first. The table holds at most MAX_LIGHTS lights and a tile 32: a
-// light that does not fit is left out of the ratio altogether (mLocalRatioLights), never half in it. False: no mapped
-// projector is among them, or none lights a pixel of the screen.
+// light that does not fit is left out of the ratio altogether (mLocalRatioLights), never half in it. False: no light
+// reaches a pixel of the screen. Unified lighting U2: every light is in the table, mapped or not.
 bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
 {
     static LLCachedControl<S32> local_light_count(gSavedSettings, "RenderLocalLightCount", 256);
@@ -9139,33 +9140,8 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
     };
     std::vector<Entry> entries;
     S32 left_out = 0;   // lights that passed the filters but did not fit the table
-    // the screen rectangle the mapped projectors can light (their frustums through the camera): outside it every pixel
-    // has R = 1, and the passes draw only inside it
-    F32 rx0 = 1.0e9f, ry0 = 1.0e9f, rx1 = -1.0e9f, ry1 = -1.0e9f;
-    bool whole_screen = false;
-    bool mapped = false;
-
     for (int pass = 0; pass < 2; ++pass)
     {
-        if (pass == 1)
-        {   // the rectangle is known: nothing outside it is listed or uploaded
-            if (!mapped)
-            {
-                return false;
-            }
-            if (whole_screen)
-            {
-                rx0 = ry0 = 0.f; rx1 = (F32)width; ry1 = (F32)height;
-            }
-            mLocalRatioRect[0] = (S32)llclamp(floorf(rx0) - 1.f, 0.f, (F32)width);
-            mLocalRatioRect[1] = (S32)llclamp(floorf(ry0) - 1.f, 0.f, (F32)height);
-            mLocalRatioRect[2] = (S32)llclamp(ceilf(rx1) + 1.f, 0.f, (F32)width);
-            mLocalRatioRect[3] = (S32)llclamp(ceilf(ry1) + 1.f, 0.f, (F32)height);
-            if (mLocalRatioRect[2] <= mLocalRatioRect[0] || mLocalRatioRect[3] <= mLocalRatioRect[1])
-            {
-                return false;
-            }
-        }
         S32 count = 0;
         for (light_set_t::iterator iter = mNearbyLights.begin(); iter != mNearbyLights.end(); ++iter)
         {
@@ -9222,54 +9198,61 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
             row[4] = col.mV[0]; row[5] = col.mV[1]; row[6] = col.mV[2]; row[7] = volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF);
             row[8] = tc.x; row[9] = tc.y; row[10] = tc.z; row[11] = 0.f;
             row[12] = 1.f;   // the projector's texture, as its average luminance
+            // the emitter: the disc its rays go toward (radius s) and the exclusion zone of its own prim, from its scale (lllocallight.h)
+            const LLVector3 scale = volume->getScale();
             if (volume->isLightSpotlight())
             {
                 LLSpotProjection sp;
                 computeSpotProjection(drawablep, sp);
                 row[8] = sp.origin.x; row[9] = sp.origin.y; row[10] = sp.origin.z; row[11] = 1.f;
                 row[12] = projectorTextureLuminance(volume->getLightTexture());
+                row[13] = LLLocalLight::projectorEmitterRadius(scale.mV[VX], scale.mV[VY]);
+                row[14] = LLLocalLight::projectorExclusion(scale.mV[VY], volume->getSpotLightParams().mV[0]);
                 memcpy(&row[16], glm::value_ptr(sp.screen_to_light), sizeof(F32) * 16);
-                if (slot >= 0)
-                {   // the corners of the projector's frustum (texture space 0 to 1 in x, y and z, with a margin) through the camera
-                    const glm::mat4 to_view = glm::inverse(sp.screen_to_light);
-                    for (int corner = 0; corner < 8 && !whole_screen; ++corner)
-                    {
-                        const glm::vec4 v = to_view * glm::vec4((corner & 1) ? 1.02f : -0.02f, (corner & 2) ? 1.02f : -0.02f, (corner & 4) ? 1.02f : -0.02f, 1.f);
-                        if (v.w == 0.f)
-                        {
-                            whole_screen = true;
-                            break;
-                        }
-                        const glm::vec4 c = proj * glm::vec4(v.x / v.w, v.y / v.w, v.z / v.w, 1.f);
-                        if (c.w <= 1.0e-4f)
-                        {
-                            whole_screen = true;
-                        }
-                        else
-                        {
-                            const F32 sx = (c.x / c.w * 0.5f + 0.5f) * (F32)width;
-                            const F32 sy = (c.y / c.w * 0.5f + 0.5f) * (F32)height;
-                            rx0 = llmin(rx0, sx); rx1 = llmax(rx1, sx);
-                            ry0 = llmin(ry0, sy); ry1 = llmax(ry1, sy);
-                        }
-                    }
-                }
+            }
+            else
+            {
+                row[13] = LLLocalLight::pointEmitterRadius(scale.mV[VX], scale.mV[VY], scale.mV[VZ]);
+                row[14] = LLLocalLight::exclusionRadius(drawablep->getRadius(), row[13]);
             }
             if (slot >= 0)
             {
                 mLocalSlotLight[slot] = (F32)mLocalLightRowCount;
                 mLocalSlotChanged[slot] = mShadowSTSpotUnchanged[slot] ? 0.f : 1.f;
-                mapped = true;
             }
             entries.push_back({ drawablep, sphereScreenRect(glm::value_ptr(tc), s, glm::value_ptr(proj), (S32)width, (S32)height) });
             ++mLocalLightRowCount;
         }
     }
 
+    // the screen rectangle the lights can reach (the union of their spheres' rectangles): outside it every pixel has R = 1, and
+    // the passes draw only inside it
+    Rect clip;
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const Rect& r = entries[i].rect;
+        if (r.empty())
+        {
+            continue;
+        }
+        if (clip.empty())
+        {
+            clip = r;
+        }
+        else
+        {
+            clip.x0 = llmin(clip.x0, r.x0); clip.y0 = llmin(clip.y0, r.y0);
+            clip.x1 = llmax(clip.x1, r.x1); clip.y1 = llmax(clip.y1, r.y1);
+        }
+    }
+    if (clip.empty())
+    {
+        return false;
+    }
+    mLocalRatioRect[0] = clip.x0; mLocalRatioRect[1] = clip.y0; mLocalRatioRect[2] = clip.x1; mLocalRatioRect[3] = clip.y1;
+
     // the tile lists, inside the rectangle only. A light a tile could not hold is taken out of the ratio and the lists are made
     // again without it (that frees room, so the second round holds every light left)
-    Rect clip;
-    clip.x0 = mLocalRatioRect[0]; clip.y0 = mLocalRatioRect[1]; clip.x1 = mLocalRatioRect[2]; clip.y1 = mLocalRatioRect[3];
     std::vector<bool> out(entries.size(), false);
     S32 overflowed = 0;
     for (int round = 0; round < 2; ++round)
@@ -9323,7 +9306,7 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
     mLocalRatioTex = 0;
     mLocalRatioScale = 1.f;
     mLocalRatioLights.clear();
-    if (local_light_count <= 0 || (mShadowSpotLight[0].isNull() && mShadowSpotLight[1].isNull()))
+    if (local_light_count <= 0)
     {
         return false;
     }
@@ -9436,6 +9419,16 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
         shader.uniform2fv(sSlotLight, 1, mLocalSlotLight);
         shader.uniform2fv(sSlotChanged, 1, mLocalSlotChanged);
         shader.uniform2fv(sSlotFade, 1, mLocalSlotFade);
+        // unified lighting U2: the screen march's projection, its most steps (the survey's clamp(ceil(px / 32), 2, 6)) and its
+        // rays per pixel (2 of the 8 by default; the floor tier shoots 1). Debug settings: structural, no Preferences entry.
+        static const LLStaticHashedString sMarchProj("st_march_proj");
+        static const LLStaticHashedString sStepsMax("ratio_steps_max");
+        static const LLStaticHashedString sRatioRays("ratio_rays");
+        static LLCachedControl<S32> steps_max(gSavedSettings, "RenderLocalShadowStepsMax", 6);
+        static LLCachedControl<bool> floor_tier(gSavedSettings, "RenderLocalShadowFloorTier", false);
+        shader.uniformMatrix4fv(sMarchProj, 1, GL_FALSE, glm::value_ptr(get_current_projection()));
+        shader.uniform1i(sStepsMax, llclamp((S32)steps_max, 2, 8));
+        shader.uniform1i(sRatioRays, floor_tier ? 1 : 2);
         const S32 table_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
         if (table_unit > -1)
         {
@@ -11064,7 +11057,7 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
         // else cast. Read where sampleSpotShadow runs (the deferred sun programs); lllocallight.h
         static const LLStaticHashedString sSpotEmitterRadius("spot_emitter_radius");
         static const LLStaticHashedString sSpotShadowExcl("spot_shadow_excl");
-        F32 emitter[2] = { LLLocalLight::PROJECTOR_EMITTER_U0, LLLocalLight::PROJECTOR_EMITTER_U0 };
+        F32 emitter[2] = { LLLocalLight::PROJECTOR_EMITTER_U0, LLLocalLight::PROJECTOR_EMITTER_U0 };   // (an empty slot's)
         F32 excl[2] = { LLLocalLight::PROJECTOR_MARGIN, LLLocalLight::PROJECTOR_MARGIN };
         for (U32 i = 0; i < 2; ++i)
         {
@@ -11072,6 +11065,8 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
             const LLVOVolume* volume = light ? light->getVOVolume() : nullptr;
             if (volume)
             {
+                // unified lighting U2: the emitter radius s of the prim's face, the same for every local light
+                emitter[i] = LLLocalLight::projectorEmitterRadius(volume->getScale().mV[VX], volume->getScale().mV[VY]);
                 excl[i] = LLLocalLight::projectorExclusion(volume->getScale().mV[VY], volume->getSpotLightParams().mV[0]);
             }
         }

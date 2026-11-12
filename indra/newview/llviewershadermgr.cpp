@@ -3609,6 +3609,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/sunLightV.glsl", GL_VERTEX_SHADER));
         gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightRatioF.glsl", GL_FRAGMENT_SHADER));
         gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightWeightUtil.glsl", GL_FRAGMENT_SHADER));   // the light pool's weights
+        gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/stochasticScreenMarchUtil.glsl", GL_FRAGMENT_SHADER));   // the core's screen march (unified lighting U2)
         gLocalLightRatioProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gLocalLightRatioProgram);
         gLocalLightRatioProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");   // it reads the depth buffer, as the sun pass does
