@@ -99,9 +99,21 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
-weights of the other methods' blend bands. A projector is the same estimator toward its emitter (0.15 m,
-a fixed 0.15 m emitter), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
+weights of the other methods' blend bands. A projector is the same estimator toward its emitter (a disc of
+radius 0.075 m, a per-slot uniform), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel).
+
+The march is split into `stMarchRay` (one ray, 1 when blocked) and `stMarch` (the mean of the 8), and a light's visibility is
+`stTransmittance` (the rays toward one light's emitter disc, marched through its map). A projector's receiver is described like the
+sun's: `shadowReceiverGeometry` gives the geometric normal from the depth buffer for the receiver plane and the normal offset,
+because the shading normal of a bump or normal map tilts both and striped the lit surface in columns. The march of a projector
+stops `r_excl` short of its eye, and a stored depth nearer the eye than that is no surface (`z_floor` of `stReference`; 0 for the
+sun): the light's own fixture does not shade it, while linked parts of a fixture beyond `r_excl` still cast. `r_excl` is the drawable's
+radius (within the emitter radius and 1 m) behind the eye-to-face stretch of the projector (`lllocallight.h`, unit tested by
+`tests/lllocallight_test.cpp`); a receiver nearer the eye than `r_excl` is unshadowed. The pipeline sets `spot_emitter_radius` and
+`spot_shadow_excl` for the two slots in `bindDeferredShader`. `scripts/perf/test_local_light_u0.py` gates this stage: the sun
+channel equals the previous code bit for bit (raw and resolved), the bump no longer changes a projector's result, a plate within
+`r_excl` of the eye shades nothing while one beyond it casts, and the sun pass costs at most 0.02 ms more.
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
 accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a
@@ -116,7 +128,8 @@ otherwise and at a size change. The sun pass writes its rays as they are into `m
 `shadowStochasticResolveF.glsl` blends them with the last frame's history (weight 1/8) after the engine's
 camera reprojection, reading the history from the 4 nearest texels, each kept only where its stored depth
 agrees (a revealed surface has none; under a quarter kept, none), clamped per channel to the 3x3 neighbourhood
-of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
+of this frame (each channel has its own texel spacing of the box, `shadow_st_clamp_stride`: all 1 today, so the sun's clamp is the
+engine's); `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
 than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
 direction changed. Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light

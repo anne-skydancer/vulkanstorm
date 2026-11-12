@@ -30,6 +30,7 @@
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
+#include "lllocallight.h" // <Vulkanstorm/> local light emitter size and exclusion zone
 
 // library includes
 #include "llimagepng.h"
@@ -8771,6 +8772,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     }
 
     static const LLStaticHashedString sChannelValid("shadow_st_channel_valid");
+    static const LLStaticHashedString sClampStride("shadow_st_clamp_stride");
     const U32 w = raw.getWidth();
     const U32 h = raw.getHeight();
 
@@ -8791,6 +8793,9 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     resolve.uniformMatrix4fv(LLShaderMgr::INVERSE_PROJECTION_MATRIX, 1, GL_FALSE, glm::value_ptr(glm::inverse(get_current_projection())));
     mShadowSTHistory.setResolveUniforms(resolve);
     resolve.uniform3fv(sChannelValid, 1, valid.mV);
+    // the texel spacing of each channel's clamp box (the sun, projector slot 0 and 1); 1 is the plain 3 x 3
+    const F32 clamp_stride[3] = { 1.f, 1.f, 1.f };
+    resolve.uniform3fv(sClampStride, 1, clamp_stride);
     const S32 depth_unit = resolve.enableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
     if (depth_unit > -1)
     {
@@ -10381,6 +10386,26 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
     {
         shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, getShadowLightSize());
+
+        // per projector slot: the radius of the emitter its rays go toward, and the distance from its eye within
+        // which nothing shades it (the fixture around the light; linked parts beyond it still cast). Only the sun
+        // pass reads them (sampleSpotShadow); lllocallight.h
+        static const LLStaticHashedString sSpotEmitterRadius("spot_emitter_radius");
+        static const LLStaticHashedString sSpotShadowExcl("spot_shadow_excl");
+        F32 emitter[2] = { LLLocalLight::PROJECTOR_EMITTER_U0, LLLocalLight::PROJECTOR_EMITTER_U0 };
+        F32 excl[2] = { LLLocalLight::PROJECTOR_EMITTER_U0, LLLocalLight::PROJECTOR_EMITTER_U0 };
+        for (U32 i = 0; i < 2; ++i)
+        {
+            const LLDrawable* light = mShadowSpotLight[i].get();
+            const LLVOVolume* volume = light ? light->getVOVolume() : nullptr;
+            if (volume)
+            {
+                excl[i] = LLLocalLight::projectorExclusion(light->getRadius(), emitter[i], volume->getScale().mV[VY],
+                                                           volume->getSpotLightParams().mV[0]);
+            }
+        }
+        shader.uniform2fv(sSpotEmitterRadius, 1, emitter);
+        shader.uniform2fv(sSpotShadowExcl, 1, excl);
     }
     // </Vulkanstorm>
     shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);

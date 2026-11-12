@@ -27,6 +27,7 @@ uniform sampler2D shadow_st_raw;
 uniform sampler2D shadow_st_history;
 uniform sampler2D depthMap;
 uniform vec3 shadow_st_channel_valid;   // the sun, projector slot 0 and 1: the channel's history is the same light as last frame's
+uniform vec3 shadow_st_clamp_stride;    // the sun, projector slot 0 and 1: the texel spacing of the 3 x 3 clamp box (1: adjacent texels)
 uniform float stoch_weight;             // the engine's: this frame's weight (1/8)
 uniform mat4 inv_proj;                  // the projection's inverse: set by the pipeline for both resolve paths
 
@@ -51,6 +52,33 @@ float shadow_linear_depth(ivec2 px, ivec2 size, float z)
 }
 
 
+// The clamp box of the channels at their own strides: r is the sun's, b and a the projectors'. Only for strides that
+// differ; when all are 1 the engine's stoch_neighbourhood runs, which is the sun's clamp of before.
+void shadow_neighbourhood(ivec2 px, ivec2 size, vec4 cur, out vec4 mn, out vec4 mx)
+{
+    if (shadow_st_clamp_stride.x == 1.0 && shadow_st_clamp_stride.y == 1.0 && shadow_st_clamp_stride.z == 1.0)
+    {
+        stoch_neighbourhood(px, size, cur, mn, mx);
+        return;
+    }
+    mn = cur;
+    mx = cur;
+    for (int c = 0; c < 3; ++c)
+    {
+        int ch = c == 0 ? 0 : c + 1; // channels r, b, a (g is the AO, which is not accumulated)
+        int stride = max(int(shadow_st_clamp_stride[c] + 0.5), 1);
+        for (int dy = -1; dy <= 1; ++dy)
+        {
+            for (int dx = -1; dx <= 1; ++dx)
+            {
+                float v = stoch_current(clamp(px + ivec2(dx, dy) * stride, ivec2(0), size - ivec2(1)))[ch];
+                mn[ch] = min(mn[ch], v);
+                mx[ch] = max(mx[ch], v);
+            }
+        }
+    }
+}
+
 // the resolved value of pixel px: r sun, g linear view depth, b and a the projector slots
 vec4 shadow_resolve(ivec2 px, ivec2 size)
 {
@@ -67,7 +95,7 @@ vec4 shadow_resolve(ivec2 px, ivec2 size)
     {
         vec4 mn;
         vec4 mx;
-        stoch_neighbourhood(px, size, cur, mn, mx);
+        shadow_neighbourhood(px, size, cur, mn, mx);
         // per channel: a channel whose light changed (or the AO and depth channels, which are not accumulated) takes this frame's value
         vec4 weight = vec4(shadow_st_channel_valid.x > 0.5 ? stoch_weight : 1.0, 1.0,
                            shadow_st_channel_valid.y > 0.5 ? stoch_weight : 1.0,

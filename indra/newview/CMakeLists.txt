@@ -1609,6 +1609,7 @@ set(viewer_HEADER_FILES
     llspatialpartition.h
     llstatslistener.h
     llstochastichistory.h
+    lllocallight.h
     llstochasticstate.h
     llspeakers.h
     llspeakingindicatormanager.h

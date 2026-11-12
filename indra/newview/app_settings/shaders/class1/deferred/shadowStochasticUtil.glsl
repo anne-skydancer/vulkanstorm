@@ -24,7 +24,6 @@
 #define ST_GOLDEN 2.39996323
 #define ST_STEPS_MAX 8
 #define ST_SPOT_STEPS 4
-#define ST_SPOT_EMITTER 0.15   // metres: width of a projector emitter
 #define ST_SPOT_MARCH 4.0      // metres: the longest march toward a projector
 // the constants below are this method's own, for the projectors
 #define ST_SPOT_BIAS_SCALE 0.8 // of spot_shadow_bias
@@ -46,6 +45,10 @@ uniform vec4 shadow_clip;
 uniform float spot_shadow_bias;
 uniform float spot_shadow_offset;
 uniform float spot_shadow_reach;
+// per projector slot (LLPipeline::bindDeferredShader, lllocallight.h): the radius of the emitter disc its rays go
+// toward, and the distance from the eye within which nothing shades the light (r_excl)
+uniform vec2 spot_emitter_radius;
+uniform vec2 spot_shadow_excl;
 
 // angular size of the shadowing light, L = 2 tan(half angle): the physical sun times the sky's
 // sun scale times RenderShadowLightSize (the moon uses the same size)
@@ -100,10 +103,15 @@ vec2 stSpotGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
 // reference depth at the centre of the texel read: the receiver's depth with the constant bias taken off, and
 // the signed plane (S2's form, d depth / d uv = g) lowering it where the plane is nearer the light over the
 // offset from the receiver, never raising it (past a crease the extrapolated plane is not the surface).
-float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, float z_bias, float rp_max, out float zs)
+// z_floor: a stored depth nearer the light than this is no surface (a light's exclusion zone, stTransmittance); 0 for the sun.
+float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, float z_bias, float rp_max, float z_floor, out float zs)
 {
     ivec2 p = clamp(ivec2(floor(uv * res + jit)), ivec2(0), ivec2(res) - 1);
     zs = texelFetch(m, p, 0).r;
+    if (zs < z_floor)
+    {
+        zs = 1.0;
+    }
     vec2 d = (vec2(p) + 0.5) / res - c.xy;
     return c.z - z_bias + clamp(dot(g, d), -rp_max, 0.0);
 }
@@ -124,52 +132,58 @@ float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, floa
 // texel, offset by up to half a texel per ray, so the frames' average is the texel-box filtered
 // visibility. g: the signed plane gradient; z_bias: the constant bias that moves the receiver's
 // reference depth towards the light; rp_max: the cap of the plane's offset.
-float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max, vec4 ds[ST_RAYS], float t_max, int steps, float jitter)
+// One ray k of the march (below): 1 when blocked, 0 when free. c: the receiver in the map's texture space (s0.xyz / s0.w).
+float stMarchRay(sampler2D m, vec2 res, vec4 s0, vec3 c, vec2 g, float z_bias, float rp_max, float z_floor, vec4 ds_k, int k, float t_max, int steps, float jitter)
+{
+    float inv_n1 = 1.0 / float(steps + 1);
+    float j = fract(jitter + 0.618034 * float(k));
+    vec2 jit = vec2(fract(j * 7.31 + 0.137 * float(k)), fract(j * 3.17 + 0.711 * float(k))) - 0.5;
+    float blocked = 0.0;
+    bool behind = false; // the ray was behind the stored surface at an earlier step (a surface hid the ones below it)
+    float zh = 1.0e9;    // the nearest such surface's depth
+    vec3 q = c; // the first interval starts at the receiver
+    for (int i = 0; i < steps && blocked == 0.0; ++i)
+    {
+        float un = i + 1 < steps ? (float(i + 1) + j) * inv_n1 : 1.0;
+        vec4 sn = s0 + (t_max * un * un) * ds_k;
+        vec3 qn = sn.xyz / sn.w;
+        float zs;
+        float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, z_floor, zs);
+        float slack = 0.25 * (q.z - qn.z) + 1.0e-4;
+        if (zs < ref && zs < q.z && zs > qn.z - slack)
+        {
+            blocked = 1.0;
+        }
+        else if (behind && zs < ref && zs > q.z && zs > zh + 0.1 * (c.z - zh))
+        {
+            blocked = 1.0; // the ray passed this surface's depth beneath the surface that hid it
+        }
+        if (zs < qn.z - slack)
+        {
+            behind = true;
+            zh = min(zh, zs);
+        }
+        q = qn;
+    }
+    if (blocked == 0.0)
+    {
+        float zs;
+        float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, z_floor, zs);
+        if ((zs < q.z || (behind && zs > q.z && zs > zh + 0.1 * (c.z - zh))) && zs < ref)
+        {
+            blocked = 1.0;
+        }
+    }
+    return blocked;
+}
+
+float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max, float z_floor, vec4 ds[ST_RAYS], float t_max, int steps, float jitter)
 {
     vec3 c = s0.xyz / s0.w;
     float vis = 0.0;
-    float inv_n1 = 1.0 / float(steps + 1);
     for (int k = 0; k < ST_RAYS; ++k)
     {
-        float j = fract(jitter + 0.618034 * float(k));
-        vec2 jit = vec2(fract(j * 7.31 + 0.137 * float(k)), fract(j * 3.17 + 0.711 * float(k))) - 0.5;
-        float blocked = 0.0;
-        bool behind = false; // the ray was behind the stored surface at an earlier step (a surface hid the ones below it)
-        float zh = 1.0e9;    // the nearest such surface's depth
-        vec3 q = c; // the first interval starts at the receiver
-        for (int i = 0; i < steps && blocked == 0.0; ++i)
-        {
-            float un = i + 1 < steps ? (float(i + 1) + j) * inv_n1 : 1.0;
-            vec4 sn = s0 + (t_max * un * un) * ds[k];
-            vec3 qn = sn.xyz / sn.w;
-            float zs;
-            float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
-            float slack = 0.25 * (q.z - qn.z) + 1.0e-4;
-            if (zs < ref && zs < q.z && zs > qn.z - slack)
-            {
-                blocked = 1.0;
-            }
-            else if (behind && zs < ref && zs > q.z && zs > zh + 0.1 * (c.z - zh))
-            {
-                blocked = 1.0; // the ray passed this surface's depth beneath the surface that hid it
-            }
-            if (zs < qn.z - slack)
-            {
-                behind = true;
-                zh = min(zh, zs);
-            }
-            q = qn;
-        }
-        if (blocked == 0.0)
-        {
-            float zs;
-            float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
-            if ((zs < q.z || (behind && zs > q.z && zs > zh + 0.1 * (c.z - zh))) && zs < ref)
-            {
-                blocked = 1.0;
-            }
-        }
-        vis += 1.0 - blocked;
+        vis += 1.0 - stMarchRay(m, res, s0, c, g, z_bias, rp_max, z_floor, ds[k], k, t_max, steps, jitter);
     }
     return vis / float(ST_RAYS);
 }
@@ -207,7 +221,7 @@ float stCascade(sampler2D map, int j, vec3 spos, vec3 ng, float sin_theta, vec3 
     float half_l = max(0.5 * shadow_light_size, 1.0e-6);
     float t_max = min(reach, SHADOW_FOOTPRINT_M / half_l);
     int steps = clamp(int(ceil(t_max * half_l / texel_m)), 2, ST_STEPS_MAX);
-    return stMarch(map, shadow_res, s0, grad, z_bias, rp_max, ds, t_max, steps, nz.y);
+    return stMarch(map, shadow_res, s0, grad, z_bias, rp_max, 0.0, ds, t_max, steps, nz.y);
 }
 
 float stCascadeVisibility(int j, vec3 spos, vec3 ng, float sin_theta, vec3 L, vec2 nz)
@@ -274,27 +288,21 @@ vec3 stProjectorEye(mat4 m)
     return -vec3(r0.w, r1.w, r3.w) * inverse(rows_t);
 }
 
-float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+// The visibility of one local light (here a projector's emitter) at a receiver: the fraction of 8 rays that reach the
+// disc of radius `radius` around the light's eye (a Vogel spiral, turned per pixel and frame). Each ray is marched
+// through the light's depth map m (matrix mat) to r_excl short of the eye, and a stored surface nearer the eye than
+// that is no occluder: the fixture around the light does not shade it, while linked parts beyond r_excl still cast.
+// pos: the receiver (view space, already offset along its geometric normal ng).
+float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps)
 {
-    pos += norm * spot_shadow_offset;
-    // fades out with the camera distance, over the last 20 % of spot_shadow_reach
-    float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
-    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
-    if (fade <= 0.0)
-    {
-        return 1.0;
-    }
-    mat4 m = shadow_matrix[4 + index];
-    vec4 s0 = m * vec4(pos, 1.0);
-    // outside the projector's frustum it lights nothing: no march
-    if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.5))))
-    {
-        return 1.0;
-    }
-    vec2 grad = stSpotGradient(m, pos, norm, s0.xyz / s0.w);
-    vec3 eye = stProjectorEye(m);
     vec3 to_eye = eye - pos;
     float dist = length(to_eye);
+    if (dist <= r_excl)
+    {
+        return 1.0; // inside the exclusion zone of the light
+    }
+    vec4 s0 = mat * vec4(pos, 1.0);
+    vec2 grad = stSpotGradient(mat, pos, ng, s0.xyz / s0.w);
     vec3 ld = to_eye / dist;
     vec3 t1 = normalize(cross(ld, abs(ld.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(ld, t1);
@@ -305,13 +313,47 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     {
         float r = sqrt((float(k) + 0.5) / float(ST_RAYS));
         float phi = float(k) * ST_GOLDEN + theta;
-        vec3 ek = eye + (0.5 * ST_SPOT_EMITTER * r) * (cos(phi) * t1 + sin(phi) * t2);
-        ds[k] = m * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
+        vec3 ek = eye + (radius * r) * (cos(phi) * t1 + sin(phi) * t2);
+        ds[k] = mat * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
     }
-    float t_max = min(ST_SPOT_MARCH, 0.9 * dist) / dist;
+    float t_max = min(march_max, dist - r_excl) / dist;
+    vec4 sx = mat * vec4(eye - ld * r_excl, 1.0); // the edge of the exclusion zone on the receiver's line to the eye
+    return stMarch(m, res, s0, grad, z_bias, rp_max, sx.z / sx.w, ds, t_max, steps, nz.y);
+}
+
+float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+{
+    mat4 m = shadow_matrix[4 + index];
+    // outside the projector's frustum (by more than the normal offset can reach) it lights nothing: no march, and
+    // no more work for the pixels that are in neither cone
+    vec4 s0 = m * vec4(pos, 1.0);
+    if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.55))))
+    {
+        return 1.0;
+    }
+    // fades out with the camera distance, over the last 20 % of spot_shadow_reach
+    float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
+    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
+    if (fade <= 0.0)
+    {
+        return 1.0;
+    }
+    vec3 eye = stProjectorEye(m);
+    // the receiver's geometric normal (from the depth buffer, like the sun's), not the shading normal: a bump or normal
+    // map tilts the shading normal, and the receiver plane taken from it, which striped surfaces in columns
+    float sin_theta;
+    vec3 ng = shadowReceiverGeometry(pos_screen, pos, norm, normalize(eye - pos), sin_theta);
+    pos += ng * spot_shadow_offset;
+    s0 = m * vec4(pos, 1.0);
+    if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.5))))
+    {
+        return 1.0;
+    }
     float z_bias = -spot_shadow_bias * ST_SPOT_BIAS_SCALE; // spot_shadow_bias is negative: the reference moves towards the light
+    float radius = index == 0 ? spot_emitter_radius.x : spot_emitter_radius.y;
+    float r_excl = index == 0 ? spot_shadow_excl.x : spot_shadow_excl.y;
     float shadow = index == 0
-        ? stMarch(shadowMap4, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y)
-        : stMarch(shadowMap5, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y);
+        ? stTransmittance(shadowMap4, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS)
+        : stTransmittance(shadowMap5, proj_shadow_res, m, pos, ng, eye, radius, r_excl, z_bias, ST_SPOT_RPDB_MAX, ST_SPOT_MARCH, ST_SPOT_STEPS);
     return mix(1.0, shadow, fade);
 }
