@@ -144,13 +144,6 @@ void LLTexUnit::refreshState(void)
     {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
-
-    // <Vulkanstorm> sampler objects
-    if (mCurrSampler)
-    {
-        glBindSampler(mIndex, mCurrSampler);
-    }
-    // </Vulkanstorm>
 }
 
 void LLTexUnit::activate(void)
@@ -845,19 +838,6 @@ void LLRender::shutdown()
 {
     resetVertexBuffer();
 }
-
-// <Vulkanstorm> sampler objects
-void LLTexUnit::bindSampler(U32 sampler)
-{
-    if (mIndex < 0 || mCurrSampler == sampler)
-    {
-        return;
-    }
-    gGL.flush();
-    glBindSampler(mIndex, sampler);
-    mCurrSampler = sampler;
-}
-// </Vulkanstorm>
 
 void LLRender::refreshState(void)
 {

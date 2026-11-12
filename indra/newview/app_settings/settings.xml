@@ -12539,7 +12539,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowMethod</key>
   <map>
     <key>Comment</key>
-    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 2 = Stochastic, stable world-anchored cascades, square sun maps and soft shadows from rays toward the light's disc, accumulated over time. 1 was PCSS, which is removed: it is unused, and a stored 1 or any other value is read as 2 (Legacy on a device below OpenGL 4.0, without writing it back). Default per graphics level in the feature table.</string>
+    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 2 = Stochastic, stable world-anchored cascades, square sun maps and soft shadows from rays toward the light's disc, accumulated over time. 1 was PCSS, which is removed and unused: a stored 1 or any other value is rewritten as 2 at startup; on a device below OpenGL 4.0, 2 runs as Legacy without storing that. Default per graphics level in the feature table.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
