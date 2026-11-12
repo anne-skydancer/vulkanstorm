@@ -3,10 +3,11 @@
 """Offscreen stochastic transparency regression, no viewer launch; --opengl PATH selects Mesa.
 
 Reuses the standalone Windows GL bootstrap and shader compiler (gl_test_context.py) and runs the
-viewer's own stochastic transparency shaders (alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
-alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
+viewer's own stochastic transparency shaders (the stochastic engine's stochasticSampleF.glsl and
+stochasticResolveUtilF.glsl, and the transparency's alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
+alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl (the temporal resolve, the default on every device) or, with STOCH_TEST_RESOLVE=compute, alphaStochasticResolveC.glsl (the GL 4.3 compute resolve, A/B only), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
 LLDrawPoolAlpha::renderStochastic on a small target:
-  * the mask table: the generator (a port of LLPipeline::alphaStochasticMaskTable) gives exactly r
+  * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run;
   * mask coverage: the samples a fragment covers in the stochastic depth, read back per sample,
     are exactly the bits the independent Python model of st_mask predicts (pixel, face seed,
@@ -56,13 +57,22 @@ R32UI=0x8236;RED_INT=0x8D94;UINT=0x1405;FLOAT=0x1406;RGBA=0x1908;RGBA16F=0x881A;
 D24=0x81A6;DEPTH_COMP=0x1902;NEAREST=0x2600;MIN=0x2801;MAG=0x2800
 BLEND=0x0BE2;DEPTH_TEST=0x0B71;MULTISAMPLE=0x809D;POLY_OFFSET=0x8037;CULL=0x0B44
 ZERO=0;ONE=1;SRC_ALPHA=0x0302;ONE_MINUS_SRC_ALPHA=0x0303;LEQUAL=0x0203;ALWAYS=0x0207;NONE=0
-W,H=64,32
+import os, sys
+# The default is the fragment resolve (the pre-pass and the fragment resolve), the one the viewer ships on every
+# device; STOCH_TEST_RESOLVE=compute runs the compute resolve (GL 4.3, kept for A/B tests). Both give the same image:
+# run the script once per mode and diff the outputs, minus the 'temporal resolve path' line (see the doc, Tests).
+RESOLVE_MODE=os.environ.get("STOCH_TEST_RESOLVE","fragment")
+if RESOLVE_MODE not in ("fragment","compute"):
+    sys.exit(f"STOCH_TEST_RESOLVE must be fragment or compute, not {RESOLVE_MODE!r}")
+FRAGMENT_RESOLVE=RESOLVE_MODE=="fragment"
+print("temporal resolve path:","fragment (the shipped default)" if FRAGMENT_RESOLVE else "compute (A/B, GL 4.3)")
+W,H=[int(v) for v in os.environ.get("STOCH_TEST_SIZE","64x32").split("x")]   # 70x37 exercises the compute resolve (STOCH_TEST_RESOLVE=compute) on partial workgroups
 vao=U();fn('glGenVertexArrays',None,I,C.POINTER(U))(1,C.byref(vao));fn('glBindVertexArray',None,U)(vao)
 viewport(0,0,W,H);disable(CULL)
 getint(0x910F,C.byref(max_ms:=I()))   # GL_MAX_DEPTH_TEXTURE_SAMPLES
 assert max_ms.value>=8,('needs 8 depth samples',max_ms.value)
 
-# ---- the mask table: LLPipeline::alphaStochasticMaskTable, ported
+# ---- the mask table: LLStochasticEngine::maskTable, ported
 SEEDS=2048;M64=(1<<64)-1
 def mask_table(s):
     state=(0x9e3779b97f4a7c15^s)&M64;table=[]
@@ -86,6 +96,19 @@ for s,t in tables.items():
         assert all(bin(m).count('1')==r and m>>s==0 for m in row),('table row',s,r)
         if 0<r<s: assert len(set(row))>1,('row not varied',s,r)
 assert mask_table(8)==tables[8]
+# the C++ generator (LLStochasticEngine::maskTable, llstochasticstate.h) makes the same tables: the
+# FNV-1a hashes in its standalone test (indra/newview/tests/llstochastichistory_test.cpp, in ci-checks)
+def fnv1a(words):
+    h=0xcbf29ce484222325
+    for w in words:
+        for i in range(4):
+            h^=(w>>(8*i))&0xff;h=(h*0x100000001b3)&M64
+    return h
+import re
+cpp_test=(root/'indra/newview/tests/llstochastichistory_test.cpp').read_text()
+for s,t in tables.items():
+    m=re.search(r'constexpr unsigned long long MASK_HASH_%d = 0x([0-9a-f]+)ULL;'%s,cpp_test);assert m,('MASK_HASH in the C++ test',s)
+    assert int(m.group(1),16)==fnv1a(t),('the Python mask table differs from the C++ one',s,hex(fnv1a(t)))
 print('mask tables: rows of exactly r bits for S = 4, 8, 16, varied and reproducible')
 
 # ---- the Python model of st_mask (alphaStochasticF.glsl), float32 at every step
@@ -108,18 +131,19 @@ def model_mask(px,py,seed,prim,a,s,table):
     col=min(int(f32(v[1]*SEEDS)),SEEDS-1)
     return table[r*SEEDS+col]
 
-# ---- programs: the viewer's shaders as the viewer compiles them (#version 420, no extra code)
-def viewer(name):
+# ---- programs: the viewer's shaders as the viewer compiles them (#version 420; 430 and COMPUTE_SHADER for the compute resolve)
+def viewer(name,version=420):
     text=(shaders/name).read_text()
-    return '#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/','')
-helper=viewer('alphaStochasticF.glsl')
+    return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
+engine=viewer('stochasticSampleF.glsl')   # the stochastic engine's sampling: the hash, the frame seed, the table lookup
+helper=viewer('alphaStochasticF.glsl')    # the transparency's part: the face's identity and the pass
 vertex='''#version 420
 uniform float z; uniform float slope; uniform float slope_y;
 void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gl_Position=vec4(p,z+slope*p.x+slope_y*p.y,1.0); }'''
 # the alpha programs' ALPHA_STOCHASTIC variant: alpha alone, the sample mask
 variant=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
-void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper)])
+void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper),(0x8B30,engine)])
 # the ordinary program: shaded colour and alpha (the accumulation)
 shade=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; uniform vec3 test_rgb; out vec4 frag_color;
@@ -143,7 +167,19 @@ expand_before=program([(0x8B31,screen_vertex),(0x8B30,'#version 420\n'+subproces
 VIEWER_OFFSET=(-1/256,-1.,-2.,-3.)
 BEFORE_OFFSET=(-1.,-1.,-2.,-3.)
 composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
-resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl'))])
+# the temporal accumulation: the transparency's compute resolve (this frame's samples averaged into a
+# shared tile) with the engine's resolve object compiled as a second compute object, as the viewer
+# links them (GL 4.3, #version 430, COMPUTE_SHADER)
+bindimage=fn('glBindImageTexture',None,U,U,I,C.c_ubyte,I,U,U);dispatch=fn('glDispatchCompute',None,U,U,U)
+membarrier=fn('glMemoryBarrier',None,U)
+COMPUTE=0x91B9;WRITE_ONLY=0x88B9;TEXTURE_FETCH_BARRIER=0x8;IMAGE_ACCESS_BARRIER=0x20
+def viewer_compute(name): return viewer(name,430).replace('#version 430\n','#version 430\n#define COMPUTE_SHADER 1\n',1)
+if FRAGMENT_RESOLVE:
+    # this frame's samples averaged once (RGBA32F), then the transparency's resolve with the engine's resolve object
+    current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
+    resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
+else:
+    resolve_prog=program([(COMPUTE,viewer_compute('alphaStochasticResolveC.glsl')),(COMPUTE,viewer_compute('stochasticResolveUtilF.glsl'))])
 # per pixel, the samples of the stochastic depth nearer than the opaque depth, as bits
 readmask=program([(0x8B31,screen_vertex),(0x8B30,'''#version 420
 uniform sampler2DMS st_depth; uniform sampler2D opaque; uniform int samples; out uvec4 bits;
@@ -215,7 +251,7 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
     spread_prog,offsets=(expand_before,BEFORE_OFFSET) if before else (expand,VIEWER_OFFSET)
     spread(n,spread_prog)
     use(variant);uniform1i(loc(variant,b'st_samples_hw'),n);uniform1i(loc(variant,b'st_samples'),total)
-    bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(variant,b'alpha_st_masks'),1)
+    bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(variant,b'stoch_masks'),1)
     def poly(i):
         if use_offset: enable(POLY_OFFSET);offset(offsets[0],offsets[i])
         else: disable(POLY_OFFSET)
@@ -243,16 +279,33 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
-    # 3b. the temporal accumulation (alphaStochasticResolveF.glsl): this frame's colour blended with the history
-    if temporal is not None:
+    # 3b. the temporal accumulation: this frame's colour blended with the history
+    if temporal is not None and FRAGMENT_RESOLVE:
         nxt=1-temporal['idx']
-        bindfbo(FB,temporal['fbo'][nxt]);drawbuffer(COLOR0);disable(BLEND);disable(DEPTH_TEST)
+        bindfbo(FB,temporal['curfbo']);drawbuffer(COLOR0);disable(BLEND);disable(DEPTH_TEST)
+        use(current_prog);bind_unit(4,TEXMS,accum);uniform1i(loc(current_prog,b'alpha_st_accum'),4)
+        uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
+        draw(4,0,3)
+        bindfbo(FB,temporal['fbo'][nxt]);drawbuffer(COLOR0)
+        use(resolve_prog);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur'])
+        uniform1i(loc(resolve_prog,b'alpha_st_current'),8);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
+        uniform1i(loc(resolve_prog,b'st_samples_hw'),n)
+        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
+        uniform1f(loc(resolve_prog,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'stoch_history_valid'),1 if temporal['valid'] else 0)
+        draw(4,0,3)
+        temporal['idx']=nxt;temporal['valid']=True
+    elif temporal is not None:
+        nxt=1-temporal['idx']
         use(resolve_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']])
         uniform1i(loc(resolve_prog,b'alpha_st_accum'),4);uniform1i(loc(resolve_prog,b'alpha_st_depth'),6);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
         uniform1i(loc(resolve_prog,b'st_samples_hw'),n);uniform1i(loc(resolve_prog,b'st_samples'),total)
-        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'st_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
-        uniform1f(loc(resolve_prog,b'st_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'st_history_valid'),1 if temporal['valid'] else 0)
-        draw(4,0,3)
+        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
+        uniform1f(loc(resolve_prog,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'stoch_history_valid'),1 if temporal['valid'] else 0)
+        bindimage(0,temporal['tex'][nxt],0,0,0,WRITE_ONLY,RGBA16F)   # the shader's binding = 0
+        dispatch((W+15)//16,(H+15)//16,1)
+        # as LLPipeline::resolveAlphaStochasticTemporal: the stores are read by the composite's texture fetches and by the next
+        # frame's resolve; the image-access bit orders the stores of a later frame after the fetches of this one
+        membarrier(TEXTURE_FETCH_BARRIER|IMAGE_ACCESS_BARRIER);bindimage(0,0,0,0,0,WRITE_ONLY,RGBA16F)
         temporal['idx']=nxt;temporal['valid']=True
     # 4. composite over the scene, then the glow into its alpha
     bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
@@ -278,8 +331,16 @@ alpha_programs={
     'class2/deferred/pbralphaF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_EMISSIVE_MAP','USE_VERTEX_COLOR','HAS_SUN_SHADOW'],
     'class3/deferred/materialF.glsl':['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_ALPHA_MASK','HAS_SUN_SHADOW'],
 }
+# the GLTF scene's blended variants (llviewershadermgr.cpp make_gltf_variant: ALPHA_BLEND, lit and
+# UNLIT, single and MULTI_UV) take part in the same engine
+gltf_blend=['MAX_NODES_PER_GLTF_OBJECT 64','MAX_MATERIALS_PER_GLTF_OBJECT 64','MAX_UBO_VEC4S 1024','ALPHA_BLEND']
+alpha_programs_all=list(alpha_programs.items())+[
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['HAS_SUN_SHADOW']),
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['HAS_SUN_SHADOW','MULTI_UV']),
+    ('class1/gltf/pbrmetallicroughnessF.glsl',gltf_blend+['UNLIT']),
+]
 compiled=0
-for rel,defines in alpha_programs.items():
+for rel,defines in alpha_programs_all:
     text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
     for as_variant in (False,True):
         extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defines)
@@ -292,6 +353,33 @@ for rel,defines in alpha_programs.items():
         assert ok.value,(rel,'stochastic' if as_variant else 'plain',log.value.decode()[:2000])
         fn('glDeleteShader',None,U)(shader);compiled+=1
 print(f'{compiled} alpha fragment shaders compile, plain and as their stochastic variants')
+# (the GLTF blended variants run in the mask model below: lit and unlit, the viewer's own shader)
+
+# ---- the sun N.L helper (sunShadowedDiffuse): every program that calls it, and deferredUtil.glsl that
+# defines it, compile in every combination of blend / no blend, with / without HAS_SUN_SHADOW,
+# with / without SHADOW_NL_MULTIPLY (compile only)
+nl_matrix=[]
+for rel,base in (('class2/deferred/alphaF.glsl',['USE_VERTEX_COLOR','HAS_ALPHA_MASK','USE_INDEXED_TEX']),
+                 ('class3/deferred/materialF.glsl',['HAS_NORMAL_MAP','HAS_SPECULAR_MAP','HAS_ALPHA_MASK']),
+                 ('class3/deferred/softenLightF.glsl',[]),
+                 ('class1/deferred/deferredUtil.glsl',[])):
+    text=(root/'indra/newview/app_settings/shaders'/rel).read_text()
+    for blend in ((0,1) if 'materialF' in rel else (1,)):
+        for sun in (0,1):
+            for mult in (0,1):
+                defs=list(base)+(['DIFFUSE_ALPHA_MODE 1'] if blend else ['DIFFUSE_ALPHA_MODE 0'])
+                if sun: defs.append('HAS_SUN_SHADOW')
+                if mult: defs.append('SHADOW_NL_MULTIPLY')
+                extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defs)
+                extra+='#define DIFFUSE_ALPHA_MODE_NONE 0\n#define DIFFUSE_ALPHA_MODE_BLEND 1\n#define DIFFUSE_ALPHA_MODE_MASK 2\n#define DIFFUSE_ALPHA_MODE_EMISSIVE 3\n'
+                extra+='#define GBUFFER_FLAG_SKIP_ATMOS 0.0\n#define GBUFFER_FLAG_HAS_ATMOS 0.34\n#define GBUFFER_FLAG_HAS_PBR 0.67\n#define GBUFFER_FLAG_HAS_HDRI 1.0\n#define GET_GBUFFER_FLAG(data, flag) (abs(data-flag)< 0.1)\nstruct GBufferInfo { vec4 albedo; vec4 specular; vec3 normal; vec4 emissive; float gbufferFlag; float envIntensity; };\n'
+                extra+='vec4 diffuseLookup(vec2 texcoord);\n'
+                source='#version 420\n'+text.replace('#extension GL_ARB_shader_image_load_store : enable','').replace('/*[EXTRA_CODE_HERE]*/',extra)
+                shader=create_shader(0x8B30);src=C.c_char_p(source.encode());source_shader(shader,1,C.byref(src),None);compile_shader(shader)
+                ok=I();shader_iv(shader,0x8B81,C.byref(ok));log=C.create_string_buffer(16384);shader_log(shader,len(log),None,log)
+                assert ok.value,(rel,defs,log.value.decode()[:2000])
+                fn('glDeleteShader',None,U)(shader);nl_matrix.append((rel,blend,sun,mult))
+print(f'{len(nl_matrix)} sun N.L shader variants compile (alphaF, materialF, softenLightF, deferredUtil; blend, sun shadow, multiply)')
 
 checks=0
 def L(z,a,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.): return (z,a,rgb,seed,glow,slope)
@@ -314,6 +402,113 @@ for total,n in ((16,8),(8,8),(4,4)):
         mean=sum(counts)/len(counts);assert abs(mean-a*total)<=0.05*total+1e-9,('mean R',total,a,mean)
         checks+=1
 print(f'{checks} coverage cases: every sample as the model predicts (16 in two passes of 8, 8, 4), R = floor or ceil of alpha S, mean alpha S')
+
+
+# ---- the GLTF scene's blended variants (pbrmetallicroughnessF.glsl itself, ALPHA_BLEND + ALPHA_STOCHASTIC, lit
+# with HAS_SUN_SHADOW as the viewer builds it, and UNLIT): the alpha-only output through the same mask model.
+# The lit shader multiplies in the vertex alpha a second time (a = basecolor.a * vertex_color.a), the unlit one
+# does not; the model is given the alpha each shaded output carries. The lighting functions the shader links
+# in the viewer are stand-ins here (they are not reached before the alpha-only return).
+GLTF_STUBS='''#version 420
+void mirrorClip(vec3 pos) {}
+void waterClip(vec3 pos) {}
+vec4 encodeNormal(vec3 n, float env, float flag) { return vec4(n, env); }
+vec3 srgb_to_linear(vec3 c) { return c; }
+vec3 linear_to_srgb(vec3 c) { return c; }
+void calcAtmosphericVarsLinear(vec3 p, vec3 n, vec3 l, out vec3 sunlit, out vec3 amblit, out vec3 atten, out vec3 additive)
+{ sunlit = vec3(1.0); amblit = vec3(0.3); atten = vec3(1.0); additive = vec3(0.0); }
+vec4 applySkyAndWaterFog(vec3 pos, vec3 additive, vec3 atten, vec4 color) { return color; }
+void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist)
+{ l = normalize(lv); h = normalize(l + v); nh = nl = nv = vh = 1.0; lightDist = length(lv); }
+float calcLegacyDistanceAttenuation(float distance, float falloff) { return 1.0; }
+float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen) { return 1.0; }
+void sampleReflectionProbes(inout vec3 ambenv, inout vec3 glossenv, vec2 tc, vec3 pos, vec3 norm, float glossiness, bool transparent, vec3 amblit)
+{ ambenv = amblit; glossenv = vec3(0.5); }
+void calcDiffuseSpecular(vec3 baseColor, float metallic, inout vec3 diffuseColor, inout vec3 specularColor) { diffuseColor = baseColor; specularColor = vec3(0.04); }
+vec3 pbrBaseLight(vec3 diffuseColor, vec3 specularColor, float metallic, vec3 pos, vec3 norm, float perceptualRoughness, vec3 light_dir,
+                  vec3 sunlit, float scol, vec3 radiance, vec3 irradiance, vec3 colorEmissive, float ao, vec3 additive, vec3 atten)
+{ return diffuseColor * sunlit * scol; }
+vec3 pbrCalcPointLightOrSpotLight(vec3 diffuseColor, vec3 specularColor, float perceptualRoughness, float metallic, vec3 n, vec3 p, vec3 v,
+                                  vec3 lp, vec3 ld, vec3 lightColor, float lightSize, float falloff, float is_pointlight, float ambiance)
+{ return vec3(0.0); }
+'''
+GLTF_VARYINGS='''out vec3 vary_position; out vec4 vertex_color; out vec2 base_color_uv; out vec2 emissive_uv;
+out vec3 vary_normal; out vec3 vary_tangent; flat out float vary_sign; out vec2 normal_uv; out vec2 metallic_roughness_uv;
+out vec2 occlusion_uv; out vec3 vary_fragcoord;
+void gltf_varyings(vec2 p, vec2 uv, float alpha, float zz)
+{
+    vary_position = vec3(p, -2.0); vertex_color = vec4(1.0, 1.0, 1.0, alpha);
+    base_color_uv = uv; emissive_uv = uv; normal_uv = uv; metallic_roughness_uv = uv; occlusion_uv = uv;
+    vary_normal = vec3(0.0, 0.0, 1.0); vary_tangent = vec3(1.0, 0.0, 0.0); vary_sign = 1.0; vary_fragcoord = vec3(p, 1.0);
+    gl_Position = vec4(p, zz, 1.0);
+}
+'''
+GLTF_VERTEX='#version 420\n'+GLTF_VARYINGS+'''uniform float z; uniform float slope; uniform float slope_y; uniform float test_alpha;
+void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gltf_varyings(p, p*0.5+0.5, test_alpha, z+slope*p.x+slope_y*p.y); }'''
+GLTF_LATTICE_VERTEX='#version 420\n'+GLTF_VARYINGS+'''uniform float z; uniform int cells; uniform vec2 goff; uniform float test_alpha;
+void main(){ int cell=gl_VertexID/6; int k=gl_VertexID%6; int cx=cell%cells; int cy=cell/cells;
+ vec2 c[6]=vec2[6](vec2(0,0),vec2(1,0),vec2(0,1),vec2(1,0),vec2(1,1),vec2(0,1));
+ vec2 p=(vec2(cx,cy)+c[k])/float(cells)*2.5-1.25+goff; gltf_varyings(p, c[k], test_alpha, z); }'''
+gltf_text=(root/'indra/newview/app_settings/shaders/class1/gltf/pbrmetallicroughnessF.glsl').read_text()
+def gltf_alpha_only(unlit,vertex=GLTF_VERTEX,text=gltf_text):
+    """make_gltf_variant's blended variant as its alpha-only (ALPHA_STOCHASTIC) program"""
+    defines=['MAX_NODES_PER_GLTF_OBJECT 64','MAX_MATERIALS_PER_GLTF_OBJECT 64','MAX_UBO_VEC4S 1024','ALPHA_BLEND','ALPHA_STOCHASTIC']
+    defines+=['UNLIT'] if unlit else ['HAS_SUN_SHADOW']
+    extra=''.join('#define '+(d if ' ' in d else d+' 1')+'\n' for d in defines)
+    src='#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/',extra)
+    prog=program([(0x8B31,vertex),(0x8B30,src),(0x8B30,GLTF_STUBS),(0x8B30,helper),(0x8B30,engine)])
+    use(prog);uniform1i(loc(prog,b'gltf_material_id'),-1);uniform1i(loc(prog,b'diffuseMap'),12)
+    return prog
+gltf_white=U();gentex(1,C.byref(gltf_white));bindtex(TEX2D,gltf_white)
+teximage(TEX2D,0,0x8058,2,2,0,RGBA,0x1401,(C.c_ubyte*16)(*([255]*16)))
+texparam(TEX2D,MIN,NEAREST);texparam(TEX2D,MAG,NEAREST);texparam(TEX2D,0x2802,0x812D);texparam(TEX2D,0x2803,0x812D)   # clamp to the (transparent) border
+bind_unit(12,TEX2D,gltf_white)
+gltf_variants={'lit':gltf_alpha_only(False),'unlit':gltf_alpha_only(True)}
+def gltf_alpha(kind,a):
+    a32=f32(a)
+    return f32(a32*a32) if kind=='lit' else a32
+
+gltf_cases=0
+for kind,gprog in gltf_variants.items():
+    saved_variant=variant;variant=gprog
+    try:
+        for total,n in ((16,8),(8,8),(4,4)):
+            for a in (0.0,0.3,0.5,0.77,1.0):
+                set_opaque(1.0)
+                _,bits=stochastic([L(0.5,a,seed=12345)],total,n,read_bits=True)
+                eff=gltf_alpha(kind,a)
+                for y in range(H):
+                    for x in range(W):
+                        full=model_mask(x,y,12345,0,eff,total,tables[total])
+                        for it in range(total//n):
+                            want=(full>>(it*n))&((1<<n)-1)
+                            assert bits[it][y*W+x]==want,('GLTF coverage bits',kind,total,n,a,x,y,it,hex(bits[it][y*W+x]),hex(want))
+                gltf_cases+=1
+        # total alpha of two layers: 1 - prod(1 - alpha_eff), whatever the visibility
+        set_opaque(1.0)
+        pix=stochastic([L(0.3,0.6,seed=7),L(0.6,0.5,seed=9)],8,8)
+        want=1-(1-gltf_alpha(kind,0.6))*(1-gltf_alpha(kind,0.5))
+        worst=max(abs(p[c]-want) for p in pix for c in range(3))
+        assert worst<2e-3,('GLTF total alpha',kind,worst,want);gltf_cases+=1
+        # mode 3 (the depth of field pass, the rigged depth restore): every sample, under the cut nothing
+        for a,cut in ((0.2,0.33),(0.5,0.33),(0.004,0.004),(0.003,0.004)):
+            eff=gltf_alpha(kind,a);n=4;set_opaque(1.0)
+            f=targets[n][0];bindfbo(FB,f);enable(MULTISAMPLE);drawbuffer(NONE);spread(n,expand)
+            disable(BLEND);enable(DEPTH_TEST);depthmask(1);disable(POLY_OFFSET)
+            use(gprog);uniform1i(loc(gprog,b'st_mode'),3);uniform1f(loc(gprog,b'st_min_alpha'),cut)
+            uniform1i(loc(gprog,b'st_samples_hw'),n);uniform1i(loc(gprog,b'st_samples'),n)
+            layer(gprog,0.5,a,seed=1)
+            bindfbo(FB,bits_fbo);disable(DEPTH_TEST);disable(MULTISAMPLE)
+            use(readmask);bind_unit(2,TEXMS,targets[n][3]);bind_unit(3,TEX2D,opaque_depth)
+            uniform1i(loc(readmask,b'st_depth'),2);uniform1i(loc(readmask,b'opaque'),3);uniform1i(loc(readmask,b'samples'),n)
+            draw(4,0,3);px=(U*(W*H))();readpixels(0,0,W,H,RED_INT,UINT,px)
+            enable(DEPTH_TEST);enable(MULTISAMPLE)
+            expect=(1<<n)-1 if eff>=f32(cut) else 0
+            assert set(px)=={expect},('GLTF depth-only mode',kind,a,cut,set(px),expect);gltf_cases+=1
+    finally:
+        variant=saved_variant
+print(f"{gltf_cases} GLTF blended variant cases (the viewer's pbrmetallicroughnessF.glsl, lit and unlit): every sample as the model predicts "
+      '(S = 16, 8, 4), total alpha, and the depth-only mode with its cut')
 
 # different face seeds: unrelated masks; the same seed: the same mask
 set_opaque(1.0)
@@ -467,6 +662,7 @@ void waterClip(vec3 pos) {}
 float getAmbientClamp() { return 1.0; }
 vec4 encodeNormal(vec3 n, float env, float flag) { return vec4(n, env); }
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen) { return 1.0; }
+float sunShadowedDiffuse(float da, float s) { return min(da, s); }
 void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv, vec2 tc, vec3 pos,
     vec3 norm, float glossiness, float envIntensity, bool transparent, vec3 amblit)
 { ambenv = amblit; glossenv = vec3(0.5); legacyenv = vec3(0.8); }
@@ -491,7 +687,7 @@ def material_program(as_variant):
     extra='#define DIFFUSE_ALPHA_MODE 1\n#define HAS_NORMAL_MAP 1\n#define HAS_SPECULAR_MAP 1\n#define HAS_SUN_SHADOW 1\n'
     if as_variant: extra+='#define ALPHA_STOCHASTIC 1\n'
     stages=[(0x8B31,MATERIAL_VERTEX),(0x8B30,'#version 420\n'+text.replace('/*[EXTRA_CODE_HERE]*/',extra)),(0x8B30,MATERIAL_STUBS)]
-    if as_variant: stages.append((0x8B30,helper))
+    if as_variant: stages.extend([(0x8B30,helper),(0x8B30,engine)])
     return program(stages)
 mat_plain=material_program(False); mat_variant=material_program(True)
 
@@ -512,6 +708,8 @@ def bind_material(prog,diffuse,bump,spec,env,gloss):
     fn('glUniform4f',None,I,C.c_float,C.c_float,C.c_float,C.c_float)(loc(prog,b'specular_color'),1.,1.,1.,gloss)
     uniform1f(loc(prog,b'emissive_brightness'),0.);uniform1i(loc(prog,b'sun_up_factor'),1)
     uniform3f(loc(prog,b'sun_dir'),0.,0.6,0.8);uniform3f(loc(prog,b'moon_dir'),0.,0.6,0.8)
+    # stage L3: the ground light and the sun's direction the shaders read now
+    uniform3f(loc(prog,b'primary_light_dir'),0.,0.6,0.8);uniform3f(loc(prog,b'primary_light_color'),1.,1.,1.);uniform1f(loc(prog,b'primary_shadow_strength'),1.)
 light_func=rgba_tex(255,255,255,255)
 red_clear=rgba_tex(200,40,40,0)            # the layer's diffuse: alpha 0 (a tattoo or applier layer)
 red_fade=rgba_tex(200,40,40,255,ramp=True) # alpha 0 -> 1 across the face
@@ -539,7 +737,7 @@ def material_layer(z,diffuse,bump,spec,env,gloss,total,n,scene_rgba,fixed):
         bind_material(mat_variant,diffuse,ab,asp,env,gloss);uniform1f(loc(mat_variant,b'z'),z)
         uniform1i(loc(mat_variant,b'st_mode'),mode);uniform1i(loc(mat_variant,b'st_iteration'),it)
         uniform1i(loc(mat_variant,b'st_samples_hw'),n);uniform1i(loc(mat_variant,b'st_samples'),total)
-        uniform1i(loc(mat_variant,b'st_seed'),21);bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(mat_variant,b'alpha_st_masks'),1)
+        uniform1i(loc(mat_variant,b'st_seed'),21);bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(mat_variant,b'stoch_masks'),1)
         draw(4,0,3)
     bindfbo(FB,f);drawbuffer(COLOR1);enable(BLEND);blendsep(ZERO,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
     depthmask(0);offset(VIEWER_OFFSET[0],VIEWER_OFFSET[1]);variant_pass(1)
@@ -597,14 +795,17 @@ for name,worst,count in before:
 assert before[0][2]==W*H and before[1][2]==W*H,('the old binding should change every pixel under the alpha 0 layer',before)
 assert before[2][2]==W*H,('the old binding should lose the shiny glass reflections',before)
 
-# ---- the temporal accumulation (alphaStochasticResolveF.glsl, the composite's st_temporal)
+# ---- the temporal accumulation (the fragment pair by default, alphaStochasticResolveC.glsl with STOCH_TEST_RESOLVE=compute, with the
+# engine's resolve; the composite's st_temporal)
 # 8 samples in one pass, the masks' seeds changing every frame (st_frame), the last frame's colour moved
 # by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.
 IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
 def new_temporal(reproj=IDENT):
     tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)]
+    if not FRAGMENT_RESOLVE: return dict(tex=tex,idx=0,valid=False,reproj=list(reproj))
     fbos=[fbo((COLOR0,TEX2D,x)) for x in tex]
-    return dict(tex=tex,fbo=fbos,idx=0,valid=False,reproj=list(reproj))
+    cur=tex2d(RGBA32F,RGBA,FLOAT);curfbo=fbo((COLOR0,TEX2D,cur))   # this frame's averaged samples
+    return dict(tex=tex,fbo=fbos,cur=cur,curfbo=curfbo,idx=0,valid=False,reproj=list(reproj))
 def rmse(pix,want,cols=None):
     xs=range(W) if cols is None else cols
     return math.sqrt(sum((pix[y*W+x][c]-want[c])**2 for y in range(H) for x in xs for c in range(3))/(3*H*len(xs)))
@@ -689,7 +890,7 @@ void main(){ int cell=gl_VertexID/6; int k=gl_VertexID%6; int cx=cell%cells; int
  vec2 p=(vec2(cx,cy)+c[k])/float(cells)*2.5-1.25+goff; gl_Position=vec4(p,z,1.0); }'''
 lat_variant=program([(0x8B31,lat_vertex),(0x8B30,'''#version 420
 uniform float test_alpha; in vec2 vuv; out vec4 frag_color; int alpha_stochastic_mask(float a);
-void main(){ frag_color=vec4(0.0,0.0,0.0,test_alpha); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper)])
+void main(){ frag_color=vec4(0.0,0.0,0.0,test_alpha); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper),(0x8B30,engine)])
 def lat_shade_program(qualifier):
     return program([(0x8B31,lat_vertex),(0x8B30,'''#version 420
 uniform float test_alpha; QUAL in vec2 vuv; out vec4 frag_color;
@@ -744,8 +945,40 @@ for rel in ('class2/deferred/alphaF.glsl','class1/deferred/fullbrightF.glsl','cl
     plain=_re.findall(r'^[ \t]*in\s+(?:vec[234]|float|mat[234])\s+\w+',text,_re.M)
     assert not plain,(rel,'fragment inputs without centroid',plain)
     assert 'centroid in ' in text,rel
+# the GLTF scene's blended variants, the viewer's own shader (its ST_IN macro) on the same lattice: the
+# 2x2 diffuse texture is opaque inside the island and transparent outside it (clamp to border), so a
+# sample shaded at an extrapolated coordinate has alpha 0 and its pixel loses the island's samples; the
+# scene behind shows through as white. Without centroid (ST_IN replaced by `in`) pixels leak.
+def glat_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
+    i=1   # one layer, its lattice off the pixel grid: a hole in it shows the scene
+    use(prog);uniform1f(loc(prog,b'z'),z);uniform1i(loc(prog,b'cells'),CELLS_L)
+    fn('glUniform2f',None,I,C.c_float,C.c_float)(loc(prog,b'goff'),(i*0.37%1.0)*2.5/CELLS_L,(i*0.61%1.0)*2.5/CELLS_L)
+    uniform1f(loc(prog,b'test_alpha'),alpha)
+    if prog in glat_variants: uniform1i(loc(prog,b'st_seed'),seed)
+    draw(4,0,6*CELLS_L*CELLS_L)
+assert '#define ST_IN centroid in' in gltf_text
+glat_centroid=gltf_alpha_only(True,GLTF_LATTICE_VERTEX)
+glat_smooth=gltf_alpha_only(True,GLTF_LATTICE_VERTEX,gltf_text.replace('#define ST_IN centroid in','#define ST_IN in'))
+glat_variants=[glat_centroid,glat_smooth]
+def gltf_lattice_white(gprog,total,n):
+    global layer,variant,shade
+    saved=(layer,variant,shade);layer,variant,shade=glat_layer,gprog,lat_centroid
+    lat_calls[0]=0;lat_layers[0]=1
+    try:
+        set_opaque(1.0)
+        pix=stochastic([L(0.5,1.0,seed=900)],total,n,scene_rgba=(1.,1.,1.,0.))
+    finally:
+        layer,variant,shade=saved
+    return sum(1 for p in pix if abs(p[0]-0.3)>0.01)   # not the island's grey: some of the white scene showing through
+glat_report=[]
+for total,n in ((4,4),(8,8),(16,8)):
+    leaks=gltf_lattice_white(glat_smooth,total,n);clean=gltf_lattice_white(glat_centroid,total,n)
+    assert leaks>0,('without centroid the GLTF variant should leak at the island edges',total,leaks)
+    assert clean==0,('the GLTF blended variant must not shade outside its island',total,clean)
+    glat_report.append((total,leaks,clean))
 checks+=1
-print('alpha programs: every interpolated fragment input is `centroid in`')
+print('alpha programs: every interpolated fragment input is `centroid in`; the GLTF blended variant (the viewer\'s own shader) on the lattice: '
+      +', '.join(f'S = {t}: {l} -> {c} leaking pixels' for t,l,c in glat_report)+' (without ST_IN centroid -> with)')
 
 # ---- two layers whose rotations meet on one table entry (the subset of the mask table)
 # The subset of a fragment was the table column of fract(pixel value + the layer's rotation), so
@@ -760,13 +993,14 @@ order=sorted(range(1,6000),key=rot_y)
 best=min(zip(order,order[1:]),key=lambda ab:abs(rot_y(ab[0])-rot_y(ab[1])))
 SEED_A,SEED_B=best;SEED_C=7777
 assert abs(rot_y(SEED_A)-rot_y(SEED_B))<2e-6,('colliding pair',best)
-assert 'v.y = float(st_hash(seed ^ h ^ 0x5bd1e995u)' in helper,'the hashed subset is in the shader'
-lines=helper.splitlines();i=next(k for k,ln in enumerate(lines) if ln.strip()=='vec2 v = fract(pv + rot);')
-j=next(k for k,ln in enumerate(lines) if ln.strip()=='uint s = uint(st_samples);')
-helper_old=chr(10).join(lines[:i+1]+lines[j:])   # the shader as it was: the subset from the rotated value
+hashed_col='float col = float(stoch_hash(seed ^ h ^ 0x5bd1e995u) >> 8u) / 16777216.0;'
+assert hashed_col in engine,'the hashed subset is in the shader'
+# the shader as it was: the subset from the rotated value
+engine_old=engine.replace(hashed_col,'float col = fract(float(stoch_hash(h) >> 8u) / 16777216.0 + float(stoch_hash(seed) >> 8u) / 16777216.0);')
+assert engine_old!=engine
 variant_old=program([(0x8B31,vertex),(0x8B30,"""#version 420
 uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
-void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }"""),(0x8B30,helper_old)])
+void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }"""),(0x8B30,helper),(0x8B30,engine_old)])
 def coincide(prog,total,n):
     global variant
     saved=variant;variant=prog

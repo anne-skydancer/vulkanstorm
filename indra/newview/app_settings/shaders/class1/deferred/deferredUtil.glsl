@@ -78,6 +78,20 @@ vec3 srgb_to_linear(vec3 cs);
 vec3 linear_to_srgb(vec3 cs);
 vec3 atmosFragLightingLinear(vec3 light, vec3 additive, vec3 atten);
 
+// <Vulkanstorm> The sun's diffuse term under a shadow. Legacy keeps Firestorm's min(). Every other
+// shadow method defines SHADOW_NL_MULTIPLY (llviewershadermgr.cpp) and multiplies: min() clips
+// the penumbra of a surface turned away from the sun, which a soft shadow must not do.
+float sunShadowedDiffuse(float da, float shadow)
+{
+#ifdef SHADOW_NL_MULTIPLY
+    // a soft shadow filter can return slightly above 1 (min() hid it) and a NaN reads as unshadowed, as min() did
+    return da * (isnan(shadow) ? 1.0 : clamp(shadow, 0.0, 1.0));
+#else
+    return min(da, shadow);
+#endif
+}
+// </Vulkanstorm>
+
 vec4 decodeNormal(vec4 norm);
 
 vec3 clampHDRRange(vec3 color)
@@ -599,7 +613,16 @@ vec3 pbrBaseLight(vec3 diffuseColor, vec3 specularColor, float metallic, vec3 v,
 
         float da = pow(nl, 1.2);
 
-        vec3 sun_contrib = vec3(min(da, scol));
+#ifdef SHADOW_NL_MULTIPLY
+        // <Vulkanstorm> finalSun below multiplies by scol once (the min() form applies the shadow
+        // twice). That single shadow acts in linear space here, while the non-PBR path applies it
+        // inside the sRGB composition, so the penumbra curve differs from non-PBR; the two match at
+        // full light and at full shadow.
+        vec3 sun_contrib = vec3(da);
+#else
+        vec3 sun_contrib = vec3(min(da, scol)); // (Legacy keeps the double application below)
+#endif
+        // </Vulkanstorm>
 
         // Multiply by PI to account for lambertian diffuse colors.  Otherwise things will be too dark when lit by the sun on legacy skies.
         sun_contrib = srgb_to_linear(linear_to_srgb(sun_contrib) * sunlit * 0.7) * M_PI;

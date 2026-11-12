@@ -38,7 +38,9 @@
 #include "llgl.h"
 #include "lldrawable.h"
 #include "llrendertarget.h"
+#include "llstochastichistory.h"
 #include "llreflectionmapmanager.h"
+#include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
 
 #include <stack>
@@ -315,7 +317,10 @@ public:
     // bind shadow maps
     // if setup is true, wil lset texture compare mode function and filtering options
     void bindShadowMaps(LLGLSLShader& shader);
-    void bindShadowDepthFetch(LLGLSLShader& shader, bool bind); // <Vulkanstorm/> PCSS raw depth units
+    // <Vulkanstorm> stage L2: the cloud transmittance map (llcloudshadowmap.h)
+    void bindCloudShadow(LLGLSLShader& shader) { mCloudShadowMap.bind(shader); }
+    LLCloudShadowMap mCloudShadowMap;
+    // </Vulkanstorm>
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);
     void setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep);
@@ -345,6 +350,17 @@ public:
     void postDeferredGammaCorrect(LLRenderTarget* screen_target);
 
     void generateSunShadow(LLCamera& camera);
+    // <Vulkanstorm> shadow method: the Legacy (Firestorm 7.2.5) and Stochastic (stable) sun cascades; only
+    // generateSunShadow calls these
+    bool computeSunSplitsLegacy(LLCamera& camera, const LLVector3& lightDir, const glm::mat4& saved_view,
+        bool skip_avatar_update, LLVector3& out_up, F32& out_near_clip);
+    void generateSunCascadesLegacy(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+        const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+        glm::mat4 (&view)[6], glm::mat4 (&proj)[6]);
+    void generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
+        const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
+        glm::mat4 (&view)[6], glm::mat4 (&proj)[6]);
+    // </Vulkanstorm>
     LLRenderTarget* getSunShadowTarget(U32 i);
     LLRenderTarget* getSpotShadowTarget(U32 i);
 
@@ -412,22 +428,36 @@ public:
         ALPHA_ST_BUFFER_ACCUM,      // alpha x colour and alpha, additive
         ALPHA_ST_BUFFER_TRANS,      // red prod(1 - alpha), green the blended faces' glow
     };
-    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: sorted alpha
+    bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: the targets are missing
     void spreadAlphaStochasticDepth(); // the opaque depth on every sample again (before an iteration)
     void setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer);
     void endAlphaStochastic();       // the scene target bound again
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
+    bool alphaStochasticReady() const;             // beginAlphaStochastic would run the passes (the targets, programs and size are there)
+    bool alphaStochasticMissing() const;           // selected and supported, but its targets are not there
+    void retryAlphaStochastic();                   // once a frame from the display path: failed allocations, with backoff
+    void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
-    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's
+    void releaseAlphaStochasticHistory();   // the history (and the fragment path's averaged-samples target) freed
+    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's (the fragment pair; compute is never chosen in the OpenGL viewer)
+    void resolveAlphaStochasticTemporalFragment();
+    bool alphaStochasticResolveReady() const; // the selected resolve's programs are built
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
-    U32  getAlphaStochasticSamples() const { return mAlphaSTSamples; }
-    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? mAlphaSTSamples / mAlphaSTPassSamples : 0; }
-    U32  getAlphaStochasticMasks() const { return mAlphaSTMasks; }
+    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::SAMPLES; }
+    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? LLStochasticEngine::SAMPLES / mAlphaSTPassSamples : 0; }
+    U32  getAlphaStochasticMasks() const { return LLStochasticEngine::getMasks(); }
     // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
-    U32  getAlphaStochasticFrame() const { return mAlphaSTTemporal ? mAlphaSTFrame : 0; }
-    static std::vector<U32> alphaStochasticMaskTable(U32 samples); // [r * 2048 + seed]
+    U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the Stochastic shadow method's temporal accumulation (the stochastic engine's history)
+    F32  getShadowLightSize() const;               // L = 2 tan(half angle) of the sun or moon, times RenderShadowLightSize
+    bool beginShadowStochastic();                  // once a frame in the lighting pass: the history made or freed, the frame begun; true: the sun pass writes raw rays
+    void releaseShadowStochasticHistory();
+    void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
+    void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
     // </Vulkanstorm>
 
     // </FS>
@@ -788,32 +818,39 @@ public:
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
-    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples; the mask table (R32UI,
-    // 2048 x (S + 1)) for S = mAlphaSTSamples samples in all
+    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 8 samples in all; the
+    // engine's mask table is held (mAlphaSTMasksHeld) while they are. All counted in the texture memory.
     U32 mAlphaSTFBO = 0;
     U32 mAlphaSTAccum = 0;
     U32 mAlphaSTTrans = 0;
     U32 mAlphaSTDepth = 0;
-    U32 mAlphaSTMasks = 0;
+    bool mAlphaSTMasksHeld = false;
     U32 mAlphaSTWidth = 0;
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
-    U32 mAlphaSTSamples = 0;
-    // the temporal accumulation: two full-size RGBA16F colours (the last frame's blended colour and
-    // this frame's), each with a framebuffer; mAlphaSTHistoryIndex holds the latest. The history is
-    // valid when the frame before ran the method at this size (mAlphaSTHistoryStamp + 1 == this frame).
-    U32 mAlphaSTHistory[2] = { 0, 0 };
-    U32 mAlphaSTHistoryFBO[2] = { 0, 0 };
-    U32 mAlphaSTHistoryIndex = 0;
-    U32 mAlphaSTHistoryWidth = 0;
-    U32 mAlphaSTHistoryHeight = 0;
-    U32 mAlphaSTHistoryStamp = 0;
-    U32 mAlphaSTFrame = 0;          // the frame counter of the seeds, never 0
-    bool mAlphaSTHistoryValid = false;
-    bool mAlphaSTTemporal = false;  // this frame accumulates over the frames
-    bool mAlphaSTHistoryUsed = false; // the history is read this frame
-    glm::mat4 mAlphaSTLastModelView = glm::mat4(1.f);
-    glm::mat4 mAlphaSTLastProjection = glm::mat4(1.f);
+    // the temporal accumulation: the transparency's history in the stochastic engine (two
+    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and, on the
+    // fragment path only (the default on every device), the full-size RGBA32F target of this frame's averaged samples
+    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
+    U32 mAlphaSTCurrent = 0;
+    U32 mAlphaSTCurrentFBO = 0;
+    F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
+    F64 mAlphaSTRetryTime = 0.0;
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the Stochastic shadow method's history: r sun, g linear view depth, b and a the projector
+    // slots, two full-size RGBA16F colours, counted in the texture memory; and what the resolve compares
+    // with last frame to tell a light that changed (its channel then takes this frame's rays alone)
+    LLStochasticHistory mShadowSTHistory{ GL_RGBA16F, 1.f / 8.f };
+    mutable F32 mShadowLightSize = 0.f;              // getShadowLightSize(), computed once a frame
+    mutable U32 mShadowLightSizeFrame = 0xffffffffu;
+    U32 mShadowSTFailedWidth = 0;       // the size whose allocation failed (logged once; tried again at another size)
+    U32 mShadowSTFailedHeight = 0;
+    bool mShadowSTLightKnown = false;
+    LLVector3 mShadowSTLightDir;        // the primary light's direction, world frame
+    const LLDrawable* mShadowSTSpot[2] = { nullptr, nullptr };   // identity only, never dereferenced
+    LLVector3 mShadowSTSpotPos[2];
+    LLQuaternion mShadowSTSpotRot[2];
     // </Vulkanstorm>
 
     // </FS>
@@ -906,6 +943,7 @@ public:
 
     LLVector4           mTransformedSunDir;
     LLVector4           mTransformedMoonDir;
+    LLVector4           mTransformedPrimaryDir; // <Vulkanstorm/> stage L3: the sun/moon handover's light, eye space
 
     bool                    mInitialized;
     bool                    mShadersLoaded;
@@ -1193,8 +1231,8 @@ public:
     static F32 CameraFieldOfView;
     static F32 RenderShadowNoise;
     static F32 RenderShadowBlurSize;
-    static bool RenderShadowPCSS;          // <Vulkanstorm/> PCSS soft shadows
-    static F32 RenderShadowPCSSLightSize;  // <Vulkanstorm/> PCSS light size multiplier
+    static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 2 Stochastic
+    static F32 RenderShadowLightSize;      // <Vulkanstorm/> light size multiplier (Stochastic)
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
     static F32 RenderSSAOFactor;

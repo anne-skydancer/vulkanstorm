@@ -49,9 +49,7 @@ uniform float ssao_irradiance_max;
 uniform vec4 clipPlane;
 uniform mat3 env_mat;
 uniform mat3  ssao_effect_mat;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
-uniform int  sun_up_factor;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 uniform int classic_mode;
 
 in vec2 vary_fragcoord;
@@ -77,6 +75,7 @@ float getDepth(vec2 pos_screen);
 
 vec3 linear_to_srgb(vec3 c);
 vec3 srgb_to_linear(vec3 c);
+float sunShadowedDiffuse(float da, float shadow);
 
 uniform vec4 waterPlane;
 
@@ -126,7 +125,7 @@ void main()
 
     vec3 colorEmissive = gb.emissive.rgb;
     float envIntensity = gb.envIntensity;
-    vec3  light_dir   = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3  light_dir   = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     vec4 baseColor     = gb.albedo;
     vec4 spec        = gb.specular; // NOTE: PBR linear Emissive
@@ -226,14 +225,14 @@ void main()
         if (classic_mode > 0)
         {
             da = pow(da,1.2);
-            vec3 sun_contrib = vec3(min(da, scol));
+            vec3 sun_contrib = vec3(sunShadowedDiffuse(da, scol));
 
             color.rgb = srgb_to_linear(color.rgb * 0.9 + (linear_to_srgb(sun_contrib) * sunlit_linear * 0.7));
             sunlit_linear = srgb_to_linear(sunlit_linear);
         }
         else
         {
-            vec3 sun_contrib = min(da, scol) * sunlit_linear;
+            vec3 sun_contrib = sunShadowedDiffuse(da, scol) * sunlit_linear;
             color.rgb += sun_contrib;
         }
 

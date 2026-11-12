@@ -23,6 +23,11 @@
  * $/LicenseInfo$
  */
 
+#if defined(SHADOW_COMMON_ONLY)
+// <Vulkanstorm> the Stochastic method links the method-neutral block (SHADOW_COMMON below) next to its own
+// shadow util: this build is that block alone, with the screen size it reads. Nothing else of this file is in it.
+uniform vec2 screen_res;
+#else
 uniform sampler2D   normalMap;
 
 #if defined(SUN_SHADOW)
@@ -37,8 +42,8 @@ uniform sampler2DShadow shadowMap4;
 uniform sampler2DShadow shadowMap5;
 #endif
 
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
+uniform float primary_shadow_strength; // <Vulkanstorm/> L3: 1 full shadow, 0 none (also in windlight/atmosphericsFuncs.glsl)
 uniform vec2 shadow_res;
 uniform vec2 proj_shadow_res;
 uniform mat4 shadow_matrix[6];
@@ -50,7 +55,6 @@ uniform float spot_shadow_offset;
 uniform float spot_shadow_reach; // <Vulkanstorm/> metres: the projector shadows fade out towards this camera distance
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
-uniform int sun_up_factor;
 
 // <Vulkanstorm> receiver-plane depth bias of the sun PCF: the depth slope of the receiver in
 // shadow texture space (d depth / d uv), from two 5 cm tangent steps of the view space position
@@ -60,7 +64,7 @@ uniform int sun_up_factor;
 // Replaces the altitude term of the bias (RenderShadowBiasError), which only widened a constant
 // bias with height. Licensed LGPL-2.1 or GPL-3.
 #define PCF_RPDB_STEP 0.05      // metres
-#define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units (as PCSS)
+#define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units
 vec2 pcfDepthGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
 {
     if (dot(norm, norm) < 1.0e-8)
@@ -131,301 +135,201 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
     return 1.0;
 #endif
 }
+#endif // !SHADOW_COMMON_ONLY
 
-#if defined(PCSS_SHADOW)
-// <Vulkanstorm> PCSS stage 1: rotated Poisson PCF with a receiver-plane depth bias.
-// Compiled only into the deferred sun program (gDeferredSunProgram) when RenderShadowPCSS is on;
-// every other consumer of this file gets the PCF above, unchanged. Licensed LGPL-2.1 or GPL-3.
+#if defined(SHADOW_COMMON) && defined(SUN_SHADOW)
+// <Vulkanstorm> Stage S2: method-neutral groundwork (SHADOW_COMMON). Any shadow method may use it:
+// the Stochastic method links this block (SHADOW_COMMON_ONLY builds), and the Legacy build can define it to
+// call the helpers (nothing in Legacy does yet, and without the define the Legacy text below is untouched).
+// The block needs no textureGather (GLSL 1.50). Written once for
+// the orthographic sun cascades of stage S1 (their matrices rotate and scale only: the rows of the
+// matrix are orthogonal, and the rows' lengths are the map's scales). Licensed LGPL-2.1 or GPL-3.
+//   * the receiver plane: the geometric normal of the surface, rebuilt from the depth buffer, instead
+//     of the G-buffer normal, which carries the normal map's bumps;
+//   * the plane's signed depth gradient in the map, and the bias in world units (texels of the map
+//     at the pixel, times the map's depth scale), the same in every cascade;
+//   * the 25 cm footprint SHADOW_FOOTPRINT_M a filter may reach (the caster cull guard of
+//     llshadowcascadefit.h keeps every caster inside that reach);
+// The constants SHADOW_BIAS_TEXELS, SHADOW_NORMAL_OFFSET_TEXELS, SHADOW_PLANE_BIAS_MAX_TEXELS,
+// SHADOW_GRAD_MAX and SHADOW_FOOTPRINT_M come from llshadowcascadefit.h through the shader manager (one source of truth).
 
-// angular size of the shadowing light, L = 2 tan(half angle) (physical sun times the sky's
-// sun_scale times RenderShadowPCSSLightSize); the penumbra width uses it from stage 2 on
-uniform float shadow_light_size;
+#if !defined(SHADOW_COMMON_NO_DEPTH)
+vec4 getPosition(vec2 pos_screen); // deferredUtil.glsl: view space position of a screen position
 
-#define PCSS_PCF_TAPS   12
-#define PCSS_PCF_RADIUS 1.5     // kernel radius in shadow map texels
-#define PCSS_PLANE_STEP 0.05    // metres: tangent step that measures the receiver plane
-#define PCSS_RPDB_MAX   0.004   // cap of the receiver-plane bias, shadow depth units
-#define PCSS_GRAD_MAX   1.0e4   // depth gradient used where the plane is edge-on to the light
+#define SHADOW_EDGE_REL        0.03   // a depth jump to the neighbour pixel beyond this fraction of the
+#define SHADOW_EDGE_ABS        0.02   //   depth plus this many metres is an edge, not a slope
+#define SHADOW_STEP_TIE        0.002  // metres: two steps whose depths differ less than this (and half) are alike
+#define SHADOW_PARALLEL_MIN    1.0e-4 // squared sine of the angle between two unit steps below which they are parallel
 
-// Best-candidate Poisson disk, mean at the centre, farthest point on the unit circle:
-// scripts/perf/gen_poisson_disk.py 12
-const vec2 pcss_poisson12[12] = vec2[12](
-    vec2(-0.789262,  0.127632),
-    vec2( 0.406628, -0.132460),
-    vec2(-0.032561,  0.702528),
-    vec2(-0.350013, -0.648809),
-    vec2( 0.580484,  0.508811),
-    vec2(-0.653347,  0.747330),
-    vec2( 0.265165, -0.741572),
-    vec2(-0.182968,  0.036783),
-    vec2(-0.897737, -0.440532),
-    vec2( 0.819877,  0.077022),
-    vec2( 0.186699,  0.290105),
-    vec2( 0.647037, -0.526838));
-
-// interleaved gradient noise (Jimenez 2014) of the pixel: the kernel's rotation
-float pcssNoise(vec2 frag)
+// One screen axis of shadowGeometricNormal: the step (view space, to the neighbour pixel) that lies in the
+// surface. fwd and bwd are the steps to the next and the previous pixel and vf and vb tell whether each is on
+// the screen and on the same surface (no depth edge). Where one step is clearly flatter in depth than the
+// other (a crease or a fold: the other side is another surface) that one is taken. Where they are alike both
+// lie in the surface and the one nearer the tangent plane of the G-buffer normal gn is taken, which only
+// breaks the tie: the plane itself comes from the depth buffer, so a tilted normal map does not bend it.
+// ok is false where no neighbour is usable.
+vec3 shadowAxisStep(vec3 fwd, vec3 bwd, bool vf, bool vb, vec3 gn, out bool ok)
 {
-    return fract(52.9829189 * fract(0.06711056 * frag.x + 0.00583715 * frag.y));
-}
-
-// Receiver plane in shadow texture space: d(depth)/d(uv) of the surface (view space position
-// pos, normal norm) under the projective shadow matrix m, from two tangent steps. c is the
-// pixel's own projected and divided position.
-vec2 pcssDepthGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
-{
-    if (dot(norm, norm) < 1.0e-8)
+    ok = vf || vb;
+    if (!vb) return fwd;
+    if (!vf) return bwd;
+    float zf = abs(fwd.z);
+    float zb = abs(bwd.z);
+    float hi = max(zf, zb);
+    if (hi - min(zf, zb) > 0.5 * hi + SHADOW_STEP_TIE)
     {
-        return vec2(0.0); // no normal (sky): constant bias only
+        return zf < zb ? fwd : bwd;
     }
-    vec3 n = normalize(norm);
-    vec3 t1 = normalize(cross(n, abs(n.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
-    vec3 t2 = cross(n, t1);
-    vec4 a = m * vec4(pos + t1 * PCSS_PLANE_STEP, 1.0);
-    vec4 b = m * vec4(pos + t2 * PCSS_PLANE_STEP, 1.0);
-    vec3 d1 = a.xyz / a.w - c;
-    vec3 d2 = b.xyz / b.w - c;
-    float det = d1.x * d2.y - d1.y * d2.x;
-    if (abs(det) < 1.0e-14)
+    float df = dot(fwd, gn);
+    float db = dot(bwd, gn);
+    return df * df * dot(bwd, bwd) < db * db * dot(fwd, fwd) ? fwd : bwd; // the smaller sine to gn, without roots
+}
+
+// The geometric normal (view space, towards the eye) at the pixel pos_screen (position pos), the plane through
+// the pixel and its neighbours in the depth buffer. Per screen axis shadowAxisStep picks the neighbour that
+// lies in the surface; the G-buffer normal gnorm (the normal-mapped one) is the result only where an axis has
+// no usable neighbour (a thin or isolated surface, the screen's edge) or the two steps are parallel.
+vec3 shadowGeometricNormal(vec2 pos_screen, vec3 pos, vec3 gnorm)
+{
+    vec3 gn = dot(gnorm, gnorm) > 1.0e-8 ? normalize(gnorm) : vec3(0.0, 0.0, 1.0);
+    vec2 px = 1.0 / screen_res;
+    float tol = SHADOW_EDGE_REL * abs(pos.z) + SHADOW_EDGE_ABS;
+
+    vec3 xr = getPosition(pos_screen + vec2(px.x, 0.0)).xyz - pos;
+    vec3 xl = pos - getPosition(pos_screen - vec2(px.x, 0.0)).xyz;
+    vec3 yu = getPosition(pos_screen + vec2(0.0, px.y)).xyz - pos;
+    vec3 yd = pos - getPosition(pos_screen - vec2(0.0, px.y)).xyz;
+
+    bool okx, oky;
+    vec3 ex = shadowAxisStep(xr, xl, pos_screen.x + px.x < 1.0 && abs(xr.z) <= tol, pos_screen.x - px.x > 0.0 && abs(xl.z) <= tol, gn, okx);
+    vec3 ey = shadowAxisStep(yu, yd, pos_screen.y + px.y < 1.0 && abs(yu.z) <= tol, pos_screen.y - px.y > 0.0 && abs(yd.z) <= tol, gn, oky);
+    if (!okx || !oky)
     {
-        return vec2(PCSS_GRAD_MAX);
+        return gn;
     }
-    vec2 g = vec2(d1.z * d2.y - d1.y * d2.z, d1.x * d2.z - d1.z * d2.x) / det;
-    return clamp(g, vec2(-PCSS_GRAD_MAX), vec2(PCSS_GRAD_MAX));
-}
 
-// Fraction (0..1) of the kernel radius that keeps every tap, with its bilinear footprint,
-// inside the map: the kernel shrinks towards the map's edges (the cascade blend hides it).
-float pcssEdgeScale(vec2 uv, vec2 extent, vec2 texel)
-{
-    vec2 room = min(uv, vec2(1.0) - uv) - 0.5 * texel;
-    return clamp(min(room.x / extent.x, room.y / extent.y), 0.0, 1.0);
-}
-
-// the kernel's per pixel rotation (cos, sin)
-vec2 pcssRotation()
-{
-    float angle = 6.28318531 * pcssNoise(gl_FragCoord.xy);
-    return vec2(cos(angle), sin(angle));
-}
-
-// 12 rotated Poisson taps through the compare sampler (each tap a hardware 2x2 PCF) over an
-// ellipse of half axes extent (uv). c: divided position with the constant bias already added
-// to its depth; grad: |receiver plane gradient|.
-float pcssPCF(sampler2DShadow shadowMap, vec3 c, vec2 grad, vec2 extent, vec2 rot)
-{
-    float shadow = 0.0;
-    for (int i = 0; i < PCSS_PCF_TAPS; ++i)
+    // unit steps: the parallel test does not depend on the pixel size
+    ex *= inversesqrt(max(dot(ex, ex), 1.0e-12));
+    ey *= inversesqrt(max(dot(ey, ey), 1.0e-12));
+    vec3 n = cross(ex, ey);
+    float len2 = dot(n, n);
+    if (!(len2 > SHADOW_PARALLEL_MIN))
     {
-        vec2 p = pcss_poisson12[i];
-        vec2 off = vec2(rot.x * p.x - rot.y * p.y, rot.y * p.x + rot.x * p.y) * extent;
-        float rpdb = min(dot(grad, abs(off)), PCSS_RPDB_MAX);
-        shadow += texture(shadowMap, vec3(c.xy + off, c.z - rpdb));
+        return gn;
     }
-    return shadow * (1.0 / float(PCSS_PCF_TAPS));
+    n *= inversesqrt(len2);
+    return dot(n, pos) > 0.0 ? -n : n; // facing the eye
 }
 
-// Fixed radius rotated PCF (stage 1): cascades 2-3, and everything without PCSS_SHADOW_FETCH.
-// stc: projected, not yet divided; z_bias: the constant bias added to the reference depth.
-float pcssPoissonPCF(sampler2DShadow shadowMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, float z_bias, vec2 res)
+#endif // !SHADOW_COMMON_NO_DEPTH
+
+// the rows of a cascade matrix: texture space (u, v, depth) of a view space point is (r0.p, r1.p, r2.p) + m[3].xyz
+vec3 shadowRow(mat4 m, int i)
 {
-    stc.xyz /= stc.w;
-    vec2 grad = abs(pcssDepthGradient(m, pos, norm, stc.xyz));
-    stc.z += z_bias;
-
-    vec2 texel = 1.0 / res;
-    vec2 extent = PCSS_PCF_RADIUS * texel;
-    extent *= pcssEdgeScale(stc.xy, extent, texel);
-
-    return pcssPCF(shadowMap, stc.xyz, grad, extent, pcssRotation());
+    return vec3(m[0][i], m[1][i], m[2][i]);
 }
 
-#if defined(PCSS_SHADOW_FETCH)
-// Stage 2, contact hardening (sun cascades 0-1 and the spot shadows): a blocker search through a
-// plain depth read of the same map (shadowDepthN, bound with a GL 3.3 sampler object that has
-// compare mode off), then a penumbra from the blockers' distance and the light's size, then the
-// rotated PCF above with that radius.
-#if defined(SUN_SHADOW)
-uniform sampler2D shadowDepth0;
-uniform sampler2D shadowDepth1;
+// uv per metre across the light's rays, per map axis
+vec2 shadowUVScale(mat4 m)
+{
+    vec3 r0 = shadowRow(m, 0);
+    vec3 r1 = shadowRow(m, 1);
+    return sqrt(vec2(dot(r0, r0), dot(r1, r1)));
+}
+
+// depth per metre along the light's rays
+float shadowDepthScale(mat4 m)
+{
+    return length(shadowRow(m, 2));
+}
+
+// metres per texel of the cascade, the larger of the two axes (a cascade's texels are square)
+float shadowTexelMetres(mat4 m, vec2 res)
+{
+    vec2 s = shadowUVScale(m) * res;
+    return 1.0 / max(min(s.x, s.y), 1.0e-6);
+}
+
+// the signed depth gradient (d depth / d uv) of the plane with view space normal n in the map
+vec2 shadowPlaneGradient(mat4 m, vec3 n)
+{
+    vec3 r0 = shadowRow(m, 0);
+    vec3 r1 = shadowRow(m, 1);
+    vec3 r2 = shadowRow(m, 2);
+    vec3 np = vec3(dot(r0, n) / dot(r0, r0), dot(r1, n) / dot(r1, r1), dot(r2, n) / dot(r2, r2));
+    float nz = abs(np.z) < 1.0e-7 ? (np.z < 0.0 ? -1.0e-7 : 1.0e-7) : np.z;
+    return clamp(-np.xy / nz, vec2(-SHADOW_GRAD_MAX), vec2(SHADOW_GRAD_MAX));
+}
+
+// depth-unit bias of the cascade's reference depth, in world units: a length in texels of the map at
+// the pixel, converted by the map's depth scale (positive; the reference moves towards the light)
+float shadowWorldBias(float texel_m, float s_z, float texels)
+{
+    return texels * texel_m * s_z;
+}
+
+// the position the cascade samples at: the surface point moved along its geometric normal by
+// SHADOW_NORMAL_OFFSET_TEXELS texels of the cascade, scaled by sin(angle to the light) so that a surface
+// facing the light is not moved at all
+vec3 shadowNormalOffsetPos(vec3 pos, vec3 ng, float sin_theta, float texel_m)
+{
+    return pos + ng * (SHADOW_NORMAL_OFFSET_TEXELS * texel_m * sin_theta);
+}
+
+// What every method needs of one sun cascade, from its matrix, once per pixel and cascade: the uv and depth
+// scales, and the constant bias and the cap of one tap's plane bias in depth units (positive; the reference
+// moves towards the light by the bias).
+struct ShadowCascade
+{
+    vec2 s_uv;
+    float s_z;
+    float texel_m;
+    float bias;
+    float plane_max;
+};
+
+ShadowCascade shadowCascadeSetup(mat4 m, vec2 res)
+{
+    ShadowCascade cs;
+    cs.s_uv = shadowUVScale(m);
+    cs.s_z = shadowDepthScale(m);
+    cs.texel_m = shadowTexelMetres(m, res);
+    cs.bias = shadowWorldBias(cs.texel_m, cs.s_z, SHADOW_BIAS_TEXELS);
+    cs.plane_max = shadowWorldBias(cs.texel_m, cs.s_z, SHADOW_PLANE_BIAS_MAX_TEXELS);
+    return cs;
+}
+
+// The receiver's geometry, once per pixel: the geometric normal and the sine of its angle to the light
+// (the normal offset's scale). light_dir: view space, towards the light.
+vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_dir, out float sin_theta)
+{
+#if defined(SHADOW_COMMON_NO_DEPTH)
+    // no depth buffer behind this program (a forward surface, or one without deferredUtil.glsl): the shading normal is the plane
+    vec3 ng = dot(gnorm, gnorm) > 1.0e-8 ? normalize(gnorm) : vec3(0.0, 0.0, 1.0);
+#else
+    vec3 ng = shadowGeometricNormal(pos_screen, pos, gnorm);
 #endif
-#if defined(SPOT_SHADOW)
-uniform sampler2D shadowDepth4;
-uniform sampler2D shadowDepth5;
-#endif
-
-#define PCSS_BLOCKER_DIST0     4.0   // metres: farthest blocker that softens cascade 0
-#define PCSS_BLOCKER_DIST1     8.0   // metres: the same for cascade 1
-#define PCSS_BLOCKER_DIST_SPOT 4.0   // metres: the same for the spot shadows
-#define PCSS_SPOT_LIGHT_SIZE   0.15  // metres: width of a projector's emitter
-#define PCSS_PCF_RADIUS_MIN    1.0   // texels: narrowest PCF (contact)
-#define PCSS_PCF_RADIUS_MAX    12.0  // texels at shadow resolution scale 1: widest PCF and search
-#define PCSS_SEARCH_RADIUS_MIN 2.0   // texels: narrowest blocker search
-#define PCSS_SCALE_STEP        0.25  // metres: step that measures the map's scale at the pixel
-
-// texture space position (uv, depth) of a view space point
-vec3 pcssProject(mat4 m, vec3 p)
-{
-    vec4 s = m * vec4(p, 1.0);
-    return s.xyz / s.w;
+    float dp = clamp(dot(ng, light_dir), 0.0, 1.0);
+    sin_theta = sqrt(max(1.0 - dp * dp, 0.0));
+    return ng;
 }
 
-// uv per metre, per map axis, across the light ray dir at pos (c: pos projected): the bounding
-// box of the image of a unit disc perpendicular to the ray, so right for warped and perspective maps
-vec2 pcssUVScale(mat4 m, vec3 pos, vec3 c, vec3 dir)
-{
-    vec3 t1 = normalize(cross(dir, abs(dir.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
-    vec3 t2 = cross(dir, t1);
-    vec2 a = (pcssProject(m, pos + t1 * PCSS_SCALE_STEP).xy - c.xy) / PCSS_SCALE_STEP;
-    vec2 b = (pcssProject(m, pos + t2 * PCSS_SCALE_STEP).xy - c.xy) / PCSS_SCALE_STEP;
-    return vec2(length(vec2(a.x, b.x)), length(vec2(a.y, b.y)));
-}
+#endif // SHADOW_COMMON
 
-// the map's resolution scale (RenderShadowResolutionScale): its width over the screen's
-float pcssResScale(vec2 res)
-{
-    return max(res.x / screen_res.x, 1.0);
-}
-
-vec2 pcssClampExtent(vec2 extent, vec2 texel, float lo, float hi)
-{
-    return clamp(extent, texel * lo, texel * hi);
-}
-
-// mean raw depth of the blockers within the search ellipse (half axes extent, uv), -1 if none:
-// texels nearer the light than the receiver plane at the tap, less the bias
-float pcssBlockerDepth(sampler2D depthMap, vec3 c, float z_bias, vec2 grad, vec2 extent, vec2 rot)
-{
-    // the centre first: the disk has no tap there, and a thin caster right under the
-    // receiver would otherwise slip between the taps of a wide search and read as lit
-    float sum = 0.0;
-    float count = 0.0;
-    float centre = texture(depthMap, c.xy).r;
-    if (centre < c.z + z_bias)
-    {
-        sum += centre;
-        count += 1.0;
-    }
-    for (int i = 0; i < PCSS_PCF_TAPS; ++i)
-    {
-        vec2 p = pcss_poisson12[i];
-        vec2 off = vec2(rot.x * p.x - rot.y * p.y, rot.y * p.x + rot.x * p.y) * extent;
-        float d = texture(depthMap, c.xy + off).r;
-        if (d < c.z + z_bias - min(dot(grad, abs(off)), PCSS_RPDB_MAX))
-        {
-            sum += d;
-            count += 1.0;
-        }
-    }
-    return count > 0.0 ? sum / count : -1.0;
-}
-
-// Sun cascade with contact hardening. light_dir: towards the light; d_max: farthest blocker.
-// Penumbra (full width, metres on the receiver) = blocker distance * light size; the PCF disc
-// takes that width as its diameter, which gives a disc light's edge profile.
-float pcssSunContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, vec3 light_dir, float d_max)
-{
-    vec3 c = stc.xyz / stc.w;
-    vec2 grad = abs(pcssDepthGradient(m, pos, norm, c));
-    float z_bias = shadow_bias * 2.0;
-    vec2 texel = 1.0 / shadow_res;
-    float r_max = PCSS_PCF_RADIUS_MAX * pcssResScale(shadow_res);
-    vec2 rot = pcssRotation();
-
-    vec2 s_uv = pcssUVScale(m, pos, c, light_dir);
-    float s_z = abs(pcssProject(m, pos + light_dir * PCSS_SCALE_STEP).z - c.z) / PCSS_SCALE_STEP;
-
-    vec2 search = pcssClampExtent(s_uv * shadow_light_size * d_max, texel, PCSS_SEARCH_RADIUS_MIN, r_max);
-    search *= pcssEdgeScale(c.xy, search, texel);
-    float z_blocker = pcssBlockerDepth(depthMap, c, z_bias, grad, search, rot);
-    if (z_blocker < 0.0)
-    {
-        // no blocker in the search: one comparison tap at the centre still catches a caster
-        // thinner than the search taps' spacing inside the bilinear footprint
-        return texture(shadowMap, vec3(c.xy, c.z + z_bias));
-    }
-
-    float w_world = max(c.z - z_blocker, 0.0) / max(s_z, 1.0e-8) * shadow_light_size;
-    vec2 extent = pcssClampExtent(0.5 * w_world * s_uv, texel, PCSS_PCF_RADIUS_MIN, r_max);
-    extent *= pcssEdgeScale(c.xy, extent, texel);
-    return pcssPCF(shadowMap, vec3(c.xy, c.z + z_bias), grad, extent, rot);
-}
-
-// a projector's position in view space: the point its matrix maps to x = y = w = 0
-vec3 pcssProjectorEye(mat4 m)
-{
-    vec4 r0 = vec4(m[0][0], m[1][0], m[2][0], m[3][0]);
-    vec4 r1 = vec4(m[0][1], m[1][1], m[2][1], m[3][1]);
-    vec4 r3 = vec4(m[0][3], m[1][3], m[2][3], m[3][3]);
-    mat3 rows_t = mat3(r0.xyz, r1.xyz, r3.xyz); // its columns are the rows
-    return -vec3(r0.w, r1.w, r3.w) * inverse(rows_t);
-}
-
-// Spot shadow with contact hardening, the textbook perspective form: an emitter of width
-// PCSS_SPOT_LIGHT_SIZE at the projector, blockers at linear distance d_b, receiver at d_r:
-// penumbra (full width, metres on the receiver) = PCSS_SPOT_LIGHT_SIZE * (d_r - d_b) / d_b.
-float pcssSpotContactShadow(sampler2DShadow shadowMap, sampler2D depthMap, mat4 m, vec4 stc, vec3 pos, vec3 norm, float bias_scale)
-{
-    vec3 c = stc.xyz / stc.w;
-    float d_r = stc.w;                       // linear distance along the projector's axis
-    vec2 grad = abs(pcssDepthGradient(m, pos, norm, c));
-    float z_bias = spot_shadow_bias * bias_scale;
-    vec2 texel = 1.0 / proj_shadow_res;
-    float r_max = PCSS_PCF_RADIUS_MAX * pcssResScale(proj_shadow_res);
-    vec2 rot = pcssRotation();
-
-    vec3 eye = pcssProjectorEye(m);
-    vec2 s_uv = pcssUVScale(m, pos, c, normalize(eye - pos));
-    // texture z (before the divide) at the projector itself: linearises a raw depth below
-    float z_eye = m[0][2] * eye.x + m[1][2] * eye.y + m[2][2] * eye.z + m[3][2];
-
-    float d_near = max(d_r - PCSS_BLOCKER_DIST_SPOT, 0.25 * d_r);
-    vec2 search = pcssClampExtent(s_uv * PCSS_SPOT_LIGHT_SIZE * (d_r - d_near) / d_near, texel, PCSS_SEARCH_RADIUS_MIN, r_max);
-    search *= pcssEdgeScale(c.xy, search, texel);
-    float z_blocker = pcssBlockerDepth(depthMap, c, z_bias, grad, search, rot);
-    if (z_blocker < 0.0)
-    {
-        // no blocker in the search: one comparison tap at the centre still catches a caster
-        // thinner than the search taps' spacing inside the bilinear footprint
-        return texture(shadowMap, vec3(c.xy, c.z + z_bias));
-    }
-
-    // along the ray eye + s (pos - eye): w = s d_r and z = z_eye + s (stc.z - z_eye); z / w = z_blocker
-    // (z_eye and the denominator share their sign: negative for a GL style projection)
-    float denom = z_blocker * d_r - stc.z + z_eye;
-    float d_b = abs(denom) > 1.0e-7 ? z_eye * d_r / denom : d_r;
-    d_b = clamp(d_b, 1.0e-3, d_r);
-    float w_world = PCSS_SPOT_LIGHT_SIZE * (d_r - d_b) / d_b;
-    vec2 extent = pcssClampExtent(0.5 * w_world * s_uv, texel, PCSS_PCF_RADIUS_MIN, r_max);
-    extent *= pcssEdgeScale(c.xy, extent, texel);
-    return pcssPCF(shadowMap, vec3(c.xy, c.z + z_bias), grad, extent, rot);
-}
-#endif // PCSS_SHADOW_FETCH
-
-// sun cascade index (0-3): the constant bias as pcfShadow applies it
-float pcssShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 pos, vec3 norm)
-{
-    return pcssPoissonPCF(shadowMap, shadow_matrix[index], stc, pos, norm, shadow_bias * 2.0, shadow_res);
-}
-
-// spot shadow index (4-5): the constant bias as pcfSpotShadow applies it
-float pcssSpotShadow(sampler2DShadow shadowMap, int index, vec4 stc, vec3 pos, vec3 norm, float bias_scale)
-{
-    return pcssPoissonPCF(shadowMap, shadow_matrix[index], stc, pos, norm, spot_shadow_bias * bias_scale, proj_shadow_res);
-}
 // </Vulkanstorm>
-#endif
+
+#if !defined(SHADOW_COMMON_ONLY)
 
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 {
 #if defined(SUN_SHADOW)
     float shadow = 0.0f;
-    vec3 light_dir = normalize((sun_up_factor == 1) ? sun_dir : moon_dir);
+    vec3 light_dir = normalize(primary_light_dir); // <Vulkanstorm/> L3: the primary light
+
+    vec3 shadow_pos = pos.xyz;
 
     float dp_directional_light = max(0.0, dot(norm.xyz, light_dir));
           dp_directional_light = clamp(dp_directional_light, 0.0, 1.0);
-
-    vec3 shadow_pos = pos.xyz;
 
     vec3 offset = light_dir.xyz * (1.0 - dp_directional_light);
 
@@ -448,11 +352,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             float w = 1.0;
             w -= max(spos.z-far_split.z, 0.0)/transition_domain.z;
             //w = clamp(w, 0.0, 1.0);
-#if defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap3, 3, lpos, spos.xyz, norm)*w;
-#else
             float contrib = pcfShadow(shadowMap3, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[3], spos.xyz)*w;
-#endif
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -469,11 +369,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(spos.z-far_split.y, 0.0)/transition_domain.y;
             w -= max(near_split.z-spos.z, 0.0)/transition_domain.z;
             //w = clamp(w, 0.0, 1.0);
-#if defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap2, 2, lpos, spos.xyz, norm)*w;
-#else
             float contrib = pcfShadow(shadowMap2, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[2], spos.xyz)*w;
-#endif
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -489,13 +385,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             w -= max(spos.z-far_split.x, 0.0)/transition_domain.x;
             w -= max(near_split.y-spos.z, 0.0)/transition_domain.y;
             //w = clamp(w, 0.0, 1.0);
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-            float contrib = pcssSunContactShadow(shadowMap1, shadowDepth1, shadow_matrix[1], lpos, spos.xyz, norm, light_dir, PCSS_BLOCKER_DIST1)*w;
-#elif defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap1, 1, lpos, spos.xyz, norm)*w;
-#else
             float contrib = pcfShadow(shadowMap1, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[1], spos.xyz)*w;
-#endif
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -510,13 +400,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
             float w = 1.0;
             w -= max(near_split.x-spos.z, 0.0)/transition_domain.x;
             //w = clamp(w, 0.0, 1.0);
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-            float contrib = pcssSunContactShadow(shadowMap0, shadowDepth0, shadow_matrix[0], lpos, spos.xyz, norm, light_dir, PCSS_BLOCKER_DIST0)*w;
-#elif defined(PCSS_SHADOW)
-            float contrib = pcssShadow(shadowMap0, 0, lpos, spos.xyz, norm)*w;
-#else
             float contrib = pcfShadow(shadowMap0, norm, lpos, 1.0, pos_screen, light_dir, shadow_matrix[0], spos.xyz)*w;
-#endif
             //if (contrib > 0)
             {
                 shadow += contrib;
@@ -531,7 +415,9 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         return 1.0f; // lit beyond the far split...
     }
     //shadow = min(dp_directional_light,shadow);
-    return shadow;
+    // <Vulkanstorm> the sun's shadow fades out while the light hands over to the moon, and in again for the moon (L3)
+    return mix(1.0, shadow, primary_shadow_strength);
+    // </Vulkanstorm>
 #else
     return 1.0;
 #endif
@@ -561,24 +447,12 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     if (index == 0)
     {
         lpos = shadow_matrix[4]*spos;
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-        shadow = pcssSpotContactShadow(shadowMap4, shadowDepth4, shadow_matrix[4], lpos, spos.xyz, norm, 0.8);
-#elif defined(PCSS_SHADOW)
-        shadow = pcssSpotShadow(shadowMap4, 4, lpos, spos.xyz, norm, 0.8);
-#else
         shadow = pcfSpotShadow(shadowMap4, lpos, 0.8, spos.xy);
-#endif
     }
     else
     {
         lpos = shadow_matrix[5]*spos;
-#if defined(PCSS_SHADOW) && defined(PCSS_SHADOW_FETCH)
-        shadow = pcssSpotContactShadow(shadowMap5, shadowDepth5, shadow_matrix[5], lpos, spos.xyz, norm, 0.8);
-#elif defined(PCSS_SHADOW)
-        shadow = pcssSpotShadow(shadowMap5, 5, lpos, spos.xyz, norm, 0.8);
-#else
         shadow = pcfSpotShadow(shadowMap5, lpos, 0.8, spos.xy);
-#endif
     }
     return mix(1.0, shadow, fade);
     // </Vulkanstorm>
@@ -586,4 +460,4 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     return 1.0;
 #endif
 }
-
+#endif // !SHADOW_COMMON_ONLY

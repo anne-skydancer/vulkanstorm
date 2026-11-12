@@ -30,7 +30,9 @@
 #include <boost/lexical_cast.hpp>
 
 #include "llfeaturemanager.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llviewershadermgr.h"
+#include "llshadowcascadefit.h" // <Vulkanstorm/> S2 constants
 
 // <FS> Vulkanstorm: shader source digest for the shader binary cache version
 #include <algorithm>
@@ -150,9 +152,13 @@ LLGLSLShader            gDeferredAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredFullbrightAlphaMaskAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredPBRAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredMaterialStochasticProgram[LLMaterial::SHADER_COUNT*2];
+LLGLSLShader            gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // the alpha-only variants of the GLTF scene's blended variants (by variant bits)
 LLGLSLShader            gAlphaStochasticExpandProgram;
 LLGLSLShader            gAlphaStochasticCompositeProgram;
 LLGLSLShader            gAlphaStochasticResolveProgram;
+LLGLSLShader            gAlphaStochasticCurrentProgram;
+LLGLSLShader            gShadowStochasticResolveProgram;   // <Vulkanstorm/> Stochastic shadows
+LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Stochastic shadows
 bool                    gAlphaStochasticShadersReady = false;
 // </Vulkanstorm>
 
@@ -224,6 +230,7 @@ LLGLSLShader            gLegacyPostGammaCorrectProgram;
 LLGLSLShader            gExposureProgram;
 LLGLSLShader            gExposureProgramNoFade;
 LLGLSLShader            gLuminanceProgram;
+LLGLSLShader            gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
 LLGLSLShader            gFXAAProgram[4];
 LLGLSLShader            gSMAAEdgeDetectProgram[4];
 LLGLSLShader            gSMAABlendWeightsProgram[4];
@@ -284,29 +291,48 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 }
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
-// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures; like PPLL before
-// it, a Windows and Linux feature.
+// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
+// resolve is a fragment pass with a pre-pass target on every device (LLStochasticEngine::computeResolve:
+// GL compute stalls the frame in motion); the compute shader with imageStore (GL 4.3, GLSL 4.30) is kept
+// compiled for the Vulkan renderer; the OpenGL viewer never selects it. The
+// device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
+static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
+static const std::string STOCH_RESOLVE_HELPER = STOCH_RESOLVE_OBJECT;   // the engine's resolve, for the fragment path
+
+static bool stochastic_transparency_shaders();
+static bool use_stochastic_shadows();
+
+// The Stochastic shadow method's temporal resolve, a fragment pass: the method is selected and the
+// engine runs on this device (the history is the engine's).
+static bool stochastic_shadow_resolve_shaders()
+{
+    return use_stochastic_shadows() && LLStochasticEngine::deviceSupported();
+}
 
 static bool stochastic_transparency_shaders()
 {
 #if LL_WINDOWS || LL_LINUX
-    return gGLManager.mGLVersion >= 4.0f && gGLManager.mGLSLVersionMajor >= 4;
+    return LLStochasticEngine::deviceSupported();
 #else
     return false;
 #endif
 }
 
 // The alpha-only variant of an alpha program (ALPHA_STOCHASTIC: the shader returns once its
-// alpha is known). A variant that fails to build leaves the method unavailable, never the
-// viewer without its shaders: sorted alpha runs instead.
-static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
+// alpha is known). A variant that fails to build leaves the method not ready (the blended faces
+// are not drawn, never another method) and never the viewer without its shaders (the error is
+// logged, and the next shader reload tries again).
+// Returns false only when a variant was due and did not build; true when it was built or is not due
+// (an unsupported device, or the helper objects missing, which loadBasicShaders logged).
+static bool make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
 {
     shader.mStochasticVariant = nullptr;
     if (!stochastic_transparency_shaders() ||
-        !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER))
+        !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER) ||
+        !LLShaderMgr::instance()->mFragmentShaderObjects.count(STOCH_SAMPLE_HELPER))
     {
-        return;   // the coverage mask helper did not build (loadBasicShaders): sorted alpha
+        return true;   // no variant: the method is not ready (an unsupported device, or an error logged by loadBasicShaders)
     }
     variant.mName = llformat("Stochastic %s", shader.mName.c_str());
     variant.mFeatures = shader.mFeatures;
@@ -317,17 +343,16 @@ static void make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
     variant.mShaderGroup = shader.mShaderGroup;
     // createShader() can fall back to a lower shader class (the class1 stubs of the PBR and material
     // programs), which writes no coverage mask: only a program that kept the mask table is a variant
-    if (variant.createShader() && variant.mTexture.size() > LLShaderMgr::ALPHA_ST_MASKS &&
-        variant.mTexture[LLShaderMgr::ALPHA_ST_MASKS] >= 0)
+    if (variant.createShader() && variant.mTexture.size() > LLShaderMgr::STOCH_MASKS &&
+        variant.mTexture[LLShaderMgr::STOCH_MASKS] >= 0)
     {
         shader.mStochasticVariant = &variant;
+        return true;
     }
-    else
-    {
-        LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
-                           << " failed to build with its coverage mask" << LL_ENDL;
-        variant.unload();
-    }
+    LL_WARNS("Shader") << "Stochastic transparency unavailable: " << variant.mName
+                       << " failed to build with its coverage mask" << LL_ENDL;
+    variant.unload();
+    return false;
 }
 
 // The alpha programs set calculatesLighting/hasLighting after creation (LLRender::syncMatrices
@@ -343,13 +368,15 @@ static void sync_stochastic_variant(LLGLSLShader& shader)
 
 static void unload_stochastic_shaders()
 {
+    gShadowStochasticResolveProgram.unload();
+    gShadowStochasticComposeProgram.unload();
     gAlphaStochasticShadersReady = false;
     for (LLGLSLShader* shader : { &gDeferredAlphaStochasticProgram[0], &gDeferredAlphaStochasticProgram[1],
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1],
                                   &gDeferredPBRAlphaStochasticProgram[0], &gDeferredPBRAlphaStochasticProgram[1],
                                   &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram,
-                                  &gAlphaStochasticResolveProgram })
+                                  &gAlphaStochasticResolveProgram, &gAlphaStochasticCurrentProgram })
     {
         shader->unload();
     }
@@ -357,13 +384,22 @@ static void unload_stochastic_shaders()
     {
         gDeferredMaterialStochasticProgram[i].unload();
     }
+    for (LLGLSLShader& shader : gGLTFAlphaStochasticProgram)
+    {
+        shader.unload();
+    }
+    // the GLTF base variants point at the programs just unloaded
+    for (LLGLSLShader& variant : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
+    {
+        variant.mStochasticVariant = nullptr;
+    }
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> PCSS soft shadows: the deferred sun program's shadow filter
-static bool use_pcss_shadows()
+// <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
+static bool use_stochastic_shadows()
 {
-    return gSavedSettings.getBOOL("RenderShadowPCSS") && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 // </Vulkanstorm>
 
@@ -378,7 +414,7 @@ static void add_common_permutations(LLGLSLShader* shader)
 }
 
 
-static bool make_gltf_variant(LLGLSLShader& shader, LLGLSLShader& variant, bool alpha_blend, bool rigged, bool unlit, bool multi_uv, bool use_sun_shadow)
+static bool make_gltf_variant(LLGLSLShader& shader, LLGLSLShader& variant, LLGLSLShader& stochastic, bool alpha_blend, bool rigged, bool unlit, bool multi_uv, bool use_sun_shadow)
 {
     variant.mName = shader.mName.c_str();
     variant.mFeatures = shader.mFeatures;
@@ -439,6 +475,18 @@ static bool make_gltf_variant(LLGLSLShader& shader, LLGLSLShader& variant, bool 
         bool success = variant.createShader();
         llassert(success);
 
+        // <Vulkanstorm> stochastic transparency's alpha-only variant of this blended variant (the
+        // GLTF scene's blended assets are drawn by the same engine as the faces); it reads no
+        // light, so it keeps the features without the alpha lighting hack below
+        // (a variant that fails to build fails the GLTF shaders like a failed base variant:
+        // make_gltf_variants, the caller logs and disables them; it does not gate the prims' transparency)
+        if (success && !make_stochastic_variant(variant, stochastic))
+        {
+            LL_WARNS("Shader") << "GLTF blended variant " << variant.mName << ": its stochastic alpha-only variant failed to build" << LL_ENDL;
+            success = false;
+        }
+        // </Vulkanstorm>
+
         // Alpha Shader Hack
         // See: LLRender::syncMatrices()
         variant.mFeatures.calculatesLighting = true;
@@ -464,7 +512,7 @@ static bool make_gltf_variants(LLGLSLShader& shader, bool use_sun_shadow)
         bool unlit = i & LLGLSLShader::GLTFVariant::UNLIT;
         bool multi_uv = i & LLGLSLShader::GLTFVariant::MULTI_UV;
 
-        if (!make_gltf_variant(shader, shader.mGLTFVariants[i], alpha_blend, rigged, unlit, multi_uv, use_sun_shadow))
+        if (!make_gltf_variant(shader, shader.mGLTFVariants[i], gGLTFAlphaStochasticProgram[i], alpha_blend, rigged, unlit, multi_uv, use_sun_shadow))
         {
             return false;
         }
@@ -547,6 +595,7 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gEnvironmentMapProgram);
     mShaderList.push_back(&gDeferredWLSkyProgram);
     mShaderList.push_back(&gDeferredWLCloudProgram);
+    mShaderList.push_back(&gCloudShadowMapProgram); // <Vulkanstorm/> L2: gets the sky uniforms like the clouds
     mShaderList.push_back(&gDeferredWLMoonProgram);
     mShaderList.push_back(&gDeferredWLSunProgram);
     mShaderList.push_back(&gDeferredPBRAlphaProgram);
@@ -631,10 +680,33 @@ S32 LLViewerShaderMgr::getShaderLevel(S32 type)
 // binary under the same program name. Fold a digest of every file under app_settings/shaders
 // (relative path + bytes, in sorted order) into the cache version: any shader change purges
 // the cache once, release builds are unaffected (their version changes anyway).
+// <Vulkanstorm> S2: the defines of the method-neutral shadow block (SHADOW_COMMON in shadowUtil.glsl): the
+// switch and every constant the block reads, taken from llshadowcascadefit.h, the one source. Any
+// shadow method calls this for the shadowUtil.glsl build it wants the block in (Stochastic now, Legacy
+// later); the shader cache version hashes the same list.
+static void addShadowCommonDefines(std::map<std::string, std::string>& attribs)
+{
+    attribs["SHADOW_COMMON"] = "1";
+    attribs["SHADOW_FOOTPRINT_M"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_FOOTPRINT_M);
+    attribs["SHADOW_BIAS_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_BIAS_TEXELS);
+    attribs["SHADOW_NORMAL_OFFSET_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_NORMAL_OFFSET_TEXELS);
+    attribs["SHADOW_PLANE_BIAS_MAX_TEXELS"] = llformat("%.4f", LLShadowCascadeFit::SHADOW_PLANE_BIAS_MAX_TEXELS);
+    attribs["SHADOW_GRAD_MAX"] = llformat("%.1f", LLShadowCascadeFit::SHADOW_GRAD_MAX);
+}
+// </Vulkanstorm>
+
 static LLUUID shader_source_digest()
 {
     namespace fs = std::filesystem;
     HBXXH128 hash_obj;
+    {   // <Vulkanstorm> S2: constants that reach the shaders as defines are part of their text
+        std::map<std::string, std::string> shadow_defines;
+        addShadowCommonDefines(shadow_defines);
+        for (const auto& define : shadow_defines)
+        {
+            hash_obj.update(define.first + "=" + define.second + ";");
+        }
+    }
     const std::string root_utf8 = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders");
 #if LL_WINDOWS
     const fs::path root(ll_convert_string_to_wide(root_utf8));
@@ -675,6 +747,7 @@ void LLViewerShaderMgr::setShaders()
     }
 
     mShaderList.clear();
+    LLStochasticEngine::clearFallbackForReload();   // <Vulkanstorm/> a full reload starts from the stochastic engine again
 
     if (!gGLManager.mHasRequirements)
     {
@@ -991,6 +1064,19 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         attribs["HERO_PROBES"] = "1";
     }
 
+    // <Vulkanstorm> every shadow method but Legacy multiplies N.L by the shadow (sunShadowedDiffuse
+    // in deferredUtil.glsl); Legacy leaves it undefined and keeps min()
+    if (LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) != LLShadowMethod::LEGACY)
+    {
+        attribs["SHADOW_NL_MULTIPLY"] = "1";
+    }
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> shadow method Stochastic (RenderShadowMethod 2): every program that links a shadow util takes the
+    // Stochastic one, which the program binary cache cannot tell from the defines; the hash takes it
+    LLGLSLShader::sShadowUtilVariant = use_stochastic_shadows() ? 1 : 0;
+    // </Vulkanstorm>
+
     { // PBR terrain
         const S32 mapping = clamp_terrain_mapping(gSavedSettings.getS32("RenderTerrainPBRPlanarSampleCount"));
         attribs["TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT"] = llformat("%d", mapping);
@@ -1037,7 +1123,10 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/deferredUtil.glsl",                    1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/gbufferUtil.glsl",                    1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/globalF.glsl",                          1));
-    index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/shadowUtil.glsl",                      1) );
+    if (!use_stochastic_shadows())   // <Vulkanstorm/> the Stochastic method links its own util (below)
+    {
+        index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/shadowUtil.glsl",                      1) );
+    }
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/aoUtil.glsl",                          1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/pbrterrainUtilF.glsl",                 1) );
     index_channels.push_back(-1);    shaders.push_back( make_pair( "deferred/tonemapUtilF.glsl",                    1) );
@@ -1057,45 +1146,70 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         }
     }
 
-    // <Vulkanstorm> stochastic transparency's coverage masks, attached to the alpha programs'
-    // alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional: without it the
-    // variants are not built and sorted alpha is used; the viewer starts either way.
-    mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
-    if (stochastic_transparency_shaders())
+    // <Vulkanstorm> the stochastic engine's sampling and the transparency's coverage masks, attached
+    // to the alpha programs' alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional:
+    // without them the variants are not built, the method is not ready (logged) and sorted
+    // alpha draws the blended faces until a shader reload builds them; the viewer starts either way. The engine's resolve object is the fragment path's
+    // (the one path on every device); the compute resolve
+    // compiles its own objects.
+    for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
-        S32 level = 1;
-        if (loadShaderFile(ALPHA_STOCHASTIC_HELPER, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+        mFragmentShaderObjects.erase(*helper);
+        // the fragment resolve (GL 4.0 to 4.2) attaches the engine's resolve object; the compute resolve compiles it as a compute object
+        const bool fragment_resolve = !LLStochasticEngine::computeResolve();
+        const bool needed = helper == &STOCH_RESOLVE_HELPER ? fragment_resolve && (stochastic_transparency_shaders() || stochastic_shadow_resolve_shaders())
+                                                            : stochastic_transparency_shaders();
+        if (needed)
         {
-            mFragmentShaderObjects.erase(ALPHA_STOCHASTIC_HELPER);
-            LL_WARNS("Shader") << "Stochastic transparency unavailable: " << ALPHA_STOCHASTIC_HELPER
-                               << " failed to build; sorted alpha is used" << LL_ENDL;
+            S32 level = 1;
+            if (loadShaderFile(*helper, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+            {
+                mFragmentShaderObjects.erase(*helper);
+                LL_WARNS("Shader") << "Stochastic engine object " << *helper << " failed to build"
+                                   << "; stochastic transparency does not run until it builds" << LL_ENDL;
+            }
         }
     }
     // </Vulkanstorm>
 
-    // <Vulkanstorm> PCSS: a second build of shadowUtil.glsl with PCSS_SHADOW defined, kept under
-    // its own key for the deferred sun program alone (LLShaderMgr::attachShaderFeatures); every
-    // other shadow consumer keeps the build above
-    if (use_pcss_shadows())
+    // <Vulkanstorm> Stochastic: its own shadow util replaces shadowUtil.glsl for every program that
+    // links one (LLShaderMgr::attachShaderFeatures attaches it by name), with the method-neutral block
+    // of shadowUtil.glsl built alone next to it (SHADOW_COMMON_ONLY): once for the programs that read
+    // the depth buffer (the deferred sun programs) and once for the others (SHADOW_COMMON_NO_DEPTH,
+    // which takes the shading normal as the receiver plane and needs no getPosition). A session holds
+    // one method's programs only, since a method change reloads every shader. Not built otherwise.
+    mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_UTIL);
+    mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_KEY);
+    mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_DEPTH_KEY);
+    if (use_stochastic_shadows())
     {
+        std::map<std::string, std::string> common_attribs = attribs;
+        addShadowCommonDefines(common_attribs);
         const std::string util = "deferred/shadowUtil.glsl";
-        const GLuint plain = mFragmentShaderObjects[util];
-        std::map<std::string, std::string> pcss_attribs = attribs;
-        pcss_attribs["PCSS_SHADOW"] = "1";
-        if (gGLManager.mGLVersion >= 3.29f)
-        {   // sampler objects (GL 3.3): plain depth reads for the blocker search; without
-            // them the PCSS build is the fixed-radius rotated PCF
-            pcss_attribs["PCSS_SHADOW_FETCH"] = "1";
-        }
         S32 level = 1;
-        const GLuint pcss = loadShaderFile(util, level, GL_FRAGMENT_SHADER, &pcss_attribs, -1);
-        mFragmentShaderObjects[util] = plain;
-        if (pcss == 0)
+        std::map<std::string, std::string> depth_attribs = common_attribs;
+        depth_attribs["SHADOW_COMMON_ONLY"] = "1";
+        const GLuint with_depth = loadShaderFile(util, level, GL_FRAGMENT_SHADER, &depth_attribs, -1);
+        std::map<std::string, std::string> no_depth_attribs = depth_attribs;
+        no_depth_attribs["SHADOW_COMMON_NO_DEPTH"] = "1";
+        const GLuint no_depth = with_depth ? loadShaderFile(util, level, GL_FRAGMENT_SHADER, &no_depth_attribs, -1) : 0;
+        mFragmentShaderObjects.erase(util);   // the stock util is not part of this method's shader set
+        if (with_depth == 0 || no_depth == 0)
         {
-            LL_WARNS("Shader") << "Failed to load fragment shader " << util << " with PCSS_SHADOW" << LL_ENDL;
+            if (with_depth)
+            {
+                glDeleteShader(with_depth);
+            }
+            LL_WARNS("Shader") << "Failed to load fragment shader " << util << " with SHADOW_COMMON_ONLY" << LL_ENDL;
             return util;
         }
-        mFragmentShaderObjects[PCSS_SHADOW_UTIL_KEY] = pcss;
+        mFragmentShaderObjects[STOCHASTIC_SHADOW_COMMON_DEPTH_KEY] = with_depth;
+        mFragmentShaderObjects[STOCHASTIC_SHADOW_COMMON_KEY] = no_depth;
+        if (loadShaderFile(STOCHASTIC_SHADOW_UTIL, level, GL_FRAGMENT_SHADER, &common_attribs, -1) == 0)
+        {
+            LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_SHADOW_UTIL << LL_ENDL;
+            return STOCHASTIC_SHADOW_UTIL;
+        }
     }
     // </Vulkanstorm>
 
@@ -1336,6 +1450,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gExposureProgram.unload();
         gExposureProgramNoFade.unload();
         gLuminanceProgram.unload();
+        gCloudShadowMapProgram.unload(); // <Vulkanstorm/>
         gDeferredPostGammaCorrectProgram.unload();
         gLegacyPostGammaCorrectProgram.unload();
         gDeferredPostTonemapProgram.unload();
@@ -1949,11 +2064,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         add_common_permutations(&gDeferredSunProgram);
 
-        // <Vulkanstorm> PCSS: the sun program alone (not the probe variant) filters with
-        // the PCSS build of shadowUtil.glsl
-        if (use_pcss_shadows())
-        {
-            gDeferredSunProgram.addPermutation("PCSS_SHADOW", "1");
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm> the sun programs read the depth buffer for the receiver plane
+            gDeferredSunProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");
         }
         // </Vulkanstorm>
 
@@ -1973,6 +2086,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredSunProbeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredSunProbeProgram);
+
+        // <Vulkanstorm> Stochastic: the probe pass reads the depth buffer as well
+        if (use_stochastic_shadows())
+        {
+            gDeferredSunProbeProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");
+        }
+        // </Vulkanstorm>
 
         success = gDeferredSunProbeProgram.createShader();
         llassert(success);
@@ -2699,6 +2819,27 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
     if (success)
     {
+        // <Vulkanstorm> the cloud transmittance map (llcloudshadowmap.cpp). In the sky shader group so
+        // that it gets the sky's cloud uniforms (scroll, density, scale, variance) as they are drawn.
+        gCloudShadowMapProgram.mName = "Cloud Shadow Map";
+        gCloudShadowMapProgram.mShaderFiles.clear();
+        gCloudShadowMapProgram.clearPermutations();
+        gCloudShadowMapProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gCloudShadowMapProgram.mShaderFiles.push_back(make_pair("deferred/cloudShadowMapF.glsl", GL_FRAGMENT_SHADER));
+        gCloudShadowMapProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gCloudShadowMapProgram.mShaderGroup = LLGLSLShader::SG_SKY;
+        success = gCloudShadowMapProgram.createShader();
+        // an absent map only means no cloud shadows: the viewer runs without it
+        if (!success)
+        {
+            LL_WARNS("ShaderLoading") << "The cloud shadow map shader failed to load: no cloud shadows" << LL_ENDL;
+            success = true;
+        }
+        // </Vulkanstorm>
+    }
+
+    if (success)
+    {
         gLuminanceProgram.mName = "Luminance";
         gLuminanceProgram.mShaderFiles.clear();
         gLuminanceProgram.clearPermutations();
@@ -3270,7 +3411,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     }
 
     // <Vulkanstorm> stochastic transparency: the opaque depth spread over the passes' samples and
-    // the composite. Like the variants, a failure leaves the method unavailable (sorted alpha).
+    // the composite. Like the variants, a failure is an error that is logged (the blended faces
+    // are not drawn until the shaders build; the next shader reload tries again), never another method.
     if (success && stochastic_transparency_shaders())
     {
         gAlphaStochasticExpandProgram.mName = "Alpha Stochastic Depth Spread";
@@ -3288,16 +3430,51 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticCompositeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
-        // the temporal accumulation: optional, without it the method runs as before
+        // The temporal resolve is only the accumulation across frames: a build failure turns that
+        // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
+        // history), never the transparency and never another method. The path is decided once
+        // (LLStochasticEngine::computeResolve: the fragment resolve on every device;
+        // compute is never chosen in the OpenGL viewer) and exactly one is built.
         gAlphaStochasticResolveProgram.mName = "Alpha Stochastic Temporal Resolve";
         gAlphaStochasticResolveProgram.mShaderFiles.clear();
         gAlphaStochasticResolveProgram.clearPermutations();
-        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
-        gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        if (ready && !gAlphaStochasticResolveProgram.createShader())
+        gAlphaStochasticResolveProgram.mFeatures.attachNothing = false;
+        gAlphaStochasticCurrentProgram.mName = "Alpha Stochastic Current";
+        gAlphaStochasticCurrentProgram.mShaderFiles.clear();
+        gAlphaStochasticCurrentProgram.clearPermutations();
+        bool resolve_built = false;
+        if (LLStochasticEngine::computeResolve())
         {
-            LL_WARNS("Shader") << "Stochastic transparency's temporal accumulation unavailable: its resolve shader failed to build" << LL_ENDL;
+            // one compute program: the transparency's part (this frame's samples averaged into a shared
+            // tile) and the engine's (stochasticResolveUtilF.glsl), both compiled as compute objects.
+            // attachNothing: the fragment helpers LLShaderMgr::attachShaderFeatures would attach
+            // (globalF.glsl) have no place in a compute link.
+            gAlphaStochasticResolveProgram.mFeatures.attachNothing = true;
+            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveC.glsl", GL_COMPUTE_SHADER));
+            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/stochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
+            gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+            resolve_built = ready && gAlphaStochasticResolveProgram.createShader();
+        }
+        else
+        {
+            // The default on every device: the averaging pre-pass (this frame's samples averaged once into an RGBA32F
+            // target) and the resolve (the engine's, with the transparency's value of this frame)
+            gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+            gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
+            gAlphaStochasticCurrentProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+            gAlphaStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
+            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+            gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+            resolve_built = ready && mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) &&
+                            gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader();
+        }
+        if (ready && !resolve_built)
+        {
+            LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve (" << (LLStochasticEngine::computeResolve() ? "compute" : "fragment")
+                                    << ") failed to build; the temporal accumulation is off and each frame keeps its "
+                                    << LLStochasticEngine::SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
+            gAlphaStochasticCurrentProgram.unload();
             gAlphaStochasticResolveProgram.unload();
         }
         LLGLSLShader* bases[] = { &gDeferredAlphaProgram, &gDeferredSkinnedAlphaProgram,
@@ -3314,15 +3491,67 @@ bool LLViewerShaderMgr::loadShadersDeferred()
                 ready = ready && gDeferredMaterialProgram[i].mStochasticVariant;
             }
         }
+        // (the GLTF scene's alpha-only variants do not gate the prims' transparency: a GLTF variant
+        // that fails to build disables the GLTF shaders, make_gltf_variants)
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
-            LL_WARNS("Shader") << "Stochastic transparency unavailable: a shader failed to build; sorted alpha is used" << LL_ENDL;
+            if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
+            {
+                LLStochasticEngine::requestFallback("a stochastic transparency shader did not build", false);
+            }
+            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the blended faces are not drawn until the "
+                                  "shaders build (the next shader reload tries again)" << LL_ENDL;
         }
     }
     else
     {
         gAlphaStochasticShadersReady = false;
+    }
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> The Stochastic shadow method's temporal resolve and the light map made of it. A build
+    // failure leaves the sun pass without accumulation (8 rays per frame, logged); the method stays.
+    if (success && stochastic_shadow_resolve_shaders())
+    {
+        gShadowStochasticResolveProgram.mName = "Shadow Stochastic Temporal Resolve";
+        // the engine decides once which resolve runs (LLStochasticEngine::computeResolve: always the fragment one in the OpenGL viewer), as for the transparency;
+        // both run the same resolve source (shadowStochasticResolveUtilF.glsl) with the engine's
+        const bool compute = LLStochasticEngine::computeResolve();
+        gShadowStochasticResolveProgram.mFeatures.attachNothing = compute;   // no fragment helpers in a compute link
+        gShadowStochasticResolveProgram.mShaderFiles.clear();
+        gShadowStochasticResolveProgram.clearPermutations();
+        if (compute)
+        {
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveC.glsl", GL_COMPUTE_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/stochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
+        }
+        else
+        {
+            gShadowStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+            gShadowStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticResolveUtilF.glsl", GL_FRAGMENT_SHADER));
+        }
+        gShadowStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+
+        gShadowStochasticComposeProgram.mName = "Shadow Stochastic Light Map";
+        gShadowStochasticComposeProgram.mShaderFiles.clear();
+        gShadowStochasticComposeProgram.clearPermutations();
+        gShadowStochasticComposeProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gShadowStochasticComposeProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticComposeF.glsl", GL_FRAGMENT_SHADER));
+        gShadowStochasticComposeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+
+        if ((!compute && !mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER)) || !gShadowStochasticResolveProgram.createShader() ||
+            !gShadowStochasticComposeProgram.createShader())
+        {
+            LL_WARNS("Shader") << "Stochastic shadows: the temporal resolve (" << (compute ? "compute" : "fragment") << ") failed to build; the sun pass keeps its 8 rays per frame "
+                                  "without accumulation (the next shader reload tries again)" << LL_ENDL;
+            gShadowStochasticResolveProgram.unload();
+            gShadowStochasticComposeProgram.unload();
+            LLStochasticEngine::requestFallback("a stochastic shadow shader did not build", false);
+        }
     }
     // </Vulkanstorm>
 

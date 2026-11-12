@@ -30,9 +30,17 @@
 #include "llgl.h"
 #include "llglslshader.h"
 
-// <Vulkanstorm> key of the PCSS build of deferred/shadowUtil.glsl among the compiled fragment
-// objects (the same file with PCSS_SHADOW defined); see LLViewerShaderMgr::loadBasicShaders
-#define PCSS_SHADOW_UTIL_KEY "deferred/shadowUtil.glsl#PCSS_SHADOW"
+// <Vulkanstorm> the Stochastic shadow method's own shadow util; when it is built (RenderShadowMethod 2)
+// every program that links a shadow util takes it instead of deferred/shadowUtil.glsl, with the
+// method-neutral block of shadowUtil.glsl built alone (SHADOW_COMMON_ONLY) next to it: the
+// programs with the STOCHASTIC_SHADOW_SUN permutation (the deferred sun programs, which have the
+// depth buffer behind them) take the build that reads it, the others the one that does not
+#define STOCHASTIC_SHADOW_UTIL "deferred/shadowStochasticUtil.glsl"
+#define STOCHASTIC_SHADOW_COMMON_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON_NO_DEPTH"
+#define STOCHASTIC_SHADOW_COMMON_DEPTH_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON"
+// <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
+#define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
+#define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (the default on every device)
 // </Vulkanstorm>
 
 class LLShaderMgr
@@ -186,7 +194,7 @@ public:
         DEFERRED_DEPTH_CUTOFF,              //  "depth_cutoff"
         DEFERRED_NORM_CUTOFF,               //  "norm_cutoff"
         DEFERRED_SHADOW_TARGET_WIDTH,       //  "shadow_target_width"
-        DEFERRED_SHADOW_LIGHT_SIZE,         //  "shadow_light_size" <Vulkanstorm/> PCSS
+        DEFERRED_SHADOW_LIGHT_SIZE,         //  "shadow_light_size" <Vulkanstorm/> light size (Stochastic)
 
         DEFERRED_SSR_ITR_COUNT,             //  "iterationCount"
         DEFERRED_SSR_RAY_STEP,              //  "rayStep"
@@ -221,12 +229,6 @@ public:
         DEFERRED_SHADOW3,                   //  "shadowMap3"
         DEFERRED_SHADOW4,                   //  "shadowMap4"
         DEFERRED_SHADOW5,                   //  "shadowMap5"
-        // <Vulkanstorm> PCSS: plain depth reads (sampler object) of shadowMap0/1/4/5
-        DEFERRED_SHADOW_DEPTH0,             //  "shadowDepth0"
-        DEFERRED_SHADOW_DEPTH1,             //  "shadowDepth1"
-        DEFERRED_SHADOW_DEPTH4,             //  "shadowDepth4"
-        DEFERRED_SHADOW_DEPTH5,             //  "shadowDepth5"
-        // </Vulkanstorm>
         DEFERRED_POSITION,                  //  "positionMap"
         DEFERRED_DIFFUSE,                   //  "diffuseRect"
         DEFERRED_SPECULAR,                  //  "specularRect"
@@ -375,14 +377,40 @@ public:
         NIGHT_SKY_CELLS,                    //  "night_sky_cells"
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
-        // <Vulkanstorm> stochastic transparency (alphaStochasticF.glsl, alphaStochasticCompositeF.glsl)
-        ALPHA_ST_MASKS,                     //  "alpha_st_masks"
+        // <Vulkanstorm> the stochastic engine (stochasticSampleF.glsl) and its transparency producer
+        // (alphaStochasticF.glsl, alphaStochasticResolveC.glsl or alphaStochasticResolveF.glsl + alphaStochasticCurrentF.glsl,
+        // alphaStochasticCompositeF.glsl)
+        STOCH_MASKS,                        //  "stoch_masks"
         ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
         ALPHA_ST_TRANS,                     //  "alpha_st_trans"
         ALPHA_ST_SEED,                      //  "st_seed"
         ALPHA_ST_DEPTH,                     //  "alpha_st_depth"
         ALPHA_ST_HISTORY,                   //  "alpha_st_history"
         ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
+        ALPHA_ST_CURRENT,                   //  "alpha_st_current"
+        // </Vulkanstorm>
+        // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
+        CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
+        CLOUD_SHADOW_MAT,                   //  "cloud_shadow_mat"
+        CLOUD_SHADOW_PARAMS,                //  "cloud_shadow_params"
+        // </Vulkanstorm>
+        // <Vulkanstorm> the sun/moon handover (stage L3): the one light the scene is lit by
+        PRIMARY_LIGHT_DIR,                  //  "primary_light_dir"
+        PRIMARY_LIGHT_COLOR,                //  "primary_light_color"
+        PRIMARY_SHADOW_STRENGTH,            //  "primary_shadow_strength"
+        SUN_MOON_BLEND,                     //  "sun_moon_blend"
+        CLOUD_LIGHT_TRANSMITTANCE,          //  "cloud_light_transmittance"
+        CLOUD_MOON_BLEND,                   //  "cloud_moon_blend"
+        CLOUD_LIGHT_DIR,                    //  "cloud_light_dir"
+        SUN_GLOW_NORM,                      //  "sun_glow_norm"
+        MOON_GLOW_NORM,                     //  "moon_glow_norm"
+        MOON_GLOW_FACTOR,                   //  "moon_glow_factor"
+        MOON_HALO_WEIGHT,                   //  "moon_halo_weight"
+        // </Vulkanstorm>
+        // <Vulkanstorm> the Stochastic shadow method's temporal resolve (deferred/shadowStochasticResolveF.glsl)
+        SHADOW_ST_RAW,                      //  "shadow_st_raw"
+        SHADOW_ST_HISTORY,                  //  "shadow_st_history"
+        SHADOW_ST_RESOLVED,                 //  "shadow_st_resolved"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;

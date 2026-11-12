@@ -65,6 +65,8 @@ U32 LLImageGL::sFrameCount = 0;
 static LLMutex sTexMemMutex;
 static std::unordered_map<U32, U64> sTextureAllocs;
 static U64 sTextureBytes = 0;
+static std::unordered_map<U32, U64> sExactTextureAllocs; // <Vulkanstorm/> alloc_tex_image_exact
+static U64 sExactTextureBytes = 0;
 
 // track a texture alloc on the currently bound texture.
 // asserts that no currently tracked alloc exists
@@ -89,10 +91,34 @@ void LLImageGLMemory::alloc_tex_image(U32 width, U32 height, U32 intformat, U32 
     sTexMemMutex.unlock();
 }
 
+// <Vulkanstorm> track an allocation on the currently bound texture whose size is exact
+void LLImageGLMemory::alloc_tex_image_exact(U32 width, U32 height, U32 intformat, U32 count)
+{
+    U32 texUnit = gGL.getCurrentTexUnitIndex();
+    llassert(texUnit == 0); // allocations should always be done on tex unit 0
+    U32 texName = gGL.getTexUnit(texUnit)->getCurrTexture();
+    U64 size = (U64)LLImageGL::dataFormatBytes(intformat, width, height) * count;
+
+    sTexMemMutex.lock();
+    llassert(sExactTextureAllocs.find(texName) == sExactTextureAllocs.end() && sTextureAllocs.find(texName) == sTextureAllocs.end());
+    sExactTextureAllocs[texName] = size;
+    sExactTextureBytes += size;
+    sTexMemMutex.unlock();
+}
+// </Vulkanstorm>
+
 // track texture free on given texName
 void LLImageGLMemory::free_tex_image(U32 texName)
 {
     sTexMemMutex.lock();
+    auto exact = sExactTextureAllocs.find(texName); // <Vulkanstorm/>
+    if (exact != sExactTextureAllocs.end())
+    {
+        sExactTextureBytes -= exact->second;
+        sExactTextureAllocs.erase(exact);
+        sTexMemMutex.unlock();
+        return;
+    }
     auto iter = sTextureAllocs.find(texName);
     if (iter != sTextureAllocs.end()) // sometimes a texName will be "freed" before allocated (e.g. first call to setManualImage for a given texName)
     {
@@ -130,6 +156,12 @@ using namespace LLImageGLMemory;
 U64 LLImageGL::getTextureBytesAllocated()
 {
     return sTextureBytes;
+}
+
+// static <Vulkanstorm/>
+U64 LLImageGL::getTextureBytesAllocatedExact()
+{
+    return sExactTextureBytes;
 }
 
 //statics
@@ -344,6 +376,7 @@ S32 LLImageGL::dataFormatBits(S32 dataformat)
     case GL_RGB16F:                                 return 48;
     case GL_RGBA16F:                                return 64;
     case GL_R32F:                                   return 32;
+    case GL_R32UI:                                  return 32;      // <Vulkanstorm/> the stochastic mask table
     case GL_RG32F:                                  return 64;
     case GL_RGB32F:                                 return 96;
     case GL_RGBA32F:                                return 128;

@@ -17,8 +17,8 @@ Part 1 (numpy, float32 as the viewer computes it): the precision loss the altitu
   the two depths, in metres along the light, is the self-shadowing error the bias must cover.
   Reported at 0, 25, 500, 1000, 2000, 3000 and 4000 m against the bias in metres.
 
-Part 2 (GL, the viewer's class2 deferred/sunLightF.glsl + class1 deferred/shadowUtil.glsl, PCSS
-off and on, scene machinery of bench_shadow_pcss.py): the whole scene is placed at each
+Part 2 (GL, the viewer's class2 deferred/sunLightF.glsl + class1 deferred/shadowUtil.glsl, the
+stock text and this tree's, scene machinery of bench_shadow_legacy.py): the whole scene is placed at each
 altitude (ground plane, boxes, camera and light view at height z, so every shader computes with
 the real magnitudes; the shadow matrices are composed in float32), cascades fitted like the
 viewer's (orthographic box around the receivers, no depth margin, light view at the camera):
@@ -37,9 +37,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-bench_src = (HERE / 'bench_shadow_pcss.py').read_text()
+bench_src = (HERE / 'bench_shadow_legacy.py').read_text()
 bench_src = bench_src.split('\nfailures = []')[0]   # the bench's definitions only, not its run
-exec(compile(bench_src, str(HERE / 'bench_shadow_pcss.py'), 'exec'))
+exec(compile(bench_src, str(HERE / 'bench_shadow_legacy.py'), 'exec'))
 
 W, H = 1920, 1080
 BIAS = -0.002            # RenderShadowBias
@@ -230,9 +230,9 @@ def sun_from(elev, azim):
     return [math.cos(e) * math.sin(a), math.sin(e), math.cos(e) * math.cos(a)]
 
 PROGS = {}
-# base: stock pcfShadow (git BASE_REF of bench_shadow_pcss.py), i.e. the term removed alone;
-# tree: this tree's pcfShadow (with the receiver-plane bias); pcss: PCSS on
-VNAME = {'base': 'stock PCF        ', 'tree': 'PCF + plane bias  ', 'pcss': 'PCSS             '}
+# base: stock pcfShadow (git BASE_REF of bench_shadow_legacy.py), i.e. the term removed alone;
+# tree: this tree's pcfShadow (with the receiver-plane bias)
+VNAME = {'base': 'stock PCF        ', 'tree': 'PCF + plane bias  '}
 def prog(variant):
     if variant not in PROGS:
         PROGS[variant] = sun_program(variant, False)
@@ -244,7 +244,7 @@ def acne_floor(z, rows):
             sc = make([DUMMY], [0.0, 1.7, 0.0], [0.0, 0.0, -12.0], sun_from(elev, 40.0), clip)
             pos, nrm = gbuffer(sc)
             floor = (nrm[:, :, 1] > 0.99) & (pos[:, :, 3] > 0.5)
-            for variant in ('base', 'tree', 'pcss'):
+            for variant in ('base', 'tree'):
                 new = float(np.mean(light_map(sc, prog(variant), NEW_BIAS)[floor] < 0.999)) * 100
                 old = float(np.mean(light_map(sc, prog(variant), old_bias(z))[floor] < 0.999)) * 100
                 rows.append(('floor', z, elev, label, variant, new, old))
@@ -263,9 +263,10 @@ def acne_wall(z, rows):
         nw = nrm[:, :, :3] @ rv                       # world normal = R^T n_view
         walls = (np.abs(nw[:, :, 1]) < 0.01) & (np.abs(nw[:, :, 0]) > 0.99) & (pos[:, :, 3] > 0.5) & (ndl > 0.05)
         assert walls.sum() > 1000, f'wall mask too small: {walls.sum()}'
-        for variant in ('base', 'tree', 'pcss'):
-            img_new = light_map(sc, prog(variant), NEW_BIAS)[walls]
-            img_old = light_map(sc, prog(variant), old_bias(z))[walls]
+        for variant in ('base', 'tree'):
+            mask = walls
+            img_new = light_map(sc, prog(variant), NEW_BIAS)[mask]
+            img_old = light_map(sc, prog(variant), old_bias(z))[mask]
             new = float(np.mean(img_new < 0.999)) * 100
             old = float(np.mean(img_old < 0.999)) * 100
             print(f'    wall {z:6.0f} m {label:11s} {variant:4s}: new mean {img_new.mean():.3f}, <0.5 {np.mean(img_new < 0.5) * 100:.2f} %, min {img_new.min():.3f} | '
@@ -287,7 +288,7 @@ def contact(z, results):
             except AssertionError:
                 pix.append(None)
         texel_cm = None
-        for variant in ('base', 'tree', 'pcss'):
+        for variant in ('base', 'tree'):
             gaps = {}
             for name, b in (('new', NEW_BIAS), ('old', old_bias(z))):
                 img = light_map(sc, prog(variant), b)
@@ -301,7 +302,7 @@ def contact(z, results):
         sc.release()
 
 def part2():
-    print('\nPart 2: GL, the scene at each altitude (viewer shaders; PCF = PCSS off)')
+    print('\nPart 2: GL, the scene at each altitude (viewer shaders)')
     rows = []; contacts = {}
     for z in ALTITUDES:
         ALT[0] = z

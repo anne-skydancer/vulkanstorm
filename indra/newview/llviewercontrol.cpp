@@ -74,6 +74,7 @@
 #include "llrender.h"
 #include "llnavigationbar.h"
 #include "llnotificationsutil.h"
+#include "llstochastichistory.h"
 #include "llfloaterpreference.h"
 #include "llfloaterreg.h"
 #include "llfloatertools.h"
@@ -261,6 +262,9 @@ static bool handleAvatarHoverOffsetChanged(const LLSD& newvalue)
 bool handleSetShaderChanged(const LLSD& newvalue)
 // </FS:Ansariel>
 {
+    // a full reload starts from the stochastic engine again (the fallback reload itself keeps the fallback)
+    LLStochasticEngine::clearFallbackForReload();
+
     // changing shader level may invalidate existing cached bump maps, as the shader type determines the format of the bump map it expects - clear and repopulate the bump cache
     gBumpImageList.destroyGL();
     gBumpImageList.restoreGL();
@@ -1362,7 +1366,7 @@ void settings_setup_listeners()
     setting_setup_signal_listener(gSavedSettings, "RenderHeroProbeResolution", handleHeroProbeResolutionChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderShadowDetail", handleSetShaderChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderDeferredSSAO", handleSetShaderChanged);
-    setting_setup_signal_listener(gSavedSettings, "RenderShadowPCSS", handleSetShaderChanged); // <Vulkanstorm/> PCSS
+    setting_setup_signal_listener(gSavedSettings, "RenderShadowMethod", handleSetShaderChanged); // <Vulkanstorm/> shadow method
     setting_setup_signal_listener(gSavedSettings, "RenderPerformanceTest", handleRenderPerfTestChanged);
     setting_setup_signal_listener(gSavedSettings, "RenderAvatarCloth", handleSetShaderChanged);
     setting_setup_signal_listener(gSavedSettings, "ChatConsoleFontSize", handleChatFontSizeChanged);

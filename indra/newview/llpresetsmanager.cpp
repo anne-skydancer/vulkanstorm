@@ -37,6 +37,7 @@
 #include "llfloaterpreference.h"
 #include "llfloaterreg.h"
 #include "llfeaturemanager.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llagentcamera.h"
 #include "llfile.h"
 #include "quickprefs.h"
@@ -527,6 +528,21 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
     bool appearance_camera_movement = gSavedSettings.getBOOL("AppearanceCameraMovement");
     bool edit_camera_movement = gSavedSettings.getBOOL("EditCameraMovement");
 
+    // <Vulkanstorm> shadow method: a graphic preset written before the switch carries the soft
+    // shadows checkbox (RenderShadowPCSS) instead of RenderShadowMethod; map it after loading
+    bool map_old_pcss = false;
+    bool old_pcss = false;
+    if (PRESETS_GRAPHIC == subdirectory)
+    {
+        llifstream preset_file(full_path.c_str());
+        LLSD preset_settings;
+        const bool parsed = preset_file.is_open() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(preset_settings, preset_file);
+        const LLShadowMethod::PresetMapping mapping = LLShadowMethod::readPreset(parsed, preset_settings);
+        map_old_pcss = mapping.apply;
+        old_pcss = mapping.pcss;
+    }
+    // </Vulkanstorm>
+
     mIsLoadingPreset = true; // <FS:Ansariel> Graphic preset controls independent from XUI
     mIgnoreChangedSignal = true;
     if(gSavedSettings.loadFromFile(full_path, false, true) > 0)
@@ -535,6 +551,16 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
         if(PRESETS_GRAPHIC == subdirectory)
         {
             gSavedSettings.setString("PresetGraphicActive", name);
+
+            // <Vulkanstorm> shadow method: old preset file, see above
+            // (a preset that stores the removed PCSS method, 1, selects Stochastic); written only when it changes
+            const LLShadowMethod::PresetMethod preset_method = LLShadowMethod::presetMethodAfterLoad(
+                { map_old_pcss, old_pcss }, gSavedSettings.getU32("RenderShadowMethod"));
+            if (preset_method.write)
+            {
+                gSavedSettings.setU32("RenderShadowMethod", preset_method.method);
+            }
+            // </Vulkanstorm>
 
             // <FS> [FIRE-35390] Old viewer presets have these as true and 0.7, whereas the equivalent on modern viewers is false and 1.0
             if (auto control = gSavedSettings.getControl("RenderSkyAutoAdjustLegacy"))

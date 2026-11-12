@@ -39,8 +39,7 @@ int alpha_stochastic_mask(float a);
 #endif
 
 uniform mat3 env_mat;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 uniform int classic_mode;
 
 #ifdef USE_DIFFUSE_TEX
@@ -61,7 +60,6 @@ uniform float minimum_alpha;
 uniform mat4 proj_mat;
 uniform mat4 inv_proj;
 uniform vec2 screen_res;
-uniform int sun_up_factor;
 uniform vec4 light_position[8];
 uniform vec3 light_direction[8];
 uniform vec4 light_attenuation[8];
@@ -78,6 +76,7 @@ void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, ou
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
 #endif
+float sunShadowedDiffuse(float da, float shadow);
 
 float getAmbientClamp();
 
@@ -224,7 +223,7 @@ void main()
 
     vec4 diffuse_linear = vec4(srgb_to_linear(diffuse_srgb.rgb), diffuse_srgb.a);
 
-    vec3 light_dir = (sun_up_factor == 1) ? sun_dir: moon_dir; // TODO -- factor out "sun_up_factor" and just send in the appropriate light vector
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     float final_alpha = diffuse_linear.a;
 
@@ -286,14 +285,14 @@ void main()
     if (classic_mode > 0)
     {
         final_da = pow(final_da,1.2);
-        vec3 sun_contrib = vec3(min(final_da, shadow));
+        vec3 sun_contrib = vec3(sunShadowedDiffuse(final_da, shadow));
 
         color.rgb = srgb_to_linear(color.rgb * 0.9 + linear_to_srgb(sun_contrib) * sunlit_linear * 0.7);
         sunlit_linear = srgb_to_linear(sunlit_linear);
     }
     else
     {
-        vec3 sun_contrib = min(final_da, shadow) * sunlit_linear;
+        vec3 sun_contrib = sunShadowedDiffuse(final_da, shadow) * sunlit_linear;
         color.rgb += sun_contrib;
     }
 

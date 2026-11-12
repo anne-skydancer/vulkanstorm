@@ -40,7 +40,6 @@ int alpha_stochastic_mask(float a);
 #define DIFFUSE_ALPHA_MODE_EMISSIVE 3
 
 uniform float emissive_brightness;  // fullbright flag, 1.0 == fullbright, 0.0 otherwise
-uniform int sun_up_factor;
 uniform int classic_mode;
 
 vec4 applySkyAndWaterFog(vec3 pos, vec3 additive, vec3 atten, vec4 color);
@@ -66,6 +65,7 @@ out vec4 frag_color;
 #ifdef HAS_SUN_SHADOW
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen);
 #endif
+float sunShadowedDiffuse(float da, float shadow);
 
 void sampleReflectionProbesLegacy(inout vec3 ambenv, inout vec3 glossenv, inout vec3 legacyenv,
         vec2 tc, vec3 pos, vec3 norm, float glossiness, float envIntensity, bool transparent, vec3 amblit_linear);
@@ -82,8 +82,7 @@ uniform mat3 env_mat;
 
 uniform float is_mirror;
 
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 uniform mat4 proj_mat;
 uniform mat4 inv_proj;
@@ -345,7 +344,7 @@ void main()
 
     vec3 color = vec3(0,0,0);
 
-    vec3 light_dir = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     float bloom = 0.0;
     vec3 sunlit;
@@ -369,14 +368,14 @@ void main()
     if (classic_mode > 0)
     {
         da = pow(da,1.2);
-        vec3 sun_contrib = vec3(min(da, shadow));
+        vec3 sun_contrib = vec3(sunShadowedDiffuse(da, shadow));
 
         color.rgb = srgb_to_linear(color.rgb * 0.9 + linear_to_srgb(sun_contrib) * sunlit_linear * 0.7);
         sunlit_linear = srgb_to_linear(sunlit_linear);
     }
     else
     {
-        vec3 sun_contrib = min(da, shadow) * sunlit_linear;
+        vec3 sun_contrib = sunShadowedDiffuse(da, shadow) * sunlit_linear;
         color.rgb += sun_contrib;
     }
 

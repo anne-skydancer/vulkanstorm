@@ -61,11 +61,24 @@ uniform float density_multiplier;
 uniform float max_y;
 
 uniform vec3 glow;
-uniform float sun_moon_glow_factor;
+// <Vulkanstorm> stage L3: the sun's transmittance at the cloud layer, and the clouds' handover to the moon
+uniform vec3 cloud_light_transmittance;
+uniform vec3 cloud_light_dir; // lightnorm of the clouds' own light (the glow follows it)
+uniform float cloud_moon_blend; // the clouds' own handover: the sun still shines on them after the ground's sunset
+vec3 srgb_to_linear(vec3 c);
+vec3 linear_to_srgb_unclamped(vec3 c);
+// </Vulkanstorm>
 
 uniform vec3 cloud_color;
 
 uniform float cloud_scale;
+
+// <Vulkanstorm> dome parallax (stage L2 of the light study): the camera's world position over
+// 2 * dome radius * cloud_scale, so the clouds stay where they are when the camera moves and the
+// ground's cloud shadow reads the cloud that is seen over the sun (llcloudshadow.h). Zero when the
+// cloud shadows are off.
+uniform vec2 cloud_parallax;
+// </Vulkanstorm>
 
 // NOTE: Keep these in sync!
 //       indra\newview\app_settings\shaders\class1\deferred\skyV.glsl
@@ -85,6 +98,7 @@ void main()
     vary_texcoord0.xy -= 0.5;
     vary_texcoord0.xy /= cloud_scale;
     vary_texcoord0.xy += 0.5;
+    vary_texcoord0.xy += cloud_parallax; // <Vulkanstorm/>
 
     vary_texcoord1 = vary_texcoord0;
     vary_texcoord1.x += lightnorm.x * 0.0125;
@@ -114,7 +128,9 @@ void main()
     float rel_pos_len  = length(rel_pos);
 
     // Initialize temp variables
-    vec3 sunlight = sunlight_color;
+    // <Vulkanstorm> the haze below the clouds takes the sun's light only as far as the clouds' band leaves it (L3): none at night
+    vec3 sunlight = sunlight_color * (1.0 - cloud_moon_blend);
+    // </Vulkanstorm>
     vec3 light_atten;
 
     // Sunlight attenuation effect (hue and brightness) due to atmosphere
@@ -126,8 +142,8 @@ void main()
     vec3 blue_weight   = blue_density / combined_haze;
     vec3 haze_weight   = haze_density / combined_haze;
 
-    // Compute sunlight from rel_pos & lightnorm (for long rays like sky)
-    float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + lightnorm.y);
+    // Compute sunlight from rel_pos & cloud_light_dir (for long rays like sky); <Vulkanstorm/> L3: the clouds' own handover
+    float off_axis = 1.0 / max(1e-6, max(0., rel_pos_norm.y) + cloud_light_dir.y);
     sunlight *= exp(-light_atten * off_axis);
 
     // Distance
@@ -139,7 +155,7 @@ void main()
     combined_haze = exp(-combined_haze * density_dist);
 
     // Compute haze glow
-    float haze_glow = 1.0 - dot(rel_pos_norm, lightnorm.xyz);
+    float haze_glow = 1.0 - dot(rel_pos_norm, cloud_light_dir.xyz); // <Vulkanstorm/> L3: the clouds' own handover
     // haze_glow is 0 at the sun and increases away from sun
     haze_glow = max(haze_glow, .001);
         // Set a minimum "angle" (smaller glow.y allows tighter, brighter hotspot)
@@ -148,11 +164,11 @@ void main()
     haze_glow = pow(haze_glow, glow.z);
         // glow.z should be negative, so we're doing a sort of (1 / "angle") function
 
-    haze_glow *= sun_moon_glow_factor;
-
     // Add "minimum anti-solar illumination"
     // For sun, add to glow.  For moon, remove glow entirely. SL-13768
-    haze_glow = (sun_moon_glow_factor < 1.0) ? 0.0 : (haze_glow + 0.25);
+    // <Vulkanstorm> the sun's glow only (L3): it fades out as the light hands over to the moon
+    haze_glow = (1.0 - cloud_moon_blend) * (haze_glow + 0.25);
+    // </Vulkanstorm>
 
     // Increase ambient when there are more clouds
     vec3 tmpAmbient = ambient_color;
@@ -166,9 +182,9 @@ void main()
         (blue_horizon * blue_weight * (sunlight + tmpAmbient) + (haze_horizon * haze_weight) * (sunlight * haze_glow + tmpAmbient));
 
     // CLOUDS
-    sunlight = sunlight_color;
-    off_axis = 1.0 / max(1e-6, lightnorm.y * 2.);
-    sunlight *= exp(-light_atten * off_axis);
+    // <Vulkanstorm> the clouds' sun thins through the atmosphere up to the cloud layer (L3, physical)
+    sunlight = linear_to_srgb_unclamped(srgb_to_linear(sunlight_color) * cloud_light_transmittance);
+    // </Vulkanstorm>
 
     // Cloud color out
     vary_CloudColorSun     = (sunlight * haze_glow) * cloud_color;

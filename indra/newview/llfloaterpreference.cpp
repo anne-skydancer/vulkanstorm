@@ -46,6 +46,8 @@
 #include "lldirpicker.h"
 #include "lleventtimer.h"
 #include "llfeaturemanager.h"
+#include "llshadowmethod.h"
+#include "llstochastichistory.h" // <Vulkanstorm/> shadow method
 #include "llfocusmgr.h"
 //#include "llfirstuse.h"
 #include "llfloaterreg.h"
@@ -2235,10 +2237,20 @@ void LLFloaterPreference::refreshEnabledState()
 
     ctrl_shadow->setEnabled(enabled);
 
-    // <Vulkanstorm> PCSS soft shadows: only with shadows on
-    getChild<LLCheckBoxCtrl>("ShadowPCSS")->setEnabled(enabled
+    // <Vulkanstorm> shadow method (Legacy / Stochastic): selectable with shadows on
+    const bool shadow_method_enabled = enabled
         && gSavedSettings.getS32("RenderShadowDetail") > 0
-        && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowPCSS"));
+        && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
+    getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
+    if (!LLStochasticEngine::deviceSupported())
+    {
+        // Legacy is the only method below OpenGL 4.0: the Stochastic item is not offered and a stored
+        // 2 reads as Legacy (the setting itself is not written, so the choice survives a GPU upgrade)
+        LLComboBox* method_combo = getChild<LLComboBox>("ShadowMethod");
+        method_combo->remove("2");   // false once it is gone
+        // always show the method that runs, so a preset load, Cancel or reset never leaves the combo blank
+        method_combo->setValue(LLSD((LLSD::Integer)LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), false)));
+    }
     // </Vulkanstorm>
 
     enabled = false;
@@ -2355,13 +2367,11 @@ void LLFloaterPreference::disableUnavailableSettings()
         ctrl_shadows->setValue(0);
     }
 
-    // <Vulkanstorm> PCSS soft shadows
-    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowPCSS")
+    // <Vulkanstorm> shadow method: disable the combo, keep the saved value
+    if (!LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod")
         || !LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowDetail"))
     {
-        LLCheckBoxCtrl* ctrl_pcss = getChild<LLCheckBoxCtrl>("ShadowPCSS");
-        ctrl_pcss->setEnabled(false);
-        ctrl_pcss->setValue(false);
+        getChild<LLComboBox>("ShadowMethod")->setEnabled(false);
     }
     // </Vulkanstorm>
 

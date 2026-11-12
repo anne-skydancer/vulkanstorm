@@ -217,10 +217,16 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 
 // <Vulkanstorm> stochastic transparency: the depth spread, the composite, and whether every
 // alpha program has its alpha-only variant (LLGLSLShader::mStochasticVariant)
+extern LLGLSLShader         gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // alpha-only variants of the GLTF scene's blended variants, by variant bits
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
-extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation (optional)
+extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (compute is never chosen in the OpenGL viewer)
+extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (the default on every device)
 extern bool                 gAlphaStochasticShadersReady;
+// </Vulkanstorm>
+// <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method
+extern LLGLSLShader         gShadowStochasticResolveProgram;
+extern LLGLSLShader         gShadowStochasticComposeProgram;
 // </Vulkanstorm>
 
 // Deferred rendering shaders
@@ -273,6 +279,7 @@ extern LLGLSLShader         gNoPostTonemapLegacyGammaCorrectProgram;
 extern LLGLSLShader         gExposureProgram;
 extern LLGLSLShader         gExposureProgramNoFade;
 extern LLGLSLShader         gLuminanceProgram;
+extern LLGLSLShader         gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
 extern LLGLSLShader         gDeferredAvatarShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaMaskShadowProgram;

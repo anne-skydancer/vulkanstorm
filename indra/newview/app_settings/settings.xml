@@ -11093,7 +11093,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowSplitExponent</key>
   <map>
     <key>Comment</key>
-    <string>Near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
+    <string>Sun cascade split distribution (Phototools' shadow clarity). With the Stochastic shadow method only y is used, as the exponent of the splits over [camera near, RenderShadowDistance]. With the Legacy method x, y and z are Firestorm's near clip plane split distances for shadow map frusta (x=perspective, y=ortho, z=transition rate).</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11429,6 +11429,116 @@ Change of this parameter will affect the layout of buttons in notification toast
       <integer>1</integer>
     <key>Backup</key>
     <integer>0</integer>
+    </map>
+    <key>RenderCloudShadowStrength</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: how much of the sky clouds' dimming reaches the ground sunlight and moonlight (flat cloud layer). 1 = physical (what the sky draws, the ground gets), 0 = off (no cloud shadow, identical to before).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>RenderCloudShadowPenumbraHeight</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the flat cloud layer's height above the ground for the cloud shadow's edge softness, in metres (the penumbra is this x 0.0093 x the sun's size: 14 m at 1500).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1500.0</real>
+    </map>
+    <key>RenderCloudShadowExtent</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the width of the world area covered by the cloud shadow map around the camera, in metres (512 texels). Beyond it the mean cloud shadow applies.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>4096.0</real>
+    </map>
+    <key>RenderCloudOpticalDepth</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the optical depth of one e-fold of the flat cloud layer's drawn opacity (opacity = 1 - exp(-depth / this)); sets how much of the light the layer's thin and partly covered parts let through (clamped to 3 .. 30). 7.6 = the visibility threshold of thin cirrus (depth 0.03) at one 8-bit step of opacity.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>7.6</real>
+    </map>
+    <key>RenderLightHandoverSwing</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: half-width of the sun-to-moon swing, in degrees of sun elevation: the light's direction and colour change from the sun's at +this to the moon's at -this (a smooth S-curve; with no usable moon the light stays with the sun). Limited to 0.05 .. 5.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.30</real>
+    </map>
+    <key>RenderLightHandoverFade</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: width of each shadow fade outside the swing, in degrees of sun elevation (the sun's shadow fades out from swing + this to swing, the moon's in from -swing to -swing - this). Limited to 0 .. 5.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.30</real>
+    </map>
+    <key>RenderMoonlightCompensation</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the moon's direct light at night in stops (EV) relative to the sun's light of the same colour, times the sky's moon brightness. Limited to -8 .. -2 (never more than a quarter of the sun). While the sun is up the moon is physical (2.5e-6 of it).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>-3.0</real>
+    </map>
+    <key>RenderMoonAdaptationDepth</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: how far below the horizon the sun is (degrees) when the moon's light has reached its compensated brightness; 6 = the end of civil twilight.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>6.0</real>
+    </map>
+    <key>RenderAtmosphereHazeSlab</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: height of the ground haze layer of the physical atmosphere that carries the sun's and moon's light to the ground, in metres. It shapes the light of a low sun and never changes it at noon.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>250.0</real>
+    </map>
+    <key>RenderAtmospherePhysicalLight</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: 1 = the sun's and moon's light reaches the ground through the physical atmosphere; 0 = through the old air path (an A/B comparison; the handover and the moon compensation apply either way).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
     </map>
     <key>RenderDesaturateIrradiance</key>
     <map>
@@ -11840,7 +11950,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowBias</key>
   <map>
     <key>Comment</key>
-    <string>Bias value for shadows (prevent shadow acne).</string>
+    <string>Bias value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the Stochastic deferred sun pass uses a bias in texels of the cascade instead.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11853,7 +11963,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowOffset</key>
   <map>
     <key>Comment</key>
-    <string>Offset value for shadows (prevent shadow acne).</string>
+    <string>Offset value for shadows (prevent shadow acne). Used by Legacy shadows, and by the forward receivers (alpha, materials, water) under every method; the Stochastic deferred sun pass offsets along the geometric normal by texels of the cascade instead.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11919,7 +12029,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaSortMethod</key>
   <map>
     <key>Comment</key>
-    <string>Main-view post-water alpha method: 0 sorted alpha, 1 stochastic transparency (default; Windows/Linux, OpenGL 4.0+; doc/oit/stochastic-transparency.md). Unsupported methods fall back to sorted alpha. 1 meant PPLL until stochastic transparency replaced it.</string>
+    <string>Main-view post-water alpha method: 0 sorted alpha, 1 stochastic transparency (default; Windows/Linux, OpenGL 4.0+; doc/oit/stochastic-transparency.md). A device without OpenGL 4.0 uses sorted alpha. 1 meant PPLL until stochastic transparency replaced it.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -11928,17 +12038,6 @@ Change of this parameter will affect the layout of buttons in notification toast
     <integer>1</integer>
   </map>
 
-  <key>RenderAlphaStochasticSamples</key>
-  <map>
-    <key>Comment</key>
-    <string>Debug only, not in Preferences and not persisted: a value an older build saved is ignored. Stochastic transparency: coverage samples per pixel, 4, 8 or 16 (the nearest above). Passes take at most 8 samples, so 16 runs the stochastic depth and accumulation passes twice. Stochastic transparency is 8 samples with the temporal accumulation on every line; change it for a session with the debug settings or --set, only to compare.</string>
-    <key>Persist</key>
-    <integer>0</integer>
-    <key>Type</key>
-    <string>U32</string>
-    <key>Value</key>
-    <integer>8</integer>
-  </map>
   <key>RenderAlphaStochasticTemporal</key>
   <map>
     <key>Comment</key>
@@ -11950,24 +12049,6 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <integer>1</integer>
   </map>
-  <key>RenderAlphaStochasticAvailable</key>
-  <map>
-    <key>Comment</key>
-    <string>Runtime capability flag used by preferences: stochastic transparency is available only on Windows/Linux with OpenGL 4.0, its shaders built and its targets allocated.</string>
-    <key>Persist</key>
-    <integer>0</integer>
-    <key>Type</key>
-    <string>Boolean</string>
-    <key>Value</key>
-    <integer>0</integer>
-  </map>
-
-
-
-
-
-
-
   <key>RenderDepthOfFieldInEditMode</key>
   <map>
     <key>Comment</key>
@@ -12323,7 +12404,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowErrorCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff error value to use ortho instead of perspective projection.</string>
+    <string>Legacy shadow method only (unused with Stochastic, whose cascades are always orthographic): cutoff error value to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12336,7 +12417,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowFOVCutoff</key>
   <map>
     <key>Comment</key>
-    <string>Cutoff FOV to use ortho instead of perspective projection.</string>
+    <string>Legacy shadow method only (unused with Stochastic, whose cascades are always orthographic): cutoff FOV to use ortho instead of perspective projection.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
@@ -12378,22 +12459,72 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Backup</key>
     <integer>0</integer>
   </map>
-  <key>RenderShadowPCSS</key>
+  <key>RenderShadowMethod</key>
   <map>
     <key>Comment</key>
-    <string>Soft shadows (PCSS): filter the deferred sun and projector shadows with a rotated Poisson kernel and a receiver-plane bias, denoised by the shadow blur. Needs RenderShadowDetail above 0.</string>
+    <string>Shadow method (needs RenderShadowDetail above 0): 0 = Legacy, the Firestorm 7.2.5 sun and moon cascades fitted to the view and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias); 2 = Stochastic, stable world-anchored cascades, square sun maps and soft shadows from rays toward the light's disc, accumulated over time. 1 was PCSS, which is removed and unused: a stored 1 or any other value is rewritten as 2 at startup; on a device below OpenGL 4.0, 2 runs as Legacy without storing that. Default per graphics level in the feature table.</string>
     <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowMethodMigrated</key>
+  <map>
+    <key>Comment</key>
+    <string>Set once the old RenderShadowPCSS checkbox has been carried over to RenderShadowMethod on an existing install.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>HideFromEditor</key>
     <integer>1</integer>
     <key>Type</key>
     <string>Boolean</string>
     <key>Value</key>
     <integer>0</integer>
   </map>
+  <key>RenderShadowPCSS</key>
+  <map>
+    <key>Comment</key>
+    <string>Retired by RenderShadowMethod; read once by the migration and when loading old graphic presets (on becomes Stochastic).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>HideFromEditor</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>RenderShadowDistance</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic shadow method only (Legacy fits its cascades to the view): distance (metres) the sun and moon shadow cascades cover, in steps of 32 m from 32 to 256 m (other values are rounded to the nearest step); capped by the draw distance. The cascades no longer follow what the camera sees. Default per graphics level in the feature table. Debug setting only (no Preferences entry).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>128.0</real>
+  </map>
+  <key>RenderShadowLightSize</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic shadow method only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size. Was RenderShadowPCSSLightSize.</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>F32</string>
+    <key>Value</key>
+    <real>1.0</real>
+  </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>
     <key>Comment</key>
-    <string>Soft shadows (PCSS): multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size.</string>
+    <string>Retired by RenderShadowLightSize; read once by the migration and when loading old graphic presets.</string>
     <key>Persist</key>
+    <integer>1</integer>
+    <key>HideFromEditor</key>
     <integer>1</integer>
     <key>Type</key>
     <string>F32</string>

@@ -23,7 +23,6 @@
  * $/LicenseInfo$
  */
 
-uniform vec3  lightnorm;
 uniform vec3  sunlight_color;
 uniform vec3  moonlight_color;
 uniform int   sun_up_factor;
@@ -39,9 +38,63 @@ uniform float max_y;
 uniform vec3  glow;
 uniform float scene_light_strength;
 uniform float sun_moon_glow_factor;
+// <Vulkanstorm> L3: each body's glow at the body, not at the blended light (lightnorm) between them
+uniform vec3  sun_glow_norm;
+uniform vec3  moon_glow_norm;
+uniform float moon_glow_factor; // the moon's share of sun_moon_glow_factor
+uniform vec3  sun_dir;          // eye space, unit (LLPipeline::bindDeferredShader): each glow is damped by its own body
+uniform vec3  moon_dir;
+// </Vulkanstorm>
 uniform float sky_sunlight_scale;
 uniform float sky_ambient_scale;
 uniform int classic_mode;
+
+// <Vulkanstorm> the sun/moon handover (stage L3): the one light the scene is lit by, with its path through the
+// atmosphere already taken (LLEnvironment::updatePrimaryLight), in sunlight_color's encoding; and the share of
+// the sun's shadow that shows (1 full, 0 none while the light swings from one body to the other)
+uniform vec3 primary_light_color;
+uniform float primary_shadow_strength;
+// </Vulkanstorm>
+
+// <Vulkanstorm> cloud shadows (stage L2 of the light study): the cloud transmittance map, a
+// world-anchored 512x512 RG8 map of the light the flat cloud layer lets through, built every frame by
+// deferred/cloudShadowMapF.glsl (LLCloudShadowMap): R the direct beam (the shadow; this lookup), G the
+// diffuse light under the cloud (stage L4; nothing reads it yet). The map's G is 1 in the white texture bound
+// when the map is off, so a reader of G must return 0 when cloud_shadow_params.x <= 0.
+//   cloud_shadow_mat    eye space position -> map coordinate (xy)
+//   cloud_shadow_params x strength (0: off), y 1: use the map's mean (probes, cube snapshots),
+//                       z width of the fade to the mean at the map's edge, w the tap's mip level
+// Only the fragment shaders look it up; with the strength at 0 no tap is made.
+#ifdef FRAGMENT_SHADER
+uniform sampler2D cloud_shadow_map;
+uniform mat4 cloud_shadow_mat;
+uniform vec4 cloud_shadow_params;
+
+float cloudShadowTransmittance(vec3 pos_eye)
+{
+    if (cloud_shadow_params.x <= 0.0)
+    {
+        return 1.0;
+    }
+
+    // the top mip of the map is its mean
+    float t = textureLod(cloud_shadow_map, vec2(0.5), 9.0).r;
+    if (cloud_shadow_params.y < 0.5)
+    {
+        vec2 uv = (cloud_shadow_mat * vec4(pos_eye, 1.0)).xy;
+        vec2 edge = min(uv, vec2(1.0) - uv);
+        // the map's weight follows the sun's shadow (L3): while the light swings, the mean applies, so the
+        // cloud shadows neither slide with the light nor bump its brightness
+        float w = clamp(min(edge.x, edge.y) / cloud_shadow_params.z, 0.0, 1.0) * primary_shadow_strength;
+        if (w > 0.0)
+        {
+            t = mix(t, textureLod(cloud_shadow_map, uv, cloud_shadow_params.w).r, w);
+        }
+    }
+    return 1.0 - cloud_shadow_params.x * (1.0 - t);
+}
+#endif
+// </Vulkanstorm>
 
 float getAmbientClamp() { return 1.0f; }
 
@@ -59,21 +112,14 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     vec3  rel_pos_norm = normalize(rel_pos);
     float rel_pos_len  = length(rel_pos);
 
-    vec3  sunlight     = (sun_up_factor == 1) ? sunlight_color: moonlight_color;
-
-    // sunlight attenuation effect (hue and brightness) due to atmosphere
-    // this is used later for sunlight modulation at various altitudes
-    vec3 light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
-    // I had thought blue_density and haze_density should have equal weighting,
-    // but attenuation due to haze_density tends to seem too strong
+    // <Vulkanstorm> the sun's or the moon's light, through the physical atmosphere (L3). It replaces the
+    // sun/moon pick and the exp(-(blue_density + haze_density/4) density_multiplier max_y / lightnorm.y)
+    vec3  sunlight     = primary_light_color;
+    // </Vulkanstorm>
 
     vec3 combined_haze = max(blue_density + vec3(haze_density), vec3(1e-6));
     vec3 blue_weight   = blue_density / combined_haze;
     vec3 haze_weight   = vec3(haze_density) / combined_haze;
-
-    //(TERRAIN) compute sunlight from lightnorm y component. Factor is roughly cosecant(sun elevation) (for short rays like terrain)
-    float above_horizon_factor = 1.0 / max(1e-6, lightnorm.y);
-    sunlight *= exp(-light_atten * above_horizon_factor);  // for sun [horizon..overhead] this maps to an exp curve [0..1]
 
     // main atmospheric scattering line integral
     float density_dist = rel_pos_len * density_multiplier;
@@ -87,12 +133,18 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     atten = combined_haze.rgb;
 
     // compute haze glow
-    float haze_glow = dot(rel_pos_norm, lightnorm.xyz);
+    // <Vulkanstorm> L3: the sun's glow at the sun, weighted with what is left of the factor, and the moon's at the moon, each
+    // damped by its own body's direction (not the blended light's, which points at neither). A caller that passes no light
+    // direction (fullbright passes vec3(0)) gets no damping to 0, as before.
+    bool  has_light = dot(light_dir, light_dir) > 1e-6;
+    float dampen = has_light ? max(0.0f, dot(sun_dir, rel_pos_norm)) : 0.0;
+    float haze_glow = dot(rel_pos_norm, sun_glow_norm.xyz);
 
     // dampen sun additive contrib when not facing it...
     // SL-13539: This "if" clause causes an "additive" white artifact at roughly 77 degreees.
     //    if (length(light_dir) > 0.01)
-    haze_glow *= max(0.0f, dot(light_dir, rel_pos_norm));
+    haze_glow *= dampen;
+    // </Vulkanstorm>
 
     haze_glow = 1. - haze_glow;
     // haze_glow is 0 at the sun and increases away from sun
@@ -105,7 +157,20 @@ void calcAtmosphericVars(vec3 inPositionEye, vec3 light_dir, float ambFactor, ou
     // add "minimum anti-solar illumination"
     haze_glow += .25;
 
-    haze_glow *= sun_moon_glow_factor;
+    // <Vulkanstorm> L3: the sun's share (the factor less the moon's) is exactly the factor by day (the moon's is 0)
+    haze_glow *= sun_moon_glow_factor - moon_glow_factor;
+
+    if (moon_glow_factor > 0.0)
+    {
+        float moon_glow = dot(rel_pos_norm, moon_glow_norm.xyz) * (has_light ? max(0.0f, dot(moon_dir, rel_pos_norm)) : 0.0);
+        moon_glow = 1. - moon_glow;
+        moon_glow = max(moon_glow, .001);
+        moon_glow *= glow.x;
+        moon_glow = clamp(pow(moon_glow, glow.z), -100000, 100000);
+        moon_glow += .25;
+        haze_glow += moon_glow * moon_glow_factor;
+    }
+    // </Vulkanstorm>
 
     vec3 amb_color = ambient_color;
 
@@ -143,7 +208,7 @@ float ambientLighting(vec3 norm, vec3 light_dir)
     return ambient;
 }
 
-// return lit amblit in linear space, leave sunlit and additive in sRGB space
+// return amblit and sunlit in linear space (sunlit stays in sRGB space only when classic_mode is on), additive in sRGB space
 void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, out vec3 sunlit, out vec3 amblit, out vec3 additive,
                          out vec3 atten)
 {
@@ -157,6 +222,13 @@ void calcAtmosphericVarsLinear(vec3 inPositionEye, vec3 norm, vec3 light_dir, ou
         amblit = vec3(dot(amblit, vec3(0.2126, 0.7152, 0.0722)));
         sunlit = srgb_to_linear(sunlit);
     }
+
+#ifdef FRAGMENT_SHADER
+    // <Vulkanstorm> the clouds dim the direct light (L2). L2b: the beam multiplies LINEAR light, the sun's and the moon's
+    // alike (the map's value is a share of the light's energy). The classic mode keeps sunlit encoded, as it always did.
+    sunlit *= cloudShadowTransmittance(inPositionEye);
+    // </Vulkanstorm>
+#endif
 
     // multiply to get similar colors as when the "scaleSoftClip" implementation was doubling color values
     // (allows for mixing of light sources other than sunlight e.g. reflection probes)

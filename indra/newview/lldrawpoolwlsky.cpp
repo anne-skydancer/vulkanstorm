@@ -49,6 +49,8 @@
 #include "llfile.h"
 #include "llimagegl.h"
 #include "llnightsky.h"
+#include "llagent.h" // <Vulkanstorm/>
+#include "llcloudshadow.h" // <Vulkanstorm/>
 // </Vulkanstorm>
 
 extern bool gCubeSnapshot;
@@ -324,6 +326,13 @@ static bool use_hdri_sky()
 
 }
 
+// <Vulkanstorm> see lldrawpoolwlsky.h
+bool LLDrawPoolWLSky::usesHDRISky()
+{
+    return use_hdri_sky();
+}
+// </Vulkanstorm>
+
 void LLDrawPoolWLSky::renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 camHeightLocal) const
 {
     if (!gSky.mVOSkyp)
@@ -396,7 +405,7 @@ void LLDrawPoolWLSky::renderSkyHazeDeferred(const LLVector3& camPosLocal, F32 ca
         sky_shader->uniform1f(LLShaderMgr::DROPLET_RADIUS, droplet_radius);
         sky_shader->uniform1f(LLShaderMgr::ICE_LEVEL, ice_level);
 
-        sky_shader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, psky->getSunMoonGlowFactor());
+        // <Vulkanstorm/> stage L3: the dome's glow follows sun_moon_blend (applySpecial), not a step at the horizon
 
         sky_shader->uniform1i(LLShaderMgr::SUN_UP_FACTOR, psky->getIsSunUp() ? 1 : 0);
 
@@ -493,6 +502,50 @@ void LLDrawPoolWLSky::renderStarsDeferred(const LLVector3& camPosLocal) const
     gGL.popMatrix();
 }
 
+// <Vulkanstorm> the cloud pass's noise textures, shared with the cloud shadow map
+bool LLDrawPoolWLSky::bindCloudNoise(LLGLSLShader* cloudshader, const LLSettingsSky::ptr_t& psky)
+{
+    LLPointer<LLViewerTexture> cloud_noise      = gSky.mVOSkyp->getCloudNoiseTex();
+    LLPointer<LLViewerTexture> cloud_noise_next = gSky.mVOSkyp->getCloudNoiseTexNext();
+
+    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+    gGL.getTexUnit(1)->unbind(LLTexUnit::TT_TEXTURE);
+
+    F32 cloud_variance = psky ? (F32)psky->getCloudVariance() : 0.0f;
+    F32 blend_factor   = psky ? (F32)psky->getBlendFactor() : 0.0f;
+
+    if (psky->getCloudScrollRate().isExactlyZero())
+    {
+        blend_factor = 0.f;
+    }
+
+    // if we even have sun disc textures to work with...
+    if (cloud_noise || cloud_noise_next)
+    {
+        if (cloud_noise && (!cloud_noise_next || (cloud_noise == cloud_noise_next)))
+        {
+            // Bind current and next sun textures
+            cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise, LLTexUnit::TT_TEXTURE);
+            blend_factor = 0;
+        }
+        else if (cloud_noise_next && !cloud_noise)
+        {
+            cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise_next, LLTexUnit::TT_TEXTURE);
+            blend_factor = 0;
+        }
+        else if (cloud_noise_next != cloud_noise)
+        {
+            cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise, LLTexUnit::TT_TEXTURE);
+            cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP_NEXT, cloud_noise_next, LLTexUnit::TT_TEXTURE);
+        }
+    }
+
+    cloudshader->uniform1f(LLShaderMgr::BLEND_FACTOR, blend_factor);
+    cloudshader->uniform1f(LLShaderMgr::CLOUD_VARIANCE, cloud_variance);
+    return cloud_noise || cloud_noise_next;
+}
+// </Vulkanstorm>
+
 void LLDrawPoolWLSky::renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 camHeightLocal, LLGLSLShader* cloudshader) const
 {
     if (use_hdri_sky())
@@ -508,44 +561,25 @@ void LLDrawPoolWLSky::renderSkyCloudsDeferred(const LLVector3& camPosLocal, F32 
 
         cloudshader->bind();
 
-        LLPointer<LLViewerTexture> cloud_noise      = gSky.mVOSkyp->getCloudNoiseTex();
-        LLPointer<LLViewerTexture> cloud_noise_next = gSky.mVOSkyp->getCloudNoiseTexNext();
+        // <Vulkanstorm> shared with the cloud shadow map: LLDrawPoolWLSky::bindCloudNoise
+        bindCloudNoise(cloudshader, psky);
 
-        gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
-        gGL.getTexUnit(1)->unbind(LLTexUnit::TT_TEXTURE);
-
-        F32 cloud_variance = psky ? (F32)psky->getCloudVariance() : 0.0f;
-        F32 blend_factor   = psky ? (F32)psky->getBlendFactor() : 0.0f;
-
-        if (psky->getCloudScrollRate().isExactlyZero())
+        // dome parallax (stage L2): the clouds stay where they are when the camera moves, so the
+        // ground's cloud shadow reads the cloud that is seen over the sun (llcloudshadow.h)
         {
-            blend_factor = 0.f;
+            static LLCachedControl<F32> shadow_strength(gSavedSettings, "RenderCloudShadowStrength", 1.f);
+            static const LLStaticHashedString sCloudParallax("cloud_parallax");
+            LLCloudShadow::Vec2 parallax;
+            if (shadow_strength > 0.f)
+            {
+                const LLVector3d cam = gAgent.getPosGlobalFromAgent(LLViewerCamera::getInstance()->getOrigin());
+                parallax = LLCloudShadow::parallax({ cam.mdV[VX], cam.mdV[VY] }, psky->getCloudScale());
+            }
+            cloudshader->uniform2f(sCloudParallax, (F32) parallax.x, (F32) parallax.y);
         }
+        // </Vulkanstorm>
 
-        // if we even have sun disc textures to work with...
-        if (cloud_noise || cloud_noise_next)
-        {
-            if (cloud_noise && (!cloud_noise_next || (cloud_noise == cloud_noise_next)))
-            {
-                // Bind current and next sun textures
-                cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise, LLTexUnit::TT_TEXTURE);
-                blend_factor = 0;
-            }
-            else if (cloud_noise_next && !cloud_noise)
-            {
-                cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise_next, LLTexUnit::TT_TEXTURE);
-                blend_factor = 0;
-            }
-            else if (cloud_noise_next != cloud_noise)
-            {
-                cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP, cloud_noise, LLTexUnit::TT_TEXTURE);
-                cloudshader->bindTexture(LLShaderMgr::CLOUD_NOISE_MAP_NEXT, cloud_noise_next, LLTexUnit::TT_TEXTURE);
-            }
-        }
-
-        cloudshader->uniform1f(LLShaderMgr::BLEND_FACTOR, blend_factor);
-        cloudshader->uniform1f(LLShaderMgr::CLOUD_VARIANCE, cloud_variance);
-        cloudshader->uniform1f(LLShaderMgr::SUN_MOON_GLOW_FACTOR, psky->getSunMoonGlowFactor());
+        // <Vulkanstorm/> stage L3: the clouds' glow follows sun_moon_blend (applySpecial)
 
         /// Render the skydome
         renderDome(camPosLocal, camHeightLocal, cloudshader);

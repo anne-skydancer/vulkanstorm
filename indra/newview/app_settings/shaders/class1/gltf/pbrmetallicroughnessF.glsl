@@ -25,8 +25,23 @@
 
 /*[EXTRA_CODE_HERE]*/
 
+#ifdef ALPHA_STOCHASTIC
+// <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
+int alpha_stochastic_mask(float a);
+#endif
+
 
 // GLTF pbrMetallicRoughness implementation
+
+// <Vulkanstorm> the blended variants take their attributes at the centroid, as the other alpha
+// programs do: the stochastic passes rasterise multisampled, and a sample outside the triangle must
+// not read the outside of its texture (the lattice on layered hair); one sample per pixel is unchanged
+#ifdef ALPHA_BLEND
+#define ST_IN centroid in
+#else
+#define ST_IN in
+#endif
+// </Vulkanstorm>
 
 uniform int gltf_material_id;
 
@@ -58,10 +73,10 @@ void unpackMaterial()
 // ==================================
 uniform sampler2D diffuseMap;  //always in sRGB space
 uniform sampler2D emissiveMap;
-in vec3 vary_position;
-in vec4 vertex_color;
-in vec2 base_color_uv;
-in vec2 emissive_uv;
+ST_IN vec3 vary_position;
+ST_IN vec4 vertex_color;
+ST_IN vec2 base_color_uv;
+ST_IN vec2 emissive_uv;
 
 void mirrorClip(vec3 pos);
 vec4 encodeNormal(vec3 n, float env, float gbuffer_flag);
@@ -78,12 +93,12 @@ vec3 srgb_to_linear(vec3 c);
 uniform sampler2D normalMap;
 uniform sampler2D metallicRoughnessMap;
 uniform sampler2D occlusionMap;
-in vec3 vary_normal;
-in vec3 vary_tangent;
+ST_IN vec3 vary_normal;
+ST_IN vec3 vary_tangent;
 flat in float vary_sign;
-in vec2 normal_uv;
-in vec2 metallic_roughness_uv;
-in vec2 occlusion_uv;
+ST_IN vec2 normal_uv;
+ST_IN vec2 metallic_roughness_uv;
+ST_IN vec2 occlusion_uv;
 #endif
 // ==================================
 
@@ -92,7 +107,7 @@ in vec2 occlusion_uv;
 // needed by all alpha variants
 // ==================================
 #ifdef ALPHA_BLEND
-in vec3 vary_fragcoord;
+ST_IN vec3 vary_fragcoord;
 uniform vec4 clipPlane;
 uniform float clipSign;
 void waterClip(vec3 pos);
@@ -122,9 +137,7 @@ uniform vec2 light_deferred_attenuation[8]; // light size and falloff
 
 uniform int classic_mode; // <Vulkanstorm/> sunlit/final scale in classic mode, as pbralphaF
 
-uniform int sun_up_factor;
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);
 float calcLegacyDistanceAttenuation(float distance, float falloff);
@@ -202,6 +215,20 @@ void main()
         discard;
     }
 
+#ifdef ALPHA_STOCHASTIC
+    // <Vulkanstorm> stochastic transparency: the total alpha or the stochastic depth, for the
+    // alpha alone (the alpha of the shaded output below: the lit output multiplies in the vertex
+    // alpha a second time, as the stock shader does)
+#ifdef UNLIT
+    float st_alpha = basecolor.a;
+#else
+    float st_alpha = basecolor.a * vertex_color.a;
+#endif
+    frag_color = vec4(0.0, 0.0, 0.0, max(st_alpha, 0.0));
+    gl_SampleMask[0] = alpha_stochastic_mask(st_alpha);
+    return;
+#endif
+
     vec3 emissive = emissiveColor;
     emissive *= srgb_to_linear(texture(emissiveMap, emissive_uv.xy).rgb);
 // ==================================
@@ -271,7 +298,7 @@ void main()
     light_dir = vec3(0,0,1);
     vec3 norm = vec3(0,0,1);
 #else
-    light_dir = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 #endif
 
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);

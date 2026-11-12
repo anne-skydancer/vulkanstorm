@@ -34,6 +34,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_files.py
       shell: bash
+    - run: python3 scripts/tests/test_cloud_noise_package.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
@@ -44,6 +46,60 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/llscripteditorposixfile_test.cpp -o "$RUNNER_TEMP/challenge-file-test"
         "$RUNNER_TEMP/challenge-file-test"
+    - name: Check the stable sun shadow cascades
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowcascadefit_test.cpp -o "$RUNNER_TEMP/shadow-cascade-fit-test"
+        "$RUNNER_TEMP/shadow-cascade-fit-test"
+    - name: Check the shadow method migration
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowmethod_test.cpp -o "$RUNNER_TEMP/shadow-method-test"
+        "$RUNNER_TEMP/shadow-method-test"
+    - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
+      shell: bash
+      run: |
+        python3 scripts/tests/test_check_legacy_shadows.py
+        python3 scripts/shadows/check_legacy_shadows.py
+    - name: Check the shadow methods' plumbing (feature tables, combo, PCSS removed)
+      shell: bash
+      run: python3 scripts/tests/test_shadow_method_tables.py
+    - name: Check the sun and sky light terms against the GLSL
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericlight_test.cpp -o "$RUNNER_TEMP/atmospheric-light-test"
+        "$RUNNER_TEMP/atmospheric-light-test"
+    - name: Check the scattering core of the physical atmosphere (bounds, tables, GLSL vectors, march accuracy)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericscatter_test.cpp -o "$RUNNER_TEMP/atmospheric-scatter-test"
+        "$RUNNER_TEMP/atmospheric-scatter-test"
+    - name: Check the shipped skies against the physical atmosphere's bounds (no whiteout outside the aureole; every 8th sky)
+      shell: bash
+      run: python3 scripts/light/check_atmosphere_library.py --quick
+    - name: Check the cloud shadow map layout and its coupling to the sky
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudshadow_test.cpp -o "$RUNNER_TEMP/cloud-shadow-test"
+        "$RUNNER_TEMP/cloud-shadow-test"
+    - name: Check the cloud optics (beam and diffuse transmittance of the flat layer)
+      shell: bash
+      run: |
+        for opt in -O0 -O2; do
+          g++ -std=c++20 "$opt" -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudoptics_test.cpp -o "$RUNNER_TEMP/cloud-optics-test"
+          "$RUNNER_TEMP/cloud-optics-test"
+        done
+    - name: Check the cloud noise container reader
+      shell: bash
+      run: |
+        test -f /usr/include/openssl/evp.h || sudo apt-get install -y --no-install-recommends libssl-dev
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudnoise_test.cpp -o "$RUNNER_TEMP/cloud-noise-test" -lcrypto
+        "$RUNNER_TEMP/cloud-noise-test"
+    - name: Check the stochastic engine's frame rules and mask table
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochastichistory_test.cpp -o "$RUNNER_TEMP/stochastic-history-test"
+        "$RUNNER_TEMP/stochastic-history-test"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')

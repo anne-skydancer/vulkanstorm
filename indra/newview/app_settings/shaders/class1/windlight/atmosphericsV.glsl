@@ -26,9 +26,7 @@
 // out param funcs
 
 
-uniform vec3 sun_dir;
-uniform vec3 moon_dir;
-uniform int sun_up_factor;
+uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 void setSunlitColor(vec3 v);
 void setAmblitColor(vec3 v);
@@ -46,7 +44,7 @@ void calcAtmospherics(vec3 inPositionEye) {
     vec3 tmpamblit = vec3(1);
     vec3 tmpaddlit = vec3(1);
     vec3 tmpattenlit = vec3(1);
-    vec3 light_dir = (sun_up_factor == 1) ? sun_dir : moon_dir;
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
     calcAtmosphericVars(inPositionEye, light_dir, 1, tmpsunlit, tmpamblit, tmpaddlit, tmpattenlit);
     setSunlitColor(tmpsunlit);
     setAmblitColor(tmpamblit);

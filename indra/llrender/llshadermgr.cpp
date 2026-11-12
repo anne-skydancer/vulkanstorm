@@ -190,10 +190,23 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
 
-    // <Vulkanstorm> stochastic transparency: the alpha programs' alpha-only variants
-    // (llviewershadermgr.cpp make_stochastic_variant) take the coverage mask helpers.
-    if (shader->mDefines.count("ALPHA_STOCHASTIC") &&
-        !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    // <Vulkanstorm> the stochastic engine: the alpha programs' alpha-only variants
+    // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
+    // coverage mask; the fragment resolve program (STOCH_RESOLVE, the default path on every device) takes the
+    // engine's resolve. (The compute resolve lists stochasticResolveUtilF.glsl among its own shader files.)
+    // STOCH_SAMPLE: any producer's program that uses the engine's sampling (ALPHA_STOCHASTIC implies it).
+    // The shadows' rays have their own noise (shadowStochasticUtil.glsl) and do not.
+    const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
+    if ((alpha_stochastic || shader->mDefines.count("STOCH_SAMPLE")) &&
+        !shader->attachFragmentObject(STOCH_SAMPLE_OBJECT))
+    {
+        return false;
+    }
+    if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    {
+        return false;
+    }
+    if (shader->mDefines.count("STOCH_RESOLVE") && !shader->attachFragmentObject(STOCH_RESOLVE_OBJECT))
     {
         return false;
     }
@@ -250,14 +263,24 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
 
     if (features->hasShadows)
     {
-        // <Vulkanstorm> a program with the PCSS_SHADOW permutation takes the PCSS build of
-        // shadowUtil.glsl (compiled by the viewer's basic shaders under its own key)
-        const char* shadow_util = shader->mDefines.count("PCSS_SHADOW") ? PCSS_SHADOW_UTIL_KEY : "deferred/shadowUtil.glsl";
-        if (!shader->attachFragmentObject(shadow_util))
-        // </Vulkanstorm>
+        // <Vulkanstorm> with the Stochastic method (its util exists only then) every program takes that util
+        // and the method-neutral block built next to it; Legacy takes the stock shadowUtil.glsl
+        if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
-            return false;
+            const char* common = shader->mDefines.count("STOCHASTIC_SHADOW_SUN") ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
+            if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL))
+            {
+                return false;
+            }
         }
+        else
+        {
+            if (!shader->attachFragmentObject("deferred/shadowUtil.glsl"))
+            {
+                return false;
+            }
+        }
+        // </Vulkanstorm>
     }
 
     if (features->hasReflectionProbes)
@@ -582,6 +605,16 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     S32 major_version = gGLManager.mGLSLVersionMajor;
     S32 minor_version = gGLManager.mGLSLVersionMinor;
 
+    // <Vulkanstorm> compute shaders are GLSL 4.30 (GL 4.3). The caller gates on the device; an older
+    // GLSL here is an error, never a different shader.
+    if (type == GL_COMPUTE_SHADER && (major_version < 4 || (major_version == 4 && minor_version < 30)))
+    {
+        LL_WARNS("ShaderLoading") << "A compute shader needs GLSL 4.30, this device has " << major_version << "."
+                                  << minor_version << ": " << open_file_name << LL_ENDL;
+        fclose(file);
+        return 0;
+    }
+
     if (major_version == 1 && minor_version < 30)
     {
         llassert(false); // GL 3.1 or later required
@@ -590,8 +623,12 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     {
         if (major_version >= 4)
         {
-            //set version to 400 or 420
-            if (minor_version >= 20)
+            //set version to 400 or 420 (430 for a compute shader, checked above)
+            if (type == GL_COMPUTE_SHADER)
+            {
+                shader_code_text[shader_code_count++] = strdup("#version 430\n");
+            }
+            else if (minor_version >= 20)
             {
                 shader_code_text[shader_code_count++] = strdup("#version 420\n");
             }
@@ -638,6 +675,10 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     if (type == GL_FRAGMENT_SHADER)
     {
         extra_code_text[extra_code_count++] = strdup("#define FRAGMENT_SHADER 1\n");
+    }
+    else if (type == GL_COMPUTE_SHADER)
+    {
+        extra_code_text[extra_code_count++] = strdup("#define COMPUTE_SHADER 1\n");
     }
     else
     {
@@ -1414,7 +1455,7 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("depth_cutoff");
     mReservedUniforms.push_back("norm_cutoff");
     mReservedUniforms.push_back("shadow_target_width");
-    mReservedUniforms.push_back("shadow_light_size"); // <Vulkanstorm/> PCSS
+    mReservedUniforms.push_back("shadow_light_size"); // <Vulkanstorm/> light size (Stochastic)
 
     llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE + 1);
 
@@ -1453,15 +1494,6 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("shadowMap5");
 
     llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW5+1);
-
-    // <Vulkanstorm> PCSS
-    mReservedUniforms.push_back("shadowDepth0");
-    mReservedUniforms.push_back("shadowDepth1");
-    mReservedUniforms.push_back("shadowDepth4");
-    mReservedUniforms.push_back("shadowDepth5");
-
-    llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_DEPTH5+1);
-    // </Vulkanstorm>
 
     mReservedUniforms.push_back("positionMap");
     mReservedUniforms.push_back("diffuseRect");
@@ -1609,15 +1641,42 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("night_sky_milky_way");
     // </Vulkanstorm>
 
-    // <Vulkanstorm> stochastic transparency: the mask table, the accumulation and the
+    // <Vulkanstorm> the stochastic engine's mask table and the transparency's accumulation and
     // transparency (samplers, bound by reserved index) and the face seed (set per draw)
-    mReservedUniforms.push_back("alpha_st_masks");
+    mReservedUniforms.push_back("stoch_masks");
     mReservedUniforms.push_back("alpha_st_accum");
     mReservedUniforms.push_back("alpha_st_trans");
     mReservedUniforms.push_back("st_seed");
     mReservedUniforms.push_back("alpha_st_depth");
     mReservedUniforms.push_back("alpha_st_history");
     mReservedUniforms.push_back("alpha_st_resolved");
+    mReservedUniforms.push_back("alpha_st_current");
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the cloud transmittance map and its lookup
+    mReservedUniforms.push_back("cloud_shadow_map");
+    mReservedUniforms.push_back("cloud_shadow_mat");
+    mReservedUniforms.push_back("cloud_shadow_params");
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the sun/moon handover (stage L3)
+    mReservedUniforms.push_back("primary_light_dir");
+    mReservedUniforms.push_back("primary_light_color");
+    mReservedUniforms.push_back("primary_shadow_strength");
+    mReservedUniforms.push_back("sun_moon_blend");
+    mReservedUniforms.push_back("cloud_light_transmittance");
+    mReservedUniforms.push_back("cloud_moon_blend");
+    mReservedUniforms.push_back("cloud_light_dir");
+    mReservedUniforms.push_back("sun_glow_norm");
+    mReservedUniforms.push_back("moon_glow_norm");
+    mReservedUniforms.push_back("moon_glow_factor");
+    mReservedUniforms.push_back("moon_halo_weight");
+    // </Vulkanstorm>
+
+    // <Vulkanstorm> the Stochastic shadow method's temporal resolve
+    mReservedUniforms.push_back("shadow_st_raw");
+    mReservedUniforms.push_back("shadow_st_history");
+    mReservedUniforms.push_back("shadow_st_resolved");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

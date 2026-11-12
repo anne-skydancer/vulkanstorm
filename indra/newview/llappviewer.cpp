@@ -31,6 +31,7 @@
 
 // Viewer includes
 #include "llversioninfo.h"
+#include "llcloudnoise.h" // <Vulkanstorm> the volumetric clouds' noise file
 #include "llfeaturemanager.h"
 #include "lluictrlfactory.h"
 #include "lltexteditor.h"
@@ -128,6 +129,7 @@
 #include "llfloaternotificationstabbed.h"   // <FS:SimonLsAlt/> FIRE-35118 - Add idle() processing to delete notifications
 
 #include "llspellcheck.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llscenemonitor.h"
 #include "llavatarrenderinfoaccountant.h"
 #include "lllocalbitmaps.h"
@@ -1183,11 +1185,32 @@ bool LLAppViewer::init()
 
     // *Note: this is where gViewerStats used to be created.
 
+    // <Vulkanstorm> The volumetric clouds' noise file is part of the installation. Nothing reads it before the
+    // clouds draw (L7-2), so until then a missing or damaged file is only logged and the viewer starts. It needs
+    // only the application directory, so it is checked here, on every machine, before any window or GL context
+    // exists. The verified bytes are not kept: the clouds load and verify again (do not hold 8.6 MB all session).
+    {
+        std::string noise_path, noise_error;
+        const bool noise_ok = LLCloudNoise::loadAndVerify(noise_path, noise_error);
+        LLCloudNoise::release();
+        if (!noise_ok)
+        {
+            LL_WARNS("InitInfo") << "Cloud noise file " << noise_path << ": " << noise_error
+                                 << " (the volumetric clouds are not drawn yet; reinstall the viewer)" << LL_ENDL;
+        }
+        else
+        {
+            LL_INFOS("InitInfo") << "Cloud noise file verified: " << noise_path << LL_ENDL;
+        }
+    }
+    // </Vulkanstorm>
+
     if (!initCache())
     {
         std::string msg = LLTrans::getString("MBUnableToAccessFile");
         OSMessageBox(msg.c_str(), LLStringUtil::null, OSMB_OK);
         LL_WARNS("InitInfo") << "Failed to init cache" << LL_ENDL;
+        removeMarkerFiles(); // <Vulkanstorm> a clean exit leaves no exec marker behind
         // quit immediately
         LL_PROFILER_FRAME_END;
         return false;
@@ -3240,6 +3263,44 @@ bool LLAppViewer::initConfiguration()
     // <FS:AO> Re-read user settings again. This is a Firestorm hack to get user settings to override modes
     //Todo, find a cleaner way of doing this via the various set_default arguments.
     loadSettingsFromDirectory("User");
+
+    // <Vulkanstorm> shadow method: once per install, an existing install's soft shadows checkbox
+    // (RenderShadowPCSS) becomes the shadow method, and the retired PCSS method and light size setting move
+    // to Stochastic and RenderShadowLightSize; before the command line and window creation
+    {
+        const LLShadowMethod::Migration migration = LLShadowMethod::migrateOnStartup(
+            gSavedSettings.getBOOL("RenderShadowMethodMigrated"), mIsFirstRun, gSavedSettings.getBOOL("RenderShadowPCSS"));
+        if (migration.setMethod)
+        {
+            gSavedSettings.setU32("RenderShadowMethod", migration.method);
+        }
+        if (migration.markMigrated)
+        {
+            gSavedSettings.setBOOL("RenderShadowMethodMigrated", true);
+        }
+        // PCSS (1) is removed: a stored 1, or any value that is no method, becomes Stochastic
+        const U32 stored_method = gSavedSettings.getU32("RenderShadowMethod");
+        if (LLShadowMethod::sanitize(stored_method) != stored_method)
+        {
+            gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::sanitize(stored_method));
+        }
+        // RenderShadowPCSSLightSize is now RenderShadowLightSize
+        LLControlVariable* old_size = gSavedSettings.getControl("RenderShadowPCSSLightSize");
+        LLControlVariable* new_size = gSavedSettings.getControl("RenderShadowLightSize");
+        if (old_size && new_size)
+        {
+            const LLShadowMethod::LightSizeMigration size_migration = LLShadowMethod::migrateLightSize(old_size->isDefault(), new_size->isDefault());
+            if (size_migration.copyToNew)
+            {
+                gSavedSettings.setF32("RenderShadowLightSize", gSavedSettings.getF32("RenderShadowPCSSLightSize"));
+            }
+            if (size_migration.resetOld)
+            {
+                old_size->resetToDefault();
+            }
+        }
+    }
+    // </Vulkanstorm>
 
     // <FS:Ansariel> Debug setting to disable log throttle
     nd::logging::setThrottleEnabled(gSavedSettings.getBOOL("FSEnableLogThrottle"));
