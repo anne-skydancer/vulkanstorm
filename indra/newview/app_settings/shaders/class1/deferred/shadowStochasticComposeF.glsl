@@ -11,8 +11,8 @@
 
 out vec4 frag_color;
 
-// The light map the soften and light passes read (r sun shadow, g AO, b and a the projector slots):
-// the resolved r, b and a, and this frame's AO (the AO is blurred afterwards, not accumulated).
+// The light map the soften and light passes read (r sun shadow, g AO; the projectors' visibility is the local light ratio's):
+// the resolved r, and this frame's AO (the AO is blurred afterwards, not accumulated).
 uniform sampler2D shadow_st_raw;
 uniform sampler2D shadow_st_resolved;
 uniform float shadow_st_scale;   // 1; a snapshot's 8 summed passes 1/8 (raw and resolved are then the sum)

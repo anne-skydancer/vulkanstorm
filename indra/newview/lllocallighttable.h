@@ -22,18 +22,23 @@
 
 // Header-only and free of GL and viewer types, so that indra/newview/tests/lllocallighttable_test.cpp can check it
 // standalone. The light pool publishes what the shadow pool's local light ratio pass (localLightRatioF.glsl) reads:
-//  - the table: one row per local light, ROW_TEXELS RGBA32F texels (see LLLocalLightRow), uploaded as a 2D texture;
+//  - the table: one row per local light, ROW_TEXELS RGBA32F texels (see below), uploaded as a 2D texture;
 //  - the tile list: for each 32 x 32 pixel tile of the screen, the lights whose screen rectangle covers it, as
 //    TILE_ROW bytes of an R8UI texture tilesX * TILE_ROW wide and tilesY high (tile (tx, ty) from x = TILE_ROW * tx at
-//    row ty, which is the order data() has): the count, then the light indices. At most MAX_PER_TILE lights are listed per tile; the
-//    lights that did not fit are counted (overflow) and leave the pixel's weight sum a little short, never wrong
-//    otherwise. The lights that cast (the mapped projectors) are added first by the caller.
+//    row ty, which is the order data() has): the count, then the light indices.
+//
+// The ratio is the sum of the weights of the lights listed in a pixel's tile, so a light that is drawn but not listed in
+// a tile it reaches is missing from that sum, and applying the ratio to it would darken it wrongly where a projector
+// shades (the denominator lacks it). So a tile holds at most MAX_PER_TILE lights, and a light that did not fit one is
+// reported by dropped(); the caller takes it out of the ratio altogether (its pass is not multiplied by the ratio) and makes
+// the lists again without it. The same holds for a light that does not fit the table (MAX_LIGHTS).
+// The lists can be clipped to a rectangle (setClip): tiles outside it are left empty and are not read.
 //
 // Texel layout of a table row (all view space):
 //   0  centre.xyz, size                  size is the light's radius (volume->getLightRadius() * 1.5)
 //   1  colour.rgb (linear), falloff
 //   2  origin.xyz, kind                  the projector's eye (its pass's proj_origin) or the centre; kind 1 a projector
-//   3  slot, changed, 0, 0               slot: the projector map (0, 1) or -1; changed: its light moved since last frame
+//   3  the projector texture's average luminance (1 for none or a point light), 0, 0, 0
 //   4-7 the projector matrix (view space to the light's texture space, column major); zero for a point light
 
 #include <algorithm>
@@ -84,6 +89,12 @@ namespace LLLocalLightTable
             min_y = std::min(min_y, sy);
             max_y = std::max(max_y, sy);
         }
+        // clamped to the screen's neighbourhood before the integer cast (a huge or non-finite float is not an int)
+        const float lo_x = -1.0f, hi_x = float(width) + 1.0f, lo_y = -1.0f, hi_y = float(height) + 1.0f;
+        min_x = std::min(std::max(min_x, lo_x), hi_x);
+        max_x = std::min(std::max(max_x, lo_x), hi_x);
+        min_y = std::min(std::max(min_y, lo_y), hi_y);
+        max_y = std::min(std::max(max_y, lo_y), hi_y);
         Rect r;
         r.x0 = std::max(int(std::floor(min_x)) - 1, 0);
         r.y0 = std::max(int(std::floor(min_y)) - 1, 0);
@@ -103,11 +114,28 @@ namespace LLLocalLightTable
             mTilesY = (std::max(height, 1) + TILE - 1) / TILE;
             mData.assign(size_t(mTilesX) * size_t(mTilesY) * size_t(TILE_ROW), 0);
             mOverflow = 0;
+            mClipped = false;
+            mDropped.assign(MAX_LIGHTS, false);
+        }
+
+        // only the tiles the rectangle (pixels) touches are filled; call after reset
+        void setClip(const Rect& r)
+        {
+            mClip = r;
+            mClipped = true;
         }
 
         // lists light `index` in every tile the rectangle touches; false when the rectangle is empty
-        bool add(int index, const Rect& r)
+        bool add(int index, const Rect& rect)
         {
+            Rect r = rect;
+            if (mClipped)
+            {
+                r.x0 = std::max(r.x0, mClip.x0);
+                r.y0 = std::max(r.y0, mClip.y0);
+                r.x1 = std::min(r.x1, mClip.x1);
+                r.y1 = std::min(r.y1, mClip.y1);
+            }
             if (r.empty() || index < 0 || index >= MAX_LIGHTS)
             {
                 return false;
@@ -129,6 +157,7 @@ namespace LLLocalLightTable
                     else
                     {
                         ++mOverflow;
+                        mDropped[size_t(index)] = true;
                     }
                 }
             }
@@ -140,7 +169,8 @@ namespace LLLocalLightTable
         int rows() const { return mTilesX * mTilesY; }
         int count(int tx, int ty) const { return mData[(size_t(ty) * size_t(mTilesX) + size_t(tx)) * size_t(TILE_ROW)]; }
         int light(int tx, int ty, int i) const { return mData[(size_t(ty) * size_t(mTilesX) + size_t(tx)) * size_t(TILE_ROW) + 1 + size_t(i)]; }
-        int overflow() const { return mOverflow; }
+        int overflow() const { return mOverflow; }                 // tile entries that did not fit
+        bool dropped(int index) const { return index >= 0 && size_t(index) < mDropped.size() && mDropped[size_t(index)]; }   // the light missed a tile it reaches
         const uint8_t* data() const { return mData.data(); }
         size_t bytes() const { return mData.size(); }
 
@@ -148,6 +178,9 @@ namespace LLLocalLightTable
         int mTilesX = 0;
         int mTilesY = 0;
         int mOverflow = 0;
+        bool mClipped = false;
+        Rect mClip;
+        std::vector<bool> mDropped;
         std::vector<uint8_t> mData;
     };
 }

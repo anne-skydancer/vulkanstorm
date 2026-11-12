@@ -25,7 +25,7 @@
 uniform sampler2D shadow_st_raw;
 uniform sampler2D shadow_st_history;
 uniform sampler2D depthMap;
-uniform vec3 shadow_st_channel_valid;   // x: the sun's history is the same light as last frame's (y and z, the projectors, are the local light ratio's)
+uniform float shadow_st_sun_valid;      // 1: the sun's history is the same light as last frame's (the projectors' are the local light ratio's)
 uniform float stoch_weight;             // the engine's: this frame's weight (1/8)
 uniform mat4 inv_proj;                  // the projection's inverse: set by the pipeline for both resolve paths
 
@@ -68,7 +68,7 @@ vec4 shadow_resolve(ivec2 px, ivec2 size)
         vec4 mx;
         stoch_neighbourhood(px, size, cur, mn, mx);
         // per channel: a channel whose light changed (or the AO and depth channels, which are not accumulated) takes this frame's value
-        vec4 weight = vec4(shadow_st_channel_valid.x > 0.5 ? stoch_weight : 1.0, 1.0, 1.0, 1.0);
+        vec4 weight = vec4(shadow_st_sun_valid > 0.5 ? stoch_weight : 1.0, 1.0, 1.0, 1.0);
         vec4 acc = stoch_accumulate_w(hist, mn, mx, cur, weight);
         res = vec4(acc.r, w_cur, 1.0, 1.0);
     }

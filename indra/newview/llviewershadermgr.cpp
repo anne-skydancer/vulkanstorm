@@ -3608,6 +3608,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gLocalLightRatioProgram.clearPermutations();
         gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/sunLightV.glsl", GL_VERTEX_SHADER));
         gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightRatioF.glsl", GL_FRAGMENT_SHADER));
+        gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightWeightUtil.glsl", GL_FRAGMENT_SHADER));   // the light pool's weights
         gLocalLightRatioProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gLocalLightRatioProgram);
         gLocalLightRatioProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");   // it reads the depth buffer, as the sun pass does
@@ -3625,8 +3626,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             !gShadowStochasticComposeProgram.createShader() || !gLocalLightRatioProgram.createShader() ||
             !gLocalLightRatioResolveProgram.createShader())
         {
-            LL_WARNS("Shader") << "Stochastic shadows: the temporal resolve (" << (compute ? "compute" : "fragment") << ") failed to build; the sun pass keeps its 8 rays per frame "
-                                  "without accumulation (the next shader reload tries again)" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic shadows: a shadow program (the temporal resolve (" << (compute ? "compute" : "fragment") << "), the light map or the local light ratio) failed to build; "
+                                  "Legacy shadows run until a shader reload builds them" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
             gLocalLightRatioProgram.unload();

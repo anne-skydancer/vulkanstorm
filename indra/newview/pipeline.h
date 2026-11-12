@@ -40,6 +40,7 @@
 #include "llrendertarget.h"
 #include "llstochastichistory.h"
 #include "lllocallighttable.h"
+#include <unordered_set>
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
@@ -462,9 +463,10 @@ public:
     void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
     void setShadowCasterCoverage(bool coverage, F32 layer = 0.f); // the bound shadow caster program: Blending (partial light) or Masking (the cutoff), the batch's layer and the frame's phase
     // unified lighting U1: the shadow pool's local light ratio. renderLocalLightRatio builds the light table and tile list
-    // (the light pool's), runs the ratio pass into `raw` (scratch) and its temporal resolve, and says whether the light
-    // passes read the ratio this frame (mLocalRatioActive); false: no mapped projector, or nothing to do
-    bool renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 light_scale);
+    // (the light pool's) and runs the ratio pass: into `scratch` with a temporal resolve in the main view, otherwise into the
+    // view's own target (a snapshot sums 8 passes). It says whether the light passes read the ratio this frame
+    // (mLocalRatioActive, for the lights in mLocalRatioLights); false: no mapped projector, or nothing to do
+    bool renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F32 light_scale);
     bool buildLocalLightTable(F32 light_scale, U32 width, U32 height);
     bool ensureLocalRatioHistory(U32 width, U32 height);
     void releaseLocalLightRatio();   // the ratio history and the table and tile textures
@@ -872,12 +874,21 @@ public:
     bool mLocalRatioActive = false;
     U32 mLocalLightTableTex = 0;
     U32 mLocalLightTilesTex = 0;
-    U32 mLocalLightTilesRows = 0;
+    S32 mLocalLightTilesW = 0;          // the tile texture's size, texels
+    S32 mLocalLightTilesH = 0;
+    bool mLocalLightTableFailed = false;   // allocation failures are tried again only after a size change or a screen buffer release
+    S32 mLocalLightTilesFailedW = 0;
+    S32 mLocalLightTilesFailedH = 0;
+    LLRenderTarget mLocalRatioAux;      // RGBA16F, the ratio of a view without a history: snapshots (8 passes summed), mirrors and probes
+    U32 mLocalRatioTex = 0;             // what the light passes read this frame
+    F32 mLocalRatioScale = 1.f;         // 1/8 for a snapshot
+    std::unordered_set<const LLDrawable*> mLocalRatioLights;   // the lights the ratio covers; the others are lit without it
     LLLocalLightTable::Tiles mLocalLightTiles;
     std::vector<F32> mLocalLightRows;
     U32 mLocalLightRowCount = 0;
     S32 mLocalRatioRect[4] = { 0, 0, 0, 0 };   // the screen rectangle (x0, y0, x1, y1) the mapped projectors can light
-    F32 mLocalSlotOn[2] = { 0.f, 0.f };
+    F32 mLocalSlotLight[2] = { -1.f, -1.f };   // the table row of each projector slot's light, -1: none
+    F32 mLocalSlotChanged[2] = { 0.f, 0.f };   // 1: the slot's light changed since last frame (its visibility has no history)
     F32 mLocalSlotFade[2] = { 1.f, 1.f };
     // </Vulkanstorm>
 

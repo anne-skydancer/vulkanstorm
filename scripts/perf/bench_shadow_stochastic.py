@@ -21,7 +21,7 @@ Checks (stage M2, the resolve, the same shaders the viewer runs):
     below 0.03 (the raw 8-ray pass is printed for comparison);
   * the 3 x 3 clamp snaps a lit area to exactly 1 and an umbra to exactly 0 in one frame, whatever the history held;
   * a history whose stored depth disagrees with the surface (a revealed surface) is rejected: this frame's rays alone;
-  * a channel whose light changed (shadow_st_channel_valid 0) takes this frame's rays alone;
+  * the sun when its light changed (shadow_st_sun_valid 0) takes this frame's rays alone;
   * a camera move (a non-identity reprojection): the history is kept where its depth agrees with the surface
     and rejected where the move disoccluded it;
   * the compute and the fragment resolve give bit identical histories.
@@ -115,7 +115,7 @@ class Resolve:
         use(self.prog)
         set_mat(self.prog, 'stoch_reproj', [[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]])
         u1f(loc(self.prog, b'stoch_weight'), 0.125)
-        u3f(loc(self.prog, b'shadow_st_channel_valid'), *channel_valid)
+        u1f(loc(self.prog, b'shadow_st_sun_valid'), channel_valid[0])   # the sun's channel only: the projectors' are the local light ratio's
         set_mat(self.prog, 'inv_proj', [inverse(self.sc.proj)])
         for unit, name in enumerate(('shadow_st_raw', 'shadow_st_history', 'depthMap')):
             u1i(loc(self.prog, name.encode()), unit)

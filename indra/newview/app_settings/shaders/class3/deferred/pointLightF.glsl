@@ -48,7 +48,8 @@ uniform int classic_mode;
 #if defined(LOCAL_LIGHT_RATIO)
 // <Vulkanstorm/> unified lighting U1: the shadow pool's ratio of the local lights' light that the shadows leave (rgb)
 uniform sampler2D local_light_ratio;
-uniform int local_ratio_on;
+uniform int local_ratio_on;      // 1 for a light the ratio covers
+uniform float local_ratio_scale; // 1/8 for a snapshot's 8 summed passes
 #endif
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);
@@ -158,7 +159,7 @@ void main()
 #if defined(LOCAL_LIGHT_RATIO)
     if (local_ratio_on != 0)
     {
-        final_color *= texture(local_light_ratio, tc).rgb;
+        final_color *= texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale;
     }
 #endif
     float final_scale = 1.0;

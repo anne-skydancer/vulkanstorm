@@ -56,6 +56,9 @@ namespace
         const float far_left[3] = { -60.f, 0.f, -10.f };
         r = sphereScreenRect(far_left, 1.f, p, 1280, 720);
         check(r.empty(), "a light far off to the side is off screen");
+        const float huge[3] = { 1.0e30f, 0.f, -10.f };
+        r = sphereScreenRect(huge, 1.f, p, 1280, 720);
+        check(r.empty() || (r.x0 >= 0 && r.x1 <= 1280), "a huge coordinate is clamped before the integer cast");
         const float edge[3] = { -10.5f, 0.f, -10.f };
         r = sphereScreenRect(edge, 1.f, p, 1280, 720);
         check(!r.empty() && r.x0 == 0, "a light across the left edge is clamped to it");
@@ -90,8 +93,30 @@ namespace
         }
         check(u.count(0, 0) == MAX_PER_TILE && u.light(0, 0, MAX_PER_TILE - 1) == MAX_PER_TILE - 1, "a tile holds at most 32 lights, the first ones added");
         check(u.overflow() == 3 * 4, "the lights that did not fit are counted (3 lights over 4 tiles)");
+        check(u.dropped(MAX_PER_TILE) && u.dropped(MAX_PER_TILE + 2) && !u.dropped(0) && !u.dropped(MAX_PER_TILE - 1), "the lights that did not fit are reported");
         u.reset(64, 64);
-        check(u.count(0, 0) == 0 && u.overflow() == 0, "reset clears");
+        check(u.count(0, 0) == 0 && u.overflow() == 0 && !u.dropped(MAX_PER_TILE), "reset clears");
+        // clipped to a rectangle: only its tiles are filled
+        Tiles c;
+        c.reset(256, 256);
+        Rect clip;
+        clip.x0 = 64; clip.y0 = 32; clip.x1 = 128; clip.y1 = 96;
+        c.setClip(clip);
+        Rect all;
+        all.x1 = 256; all.y1 = 256;
+        c.add(3, all);
+        check(c.count(2, 1) == 1 && c.count(3, 2) == 1 && c.count(0, 0) == 0 && c.count(4, 1) == 0 && c.count(2, 3) == 0, "a clipped list fills the clip's tiles only");
+        Rect outside;
+        outside.x0 = 200; outside.y0 = 200; outside.x1 = 220; outside.y1 = 220;
+        check(!c.add(4, outside), "a light outside the clip is not listed");
+        // taking the light that did not fit out frees the room: the lists made again hold the others
+        Tiles d;
+        d.reset(64, 64);
+        for (int i = 0; i < MAX_PER_TILE + 1; ++i) d.add(i, one);
+        check(d.dropped(MAX_PER_TILE), "the 33rd light is dropped");
+        d.reset(64, 64);
+        for (int i = 0; i < MAX_PER_TILE + 1; ++i) if (!(i == MAX_PER_TILE)) d.add(i, one);
+        check(d.overflow() == 0 && d.count(0, 0) == MAX_PER_TILE, "without it every other light is listed");
     }
 }
 
