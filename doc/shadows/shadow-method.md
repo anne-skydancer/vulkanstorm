@@ -262,7 +262,8 @@ stochastic pick per pixel and a screen-space march (Stochastic only; Legacy and 
   (the texture pipe was the loop's bound). The screen rectangle of a light is its sphere at 0.9293 of its reach (beyond it the weight
   is under 0.5 % of the light's peak), cut by a projector's frustum with the four far corners at that reach from the eye; the
   ratio's rectangle is the union. The 32-per-tile rule on the CPU lists is unchanged (a light that misses a tile leaves the ratio).
-  A GPU depth-bounds tile cull was studied (club 0.64 to 0.46 ms) and is not in this stage.
+  The GPU tile cull (main view) then drops the lights that have no weight on any pixel of a tile, by the tile's depth bounds of
+  4 x 4 pixels (`localLightBlockF.glsl`, `localLightCullF.glsl`); the ratio is bit identical to the coarse lists' (the costs are in the PR).
 - Gates, costs and what is not verified: the PR.
 
 ## Shared by all methods
