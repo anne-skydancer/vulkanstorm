@@ -65,16 +65,15 @@ float shadowWorldBias(float texel_m, float s_z, float texels);
 vec3 shadowNormalOffsetPos(vec3 pos, vec3 ng, float sin_theta, float texel_m);
 vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_dir, out float sin_theta);
 
-float stIGN(vec2 p)
-{
-    return fract(52.9829189 * fract(0.06711056 * p.x + 0.00583715 * p.y));
-}
+// the stochastic core's noise (stochasticNoiseUtil.glsl, linked next to this object); the ids are its streams'
+#define ST_STREAM_SUN_RAYS 0
+#define ST_STREAM_LOCAL_RAYS 2
+vec2 stNoiseStream(vec2 px, int frame, int stream);
 
-// the rays' rotation and the step jitter of this pixel and frame
-vec2 stNoise()
+// the rays' rotation and the step jitter of this pixel and frame, from the stream of the light they go toward
+vec2 stNoise(int stream)
 {
-    vec2 p = gl_FragCoord.xy + 5.588238 * float(shadow_st_frame & 63);
-    return vec2(stIGN(p), stIGN(p.yx + vec2(113.0, 71.0)));
+    return stNoiseStream(gl_FragCoord.xy, shadow_st_frame, stream);
 }
 
 // d(depth)/d(uv) of the plane of a perspective projector's receiver, from two tangent steps
@@ -256,7 +255,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     {
         return 1.0;
     }
-    vec2 nz = stNoise();
+    vec2 nz = stNoise(ST_STREAM_SUN_RAYS);
     float pick = fract(nz.x * 7.0 + nz.y) * total;
     int j = 3;
     float acc = 0.0;
@@ -305,7 +304,7 @@ float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 e
     vec3 ld = to_eye / dist;
     vec3 t1 = normalize(cross(ld, abs(ld.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
     vec3 t2 = cross(ld, t1);
-    vec2 nz = stNoise();
+    vec2 nz = stNoise(ST_STREAM_LOCAL_RAYS);
     float theta = 6.28318531 * nz.x;
     vec4 ds[ST_RAYS];
     for (int k = 0; k < ST_RAYS; ++k)

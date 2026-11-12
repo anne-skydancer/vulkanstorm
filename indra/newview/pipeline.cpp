@@ -1509,7 +1509,9 @@ void LLPipeline::releaseScreenBuffers()
 {
     releaseAlphaStochastic(); // <Vulkanstorm/> stochastic transparency's targets
     releaseShadowStochasticHistory(); // <Vulkanstorm/> Stochastic shadows' history
+    releaseLocalLightRatio(); // <Vulkanstorm/> unified lighting U1: the ratio's history, table and tile list
     mShadowSTFailedWidth = mShadowSTFailedHeight = 0;
+    mLocalRatioFailedWidth = mLocalRatioFailedHeight = 0;
 
     mRT->screen.release();
     mRT->deferredScreen.release();
@@ -8690,6 +8692,8 @@ void LLPipeline::resolveAlphaStochasticTemporalFragment()
 void LLPipeline::releaseShadowStochasticHistory()
 {
     mShadowSTHistory.release();
+    mLocalRatioHistory.release(); // <Vulkanstorm/> unified lighting U1: it follows the sun history's size
+    mLocalRatioActive = false;
 }
 
 bool LLPipeline::beginShadowStochastic()
@@ -8714,6 +8718,9 @@ bool LLPipeline::beginShadowStochastic()
     if (!mShadowSTHistory.isAllocated() && w && h && !(mShadowSTFailedWidth == w && mShadowSTFailedHeight == h))
     {
         while (glGetError() != GL_NO_ERROR) {}
+        // r the sun, g the linear view depth: two channels (unified lighting U1 moved the projectors' channels to the local light ratio);
+        // the compute resolve (A/B only) writes an rgba16f image
+        mShadowSTHistory.setFormat(LLStochasticEngine::computeResolve() ? GL_RGBA16F : GL_RG16F);
         bool ok = mShadowSTHistory.allocate(w, h, !LLStochasticEngine::computeResolve());   // a fragment resolve draws into the history: framebuffers
         ok = ok && glGetError() == GL_NO_ERROR;
         glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
@@ -8765,6 +8772,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
                                                                rot.mQ, mShadowSTSpotRot[i].mQ);
             }
             valid.mV[1 + i] = same ? 1.f : 0.f;
+            mShadowSTSpotUnchanged[i] = same;   // the local light ratio's history asks
             mShadowSTSpot[i] = light;
             mShadowSTSpotPos[i] = pos;
             mShadowSTSpotRot[i] = rot;
@@ -8881,6 +8889,387 @@ void LLPipeline::composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 
     compose.unbind();
     light_map.flush();
 }
+
+// <Vulkanstorm> a projector's matrices as setupSpotLight uploads them, shared with the local light table
+// (unified lighting U1: the ratio pass tests the same frustum the spot pass lights)
+struct LLSpotProjection
+{
+    glm::mat4 screen_to_light;   // view space to the projector's texture space
+    F32 near_clip;
+    glm::vec3 p1;
+    glm::vec3 n;
+    glm::vec3 origin;            // the projector's eye, view space
+    F32 range;
+};
+
+static void computeSpotProjection(LLDrawable* drawablep, LLSpotProjection& out)
+{
+    //construct frustum
+    LLVOVolume* volume = drawablep->getVOVolume();
+    LLVector3 params = volume->getSpotLightParams();
+
+    F32 fov = params.mV[0];
+
+    LLVector3 pos = drawablep->getPositionAgent();
+    LLQuaternion quat = volume->getRenderRotation();
+    LLVector3 scale = volume->getScale();
+
+    //get near clip plane
+    LLVector3 at_axis(0,0,-scale.mV[2]*0.5f);
+    at_axis *= quat;
+
+    LLVector3 np = pos+at_axis;
+    at_axis.normVec();
+
+    //get origin that has given fov for plane np, at_axis, and given scale
+    F32 dist = (scale.mV[1]*0.5f)/tanf(fov*0.5f);
+
+    LLVector3 origin = np - at_axis*dist;
+
+    //matrix from volume space to agent space
+    LLMatrix4 light_mat(quat, LLVector4(origin,1.f));
+
+    glm::mat4 light_to_agent(glm::make_mat4((F32*) light_mat.mMatrix));
+    glm::mat4 light_to_screen = get_current_modelview() * light_to_agent;
+
+    glm::mat4 screen_to_light = glm::inverse(light_to_screen);
+
+    F32 s = volume->getLightRadius()*1.5f;
+    F32 near_clip = dist;
+    F32 width = scale.mV[VX];
+    F32 height = scale.mV[VY];
+    F32 far_clip = s+dist-scale.mV[VZ];
+
+    F32 fovy = fov; // radians
+    F32 aspect = width/height;
+
+    glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.5f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 0.5f, 0.0f,
+                        0.5f, 0.5f, 0.5f, 1.0f);
+
+    glm::vec3 p1(0, 0, -(near_clip+0.01f));
+    glm::vec3 p2(0, 0, -(near_clip+1.f));
+
+    glm::vec3 screen_origin(0, 0, 0);
+
+    p1 = mul_mat4_vec3(light_to_screen, p1);
+    p2 = mul_mat4_vec3(light_to_screen, p2);
+    screen_origin = mul_mat4_vec3(light_to_screen, screen_origin);
+
+    glm::vec3 n = p2-p1;
+    n = glm::normalize(n);
+
+    F32 proj_range = far_clip - near_clip;
+    glm::mat4 light_proj = glm::perspective(fovy, aspect, near_clip, far_clip);
+    screen_to_light = trans * light_proj * screen_to_light;
+
+    out.screen_to_light = screen_to_light;
+    out.near_clip = near_clip;
+    out.p1 = p1;
+    out.n = n;
+    out.origin = screen_origin;
+    out.range = proj_range;
+}
+// </Vulkanstorm>
+
+// <Vulkanstorm> Unified lighting U1: the shadow pool's local light ratio (doc/shadows/shadow-method.md).
+//
+// The light pool publishes a table of the visible local lights and a 32 x 32 screen tile list (lllocallighttable.h); the
+// shadow pool's ratio pass (localLightRatioF.glsl) turns the mapped projectors' visibility into the ratio R of the local
+// lights' light that the shadows leave, per colour channel, and the temporal resolve (localLightRatioResolveF.glsl) keeps
+// it in the stochastic engine's history; the light passes multiply their direct light by it. Data flows one way:
+// G-buffer -> shadow pool (sun, ratio) -> light pool. The ratio is made only when a projector holds a shadow map; with
+// none every light is unshadowed and the passes skip the fetch (local_ratio_on 0).
+// Main view only: a snapshot, a probe or another render target has no ratio (R = 1, the projectors cast nothing there).
+bool LLPipeline::ensureLocalRatioHistory(U32 width, U32 height)
+{
+    if (mLocalRatioHistory.isAllocated() && !mLocalRatioHistory.matches(width, height))
+    {
+        mLocalRatioHistory.release();
+    }
+    if (mLocalRatioHistory.isAllocated())
+    {
+        return true;
+    }
+    if (!width || !height || (mLocalRatioFailedWidth == width && mLocalRatioFailedHeight == height))
+    {
+        return false;
+    }
+    while (glGetError() != GL_NO_ERROR) {}
+    bool ok = mLocalRatioHistory.allocate(width, height, true);   // the resolve is a fragment pass: framebuffers
+    ok = ok && glGetError() == GL_NO_ERROR;
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    if (ok)
+    {
+        LL_INFOS("Pipeline") << "Stochastic shadows: local light ratio history (" << (mLocalRatioHistory.bytes() >> 20) << " MiB, " << width << "x" << height << ")" << LL_ENDL;
+        mLocalRatioFailedWidth = mLocalRatioFailedHeight = 0;
+        return true;
+    }
+    mLocalRatioHistory.release();
+    mLocalRatioFailedWidth = width;
+    mLocalRatioFailedHeight = height;
+    LL_WARNS("Pipeline") << "Stochastic shadows: the local light ratio history could not be allocated (" << width << "x" << height
+                         << "); the projectors cast no shadow until it can" << LL_ENDL;
+    return false;
+}
+
+void LLPipeline::releaseLocalLightRatio()
+{
+    mLocalRatioHistory.release();
+    mLocalRatioActive = false;
+    LLStochasticEngine::deleteTexture(mLocalLightTableTex);
+    LLStochasticEngine::deleteTexture(mLocalLightTilesTex);
+    mLocalLightTilesRows = 0;
+    mLocalLightTiles.reset(1, 1);
+    mLocalLightRowCount = 0;
+}
+
+// The table of the lights the passes below draw, the same set and the same rules as the loop of renderDeferredLighting
+// (keep them together): nearby, not muted, attached lights if shown, radius and colour not negligible, in the frustum.
+// The mapped projectors come first, so that the tile lists never lose them. False: no mapped projector is among them.
+bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
+{
+    static LLCachedControl<S32> local_light_count(gSavedSettings, "RenderLocalLightCount", 256);
+    using namespace LLLocalLightTable;
+    LLViewerCamera* camera = LLViewerCamera::getInstance();
+    const glm::mat4 mat = get_current_modelview();
+    const glm::mat4 proj = get_current_projection();
+
+    mLocalLightRows.assign(size_t(MAX_LIGHTS) * ROW_TEXELS * 4, 0.f);
+    mLocalLightRowCount = 0;
+    mLocalLightTiles.reset((S32)width, (S32)height);
+    bool mapped = false;
+    for (U32 i = 0; i < 2; ++i)
+    {
+        mLocalSlotOn[i] = mShadowSpotLight[i].notNull() ? 1.f : 0.f;
+        mLocalSlotFade[i] = 1.f - mSpotLightFade[i];
+    }
+
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        S32 count = 0;
+        for (light_set_t::iterator iter = mNearbyLights.begin(); iter != mNearbyLights.end(); ++iter)
+        {
+            count++;
+            if (count > local_light_count)
+            {
+                break;
+            }
+            LLDrawable* drawablep = iter->drawable;
+            LLVOVolume* volume = drawablep->getVOVolume();
+            if (!volume || (volume->isAttachment() && !sRenderAttachedLights))
+            {
+                continue;
+            }
+            S32 slot = -1;
+            for (U32 i = 0; i < 2; ++i)
+            {
+                if (mShadowSpotLight[i] == drawablep)
+                {
+                    slot = (S32)i;
+                }
+            }
+            if ((pass == 0) != (slot >= 0))
+            {
+                continue;
+            }
+            const LLVector3 agent = drawablep->getPositionAgent();
+            const F32 s = volume->getLightRadius() * 1.5f;
+            if (s <= 0.001f)
+            {
+                continue;
+            }
+            const LLColor3 col = volume->getLightLinearColor() * light_scale;
+            if (col.magVecSquared() < 0.001f)
+            {
+                continue;
+            }
+            LLVector4a center;
+            center.load3(agent.mV);
+            LLVector4a sa;
+            sa.splat(s);
+            if (camera->AABBInFrustumNoFarClip(center, sa) == 0)
+            {
+                continue;
+            }
+            if (mLocalLightRowCount >= (U32)MAX_LIGHTS)
+            {
+                break;
+            }
+            const glm::vec3 tc = mul_mat4_vec3(mat, glm::vec3(agent.mV[0], agent.mV[1], agent.mV[2]));
+            F32* row = &mLocalLightRows[size_t(mLocalLightRowCount) * ROW_TEXELS * 4];
+            row[0] = tc.x; row[1] = tc.y; row[2] = tc.z; row[3] = s;
+            row[4] = col.mV[0]; row[5] = col.mV[1]; row[6] = col.mV[2]; row[7] = volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF);
+            row[8] = tc.x; row[9] = tc.y; row[10] = tc.z; row[11] = 0.f;
+            row[12] = (F32)slot;
+            row[13] = (slot >= 0 && !mShadowSTSpotUnchanged[slot]) ? 1.f : 0.f;
+            if (volume->isLightSpotlight())
+            {
+                LLSpotProjection sp;
+                computeSpotProjection(drawablep, sp);
+                row[8] = sp.origin.x; row[9] = sp.origin.y; row[10] = sp.origin.z; row[11] = 1.f;
+                memcpy(&row[16], glm::value_ptr(sp.screen_to_light), sizeof(F32) * 16);
+            }
+            mapped = mapped || slot >= 0;
+            const Rect r = sphereScreenRect(glm::value_ptr(tc), s, glm::value_ptr(proj), (S32)width, (S32)height);
+            mLocalLightTiles.add((S32)mLocalLightRowCount, r);
+            ++mLocalLightRowCount;
+        }
+    }
+    return mapped;
+}
+
+bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 light_scale)
+{
+    static LLCachedControl<S32> local_light_count(gSavedSettings, "RenderLocalLightCount", 256);
+    if (local_light_count <= 0 || (mShadowSpotLight[0].isNull() && mShadowSpotLight[1].isNull()))
+    {
+        return false;
+    }
+    if (!gLocalLightRatioProgram.mProgramObject || !gLocalLightRatioResolveProgram.mProgramObject)
+    {
+        return false;
+    }
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    LL_PROFILE_GPU_ZONE("local light ratio");
+    const U32 w = mRT->deferredLight.getWidth();
+    const U32 h = mRT->deferredLight.getHeight();
+    if (!w || !h || raw.getWidth() != w || raw.getHeight() != h || !ensureLocalRatioHistory(w, h))
+    {
+        return false;
+    }
+    if (!buildLocalLightTable(light_scale, w, h))
+    {
+        return false;
+    }
+
+    // upload: the table (made once), the tile list (made again when the screen's size changes)
+    using namespace LLLocalLightTable;
+    if (!mLocalLightTableTex)
+    {
+        mLocalLightTableTex = LLStochasticEngine::newTexture2D(GL_RGBA32F, ROW_TEXELS, MAX_LIGHTS, GL_RGBA32F);
+    }
+    const U32 tiles_w = (U32)(mLocalLightTiles.tilesX() * TILE_ROW);
+    const U32 tiles_h = (U32)mLocalLightTiles.tilesY();
+    if (mLocalLightTilesTex && mLocalLightTilesRows != tiles_w * 65536u + tiles_h)
+    {
+        LLStochasticEngine::deleteTexture(mLocalLightTilesTex);
+    }
+    if (!mLocalLightTilesTex)
+    {
+        mLocalLightTilesTex = LLStochasticEngine::newTexture2D(GL_R8UI, tiles_w, tiles_h, GL_R8, nullptr, GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+        mLocalLightTilesRows = tiles_w * 65536u + tiles_h;
+    }
+    if (!mLocalLightTableTex || !mLocalLightTilesTex)
+    {
+        LL_WARNS_ONCE("Pipeline") << "Stochastic shadows: the local light table could not be allocated; the projectors cast no shadow" << LL_ENDL;
+        return false;
+    }
+    gGL.flush();
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, ROW_TEXELS, (GLsizei)mLocalLightRowCount, GL_RGBA, GL_FLOAT, mLocalLightRows.data());
+    gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTilesTex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, (GLsizei)tiles_w, (GLsizei)tiles_h, GL_RED_INTEGER, GL_UNSIGNED_BYTE, mLocalLightTiles.data());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+
+    static const LLStaticHashedString sShadowSTFrame("shadow_st_frame");
+    static const LLStaticHashedString sSlotOn("spot_slot_on");
+    static const LLStaticHashedString sSlotFade("spot_shadow_fade");
+    static const LLStaticHashedString sScale("shadow_st_scale");
+
+    // the ratio pass: raw ratio (rgb) and the share of changed projectors (a), into the scratch target
+    raw.bindTarget();
+    glClearColor(1.f, 1.f, 1.f, 0.f);
+    raw.clear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0, 0, 0, 0);
+    {
+        LLGLSLShader& shader = gLocalLightRatioProgram;
+        bindDeferredShader(shader, &mRT->deferredLight);
+        mScreenTriangleVB->setBuffer();
+        shader.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)w, (GLfloat)h);
+        shader.uniform1i(sShadowSTFrame, temporal ? (S32)mShadowSTHistory.seedFrame() : 0);   // the sun's seeds, as stage U0's projectors had
+        shader.uniform2fv(sSlotOn, 1, mLocalSlotOn);
+        shader.uniform2fv(sSlotFade, 1, mLocalSlotFade);
+        const S32 table_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
+        if (table_unit > -1)
+        {
+            gGL.getTexUnit(table_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+        }
+        const S32 tiles_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TILES);
+        if (tiles_unit > -1)
+        {
+            gGL.getTexUnit(tiles_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTilesTex);
+        }
+        {
+            LLGLDisable   blend(GL_BLEND);
+            LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
+            mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+        }
+        shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
+        shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TILES);
+        unbindDeferredShader(shader);
+    }
+    raw.flush();
+
+    // its temporal resolve, in the engine's history: raw + last frame -> the other texture
+    mLocalRatioHistory.beginFrame(temporal);
+    glBindFramebuffer(GL_FRAMEBUFFER, mLocalRatioHistory.writeFramebuffer());
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glViewport(0, 0, w, h);
+    LLGLSLShader& resolve = gLocalLightRatioResolveProgram;
+    gGL.flush();
+    resolve.bind();
+    resolve.uniformMatrix4fv(LLShaderMgr::INVERSE_PROJECTION_MATRIX, 1, GL_FALSE, glm::value_ptr(glm::inverse(get_current_projection())));
+    mLocalRatioHistory.setResolveUniforms(resolve);
+    resolve.uniform1f(sScale, 1.f);
+    const S32 depth_unit = resolve.enableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
+    if (depth_unit > -1)
+    {
+        gGL.getTexUnit(depth_unit)->bind(&mRT->deferredScreen, true);
+    }
+    const S32 raw_unit = resolve.enableTexture(LLShaderMgr::SHADOW_ST_RAW, LLTexUnit::TT_TEXTURE);
+    if (raw_unit > -1)
+    {
+        raw.bindTexture(0, raw_unit, LLTexUnit::TFO_POINT);
+    }
+    const S32 history_unit = resolve.enableTexture(LLShaderMgr::SHADOW_ST_HISTORY, LLTexUnit::TT_TEXTURE);
+    if (history_unit > -1)
+    {
+        gGL.getTexUnit(history_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalRatioHistory.readTexture());
+    }
+    // the depth of the last frame, from the sun history (the ratio's has no channel for it): the frame before the one
+    // the sun's resolve just made latest. Unused where this frame has no history.
+    const S32 sun_unit = resolve.enableTexture(LLShaderMgr::SHADOW_ST_RESOLVED, LLTexUnit::TT_TEXTURE);
+    if (sun_unit > -1)
+    {
+        gGL.getTexUnit(sun_unit)->bindManual(LLTexUnit::TT_TEXTURE, mShadowSTHistory.isAllocated() ? mShadowSTHistory.previousTexture() : mLocalRatioHistory.readTexture());
+    }
+    {
+        LLGLDisable blend(GL_BLEND);
+        LLGLDepthTest depth(GL_FALSE);
+        mScreenTriangleVB->setBuffer();
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+    }
+    for (S32 unit : { raw_unit, history_unit, sun_unit })
+    {
+        if (unit > -1)
+        {
+            gGL.getTexUnit(unit)->unbind(LLTexUnit::TT_TEXTURE);
+        }
+    }
+    if (depth_unit > -1)
+    {
+        gGL.getTexUnit(depth_unit)->unbind(mRT->deferredScreen.getUsage());
+    }
+    resolve.unbind();
+    glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+    mLocalRatioHistory.endFrame();
+    return true;
+}
+// </Vulkanstorm>
 // </Vulkanstorm>
 
 void LLPipeline::compositeAlphaStochastic(bool glow)
@@ -10248,6 +10637,17 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
         gGL.getTexUnit(channel)->setTextureFilteringOption(LLTexUnit::TFO_POINT);
     }
 
+    // <Vulkanstorm> unified lighting U1: the local light passes read the shadow pool's ratio when there is one this frame
+    channel = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_RATIO);
+    if (channel > -1)
+    {
+        static const LLStaticHashedString sRatioOn("local_ratio_on");
+        const bool ratio = mLocalRatioActive && mLocalRatioHistory.isAllocated();
+        gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, ratio ? mLocalRatioHistory.latestTexture() : mNoiseMap);
+        shader.uniform1i(sRatioOn, ratio ? 1 : 0);
+    }
+    // </Vulkanstorm>
+
     bindLightFunc(shader);
 
     stop_glerror();
@@ -10581,6 +10981,13 @@ void LLPipeline::renderDeferredLighting()
         {
             composeShadowStochastic(*screen_target, screen_target->getTexture(), 0.125f, *deferred_light_target);
         }
+        // <Vulkanstorm> unified lighting U1: the local light ratio, in the main view only; the screen target is scratch until the lighting clears it
+        mLocalRatioActive = false;
+        if (stochastic_shadows && mRT == &mMainRT && !gCubeSnapshot && !gSnapshot)
+        {
+            mLocalRatioActive = renderLocalLightRatio(stochastic_temporal, *screen_target, light_scale);
+        }
+        // </Vulkanstorm>
         // the blur leaves the shadow channels alone when the history or the snapshot's passes made them
         const bool stochastic_resolved = stochastic_temporal || stochastic_snapshot;
 
@@ -11184,72 +11591,19 @@ void LLPipeline::doWaterExclusionMask()
 
 void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
 {
-    //construct frustum
     LLVOVolume* volume = drawablep->getVOVolume();
     LLVector3 params = volume->getSpotLightParams();
 
-    F32 fov = params.mV[0];
     F32 focus = params.mV[1];
-
-    LLVector3 pos = drawablep->getPositionAgent();
-    LLQuaternion quat = volume->getRenderRotation();
-    LLVector3 scale = volume->getScale();
-
-    //get near clip plane
-    LLVector3 at_axis(0,0,-scale.mV[2]*0.5f);
-    at_axis *= quat;
-
-    LLVector3 np = pos+at_axis;
-    at_axis.normVec();
-
-    //get origin that has given fov for plane np, at_axis, and given scale
-    F32 dist = (scale.mV[1]*0.5f)/tanf(fov*0.5f);
-
-    LLVector3 origin = np - at_axis*dist;
-
-    //matrix from volume space to agent space
-    LLMatrix4 light_mat(quat, LLVector4(origin,1.f));
-
-    glm::mat4 light_to_agent(glm::make_mat4((F32*) light_mat.mMatrix));
-    glm::mat4 light_to_screen = get_current_modelview() * light_to_agent;
-
-    glm::mat4 screen_to_light = glm::inverse(light_to_screen);
-
-    F32 s = volume->getLightRadius()*1.5f;
-    F32 near_clip = dist;
-    F32 width = scale.mV[VX];
-    F32 height = scale.mV[VY];
-    F32 far_clip = s+dist-scale.mV[VZ];
-
-    F32 fovy = fov; // radians
-    F32 aspect = width/height;
-
-    glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
-                        0.0f, 0.5f, 0.0f, 0.0f,
-                        0.0f, 0.0f, 0.5f, 0.0f,
-                        0.5f, 0.5f, 0.5f, 1.0f);
-
-    glm::vec3 p1(0, 0, -(near_clip+0.01f));
-    glm::vec3 p2(0, 0, -(near_clip+1.f));
-
-    glm::vec3 screen_origin(0, 0, 0);
-
-    p1 = mul_mat4_vec3(light_to_screen, p1);
-    p2 = mul_mat4_vec3(light_to_screen, p2);
-    screen_origin = mul_mat4_vec3(light_to_screen, screen_origin);
-
-    glm::vec3 n = p2-p1;
-    n = glm::normalize(n);
-
-    F32 proj_range = far_clip - near_clip;
-    glm::mat4 light_proj = glm::perspective(fovy, aspect, near_clip, far_clip);
-    screen_to_light = trans * light_proj * screen_to_light;
-    shader.uniformMatrix4fv(LLShaderMgr::PROJECTOR_MATRIX, 1, false, glm::value_ptr(screen_to_light));
-    shader.uniform1f(LLShaderMgr::PROJECTOR_NEAR, near_clip);
-    shader.uniform3fv(LLShaderMgr::PROJECTOR_P, 1, glm::value_ptr(p1));
-    shader.uniform3fv(LLShaderMgr::PROJECTOR_N, 1, glm::value_ptr(n));
-    shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(screen_origin));
-    shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, proj_range);
+    LLSpotProjection sp;
+    computeSpotProjection(drawablep, sp);
+    F32 proj_range = sp.range;
+    shader.uniformMatrix4fv(LLShaderMgr::PROJECTOR_MATRIX, 1, false, glm::value_ptr(sp.screen_to_light));
+    shader.uniform1f(LLShaderMgr::PROJECTOR_NEAR, sp.near_clip);
+    shader.uniform3fv(LLShaderMgr::PROJECTOR_P, 1, glm::value_ptr(sp.p1));
+    shader.uniform3fv(LLShaderMgr::PROJECTOR_N, 1, glm::value_ptr(sp.n));
+    shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(sp.origin));
+    shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, sp.range);
     shader.uniform1f(LLShaderMgr::PROJECTOR_AMBIANCE, params.mV[2]);
     S32 s_idx = -1;
 
@@ -11363,6 +11717,7 @@ void LLPipeline::unbindDeferredShader(LLGLSLShader &shader)
 
     shader.disableTexture(LLShaderMgr::DEFERRED_NOISE);
     shader.disableTexture(LLShaderMgr::DEFERRED_LIGHTFUNC);
+    shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_RATIO); // <Vulkanstorm/> unified lighting U1
 
     if (!LLPipeline::sReflectionProbesEnabled)
     {

@@ -39,6 +39,7 @@
 #include "lldrawable.h"
 #include "llrendertarget.h"
 #include "llstochastichistory.h"
+#include "lllocallighttable.h"
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
@@ -460,6 +461,13 @@ public:
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
     void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
     void setShadowCasterCoverage(bool coverage, F32 layer = 0.f); // the bound shadow caster program: Blending (partial light) or Masking (the cutoff), the batch's layer and the frame's phase
+    // unified lighting U1: the shadow pool's local light ratio. renderLocalLightRatio builds the light table and tile list
+    // (the light pool's), runs the ratio pass into `raw` (scratch) and its temporal resolve, and says whether the light
+    // passes read the ratio this frame (mLocalRatioActive); false: no mapped projector, or nothing to do
+    bool renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 light_scale);
+    bool buildLocalLightTable(F32 light_scale, U32 width, U32 height);
+    bool ensureLocalRatioHistory(U32 width, U32 height);
+    void releaseLocalLightRatio();   // the ratio history and the table and tile textures
     // </Vulkanstorm>
 
     // </FS>
@@ -853,6 +861,23 @@ public:
     const LLDrawable* mShadowSTSpot[2] = { nullptr, nullptr };   // identity only, never dereferenced
     LLVector3 mShadowSTSpotPos[2];
     LLQuaternion mShadowSTSpotRot[2];
+    bool mShadowSTSpotUnchanged[2] = { false, false };   // the last resolve: the slot's light is the one of the frame before
+
+    // unified lighting U1: the shadow pool's local light ratio (rgb, 10 bits) in the stochastic engine's history, the
+    // light pool's table (8 RGBA32F texels per light) and its 32 x 32 screen tile list (R8UI rows). All render thread only:
+    // made and read in renderDeferredLighting, freed in releaseScreenBuffers.
+    LLStochasticHistory mLocalRatioHistory{ GL_RGB10_A2, 1.f / 8.f };
+    U32 mLocalRatioFailedWidth = 0;
+    U32 mLocalRatioFailedHeight = 0;
+    bool mLocalRatioActive = false;
+    U32 mLocalLightTableTex = 0;
+    U32 mLocalLightTilesTex = 0;
+    U32 mLocalLightTilesRows = 0;
+    LLLocalLightTable::Tiles mLocalLightTiles;
+    std::vector<F32> mLocalLightRows;
+    U32 mLocalLightRowCount = 0;
+    F32 mLocalSlotOn[2] = { 0.f, 0.f };
+    F32 mLocalSlotFade[2] = { 1.f, 1.f };
     // </Vulkanstorm>
 
     // </FS>

@@ -50,8 +50,14 @@ void main()
     vec4 col;
     col.r = sampleDirectionalShadow(pos.xyz, norm.xyz, pos_screen);
     col.g = 1.0f;
+#if defined(STOCHASTIC_SHADOW_SUN)
+    // <Vulkanstorm/> unified lighting U1: the projectors' visibility is the local light ratio pass's (localLightRatioF.glsl)
+    col.b = 1.0;
+    col.a = 1.0;
+#else
     col.b = sampleSpotShadow(pos.xyz, norm.xyz, 0, pos_screen);
     col.a = sampleSpotShadow(pos.xyz, norm.xyz, 1, pos_screen);
+#endif
 
     frag_color = clamp(col, vec4(0), vec4(1));
 }

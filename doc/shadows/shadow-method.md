@@ -130,13 +130,14 @@ actually read (S2's signed one-sided form), so a lit plane under a low sun stays
 
 ### M2: the history
 
-`LLStochasticHistory` (two full-size RGBA16F colours, counted in the texture memory: r sun, g linear view
-depth, b and a the two projector slots) is made on the main view when the method is Stochastic, freed
+`LLStochasticHistory` (two full-size colours, counted in the texture memory: r sun, g linear view
+depth; RG16F, 4 bytes a pixel each, RGBA16F on the compute A/B path; the projector slots were b and a until unified
+lighting U1 moved them to the local light ratio, below) is made on the main view when the method is Stochastic, freed
 otherwise and at a size change. The sun pass writes its rays as they are into `mRT->screen`;
 `shadowStochasticResolveF.glsl` blends them with the last frame's history (weight 1/8) after the engine's
 camera reprojection, reading the history from the 4 nearest texels, each kept only where its stored depth
 agrees (a revealed surface has none; under a quarter kept, none), clamped per channel to the 3x3 neighbourhood
-of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
+of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r) and this frame's AO (g; b and a are 1).
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
 than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
 direction changed. Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light
@@ -152,6 +153,40 @@ while the camera or avatar moves, and OpenGL has no async compute. Both run the 
 resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and
 the offline bench finds their histories bit identical frame after frame. A Windows driver that does not load the compute
 entry points cannot be forced to compute (the fragment resolve is the default everywhere anyway).
+
+### Unified lighting U1: the light/shadow split
+
+The projectors' visibility no longer rides the sun pass. The architecture is one stochastic core and three pools with one-way
+interfaces: transparency -> shadows -> light. Nothing a later pool produces enters an earlier one.
+
+- **Core noise.** `stochasticNoiseUtil.glsl` has one function, `stNoiseStream(px, frame, stream)`, with named streams: SUN_RAYS
+  (0, the shipped formula, bit identical), LOCAL_PICK (1), LOCAL_RAYS (2), CASTER_COVERAGE (3), TRANSPARENCY (4). In U1
+  LOCAL_RAYS uses the SUN_RAYS formula, so the projectors' rays are the ones U0 drew; U2 gives it its own offset with the pick.
+  The sun pass and `stTransmittance` ask for their stream; the shadow util links the object next to it.
+- **Light pool: the table and the tile list** (`lllocallighttable.h`, header-only and tested standalone). `buildLocalLightTable`
+  lists the lights `renderDeferredLighting` draws (same filters), the mapped projectors first, as rows of 8 RGBA32F texels
+  (centre and radius, colour and falloff, origin and kind, slot and changed flag, the projector matrix; at most 256 lights),
+  and a list per 32 x 32 pixel screen tile (at most 32 lights each, from each light's projected sphere box; a light the camera is
+  inside covers the screen) as an R8UI texture.
+- **Shadow pool: the ratio.** `localLightRatioF.glsl` makes, per colour channel, R = sum w_i V_i / sum w_i over the pixel's tile
+  list, with w_i = `localLightW`, the light's unshadowed contribution (colour x `calcLegacyDistanceAttenuation` x n.l, inside the
+  projector's frustum for a projector; no texture) and V_i the projector map's visibility (`stTransmittance`, with the slot's
+  fade) for the two mapped lights and 1 for every other. A pixel both maps leave lit is R = 1 without a loop. The raw ratio (rgb)
+  and the share of its light that comes from a projector that changed since last frame (a) go to the scratch screen target;
+  `localLightRatioResolveF.glsl` blends it into its own `LLStochasticHistory` (RGB10_A2, two 4 bytes a pixel textures) with the
+  engine's reprojection, bilinear read and 3x3 clamp; the history has no depth channel, so a texel is kept where the sun history's
+  depth of the same frame agrees (`stoch_history_bilinear_ext`); the changed share takes this frame's value (weight 1).
+- **Light pool: the passes.** The point, multi-point, spot and multi-spot programs (permutation `LOCAL_LIGHT_RATIO`, Stochastic
+  only) multiply their direct light by R (the projector's ambiance and the sun are not touched). With no mapped projector, no
+  ratio is made and the passes skip the fetch (`local_ratio_on` 0), exactly: every V is 1. Where the weights are proportional
+  to the passes' light (diffuse), sum_i C_i R = sum_i C_i V_i; a projector's texture is not in the weights, so another light at a
+  pixel the projector shades dims by the projector's untextured share (printed by `test_local_light_u1.py`).
+- **Sun.** The sun pass drops the projector channels (the light map's b and a are 1); the sun history is RG16F.
+- **Main view only.** A snapshot, a probe or another render target has no ratio (R = 1): the projectors cast no shadow there in U1.
+  A ratio history that cannot be allocated is logged once per size and the projectors cast nothing until it can (not a method
+  fallback).
+- **Threads.** Render thread only: the table and tiles are built in `renderDeferredLighting` and freed with the screen buffers.
+
 
 ## Shared by all methods
 
