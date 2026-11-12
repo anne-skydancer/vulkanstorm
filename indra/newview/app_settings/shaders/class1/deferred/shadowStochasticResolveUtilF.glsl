@@ -10,7 +10,7 @@
 /*[EXTRA_CODE_HERE]*/
 
 // Stage-neutral (only uniforms, texelFetch and functions, like the engine's stochasticResolveUtilF.glsl),
-// so that the fragment resolve (GL 4.0 to 4.2) and the compute resolve (GL 4.3 and later) run this one
+// so that the fragment resolve (the OpenGL viewer) and the compute resolve (kept for the Vulkan renderer) run this one
 // source and give the same result. Each adds its own main: shadowStochasticResolveF.glsl and
 // shadowStochasticResolveC.glsl.
 //

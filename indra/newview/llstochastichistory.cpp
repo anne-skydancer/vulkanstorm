@@ -137,6 +137,61 @@ void deleteTexture(U32& name)
     name = 0;
 }
 
+namespace
+{
+    bool sFallback = false;
+    bool sFallbackRetriable = false;
+    bool sReloadPending = false;
+    bool sNoticePending = false;
+    bool sNoticeShown = false;      // once per session
+    bool sFallbackReloading = false;
+}
+
+bool fallbackActive() { return sFallback; }
+
+void requestFallback(const char* reason, bool retriable)
+{
+    if (sFallback || !deviceSupported())
+    {
+        return;
+    }
+    sFallback = true;
+    sFallbackRetriable = retriable;
+    sReloadPending = true;
+    if (!sNoticeShown)
+    {
+        sNoticeShown = true;
+        sNoticePending = true;
+    }
+    LL_WARNS("Pipeline") << "Stochastic model could not load (" << reason << "): falling back to sorted alpha and Legacy shadows"
+                         << (retriable ? " until a retry succeeds" : " until the shaders are reloaded") << LL_ENDL;
+}
+
+void restoreFromFallback()
+{
+    if (sFallback && sFallbackRetriable)
+    {
+        sFallback = false;
+        sFallbackRetriable = false;
+        sReloadPending = true;
+        LL_INFOS("Pipeline") << "Stochastic model restored" << LL_ENDL;
+    }
+}
+
+void clearFallbackForReload()
+{
+    if (!sFallbackReloading)
+    {
+        sFallback = false;
+        sFallbackRetriable = false;
+    }
+}
+
+bool takeReloadPending() { const bool p = sReloadPending; sReloadPending = false; return p; }
+bool takeNoticePending() { const bool p = sNoticePending; sNoticePending = false; return p; }
+void setFallbackReloading(bool on) { sFallbackReloading = on; }
+bool fallbackReloading() { return sFallbackReloading; }
+
 bool deviceSupported()
 {
     // 3.99 / 4.29 as llgl.cpp: mGLVersion is a float

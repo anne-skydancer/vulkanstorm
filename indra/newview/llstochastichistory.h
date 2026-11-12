@@ -46,14 +46,34 @@ namespace LLStochasticEngine
     // below it cannot (sorted alpha is used there: a capability gate, not a run-time fallback).
     bool deviceSupported();
 
+    // The run-time fallback (owner decision, 2026-11-12, an explicit exception to the no-fallback rule):
+    // on a device that supports the engine, when its targets cannot be allocated or the stochastic alpha
+    // or shadow shaders do not build, sorted alpha and Legacy shadows run instead (the effective method;
+    // the saved settings are never rewritten). It is logged, and a notice is shown once per session.
+    // A full shader reload tries the engine again; a later successful allocation restores it. Below
+    // GL 4.0 (deviceSupported() false) none of this applies: Legacy and sorted by design, no notice.
+    // usable() is what the effective shadow method and the alpha pool ask.
+    bool fallbackActive();
+    inline bool usable() { return deviceSupported() && !fallbackActive(); }
+    // retriable: a failed allocation, which a later successful one undoes (restoreFromFallback)
+    void requestFallback(const char* reason, bool retriable);
+    void restoreFromFallback();            // after a successful allocation that follows a retriable failure
+    void clearFallbackForReload();         // a full shader reload starts from the engine again
+    bool takeReloadPending();              // the shader set must be rebuilt for the new effective method
+    bool takeNoticePending();              // the once-per-session notice has not been shown yet
+    void setFallbackReloading(bool on);    // the reload that applies a fallback does not clear it
+    bool fallbackReloading();
+
     // Which resolve runs: the fragment resolve with its pre-pass target (option P; 160 B/px) on every
     // device, never changed at run time. OpenGL compute dispatches, with the glMemoryBarrier they need
     // between graphics passes, stall the frame while the camera or avatar moves, and OpenGL has no
     // async compute; compute belongs in the Vulkan renderer. The compute resolve (GL 4.3, GLSL 4.30,
     // entry points loaded; 144 B/px) stays compiled but unused: nothing in the OpenGL viewer selects it
-    // (computeResolve() is always false; no setting, no environment variable). The two are the same method
-    // and give the same image (bit for bit on the measured NVIDIA). A shader set of the selected path that does not build is an error (logged,
-    // retried at the next shader reload); the other path is never taken in its place.
+    // (computeResolve() is always false; no setting, no environment variable). The two are the same
+    // method and give the same image (bit for bit on the measured NVIDIA). A shader set of the selected
+    // path that does not build is an error (logged, retried at the next shader reload); the other
+    // resolve path is never taken in its place. (Transparency then falls back to sorted alpha, see
+    // LLDrawPoolAlpha.)
     bool computeResolve();
 
     // The image unit a compute resolve writes the history through: the shader declares binding = 0
