@@ -97,42 +97,41 @@ namespace LLShadowMethod
         return { new_is_default, true };
     }
 
-    // A graphic preset file that carries the old light size but not the new one maps it as well.
-    constexpr bool presetNeedsLightSizeMapping(bool file_has_old_size, bool file_has_new_size)
-    {
-        return file_has_old_size && !file_has_new_size;
-    }
-
     struct PresetMapping
     {
-        bool apply;            // set RenderShadowMethod after loading the preset
-        bool pcss;             // the old checkbox's value in the file
-        bool apply_light_size; // set RenderShadowLightSize after loading the preset
-        double light_size;     // the old light size in the file
+        bool apply;  // set RenderShadowMethod after loading the preset
+        bool pcss;   // the old checkbox's value in the file
     };
 
     // The read path of LLPresetsManager::loadPreset: 'settings' is the preset file parsed as an
-    // LLSD map {name: {Comment, Type, Value}} (anything with has(name), [name]["Value"].asBoolean() and
-    // [name]["Value"].asReal()); 'parsed' is false when the file could not be opened or parsed, which maps nothing.
+    // LLSD map {name: {Comment, Type, Value}} (anything with has(name) and [name]["Value"].asBoolean());
+    // 'parsed' is false when the file could not be opened or parsed, which maps nothing.
     template <class Settings>
     PresetMapping readPreset(bool parsed, const Settings& settings)
     {
-        PresetMapping mapping = { false, false, false, 0.0 };
-        if (!parsed)
+        if (!parsed || !presetNeedsMapping(settings.has("RenderShadowPCSS"), settings.has("RenderShadowMethod")))
         {
-            return mapping;
+            return { false, false };
         }
-        if (presetNeedsMapping(settings.has("RenderShadowPCSS"), settings.has("RenderShadowMethod")))
-        {
-            mapping.apply = true;
-            mapping.pcss = settings["RenderShadowPCSS"]["Value"].asBoolean();
-        }
-        if (presetNeedsLightSizeMapping(settings.has("RenderShadowPCSSLightSize"), settings.has("RenderShadowLightSize")))
-        {
-            mapping.apply_light_size = true;
-            mapping.light_size = settings["RenderShadowPCSSLightSize"]["Value"].asReal();
-        }
-        return mapping;
+        return { true, settings["RenderShadowPCSS"]["Value"].asBoolean() };
+    }
+
+    // True when a stored value is not a valid method (the removed 1, or a hand-edited one): it is written back
+    // sanitized, and only then, so a valid choice causes no second shader reload.
+    constexpr bool needsRewrite(std::uint32_t method) { return sanitize(method) != method; }
+
+    struct PresetMethod
+    {
+        bool write;            // set RenderShadowMethod after loading the preset
+        std::uint32_t method;
+    };
+
+    // What loadPreset writes once the file is loaded: the old checkbox's method first (an old file has no
+    // RenderShadowMethod, so 'loaded' is then the current value), then a sanitized value only if the result needs it.
+    constexpr PresetMethod presetMethodAfterLoad(const PresetMapping& mapping, std::uint32_t loaded)
+    {
+        const std::uint32_t method = mapping.apply ? fromPCSSFlag(mapping.pcss) : loaded;
+        return { mapping.apply || needsRewrite(method), sanitize(method) };
     }
 }
 

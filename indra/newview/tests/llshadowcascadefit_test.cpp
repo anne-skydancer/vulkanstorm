@@ -290,7 +290,7 @@ namespace
 
     // Stage S2: the receiver plane's signed depth gradient that shadowUtil.glsl's shadowPlaneGradient computes
     // (np = (r0.n / r0.r0, r1.n / r1.r1, r2.n / r2.r2), g = -np.xy / np.z, clamped to SHADOW_GRAD_MAX) against
-    // the plane measured by two tangent steps through the matrix (pcssDepthGradient). The matrix is the one
+    // the plane measured by two tangent steps through the matrix. The matrix is the one
     // generateSunCascadesStable builds: bias(0.5, 0.5) * ortho(snappedSquare box, depthRange) * light view.
     void test_plane_gradient()
     {
