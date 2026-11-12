@@ -133,7 +133,7 @@ The sky itself is not changed. Based on the L2b survey of 2026-11-11 (owner deci
 - total = 1 / (1 + 3/4 (1 - g) tau): Eddington, no absorption in the visible (D3). Citations in the header: Joseph, Wiscombe and Weinman 1976 for the forward peak, Stephens' AT622 notes section 15 for g. The coefficient 3/4 is the Eddington collimated-light form; the diffuse-incidence form (1/2) is in the same notes. Not verified at the source: the 3/4 coefficient (the verified diffuse-incidence form has 1/2). An ice g of 0.75 was only the rejected alternative of D4: one g = 0.85 serves the whole layer.
 - diffuse = max(total - beam, 0) (>= 0 for every tau, since 1 - g^2 >= 3/4 (1 - g)); the light sent back up is 1 - total.
 - alpha(tau, tau_v) = 1 - exp(-tau / tau_v): the inverse, for the volumetric clouds.
-- tau_v = `RenderCloudOpticalDepth`, default 7.6 (D2): the visibility threshold of thin cirrus (tau 0.03, Sassen, Griffin and Dodd 1989) equals one 8-bit step of the drawn opacity. Consistency with the ISCCP classes: alpha 0.5 is tau 5.3 (the middle class), alpha 0.96 is tau 24.5 (the thick boundary, 23). A debug setting, clamped to 3 - 30 (below 3 an opaque cloud would still pass over 20 % of the sun), a slider (3 - 20) on the devel-only Sky tab and in its reset list; no Preferences entry.
+- tau_v = `RenderCloudOpticalDepth`, default 7.6 (D2): the visibility threshold of thin cirrus (tau 0.03, Sassen, Griffin and Dodd 1989) equals one 8-bit step of the drawn opacity. Consistency with the ISCCP classes: alpha 0.5 is tau 5.3 (the middle class), alpha 0.96 is tau 24.5 (the thick boundary, 23). A debug setting, clamped to 3 - 30 (below 3 an opaque cloud would still pass over 20 % of the sun); no Preferences entry.
 
 ### The map and the lookup
 
@@ -166,4 +166,4 @@ VRAM: +0.34 MB (RG8, 0.67 MB with mips). CPU: one cached control and one `unifor
 
 ### What the owner checks in-world
 
-Day cloud shadows look as before; at night the clouds dim the moon as they dim the sun; the `RenderCloudOpticalDepth` slider acts live (cloud edges and skies that fade the layer, such as the EEP default, react; the median sky barely does, since the drawn opacity is nearly binary); an overcast sky and the sunset handover have no pop.
+Day cloud shadows look as before; at night the clouds dim the moon as they dim the sun; the `RenderCloudOpticalDepth` setting acts live (cloud edges and skies that fade the layer, such as the EEP default, react; the median sky barely does, since the drawn opacity is nearly binary); an overcast sky and the sunset handover have no pop.

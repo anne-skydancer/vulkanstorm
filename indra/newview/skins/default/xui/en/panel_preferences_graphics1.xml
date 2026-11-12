@@ -2075,7 +2075,7 @@ If you do not understand the distinction then leave this control alone."
       </radio_group>
       <!-- </Vulkanstorm> -->
 
-      <!-- <Vulkanstorm> PCSS soft shadows; enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
+      <!-- <Vulkanstorm> shadow method (Legacy / Stochastic); enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
       <text
        follows="left|top"
        height="18"
@@ -2087,16 +2087,26 @@ If you do not understand the distinction then leave this control alone."
        name="ShadowsHeading">
         Shadows
       </text>
-      <check_box
-       control_name="RenderShadowPCSS"
-       height="18"
-       label="Soft shadows (PCSS)"
+      <combo_box
+       control_name="RenderShadowMethod"
+       height="20"
        layout="topleft"
        left_pad="5"
-       top_delta="0"
-       width="300"
-       name="ShadowPCSS"
-       tool_tip="Softens the edges of sun, moon and projector shadows with a wider, rotated filter and smooths the result with the shadow blur. Needs shadows (Sun/Moon or Sun/Moon + Projectors). Costs some GPU time."/>
+       top_delta="-2"
+       width="200"
+       name="ShadowMethod"
+       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). Stochastic: stable cascades and square sun maps, with soft shadows from rays toward the sun or moon's disc, accumulated over time. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
+       <combo_box.commit_callback
+        function="Pref.RenderOptionUpdate" />
+       <combo_box.item
+        label="Legacy"
+        name="0"
+        value="0"/>
+       <combo_box.item
+        label="Stochastic"
+        name="2"
+        value="2"/>
+      </combo_box>
       <!-- </Vulkanstorm> -->
 
     </panel>
