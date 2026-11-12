@@ -54,7 +54,7 @@ namespace LLLocalLight
         return std::min(std::max(s, EMITTER_MIN), EMITTER_MAX);
     }
 
-    // A projector's emitter radius from the prim's face (scale x and y): the radius of the disc of the same area
+    // A projector's emitter radius from the prim's face (scale x and y): the radius of the disc of the same area.
     inline float projectorEmitterRadius(float scale_x, float scale_y)
     {
         constexpr float pi = 3.14159265358979f;

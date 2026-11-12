@@ -14,7 +14,7 @@ Gates:
   * the lamp's own housing does not black out its light, and everything else casts: r_excl is the projector's
     eye-to-face stretch plus a 5 cm margin (the real projectorExclusion of lllocallight.h). A plate inside it
     (the housing, in the near-clipped stretch) shades nothing; a shade plate 0.1 to 0.5 m in front of the face,
-    a thin partition 0.4 m in front of it, and an object between the lamp and a table 0.8 m below it all cast;
+    a thin partition 0.4 m in front of it, and an object between the lamp and a table 1 m below it all cast;
   * the sun light pass costs at most the base's + 0.02 ms (interleaved, median of 3 rounds).
 
 Environment: LOCAL_LIGHT_BASE_REF (default origin/vkstorm-devel), ST_FRAMES (timing frames, default 40),
@@ -209,7 +209,7 @@ check(n > 10000 and res['base'] < 0.05 and res['new'] > 0.999, f'a housing 0.2 m
 for label, d in (('a shade plate 0.1 m in front of the face', APEX + 0.1), ('a shade plate 0.5 m in front of the face', APEX + 0.5), ('a thin partition 0.4 m in front of the face', APEX + 0.4)):
     res, n = ground_light(plate(EYE[1] - d), EYE)
     check(n > 10000 and res['new'] < 0.05, f'{label}: it casts (mean light {res["new"]:.3f}; base {res["base"]:.3f})', 'excl: ')
-# a table 0.8 m below the lamp (inside the old 1 m zone): an object 0.55 m below the lamp shades it
+# a table 1 m below the lamp: an object 0.55 m below the lamp shades the table under it, and not the table beside it
 LAMP = [0.0, 1.0, -10.0]
 box = [((-0.15, 0.40, -10.15), (0.15, 0.45, -9.85))]   # 0.55 m under the eye (past r_excl), a 0.55 m wide shadow on the table 1 m below
 res, _ = ground_light(box, LAMP, points=[(0.0, 0.0, -10.0), (0.0, 0.0, -9.65), (0.45, 0.0, -10.0)])
