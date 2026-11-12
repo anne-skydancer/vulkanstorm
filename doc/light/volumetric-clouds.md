@@ -33,10 +33,10 @@ mismatch; CI generates twice and compares the bytes and the pinned SHA-256.
 | CI checks the staged file and licences of every build, and for package builds installs the Windows installer silently (file, licences, read-only attribute, removal by the uninstaller) or extracts the Linux tarball | `.github/actions/viewer-build/action.yml`, `scripts/clouds/check_cloud_noise.py` |
 | Start-up check: SHA-256 of the whole file against the compiled-in hash, then the container and every entry's hash | `LLCloudNoise::loadAndVerify`, called from `LLAppViewer::init` before the cache |
 
-If the file is missing or damaged the viewer shows "A file [APP_NAME] needs is damaged or missing
-(app_settings/clouds/cloud_noise.vkcn). Please reinstall [APP_NAME]." (`MBCloudNoiseDamaged`; the owner approved this
-text, 2026-11-10) and exits cleanly: a message box, the exec marker removed, and `return false`, as for the cache; not
-`LL_ERRS`, so no crash report. The check runs before the cache is opened, on every machine, including GL 3 ones,
+If the file is missing or damaged the viewer logs a warning (`LL_WARNS("InitInfo")`) and starts: until the clouds
+draw (L7-2) nothing reads the file, so there is no message box and no exit (owner decision, 2026-11-12; the
+`MBCloudNoiseDamaged` string is removed). The configure-time check in `CloudNoise.cmake` still stops a build without
+the file. The check runs before the cache is opened, on every machine, including GL 3 ones,
 because it does not depend on the renderer. It reads the file once (size checked first), hashes it twice (the whole
 file, then each entry), and frees the 8.6 MB again; the clouds will load and verify it again when they first draw. An
 open that fails is logged with its reason and tried once more after 200 ms. Besides a user who edits the file in a
