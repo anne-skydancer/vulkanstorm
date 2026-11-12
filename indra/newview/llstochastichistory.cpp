@@ -155,50 +155,15 @@ bool computeResolve()
 {
     // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
     // glMemoryBarrier it needs between graphics passes stall the frame while the camera or avatar
-    // moves, and OpenGL has no async compute. The compute resolve stays compiled for A/B tests
-    // (VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a GL 4.3 device, read once) and for the Vulkan renderer.
-    static const bool force_compute = []() {
-        const char* v = getenv("VKSTORM_STOCH_COMPUTE_RESOLVE");
-        return v && v[0] == '1';
-    }();
-    if (!force_compute)
+    // moves, and OpenGL has no async compute. The compute resolve code stays compiled for the Vulkan
+    // renderer, but nothing in this viewer selects it (no setting, no environment variable).
+    static bool logged_default = false;   // main render thread, the pipeline's allocation
+    if (!logged_default && gGLManager.mGLVersion >= 3.99f)
     {
-        static bool logged_default = false;   // main render thread, the pipeline's allocation
-        if (!logged_default && gGLManager.mGLVersion >= 3.99f)
-        {
-            logged_default = true;
-            LL_INFOS("Pipeline") << "Stochastic transparency: fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)" << LL_ENDL;
-        }
-        return false;
+        logged_default = true;
+        LL_INFOS("Pipeline") << "Stochastic transparency: fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)" << LL_ENDL;
     }
-    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
-    bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
-#if LL_WINDOWS && !LL_MESA
-    // Only Windows (without Mesa) loads these as nullable function pointers (llglheaders.h, llgl.cpp);
-    // Linux and Mesa declare them as linked prototypes (GL_GLEXT_PROTOTYPES), which are never null, so
-    // there is nothing to test there.
-    // GL 4.3 reports the compute entry points; a driver that does not load them cannot be forced to the compute
-    // resolve (an A/B test only; the fragment resolve is the default everywhere)
-    if (capable && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
-    {
-        capable = false;
-    }
-#endif
-    static bool logged = false;   // main render thread, the pipeline's allocation
-    if (!logged && gGLManager.mGLVersion >= 3.99f)
-    {
-        logged = true;
-        if (capable)
-        {
-            LL_INFOS("Pipeline") << "Stochastic transparency: compute resolve (GL 4.3 and later, 144 B/px), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test" << LL_ENDL;
-        }
-        else
-        {
-            LL_WARNS("Pipeline") << "Stochastic transparency: VKSTORM_STOCH_COMPUTE_RESOLVE is set but the compute resolve is not available (needs GL 4.3, GLSL 4.30 and the compute entry points); the fragment resolve is used" << LL_ENDL;
-        }
-    }
-    const bool compute = capable;
-    return compute;
+    return false;
 }
 
 bool acquireMasks()
