@@ -2064,9 +2064,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         add_common_permutations(&gDeferredSunProgram);
 
-        // <Vulkanstorm>
         if (use_stochastic_shadows())
-        {   // the sun programs read the depth buffer for the receiver plane
+        {   // <Vulkanstorm> the sun programs read the depth buffer for the receiver plane
             gDeferredSunProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");
         }
         // </Vulkanstorm>

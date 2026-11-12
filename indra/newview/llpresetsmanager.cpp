@@ -532,8 +532,6 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
     // shadows checkbox (RenderShadowPCSS) instead of RenderShadowMethod; map it after loading
     bool map_old_pcss = false;
     bool old_pcss = false;
-    bool map_old_light_size = false;
-    F32 old_light_size = 1.f;
     if (PRESETS_GRAPHIC == subdirectory)
     {
         llifstream preset_file(full_path.c_str());
@@ -542,8 +540,6 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
         const LLShadowMethod::PresetMapping mapping = LLShadowMethod::readPreset(parsed, preset_settings);
         map_old_pcss = mapping.apply;
         old_pcss = mapping.pcss;
-        map_old_light_size = mapping.apply_light_size;
-        old_light_size = (F32)mapping.light_size;
     }
     // </Vulkanstorm>
 
@@ -557,16 +553,13 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
             gSavedSettings.setString("PresetGraphicActive", name);
 
             // <Vulkanstorm> shadow method: old preset file, see above
-            if (map_old_pcss)
+            // (a preset that stores the removed PCSS method, 1, selects Stochastic); written only when it changes
+            const LLShadowMethod::PresetMethod preset_method = LLShadowMethod::presetMethodAfterLoad(
+                { map_old_pcss, old_pcss }, gSavedSettings.getU32("RenderShadowMethod"));
+            if (preset_method.write)
             {
-                gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::fromPCSSFlag(old_pcss));
+                gSavedSettings.setU32("RenderShadowMethod", preset_method.method);
             }
-            if (map_old_light_size)
-            {
-                gSavedSettings.setF32("RenderShadowLightSize", old_light_size);
-            }
-            // a preset that stores the removed PCSS method (1) selects Stochastic
-            gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")));
             // </Vulkanstorm>
 
             // <FS> [FIRE-35390] Old viewer presets have these as true and 0.7, whereas the equivalent on modern viewers is false and 1.0
