@@ -404,7 +404,7 @@ static bool use_stochastic_shadows()
 }
 // </Vulkanstorm>
 
-// <Vulkanstorm> Stochastic shadows, S1: the shadow casters of semi-transparent faces cast solid shade and
+// <Vulkanstorm> Stochastic shadows, S1: the shadow casters of semi-transparent faces cast partial shade and
 // sample a finer mip of the alpha (SHADOW_STOCH_ALPHA / SHADOW_ALPHA_LOD_BIAS, read by shadowAlphaMaskF,
 // pbrShadowAlphaBlendF, avatarAlphaShadowF, avatarAlphaMaskShadowF and the generated diffuseLookup). The
 // stock raster-column stipple stays in the Legacy build of the same files. use_stochastic_shadows() is the
