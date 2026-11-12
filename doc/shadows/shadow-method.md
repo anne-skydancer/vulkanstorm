@@ -50,9 +50,14 @@ uniform (EEP `sun_scale` times `RenderShadowLightSize`). It is built on the stoc
 engine: `LLStochasticHistory` and the resolve object (the history, camera reprojection and the 3x3 clamp,
 weight 1/8). The estimator's noise is its own (interleaved gradient noise of the pixel and the frame), not
 the transparency's hash and mask table. 8 rays per pixel in every program (the forward ones too, with fixed
-rays), full resolution, no other mode and no user setting. There is no fallback
-to another method: if the history cannot be allocated (or the resolve shaders do not build), only the
-accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel, still Stochastic.
+rays), full resolution, no other mode and no user setting. If the history cannot be
+allocated, only the accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel,
+still Stochastic. Run-time fallback (owner decision, 2026-11-12, an explicit exception to the no-fallback rule): on a
+device that supports the engine, if the stochastic transparency targets cannot be allocated or a stochastic alpha or
+shadow shader does not build, the effective methods become sorted alpha and Legacy shadows
+(`LLStochasticEngine::requestFallback`, `usable()`): logged, the notice `StochasticFallback` shown once per session,
+the saved settings untouched. A full shader reload, or a later successful allocation, brings the engine back. Devices
+below OpenGL 4.0 are Legacy and sorted by design, with no notice.
 
 M0 to M2 shipped as one PR.
 
@@ -60,7 +65,7 @@ M0 to M2 shipped as one PR.
 
 - `LLShadowMethod::STOCHASTIC = 2`. `usesStableCascades` is true for every method but Legacy. The gates
   "not Legacy" are the square sun maps (`allocateShadowBuffer`), the `shadow_light_size` uniform of the sun
-  pass, and the light-size slider. Stochastic's own denoising is the temporal accumulation (M2), independent of
+  pass. Stochastic's own denoising is the temporal accumulation (M2), independent of
   the light-map blur, which runs with SSAO only.
 - `shadowStochasticUtil.glsl` is Stochastic's shadow util. `loadBasicShaders` builds it only when the
   method is Stochastic, and `LLShaderMgr::attachShaderFeatures` then links it, instead of
