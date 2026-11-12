@@ -40,6 +40,7 @@ exec(compile(_src.split('# --- timing + basic checks')[0], 'bench_prefix', 'exec
 FRAMES = int(os.environ.get('ST_FRAMES', 40))
 DEEP = root / SHADERS / 'class1/deferred/'
 UTIL_ST = (DEEP / 'shadowStochasticUtil.glsl').read_text()
+NOISE_ST = (DEEP / 'stochasticNoiseUtil.glsl').read_text()   # the core's noise, linked next to the util (unified lighting U1)
 UTIL_COMMON = (root / UTIL_F).read_text()
 RESOLVE_ST = (DEEP / 'shadowStochasticResolveF.glsl').read_text()
 RESOLVE_C = (DEEP / 'shadowStochasticResolveC.glsl').read_text()
@@ -57,7 +58,7 @@ def stoch_program(spot, depth=True, consts=None):
     consts = consts or S2_DEFINES
     common = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + consts + ([] if depth else ['SHADOW_COMMON_NO_DEPTH'])
     return program([(0x8B31, VERTEX), (0x8B30, stage(sun, [])), (0x8B30, stage(UTIL_COMMON, defines + common)),
-                    (0x8B30, stage(UTIL_ST, defines + consts)), (0x8B30, STUBS_F)])
+                    (0x8B30, stage(UTIL_ST, defines + consts)), (0x8B30, stage(NOISE_ST, [])), (0x8B30, STUBS_F)])
 
 
 def bind_stoch(prog, sc, light_size, frame):
@@ -168,7 +169,7 @@ for spot in (True, False):
         defines = ['SUN_SHADOW'] + (['SPOT_SHADOW'] if spot else [])
         common = COMMON_DEFINES + ([] if depth else ['SHADOW_COMMON_NO_DEPTH'])
         # the build without the depth buffer links with no getPosition at all (a program without deferredUtil.glsl)
-        parts = [(0x8B31, VERTEX), (0x8B30, STOCH_MAIN), (0x8B30, stage(UTIL_COMMON, defines + common)), (0x8B30, stage(UTIL_ST, defines + S2_DEFINES))]
+        parts = [(0x8B31, VERTEX), (0x8B30, STOCH_MAIN), (0x8B30, stage(UTIL_COMMON, defines + common)), (0x8B30, stage(UTIL_ST, defines + S2_DEFINES)), (0x8B30, stage(NOISE_ST, []))]
         if depth: parts.append((0x8B30, STUBS_F))
         try:
             fn('glDeleteProgram', None, U)(program(parts)); ok = True
@@ -295,7 +296,7 @@ void main()
 for (W, H) in RESOLUTIONS:
     sc = Scene(W, H, TIMING_BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], TIMING_SPOTS, (10.0, 25.0, 60.0, 150.0))
     for label, parts in (('stock PCF', [(0x8B30, stage(UTIL_COMMON, ['SUN_SHADOW']))]),
-                         ('Stochastic, 8 fixed rays', [(0x8B30, stage(UTIL_COMMON, ['SUN_SHADOW'] + COMMON_DEFINES + ['SHADOW_COMMON_NO_DEPTH'])), (0x8B30, stage(UTIL_ST, ['SUN_SHADOW'] + S2_DEFINES))])):
+                         ('Stochastic, 8 fixed rays', [(0x8B30, stage(UTIL_COMMON, ['SUN_SHADOW'] + COMMON_DEFINES + ['SHADOW_COMMON_NO_DEPTH'])), (0x8B30, stage(UTIL_ST, ['SUN_SHADOW'] + S2_DEFINES)), (0x8B30, stage(NOISE_ST, []))])):
         prog = program([(0x8B31, VERTEX), (0x8B30, FWD_MAIN)] + parts)
         sc.bind(prog, LIGHT_SIZE)
         for unit in range(2, 8): bindsampler(unit, depth_fetch.value if label.startswith('Stoch') else 0)

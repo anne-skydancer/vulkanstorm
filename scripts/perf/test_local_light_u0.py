@@ -31,6 +31,7 @@ FRAMES = int(os.environ.get('ST_FRAMES', 40))
 DEEP = 'class1/deferred/'
 UTIL_NEW = (root / SHADERS / DEEP / 'shadowStochasticUtil.glsl').read_text()
 UTIL_OLD = git_show(REF, SHADERS + DEEP + 'shadowStochasticUtil.glsl')
+NOISE = (root / SHADERS / DEEP / 'stochasticNoiseUtil.glsl').read_text()   # the core's noise (unified lighting U1); unused by a base without it
 RES_NEW = (root / SHADERS / DEEP / 'shadowStochasticResolveUtilF.glsl').read_text()
 RES_OLD = git_show(REF, SHADERS + DEEP + 'shadowStochasticResolveUtilF.glsl')
 RESOLVE_F = (root / SHADERS / DEEP / 'shadowStochasticResolveF.glsl').read_text()
@@ -44,7 +45,7 @@ def stoch_program(util, spot=True):
     defines = ['SUN_SHADOW'] + (['SPOT_SHADOW'] if spot else [])
     common = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + S2_DEFINES
     return program([(0x8B31, VERTEX), (0x8B30, stage(sun, [])), (0x8B30, stage(UTIL_COMMON, defines + common)),
-                    (0x8B30, stage(util, defines + S2_DEFINES)), (0x8B30, STUBS_F)])
+                    (0x8B30, stage(util, defines + S2_DEFINES)), (0x8B30, STUBS_F)] + ([(0x8B30, stage(NOISE, []))] if 'stNoiseStream' in util else []))
 
 
 def bind_stoch(prog, sc, frame, emitter=0.075, excl=0.075):

@@ -9040,6 +9040,10 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
     mLocalLightRowCount = 0;
     mLocalLightTiles.reset((S32)width, (S32)height);
     bool mapped = false;
+    // the screen rectangle the mapped projectors can light (their frustums through the camera): outside it every pixel
+    // has R = 1, and the passes below draw only inside it
+    F32 rx0 = 1.0e9f, ry0 = 1.0e9f, rx1 = -1.0e9f, ry1 = -1.0e9f;
+    bool whole_screen = false;
     for (U32 i = 0; i < 2; ++i)
     {
         mLocalSlotOn[i] = mShadowSpotLight[i].notNull() ? 1.f : 0.f;
@@ -9110,6 +9114,26 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
                 computeSpotProjection(drawablep, sp);
                 row[8] = sp.origin.x; row[9] = sp.origin.y; row[10] = sp.origin.z; row[11] = 1.f;
                 memcpy(&row[16], glm::value_ptr(sp.screen_to_light), sizeof(F32) * 16);
+                if (slot >= 0)
+                {   // the corners of the projector's frustum (texture space 0 to 1 in x, y and z, with a margin) through the camera
+                    const glm::mat4 to_view = glm::inverse(sp.screen_to_light);
+                    for (int corner = 0; corner < 8 && !whole_screen; ++corner)
+                    {
+                        const glm::vec4 v = to_view * glm::vec4((corner & 1) ? 1.02f : -0.02f, (corner & 2) ? 1.02f : -0.02f, (corner & 4) ? 1.02f : -0.02f, 1.f);
+                        const glm::vec4 c = proj * glm::vec4(v.x / v.w, v.y / v.w, v.z / v.w, 1.f);
+                        if (!(v.w != 0.f) || c.w <= 1.0e-4f)
+                        {
+                            whole_screen = true;
+                        }
+                        else
+                        {
+                            const F32 sx = (c.x / c.w * 0.5f + 0.5f) * (F32)width;
+                            const F32 sy = (c.y / c.w * 0.5f + 0.5f) * (F32)height;
+                            rx0 = llmin(rx0, sx); rx1 = llmax(rx1, sx);
+                            ry0 = llmin(ry0, sy); ry1 = llmax(ry1, sy);
+                        }
+                    }
+                }
             }
             mapped = mapped || slot >= 0;
             const Rect r = sphereScreenRect(glm::value_ptr(tc), s, glm::value_ptr(proj), (S32)width, (S32)height);
@@ -9117,7 +9141,15 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
             ++mLocalLightRowCount;
         }
     }
-    return mapped;
+    if (whole_screen)
+    {
+        rx0 = ry0 = 0.f; rx1 = (F32)width; ry1 = (F32)height;
+    }
+    mLocalRatioRect[0] = (S32)llclamp(floorf(rx0) - 1.f, 0.f, (F32)width);
+    mLocalRatioRect[1] = (S32)llclamp(floorf(ry0) - 1.f, 0.f, (F32)height);
+    mLocalRatioRect[2] = (S32)llclamp(ceilf(rx1) + 1.f, 0.f, (F32)width);
+    mLocalRatioRect[3] = (S32)llclamp(ceilf(ry1) + 1.f, 0.f, (F32)height);
+    return mapped && mLocalRatioRect[2] > mLocalRatioRect[0] && mLocalRatioRect[3] > mLocalRatioRect[1];
 }
 
 bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 light_scale)
@@ -9206,6 +9238,8 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 l
         {
             LLGLDisable   blend(GL_BLEND);
             LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
+            LLGLEnable    scissor(GL_SCISSOR_TEST);   // outside the projectors' frustums R = 1: the clear above
+            glScissor(mLocalRatioRect[0], mLocalRatioRect[1], mLocalRatioRect[2] - mLocalRatioRect[0], mLocalRatioRect[3] - mLocalRatioRect[1]);
             mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
         }
         shader.disableTexture(LLShaderMgr::LOCAL_LIGHT_TABLE);
@@ -9219,6 +9253,9 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 l
     glBindFramebuffer(GL_FRAMEBUFFER, mLocalRatioHistory.writeFramebuffer());
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
     glViewport(0, 0, w, h);
+    glClearColor(1.f, 1.f, 1.f, 1.f);   // R = 1 outside the rectangle the resolve draws
+    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0, 0, 0, 0);
     LLGLSLShader& resolve = gLocalLightRatioResolveProgram;
     gGL.flush();
     resolve.bind();
@@ -9250,6 +9287,8 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& raw, F32 l
     {
         LLGLDisable blend(GL_BLEND);
         LLGLDepthTest depth(GL_FALSE);
+        LLGLEnable scissor(GL_SCISSOR_TEST);
+        glScissor(mLocalRatioRect[0], mLocalRatioRect[1], mLocalRatioRect[2] - mLocalRatioRect[0], mLocalRatioRect[3] - mLocalRatioRect[1]);
         mScreenTriangleVB->setBuffer();
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
     }

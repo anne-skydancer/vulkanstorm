@@ -876,6 +876,7 @@ public:
     LLLocalLightTable::Tiles mLocalLightTiles;
     std::vector<F32> mLocalLightRows;
     U32 mLocalLightRowCount = 0;
+    S32 mLocalRatioRect[4] = { 0, 0, 0, 0 };   // the screen rectangle (x0, y0, x1, y1) the mapped projectors can light
     F32 mLocalSlotOn[2] = { 0.f, 0.f };
     F32 mLocalSlotFade[2] = { 1.f, 1.f };
     // </Vulkanstorm>

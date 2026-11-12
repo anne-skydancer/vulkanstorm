@@ -171,7 +171,7 @@ interfaces: transparency -> shadows -> light. Nothing a later pool produces ente
 - **Shadow pool: the ratio.** `localLightRatioF.glsl` makes, per colour channel, R = sum w_i V_i / sum w_i over the pixel's tile
   list, with w_i = `localLightW`, the light's unshadowed contribution (colour x `calcLegacyDistanceAttenuation` x n.l, inside the
   projector's frustum for a projector; no texture) and V_i the projector map's visibility (`stTransmittance`, with the slot's
-  fade) for the two mapped lights and 1 for every other. A pixel both maps leave lit is R = 1 without a loop. The raw ratio (rgb)
+  fade) for the two mapped lights and 1 for every other. A pixel both maps leave lit is R = 1 without a loop. Both passes draw only inside the screen rectangle the mapped projectors' frustums cover (their corners through the camera, the whole screen when one reaches the camera plane); outside it R = 1, which the clears write. The raw ratio (rgb)
   and the share of its light that comes from a projector that changed since last frame (a) go to the scratch screen target;
   `localLightRatioResolveF.glsl` blends it into its own `LLStochasticHistory` (RGB10_A2, two 4 bytes a pixel textures) with the
   engine's reprojection, bilinear read and 3x3 clamp; the history has no depth channel, so a texel is kept where the sun history's

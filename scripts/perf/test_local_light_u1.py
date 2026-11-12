@@ -19,7 +19,8 @@ Gates:
   * the stage costs at most the base: with no mapped projector (the ratio pass is skipped) and with two.
 
 Environment: LOCAL_LIGHT_BASE_REF (default origin/codex/unified-lighting-u0), ST_FRAMES (timing frames, default 40),
-SHADOW_BENCH_RES (as bench_shadow_legacy.py; this script defaults to 1920x1080,2560x1440,3840x2160).
+SHADOW_BENCH_RES (as bench_shadow_legacy.py; this script defaults to 1920x1080,2560x1440,3840x2160), ST_FULL_RECT=1 (the cost with the
+projectors' frustums covering the whole screen, the scissor's worst case).
 """
 import math, os, re, statistics, sys
 from pathlib import Path
@@ -279,15 +280,16 @@ w0 = weights(sc, L0, gpos, gnorm)
 lit0 = (w0.sum(-1) > 1e-3) & valid_px
 check(int(lit0.sum()) > 20000, f'projector 0 lights {int(lit0.sum())} pixels', 'ratio: ')
 
-# one projector in the table: R is the base's visibility
-bad, total = 0, 0
+# one projector in the table: R is the base's visibility (w V / w in fp32, then stored in fp16: at most one fp16 step off the
+# eighths the 8 rays give, 2.5e-4 near 0.4 to 0.5)
+exact, worst1, total = 0, 0.0, 0
 for frame in (1, 2, 3, 4):
     base = render(p_old, sc, frame)
     rr = run_ratio(sc, [L0], (1.0, 0.0), frame)
     for c in range(3):
-        bad += int((rr[..., c][lit0] != base[..., 2][lit0]).sum())
-    total += int(lit0.sum()) * 3
-check(bad == 0, f'one projector: R equals the base projector channel on all {total} lit values, bit for bit ({bad} differ)', 'ratio: ')
+        d1 = np.abs(rr[..., c][lit0] - base[..., 2][lit0])
+        exact += int((d1 == 0).sum()); worst1 = max(worst1, float(d1.max())); total += d1.size
+check(worst1 < 5.0e-4 and exact > 0.999 * total, f'one projector: R equals the base projector channel on {total} lit values ({total - exact} off by a fp16 step, max {worst1:.5f})', 'ratio: ')
 
 # nothing occludes: R is exactly 1
 sc_free = Scene(W, H, FAR_BOX, [4.0, 5.0, -1.0], [0.0, 0.0, -14.0], [-0.5, 1.0, 0.2], SPOTS, CLIP)
@@ -369,6 +371,32 @@ bindfbo(FB, 0); delfbo(1, C.byref(raw_fbo)); deltex(1, (U * 1)(raw_tex))
 
 
 # --- cost ---------------------------------------------------------------------------------------------
+def frustum_rect(scc, slots=(0, 1)):
+    """the screen rectangle (x, y, w, h) the mapped projectors' frustums (with the sun pass's 0.05 margin) can light: the
+    bounding box of the corners of each frustum through the camera; the whole screen where a corner reaches the camera plane"""
+    x0 = y0 = 1.0e9; x1 = y1 = -1.0e9
+    if os.environ.get('ST_FULL_RECT'):   # the worst case: the projectors' frustums cover the screen
+        return 0, 0, scc.W, scc.H
+    for slot in slots:
+        inv = inverse(scc.shadow_matrix[4 + slot])
+        for cx in (-0.05, 1.05):
+            for cy in (-0.05, 1.05):
+                for cz in (-0.05, 1.05):
+                    v = mvec(inv, [cx, cy, cz, 1.0])
+                    c = mvec(scc.proj, [v[0] / v[3], v[1] / v[3], v[2] / v[3], 1.0])
+                    if c[3] <= 1.0e-4:
+                        return 0, 0, scc.W, scc.H
+                    sx, sy = (c[0] / c[3] * 0.5 + 0.5) * scc.W, (c[1] / c[3] * 0.5 + 0.5) * scc.H
+                    x0, x1, y0, y1 = min(x0, sx), max(x1, sx), min(y0, sy), max(y1, sy)
+    x0, y0 = max(int(math.floor(x0)) - 1, 0), max(int(math.floor(y0)) - 1, 0)
+    x1, y1 = min(int(math.ceil(x1)) + 1, scc.W), min(int(math.ceil(y1)) + 1, scc.H)
+    return x0, y0, max(x1 - x0, 0), max(y1 - y0, 0)
+
+
+_scissor = fn('glScissor', None, I, I, I, I)
+_enable, _disable, _clearcolor, _clear = fn('glEnable', None, U), fn('glDisable', None, U), fn('glClearColor', None, F, F, F, F), fn('glClear', None, U)
+
+
 def timed_pass(draw_once):
     beginq(TIME_ELAPSED, queries[0]); draw_once(); endq(TIME_ELAPSED)
     v = C.c_uint64(); qresult(queries[0], QUERY_RESULT, C.byref(v)); return v.value / 1e6
@@ -393,12 +421,19 @@ for (Wc, Hc) in RESOLUTIONS:
                 bind_stoch(p_new, scc, f + 1); ms += timed_pass(lambda: draw(4, 0, 3)); scc.unbind()
                 ms += timed_pass(lambda: rn.run())
                 if spots is SPOTS:
+                    rect = frustum_rect(scc)
+                    bindfbo(FB, scc.lfbo); _clearcolor(1.0, 1.0, 1.0, 0.0); ms += timed_pass(lambda: _clear(0x4000))   # the raw: R = 1 outside
                     bind_stoch(p_ratio, scc, f + 1)
                     for unit, tex, name in ((8, table, b'local_light_table'), (9, tiles, b'local_light_tiles')):
                         active(0x84C0 + unit); bindtex(TEX2D, tex); bindsampler(unit, 0); u1i(loc(p_ratio, name), unit)
                     active(0x84C0); u2f(loc(p_ratio, b'spot_slot_on'), 1.0, 1.0); u2f(loc(p_ratio, b'spot_shadow_fade'), 0.0, 0.0)
+                    _enable(0x0C11); _scissor(*rect)
                     ms += timed_pass(lambda: draw(4, 0, 3)); scc.unbind()
+                    _disable(0x0C11)
+                    bindfbo(FB, rr_.fbo[rr_.idx ^ 1]); ms += timed_pass(lambda: _clear(0x4000))   # the ratio history: 1 outside
+                    _enable(0x0C11); _scissor(*rect)
                     ms += timed_pass(lambda: rr_.run(scc.light_map, rn.hist[rn.idx ^ 1]))
+                    _disable(0x0C11)
                 if f >= WARMUP:
                     samples['base'].append(s_base); samples['new'].append(ms)
             for k in rounds: rounds[k].append(statistics.median(samples[k]))
