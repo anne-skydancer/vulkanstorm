@@ -27,7 +27,7 @@ These complete the rules above for every agent (planner, surveyor, coder, review
 - Smoke launches use a scratch APPDATA/LOCALAPPDATA with no saved credentials, so they can never log in. Changes that touch rendering, shutdown or login need a Release build that reaches the world (owner-assisted) before they are called safe.
 - Before adding cleanup, frees, caching or shared/static state to a function, check every caller and every thread that runs it (worker threads with shared GL contexts call the same `shutdown()` paths).
 - OpenGL behaviour outside the change must stay identical. Renderer-free logic gets equivalence tests where a GLSL twin exists.
-- Light and shadow work: everything new together, at the default tier, costs at most today's PCSS-on frame + 5 % (measured against the recorded baseline). Every stage's PR reports its own cost and the running total.
+- Light and shadow work: everything new together, at the default tier, costs at most the Stochastic frame of build 1.0.1.82178 (windows-latest at 8a797c1d61, Shadow method Stochastic) + 5 % (measured against the recorded baseline). Every stage's PR reports its own cost and the running total.
 - No Preferences entries unless the owner asks. Structural parts of a method are debug settings. Tuning panels (such as the Sky tab) and diagnostics live on `vkstorm-devel` only and are left out of every integration into `vkstorm-release`.
 - Bugs are hotfixes (see above), applied to every line the bug exists on. PRs are for features, studies and integrations.
 - CI and workflow changes are validated by `ci-lint` only, never by a viewer build; documentation-only changes are not linted and do not require a viewer build.
