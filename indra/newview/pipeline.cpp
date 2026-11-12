@@ -8504,7 +8504,7 @@ void LLPipeline::resolveAlphaStochasticTemporal()
     mAlphaSTHistory.endFrame();
 }
 
-// The fragment path (the default on every device; compute is A/B only, VKSTORM_STOCH_COMPUTE_RESOLVE=1): this frame's accumulation averaged once into mAlphaSTCurrent
+// The fragment path (the one path on every device; compute is never chosen in the OpenGL viewer): this frame's accumulation averaged once into mAlphaSTCurrent
 // (alphaStochasticCurrentF.glsl), then the resolve (alphaStochasticResolveF.glsl, with the engine's
 // resolve) drawn into the history's framebuffer that was not read. Rendering into a framebuffer needs
 // no memory barrier (the compute path's image stores do: LLStochasticHistory::endComputeWrite).

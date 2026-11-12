@@ -2242,9 +2242,6 @@ void LLFloaterPreference::refreshEnabledState()
         && gSavedSettings.getS32("RenderShadowDetail") > 0
         && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
-    // the light size applies to the Stochastic method
-    getChild<LLSliderCtrl>("ShadowLightSize")->setEnabled(shadow_method_enabled
-        && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported())));
     if (!LLStochasticEngine::deviceSupported())
     {
         // Legacy is the only method below OpenGL 4.0: the Stochastic item is not offered and a stored
