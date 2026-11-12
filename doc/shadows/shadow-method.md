@@ -197,6 +197,28 @@ guard at the cascade edges (26 cm in the finest cascade instead of 14 cm).
 Known limit: at a crease (a wall's foot on the ground) the plane of one surface does not continue into
 the other.
 
+## Stage AA-S1: semi-transparent casters, no stipple
+
+Linden Lab's shadow casters for semi-transparent faces discard on a raster-column stipple
+(`if (alpha < 0.88) if (fract(0.5*floor(target_pos_x/post_pos.w)) < 0.25) discard;`, in
+`shadowAlphaMaskF`, `pbrShadowAlphaBlendF`, `avatarAlphaShadowF`, `avatarAlphaMaskShadowF`). The stipple
+is fixed in the shadow map, so thin foliage (palm fronds) casts fixed stripes. Under the Stochastic method
+only, those casters cast solid shade (nothing but the alpha < 0.05 discard remains) and sample the caster
+alpha with a LOD bias of -1 (a finer mip).
+
+- `add_stochastic_shadow_alpha_permutations` (`llviewershadermgr.cpp`) adds `SHADOW_SOLID_ALPHA=1` and
+  `SHADOW_ALPHA_LOD_BIAS=-1.0` to the programs that run those shaders when `use_stochastic_shadows()`
+  (the effective method: the run-time stochastic fallback makes it false and reloads the shaders, so the
+  stipple is back with the Legacy shadows). Programs: Shadow Alpha Mask and Shadow Fullbright Alpha Mask
+  (each with its skinned variant), GLTF Shadow Alpha Blend (and skinned), Avatar Alpha Shadow, Avatar Alpha
+  Mask Shadow. Projector maps, reflection-probe shadow passes and the sun cascades draw through the same
+  programs, so all follow the method.
+- The indexed-texture `diffuseLookup` generated in `llshadermgr.cpp` appends the bias to its `texture()`
+  calls only when the program defines `SHADOW_ALPHA_LOD_BIAS`; otherwise the generated text is unchanged.
+- Legacy: every changed shader keeps the stock lines in the `#else` branch; with the define absent the
+  text is the previous text.
+- Nothing downstream (the light pass, the later AA stages, the unified lighting) reads the stipple.
+
 ## Where the method is read
 
 `LLPipeline::RenderShadowMethod` is a cached setting refreshed on change. A change calls

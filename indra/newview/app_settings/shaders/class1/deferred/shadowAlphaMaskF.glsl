@@ -51,6 +51,7 @@ void main()
         discard;
     }
 
+#if !defined(SHADOW_SOLID_ALPHA)
     if (alpha < 0.88) // treat as semi-transparent
     {
         if (fract(0.5*floor(target_pos_x / post_pos.w )) < 0.25)
@@ -58,6 +59,10 @@ void main()
             discard;
         }
     }
+#endif
+    // SHADOW_SOLID_ALPHA (Stochastic shadows): a semi-transparent caster casts solid shade, no raster-column
+    // stipple (it showed as fixed stripes in thin foliage); the lookup above samples a finer mip
+    // (SHADOW_ALPHA_LOD_BIAS, applied in the generated diffuseLookup).
 
     frag_color = vec4(1,1,1,1);
 }

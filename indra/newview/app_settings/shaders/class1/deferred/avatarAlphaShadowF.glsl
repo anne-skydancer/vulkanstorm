@@ -36,13 +36,19 @@ uniform vec4 color;
 
 void main()
 {
+#if defined(SHADOW_SOLID_ALPHA)
+    // Stochastic shadows: finer mip, solid shade for a semi-transparent caster (no stipple)
+    float alpha = texture(diffuseMap, vary_texcoord0.xy, SHADOW_ALPHA_LOD_BIAS).a * color.a;
+#else
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a * color.a;
+#endif
 
     if (alpha < 0.05) // treat as totally transparent
     {
         discard;
     }
 
+#if !defined(SHADOW_SOLID_ALPHA)
     if (alpha < minimum_alpha) // treat as semi-transparent
     {
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)
@@ -50,6 +56,7 @@ void main()
         discard;
       }
     }
+#endif
 
     frag_color = vec4(1,1,1,1);
 }
