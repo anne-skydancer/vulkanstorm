@@ -416,6 +416,11 @@ static void add_stochastic_shadow_alpha_permutations(LLGLSLShader* shader)
         shader->addPermutation("SHADOW_SOLID_ALPHA", "1");
         shader->addPermutation("SHADOW_ALPHA_LOD_BIAS", "-1.0");
     }
+    else
+    {   // symmetric: a define left from an earlier build of this program cannot survive
+        shader->removePermutation("SHADOW_SOLID_ALPHA");
+        shader->removePermutation("SHADOW_ALPHA_LOD_BIAS");
+    }
 }
 // </Vulkanstorm>
 

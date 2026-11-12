@@ -33,17 +33,31 @@ in vec4 vertex_color;
 in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
+// SHADOW_SOLID_ALPHA (Stochastic shadows): a semi-transparent caster casts solid shade, no raster-column
+// stipple (it showed as fixed stripes in thin foliage); the cutoff tests the final alpha and the lookup
+// samples a finer mip (SHADOW_ALPHA_LOD_BIAS, applied in the generated diffuseLookup).
 void main()
 {
     float alpha = diffuseLookup(vary_texcoord0.xy).a;
 
+#if !defined(SHADOW_SOLID_ALPHA)
     if (alpha < minimum_alpha)
     {
         discard;
     }
+#endif
 
 #if !defined(IS_FULLBRIGHT)
     alpha *= vertex_color.a;
+#endif
+
+#if defined(SHADOW_SOLID_ALPHA)
+    // The cutoff tests the final alpha (texture x vertex), as pbrShadowAlphaBlendF does: material below
+    // minimum_alpha casts nothing, denser material casts solid.
+    if (alpha < minimum_alpha)
+    {
+        discard;
+    }
 #endif
 
     if (alpha < 0.05) // treat as totally transparent
@@ -60,9 +74,6 @@ void main()
         }
     }
 #endif
-    // SHADOW_SOLID_ALPHA (Stochastic shadows): a semi-transparent caster casts solid shade, no raster-column
-    // stipple (it showed as fixed stripes in thin foliage); the lookup above samples a finer mip
-    // (SHADOW_ALPHA_LOD_BIAS, applied in the generated diffuseLookup).
 
     frag_color = vec4(1,1,1,1);
 }

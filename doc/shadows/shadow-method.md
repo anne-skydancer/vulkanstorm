@@ -199,24 +199,33 @@ the other.
 
 ## Stage AA-S1: semi-transparent casters, no stipple
 
-Linden Lab's shadow casters for semi-transparent faces discard on a raster-column stipple
-(`if (alpha < 0.88) if (fract(0.5*floor(target_pos_x/post_pos.w)) < 0.25) discard;`, in
-`shadowAlphaMaskF`, `pbrShadowAlphaBlendF`, `avatarAlphaShadowF`, `avatarAlphaMaskShadowF`). The stipple
-is fixed in the shadow map, so thin foliage (palm fronds) casts fixed stripes. Under the Stochastic method
-only, those casters cast solid shade (nothing but the alpha < 0.05 discard remains) and sample the caster
-alpha with a LOD bias of -1 (a finer mip).
+Linden Lab's prim and glTF-blend shadow casters discard on a raster-column stipple
+(`if (alpha < 0.88) if (fract(0.5*floor(target_pos_x/post_pos.w)) < 0.25) discard;`, in `shadowAlphaMaskF`
+and `pbrShadowAlphaBlendF`). The stipple is fixed in the shadow map, so thin foliage (palm fronds) casts fixed
+stripes. Under the Stochastic method only, the stipple is gone and the alpha is sampled with a LOD bias of -1
+(a finer mip). The rule that results, the same on both paths:
+
+- final alpha (texture x vertex) below 0.05: casts nothing;
+- final alpha below `minimum_alpha` (0.598, the blend cutoff, set by `renderAlphaObjects`; the mask cutoff
+  on the alpha-mask pass): casts nothing, so glass and low-alpha tints cast no shade;
+- anything denser: casts solid shade.
+
+The avatar casters (`avatarAlphaShadowF`, `avatarAlphaMaskShadowF`) had a stipple that never ran (their
+`minimum_alpha` is never set, so it stays 0); they only get the finer mip.
 
 - `add_stochastic_shadow_alpha_permutations` (`llviewershadermgr.cpp`) adds `SHADOW_SOLID_ALPHA=1` and
-  `SHADOW_ALPHA_LOD_BIAS=-1.0` to the programs that run those shaders when `use_stochastic_shadows()`
-  (the effective method: the run-time stochastic fallback makes it false and reloads the shaders, so the
-  stipple is back with the Legacy shadows). Programs: Shadow Alpha Mask and Shadow Fullbright Alpha Mask
-  (each with its skinned variant), GLTF Shadow Alpha Blend (and skinned), Avatar Alpha Shadow, Avatar Alpha
-  Mask Shadow. Projector maps, reflection-probe shadow passes and the sun cascades draw through the same
-  programs, so all follow the method.
+  `SHADOW_ALPHA_LOD_BIAS=-1.0` to the programs that run those shaders when `use_stochastic_shadows()`, and
+  removes both otherwise. That function is the effective method: the run-time stochastic fallback makes it
+  false and reloads the shaders, so the stipple is back with the Legacy shadows. Programs: Shadow Alpha Mask
+  and Shadow Fullbright Alpha Mask (each with its skinned variant), GLTF Shadow Alpha Blend (and skinned),
+  Avatar Alpha Shadow, Avatar Alpha Mask Shadow. Projector maps, reflection-probe shadow passes and the sun
+  cascades draw through the same programs, so all follow the method.
 - The indexed-texture `diffuseLookup` generated in `llshadermgr.cpp` appends the bias to its `texture()`
   calls only when the program defines `SHADOW_ALPHA_LOD_BIAS`; otherwise the generated text is unchanged.
-- Legacy: every changed shader keeps the stock lines in the `#else` branch; with the define absent the
-  text is the previous text.
+- Legacy: every changed shader keeps the stock lines in the Legacy branch; with the define absent the text
+  is the previous text. `scripts/tests/test_shadow_alpha_permutation.py` compares each Legacy permutation with
+  the stock text in `scripts/shadows/legacy_reference/` and checks that every program linking one of the four
+  files gets the permutation call.
 - Nothing downstream (the light pass, the later AA stages, the unified lighting) reads the stipple.
 
 ## Where the method is read

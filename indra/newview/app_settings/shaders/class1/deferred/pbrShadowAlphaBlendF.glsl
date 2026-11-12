@@ -49,7 +49,13 @@ void main()
         discard;
     }
 
-#if !defined(SHADOW_SOLID_ALPHA)
+#if defined(SHADOW_SOLID_ALPHA)
+    // as shadowAlphaMaskF: below the blend cutoff (renderAlphaObjects sets minimum_alpha) nothing is cast
+    if (alpha < minimum_alpha)
+    {
+        discard;
+    }
+#else
     if (alpha < 0.88) // treat as semi-transparent
     {
         if (fract(0.5*floor(target_pos_x / post_pos.w )) < 0.25)
