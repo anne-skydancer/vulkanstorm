@@ -121,12 +121,10 @@ history or the snapshot's passes made the shadow channels, and for all channels 
 them from. The resolve is the transparency's: the engine decides once (`LLStochasticEngine::computeResolve`), and the OpenGL viewer
 runs the fragment resolve on every device (`shadowStochasticResolveF.glsl`, into the history's framebuffer; it needs no
 extra target, the history stays 2 x RGBA16F, 8 bytes a pixel each). The compute resolve (`shadowStochasticResolveC.glsl`,
-the history written as an image) is kept compiled for A/B tests (`VKSTORM_STOCH_COMPUTE_RESOLVE=1` on a GL 4.3 device)
-and for the Vulkan renderer: an OpenGL compute dispatch and its `glMemoryBarrier` between graphics passes cost frame rate
+the history written as an image) is kept compiled for the Vulkan renderer, never selected by the OpenGL viewer: an OpenGL compute dispatch and its `glMemoryBarrier` between graphics passes cost frame rate
 while the camera or avatar moves, and OpenGL has no async compute. Both run the same
 resolve source (`shadowStochasticResolveUtilF.glsl` and the engine's `stochasticResolveUtilF.glsl`), and
-the offline bench finds their histories bit identical frame after frame. A Windows driver that does not load the compute
-entry points cannot be forced to compute (the fragment resolve is the default everywhere anyway).
+the offline bench finds their histories bit identical frame after frame.
 
 ## Shared by all methods
 
@@ -225,7 +223,7 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
   Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
   the quality slider and the recommended-settings re-applies like every graphics setting, and the
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the light size slider (Sky tab) is enabled with Stochastic.
+  feature are unavailable, and the light size (`RenderShadowLightSize`, a debug setting) applies with Stochastic.
 - Graphic presets carry `RenderShadowMethod` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
   becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).

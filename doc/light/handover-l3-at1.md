@@ -126,7 +126,7 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
 The shadow caster, the shadow light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.
 
-## Debug settings (Preferences > Graphics > Sky, devel only)
+## Debug settings (no Preferences entry)
 
 | Setting | Default | Meaning |
 |---|---|---|

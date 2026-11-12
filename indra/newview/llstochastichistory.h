@@ -50,10 +50,9 @@ namespace LLStochasticEngine
     // device, never changed at run time. OpenGL compute dispatches, with the glMemoryBarrier they need
     // between graphics passes, stall the frame while the camera or avatar moves, and OpenGL has no
     // async compute; compute belongs in the Vulkan renderer. The compute resolve (GL 4.3, GLSL 4.30,
-    // entry points loaded; 144 B/px) stays compiled but unused, selected only for A/B tests by the
-    // environment variable VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a device that supports it (debug only,
-    // not a setting). The two are the same method and give the same image (bit for bit on the
-    // measured NVIDIA). A shader set of the selected path that does not build is an error (logged,
+    // entry points loaded; 144 B/px) stays compiled but unused: nothing in the OpenGL viewer selects it
+    // (computeResolve() is always false; no setting, no environment variable). The two are the same method
+    // and give the same image (bit for bit on the measured NVIDIA). A shader set of the selected path that does not build is an error (logged,
     // retried at the next shader reload); the other path is never taken in its place.
     bool computeResolve();
 

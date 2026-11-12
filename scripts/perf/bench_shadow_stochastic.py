@@ -98,7 +98,7 @@ class Resolve:
         self.sc = sc; W, H = sc.W, sc.H; self.compute = compute
         engine = stage(ENGINE_RESOLVE, [])
         util = stage(RESOLVE_UTIL, [])
-        if compute:   # A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1): the compute resolve, the history written as an image
+        if compute:   # A/B bench only (the viewer never selects it): the compute resolve, the history written as an image
             self.prog = program([(0x91B9, stage(RESOLVE_C, [])), (0x91B9, util), (0x91B9, engine)])
         else:         # the shipped default on every device: the fragment resolve into the history's framebuffer
             self.prog = program([(0x8B31, VERTEX), (0x8B30, stage(RESOLVE_ST, [])), (0x8B30, util), (0x8B30, engine)])

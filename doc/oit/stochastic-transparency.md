@@ -159,7 +159,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
 - The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
   face identities stay stable, so layers keep their roles).
 - `alphaStochasticResolveC.glsl`, one compute dispatch after the accumulation (the compute resolve: not run by the OpenGL viewer, kept compiled
-  for A/B tests with `VKSTORM_STOCH_COMPUTE_RESOLVE=1` and for the Vulkan renderer, where compute is
+  for the Vulkan renderer, where compute is
   async; the fragment pair described below is the shipped resolve).
   A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
   once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
@@ -197,8 +197,7 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   (the history has framebuffers only on this path; rendering needs no memory barrier). The two give the same
   image (compared bit for bit offline on the measured NVIDIA, 24 frames, 4 scenes, 3 resolutions). A shader set of
   the selected path that fails to build is an error, logged and retried at the next shader reload; the other path is
-  never taken in its place. For A/B tests on a GL 4.3 GPU, the environment variable `VKSTORM_STOCH_COMPUTE_RESOLVE=1`
-  selects the compute path (debug only, not a setting).
+  never taken in its place. Nothing in the OpenGL viewer selects the compute path (no setting, no environment variable).
 - No history on the first frame, after a resize, when the setting or the method is switched, or when the
   frame before did not run the method (the history stamp is the frame counter).
 - Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
@@ -375,7 +374,7 @@ Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `g
 textures; the compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
 2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
 sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (160 bytes a
-pixel); the compute resolve (144 bytes a pixel) only when `VKSTORM_STOCH_COMPUTE_RESOLVE=1` forces it on a GL 4.3 device. There is no fallback otherwise (a history or
+pixel); the compute resolve (144 bytes a pixel) never in the OpenGL viewer. There is no fallback otherwise (a history or
 temporal resolve that fails only drops the accumulation, each frame keeps its 8 samples; particles and
 custom-blend draws are hidden while the engine is not ready): a failed allocation is logged and tried again (every frame loop: 1 s, doubling to
 30 s), a shader set that did not build is logged and tried again at the next shader reload, and until
