@@ -117,7 +117,9 @@ float stReference(sampler2D m, vec2 uv, vec2 res, vec2 jit, vec3 c, vec2 g, floa
 // the roof's height beneath the higher caster reads no crossing there, and drifts out of its outline
 // to find the roof "below" it. Such a ray is behind the stored surface at some step (the surface is
 // nearer the light than the step's far end); once it is, a texel holding a surface nearer the light
-// than the receiver that the ray has already passed (deeper than the ray) counts as blocking too.
+// than the receiver that the ray has already passed (deeper than the ray) counts as blocking too, when it is
+// well below the surface that hid the ray (more than a tenth of the way from that surface to the receiver):
+// a lace canopy's own texels, or a ground beside it, are not a roof under it, and would darken the lace.
 // Each read is one
 // texel, offset by up to half a texel per ray, so the frames' average is the texel-box filtered
 // visibility. g: the signed plane gradient; z_bias: the constant bias that moves the receiver's
@@ -133,6 +135,7 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max
         vec2 jit = vec2(fract(j * 7.31 + 0.137 * float(k)), fract(j * 3.17 + 0.711 * float(k))) - 0.5;
         float blocked = 0.0;
         bool behind = false; // the ray was behind the stored surface at an earlier step (a surface hid the ones below it)
+        float zh = 1.0e9;    // the nearest such surface's depth
         vec3 q = c; // the first interval starts at the receiver
         for (int i = 0; i < steps && blocked == 0.0; ++i)
         {
@@ -146,18 +149,22 @@ float stMarch(sampler2D m, vec2 res, vec4 s0, vec2 g, float z_bias, float rp_max
             {
                 blocked = 1.0;
             }
-            else if (behind && zs < ref && zs > q.z)
+            else if (behind && zs < ref && zs > q.z && zs > zh + 0.1 * (c.z - zh))
             {
                 blocked = 1.0; // the ray passed this surface's depth beneath the surface that hid it
             }
-            behind = behind || zs < qn.z - slack;
+            if (zs < qn.z - slack)
+            {
+                behind = true;
+                zh = min(zh, zs);
+            }
             q = qn;
         }
         if (blocked == 0.0)
         {
             float zs;
             float ref = stReference(m, q.xy, res, jit, c, g, z_bias, rp_max, zs);
-            if ((zs < q.z || (behind && zs > q.z)) && zs < ref)
+            if ((zs < q.z || (behind && zs > q.z && zs > zh + 0.1 * (c.z - zh))) && zs < ref)
             {
                 blocked = 1.0;
             }

@@ -7637,6 +7637,27 @@ void LLPipeline::renderGLTFObjects(U32 type, bool texture, bool rigged)
     }
 }
 
+// <Vulkanstorm> Stochastic shadows, S1 coverage: the uniforms of the bound shadow caster program. coverage: a
+// Blending face (partial light, following alpha) or a Masking face (the cutoff). layer: a constant per drawn
+// batch, so stacked layers get independent noise. The phase is the golden-ratio step of the history's seed
+// frame, reduced on the CPU (a float32 frame counter would lose the fraction). Does nothing unless the
+// casters were built for the Stochastic method.
+void LLPipeline::setShadowCasterCoverage(bool coverage, F32 layer)
+{
+    if (!LLViewerShaderMgr::sShadowStochAlpha || !LLGLSLShader::sCurBoundShaderPtr)
+    {
+        return;
+    }
+    static const LLStaticHashedString sCoverage("shadow_st_coverage");
+    static const LLStaticHashedString sPhase("shadow_st_caster_phase");
+    static const LLStaticHashedString sLayer("shadow_st_layer");
+    LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
+    shader->uniform1f(sCoverage, coverage ? 1.f : 0.f);
+    shader->uniform1f(sPhase, (F32)fmod(0.6180339887498949 * (double)mShadowSTHistory.seedFrame(), 1.0));
+    shader->uniform1f(sLayer, layer);
+}
+// </Vulkanstorm>
+
 // Currently only used for shadows -Cosmic,2023-04-19
 void LLPipeline::renderAlphaObjects(bool rigged)
 {
@@ -7678,6 +7699,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                setShadowCasterCoverage(true, (F32)(pparams->mStochasticSeed & 1023));   // <Vulkanstorm/> one layer per batch
                 LLRenderPass::pushRiggedGLTFBatch(*pparams, lastAvatarGLTF, lastMeshIdGLTF, skipLastSkinGLTF);
             }
             else
@@ -7686,6 +7708,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                setShadowCasterCoverage(true, (F32)(pparams->mStochasticSeed & 1023));   // <Vulkanstorm/> one layer per batch
                 if (mSimplePool->uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
                 {
                     mSimplePool->pushBatch(*pparams, true, true);
@@ -7700,6 +7723,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                setShadowCasterCoverage(true, (F32)(pparams->mStochasticSeed & 1023));   // <Vulkanstorm/> one layer per batch
                 LLRenderPass::pushGLTFBatch(*pparams);
             }
             else
@@ -7708,6 +7732,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                setShadowCasterCoverage(true, (F32)(pparams->mStochasticSeed & 1023));   // <Vulkanstorm/> one layer per batch
                 mSimplePool->pushBatch(*pparams, true, true);
             }
         }
@@ -11653,6 +11678,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                setShadowCasterCoverage(false);   // <Vulkanstorm/> Masking keeps the creator's cutoff
                 renderMaskedObjects(LLRenderPass::PASS_ALPHA_MASK, true, true, rigged);
             }
 
@@ -11670,6 +11696,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
                 gDeferredShadowFullbrightAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                setShadowCasterCoverage(false);   // <Vulkanstorm/>
                 renderFullbrightMaskedObjects(LLRenderPass::PASS_FULLBRIGHT_ALPHA_MASK, true, true, rigged);
             }
 

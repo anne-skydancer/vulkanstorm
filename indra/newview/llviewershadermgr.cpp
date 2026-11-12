@@ -74,6 +74,7 @@ using std::string;
 
 bool                LLViewerShaderMgr::sInitialized = false;
 bool                LLViewerShaderMgr::sSkipReload = false;
+bool                LLViewerShaderMgr::sShadowStochAlpha = false;   // <Vulkanstorm/>
 
 LLVector4           gShinyOrigin;
 
@@ -400,6 +401,29 @@ static void unload_stochastic_shaders()
 static bool use_stochastic_shadows()
 {
     return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
+}
+// </Vulkanstorm>
+
+// <Vulkanstorm> Stochastic shadows, S1: the shadow casters of semi-transparent faces cast partial shade and
+// sample a finer mip of the alpha (SHADOW_STOCH_ALPHA / SHADOW_ALPHA_LOD_BIAS, read by shadowAlphaMaskF,
+// pbrShadowAlphaBlendF, avatarAlphaShadowF, avatarAlphaMaskShadowF and the generated diffuseLookup). The
+// stock raster-column stipple stays in the Legacy build of the same files. use_stochastic_shadows() is the
+// effective method (the run-time fallback makes it false and reloads the shaders), so a program never
+// carries the define while Legacy shadows are drawn. Call before make_rigged_variant (it copies the defines).
+static void add_stochastic_shadow_alpha_permutations(LLGLSLShader* shader)
+{
+    const bool stochastic = use_stochastic_shadows();
+    LLViewerShaderMgr::sShadowStochAlpha = stochastic;   // what the casters were built for (read per draw)
+    if (stochastic)
+    {
+        shader->addPermutation("SHADOW_STOCH_ALPHA", "1");
+        shader->addPermutation("SHADOW_ALPHA_LOD_BIAS", "-1.0");
+    }
+    else
+    {   // symmetric: a define left from an earlier build of this program cannot survive
+        shader->removePermutation("SHADOW_STOCH_ALPHA");
+        shader->removePermutation("SHADOW_ALPHA_LOD_BIAS");
+    }
 }
 // </Vulkanstorm>
 
@@ -2624,6 +2648,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("IS_FULLBRIGHT", "1");
 
         add_common_permutations(&gDeferredShadowFullbrightAlphaMaskProgram);
+        add_stochastic_shadow_alpha_permutations(&gDeferredShadowFullbrightAlphaMaskProgram);   // <Vulkanstorm/>
 
         gDeferredShadowFullbrightAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = make_rigged_variant(gDeferredShadowFullbrightAlphaMaskProgram, gDeferredSkinnedShadowFullbrightAlphaMaskProgram);
@@ -2640,6 +2665,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskF.glsl", GL_FRAGMENT_SHADER));
         gDeferredShadowAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        add_stochastic_shadow_alpha_permutations(&gDeferredShadowAlphaMaskProgram);   // <Vulkanstorm/>
         success = make_rigged_variant(gDeferredShadowAlphaMaskProgram, gDeferredSkinnedShadowAlphaMaskProgram);
         success = success && gDeferredShadowAlphaMaskProgram.createShader();
         llassert(success);
@@ -2672,6 +2698,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowGLTFAlphaBlendProgram.clearPermutations();
 
         add_common_permutations(&gDeferredShadowGLTFAlphaBlendProgram);
+        add_stochastic_shadow_alpha_permutations(&gDeferredShadowGLTFAlphaBlendProgram);   // <Vulkanstorm/>
 
         success = make_rigged_variant(gDeferredShadowGLTFAlphaBlendProgram, gDeferredSkinnedShadowGLTFAlphaBlendProgram);
         success = success && gDeferredShadowGLTFAlphaBlendProgram.createShader();
@@ -2699,6 +2726,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowV.glsl", GL_VERTEX_SHADER));
         gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        add_stochastic_shadow_alpha_permutations(&gDeferredAvatarAlphaShadowProgram);   // <Vulkanstorm/>
         success = gDeferredAvatarAlphaShadowProgram.createShader();
         llassert(success);
     }
@@ -2710,6 +2738,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowV.glsl", GL_VERTEX_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaMaskShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        add_stochastic_shadow_alpha_permutations(&gDeferredAvatarAlphaMaskShadowProgram);   // <Vulkanstorm/>
         success = gDeferredAvatarAlphaMaskShadowProgram.createShader();
         llassert(success);
     }

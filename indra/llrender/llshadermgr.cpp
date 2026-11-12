@@ -744,6 +744,20 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
 
         extra_code_text[extra_code_count++] = strdup("#define HAS_DIFFUSE_LOOKUP\n");
 
+        // <Vulkanstorm> a program may ask for a LOD bias on the diffuse lookup (SHADOW_ALPHA_LOD_BIAS: the
+        // Stochastic method's shadow casters sample a finer mip of the alpha). Without the define the
+        // generated text is the stock text, character for character.
+        std::string lookup_bias;
+        if (defines)
+        {
+            const auto bias_iter = defines->find("SHADOW_ALPHA_LOD_BIAS");
+            if (bias_iter != defines->end())
+            {
+                lookup_bias = ", " + bias_iter->second;
+            }
+        }
+        // </Vulkanstorm>
+
         //uniform declartion
         for (S32 i = 0; i < texture_index_channels; ++i)
         {
@@ -762,7 +776,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
 
         if (texture_index_channels == 1)
         { //don't use flow control, that's silly
-            extra_code_text[extra_code_count++] = strdup("return texture(tex0, texcoord);\n");
+            extra_code_text[extra_code_count++] = strdup(("return texture(tex0, texcoord" + lookup_bias + ");\n").c_str());
             extra_code_text[extra_code_count++] = strdup("}\n");
         }
         else if (major_version > 1 || minor_version >= 30)
@@ -771,7 +785,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
             { //switches are unreliable on some NVIDIA drivers
                 for (S32 i = 0; i < texture_index_channels; ++i)
                 {
-                    std::string if_string = llformat("\t%sif (vary_texture_index == %d) { return texture(tex%d, texcoord); }\n", i > 0 ? "else " : "", i, i);
+                    std::string if_string = llformat("\t%sif (vary_texture_index == %d) { return texture(tex%d, texcoord%s); }\n", i > 0 ? "else " : "", i, i, lookup_bias.c_str());
                     extra_code_text[extra_code_count++] = strdup(if_string.c_str());
                 }
                 extra_code_text[extra_code_count++] = strdup("\treturn vec4(1,0,1,1);\n");
@@ -786,7 +800,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
                 //switch body
                 for (S32 i = 0; i < texture_index_channels; ++i)
                 {
-                    std::string case_str = llformat("\t\tcase %d: return texture(tex%d, texcoord);\n", i, i);
+                    std::string case_str = llformat("\t\tcase %d: return texture(tex%d, texcoord%s);\n", i, i, lookup_bias.c_str());
                     extra_code_text[extra_code_count++] = strdup(case_str.c_str());
                 }
 

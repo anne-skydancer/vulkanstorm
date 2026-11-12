@@ -459,6 +459,7 @@ public:
     void releaseShadowStochasticHistory();
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
     void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
+    void setShadowCasterCoverage(bool coverage, F32 layer = 0.f); // the bound shadow caster program: Blending (partial light) or Masking (the cutoff), the batch's layer and the frame's phase
     // </Vulkanstorm>
 
     // </FS>

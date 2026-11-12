@@ -197,6 +197,90 @@ guard at the cascade edges (26 cm in the finest cascade instead of 14 cm).
 Known limit: at a crease (a wall's foot on the ground) the plane of one surface does not continue into
 the other.
 
+## Stage AA-S1: semi-transparent casters let partial light through
+
+Linden Lab's prim and glTF-blend shadow casters discard on a raster-column stipple
+(`if (alpha < 0.88) if (fract(0.5*floor(target_pos_x/post_pos.w)) < 0.25) discard;`, in `shadowAlphaMaskF`
+and `pbrShadowAlphaBlendF`). The stipple is fixed in the shadow map, so thin foliage (palm fronds) casts fixed
+stripes. Under the Stochastic method only, the stipple is gone, the alpha is sampled with a LOD bias of -1
+(a finer mip), and a Blending caster lets partial light through, following its alpha.
+
+### The rule
+
+- Blending casters (legacy Blending faces through `renderAlphaObjects` and `shadowAlphaMaskF` with
+  `shadow_st_coverage` = 1, glTF BLEND through `pbrShadowAlphaBlendF`, avatar ALPHA_BLEND through
+  `avatarAlphaShadowF`) keep a fragment when `alpha > shadowCasterThreshold()`. alpha = texture alpha x face
+  or vertex alpha at LOD bias -1; below 0.05 the fragment is dropped whatever the threshold. The blend cutoff
+  (`minimum_alpha` 0.598) does not apply. A dropped texel leaves the depth below it in the map (the opaque
+  pass is drawn first), so the receiver's march sees the lace's holes.
+- Masking casters (`PASS_ALPHA_MASK`, the fullbright mask, avatar ALPHA_MASK) set `shadow_st_coverage` = 0 and
+  keep the stock cutoff, binary: the texture alpha below `minimum_alpha` casts nothing. `avatarAlphaMaskShadowF`
+  also tests `minimum_alpha` now (the avatar pool sets it to `LLDrawPoolAvatar::sMinimumAlpha` while the casters
+  are built for Stochastic); its stipple never ran before, as it was never set.
+- Not changed: `pbrShadowAlphaMaskF`, the material masks and grass (`treeShadowF`), and the opaque programs.
+
+User-visible change: Blending glass and sheer material at alpha 0.05 to 0.6 now casts partial shade; below
+the blend cutoff it cast none before. Fully transparent texels (below 0.05) still cast none.
+
+### The threshold
+
+`shadowCasterThreshold()` (the same body in the three Blending casters; a test compares them) is
+`fract(IGN(gl_FragCoord.xy) + hash(layer, 4 x 4 block) + phase)`:
+
+- IGN is interleaved-gradient noise of the shadow-map texel, so a stable cascade gives a world-stable pattern.
+- `shadow_st_layer` is constant per drawn batch (`LLDrawInfo::mStochasticSeed & 1023`, the batch's face
+  identity; the avatar pass uses one constant), so stacked layers get independent noise. The depth test
+  keeps the nearest kept layer, so n layers block with probability 1 - prod(1 - alpha_i), as stacked
+  translucent material does: two panes of alpha 0.5 cast 0.75 (offline: 0.751, over 12 layer-id sets 0.747 to
+  0.758), not 0.5. Faces of one batch share an id; they do not normally overlap.
+- `shadow_st_caster_phase` = `fract(0.618034 * seedFrame())`, reduced on the CPU in double precision (a float32
+  counter loses the fraction after about 850 thousand frames). The step stratifies the coverage over time.
+  The caster reads the counter when the shadow maps are drawn, which can be the previous frame's value
+  relative to the light pass; the caster threshold needs no match with the receiver's rays.
+
+### Wiring
+
+- `add_stochastic_shadow_alpha_permutations` (`llviewershadermgr.cpp`) adds `SHADOW_STOCH_ALPHA=1` and
+  `SHADOW_ALPHA_LOD_BIAS=-1.0` to the programs that run those shaders when `use_stochastic_shadows()`, removes
+  both otherwise, and records the result in `LLViewerShaderMgr::sShadowStochAlpha`. That is the effective
+  method: the run-time stochastic fallback makes it false and reloads the shaders, so the stipple is back with
+  the Legacy shadows. Programs: Shadow Alpha Mask and Shadow Fullbright Alpha Mask (each with its skinned
+  variant), GLTF Shadow Alpha Blend (and skinned), Avatar Alpha Shadow, Avatar Alpha Mask Shadow. Projector
+  maps, reflection-probe shadow passes and the sun cascades draw through the same programs, so all follow the
+  method; the projector channels have history, so projectors get coverage too.
+- `LLPipeline::setShadowCasterCoverage(coverage, layer)` sets `shadow_st_coverage`, `shadow_st_caster_phase`
+  and `shadow_st_layer` on the bound caster program. It returns at once unless `sShadowStochAlpha`. It is
+  called after each bind in `renderAlphaObjects` (per batch: the layer changes), once per pass for the mask
+  and fullbright-mask programs (coverage 0), and from `LLDrawPoolAvatar::beginShadowPass` for the avatar
+  blend pass. The avatar pool reads the same flag for the mask pass's cutoff.
+- The indexed-texture `diffuseLookup` generated in `llshadermgr.cpp` appends the bias to its `texture()`
+  calls only when the program defines `SHADOW_ALPHA_LOD_BIAS`; otherwise the generated text is unchanged.
+- Legacy: every changed shader keeps the stock lines in the Legacy branch; with the define absent the text
+  is the previous text. `scripts/tests/test_shadow_alpha_permutation.py` compares each Legacy permutation with
+  the stock text in `scripts/shadows/legacy_reference/` and checks that every program linking one of the four
+  files gets the permutation call.
+
+### The receiver's march and lace
+
+The map holds one layer, and `stMarch`'s `behind` rule (a roof hidden under a higher caster) would count the
+lace's own kept texels as a surface the ray had passed, darkening the lace (offline 2-D model of the march:
+a = 0.5 lace over flat ground, light disc half-width 0.2 of the depth: 0.20 instead of 0.50). The rule now
+needs the surface to be more than a tenth of the way from the hiding surface to the receiver below it
+(model: 0.46; the roof-under-caster leak stays closed, 0.000). `scripts/perf/model_shadow_caster_clamp.py`
+documents the clamp model.
+
+### Known limits
+
+- The forward receivers (`alphaF`, `pbralphaF`, `materialF`, `waterF`, `pbrmetallicroughnessF`) read the maps
+  without history, so the coverage shimmers on them under sheer casters until stage S2.
+- Whenever `seedFrame()` is 0 the coverage is a fixed dither: snapshots, cube snapshots, an unsupported
+  device, a history allocation failure, and resolve programs not ready (the frame is not accumulating).
+  Snapshots stay a dither until stage S4.
+- At extreme contact (light rays within half a shadow texel of each other, 4 to 8 receiver pixels per caster
+  texel) the 3 x 3 clamp of the resolve raises the noise (offline RMS 0.12 to 0.16 against 0.05); widening the
+  clamp stride for the sun channel (stage S2) is the remedy.
+- Nothing downstream (the light pass, the later AA stages, the unified lighting) reads the stipple.
+
 ## Where the method is read
 
 `LLPipeline::RenderShadowMethod` is a cached setting refreshed on change. A change calls

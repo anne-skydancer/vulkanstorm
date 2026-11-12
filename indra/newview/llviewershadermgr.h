@@ -37,6 +37,7 @@ class LLViewerShaderMgr: public LLShaderMgr
 public:
     static bool sInitialized;
     static bool sSkipReload;
+    static bool sShadowStochAlpha;   // <Vulkanstorm/> the shadow casters were built with SHADOW_STOCH_ALPHA
 
     LLViewerShaderMgr();
     /* virtual */ ~LLViewerShaderMgr();
