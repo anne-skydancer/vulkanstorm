@@ -37,6 +37,7 @@ class LLViewerShaderMgr: public LLShaderMgr
 public:
     static bool sInitialized;
     static bool sSkipReload;
+    static bool sShadowStochAlpha;   // <Vulkanstorm/> the shadow casters were built with SHADOW_STOCH_ALPHA
 
     LLViewerShaderMgr();
     /* virtual */ ~LLViewerShaderMgr();
@@ -251,9 +252,6 @@ extern LLGLSLShader         gHazeWaterProgram;
 extern LLGLSLShader         gDeferredBlurLightProgram;
 extern LLGLSLShader         gDeferredAvatarProgram;
 extern LLGLSLShader         gDeferredSoftenProgram;
-// <Vulkanstorm/> the shader set is built for the Stochastic shadow method (the effective method)
-bool use_stochastic_shadows();
-
 extern LLGLSLShader         gDeferredShadowProgram;
 extern LLGLSLShader         gDeferredShadowCubeProgram;
 extern LLGLSLShader         gDeferredShadowAlphaMaskProgram;

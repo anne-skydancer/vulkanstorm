@@ -34,8 +34,8 @@ in vec2 vary_texcoord0;
 
 void main()
 {
-#if defined(SHADOW_SOLID_ALPHA)
-    // Stochastic shadows: finer mip, solid shade for a semi-transparent caster (no stipple)
+#if defined(SHADOW_STOCH_ALPHA)
+    // Stochastic shadows: finer mip, no stipple
     float alpha = texture(diffuseMap, vary_texcoord0.xy, SHADOW_ALPHA_LOD_BIAS).a;
 #else
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a;
@@ -46,7 +46,7 @@ void main()
         discard;
     }
 
-#if defined(SHADOW_SOLID_ALPHA)
+#if defined(SHADOW_STOCH_ALPHA)
     // Masking: the cutoff (minimum_alpha, set by the avatar pool), binary
     if (alpha < minimum_alpha)
     {

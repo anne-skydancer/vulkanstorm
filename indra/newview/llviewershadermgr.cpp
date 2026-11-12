@@ -74,6 +74,7 @@ using std::string;
 
 bool                LLViewerShaderMgr::sInitialized = false;
 bool                LLViewerShaderMgr::sSkipReload = false;
+bool                LLViewerShaderMgr::sShadowStochAlpha = false;   // <Vulkanstorm/>
 
 LLVector4           gShinyOrigin;
 
@@ -301,7 +302,7 @@ static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the e
 static const std::string STOCH_RESOLVE_HELPER = STOCH_RESOLVE_OBJECT;   // the engine's resolve, for the fragment path
 
 static bool stochastic_transparency_shaders();
-bool use_stochastic_shadows();
+static bool use_stochastic_shadows();
 
 // The Stochastic shadow method's temporal resolve, a fragment pass: the method is selected and the
 // engine runs on this device (the history is the engine's).
@@ -397,28 +398,30 @@ static void unload_stochastic_shaders()
 // </Vulkanstorm>
 
 // <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
-bool use_stochastic_shadows()
+static bool use_stochastic_shadows()
 {
     return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 // </Vulkanstorm>
 
 // <Vulkanstorm> Stochastic shadows, S1: the shadow casters of semi-transparent faces cast solid shade and
-// sample a finer mip of the alpha (SHADOW_SOLID_ALPHA / SHADOW_ALPHA_LOD_BIAS, read by shadowAlphaMaskF,
+// sample a finer mip of the alpha (SHADOW_STOCH_ALPHA / SHADOW_ALPHA_LOD_BIAS, read by shadowAlphaMaskF,
 // pbrShadowAlphaBlendF, avatarAlphaShadowF, avatarAlphaMaskShadowF and the generated diffuseLookup). The
 // stock raster-column stipple stays in the Legacy build of the same files. use_stochastic_shadows() is the
 // effective method (the run-time fallback makes it false and reloads the shaders), so a program never
 // carries the define while Legacy shadows are drawn. Call before make_rigged_variant (it copies the defines).
 static void add_stochastic_shadow_alpha_permutations(LLGLSLShader* shader)
 {
-    if (use_stochastic_shadows())
+    const bool stochastic = use_stochastic_shadows();
+    LLViewerShaderMgr::sShadowStochAlpha = stochastic;   // what the casters were built for (read per draw)
+    if (stochastic)
     {
-        shader->addPermutation("SHADOW_SOLID_ALPHA", "1");
+        shader->addPermutation("SHADOW_STOCH_ALPHA", "1");
         shader->addPermutation("SHADOW_ALPHA_LOD_BIAS", "-1.0");
     }
     else
     {   // symmetric: a define left from an earlier build of this program cannot survive
-        shader->removePermutation("SHADOW_SOLID_ALPHA");
+        shader->removePermutation("SHADOW_STOCH_ALPHA");
         shader->removePermutation("SHADOW_ALPHA_LOD_BIAS");
     }
 }

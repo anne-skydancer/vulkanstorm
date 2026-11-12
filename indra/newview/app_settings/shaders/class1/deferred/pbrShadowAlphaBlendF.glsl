@@ -33,22 +33,28 @@ in vec4 vertex_color;
 in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
-#if defined(SHADOW_SOLID_ALPHA)
-// Stochastic shadows, S1 coverage: a Blending caster keeps a fragment when alpha > threshold, the threshold
-// being interleaved-gradient noise stepped by the golden ratio per frame (stratified over time). The noise is
-// anchored to the shadow-map texel, so a stable cascade gives a world-stable pattern.
-uniform float shadow_st_caster_frame;
+#if defined(SHADOW_STOCH_ALPHA)
+// Stochastic shadows, S1 coverage: a Blending caster keeps a fragment when alpha > threshold. The threshold is
+// interleaved-gradient noise of the shadow-map texel (world-stable for a stable cascade), plus a per-layer hash
+// of its 4 x 4 block (shadow_st_layer: constant per drawn batch, so stacked layers are independent and the
+// kept fraction through n layers is 1 - prod(1 - alpha_i)), plus the golden-ratio phase of the frame
+// (shadow_st_caster_phase, from the CPU: stratified over time). The body is the same in all three casters.
+uniform float shadow_st_caster_phase;
+uniform float shadow_st_layer;
 float shadowCasterThreshold()
 {
-    float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-    return fract(n + 0.618034 * shadow_st_caster_frame);
+    vec2 p = gl_FragCoord.xy;
+    float n = fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715))));
+    vec3 p3 = fract(vec3(floor(p * 0.25).xyx + shadow_st_layer) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract(n + fract((p3.x + p3.y) * p3.z) + shadow_st_caster_phase);
 }
 #endif
 
 void main()
 {
-#if defined(SHADOW_SOLID_ALPHA)
-    // Stochastic shadows: finer mip, solid shade for a semi-transparent caster (no stipple)
+#if defined(SHADOW_STOCH_ALPHA)
+    // Stochastic shadows: finer mip, no stipple
     float alpha = texture(diffuseMap,vary_texcoord0.xy,SHADOW_ALPHA_LOD_BIAS).a;
 #else
     float alpha = texture(diffuseMap,vary_texcoord0.xy).a;
@@ -61,7 +67,7 @@ void main()
         discard;
     }
 
-#if defined(SHADOW_SOLID_ALPHA)
+#if defined(SHADOW_STOCH_ALPHA)
     // Blending: kept with probability alpha (the blend cutoff does not apply)
     if (alpha <= shadowCasterThreshold())
     {
