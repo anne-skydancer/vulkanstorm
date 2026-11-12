@@ -11,14 +11,16 @@ Gates:
   * the sun channel is bit identical to the base, raw (frames 0 to 3, two scenes) and resolved (24 frames);
   * the projector bands are gone: a projector over a bumped (35 degree normal map) ground and wall reads
     exactly 1 on every lit pixel, where the base's shading-normal receiver plane leaves dark columns;
-  * a shade at the lamp does not black out the light: a plate within r_excl of the lamp's eye shades
-    nothing, a plate beyond r_excl still casts (the linked parts of a fixture keep casting);
+  * the lamp's own housing does not black out its light, and everything else casts: r_excl is the projector's
+    eye-to-face stretch plus a 5 cm margin (the real projectorExclusion of lllocallight.h). A plate inside it
+    (the housing, in the near-clipped stretch) shades nothing; a shade plate 0.1 to 0.5 m in front of the face,
+    a thin partition 0.4 m in front of it, and an object between the lamp and a table 0.8 m below it all cast;
   * the sun light pass costs at most the base's + 0.02 ms (interleaved, median of 3 rounds).
 
 Environment: LOCAL_LIGHT_BASE_REF (default origin/vkstorm-devel), ST_FRAMES (timing frames, default 40),
 SHADOW_BENCH_RES (as bench_shadow_legacy.py).
 """
-import math, os, statistics, sys
+import math, os, re, statistics, sys
 from pathlib import Path
 import numpy as np
 _src = Path(__file__).with_name('bench_shadow_legacy.py').read_text()
@@ -94,7 +96,6 @@ class Resolve:
         use(self.prog)
         set_mat(self.prog, 'stoch_reproj', [[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]])
         u1f(loc(self.prog, b'stoch_weight'), 0.125); u3f(loc(self.prog, b'shadow_st_channel_valid'), 1.0, 1.0, 1.0)
-        u3f(loc(self.prog, b'shadow_st_clamp_stride'), 1.0, 1.0, 1.0)
         set_mat(self.prog, 'inv_proj', [inverse(sc.proj)])
         for unit, name in enumerate(('shadow_st_raw', 'shadow_st_history', 'depthMap')):
             u1i(loc(self.prog, name.encode()), unit)
@@ -120,11 +121,7 @@ for frame in range(1, 25):
     render(p_new, sc, frame)
     a, b = r_old.run(), r_new.run()
     same = same and np.array_equal(a[..., 0], b[..., 0]) and np.array_equal(a[..., 1], b[..., 1])
-check(same, 'the resolved sun (r) and depth (g) equal the base bit for bit over 24 frames (clamp stride 1)', 'sun: ')
-# a differing stride changes the projector channels only: the sun's clamp box does not move
-use(r_new.prog); u3f(loc(r_new.prog, b'shadow_st_clamp_stride'), 1.0, 3.0, 2.0)
-render(p_new, sc, 25); a = r_old.run(); b = r_new.run()
-check(np.array_equal(a[..., 0], b[..., 0]), 'a projector stride of 3 and 2 leaves the sun channel as it was', 'sun: ')
+check(same, 'the resolved sun (r) and depth (g) equal the base bit for bit over 24 frames ', 'sun: ')
 r_old.release(); r_new.release(); sc.release()
 
 
@@ -174,30 +171,50 @@ for label, spot in (('wall, projector 0.5 m off it', ([-6.0, 3.0, -12.0], [6.0, 
     check(res['base'][0] > res['base'][1], f'{label}: the base shows the bump ({res["base"][0] - res["base"][1]} more pixels below 1 than flat)', 'bands: ')
     check(res['new'][0] <= res['new'][1], f'{label}: the bump no longer changes the result ({res["new"][0]} bumped, {res["new"][1]} flat)', 'bands: ')
 
-# --- a shade at the lamp ---------------------------------------------------------------------------------
-print('\nshade at the lamp')
+# --- what the exclusion zone is, and is not --------------------------------------------------------------
+print('\nexclusion zone (the real projectorExclusion: apex-to-face + margin)')
+FOV, FACE = math.radians(60.0), 0.5   # the bench's projectors are 60 degrees; a 0.5 m prim face
+MARGIN = float(re.search(r'PROJECTOR_MARGIN = ([0-9.]+)f', (root / 'indra/newview/lllocallight.h').read_text()).group(1))
+APEX = 0.5 * FACE / math.tan(0.5 * FOV)
+EXCL = APEX + MARGIN
+print(f'  info apex-to-face {APEX:.3f} m, margin {MARGIN} m, r_excl {EXCL:.3f} m')
 EYE = [0.0, 6.0, -10.0]
-SPOT0 = (EYE, [0.0, 0.0, -10.0])
-for label, y_plate, want_lit in (('plate 0.5 m under the eye (within r_excl 1 m)', 5.5, True), ('plate 1.5 m under the eye (beyond r_excl)', 4.5, False)):
-    plate = [((-0.8, y_plate - 0.05, -10.8), (0.8, y_plate + 0.05, -9.2))]
-    sc = Scene(W, H, plate, [4.0, 5.0, -1.0], [0.0, 0.0, -10.0], [-0.5, 1.0, 0.2], [SPOT0, SPOTS[1]], CLIP)
+
+
+def ground_light(boxes, eye, points=None, min_dist=2.5, wy_max=0.02):
+    """mean projector (slot 0) light of the ground in view of the lamp, base and new; or at points (world)"""
+    sc = Scene(W, H, boxes, [4.0, 5.0, -1.0], [0.0, 0.0, -10.0], [-0.5, 1.0, 0.2], [(eye, [eye[0], 0.0, eye[2]]), SPOTS[1]], CLIP)
     gpos = read_rgba(sc.gfbo, W, H)
-    ground = lit_mask(sc, gpos, 0, 2.5)
-    # the ground in view of the projector, away from the plate's own pixels (their depth is in front of the ground)
-    wy = (np.linalg.inv(np.array(sc.view, np.float64)) @ np.concatenate([gpos[..., :3].reshape(-1, 3), np.ones((W * H, 1))], axis=1).T).T[:, 1].reshape(H, W)
-    ground &= np.abs(wy) < 0.02
-    res = {}
+    out = {}
+    if points is None:
+        ground = lit_mask(sc, gpos, 0, min_dist)
+        wy = (np.linalg.inv(np.array(sc.view, np.float64)) @ np.concatenate([gpos[..., :3].reshape(-1, 3), np.ones((W * H, 1))], axis=1).T).T[:, 1].reshape(H, W)
+        ground &= np.abs(wy) < wy_max
     for name, prog in (('base', p_old), ('new', p_new)):
-        img = np.mean([render(prog, sc, f, excl=1.0)[..., 2] for f in (1, 2, 3, 4)], axis=0)
-        res[name] = float(img[ground].mean())
-    n = int(ground.sum())
-    print(f'  info {label}: {n} ground receivers, mean projector light: base {res["base"]:.3f}, new {res["new"]:.3f}')
-    check(n > 10000, f'{label}: {n} ground receivers', 'shade: ')
-    if want_lit:
-        check(res['base'] < 0.05 and res['new'] > 0.999, f'{label}: the base blacks the light out ({res["base"]:.3f}), the new does not ({res["new"]:.3f})', 'shade: ')
-    else:
-        check(res['new'] < 0.05, f'{label}: a shade beyond r_excl still casts ({res["new"]:.3f})', 'shade: ')
+        img = np.mean([render(prog, sc, f, excl=EXCL)[..., 2] for f in (1, 2, 3, 4)], axis=0)
+        out[name] = float(img[ground].mean()) if points is None else [float(img[sc.project(pt)[1], sc.project(pt)[0]]) for pt in points]
+    n = int(ground.sum()) if points is None else len(points)
     sc.release()
+    return out, n
+
+
+def plate(y, half=0.8):
+    return [((-half, y - 0.02, EYE[2] - half), (half, y + 0.02, EYE[2] + half))]
+
+
+# the lamp's housing, inside the eye-to-face stretch (where the real map holds nothing): no black-out
+res, n = ground_light(plate(EYE[1] - 0.2), EYE)
+check(n > 10000 and res['base'] < 0.05 and res['new'] > 0.999, f'a housing 0.2 m under the eye (the face is {APEX:.2f} m): base {res["base"]:.3f}, new {res["new"]:.3f}', 'excl: ')
+# linked parts and others in front of the face cast
+for label, d in (('a shade plate 0.1 m in front of the face', APEX + 0.1), ('a shade plate 0.5 m in front of the face', APEX + 0.5), ('a thin partition 0.4 m in front of the face', APEX + 0.4)):
+    res, n = ground_light(plate(EYE[1] - d), EYE)
+    check(n > 10000 and res['new'] < 0.05, f'{label}: it casts (mean light {res["new"]:.3f}; base {res["base"]:.3f})', 'excl: ')
+# a table 0.8 m below the lamp (inside the old 1 m zone): an object 0.55 m below the lamp shades it
+LAMP = [0.0, 1.0, -10.0]
+box = [((-0.15, 0.40, -10.15), (0.15, 0.45, -9.85))]   # 0.55 m under the eye (past r_excl), a 0.55 m wide shadow on the table 1 m below
+res, _ = ground_light(box, LAMP, points=[(0.0, 0.0, -10.0), (0.0, 0.0, -9.65), (0.45, 0.0, -10.0)])
+check(res['new'][0] < 0.05 and res['new'][1] > 0.999 and res['new'][2] > 0.999,
+      f'a table 1 m below the lamp: under an object between them {res["new"][0]:.3f}, beside it {res["new"][1]:.3f} and {res["new"][2]:.3f} (base {res["base"][0]:.3f})', 'excl: ')
 
 # --- the sun pass costs at most the base's + 0.02 ms ----------------------------------------------------------
 print('\nsun light pass cost')

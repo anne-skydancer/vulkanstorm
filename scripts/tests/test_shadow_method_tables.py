@@ -97,7 +97,6 @@ class StochasticResolveUniforms(unittest.TestCase):
         'shadow_st_raw': 'SHADOW_ST_RAW',
         'shadow_st_history': 'SHADOW_ST_HISTORY',
         'shadow_st_channel_valid': 'sChannelValid',
-        'shadow_st_clamp_stride': 'sClampStride',
         'stoch_weight': 'setResolveUniforms',
         'stoch_reproj': 'setResolveUniforms',
         'stoch_history_valid': 'setResolveUniforms',

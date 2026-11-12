@@ -106,14 +106,22 @@ width on the bench (within one map texel plus one pixel).
 The march is split into `stMarchRay` (one ray, 1 when blocked) and `stMarch` (the mean of the 8), and a light's visibility is
 `stTransmittance` (the rays toward one light's emitter disc, marched through its map). A projector's receiver is described like the
 sun's: `shadowReceiverGeometry` gives the geometric normal from the depth buffer for the receiver plane and the normal offset,
-because the shading normal of a bump or normal map tilts both and striped the lit surface in columns. The march of a projector
-stops `r_excl` short of its eye, and a stored depth nearer the eye than that is no surface (`z_floor` of `stReference`; 0 for the
-sun): the light's own fixture does not shade it, while linked parts of a fixture beyond `r_excl` still cast. `r_excl` is the drawable's
-radius (within the emitter radius and 1 m) behind the eye-to-face stretch of the projector (`lllocallight.h`, unit tested by
-`tests/lllocallight_test.cpp`); a receiver nearer the eye than `r_excl` is unshadowed. The pipeline sets `spot_emitter_radius` and
-`spot_shadow_excl` for the two slots in `bindDeferredShader`. `scripts/perf/test_local_light_u0.py` gates this stage: the sun
-channel equals the previous code bit for bit (raw and resolved), the bump no longer changes a projector's result, a plate within
-`r_excl` of the eye shades nothing while one beyond it casts, and the sun pass costs at most 0.02 ms more.
+because the shading normal of a bump or normal map tilts both and striped the lit surface in columns.
+
+What a projector's march excludes, exactly: its own prim, and nothing else. The own prim is not drawn into the projector's map
+(`stateSort` skips it) and the map's near plane lies at the prim's face, so the stretch from the eye (the apex, behind the face) to
+the face holds no depth. The march therefore ends `r_excl` short of the eye, with `r_excl` = that stretch plus a 5 cm margin
+(`LLLocalLight::projectorExclusion`, `lllocallight.h`), and a stored depth nearer the eye than that along the receiver's line is no
+surface (`z_floor` of `stReference`; 0 for the sun, which is unchanged). That plane is at the eye's distance `r_excl` along the
+receiver's line, so for rays off the axis it lies nearer than the margin's depth: it can only exclude less than the margin, and
+everything past the face casts. Linked parts of a fixture (a shade, a housing beyond the face), a partition or a table's object
+in front of the face all shade the light. Receivers nearer than `r_excl` march a sliver and are mostly outside the map's depth range.
+The pipeline sets `spot_emitter_radius` (0.075 m, a per-slot uniform) and `spot_shadow_excl` for the two slots in `bindDeferredShader`.
+A point light (U2, not used yet) will exclude half its own drawable's extent (`exclusionRadius`; `LLDrawable::getRadius` is the full
+scale diagonal). `scripts/perf/test_local_light_u0.py` gates this stage: the sun channel equals the previous code bit for bit (raw
+and resolved), the bump no longer changes a projector's result, a housing inside the stretch does not black out the light while a
+shade plate 0.1 to 0.5 m in front of the face, a thin partition and an object over a table all cast, and the sun pass costs at most
+0.02 ms more.
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
 accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a
@@ -128,8 +136,7 @@ otherwise and at a size change. The sun pass writes its rays as they are into `m
 `shadowStochasticResolveF.glsl` blends them with the last frame's history (weight 1/8) after the engine's
 camera reprojection, reading the history from the 4 nearest texels, each kept only where its stored depth
 agrees (a revealed surface has none; under a quarter kept, none), clamped per channel to the 3x3 neighbourhood
-of this frame (each channel has its own texel spacing of the box, `shadow_st_clamp_stride`: all 1 today, so the sun's clamp is the
-engine's); `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
+of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
 than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
 direction changed. Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light

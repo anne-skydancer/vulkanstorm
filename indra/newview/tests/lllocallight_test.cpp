@@ -3,7 +3,7 @@
 //
 // Standalone checks of lllocallight.h (no viewer libraries):
 //   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllocallight_test.cpp
-// The emitter radius is clamped to 0.02 to 0.5 m; the exclusion zone of a light is its own drawable's radius within the
+// The emitter radius is clamped to 0.02 to 0.5 m; the exclusion zone of a point light is half its drawable's radius within the
 // emitter radius and 1 m, and a projector's lies beyond the stretch from its eye to the prim's face.
 
 #include "lllocallight.h"
@@ -49,20 +49,23 @@ namespace
     void test_exclusion()
     {
         using namespace LLLocalLight;
-        check(exclusionRadius(0.0f, 0.075f) == 0.075f, "never under the emitter radius");
-        check(exclusionRadius(0.4f, 0.075f) == 0.4f, "the drawable's radius");
-        check(exclusionRadius(7.0f, 0.075f) == EXCLUSION_MAX, "never beyond 1 m");
-        check(exclusionRadius(1.0f, 0.5f) == 1.0f, "exactly 1 m");
+        // point lights: half of getRadius (the full scale diagonal), within s and 1 m
+        check(near_to(exclusionRadius(0.0f, 0.075f), 0.075f), "never under the emitter radius");
+        check(near_to(exclusionRadius(0.8f, 0.075f), 0.4f), "half the drawable's radius");
+        check(near_to(exclusionRadius(7.0f, 0.075f), EXCLUSION_MAX), "never beyond 1 m");
+        check(near_to(exclusionRadius(2.0f, 0.5f), 1.0f), "exactly 1 m");
+        // projectors
         const float fov = 1.0471976f; // 60 degrees
         const float apex = projectorApexToFace(0.5f, fov);
         check(near_to(apex, 0.25f / std::tan(0.5f * fov)), "the apex lies 0.25 / tan(fov / 2) behind a 0.5 m face");
         check(near_to(apex, 0.4330127f, 1.0e-4f), "0.433 m for 60 degrees");
         check(projectorApexToFace(0.5f, 2.0f) < projectorApexToFace(0.5f, 1.0f), "a wider field puts the apex nearer the face");
-        check(projectorApexToFace(0.0f, fov) == 0.0f, "a zero face has no stretch");
-        check(std::isfinite(projectorApexToFace(1.f, 0.0f)) && std::isfinite(projectorApexToFace(1.f, 7.0f)), "fov limits keep it finite");
-        check(near_to(projectorExclusion(0.3f, 0.075f, 0.5f, fov), apex + 0.3f), "a projector's zone is the stretch and the drawable's radius");
-        check(projectorExclusion(9.0f, 0.075f, 0.5f, fov) < apex + EXCLUSION_MAX + 1.0e-5f, "the drawable part is capped at 1 m");
-        check(projectorExclusion(0.0f, 0.075f, 0.5f, fov) > apex, "and never under the emitter radius");
+        check(near_to(projectorApexToFace(0.0f, fov), 0.0f), "a zero face has no stretch");
+        check(std::isfinite(projectorApexToFace(1.f, 0.0f)) && std::isfinite(projectorApexToFace(1.f, -1.0f)) && std::isfinite(projectorApexToFace(1.f, 7.0f)), "fov limits keep it finite");
+        check(projectorApexToFace(10.f, 0.0f) <= APEX_MAX && near_to(projectorApexToFace(10.f, 0.0f), APEX_MAX), "a vanishing field is capped");
+        check(near_to(projectorExclusion(0.5f, fov), apex + PROJECTOR_MARGIN), "a projector's zone is the stretch and the margin, nothing more");
+        check(projectorExclusion(0.5f, fov) < apex + 0.1f, "the margin is a few cm: the lamp's surroundings are not excluded");
+        check(projectorExclusion(0.0f, fov) > 0.0f, "r_excl stays positive");
     }
 }
 

@@ -46,7 +46,7 @@ uniform float spot_shadow_bias;
 uniform float spot_shadow_offset;
 uniform float spot_shadow_reach;
 // per projector slot (LLPipeline::bindDeferredShader, lllocallight.h): the radius of the emitter disc its rays go
-// toward, and the distance from the eye within which nothing shades the light (r_excl)
+// toward, and r_excl: the distance from the eye (the apex) to the prim's face plus a small margin
 uniform vec2 spot_emitter_radius;
 uniform vec2 spot_shadow_excl;
 
@@ -290,17 +290,16 @@ vec3 stProjectorEye(mat4 m)
 
 // The visibility of one local light (here a projector's emitter) at a receiver: the fraction of 8 rays that reach the
 // disc of radius `radius` around the light's eye (a Vogel spiral, turned per pixel and frame). Each ray is marched
-// through the light's depth map m (matrix mat) to r_excl short of the eye, and a stored surface nearer the eye than
-// that is no occluder: the fixture around the light does not shade it, while linked parts beyond r_excl still cast.
+// through the light's depth map m (matrix mat) to r_excl short of the eye. r_excl ends just past the prim's face: the
+// stretch from the eye to the face is near-clipped out of the map, and the light's own prim is not drawn into it.
+// What stored depth lies nearer the eye than r_excl along the receiver's line (a margin past the face) is no occluder,
+// so the face's own rim does not shade the light; every other surface casts, linked parts of a fixture included.
 // pos: the receiver (view space, already offset along its geometric normal ng).
 float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps)
 {
     vec3 to_eye = eye - pos;
     float dist = length(to_eye);
-    if (dist <= r_excl)
-    {
-        return 1.0; // inside the exclusion zone of the light
-    }
+    r_excl = max(r_excl, 1.0e-3);
     vec4 s0 = mat * vec4(pos, 1.0);
     vec2 grad = stSpotGradient(mat, pos, ng, s0.xyz / s0.w);
     vec3 ld = to_eye / dist;
@@ -316,7 +315,7 @@ float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 e
         vec3 ek = eye + (radius * r) * (cos(phi) * t1 + sin(phi) * t2);
         ds[k] = mat * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
     }
-    float t_max = min(march_max, dist - r_excl) / dist;
+    float t_max = min(march_max, max(dist - r_excl, 1.0e-3)) / dist; // a receiver within r_excl marches its sliver only
     vec4 sx = mat * vec4(eye - ld * r_excl, 1.0); // the edge of the exclusion zone on the receiver's line to the eye
     return stMarch(m, res, s0, grad, z_bias, rp_max, sx.z / sx.w, ds, t_max, steps, nz.y);
 }
@@ -324,8 +323,9 @@ float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 e
 float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
 {
     mat4 m = shadow_matrix[4 + index];
-    // outside the projector's frustum (by more than the normal offset can reach) it lights nothing: no march, and
-    // no more work for the pixels that are in neither cone
+    // clearly outside the projector's frustum (a margin of 0.05 of its extent, more than the 4 cm normal offset moves a
+    // receiver except very near the eye) it lights nothing: no march and no depth-buffer normal, so the pixels in
+    // neither cone cost what they did; the exact test follows the offset
     vec4 s0 = m * vec4(pos, 1.0);
     if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.55))))
     {

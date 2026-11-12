@@ -1407,6 +1407,7 @@ set(viewer_HEADER_FILES
     lllightconstants.h
     lllistcontextmenu.h
     lllistview.h
+    lllocallight.h
     lllocalbitmaps.h
     lllocalgltfmaterials.h
     lllocationhistory.h
@@ -1609,7 +1610,6 @@ set(viewer_HEADER_FILES
     llspatialpartition.h
     llstatslistener.h
     llstochastichistory.h
-    lllocallight.h
     llstochasticstate.h
     llspeakers.h
     llspeakingindicatormanager.h

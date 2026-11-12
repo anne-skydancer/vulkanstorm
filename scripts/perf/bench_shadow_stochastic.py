@@ -115,7 +115,6 @@ class Resolve:
         set_mat(self.prog, 'stoch_reproj', [[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]])
         u1f(loc(self.prog, b'stoch_weight'), 0.125)
         u3f(loc(self.prog, b'shadow_st_channel_valid'), *channel_valid)
-        u3f(loc(self.prog, b'shadow_st_clamp_stride'), 1.0, 1.0, 1.0)
         set_mat(self.prog, 'inv_proj', [inverse(self.sc.proj)])
         for unit, name in enumerate(('shadow_st_raw', 'shadow_st_history', 'depthMap')):
             u1i(loc(self.prog, name.encode()), unit)

@@ -22,9 +22,15 @@
 
 // Header-only and free of GL and viewer types, so that indra/newview/tests/lllocallight_test.cpp can check the
 // rules standalone. The Stochastic method's local light visibility (shadowStochasticUtil.glsl, stTransmittance)
-// takes its two per-light lengths from here: the radius of the emitter its rays go toward, which sets the penumbra,
-// and r_excl, the distance from the light's eye within which nothing counts as an occluder (the fixture around the
-// light is not its shadow). Linked parts of a fixture (a shade, a housing) beyond r_excl still cast.
+// takes its per-light lengths from here: the radius of the emitter its rays go toward, which sets the penumbra, and
+// r_excl, how close to the light's eye a stored depth still counts as an occluder.
+//
+// What is excluded, exactly. A projector's own prim never shades its light: it is not drawn into the projector's map
+// (LLPipeline::stateSort skips it) and the map's near plane lies at the prim's face. Everything else casts, linked
+// parts of the fixture (a shade, a housing) and any other object included. So a projector's r_excl is only the stretch
+// from the eye (the apex, behind the face) to the face plus a small margin, where the map holds no depth anyway; the
+// margin keeps the face's own rim and the depth precision from shading the light. A point light has no near plane, so
+// its zone is its own drawable's half extent (U2; unused until then).
 
 #include <algorithm>
 #include <cmath>
@@ -33,7 +39,11 @@ namespace LLLocalLight
 {
     constexpr float EMITTER_MIN = 0.02f;      // metres: the smallest emitter radius s
     constexpr float EMITTER_MAX = 0.5f;       // metres: the largest
-    constexpr float EXCLUSION_MAX = 1.0f;     // metres: the longest exclusion beyond the apex-to-face distance
+    constexpr float EXCLUSION_MAX = 1.0f;     // metres: the longest point light exclusion
+    constexpr float APEX_MAX = 50.f;          // metres: the longest eye-to-face stretch taken
+    // A projector's margin past its face. The map's near plane is 1 cm beyond the face; 5 cm covers it and the depth
+    // precision there, and is small enough that a shade 10 cm or more in front of the face still casts.
+    constexpr float PROJECTOR_MARGIN = 0.05f;
 
     // The projectors' emitter radius of stage U0: today's fixed 0.075 m (half of the 0.15 m wide emitter). Stage U2
     // replaces it by projectorEmitterRadius for all local lights together.
@@ -61,26 +71,25 @@ namespace LLLocalLight
     }
 
     // The distance of a projector's eye (apex) behind the prim's face: the frustum of the field of view fov (radians)
-    // is as wide as the face (scale_y) at the face. The face is near-clipped out of the projector's map, so the
-    // stretch between the eye and the face holds no stored depth.
+    // is as wide as the face (scale_y) at the face. A field of view of zero or less, or a huge stretch, is capped.
     inline float projectorApexToFace(float scale_y, float fov)
     {
         const float t = std::tan(0.5f * std::min(std::max(fov, 1.0e-3f), 3.1f));
-        return 0.5f * std::max(scale_y, 0.f) / t;
+        return std::min(0.5f * std::max(scale_y, 0.f) / t, APEX_MAX);
     }
 
-    // The exclusion distance r_excl from a point light's centre: the radius of the light's own drawable, within the
-    // emitter radius s and EXCLUSION_MAX
+    // A projector's r_excl, the distance from its eye: the stretch to the face and the margin. Nothing else is excluded.
+    inline float projectorExclusion(float scale_y, float fov)
+    {
+        return projectorApexToFace(scale_y, fov) + PROJECTOR_MARGIN;
+    }
+
+    // A point light's r_excl from its centre (U2): half the extent of the light's own drawable. LLDrawable::getRadius is
+    // the length of the prim's scale vector (the full diagonal, LLVOVolume::updateRadius), so half of it, within the
+    // emitter radius s and EXCLUSION_MAX.
     inline float exclusionRadius(float drawable_radius, float s)
     {
-        return std::min(std::max(drawable_radius, s), EXCLUSION_MAX);
-    }
-
-    // The exclusion distance r_excl from a projector's eye: the same, beyond the apex-to-face stretch (the rays toward
-    // the eye cross the fixture there)
-    inline float projectorExclusion(float drawable_radius, float s, float scale_y, float fov)
-    {
-        return projectorApexToFace(scale_y, fov) + exclusionRadius(drawable_radius, s);
+        return std::min(std::max(0.5f * drawable_radius, s), EXCLUSION_MAX);
     }
 }
 
