@@ -451,6 +451,8 @@ list AMD
 RenderGLMultiThreadedTextures       1   1
 
 list GL3
+// below OpenGL 4.0 Stochastic does not run (LLShadowMethod::effective): store Legacy so recommendations and presets say so
+RenderShadowMethod			1	0
 RenderFSAAType  			0	0
 RenderFSAASamples           0   0
 RenderReflectionsEnabled    0   0

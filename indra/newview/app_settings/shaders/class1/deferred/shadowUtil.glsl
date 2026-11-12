@@ -64,7 +64,7 @@ uniform vec2 screen_res;
 // Replaces the altitude term of the bias (RenderShadowBiasError), which only widened a constant
 // bias with height. Licensed LGPL-2.1 or GPL-3.
 #define PCF_RPDB_STEP 0.05      // metres
-#define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units (as the stable-cascade methods)
+#define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units
 vec2 pcfDepthGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
 {
     if (dot(norm, norm) < 1.0e-8)
