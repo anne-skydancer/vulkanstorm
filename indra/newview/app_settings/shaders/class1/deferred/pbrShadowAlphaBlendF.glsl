@@ -33,6 +33,18 @@ in vec4 vertex_color;
 in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
+#if defined(SHADOW_SOLID_ALPHA)
+// Stochastic shadows, S1 coverage: a Blending caster keeps a fragment when alpha > threshold, the threshold
+// being interleaved-gradient noise stepped by the golden ratio per frame (stratified over time). The noise is
+// anchored to the shadow-map texel, so a stable cascade gives a world-stable pattern.
+uniform float shadow_st_caster_frame;
+float shadowCasterThreshold()
+{
+    float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    return fract(n + 0.618034 * shadow_st_caster_frame);
+}
+#endif
+
 void main()
 {
 #if defined(SHADOW_SOLID_ALPHA)
@@ -50,8 +62,8 @@ void main()
     }
 
 #if defined(SHADOW_SOLID_ALPHA)
-    // as shadowAlphaMaskF: below the blend cutoff (renderAlphaObjects sets minimum_alpha) nothing is cast
-    if (alpha < minimum_alpha)
+    // Blending: kept with probability alpha (the blend cutoff does not apply)
+    if (alpha <= shadowCasterThreshold())
     {
         discard;
     }

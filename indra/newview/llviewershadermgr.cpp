@@ -301,7 +301,7 @@ static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the e
 static const std::string STOCH_RESOLVE_HELPER = STOCH_RESOLVE_OBJECT;   // the engine's resolve, for the fragment path
 
 static bool stochastic_transparency_shaders();
-static bool use_stochastic_shadows();
+bool use_stochastic_shadows();
 
 // The Stochastic shadow method's temporal resolve, a fragment pass: the method is selected and the
 // engine runs on this device (the history is the engine's).
@@ -397,7 +397,7 @@ static void unload_stochastic_shaders()
 // </Vulkanstorm>
 
 // <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
-static bool use_stochastic_shadows()
+bool use_stochastic_shadows()
 {
     return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }

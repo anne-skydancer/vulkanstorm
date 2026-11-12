@@ -451,6 +451,8 @@ public:
     U32  getAlphaStochasticMasks() const { return LLStochasticEngine::getMasks(); }
     // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
     U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
+    // the bound shadow caster program: coverage on (a Blending face casts partial light) or off (a Masking face keeps its cutoff), and the frame of the coverage threshold
+    void setShadowCasterCoverage(bool coverage);
     // </Vulkanstorm>
 
     // <Vulkanstorm> the Stochastic shadow method's temporal accumulation (the stochastic engine's history)

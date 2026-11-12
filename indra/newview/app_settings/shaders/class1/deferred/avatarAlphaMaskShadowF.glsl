@@ -46,7 +46,13 @@ void main()
         discard;
     }
 
-#if !defined(SHADOW_SOLID_ALPHA)
+#if defined(SHADOW_SOLID_ALPHA)
+    // Masking: the cutoff (minimum_alpha, set by the avatar pool), binary
+    if (alpha < minimum_alpha)
+    {
+        discard;
+    }
+#else
     if (alpha < minimum_alpha)
     {
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)

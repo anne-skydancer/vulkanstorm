@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Stochastic shadow AA S1: the four semi-transparent shadow casters carry the stipple only in their Legacy
-branch. With the SHADOW_SOLID_ALPHA branches stripped (the Legacy permutation) each shader must equal the
+branch, and the coverage threshold only in their Stochastic branch. With the SHADOW_SOLID_ALPHA branches stripped (the Legacy permutation) each shader must equal the
 stock text stored in scripts/shadows/legacy_reference/NAME.glsl.txt (comments and blank lines ignored), and
 every program in llviewershadermgr.cpp that links one of them must call
 add_stochastic_shadow_alpha_permutations in the same block."""
@@ -95,6 +95,38 @@ class ShadowAlphaPermutation(unittest.TestCase):
                               '%s links %s' % (prog, name))
                 found += 1
         self.assertGreaterEqual(found, 5)   # mask, fullbright mask, glTF blend, avatar alpha, avatar mask
+
+    def test_coverage_only_under_stochastic(self):
+        # the coverage threshold and its uniforms exist in the SOLID branch of the three Blending casters only
+        # (the Legacy permutation, tested above, equals the stock text, so none of it can leak into Legacy)
+        for name in ['shadowAlphaMaskF', 'pbrShadowAlphaBlendF', 'avatarAlphaShadowF']:
+            text = (SHADERS / (name + '.glsl')).read_text(encoding='utf-8')
+            self.assertIn('shadowCasterThreshold', text, name)
+            self.assertIn('shadow_st_caster_frame', text, name)
+            legacy = '\n'.join(significant(legacy_permutation(text).splitlines()))
+            for token in ('shadowCasterThreshold', 'shadow_st_caster_frame', 'shadow_st_coverage', 'gl_FragCoord'):
+                self.assertNotIn(token, legacy, name)
+        text = (SHADERS / 'avatarAlphaMaskShadowF.glsl').read_text(encoding='utf-8')
+        self.assertNotIn('shadowCasterThreshold', text)   # Masking stays binary
+        mask = (SHADERS / 'shadowAlphaMaskF.glsl').read_text(encoding='utf-8')
+        self.assertIn('shadow_st_coverage', mask)         # the shared program serves mask and blend
+
+    def test_avatar_mask_tests_minimum_alpha_when_solid(self):
+        text = (SHADERS / 'avatarAlphaMaskShadowF.glsl').read_text(encoding='utf-8')
+        solid = text.split('#if defined(%s)' % DEFINE)[2].split('#else')[0]   # second one: the cutoff block
+        self.assertIn('alpha < minimum_alpha', solid)
+        self.assertNotIn('target_pos_x', solid)
+
+    def test_callers_set_coverage(self):
+        pipe = (ROOT / 'indra/newview/pipeline.cpp').read_text(encoding='utf-8')
+        a = pipe.index('void LLPipeline::renderAlphaObjects')
+        b = pipe.index('void LLPipeline::renderMaskedObjects')
+        blend = pipe[a:b]
+        self.assertEqual(blend.count('setShadowCasterCoverage(true)'), blend.count('setMinimumAlpha(ALPHA_BLEND_CUTOFF)'))
+        self.assertGreaterEqual(blend.count('setShadowCasterCoverage(true)'), 4)
+        self.assertGreaterEqual(pipe.count('setShadowCasterCoverage(false)'), 2)   # mask and fullbright mask
+        avatar = (ROOT / 'indra/newview/lldrawpoolavatar.cpp').read_text(encoding='utf-8')
+        self.assertIn('setShadowCasterCoverage(true)', avatar)
 
 
 if __name__ == '__main__':

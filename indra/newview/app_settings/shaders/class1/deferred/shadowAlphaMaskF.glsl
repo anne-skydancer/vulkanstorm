@@ -33,6 +33,19 @@ in vec4 vertex_color;
 in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
+#if defined(SHADOW_SOLID_ALPHA)
+uniform float shadow_st_coverage;   // 1: a Blending face (continuous coverage), 0: a Masking face (the cutoff)
+// Stochastic shadows, S1 coverage: a Blending caster keeps a fragment when alpha > threshold, the threshold
+// being interleaved-gradient noise stepped by the golden ratio per frame (stratified over time). The noise is
+// anchored to the shadow-map texel, so a stable cascade gives a world-stable pattern.
+uniform float shadow_st_caster_frame;
+float shadowCasterThreshold()
+{
+    float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    return fract(n + 0.618034 * shadow_st_caster_frame);
+}
+#endif
+
 // SHADOW_SOLID_ALPHA (Stochastic shadows): a semi-transparent caster casts solid shade, no raster-column
 // stipple (it showed as fixed stripes in thin foliage); the cutoff tests the final alpha and the lookup
 // samples a finer mip (SHADOW_ALPHA_LOD_BIAS, applied in the generated diffuseLookup).
@@ -52,9 +65,9 @@ void main()
 #endif
 
 #if defined(SHADOW_SOLID_ALPHA)
-    // The cutoff tests the final alpha (texture x vertex), as pbrShadowAlphaBlendF does: material below
-    // minimum_alpha casts nothing, denser material casts solid.
-    if (alpha < minimum_alpha)
+    // Blending: the fragment is kept with probability alpha (the blend cutoff does not apply); Masking: the
+    // creator's cutoff on the final alpha (texture x vertex), as pbrShadowAlphaBlendF did.
+    if (shadow_st_coverage < 0.5 && alpha < minimum_alpha)
     {
         discard;
     }
@@ -64,6 +77,13 @@ void main()
     {
         discard;
     }
+
+#if defined(SHADOW_SOLID_ALPHA)
+    if (shadow_st_coverage > 0.5 && alpha <= shadowCasterThreshold())
+    {
+        discard;
+    }
+#endif
 
 #if !defined(SHADOW_SOLID_ALPHA)
     if (alpha < 0.88) // treat as semi-transparent
