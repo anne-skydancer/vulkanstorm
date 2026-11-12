@@ -57,7 +57,7 @@ out vec4 frag_color;
 in vec2 vary_fragcoord;
 
 uniform sampler2D depthMap;
-uniform usampler2D local_light_tiles;    // R8UI, 33 texels per tile, tile (tx, ty) at x = 33 tx, y = ty: the count, then the light indices
+uniform usampler2DArray local_light_tiles;   // RGBA32UI, 3 layers: tile (tx, ty)'s 48 bytes, the count, then the light indices (the GPU cull's, or the CPU's coarse list)
 uniform vec2 spot_slot_light;            // the table row of each projector slot's light, -1: none this frame
 uniform vec2 spot_slot_changed;          // 1: that light changed since last frame (its visibility has no history)
 uniform vec2 spot_shadow_fade;           // 1 - the slot's fade-in (the projectors cross-fade when they swap)
@@ -98,8 +98,14 @@ void main()
     float depth = texelFetch(depthMap, px, 0).r;
     bool geo = depth < 1.0;
 
-    ivec2 tile = ivec2((px.x >> 5) * 33, px.y >> 5);
-    int count = geo ? min(int(texelFetch(local_light_tiles, tile, 0).r), 32) : 0;
+    ivec2 tile = px >> 5;
+    uvec4 tl = uvec4(0u);
+    int count = 0;
+    if (geo)
+    {
+        tl = texelFetch(local_light_tiles, ivec3(tile, 0), 0);
+        count = min(int(tl.x & 0xFFu), 32);
+    }
     int slot0 = int(spot_slot_light.x);
     int slot1 = int(spot_slot_light.y);
 
@@ -123,7 +129,12 @@ void main()
         float ws_pick = 0.0;
         for (int i = 0; i < count; ++i)
         {
-            int idx = int(texelFetch(local_light_tiles, tile + ivec2(1 + i, 0), 0).r);
+            int b = 1 + i;
+            if ((b & 15) == 0)
+            {
+                tl = texelFetch(local_light_tiles, ivec3(tile, b >> 4), 0);
+            }
+            int idx = int((tl[(b >> 2) & 3] >> uint(8 * (b & 3))) & 0xFFu);
             vec3 w = localLightWeight(idx, pos.xyz, n);
             float ws = w.r + w.g + w.b;
             if (ws <= 0.0)

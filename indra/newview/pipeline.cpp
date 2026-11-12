@@ -9105,7 +9105,31 @@ void LLPipeline::releaseLocalLightRatio()
         glDeleteBuffers(1, &mLocalLightTableUBO);
         mLocalLightTableUBO = 0;
     }
-    LLStochasticEngine::deleteTexture(mLocalLightTilesTex);
+    if (mLocalLightTilesTex)
+    {
+        glDeleteTextures(1, &mLocalLightTilesTex);
+        mLocalLightTilesTex = 0;
+    }
+    if (mLocalCullFbo)
+    {
+        glDeleteFramebuffers(1, &mLocalCullFbo);
+        mLocalCullFbo = 0;
+    }
+    if (mLocalBlockFbo)
+    {
+        glDeleteFramebuffers(1, &mLocalBlockFbo);
+        mLocalBlockFbo = 0;
+    }
+    for (U32* tex : { &mLocalCullTex, &mLocalBlockTex })
+    {
+        if (*tex)
+        {
+            glDeleteTextures(1, tex);
+            *tex = 0;
+        }
+    }
+    mLocalCullW = mLocalCullH = 0;
+    mLocalCullFailed = false;
     mLocalLightTilesW = mLocalLightTilesH = 0;
     mLocalLightTableFailed = false;
     mLocalLightTilesFailedW = mLocalLightTilesFailedH = 0;
@@ -9432,17 +9456,38 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
         mLocalLightTableTex = LLStochasticEngine::newTexture2D(GL_RGBA32F, ROW_TEXELS, MAX_LIGHTS, GL_RGBA32F);
         mLocalLightTableFailed = mLocalLightTableTex == 0;
     }
-    const S32 tiles_w = mLocalLightTiles.tilesX() * TILE_ROW;
+    const S32 tiles_w = mLocalLightTiles.tilesX();
     const S32 tiles_h = mLocalLightTiles.tilesY();
+    // the array texture of a list per tile: RGBA32UI, 3 layers (48 bytes a tile)
+    auto new_tile_array = [](S32 w, S32 h, const void* zeros) -> U32
+    {
+        U32 tex = 0;
+        while (glGetError() != GL_NO_ERROR) {}
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, tex);
+        glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA32UI, w, h, 3, 0, GL_RGBA_INTEGER, GL_UNSIGNED_INT, zeros);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+        if (glGetError() != GL_NO_ERROR)
+        {
+            glDeleteTextures(1, &tex);
+            return 0;
+        }
+        return tex;
+    };
     if (mLocalLightTilesTex && (mLocalLightTilesW != tiles_w || mLocalLightTilesH != tiles_h))
     {
-        LLStochasticEngine::deleteTexture(mLocalLightTilesTex);
+        glDeleteTextures(1, &mLocalLightTilesTex);
+        mLocalLightTilesTex = 0;
     }
     if (!mLocalLightTilesTex && !(mLocalLightTilesFailedW == tiles_w && mLocalLightTilesFailedH == tiles_h))
     {
         // zeroed: the tiles outside the rectangle are never uploaded and the shader reads their count
-        const std::vector<U8> zeros(size_t(tiles_w) * size_t(tiles_h), 0);
-        mLocalLightTilesTex = LLStochasticEngine::newTexture2D(GL_R8UI, tiles_w, tiles_h, GL_R8, zeros.data(), GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+        const std::vector<U32> zeros(size_t(tiles_w) * size_t(tiles_h) * 12, 0u);
+        mLocalLightTilesTex = new_tile_array(tiles_w, tiles_h, zeros.data());
         mLocalLightTilesW = mLocalLightTilesTex ? tiles_w : 0;
         mLocalLightTilesH = mLocalLightTilesTex ? tiles_h : 0;
         mLocalLightTilesFailedW = mLocalLightTilesTex ? 0 : tiles_w;
@@ -9469,13 +9514,156 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
     {
         const S32 tx0 = mLocalRatioRect[0] / TILE, ty0 = mLocalRatioRect[1] / TILE;
         const S32 tx1 = (mLocalRatioRect[2] - 1) / TILE, ty1 = (mLocalRatioRect[3] - 1) / TILE;
-        gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTilesTex);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, tiles_w);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, tx0 * TILE_ROW, ty0, (tx1 - tx0 + 1) * TILE_ROW, ty1 - ty0 + 1, GL_RED_INTEGER, GL_UNSIGNED_BYTE,
-                        mLocalLightTiles.data() + size_t(ty0) * size_t(tiles_w) + size_t(tx0) * TILE_ROW);
-        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        // the rectangle's tiles, packed: layer l of tile (x, y) is words 4 l .. 4 l + 3 of its 48 bytes (the count, then the indices)
+        const S32 pw = tx1 - tx0 + 1, ph = ty1 - ty0 + 1;
+        std::vector<U32> packed(size_t(pw) * size_t(ph) * 12, 0u);
+        for (S32 y = 0; y < ph; ++y)
+        {
+            for (S32 x = 0; x < pw; ++x)
+            {
+                U8 bytes[48] = {};
+                const S32 n = mLocalLightTiles.count(tx0 + x, ty0 + y);
+                bytes[0] = (U8)n;
+                for (S32 i = 0; i < n; ++i)
+                {
+                    bytes[1 + i] = (U8)mLocalLightTiles.light(tx0 + x, ty0 + y, i);
+                }
+                for (S32 layer = 0; layer < 3; ++layer)
+                {
+                    memcpy(&packed[((size_t(layer) * ph + y) * pw + x) * 4], &bytes[layer * 16], 16);
+                }
+            }
+        }
+        glBindTexture(GL_TEXTURE_2D_ARRAY, mLocalLightTilesTex);
+        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, tx0, ty0, 0, pw, ph, 3, GL_RGBA_INTEGER, GL_UNSIGNED_INT, packed.data());
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     }
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+
+    // the GPU tile cull (main view): the lights whose weight is 0 on every pixel of a tile leave its list, by the tile's depth
+    // bounds; the image is the coarse lists'. Without it (not the main view, or the programs or targets missing) the coarse
+    // lists are read.
+    U32 tiles_tex = mLocalLightTilesTex;
+    if (main_view && gLocalLightBlockProgram.mProgramObject && gLocalLightCullProgram.mProgramObject && !mLocalCullFailed)
+    {
+        const S32 bw = (S32)((w + 3) / 4), bh = (S32)((h + 3) / 4);
+        if (mLocalCullTex && (mLocalCullW != (S32)w || mLocalCullH != (S32)h))
+        {
+            glDeleteFramebuffers(1, &mLocalCullFbo); mLocalCullFbo = 0;
+            glDeleteFramebuffers(1, &mLocalBlockFbo); mLocalBlockFbo = 0;
+            glDeleteTextures(1, &mLocalCullTex); mLocalCullTex = 0;
+            glDeleteTextures(1, &mLocalBlockTex); mLocalBlockTex = 0;
+        }
+        if (!mLocalCullTex)
+        {
+            while (glGetError() != GL_NO_ERROR) {}
+            mLocalCullTex = new_tile_array(tiles_w, tiles_h, nullptr);
+            glGenTextures(1, &mLocalBlockTex);
+            glBindTexture(GL_TEXTURE_2D, mLocalBlockTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RG32F, bw, bh, 0, GL_RG, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            glGenFramebuffers(1, &mLocalBlockFbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, mLocalBlockFbo);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mLocalBlockTex, 0);
+            bool ok = mLocalCullTex && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+            glGenFramebuffers(1, &mLocalCullFbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, mLocalCullFbo);
+            if (mLocalCullTex)
+            {
+                const GLenum bufs[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+                for (int l = 0; l < 3; ++l)
+                {
+                    glFramebufferTextureLayer(GL_FRAMEBUFFER, bufs[l], mLocalCullTex, 0, l);
+                }
+                glDrawBuffers(3, bufs);
+                ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+            ok = ok && glGetError() == GL_NO_ERROR;
+            if (ok)
+            {
+                mLocalCullW = (S32)w;
+                mLocalCullH = (S32)h;
+            }
+            else
+            {
+                mLocalCullFailed = true;
+                LL_WARNS("Pipeline") << "Stochastic shadows: the local light tile cull targets could not be made; the coarse tile lists are read" << LL_ENDL;
+                glDeleteFramebuffers(1, &mLocalCullFbo); mLocalCullFbo = 0;
+                glDeleteFramebuffers(1, &mLocalBlockFbo); mLocalBlockFbo = 0;
+                glDeleteTextures(1, &mLocalCullTex); mLocalCullTex = 0;
+                glDeleteTextures(1, &mLocalBlockTex); mLocalBlockTex = 0;
+            }
+        }
+        if (mLocalCullTex && !mLocalCullFailed)
+        {
+            LL_PROFILE_GPU_ZONE("local light tile cull");
+            LLGLDisable blend_off(GL_BLEND);
+            LLGLDisable scissor_off(GL_SCISSOR_TEST);
+            LLGLDepthTest depth(GL_FALSE);
+            mScreenTriangleVB->setBuffer();
+            {   // the depth bounds of 4 x 4 pixels
+                LLGLSLShader& block = gLocalLightBlockProgram;
+                gGL.flush();
+                block.bind();
+                block.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)w, (GLfloat)h);
+                const S32 depth_unit = block.enableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
+                if (depth_unit > -1)
+                {
+                    gGL.getTexUnit(depth_unit)->bind(&mRT->deferredScreen, true);
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, mLocalBlockFbo);
+                glViewport(0, 0, bw, bh);
+                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                if (depth_unit > -1)
+                {
+                    gGL.getTexUnit(depth_unit)->unbind(mRT->deferredScreen.getUsage());
+                }
+                block.unbind();
+            }
+            {   // the cull: one fragment a tile
+                static const LLStaticHashedString sBlockDepth("st_block_depth");
+                static const LLStaticHashedString sTilesName("local_light_tiles");
+                static const LLStaticHashedString sTableName("local_light_table");
+                LLGLSLShader& cull = gLocalLightCullProgram;
+                gGL.flush();
+                cull.bind();
+                cull.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)w, (GLfloat)h);
+                cull.uniformMatrix4fv(LLShaderMgr::INVERSE_PROJECTION_MATRIX, 1, GL_FALSE, glm::value_ptr(glm::inverse(get_current_projection())));
+                cull.uniform1i(sBlockDepth, 0);
+                cull.uniform1i(sTilesName, 1);
+                gGL.getTexUnit(0)->bindManual(LLTexUnit::TT_TEXTURE, mLocalBlockTex);
+                gGL.getTexUnit(1)->activate();
+                glBindTexture(GL_TEXTURE_2D_ARRAY, mLocalLightTilesTex);
+                if (gLocalLightTableUBO)
+                {
+                    glBindBufferBase(GL_UNIFORM_BUFFER, LLGLSLShader::UB_LOCAL_LIGHT_TABLE, mLocalLightTableUBO);
+                }
+                else
+                {
+                    cull.uniform1i(sTableName, 2);
+                    gGL.getTexUnit(2)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTableTex);
+                }
+                glBindFramebuffer(GL_FRAMEBUFFER, mLocalCullFbo);
+                glViewport(0, 0, tiles_w, tiles_h);
+                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+                gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
+                if (!gLocalLightTableUBO)
+                {
+                    gGL.getTexUnit(2)->unbind(LLTexUnit::TT_TEXTURE);
+                }
+                gGL.getTexUnit(0)->activate();
+                cull.unbind();
+            }
+            glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
+            tiles_tex = mLocalCullTex;
+        }
+    }
 
     static const LLStaticHashedString sShadowSTFrame("shadow_st_frame");
     static const LLStaticHashedString sSlotLight("spot_slot_light");
@@ -9532,7 +9720,9 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
         const S32 tiles_unit = shader.enableTexture(LLShaderMgr::LOCAL_LIGHT_TILES);
         if (tiles_unit > -1)
         {
-            gGL.getTexUnit(tiles_unit)->bindManual(LLTexUnit::TT_TEXTURE, mLocalLightTilesTex);
+            gGL.getTexUnit(tiles_unit)->activate();
+            glBindTexture(GL_TEXTURE_2D_ARRAY, tiles_tex);
+            gGL.getTexUnit(0)->activate();
         }
         {
             LLGLDisable   blend_off(GL_BLEND);

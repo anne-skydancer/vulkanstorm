@@ -113,6 +113,20 @@ _genbuf = fn('glGenBuffers', None, I, C.POINTER(U)); _bindbuf = fn('glBindBuffer
 _bufdata = fn('glBufferData', None, U, C.c_ssize_t, P, U); _bindbase = fn('glBindBufferBase', None, U, U, U)
 _blockidx = fn('glGetUniformBlockIndex', U, U, C.c_char_p); _blockbind = fn('glUniformBlockBinding', None, U, U, U)
 UBO_BINDING = 4   # LLGLSLShader::UB_LOCAL_LIGHT_TABLE
+texstorage3 = fn('glTexStorage3D', None, U, I, U, I, I, I)
+texsub3 = fn('glTexSubImage3D', None, U, I, I, I, I, I, I, I, U, U, P)
+fbolayer = fn('glFramebufferTextureLayer', None, U, U, U, I, I)
+u2i = fn('glUniform2i', None, I, I, I)
+ARR = 0x8C1A
+BLOCK_F = (root / DEEP / 'localLightBlockF.glsl').read_text()
+CULL_F = (root / DEEP / 'localLightCullF.glsl').read_text()
+
+
+def make_arr(fmt, w, h, layers):
+    t = U(); gentex(1, C.byref(t)); bindtex(ARR, t); texstorage3(ARR, 1, fmt, w, h, layers)
+    for pn, v in ((0x2801, 0x2600), (0x2800, 0x2600), (0x2802, 0x812F), (0x2803, 0x812F)):
+        texparam(ARR, pn, v)
+    return t.value
 
 
 def ratio_stages(extra, ubo=True):
@@ -340,14 +354,13 @@ def tile_lists(sc, lights):
 def tile_data(sc, lights):
     lists, worst, out = tile_lists(sc, lights)
     tx, ty = (sc.W + 31) // 32, (sc.H + 31) // 32
-    data = np.zeros((ty, tx * 33), np.uint8)
+    by = np.zeros((ty, tx, 48), np.uint8)
     for y in range(ty):
         for x in range(tx):
-            lst = lists[y][x]
-            data[y, x * 33] = len(lst); data[y, x * 33 + 1:x * 33 + 1 + len(lst)] = lst
-    tex = make_tex(0x8232, tx * 33, ty)
-    bindtex(TEX2D, tex); _pixelstore(0x0CF5, 1)
-    texsub(TEX2D, 0, 0, 0, tx * 33, ty, 0x8D94, 0x1401, data.ctypes.data_as(C.c_void_p))
+            l = lists[y][x]; by[y, x, 0] = len(l); by[y, x, 1:1 + len(l)] = l
+    words = by.view(np.uint32).reshape(ty, tx, 3, 4).transpose(2, 0, 1, 3).copy()   # layer, y, x, rgba
+    tex = make_arr(0x8D70, tx, ty, 3)
+    texsub3(ARR, 0, 0, 0, 0, tx, ty, 3, 0x8D99, 0x1405, words.ctypes.data_as(C.c_void_p))
     return tex, worst, out
 
 
@@ -376,6 +389,19 @@ class Pass:
         self.p_ref = program(ratio_stages([(0x8B30, stage(REFMARCH_F, ['STOCHASTIC_SHADOW_SUN']))]))
         self.p_truth = program(ratio_stages([(0x8B30, stage(TRUTH_F % scene_glsl(sc.boxes), ['STOCHASTIC_SHADOW_SUN']))]))
         self.t_raw = make_tex(0x881A, sc.W, sc.H); self.f_raw = make_fbo([self.t_raw])
+        # the GPU cull: the depth bounds of 4 x 4 pixels, then a list per tile
+        self.use_cull = False
+        self.tx, self.ty = (sc.W + 31) // 32, (sc.H + 31) // 32
+        self.bw, self.bh = (sc.W + 3) // 4, (sc.H + 3) // 4
+        self.t_block = make_tex(0x8230, self.bw, self.bh); self.f_block = make_fbo([self.t_block])
+        self.t_cull = make_arr(0x8D70, self.tx, self.ty, 3)
+        f = U(); genfbo(1, C.byref(f)); bindfbo(FB, f)
+        for l in range(3):
+            fbolayer(FB, COLOR0 + l, self.t_cull, 0, l)
+        drawbuffers(3, (U * 3)(COLOR0, COLOR0 + 1, COLOR0 + 2)); assert fbstatus(FB) == 0x8CD5
+        self.f_cull = f
+        self.p_block = program([(0x8B31, VERTEX), (0x8B30, stage(BLOCK_F, []))])
+        self.p_cullp = program([(0x8B31, VERTEX), (0x8B30, stage(CULL_F, ['LOCAL_LIGHT_TABLE_UBO']))])
         self.t_a = make_tex(0x8814, sc.W, sc.H); self.t_b = make_tex(0x8814, sc.W, sc.H); self.f_truth = make_fbo([self.t_a, self.t_b])
 
     def bind(self, prog, frame, floor=False, steps=4):
@@ -384,8 +410,8 @@ class Pass:
             bindsampler(unit, depth_fetch.value)
         u1i(loc(prog, b'shadow_st_frame'), frame); u1f(loc(prog, b'spot_shadow_reach'), 128.0)
         u2f(loc(prog, b'spot_emitter_radius'), 0.075, 0.075); u2f(loc(prog, b'spot_shadow_excl'), 0.075, 0.075)
-        for unit, tex, name in ((9, self.tiles, b'local_light_tiles'),):
-            active(0x84C0 + unit); bindtex(TEX2D, tex); bindsampler(unit, 0); u1i(loc(prog, name), unit)
+        for unit, tex, name in ((9, self.t_cull if self.use_cull else self.tiles, b'local_light_tiles'),):
+            active(0x84C0 + unit); bindtex(ARR, tex); bindsampler(unit, 0); u1i(loc(prog, name), unit)
         bi = _blockidx(prog, b'LLLocalLightTable')
         if bi != 0xFFFFFFFF:
             _blockbind(prog, bi, UBO_BINDING); _bindbase(0x8A11, UBO_BINDING, self.ubo)
@@ -403,6 +429,26 @@ class Pass:
         self.bind(prog or self.p_ratio, frame, floor, steps); bindfbo(FB, self.f_raw); viewport(0, 0, self.sc.W, self.sc.H)
         draw(4, 0, 3); finish(); self.sc.unbind()
         return read_rgba(self.f_raw, self.sc.W, self.sc.H)
+
+    def cull(self):
+        sc = self.sc
+        use(self.p_block); active(0x84C0); bindtex(TEX2D, sc.gdepth); bindsampler(0, 0); u1i(loc(self.p_block, b'depthMap'), 0)
+        u2f(loc(self.p_block, b'screen_res'), float(sc.W), float(sc.H)); bindfbo(FB, self.f_block); viewport(0, 0, self.bw, self.bh); draw(4, 0, 3)
+        p = self.p_cullp; use(p)
+        for unit, target, tex, name in ((0, TEX2D, self.t_block, b'st_block_depth'), (1, ARR, self.tiles, b'local_light_tiles')):
+            active(0x84C0 + unit); bindtex(target, tex); bindsampler(unit, 0); u1i(loc(p, name), unit)
+        active(0x84C0)
+        bi = _blockidx(p, b'LLLocalLightTable')
+        if bi != 0xFFFFFFFF:
+            _blockbind(p, bi, UBO_BINDING); _bindbase(0x8A11, UBO_BINDING, self.ubo)
+        set_mat(p, 'inv_proj', [inverse(sc.proj)]); u2f(loc(p, b'screen_res'), float(sc.W), float(sc.H))
+        bindfbo(FB, self.f_cull); viewport(0, 0, self.tx, self.ty); draw(4, 0, 3)
+
+    def cull_counts(self, culled):
+        finish(); bindfbo(FB, self.f_cull); readbuffer(COLOR0)
+        buf = np.empty((self.ty, self.tx, 4), np.uint32); readpixels(0, 0, self.tx, self.ty, 0x8D99, 0x1405, buf.ctypes.data_as(C.c_void_p))
+        n = (buf[..., 0] & 0xFF).astype(np.int64)
+        return float(n.mean()), int(n.max())
 
     def reference(self, frame, steps=4):
         return self.ratio(frame, False, steps, self.p_ref)
@@ -422,8 +468,8 @@ class Pass:
 
     def release(self):
         bindfbo(FB, 0)
-        delfbo(2, (U * 2)(self.f_raw, self.f_truth))
-        deltex(4, (U * 4)(self.tiles, self.t_raw, self.t_a, self.t_b)); fn('glDeleteBuffers', None, I, C.POINTER(U))(1, C.byref(self.ubo))
+        delfbo(3, (U * 3)(self.f_raw, self.f_truth, self.f_block)); delfbo(1, C.byref(self.f_cull))
+        deltex(7, (U * 7)(self.tiles, self.t_raw, self.t_a, self.t_b, self.t_block, self.t_cull, 0)); fn('glDeleteBuffers', None, I, C.POINTER(U))(1, C.byref(self.ubo))
 
 
 def make_scene(name, W, H):
@@ -747,8 +793,11 @@ bins = np.arange(0.5, 1.001, 0.02); means = []
 for lo in bins[:-1]:
     m = floor & (dist >= lo) & (dist < lo + 0.02)
     means.append(float(accp[m][..., 0].mean()) if m.sum() > 200 else np.nan)
-means = np.array(means); steps = np.abs(np.diff(means[~np.isnan(means)]))
-check(steps.size > 10 and float(steps.max()) < 0.08, f'no pop along the radius: the mean R of the floor by d/radius in 0.02 bins changes by at most {float(steps.max()):.4f} (< 0.08) from bin to bin over 0.5 to 1.0 (the 2 % cut popped by 0.8)', 'pop: ')
+means = np.array(means); centres = bins[:-1] + 0.01
+light = (1.0 - means) * (1.0 - centres) ** 2   # the shadow's share of the light, as the light pass applies it (the weight is cut at 0.9293 of the radius)
+light = light[~np.isnan(light)]; steps = np.abs(np.diff(light))
+ratio_steps = np.abs(np.diff(means[~np.isnan(means)]))
+check(steps.size > 10 and float(steps.max()) < 0.01, f'no pop along the radius: the mean R of the floor by d/radius in 0.02 bins applied to the light, (1 - R)(1 - d/r)^2 changes by at most {float(steps.max()):.4f} (< 0.01 of the peak of the light) from bin to bin over 0.5 to 1.0 (R itself steps by {float(ratio_steps.max()):.3f} where the weight is cut at 0.9293 of the radius, 0.5 % of the peak; the 2 % cut popped the light by 0.8 x 2 %)', 'pop: ')
 ps.release(); sc.release()
 
 
@@ -816,10 +865,23 @@ check(float(acc_map[umbra].mean()) < 0.1, f'and with the map the box\'s umbra is
 ps.release(); sc.release()
 
 
+# --- the GPU tile cull: the same ratio, bit for bit, and shorter lists ------------------------------------------
+print('\n== the GPU tile cull ==')
+for (W2, H2) in RESOLUTIONS:
+    for name in ('bedroom', 'club'):
+        sc, lights = make_scene(name, W2, H2); ps = Pass(sc, lights)
+        ps.use_cull = False; coarse = [ps.ratio(f)[..., :3] for f in (1, 2, 3)]
+        ps.cull(); ps.use_cull = True; culled = [ps.ratio(f)[..., :3] for f in (1, 2, 3)]
+        mean_c, max_c = ps.cull_counts(True)
+        same = all(np.array_equal(a, b) for a, b in zip(coarse, culled))
+        check(same, f'{name} {W2}x{H2}: the culled lists give the same raw ratio bit for bit (3 frames); the lists: mean {mean_c:.2f}, max {max_c} lights a tile', 'cull: ')
+        ps.release(); sc.release()
+
+
 # --- cost -------------------------------------------------------------------------------------------------
 print('\n== cost: the ratio pass + its resolve (ms), median of the per-frame minima over rounds ==')
 costs = {}
-VARIANTS_COST = (('4 steps, quad (the default)', 4, False), ('6 steps, quad', 6, False), ('floor tier (1 ray per pixel), 4 steps', 4, True))
+VARIANTS_COST = (('4 steps, quad, GPU cull (the default)', 4, False, True), ('4 steps, quad, coarse lists', 4, False, False), ('6 steps, quad, GPU cull', 6, False, True), ('floor tier (1 ray per pixel), 4 steps, GPU cull', 4, True, True))
 for (W, H) in RESOLUTIONS:
     for name in ('bedroom', 'club'):
         sc, lights = make_scene(name, W, H)
@@ -827,12 +889,15 @@ for (W, H) in RESOLUTIONS:
         rs = RatioResolve(sc)
         for f in range(5):
             rs.run(ps.t_raw); ps.ratio(f)
-        for label, steps, floor in VARIANTS_COST:
+        for label, steps, floor, culled in VARIANTS_COST:
             meds = []
             for rnd in range(3):
                 ts = []
                 for f in range(FRAMES):
                     def go():
+                        if culled:
+                            ps.cull()
+                        ps.use_cull = culled
                         ps.bind(ps.p_ratio, 200 + f, floor, steps); bindfbo(FB, ps.f_raw); viewport(0, 0, W, H); draw(4, 0, 3)
                         rs.run(ps.t_raw)
                     ts.append(tq(go))
@@ -846,8 +911,8 @@ for (W, H) in RESOLUTIONS:
         rs.release(); ps.release(); sc.release()
 survey = {('bedroom', 2560): 0.46, ('club', 2560): 0.63}
 for (W, H, name, label), v in costs.items():
-    if W == 2560 and label.startswith('4 steps'):
-        print(f'  survey (1440p, {name}, 4 steps, quad): {survey[(name, W)]:.2f} ms; here {v:.3f} ms ({(v / survey[(name, W)] - 1) * 100:+.0f} %)')
+    if W == 2560 and label.startswith('4 steps, quad, GPU'):
+        print(f'  survey (1440p, {name}, 4 steps, quad; with the GPU cull): {survey[(name, W)]:.2f} ms; here {v:.3f} ms ({(v / survey[(name, W)] - 1) * 100:+.0f} %)')
 
 print()
 if failures:

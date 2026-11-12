@@ -34,6 +34,8 @@
 // (it is out of the pixel's weights there), and its colour in the table is capped on the CPU.
 
 #define WORN_REACH 6.0   // metres
+#define WEIGHT_RADIUS 0.9293   // the share of its radius a light has weight within: beyond it the weight is under 0.5 % of its peak, so the
+                               // tile lists (CPU rectangles, GPU cull) are exact at it and the light is lit unshadowed there
 
 #ifdef LOCAL_LIGHT_TABLE_UBO
 layout(std140) uniform LLLocalLightTable { vec4 ll_rows[2048]; };
@@ -52,7 +54,7 @@ vec3 localLightWeight(int idx, vec3 pos, vec3 n)
     vec4 b = LL_ROW(1, idx);   // colour, falloff
     vec4 c = LL_ROW(2, idx);   // origin, kind
     vec4 d = LL_ROW(3, idx);   // texture, s, r_excl, worn
-    float reach = d.w > 0.5 ? min(a.w, WORN_REACH) : a.w;
+    float reach = d.w > 0.5 ? min(a.w * WEIGHT_RADIUS, WORN_REACH) : a.w * WEIGHT_RADIUS;
     vec3 lv = a.xyz - pos;
     float d2 = dot(lv, lv);
     if (d2 >= reach * reach)

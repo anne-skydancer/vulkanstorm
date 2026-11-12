@@ -162,6 +162,8 @@ LLGLSLShader            gShadowStochasticResolveProgram;   // <Vulkanstorm/> Sto
 LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Stochastic shadows
 LLGLSLShader            gLocalLightRatioProgram;           // <Vulkanstorm/> unified lighting U1: the shadow pool's local light ratio
 LLGLSLShader            gLocalLightRatioResolveProgram;    // <Vulkanstorm/> and its temporal resolve
+LLGLSLShader            gLocalLightBlockProgram;           // <Vulkanstorm/> unified lighting U2: the depth bounds of 4 x 4 pixels
+LLGLSLShader            gLocalLightCullProgram;            // <Vulkanstorm/> and the GPU tile cull
 bool                    gAlphaStochasticShadersReady = false;
 bool                    gLocalLightTableUBO = false;   // <Vulkanstorm/> unified lighting U2: the ratio pass reads the light table from a uniform block
 // </Vulkanstorm>
@@ -376,6 +378,8 @@ static void unload_stochastic_shaders()
     gShadowStochasticComposeProgram.unload();
     gLocalLightRatioProgram.unload();
     gLocalLightRatioResolveProgram.unload();
+    gLocalLightBlockProgram.unload();
+    gLocalLightCullProgram.unload();
     gAlphaStochasticShadersReady = false;
     for (LLGLSLShader* shader : { &gDeferredAlphaStochasticProgram[0], &gDeferredAlphaStochasticProgram[1],
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
@@ -3632,6 +3636,31 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gLocalLightRatioResolveProgram.mShaderFiles.push_back(make_pair("deferred/localLightRatioResolveF.glsl", GL_FRAGMENT_SHADER));
         gLocalLightRatioResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         // </Vulkanstorm>
+
+        // unified lighting U2: the GPU tile cull (two fragment passes). Without them the ratio reads the CPU's coarse lists, which gives
+        // the same image; so a failure to build them is not a method fallback.
+        gLocalLightBlockProgram.mName = "Local Light Depth Bounds";
+        gLocalLightBlockProgram.mShaderFiles.clear();
+        gLocalLightBlockProgram.clearPermutations();
+        gLocalLightBlockProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gLocalLightBlockProgram.mShaderFiles.push_back(make_pair("deferred/localLightBlockF.glsl", GL_FRAGMENT_SHADER));
+        gLocalLightBlockProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gLocalLightCullProgram.mName = "Local Light Tile Cull";
+        gLocalLightCullProgram.mShaderFiles.clear();
+        gLocalLightCullProgram.clearPermutations();
+        gLocalLightCullProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gLocalLightCullProgram.mShaderFiles.push_back(make_pair("deferred/localLightCullF.glsl", GL_FRAGMENT_SHADER));
+        gLocalLightCullProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (gLocalLightTableUBO)
+        {
+            gLocalLightCullProgram.addPermutation("LOCAL_LIGHT_TABLE_UBO", "1");
+        }
+        if (!gLocalLightBlockProgram.createShader() || !gLocalLightCullProgram.createShader())
+        {
+            LL_WARNS("Shader") << "Stochastic shadows: the local light tile cull did not build; the ratio reads the coarse tile lists" << LL_ENDL;
+            gLocalLightBlockProgram.unload();
+            gLocalLightCullProgram.unload();
+        }
 
         if (!mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) || !gShadowStochasticResolveProgram.createShader() ||
             !gShadowStochasticComposeProgram.createShader() || !gLocalLightRatioProgram.createShader() ||

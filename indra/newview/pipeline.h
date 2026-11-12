@@ -874,7 +874,13 @@ public:
     bool mLocalRatioActive = false;
     U32 mLocalLightTableTex = 0;        // the table as a texture (a device whose uniform blocks hold less than 32 KB)
     U32 mLocalLightTableUBO = 0;        // or as a std140 uniform block (gLocalLightTableUBO), orphaned each frame
-    U32 mLocalLightTilesTex = 0;
+    U32 mLocalLightTilesTex = 0;        // the CPU's coarse tile lists: an RGBA32UI array of 3 layers, tile (x, y)'s 48 bytes (the count, the light indices)
+    U32 mLocalCullTex = 0;              // the GPU cull's lists, the same format (main view)
+    U32 mLocalCullFbo = 0;
+    U32 mLocalBlockTex = 0;             // RG32F: the nearest and farthest depth of each 4 x 4 pixels
+    U32 mLocalBlockFbo = 0;
+    S32 mLocalCullW = 0, mLocalCullH = 0;   // the screen size the cull targets were made for
+    bool mLocalCullFailed = false;
     S32 mLocalLightTilesW = 0;          // the tile texture's size, texels
     S32 mLocalLightTilesH = 0;
     bool mLocalLightTableFailed = false;   // allocation failures are tried again only after a size change or a screen buffer release
