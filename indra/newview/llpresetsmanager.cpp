@@ -553,9 +553,12 @@ void LLPresetsManager::loadPreset(const std::string& subdirectory, std::string n
             gSavedSettings.setString("PresetGraphicActive", name);
 
             // <Vulkanstorm> shadow method: old preset file, see above
-            if (map_old_pcss)
+            // (a preset that stores the removed PCSS method, 1, selects Stochastic); written only when it changes
+            const LLShadowMethod::PresetMethod preset_method = LLShadowMethod::presetMethodAfterLoad(
+                { map_old_pcss, old_pcss }, gSavedSettings.getU32("RenderShadowMethod"));
+            if (preset_method.write)
             {
-                gSavedSettings.setU32("RenderShadowMethod", LLShadowMethod::fromPCSSFlag(old_pcss));
+                gSavedSettings.setU32("RenderShadowMethod", preset_method.method);
             }
             // </Vulkanstorm>
 

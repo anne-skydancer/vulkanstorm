@@ -62,8 +62,8 @@ RenderShaderLightingMaxLevel	1	3
 RenderDeferred				1	1
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-// RenderShadowMethod: 0 Legacy, 1 PCSS; 2 (Stochastic) is chosen by the user only, never recommended.
-RenderShadowMethod			1	1
+// RenderShadowMethod: 0 Legacy, 2 Stochastic (1 was PCSS, removed). A device below OpenGL 4.0 runs Stochastic as Legacy (LLShadowMethod::effective).
+RenderShadowMethod			1	2
 RenderShadowDistance		1	256
 RenderUseStreamVBO			1	1
 RenderFSAAType			    1	2
@@ -292,7 +292,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	1
-RenderShadowMethod			1	1
+RenderShadowMethod			1	2
 RenderShadowDistance		1	128
 WLSkyDetail					1	96
 RenderFSAAType			    1	1
@@ -336,7 +336,7 @@ RenderTreeLODFactor			1	0.5
 RenderVolumeLODFactor		1	2.0
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-RenderShadowMethod			1	1
+RenderShadowMethod			1	2
 RenderShadowDistance		1	160
 WLSkyDetail					1	96
 RenderFSAAType			    1	2
@@ -381,7 +381,7 @@ WindLightUseAtmosShaders	1	1
 WLSkyDetail					1	128
 RenderDeferredSSAO			1	1
 RenderShadowDetail			1	2
-RenderShadowMethod			1	1
+RenderShadowMethod			1	2
 RenderShadowDistance		1	192
 RenderFSAAType			    1	2
 RenderFSAASamples			1	3
@@ -472,6 +472,8 @@ list NonAppleGPU
 RenderDeferredSSAO			1   0
 
 list GL3
+// below OpenGL 4.0 Stochastic does not run (LLShadowMethod::effective): store Legacy so recommendations and presets say so
+RenderShadowMethod			1	0
 RenderFSAASamples           0   0
 RenderReflectionProbeDetail	0	0
 RenderReflectionsEnabled    0   0

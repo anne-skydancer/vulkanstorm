@@ -84,7 +84,7 @@ vec3 atmosFragLightingLinear(vec3 light, vec3 additive, vec3 atten);
 float sunShadowedDiffuse(float da, float shadow)
 {
 #ifdef SHADOW_NL_MULTIPLY
-    // the PCSS filters can return slightly above 1 (min() hid it) and a NaN reads as unshadowed, as min() did
+    // a soft shadow filter can return slightly above 1 (min() hid it) and a NaN reads as unshadowed, as min() did
     return da * (isnan(shadow) ? 1.0 : clamp(shadow, 0.0, 1.0));
 #else
     return min(da, shadow);

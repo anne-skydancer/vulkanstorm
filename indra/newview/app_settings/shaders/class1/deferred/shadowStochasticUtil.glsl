@@ -8,12 +8,11 @@
  *
  * Replaces deferred/shadowUtil.glsl for every program that links a shadow util when the method is
  * Stochastic (llviewershadermgr.cpp builds it only then; LLShaderMgr::attachShaderFeatures picks it).
- * It shares nothing with the PCSS code: no blocker search, filter, gather tap or PCSS define. Its only
- * other source is the method-neutral SHADOW_COMMON block of shadowUtil.glsl (compiled alone, linked
+ * Its only other source is the method-neutral SHADOW_COMMON block of shadowUtil.glsl (compiled alone, linked
  * next to this object).
  *
  * Per pixel, 8 rays toward points on the light's disc (the sun or moon: the angular size
- * shadow_light_size, as PCSS; a projector: its emitter), each marched in a few steps through the
+ * shadow_light_size; a projector: its emitter), each marched in a few steps through the
  * cascade's depth map, which is read as plain depth (the method switches the maps' compare mode off).
  * A ray is blocked when it crosses a stored surface between two nodes of its march, or is still behind
  * one at the end of it, the surface nearer the light than the receiver's plane at the texel read. The pixel's value is the fraction of free rays. The deferred sun pass
@@ -27,7 +26,7 @@
 #define ST_SPOT_STEPS 4
 #define ST_SPOT_EMITTER 0.15   // metres: width of a projector emitter
 #define ST_SPOT_MARCH 4.0      // metres: the longest march toward a projector
-// the constants below were PCSS's for the projectors; they are this method's own copies (PCSS is removed afterwards)
+// the constants below are this method's own, for the projectors
 #define ST_SPOT_BIAS_SCALE 0.8 // of spot_shadow_bias
 #define ST_SPOT_RPDB_MAX 0.004 // cap of the projectors' receiver-plane bias, shadow depth units
 
@@ -49,7 +48,7 @@ uniform float spot_shadow_offset;
 uniform float spot_shadow_reach;
 
 // angular size of the shadowing light, L = 2 tan(half angle): the physical sun times the sky's
-// sun scale times RenderShadowPCSSLightSize (the moon uses the same size)
+// sun scale times RenderShadowLightSize (the moon uses the same size)
 uniform float shadow_light_size;
 // the frame of the rays' seeds; 0 fixes them (every program but the deferred sun pass)
 uniform int shadow_st_frame;

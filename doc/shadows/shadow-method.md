@@ -1,27 +1,52 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <!-- Copyright (C) 2026, Anne Skydancer (Vulkanstorm) -->
-# Shadow method: Legacy, PCSS and Stochastic
+# Shadow method: Legacy and Stochastic
 
-`RenderShadowMethod` (U32, saved, default 0) selects how the sun and moon shadows are fitted and
-filtered. Preferences > Graphics > Rendering 2 shows it as a "Legacy / PCSS / Stochastic" combo next to the
-Shadows heading. It replaces the "Soft shadows (PCSS)" checkbox (`RenderShadowPCSS`).
+`RenderShadowMethod` (U32, saved) selects how the sun and moon shadows are fitted and filtered:
+0 = Legacy, 2 = Stochastic. Value 1 was PCSS, which is removed and stays unused (see "PCSS is removed"
+below). Preferences > Graphics > Rendering 2 shows the setting as a "Legacy / Stochastic" combo next to the
+Shadows heading. It replaced the "Soft shadows (PCSS)" checkbox (`RenderShadowPCSS`).
 
-| | Legacy (0) | PCSS (1) | Stochastic (2) |
-|---|---|---|---|
-| Sun/moon cascades | Firestorm 7.2.5's: split distances from the visible point cloud, the camera-angle blend of the split exponent (x, y, z), each cascade fitted to the visible receivers, orthographic or perspective-warped | Stable (stage S1, `llshadowcascadefit.h`): splits from the shadow distance, each cascade the bounding sphere of its frustum slice, texel-snapped on a world-anchored grid, orthographic | As PCSS |
-| Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) | As PCSS |
-| Filtering | PCF with the receiver-plane bias | PCSS: rotated Poisson kernel, blocker search and contact hardening | 8 rays per pixel toward the light's disc, accumulated over time |
-| Sun N·L under shadow | Legacy `min(N·L, shadow)` | N·L × shadow (`SHADOW_NL_MULTIPLY`) | N·L × shadow |
-| Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; forward receivers (alpha, PBR, water) still use the Legacy build until D11 | Yes |
-| Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowPCSSLightSize` | As PCSS |
+| | Legacy (0) | Stochastic (2) |
+|---|---|---|
+| Sun/moon cascades | Firestorm 7.2.5's: split distances from the visible point cloud, the camera-angle blend of the split exponent (x, y, z), each cascade fitted to the visible receivers, orthographic or perspective-warped | Stable (stage S1, `llshadowcascadefit.h`): splits from the shadow distance, each cascade the bounding sphere of its frustum slice, texel-snapped on a world-anchored grid, orthographic |
+| Sun map size | Screen-sized (`BlurHappySize(width)` x `BlurHappySize(height)`) | Square, same texel count (`sqrt(width * height)`) |
+| Filtering | PCF with the receiver-plane bias | 8 rays per pixel toward the light's disc, accumulated over time |
+| Sun N·L under shadow | Legacy `min(N·L, shadow)` | N·L × shadow (`SHADOW_NL_MULTIPLY`) |
+| Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; the forward receivers (alpha, PBR, water) use Stochastic's own util with fixed rays |
+| Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowLightSize` |
+
+A device below OpenGL 4.0 runs Stochastic as Legacy (`LLShadowMethod::effective`).
+
+## PCSS is removed
+
+PCSS (value 1: rotated Poisson PCF, blocker search, contact hardening, the `PCSS_SHADOW` shader build and the
+`pcss_shadows` blur gate) was removed from `vkstorm-devel` once Stochastic replaced it. The code is kept in the tag
+`archive/pcss/2026-11-11` (the devel tip before the removal), and the removal as a reverse patch in
+`H:\vulkanstorm\archive-pcss\pcss-devel-2026-11-11.patch` (`git apply` on the post-removal tree brings it back; the
+folder's README.txt says how). `vkstorm-release` still has PCSS until the stochastic integration PR lands there.
+
+- `LLShadowMethod::RETIRED_PCSS = 1` stays unused, so 2 keeps meaning Stochastic in stored settings and presets.
+  `DEFAULT = STOCHASTIC`: a stored 1 and any other unknown value read as Stochastic (`sanitize`), which `effective`
+  turns into Legacy where Stochastic is not supported. At startup a stored 1 (or unknown value) is also written
+  back as 2, so the combo shows it. A preset file that stores 1 selects Stochastic the same way.
+- The `RenderShadowPCSS` checkbox migration (once per install) now maps on to Stochastic, off to Legacy; the
+  preset rule is the same.
+- `RenderShadowPCSSLightSize` is renamed `RenderShadowLightSize`. At startup a stored old value moves to the new
+  setting unless the new one is already set (it wins), and the old setting is reset to its default (it stays
+  declared, hidden and retired, so the user file can be read). A preset file with the old key and no new key maps
+  it on loading. The rules are `migrateLightSize` and `presetNeedsLightSizeMapping` in `llshadowmethod.h`.
+- Feature tables: every list that recommended PCSS (1) recommends Stochastic (2); the device gate keeps GL < 4.0
+  on Legacy.
+- Kept, as they serve Stochastic (and Legacy later): the stable cascades (S1), the method-neutral
+  `SHADOW_COMMON` helpers (S2), the N·L multiply, and the stochastic util and resolve. Legacy is unchanged.
 
 ## Stochastic (2)
 
-Stochastic is the third method. It replaces PCSS, and the PCSS code is removed afterwards, so it shares
-nothing with PCSS: not the blocker search, the filter, the gather taps or any `PCSS_*` define. It uses
+Stochastic replaced PCSS and shares nothing with it. It uses
 the stable cascades and square sun maps of stage S1, only the method-neutral helpers of stage S2 (the
-`SHADOW_COMMON` block of `shadowUtil.glsl`), and the light's disc size from the same `shadow_light_size`
-uniform (EEP `sun_scale` times `RenderShadowPCSSLightSize`). It is built on the stochastic transparency's
+`SHADOW_COMMON` block of `shadowUtil.glsl`), and the light's disc size from the `shadow_light_size`
+uniform (EEP `sun_scale` times `RenderShadowLightSize`). It is built on the stochastic transparency's
 engine: `LLStochasticHistory` and the resolve object (the history, camera reprojection and the 3x3 clamp,
 weight 1/8). The estimator's noise is its own (interleaved gradient noise of the pixel and the frame), not
 the transparency's hash and mask table. 8 rays per pixel in every program (the forward ones too, with fixed
@@ -29,18 +54,14 @@ rays), full resolution, no other mode and no user setting. There is no fallback
 to another method: if the history cannot be allocated (or the resolve shaders do not build), only the
 accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel, still Stochastic.
 
-M0 to M2 ship as one PR.
+M0 to M2 shipped as one PR.
 
 ### M0: the plumbing
 
-- `LLShadowMethod::STOCHASTIC = 2`. `sanitize` keeps 2 and maps a larger value to `DEFAULT`, which is
-  PCSS today. The PR that removes PCSS sets `DEFAULT = STOCHASTIC` and migrates a stored 1 to
-  Stochastic (never to Legacy). `usesStableCascades` is true for every method but Legacy.
-- Gates widened from "PCSS" to "not Legacy": the square sun maps (`allocateShadowBuffer`), the
-  `shadow_light_size` uniform of the sun pass, and the light-size slider. The cascades already took the
-  stable branch for every method but Legacy. The blocker-search depth fetch (`pcss_depth_fetch`) and
-  the light-map blur gate (`pcss_shadows`) in `renderDeferredLighting` stay PCSS-only: Stochastic's own
-  denoising is the temporal accumulation (M2), independent of SSAO.
+- `LLShadowMethod::STOCHASTIC = 2`. `usesStableCascades` is true for every method but Legacy. The gates
+  "not Legacy" are the square sun maps (`allocateShadowBuffer`), the `shadow_light_size` uniform of the sun
+  pass, and the light-size slider. Stochastic's own denoising is the temporal accumulation (M2), independent of
+  the light-map blur, which runs with SSAO only.
 - `shadowStochasticUtil.glsl` is Stochastic's shadow util. `loadBasicShaders` builds it only when the
   method is Stochastic, and `LLShaderMgr::attachShaderFeatures` then links it, instead of
   `shadowUtil.glsl`, into every program that links a shadow util (sun, probe, spot and forward). The
@@ -50,15 +71,15 @@ M0 to M2 ship as one PR.
   with `SHADOW_COMMON_NO_DEPTH` for every other program (the shading normal is the plane; no
   `getPosition`, so programs without `deferredUtil.glsl` link). None of the groundwork's `SHADOW_*` defines is global (the neutral block's go to its two builds only). The
   program binary cache hashes defines, not attached objects, so the method is part of the program hash
-  (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy and PCSS keep their cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
+  (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy keeps its cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
   probe pass included.
 - Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`, as for the stochastic
   transparency) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
   item and a stored 2 reads as Legacy (`LLShadowMethod::effective`, unit tested). The setting is never written, so the
   choice survives a GPU upgrade. This is a capability choice, not a run-time fallback.
-- The combo has the item "Stochastic". No feature-table row recommends it: every table value is the
-  minimum over the applied lists, and `all` says 1. `scripts/tests/test_shadow_method_tables.py`
-  checks that, the combo, and that the util has no PCSS code and the build no groundwork defines.
+- The combo has the items "Legacy" and "Stochastic". `scripts/tests/test_shadow_method_tables.py`
+  checks that the feature tables recommend 0 or 2 and never 1, the combo, that PCSS is gone from the shaders and
+  the shader manager, and that the util has no groundwork defines.
 - No debug settings: the ray count (8), the history weight and the resolution are fixed by design.
 - Legacy is untouched (`scripts/shadows/check_legacy_shadows.py`).
 
@@ -74,7 +95,7 @@ rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther tha
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
 weights of the other methods' blend bands. A projector is the same estimator toward its emitter (0.15 m,
-as PCSS), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
+a fixed 0.15 m emitter), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel).
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
@@ -119,14 +140,13 @@ These are not gated by the method:
   Euclidean camera distance and `spot_shadow_reach`, not with the sun cascade splits.
 
 So Legacy is Firestorm 7.2.5's cascade fit and map sizes with the PCF shader as it is today
-(the shader program is the one PCSS-off used before the switch); only the cascades and the map
-size differ in the C++ code. The one shader difference is the sun's N·L under shadow: every method but Legacy defines `SHADOW_NL_MULTIPLY` (a global define set in `loadBasicShaders`, `llviewershadermgr.cpp`, where the method is read), which switches `sunShadowedDiffuse` in `deferredUtil.glsl` from Firestorm's `min(N·L, shadow)` to `N·L × clamp(shadow, 0, 1)`. Legacy never defines it and keeps `min()`. In classic-mode PBR (`pbrBaseLight`) the multiply form applies the shadow once, where `min()` applied it twice. The define changes the shader text, so the shader cache is rebuilt once after the update.
+(the stock `shadowUtil.glsl`); only the cascades and the map size differ in the C++ code. The one shader difference is the sun's N·L under shadow: every method but Legacy defines `SHADOW_NL_MULTIPLY` (a global define set in `loadBasicShaders`, `llviewershadermgr.cpp`, where the method is read), which switches `sunShadowedDiffuse` in `deferredUtil.glsl` from Firestorm's `min(N·L, shadow)` to `N·L × clamp(shadow, 0, 1)`. Legacy never defines it and keeps `min()`. In classic-mode PBR (`pbrBaseLight`) the multiply form applies the shadow once, where `min()` applied it twice. The define changes the shader text, so the shader cache is rebuilt once after the update.
 
 ## Stage S2: the method-neutral groundwork
 
 `shadowUtil.glsl` has a block that no method owns, `SHADOW_COMMON` (GLSL 1.50, no `textureGather`).
-`SHADOW_MODERN` (the PCSS build, and the Stochastic build when it exists) implies it. The Legacy
-stages that follow S2 can define it to call the same helpers; today Legacy defines neither, nothing in
+The Stochastic build links it (`SHADOW_COMMON_ONLY`). The Legacy
+stages that follow S2 can define `SHADOW_COMMON` to call the same helpers; today Legacy does not define it, nothing in
 Legacy calls the block, and its light map stays bit-identical to the devel tip (offline bench). The shader
 manager emits the define and every constant the block reads from one place (`addShadowCommonDefines`,
 `llviewershadermgr.cpp`), the constants come from `llshadowcascadefit.h`, and the shader cache version
@@ -157,46 +177,28 @@ alone as GLSL 1.50.
   `SHADOW_PLANE_BIAS_MAX_TEXELS`. The same length in metres in every cascade. `shadowCascadeSetup` computes
   the per-cascade scales, bias and cap once, and `shadowReceiverGeometry` the normal and its angle to the
   light once per pixel, only inside the shadow distance (sky and far pixels skip the four depth reads);
-  PCSS calls them, and so can any other method. Under PCSS `RenderShadowBias` and `RenderShadowOffset` no
-  longer act on the deferred sun pass (they stay for Legacy); the forward receivers (alpha, PBR materials,
-  water) still link the Legacy build and use them until decision D11, and the projector shadows keep their
-  own bias.
-- `shadowPlaneTap` (`SHADOW_GATHER`, GL 4.0 and later, under `SHADOW_MODERN`): one bilinear compare tap
-  with the signed plane through `textureGather`; the PCSS no-blocker tap uses it. The plane only ever lowers
-  the reference (one-sided), because past a crease the extrapolated plane is not the surface. GL 3.3
-  keeps the hardware compare.
-- The sun contact path keeps `foot`, half a shadow texel added to the plane term of the blocker search and the
-  filter, so a tap anywhere inside its texel is covered.
+  Stochastic calls them, and so can any other method. Under Stochastic nothing reads `RenderShadowBias` and
+  `RenderShadowOffset`: every program that links a shadow util (the sun and probe passes, and the forward
+  `alphaF`, `pbralphaF`, `materialF`, `waterF` and `pbrmetallicroughnessF`) links Stochastic's util, which uses the
+  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. The projector shadows keep
+  their own bias (`spot_shadow_bias`, `spot_shadow_offset`) in both methods.
 
-What changes in the PCSS image with stage S2 alone: no per-pixel bump pattern in the receiver plane (a
-normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
+What stage S2 changed in the image of the stable-cascade methods: no per-pixel bump pattern in the receiver
+plane (a normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
 the same length in metres in every cascade (smaller than before in the near cascades, larger in the far
-ones: no more 4 mm in cascade 0 to 70 cm in cascade 3), a search and a filter that stop at 25 cm
-(visible only in cascade 1 under a large sun scale; it was 41 cm), and a wider caster guard at the cascade
-edges (26 cm in the finest cascade instead of 14 cm). The filter itself (rotated 12 taps, light-map blur)
-is unchanged.
+ones: no more 4 mm in cascade 0 to 70 cm in cascade 3), a filter reach that stops at 25 cm, and a wider caster
+guard at the cascade edges (26 cm in the finest cascade instead of 14 cm).
 
 Known limit: at a crease (a wall's foot on the ground) the plane of one surface does not continue into
-the other. `test_shadow_bias_altitude.py` counts the 3 cm band above the ground apart from the rest of the
-wall and bounds it (measured 2.3 to 4.3 % of that band's pixels, at most 5 %); the rest of the wall has no acne.
-
-Cost, offline bench (`scripts/perf/bench_shadow_pcss.py`, sun light pass, median of 30 frames, 3 rounds,
-same GPU, devel-tip PCSS against this tree's PCSS; the run-to-run spread of the medians is 0.001 ms at
-1080p, and three full runs gave +0.014 to +0.016 ms): +0.015 ms at 1080p with sun and spot shadows (+0.012 ms
-sun only), +0.023 ms at 1440p; the GL 3.3 path (`pcss33`) is +0.012 / +0.009 ms at 1080p. In a view that is
-74 % sky (the receiver geometry is skipped beyond the shadow distance) it is +0.001 / +0.004 ms at 1080p
-and +0.008 / +0.006 ms at 1440p. The gate is +0.015 ms at 1080p, so S2 is at the gate and not under it.
-S2 is the only cost added so far, so the running total of the light and shadow work is the same
-+0.015 ms; its percentage of the `windows-latest` 82080 PCSS-on frame is not known yet, because that
-baseline capture is still owed.
+the other.
 
 ## Where the method is read
 
 `LLPipeline::RenderShadowMethod` is a cached setting refreshed on change. A change calls
 `handleSetShaderChanged` (shaders reloaded, render targets released and created again, shadow
-buffers allocated again), the same path the old checkbox took. The gates are `use_pcss_shadows()`
-(`llviewershadermgr.cpp`: the PCSS build of `shadowUtil.glsl` and the sun program's `PCSS_SHADOW`),
-the sun-light uniforms and `pcss_shadows` in `pipeline.cpp`, `allocateShadowBuffer` (map size) and
+buffers allocated again), the same path the old checkbox took. The gates are `use_stochastic_shadows()`
+(`llviewershadermgr.cpp`: the Stochastic util build and the sun program's `STOCHASTIC_SHADOW_SUN`),
+the sun-light uniforms in `pipeline.cpp`, `allocateShadowBuffer` (map size) and
 `generateSunShadow` (cascades).
 
 ## The Legacy code is checked against upstream
@@ -219,14 +221,14 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 
 ## Defaults, presets, migration
 
-- Feature table (`featuretable*.txt`, all three, no version bump): PCSS (1) at High, HighUltra and
+- Feature table (`featuretable*.txt`, all three, no version bump): Stochastic (2) at High, HighUltra and
   Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
   the quality slider and the recommended-settings re-applies like every graphics setting, and the
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the light size slider (Sky tab) is enabled with PCSS and Stochastic.
+  feature are unavailable, and the light size slider (Sky tab) is enabled with Stochastic.
 - Graphic presets carry `RenderShadowMethod` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
-  becomes PCSS if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).
+  becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).
 - One-time migration (`RenderShadowMethodMigrated`): at startup, after the user settings are read and
   before the command line and window creation, an existing install takes `RenderShadowPCSS` as the
   method; a fresh install gets the feature table's value when the window is created. The flag is set
@@ -236,8 +238,8 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 
 ## Cost
 
-Measured on an RTX 5070 Ti (offline sun-light-pass bench, `scripts/perf/bench_shadow_pcss.py`, whose
-`legacy` variant is an alias of the PCSS-off shader, identical by construction because the shaders Legacy compiles
-are the PCSS-off ones): PCSS adds, over Legacy, +0.02 to +0.03 ms at High in the study (+0.02 to +0.03 ms in the
-latest bench run) and +0.07 to +0.13 ms at HighUltra (1080p and 1440p). Legacy costs what the PCF with the
-receiver-plane bias costs.
+Legacy costs what the PCF with the receiver-plane bias costs. The offline sun-light-pass bench
+(`scripts/perf/bench_shadow_legacy.py`) times the devel-tip shaders and this tree's Legacy shaders side by side
+and checks that Legacy's light map is bit-identical to the devel tip; Stochastic's costs are measured by
+`scripts/perf/bench_shadow_stochastic.py` against Legacy. PCSS's costs (+0.02 to +0.03 ms at High, +0.07 to
++0.13 ms at HighUltra over Legacy) are in the archived study.

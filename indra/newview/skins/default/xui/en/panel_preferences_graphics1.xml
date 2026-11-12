@@ -2029,7 +2029,7 @@ If you do not understand the distinction then leave this control alone."
       </radio_group>
       <!-- </Vulkanstorm> -->
 
-      <!-- <Vulkanstorm> shadow method (Legacy / PCSS); enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
+      <!-- <Vulkanstorm> shadow method (Legacy / Stochastic); enabled with shadows only (LLFloaterPreference::refreshEnabledState) -->
       <text
        follows="left|top"
        height="18"
@@ -2049,17 +2049,13 @@ If you do not understand the distinction then leave this control alone."
        top_delta="-2"
        width="200"
        name="ShadowMethod"
-       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). PCSS: stable cascades and square sun maps, with soft, contact-hardening shadows. Stochastic: the same cascades and maps, with soft shadows from rays toward the sun or moon's disc, accumulated over time. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
+       tool_tip="Shadow method. Legacy: the Firestorm 7.2.5 sun and moon cascades and screen-sized sun maps, with Vulkanstorm's PCF (receiver-plane bias). Stochastic: stable cascades and square sun maps, with soft shadows from rays toward the sun or moon's disc, accumulated over time. Needs shadows (Sun/Moon or Sun/Moon + Projectors).">
        <combo_box.commit_callback
         function="Pref.RenderOptionUpdate" />
        <combo_box.item
         label="Legacy"
         name="0"
         value="0"/>
-       <combo_box.item
-        label="PCSS"
-        name="1"
-        value="1"/>
        <combo_box.item
         label="Stochastic"
         name="2"
@@ -2326,7 +2322,7 @@ If you do not understand the distinction then leave this control alone."
        top_pad="8"
        width="500"/>
       <slider
-       control_name="RenderShadowPCSSLightSize"
+       control_name="RenderShadowLightSize"
        decimal_digits="2"
        follows="left|top"
        height="16"
@@ -2337,8 +2333,8 @@ If you do not understand the distinction then leave this control alone."
        left="10"
        max_val="3"
        min_val="0.1"
-       name="ShadowPCSSLightSize"
-       tool_tip="Multiplier of the sun and moon's apparent size for soft (PCSS and Stochastic) shadows. Larger = softer penumbra. Only used with the PCSS and Stochastic shadow methods."
+       name="ShadowLightSize"
+       tool_tip="Multiplier of the sun and moon's apparent size for soft shadows. Larger = softer penumbra. Only used with the Stochastic shadow method."
        top_pad="8"
        width="500"/>
       <text
