@@ -8226,7 +8226,10 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 // count: the screen's buffers were resized without them).
 bool LLPipeline::alphaStochasticMissing() const
 {
-    return sRenderAlphaStochasticSupported && gSavedSettings.getU32("RenderAlphaSortMethod") == 1 &&
+    // While the run-time fallback is active the effective methods are sorted alpha and Legacy shadows,
+    // so the missing targets are not needed: snapshots render with those (only a transient not-ready
+    // state while stochastic is still the effective method counts as missing).
+    return sRenderAlphaStochasticSupported && !LLStochasticEngine::fallbackActive() && gSavedSettings.getU32("RenderAlphaSortMethod") == 1 &&
            (!mAlphaSTFBO || !alphaStochasticSized(mMainRT.screen, mAlphaSTWidth, mAlphaSTHeight));
 }
 
