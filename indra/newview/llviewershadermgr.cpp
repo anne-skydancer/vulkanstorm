@@ -160,6 +160,8 @@ LLGLSLShader            gAlphaStochasticResolveProgram;
 LLGLSLShader            gAlphaStochasticCurrentProgram;
 LLGLSLShader            gShadowStochasticResolveProgram;   // <Vulkanstorm/> Stochastic shadows
 LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Stochastic shadows
+LLGLSLShader            gLocalLightRatioProgram;           // <Vulkanstorm/> unified lighting U1: the shadow pool's local light ratio
+LLGLSLShader            gLocalLightRatioResolveProgram;    // <Vulkanstorm/> and its temporal resolve
 bool                    gAlphaStochasticShadersReady = false;
 // </Vulkanstorm>
 
@@ -371,6 +373,8 @@ static void unload_stochastic_shaders()
 {
     gShadowStochasticResolveProgram.unload();
     gShadowStochasticComposeProgram.unload();
+    gLocalLightRatioProgram.unload();
+    gLocalLightRatioResolveProgram.unload();
     gAlphaStochasticShadersReady = false;
     for (LLGLSLShader* shader : { &gDeferredAlphaStochasticProgram[0], &gDeferredAlphaStochasticProgram[1],
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
@@ -1182,7 +1186,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         mFragmentShaderObjects.erase(*helper);
         // the fragment resolve (GL 4.0 to 4.2) attaches the engine's resolve object; the compute resolve compiles it as a compute object
         const bool fragment_resolve = !LLStochasticEngine::computeResolve();
-        const bool needed = helper == &STOCH_RESOLVE_HELPER ? fragment_resolve && (stochastic_transparency_shaders() || stochastic_shadow_resolve_shaders())
+        const bool needed = helper == &STOCH_RESOLVE_HELPER ? (fragment_resolve && stochastic_transparency_shaders()) || stochastic_shadow_resolve_shaders()   // the local light ratio resolves by fragment on every device
                                                             : stochastic_transparency_shaders();
         if (needed)
         {
@@ -1204,6 +1208,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // which takes the shading normal as the receiver plane and needs no getPosition). A session holds
     // one method's programs only, since a method change reloads every shader. Not built otherwise.
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_UTIL);
+    mFragmentShaderObjects.erase(STOCHASTIC_NOISE_UTIL);
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_KEY);
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_DEPTH_KEY);
     if (use_stochastic_shadows())
@@ -1234,6 +1239,11 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         {
             LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_SHADOW_UTIL << LL_ENDL;
             return STOCHASTIC_SHADOW_UTIL;
+        }
+        if (loadShaderFile(STOCHASTIC_NOISE_UTIL, level, GL_FRAGMENT_SHADER, &common_attribs, -1) == 0)
+        {
+            LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_NOISE_UTIL << LL_ENDL;
+            return STOCHASTIC_NOISE_UTIL;
         }
     }
     // </Vulkanstorm>
@@ -1994,6 +2004,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredLightProgram.clearPermutations();
 
         add_common_permutations(&gDeferredLightProgram);
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> unified lighting U1: the local light passes read the shadow pool's ratio
+            gDeferredLightProgram.addPermutation("LOCAL_LIGHT_RATIO", "1");
+        }
 
         success = gDeferredLightProgram.createShader();
         llassert(success);
@@ -2015,6 +2029,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             gDeferredMultiLightProgram[i].mShaderFiles.push_back(make_pair("deferred/multiPointLightF.glsl", GL_FRAGMENT_SHADER));
             gDeferredMultiLightProgram[i].mShaderLevel = mShaderLevel[SHADER_DEFERRED];
             gDeferredMultiLightProgram[i].addPermutation("LIGHT_COUNT", llformat("%d", i+1));
+            if (use_stochastic_shadows())
+            {   // <Vulkanstorm/> unified lighting U1
+                gDeferredMultiLightProgram[i].addPermutation("LOCAL_LIGHT_RATIO", "1");
+            }
 
             add_common_permutations(&gDeferredMultiLightProgram[i]);
 
@@ -2038,6 +2056,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredSpotLightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredSpotLightProgram);
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> unified lighting U1
+            gDeferredSpotLightProgram.addPermutation("LOCAL_LIGHT_RATIO", "1");
+        }
 
         success = gDeferredSpotLightProgram.createShader();
         llassert(success);
@@ -2059,6 +2081,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredMultiSpotLightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredMultiSpotLightProgram);
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> unified lighting U1
+            gDeferredMultiSpotLightProgram.addPermutation("LOCAL_LIGHT_RATIO", "1");
+        }
 
         success = gDeferredMultiSpotLightProgram.createShader();
         llassert(success);
@@ -3573,13 +3599,39 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gShadowStochasticComposeProgram.mShaderFiles.push_back(make_pair("deferred/shadowStochasticComposeF.glsl", GL_FRAGMENT_SHADER));
         gShadowStochasticComposeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
-        if ((!compute && !mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER)) || !gShadowStochasticResolveProgram.createShader() ||
-            !gShadowStochasticComposeProgram.createShader())
+        // <Vulkanstorm> unified lighting U1: the local light ratio (the shadow pool): the pass that makes it and its
+        // temporal resolve, a fragment pass on every device (the engine's resolve object)
+        gLocalLightRatioProgram.mName = "Local Light Ratio";
+        gLocalLightRatioProgram.mFeatures.isDeferred = true;
+        gLocalLightRatioProgram.mFeatures.hasShadows = true;
+        gLocalLightRatioProgram.mShaderFiles.clear();
+        gLocalLightRatioProgram.clearPermutations();
+        gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/sunLightV.glsl", GL_VERTEX_SHADER));
+        gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightRatioF.glsl", GL_FRAGMENT_SHADER));
+        gLocalLightRatioProgram.mShaderFiles.push_back(make_pair("deferred/localLightWeightUtil.glsl", GL_FRAGMENT_SHADER));   // the light pool's weights
+        gLocalLightRatioProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        add_common_permutations(&gLocalLightRatioProgram);
+        gLocalLightRatioProgram.addPermutation("STOCHASTIC_SHADOW_SUN", "1");   // it reads the depth buffer, as the sun pass does
+
+        gLocalLightRatioResolveProgram.mName = "Local Light Ratio Resolve";
+        gLocalLightRatioResolveProgram.mShaderFiles.clear();
+        gLocalLightRatioResolveProgram.clearPermutations();
+        gLocalLightRatioResolveProgram.addPermutation("STOCH_RESOLVE", "1");
+        gLocalLightRatioResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gLocalLightRatioResolveProgram.mShaderFiles.push_back(make_pair("deferred/localLightRatioResolveF.glsl", GL_FRAGMENT_SHADER));
+        gLocalLightRatioResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        // </Vulkanstorm>
+
+        if (!mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) || !gShadowStochasticResolveProgram.createShader() ||
+            !gShadowStochasticComposeProgram.createShader() || !gLocalLightRatioProgram.createShader() ||
+            !gLocalLightRatioResolveProgram.createShader())
         {
-            LL_WARNS("Shader") << "Stochastic shadows: the temporal resolve (" << (compute ? "compute" : "fragment") << ") failed to build; the sun pass keeps its 8 rays per frame "
-                                  "without accumulation (the next shader reload tries again)" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic shadows: a shadow program (the temporal resolve (" << (compute ? "compute" : "fragment") << "), the light map or the local light ratio) failed to build; "
+                                  "Legacy shadows run until a shader reload builds them" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
+            gLocalLightRatioProgram.unload();
+            gLocalLightRatioResolveProgram.unload();
             LLStochasticEngine::requestFallback("a stochastic shadow shader did not build", false);
         }
     }

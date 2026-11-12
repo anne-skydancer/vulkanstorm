@@ -5,7 +5,8 @@
 Reuses the scenes and GL context of bench_shadow_legacy.py and runs the shipped Stochastic shaders: the
 util (class1/deferred/shadowStochasticUtil.glsl) next to the method-neutral block of shadowUtil.glsl, the
 deferred sun light pass, and the temporal resolve. The reference is the same files at a git ref (default
-origin/vkstorm-devel, the stage's base).
+1c0032f9d6, the devel before this stage; a SHA, pinned). From stage U1 on the sun pass has no projector channel and this script
+stops with an explanation (see test_local_light_u1.py).
 
 Gates:
   * the sun channel is bit identical to the base, raw (frames 0 to 3, two scenes) and resolved (24 frames);
@@ -17,7 +18,7 @@ Gates:
     a thin partition 0.4 m in front of it, and an object between the lamp and a table 1 m below it all cast;
   * the sun light pass costs at most the base's + 0.02 ms (interleaved, median of 3 rounds).
 
-Environment: LOCAL_LIGHT_BASE_REF (default origin/vkstorm-devel), ST_FRAMES (timing frames, default 40),
+Environment: LOCAL_LIGHT_BASE_REF (default 1c0032f9d6), ST_FRAMES (timing frames, default 40),
 SHADOW_BENCH_RES (as bench_shadow_legacy.py).
 """
 import math, os, re, statistics, sys
@@ -26,11 +27,12 @@ import numpy as np
 _src = Path(__file__).with_name('bench_shadow_legacy.py').read_text()
 exec(compile(_src.split('# --- timing + basic checks')[0], 'bench_prefix', 'exec'))
 
-REF = os.environ.get('LOCAL_LIGHT_BASE_REF', 'origin/vkstorm-devel')
+REF = os.environ.get('LOCAL_LIGHT_BASE_REF', '1c0032f9d6')   # devel after #486, before stage U0
 FRAMES = int(os.environ.get('ST_FRAMES', 40))
 DEEP = 'class1/deferred/'
 UTIL_NEW = (root / SHADERS / DEEP / 'shadowStochasticUtil.glsl').read_text()
 UTIL_OLD = git_show(REF, SHADERS + DEEP + 'shadowStochasticUtil.glsl')
+NOISE = (root / SHADERS / DEEP / 'stochasticNoiseUtil.glsl').read_text()   # the core's noise (unified lighting U1); unused by a base without it
 RES_NEW = (root / SHADERS / DEEP / 'shadowStochasticResolveUtilF.glsl').read_text()
 RES_OLD = git_show(REF, SHADERS + DEEP + 'shadowStochasticResolveUtilF.glsl')
 RESOLVE_F = (root / SHADERS / DEEP / 'shadowStochasticResolveF.glsl').read_text()
@@ -44,7 +46,7 @@ def stoch_program(util, spot=True):
     defines = ['SUN_SHADOW'] + (['SPOT_SHADOW'] if spot else [])
     common = ['SHADOW_COMMON_ONLY', 'SHADOW_COMMON'] + S2_DEFINES
     return program([(0x8B31, VERTEX), (0x8B30, stage(sun, [])), (0x8B30, stage(UTIL_COMMON, defines + common)),
-                    (0x8B30, stage(util, defines + S2_DEFINES)), (0x8B30, STUBS_F)])
+                    (0x8B30, stage(util, defines + S2_DEFINES)), (0x8B30, STUBS_F)] + ([(0x8B30, stage(NOISE, []))] if 'stNoiseStream' in util else []))
 
 
 def bind_stoch(prog, sc, frame, emitter=0.075, excl=0.075):
@@ -76,6 +78,16 @@ FAR_BOX = [((60.0, 0.0, 60.0), (61.0, 1.0, 61.0))]
 # --- the sun channel is bit identical to the base ------------------------------------------------------
 print('sun channel against', REF)
 p_old, p_new = stoch_program(UTIL_OLD), stoch_program(UTIL_NEW)
+# The projector gates below read the sun pass's b channel. From unified lighting U1 on the sun pass writes 1 there (the
+# projectors' visibility is the local light ratio's), so they would pass without testing anything: fail loudly instead.
+_probe = Scene(W, H, BOXES, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], [-0.5, 1.0, 0.2], SPOTS, CLIP)
+_b = render(p_new, _probe, 1)[..., 2]
+_probe.release()
+if not bool((_b < 1.0).any()) and not os.environ.get('LOCAL_LIGHT_U0_ALLOW_VACUOUS'):
+    print('FAIL the sun pass of this tree writes 1 in its projector channel (stage U1 or later): the projector-band, exclusion and projector-cost gates of this '
+          'script would be vacuous. They are covered by test_local_light_u1.py (the ratio against the base projector channel). '
+          'Set LOCAL_LIGHT_U0_ALLOW_VACUOUS=1 to run only the sun-channel gates.')
+    sys.exit(2)
 for label, sun, boxes in (('slanted sun, boxes', [-0.5, 1.0, 0.2], BOXES), ('low sun, boxes', [-1.0, 0.35, 0.2], BOXES)):
     sc = Scene(W, H, boxes, [0.0, 8.0, 4.0], [0.0, 0.0, -16.0], sun, SPOTS, CLIP)
     same, total = 0, 0
@@ -95,7 +107,7 @@ class Resolve:
         self.idx = 0; self.valid = False
         use(self.prog)
         set_mat(self.prog, 'stoch_reproj', [[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]])
-        u1f(loc(self.prog, b'stoch_weight'), 0.125); u3f(loc(self.prog, b'shadow_st_channel_valid'), 1.0, 1.0, 1.0)
+        u1f(loc(self.prog, b'stoch_weight'), 0.125); u3f(loc(self.prog, b'shadow_st_channel_valid'), 1.0, 1.0, 1.0); u1f(loc(self.prog, b'shadow_st_sun_valid'), 1.0)   # (the base's name and the new one)
         set_mat(self.prog, 'inv_proj', [inverse(sc.proj)])
         for unit, name in enumerate(('shadow_st_raw', 'shadow_st_history', 'depthMap')):
             u1i(loc(self.prog, name.encode()), unit)

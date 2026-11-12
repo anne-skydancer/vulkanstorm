@@ -87,6 +87,32 @@ float stoch_history_bilinear(sampler2D history, vec2 puv, ivec2 size, float w_ex
     return wsum;
 }
 
+// The same with the depth held in another texture (depth_history, channel depth_channel) at the same texel: a history that
+// has no channel for it (the local light ratio's, 10-bit RGB) validates against the sun history's depth of the same frame.
+float stoch_history_bilinear_ext(sampler2D history, sampler2D depth_history, vec2 puv, ivec2 size, float w_expected, int depth_channel, out vec4 hist)
+{
+    vec2 f = puv * vec2(size) - 0.5;
+    ivec2 b = ivec2(floor(f));
+    vec2 fr = f - vec2(b);
+    hist = vec4(0.0);
+    float wsum = 0.0;
+    for (int i = 0; i < 4; ++i)
+    {
+        ivec2 o = ivec2(i & 1, i >> 1);
+        ivec2 p = clamp(b + o, ivec2(0), size - 1);
+        vec4 h = texelFetch(history, p, 0);
+        float wb = (o.x == 1 ? fr.x : 1.0 - fr.x) * (o.y == 1 ? fr.y : 1.0 - fr.y);
+        float ok = abs(texelFetch(depth_history, p, 0)[depth_channel] - w_expected) <= 0.02 * w_expected + 0.02 ? 1.0 : 0.0;
+        hist += h * (wb * ok);
+        wsum += wb * ok;
+    }
+    if (wsum > 0.0)
+    {
+        hist /= wsum;
+    }
+    return wsum;
+}
+
 // The 3 x 3 min / max of this frame's values around px (the TAA clamp box): the history is clamped
 // to it, so that what moved shows no ghost beyond what the neighbourhood holds.
 void stoch_neighbourhood(ivec2 px, ivec2 size, vec4 cur, out vec4 mn, out vec4 mx)
