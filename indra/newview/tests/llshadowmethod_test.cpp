@@ -7,7 +7,7 @@
 // Stochastic, PCSS being removed), a fresh install is left to the feature table, the flag always ends up
 // set, and an old preset file maps its checkbox to the method unless it already carries the method. A
 // stored method 1 (the removed PCSS) and any unknown value read as Stochastic, never Legacy. The old light
-// size setting moves to the new name once, in the startup and in preset files.
+// size setting moves to the new name once, at startup.
 
 #include "llshadowmethod.h"
 
@@ -92,8 +92,6 @@ namespace
             return it == children.end() ? empty : it->second;
         }
         bool asBoolean() const { return value; }
-        double asReal() const { return number; }
-        double number = 0.0;
     };
 
     Node setting(bool value)
@@ -106,14 +104,7 @@ namespace
     void test_preset_file()
     {
         using namespace LLShadowMethod;
-        Node size_only, size_both;
-        size_only.children["RenderShadowPCSSLightSize"].children["Value"].number = 1.75;
-        size_both.children["RenderShadowPCSSLightSize"].children["Value"].number = 1.75;
-        size_both.children["RenderShadowLightSize"].children["Value"].number = 0.5;
-        PresetMapping sm = readPreset(true, size_only);
-        check(sm.apply_light_size && sm.light_size == 1.75 && !sm.apply, "old preset light size maps, nothing else");
-        check(!readPreset(true, size_both).apply_light_size, "preset with both light size keys keeps the new one");
-        check(!readPreset(false, size_only).apply_light_size, "unreadable file maps no light size");
+
         Node old_on, old_off, both, only_new, no_value;
         old_on.children["RenderShadowPCSS"] = setting(true);
         old_off.children["RenderShadowPCSS"] = setting(false);
@@ -148,9 +139,27 @@ namespace
         // idempotent: after the first run the old name is at its default
         m = migrateLightSize(true, false);
         check(!m.copyToNew && !m.resetOld, "a second run does nothing");
-        check(presetNeedsLightSizeMapping(true, false), "old preset light size maps");
-        check(!presetNeedsLightSizeMapping(true, true), "preset with both keeps the new size");
-        check(!presetNeedsLightSizeMapping(false, true) && !presetNeedsLightSizeMapping(false, false), "no old size, nothing to map");
+    }
+
+    void test_rewrite()
+    {
+        using namespace LLShadowMethod;
+        check(!needsRewrite(0) && !needsRewrite(2), "valid methods are not rewritten");
+        check(needsRewrite(1) && needsRewrite(3) && needsRewrite(4000000000u), "the removed 1 and unknown values are rewritten");
+        PresetMethod m = presetMethodAfterLoad({ false, false }, 2);
+        check(!m.write, "a preset with a valid method writes nothing (no second shader reload)");
+        m = presetMethodAfterLoad({ false, false }, 0);
+        check(!m.write, "a Legacy preset writes nothing");
+        m = presetMethodAfterLoad({ false, false }, 1);
+        check(m.write && m.method == STOCHASTIC, "a preset storing 1 is rewritten as Stochastic");
+        m = presetMethodAfterLoad({ false, false }, 3);
+        check(m.write && m.method == STOCHASTIC, "a preset storing 3 is rewritten as Stochastic");
+        m = presetMethodAfterLoad({ true, true }, 1);
+        check(m.write && m.method == STOCHASTIC, "checkbox on with a stored 1: Stochastic, written once");
+        m = presetMethodAfterLoad({ true, false }, 1);
+        check(m.write && m.method == LEGACY, "checkbox off wins over a stored 1: Legacy");
+        m = presetMethodAfterLoad({ true, true }, 0);
+        check(m.write && m.method == STOCHASTIC, "checkbox on over a current 0");
     }
 
     void test_presets()
@@ -168,6 +177,7 @@ int main()
     test_values();
     test_migration();
     test_light_size();
+    test_rewrite();
     test_presets();
     test_preset_file();
     if (failures != 0)

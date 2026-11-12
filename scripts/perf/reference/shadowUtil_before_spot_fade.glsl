@@ -1,3 +1,4 @@
+// Frozen reference (shadowUtil.glsl before the spot fade fix): its PCSS parts are dead, PCSS_SHADOW is never defined for it.
 // Reference for scripts/perf/test_spot_shadow_fade.py: deferred/shadowUtil.glsl as it was before the
 // projector fade followed the camera distance (parent of commit bf6e2553ab), i.e. the projector
 // shadow faded with the sun cascade splits. Linden Lab / Firestorm code (LGPL-2.1, headers below
