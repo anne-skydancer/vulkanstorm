@@ -193,6 +193,53 @@ namespace LLShadowCascadeFit
         const float ul = std::sqrt(up.x * up.x + up.y * up.y + up.z * up.z);
         return { up.x / ul, up.y / ul, up.z / ul };
     }
+
+    // The two rows of the world-anchored seeds of the forward programs (shadowStochasticUtil.glsl, stNoise): for a view-space
+    // point p, u = u[0..2] . p + u[3] and v = v[0..2] . p + v[3] are the point's coordinates in metres in the plane across the
+    // light's direction, in the world. For the column-major modelview mv = [R | t] (p = R w + t): w = R^T p + C with C = -R^T t,
+    // so u = t1 . w = (R t1) . p + t1 . C, with t1 and t2 the unit vectors across the light (the pair of the shaders' sun rays,
+    // so that it is a function of the light alone). All zeros (the shader keeps the pixel seeds) for no light.
+    struct SeedPlane
+    {
+        float u[4];
+        float v[4];
+    };
+    inline SeedPlane worldSeedPlane(const float mv[16], const Vec3& light_world)
+    {
+        SeedPlane out = { { 0.f, 0.f, 0.f, 0.f }, { 0.f, 0.f, 0.f, 0.f } };
+        const float len = std::sqrt(light_world.x * light_world.x + light_world.y * light_world.y + light_world.z * light_world.z);
+        if (!(len > 1.0e-4f))
+        {
+            return out;
+        }
+        const float l[3] = { light_world.x / len, light_world.y / len, light_world.z / len };
+        const bool use_x = std::fabs(l[0]) < 0.9f;
+        const float ref[3] = { use_x ? 1.f : 0.f, use_x ? 0.f : 1.f, 0.f };
+        float t1[3] = { l[1] * ref[2] - l[2] * ref[1], l[2] * ref[0] - l[0] * ref[2], l[0] * ref[1] - l[1] * ref[0] };
+        const float n1 = std::sqrt(t1[0] * t1[0] + t1[1] * t1[1] + t1[2] * t1[2]);
+        for (float& c : t1)
+        {
+            c /= n1;
+        }
+        const float t2[3] = { l[1] * t1[2] - l[2] * t1[1], l[2] * t1[0] - l[0] * t1[2], l[0] * t1[1] - l[1] * t1[0] };
+        // C = -R^T t, with R(r, c) = mv[4 c + r]
+        float cam[3];
+        for (int j = 0; j < 3; ++j)
+        {
+            cam[j] = -(mv[4 * j] * mv[12] + mv[4 * j + 1] * mv[13] + mv[4 * j + 2] * mv[14]);
+        }
+        const float* ts[2] = { t1, t2 };
+        float* rows[2] = { out.u, out.v };
+        for (int k = 0; k < 2; ++k)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                rows[k][i] = mv[i] * ts[k][0] + mv[4 + i] * ts[k][1] + mv[8 + i] * ts[k][2]; // R t_k
+            }
+            rows[k][3] = ts[k][0] * cam[0] + ts[k][1] * cam[1] + ts[k][2] * cam[2];
+        }
+        return out;
+    }
 }
 
 #endif // LL_LLSHADOWCASCADEFIT_H

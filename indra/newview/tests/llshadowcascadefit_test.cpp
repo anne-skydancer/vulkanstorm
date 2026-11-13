@@ -363,10 +363,82 @@ namespace
         const auto z = LLShadowCascadeFit::depthRange(-3.f, 5.f);
         check(z.z_min == -8.f && z.z_max == 7.f, "depth range: sphere plus one radius towards the light", z.z_min, z.z_max);
     }
+    // the world-anchored seeds: u = t1 . (R^T p + C) for the view-space point p of a rotated and translated modelview, and the
+    // coordinate follows the object: object and camera moved together by m keep the view-space point and shift u by t1 . m
+    void test_seed_plane()
+    {
+        std::mt19937 rng(11);
+        std::uniform_real_distribution<double> uni(-1.0, 1.0);
+        double worst = 0.0, worst_move = 0.0, worst_cam = 0.0;
+        for (int n = 0; n < 200; ++n)
+        {
+            D3 ax = { uni(rng), uni(rng), uni(rng) };
+            const double al = std::sqrt(ax.x * ax.x + ax.y * ax.y + ax.z * ax.z);
+            ax = { ax.x / al, ax.y / al, ax.z / al };
+            const double a = uni(rng) * 3.0, c = std::cos(a), s = std::sin(a);
+            const double R[3][3] = { { c + ax.x * ax.x * (1 - c), ax.x * ax.y * (1 - c) - ax.z * s, ax.x * ax.z * (1 - c) + ax.y * s },
+                                     { ax.y * ax.x * (1 - c) + ax.z * s, c + ax.y * ax.y * (1 - c), ax.y * ax.z * (1 - c) - ax.x * s },
+                                     { ax.z * ax.x * (1 - c) - ax.y * s, ax.z * ax.y * (1 - c) + ax.x * s, c + ax.z * ax.z * (1 - c) } };
+            const double t[3] = { uni(rng) * 4000.0, uni(rng) * 400.0, uni(rng) * 4000.0 };
+            auto make = [&](const double tt[3], float mv[16]) {
+                for (int r = 0; r < 3; ++r)
+                {
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        mv[4 * k + r] = (float)R[r][k];
+                    }
+                    mv[12 + r] = (float)tt[r];
+                    mv[4 * r + 3] = 0.f;
+                }
+                mv[15] = 1.f;
+            };
+            float mv[16];
+            make(t, mv);
+            const LLShadowCascadeFit::Vec3 light = { (float)uni(rng), (float)uni(rng), (float)uni(rng) };
+            const auto sp = LLShadowCascadeFit::worldSeedPlane(mv, light);
+            // the reference in double: the same pair of vectors across the light
+            D3 l = { light.x, light.y, light.z };
+            const double ll = std::sqrt(l.x * l.x + l.y * l.y + l.z * l.z);
+            l = { l.x / ll, l.y / ll, l.z / ll };
+            const D3 ref = std::fabs(l.x) < 0.9 ? D3{ 1, 0, 0 } : D3{ 0, 1, 0 };
+            D3 t1 = { l.y * ref.z - l.z * ref.y, l.z * ref.x - l.x * ref.z, l.x * ref.y - l.y * ref.x };
+            const double n1 = std::sqrt(t1.x * t1.x + t1.y * t1.y + t1.z * t1.z);
+            t1 = { t1.x / n1, t1.y / n1, t1.z / n1 };
+            const D3 t2 = { l.y * t1.z - l.z * t1.y, l.z * t1.x - l.x * t1.z, l.x * t1.y - l.y * t1.x };
+            const D3 w = { uni(rng) * 30.0, uni(rng) * 30.0, uni(rng) * 30.0 };
+            const D3 m = { uni(rng) * 256.0, uni(rng) * 256.0, uni(rng) * 256.0 };
+            auto view = [&](D3 q, const double tt[3]) {
+                return D3{ R[0][0] * q.x + R[0][1] * q.y + R[0][2] * q.z + tt[0], R[1][0] * q.x + R[1][1] * q.y + R[1][2] * q.z + tt[1],
+                           R[2][0] * q.x + R[2][1] * q.y + R[2][2] * q.z + tt[2] };
+            };
+            const D3 p = view(w, t);
+            const double ud = t1.x * w.x + t1.y * w.y + t1.z * w.z, vd = t2.x * w.x + t2.y * w.y + t2.z * w.z;
+            const double us = sp.u[0] * p.x + sp.u[1] * p.y + sp.u[2] * p.z + sp.u[3];
+            const double vs = sp.v[0] * p.x + sp.v[1] * p.y + sp.v[2] * p.z + sp.v[3];
+            worst = std::max(worst, std::max(std::fabs(us - ud), std::fabs(vs - vd)));
+            // object and camera moved together by m: t' = t - R m
+            const double t_m[3] = { t[0] - (R[0][0] * m.x + R[0][1] * m.y + R[0][2] * m.z), t[1] - (R[1][0] * m.x + R[1][1] * m.y + R[1][2] * m.z),
+                                    t[2] - (R[2][0] * m.x + R[2][1] * m.y + R[2][2] * m.z) };
+            float mv2[16];
+            make(t_m, mv2);
+            const auto sp2 = LLShadowCascadeFit::worldSeedPlane(mv2, light);
+            const D3 p2 = view(add(w, m), t_m);
+            worst_move = std::max(worst_move, std::fabs(p2.x - p.x) + std::fabs(p2.y - p.y) + std::fabs(p2.z - p.z));
+            const double u2 = sp2.u[0] * p2.x + sp2.u[1] * p2.y + sp2.u[2] * p2.z + sp2.u[3];
+            worst_cam = std::max(worst_cam, std::fabs(u2 - (ud + t1.x * m.x + t1.y * m.y + t1.z * m.z)));
+        }
+        check(worst < 0.01, "seed plane: u, v equal t . (R^T p + C) for a rotated and translated modelview", worst, 0.01);
+        check(worst_move < 1.0e-9, "seed plane: moving object and camera together leaves the view-space point", worst_move, 1.0e-9);
+        check(worst_cam < 0.01, "seed plane: the coordinate follows the object (shifts by t1 . m under the move)", worst_cam, 0.01);
+        const float id[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+        const auto none = LLShadowCascadeFit::worldSeedPlane(id, { 0.f, 0.f, 0.f });
+        check(none.u[0] == 0.f && none.u[3] == 0.f && none.v[1] == 0.f && none.v[3] == 0.f, "seed plane: no light gives zeros (the pixel seeds)");
+    }
 }
 
 int main()
 {
+    test_seed_plane();
     test_splits();
     test_sphere();
     test_quantize();

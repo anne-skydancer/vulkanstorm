@@ -96,8 +96,16 @@ depth map in 2 to 8 steps. The maps are read as plain depth (`texelFetch`): `all
 their compare mode off in this method, so every program that samples them is a Stochastic program. A ray
 is blocked when it crosses a stored surface between two march nodes (the first interval starts at the
 receiver), or is still behind one at the end of the march. The pixel's value is the fraction of free
-rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
-footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
+rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's footprint at the disc's angular
+radius; the steps follow from the cascade's texel size. (A reach that is a property of the light, the same in every cascade, was
+measured in stage R1 and not taken: at the default light size the same 2 or 3 steps spread over about 54 m made the near penumbra
+of 4 and 8 m casters narrower than before; see the PR of stage R1.) The forward programs (glass,
+water, hair, alpha, and the deferred spot and point fallback passes) seed their rays from their place in the plane across the
+light's direction, in world cells (4 mm, or its pixel footprint rounded up to a power of two times 4 mm; `shadow_seed_u/v/px`,
+LLShadowCascadeFit::worldSeedPlane), not from the pixel, so the fixed noise sticks to the surface; the deferred sun pass keeps its
+pixel seeds, and the ratio program (localLightRatioF) ignores the world seeds. The seeds are in the viewer's agent coordinates:
+crossing a region border re-rolls the noise once, and under a low sun the plane across the light is stretched along the ground,
+so cells there are wider than their size on the ground. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
 weights of the other methods' blend bands. A projector is the same estimator toward its emitter (a disc of
 radius 0.075 m, a per-slot uniform), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
@@ -124,7 +132,7 @@ shade plate 0.1 to 0.5 m in front of the face, a thin partition and an object ov
 0.02 ms more.
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
-accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a
+accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each receiver's rays (from its place in the world, see above; a
 static grain, 6 to 9 % in a penumbra). The reference depth of a read is the receiver's plane at the texel
 actually read (S2's signed one-sided form), so a lit plane under a low sun stays lit.
 
