@@ -1019,7 +1019,6 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
     {
         if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
         {
-            mAlphaSTRetryAt = 0.0; // a new screen buffer tries at once
             allocateAlphaStochastic(resX, resY);
         }
         else
@@ -8062,8 +8061,7 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //   4. composite: the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha; the glow then added to the scene alpha.
 // Gated on GL 4.0 (gl_SampleMask, multisample textures) and on every alpha program's alpha-only
-// variant (gAlphaStochasticShadersReady); a failure of either never switches the method (owner
-// decision Q8, 2026-11-13): the plain alpha pass draws the blended faces until a retry succeeds.
+// variant (gAlphaStochasticShadersReady); otherwise sorted alpha runs.
 
 namespace
 {
@@ -8116,9 +8114,9 @@ std::vector<U32> LLPipeline::alphaStochasticMaskTable(U32 samples)
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // The device gate only (owner decision Q8, 2026-11-13: no switch of method on a failure): a shader
-    // that did not build is "not ready", handled below, and never changes the gate or the setting.
-    sRenderAlphaStochasticSupported = gGLManager.mGLVersion >= 4.0f;
+    sRenderAlphaStochasticSupported = gAlphaStochasticShadersReady && gGLManager.mGLVersion >= 4.0f &&
+                                      gAlphaStochasticExpandProgram.mProgramObject &&
+                                      gAlphaStochasticCompositeProgram.mProgramObject;
 #else
     sRenderAlphaStochasticSupported = false;
 #endif
@@ -8156,28 +8154,12 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
         releaseAlphaStochastic();
         return;
     }
-    if (!gAlphaStochasticShadersReady || !gAlphaStochasticExpandProgram.mProgramObject ||
-        !gAlphaStochasticCompositeProgram.mProgramObject)
-    {
-        // Not ready, not unavailable: the method stays selected, the blended faces are drawn with the
-        // plain alpha pass, and the next shader reload tries the shaders again.
-        LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build; the method stays selected "
-                                     "and the plain alpha pass draws the blended faces until a shader reload builds them" << LL_ENDL;
-        releaseAlphaStochastic();
-        return;
-    }
 
     if (mAlphaSTFBO && mAlphaSTWidth == w && mAlphaSTHeight == h && mAlphaSTPassSamples == pass &&
         mAlphaSTSamples == samples)
     {
         updateAlphaStochasticHistory(); // the setting may have changed
         return; // already sized
-    }
-    // A failed allocation is tried again after 1 s, 2 s, 4 s ... 30 s, not on every frame; a
-    // screen buffer allocation tries at once (mAlphaSTRetryAt reset by its caller).
-    if (LLTimer::getElapsedSeconds() < mAlphaSTRetryAt)
-    {
-        return;
     }
     releaseAlphaStochastic();
     while (glGetError() != GL_NO_ERROR) {}
@@ -8217,18 +8199,16 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     const GLenum error = glGetError();
     if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR)
     {
-        // No method switch (owner decision Q8, 2026-11-13): the saved setting and the availability flag
-        // stay as they are, the plain alpha pass draws the blended faces, and the allocation is tried again.
-        mAlphaSTRetryDelay = llmin(mAlphaSTRetryDelay * 2.f, 30.f);
-        mAlphaSTRetryAt = LLTimer::getElapsedSeconds() + mAlphaSTRetryDelay;
         LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
-                             << ", GL error " << error << ", " << w << "x" << h
-                             << "); the method stays selected, it is tried again in " << mAlphaSTRetryDelay << " s" << LL_ENDL;
+                             << ", GL error " << error << "); sorted alpha is selected" << LL_ENDL;
         releaseAlphaStochastic();
+        sRenderAlphaStochasticSupported = false;
+        gSavedSettings.setBOOL("RenderAlphaStochasticAvailable", false);
+        // as PPLL's allocator did: sorted alpha selected, so the allocation is not retried on
+        // every frame (choosing the method again in Preferences retries it once)
+        gSavedSettings.setU32("RenderAlphaSortMethod", 0);
         return;
     }
-    mAlphaSTRetryDelay = 0.5f;
-    mAlphaSTRetryAt = 0.0;
 
     mAlphaSTWidth = w;
     mAlphaSTHeight = h;
