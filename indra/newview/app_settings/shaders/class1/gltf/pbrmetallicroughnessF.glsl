@@ -135,7 +135,8 @@ uniform vec4 light_attenuation[8]; // linear, quadratic, is omni, unused, See: L
 uniform vec3 light_diffuse[8];
 uniform vec2 light_deferred_attenuation[8]; // light size and falloff
 
-uniform int classic_mode; // <Vulkanstorm/> the classic sky, as pbralphaF.glsl
+uniform int classic_mode; // <Vulkanstorm/> sunlit/final scale in classic mode, as pbralphaF
+
 uniform vec3 primary_light_dir; // <Vulkanstorm/> L3: eye space, unit
 
 void calcHalfVectors(vec3 lv, vec3 n, vec3 v, out vec3 h, out vec3 l, out float nh, out float nl, out float nv, out float vh, out float lightDist);
@@ -303,11 +304,12 @@ void main()
     calcAtmosphericVarsLinear(pos.xyz, norm, light_dir, sunlit, amblit, additive, atten);
 
 #ifndef UNLIT
-    // <Vulkanstorm> both modes as pbralphaF.glsl and softenLightF.glsl: calcAtmosphericVarsLinear returns the sun's light
-    // ready to use (linear in normal mode; in classic mode the encoded light, taken as it is), so it is not converted again
-    // (it was, twice over in normal mode), and the classic sky is lit 1.35 times brighter
+    // <Vulkanstorm> calcAtmosphericVarsLinear already returns sunlit in linear light in normal mode (it was converted twice);
+    // both modes now match pbralphaF/softenLightF: classic mode scales sunlit by 1.35, no further srgb_to_linear
     if (classic_mode > 0)
+    {
         sunlit *= 1.35;
+    }
     vec3 sunlit_linear = sunlit;
     // </Vulkanstorm>
 
@@ -353,11 +355,14 @@ void main()
 
     float a = basecolor.a*vertex_color.a;
 
-    // <Vulkanstorm/> as pbralphaF.glsl
+    // <Vulkanstorm> classic mode final scale, as pbralphaF
     float final_scale = 1;
     if (classic_mode > 0)
+    {
         final_scale = 1.1;
+    }
     frag_color = max(vec4(color.rgb * final_scale,a), vec4(0));
+    // </Vulkanstorm>
 #else // UNLIT
     vec4 color = basecolor;
     color.rgb += emissive.rgb;
