@@ -17,7 +17,8 @@
  * A ray is blocked when it crosses a stored surface between two nodes of its march, or is still behind
  * one at the end of it, the surface nearer the light than the receiver's plane at the texel read. The pixel's value is the fraction of free rays. The deferred sun pass
  * changes the rays every frame (shadow_st_frame) and the temporal resolve averages the frames; every
- * other program keeps shadow_st_frame at 0, which fixes each pixel's rays.
+ * other program keeps shadow_st_frame at 0, which fixes each receiver's rays: seeded from the receiver's place in the
+ * world (shadow_seed_u / shadow_seed_v), so that the noise sticks to the surface and does not slide with the screen.
  */
 
 #define ST_RAYS 8
@@ -55,6 +56,11 @@ uniform vec2 spot_shadow_excl;
 uniform float shadow_light_size;
 // the frame of the rays' seeds; 0 fixes them (every program but the deferred sun pass)
 uniform int shadow_st_frame;
+// World-anchored seeds (the forward programs: glass, water, hair, alpha). The receiver's place in the plane across the light's
+// direction: u = dot(shadow_seed_u.xyz, view pos) + shadow_seed_u.w, in metres of the world, and v likewise. (0, 0, 0, 0) keeps the
+// seed on the pixel (the deferred sun pass, which has its own frame and history).
+uniform vec4 shadow_seed_u;
+uniform vec4 shadow_seed_v;
 
 // SHADOW_COMMON (shadowUtil.glsl, linked next to this object)
 vec2 shadowUVScale(mat4 m);
@@ -70,10 +76,21 @@ vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_di
 #define ST_STREAM_LOCAL_RAYS 2
 vec2 stNoiseStream(vec2 px, int frame, int stream);
 
-// the rays' rotation and the step jitter of this pixel and frame, from the stream of the light they go toward
-vec2 stNoise(int stream)
+// The cells of the world-anchored seeds: 4 mm cells (finer than the finest shadow texel, about 8 mm), a lattice of 2048 cells (about 8 m)
+// that repeats: the noise is a pure function of the cell, and a smaller lattice keeps the hash's precision.
+#define ST_SEED_CELLS_PER_M 250.0
+#define ST_SEED_CELLS_WRAP 2048.0
+
+// the rays' rotation and the step jitter of this receiver (view space) and frame, from the stream of the light they go toward
+vec2 stNoise(int stream, vec3 pos)
 {
-    return stNoiseStream(gl_FragCoord.xy, shadow_st_frame, stream);
+    vec2 px = gl_FragCoord.xy;
+    if (dot(shadow_seed_u, shadow_seed_u) > 0.0)
+    {
+        vec2 w = vec2(dot(shadow_seed_u.xyz, pos) + shadow_seed_u.w, dot(shadow_seed_v.xyz, pos) + shadow_seed_v.w);
+        px = mod(floor(w * ST_SEED_CELLS_PER_M), ST_SEED_CELLS_WRAP);
+    }
+    return stNoiseStream(px, shadow_st_frame, stream);
 }
 
 // d(depth)/d(uv) of the plane of a perspective projector's receiver, from two tangent steps
@@ -214,12 +231,13 @@ float stCascade(sampler2D map, int j, vec3 spos, vec3 ng, float sin_theta, vec3 
     vec2 grad = shadowPlaneGradient(m, ng);
     vec4 ds[ST_RAYS];
     stSunRays(m, L, 6.28318531 * nz.x, ds);
-    // the reach of the march: 4, 8, 16 and 32 m, and no farther than a ray can wander from the
-    // casters the cull guard keeps (the footprint) at the disc's angular radius
+    // the reach of the march is a property of the light, the same in every cascade: as far as a ray can wander from the
+    // casters the cull guard keeps (the footprint) at the disc's angular radius. The step count keeps its per-cascade
+    // budget (the stage before reached 4, 8, 16 and 32 m by cascade and took its steps from that reach).
     float reach = j == 0 ? 4.0 : j == 1 ? 8.0 : j == 2 ? 16.0 : 32.0;
     float half_l = max(0.5 * shadow_light_size, 1.0e-6);
-    float t_max = min(reach, SHADOW_FOOTPRINT_M / half_l);
-    int steps = clamp(int(ceil(t_max * half_l / texel_m)), 2, ST_STEPS_MAX);
+    float t_max = SHADOW_FOOTPRINT_M / half_l;
+    int steps = clamp(int(ceil(min(reach, t_max) * half_l / texel_m)), 2, ST_STEPS_MAX);
     return stMarch(map, shadow_res, s0, grad, z_bias, rp_max, 0.0, ds, t_max, steps, nz.y);
 }
 
@@ -255,7 +273,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     {
         return 1.0;
     }
-    vec2 nz = stNoise(ST_STREAM_SUN_RAYS);
+    vec2 nz = stNoise(ST_STREAM_SUN_RAYS, pos);
     float pick = fract(nz.x * 7.0 + nz.y) * total;
     int j = 3;
     float acc = 0.0;
@@ -339,7 +357,7 @@ float stMaskCount(int mask)
 // The visibility of one local light at a receiver: the fraction of the 8 rays that reach its emitter disc
 float stTransmittance(sampler2D m, vec2 res, mat4 mat, vec3 pos, vec3 ng, vec3 eye, float radius, float r_excl, float z_bias, float rp_max, float march_max, int steps)
 {
-    int mask = stTransmittanceRays(m, res, mat, pos, ng, eye, radius, r_excl, z_bias, rp_max, march_max, steps, stNoise(ST_STREAM_LOCAL_RAYS), 0, ST_RAYS);
+    int mask = stTransmittanceRays(m, res, mat, pos, ng, eye, radius, r_excl, z_bias, rp_max, march_max, steps, stNoise(ST_STREAM_LOCAL_RAYS, pos), 0, ST_RAYS);
     return 1.0 - stMaskCount(mask) / float(ST_RAYS);
 }
 
@@ -387,6 +405,6 @@ int sampleSpotShadowRays(vec3 pos, vec3 norm, int index, vec2 pos_screen, vec2 n
 float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
 {
     float fade;
-    int mask = sampleSpotShadowRays(pos, norm, index, pos_screen, stNoise(ST_STREAM_LOCAL_RAYS), 0, ST_RAYS, fade);
+    int mask = sampleSpotShadowRays(pos, norm, index, pos_screen, stNoise(ST_STREAM_LOCAL_RAYS, pos), 0, ST_RAYS, fade);
     return mix(1.0, 1.0 - stMaskCount(mask) / float(ST_RAYS), fade);
 }

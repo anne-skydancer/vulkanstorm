@@ -96,8 +96,12 @@ depth map in 2 to 8 steps. The maps are read as plain depth (`texelFetch`): `all
 their compare mode off in this method, so every program that samples them is a Stochastic program. A ray
 is blocked when it crosses a stored surface between two march nodes (the first interval starts at the
 receiver), or is still behind one at the end of the march. The pixel's value is the fraction of free
-rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
-footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
+rays. The march reaches as far as the cull guard's footprint at the disc's angular radius, the same in every
+cascade (a property of the light, not of the camera: the penumbra of a high caster no longer depends on how far
+the receiver stands from the camera). The steps follow from the cascade's texel size and a per-cascade budget of
+4, 8, 16 and 32 m (so the cost is today's). A receiver of a forward program (glass, water, hair, alpha) seeds
+its rays from its place in the plane across the light's direction (4 mm cells, `shadow_seed_u/v`), not from the pixel,
+so the fixed noise sticks to the surface; the deferred sun pass keeps its pixel seeds. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
 weights of the other methods' blend bands. A projector is the same estimator toward its emitter (a disc of
 radius 0.075 m, a per-slot uniform), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's

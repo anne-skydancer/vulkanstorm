@@ -11076,6 +11076,39 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
             }
         }
     }
+
+    // <Vulkanstorm> Stochastic shadows, world-anchored seeds (stage R1): the forward programs seed their fixed rays from the
+    // receiver's place in the plane across the light's direction, in metres of the world, so the noise sticks to the surface.
+    // u = t1 . (R^T p + C) = (R t1) . p + t1 . C for the view-space point p, with the modelview [R | t] and C = -R^T t.
+    // The deferred sun programs have their own frame and history and keep the pixel seeds: they get zeros (sunLightF).
+    if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
+    {
+        static const LLStaticHashedString sSeedU("shadow_seed_u");
+        static const LLStaticHashedString sSeedV("shadow_seed_v");
+        glm::vec4 su(0.f), sv(0.f);
+        if (&shader != &gDeferredSunProgram && &shader != &gDeferredSunProbeProgram)
+        {
+            const glm::mat4 mv = get_current_modelview();
+            const glm::mat3 rot(mv);
+            const glm::vec3 cam = -(glm::transpose(rot) * glm::vec3(mv[3]));
+            const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
+            const LLVector4 pd = primary.valid ? LLVector4(primary.dir.mV[VX], primary.dir.mV[VY], primary.dir.mV[VZ], 0.f)
+                                               : (LLEnvironment::instance().getIsSunUp() ? mSunDir : mMoonDir);
+            glm::vec3 l(pd.mV[VX], pd.mV[VY], pd.mV[VZ]);
+            const F32 len = glm::length(l);
+            if (len > 1.0e-4f)
+            {
+                l /= len;
+                const glm::vec3 t1 = glm::normalize(glm::cross(l, std::fabs(l.x) < 0.9f ? glm::vec3(1.f, 0.f, 0.f) : glm::vec3(0.f, 1.f, 0.f)));
+                const glm::vec3 t2 = glm::cross(l, t1);
+                su = glm::vec4(rot * t1, glm::dot(t1, cam));
+                sv = glm::vec4(rot * t2, glm::dot(t2, cam));
+            }
+        }
+        shader.uniform4fv(sSeedU, 1, glm::value_ptr(su));
+        shader.uniform4fv(sSeedV, 1, glm::value_ptr(sv));
+    }
+    // </Vulkanstorm>
 }
 
 // <Vulkanstorm> The shadowing light's angular size, L = 2 tan(half angle): the physical sun (0.53 degrees)
