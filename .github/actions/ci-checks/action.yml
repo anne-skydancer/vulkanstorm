@@ -63,11 +63,6 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllocallight_test.cpp -o "$RUNNER_TEMP/local-light-test"
         "$RUNNER_TEMP/local-light-test"
-    - name: Check the local light table and its screen tile list
-      shell: bash
-      run: |
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllocallighttable_test.cpp -o "$RUNNER_TEMP/local-light-table-test"
-        "$RUNNER_TEMP/local-light-table-test"
     - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
       shell: bash
       run: |

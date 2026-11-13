@@ -96,7 +96,7 @@ class StochasticResolveUniforms(unittest.TestCase):
         'depthMap': 'DEFERRED_DEPTH',
         'shadow_st_raw': 'SHADOW_ST_RAW',
         'shadow_st_history': 'SHADOW_ST_HISTORY',
-        'shadow_st_sun_valid': 'sSunValid',
+        'shadow_st_channel_valid': 'sChannelValid',
         'stoch_weight': 'setResolveUniforms',
         'stoch_reproj': 'setResolveUniforms',
         'stoch_history_valid': 'setResolveUniforms',

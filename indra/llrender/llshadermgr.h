@@ -36,7 +36,6 @@
 // programs with the STOCHASTIC_SHADOW_SUN permutation (the deferred sun programs, which have the
 // depth buffer behind them) take the build that reads it, the others the one that does not
 #define STOCHASTIC_SHADOW_UTIL "deferred/shadowStochasticUtil.glsl"
-#define STOCHASTIC_NOISE_UTIL "deferred/stochasticNoiseUtil.glsl"   // the core's noise, linked next to it
 #define STOCHASTIC_SHADOW_COMMON_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON_NO_DEPTH"
 #define STOCHASTIC_SHADOW_COMMON_DEPTH_KEY "deferred/shadowUtil.glsl#SHADOW_COMMON"
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
@@ -412,11 +411,6 @@ public:
         SHADOW_ST_RAW,                      //  "shadow_st_raw"
         SHADOW_ST_HISTORY,                  //  "shadow_st_history"
         SHADOW_ST_RESOLVED,                 //  "shadow_st_resolved"
-        // </Vulkanstorm>
-        // <Vulkanstorm> unified lighting U1: the local light ratio
-        LOCAL_LIGHT_TABLE,                  //  "local_light_table"
-        LOCAL_LIGHT_TILES,                  //  "local_light_tiles"
-        LOCAL_LIGHT_RATIO,                  //  "local_light_ratio"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
