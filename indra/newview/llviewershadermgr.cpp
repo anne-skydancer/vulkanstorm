@@ -2621,6 +2621,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowFullbrightAlphaMaskProgram.clearPermutations();
         gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("DEPTH_CLAMP", "1");
         gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("IS_FULLBRIGHT", "1");
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> dither in place of the column stipple
+            gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
+        }
 
         add_common_permutations(&gDeferredShadowFullbrightAlphaMaskProgram);
 
@@ -2638,6 +2642,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowAlphaMaskProgram.mShaderFiles.clear();
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskF.glsl", GL_FRAGMENT_SHADER));
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> dither in place of the column stipple
+            gDeferredShadowAlphaMaskProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
+        }
         gDeferredShadowAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = make_rigged_variant(gDeferredShadowAlphaMaskProgram, gDeferredSkinnedShadowAlphaMaskProgram);
         success = success && gDeferredShadowAlphaMaskProgram.createShader();
@@ -2669,6 +2677,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowGLTFAlphaBlendProgram.mShaderFiles.push_back(make_pair("deferred/pbrShadowAlphaBlendF.glsl", GL_FRAGMENT_SHADER));
         gDeferredShadowGLTFAlphaBlendProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredShadowGLTFAlphaBlendProgram.clearPermutations();
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> dither in place of the column stipple
+            gDeferredShadowGLTFAlphaBlendProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
+        }
 
         add_common_permutations(&gDeferredShadowGLTFAlphaBlendProgram);
 
@@ -2698,6 +2710,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowV.glsl", GL_VERTEX_SHADER));
         gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> dither in place of the column stipple
+            gDeferredAvatarAlphaShadowProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
+        }
         success = gDeferredAvatarAlphaShadowProgram.createShader();
         llassert(success);
     }
@@ -2709,6 +2725,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowV.glsl", GL_VERTEX_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaMaskShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (use_stochastic_shadows())
+        {   // <Vulkanstorm/> dither in place of the column stipple
+            gDeferredAvatarAlphaMaskShadowProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
+        }
         success = gDeferredAvatarAlphaMaskShadowProgram.createShader();
         llassert(success);
     }
