@@ -11063,57 +11063,6 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
             }
         }
     }
-
-    // <Vulkanstorm> Stochastic shadows, world-anchored seeds (stage R1): the forward programs and the deferred spot/point fallback passes seed their
-    // fixed rays from the receiver's place in the plane across the light's direction, in metres of the world, so the noise
-    // sticks to the surface (LLShadowCascadeFit::worldSeedPlane; shadowStochasticUtil.glsl, stNoise). The sun programs have their
-    // own frame and history and keep the pixel seeds: they get zeros. The rows depend on the modelview and the light only, so
-    // they are computed once per change of either, not on every bind.
-    if (RenderShadowMethod == LLShadowMethod::STOCHASTIC && RenderShadowDetail > 0)
-    {
-        static const LLStaticHashedString sSeedU("shadow_seed_u");
-        static const LLStaticHashedString sSeedV("shadow_seed_v");
-        static const LLStaticHashedString sSeedPx("shadow_seed_px");
-        static const glm::vec4 zero(0.f);
-        if (&shader == &gDeferredSunProgram || &shader == &gDeferredSunProbeProgram)
-        {
-            shader.uniform4fv(sSeedU, 1, glm::value_ptr(zero));
-            shader.uniform4fv(sSeedV, 1, glm::value_ptr(zero));
-            shader.uniform1f(sSeedPx, 0.f);
-        }
-        else
-        {
-            static glm::mat4 last_mv(0.f);
-            static LLShadowCascadeFit::Vec3 last_light = { 0.f, 0.f, 0.f };
-            static LLShadowCascadeFit::SeedPlane plane = {};
-            static F32 px_angle = 0.f;
-            static F32 last_proj_y = 0.f, last_height = 0.f;
-            const glm::mat4 mv = get_current_modelview();
-            const LLEnvironment::PrimaryLightState& primary = LLEnvironment::instance().getPrimaryLight();
-            const LLVector4 pd = primary.valid ? LLVector4(primary.dir.mV[VX], primary.dir.mV[VY], primary.dir.mV[VZ], 0.f)
-                                               : (LLEnvironment::instance().getIsSunUp() ? mSunDir : mMoonDir);
-            const LLShadowCascadeFit::Vec3 light = { pd.mV[VX], pd.mV[VY], pd.mV[VZ] };
-            if (mv != last_mv || light.x != last_light.x || light.y != last_light.y || light.z != last_light.z)
-            {
-                last_mv = mv;
-                last_light = light;
-                plane = LLShadowCascadeFit::worldSeedPlane(glm::value_ptr(mv), light);
-            }
-            // the world size of a pixel at 1 m depth: 2 / (P[1][1] x the target's height); the seed cell follows it
-            const F32 proj_y = get_current_projection()[1][1];
-            const F32 height = (F32)mRT->deferredScreen.getHeight();
-            if (proj_y != last_proj_y || height != last_height)
-            {
-                last_proj_y = proj_y;
-                last_height = height;
-                px_angle = (proj_y > 1.0e-6f && height > 0.f) ? 2.f / (proj_y * height) : 0.f;
-            }
-            shader.uniform4fv(sSeedU, 1, plane.u);
-            shader.uniform4fv(sSeedV, 1, plane.v);
-            shader.uniform1f(sSeedPx, px_angle);
-        }
-    }
-    // </Vulkanstorm>
 }
 
 // <Vulkanstorm> The shadowing light's angular size, L = 2 tan(half angle): the physical sun (0.53 degrees)
