@@ -268,8 +268,7 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
             const char* common = shader->mDefines.count("STOCHASTIC_SHADOW_SUN") ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
-            if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL) ||
-                !shader->attachFragmentObject(STOCHASTIC_NOISE_UTIL))
+            if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL))
             {
                 return false;
             }
@@ -1692,11 +1691,6 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("shadow_st_raw");
     mReservedUniforms.push_back("shadow_st_history");
     mReservedUniforms.push_back("shadow_st_resolved");
-    // </Vulkanstorm>
-    // <Vulkanstorm> unified lighting U1: the local light ratio
-    mReservedUniforms.push_back("local_light_table");
-    mReservedUniforms.push_back("local_light_tiles");
-    mReservedUniforms.push_back("local_light_ratio");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

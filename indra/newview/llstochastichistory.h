@@ -132,14 +132,6 @@ public:
 
     U32  readTexture() const { return mTexture[mState.index()]; }          // the last frame's colour
 
-    // After endFrame: the texture the resolve of this frame read, the frame before latestTexture()'s. Whole until the
-    // next frame's resolve writes it, so a pass after the producer's own resolve can still compare with last frame.
-    U32  previousTexture() const { return mTexture[1 - mState.index()]; }
-
-    // The storage format, before allocate(): the producer's resolve only ever writes the channels it needs
-    // (the shadow history is RG16F, the compute resolve A/B path keeps RGBA16F).
-    void setFormat(GLenum format) { if (!isAllocated()) mFormat = format; }
-
     // The compute resolve's write: bindWriteImage binds the texture that was not read as a write-only
     // image at `unit` (the format is the shader's rgba16f; asserted); endComputeWrite follows the
     // dispatch. Memory model (GL 4.3 section 7.12): imageStore writes are incoherent, no later command

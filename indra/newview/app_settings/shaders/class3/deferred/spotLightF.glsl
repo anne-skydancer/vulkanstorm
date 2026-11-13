@@ -48,12 +48,6 @@ uniform float sun_wash;
 uniform int proj_shadow_idx;
 uniform float shadow_fade;
 uniform int classic_mode;
-#if defined(LOCAL_LIGHT_RATIO)
-// <Vulkanstorm/> unified lighting U1: the shadow pool's ratio of the local lights' light that the shadows leave (rgb)
-uniform sampler2D local_light_ratio;
-uniform int local_ratio_on;      // 1 for a light the ratio covers
-uniform float local_ratio_scale; // 1/8 for a snapshot's 8 summed passes
-#endif
 
 // Light params
 #if defined(MULTI_SPOTLIGHT)
@@ -117,23 +111,15 @@ void main()
         discard;
     }
 
-    vec3 shadow = vec3(1.0);
+    float shadow = 1.0;
 
-#if defined(LOCAL_LIGHT_RATIO)
-    // the Stochastic method: every local light is lit by the ratio the shadow pool leaves (localLightRatioF.glsl)
-    if (local_ratio_on != 0)
-    {
-        shadow = texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale;
-    }
-#else
     if (proj_shadow_idx >= 0)
     {
         vec4 shd = texture(lightMap, tc);
-        shadow.x = (proj_shadow_idx==0)?shd.b:shd.a;
-        shadow.x += shadow_fade;
-        shadow = vec3(clamp(shadow.x, 0.0, 1.0));
+        shadow = (proj_shadow_idx==0)?shd.b:shd.a;
+        shadow += shadow_fade;
+        shadow = clamp(shadow, 0.0, 1.0);
     }
-#endif
 
     GBufferInfo gb = getGBuffer(tc);
 

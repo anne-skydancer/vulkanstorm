@@ -39,12 +39,6 @@ uniform vec2  screen_res;
 uniform float far_z;
 uniform mat4  inv_proj;
 uniform int classic_mode;
-#if defined(LOCAL_LIGHT_RATIO)
-// <Vulkanstorm/> unified lighting U1: the shadow pool's ratio of the local lights' light that the shadows leave (rgb)
-uniform sampler2D local_light_ratio;
-uniform int local_ratio_on;      // 1 for a light the ratio covers
-uniform float local_ratio_scale; // 1/8 for a snapshot's 8 summed passes
-#endif
 
 in vec4 vary_fragcoord;
 
@@ -176,12 +170,6 @@ void main()
             }
         }
     }
-#if defined(LOCAL_LIGHT_RATIO)
-    if (local_ratio_on != 0)
-    {
-        final_color *= texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale;
-    }
-#endif
     float final_scale = 1.0;
     if (classic_mode > 0)
         final_scale = 0.9;

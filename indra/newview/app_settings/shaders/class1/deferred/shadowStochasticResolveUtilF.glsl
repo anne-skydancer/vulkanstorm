@@ -16,8 +16,9 @@
 //
 // The Stochastic shadow method's part of the stochastic engine's temporal resolve
 // (stochasticResolveUtilF.glsl, attached as the STOCH_RESOLVE object). This frame's sun pass
-// (shadow_st_raw: r sun, g AO; 8 rays per pixel) is blended with
-// the last frame's result (shadow_st_history: r sun, g the linear view depth), moved by the camera's motion alone. The history is read bilinearly from the 4 nearest
+// (shadow_st_raw: r sun, g AO, b and a the two projector slots; 8 rays per pixel) is blended with
+// the last frame's result (shadow_st_history: r sun, g the linear view depth, b and a the
+// projectors), moved by the camera's motion alone. The history is read bilinearly from the 4 nearest
 // texels, each kept only where its stored depth agrees with the expected one (a revealed surface
 // has no history), and clamped per channel to the 3 x 3 neighbourhood of this frame's values.
 // The result is the next frame's history; shadowStochasticComposeF.glsl makes the light map of it.
@@ -25,7 +26,7 @@
 uniform sampler2D shadow_st_raw;
 uniform sampler2D shadow_st_history;
 uniform sampler2D depthMap;
-uniform float shadow_st_sun_valid;      // 1: the sun's history is the same light as last frame's (the projectors' are the local light ratio's)
+uniform vec3 shadow_st_channel_valid;   // the sun, projector slot 0 and 1: the channel's history is the same light as last frame's
 uniform float stoch_weight;             // the engine's: this frame's weight (1/8)
 uniform mat4 inv_proj;                  // the projection's inverse: set by the pipeline for both resolve paths
 
@@ -50,13 +51,13 @@ float shadow_linear_depth(ivec2 px, ivec2 size, float z)
 }
 
 
-// the resolved value of pixel px: r sun, g linear view depth (b and a are constants: the history holds r and g only)
+// the resolved value of pixel px: r sun, g linear view depth, b and a the projector slots
 vec4 shadow_resolve(ivec2 px, ivec2 size)
 {
     vec4 cur = stoch_current(px);
     float z = texelFetch(depthMap, px, 0).r;
     float w_cur = shadow_linear_depth(px, size, z);
-    vec4 res = vec4(cur.r, w_cur, 1.0, 1.0);
+    vec4 res = vec4(cur.r, w_cur, cur.b, cur.a);
 
     vec4 pp;
     vec2 puv;
@@ -68,9 +69,11 @@ vec4 shadow_resolve(ivec2 px, ivec2 size)
         vec4 mx;
         stoch_neighbourhood(px, size, cur, mn, mx);
         // per channel: a channel whose light changed (or the AO and depth channels, which are not accumulated) takes this frame's value
-        vec4 weight = vec4(shadow_st_sun_valid > 0.5 ? stoch_weight : 1.0, 1.0, 1.0, 1.0);
+        vec4 weight = vec4(shadow_st_channel_valid.x > 0.5 ? stoch_weight : 1.0, 1.0,
+                           shadow_st_channel_valid.y > 0.5 ? stoch_weight : 1.0,
+                           shadow_st_channel_valid.z > 0.5 ? stoch_weight : 1.0);
         vec4 acc = stoch_accumulate_w(hist, mn, mx, cur, weight);
-        res = vec4(acc.r, w_cur, 1.0, 1.0);
+        res = vec4(acc.r, w_cur, acc.b, acc.a);
     }
     return res;
 }

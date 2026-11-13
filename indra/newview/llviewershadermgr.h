@@ -228,8 +228,6 @@ extern bool                 gAlphaStochasticShadersReady;
 // <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method
 extern LLGLSLShader         gShadowStochasticResolveProgram;
 extern LLGLSLShader         gShadowStochasticComposeProgram;
-extern LLGLSLShader         gLocalLightRatioProgram;          // unified lighting U1: the local light ratio and its resolve
-extern LLGLSLShader         gLocalLightRatioResolveProgram;
 // </Vulkanstorm>
 
 // Deferred rendering shaders
