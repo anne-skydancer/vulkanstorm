@@ -827,6 +827,11 @@ void LLPipeline::cleanup()
 
     releaseGLBuffers();
 
+    // <Vulkanstorm/> sun and spot shadow targets are freed here, while the GL context lives: cleanup() runs once from
+    // LLViewerWindow::shutdownGL (main thread), before stopGL; destroyGL() is skipped then (mInitialized is false),
+    // so otherwise ~LLRenderTarget would run after gGL.shutdown().
+    releaseShadowBuffers();
+
     mFaceSelectImagep = NULL;
 
     mMovedList.clear();
@@ -1503,6 +1508,13 @@ void LLPipeline::releaseLUTBuffers()
 void LLPipeline::releaseShadowBuffers()
 {
     releaseSunShadowTargets();
+    // <Vulkanstorm/> the auxiliary and hero-probe packs allocate their own sun shadow maps (allocateShadowBuffer runs
+    // once per pack); releaseSunShadowTargets() only reaches the pack mRT points at.
+    for (U32 i = 0; i < 4; i++)
+    {
+        mAuxillaryRT.shadow[i].release();
+        mHeroProbeRT.shadow[i].release();
+    }
     releaseSpotShadowTargets();
 }
 
