@@ -239,6 +239,7 @@ bool LLRenderTarget::addColorAttachment(U32 color_fmt)
         if (glGetError() != GL_NO_ERROR)
         {
             LL_WARNS() << "Could not allocate color buffer for render target." << LL_ENDL;
+            LLImageGL::deleteTextures(1, &tex);
             return false;
         }
     }
