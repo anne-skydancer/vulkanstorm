@@ -11077,7 +11077,7 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
         }
     }
 
-    // <Vulkanstorm> Stochastic shadows, world-anchored seeds (stage R1): every program but the deferred sun passes seeds its
+    // <Vulkanstorm> Stochastic shadows, world-anchored seeds (stage R1): the forward programs and the deferred spot/point fallback passes seed their
     // fixed rays from the receiver's place in the plane across the light's direction, in metres of the world, so the noise
     // sticks to the surface (LLShadowCascadeFit::worldSeedPlane; shadowStochasticUtil.glsl, stNoise). The sun programs have their
     // own frame and history and keep the pixel seeds: they get zeros. The rows depend on the modelview and the light only, so
