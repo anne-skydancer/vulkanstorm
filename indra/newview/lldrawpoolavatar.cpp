@@ -316,7 +316,6 @@ void LLDrawPoolAvatar::beginShadowPass(S32 pass)
         {
             sRenderingSkinned = true;
             sVertexProgram->bind();
-            gPipeline.setShadowCasterCoverage(true, 1013.f);   // <Vulkanstorm/> Blending: partial light; one layer per pass
         }
 
         gGL.diffuseColor4f(1, 1, 1, 1);
@@ -337,12 +336,6 @@ void LLDrawPoolAvatar::beginShadowPass(S32 pass)
         {
             sRenderingSkinned = true;
             sVertexProgram->bind();
-            // <Vulkanstorm> Masking: the cutoff (the stipple of Legacy needs none)
-            if (LLViewerShaderMgr::sShadowStochAlpha)
-            {
-                sVertexProgram->setMinimumAlpha(sMinimumAlpha);
-            }
-            // </Vulkanstorm>
         }
 
         gGL.diffuseColor4f(1, 1, 1, 1);
