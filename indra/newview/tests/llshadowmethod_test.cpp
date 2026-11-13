@@ -55,6 +55,9 @@ namespace
         check(LLShadowMethod::effective(3, false) == LLShadowMethod::LEGACY, "an unknown value is Stochastic, so Legacy on such a device");
         check(LLShadowMethod::effective(1, true) == LLShadowMethod::STOCHASTIC, "a stored 1 on a capable device is Stochastic");
         check(LLShadowMethod::DEFAULT == LLShadowMethod::STOCHASTIC, "unknown values read as the default, Stochastic");
+        // Owner decision Q8 (2026-11-13): the method is chosen by the capability alone. No run-time failure
+        // (an allocation or a shader build) is an input here, so none can turn Stochastic into Legacy.
+        check(LLShadowMethod::effective(LLShadowMethod::STOCHASTIC, true) == LLShadowMethod::STOCHASTIC, "Q8: Stochastic stays Stochastic on a capable device");
     }
 
     void test_migration()
