@@ -123,7 +123,7 @@ void main()
     // the Stochastic method: every local light is lit by the ratio the shadow pool leaves (localLightRatioF.glsl)
     if (local_ratio_on != 0)
     {
-        shadow = texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale;
+        shadow = clamp(texelFetch(local_light_ratio, ivec2(gl_FragCoord.xy), 0).rgb * local_ratio_scale, vec3(0.0), vec3(1.0));
     }
 #else
     if (proj_shadow_idx >= 0)

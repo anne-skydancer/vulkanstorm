@@ -30,7 +30,7 @@
 // parts of the fixture (a shade, a housing) and any other object included. So a projector's r_excl is only the stretch
 // from the eye (the apex, behind the face) to the face plus a small margin, where the map holds no depth anyway; the
 // margin keeps the face's own rim and the depth precision from shading the light. A point light has no near plane, so
-// its zone is its own drawable's half extent (U2; unused until then).
+// its zone is its own drawable's half extent (stage U2: the screen march and the table).
 
 #include <algorithm>
 #include <cmath>
@@ -45,8 +45,8 @@ namespace LLLocalLight
     // precision there, and is small enough that a shade 10 cm or more in front of the face still casts.
     constexpr float PROJECTOR_MARGIN = 0.05f;
 
-    // The projectors' emitter radius of stage U0: today's fixed 0.075 m (half of the 0.15 m wide emitter). Stage U2
-    // replaces it by projectorEmitterRadius for all local lights together.
+    // The projectors' emitter radius of stage U0: today's fixed 0.075 m (half of the 0.15 m wide emitter). Stage U2 replaced it
+    // by projectorEmitterRadius for all local lights together; this is the radius of an empty slot's uniform.
     constexpr float PROJECTOR_EMITTER_U0 = 0.075f;
 
     inline float clampEmitter(float s)
