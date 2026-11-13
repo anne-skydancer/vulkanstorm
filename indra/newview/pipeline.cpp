@@ -9592,11 +9592,11 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
             LLGLDisable blend_off(GL_BLEND);
             LLGLDisable scissor_off(GL_SCISSOR_TEST);
             LLGLDepthTest depth(GL_FALSE);
+            mScreenTriangleVB->setBuffer();
             {   // the depth bounds of 4 x 4 pixels
                 LLGLSLShader& block = gLocalLightBlockProgram;
                 gGL.flush();
                 block.bind();
-                mScreenTriangleVB->setBuffer();
                 block.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)w, (GLfloat)h);
                 const S32 depth_unit = block.enableTexture(LLShaderMgr::DEFERRED_DEPTH, mRT->deferredScreen.getUsage());
                 if (depth_unit > -1)
@@ -9619,7 +9619,6 @@ bool LLPipeline::renderLocalLightRatio(bool temporal, LLRenderTarget& scratch, F
                 LLGLSLShader& cull = gLocalLightCullProgram;
                 gGL.flush();
                 cull.bind();
-                mScreenTriangleVB->setBuffer();
                 cull.uniform2f(LLShaderMgr::DEFERRED_SCREEN_RES, (GLfloat)w, (GLfloat)h);
                 cull.uniformMatrix4fv(LLShaderMgr::INVERSE_PROJECTION_MATRIX, 1, GL_FALSE, glm::value_ptr(glm::inverse(get_current_projection())));
                 cull.uniform1i(sBlockDepth, 0);
