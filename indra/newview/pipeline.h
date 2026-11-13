@@ -799,6 +799,8 @@ public:
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
     U32 mAlphaSTSamples = 0;
+    F64 mAlphaSTRetryAt = 0.0;      // no allocation attempt before this time (LLTimer::getElapsedSeconds)
+    F32 mAlphaSTRetryDelay = 0.5f;  // doubled per failed attempt, at most 30 s
     // the temporal accumulation: two full-size RGBA16F colours (the last frame's blended colour and
     // this frame's), each with a framebuffer; mAlphaSTHistoryIndex holds the latest. The history is
     // valid when the frame before ran the method at this size (mAlphaSTHistoryStamp + 1 == this frame).
