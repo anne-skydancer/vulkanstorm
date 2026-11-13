@@ -45,8 +45,9 @@ out vec4 frag_color;
 // average their D over the pixels at the same depth (3 %): a half-resolution march, four independent picks. The resolve
 // (localLightRatioResolveF) averages the frames. A light under 0.5 % of the pixel's total light is lit unshadowed (its
 // estimate is weighted by smoothstep(0.5 t, t, ws_j), t = 1 % of the total: no pop along a light's radius), and the march is
-// skipped for it. The estimate is signed and not clamped (a single pick's share of a channel can exceed the channel's total:
-// a clamp biases a coloured light's shadow); the history is wide (RGBA16F) and the readers clamp.
+// skipped for it. The estimate is signed (a single pick's share of a channel can exceed the channel's total: a clamp at 1 biases a
+// coloured light's shadow) and capped at RATIO_EST_MAX (a share of 1 / 0.005 held the history under 0 for dozens of frames); the history is
+// wide (RGBA16F) and the readers clamp.
 //
 // Output: rgb the ratio, a the share of the pixel's light that comes from a projector that changed since last frame
 // (its map's visibility has no history).
@@ -83,6 +84,7 @@ float stMarchRayScreen(vec3 p, vec4 c0, vec3 e, float xr, float reach, float jit
 uniform int dbg_q;   // the offline gate's: which list position's share to report
 #endif
 #define RATIO_MAX_RAYS 8
+#define RATIO_EST_MAX 3.0
 
 #ifdef RATIO_QUAD_MERGE
 float qx(float v) { float d = dFdxFine(v); return ((int(gl_FragCoord.x) & 1) == 0) ? v + d : v - d; }
@@ -137,7 +139,7 @@ void main()
             int idx = int((tl[(b >> 2) & 3] >> uint(8 * (b & 3))) & 0xFFu);
             vec3 w = localLightWeight(idx, pos.xyz, n);
             float ws = w.r + w.g + w.b;
-            if (ws <= 0.0)
+            if (!(ws > 0.0))   // also a non-finite weight: one NaN would poison the pixel's history for as long as it is kept
             {
                 continue;
             }
@@ -208,6 +210,10 @@ void main()
                 blocked += max(b, m);
             }
             est = soft_a * (blocked / float(kn)) * w_pick * (den_all / ws_pick) / max(den, vec3(1.0e-20));
+            // a channel's share of a faint coloured light that is picked and blocked can reach 1 / 0.005: one such sample would hold
+            // the history under 0 (the readers clamp) for dozens of frames. Capped at 3 (R >= -2): the bias is for a pixel whose
+            // channel is lit by one light in a few hundred only
+            est = clamp(est, vec3(0.0), vec3(RATIO_EST_MAX));
         }
     }
 

@@ -9285,6 +9285,16 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
                 {
                     bounded = false;
                 }
+                // the frustum cut by the plane perpendicular to its axis at the axial distance far_d: every point of the frustum within
+                // far_d of the eye (the weight's sphere is inside that ball) lies on the near side of it. The corners sit at far_d / cos
+                // (their angle to the axis) along their edges, not at far_d: at far_d the ball's cap bulges past the corners' chord
+                // (a wide projector's rectangle came out too small, and the shadows it holds ended in straight cuts)
+                const glm::vec4 axis_v = to_view * glm::vec4(0.5f, 0.5f, 1.f, 1.f);
+                if (axis_v.w == 0.f)
+                {
+                    bounded = false;
+                }
+                const glm::vec3 axis = bounded ? glm::normalize(glm::vec3(axis_v) / axis_v.w - projector_eye) : glm::vec3(0.f, 0.f, -1.f);
                 for (int corner = 0; corner < 4 && bounded; ++corner)
                 {
                     const glm::vec4 v = to_view * glm::vec4((corner & 1) ? 1.02f : -0.02f, (corner & 2) ? 1.02f : -0.02f, 1.f, 1.f);
@@ -9294,7 +9304,13 @@ bool LLPipeline::buildLocalLightTable(F32 light_scale, U32 width, U32 height)
                         break;
                     }
                     const glm::vec3 dir = glm::normalize(glm::vec3(v) / v.w - projector_eye);
-                    const glm::vec4 c = proj * glm::vec4(projector_eye + dir * far_d, 1.f);
+                    const F32 cos_axis = glm::dot(dir, axis);
+                    if (cos_axis < 0.05f)
+                    {
+                        bounded = false;
+                        break;
+                    }
+                    const glm::vec4 c = proj * glm::vec4(projector_eye + dir * (far_d / cos_axis), 1.f);
                     if (c.w <= 1.0e-4f)
                     {
                         bounded = false;

@@ -53,6 +53,11 @@ void main()
     ivec2 px = ivec2(gl_FragCoord.xy);
     ivec2 size = textureSize(shadow_st_raw, 0);
     vec4 cur = stoch_current(px);
+    // a non-finite value (a NaN weight, a march at the camera plane) is no estimate: R = 1, and never enters the history
+    if (any(isnan(cur)) || any(isinf(cur)))
+    {
+        cur = vec4(1.0, 1.0, 1.0, 0.0);
+    }
     vec3 res = cur.rgb;
     float z = texelFetch(depthMap, px, 0).r;
     vec4 pp;
@@ -62,7 +67,8 @@ void main()
     {
         vec4 pos = inv_proj * vec4((vec2(px) + 0.5) / vec2(size) * 2.0 - 1.0, 2.0 * z - 1.0, 1.0);
         float w_cur = -pos.z / pos.w;
-        if (stoch_history_bilinear_ext(shadow_st_history, shadow_st_resolved, puv, size, pp.w * w_cur, 1, hist) >= RATIO_MIN_KEPT)
+        if (stoch_history_bilinear_ext(shadow_st_history, shadow_st_resolved, puv, size, pp.w * w_cur, 1, hist) >= RATIO_MIN_KEPT
+            && !any(isnan(hist)) && !any(isinf(hist)))
         {
             vec4 mn;
             vec4 mx;
