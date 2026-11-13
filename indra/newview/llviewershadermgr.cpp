@@ -3317,7 +3317,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
-            LL_WARNS("Shader") << "Stochastic transparency unavailable: a shader failed to build; the method stays selected and the plain alpha pass draws the blended faces until a shader reload builds them" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic transparency unavailable: a shader failed to build; sorted alpha is used" << LL_ENDL;
         }
     }
     else
