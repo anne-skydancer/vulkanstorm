@@ -230,20 +230,20 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
         !gCubeSnapshot;
 
     // Sorted alpha runs where the device cannot run stochastic transparency (the capability gate,
-    // sRenderAlphaStochasticSupported) and, as a run-time fallback that never touches the saved setting,
-    // while the engine is not ready on a supported device (targets missing or of another size after a
-    // failed allocation or a resize, or an alpha-only shader variant that did not build). Owner decision
-    // 2026-11-12, an explicit exception to the no-fallback rule: the blended faces are drawn, not dropped,
-    // and the shadows follow to Legacy (LLStochasticEngine::requestFallback: also on a stochastic shader failure).
+    // sRenderAlphaStochasticSupported). While the engine is not ready on a supported device (targets
+    // missing or of another size after a failed allocation or a resize, or an alpha-only shader variant
+    // that did not build) the method stays selected and nothing is latched: the blended faces are drawn
+    // by the plain alpha pass, frame by frame, rather than dropped, until the engine is ready again. Owner
+    // decision Q8, 2026-11-13: no switch of method, and the shadows are not changed by it.
     // The targets are made when the method is selected or the screen buffers are
     // (LLPipeline::allocateAlphaStochastic) and retried by LLPipeline::retryAlphaStochastic, never here;
     // a later success, or a shader reload, brings stochastic transparency back by itself.
     const bool stochastic_selected = alpha_method == 1 && oit_view_eligible && LLPipeline::sRenderAlphaStochasticSupported;
-    const bool use_stochastic = stochastic_selected && !LLStochasticEngine::fallbackActive() && gPipeline.alphaStochasticReady();
+    const bool use_stochastic = stochastic_selected && gPipeline.alphaStochasticReady();
     if (stochastic_selected && !use_stochastic)
     {
         LL_WARNS_ONCE("Pipeline") << "Stochastic transparency is not ready (" << (gAlphaStochasticShadersReady ? "its targets are missing or of another size" : "its shaders did not build")
-                                  << "): sorted alpha is drawn until it is" << LL_ENDL;
+                                  << "): the method stays selected; the plain alpha pass draws the blended faces until it is" << LL_ENDL;
     }
     bool stochastic_drawn = false;
     if (use_stochastic)

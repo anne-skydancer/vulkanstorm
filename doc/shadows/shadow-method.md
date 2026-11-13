@@ -52,12 +52,11 @@ weight 1/8). The estimator's noise is its own (interleaved gradient noise of the
 the transparency's hash and mask table. 8 rays per pixel in every program (the forward ones too, with fixed
 rays), full resolution, no other mode and no user setting. If the history cannot be
 allocated, only the accumulation is turned off, with a log line, and the 8 rays per frame stay, fixed per pixel,
-still Stochastic. Run-time fallback (owner decision, 2026-11-12, an explicit exception to the no-fallback rule): on a
-device that supports the engine, if the stochastic transparency targets cannot be allocated or a stochastic alpha or
-shadow shader does not build, the effective methods become sorted alpha and Legacy shadows
-(`LLStochasticEngine::requestFallback`, `usable()`): logged, the notice `StochasticFallback` shown once per session,
-the saved settings untouched. A full shader reload, or a later successful allocation, brings the engine back. Devices
-below OpenGL 4.0 are Legacy and sorted by design, with no notice.
+still Stochastic. No run-time fallback (owner decision Q8, 2026-11-13, replacing the 2026-11-12 exception): if the stochastic
+transparency targets cannot be allocated or a stochastic shader does not build, the failure is logged, the selected
+methods stay (no switch to sorted alpha or Legacy shadows, no notice) and the retry comes at the next natural point (the
+allocation backoff, the next shader reload). Devices below OpenGL 4.0 are Legacy and sorted by design
+(`LLStochasticEngine::usable()` is the capability).
 
 M0 to M2 shipped as one PR.
 
