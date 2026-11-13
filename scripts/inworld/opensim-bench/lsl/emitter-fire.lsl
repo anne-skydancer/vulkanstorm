@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Particle bench emitter "fire": firework post at 12 m (4 posts around the plaza), 350-particle bursts, streaks (non-uniform scale + follow velocity).
+// Particle bench emitter "fire": firework post at 12 m (4 posts around the plaza), 255-particle bursts every 1.1 s (the burst count is a U8 on the wire and in OpenSim: 255 at most), streaks (non-uniform scale + follow velocity).
 // Commands arrive from controller.lsl over channel -74250 via llRegionSay ("fire", "all", or anything else = stop).
 integer CMD = -74250;
 string  SET = "fire";
 
-// Texture from inventory chosen by position, so it is stable across runs. Put 4 different textures in each
-// emitter (or at least in the emitters of one scene): different textures split the draw batches.
+// Texture from inventory by a static index, so it never changes during a run and is stable across runs:
+// attached (NPC bling): derived from the owner key (distinct per NPC); in-world: the last digit of the object name
+// ("Fire 2" -> 2). Put 4 different textures in each emitter: the differences split the draw batches.
 list tex()
 {
     integer n = llGetInventoryNumber(INVENTORY_TEXTURE);
     if (n == 0) return [];
-    vector p = llGetPos();
-    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, ((integer)(p.x + p.y)) % n)];
+    integer i;
+    if (llGetAttached()) i = llAbs((integer)("0x" + llGetSubString((string)llGetOwner(), 0, 6)));
+    else i = (integer)llGetSubString(llGetObjectName(), -1, -1);
+    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, i % n)];
 }
 
 list PARAMS()
 {
     return [PSYS_PART_FLAGS, PSYS_PART_EMISSIVE_MASK|PSYS_PART_INTERP_COLOR_MASK|PSYS_PART_INTERP_SCALE_MASK|PSYS_PART_FOLLOW_VELOCITY_MASK,
-     PSYS_SRC_PATTERN, PSYS_SRC_PATTERN_EXPLODE, PSYS_SRC_BURST_RATE, 1.5, PSYS_SRC_BURST_PART_COUNT, 350,
+     PSYS_SRC_PATTERN, PSYS_SRC_PATTERN_EXPLODE, PSYS_SRC_BURST_RATE, 1.1, PSYS_SRC_BURST_PART_COUNT, 255,
      PSYS_SRC_BURST_RADIUS, 0.3, PSYS_SRC_BURST_SPEED_MIN, 4.0, PSYS_SRC_BURST_SPEED_MAX, 9.0, PSYS_SRC_ACCEL, <0,0,-2.5>,
      PSYS_PART_MAX_AGE, 2.5, PSYS_PART_START_SCALE, <0.06,0.4,0>, PSYS_PART_END_SCALE, <0.03,0.15,0>,
      PSYS_PART_START_COLOR, <1,0.8,0.3>, PSYS_PART_END_COLOR, <1,0.2,0.1>, PSYS_PART_START_ALPHA, 1.0, PSYS_PART_END_ALPHA, 0.0,

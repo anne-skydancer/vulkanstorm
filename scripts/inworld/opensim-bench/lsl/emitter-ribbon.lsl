@@ -4,14 +4,17 @@
 integer CMD = -74250;
 string  SET = "ribbon";
 
-// Texture from inventory chosen by position, so it is stable across runs. Put 4 different textures in each
-// emitter (or at least in the emitters of one scene): different textures split the draw batches.
+// Texture from inventory by a static index, so it never changes during a run and is stable across runs:
+// attached (NPC bling): derived from the owner key (distinct per NPC); in-world: the last digit of the object name
+// ("Fire 2" -> 2). Put 4 different textures in each emitter: the differences split the draw batches.
 list tex()
 {
     integer n = llGetInventoryNumber(INVENTORY_TEXTURE);
     if (n == 0) return [];
-    vector p = llGetPos();
-    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, ((integer)(p.x + p.y)) % n)];
+    integer i;
+    if (llGetAttached()) i = llAbs((integer)("0x" + llGetSubString((string)llGetOwner(), 0, 6)));
+    else i = (integer)llGetSubString(llGetObjectName(), -1, -1);
+    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, i % n)];
 }
 
 list PARAMS()
