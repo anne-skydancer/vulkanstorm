@@ -43,6 +43,7 @@
 #include "llviewerregion.h"
 #include "pipeline.h"
 #include "llspatialpartition.h"
+#include "llparticleprobe.h"
 
 extern U64MicrosecondsImplicit gFrameTime;
 
@@ -683,6 +684,7 @@ void LLParticlePartition::rebuildGeom(LLSpatialGroup* group)
     {
         return;
     }
+    ++LLParticleProbe::f.sgroups_rebuilt;
 
     if (group->changeLOD())
     {
@@ -740,6 +742,7 @@ void LLParticlePartition::rebuildGeom(LLSpatialGroup* group)
         }
 
 
+        group->mVertexBuffer->mProbeParticle = true;
         getGeometry(group);
     }
     else
@@ -800,7 +803,12 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    std::sort(mFaceList.begin(), mFaceList.end(), LLFace::CompareDistanceGreater());
+    {
+        LL_PROFILE_ZONE_NAMED("part sort");
+        LL_PROFILE_ZONE_NUM(mFaceList.size());
+        LLParticleProbe::f.faces += mFaceList.size();
+        std::sort(mFaceList.begin(), mFaceList.end(), LLFace::CompareDistanceGreater());
+    }
 
     group->clearDrawMap();
 
@@ -844,7 +852,17 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 
         LLColor4U* start_glow = cur_glow.get();
 
-        object->getGeometry(facep->getTEOffset(), cur_vert, cur_norm, cur_tc, cur_col, cur_glow, cur_idx);
+        {
+#if PARTICLE_PROBE_FACE_ZONES
+            LL_PROFILE_ZONE_NAMED("part fill");
+#endif
+            LLParticleProbe::Ticks fill_t(LLParticleProbe::f.fill_ticks);
+            object->getGeometry(facep->getTEOffset(), cur_vert, cur_norm, cur_tc, cur_col, cur_glow, cur_idx);
+        }
+#if PARTICLE_PROBE_FACE_ZONES
+        LL_PROFILE_ZONE_NAMED("part drawinfo");
+#endif
+        LLParticleProbe::Ticks batch_t(LLParticleProbe::f.batch_ticks);
 
         bool has_glow = false;
 
@@ -900,6 +918,7 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
             U32 end = start + facep->getGeomCount()-1;
             U32 offset = facep->getIndicesStart();
             U32 count = facep->getIndicesCount();
+            ++LLParticleProbe::f.drawinfos;
             LLDrawInfo* info = new LLDrawInfo(start,end,count,offset,facep->getTexture(),
                 buffer, fullbright);
 

@@ -29,6 +29,7 @@
 #include "llfasttimer.h"
 #include "llsys.h"
 #include "llvertexbuffer.h"
+#include "llparticleprobe.h"
 // #include "llrender.h"
 #include "llglheaders.h"
 #include "llrender.h"
@@ -1049,7 +1050,21 @@ void LLVertexBuffer::flushBuffers()
     // must only be called from main thread
     for (auto& buffer : sMappedBuffers)
     {
-        buffer->_unmapBuffer();
+        if (buffer->mProbeParticle)
+        {
+            LL_PROFILE_ZONE_NAMED("part upload");
+            LLParticleProbe::sUploadingParticle = true;
+            {
+                LLParticleProbe::Ticks t(LLParticleProbe::f.upload_ticks);
+                buffer->_unmapBuffer();
+            }
+            LLParticleProbe::sUploadingParticle = false;
+            ++LLParticleProbe::f.upload_buffers;
+        }
+        else
+        {
+            buffer->_unmapBuffer();
+        }
         buffer->mMapped = false;
     }
 
@@ -1417,6 +1432,7 @@ void LLVertexBuffer::flush_vbo(GLenum target, U32 start, U32 end, void* data, U8
                 U32 size = tend - i + 1;
                 VKS_GLSTAT_INC(bufSubData);
                 VKS_GLSTAT(bufSubDataBytes, size);
+                if (LLParticleProbe::sUploadingParticle) { LLParticleProbe::f.upload_bytes += size; }
                 glBufferSubData(target, i, size, (U8*) data + (i-start));
             }
         }

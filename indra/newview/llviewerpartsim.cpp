@@ -42,6 +42,7 @@
 #include "llspatialpartition.h"
 #include "llvoavatarself.h"
 #include "llvovolume.h"
+#include "llparticleprobe.h"
 
 const F32 PART_SIM_BOX_SIDE = 16.f;
 
@@ -627,6 +628,8 @@ void LLViewerPartSim::addPart(LLViewerPart* part)
 
 LLViewerPartGroup *LLViewerPartSim::put(LLViewerPart* part)
 {
+    LL_PROFILE_ZONE_NAMED("part put");
+    ++LLParticleProbe::f.puts;
     const F32 MAX_MAG = 1000000.f*1000000.f; // 1 million
     LLViewerPartGroup *return_group = NULL ;
     if (part->mPosAgent.magVecSquared() > MAX_MAG || !part->mPosAgent.isFinite())
@@ -644,6 +647,7 @@ LLViewerPartGroup *LLViewerPartSim::put(LLViewerPart* part)
         S32 count = (S32) mViewerPartGroups.size();
         for (S32 i = 0; i < count; i++)
         {
+            ++LLParticleProbe::f.put_scanned;
             if (mViewerPartGroups[i]->addPart(part, desired_size))
             {
                 // We found a spatial group that we fit into, add us and exit
@@ -688,6 +692,7 @@ LLViewerPartGroup *LLViewerPartSim::createViewerPartGroup(const LLVector3 &pos_a
     //pos_agent
     LLViewerPartGroup *groupp = new LLViewerPartGroup(pos_agent, desired_size, hud);
     mViewerPartGroups.push_back(groupp);
+    ++LLParticleProbe::f.groups_created;
     return groupp;
 }
 
@@ -714,6 +719,58 @@ void LLViewerPartSim::shift(const LLVector3 &offset)
 
 static LLTrace::BlockTimerStatHandle FTM_SIMULATE_PARTICLES("Simulate Particles");
 
+// TEMP stage-0 probe: publishes the previous frame's counters as Tracy plots and a once-per-second log line
+static void probeFrameEnd(U64 parts, U64 groups)
+{
+    using namespace LLParticleProbe;
+    const double tpu = ticksPerUs();
+
+    LL_PROFILE_PLOT("part count", (int64_t)parts);
+    LL_PROFILE_PLOT("part groups", (int64_t)groups);
+    LL_PROFILE_PLOT("part puts", (int64_t)f.puts);
+    LL_PROFILE_PLOT("part put scanned", (int64_t)f.put_scanned);
+    LL_PROFILE_PLOT("part groups created", (int64_t)f.groups_created);
+    LL_PROFILE_PLOT("part groups deleted", (int64_t)f.groups_deleted);
+    LL_PROFILE_PLOT("part sgroups rebuilt", (int64_t)f.sgroups_rebuilt);
+    LL_PROFILE_PLOT("part faces", (int64_t)f.faces);
+    LL_PROFILE_PLOT("part drawinfos", (int64_t)f.drawinfos);
+    LL_PROFILE_PLOT("part fill us", (double)f.fill_ticks / tpu);
+    LL_PROFILE_PLOT("part drawinfo us", (double)f.batch_ticks / tpu);
+    LL_PROFILE_PLOT("part upload us", (double)f.upload_ticks / tpu);
+    LL_PROFILE_PLOT("part upload bytes", (int64_t)f.upload_bytes);
+    LL_PROFILE_PLOT("part upload buffers", (int64_t)f.upload_buffers);
+
+    sum.puts += f.puts; sum.put_scanned += f.put_scanned;
+    sum.groups_created += f.groups_created; sum.groups_deleted += f.groups_deleted;
+    sum.sgroups_rebuilt += f.sgroups_rebuilt; sum.faces += f.faces; sum.drawinfos += f.drawinfos;
+    sum.fill_ticks += f.fill_ticks; sum.batch_ticks += f.batch_ticks; sum.upload_ticks += f.upload_ticks;
+    sum.upload_bytes += f.upload_bytes; sum.upload_buffers += f.upload_buffers;
+    ++sum_frames; sum_parts_total += parts; sum_groups_total += groups;
+    if (parts > sum_parts_max) sum_parts_max = parts;
+    f = Frame();
+
+    static LLTimer log_timer;
+    if (log_timer.getElapsedTimeF32() >= 1.f && sum_frames)
+    {
+        const double n = (double)sum_frames;
+        LL_INFOS("ParticleProbe") << "ParticleProbe: frames=" << sum_frames
+            << " parts=" << (sum_parts_total / n) << " parts_max=" << sum_parts_max
+            << " groups=" << (sum_groups_total / n)
+            << " puts=" << (sum.puts / n) << " put_scanned=" << (sum.put_scanned / n)
+            << " groups_created_s=" << sum.groups_created << " groups_deleted_s=" << sum.groups_deleted
+            << " sgroups_rebuilt=" << (sum.sgroups_rebuilt / n)
+            << " faces=" << (sum.faces / n) << " drawinfos=" << (sum.drawinfos / n)
+            << " fill_us=" << (sum.fill_ticks / tpu / n)
+            << " drawinfo_us=" << (sum.batch_ticks / tpu / n)
+            << " upload_us=" << (sum.upload_ticks / tpu / n)
+            << " upload_bytes=" << (sum.upload_bytes / n)
+            << " upload_buffers=" << (sum.upload_buffers / n)
+            << LL_ENDL;
+        sum = Frame(); sum_frames = 0; sum_parts_total = 0; sum_groups_total = 0; sum_parts_max = 0;
+        log_timer.reset();
+    }
+}
+
 void LLViewerPartSim::updateSimulation()
 {
     static LLFrameTimer update_timer;
@@ -728,6 +785,7 @@ void LLViewerPartSim::updateSimulation()
     // </FS:LO>
 
     LL_RECORD_BLOCK_TIME(FTM_SIMULATE_PARTICLES);
+    probeFrameEnd((U64)sParticleCount.load(), (U64)mViewerPartGroups.size());
 
     // Start at a random particle system so the same
     // particle system doesn't always get first pick at the
@@ -832,6 +890,7 @@ void LLViewerPartSim::updateSimulation()
             mViewerPartGroups[i]->mSkippedTime=0.0f;
             if (!mViewerPartGroups[i]->getCount())
             {
+                ++LLParticleProbe::f.groups_deleted;
                 delete mViewerPartGroups[i];
                 mViewerPartGroups.erase(mViewerPartGroups.begin() + i);
                 i--;

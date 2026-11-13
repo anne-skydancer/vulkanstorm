@@ -326,6 +326,7 @@ private:
     bool mMapped = false;
 
 public:
+    bool mProbeParticle = false; // TEMP stage-0 particle probe
 
     static U64 getBytesAllocated();
     static const U32 sTypeSize[TYPE_MAX];
