@@ -322,8 +322,8 @@ when one is on, because a capped frame rate hides the difference.
 
 Scenes, one run each:
 
-- **S1, local OpenSim with ~40 NPCs.** The repo has no tooling for it (no OpenSim region setup, no OAR, no NPC script). Use your own OpenSim
-  region with NPCs dressed in rigged mesh hair and clothing, and log in to it.
+- **S1, local OpenSim with ~40 NPCs.** For the region setup, NPC spawner and LSL kit see `opensim-bench/README.md` (built for particles, but it
+  gives a local region with 30 NPCs). Dress the NPCs in rigged mesh hair and clothing for the alpha-crowd scene.
 - **C, a real crowded venue** with 30+ mesh avatars. **T, a heavy-transparency scene** (glass, foliage, particles).
 - **Low tier** (`alpha_crowd_lowtier.json`): the same scene with the Low list of `featuretable.txt` for the settings that matter in a
   crowd (3 non-impostor avatars, complexity cap 35000, LODs, far clip 64, no shadows, reflections or SSAO, 512 px textures). A crowd

@@ -4,14 +4,17 @@
 integer CMD = -74250;
 string  SET = "rain";
 
-// Texture from inventory chosen by position, so it is stable across runs. Put 4 different textures in each
-// emitter (or at least in the emitters of one scene): different textures split the draw batches.
+// Texture from inventory by a static index, so it never changes during a run and is stable across runs:
+// attached (NPC bling): derived from the owner key (distinct per NPC); in-world: the last digit of the object name
+// ("Fire 2" -> 2). Put 4 different textures in each emitter: the differences split the draw batches.
 list tex()
 {
     integer n = llGetInventoryNumber(INVENTORY_TEXTURE);
     if (n == 0) return [];
-    vector p = llGetPos();
-    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, ((integer)(p.x + p.y)) % n)];
+    integer i;
+    if (llGetAttached()) i = llAbs((integer)("0x" + llGetSubString((string)llGetOwner(), 0, 6)));
+    else i = (integer)llGetSubString(llGetObjectName(), -1, -1);
+    return [PSYS_SRC_TEXTURE, llGetInventoryName(INVENTORY_TEXTURE, i % n)];
 }
 
 list PARAMS()
@@ -20,7 +23,7 @@ list PARAMS()
     if (llGetObjectDesc() == "follow") fl = fl | PSYS_PART_FOLLOW_SRC_MASK;
     return [PSYS_PART_FLAGS, fl,
      PSYS_SRC_PATTERN, PSYS_SRC_PATTERN_ANGLE_CONE, PSYS_SRC_ANGLE_BEGIN, 0.0, PSYS_SRC_ANGLE_END, 0.6,
-     PSYS_SRC_BURST_RATE, 0.05, PSYS_SRC_BURST_PART_COUNT, 25, PSYS_SRC_BURST_RADIUS, 6.0,
+     PSYS_SRC_BURST_RATE, 0.1, PSYS_SRC_BURST_PART_COUNT, 50, PSYS_SRC_BURST_RADIUS, 6.0,
      PSYS_SRC_BURST_SPEED_MIN, 1.0, PSYS_SRC_BURST_SPEED_MAX, 3.0, PSYS_SRC_ACCEL, <0,0,-4>, PSYS_PART_MAX_AGE, 6.0,
      PSYS_PART_START_SCALE, <0.04,0.35,0>, PSYS_PART_END_SCALE, <0.04,0.35,0>, PSYS_PART_START_ALPHA, 0.6, PSYS_PART_END_ALPHA, 0.2];
 }
