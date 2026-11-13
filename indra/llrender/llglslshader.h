@@ -154,7 +154,6 @@ public:
         UB_GLTF_JOINTS,         // "GLTFJoints"
         UB_GLTF_NODES,          // "GLTFNodes"
         UB_GLTF_MATERIALS,      // "GLTFMaterials"
-        UB_LOCAL_LIGHT_TABLE,   // "LLLocalLightTable" (<Vulkanstorm/> unified lighting U2)
         NUM_UNIFORM_BLOCKS
     };
 

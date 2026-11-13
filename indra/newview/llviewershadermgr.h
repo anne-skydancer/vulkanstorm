@@ -224,9 +224,6 @@ extern LLGLSLShader         gAlphaStochasticCompositeProgram;
 extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
 extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (the default on every device)
 extern bool                 gAlphaStochasticShadersReady;
-extern LLGLSLShader          gLocalLightBlockProgram;   // <Vulkanstorm/> unified lighting U2
-extern LLGLSLShader          gLocalLightCullProgram;
-extern bool                 gLocalLightTableUBO;   // <Vulkanstorm/> unified lighting U2
 // </Vulkanstorm>
 // <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method
 extern LLGLSLShader         gShadowStochasticResolveProgram;
