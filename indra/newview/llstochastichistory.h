@@ -46,23 +46,12 @@ namespace LLStochasticEngine
     // below it cannot (sorted alpha is used there: a capability gate, not a run-time fallback).
     bool deviceSupported();
 
-    // The run-time fallback (owner decision, 2026-11-12, an explicit exception to the no-fallback rule):
-    // on a device that supports the engine, when its targets cannot be allocated or the stochastic alpha
-    // or shadow shaders do not build, sorted alpha and Legacy shadows run instead (the effective method;
-    // the saved settings are never rewritten). It is logged, and a notice is shown once per session.
-    // A full shader reload tries the engine again; a later successful allocation restores it. Below
-    // GL 4.0 (deviceSupported() false) none of this applies: Legacy and sorted by design, no notice.
-    // usable() is what the effective shadow method and the alpha pool ask.
-    bool fallbackActive();
-    inline bool usable() { return deviceSupported() && !fallbackActive(); }
-    // retriable: a failed allocation, which a later successful one undoes (restoreFromFallback)
-    void requestFallback(const char* reason, bool retriable);
-    void restoreFromFallback();            // after a successful allocation that follows a retriable failure
-    void clearFallbackForReload();         // a full shader reload starts from the engine again
-    bool takeReloadPending();              // the shader set must be rebuilt for the new effective method
-    bool takeNoticePending();              // the once-per-session notice has not been shown yet
-    void setFallbackReloading(bool on);    // the reload that applies a fallback does not clear it
-    bool fallbackReloading();
+    // No run-time fallback (owner decision Q8, 2026-11-13, replacing the 2026-11-12 exception): a stochastic
+    // method never switches to another one on failure. A failed target allocation or shader build is logged,
+    // the selected method stays, and the next natural point retries (LLPipeline::retryAlphaStochastic, the
+    // next shader reload); meanwhile the pass that cannot run does no harm. Only a device below GL 4.0
+    // (deviceSupported() false) runs Legacy and sorted alpha, by capability, as always.
+    inline bool usable() { return deviceSupported(); }
 
     // Which resolve runs: the fragment resolve with its pre-pass target (option P; 160 B/px) on every
     // device, never changed at run time. OpenGL compute dispatches, with the glMemoryBarrier they need
@@ -72,7 +61,7 @@ namespace LLStochasticEngine
     // (computeResolve() is always false; no setting, no environment variable). The two are the same
     // method and give the same image (bit for bit on the measured NVIDIA). A shader set of the selected
     // path that does not build is an error (logged, retried at the next shader reload); the other
-    // resolve path is never taken in its place. (Transparency then falls back to sorted alpha, see
+    // resolve path is never taken in its place. (The plain alpha pass then draws the blended faces meanwhile, see
     // LLDrawPoolAlpha.)
     bool computeResolve();
 

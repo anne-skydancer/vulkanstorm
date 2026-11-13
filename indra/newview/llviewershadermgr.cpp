@@ -747,7 +747,6 @@ void LLViewerShaderMgr::setShaders()
     }
 
     mShaderList.clear();
-    LLStochasticEngine::clearFallbackForReload();   // <Vulkanstorm/> a full reload starts from the stochastic engine again
 
     if (!gGLManager.mHasRequirements)
     {
@@ -3516,12 +3515,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
-            if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
-            {
-                LLStochasticEngine::requestFallback("a stochastic transparency shader did not build", false);
-            }
-            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the blended faces are not drawn until the "
-                                  "shaders build (the next shader reload tries again)" << LL_ENDL;
+            // owner decision Q8, 2026-11-13: no switch to another method; the selection stays, the pass does not
+            // run (alphaStochasticReady false) and the next shader reload builds the set again
+            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the method stays selected and does not run until "
+                                  "the shaders build (the next shader reload tries again)" << LL_ENDL;
         }
     }
     else
@@ -3570,7 +3567,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
                                   "without accumulation (the next shader reload tries again)" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
-            LLStochasticEngine::requestFallback("a stochastic shadow shader did not build", false);
+            // owner decision Q8, 2026-11-13: the method stays Stochastic (no switch to Legacy shadows)
         }
     }
     // </Vulkanstorm>
