@@ -99,8 +99,8 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's footprint at the disc's angular
 radius; the steps follow from the cascade's texel size. (A reach that is a property of the light, the same in every cascade, was
 measured in stage R1 and not taken: at the default light size the same 2 or 3 steps spread over about 54 m made the near penumbra
-of 4 and 8 m casters narrower than before; see the PR of stage R1.) A receiver of every program but the deferred sun passes (glass,
-water, hair, alpha, and the deferred spot and point fallback passes) seeds its rays from its place in the plane across the
+of 4 and 8 m casters narrower than before; see the PR of stage R1.) The forward programs (glass,
+water, hair, alpha, and the deferred spot and point fallback passes) seed their rays from their place in the plane across the
 light's direction, in world cells (4 mm, or its pixel footprint rounded up to a power of two times 4 mm; `shadow_seed_u/v/px`,
 LLShadowCascadeFit::worldSeedPlane), not from the pixel, so the fixed noise sticks to the surface; the deferred sun pass keeps its
 pixel seeds, and the ratio program (localLightRatioF) ignores the world seeds. The seeds are in the viewer's agent coordinates:
