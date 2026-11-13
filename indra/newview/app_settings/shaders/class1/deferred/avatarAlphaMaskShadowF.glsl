@@ -34,25 +34,13 @@ in vec2 vary_texcoord0;
 
 void main()
 {
-#if defined(SHADOW_STOCH_ALPHA)
-    // Stochastic shadows: finer mip, no stipple
-    float alpha = texture(diffuseMap, vary_texcoord0.xy, SHADOW_ALPHA_LOD_BIAS).a;
-#else
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a;
-#endif
 
     if (alpha < 0.05) // treat as totally transparent
     {
         discard;
     }
 
-#if defined(SHADOW_STOCH_ALPHA)
-    // Masking: the cutoff (minimum_alpha, set by the avatar pool), binary
-    if (alpha < minimum_alpha)
-    {
-        discard;
-    }
-#else
     if (alpha < minimum_alpha)
     {
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)
@@ -60,7 +48,6 @@ void main()
         discard;
       }
     }
-#endif
 
     frag_color = vec4(1,1,1,1);
 }
