@@ -45,10 +45,19 @@ void main()
 
     if (alpha < minimum_alpha) // treat as semi-transparent
     {
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+      // <Vulkanstorm/> Stochastic shadows: hashed per-texel dither instead of the column stipple (see shadowAlphaMaskF.glsl)
+      float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+      if (ign >= alpha)
+      {
+        discard;
+      }
+#else
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)
       {
         discard;
       }
+#endif
     }
 
     frag_color = vec4(1,1,1,1);
