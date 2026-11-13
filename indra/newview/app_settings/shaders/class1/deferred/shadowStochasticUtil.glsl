@@ -61,6 +61,8 @@ uniform int shadow_st_frame;
 // seed on the pixel (the deferred sun pass, which has its own frame and history).
 uniform vec4 shadow_seed_u;
 uniform vec4 shadow_seed_v;
+// the world size of a pixel at 1 m depth (the seed cell follows the pixel's footprint)
+uniform float shadow_seed_px;
 
 // SHADOW_COMMON (shadowUtil.glsl, linked next to this object)
 vec2 shadowUVScale(mat4 m);
@@ -76,10 +78,13 @@ vec3 shadowReceiverGeometry(vec2 pos_screen, vec3 pos, vec3 gnorm, vec3 light_di
 #define ST_STREAM_LOCAL_RAYS 2
 vec2 stNoiseStream(vec2 px, int frame, int stream);
 
-// The cells of the world-anchored seeds: 4 mm cells (finer than the finest shadow texel, about 8 mm), a lattice of 2048 cells (about 8 m)
-// that repeats: the noise is a pure function of the cell, and a smaller lattice keeps the hash's precision.
-#define ST_SEED_CELLS_PER_M 250.0
-#define ST_SEED_CELLS_WRAP 2048.0
+// The cells of the world-anchored seeds. A cell is 4 mm (finer than the finest shadow texel, about 8 mm), or the receiver's pixel
+// footprint rounded up to a power of two times 4 mm when that is larger: a distant receiver then keeps its numbers while the camera
+// moves by a fraction of a pixel (4 mm cells there would draw new ones as every pixel crosses a cell edge, and the noise would
+// shimmer), and the cell changes only by octaves. The lattice is 4096 cells wide and repeats: the seeds are a pure function of the
+// cell, and the wrap keeps the hash's precision.
+#define ST_SEED_CELL_M 0.004
+#define ST_SEED_CELLS_WRAP 4096.0
 
 // the rays' rotation and the step jitter of this receiver (view space) and frame, from the stream of the light they go toward
 vec2 stNoise(int stream, vec3 pos)
@@ -88,7 +93,8 @@ vec2 stNoise(int stream, vec3 pos)
     if (dot(shadow_seed_u, shadow_seed_u) > 0.0)
     {
         vec2 w = vec2(dot(shadow_seed_u.xyz, pos) + shadow_seed_u.w, dot(shadow_seed_v.xyz, pos) + shadow_seed_v.w);
-        px = mod(floor(w * ST_SEED_CELLS_PER_M), ST_SEED_CELLS_WRAP);
+        float cell = ST_SEED_CELL_M * exp2(ceil(log2(max(abs(pos.z) * shadow_seed_px / ST_SEED_CELL_M, 1.0))));
+        px = mod(floor(w / cell), ST_SEED_CELLS_WRAP);
     }
     return stNoiseStream(px, shadow_st_frame, stream);
 }
@@ -231,13 +237,12 @@ float stCascade(sampler2D map, int j, vec3 spos, vec3 ng, float sin_theta, vec3 
     vec2 grad = shadowPlaneGradient(m, ng);
     vec4 ds[ST_RAYS];
     stSunRays(m, L, 6.28318531 * nz.x, ds);
-    // the reach of the march is a property of the light, the same in every cascade: as far as a ray can wander from the
-    // casters the cull guard keeps (the footprint) at the disc's angular radius. The step count keeps its per-cascade
-    // budget (the stage before reached 4, 8, 16 and 32 m by cascade and took its steps from that reach).
+    // the reach of the march: 4, 8, 16 and 32 m, and no farther than a ray can wander from the
+    // casters the cull guard keeps (the footprint) at the disc's angular radius
     float reach = j == 0 ? 4.0 : j == 1 ? 8.0 : j == 2 ? 16.0 : 32.0;
     float half_l = max(0.5 * shadow_light_size, 1.0e-6);
-    float t_max = SHADOW_FOOTPRINT_M / half_l;
-    int steps = clamp(int(ceil(min(reach, t_max) * half_l / texel_m)), 2, ST_STEPS_MAX);
+    float t_max = min(reach, SHADOW_FOOTPRINT_M / half_l);
+    int steps = clamp(int(ceil(t_max * half_l / texel_m)), 2, ST_STEPS_MAX);
     return stMarch(map, shadow_res, s0, grad, z_bias, rp_max, 0.0, ds, t_max, steps, nz.y);
 }
 
