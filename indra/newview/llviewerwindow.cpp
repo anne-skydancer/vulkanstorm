@@ -6257,11 +6257,7 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                 original_width = gPipeline.mRT->deferredScreen.getWidth();
                 original_height = gPipeline.mRT->deferredScreen.getHeight();
 
-                // <Vulkanstorm> a large buffer without stochastic transparency's targets would save the
-                // picture without its blended faces: it counts as failed, and the snapshot is taken in
-                // tiles at the window's size, which has them
-                if (gPipeline.allocateScreenBuffer(image_width, image_height) && !gPipeline.alphaStochasticMissing())
-                // </Vulkanstorm>
+                if (gPipeline.allocateScreenBuffer(image_width, image_height))
                 {
                     window_width = image_width;
                     window_height = image_height;
@@ -6298,29 +6294,6 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
             scale_factor = llmax(1.0f, 1.0f / ratio) ;
         }
     }
-
-    // <Vulkanstorm> stochastic transparency's targets are missing at the window's size too (an
-    // allocation failed and is being retried): no picture without the blended faces
-    if (gPipeline.alphaStochasticMissing())
-    {
-        LLSD args;
-        args["MESSAGE"] = "The snapshot was not taken: the graphics memory for transparent objects could not be allocated. Try again in a moment.";
-        LLNotificationsUtil::add("GenericAlert", args);
-        restore_deferred();
-        gSnapshotNoPost = false;
-        if (!gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI))
-        {
-            LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
-        }
-        setCursor(UI_CURSOR_ARROW);
-        if (hide_hud)
-        {
-            LLPipeline::sShowHUDAttachments = true;
-        }
-        setBalanceVisible(true);
-        return false;
-    }
-    // </Vulkanstorm>
 
     if (show_ui && scale_factor > 1.f)
     {
@@ -6593,9 +6566,7 @@ bool LLViewerWindow::simpleSnapshot(LLImageRaw* raw, S32 image_width, S32 image_
     U32 color_fmt = GL_RGBA;
     if (scratch_space.allocate(image_width, image_height, color_fmt, true))
     {
-        // <Vulkanstorm> without stochastic transparency's targets the buffer counts as failed
-        if (gPipeline.allocateScreenBuffer(image_width, image_height) && !gPipeline.alphaStochasticMissing())
-        // </Vulkanstorm>
+        if (gPipeline.allocateScreenBuffer(image_width, image_height))
         {
             mWorldViewRectRaw.set(0, image_height, image_width, 0);
 
@@ -6607,25 +6578,6 @@ bool LLViewerWindow::simpleSnapshot(LLImageRaw* raw, S32 image_width, S32 image_
             gPipeline.allocateScreenBuffer(original_width, original_height);
         }
     }
-
-    // <Vulkanstorm> no picture without the blended faces: the error is the user's, not a blank gap
-    if (gPipeline.alphaStochasticMissing())
-    {
-        LLSD args;
-        args["MESSAGE"] = "The capture was not taken: the graphics memory for transparent objects could not be allocated. Try again in a moment.";
-        LLNotificationsUtil::add("GenericAlert", args);
-        if (!gPipeline.hasRenderDebugFeatureMask(LLPipeline::RENDER_DEBUG_FEATURE_UI) && prev_draw_ui)
-        {
-            LLPipeline::toggleRenderDebugFeature(LLPipeline::RENDER_DEBUG_FEATURE_UI);
-        }
-        if (hide_hud)
-        {
-            LLPipeline::sShowHUDAttachments = true;
-        }
-        setCursor(UI_CURSOR_ARROW);
-        return false;
-    }
-    // </Vulkanstorm>
 
     // we render the scene more than once since this helps
     // greatly with the objects not being drawn in the

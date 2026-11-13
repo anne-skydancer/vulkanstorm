@@ -8189,7 +8189,7 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //     size (an allocation that failed, or a screen buffer resized without them), or an alpha program's
 //     alpha-only variant did not build (gAlphaStochasticShadersReady). It is logged once, and
 //     sorted alpha draws the blended faces and the GLTF scene's blended assets meanwhile (a run-time
-//     fallback by owner decision, 2026-11-12; the saved setting is not changed); the targets are made again
+//     stopgap, no method switch: owner decision Q8, 2026-11-13; the saved setting is not changed); the targets are made again
 //     by retryAlphaStochastic (with a backoff), the shaders by the next shader reload, and stochastic
 //     transparency returns by itself.
 // A history that fails (or a temporal resolve that did not build) only stops the temporal
@@ -8214,7 +8214,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
     // the device only (GL 4.0, enough samples): a shader set that did not build does not clear this
-    // flag; LLDrawPoolAlpha draws sorted alpha until alphaStochasticReady (a shader reload retries it).
+    // flag; LLDrawPoolAlpha draws the plain alpha pass until alphaStochasticReady (a shader reload retries it).
     sRenderAlphaStochasticSupported = LLStochasticEngine::deviceSupported();
 #else
     sRenderAlphaStochasticSupported = false;
@@ -8279,11 +8279,10 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     if (status != GL_FRAMEBUFFER_COMPLETE || error != GL_NO_ERROR || !mAlphaSTAccum || !mAlphaSTTrans ||
         !mAlphaSTDepth || !mAlphaSTMasksHeld)
     {
-        // Sorted alpha and Legacy shadows run (LLStochasticEngine::requestFallback) until a retry
-        // succeeds; the saved settings are not changed.
-        LLStochasticEngine::requestFallback("the targets could not be allocated", true);
+        // No method switch (owner decision Q8, 2026-11-13): the method stays selected and the targets are
+        // made again by retryAlphaStochastic (with a backoff) or the next screen buffer allocation.
         LL_WARNS("Pipeline") << "Stochastic transparency allocation failed (framebuffer status " << status
-                             << ", GL error " << error << ", " << w << "x" << h << "); it is tried again at the next screen buffer allocation" << LL_ENDL;
+                             << ", GL error " << error << ", " << w << "x" << h << "); the method stays selected, it is tried again (backoff, or the next screen buffer allocation)" << LL_ENDL;
         releaseAlphaStochastic();
         return;
     }
@@ -8291,23 +8290,11 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     mAlphaSTWidth = w;
     mAlphaSTHeight = h;
     mAlphaSTPassSamples = pass;
-    LLStochasticEngine::restoreFromFallback();   // a retry that succeeds brings the engine back
     updateAlphaStochasticHistory();
     // 8 + 4 + 4 bytes per sample (DEPTH_COMPONENT24 is stored in 32 bits)
     const U64 bytes = (U64)w * h * pass * 16;
     LL_INFOS("Pipeline") << "Stochastic transparency: " << w << "x" << h << ", " << samples << " samples in "
                          << samples / pass << " pass(es) of " << pass << " (" << (bytes >> 20) << " MiB)" << LL_ENDL;
-}
-
-// Whether the main view needs stochastic targets it does not have (the targets of another size
-// count: the screen's buffers were resized without them).
-bool LLPipeline::alphaStochasticMissing() const
-{
-    // While the run-time fallback is active the effective methods are sorted alpha and Legacy shadows,
-    // so the missing targets are not needed: snapshots render with those (only a transient not-ready
-    // state while stochastic is still the effective method counts as missing).
-    return sRenderAlphaStochasticSupported && !LLStochasticEngine::fallbackActive() && gSavedSettings.getU32("RenderAlphaSortMethod") == 1 &&
-           (!mAlphaSTFBO || !alphaStochasticSized(mMainRT.screen, mAlphaSTWidth, mAlphaSTHeight));
 }
 
 // The guard of beginAlphaStochastic, without effects: what the passes need is there. The blended
@@ -8322,23 +8309,9 @@ bool LLPipeline::alphaStochasticReady() const
 
 // Once a frame from the display path: an allocation that failed (the targets, or the history while
 // the setting asks for it) is tried again, after 1 s, 2 s, 4 s ... 30 s, and the failure is logged at
-// that cadence. Sorted alpha draws the blended faces in the meantime.
+// that cadence. The method stays selected; the plain alpha pass draws the blended faces meanwhile.
 void LLPipeline::retryAlphaStochastic()
 {
-    // The run-time fallback of the stochastic model (LLStochasticEngine::requestFallback): once per session
-    // the notice, and the shader set rebuilt for the effective methods (sorted alpha and Legacy shadows, or
-    // the engine again after a successful retry). The saved settings are not touched.
-    if (LLStochasticEngine::takeNoticePending())
-    {
-        LLNotificationsUtil::add("StochasticFallback");
-    }
-    if (LLStochasticEngine::takeReloadPending())
-    {
-        LLStochasticEngine::setFallbackReloading(true);
-        handleSetShaderChanged(LLSD());
-        LLStochasticEngine::setFallbackReloading(false);
-        requestResizeShadowTexture();   // the sun maps' shape follows the effective method
-    }
     if (mRT != &mMainRT || gSavedSettings.getU32("RenderAlphaSortMethod") != 1 ||
         !mMainRT.screen.getWidth() || !mMainRT.screen.getHeight())
     {
@@ -8482,15 +8455,15 @@ bool LLPipeline::beginAlphaStochastic()
         {
             if (!gAlphaStochasticShadersReady)
             {
-                LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build, sorted alpha is drawn "
-                                             "until they do (the next shader reload tries again)" << LL_ENDL;
+                LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build; the method stays selected and the blended faces "
+                                             "are drawn with the plain alpha pass until they do (the next shader reload tries again)" << LL_ENDL;
             }
             else if (!alphaStochasticSized(mRT->screen, mAlphaSTWidth, mAlphaSTHeight))
             {
                 // retryAlphaStochastic (once a frame, display path) makes the targets again at the screen's size
                 LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its targets are " << mAlphaSTWidth << "x" << mAlphaSTHeight
                                           << ", the screen " << mRT->screen.getWidth() << "x" << mRT->screen.getHeight()
-                                          << "; sorted alpha is drawn until the targets are made again" << LL_ENDL;
+                                          << "; the blended faces are drawn with the plain alpha pass until the targets are made again" << LL_ENDL;
             }
         }
         return false;
@@ -8725,11 +8698,14 @@ bool LLPipeline::beginShadowStochastic()
     }
     const U32 w = mRT->deferredLight.getWidth();
     const U32 h = mRT->deferredLight.getHeight();
-    if (mShadowSTHistory.isAllocated() && !mShadowSTHistory.matches(w, h))
+    // Without the resolve and compose programs (a shader failure: the method stays selected, no switch)
+    // nothing would read the history, so none is held; a shader reload brings both back.
+    const bool programs = gShadowStochasticResolveProgram.mProgramObject && gShadowStochasticComposeProgram.mProgramObject;
+    if (mShadowSTHistory.isAllocated() && (!programs || !mShadowSTHistory.matches(w, h)))
     {
         releaseShadowStochasticHistory();
     }
-    if (!mShadowSTHistory.isAllocated() && w && h && !(mShadowSTFailedWidth == w && mShadowSTFailedHeight == h))
+    if (programs && !mShadowSTHistory.isAllocated() && w && h && !(mShadowSTFailedWidth == w && mShadowSTFailedHeight == h))
     {
         while (glGetError() != GL_NO_ERROR) {}
         // r the sun, g the linear view depth: two channels (unified lighting U1 moved the projectors' channels to the local light ratio);
@@ -8759,7 +8735,6 @@ bool LLPipeline::beginShadowStochastic()
         ensureLocalRatioHistory(w, h);
     }
     // </Vulkanstorm>
-    const bool programs = gShadowStochasticResolveProgram.mProgramObject && gShadowStochasticComposeProgram.mProgramObject;
     return mShadowSTHistory.beginFrame(programs && mShadowSTHistory.isAllocated());
 }
 

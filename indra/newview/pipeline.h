@@ -439,7 +439,6 @@ public:
     void allocateAlphaStochastic(U32 w, U32 h);
     void releaseAlphaStochastic();
     bool alphaStochasticReady() const;             // beginAlphaStochastic would run the passes (the targets, programs and size are there)
-    bool alphaStochasticMissing() const;           // selected and supported, but its targets are not there
     void retryAlphaStochastic();                   // once a frame from the display path: failed allocations, with backoff
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed

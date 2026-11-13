@@ -780,7 +780,6 @@ void LLViewerShaderMgr::setShaders()
     }
 
     mShaderList.clear();
-    LLStochasticEngine::clearFallbackForReload();   // <Vulkanstorm/> a full reload starts from the stochastic engine again
 
     if (!gGLManager.mHasRequirements)
     {
@@ -3557,12 +3556,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticShadersReady = ready;
         if (!ready)
         {
-            if (gSavedSettings.getU32("RenderAlphaSortMethod") == 1)
-            {
-                LLStochasticEngine::requestFallback("a stochastic transparency shader did not build", false);
-            }
-            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the blended faces are not drawn until the "
-                                  "shaders build (the next shader reload tries again)" << LL_ENDL;
+            // owner decision Q8, 2026-11-13: no switch to another method; the selection stays, the pass does not
+            // run (alphaStochasticReady false) and the next shader reload builds the set again
+            LL_WARNS("Shader") << "Stochastic transparency: a shader failed to build; the method stays selected and does not run until "
+                                  "the shaders build (the next shader reload tries again)" << LL_ENDL;
         }
     }
     else
@@ -3667,12 +3664,12 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             !gLocalLightRatioResolveProgram.createShader())
         {
             LL_WARNS("Shader") << "Stochastic shadows: a shadow program (the temporal resolve (" << (compute ? "compute" : "fragment") << "), the light map or the local light ratio) failed to build; "
-                                  "Legacy shadows run until a shader reload builds them" << LL_ENDL;
+                                  "the method stays selected; the projectors cast no shadow and the sun pass runs without accumulation until a shader reload builds them" << LL_ENDL;
             gShadowStochasticResolveProgram.unload();
             gShadowStochasticComposeProgram.unload();
             gLocalLightRatioProgram.unload();
             gLocalLightRatioResolveProgram.unload();
-            LLStochasticEngine::requestFallback("a stochastic shadow shader did not build", false);
+            // owner decision Q8, 2026-11-13: the method stays Stochastic (no switch to Legacy shadows)
         }
     }
     // </Vulkanstorm>
