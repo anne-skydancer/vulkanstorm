@@ -53,10 +53,23 @@ void main()
 
     if (alpha < 0.88) // treat as semi-transparent
     {
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+        // <Vulkanstorm/> Stochastic shadows read one texel per ray; a stipple that drops every other texel column
+        // reads as columns of light and shade. A hashed per-texel dither (anchored to the map's texel, so it is
+        // stable wherever the map is) keeps the fraction alpha of the texels, with no column period. It is still grain at
+        // texel scale: static, with no per-layer or per-frame decorrelation, so only the ray jitter averages it. Every
+        // texel below 0.88 is dithered here, mask or blend faces alike, as the stipple it replaces did.
+        float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+        if (ign >= alpha)
+        {
+            discard;
+        }
+#else
         if (fract(0.5*floor(target_pos_x / post_pos.w )) < 0.25)
         {
             discard;
         }
+#endif
     }
 
     frag_color = vec4(1,1,1,1);
