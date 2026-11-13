@@ -867,19 +867,12 @@ public:
     // unified lighting U1: the shadow pool's local light ratio (rgb, 10 bits) in the stochastic engine's history, the
     // light pool's table (8 RGBA32F texels per light) and its 32 x 32 screen tile list (R8UI rows). All render thread only:
     // made and read in renderDeferredLighting, freed in releaseScreenBuffers.
-    LLStochasticHistory mLocalRatioHistory{ GL_RGBA16F, 1.f / 8.f };   // signed, unclamped ratio (the light passes clamp on read)
+    LLStochasticHistory mLocalRatioHistory{ GL_RGB10_A2, 1.f / 8.f };
     U32 mLocalRatioFailedWidth = 0;
     U32 mLocalRatioFailedHeight = 0;
     bool mLocalRatioActive = false;
-    U32 mLocalLightTableTex = 0;        // the table as a texture (a device whose uniform blocks hold less than 32 KB)
-    U32 mLocalLightTableUBO = 0;        // or as a std140 uniform block (gLocalLightTableUBO), orphaned each frame
-    U32 mLocalLightTilesTex = 0;        // the CPU's coarse tile lists: an RGBA32UI array of 3 layers, tile (x, y)'s 48 bytes (the count, the light indices)
-    U32 mLocalCullTex = 0;              // the GPU cull's lists, the same format (main view)
-    U32 mLocalCullFbo = 0;
-    U32 mLocalBlockTex = 0;             // RG32F: the nearest and farthest depth of each 4 x 4 pixels
-    U32 mLocalBlockFbo = 0;
-    S32 mLocalCullW = 0, mLocalCullH = 0;   // the screen size the cull targets were made for
-    bool mLocalCullFailed = false;
+    U32 mLocalLightTableTex = 0;
+    U32 mLocalLightTilesTex = 0;
     S32 mLocalLightTilesW = 0;          // the tile texture's size, texels
     S32 mLocalLightTilesH = 0;
     bool mLocalLightTableFailed = false;   // allocation failures are tried again only after a size change or a screen buffer release

@@ -36,10 +36,9 @@
 //
 // Texel layout of a table row (all view space):
 //   0  centre.xyz, size                  size is the light's radius (volume->getLightRadius() * 1.5)
-//   1  colour.rgb (linear; a worn light's capped at 1.0), falloff
+//   1  colour.rgb (linear), falloff
 //   2  origin.xyz, kind                  the projector's eye (its pass's proj_origin) or the centre; kind 1 a projector
-//   3  the projector texture's average luminance (1 for none or a point light), the emitter's radius s, the exclusion radius
-//      r_excl, worn (1 an attachment)
+//   3  the projector texture's average luminance (1 for none or a point light), 0, 0, 0
 //   4-7 the projector matrix (view space to the light's texture space, column major); zero for a point light
 
 #include <algorithm>
