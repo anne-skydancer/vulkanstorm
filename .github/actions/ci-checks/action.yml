@@ -58,11 +58,6 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowmethod_test.cpp -o "$RUNNER_TEMP/shadow-method-test"
         "$RUNNER_TEMP/shadow-method-test"
-    - name: Check the local light emitter and exclusion rules
-      shell: bash
-      run: |
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllocallight_test.cpp -o "$RUNNER_TEMP/local-light-test"
-        "$RUNNER_TEMP/local-light-test"
     - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
       shell: bash
       run: |
