@@ -15,13 +15,13 @@ The report script reads `utf-8-sig`.
 
 ## 1. The bench viewer
 
-Build from the probe branch (worktree `work\particles-s0`), configuration `RelWithDebInfoFS_open` (OpenSim on: the
+Build from the probe branch (worktree `work\particles-s0`), configuration `RelWithDebInfoOS` (OpenSim on: the
 Release configuration cannot log in to a local OpenSim grid), with Tracy, LTO and AVX2 (local Windows builds default
 AVX2 off, CI turns it on, so pass it):
 
 ```bash
-autobuild configure -A 64 -c RelWithDebInfoFS_open -- --tracy --lto --avx2 "-DLL_TESTS:BOOL=FALSE"
-autobuild build -A 64 -c RelWithDebInfoFS_open --no-configure
+autobuild configure -A 64 -c RelWithDebInfoOS -- --tracy --lto --avx2 "-DLL_TESTS:BOOL=FALSE"
+autobuild build -A 64 -c RelWithDebInfoOS --no-configure
 # build-vc180-64/CMakeCache.txt must say OPENSIM=ON, USE_TRACY=ON, USE_AVX2_OPTIMIZATION=ON, USE_LTO=ON
 ```
 
