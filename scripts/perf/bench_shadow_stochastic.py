@@ -65,7 +65,6 @@ def bind_stoch(prog, sc, light_size, frame):
     for unit in range(2, 8):
         bindsampler(unit, depth_fetch.value)       # shadowMap0-5: plain depth, compare off
     u1i(loc(prog, b'shadow_st_frame'), frame); u1f(loc(prog, b'spot_shadow_reach'), 128.0)
-    u2f(loc(prog, b'spot_emitter_radius'), 0.075, 0.075); u2f(loc(prog, b'spot_shadow_excl'), 0.075, 0.075)   # lllocallight.h: PROJECTOR_EMITTER_U0
 
 
 def cascade_texels(sc):

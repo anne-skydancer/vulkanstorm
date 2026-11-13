@@ -98,29 +98,9 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
-weights of the other methods' blend bands. A projector is the same estimator toward its emitter (a disc of
-radius 0.075 m, a per-slot uniform), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
+weights of the other methods' blend bands. A projector is the same estimator toward its emitter (0.15 m,
+a fixed 0.15 m emitter), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel).
-
-The march is split into `stMarchRay` (one ray, 1 when blocked) and `stMarch` (the mean of the 8), and a light's visibility is
-`stTransmittance` (the rays toward one light's emitter disc, marched through its map). A projector's receiver is described like the
-sun's: `shadowReceiverGeometry` gives the geometric normal from the depth buffer for the receiver plane and the normal offset,
-because the shading normal of a bump or normal map tilts both and striped the lit surface in columns.
-
-What a projector's march excludes, exactly: its own prim, and nothing else. The own prim is not drawn into the projector's map
-(`stateSort` skips it) and the map's near plane lies at the prim's face, so the stretch from the eye (the apex, behind the face) to
-the face holds no depth. The march therefore ends `r_excl` short of the eye, with `r_excl` = that stretch plus a 5 cm margin
-(`LLLocalLight::projectorExclusion`, `lllocallight.h`), and a stored depth nearer the eye than that along the receiver's line is no
-surface (`z_floor` of `stReference`; 0 for the sun, which is unchanged). That plane is at the eye's distance `r_excl` along the
-receiver's line, so for rays off the axis it lies nearer than the margin's depth: it can only exclude less than the margin, and
-everything past the face casts. Linked parts of a fixture (a shade, a housing beyond the face), a partition or a table's object
-in front of the face all shade the light. Receivers nearer than `r_excl` march a sliver and are mostly outside the map's depth range.
-The pipeline sets `spot_emitter_radius` (0.075 m, a per-slot uniform) and `spot_shadow_excl` for the two slots in `bindDeferredShader`.
-A point light (U2, not used yet) will exclude half its own drawable's extent (`exclusionRadius`; `LLDrawable::getRadius` is the full
-scale diagonal). `scripts/perf/test_local_light_u0.py` gates this stage: the sun channel equals the previous code bit for bit (raw
-and resolved), the bump no longer changes a projector's result, a housing inside the stretch does not black out the light while a
-shade plate 0.1 to 0.5 m in front of the face, a thin partition and an object over a table all cast, and the sun pass costs at most
-0.02 ms more.
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
 accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a

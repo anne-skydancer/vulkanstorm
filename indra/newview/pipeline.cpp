@@ -30,7 +30,6 @@
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
-#include "lllocallight.h" // <Vulkanstorm/> local light emitter size and exclusion zone
 
 // library includes
 #include "llimagepng.h"
@@ -10369,26 +10368,6 @@ void LLPipeline::bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_
     if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
     {
         shader.uniform1f(LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE, getShadowLightSize());
-
-        // per projector slot: the radius of the emitter its rays go toward, and r_excl, the distance from its eye
-        // within which a stored depth is no occluder: the stretch between the eye and the prim's face (near-clipped
-        // out of the map) and a small margin. The light's own prim is not in its map; linked parts and everything
-        // else cast. Read where sampleSpotShadow runs (the deferred sun programs); lllocallight.h
-        static const LLStaticHashedString sSpotEmitterRadius("spot_emitter_radius");
-        static const LLStaticHashedString sSpotShadowExcl("spot_shadow_excl");
-        F32 emitter[2] = { LLLocalLight::PROJECTOR_EMITTER_U0, LLLocalLight::PROJECTOR_EMITTER_U0 };
-        F32 excl[2] = { LLLocalLight::PROJECTOR_MARGIN, LLLocalLight::PROJECTOR_MARGIN };
-        for (U32 i = 0; i < 2; ++i)
-        {
-            const LLDrawable* light = mShadowSpotLight[i].get();
-            const LLVOVolume* volume = light ? light->getVOVolume() : nullptr;
-            if (volume)
-            {
-                excl[i] = LLLocalLight::projectorExclusion(volume->getScale().mV[VY], volume->getSpotLightParams().mV[0]);
-            }
-        }
-        shader.uniform2fv(sSpotEmitterRadius, 1, emitter);
-        shader.uniform2fv(sSpotShadowExcl, 1, excl);
     }
     // </Vulkanstorm>
     shader.uniform1f(LLShaderMgr::DEFERRED_DEPTH_CUTOFF, RenderEdgeDepthCutoff);
