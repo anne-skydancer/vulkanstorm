@@ -126,23 +126,24 @@ void main()
         discard;
     }
 
+    GBufferInfo gb = getGBuffer(tc); // the normal is decoded once, here, for the facing test and the rest of the shader
+
+    vec3 n = gb.normal;
+
     float shadow = 1.0;
 
     if (proj_shadow_idx >= 0 && all(greaterThan(proj_tc.xy, vec2(0.0))) && all(lessThan(proj_tc.xy, vec2(1.0))))
     {
-        vec3 n0 = getNorm(tc).xyz; // the decode getGBuffer does
 #if !defined(PROJECTOR_SHADOW_NO_FACING_SKIP)
-        // a surface that faces away gets at most 0.1 % of the lamp's front-on term (N.L is clamped), so its shadow is not looked up
-        if (dot(n0, proj_origin - pos) > 0.0)
+        // a surface that faces away gets at most 0.1 % of the lamp's front-on term (N.L is clamped), so its shadow is not
+        // looked up, unless it has an environment reflection of the projected image, which is lit from any side and
+        // multiplied by the shadow (envIntensity)
+        if (dot(n, proj_origin - pos) > 0.0 || gb.envIntensity > 0.0)
 #endif
         {
-            shadow = sampleProjectorShadow(pos, n0, tc);
+            shadow = sampleProjectorShadow(pos, n, tc);
         }
     }
-
-    GBufferInfo gb = getGBuffer(tc);
-
-    vec3 n = gb.normal;
     // </Vulkanstorm>
 #else
     float shadow = 1.0;
