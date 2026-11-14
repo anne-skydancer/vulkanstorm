@@ -282,6 +282,7 @@ protected:
     LLGLenum mFormatType;
     bool     mFormatSwapBytes;// if true, use glPixelStorei(GL_UNPACK_SWAP_BYTES, 1)
 
+    // true: not counted in sCount and not registered in sImageList (texName constructor); the texture is still owned and deleted
     bool mExternalTexture;
 
     // STATICS

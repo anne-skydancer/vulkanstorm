@@ -40,7 +40,7 @@ the file. The check runs before the cache is opened, on every machine, including
 because it does not depend on the renderer. It reads the file once (size checked first), hashes it twice (the whole
 file, then each entry), and frees the 8.6 MB again; the clouds will load and verify it again when they first draw. An
 open that fails is logged with its reason and tried once more after 200 ms. Besides a user who edits the file in a
-user-writable install, the message can be caused by an antivirus quarantining or locking the file, disk errors, or an
+user-writable install, the warning can be caused by an antivirus quarantining or locking the file, disk errors, or an
 interrupted upgrade; reinstalling fixes all of them.
 
 Read-only: the Inno installer (the Windows installer CI builds) installs the file with the read-only attribute and the
