@@ -32,6 +32,9 @@ in float target_pos_x;
 in vec4 vertex_color;
 in vec2 vary_texcoord0;
 uniform float minimum_alpha;
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+uniform float shadow_solid_alpha; // <Vulkanstorm/> 0.98 for blend faces; 0.0 for mask faces, which never dither
+#endif
 
 void main()
 {
@@ -52,9 +55,10 @@ void main()
     }
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-    // <Vulkanstorm/> Stochastic shadows: a texel is solid from 0.98 up; below that it lets light through in
-    // proportion to its transparency (Legacy keeps the stock 0.88 below).
-    if (alpha < 0.98)
+    // <Vulkanstorm/> Stochastic shadows: a blend texel is solid from 0.98 up; below that it lets light through in
+    // proportion to its transparency (Legacy keeps the stock 0.88 below). A mask face follows the creator's cutoff
+    // (minimum_alpha, above) and nothing else: the pass sets shadow_solid_alpha to 0, so it never dithers.
+    if (alpha < shadow_solid_alpha)
 #else
     if (alpha < 0.88) // treat as semi-transparent
 #endif
@@ -63,8 +67,8 @@ void main()
         // <Vulkanstorm/> Stochastic shadows read one texel per ray; a stipple that drops every other texel column
         // reads as columns of light and shade. A hashed per-texel dither (anchored to the map's texel, so it is
         // stable wherever the map is) keeps the fraction alpha of the texels, with no column period. It is still grain at
-        // texel scale: static, with no per-layer or per-frame decorrelation, so only the ray jitter averages it. Every
-        // texel below 0.98 is dithered here, mask or blend faces alike, as the stipple it replaces did.
+        // texel scale: static, with no per-layer or per-frame decorrelation, so only the ray jitter averages it. Only
+        // blend faces reach it (shadow_solid_alpha is 0 for mask faces).
         float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
         if (ign >= alpha)
         {
