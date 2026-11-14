@@ -42,8 +42,12 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
   is one texel (an edge is never narrower than the tile resolves, so a shrunk tile does not alias); the upper bound is 12 texels
   because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
-  452 texels for 32 bilinear 2 x 2 taps, 3.5 times the coverage of one gather per tap) and the penumbra turns grainy before
-  it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
+  452 texels, and 32 bilinear 2 x 2 taps read 128 of them, 28 % against 41 % at the old 10 texels) and the penumbra turns grainy
+  before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
+- **Emitter size from the prim (P2b).** The penumbra's light size is the projector prim's own face, `scale.x` and `scale.y` of the
+  pose the tile was drawn with, as the uniform `proj_shadow_light_size` (metres along the map's u and v, each clamped to
+  2 cm .. 30 cm; the old constant was 15 cm, at most the near plane's width). A bulb prim gives a sharper shadow than before, a wall washer
+  a softer one up to the 4 cm radius cap. Nothing depends on the camera. The sun keeps `shadow_light_size`.
 - **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
   pool), so a tile's pattern does not depend on where the tile sits in the atlas.
 - **Lifetime.** Allocated in `allocateShadowBuffer` (the place of the spot maps, not for probe snapshots), released when the method
