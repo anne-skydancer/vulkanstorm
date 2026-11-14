@@ -182,7 +182,9 @@ private:
         bool prevPoseValid = false;
         bool lampMoving = false;           // the pose changed since last frame (a dynamic item)
         bool poseStale = false;            // the pose differs from the one the tile holds
-        llprojectorpool::Pyramid volume;   // the light's volume, agent space, from this frame's pose (camera independent)
+        llprojectorpool::Pyramid volume;   // the light's volume, agent space, from the pose below (camera independent)
+        llprojectorpool::Pose volumePose;  // the pose `volume` was built for (rebuilt when the lamp's pose changes or agent space shifts)
+        bool volumeValid = false;
         bool pending = false;              // a dirty box touched it since it was drawn
         llprojectorpool::Cause pendingCause = llprojectorpool::Cause::Other;
         U32 dirtyFrame = 0;                // the frame the first such box was applied
@@ -223,6 +225,7 @@ private:
     std::unordered_map<const LLDrawable*, U32> mKeyOf;
     U32 mNextKey = 1;
     U32 mFrame = 0;                // the frame count update() last ran in
+    U32 mShiftsSeen = 0;           // LLShadowDirtyFeed::shifts() at the last update: agent space moved since, every volume is rebuilt
     F32 mCostEmaMs = 0.5f;         // placeholder until the first tile render is timed (a new record's prediction is capped, coldItemMs)
     F64 mNextAllocTry = 0.0;       // seconds: when a failed allocation is tried again
     bool mAllocFailed = false;
