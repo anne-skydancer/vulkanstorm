@@ -1208,10 +1208,10 @@ struct StaticItem
 {
     uint32_t key = 0;
     bool never_drawn = false;   // drawn_frame == 0
-    bool pending = false;       // needs a render (ignored when never_drawn; P2 has no change tracking, so every placed tile)
+    bool pending = false;       // needs a render (ignored when never_drawn): the caller passes only the tiles its verdict (classifyTile) selected
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
-    uint32_t age_frames = 0;    // frames since it became stale (P3: since the first dirty box that touched it): the order of service
+    uint32_t age_frames = 0;    // how long it has waited: frames since the first dirty box that touched it, else since it was drawn
 };
 
 // Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the
