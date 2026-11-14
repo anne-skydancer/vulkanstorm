@@ -384,7 +384,7 @@ runs:
           exit 1
         fi
 
-    - name: Run statistics, script metadata, transport, TLS, primitive, night sky and physics decomposition regression tests
+    - name: Build the regression tests; run the transport, night sky and primitive tests
       # Release builds (vkstorm-release pushes, publishing dispatches) build no tests.
       if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
@@ -393,18 +393,23 @@ runs:
         cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
         cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
-          llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
+          PROJECT_llprimitive_TEST_llmediaentry PROJECT_llprimitive_TEST_llprimitive PROJECT_llprimitive_TEST_llgltfmaterial INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
           INTEGRATION_TEST_llcorehttp
         # The TLS test: this line's test helpers register tests with CTest,
         # so run it here, and fail unless it is found. The credential-store
         # tests (llsechandler_basic, llsecapi, llviewernetwork) compile on this
         # line but are left out of this step by choice.
-        runners='llcorehttp'
-        want=1
+        runners='llcorehttp|llnightsky'
+        want=2
         tests="^INTEGRATION_TEST_RUNNER_($runners)$"
         found=$(ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$tests" | sed -n 's/^Total Tests: //p')
         test "$found" = "$want" || { echo "expected $want tests, CTest found ${found:-none}"; exit 1; }
         ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$tests" --output-on-failure
+        # The llprimitive unit tests (llmediaentry, llprimitive, llgltfmaterial).
+        units="^PROJECT_llprimitive_TEST_"
+        found=$(ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$units" | sed -n 's/^Total Tests: //p')
+        test "$found" = "3" || { echo "expected 3 llprimitive tests, CTest found ${found:-none}"; exit 1; }
+        ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$units" --output-on-failure
 
     - name: Upload installer
       if: env.VIEWER_PACKAGE == 'ON'

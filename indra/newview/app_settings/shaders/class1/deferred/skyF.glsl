@@ -111,7 +111,7 @@ vec3 halo22(float d)
 // Milky Way of the fainter stars (milky_way.bin, Tycho-2), turning about the
 // celestial pole as seen from the place of "Sky seen from" (Rome by default).
 // Firestorm's random stars (starsF.glsl) are the other choice; this pass
-// is off for them (night_sky_params.x 0). Design by Anne Skydancer, LGPL 2.1.
+// is off for them (night_sky_params.x 0). Design by Anne Skydancer, GPL-3.0-or-later.
 //
 // The catalogue is sorted into the cells of a cube map, each star listed in
 // every cell its point reaches, so that a pixel reads its own cell only.
