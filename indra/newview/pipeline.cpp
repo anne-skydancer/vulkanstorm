@@ -218,6 +218,7 @@ F32 LLPipeline::RenderShadowBias;
 F32 LLPipeline::RenderSpotShadowOffset;
 F32 LLPipeline::RenderSpotShadowBias;
 LLDrawable* LLPipeline::RenderSpotLight = nullptr;
+LLPipeline::ELocalShadowPass LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE; // <Vulkanstorm/>
 F32 LLPipeline::RenderEdgeDepthCutoff;
 F32 LLPipeline::RenderEdgeNormCutoff;
 LLVector3 LLPipeline::RenderShadowGaussian;
@@ -3235,6 +3236,13 @@ void LLPipeline::markVisible(LLDrawable *drawablep, LLCamera& camera)
                     }
                 }
             }
+            // <Vulkanstorm> a projector tile draws the fixed layer: a linkset the simulator reports moving, or a physical one, is
+            // not in it (unless it is the lamp's own linkset, the fixture)
+            if (sLocalShadowPass == LOCAL_SHADOW_STATIC && !LLShadowDirtyFeed::bridgeCasts(root, RenderSpotLight))
+            {
+                return;
+            }
+            // </Vulkanstorm>
             sCull->pushBridge((LLSpatialBridge*) drawablep);
         }
         else
@@ -11661,6 +11669,13 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         updateCull(shadow_cam, result);
 
         stateSort(shadow_cam, result);
+
+        // <Vulkanstorm> a projector tile: hold the casters it draws at full detail (the LOD pin, spec 4.4)
+        if (sLocalShadowPass == LOCAL_SHADOW_STATIC)
+        {
+            mProjectorShadows.pinCasters(result);
+        }
+        // </Vulkanstorm>
     }
 
     //generate shadow map
