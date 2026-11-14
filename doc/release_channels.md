@@ -85,6 +85,11 @@ will be one more entry in `build-platforms.json` and one more workflow.
 Dispatch the platform's workflow (Build Windows, Build Linux or Build Linux
 LTS). With `publish` set, it builds a Release package and publishes it to
 that line's tag for the platform. Without it, it only builds.
+
+On vkstorm-canary (Vulkanstorm on upstream Firestorm `master`, 7.3.x), a
+dispatch without `publish` is the on-demand RelWithDebInfo test build; with
+`publish` it publishes the Release package as `experimental-<platform>`.
+Pull requests into canary build RelWithDebInfo as everywhere else.
 No other line publishes. vkstorm-canary and vkstorm-devel never move
 `windows-latest`, `linux-latest`, `linux-lts` or `stable`.
 

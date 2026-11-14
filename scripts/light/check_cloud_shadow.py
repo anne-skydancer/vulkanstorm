@@ -222,7 +222,7 @@ def random_dir(rnd, min_z):
             return [a / l for a in v]
 
 
-# vkstorm-aleph: upstream moved the sky and cloud lighting into the fragment shader (b9727dd841), so cloudsF
+# vkstorm-canary: upstream moved the sky and cloud lighting into the fragment shader (b9727dd841), so cloudsF
 # uses srgbF's functions (the viewer attaches that file to programs that calculate atmospherics)
 SKY_VS = "#version 400 compatibility\n" + EXTRA + read('class1/deferred/cloudsV.glsl')
 SKY_FS = "#version 400 compatibility\n" + EXTRA + read('class1/environment/srgbF.glsl') + read('class1/deferred/cloudsF.glsl').replace('/*[EXTRA_CODE_HERE]*/', '')

@@ -11,7 +11,7 @@ the shipped binaries link with, re-done on 2026-11-08 on `vkstorm-devel` (re-che
 `autobuild.xml`, the CMake configuration, the CI configure line and the package
 licence files in `packages/LICENSES/` of a local build.
 
-## This line: `vkstorm-aleph`
+## This line: `vkstorm-canary`
 
 Audited on `vkstorm-devel` and re-checked against this line's own `autobuild.xml`
 and CI configure line (2026-11-08). The configure options are devel's. This line

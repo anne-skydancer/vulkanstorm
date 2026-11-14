@@ -313,7 +313,7 @@ runs:
         set -euo pipefail
         shopt -s nullglob
         # Lines whose viewer_manifest.py diverts the archive to $RUNNER_TEMP
-        # under GitHub Actions (canary, aleph) leave it there, the others in
+        # under GitHub Actions (canary) leave it there, the others in
         # newview/; the suffixed package goes to newview/, where the upload
         # step reads it.
         packages=("${{ inputs.directory }}"/newview/*.tar.xz "$RUNNER_TEMP"/*.tar.xz)
@@ -384,32 +384,39 @@ runs:
           exit 1
         fi
 
-    - name: Build the regression tests; run the transport, night sky and primitive tests
-      # Release builds (vkstorm-release pushes, publishing dispatches) build no tests.
+    # Release builds (vkstorm-release pushes, publishing dispatches) never build or run tests: LL_TESTS stays
+    # off for Release. PR and qualification builds (RelWithDebInfo) run them.
+    - name: Run statistics, script metadata, transport, primitive, night sky and launcher regression tests
       if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
       run: |
         set -euo pipefail
         cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
-        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-          --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
-          PROJECT_llprimitive_TEST_llmediaentry PROJECT_llprimitive_TEST_llprimitive PROJECT_llprimitive_TEST_llgltfmaterial INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
-          INTEGRATION_TEST_llcorehttp
-        # The TLS test: this line's test helpers register tests with CTest,
-        # so run it here, and fail unless it is found. The credential-store
-        # tests (llsechandler_basic, llsecapi, llviewernetwork) compile on this
-        # line but are left out of this step by choice.
-        runners='llcorehttp|llnightsky'
-        want=2
-        tests="^INTEGRATION_TEST_RUNNER_($runners)$"
+        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver           PROJECT_llprimitive_TEST_llgltfmaterial PROJECT_llprimitive_TEST_llmediaentry PROJECT_llprimitive_TEST_llprimitive           INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition INTEGRATION_TEST_llcorehttp
+        # This line's test helpers register the tests with CTest (upstream
+        # b66d6679b2) instead of running them after their build: run them
+        # here, and fail unless all of them are found.
+        runners='lltrace|llinventory_runtime|jsonrpcws|wsserver|llnightsky|llmodel_decomposition|llcorehttp'
+        want=10
+        extra=''
+        # The credential-store tests stub LLControlGroup and link llui,
+        # which only MSVC's linker resolves; they have never linked on Linux.
+        if [ "$RUNNER_OS" = Windows ]; then
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
+          runners="$runners|llsechandler_basic|llsecapi"
+          want=12
+        fi
+        # The Linux launcher (wrapper.sh) tests and the crash report test:
+        # script tests that register with CTest on Linux only.
+        if [ "$RUNNER_OS" = Linux ]; then
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target linux-crash-report-test-driver linux-crash-logger
+          want=$((want + 3))
+          extra="|linux_wrapper_syntax|linux_wrapper_graphics_policy|linux-crash-report"
+        fi
+        tests="^(INTEGRATION_TEST_RUNNER_($runners)|PROJECT_llprimitive_TEST_(llgltfmaterial|llmediaentry|llprimitive)$extra)$"
         found=$(ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$tests" | sed -n 's/^Total Tests: //p')
         test "$found" = "$want" || { echo "expected $want tests, CTest found ${found:-none}"; exit 1; }
         ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$tests" --output-on-failure
-        # The llprimitive unit tests (llmediaentry, llprimitive, llgltfmaterial).
-        units="^PROJECT_llprimitive_TEST_"
-        found=$(ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -N -R "$units" | sed -n 's/^Total Tests: //p')
-        test "$found" = "3" || { echo "expected 3 llprimitive tests, CTest found ${found:-none}"; exit 1; }
-        ctest --test-dir "${{ inputs.directory }}" -C "$VIEWER_BUILD_TYPE" -R "$units" --output-on-failure
 
     - name: Upload installer
       if: env.VIEWER_PACKAGE == 'ON'
