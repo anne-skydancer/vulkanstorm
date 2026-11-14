@@ -423,7 +423,9 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
 void LLProjectorShadows::copyTile(U32 from_tex, const Rect& src, U32 to_tex, const Rect& dst)
 {
     llassert(src.size == dst.size);
-    if (glCopyImageSubData)
+    // GL 4.3 core, fetched by LLGLManager only at 4.3 and above (llgl.cpp). Test the version, not the
+    // pointer: on Linux the function is linked directly and its address is never null (-Werror=address).
+    if (gGLManager.mGLVersion >= 4.29f)
     {
         glCopyImageSubData(from_tex, GL_TEXTURE_2D, 0, (GLint)src.x, (GLint)src.y, 0, to_tex, GL_TEXTURE_2D, 0, (GLint)dst.x,
                            (GLint)dst.y, 0, (GLsizei)src.size, (GLsizei)src.size, 1);
