@@ -30,9 +30,11 @@
 
 #include "llvovolume.h"
 
+#include <limits>
 #include <sstream>
 
 #include "llviewercontrol.h"
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's LOD pin
 #include "lldir.h"
 #include "llflexibleobject.h"
 #include "llfloatertools.h"
@@ -1789,6 +1791,10 @@ bool LLVOVolume::calcLOD()
     else
     {
         cur_detail = computeLODDetail(ll_round(distance, 0.01f), ll_round(radius, 0.01f), lod_factor);
+        if (mLampLODPin)
+        {
+            cur_detail = 3; // <Vulkanstorm/> held by a projector tile: full detail wherever the camera is (spec 4.4, D6)
+        }
     }
 
     if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_TRIANGLE_COUNT) && mDrawable->getFace(0))
@@ -1824,6 +1830,30 @@ bool LLVOVolume::calcLOD()
 
     return false;
 }
+
+// <Vulkanstorm> the projector shadow pool's LOD pin
+void LLVOVolume::pinLampLOD()
+{
+    if (mLampLODPin < std::numeric_limits<U16>::max())
+    {
+        ++mLampLODPin;
+    }
+    // the rebuild this forces is a LOD increase: the tile that pinned it is drawn once more with the full detail, and then holds
+    if (!isNoLOD() && mLOD < 3 && mDrawable.notNull() && !mGLTFAsset && !isHUDAttachment())
+    {
+        LLShadowDirtyFeed::CauseScope cause(llprojectorpool::Cause::LodUp);
+        forceLOD(3);
+    }
+}
+
+void LLVOVolume::unpinLampLOD()
+{
+    if (mLampLODPin > 0)
+    {
+        --mLampLODPin; // the next updateLOD gives the camera's LOD back (and rebuilds if it differs)
+    }
+}
+// </Vulkanstorm>
 
 //<FS:Beq> FIRE-21445
 void LLVOVolume::forceLOD(S32 lod)
