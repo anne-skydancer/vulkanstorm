@@ -663,6 +663,7 @@ void LLProjectorShadows::renderTile(Record& rec)
     }
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
+    gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
 
     copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
 
@@ -792,6 +793,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         gGLViewport[i] = saved.viewport[i];
     }
     glViewport(saved.viewport[0], saved.viewport[1], saved.viewport[2], saved.viewport[3]);
+    glScissor(saved.viewport[0], saved.viewport[1], saved.viewport[2], saved.viewport[3]); // not the last tile's box
     LLRenderTarget::sCurResX = saved.resX;
     LLRenderTarget::sCurResY = saved.resY;
     set_current_modelview(saved.view);
