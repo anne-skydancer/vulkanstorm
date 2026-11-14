@@ -163,6 +163,28 @@ class SourceHeaderTest(unittest.TestCase):
                     offenders.append(name)
         self.assertEqual(offenders, [])
 
+    def test_vulkanstorm_viewer_headers_are_gpl3(self):
+        # A header that names itself "Vulkanstorm Viewer Source Code" is ours: no LGPL licence block.
+        marker = 'Vulkanstorm Viewer ' + 'Source Code'
+        offenders = []
+        for name, path in tracked_text_files():
+            head = path.read_bytes()[:4000].decode('utf-8', 'replace')
+            if marker not in head:
+                continue
+            if VULKANSTORM not in head or 'viewerlgpl' in head or 'Lesser General Public' in head:
+                offenders.append(name)
+        self.assertEqual(offenders, [])
+
+    def test_no_lgpl_wording_in_vulkanstorm_comments(self):
+        # Comments by Vulkanstorm that gave the licence of a block or design as LGPL (or LGPL or GPL-3).
+        wording = ('Licensed LGPL-2.1 ' + 'or GPL-3', 'Anne Skydancer, ' + 'LGPL')
+        offenders = []
+        for name, path in tracked_text_files():
+            text = path.read_bytes().decode('utf-8', 'replace')
+            if any(w in text for w in wording):
+                offenders.append(name)
+        self.assertEqual(offenders, [])
+
     def test_every_spdx_expression_can_be_part_of_a_gpl3_work(self):
         offenders = []
         for name, path in tracked_text_files():
