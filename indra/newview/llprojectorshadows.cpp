@@ -40,6 +40,7 @@
 #include "llvovolume.h"
 #include "pipeline.h"
 
+#include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -77,7 +78,8 @@ namespace
         g.radius = volume->getLightRadius();
         g.rot = volume->getRenderRotation();
         g.scale = volume->getScale();
-        if (!(g.fov > 0.f) || !(g.scale.mV[VY] > 0.f) || !(g.scale.mV[VX] > 0.f))
+        if (!(g.fov > 0.f && g.fov < 3.1f) || !(g.scale.mV[VY] > 0.f) || !(g.scale.mV[VX] > 0.f) || !(g.radius > 0.f) || !std::isfinite(g.radius) ||
+            !std::isfinite(g.scale.mV[VX]) || !std::isfinite(g.scale.mV[VY]) || !std::isfinite(g.scale.mV[VZ]))
         {
             return false;
         }
@@ -121,7 +123,9 @@ namespace
         {
             return false;
         }
-        return true;
+        // the geometry renderTile needs: a light read_spot rejects would stay never drawn for good
+        SpotGeom g;
+        return read_spot(drawable, g);
     }
 
     F32 camera_distance(LLDrawable* drawable, const LLVector3& cam_pos, F32 radius)
@@ -263,15 +267,20 @@ bool LLProjectorShadows::ensureAllocated()
                                          << ((U64)size * size * 8 >> 20) << " MiB)" << LL_ENDL;
             return true;
         }
-        LL_WARNS("ProjectorShadows") << "projector shadow atlases of " << size << "x" << size << " could not be allocated" << LL_ENDL;
+        if (!mAllocFailed)
+        {
+            LL_WARNS("ProjectorShadows") << "projector shadow atlases of " << size << "x" << size << " could not be allocated" << LL_ENDL;
+        }
     }
     if (!mAllocFailed)
     {
         LL_WARNS("ProjectorShadows") << "projector shadow pool unavailable: the projectors are lit without shadows; the method stays selected and "
                                         "the allocation is tried again" << LL_ENDL;
     }
+    // the retry backs off: 5 s, 10 s, ... up to 60 s
+    mAllocBackoff = mAllocFailed ? llmin(mAllocBackoff * 2.0, 60.0) : 5.0;
     mAllocFailed = true;
-    mNextAllocTry = LLTimer::getTotalSeconds() + 5.0;
+    mNextAllocTry = LLTimer::getTotalSeconds() + mAllocBackoff;
     return false;
 }
 
@@ -481,27 +490,8 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
     }
     glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
 
-    // adopt the layout: the buddy allocator takes the same blocks in the same order the plan did
-    mBuddy.reset(mAtlasSize);
-    std::vector<size_t> order(requests.size());
-    for (size_t i = 0; i < order.size(); ++i)
-    {
-        order[i] = i;
-    }
-    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-        if (requests[a].size != requests[b].size)
-        {
-            return requests[a].size > requests[b].size;
-        }
-        return requests[a].key < requests[b].key;
-    });
-    for (size_t i : order)
-    {
-        Rect r;
-        const bool got = mBuddy.alloc(requests[i].size, r);
-        llassert(got && r == plan.placed[i]);
-        (void)got;
-    }
+    // adopt the layout: the allocator the plan ended with
+    mBuddy = plan.buddy;
     for (size_t i = 0; i < requests.size(); ++i)
     {
         Record& rec = mRecords[requests[i].key];
@@ -611,7 +601,8 @@ void LLProjectorShadows::setTileOrigin(F32 x, F32 y)
 }
 
 // One tile: the light's view (its pose now), the fixed objects and the avatars into S, then S -> L for the tile. The cull
-// frustum comes from the light's matrices, so what is drawn depends on the light alone.
+// frustum comes from the light's matrices. The tile's size and view come from the light; the caster LOD and the avatars'
+// visibility still follow the camera until P3/P4.
 void LLProjectorShadows::renderTile(Record& rec)
 {
     SpotGeom g;
@@ -623,7 +614,7 @@ void LLProjectorShadows::renderTile(Record& rec)
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
 
-    const F32 cpu_start = (F32)LLTimer::getTotalSeconds();
+    const F64 cpu_start = LLTimer::getTotalSeconds();
 
     glBindFramebuffer(GL_FRAMEBUFFER, mFboS);
     LLRenderTarget::sCurFBO = mFboS;
@@ -679,7 +670,7 @@ void LLProjectorShadows::renderTile(Record& rec)
     r.drawnFrame = LLFrameTimer::getFrameCount();
     r.drawnTime = LLTimer::getTotalSeconds();
     r.lowres = false;
-    const F32 ms = ((F32)LLTimer::getTotalSeconds() - cpu_start) * 1000.f;
+    const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     r.lastCpuMs = ms;
     mCostEmaMs += 0.2f * (ms - mCostEmaMs);
     mLastFrameRenderMs += ms;
@@ -774,12 +765,20 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
+    // the in-frame cap (section 4.5): the first pick always runs, the others only while the measured time is inside the budget
+    const F32 frame_budget_ms = 2.f * mCostEmaMs;
+    bool first_pick = true;
     for (U32 key : picks)
     {
+        if (!first_pick && mLastFrameRenderMs >= frame_budget_ms)
+        {
+            break;
+        }
         auto it = mRecords.find(key);
         if (it != mRecords.end() && it->second.placed)
         {
             renderTile(it->second);
+            first_pick = false;
         }
     }
 
