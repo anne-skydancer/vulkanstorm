@@ -98,7 +98,7 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         self.path('luau.txt', 'licenses/luau.txt')
         # <Vulkanstorm> The volumetric clouds' noise file (the cloudnoise package, indra/cmake/CloudNoise.cmake
         # checks its hash at configure time and the viewer again at start-up) and the licences of what made it.
-        # No fallback: the viewer stops with a "reinstall" message when the file is missing.
+        # No fallback: when the file is missing or bad the viewer logs a warning at start-up and carries on without it.
         with self.prefix(src=os.path.join(pkgdir, 'clouds'), dst='app_settings/clouds'):
             self.path(CLOUD_NOISE_FILE_NAME)
         # </Vulkanstorm>
