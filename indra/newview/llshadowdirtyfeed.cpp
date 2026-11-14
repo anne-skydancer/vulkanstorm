@@ -30,6 +30,7 @@
 #include "llspatialpartition.h"
 #include "llthread.h"
 #include "llviewerobject.h"
+#include "llviewerobjectlist.h"
 #include "llviewertexture.h"
 #include "llvovolume.h"
 #include "pipeline.h"
@@ -93,10 +94,19 @@ namespace
             return true;
         }
         const LLMaterialPtr material = te->getMaterialParams();
-        if (material.notNull() && (material->getDiffuseAlphaMode() == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND ||
-                                   material->getDiffuseAlphaMode() == LLMaterial::DIFFUSE_ALPHA_MODE_MASK))
+        if (material.notNull())
         {
-            return true;
+            const U8 mode = material->getDiffuseAlphaMode();
+            if (mode == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND || mode == LLMaterial::DIFFUSE_ALPHA_MODE_MASK)
+            {
+                return true;
+            }
+            // NONE and EMISSIVE never go to the alpha pool and never mask (LLPipeline::getPoolTypeFromTE: only the face's own
+            // alpha counts, tested above), so the shadow pass draws the face opaque whatever its texture carries
+            if (mode == LLMaterial::DIFFUSE_ALPHA_MODE_NONE || mode == LLMaterial::DIFFUSE_ALPHA_MODE_EMISSIVE)
+            {
+                return false;
+            }
         }
         const LLGLTFMaterial* gltf = te->getGLTFRenderMaterial();
         if (gltf && gltf->mAlphaMode != LLGLTFMaterial::ALPHA_MODE_OPAQUE)
@@ -120,17 +130,18 @@ namespace
         return false;
     }
 
-    // stores `now` in the object's POOL_ALPHA_FACE bit and returns the bit it held (main thread only, like every pool flag)
-    bool swapAlphaBit(LLVOVolume* volume, bool now)
+    // Stores `now` in the object's POOL_ALPHA_FACE bit and returns what it held. `known` says whether the bit had been written
+    // since tracking last started (POOL_ALPHA_KNOWN; setTracking clears it on every object when tracking switches on): an object
+    // that predates tracking has an unknown "was", which texturedDirties treats as possibly alpha. Main thread only.
+    bool swapAlphaBit(LLVOVolume* volume, bool now, bool& known)
     {
-        const bool was = (volume->mPoolFlags & LLViewerObject::POOL_ALPHA_FACE) != 0;
+        const U8 flags = volume->mPoolFlags;
+        known = (flags & LLViewerObject::POOL_ALPHA_KNOWN) != 0;
+        const bool was = (flags & LLViewerObject::POOL_ALPHA_FACE) != 0;
+        volume->mPoolFlags = (U8)((flags | LLViewerObject::POOL_ALPHA_KNOWN) & ~LLViewerObject::POOL_ALPHA_FACE);
         if (now)
         {
             volume->mPoolFlags |= LLViewerObject::POOL_ALPHA_FACE;
-        }
-        else
-        {
-            volume->mPoolFlags &= ~LLViewerObject::POOL_ALPHA_FACE;
         }
         return was;
     }
@@ -153,10 +164,23 @@ LLShadowDirtyFeed::CauseScope::~CauseScope()
 // static
 void LLShadowDirtyFeed::setTracking(bool on)
 {
-    sTracking.store(on, std::memory_order_relaxed);
+    const bool was_on = sTracking.exchange(on, std::memory_order_relaxed);
     if (!on && on_main_thread())
     {
         reset();
+    }
+    else if (on && !was_on && on_main_thread())
+    {
+        // the alpha bits are only kept while tracking: forget them all, so the first change of each object after this pushes
+        // once (conservatively) and then knows. A walk over the object list, once per switch-on.
+        const S32 count = gObjectList.getNumObjects();
+        for (S32 i = 0; i < count; ++i)
+        {
+            if (LLViewerObject* object = gObjectList.getObject(i))
+            {
+                object->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN;
+            }
+        }
     }
 }
 
@@ -337,14 +361,26 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         return;
     }
     LLViewerObject* object = drawable->getVObj();
-    if (LLVOVolume* volume = drawable->getVOVolume())
-    {
-        swapAlphaBit(volume, anyAlphaFace(volume)); // keep the "had an alpha face" bit current at every rebuild, put and edit
-    }
+    LLVOVolume* volume = drawable->getVOVolume();
     if (skipped(drawable, object))
     {
+        if (volume)
+        {
+            volume->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN; // not kept for objects out of the fixed layer
+        }
         return;
     }
+    if (volume)
+    {
+        bool known;
+        swapAlphaBit(volume, anyAlphaFace(volume), known); // keep the "had an alpha face" bit current at every rebuild, put and edit
+    }
+    pushExtents(drawable, cause);
+}
+
+// static
+void LLShadowDirtyFeed::pushExtents(LLDrawable* drawable, Cause cause)
+{
     Aabb box;
     if (extentsOf(drawable, box))
     {
@@ -411,10 +447,17 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     // Callers differ: some run before the change is applied (LLVOVolume::setTEColor), most after. So the prim's state at this
     // call may be the old one or the new one; the stored bit is what the feed last saw. The tile is stale if either had an
     // alpha face (a face turned opaque closes a hole the cached tile still has).
-    const bool was = swapAlphaBit(volume, anyAlphaFace(volume));
-    if (!skipped(drawable, volume) && texturedDirties(was, (volume->mPoolFlags & LLViewerObject::POOL_ALPHA_FACE) != 0))
+    if (skipped(drawable, volume))
     {
-        noteDrawable(drawable, Cause::Edit);
+        volume->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN;
+        return;
+    }
+    const bool now = anyAlphaFace(volume);
+    bool known;
+    const bool was = swapAlphaBit(volume, now, known);
+    if (texturedDirties(was, now, known))
+    {
+        pushExtents(drawable, Cause::Edit);
     }
 }
 
