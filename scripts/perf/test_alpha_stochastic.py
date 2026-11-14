@@ -23,6 +23,8 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     them; the depth spread of 1.0.1.81943 (the centre's depth on every sample, with a
     slope-scaled offset in the passes) is shown to let the face behind through.
 ;
+  * sub-pixel camera pans (horizontal, vertical, diagonal): the transparency history is read with a Catmull-Rom filter at the exact
+    reprojected position; frame 40 beats the nearest read and plain 8 samples, whole-pixel pans and the static view are unchanged;
   * blended legacy materials that can glare (materialF.glsl itself, plain and as its variant, with
     stand-ins for the lighting it links): the composite equals sorted alpha, an alpha 0 layer with
     matte maps leaves the opaque surface untouched, and shiny glass keeps its reflections (#328);
@@ -1028,12 +1030,15 @@ print(f'two layers whose subsets collide (seeds {SEED_A} and {SEED_B}) over a th
 # 1/8 blend accumulated it as a smear 1 to 2 px behind the image (frame 40 rmse 13 to 17 /255 at 0.25, 0.5, 1.3, 2.5 px
 # per frame, against 4 to 6 for plain 8 samples). True sub-pixel pans: the geometry is translated by frame * d pixels, the
 # reprojection is the exact clip-space translation, the reference is sorted alpha at the same position and samples.
-# The old resolve (git show of the parent commit) is the baseline: whole-pixel pans and the static view must equal it bit for bit.
+# The old resolve is the baseline: the current resolve source with the call of stoch_history_catmull_rom replaced by
+# stoch_history_nearest (still in the util, for this test), so it needs no git history: whole-pixel pans (diagonal ones
+# included) and the static view must equal it bit for bit. The pans are horizontal, vertical and diagonal (both filter axes).
 import numpy as np
-PAN_BEFORE_REF='0067dc4a73'
 def old_text(name,version=420):
-    text=subprocess.run(['git','show',PAN_BEFORE_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,
-        capture_output=True,text=True,check=True).stdout.replace('/*[EXTRA_CODE_HERE]*/','')
+    text=open(os.path.join(root,'indra/newview/app_settings/shaders/class1/deferred',name),encoding='utf-8').read().replace('/*[EXTRA_CODE_HERE]*/','')
+    if name!='stochasticResolveUtilF.glsl':
+        assert 'stoch_history_catmull_rom' in text,name
+        text=text.replace('stoch_history_catmull_rom','stoch_history_nearest')
     return ('#version %d\n'%version)+('#define COMPUTE_SHADER 1\n' if version==430 else '')+text
 getteximage=fn('glGetTexImage',None,U,I,U,U,P);uniform2f=fn('glUniform2f',None,I,C.c_float,C.c_float);uniform4fv=fn('glUniform4fv',None,I,I,C.POINTER(C.c_float))
 PAN_VS="""#version 420
@@ -1067,10 +1072,10 @@ in vec2 obj; in vec2 across;
 void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }"""
 pan_variant=program([(0x8B31,PAN_VS),(0x8B30,PAN_VARIANT),(0x8B30,helper),(0x8B30,engine)])
 pan_shade=program([(0x8B31,PAN_VS),(0x8B30,PAN_SHADE)])
-PAN=[0.0]
+PAN=[(0.0,0.0)]
 def pan_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=None,slope_y=0.):
     g=slope;use(prog)
-    uniform1f(loc(prog,b'z'),z);uniform2f(loc(prog,b'pan'),PAN[0],0.0);uniform2f(loc(prog,b'vp'),float(W),float(H))
+    uniform1f(loc(prog,b'z'),z);uniform2f(loc(prog,b'pan'),PAN[0][0],PAN[0][1]);uniform2f(loc(prog,b'vp'),float(W),float(H))
     uniform1i(loc(prog,b'kind'),g['kind']);uniform1f(loc(prog,b'angle'),g.get('angle',0.))
     count=1
     if g['kind']==1:
@@ -1117,8 +1122,8 @@ def pan_scene(name):
             geo=dict(kind=1,strips=arr,angle=ang,**pan_tex(rng,6.,16.))
         layers.append(L(float(zs[i]),a,rgb,seed=101+i,slope=geo))
     return layers
-def pan_reproj(d): return [1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*d/W,0.,0.,1.]
-PAN_MX,PAN_MY=max(8,W//10),max(4,H//32)   # the border left out: the columns that enter have no history
+def pan_reproj(d): return [1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*d[0]/W,-2.0*d[1]/H,0.,1.]
+PAN_MX,PAN_MY=max(8,W//10),max(4,H//10)   # the border left out: the columns that enter have no history
 def gauss_lp(img,sigma=1.5):
     r=int(math.ceil(3*sigma));k=np.exp(-0.5*(np.arange(-r,r+1)/sigma)**2);k/=k.sum();out=img
     for ax in (0,1):
@@ -1138,7 +1143,7 @@ def pan_run(layers,d,old_prog,frames=40):
     new_prog=resolve_prog;Ts={'old':new_temporal(pan_reproj(d)),'new':new_temporal(pan_reproj(d))};plain=[];last={}
     identical=True;worst=0.;differing=0;sc=(0.5,0.5,0.5,0.0)
     for f in range(1,frames+1):
-        TEMPORAL_FRAME[0]=f;PAN[0]=f*d
+        TEMPORAL_FRAME[0]=f;PAN[0]=(f*d[0],f*d[1])
         ref=sorted_reference(layers,sc)
         plain.append(pan_err(np.array(stochastic(layers,8,8,scene_rgba=sc),dtype=np.float32).reshape(H,W,4),ref))
         imgs={}
@@ -1160,9 +1165,10 @@ if True:
         set_opaque(1.0);pan_rows=[]
         for name in ('T3','Q10','S10'):
             layers=pan_scene(name)
-            for d in (0.0,1.0,4.0,0.25,0.5,1.3,2.5):
+            for d in ((0.,0.),(1.,0.),(4.,0.),(1.,1.),(0.25,0.),(0.5,0.),(1.3,0.),(2.5,0.),(0.,0.5),(0.5,0.5),(1.3,0.7),(-0.5,0.25)):
+                if d[1] and H<96: continue   # 40 frames of a vertical pan scroll a scene this short off the screen: run these at STOCH_TEST_SIZE=128x128 or more
                 r=pan_run(layers,d,old_resolve);pan_rows.append((name,d,r))
-                if d==int(d):   # a whole-pixel pan and the static view: the same image as the nearest read, bit for bit
+                if d[0]==int(d[0]) and d[1]==int(d[1]):   # a whole-pixel pan and the static view: the same image as the nearest read, bit for bit
                     # the hair strips' passes are not bit-deterministic on this GPU (the nearest resolve against itself differs by one
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
@@ -1173,8 +1179,8 @@ if True:
             checks+=1
     finally:
         layer,variant,shade=saved;TEMPORAL_FRAME[0]=0
-    print('sub-pixel camera pans, frame 40, rmse/255 (low-pass in brackets): scene px/frame | plain 8 samples | nearest history (before) | Catmull-Rom history (now)')
+    print('sub-pixel camera pans, frame 40 (plain 8 samples: the mean over the 40 frames), rmse/255 (low-pass in brackets): scene px/frame (x, y) | plain 8 samples | nearest history (before) | Catmull-Rom history (now)')
     for name,d,r in pan_rows:
-        print(f"  {name:3s} {d:4.2f} | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['old'][0]:5.2f} ({r['old'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})"+(' | same image as the nearest read' if d==int(d) else ''))
+        print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['old'][0]:5.2f} ({r['old'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})"+(' | same image as the nearest read' if d[0]==int(d[0]) and d[1]==int(d[1]) else ''))
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
