@@ -386,7 +386,7 @@ runs:
 
     # Release builds (vkstorm-release pushes, publishing dispatches) never build or run tests: LL_TESTS stays
     # off for Release. PR and qualification builds (RelWithDebInfo) run them.
-    - name: Run statistics, script metadata, transport, primitive, night sky and launcher regression tests
+    - name: Run the trace, inventory, JSON-RPC, WebSocket, primitive, night sky, model, HTTP and (per platform) credential or Linux launcher tests
       if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
       run: |
@@ -399,8 +399,8 @@ runs:
         runners='lltrace|llinventory_runtime|jsonrpcws|wsserver|llnightsky|llmodel_decomposition|llcorehttp'
         want=10
         extra=''
-        # The credential-store tests stub LLControlGroup and link llui,
-        # which only MSVC's linker resolves; they have never linked on Linux.
+        # The credential-store tests are kept Windows-only for now: they have
+        # not been built on Linux in CI, so they never run there.
         if [ "$RUNNER_OS" = Windows ]; then
           cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
           runners="$runners|llsechandler_basic|llsecapi"

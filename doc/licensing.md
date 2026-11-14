@@ -243,13 +243,18 @@ a Vulkanstorm header claiming LGPL-2.1 only, or carried no header at all in
   JavaScript, including `scripts/ci/freebsd/`, `scripts/perf/` and
   `scripts/tests/`, but not the C++ fixtures) and `doc/vulkan/*.py`, plus
   `indra/newview/licence_texts.py`.
-- 2026-11-14 pass over every line: two Vulkanstorm comments in `shadowUtil.glsl` (and
-  its `scripts/perf/reference` copy) that gave the licence as LGPL-2.1 or GPL-3, and the
-  `skyF.glsl` night sky comment that gave it as LGPL 2.1, now say `GPL-3.0-or-later`; the
-  Vulkanstorm-authored `indra/llprimitive/tests/llmodel_decomposition_test.cpp`
-  (an LGPL block with no copyright holder) carries the Vulkanstorm GPL header.
-  `test_licence_files.py` now rejects an LGPL block in any file whose header calls it
-  Vulkanstorm Viewer Source Code, and those two comment wordings.
+
+2026-11-14 pass over every line (separate from the 2026-11-04 set above): two
+Vulkanstorm-authored comments in `shadowUtil.glsl` (and in its
+`scripts/perf/reference/shadowUtil_before_spot_fade.glsl` copy) that gave the licence as
+LGPL-2.1 or GPL-3, and the `skyF.glsl` night sky comment that gave it as LGPL 2.1, now say
+`GPL-3.0-or-later`. Only those Vulkanstorm-authored comments changed: the reference
+file's Linden Lab header is untouched and the file stays under LGPL-2.1 (see below).
+On vkstorm-canary `skyF.glsl` needed no change (it has no such comment).
+The Vulkanstorm-authored `indra/llprimitive/tests/llmodel_decomposition_test.cpp`
+(an LGPL block with no copyright holder) carries the Vulkanstorm GPL header.
+`test_licence_files.py` now rejects an LGPL block in any file whose header calls it
+Vulkanstorm Viewer Source Code, and those two comment wordings.
 
 `scripts/tests/test_licence_files.py` checks that the licence files are in
 place, that no file with a Vulkanstorm copyright line carries another SPDX
