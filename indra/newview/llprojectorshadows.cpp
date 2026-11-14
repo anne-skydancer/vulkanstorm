@@ -1351,6 +1351,9 @@ std::vector<LLProjectorShadows::TileInfo> LLProjectorShadows::getTiles() const
         t.drawnFrame = rec.drawnFrame;
         t.camDist = rec.camDist;
         t.pending = rec.pending;
+        t.avatar = rec.holdsAvatar || rec.drawnWithAvatar;
+        t.poseStale = rec.poseStale;
+        t.lampMoving = rec.lampMoving;
         tiles.push_back(t);
     }
     return tiles;
