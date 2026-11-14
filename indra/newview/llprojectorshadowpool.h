@@ -942,10 +942,17 @@ inline bool castsFixed(const ObjectFlags& root, bool is_lights_own_root)
     return is_lights_own_root || !(root.physical || root.mover);
 }
 
-// A change of an object that is a mover (or physical), or whose root is, never dirties a tile: it is not in the fixed layer, and a
-// moving part inside a still linkset casts with the pose of the last render (its moves never invalidate: the known limit).
-inline bool hookSkips(const ObjectFlags& obj, const ObjectFlags& root)
+// A change of an object that is a mover (or physical), or whose root is, does not dirty a tile while the object is active (its
+// linkset has a spatial bridge, which the tile's cull drops: it is not in the fixed layer), and a moving part inside a still
+// linkset casts with the pose of the last render (its moves never invalidate: the known limit). While the object is static (a
+// mover at rest, say a door the simulator moved with no velocity) the tile draws it like any fixed caster, so its changes push.
+// The lamp's own linkset is the fixture (castsFixed): its changes always push.
+inline bool hookSkips(const ObjectFlags& obj, const ObjectFlags& root, bool active, bool lights_own_root = false)
 {
+    if (lights_own_root || !active)
+    {
+        return false;
+    }
     return obj.physical || obj.mover || root.physical || root.mover;
 }
 

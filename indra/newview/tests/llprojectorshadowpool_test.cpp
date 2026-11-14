@@ -993,8 +993,12 @@ void testP3MoverRules()
     check(castsFixed(none, false), "P3 a plain linkset casts");
     check(!castsFixed(phys, false) && !castsFixed(mover, false), "P3 a physical object and a mover do not cast");
     check(castsFixed(phys, true) && castsFixed(mover, true), "P3 the lamp's own linkset is the fixture: it casts whatever its flags");
-    check(hookSkips(mover, none) && hookSkips(phys, none) && hookSkips(none, mover) && hookSkips(none, phys), "P3 hooks skip movers and their roots");
-    check(!hookSkips(none, none), "P3 hooks keep ordinary objects");
+    check(hookSkips(mover, none, true) && hookSkips(phys, none, true) && hookSkips(none, mover, true) && hookSkips(none, phys, true),
+          "P3 hooks skip active movers and their roots");
+    check(!hookSkips(mover, none, false) && !hookSkips(phys, none, false) && !hookSkips(none, mover, false) && !hookSkips(none, phys, false),
+          "P3 a mover at rest (static, drawn) is a fixed caster: its changes push");
+    check(!hookSkips(mover, mover, true, true) && !hookSkips(phys, phys, true, true), "P3 the lamp's own linkset always pushes");
+    check(!hookSkips(none, none, true), "P3 hooks keep ordinary objects");
     ServerUpdate u;
     check(!becomesMover(u), "P3 an empty update");
     u.pos_changed = true;
