@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """GLOD stays retired and the mesh uploader's LOD selectors stay consistent.
 
 Port of the earlier scripts/validate_mesh_physics.ps1 GLOD checks. The LOD
