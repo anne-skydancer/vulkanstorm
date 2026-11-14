@@ -30,6 +30,7 @@
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's change hooks
 
 // library includes
 #include "llimagepng.h"
@@ -3181,8 +3182,16 @@ void LLPipeline::updateGeom(F32 max_dtime)
                 drawablep->clearState(LLDrawable::FOR_UNLOAD);
             }
 
+            // <Vulkanstorm> the projector shadow pool: a rebuild that waited (a mesh not yet loaded) changes the picture when it completes
+            const bool pool_rebuild = LLShadowDirtyFeed::tracking() &&
+                                      drawablep->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED);
+            // </Vulkanstorm>
             if (updateDrawableGeom(drawablep))
             {
+                if (pool_rebuild)
+                {
+                    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit); // <Vulkanstorm/>
+                }
                 drawablep->clearState(LLDrawable::IN_REBUILD_Q);
                 mBuildQ1.erase(curiter);
             }
@@ -3260,6 +3269,9 @@ void LLPipeline::markMoved(LLDrawable *drawablep, bool damped_motion)
 
     assertInitialized();
 
+    // <Vulkanstorm> the projector shadow pool: the extents it moves from (the move's end is pushed by the partition's move)
+    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit);
+
     if (!drawablep->isState(LLDrawable::ON_MOVE_LIST))
     {
         if (drawablep->isSpatialBridge())
@@ -3315,6 +3327,7 @@ void LLPipeline::shiftObjects(const LLVector3 &offset)
     // otherwise read as camera motion and reproject unrelated history.
     mAlphaSTHistory.invalidate();
     mShadowSTHistory.invalidate(); // <Vulkanstorm/> the same for the Stochastic shadows' history
+    LLShadowDirtyFeed::noteShift(offset); // <Vulkanstorm/> the projector pool's pending dirty boxes move with agent space
 
     LLVector4a offseta;
     offseta.load3(offset.mV);
@@ -3439,6 +3452,7 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
             drawablep->getVObj()->setChanged(LLXform::SILHOUETTE);
         }
         drawablep->setState(flag);
+        LLShadowDirtyFeed::noteRebuild(drawablep, (U32)flag); // <Vulkanstorm/> the projector shadow pool: a rebuild that can change a picture
     }
 }
 
