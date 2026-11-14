@@ -9,6 +9,7 @@ Not covered (needs the live development viewer): the real replies, the real GPU 
 import csv
 import json
 import pathlib
+import statistics
 import sys
 import tempfile
 import unittest
@@ -22,7 +23,7 @@ import analyze_perf_check as apc  # noqa: E402
 import light_check as lc  # noqa: E402
 import perf_check as pc  # noqa: E402
 from fake_viewer import FakeViewer  # noqa: E402
-from leap_client import LeapSession  # noqa: E402
+from leap_client import LeapError, LeapSession, ViewerGone  # noqa: E402
 
 SCENARIO = HERE.parent / "scenarios" / "gl_submit_g0.json"
 ALPHA_CROWD = HERE.parent / "scenarios" / "alpha_crowd.json"
@@ -199,6 +200,34 @@ class RunTest(unittest.TestCase):
                 self.assertNotIn("summary", info)
             for op in ("windowBegin", "dump", "compareArm", "selfBench", "profileFrame"):
                 self.assertNotIn(("GLSubmitStats", op), fv.log)
+
+    def test_no_glstats_without_variants_records_a_median_of_probes_with_the_spread(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, extra=["--no-glstats"])
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            for info in index["presets"].values():
+                probe = info["fps_probe"]
+                self.assertEqual(len(probe["samples"]), 3)      # overhead.probe_repeats in scenario_file
+                self.assertEqual(info["fps_stats_off"], round(statistics.median(probe["samples"]), 2))
+                self.assertIn("spread_pct", probe)
+
+    def test_projector_stats_gives_none_for_an_error_reply_but_a_lost_connection_propagates(self):
+        run = object.__new__(pc.Run)
+
+        class Viewer:
+            def __init__(self, exc):
+                self.exc = exc
+
+            def req(self, *_a, **_k):
+                raise self.exc
+
+        run.v = Viewer(LeapError("no such API"))
+        self.assertIsNone(run.projector_stats())
+        run.v = Viewer(ViewerGone("pipe closed"))
+        with self.assertRaises(ViewerGone):
+            run.projector_stats()
 
     def test_replies_stay_small(self):
         with tempfile.TemporaryDirectory() as tmp:

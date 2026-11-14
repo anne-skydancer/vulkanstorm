@@ -322,7 +322,7 @@ class Run:
         """The ProjectorShadows.stats reply (slots, light set, pool), or None when the viewer has no such API (older build)."""
         try:
             r = self.v.req(PROJECTOR_API, "stats")
-        except (LeapError, ConnectionLost):
+        except LeapError:   # a lost connection (ConnectionLost) is deliberately not a LeapError: it propagates
             return None
         return {k: r.get(k) for k in ("shadow_method", "shadow_detail", "slots", "lights", "pool")}
 
@@ -393,6 +393,16 @@ class Run:
             self.v.sleep(sc["settle"]["after_camera_s"])
         self.v.wait_window_visible("the window of preset " + key)
 
+        if fps_samples is None and self.args.no_glstats:
+            # no window to follow: the clean frame rate is the whole measurement, so it is a median of probe_repeats probes
+            # (one 5 s probe is far too noisy), with the spread recorded like the variants' probes
+            reps = max(1, int(sc["overhead"].get("probe_repeats", 1)))
+            fps_samples = []
+            for _ in range(reps):
+                self.v.check_abort()
+                one = self.measure_fps_off()
+                if one is not None:
+                    fps_samples.append(one)
         if fps_samples:
             fps_off = round(statistics.median(fps_samples), 2)
             info["fps_probe"] = {"samples": fps_samples, "min": min(fps_samples), "max": max(fps_samples),

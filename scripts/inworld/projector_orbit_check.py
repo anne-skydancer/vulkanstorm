@@ -38,6 +38,9 @@ from light_check import Aborted, Viewer, default_capture_root, log, write_json_a
 
 API = "ProjectorShadows"
 POOL_KEYS = ["pool_present", "level", "static_renders", "dynamic_renders", "lights_without_tile", "tiles", "rerender_causes"]
+SLOTS_KEYS = ["occupied", "targeted"]
+LIGHTS_KEYS = ["nearby", "spotlights", "eligible", "reach_m", "eligible_within_16m", "eligible_within_32m",
+               "eligible_within_64m", "eligible_within_reach"]
 SETTINGS = ["RenderShadowMethod", "RenderShadowDetail"]
 
 
@@ -46,6 +49,21 @@ def pool_state(stats):
     pool = stats.get("pool") or {}
     crcs = {str(t.get("key")): t.get("crc32") for t in (pool.get("tiles") or [])}
     return int(pool.get("static_renders", 0)), int(pool.get("lights_without_tile", 0)), crcs
+
+
+def dry_run_rows(st):
+    """The api, slots and lights rows of the dry run: each reply part is checked for its keys, like the pool's."""
+    rows = []
+    for name, part, keys in (("api", st.get("pool") or {}, POOL_KEYS), ("slots", st.get("slots") or {}, SLOTS_KEYS),
+                             ("lights", st.get("lights") or {}, LIGHTS_KEYS)):
+        missing = [k for k in keys if k not in part]
+        if name == "api":
+            detail = ("pool keys missing: %s" % missing if missing
+                      else "ProjectorShadows.stats ok, pool_present=%s" % part.get("pool_present"))
+        else:
+            detail = "keys missing: %s" % missing if missing else json.dumps(part, sort_keys=True)
+        rows.append((name, "FAIL" if missing else "PASS", detail))
+    return rows
 
 
 def o1_steps(cfg):
@@ -153,6 +171,10 @@ class Check:
                 self.warm_up()
             self.v.sleep(float(self.sc["settle"].get("step_s", 0.3)))
             states.append(pool_state(self.stats()))
+            if n == 0 and not states[0][2]:
+                # a rotation test over an empty pool proves nothing: not a pass
+                return {"status": "NOT RUN", "why": "no projector tile in the scene (the baseline has no tiles); "
+                                                    "go where a projector is in reach"}
         fails = judge_o1(states[0], states[1:])
         return {"status": "FAIL" if fails else "PASS", "steps": len(states), "failures": fails[:50]}
 
@@ -188,12 +210,7 @@ def dry_run(v, outdir):
     rows = []
     try:
         st = v.req(API, "stats")
-        pool = st.get("pool") or {}
-        missing = [k for k in POOL_KEYS if k not in pool]
-        rows.append(("api", "FAIL" if missing else "PASS",
-                     "pool keys missing: %s" % missing if missing else "ProjectorShadows.stats ok, pool_present=%s" % pool.get("pool_present")))
-        rows.append(("slots", "PASS", json.dumps(st.get("slots"), sort_keys=True)))
-        rows.append(("lights", "PASS", json.dumps(st.get("lights"), sort_keys=True)))
+        rows.extend(dry_run_rows(st))
     except LeapError as exc:
         rows.append(("api", "FAIL", "the viewer has no ProjectorShadows API (not a VKS_GL_STATS build?): %s" % exc))
     for key in SETTINGS:
