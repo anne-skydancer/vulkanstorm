@@ -3370,6 +3370,7 @@ void LLPipeline::markTextured(LLDrawable *drawablep)
     if (drawablep && !drawablep->isDead() && assertInitialized())
     {
         mRetexturedList.insert(drawablep);
+        LLShadowDirtyFeed::noteTextured(drawablep); // <Vulkanstorm/> the projector shadow pool: a retextured alpha caster
     }
 }
 
