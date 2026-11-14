@@ -191,10 +191,11 @@ class SourceHeaderTest(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_no_comment_gives_a_vulkanstorm_licence_as_lgpl(self):
-        # A comment line in a source file (not a .md doc) that names Vulkanstorm or its author together
-        # with LGPL is wrong, unless the line also carries a Linden Lab, Firestorm or Phoenix marker
-        # (upstream text). The three words are built from parts so that this file does not match itself.
-        ours = re.compile('Vulkan' + 'storm|Anne ' + 'Skydancer')
+        # A comment line in a source file (not a .md doc) that names Vulkanstorm's author, or Vulkanstorm
+        # in a licence statement, together with LGPL is wrong, unless the line also carries a Linden Lab,
+        # Firestorm or Phoenix marker (upstream text). A comment that only says Vulkanstorm loads an LGPL
+        # library is fine. The names are built from parts so that this file does not match itself.
+        ours = re.compile('Anne ' + 'Skydancer|(?=.*Vulkan' + r'storm)(?=.*(?:[Ll]icen[cs]|Copyright|SPDX))')
         lgpl = re.compile(r'\b' + 'LG' + r'PL\b')
         upstream = re.compile('Linden ' + 'Lab|Linden ' + 'Research|Fire' + 'storm|Phoe' + 'nix')
         comment = re.compile(r'^\s*(//|#|/\*|\*)')
