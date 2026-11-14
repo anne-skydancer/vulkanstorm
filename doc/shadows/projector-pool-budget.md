@@ -162,4 +162,15 @@ the cube and the bulb at N = 2048 are +0.2 to +0.6 % at atlas 4096 and -2.3 to -
 timings by under 3 %. These are full-screen worst cases of one projector; a real frame shades only the pixels inside each frustum.
 In-world full-frame cost: not measured, owed at the S0 capture session; gates any release integration.
 
+**Table 6. P2c: scheduler and ambiance (estimates, nothing measured in-world yet)**
+
+| Item | Value | Label |
+|---|---|---|
+| Static cap (CPU, tile renders per frame) | 0.35 ms fixed (4.4 % of an 8 ms frame; was 2 x the 0.07 ms average = 0.14 ms) | design constant |
+| Tile renders per frame, 4 lamps at the P2b session's 0.07 ms | 4 (all) instead of about 1.2; the CPU cost rises from about 0.085 ms to 0.28 ms a frame | estimate from the 2026-11-14 session's numbers |
+| Staleness of the oldest tile | at most ceil(N / tiles per frame) frames (24 frames seen in P2b) | by construction, unit test T7; read `pool.max_stale_frames` |
+| Ambiance shadowed: the per-pixel function `sampleProjectorShadow` | unchanged, so `--time-pass` does not apply (it times that function) | not applicable |
+| Ambiance shadowed: lookups on back-facing pixels in the cone | extra lookups, one per such pixel for lamps with `proj_ambiance` > 0; each costs what Table 5 shows per full-screen pass, scaled by the share of the screen those pixels cover | estimate |
+| Running total of the light and shadow budget | the tile renders now take up to 0.35 ms CPU of the about 0.4 ms (+5 %) allowed; GPU side not re-measured | estimate, to be read in-world |
+
 Label every cost "measured" (with scene, resolution, driver) or "estimate".
