@@ -1456,7 +1456,13 @@ void LLWebRTCImpl::intSetMute(bool mute, int delay_ms)
         gWebRTCUpdateDevices = true;
         // </FS:TJ>
         mDeviceModule->ForceStopRecording();
-        if (start)
+        // <Vulkanstorm> With "stop capture while muted", capture starts only once a
+        // connection's audio is established (startPlayout() -> workerStartRecording()),
+        // as workerStartRecording() gates it. An unmuted first connection reaches here
+        // while still negotiating (newPeerConnection), so it only stops. mAudioEstablished
+        // is atomic: written by startPlayout() on the worker thread and by
+        // freePeerConnection() on the caller's thread.
+        if (start && !(mStopCaptureOnMute.load() && !mAudioEstablished.load()))
         {
             mDeviceModule->ForceInitRecording(mStopCaptureOnMute.load() ? webrtc::AudioDeviceModule::AudioCategory::kMedia
                                                                         : webrtc::AudioDeviceModule::AudioCategory::kCommunications);
