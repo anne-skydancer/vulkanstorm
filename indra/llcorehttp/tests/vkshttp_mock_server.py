@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Vulkanstorm Viewer Project
 """\
 @file   vkshttp_mock_server.py
 @brief  Scripted local HTTP/1.1 server for the llcorehttp parity test.
@@ -36,11 +38,10 @@ Paths served (every other path is a 404):
   /chunked/               200 with a chunked body
   /gzip/                  200 with a gzip-encoded body
 
-$LicenseInfo:firstyear=2026&license=viewerlgpl$
 Vulkanstorm Viewer Source Code
 Copyright (C) 2026, Vulkanstorm Viewer Project
-Licensed under the GNU Lesser General Public License, version 2.1.
-$/LicenseInfo$
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later); see LICENSE and NOTICE.md in the source tree.
 """
 
 import base64

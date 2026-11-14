@@ -3,11 +3,19 @@
  * @brief Recorder R4b (inventory rung): the fakes behind the frozen offer and
  * give copies. See llinventory_offer_oracle_fakes.h.
  *
- * $LicenseInfo:firstyear=2026&license=viewerlgpl$
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Vulkanstorm Viewer Project
- * Licensed under the GNU Lesser General Public License, version 2.1.
- * $/LicenseInfo$
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, version 3 of the License or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE and
+ * NOTICE.md in the source tree.
  */
 
 #include "linden_common.h"

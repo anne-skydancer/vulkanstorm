@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """The AIS update harness's drift guard (recorder R3a).
 
 usage: python indra/newview/tests/check_r3a_copies.py [--print-fingerprints | --print-fence]

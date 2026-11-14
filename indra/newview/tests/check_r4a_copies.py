@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Checks the task-inventory oracle's frozen copies against the live source.
 
 usage: python indra/newview/tests/check_r4a_copies.py [--print-fence] [--record-conditionals]

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Writes llaudio_parity_scenes.txt, the script INTEGRATION_TEST_llaudio_parity
 replays on the audio engine (see the command reference in the file header).
 

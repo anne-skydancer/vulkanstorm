@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Checks recorder R3b's frozen copies against the live viewer source.
 
 usage: python indra/newview/tests/check_r3b_copies.py [repository root]

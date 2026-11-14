@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Confirms that recorder R4b's frozen copies still match the live viewer source.
 
 usage: python indra/newview/tests/check_r4b_copies.py [--root <viewer checkout>] [--write-fence]

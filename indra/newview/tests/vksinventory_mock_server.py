@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Vulkanstorm Viewer Project
 """\
 @file   vksinventory_mock_server.py
 @brief  Loopback AIS (InventoryAPIv3 / LibraryAPIv3) and legacy inventory
@@ -74,11 +76,10 @@ llinventorymodelbackgroundfetch.cpp BGFolderHttpHandler); the real servers'
 shapes at the depth limit and in error bodies are not known (see the
 fixture README).
 
-$LicenseInfo:firstyear=2026&license=viewerlgpl$
 Vulkanstorm Viewer Source Code
 Copyright (C) 2026, Vulkanstorm Viewer Project
-Licensed under the GNU Lesser General Public License, version 2.1.
-$/LicenseInfo$
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later); see LICENSE and NOTICE.md in the source tree.
 """
 
 import base64
