@@ -267,7 +267,8 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         // and the method-neutral block built next to it; Legacy takes the stock shadowUtil.glsl
         if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
-            const char* common = shader->mDefines.count("STOCHASTIC_SHADOW_SUN") ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
+            // the projector shadow pool reads the depth buffer too (shadowReceiverGeometry)
+            const char* common = (shader->mDefines.count("STOCHASTIC_SHADOW_SUN") || shader->mDefines.count("PROJECTOR_SHADOW_POOL")) ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
             if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL))
             {
                 return false;
@@ -1678,6 +1679,12 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("shadow_st_raw");
     mReservedUniforms.push_back("shadow_st_history");
     mReservedUniforms.push_back("shadow_st_resolved");
+    // the projector shadow pool
+    mReservedUniforms.push_back("proj_shadow_atlas");
+    mReservedUniforms.push_back("proj_shadow_matrix");
+    mReservedUniforms.push_back("proj_shadow_tile");
+    mReservedUniforms.push_back("proj_shadow_kernel_max");
+    mReservedUniforms.push_back("shadow_tile_origin");
     // </Vulkanstorm>
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);

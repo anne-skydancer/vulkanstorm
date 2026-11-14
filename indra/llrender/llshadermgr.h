@@ -413,6 +413,13 @@ public:
         SHADOW_ST_HISTORY,                  //  "shadow_st_history"
         SHADOW_ST_RESOLVED,                 //  "shadow_st_resolved"
         // </Vulkanstorm>
+        // <Vulkanstorm> the projector shadow pool (llprojectorshadows.cpp, deferred/shadowStochasticUtil.glsl)
+        PROJ_SHADOW_ATLAS,                  //  "proj_shadow_atlas"
+        PROJ_SHADOW_MATRIX,                 //  "proj_shadow_matrix"
+        PROJ_SHADOW_TILE,                   //  "proj_shadow_tile"
+        PROJ_SHADOW_KERNEL_MAX,             //  "proj_shadow_kernel_max"
+        SHADOW_TILE_ORIGIN,                 //  "shadow_tile_origin"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
