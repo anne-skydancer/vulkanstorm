@@ -14,14 +14,25 @@ a lattice, per-texel noise, open areas) is put into
 
 at the atlas origin, an interior offset and the far corner, and every receiver's visibility is compared. The receivers cover the whole
 tile including its edges (the edge band is most of a small tile), with random depths, receiver-plane gradients and
-penumbra scales that make the search radius run from its 1 texel floor to its 10 texel cap.
+penumbra scales that make the search radius run from its 1 texel floor to its 12 texel cap (ST_SPOT_KERNEL_TEXELS_MAX; the cap
+sampleProjectorShadow derives in metres is fed as a per-axis uniform: 10 in the main cases, 1 .. 12 in the radius-cap cases).
 
 Pass: (a) the tile in the atlas equals the same code run on the standalone map, max abs difference 0 (this is the atlas
 handling: gather corner, edge clamp, no read past the tile); (b) the tile lookup is within 2 ulp of the 261253bd43
 reference source (--ref-tol). (b) is not 0 because the two sources are different compilations of the same arithmetic;
 on the measured NVIDIA driver they differ in the last bit of about 1 receiver in 130 (1.2e-7).
 
-    python scripts/shadows/projector_pool_g1.py [--sizes 32,64,256,1024] [--atlas 4096] [--grid 512] [--seed 1]
+    python scripts/shadows/projector_pool_g1.py [--sizes 32,64,256,1024,2048] [--atlas 4096] [--grid 512] [--seed 1]
+    python scripts/shadows/projector_pool_g1.py --atlas 8192       # the 8192 tier (D20); N = 2048 is among the default sizes
+
+--time-pass runs no checks: it times the whole changed per-pixel path, before and after the P2b change, from stSpotGradient
+through sampleProjectorShadow compiled from the working file ("after") and from git's origin/codex/projector-pool-p2
+("before"), with only shadowReceiverGeometry stubbed (identically on both sides). Receivers are hashed inside real
+projectors' frusta (a 0.5 m cube, a 5 x 0.2 m strip, a 0.05 m bulb), each tile is ray-cast from a small synthetic scene
+(floor and boxes), 2560x1440, median of 9 x 20 draws, N = 2048, 1024, 256, 64 in a 4096 and an 8192 atlas; a second pair
+of runs has the filter return 1.0 at once, to isolate the arithmetic around it:
+
+    python scripts/shadows/projector_pool_g1.py --time-pass [--sizes 2048,1024,256,64] [--atlases 4096,8192]
 
 Exit code 0 on pass, 1 on a difference. Needs numpy.
 """
@@ -38,11 +49,15 @@ REFERENCE = Path(__file__).with_name('projector_pool_g1_reference.glsl')
 CONTEXT = ROOT / 'scripts/perf/gl_test_context.py'
 
 ap = argparse.ArgumentParser()
-ap.add_argument('--sizes', default='32,64,256,1024')
+ap.add_argument('--sizes', default='32,64,256,1024,2048')
 ap.add_argument('--atlas', type=int, default=4096)
 ap.add_argument('--grid', type=int, default=512, help='receivers per side (grid x grid per tile)')
 ap.add_argument('--seed', type=int, default=1)
 ap.add_argument('--time', action='store_true', help='also time the lookup (GPU ms per 2560x1440 full-screen pass, median of 9 x 20)')
+ap.add_argument('--time-pass', action='store_true', help='time the whole changed per-pixel path, before (--base-ref) and after (the working file)')
+ap.add_argument('--atlases', default='4096,8192', help='--time-pass: atlas edges')
+ap.add_argument('--base-ref', default='origin/codex/projector-pool-p2', help='--time-pass: the git ref of the "before" shader')
+ap.add_argument('--emitter-max', type=float, default=0.15, help='--time-pass: kEmitterMax of llprojectorshadows.cpp (m)')
 ap.add_argument('--ref-tol', type=float, default=2.5e-7, help='allowed difference to the 261253bd43 source (2 ulp of 1.0)')
 opts = ap.parse_args()
 sys.argv = [sys.argv[0]]  # the GL context helper parses the command line itself
@@ -210,7 +225,203 @@ def gpu_ms(prog_setup, draws=20, rounds=9):
     return statistics.median(samples)
 
 
+def time_pass():
+    import math
+    import subprocess
+    rel = str(UTIL.relative_to(ROOT)).replace(chr(92), '/')
+    before_text = subprocess.run(['git', '-C', str(ROOT), 'show', '%s:%s' % (opts.base_ref, rel)], capture_output=True, check=True).stdout.decode('utf-8')
+    after_text = util
+
+    def pieces(text):
+        d = '\n'.join(l for l in text.splitlines() if re.match(r'#define (ST_|SHADOW_)', l))
+        grad = text[text.index('vec2 stSpotGradient('):]
+        grad = grad[:grad.index('\n}\n') + 3]
+        sample = text[text.index('float sampleProjectorShadow('):]
+        sample = sample[:sample.index('\n}\n') + 3]
+        return d, grad, section(text, '// <G1-BEGIN>', '// <G1-END>'), sample
+
+    stubs = ('uniform float spot_shadow_offset;\nuniform float spot_shadow_reach;\n'
+             'vec3 shadowReceiverGeometry(vec2 p, vec3 pos, vec3 gn, vec3 ld, out float s) { s = 1.0; return gn; }\n')
+    # the receiver: a hashed point of the projector's frustum (w, the axial distance from its centre, from the near plane to the
+    # far plane, 1.5 x the light's radius) and a hashed normal; view space = the projector's pose (the camera at the origin)
+    receiver = '''
+uniform vec2 grid;
+uniform mat4 pose;      // projector local -> view
+uniform vec4 frustum;   // tan(fov / 2) * aspect, tan(fov / 2), near, far
+out vec4 oc;
+float hash(vec2 p, float s) { return fract(sin(dot(p, vec2(12.9898, 78.233)) + s * 37.719) * 43758.5453); }
+void main()
+{
+    vec2 id = floor(gl_FragCoord.xy);
+    vec2 ndc = vec2(hash(id, 1.0), hash(id, 2.0)) * 2.0 - 1.0;
+    float w = mix(frustum.z, frustum.w, hash(id, 3.0));
+    vec3 pos = (pose * vec4(ndc.x * frustum.x * w, ndc.y * frustum.y * w, -w, 1.0)).xyz;
+    vec3 nl = normalize(vec3(hash(id, 4.0) - 0.5, 1.0, hash(id, 5.0) - 0.5));
+    vec3 norm = normalize(mat3(pose) * nl);
+%s
+}
+'''
+    plain_body = '    oc = vec4(sampleProjectorShadow(pos, norm, gl_FragCoord.xy / grid));'
+    dbg_body = '    float v = sampleProjectorShadow(pos, norm, gl_FragCoord.xy / grid);\n    oc = vec4(dbg_kmax, v, 1.0);'
+
+    def build(text, stub, after, debug=False):
+        d, grad, g1, sample = pieces(text)
+        if stub:
+            # the filter returns 1.0 at once; its inputs stay live (the arithmetic of the call remains): 1e-20 times them vanishes in a float
+            args = 'pen.x + pen.y + z_tex + g.x + c.z + ' + ('kmax.x + kmax.y' if after else 'proj_shadow_kernel_max')
+            g1 = re.sub(r'float stSpotFilterTile\([^)]*\)\n\{.*?\n\}\n',
+                        lambda m: m.group(0).split('\n')[0] + '\n{\n    return 1.0 + 1.0e-20 * (' + args + ');\n}\n', g1, count=1, flags=re.S)
+        dbg = ''
+        if debug:
+            sample = sample.replace('float shadow = stSpotFilterTile(', 'dbg_kmax = kmax;\n    float shadow = stSpotFilterTile(')
+            dbg = 'vec2 dbg_kmax;\n'
+        return PREAMBLE + d + '\n' + stubs + grad + g1 + dbg + sample + receiver % (dbg_body if debug else plain_body)
+
+    # (name, face x, face y, fov, light radius)
+    projectors = (('cube 0.5 m', 0.5, 0.5, 1.5, 10.0), ('strip 5 x 0.2 m', 5.0, 0.2, 1.5, 10.0), ('bulb 0.05 m', 0.05, 0.05, 1.5, 10.0))
+
+    def rot(ax, ay):
+        cx, sx, cy, sy = math.cos(ax), math.sin(ax), math.cos(ay), math.sin(ay)
+        return np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]]) @ np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+
+    def pose_of(fx, fy, fov, radius):
+        # llprojectorshadows.cpp: dist = (face y / 2) / tan(fov / 2): the centre sits dist behind the face; near = dist + 0.01,
+        # far = dist + 1.5 radius, aspect = face x / face y
+        dist = fy * 0.5 / math.tan(fov * 0.5)
+        near, far = dist + 0.01, dist + 1.5 * radius
+        pose = np.eye(4)
+        pose[:3, :3] = rot(-0.35, 0.4)
+        pose[:3, 3] = (1.0, 2.0, -3.0)
+        f = 1.0 / math.tan(fov * 0.5)
+        proj = np.array([[f * fy / fx, 0, 0, 0], [0, f, 0, 0], [0, 0, -(far + near) / (far - near), -2 * far * near / (far - near)], [0, 0, -1, 0]])
+        bias = np.array([[.5, 0, 0, .5], [0, .5, 0, .5], [0, 0, .5, .5], [0, 0, 0, 1]])
+        return pose, bias @ proj @ np.linalg.inv(pose), near, far, math.tan(fov * 0.5) * fx / fy, math.tan(fov * 0.5)
+
+    def tile_of(n, pose, m, tx, ty):
+        # the tile: a floor 1.5 m below the projector's centre and eight boxes, ray-cast from the centre through every texel
+        r = np.random.default_rng(7)
+        boxes = []
+        for _ in range(8):
+            w = r.uniform(1.5, 7.0)
+            a, b = r.uniform(-0.9, 0.9, 2)
+            boxes.append((np.array([a * tx * w, b * ty * w, -w]), r.uniform(0.3, 1.0, 3)))
+        u = (np.arange(n) + 0.5) / n * 2 - 1
+        dx, dy = np.meshgrid(u * tx, u * ty)
+        d = np.stack([dx, dy, -np.ones_like(dx)], -1).reshape(-1, 3)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            t_hit = np.where(d[:, 1] < 0, -1.5 / d[:, 1], np.inf)
+            for c, hs in boxes:
+                lo, hi = (c - hs) / d, (c + hs) / d
+                tn, tf = np.minimum(lo, hi).max(1), np.maximum(lo, hi).min(1)
+                t_hit = np.where((tf >= tn) & (tn > 0) & (tn < t_hit), tn, t_hit)
+        hit = np.isfinite(t_hit)
+        p = np.concatenate([d * np.where(hit, t_hit, 1.0)[:, None], np.ones((len(d), 1))], 1)
+        s = (m @ (pose @ p.T)).T
+        return np.clip(np.where(hit, s[:, 2] / s[:, 3], 1.0), 0.0, 1.0).astype(np.float32).reshape(n, n)
+
+    glTexSubImage2D = fn('glTexSubImage2D', None, U, I, I, I, I, I, U, U, P)
+    glUniformMatrix4fv = fn('glUniformMatrix4fv', None, I, I, C.c_ubyte, P)
+    vao = U()
+    glGenVertexArrays(1, C.byref(vao))
+    glBindVertexArray(vao.value)
+    W, H = 2560, 1440
+    big = texture(GL_R32F, W, H, None, GL_RED)
+    dbg_tex = texture(0x8814, W, H, None, 0x1908)  # RGBA32F: kmax x, kmax y, visibility
+    fbo, fbo_dbg = U(), U()
+    glGenFramebuffers(1, C.byref(fbo))
+    glBindFramebuffer(0x8D40, fbo.value)
+    glFramebufferTexture2D(0x8D40, 0x8CE0, TEX, big, 0)
+    assert glCheckFramebufferStatus(0x8D40) == 0x8CD5
+    glGenFramebuffers(1, C.byref(fbo_dbg))
+    glBindFramebuffer(0x8D40, fbo_dbg.value)
+    glFramebufferTexture2D(0x8D40, 0x8CE0, TEX, dbg_tex, 0)
+    assert glCheckFramebufferStatus(0x8D40) == 0x8CD5
+    progs = {}
+    for side, text in (('before', before_text), ('after', after_text)):
+        for stub in (False, True):
+            progs[side, stub] = program([(0x8B31, VS), (0x8B30, build(text, stub, side == 'after'))])
+    prog_dbg = program([(0x8B31, VS), (0x8B30, build(after_text, False, True, debug=True))])
+
+    def read_full(tex, fmt, ch):
+        buf = np.empty((H, W, ch) if ch > 1 else (H, W), np.float32)
+        glBindTexture(TEX, tex)
+        glGetTexImage(TEX, 0, fmt, GL_FLOAT, buf.ctypes.data)
+        return buf
+
+    print('time-pass: before = %s, after = the working file; %dx%d, median of 9 x 20 draws; emitter max %g m' % (opts.base_ref, W, H, opts.emitter_max), flush=True)
+    rows = []
+    for A in [int(a) for a in opts.atlases.split(',')]:
+        atlas_tex = texture(GL_DEPTH32F, A, A, None, GL_DEPTH)
+        for pname, fx, fy, fov, radius in projectors:
+            pose, m, near, far, tx, ty = pose_of(fx, fy, fov, radius)
+            m_flat = np.ascontiguousarray(m.T, np.float32)
+            pose_flat = np.ascontiguousarray(pose.T, np.float32)
+            for n in [int(s) for s in opts.sizes.split(',')]:
+                if n > A:
+                    continue
+                ox, oy = A // 2, (A // 4) // n * n
+                glBindTexture(TEX, atlas_tex)
+                tile = tile_of(n, pose, m, tx, ty)
+                glTexSubImage2D(TEX, 0, ox, oy, n, n, GL_DEPTH, GL_FLOAT, tile.ctypes.data)
+                kmax_before = max(1.0, 10.0 * n / 2048.0)  # setupLight of P2: max(1, 10 N / N_base), N_base 2048
+                emit = lambda v: min(max(v, 0.02), opts.emitter_max)
+
+                def setup(prog, after, target):
+                    def f():
+                        use(prog)
+                        glBindFramebuffer(0x8D40, target)
+                        glViewport(0, 0, W, H)
+                        glActiveTexture(0x84C0)
+                        glBindTexture(TEX, atlas_tex)
+                        glUniform1i(glGetUniformLocation(prog, b'proj_shadow_atlas'), 0)
+                        glUniform2f(glGetUniformLocation(prog, b'grid'), float(W), float(H))
+                        glUniformMatrix4fv(glGetUniformLocation(prog, b'proj_shadow_matrix'), 1, 0, m_flat.ctypes.data)
+                        glUniformMatrix4fv(glGetUniformLocation(prog, b'pose'), 1, 0, pose_flat.ctypes.data)
+                        glUniform4f(glGetUniformLocation(prog, b'frustum'), tx, ty, near, far)
+                        glUniform4f(glGetUniformLocation(prog, b'proj_shadow_tile'), float(ox), float(oy), float(n), 1.0 / A)
+                        glUniform1f(glGetUniformLocation(prog, b'spot_shadow_offset'), 0.02)
+                        glUniform1f(glGetUniformLocation(prog, b'spot_shadow_reach'), 128.0)
+                        if after:
+                            glUniform2f(glGetUniformLocation(prog, b'proj_shadow_light_size'), emit(fx), emit(fy))
+                        else:
+                            glUniform1f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), kmax_before)
+                    return f
+
+                frac = {}
+                for side in ('before', 'after'):
+                    setup(progs[side, False], side == 'after', fbo.value)()
+                    glDrawArrays(4, 0, 3)
+                    glFinish()
+                    v = read_full(big, GL_RED, 1)
+                    frac[side] = 100 * float(np.mean((v > 0) & (v < 1)))
+                setup(prog_dbg, True, fbo_dbg.value)()
+                glDrawArrays(4, 0, 3)
+                glFinish()
+                dv = read_full(dbg_tex, 0x1908, 4)
+                kk = np.maximum(dv[..., 0], dv[..., 1])
+                hist = ['%.0f%%' % (100 * np.mean(sel)) for sel in (kk <= 1.0 + 1e-6, (kk > 1.0 + 1e-6) & (kk <= 4.0), (kk > 4.0) & (kk <= 8.0), (kk > 8.0) & (kk < 12.0 - 1e-6), kk >= 12.0 - 1e-6)]
+
+                def ms(side, stub):
+                    return gpu_ms(setup(progs[side, stub], side == 'after', fbo.value))
+                tb1, ta, tb2 = ms('before', False), ms('after', False), ms('before', False)
+                sb1, sa, sb2 = ms('before', True), ms('after', True), ms('before', True)
+                tb, sb = (tb1 + tb2) / 2, (sb1 + sb2) / 2
+                rows.append((A, pname, n, tb, ta, 100 * (ta / tb - 1), 100 * abs(tb1 - tb2) / tb, sb, sa, 100 * (sa / sb - 1), frac['before'], frac['after'], hist))
+                r = rows[-1]
+                print('atlas %d %-16s N=%-4d full: before %.3f after %.3f ms %+.1f %% (noise %.1f %%) | filter off: before %.3f after %.3f ms %+.1f %% | penumbra %.1f / %.1f %% | kmax %s' % (
+                    r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], ' '.join(r[12])), flush=True)
+        fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
+    print()
+    print('| atlas | projector | N | before ms | after ms | delta | filter off: before ms | after ms | delta | penumbra pixels before / after | kmax 1 / (1,4] / (4,8] / (8,12) / 12 |')
+    print('|---|---|---|---|---|---|---|---|---|---|---|')
+    for r in rows:
+        print('| %d | %s | %d | %.3f | %.3f | %+.1f %% | %.3f | %.3f | %+.1f %% | %.1f %% / %.1f %% | %s |' % (r[0], r[1], r[2], r[3], r[4], r[5], r[7], r[8], r[9], r[10], r[11], ' / '.join(r[12])))
+    return 0
+
+
 def main():
+    if opts.time_pass:
+        return time_pass()
     rng = np.random.default_rng(opts.seed)
     vao = U()
     glGenVertexArrays(1, C.byref(vao))
