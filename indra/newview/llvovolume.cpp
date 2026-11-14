@@ -2591,6 +2591,10 @@ S32 LLVOVolume::setTEColor(const U8 te, const LLColor4& color)
             mDrawable->setState(LLDrawable::REBUILD_COLOR);
             shrinkWrap();
             dirtyMesh();
+            if (color.mV[3] != old_alpha)
+            {
+                gPipeline.markTextured(mDrawable); // <Vulkanstorm/> the first call saw the old colour; the projector pool's alpha bit needs the new one
+            }
         }
     }
 
