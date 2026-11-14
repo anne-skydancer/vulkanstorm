@@ -990,7 +990,7 @@ void testP3ChangeIndex()
     Aabb nan_box;
     nan_box.lo[0] = std::numeric_limits<float>::quiet_NaN();
     index.apply({ { nan_box, Cause::Edit } }, false, hits); // must not crash; a NaN box fails every plane test
-    check(true, "P3 a NaN box is survived");
+    check(true, "P3 a NaN box does not crash (a smoke check: no hit count is asserted)");
 }
 
 void testP3MoverRules()
@@ -1120,55 +1120,91 @@ void testP3Verdict()
     check(classifyTile(f).cause == Cause::Edit, "P3 a change outranks the resize in the cause");
 }
 
-// A scene of eight lamps with no change and no avatar costs no render, for as long as it stays so: the scheduler is handed
-// nothing (the whole chain: dirty list, index, verdict, selection).
+// Eight lamps whose volumes do not overlap, each drawn once, then no change and no avatar for as long as it stays so: the scheduler
+// is handed nothing (the whole chain: dirty list, index over the drawn tiles, verdict, selection, with each tile's drawn and
+// pending state modelled as the pool keeps it). One edit inside lamp 3's volume draws exactly lamp 3, in the frame after it.
 void testP3StaticScene()
 {
+    constexpr uint32_t kLamps = 8;
     std::vector<TileVolume> tiles;
-    for (uint32_t k = 0; k < 8; ++k)
+    for (uint32_t k = 0; k < kLamps; ++k)
     {
-        tiles.push_back({ k + 1, pyramidAt(float(k) * 5.f, 0.f, 0.f, 1.5f, 8.f) });
+        tiles.push_back({ k + 1, pyramidAt(float(k) * 40.f, 0.f, 0.f, 1.5f, 8.f) }); // 40 m apart, 8 m deep: disjoint
     }
     ChangeIndex index;
     DirtyList dirty;
-    int renders = 0;
+    bool drawn[kLamps] = {}, pending[kLamps] = {};
+    Cause pending_cause[kLamps] = {};
+    int fill_renders = 0, later_renders = 0, last_fill_frame = -1;
+    std::vector<std::pair<int, uint32_t>> later; // (frame, tile) of every render after the fill
     for (int frame = 0; frame < 100; ++frame)
     {
-        index.rebuild(tiles);
+        // the index covers the drawn tiles only, and only a frame with boxes needs it
+        std::vector<TileVolume> drawn_tiles;
+        for (uint32_t k = 0; k < kLamps; ++k)
+        {
+            if (drawn[k])
+            {
+                drawn_tiles.push_back(tiles[k]);
+            }
+        }
+        index.rebuild(drawn_tiles);
         std::vector<Hit> hits;
-        index.apply(dirty.swapForApply(), dirty.everything(), hits);
+        const std::vector<DirtyBox>& boxes = dirty.swapForApply();
+        index.apply(boxes, dirty.everything(), hits);
+        for (const Hit& h : hits)
+        {
+            if (!pending[h.key - 1])
+            {
+                pending[h.key - 1] = true;
+                pending_cause[h.key - 1] = h.cause;
+            }
+        }
         std::vector<StaticItem> items;
-        for (const TileVolume& t : tiles)
+        for (uint32_t k = 0; k < kLamps; ++k)
         {
             TileFacts f;
-            f.never_drawn = frame == 0;
-            for (const Hit& h : hits)
-            {
-                if (h.key == t.key)
-                {
-                    f.pending = true;
-                    f.pending_cause = h.cause;
-                }
-            }
+            f.never_drawn = !drawn[k];
+            f.pending = pending[k];
+            f.pending_cause = pending_cause[k];
             const TileVerdict v = classifyTile(f);
             if (v.needs_render && !v.dynamic)
             {
-                items.push_back({ t.key, f.never_drawn, true, float(t.key), 0.05f, 0 });
+                items.push_back({ k + 1, f.never_drawn, true, float(k + 1), 0.05f, 0 });
             }
         }
-        renders += int(selectStatic(items, kStaticCapMs).size());
+        for (uint32_t key : selectStatic(items, kStaticCapMs))
+        {
+            const uint32_t k = key - 1;
+            if (!drawn[k])
+            {
+                ++fill_renders;
+                last_fill_frame = frame;
+            }
+            else
+            {
+                ++later_renders;
+                later.push_back({ frame, k });
+            }
+            drawn[k] = true;
+            pending[k] = false;
+        }
         if (frame == 50)
         {
-            // one edit inside lamp 3's light; a camera that moved does not enter into it: one render, once
+            // one edit inside lamp 3's volume (key 3, index 2); a camera that moved does not enter into it
             Aabb b;
-            for (int i = 0; i < 3; ++i) { b.lo[i] = tiles[2].pyramid.bounds.lo[i] + 1.f; b.hi[i] = b.lo[i] + 0.1f; }
+            for (int i = 0; i < 3; ++i)
+            {
+                b.lo[i] = (tiles[2].pyramid.bounds.lo[i] + tiles[2].pyramid.bounds.hi[i]) * 0.5f;
+                b.hi[i] = b.lo[i] + 0.1f;
+            }
             dirty.push(b, Cause::Edit);
         }
     }
-    // frame 0 asks for all eight (the cap serves what fits, and the test counts what the scheduler returns, every frame
-    // the same eight are never-drawn only in frame 0): at most 8, then the one edit
-    check(renders >= 2, "P3 static scene: the fill and the edit were drawn", renders);
-    check(renders <= 8 + 1, "P3 static scene: nothing else was drawn in 100 frames (0 static renders per frame)", renders);
+    check(fill_renders == int(kLamps), "P3 static scene: every lamp is filled once", fill_renders);
+    check(last_fill_frame < 5, "P3 static scene: the cold fill ends within a few frames (the fixed cap)", last_fill_frame);
+    check(later_renders == 1 && later.size() == 1 && later[0].first == 51 && later[0].second == 2,
+          "P3 static scene: after the fill the one edit draws exactly lamp 3, in the next frame, and nothing else in 100 frames", later_renders);
 }
 
 void testP3()
