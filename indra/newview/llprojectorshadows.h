@@ -39,9 +39,8 @@ class LLGLSLShader;
 // Replaces the two re-rendered shadow slots of the Legacy method for the Stochastic method (RenderShadowMethod 2,
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
 // own in a shared depth atlas S (the tiles as drawn), copied into the live atlas L, the only texture the lighting programs
-// read (spotLightF.glsl, sampleProjectorShadow). What a projector shadows depends on the light alone: the tile's size, its
-// view and what is drawn into it come from the light's pose, never from the camera's orientation, so turning the camera
-// changes nothing. The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL
+// read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light's pose, never from the
+// camera's orientation; the caster LOD and the avatars' visibility still follow the camera until P3/P4. The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL
 // half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P2: every tile is a full render (the fixed objects and the avatars into S, then copied to L), at most as many per
@@ -177,6 +176,7 @@ private:
     F32 mCostEmaMs = 0.5f;         // placeholder until the first tile render is timed
     F64 mNextAllocTry = 0.0;       // seconds: when a failed allocation is tried again
     bool mAllocFailed = false;
+    F64 mAllocBackoff = 5.0;       // seconds between allocation retries
 
     U64 mTileRenders = 0;
     U64 mRepacks = 0;
