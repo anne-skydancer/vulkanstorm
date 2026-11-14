@@ -9,12 +9,17 @@ reports "pool": {"pool_present": false, ...}; a gate then ends as NOT RUN, never
   O-1 pure rotation   camera position fixed; yaw 360 deg and pitch -60..+60 deg; per step the pool's static renders, the
                       number of lights without a tile and the CRC32 of every static tile must not change.  (implemented; NOT RUN
                       with no projector tile in the baseline, or with no tile CRC: GL < 4.5 or "crc" off)
-  O-2 orbit           24 steps around a centre at 3 m and 8 m, two laps each; every lap after the first changes nothing: 0 renders,
-                      no cause, identical CRCs. The first lap may only re-render from the LOD pin (cause lod_up). Each step
-                      can save a snapshot (o2.snapshots) and the last lap a contact sheet to look at.            (stage P3)
+  O-2 orbit           24 steps around a centre (o2.centre: "agent" or [x, y, z] in region coordinates) at 3 m and 8 m, two laps each.
+                      The first lap of each radius settles (it may re-render from the LOD pin, lod_up, and from a mesh or prim
+                      that arrives late, edit: o2.first_lap_causes); the second changes nothing: 0 renders, no cause, the CRCs
+                      of that radius's first lap. Tiles with an avatar in their light are left out of the comparison (they are
+                      redrawn every frame until P4) and reported (avatar_tiles). Limit: at 8 m an object still loading into
+                      view during the second lap fails the gate; run it again once the scene has loaded. Each step can save a
+                      snapshot (o2.snapshots) and the last lap a contact sheet to look at.                        (stage P3)
   O-4 never vanish    walk a route, teleport in: lights without a tile is 0 after the first fill.           (stage P2)
   O-6 movers          three watch windows while you act in-world (o6.run): a fan with a spinning child under a lamp (no render),
-                      a rotating spot (a dynamic render every frame, a static one after it stops), an object edited under a
+                      a rotating spot (a dynamic render every frame; once it stops no tile is behind its lamp's pose: the final
+                      pose is drawn as a dynamic item, so the static counter is not asked to rise), an object edited under a
                       second lamp (its tile waits at most 250 ms).                                              (stage P3)
 
 The camera is moved with LLAgent.setCameraParams as light_check.py does; settings are restored at the end and on error.
@@ -109,6 +114,9 @@ def pool_extras(stats):
         "without": int(pool.get("lights_without_tile", 0)),
         "drawn": {str(t.get("key")): int(t.get("drawn_frame", 0)) for t in (pool.get("tiles") or [])},
         "dirty_age_ms_max": float(pool.get("dirty_age_ms_max", 0.0)),
+        "pose_stale": sum(1 for t in (pool.get("tiles") or []) if t.get("pose_stale")),
+        "lamp_moving": sum(1 for t in (pool.get("tiles") or []) if t.get("lamp_moving")),
+        "avatar_keys": sorted(str(t.get("key")) for t in (pool.get("tiles") or []) if t.get("avatar")),
     }
 
 
@@ -130,33 +138,42 @@ def cause_delta(prev, cur):
 
 def judge_o2(baseline, samples, first_lap_causes=("lod_up",)):
     """Failures of O-2. baseline: the sample before the orbit; samples: dicts with lap (1-based, over the whole run), tag, renders,
-    without, crcs, causes. Lap 1 (the first lap of the first radius) may re-render only from the causes in first_lap_causes
-    (the LOD pin lifting an object once); every later lap must change nothing: no render, no cause, no CRC against the first
-    lap's last step. A light without a tile fails at any step."""
+    without, crcs, causes, and optionally settle (the first lap of a radius; default: lap 1), group (the radius' index, default 0)
+    and avatar_keys (tiles with an avatar in their light). A settling lap may re-render only from the causes in first_lap_causes
+    (the LOD pin lifting an object once, a late mesh); every other lap must change nothing: no render, no cause, no CRC against the
+    last step of its radius's settling lap. Tiles that held an avatar in any sample are left out of the CRC comparison (the avatars
+    are drawn into the tiles every frame until P4), and the cause "avatar" and as many renders are tolerated. A light without a
+    tile fails at any step."""
     fails = []
+    skip = set(str(k) for k in baseline.get("avatar_keys", []))
+    for s in samples:
+        skip |= set(str(k) for k in s.get("avatar_keys", []))
     prev = baseline
-    ref_crcs = None
-    lap1 = [s for s in samples if s["lap"] == 1]
-    if lap1:
-        ref_crcs = lap1[-1]["crcs"]
+    refs = {}
+    for s in samples:
+        if s.get("settle", s["lap"] == 1):
+            refs[s.get("group", 0)] = s["crcs"]   # the last step of the settling lap
     for s in samples:
         tag = "lap %d %s" % (s["lap"], s["tag"])
         if s["without"]:
             fails.append("%s: %d lights without a tile" % (tag, s["without"]))
         delta = cause_delta(prev["causes"], s["causes"])
-        if s["lap"] == 1:
+        avatar_renders = max(0, delta.pop("avatar", 0))
+        if s.get("settle", s["lap"] == 1):
             bad = {k: v for k, v in delta.items() if k not in first_lap_causes}
             if bad:
-                fails.append("%s: re-render for %s (only %s allowed in the first lap)"
+                fails.append("%s: re-render for %s (only %s allowed in a settling lap)"
                              % (tag, dict(sorted(bad.items())), ", ".join(first_lap_causes)))
         else:
-            if s["renders"] != prev["renders"]:
+            if s["renders"] - prev["renders"] > avatar_renders:
                 fails.append("%s: static renders %d -> %d" % (tag, prev["renders"], s["renders"]))
             if delta:
                 fails.append("%s: render causes changed: %s" % (tag, dict(sorted(delta.items()))))
-            if ref_crcs is not None and s["crcs"] != ref_crcs:
-                changed = sorted(k for k in set(s["crcs"]) | set(ref_crcs) if s["crcs"].get(k) != ref_crcs.get(k))
-                fails.append("%s: tile CRC differs from the first lap for %s" % (tag, ", ".join(changed[:8])))
+            ref = refs.get(s.get("group", 0))
+            if ref is not None:
+                changed = sorted(k for k in set(s["crcs"]) | set(ref) if k not in skip and s["crcs"].get(k) != ref.get(k))
+                if changed:
+                    fails.append("%s: tile CRC differs from the first lap for %s" % (tag, ", ".join(changed[:8])))
         prev = s
     return fails
 
@@ -176,7 +193,8 @@ def judge_o6_fan(before, after):
 
 def judge_o6_spot(before, during, after, min_fraction=0.5):
     """A rotating spot: while it turns, its tile is a dynamic item (drawn in at least min_fraction of the frames), no light is
-    without a tile, and once it stands still the tile is brought up to date by a static render."""
+    without a tile, and once it stands still no tile is behind its lamp's pose and none reads as moving. The final pose is drawn as
+    a dynamic item (the lamp was moving in the frame it arrived), so the static counter is not asked to rise."""
     fails = []
     frames = during["frame"] - before["frame"]
     if frames <= 0:
@@ -186,8 +204,12 @@ def judge_o6_spot(before, during, after, min_fraction=0.5):
         fails.append("dynamic renders %d in %d frames: the rotating spot is not redrawn every frame" % (dyn, frames))
     if before["without"] or during["without"] or after["without"]:
         fails.append("a light was without a tile")
-    if after["static"] - during["static"] < 1:
-        fails.append("no static render after the spot stopped (its tile is behind its pose)")
+    if after["frame"] <= during["frame"]:
+        fails.append("the frame counter did not advance after the spot stopped (%d -> %d)" % (during["frame"], after["frame"]))
+    if after.get("pose_stale", 0):
+        fails.append("%d tile(s) still behind their lamp's pose after the spot stopped" % after["pose_stale"])
+    if after.get("lamp_moving", 0):
+        fails.append("%d lamp(s) still read as moving after the spot stopped: stop it" % after["lamp_moving"])
     return fails
 
 
@@ -253,13 +275,15 @@ class Check:
 
     def warm_up(self):
         """Before the baseline: let the first fill finish. Waits after_camera_s, then polls until static_renders and
-        lights_without_tile are unchanged for 3 reads (at most 15 s), so step 0 is not read mid-fill."""
+        lights_without_tile are unchanged and no tile is pending for 3 reads (at most 15 s), so step 0 is not read mid-fill or
+        with a late mesh still waiting to be drawn."""
         self.v.sleep(float(self.sc["settle"].get("after_camera_s", 0.5)))
         last, same = None, 0
         for _ in range(30):
             self.v.check_abort()
-            st = pool_state(self.stats())[:2]
-            same = same + 1 if st == last else 0
+            reply = self.stats()
+            st = pool_state(reply)[:2] + (pool_extras(reply)["pending"],)
+            same = same + 1 if st == last and not st[2] else 0
             if same >= 3:
                 return
             last = st
@@ -303,8 +327,9 @@ class Check:
         """One comparable reading of the pool: static renders, lights without a tile, tile CRCs, the render causes."""
         st = self.stats()
         renders, without, crcs = pool_state(st)
-        return {"lap": lap, "tag": tag, "renders": renders, "without": without, "crcs": crcs,
-                "causes": pool_extras(st)["causes"]}
+        ex = pool_extras(st)
+        return {"lap": lap, "tag": tag, "renders": renders, "without": without, "crcs": crcs, "causes": ex["causes"],
+                "avatar_keys": ex["avatar_keys"]}
 
     def extras(self, reset_ages=False):
         """The P3 counters without the tile read-back (cheap): the O-6 windows poll these."""
@@ -314,23 +339,27 @@ class Check:
         return pool_extras(self.v.req(API, "stats", **args))
 
     def contact_sheet(self, files, out):
-        """A grid of the lap-2 snapshots to look at (Pillow, when installed): the same lamp shadows at every step is the pass."""
+        """A grid of the last lap's snapshots to look at (Pillow, when installed): the same lamp shadows at every step is the pass.
+        Each picture keeps its aspect, fitted in a 320 x 180 cell."""
         try:
             from PIL import Image  # noqa: PLC0415
         except ImportError:
             self.report["warnings"].append("Pillow not installed: no contact sheet, the snapshots stay .bmp")
             return None
+        cw, ch = 320, 180
         thumbs = []
         for f in files:
             with Image.open(f) as im:
-                thumbs.append(im.convert("RGB").resize((320, 180)))
+                t = im.convert("RGB")
+                t.thumbnail((cw, ch))
+                thumbs.append(t)
         if not thumbs:
             return None
         cols = 6
         rows = (len(thumbs) + cols - 1) // cols
-        sheet = Image.new("RGB", (cols * 320, rows * 180))
+        sheet = Image.new("RGB", (cols * cw, rows * ch))
         for i, t in enumerate(thumbs):
-            sheet.paste(t, ((i % cols) * 320, (i // cols) * 180))
+            sheet.paste(t, ((i % cols) * cw + (cw - t.width) // 2, (i // cols) * ch + (ch - t.height) // 2))
         sheet.save(out)
         return str(out)
 
@@ -339,8 +368,12 @@ class Check:
         first = self.stats()
         if not (first.get("pool") or {}).get("pool_present"):
             return {"status": "NOT RUN", "why": "this viewer has no projector shadow pool (pool_present is false)"}
-        pos = self.v.agent_pos()
-        centre = [pos[0], pos[1], pos[2]]
+        centre_cfg = cfg.get("centre", "agent")
+        if isinstance(centre_cfg, (list, tuple)) and len(centre_cfg) == 3:
+            centre = [float(c) for c in centre_cfg]
+        else:
+            pos = self.v.agent_pos()
+            centre = [pos[0], pos[1], pos[2]]
         height = float(self.sc["camera"]["height_m"])
         radii = [float(r) for r in cfg.get("radii_m", [3.0, 8.0])]
         steps = int(cfg.get("steps", 24))
@@ -360,7 +393,7 @@ class Check:
         if all(c is None for c in baseline["crcs"].values()):
             return {"status": "NOT RUN", "why": "no tile CRC in the reply (GL < 4.5 or crc off); the orbit gate cannot compare tile contents"}
         samples, lap_no, last_lap_files = [], 0, []
-        for radius in radii:
+        for group, radius in enumerate(radii):
             pts = orbit_points(centre, radius, steps, height, float(cfg.get("target_height_m", 0.5)))
             for lap in range(laps):
                 lap_no += 1
@@ -369,14 +402,18 @@ class Check:
                     self.v.check_abort()
                     self.aim(cam, focus)
                     self.v.sleep(float(self.sc["settle"].get("step_s", 0.3)))
-                    samples.append(self.sample("r%gm s%02d" % (radius, i), lap_no))
+                    smp = self.sample("r%gm s%02d" % (radius, i), lap_no)
+                    smp["settle"], smp["group"] = lap == 0, group   # the first lap of each radius settles; the others are the gate
+                    samples.append(smp)
                     if take_snaps:
                         name = sheet_dir / ("lap%d_r%g_s%02d.bmp" % (lap_no, radius, i))
                         self.v.snapshot(str(name))
                         files.append(name)
                 last_lap_files = files or last_lap_files
-        fails = judge_o2(baseline, samples, tuple(cfg.get("first_lap_causes", ["lod_up"])))
+        fails = judge_o2(baseline, samples, tuple(cfg.get("first_lap_causes", ["lod_up", "edit"])))
+        avatar_keys = sorted(set(str(k) for smp in samples + [baseline] for k in smp.get("avatar_keys", [])))
         out = {"status": "FAIL" if fails else "PASS", "steps": len(samples), "failures": fails[:50],
+               "avatar_tiles": avatar_keys,   # left out of the comparison: an avatar in the light redraws the tile every frame until P4
                "causes": cause_delta(baseline["causes"], samples[-1]["causes"]),
                "first_lap_renders": samples[steps - 1]["renders"] - baseline["renders"] if len(samples) >= steps else None}
         if last_lap_files:
