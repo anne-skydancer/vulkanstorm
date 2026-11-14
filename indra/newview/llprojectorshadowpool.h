@@ -79,21 +79,22 @@ inline uint32_t baseSize(float radius, float fov_radians)
 }
 
 // Atlas edge by video memory (spec 4.2, D20). vram_mb is gGLManager.mVRAM (MB, 0 = unknown), max_texture the driver's
-// GL_MAX_TEXTURE_SIZE (0 = unknown, not limiting). Two D32F atlases: 32 MiB at 2048, 128 MiB at 4096, 512 MiB at 8192.
+// GL_MAX_TEXTURE_SIZE (0 = unknown, not limiting), dedicated whether vram_mb is the card's own memory (the driver's memory
+// info) and not a budget of shared system memory. Two D32F atlases: 32 MiB at 2048, 128 MiB at 4096, 512 MiB at 8192.
 constexpr uint32_t kAtlasSmall = 2048;   // below 3 GB
 constexpr uint32_t kAtlasDefault = 4096;
-constexpr uint32_t kAtlasLarge = 8192;   // from 12 GB: the 4096 atlas holds four 2048 tiles, the 8192 one sixteen
+constexpr uint32_t kAtlasLarge = 8192;   // from 11 GB of dedicated memory: the 4096 atlas holds four 2048 tiles, the 8192 one sixteen
 constexpr uint32_t kSmallVramMb = 3072;
-constexpr uint32_t kLargeVramMb = 12288;
+constexpr uint32_t kLargeVramMb = 11264; // a "12 GB" card often reports a little under 12288 MB
 
-inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture)
+inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture, bool dedicated)
 {
     uint32_t size = kAtlasDefault;
     if (vram_mb > 0 && vram_mb < kSmallVramMb)
     {
         size = kAtlasSmall;
     }
-    else if (vram_mb >= kLargeVramMb)
+    else if (dedicated && vram_mb >= kLargeVramMb)
     {
         size = kAtlasLarge;
     }
@@ -107,6 +108,33 @@ inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture)
 
 // the memory of the two atlases of one tier (D32F, 4 bytes a texel), in bytes
 constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull; }
+
+// The penumbra's size rules (P2b), the C++ twins of sampleProjectorShadow's (shadowStochasticUtil.glsl), per axis of the map
+// (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; w: the receiver's axial distance from the
+// projector's centre (m); n: the tile size (texels); c1: the depth term of the projector's matrix (z = c0 - c1 / w).
+constexpr float kRadiusMaxM = 0.04f;        // ST_SPOT_RADIUS_MAX_M: the largest radius of the search and filter, metres at the receiver
+constexpr float kKernelTexelsMin = 1.0f;    // ST_SPOT_KERNEL_MIN
+constexpr float kKernelTexelsMax = 12.0f;   // ST_SPOT_KERNEL_TEXELS_MAX
+constexpr float kEmitterMin = 0.02f;        // metres: the emitter extent's lower limit (a point has no edge to render)
+constexpr float kEmitterMax = 0.15f;        // metres: the upper limit, the constant of P2: no lamp is softer than before
+
+// clamp(ST_SPOT_RADIUS_MAX_M * k * N / w, 1, 12)
+inline float radiusCapTexels(float k, uint32_t n, float w)
+{
+    return std::min(std::max(kRadiusMaxM * k * (float)n / w, kKernelTexelsMin), kKernelTexelsMax);
+}
+
+// the emitter's extent across the beam: the prim's face, clamped (a bad value gets the lower limit)
+inline float emitterExtent(float face)
+{
+    return std::isfinite(face) ? std::min(std::max(face, kEmitterMin), kEmitterMax) : kEmitterMin;
+}
+
+// texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N
+inline float penumbraTexelsPerDepth(float light, float k, uint32_t n, float c1)
+{
+    return (0.5f / c1) * light * k * (float)n;
+}
 
 // N_i(s) = max(64, N_base >> s)
 inline uint32_t levelSize(uint32_t base, int level)
