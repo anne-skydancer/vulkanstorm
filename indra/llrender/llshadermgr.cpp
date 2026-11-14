@@ -1683,7 +1683,6 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("proj_shadow_atlas");
     mReservedUniforms.push_back("proj_shadow_matrix");
     mReservedUniforms.push_back("proj_shadow_tile");
-    mReservedUniforms.push_back("proj_shadow_kernel_max");
     mReservedUniforms.push_back("shadow_tile_origin");
     // </Vulkanstorm>
 
