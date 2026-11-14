@@ -596,19 +596,35 @@ namespace
             // an avatar item with avatar_draws left at 0 still counts one draw against A_max
             std::vector<DynamicItem> av_items{ { 1, true, 0, 1.f, 0.01f, 0 }, { 2, true, 0, 2.f, 0.01f, 0 } };
             check(selectDynamic(av_items, 10.f, 1).size() == 1, "T7 an avatar item with no draw count still costs one of A_max");
-            // a bad frame time never advances or poisons the grow hold
+            // a bad frame time never advances or poisons the grow hold; every case starts from a fresh level 1
             {
                 const std::vector<uint32_t> one{ 2048 };
-                LevelController lc;
-                lc.update(std::vector<uint32_t>(3, 2048), 4096, 0.016f, false);   // level 1
-                const int shrunk = lc.level();
-                for (float dt : { std::numeric_limits<float>::quiet_NaN(), -5.f })
-                {
-                    for (int i = 0; i < 10; ++i) lc.update(one, 4096, dt, false);
-                }
-                check(lc.level() == shrunk, "T2 a NaN or negative frame time does not grow the level", lc.level());
-                lc.update(one, 4096, 100.f, false);   // one stall counts as one short frame, not 3 s of stability
-                check(lc.level() == shrunk, "T2 a long stall is not 3 s of stable demand", lc.level());
+                auto fresh = [&]() {
+                    LevelController lc;
+                    lc.update(std::vector<uint32_t>(3, 2048), 4096, 0.016f, false);   // level 1
+                    return lc;
+                };
+                auto stable = [&](LevelController& lc, int frames, float dt) {
+                    for (int i = 0; i < frames; ++i) lc.update(one, 4096, dt, false);
+                };
+                LevelController ref = fresh();
+                const int shrunk = ref.level();
+                stable(ref, 11, 0.25f);
+                check(ref.level() == shrunk, "T2 11 frames of 0.25 s are not yet 3 s", ref.level());
+                stable(ref, 1, 0.25f);
+                check(ref.level() < shrunk, "T2 12 frames of 0.25 s are 3 s: the level grows", ref.level());
+                LevelController nan = fresh();
+                stable(nan, 10, std::numeric_limits<float>::quiet_NaN());
+                check(nan.level() == shrunk, "T2 a NaN frame time does not advance the hold", nan.level());
+                stable(nan, 12, 0.25f);
+                check(nan.level() < shrunk, "T2 a NaN frame time does not poison the hold", nan.level());
+                LevelController neg = fresh();
+                stable(neg, 1, -5.f);
+                stable(neg, 12, 0.25f);
+                check(neg.level() < shrunk, "T2 a negative frame time does not run the hold backwards", neg.level());
+                LevelController stall = fresh();
+                stable(stall, 1, 100.f);   // one stall counts as one short frame, not 3 s of stability
+                check(stall.level() == shrunk, "T2 a long stall is not 3 s of stable demand", stall.level());
             }
         }
     }
