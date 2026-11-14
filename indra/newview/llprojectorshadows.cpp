@@ -23,7 +23,6 @@
 
 #include "llagent.h"
 #include "llapp.h"
-#include "llappviewer.h"
 #include "llspatialpartition.h"
 #include "llframetimer.h"
 #include "lldrawable.h"
@@ -35,7 +34,6 @@
 #include "llthread.h"
 #include "lltimer.h"
 #include "llviewercamera.h"
-#include "llviewercontrol.h"
 #include "llviewershadermgr.h"
 #include "llvovolume.h"
 #include "pipeline.h"
@@ -261,7 +259,6 @@ bool LLProjectorShadows::ensureAllocated()
                 Record& rec = entry.second;
                 rec.placed = false;
                 rec.drawnFrame = 0;
-                rec.lowres = false;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << ((U64)size * size * 8 >> 20) << " MiB)" << LL_ENDL;
@@ -297,6 +294,8 @@ void LLProjectorShadows::release()
     mBuddy.reset(kTierSmall);
     mLevel.reset();
     mAllocFailed = false;
+    mTileRenders = 0;
+    mRepacks = 0;
 }
 
 void LLProjectorShadows::clear()
@@ -481,7 +480,6 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         else
         {
             blitTile(mFboS, move.src, mFboL, move.dst);
-            it->second.lowres = true;
         }
     }
     if (!plan.moves.empty())
@@ -651,10 +649,10 @@ void LLProjectorShadows::renderTile(Record& rec)
         LLPipeline::RenderSpotLight = rec.drawable;
         gPipeline.renderShadow(view, proj, shadow_cam, result, false);
         LLPipeline::RenderSpotLight = nullptr;
+        gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
     }
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
-    gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
 
     copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
 
@@ -669,7 +667,6 @@ void LLProjectorShadows::renderTile(Record& rec)
     r.drawn.valid = true;
     r.drawnFrame = LLFrameTimer::getFrameCount();
     r.drawnTime = LLTimer::getTotalSeconds();
-    r.lowres = false;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     r.lastCpuMs = ms;
     mCostEmaMs += 0.2f * (ms - mCostEmaMs);
