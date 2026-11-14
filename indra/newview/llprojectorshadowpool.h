@@ -571,13 +571,13 @@ namespace detail
     }
 }
 
-// The rectangular pyramid of an SL projector (square tile: aspect 1). origin and the unit axes
-// are in the same space as the boxes (agent space); fov is the full angle in radians; the planes
-// run from `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
+// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
+// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
+// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
+// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
 inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
-                           float fov, float near_d, float far_d)
+                           float tan_x, float tan_y, float near_d, float far_d)
 {
-    const float t = std::tan(0.5f * fov);
     Pyramid py;
     float c[8][3];
     int k = 0;
@@ -588,8 +588,8 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         {
             for (int xi = 0; xi < 2; ++xi)
             {
-                const float x = (xi ? 1.f : -1.f) * t * z;
-                const float y = (yi ? 1.f : -1.f) * t * z;
+                const float x = (xi ? 1.f : -1.f) * tan_x * z;
+                const float y = (yi ? 1.f : -1.f) * tan_y * z;
                 for (int i = 0; i < 3; ++i)
                 {
                     c[k][i] = origin[i] + fwd[i] * z + right[i] * x + up[i] * y;
@@ -624,6 +624,14 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         }
     }
     return py;
+}
+
+// the square pyramid of a full angle `fov` (radians)
+inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
+                           float fov, float near_d, float far_d)
+{
+    const float t = std::tan(0.5f * fov);
+    return makePyramid(origin, fwd, right, up, t, t, near_d, far_d);
 }
 
 // Conservative box against the pyramid's bounds and six planes: false when the box lies wholly
