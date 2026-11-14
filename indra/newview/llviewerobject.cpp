@@ -2400,8 +2400,13 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
     F32 accel_mag_sq = getAcceleration().magVecSquared();
 
     // <Vulkanstorm> what this update changes, for the projector shadow pool's mover classifier (read before the position and rotation are applied)
-    const bool pool_pos_changed = (test_pos_parent != new_pos_parent);
-    const bool pool_rot_changed = new_rot.isNotEqualEps(getRotation(), F_ALMOST_ZERO);
+    // The tolerances are above what terse updates quantise (16-bit position: 0.004 m a step across the region, up to about 0.08 m in height; 16-bit quaternion components), so a
+    // full update after a terse one cannot read as a move. A move below them is not classified: the object stays a fixed caster,
+    // and a static drawable's move pushes its extents anyway (llshadowdirtyfeed.cpp).
+    constexpr F32 POOL_MOVE_POS_EPS_SQ = 0.1f * 0.1f;
+    constexpr F32 POOL_MOVE_ROT_EPS = 1.0e-3f;
+    const bool pool_pos_changed = dist_vec_squared(test_pos_parent, new_pos_parent) > POOL_MOVE_POS_EPS_SQ;
+    const bool pool_rot_changed = new_rot.isNotEqualEps(getRotation(), POOL_MOVE_ROT_EPS);
     // </Vulkanstorm>
 
     if (  ((b_changed_status)||(test_pos_parent != new_pos_parent))
