@@ -50,6 +50,7 @@ class PoolModel:
         self.crcs = {k: 100 + k for k in range(1, tiles + 1)}
         self.moves = 0
         self.dirty_age_ms_max = 0.0
+        self.avatar_tiles = set()   # keys of tiles with an avatar in their light (redrawn every frame until P4)
 
     def on_camera(self, pos, focus):
         self.moves += 1
@@ -71,7 +72,8 @@ class PoolModel:
             self.dirty_age_ms_max = 0.0
         tiles = []
         for k, c in sorted(self.crcs.items()):
-            t = {"key": k, "size": 1024, "x": 0, "y": 0, "drawn_frame": self.frame - 3, "cam_dist": 5.0, "pending": False}
+            t = {"key": k, "size": 1024, "x": 0, "y": 0, "drawn_frame": self.frame - 3, "cam_dist": 5.0, "pending": False,
+                 "avatar": k in self.avatar_tiles, "pose_stale": False, "lamp_moving": False}
             if self.crc and d.get("crc", True):
                 t["crc32"] = c
             tiles.append(t)
