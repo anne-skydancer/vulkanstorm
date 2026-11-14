@@ -1,12 +1,12 @@
 {
   "name": "projector_orbit",
-  "description": "Camera-orbit gates of the projector shadow pool (doc/shadows/projector-pool-budget.md, spec section 7.3). S0 skeleton: the scene is the owner's bedroom; teleport and the fan / rotating-spot objects are filled in at the capture session.",
+  "description": "Camera-orbit gates of the projector shadow pool (doc/shadows/projector-pool-budget.md, spec section 7.3). P3: the scene is the owner's bedroom; teleport is filled in at the capture session. O-6 (o6.run) needs the fan, the rotating spot and an editable object under a second lamp, and you in-world.",
   "settle": {"post_login_s": 20.0, "after_camera_s": 0.5, "after_teleport_s": 30.0, "login_timeout_s": 3600, "step_s": 0.3},
   "teleport": null,
   "settings": {"RenderShadowMethod": 2, "RenderShadowDetail": 2},
   "camera": {"height_m": 1.6, "look_distance_m": 10.0},
   "o1": {"yaw_step_deg": 15, "pitch_deg": [-60, -45, -30, -15, 15, 30, 45, 60]},
-  "o2": {"radii_m": [3.0, 8.0], "steps": 24, "laps": 2, "centre": "agent"},
+  "o2": {"radii_m": [3.0, 8.0], "steps": 24, "laps": 2, "centre": "agent", "target_height_m": 0.5, "snapshots": true, "first_lap_causes": ["lod_up"]},
   "o4": {"route": [], "teleport_in": null},
-  "o6": {"fan_object": null, "rotating_spot": null, "second_lamp": null}
+  "o6": {"run": false, "windows": {"prompt_s": 10, "fan_s": 10, "spot_s": 12, "spot_stop_s": 5, "lamp_edit_s": 20, "limit_ms": 250}}
 }
