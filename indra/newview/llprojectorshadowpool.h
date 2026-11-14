@@ -78,6 +78,36 @@ inline uint32_t baseSize(float radius, float fov_radians)
     return std::min(std::max(n, kMinBase), kMaxBase);
 }
 
+// Atlas edge by video memory (spec 4.2, D20). vram_mb is gGLManager.mVRAM (MB, 0 = unknown), max_texture the driver's
+// GL_MAX_TEXTURE_SIZE (0 = unknown, not limiting). Two D32F atlases: 32 MiB at 2048, 128 MiB at 4096, 512 MiB at 8192.
+constexpr uint32_t kAtlasSmall = 2048;   // below 3 GB
+constexpr uint32_t kAtlasDefault = 4096;
+constexpr uint32_t kAtlasLarge = 8192;   // from 12 GB: the 4096 atlas holds four 2048 tiles, the 8192 one sixteen
+constexpr uint32_t kSmallVramMb = 3072;
+constexpr uint32_t kLargeVramMb = 12288;
+
+inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture)
+{
+    uint32_t size = kAtlasDefault;
+    if (vram_mb > 0 && vram_mb < kSmallVramMb)
+    {
+        size = kAtlasSmall;
+    }
+    else if (vram_mb >= kLargeVramMb)
+    {
+        size = kAtlasLarge;
+    }
+    // a driver that cannot make a texture that wide gets the largest tier it can (never below the smallest)
+    while (size > kAtlasSmall && max_texture > 0 && size > max_texture)
+    {
+        size >>= 1;
+    }
+    return size;
+}
+
+// the memory of the two atlases of one tier (D32F, 4 bytes a texel), in bytes
+constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull; }
+
 // N_i(s) = max(64, N_base >> s)
 inline uint32_t levelSize(uint32_t base, int level)
 {
