@@ -163,6 +163,33 @@ class ShadowAlphaPermutation(unittest.TestCase):
         self.assertEqual(len(re.findall(call, pipe)), 4)
         self.assertEqual(len(re.findall(r'gDeferredShadow(?:Fullbright)?AlphaMaskProgram\.bind\(rigged\);', pipe)), 4)
 
+    def test_classic_blend_minimum_alpha_is_005_only_under_stochastic(self):
+        # renderAlphaObjects: the classic blend faces' minimum_alpha is 0.05 under Stochastic and the stock
+        # ALPHA_BLEND_CUTOFF (0.598) otherwise; the shader tests the texture alpha against it before the vertex
+        # alpha multiply, and 0.05 is the same cut the shader makes after the multiply.
+        pipe = PIPELINE.read_text(encoding='utf-8').replace('\r\n', '\n')
+        self.assertRegex(pipe, r'ALPHA_BLEND_CUTOFF = 0\.598f;')
+        self.assertRegex(pipe, r'SHADOW_BLEND_MIN_ALPHA_STOCHASTIC = 0\.05f;')
+        start = pipe.index('void LLPipeline::renderAlphaObjects')
+        body = pipe[start:pipe.index('\n}\n', start)]
+        self.assertRegex(body, r'blend_minimum_alpha = RenderShadowMethod == LLShadowMethod::STOCHASTIC '
+                               r'\? SHADOW_BLEND_MIN_ALPHA_STOCHASTIC : ALPHA_BLEND_CUTOFF;')
+        # each classic (gDeferredShadowAlphaMaskProgram) bind sets it; the glTF blend binds keep the stock value
+        binds = list(re.finditer(r'gDeferredShadowAlphaMaskProgram\.bind\(rigged\);', body))
+        self.assertEqual(len(binds), 2)
+        for m in binds:
+            tail = body[m.end():m.end() + 700]
+            self.assertIn('setMinimumAlpha(blend_minimum_alpha)', tail[:tail.index('pushBatch')])
+        self.assertEqual(body.count('setMinimumAlpha(ALPHA_BLEND_CUTOFF)'), 2)   # the two glTF blend binds
+        self.assertEqual(body.count('setMinimumAlpha(blend_minimum_alpha)'), 2)
+        # the shader order: texture alpha vs minimum_alpha, then vertex alpha, then the 0.05 cut
+        on = significant(evaluate(self.read('shadowAlphaMaskF'), True).splitlines())
+        i_min = on.index('if (alpha < minimum_alpha)')
+        i_vtx = on.index('alpha *= vertex_color.a;')
+        i_cut = on.index('if (alpha < 0.05) // treat as totally transparent')
+        self.assertLess(i_min, i_vtx)
+        self.assertLess(i_vtx, i_cut)
+
     def test_avatar_shadow_pass_never_sets_minimum_alpha(self):
         # The avatar alpha-shadow branch (the stock stipple, and the dither under Stochastic) is inert: it runs only
         # for texels below minimum_alpha, which stays 0 in the shadow pass, as in stock. Making it live is a separate

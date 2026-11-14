@@ -267,6 +267,9 @@ const F32 ALPHA_BLEND_CUTOFF = 0.598f;
 // dither below it; mask faces follow the creator's cutoff alone (0: never dither). Absent in the Legacy permutation.
 const F32 SHADOW_BLEND_SOLID_ALPHA = 0.98f;
 const F32 SHADOW_MASK_SOLID_ALPHA = 0.f;
+// <Vulkanstorm/> Stochastic shadows: classic blend faces dither from 0.05 (the shader's own "totally transparent" cut)
+// instead of being cut below ALPHA_BLEND_CUTOFF, so a sheer casts its proportional shadow like the glTF blend shader's.
+const F32 SHADOW_BLEND_MIN_ALPHA_STOCHASTIC = 0.05f;
 const F32 DEFERRED_LIGHT_FALLOFF = 0.5f;
 const U32 DEFERRED_VB_MASK = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0 | LLVertexBuffer::MAP_TEXCOORD1;
 
@@ -7639,6 +7642,8 @@ void LLPipeline::renderAlphaObjects(bool rigged)
     S32 sun_up = LLEnvironment::instance().getIsSunUp() ? 1 : 0;
     U32 target_width = LLRenderTarget::sCurResX;
     U32 type = LLRenderPass::PASS_ALPHA;
+    // classic blend faces: the stock cutoff in Legacy, 0.05 under Stochastic (Legacy behaviour is unchanged)
+    const F32 blend_minimum_alpha = RenderShadowMethod == LLShadowMethod::STOCHASTIC ? SHADOW_BLEND_MIN_ALPHA_STOCHASTIC : ALPHA_BLEND_CUTOFF;
     // for gDeferredShadowAlphaMaskProgram
     const LLVOAvatar* lastAvatar = nullptr;
     U64 lastMeshId = 0;
@@ -7677,7 +7682,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
-                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(blend_minimum_alpha);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 if (mSimplePool->uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
                 {
@@ -7700,7 +7705,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
-                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(blend_minimum_alpha);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 mSimplePool->pushBatch(*pparams, true, true);
             }
