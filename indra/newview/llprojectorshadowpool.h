@@ -1069,6 +1069,25 @@ public:
         return all;
     }
 
+    // The object is gone (killed, its drawable unlinked): no tile holds it any more, whatever the books said. An object created
+    // later with the same id is a new object whose counter is zero and must be pinned by its first render. Returns how many tiles
+    // held it (the counter the caller lowers on the object, if it still lives).
+    uint32_t forget(const Id128& id)
+    {
+        auto r = mRefs.find(id);
+        if (r == mRefs.end())
+        {
+            return 0;
+        }
+        const uint32_t n = r->second;
+        mRefs.erase(r);
+        for (auto& t : mTiles)
+        {
+            t.second.held.erase(id);
+        }
+        return n;
+    }
+
     size_t heldBy(uint32_t tile) const
     {
         auto it = mTiles.find(tile);
