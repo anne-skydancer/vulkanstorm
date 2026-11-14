@@ -531,8 +531,9 @@ LLImageGL::LLImageGL(
     LLGLenum formatType,
     LLTexUnit::eTextureAddressMode addressMode)
 // <Vulkanstorm> this constructor never initialised mExternalTexture (init() does not
-// set it), so ~LLImageGL read an indeterminate bool and, when it was false, deleted the
-// caller-owned texture and decremented sCount for an image never counted
+// set it), so ~LLImageGL read an indeterminate bool. true now means "not counted or
+// registered in sCount/sImageList"; the image still owns texName (the only caller,
+// load_exr(), hands a freshly generated texture over), so ~LLImageGL deletes it
 :   mSaveData(0), mExternalTexture(true)
 // </Vulkanstorm>
 {
@@ -549,12 +550,17 @@ LLImageGL::LLImageGL(
 
 LLImageGL::~LLImageGL()
 {
-    if (!mExternalTexture && gGLManager.mInited)
+    if (gGLManager.mInited)
     {
         LLImageGL::cleanup();
-        sImageList.erase(this);
-        freePickMask();
-        sCount--;
+        // <Vulkanstorm> an image from the texName constructor was never counted or registered
+        if (!mExternalTexture)
+        {
+            sImageList.erase(this);
+            freePickMask();
+            sCount--;
+        }
+        // </Vulkanstorm>
     }
 }
 
