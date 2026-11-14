@@ -27,7 +27,7 @@ function install_desktop_entry()
 Name=Second Life SLURL handler\n\
 Path=${installation_prefix}\n\
 Exec=${HANDLER} %u\n\
-Icon=${installation_prefix}/secondlife_icon.png\n\
+Icon=${installation_prefix}/firestorm_icon.png\n\
 Terminal=false\n\
 Type=Application\n\
 StartupNotify=true\n\

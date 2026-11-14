@@ -81,7 +81,8 @@ class WrapperTests(unittest.TestCase):
     def launch(self, settings):
         # A clean environment makes the result independent of the runner's GPU,
         # desktop, shell startup files and any inherited loader/SDL overrides.
-        env = {"PATH": os.defpath, "HOME": str(self.root), "LC_ALL": "C"}
+        # VKSTORM_ARCH makes the launcher's x86-64-v3 CPU check pass on any host.
+        env = {"PATH": os.defpath, "HOME": str(self.root), "LC_ALL": "C", "VKSTORM_ARCH": "aarch64"}
         env.update(settings)
         output = self.root / "viewer-env"
         output.unlink(missing_ok=True)
@@ -104,6 +105,27 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(actual.get("__GL_THREADED_OPTIMIZATIONS"), expected_threading)
         for name in ("WAYLAND_DISPLAY", "XDG_SESSION_TYPE", "DISPLAY"):
             self.assertEqual(actual.get(name), settings.get(name), name)
+
+    def run_cpu_check(self, flags):
+        cpuinfo = self.root / "cpuinfo"
+        cpuinfo.write_text("processor\t: 0\nflags\t\t: " + flags + "\n")
+        env = {
+            "PATH": os.defpath, "HOME": str(self.root), "LC_ALL": "C",
+            "VKSTORM_ARCH": "x86_64", "VKSTORM_LD_SO": "",
+            "VKSTORM_CPUINFO": str(cpuinfo), "VKSTORM_CPU_CHECK_ONLY": "1",
+        }
+        return subprocess.run(
+            [BASH, str(self.launcher)], cwd=self.root, env=env,
+            capture_output=True, text=True, timeout=5,
+        )
+
+    def test_cpu_check(self):
+        v3 = "fpu sse2 avx avx2 bmi1 bmi2 f16c fma movbe abm"
+        result = self.run_cpu_check(v3)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.run_cpu_check(v3.replace("avx2", ""))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("AVX2", result.stderr)
 
     def test_hardware_detection(self):
         cases = [

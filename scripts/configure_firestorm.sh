@@ -99,7 +99,7 @@ showUsage()
     echo "  --zink                   : Bundle the Mesa Zink OpenGL-over-Vulkan runtime (Windows 64-bit only)"
     echo "  --lto                    : Build with Link Time Optimization (default)"
     echo "  --no-lto                 : Build without Link Time Optimization"
-    echo "  --crashreporting         : Build with crash reporting enabled "
+    echo "  --crashreporting         : Build with crash reporting enabled"
     echo "  --testbuild <days>       : Create time-limited test build (build date + <days>)"
     echo "  --platform <platform>    : Build for specified platform (darwin | windows | linux)"
     echo "  --jobs <num>             : Build with <num> jobs in parallel (Linux and Darwin only)"

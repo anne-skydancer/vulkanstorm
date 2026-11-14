@@ -281,3 +281,9 @@ take them under the GPL, version 3 or later.
   with the Linden Research header and `SPDX-License-Identifier: LGPL-2.1-only`) and
   `scripts/perf/reference/shadowUtil_before_spot_fade.glsl` (an earlier
   `shadowUtil.glsl`, Linden Research header unchanged). Left under LGPL-2.1.
+
+- Re-check 2026-11-14 (upstream sync, jemalloc 5.4.0 and WebRTC m144.7559.06.22): the installed
+  Windows WebRTC package's `LICENSES/webrtc-license.txt` lists no FFmpeg, OpenH264 or
+  other GPL-incompatible component (its only GPL mentions are the Apache-2.0 GPLv2
+  patent-waiver paragraph and a public-domain note). The Linux jemalloc 5.4.0 and Linux WebRTC
+  archives are not in the local cache: per upstream metadata, contents not inspected.

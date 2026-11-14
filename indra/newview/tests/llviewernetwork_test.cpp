@@ -40,10 +40,6 @@ namespace
 // Should not collide with other test programs creating temp files.
 static const char * const TEST_FILENAME("llviewernetwork_test.xml");
 
-// The login page this viewer gives both system grids (DEFAULT_LOGIN_PAGE in
-// llviewernetwork.cpp)
-static const std::string SYSTEM_GRID_LOGIN_PAGE("https://phoenixviewer.com/app/loginV3/");
-
 }
 
 //
