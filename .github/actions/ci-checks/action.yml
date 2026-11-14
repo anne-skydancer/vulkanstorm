@@ -53,6 +53,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowcascadefit_test.cpp -o "$RUNNER_TEMP/shadow-cascade-fit-test"
         "$RUNNER_TEMP/shadow-cascade-fit-test"
+    - name: Check the projector shadow pool core (tile size, level, buddy atlas, repack, dirty boxes, scheduler)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llprojectorshadowpool_test.cpp -o "$RUNNER_TEMP/projector-pool-test"
+        "$RUNNER_TEMP/projector-pool-test"
     - name: Check the shadow method migration
       shell: bash
       run: |
