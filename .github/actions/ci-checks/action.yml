@@ -63,6 +63,9 @@ runs:
       run: |
         python3 scripts/tests/test_check_legacy_shadows.py
         python3 scripts/shadows/check_legacy_shadows.py
+    - name: Check the semi-transparent shadow casters (stock stipple in Legacy, one dither under Stochastic)
+      shell: bash
+      run: python3 scripts/tests/test_shadow_alpha_permutation.py
     - name: Check the shadow methods' plumbing (feature tables, combo, PCSS removed)
       shell: bash
       run: python3 scripts/tests/test_shadow_method_tables.py
