@@ -3175,13 +3175,15 @@ void LLPipeline::updateGeom(F32 max_dtime)
 
             // <Vulkanstorm> the projector shadow pool: a rebuild that waited (a mesh not yet loaded) changes the picture when it completes
             const bool pool_rebuild = LLShadowDirtyFeed::tracking() &&
-                                      drawablep->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED);
+                                      (drawablep->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_RIGGED) ||
+                                       LLShadowDirtyFeed::meshLoaded(drawablep));
             // </Vulkanstorm>
             if (updateDrawableGeom(drawablep))
             {
                 if (pool_rebuild)
                 {
                     LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit); // <Vulkanstorm/>
+                    LLShadowDirtyFeed::clearMeshLoaded(drawablep);
                 }
                 drawablep->clearState(LLDrawable::IN_REBUILD_Q);
                 mBuildQ1.erase(curiter);
