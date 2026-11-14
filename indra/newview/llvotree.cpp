@@ -28,6 +28,10 @@
 
 #include "llvotree.h"
 
+#include <limits>
+
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's LOD pin
+
 #include "lldrawpooltree.h"
 
 #include "llviewercontrol.h"
@@ -353,6 +357,31 @@ U32 LLVOTree::processUpdateMessage(LLMessageSystem *mesgsys,
     return retval;
 }
 
+// <Vulkanstorm> the projector shadow pool's LOD pin
+void LLVOTree::pinLampLOD()
+{
+    if (mLampLODPin < std::numeric_limits<U16>::max())
+    {
+        ++mLampLODPin;
+    }
+    if (mTrunkLOD != 0 && mDrawable.notNull())
+    {
+        // the rebuild this forces is a LOD increase: the tile that pinned it is drawn once more with the full detail, then holds
+        LLShadowDirtyFeed::CauseScope cause(llprojectorpool::Cause::LodUp);
+        mTrunkLOD = 0;
+        gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_ALL);
+    }
+}
+
+void LLVOTree::unpinLampLOD()
+{
+    if (mLampLODPin > 0)
+    {
+        --mLampLODPin; // the next idleUpdate gives the camera's LOD back (and rebuilds if it differs)
+    }
+}
+// </Vulkanstorm>
+
 void LLVOTree::idleUpdate(LLAgent &agent, const F64 &time)
 {
     if (mDead || !(gPipeline.hasRenderType(LLPipeline::RENDER_TYPE_TREE)))
@@ -381,6 +410,10 @@ void LLVOTree::idleUpdate(LLAgent &agent, const F64 &time)
     // for trunk_LOD lower value means better quality, but both trunk_LOD and cur_detail have 4 levels
     trunk_LOD = llmax(trunk_LOD, LLVolumeLODGroup::NUM_LODS - cur_detail - 1);
     trunk_LOD = llmin(trunk_LOD, sMAX_NUM_TREE_LOD_LEVELS);
+    if (mLampLODPin)
+    {
+        trunk_LOD = 0; // <Vulkanstorm/> held by a projector tile: the best detail wherever the camera is
+    }
 
     if (mReferenceBuffer.isNull())
     {
