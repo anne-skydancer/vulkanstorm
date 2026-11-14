@@ -89,7 +89,9 @@ namespace
         pool["dynamic_renders"] = (F64)ps.dynamicRenders; // ... the dynamic schedule (a moving lamp, an avatar in the light)
         pool["last_frame_static_renders"] = (S32)ps.lastFrameStatic;
         pool["last_frame_dynamic_renders"] = (S32)ps.lastFrameDynamic;
-        pool["pinned_objects"] = (S32)ps.pinnedObjects;   // volumes held at full detail by at least one tile (the LOD pin)
+        pool["pinned_objects"] = (S32)ps.pinnedObjects;   // prims and trees held at full detail by at least one tile (the LOD pin)
+        pool["pinned_triangles"] = (F64)ps.pinnedTriangles; // their triangles at that detail: what the pin costs the main view
+        pool["mover_objects"] = (S32)ps.moverObjects;     // objects flagged as movers since start (out of the fixed layer while active)
         pool["pending_tiles"] = (S32)ps.pendingTiles;     // drawn tiles a change touched and the scheduler has not drawn again
         pool["avatar_tiles"] = (S32)ps.avatarTiles;
         pool["dirty_boxes_last_frame"] = (S32)ps.dirtyBoxesLastFrame;
@@ -100,7 +102,7 @@ namespace
         pool["lights_without_tile"] = (S32)ps.lightsWithoutTile; // O-4: 0 after the first fill
         pool["tile_cost_ms"] = (F64)ps.costEmaMs;
         pool["last_frame_renders"] = (S32)ps.lastFrameRenders;
-        pool["max_stale_frames"] = (S32)ps.maxStaleFrames; // the oldest drawn tile, in frames (the scheduler bounds it)
+        pool["max_stale_frames"] = (S32)ps.maxStaleFrames; // the oldest pending tile (a change touched it, not yet redrawn), in frames; 0 in a static scene (the scheduler bounds it)
         pool["last_frame_render_ms"] = (F64)ps.lastFrameRenderMs;
         LLSD tiles = LLSD::emptyArray();
         const bool with_crc = !req.has("crc") || req["crc"].asBoolean(); // on unless asked off: a read-back of each tile
