@@ -919,9 +919,15 @@ void LLProjectorShadows::update(LLCamera& camera)
     // The lamps' poses and volumes, this frame's: from the lamp alone (never the camera).
     std::vector<TileVolume> volumes;
     volumes.reserve(mRecords.size());
+    std::vector<const LLViewerObject*> lamp_roots; // the lamps' own linksets: fixtures, their changes always push (llshadowdirtyfeed)
     for (auto& entry : mRecords)
     {
         Record& rec = entry.second;
+        if (LLViewerObject* lamp = rec.drawable.notNull() ? rec.drawable->getVObj().get() : nullptr)
+        {
+            LLViewerObject* lamp_root = lamp->getRootEdit();
+            lamp_roots.push_back(lamp_root ? lamp_root : lamp);
+        }
         SpotGeom g;
         if (!read_spot(rec.drawable, g))
         {
@@ -945,6 +951,8 @@ void LLProjectorShadows::update(LLCamera& camera)
             volumes.push_back(tv);
         }
     }
+
+    LLShadowDirtyFeed::setLampRoots(lamp_roots);
 
     // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn)
     mIndex.rebuild(volumes);
