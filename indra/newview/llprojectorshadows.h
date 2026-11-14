@@ -147,6 +147,9 @@ public:
         U32 key = 0, x = 0, y = 0, size = 0, drawnFrame = 0;
         F32 camDist = 0.f;
         bool pending = false;      // stale: waiting to be drawn again
+        bool avatar = false;       // an avatar is in its light, or its last draw had one
+        bool poseStale = false;    // the lamp's pose differs from the pose the tile was drawn with
+        bool lampMoving = false;   // the lamp's pose changed since the last frame
     };
     std::vector<TileInfo> getTiles() const;
     U32 atlasS() const { return mAtlasS; }
