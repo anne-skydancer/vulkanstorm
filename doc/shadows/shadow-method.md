@@ -249,7 +249,7 @@ How a semi-transparent texel casts depends on the method.
   (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws). Blend faces, whatever the material type: a texel at
   0.98 alpha or more is solid, from 0.05 up to 0.98 it lets light through in proportion (a hashed per-texel dither,
   anchored to the shadow map's texel), and below 0.05 it casts nothing (`shadow_solid_alpha` is 0.98 for the blend draws
-  in `renderAlphaObjects`). Classic (non-glTF) blend faces are still cut below 0.598 before the dither.
+  in `renderAlphaObjects`). Classic (non-glTF) blend faces use a minimum alpha of 0.05 here instead of Legacy's 0.598, so a sheer at 0.3 to 0.5 casts its proportional shadow like a glTF blend face.
 - The avatar alpha shadow shaders (`avatarAlphaShadowF`, `avatarAlphaMaskShadowF`) carry the same branch, which is inert:
   the avatar shadow pass never sets `minimum_alpha`.
 
