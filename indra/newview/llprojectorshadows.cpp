@@ -1305,6 +1305,16 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     st.lastFrameStatic = mLastFrameStatic;
     st.lastFrameDynamic = mLastFrameDynamic;
     st.pinnedObjects = (U32)mPins.pinnedObjects();
+    st.moverObjects = LLShadowDirtyFeed::moverObjects();
+    for (const Id128& id : mPins.pinnedIds())
+    {
+        LLUUID uuid;
+        memcpy(uuid.mData, &id, sizeof(id));
+        if (LLViewerObject* object = gObjectList.findObject(uuid))
+        {
+            st.pinnedTriangles += object->getTriangleCount();
+        }
+    }
     st.pendingTiles = mPendingTiles;
     st.avatarTiles = mAvatarTiles;
     st.dirtyBoxesLastFrame = mDirtyBoxes;
@@ -1316,9 +1326,11 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     for (const auto& entry : mRecords)
     {
         const Record& rec = entry.second;
-        if (rec.placed && rec.drawnFrame != 0 && frame >= rec.drawnFrame)
+        // the oldest PENDING tile: frames since the first change that touched it (0 in a static scene; a tile that is merely not
+        // redrawn is not stale)
+        if (rec.placed && rec.drawnFrame != 0 && rec.pending && rec.dirtyFrame != 0 && frame >= rec.dirtyFrame)
         {
-            st.maxStaleFrames = std::max(st.maxStaleFrames, frame - rec.drawnFrame);
+            st.maxStaleFrames = std::max(st.maxStaleFrames, frame - rec.dirtyFrame);
         }
     }
     return st;
