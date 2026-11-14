@@ -1023,6 +1023,15 @@ inline bool rebuildDirties(uint32_t flags)
     return (flags & kRebuildPosition) != 0 && !((flags & kRebuildTcoord) && (flags & kRebuildColor));
 }
 
+// A texture, material, bump or glow change dirties a prim's tiles when the prim had a silhouette-affecting face (blended,
+// alpha-masked, alpha-textured) before the change or has one after it: turning such a face opaque removes a hole from the
+// shadow, and an opaque face turning alpha cuts one. Opaque to opaque never does (the texture does not show in a depth tile),
+// so plain texture swaps and animated textures do not churn. `was` is what the feed last saw; the caller stores `now` after.
+inline bool texturedDirties(bool was, bool now)
+{
+    return was || now;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The LOD pin's books (section 4.4, D6). A tile pins the objects it draws at full detail (the viewer raises a counter on each
 // object); the books say, per render, which objects the tile now holds and which it lets go of. Keyed by tile and object id.
