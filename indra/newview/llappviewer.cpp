@@ -27,7 +27,6 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llappviewer.h"
-#include "llcloudnoise.h" // <Vulkanstorm> the volumetric clouds' noise file
 
 // Viewer includes
 #include "llversioninfo.h"
