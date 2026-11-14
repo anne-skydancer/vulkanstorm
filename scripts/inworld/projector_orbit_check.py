@@ -7,7 +7,8 @@ SKELETON (stage S0 of doc/shadows/projector-pool-budget.md, spec section 7.3). I
 reports "pool": {"pool_present": false, ...}; a gate then ends as NOT RUN, never as PASS.
 
   O-1 pure rotation   camera position fixed; yaw 360 deg and pitch -60..+60 deg; per step the pool's static renders, the
-                      number of lights without a tile and the CRC32 of every static tile must not change.  (implemented)
+                      number of lights without a tile and the CRC32 of every static tile must not change.  (implemented; NOT RUN
+                      with no projector tile in the baseline, or with no tile CRC: GL < 4.5 or "crc" off)
   O-2 orbit           24 steps around a centre at 3 m and 8 m, two laps; lap 2 must show 0 renders and identical CRCs,
                       every re-render with its cause.                                                      (stage P3)
   O-4 never vanish    walk a route, teleport in: lights without a tile is 0 after the first fill.           (stage P2)
@@ -18,7 +19,7 @@ stdout is the LEAP channel: this script only logs to stderr.
 
 Modes: (default) run | --dry-run (read-only: the API and its reply shape) | --noop | --restore RUNDIR.
 Exit codes: 0 every gate that ran passed (and at least one ran), 1 error, 2 stopped by a STOP file, 3 the pipe closed,
-4 a gate failed, 5 protocol error, 6 nothing could run (no pool in this viewer).
+4 a gate failed, 5 protocol error, 6 nothing could run (no pool in this viewer, or no projector tile in the scene).
 """
 
 import argparse
@@ -175,6 +176,10 @@ class Check:
                 # a rotation test over an empty pool proves nothing: not a pass
                 return {"status": "NOT RUN", "why": "no projector tile in the scene (the baseline has no tiles); "
                                                     "go where a projector is in reach"}
+            if n == 0 and all(c is None for c in states[0][2].values()):
+                # no CRC to compare (the API leaves crc32 out below GL 4.5 or with "crc": false): not a pass either
+                return {"status": "NOT RUN", "why": "no tile CRC in the reply (GL < 4.5 or crc off); "
+                                                    "the rotation gate cannot compare tile contents"}
         fails = judge_o1(states[0], states[1:])
         return {"status": "FAIL" if fails else "PASS", "steps": len(states), "failures": fails[:50]}
 
