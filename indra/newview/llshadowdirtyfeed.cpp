@@ -56,14 +56,16 @@ namespace
         return b;
     }
 
-    // the drawable types whose changes dirty a lamp's tile: prims, trees and terrain (the shadow render-type mask also lists
-    // avatars, which are the dynamic layer, and water, which casts nothing). Grass is left out on purpose: its blade count
-    // follows the camera's distance (LLVOGrass::updateGeometry rebuilds it as the camera moves), so counting it would redraw
-    // tiles with the camera; a tile keeps the blades it was drawn with (a known limit, doc/shadows/projector-shadow-pool.md).
+    // the drawable types whose changes dirty a lamp's tile: prims and trees (the shadow render-type mask also lists avatars, the
+    // dynamic layer, and water, which casts nothing). Grass and terrain are left out on purpose: their geometry follows the
+    // camera's distance (the grass blade count in LLVOGrass::updateGeometry, the terrain patch's render stride in
+    // LLSurfacePatch::updateVisibility), so counting them would redraw tiles as the camera moves. A tile keeps the grass and
+    // the terrain it was drawn with (a known limit: a terraform or a grass patch edit shows in a tile when something else
+    // redraws it; doc/shadows/projector-shadow-pool.md).
     bool casting_type(LLDrawable* drawable)
     {
         const S32 type = drawable->getRenderType();
-        return type == LLPipeline::RENDER_TYPE_VOLUME || type == LLPipeline::RENDER_TYPE_TREE || type == LLPipeline::RENDER_TYPE_TERRAIN;
+        return type == LLPipeline::RENDER_TYPE_VOLUME || type == LLPipeline::RENDER_TYPE_TREE;
     }
 }
 
