@@ -344,8 +344,8 @@ U32 LLProjectorShadows::desiredSize(const Record& rec) const
 }
 
 // The light set (spec 4.1): the position-based nearby lights plus every light that already has a record, in range of the
-// camera's position (add at the reach, drop beyond reach + max(2 m, 10 %)). No view test, no screen area, no count cap beyond
-// RenderLocalLightCount (calcNearbyLights).
+// camera's position (add at the reach, drop beyond reach + max(2 m, 10 %)). No view test, no screen area, no count cap
+// (calcNearbyLights uses RenderLocalLightCount only as an on/off, >= 1; its six-light cap is the non-deferred path's).
 void LLProjectorShadows::updateLightSet(LLCamera& camera)
 {
     const LLVector3 cam_pos = camera.getOrigin();

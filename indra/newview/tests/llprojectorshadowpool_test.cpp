@@ -250,6 +250,42 @@ namespace
         check(same, "T3 repeatable");
     }
 
+    // ---- the allocator a plan hands back (the viewer adopts it instead of allocating again) ----
+    void testPlanBuddy()
+    {
+        const uint32_t atlas = 1024;
+        std::vector<LayoutRequest> reqs;
+        const uint32_t sizes[] = { 256, 128, 128, 64, 64, 64, 512, 256 };
+        uint32_t key = 1;
+        uint64_t used = 0;
+        for (uint32_t sz : sizes)
+        {
+            LayoutRequest q;
+            q.key = key++;
+            q.size = sz;
+            reqs.push_back(q);
+            used += uint64_t(sz) * sz;
+        }
+        RepackPlan plan = planRepack(reqs, atlas);
+        check(plan.ok, "buddy plan ok");
+        check(plan.buddy.freeTexels() == uint64_t(atlas) * atlas - used, "plan.buddy holds exactly the placed tiles", double(plan.buddy.freeTexels()));
+        // a further allocation from the adopted allocator does not overlap any placed rect
+        Rect extra;
+        check(plan.buddy.alloc(64, extra), "plan.buddy still has room");
+        for (const Rect& r : plan.placed)
+        {
+            const bool apart = extra.x + extra.size <= r.x || r.x + r.size <= extra.x || extra.y + extra.size <= r.y || r.y + r.size <= extra.y;
+            check(apart, "plan.buddy hands out a rect clear of the placed ones");
+        }
+        // freeing every placed rect (and the extra one) gives the whole atlas back as one block
+        plan.buddy.free(extra);
+        for (const Rect& r : plan.placed)
+        {
+            plan.buddy.free(r);
+        }
+        check(plan.buddy.freeTexels() == uint64_t(atlas) * atlas && plan.buddy.largestFree() == atlas, "freeing all restores one whole-atlas block");
+    }
+
     // ---- allocator ----
     void testBuddy()
     {
@@ -674,6 +710,7 @@ int main()
     testT1();
     testT2();
     testT3();
+    testPlanBuddy();
     testT4();
     testT5();
     testT6();
