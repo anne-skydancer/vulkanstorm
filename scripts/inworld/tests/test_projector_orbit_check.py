@@ -39,6 +39,12 @@ class OrbitTest(unittest.TestCase):
         self.assertIn("2 lights without a tile", fails[1])
         self.assertIn("tile CRC changed for 2", fails[2])
 
+    def test_o1_fails_when_the_baseline_has_a_light_without_a_tile(self):
+        base = (5, 1, {"1": 11})
+        fails = poc.judge_o1(base, [(5, 0, {"1": 11})])
+        self.assertEqual(len(fails), 1)
+        self.assertIn("step 0: 1 lights without a tile", fails[0])
+
 
 if __name__ == "__main__":
     unittest.main()

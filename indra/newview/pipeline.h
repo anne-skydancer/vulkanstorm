@@ -915,8 +915,8 @@ public:
     {
         U32 nearbyLights = 0;       // mNearbyLights (position-based, RenderLocalLightCount cap)
         U32 spotlights = 0;         // of them, spotlights
-        U32 eligible = 0;           // of them, with radius > 0, a colour that is not black, not worn, not on an avatar
-        U32 eligibleWithin[4] = {}; // eligible and within 16 m, 32 m, 64 m, reach (min(RenderFarClip, 128 m)) of the camera, by Light::dist
+        U32 eligible = 0;           // of them, with radius > 0, a colour that is not black (tested unscaled; the draw loop also multiplies by light_scale, 1 outside reflection probes), not worn, not on an avatar
+        U32 eligibleWithin[4] = {}; // eligible and within 16 m, 32 m, 64 m, reach (min(RenderFarClip, 128 m)) of the camera's position, by Light::dist (distance to the lamp's edge: centre distance minus radius, clamped at 0)
         F32 reach = 0.f;
         U32 slotsOccupied = 0;      // mShadowSpotLight entries that are set (0, 1 or 2 slot renders this frame)
         U32 slotsTargeted = 0;      // mTargetShadowSpotLight entries that are set

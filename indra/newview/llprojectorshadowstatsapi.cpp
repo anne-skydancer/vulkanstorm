@@ -29,8 +29,11 @@ namespace
         const LLPipeline::ProjectorShadowStats st = gPipeline.getProjectorShadowStats();
 
         r["compiled"] = true;
-        r["shadow_method"] = (S32)gSavedSettings.getU32("RenderShadowMethod");
-        r["shadow_detail"] = (S32)gSavedSettings.getS32("RenderShadowDetail");
+        // effective values (what runs: a stored 2 runs as Legacy below GL 4.0), and the stored settings beside them
+        r["shadow_method"] = (S32)LLPipeline::RenderShadowMethod;
+        r["shadow_detail"] = (S32)LLPipeline::RenderShadowDetail;
+        r["shadow_method_setting"] = (S32)gSavedSettings.getU32("RenderShadowMethod");
+        r["shadow_detail_setting"] = (S32)gSavedSettings.getS32("RenderShadowDetail");
 
         // today's two slots and the light set (S0: what the pool replaces)
         LLSD slots;
