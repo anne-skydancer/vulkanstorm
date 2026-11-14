@@ -109,6 +109,7 @@ how many lamps the owner's places have. Its 512 MiB counts in the viewer's textu
 | S0 (offline parts) | not measured (no draw work added; the new pass scopes cost one pointer test with the option off and are absent without `VKS_GL_STATS`) | not measured | not measured | | |
 | P2 | | | | | |
 | P2b | offline per-pixel path only (table 5); in-world full-frame cost: not measured, owed at the S0 capture session; gates any release integration | see table 5 | not measured | | |
+| P2c | estimate, not measured in-world. The tile timer is CPU only; each 2048 tile also pays a GPU clear, render and a 16 MB copy (S to L) that no number here includes | up to +0.35 ms CPU (fixed cap; about 0.28 ms for four lamps at the 0.07 ms of 2026-11-14), GPU not measured | not measured | about 0.4 ms (+5 % of an assumed 8 ms frame) | not shown; the Legacy-cost guarantee is dropped until P3 |
 | P3 | | | | | |
 | P4 | | | | | |
 | P5 | | | | | |
@@ -171,6 +172,7 @@ In-world full-frame cost: not measured, owed at the S0 capture session; gates an
 | Staleness of the oldest tile | at most ceil(N / tiles per frame) frames (24 frames seen in P2b) | by construction, unit test T7; read `pool.max_stale_frames` |
 | Ambiance shadowed: the per-pixel function `sampleProjectorShadow` | unchanged, so `--time-pass` does not apply (it times that function) | not applicable |
 | Ambiance shadowed: lookups on back-facing pixels in the cone | extra lookups, one per such pixel for lamps with `proj_ambiance` > 0; each costs what Table 5 shows per full-screen pass, scaled by the share of the screen those pixels cover | estimate |
-| Running total of the light and shadow budget | the tile renders now take up to 0.35 ms CPU of the about 0.4 ms (+5 %) allowed; GPU side not re-measured | estimate, to be read in-world |
+| Running total of the light and shadow budget | the tile renders now take up to 0.35 ms CPU of the about 0.4 ms (+5 % of an assumed 8 ms frame) allowed; the timer is CPU only, GPU side (clear, render, 16 MB copy per 2048 tile) not measured | estimate, to be read in-world |
+| Cold start | a never-drawn record is predicted at most 0.0875 ms (a quarter of the cap), so about four tiles a frame after login or a teleport | by construction, unit test T7 |
 
 Label every cost "measured" (with scene, resolution, driver) or "estimate".
