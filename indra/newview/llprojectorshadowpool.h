@@ -1124,6 +1124,16 @@ public:
         auto it = mTiles.find(tile);
         return it == mTiles.end() ? 0 : it->second.held.size();
     }
+    std::vector<Id128> pinnedIds() const
+    {
+        std::vector<Id128> ids;
+        ids.reserve(mRefs.size());
+        for (const auto& e : mRefs)
+        {
+            ids.push_back(e.first);
+        }
+        return ids;
+    }
     size_t pinnedObjects() const { return mRefs.size(); }              // distinct objects pinned by at least one tile
     uint32_t refs(const Id128& id) const { auto it = mRefs.find(id); return it == mRefs.end() ? 0 : it->second; }
 
