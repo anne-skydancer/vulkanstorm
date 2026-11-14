@@ -28,7 +28,6 @@
 #define ST_GOLDEN 2.39996323
 #define ST_STEPS_MAX 8
 // the projectors' filtered lookup (sampleProjectorShadow)
-#define ST_SPOT_LIGHT_SIZE 0.15    // metres: diameter of a projector's emitter disc, at its centre, at most the emitter prim's face
 #define ST_SPOT_RADIUS_MAX_M 0.04  // metres at the receiver: the largest radius of the search and of the filter (about 10 texels of a base-size tile at its reference distance)
 #define ST_SPOT_KERNEL_TEXELS_MAX 12.0 // texels: the same radius never exceeds this, so the fixed 8 + 32 gathers keep covering the disc
 #define ST_SPOT_SEARCH 8           // gathers of the blocker search
@@ -268,6 +267,7 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 uniform sampler2D proj_shadow_atlas;  // the pool's live atlas (D32F, depth as is: no compare, NEAREST, CLAMP_TO_EDGE)
 uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^3 (of the pose the tile was drawn with)
 uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size
+uniform vec2 proj_shadow_light_size;  // metres: the emitter's extent across the beam, along the map's u and v axes (the prim's face)
 
 // What the filter needs of a projector, from its matrix (bias * glm::perspective * rigid view * rigid inv_view, the
 // frustum symmetric; llprojectorshadows.cpp setupLight): with w = s.w the axial distance from the projector's centre, the
@@ -410,11 +410,12 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // one texel of the map at the receiver, in map depth: the constant bias (S2's SHADOW_BIAS_TEXELS) and the unit of
     // the plane bias's cap; dz/dw = c1 / w^2 times the texel's width w / (k N)
     float z_tex = sp.c1 / (min(sp.k.x * res.x, sp.k.y * res.y) * s0.w);
-    // the emitter disc: ST_SPOT_LIGHT_SIZE, at most the emitter prim's face (the frustum's width at the near plane)
-    float light = min(ST_SPOT_LIGHT_SIZE, (sp.c1 / sp.c0) / max(sp.k.x, sp.k.y));
+    // the emitter: the prim's own face (proj_shadow_light_size, metres along the map's u and v, clamped by the C++ side); the
+    // light's pose is the one the tile was drawn with, so nothing here depends on the camera
+    vec2 light = proj_shadow_light_size;
     // a blocker at depth zb gives a penumbra of radius light / 2 * (1 / wb - 1 / w) metres per unit of axial distance,
     // k * that in uv: 0.5 * light * k * (z - zb) / c1, here in texels per unit of z - zb
-    vec2 pen = (0.5 * light / sp.c1) * sp.k * res;
+    vec2 pen = (0.5 / sp.c1) * light * sp.k * res;
     // the largest radius is a length at the receiver, not a count of texels: a texel of this tile is w / (k N) metres wide
     // there, so the cap in texels is ST_SPOT_RADIUS_MAX_M * k N / w. At least one texel (an edge is never narrower than
     // the tile resolves), at most ST_SPOT_KERNEL_TEXELS_MAX (a wider disc is sampled coarser by the fixed taps)
