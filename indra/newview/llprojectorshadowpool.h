@@ -51,7 +51,7 @@ constexpr uint32_t kMinBase = 128;     // clamp of the light's base size
 constexpr uint32_t kMaxBase = 2048;
 constexpr int      kMaxLevel = 5;      // 2048 >> 5 = 64: below this nothing changes
 
-constexpr float kShrinkAbove = 0.60f;  // demand above this: one level down (smaller tiles)
+constexpr float kShrinkAbove = 0.60f;  // demand above this: down by as many levels as it takes to get at or below it (one repack)
 constexpr float kGrowAtMost = 0.45f;   // demand of the next level up at or below this ...
 constexpr float kGrowHoldSeconds = 3.0f; // ... for this long: one level up
 
@@ -109,6 +109,9 @@ public:
     // down (a repack that did not fit after compaction). Returns true when the level changed.
     bool update(const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds, bool placement_failed)
     {
+        // a timer glitch (NaN, negative) counts as no time; a long stall (teleport, alt-tab) as one short frame, so the
+        // 3 s hold is 3 s of stable frames
+        dt_seconds = std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
         const int before = mLevel;
         while (mLevel < kMaxLevel && demand(bases, mLevel, atlas) > kShrinkAbove)
         {
@@ -563,9 +566,9 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
 }
 
 // Conservative box against the pyramid's bounds and six planes: false when the box lies wholly
-// outside the bounds or one plane. It never misses a box that touches the pyramid (no false
-// negatives); a box near an edge or corner may be reported although it does not touch (rare,
-// costs one extra re-render). The bounds test is part of it, so callers need nothing else.
+// outside the bounds or one plane. It never misses a box that touches the pyramid, up to float
+// rounding of the plane normals (a few ulps at a plane); a box near an edge or corner may be
+// reported although it does not touch (rare, costs one extra re-render). The bounds test is part of it, so callers need nothing else.
 inline bool intersects(const Pyramid& py, const Aabb& box)
 {
     if (!overlaps(py.bounds, box))
@@ -802,7 +805,7 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
 struct DynamicItem
 {
     uint32_t key = 0;
-    bool avatar = false;        // an avatar item (counts against A_max); else a moving lamp
+    bool avatar = false;        // an avatar item (counts against A_max, at least one draw); else a moving lamp (no avatar draw)
     uint32_t age_frames = 0;    // frames since last drawn
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;
@@ -841,7 +844,7 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     for (const DynamicItem* it : order)
     {
         const float cost = itemCost(it->last_cpu_ms);
-        const uint32_t draws = std::min(it->avatar_draws, a_max);
+        const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
         const bool overdue = it->age_frames >= kDynamicDeadlineFrames && out.empty();
         if ((spent + cost > t_d_ms && !overdue) || avatars + draws > a_max)
         {
