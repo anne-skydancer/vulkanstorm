@@ -32,7 +32,7 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
 The sampling and the temporal resolve are shared with the producers that will use them (the Stochastic
 shadow method, RenderShadowMethod 2, later): GLSL objects `stochasticSampleF.glsl` (hash, per-frame seed,
 mask lookup in the one S = 8 table, `stoch_masks`) and `stochasticResolveUtilF.glsl` (reprojection with the
-last frame's matrices, nearest and depth-checked bilinear history reads, the 3 x 3 clamp, the 1/8 blend,
+last frame's matrices, Catmull-Rom (transparency) and depth-checked bilinear (shadow) history reads, the 3 x 3 clamp, the 1/8 blend,
 `stoch_reproj`, `stoch_weight`, `stoch_history_valid`; stage-neutral). The sampling object is compiled once
 and attached to the programs that sample (`STOCH_SAMPLE_OBJECT`, `LLShaderMgr::attachShaderFeatures`); the
 resolve util is listed in the producer's own `mShaderFiles` and compiled as that program's stage (a compute
@@ -234,8 +234,17 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   A whole-pixel pan (0, 1, 4 px a frame) gives the same image as before. Hair strips: the history does not beat plain 8 samples in rmse
   there (6.2 to 6.6 against 4.95: the strips are 1.5 to 5 px wide and the 4 x 4 filter softens their detail), but it beats them in low-pass
   error (0.64 to 0.67 against 0.99; the nearest read: 4.9 to 6.0): the smear is gone, what remains is the fine
-  detail the filter softens (a separate bench of the same scene read 6.0 against 4.96 and 0.58 against 0.98). The resolve pass costs the same: 0.281 against 0.283 ms (static) and 0.285 against 0.288 ms (0.5 px a frame) at 1920 x 1080, 0.508 against 0.502 and 0.506 against 0.503 ms at 2560 x 1440,
-  on the offline harness (RTX 5070 Ti, NVIDIA 621.14, ten textured layers, GPU timer query).
+  detail the filter softens (a separate bench of the same scene read 6.0 against 4.96 and 0.58 against 0.98). The resolve pass costs the same. Nearest (before) against Catmull-Rom (now), median GPU timer query of 50 frames, ten textured layers, RTX 5070 Ti, NVIDIA 621.14:
+
+  | pan (px a frame, x y) | 1920 x 1080 | 2560 x 1440 |
+  |---|---|---|
+  | static | 0.278 against 0.286 ms | 0.496 against 0.496 ms |
+  | 0.5, 0 (4 taps: the y weights are 0, 1, 0, 0) | 0.280 against 0.278 ms | 0.497 against 0.499 ms |
+  | 0.5, 0.5 (all 16 taps) | 0.287 against 0.287 ms | 0.502 against 0.498 ms |
+  | 1.3, 0.7 (all 16 taps) | 0.289 against 0.282 ms | 0.498 against 0.505 ms |
+
+  The differences are within the timer's noise (about 0.01 ms): the pass is bound by its other reads, not by the history taps, so the
+  bilinear-optimised 9-tap form (which needs a LINEAR history) is not needed. The tests also pan vertically and diagonally.
 - Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
   history ghosts, limited by the clamp.
 
