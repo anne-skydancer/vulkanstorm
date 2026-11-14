@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <set>
 
@@ -122,21 +123,39 @@ namespace
         // reach hysteresis plus the level hysteresis keep the level at 1: no oscillation
         const float reach = 128.f;
         bool in = false;
-        int changes = 0;
+        int changes = 0, flips = 0;
         std::mt19937 rng(7);
         std::uniform_real_distribution<float> jitter(-1.5f, 1.5f);
         for (int f = 0; f < 3000; ++f)
         {
-            const float dist = reach + 1.0f + jitter(rng); // wanders about the add distance
+            // a slow sweep across both thresholds (add at 128, drop beyond 140.8) plus jitter,
+            // so the lamp really comes and goes; it also toggles every frame near the add distance
+            const float dist = 135.f + 15.f * std::sin(float(f) * 0.01f) + jitter(rng);
             const bool now = inRange(in, dist, reach);
+            if (now != in)
+            {
+                ++flips;
+            }
             in = now;
             if (lc.update(in ? three : two, atlas, 0.016f, false))
             {
                 ++changes;
             }
         }
+        check(flips > 4, "T2 the lamp really crosses the range", flips);
         check(changes == 0, "T2 no level change while a lamp crosses the range", changes);
         check(lc.level() == 1, "T2 stays at level 1 (U(0) = 0.5 > 0.45)", lc.level());
+        {
+            // demand toggling every frame between 0.50 (two) and 0.75 (three): above 0.60 only
+            // with the third lamp, so the level steps down once and then holds at the grow band
+            LevelController tg;
+            int ch = 0;
+            for (int f = 0; f < 600; ++f)
+            {
+                ch += tg.update((f & 1) ? three : two, atlas, 0.016f, false) ? 1 : 0;
+            }
+            check(ch <= 1, "T2 per-frame toggling changes the level at most once", ch);
+        }
 
         // reach hysteresis itself: in at D, out only beyond D + max(2, 0.1 D)
         check(inRange(false, 128.f, 128.f) && !inRange(false, 128.01f, 128.f), "T2 add at D");
@@ -144,16 +163,12 @@ namespace
         check(inRange(true, 43.9f, 40.f) && !inRange(true, 44.1f, 40.f), "T2 10 percent band at D = 40");
         check(inRange(true, 11.9f, 10.f) && !inRange(true, 12.1f, 10.f), "T2 2 m band for small D");
 
-        // 0.60 / 0.45 / 3 s: demand 0.50 exactly (two 2048^2) at level 0 never shrinks;
-        // 0.5625 (9 x 1024^2 ... build by sizes) shrinks only above 0.60
-        std::vector<uint32_t> d60(5, 1024u);               // 5 x 1024^2 / 4096^2 = 0.3125 at level 0
+        // 0.60 / 0.45 / 3 s: 0.75 shrinks; 38 x 512^2 (0.59) holds; 40 x 512^2 (0.625) shrinks
         std::vector<uint32_t> exact60(1, 2048u);
         exact60.insert(exact60.end(), 8, 1024u);           // 0.25 + 8 * 0.0625 = 0.75
         LevelController a;
         a.update(exact60, atlas, 0.016f, false);
         check(a.level() == 1, "T2 0.75 shrinks", a.level());
-        // exactly 0.60 does not shrink (strictly above): 2048 + 1024 + 1024 + 6 x 1024? build 0.6:
-        // 0.6 * 16 = 9.6 units of 1024^2; use 512^2 units (1/64 each): 0.6 = 38.4 -> use 0.59375 = 38 units
         std::vector<uint32_t> u38(38, 512u);
         LevelController b;
         b.update(u38, atlas, 0.016f, false);
@@ -182,18 +197,7 @@ namespace
         }
         check(g.level() == 0, "T2 grows after 3 s", g.level());
         // a spike above 0.45 resets the hold
-        LevelController h;
-        h.update(u40, atlas, 0.016f, false);
         std::vector<uint32_t> mid(30, 512u);                // 30/64 = 0.469 > 0.45: no grow
-        for (int i = 0; i < 100; ++i)
-        {
-            h.update(low, atlas, 0.05f, false);              // 2.5 s of grow-eligible
-            if (i == 49)
-            {
-                h.update(mid, atlas, 0.05f, false);          // reset
-            }
-        }
-        check(h.level() == 1 || h.level() == 0, "T2 reset path ran");
         LevelController r2;
         r2.update(u40, atlas, 0.016f, false);
         for (int i = 0; i < 50; ++i) r2.update(low, atlas, 0.05f, false);  // 2.5 s
@@ -546,6 +550,17 @@ namespace
             }
             check(served_at >= 0.f && served_at <= kStaleMs + 2 * frame_ms, "T7 far item is not starved", served_at);
         }
+        // cold start: 20 never-drawn tiles with no history (cost 0, NaN) do not all run in one frame
+        {
+            std::vector<StaticItem> cold;
+            for (uint32_t i = 1; i <= 20; ++i) cold.push_back({ i, true, false, 0.f, float(i), 0.f });
+            const size_t n = selectStatic(cold, 0.25f).size();
+            check(n >= 4 && n <= 6, "T7 cold start is capped (about T_s / default)", double(n));
+            for (StaticItem& it : cold) it.last_cpu_ms = std::numeric_limits<float>::quiet_NaN();
+            check(selectStatic(cold, 0.25f).size() == n, "T7 a NaN prediction is the default", 0);
+            for (StaticItem& it : cold) it.cam_dist = std::numeric_limits<float>::quiet_NaN();
+            check(selectStatic(cold, 0.25f).size() == n, "T7 NaN distances sort without UB", 0);
+        }
         // dynamic: A_max and the CPU cap, the 4-frame deadline, no floor
         {
             std::vector<DynamicItem> items;
@@ -559,15 +574,64 @@ namespace
             items[30].age_frames = 4;               // key 31, far, at the deadline
             const std::vector<uint32_t> o2 = selectDynamic(items, 10.f, 24);
             check(o2[0] == 31, "T7 age deadline beats distance (dynamic)", o2[0]);
+            {
+                const std::vector<uint32_t> o4 = selectDynamic(items, 0.001f, 24);
+                check(o4.size() == 1 && o4[0] == 31, "T7 only the overdue item runs when nothing fits the cap", o4.size());
+            }
+            items[30].age_frames = 0;
             check(selectDynamic(items, 0.001f, 24).empty(), "T7 no floor: nothing fits the cap, nothing runs");
             std::vector<DynamicItem> big{ { 1, true, 0, 1.f, 0.01f, 30 }, { 2, true, 0, 2.f, 0.01f, 5 } };
             const std::vector<uint32_t> o3 = selectDynamic(big, 10.f, 24);
-            check(o3.size() == 1 && o3[0] == 2, "T7 an item over A_max is skipped, a smaller one runs");
+            check(o3.size() == 1 && o3[0] == 1,
+                  "T7 an item over A_max draws its nearest A_max, it is not starved", o3.size());
+            std::vector<DynamicItem> alone{ { 7, true, 9, 1.f, 0.01f, 30 } };
+            check(selectDynamic(alone, 10.f, 24).size() == 1, "T7 a lone item with 30 avatars still runs");
+            std::vector<DynamicItem> costly{ { 8, false, 9, 1.f, 0.5f, 0 } };
+            check(selectDynamic(costly, 0.3f, 24).size() == 1, "T7 an overdue item over the CPU cap runs");
+            std::vector<DynamicItem> costly_young{ { 8, false, 0, 1.f, 0.5f, 0 } };
+            check(selectDynamic(costly_young, 0.3f, 24).empty(), "T7 a young item over the CPU cap waits");
             std::vector<DynamicItem> lamps{ { 1, false, 0, 1.f, 0.1f, 0 }, { 2, false, 0, 2.f, 0.1f, 0 },
                                             { 3, false, 0, 3.f, 0.1f, 0 }, { 4, false, 0, 4.f, 0.1f, 0 } };
             check(selectDynamic(lamps, 0.3f, 24).size() == 3, "T7 lamps follow the CPU cap, not A_max");
         }
     }
+void testBadInput()
+{
+    TileGrid grid;
+    Aabb a;
+    for (int i = 0; i < 3; ++i) { a.lo[i] = 0.f; a.hi[i] = 4.f; }
+    grid.add(0, a);
+    Aabb b;
+    for (int i = 0; i < 3; ++i) { b.lo[i] = 100.f; b.hi[i] = 104.f; }
+    grid.add(1, b);
+    std::vector<uint32_t> cand;
+    Aabb huge;
+    for (int i = 0; i < 3; ++i) { huge.lo[i] = -1.0e6f; huge.hi[i] = 1.0e6f; }
+    grid.candidates(huge, cand);
+    check(cand.size() == 2, "T5 a 1e6 m box returns every tile, without looping", double(cand.size()));
+    Aabb nan = a;
+    nan.hi[1] = std::numeric_limits<float>::quiet_NaN();
+    grid.candidates(nan, cand);
+    check(cand.size() == 2, "T5 a NaN box returns every tile");
+    Aabb inf = a;
+    inf.lo[0] = -std::numeric_limits<float>::infinity();
+    grid.candidates(inf, cand);
+    check(cand.size() == 2, "T5 an infinite box returns every tile");
+    grid.add(2, huge);                       // a world-sized tile goes to the wide list
+    grid.candidates(a, cand);
+    check(cand.size() == 2 && cand[0] == 0 && cand[1] == 2, "T5 a wide tile is a candidate of every query");
+    Aabb far = a;
+    for (int i = 0; i < 3; ++i) { far.lo[i] = 3.0e38f; far.hi[i] = 3.4e38f; }
+    grid.candidates(far, cand);              // clamped, no UB, wide tile only
+    check(cand.size() == 1 && cand[0] == 2, "T5 an extreme box is clamped");
+    // atlas that is not a power of two never hands out a rect outside it
+    BuddyAtlas atlas(3000);
+    Rect r1, r2;
+    check(atlas.atlasSize() == 2048, "buddy: 3000 rounds down to 2048", atlas.atlasSize());
+    check(atlas.alloc(2048, r1) && !atlas.alloc(2048, r2), "buddy: the rounded atlas holds one 2048 tile");
+    check(baseSize(1.f, 3.1415927f) >= kMinBase && baseSize(1.f, 3.1415927f) <= kMaxBase, "size rule: fov near pi stays in range");
+    check(baseSize(1.f, 1.0e30f) <= kMaxBase, "size rule: huge fov stays in range");
+}
 } // namespace
 
 int main()
@@ -581,6 +645,7 @@ int main()
     testT5();
     testT6();
     testT7();
+    testBadInput();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);
