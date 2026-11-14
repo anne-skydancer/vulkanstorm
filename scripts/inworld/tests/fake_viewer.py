@@ -32,14 +32,66 @@ INV_ROOT = "33333333-0000-0000-0000-000000000002"
 SETTINGS_FOLDER = "33333333-0000-0000-0000-000000000001"
 
 
+class PoolModel:
+    """A model of the projector shadow pool's ProjectorShadows.stats reply (stage P3), enough for the orbit gates: a few tiles with a CRC
+    each, the render counters and their causes. The ideal pool changes nothing when the camera moves, except that the first moves
+    lift objects to full detail (cause lod_up, once). camera_bug models the defect P3 removes: every camera move redraws a tile."""
+
+    def __init__(self, tiles=3, crc=True, camera_bug=False, lod_ups=2, without=0, present=True):
+        self.frame = 1000
+        self.crc = crc
+        self.camera_bug = camera_bug
+        self.lod_ups = lod_ups
+        self.without = without
+        self.present = present
+        self.static = tiles
+        self.dynamic = 0
+        self.causes = {"new": tiles, "lod_up": 0, "add_remove": 0, "edit": 0, "mover": 0, "lamp": 0, "avatar": 0, "lowres": 0, "other": 0}
+        self.crcs = {k: 100 + k for k in range(1, tiles + 1)}
+        self.moves = 0
+        self.dirty_age_ms_max = 0.0
+
+    def on_camera(self, pos, focus):
+        self.moves += 1
+        self.frame += 6
+        if self.camera_bug:
+            self.static += 1
+            self.causes["edit"] += 1
+            for k in list(self.crcs)[:1]:
+                self.crcs[k] += 1
+        elif self.lod_ups > 0:
+            self.lod_ups -= 1
+            self.static += 1
+            self.causes["lod_up"] += 1
+            for k in list(self.crcs)[-1:]:
+                self.crcs[k] += 1000
+
+    def stats(self, d):
+        if d.get("reset_ages"):
+            self.dirty_age_ms_max = 0.0
+        tiles = []
+        for k, c in sorted(self.crcs.items()):
+            t = {"key": k, "size": 1024, "x": 0, "y": 0, "drawn_frame": self.frame - 3, "cam_dist": 5.0, "pending": False}
+            if self.crc and d.get("crc", True):
+                t["crc32"] = c
+            tiles.append(t)
+        pool = {"pool_present": self.present, "level": 0, "atlas_size": 4096, "lights": len(tiles), "static_renders": self.static,
+                "dynamic_renders": self.dynamic, "repacks": 0, "lights_without_tile": self.without, "tile_cost_ms": 0.07,
+                "last_frame_renders": 0, "max_stale_frames": 3, "last_frame_render_ms": 0.0, "pinned_objects": 4, "pending_tiles": 0,
+                "avatar_tiles": 0, "dirty_boxes_last_frame": 0, "frame": self.frame, "dirty_age_ms_max": self.dirty_age_ms_max,
+                "tiles": tiles, "rerender_causes": dict(self.causes)}
+        return {"compiled": True, "pool": pool, "slots": {"occupied": 0, "targeted": 0}, "lights": {}}
+
+
 class FakeViewer:
     def __init__(self, pop_in_sky=None, snapshot_fails_for=None, drop_ops=(), initial_combo=REGION_DEFAULT,
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
                  logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False,
-                 gl_m1_fps_factor=1.0, u32_as_string=False):
+                 gl_m1_fps_factor=1.0, u32_as_string=False, projector=None):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
+        self.projector = projector            # a model of the projector shadow pool (ProjectorShadows.stats), or None
         self.gl_stats = gl_stats
         self.gl_catches = gl_stats_catches_injection
         self.gl_diff_pass = gl_stats_diff_pass
@@ -168,7 +220,7 @@ class FakeViewer:
         elif op == "getAPIs":
             self._reply(d, {n: {"desc": n} for n in ("LLStartUp", "LLViewerControl", "LLFloaterReg", "UI", "LLWindow",
                                                     "LLViewerWindow", "LLAgent", "LLInventory", "LLStats")
-                            + (("GLSubmitStats",) if self.gl_stats else ())})
+                            + (("GLSubmitStats",) if self.gl_stats else ()) + (("ProjectorShadows",) if self.projector else ())})
         elif op == "getAPI":
             if d["api"] == "GLSubmitStats":
                 if not self.gl_stats:
@@ -183,7 +235,7 @@ class FakeViewer:
                    "LLViewerWindow": ["saveSnapshot"],
                    "LLAgent": ["getPosition", "setCameraParams", "setFollowCamActive", "removeCameraParams"],
                    "LLInventory": ["getBasicFolderID", "collectDescendantsIf", "getItemsInfo"],
-                   "LLStats": ["getPerfData"]}[d["api"]]
+                   "LLStats": ["getPerfData"], "ProjectorShadows": ["stats"]}[d["api"]]
             ops = [o for o in ops if o not in self.drop_ops]
             self._reply(d, {"name": d["api"], "ops": [{"name": o} for o in ops]})
 
@@ -387,8 +439,14 @@ class FakeViewer:
             self._reply(d, {"region": [128.0, 64.0, 30.0], "global": [1.0, 2.0, 3.0]})
         elif op == "setCameraParams":
             self.follow_cam = d
+            if self.projector:
+                self.projector.on_camera(d["camera_pos"], d["focus_pos"])
         elif op in ("setFollowCamActive", "removeCameraParams"):
             self.follow_cam = None
+
+    def api_ProjectorShadows(self, op, d):
+        if op == "stats" and self.projector:
+            self._reply(d, self.projector.stats(d))
 
     def api_LLInventory(self, op, d):
         if op == "getBasicFolderID":

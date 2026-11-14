@@ -85,8 +85,17 @@ namespace
         pool["level"] = ps.level;
         pool["atlas_size"] = (S32)ps.atlasSize;
         pool["lights"] = (S32)ps.lights;
-        pool["static_renders"] = (F64)ps.tileRenders;   // cumulative since the pool was allocated (P2: every render is a full one)
-        pool["dynamic_renders"] = 0;
+        pool["static_renders"] = (F64)ps.staticRenders;   // cumulative since the pool was allocated: the static schedule (the first fill and every change)
+        pool["dynamic_renders"] = (F64)ps.dynamicRenders; // ... the dynamic schedule (a moving lamp, an avatar in the light)
+        pool["last_frame_static_renders"] = (S32)ps.lastFrameStatic;
+        pool["last_frame_dynamic_renders"] = (S32)ps.lastFrameDynamic;
+        pool["pinned_objects"] = (S32)ps.pinnedObjects;   // volumes held at full detail by at least one tile (the LOD pin)
+        pool["pending_tiles"] = (S32)ps.pendingTiles;     // drawn tiles a change touched and the scheduler has not drawn again
+        pool["avatar_tiles"] = (S32)ps.avatarTiles;
+        pool["dirty_boxes_last_frame"] = (S32)ps.dirtyBoxesLastFrame;
+        pool["frame"] = (S32)ps.frame;
+        pool["dirty_age_ms_max"] = (F64)ps.dirtyAgeMsMax; // the longest a changed tile waited for its render since the last "reset_ages"
+        pool["dirty_renders"] = (F64)ps.dirtyRenders;
         pool["repacks"] = (F64)ps.repacks;
         pool["lights_without_tile"] = (S32)ps.lightsWithoutTile; // O-4: 0 after the first fill
         pool["tile_cost_ms"] = (F64)ps.costEmaMs;
@@ -104,6 +113,7 @@ namespace
             tile["y"] = (S32)t.y;
             tile["drawn_frame"] = (S32)t.drawnFrame;
             tile["cam_dist"] = (F64)t.camDist;
+            tile["pending"] = t.pending;
             if (with_crc && t.size && t.drawnFrame && gGLManager.mGLVersion >= 4.49f)   // GL 4.5 core: fetched only from 4.5 up (llgl.cpp); the version, not the address (-Werror=address)
             {
                 std::vector<F32> texels((size_t)t.size * t.size);
@@ -114,8 +124,18 @@ namespace
             tiles.append(tile);
         }
         pool["tiles"] = tiles;  // per tile: key, size, drawn_frame, and (unless "crc": false) the crc32 of its texels in S
-        pool["rerender_causes"] = LLSD::emptyMap(); // P3 (the invalidation hooks)
+        LLSD causes = LLSD::emptyMap();   // renders by the cause that made the tile stale (new, lod_up, add_remove, edit, mover, lamp, avatar, lowres, other)
+        for (size_t c = 0; c < llprojectorpool::kCauseCount; ++c)
+        {
+            causes[llprojectorpool::causeName(llprojectorpool::Cause(c))] = (F64)ps.causes.n[c];
+        }
+        pool["rerender_causes"] = causes;
         r["pool"] = pool;
+
+        if (req.has("reset_ages") && req["reset_ages"].asBoolean())
+        {
+            gPipeline.mProjectorShadows.resetAgeStats();
+        }
 
         LL_INFOS("ProjectorShadows") << "stats: slots " << st.slotsOccupied << ", eligible projectors within 16/32/64 m/reach("
                                      << st.reach << " m): " << st.eligibleWithin[0] << "/" << st.eligibleWithin[1] << "/"

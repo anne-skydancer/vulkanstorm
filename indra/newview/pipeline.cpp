@@ -30,6 +30,7 @@
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's change hooks
 
 // library includes
 #include "llimagepng.h"
@@ -217,6 +218,7 @@ F32 LLPipeline::RenderShadowBias;
 F32 LLPipeline::RenderSpotShadowOffset;
 F32 LLPipeline::RenderSpotShadowBias;
 LLDrawable* LLPipeline::RenderSpotLight = nullptr;
+LLPipeline::ELocalShadowPass LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE; // <Vulkanstorm/>
 F32 LLPipeline::RenderEdgeDepthCutoff;
 F32 LLPipeline::RenderEdgeNormCutoff;
 LLVector3 LLPipeline::RenderShadowGaussian;
@@ -3181,8 +3183,16 @@ void LLPipeline::updateGeom(F32 max_dtime)
                 drawablep->clearState(LLDrawable::FOR_UNLOAD);
             }
 
+            // <Vulkanstorm> the projector shadow pool: a rebuild that waited (a mesh not yet loaded) changes the picture when it completes
+            const bool pool_rebuild = LLShadowDirtyFeed::tracking() &&
+                                      drawablep->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED);
+            // </Vulkanstorm>
             if (updateDrawableGeom(drawablep))
             {
+                if (pool_rebuild)
+                {
+                    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit); // <Vulkanstorm/>
+                }
                 drawablep->clearState(LLDrawable::IN_REBUILD_Q);
                 mBuildQ1.erase(curiter);
             }
@@ -3226,6 +3236,13 @@ void LLPipeline::markVisible(LLDrawable *drawablep, LLCamera& camera)
                     }
                 }
             }
+            // <Vulkanstorm> a projector tile draws the fixed layer: a linkset the simulator reports moving, or a physical one, is
+            // not in it (unless it is the lamp's own linkset, the fixture)
+            if (sLocalShadowPass == LOCAL_SHADOW_STATIC && !LLShadowDirtyFeed::bridgeCasts(root, RenderSpotLight))
+            {
+                return;
+            }
+            // </Vulkanstorm>
             sCull->pushBridge((LLSpatialBridge*) drawablep);
         }
         else
@@ -3259,6 +3276,9 @@ void LLPipeline::markMoved(LLDrawable *drawablep, bool damped_motion)
     }
 
     assertInitialized();
+
+    // <Vulkanstorm> the projector shadow pool: the extents it moves from (the move's end is pushed by the partition's move)
+    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit);
 
     if (!drawablep->isState(LLDrawable::ON_MOVE_LIST))
     {
@@ -3315,6 +3335,7 @@ void LLPipeline::shiftObjects(const LLVector3 &offset)
     // otherwise read as camera motion and reproject unrelated history.
     mAlphaSTHistory.invalidate();
     mShadowSTHistory.invalidate(); // <Vulkanstorm/> the same for the Stochastic shadows' history
+    LLShadowDirtyFeed::noteShift(offset); // <Vulkanstorm/> the projector pool's pending dirty boxes move with agent space
 
     LLVector4a offseta;
     offseta.load3(offset.mV);
@@ -3439,6 +3460,7 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
             drawablep->getVObj()->setChanged(LLXform::SILHOUETTE);
         }
         drawablep->setState(flag);
+        LLShadowDirtyFeed::noteRebuild(drawablep, (U32)flag); // <Vulkanstorm/> the projector shadow pool: a rebuild that can change a picture
     }
 }
 
@@ -11647,6 +11669,13 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         updateCull(shadow_cam, result);
 
         stateSort(shadow_cam, result);
+
+        // <Vulkanstorm> a projector tile: hold the casters it draws at full detail (the LOD pin, spec 4.4)
+        if (sLocalShadowPass == LOCAL_SHADOW_STATIC)
+        {
+            mProjectorShadows.pinCasters(result);
+        }
+        // </Vulkanstorm>
     }
 
     //generate shadow map

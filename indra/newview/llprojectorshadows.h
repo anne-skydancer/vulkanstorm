@@ -34,7 +34,9 @@
 #include "llrender.h"
 
 class LLCamera;
+class LLCullResult;
 class LLGLSLShader;
+class LLVOVolume;
 
 // Replaces the two re-rendered shadow slots of the Legacy method for the Stochastic method (RenderShadowMethod 2,
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
@@ -43,9 +45,16 @@ class LLGLSLShader;
 // camera's orientation; the caster LOD and the avatars' visibility still follow the camera until P3/P4. The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL
 // half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
-// Stage P2: every tile is a full render (the fixed objects and the avatars into S, then copied to L), as many per frame as fit
-// a fixed CPU cap of 0.35 ms (llprojectorpool::kStaticCapMs). The earlier guarantee that the pool costs at most what Legacy's
-// two slot renders cost is dropped until P3 skips unchanged tiles; P4 splits avatars out.
+// Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
+// hooks, llshadowdirtyfeed.h, tested against the tile's volume through the 8 m grid), when its lamp's pose changed, or while an
+// avatar is in its light (the avatars are still drawn into S until P4). A static scene costs no tile render. The casters a tile
+// draws are held at full detail (the LOD pin), so a camera that moves changes nothing in a tile. Movers and physical objects are
+// not in the fixed layer. The tiles still run under the fixed CPU caps of llprojectorpool (static 0.35 ms, dynamic 0.30 ms).
+//
+// Interfaces a second cache (the point lights' faces) reuses, all keyed by a tile or face key and never by "the projector":
+// llshadowdirtyfeed.h (the hooks and the per-frame boxes), llprojectorpool::ChangeIndex (boxes against volumes),
+// llprojectorpool::classifyTile (the verdict of one tile), selectStatic/selectDynamic (the order of work) and PinBook (the LOD
+// pin's books). What is projector-specific stays in this class: the light set, the pose, the lookup matrix.
 //
 // Main render thread only. Every entry point asserts it and returns at once off it, or while the viewer exits; nothing
 // here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which worker threads with shared
@@ -92,6 +101,14 @@ public:
     // From LLPipeline::unlinkDrawable (a drawable is going away): its record and tile are dropped.
     void forget(const LLDrawable* drawable);
 
+    // From LLPipeline::renderShadowImpl, after the tile's cull and sort (LLPipeline::LOCAL_SHADOW_STATIC): the LOD pin. Every volume the
+    // tile is about to draw, inside the light's volume, is held at full detail (a counter on the volume, one per tile).
+    void pinCasters(LLCullResult& result);
+
+    // The longest a changed tile waited for its render (the time from the frame that applied the change to the end of its render, plus
+    // the frame before it: a change reaches the pool at most one frame ahead), since the last reset. Development stats only.
+    void resetAgeStats() { mDirtyAgeMsMax = 0.f; }
+
     // Counters for the development stats API and the log.
     struct Stats
     {
@@ -106,6 +123,19 @@ public:
         F32 lastFrameRenderMs = 0.f;
         U32 lastFrameRenders = 0;
         U32 maxStaleFrames = 0;    // the oldest placed, drawn tile: frames since it was drawn
+        // P3
+        U64 staticRenders = 0;     // since the atlases were made: renders of the static schedule (a tile's first fill and every change)
+        U64 dynamicRenders = 0;    // ... of the dynamic schedule (a moving lamp, an avatar in the light)
+        U32 lastFrameStatic = 0;
+        U32 lastFrameDynamic = 0;
+        U32 pinnedObjects = 0;     // volumes held at full detail by at least one tile
+        U32 pendingTiles = 0;      // drawn tiles a change touched and the scheduler has not drawn again yet
+        U32 avatarTiles = 0;       // tiles with an avatar in their light this frame
+        U32 dirtyBoxesLastFrame = 0;
+        U32 frame = 0;             // the frame the stats were read in
+        F32 dirtyAgeMsMax = 0.f;   // the longest a changed tile waited for its render since resetAgeStats
+        U64 dirtyRenders = 0;      // renders a change caused (all but the first fills, lamp moves, avatars and resizes)
+        llprojectorpool::CauseCounts causes; // why the renders happened (the first cause that made the tile stale)
     };
     Stats getStats() const;
 
@@ -114,6 +144,7 @@ public:
     {
         U32 key = 0, x = 0, y = 0, size = 0, drawnFrame = 0;
         F32 camDist = 0.f;
+        bool pending = false;      // stale: waiting to be drawn again
     };
     std::vector<TileInfo> getTiles() const;
     U32 atlasS() const { return mAtlasS; }
@@ -144,6 +175,22 @@ private:
         F32 camDist = 0.f;         // distance of the lamp's edge to the camera's position
         F32 lastCpuMs = 0.f;       // the cost of its last render (the scheduler's prediction)
         bool seen = false;         // in this frame's light set
+        // P3: what the lamp and the scene did since the tile was drawn
+        llprojectorpool::Pose drawnPose;   // the pose the tile holds (the comparison of the lamp's changes)
+        llprojectorpool::Pose curPose;     // this frame's
+        llprojectorpool::Pose prevPose;    // last frame's
+        bool prevPoseValid = false;
+        bool lampMoving = false;           // the pose changed since last frame (a dynamic item)
+        bool poseStale = false;            // the pose differs from the one the tile holds
+        llprojectorpool::Pyramid volume;   // the light's volume, agent space, from this frame's pose (camera independent)
+        bool pending = false;              // a dirty box touched it since it was drawn
+        llprojectorpool::Cause pendingCause = llprojectorpool::Cause::Other;
+        U32 dirtyFrame = 0;                // the frame the first such box was applied
+        F64 dirtyTime = 0.0;               // ... and its time (seconds)
+        bool lowres = false;               // down-sized by a layout change: drawn again at the new size
+        bool holdsAvatar = false;          // an avatar is in its light this frame
+        U32 avatarCount = 0;
+        bool drawnWithAvatar = false;      // its picture was drawn with an avatar in the light
     };
 
     bool allocateAtlases(U32 size);
@@ -155,7 +202,10 @@ private:
     void copyTile(U32 from_tex, const llprojectorpool::Rect& src, U32 to_tex, const llprojectorpool::Rect& dst);
     void copyAtlas(U32 from_tex, U32 to_tex);
     void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
-    void renderTile(Record& rec);
+    void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
+    void unpinTile(U32 key);
+    void unpinObject(const llprojectorpool::Id128& id);
+    void pinDrawable(LLDrawable* drawable);
     void setTileOrigin(F32 x, F32 y);
     void dropRecord(std::map<U32, Record>::iterator it);
     U32 desiredSize(const Record& rec) const;
@@ -182,6 +232,22 @@ private:
     F32 mLastFrameRenderMs = 0.f;
     U32 mLastFrameRenders = 0;
     U32 mLightsWithoutTile = 0;
+
+    // P3
+    llprojectorpool::PinBook mPins;            // the LOD pin's books, per tile key and object id
+    llprojectorpool::ChangeIndex mIndex;       // this frame's tile volumes, for the dirty boxes
+    llprojectorpool::CauseCounts mCauses;
+    Record* mRenderingRec = nullptr;           // the tile being drawn (pinCasters reads it)
+    llprojectorpool::Pyramid mRenderVolume;    // ... and its volume
+    U64 mStaticRenders = 0;
+    U64 mDynamicRenders = 0;
+    U32 mLastFrameStatic = 0;
+    U32 mLastFrameDynamic = 0;
+    U32 mPendingTiles = 0;
+    U32 mAvatarTiles = 0;
+    U32 mDirtyBoxes = 0;
+    F32 mDirtyAgeMsMax = 0.f;
+    U64 mDirtyRenders = 0;
 };
 
 #endif // LL_LLPROJECTORSHADOWS_H

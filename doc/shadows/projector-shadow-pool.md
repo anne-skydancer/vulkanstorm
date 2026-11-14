@@ -10,7 +10,7 @@ Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shado
 Today's two slots (`mSpotShadow[0..1]`, window-sized maps) are handed from lamp to lamp by a view-dependent priority and are
 re-rendered every frame, so a lamp's shadow can vanish when the camera turns. The pool gives every projector within the shadows'
 reach (`min(RenderFarClip, 128 m)`, measured from the camera's position, with a hysteresis band) a tile of its own in a shared
-depth atlas. The tile's size and view come from the light alone; the caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera until those stages.
+depth atlas. The tile's size and view come from the light alone; the caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera until those stages (P3 closes the caster LOD and the redraw on camera moves: see below).
 
 ## Stage P2: tiles replace the slots
 
@@ -109,3 +109,151 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 - The light set has no count cap: `RenderLocalLightCount` only switches `calcNearbyLights` on (>= 1) and the six-light cap applies
   to the non-deferred path only, so the pool considers every eligible spotlight within reach. When they do not fit even at the
   smallest level, the lights that sort last (smaller tiles first, then key) have no tile and are lit without a shadow.
+
+## Stage P3: cache and camera-proof
+
+Code: `llshadowdirtyfeed.h/.cpp` (the scene's change hooks and the mover classifier), `llprojectorshadowpool.h` (the GL-free rules),
+`llprojectorshadows.cpp` (the tile scheduler), and a few lines in `pipeline.cpp`, `llspatialpartition.cpp`, `llviewerobject.cpp`,
+`llvovolume.cpp`. Unit tests: `indra/newview/tests/llprojectorshadowpool_test.cpp` (the `P3` checks). Gates: `scripts/inworld/projector_orbit_check.py`
+(O-1, O-2, O-6; O-4 is P2's).
+
+**What changed for the owner.** A tile is drawn again only when something that shows in it changed, not every frame. A static
+scene costs no tile render. What a camera does, where it stands and where it looks, no longer reaches a tile: the casters in a
+lamp's light are held at full detail, and no hook looks at the camera.
+
+### What makes a tile stale
+
+One cause per render (the first that made it stale); the stats API counts them (`pool.rerender_causes`).
+
+| Cause | When |
+|---|---|
+| `new` | never drawn: the first fill, a lamp that entered the range, an atlas that was made again. Drawn nearest first |
+| `lod_up` | the LOD pin raised an object in the light to full detail (once per object and tile, then it holds) |
+| `add_remove` | an object was put into or taken out of the scene inside the light (`LLSpatialPartition::put`/`remove`) |
+| `edit` | a fixed object in the light was rebuilt (volume, position, rigged), moved inside its octree group, or its geometry finished a delayed rebuild (a mesh that loaded) |
+| `mover` | an object turned into a mover or a physical one, or stopped being physical |
+| `lamp` | the lamp's own pose changed: position more than 1 mm, rotation 1e-4, scale 1 mm, angle 1e-4, reach 1 cm |
+| `avatar` | an avatar is in the light (drawn into S until P4, so the tile is redrawn every frame), or it left (one more render) |
+| `lowres` | a layout change down-sized the tile (a blit): drawn again at its new size |
+| `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
+
+Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do a lamp's colour, intensity or falloff.
+
+### The hooks, and the thread each runs on
+
+All hooks push a box (the extents of what changed, agent space) with a cause into one double-buffered list
+(`LLShadowDirtyFeed`). `LLProjectorShadows::update` swaps it before any render of the frame (a change a render itself causes lands
+in the next frame), tests the boxes against the tile volumes through the 8 m grid (`ChangeIndex`), and keeps the first cause per
+tile. Every hook is a no-op until the pool holds tiles (`setTracking`), and every one runs on the main thread. A hook that runs
+elsewhere changes nothing and flags the next frame "everything is stale".
+
+| Hook | File | Runs on | Pushes | Skipped |
+|---|---|---|---|---|
+| `LLSpatialPartition::put` (after the octree insert) | `llspatialpartition.cpp` | main (`LLDrawable::movePartition`, `LLPipeline::addObject`) | extents, cause `add_remove` | not fixed casters |
+| `LLSpatialPartition::remove` (before the removal) | `llspatialpartition.cpp` | main (`LLPipeline::unlinkDrawable`, `move`) | extents, `add_remove` | not fixed casters |
+| `LLSpatialPartition::move`, in-group branch | `llspatialpartition.cpp` | main | extents after the update, `edit` | not fixed casters |
+| `LLPipeline::markRebuild(drawable, flag)` | `pipeline.cpp` | main (object updates, LOD, the pin) | extents when `flag & (VOLUME | POSITION | RIGGED)`, `edit` | `TCOORD`, `COLOR` only |
+| `LLPipeline::markMoved` | `pipeline.cpp` | main | the extents it moves from, `edit` | not fixed casters |
+| `LLPipeline::updateGeom` (a delayed rebuild completes) | `pipeline.cpp` | main (`display`) | extents, `edit` | not fixed casters |
+| `LLPipeline::shiftObjects` | `pipeline.cpp` | main (`LLWorld::updateAgentOffset`) | translates the pending boxes | |
+| `LLViewerObject::processUpdateMessage` (the classifier) | `llviewerobject.cpp` | main (the message handlers) | extents of the object (or its bridge) when it turns into a mover or its physics flag flips, `mover` | avatars |
+| `LLPipeline::unlinkDrawable` | `pipeline.cpp` | main (`LLDrawable::markDead`) | none: `remove` has pushed; calls `forget` (record, tile and pins) | |
+
+`LLSpatialGroup::addObject`/`removeObject` (the spec's choice) are not used: they run for the octree's own rebalancing
+(`handleInsertion`/`handleRemoval`) too, which is not a change of the scene. `put`/`remove` are the real insertions and removals
+and see the same drawables. Not fixed casters: avatars, attachments, HUD, animesh, flexible prims, client-spun parts, movers,
+physical objects (and children of a mover or physical root), and render types that cast no lamp shadow (particles, sky, water).
+`markRebuild(group)` is not hooked: it fires for alpha re-sorts and texture animation.
+
+Nothing else is new at a shared path: `LLPipeline::markVisible` drops a bridge only inside a tile render (`sLocalShadowPass`),
+`LLPipeline::renderShadowImpl` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
+(zero for every volume outside a pool tile). No free, no static state beyond the feed's own list was added to a function a worker
+thread runs (`LLRender::shutdown`, `LLImageGL`, `LLVertexBuffer::cleanupClass` are untouched).
+
+### The classifier
+
+Sticky for the session, per object (`LLViewerObject::mPoolFlags`): a mover is an object the simulator reported moving, either a
+velocity or an angular velocity on a root, or a position or rotation change after its creating update unless the agent has it
+selected. A physical object is one with the physics flag. Movers and physical roots are not in the fixed layer: `markVisible`
+drops their bridge from a tile's cull, and a change of theirs (or of any of their children) never makes a tile stale. The lamp's
+own linkset is the fixture and is never dropped. A moving part inside an otherwise still linkset (a spinning fan blade, a linked
+door, flexi) is batched with its group, so it casts with the pose of the last render and never invalidates a tile: a known limit.
+
+### The LOD pin
+
+`pinCasters` (called from `renderShadowImpl` after the tile's cull and sort) walks the groups the tile is about to draw and, for
+every volume inside the light's volume that is not rigged, worn or a HUD, takes one pin for the tile (`PinBook`). The pin is a
+counter on the volume (`mLampLODPin`); `calcLOD` returns LOD 3 for a pinned volume, in the main view too, and the first pin of a
+volume below LOD 3 calls `forceLOD(3)` (cause `lod_up`: the tile is drawn once more with the full detail and then holds; two
+renders). A tile gives its pins back when its render no longer meets the object, when the tile is dropped, and at release (not at
+exit: the objects go with the world). Cost: the triangles of everything inside a lamp's light, in the main view too, at full detail;
+not measured here (it needs the in-world scene: `pool.pinned_objects` counts the volumes held).
+
+The four camera-driven inputs the P2 audit listed:
+
+| Input | What P3 does | What stays |
+|---|---|---|
+| Caster LOD (`calcLOD`, `computeLODDetail`) | closed by the pin for everything inside a tiled light | an object that enters a light is drawn at the camera's LOD until the first render that meets it (one `lod_up` render) |
+| Object loading by camera distance (`llvocache.cpp:1037`-`1060`) | nothing | an object outside the near radius that never entered the main frustum or the rear sphere has no drawable: it does not cast until loaded, then it arrives as `add_remove`. Documented limit |
+| Mesh asset fetch (`llvovolume.cpp:6066`) | the completion of a delayed rebuild makes the tiles stale (`edit`) | the order and speed of the fetch follow the camera's priority; a mesh that never loads does not cast |
+| Alpha-mask texture virtual size (`llvovolume.cpp:889`-`905`, `6108`) | nothing: the mask uses whatever resolution the texture has at the render, and a texture that finishes loading later does not make the tile stale (texture changes are not a rebuild) | the woven shade of a pendant lamp can still show a coarser mask until the tile is next drawn. The masked-caster refinement (D16, stage P5) is the fix: a tile-derived virtual size and a re-render on improvement |
+
+### Scheduler
+
+`classifyTile` gives each placed tile one verdict from the facts: never drawn, a dirty box, the lamp's pose stale, the lamp
+moving, a down-sized tile, an avatar in the light or one that just left. A verdict of "nothing" is no item: a static scene costs
+no render. Items go to two schedules, each under its own fixed CPU cap:
+
+- **static** (`selectStatic`, 0.35 ms): the first fill nearest first, then stale tiles oldest first (frames since the change that
+  touched them);
+- **dynamic** (`selectDynamic`, 0.30 ms, at most 24 avatar draws): a lamp that is moving, or a tile with an avatar in its light
+  (the avatars are still drawn into S until P4, so such a tile is a full render every frame): items past the 4-frame deadline
+  first, then nearest first.
+
+The two caps together exceed the 0.4 ms budget when both are busy; the dynamic one is spent only while an avatar is under a lamp
+or a lamp moves, and P4 re-divides it (S/L split). A lamp that moves is drawn every frame with its current pose, and the lookup
+matrix is built from the pose the tile was drawn with, so a lagging picture stays coherent (D10).
+
+The avatars a tile holds are the ones the render would draw (visible, not impostored): their visibility still follows the camera
+until P4, so an avatar that leaves the view makes its tile stale once.
+
+### Stats
+
+`ProjectorShadows.stats` (development builds) gained `pool.rerender_causes` (renders by cause, cumulative), `static_renders` and
+`dynamic_renders` (cumulative), `last_frame_static_renders`, `last_frame_dynamic_renders`, `pinned_objects`, `pending_tiles`,
+`avatar_tiles`, `dirty_boxes_last_frame`, `frame`, `dirty_age_ms_max` (the longest a changed tile waited for its render, since the
+last `reset_ages`) and per tile `pending`.
+
+### Interfaces a second cache (the point lights' faces) reuses
+
+Nothing in these is about projectors; they are keyed by a tile or face key and an agent-space volume.
+
+- `LLShadowDirtyFeed::beginFrame(frame)`: the frame's boxes with causes (idempotent per frame, so two caches may read them).
+- `llprojectorpool::ChangeIndex`: `rebuild(volumes)` with one `Pyramid` per tile or face, `apply(boxes, everything, hits)`.
+- `llprojectorpool::classifyTile(TileFacts)` and `selectStatic` / `selectDynamic`: the verdict and the order of work.
+- `llprojectorpool::PinBook` plus `LLVOVolume::pinLampLOD`: the LOD pin's books by key.
+- `llprojectorpool::castsFixed`, `hookSkips`, `becomesMover`: the mover rules.
+
+What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, the lookup matrix and the atlas.
+
+### Known limits of P3
+
+- A moving part inside a still linkset, client spin and flexi cast with the pose of the last render.
+- Avatars are still drawn into S (a tile with an avatar in its light is a full render every frame, under the dynamic cap) and their
+  visibility follows the camera until P4.
+- The mover classifier is sticky: a prim another avatar edits (a server-reported move after creation) stops casting lamp shadows
+  for the session. An object that arrives through the object cache and differs from its cached position counts as moved.
+- Texture detail of alpha-masked casters (above) and object loading by camera distance (above).
+- Not measured in-world: the LOD pin's triangle cost, the steady state of `rerender_causes` in the owner's rooms, and the hooks'
+  CPU cost (a few relaxed loads per hook while no tile exists; one box push per change while tiles exist).
+
+### For the point-light stages (what is covered)
+
+- One generic pass flag, `LLPipeline::sLocalShadowPass` (`LOCAL_SHADOW_NONE/STATIC/DYNAMIC`), is the check at every site (the mover filter, the pin).
+- The light-linkset exemption compares the roots of the bridge and of `RenderSpotLight` (the emitter drawable): nothing spotlight-only.
+- Every hook goes through `LLShadowDirtyFeed::push`; several caches read the same per-frame list (`beginFrame` is idempotent per frame) and
+  `noteShift` translates it once. A cache with its own list is not needed.
+- The mover and physical bits are on the object (`mPoolFlags`, read through `LLShadowDirtyFeed::flagsOf`); transitions push through the feed.
+- The pin counter on the volume is shared; each cache has its own `PinBook` keyed by tile, so two caches can pin one object.
+- Left for later: `renderTile` still takes the record (not `fbo, rect, view, proj, far, light, pass, two_sided`) and saves the GL state once per
+  frame, not once around a tile list across caches; `LevelController` is unchanged (no demand callback); the caster faces stay front-only (D12).
