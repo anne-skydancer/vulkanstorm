@@ -12,6 +12,8 @@
 //   T6  a dirty box pushed during a render lands in the next frame (double buffer)
 //   T7  scheduler: never-drawn first, 250 ms deadline beats distance, avatar items never exceed
 //       A_max, no static starvation under a continuous dirty source
+//   T8  the 8192 atlas tier: tier choice by VRAM and GL_MAX_TEXTURE_SIZE, buddy and repack at 8192, level controller,
+//       compaction and the stats' sizes
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -107,6 +109,94 @@ namespace
         check(full.ok, "T1 4096 floor tiles fill a 4096 atlas");
         const RepackPlan over = planRepack(requestsFor(std::vector<uint32_t>(4097, 2048u), kMaxLevel), 4096);
         check(!over.ok && over.unplaced.size() == 1, "T1 one over fails cleanly", double(over.unplaced.size()));
+    }
+
+    // ---- T8 ----
+    void testT8()
+    {
+        // the tier: 2048 below 3 GB, 4096, 8192 from 12 GB, never above what the driver can make
+        check(atlasTier(0, 16384) == 4096, "T8 unknown VRAM gets the default tier");
+        check(atlasTier(2048, 16384) == 2048, "T8 2 GB gets 2048");
+        check(atlasTier(3071, 16384) == 2048 && atlasTier(3072, 16384) == 4096, "T8 the 3 GB edge");
+        check(atlasTier(8192, 16384) == 4096, "T8 8 GB gets 4096");
+        check(atlasTier(12287, 16384) == 4096 && atlasTier(12288, 16384) == 8192, "T8 the 12 GB edge");
+        check(atlasTier(24576, 16384) == 8192, "T8 24 GB gets 8192");
+        check(atlasTier(24576, 4096) == 4096, "T8 GL_MAX_TEXTURE_SIZE 4096 limits it");
+        check(atlasTier(24576, 2048) == 2048 && atlasTier(24576, 1024) == 2048, "T8 never below the smallest tier");
+        check(atlasTier(24576, 0) == 8192, "T8 unknown max texture size does not limit");
+        check(atlasBytes(2048) >> 20 == 32 && atlasBytes(4096) >> 20 == 128 && atlasBytes(8192) >> 20 == 512, "T8 MiB of S + L");
+
+        const uint32_t atlas = 8192;
+        BuddyAtlas b(atlas);
+        check(b.atlasSize() == 8192, "T8 buddy takes 8192", b.atlasSize());
+        // sixteen 2048 tiles fill it; a seventeenth does not fit; the floor holds 128 * 128 tiles
+        std::vector<Rect> rects;
+        Rect r;
+        for (int i = 0; i < 16; ++i)
+        {
+            check(b.alloc(2048, r) && rectInside(r, atlas), "T8 sixteen 2048 tiles fit", i);
+            rects.push_back(r);
+        }
+        check(!b.alloc(64, r), "T8 a full atlas has no room for a 64 tile");
+        bool clean = true;
+        for (size_t i = 0; i < rects.size(); ++i)
+            for (size_t j = i + 1; j < rects.size(); ++j) clean = clean && !rectOverlap(rects[i], rects[j]);
+        check(clean, "T8 the sixteen tiles do not overlap");
+        for (const Rect& q : rects) b.free(q);
+        check(b.alloc(8192, r) && r.x == 0 && r.y == 0 && r.size == 8192, "T8 freed tiles merge back into one 8192 block");
+
+        check(planRepack(requestsFor(std::vector<uint32_t>(16384, 2048u), kMaxLevel), atlas).ok, "T8 16384 floor tiles fill an 8192 atlas");
+        const RepackPlan over = planRepack(requestsFor(std::vector<uint32_t>(16385, 2048u), kMaxLevel), atlas);
+        check(!over.ok && over.unplaced.size() == 1, "T8 one over fails cleanly", double(over.unplaced.size()));
+
+        // the level: nine 2048 lamps (U = 0.5625) stay at level 0, the tenth shrinks; at 4096 the third already does
+        LevelController lc;
+        lc.update(std::vector<uint32_t>(9, 2048u), atlas, 0.016f, false);
+        check(lc.level() == 0, "T8 nine 2048 lamps stay at level 0 on 8192", lc.level());
+        lc.update(std::vector<uint32_t>(10, 2048u), atlas, 0.016f, false);
+        check(lc.level() == 1, "T8 the tenth shrinks", lc.level());
+        LevelController l4;
+        l4.update(std::vector<uint32_t>(3, 2048u), 4096, 0.016f, false);
+        check(l4.level() == 1, "T8 the same on 4096: the third lamp shrinks", l4.level());
+        for (uint32_t n : { 5u, 12u, 40u, 100u })
+        {
+            LevelController c;
+            const std::vector<uint32_t> bases(n, 2048u);
+            c.update(bases, atlas, 0.016f, false);
+            check(demand(bases, c.level(), atlas) <= kShrinkAbove, "T8 demand under threshold", n, demand(bases, c.level(), atlas));
+            check(planRepack(requestsFor(bases, c.level()), atlas).ok, "T8 placed at the chosen level", n);
+        }
+
+        // a repack from level 0 to 1 and a compaction at 8192: moves inside the atlas, copies for equal sizes
+        std::mt19937 rng(8);
+        std::vector<uint32_t> bases;
+        for (int i = 0; i < 40; ++i) bases.push_back(128u << (rng() % 5));
+        const RepackPlan old_plan = planRepack(requestsFor(bases, 0), atlas);
+        check(old_plan.ok, "T8 old plan ok");
+        std::vector<LayoutRequest> req = requestsFor(bases, 1);
+        for (size_t i = 0; i < req.size(); ++i)
+        {
+            req[i].has_old = true;
+            req[i].old_rect = old_plan.placed[i];
+            req[i].drawn = true;
+        }
+        const RepackPlan plan = planRepack(req, atlas);
+        bool ok = plan.ok && plan.moves.size() == req.size();
+        for (const Move& m : plan.moves)
+        {
+            ok = ok && m.copy == (m.src.size == m.dst.size) && rectInside(m.dst, atlas) && rectInside(m.src, atlas);
+        }
+        check(ok, "T8 repack 0 -> 1 at 8192: every move inside, copy iff equal size");
+        for (size_t i = 0; i < plan.placed.size() && ok; ++i)
+        {
+            ok = rectInside(plan.placed[i], atlas) && plan.placed[i].size == req[i].size;
+            for (size_t j = i + 1; j < plan.placed.size() && ok; ++j) ok = !rectOverlap(plan.placed[i], plan.placed[j]);
+        }
+        check(ok, "T8 new rects inside and disjoint at 8192");
+        // the repack plan's own allocator at 8192 reports its size, and a tile past 8192 is refused
+        check(plan.buddy.atlasSize() == 8192, "T8 the plan's buddy is the 8192 allocator", plan.buddy.atlasSize());
+        BuddyAtlas big(atlas);
+        check(!big.alloc(16384, r), "T8 a tile larger than the atlas is refused");
     }
 
     // ---- T2 ----
@@ -715,6 +805,7 @@ int main()
     testT5();
     testT6();
     testT7();
+    testT8();
     testBadInput();
     if (failures)
     {
