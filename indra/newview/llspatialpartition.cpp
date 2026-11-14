@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llspatialpartition.h"
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's change hooks
 
 #include "llappviewer.h"
 #include "lltexturecache.h"
@@ -968,12 +969,18 @@ LLSpatialGroup *LLSpatialPartition::put(LLDrawable *drawablep, bool was_visible)
         group->setOcclusionState(LLSpatialGroup::DISCARD_QUERY, LLSpatialGroup::STATE_MODE_ALL_CAMERAS);
     }
 
+    // <Vulkanstorm> the projector shadow pool: the drawable is in the octree with its new extents (a real insertion: the octree's
+    // own rebalancing goes through handleInsertion/handleRemoval and is not a change of the scene)
+    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::AddRemove);
+    // </Vulkanstorm>
+
     return group;
 }
 
 bool LLSpatialPartition::remove(LLDrawable *drawablep, LLSpatialGroup *curp)
 {
     LL_PROFILE_ZONE_SCOPED;
+    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::AddRemove); // <Vulkanstorm/> the projector shadow pool: the extents it leaves
     if (!curp->removeObject(drawablep))
     {
         OCT_ERRS << "Failed to remove drawable from octree!" << LL_ENDL;
@@ -1020,6 +1027,7 @@ void LLSpatialPartition::move(LLDrawable *drawablep, LLSpatialGroup *curp, bool 
     {
         // Already updated, don't need to do anything
         assert_octree_valid(mOctree);
+        LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit); // <Vulkanstorm/> the projector shadow pool: where it ended up
         return;
     }
 
