@@ -21,6 +21,8 @@
 
 #include "llprojectorshadows.h"
 
+#include "llshadowdirtyfeed.h"
+
 #include "llagent.h"
 #include "llapp.h"
 #include "llspatialpartition.h"
@@ -35,6 +37,9 @@
 #include "lltimer.h"
 #include "llviewercamera.h"
 #include "llviewershadermgr.h"
+#include "llviewerobjectlist.h"
+#include "llviewerregion.h"
+#include "llvoavatar.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
@@ -263,12 +268,17 @@ bool LLProjectorShadows::ensureAllocated()
         if (allocateAtlases(size))
         {
             mAllocFailed = false;
+            LLShadowDirtyFeed::setTracking(true); // the scene's change hooks record from now on
             // every record starts again: a tile has to be drawn into the new atlas
             for (auto& entry : mRecords)
             {
                 Record& rec = entry.second;
                 rec.placed = false;
                 rec.drawnFrame = 0;
+                rec.drawn.valid = false;
+                rec.pending = false;
+                rec.lowres = false;
+                rec.drawnWithAvatar = false;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
@@ -301,6 +311,7 @@ void LLProjectorShadows::release()
         return;
     }
     // order: the framebuffers, the textures, then every tile and record (the LOD pins of later stages are released with them)
+    LLShadowDirtyFeed::setTracking(false); // the hooks stop recording (and the pending boxes go)
     freeAtlases();
     clear(); // the records hold drawables: dropped with the tiles (a later allocation starts from the light set)
     mBuddy.reset(kTierSmall);
@@ -308,10 +319,25 @@ void LLProjectorShadows::release()
     mAllocFailed = false;
     mTileRenders = 0;
     mRepacks = 0;
+    mStaticRenders = 0;
+    mDynamicRenders = 0;
+    mDirtyRenders = 0;
+    mDirtyAgeMsMax = 0.f;
+    mCauses = CauseCounts();
 }
 
 void LLProjectorShadows::clear()
 {
+    // every tile gives its LOD pins back (the books and the counters on the volumes)
+    std::vector<U32> keys;
+    for (const auto& entry : mRecords)
+    {
+        keys.push_back(entry.first);
+    }
+    for (U32 key : keys)
+    {
+        unpinTile(key);
+    }
     mRecords.clear();
     mKeyOf.clear();
     mLightsWithoutTile = 0;
@@ -346,6 +372,7 @@ void LLProjectorShadows::dropRecord(std::map<U32, Record>::iterator it)
     {
         mBuddy.free(rec.rect);
     }
+    unpinTile(rec.key);
     mKeyOf.erase(rec.drawable.get());
     mRecords.erase(it);
 }
@@ -494,6 +521,7 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         else
         {
             blitTile(mFboS, move.src, mFboL, move.dst);
+            it->second.lowres = true; // drawn again at its new size
         }
     }
     if (!plan.moves.empty())
@@ -613,9 +641,10 @@ void LLProjectorShadows::setTileOrigin(F32 x, F32 y)
 }
 
 // One tile: the light's view (its pose now), the fixed objects and the avatars into S, then S -> L for the tile. The cull
-// frustum comes from the light's matrices. The tile's size and view come from the light; the caster LOD and the avatars'
-// visibility still follow the camera until P3/P4.
-void LLProjectorShadows::renderTile(Record& rec)
+// frustum comes from the light's matrices. The tile's size and view come from the light and the casters are held at full
+// detail by the LOD pin (pinCasters, called from LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture.
+// The avatars' visibility still follows the camera until P4.
+void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
     SpotGeom g;
     if (!read_spot(rec.drawable, g))
@@ -639,6 +668,12 @@ void LLProjectorShadows::renderTile(Record& rec)
     LLRenderTarget::sCurResX = (U32)n;
     LLRenderTarget::sCurResY = (U32)n;
     setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
+
+    // the LOD pin's books for this render: what the tile meets from here on is what it holds afterwards
+    mPins.beginRender(rec.key);
+    mRenderingRec = &rec;
+    mRenderVolume = rec.volume;
+    LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_STATIC;
 
     {
         LLGLEnable scissor(GL_SCISSOR_TEST);
@@ -665,6 +700,13 @@ void LLProjectorShadows::renderTile(Record& rec)
         LLPipeline::RenderSpotLight = nullptr;
         gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
     }
+    LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
+    mRenderingRec = nullptr;
+    // the objects the tile held and did not meet again (they left the light, or are gone) go back to the camera's LOD
+    for (const Id128& id : mPins.endRender(rec.key))
+    {
+        unpinObject(id);
+    }
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
@@ -679,13 +721,162 @@ void LLProjectorShadows::renderTile(Record& rec)
     r.drawn.radius = g.radius;
     r.drawn.dist = g.dist;
     r.drawn.valid = true;
+    r.drawnPose = r.curPose;
     r.drawnFrame = LLFrameTimer::getFrameCount();
+    if (r.pending && cause != Cause::Lamp && cause != Cause::Avatar && cause != Cause::Lowres && cause != Cause::New)
+    {
+        // a change that reached the pool at the start of this frame (or the end of the last) is on screen after this render
+        const F32 waited_ms = (F32)((LLTimer::getTotalSeconds() - r.dirtyTime) * 1000.0) + gFrameIntervalSeconds.value() * 1000.f;
+        mDirtyAgeMsMax = llmax(mDirtyAgeMsMax, waited_ms);
+        ++mDirtyRenders;
+    }
+    r.pending = false;
+    r.dirtyFrame = 0;
+    r.dirtyTime = 0.0;
+    r.lowres = false;
+    r.drawnWithAvatar = r.holdsAvatar;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     r.lastCpuMs = ms;
     mCostEmaMs += 0.2f * (ms - mCostEmaMs);
     mLastFrameRenderMs += ms;
     ++mLastFrameRenders;
     ++mTileRenders;
+    mCauses.add(cause);
+    if (dynamic)
+    {
+        ++mDynamicRenders;
+        ++mLastFrameDynamic;
+    }
+    else
+    {
+        ++mStaticRenders;
+        ++mLastFrameStatic;
+    }
+}
+
+namespace
+{
+    // The light's view volume for the change tests, from the pose the tile is drawn with: the pyramid of its frustum, in agent
+    // space. A tile is square, so a wide projector (scale x over y) is covered by the wider angle: conservative, never smaller.
+    // Camera independent by construction: only the lamp's pose enters.
+    Pyramid light_volume(const SpotGeom& g, F32 far_clip)
+    {
+        LLVector3 fwd(0.f, 0.f, -1.f), right(1.f, 0.f, 0.f), up(0.f, 1.f, 0.f);
+        fwd *= g.rot;
+        right *= g.rot;
+        up *= g.rot;
+        const F32 aspect = g.scale.mV[VY] > 0.f ? g.scale.mV[VX] / g.scale.mV[VY] : 1.f;
+        const F32 half_tan = tanf(g.fov * 0.5f) * llmax(1.f, aspect);
+        const F32 fov = 2.f * atanf(half_tan);
+        return makePyramid(g.origin.mV, fwd.mV, right.mV, up.mV, fov, llmax(g.dist, 0.001f), far_clip);
+    }
+
+    Pose light_pose(const SpotGeom& g, LLDrawable* drawable)
+    {
+        Pose p;
+        LLVOVolume* volume = drawable ? drawable->getVOVolume() : nullptr;
+        LLViewerRegion* region = volume ? volume->getRegion() : nullptr;
+        // region-local and the region's handle, never agent space: a region crossing shifts agent space without moving the lamp
+        LLVector3d local = gAgent.getPosGlobalFromAgent(g.origin);
+        if (region)
+        {
+            p.region = region->getHandle();
+            local -= region->getOriginGlobal();
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            p.pos[i] = (F32)local.mdV[i];
+            p.scale[i] = g.scale.mV[i];
+        }
+        for (int i = 0; i < 4; ++i)
+        {
+            p.rot[i] = g.rot.mQ[i];
+        }
+        p.fov = g.fov;
+        p.radius = g.radius;
+        return p;
+    }
+
+    Id128 id_of(const LLUUID& uuid)
+    {
+        Id128 id;
+        static_assert(sizeof(id) == UUID_BYTES, "an object id is 16 bytes");
+        memcpy(&id, uuid.mData, sizeof(id));
+        return id;
+    }
+}
+
+void LLProjectorShadows::unpinObject(const Id128& id)
+{
+    LLUUID uuid;
+    memcpy(uuid.mData, &id, sizeof(id));
+    LLViewerObject* object = gObjectList.findObject(uuid);
+    if (LLVOVolume* volume = object ? dynamic_cast<LLVOVolume*>(object) : nullptr)
+    {
+        volume->unpinLampLOD();
+    }
+}
+
+void LLProjectorShadows::unpinTile(U32 key)
+{
+    const std::vector<Id128> held = mPins.releaseTile(key);
+    if (LLApp::isExiting())
+    {
+        return; // the objects are going with the world: nothing to give back
+    }
+    for (const Id128& id : held)
+    {
+        unpinObject(id);
+    }
+}
+
+void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
+{
+    LLVOVolume* volume = drawable && !drawable->isDead() ? drawable->getVOVolume() : nullptr;
+    if (!volume || volume->isDead() || volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment())
+    {
+        return;
+    }
+    Aabb box;
+    if (!LLShadowDirtyFeed::extentsOf(drawable, box) || !intersects(mRenderVolume, box))
+    {
+        return; // not in this light's volume: the object's detail is the camera's business
+    }
+    if (mPins.touch(mRenderingRec->key, id_of(volume->getID())))
+    {
+        volume->pinLampLOD(); // raises it to LOD 3 and rebuilds once; the tile is drawn again with the full detail, then holds
+    }
+}
+
+// The LOD pin (spec 4.4, D6): every volume the tile is about to draw, inside the light's volume, is held at full detail. Without
+// it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves.
+void LLProjectorShadows::pinCasters(LLCullResult& result)
+{
+    if (!mRenderingRec || !on_main_thread())
+    {
+        return;
+    }
+    auto pin_group = [this](LLSpatialGroup* group) {
+        if (!group || group->isDead())
+        {
+            return;
+        }
+        for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
+        {
+            if ((*i)->hasDrawable())
+            {
+                pinDrawable((LLDrawable*)(*i)->getDrawable());
+            }
+        }
+    };
+    for (LLCullResult::sg_iterator i = result.beginVisibleGroups(); i != result.endVisibleGroups(); ++i)
+    {
+        pin_group(*i);
+    }
+    for (LLCullResult::sg_iterator i = result.beginDrawableGroups(); i != result.endDrawableGroups(); ++i)
+    {
+        pin_group(*i);
+    }
 }
 
 void LLProjectorShadows::update(LLCamera& camera)
@@ -713,18 +904,98 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
     mLastFrameRenderMs = 0.f;
     mLastFrameRenders = 0;
+    mLastFrameStatic = 0;
+    mLastFrameDynamic = 0;
+
+    // the scene's changes since the last frame (swapped before any render of this frame, so a change a render itself causes
+    // lands in the next frame: F9)
+    const std::vector<DirtyBox>& boxes = LLShadowDirtyFeed::beginFrame(frame);
+    const bool everything = LLShadowDirtyFeed::everything();
+    mDirtyBoxes = (U32)boxes.size();
 
     updateLightSet(camera);
     layoutChanged();
 
-    // the work list: every placed tile is an item (stage P2 has no change tracking, so each is a full render, in the order
-    // of llprojectorpool::selectStatic: never drawn first, then the oldest first by frames, the nearest only breaking a tie)
-    std::vector<StaticItem> items;
-    items.reserve(mRecords.size());
-    mLightsWithoutTile = 0;
-    for (const auto& entry : mRecords)
+    // The lamps' poses and volumes, this frame's: from the lamp alone (never the camera).
+    std::vector<TileVolume> volumes;
+    volumes.reserve(mRecords.size());
+    for (auto& entry : mRecords)
     {
-        const Record& rec = entry.second;
+        Record& rec = entry.second;
+        SpotGeom g;
+        if (!read_spot(rec.drawable, g))
+        {
+            rec.prevPoseValid = false;
+            continue;
+        }
+        rec.curPose = light_pose(g, rec.drawable);
+        rec.lampMoving = rec.prevPoseValid && poseChanged(rec.prevPose, rec.curPose);
+        rec.prevPose = rec.curPose;
+        rec.prevPoseValid = true;
+        rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
+        glm::mat4 view, proj;
+        F32 far_clip = 0.f;
+        spot_matrices(g, view, proj, far_clip);
+        rec.volume = light_volume(g, far_clip);
+        if (rec.placed && rec.drawnFrame != 0)
+        {
+            TileVolume tv;
+            tv.key = rec.key;
+            tv.pyramid = rec.volume;
+            volumes.push_back(tv);
+        }
+    }
+
+    // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn)
+    mIndex.rebuild(volumes);
+    std::vector<Hit> hits;
+    mIndex.apply(boxes, everything, hits);
+    for (const Hit& hit : hits)
+    {
+        auto it = mRecords.find(hit.key);
+        if (it != mRecords.end() && !it->second.pending)
+        {
+            it->second.pending = true;
+            it->second.pendingCause = hit.cause;
+            it->second.dirtyFrame = frame;
+            it->second.dirtyTime = LLTimer::getTotalSeconds();
+        }
+    }
+
+    // the avatars: a tile with one in its light is drawn again every frame (they are drawn into S until P4), nearest first
+    std::vector<Aabb> avatar_boxes;
+    for (LLCharacter* character : LLCharacter::sInstances)
+    {
+        LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
+        // the avatars the tile render would draw (stateSort, LLDrawPoolAvatar: not impostors); their visibility follows the camera until P4
+        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || !avatar->isVisible() || avatar->isImpostor())
+        {
+            continue;
+        }
+        const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
+        if (!ext)
+        {
+            continue;
+        }
+        Aabb b;
+        for (int i = 0; i < 3; ++i)
+        {
+            b.lo[i] = ext[0].getF32ptr()[i];
+            b.hi[i] = ext[1].getF32ptr()[i];
+        }
+        avatar_boxes.push_back(b);
+    }
+
+    // the work list: the verdict of every placed tile (llprojectorpool::classifyTile). A static scene has none.
+    std::vector<StaticItem> static_items;
+    std::vector<DynamicItem> dynamic_items;
+    std::map<U32, Cause> causes;
+    mLightsWithoutTile = 0;
+    mPendingTiles = 0;
+    mAvatarTiles = 0;
+    for (auto& entry : mRecords)
+    {
+        Record& rec = entry.second;
         if (rec.drawnFrame == 0)
         {
             ++mLightsWithoutTile;
@@ -733,19 +1004,62 @@ void LLProjectorShadows::update(LLCamera& camera)
         {
             continue;
         }
-        StaticItem item;
-        item.key = rec.key;
-        item.never_drawn = rec.drawnFrame == 0;
-        item.pending = true;
-        item.cam_dist = rec.camDist;
-        item.last_cpu_ms = rec.lastCpuMs;
-        item.age_frames = rec.drawnFrame == 0 ? 0u : frame - rec.drawnFrame;
-        items.push_back(item);
+        rec.avatarCount = 0;
+        for (const Aabb& b : avatar_boxes)
+        {
+            if (intersects(rec.volume, b))
+            {
+                ++rec.avatarCount; // also for a tile about to be drawn the first time: its picture holds the avatar
+            }
+        }
+        rec.holdsAvatar = rec.avatarCount > 0;
+        mAvatarTiles += rec.holdsAvatar ? 1 : 0;
+        mPendingTiles += rec.pending ? 1 : 0;
+
+        TileFacts facts;
+        facts.never_drawn = rec.drawnFrame == 0;
+        facts.pending = rec.pending;
+        facts.pending_cause = rec.pendingCause;
+        facts.pose_stale = rec.poseStale;
+        facts.lamp_moving = rec.lampMoving;
+        facts.lowres = rec.lowres;
+        facts.holds_avatar = rec.holdsAvatar;
+        facts.drawn_with_avatar = rec.drawnWithAvatar;
+        const TileVerdict verdict = classifyTile(facts);
+        if (!verdict.needs_render)
+        {
+            continue;
+        }
+        causes[rec.key] = verdict.cause;
+        if (verdict.dynamic)
+        {
+            DynamicItem item;
+            item.key = rec.key;
+            item.avatar = rec.holdsAvatar;
+            item.age_frames = frame - rec.drawnFrame;
+            item.cam_dist = rec.camDist;
+            item.last_cpu_ms = rec.lastCpuMs;
+            item.avatar_draws = rec.avatarCount;
+            dynamic_items.push_back(item);
+        }
+        else
+        {
+            StaticItem item;
+            item.key = rec.key;
+            item.never_drawn = rec.drawnFrame == 0;
+            item.pending = true;
+            item.cam_dist = rec.camDist;
+            item.last_cpu_ms = rec.lastCpuMs;
+            // the order of service: how long the tile has been waiting (frames since the first change that touched it)
+            item.age_frames = rec.dirtyFrame && frame >= rec.dirtyFrame ? frame - rec.dirtyFrame : 0u;
+            static_items.push_back(item);
+        }
     }
-    // The budget: a fixed CPU time per frame (llprojectorpool::kStaticCapMs). The measured cost of a tile only predicts how many
-    // fit; it does not set the budget (it used to, at 2 x the average, which let the nearest tiles use it up every frame).
-    const std::vector<U32> picks = selectStatic(items, kStaticCapMs);
-    if (picks.empty())
+    // The budgets: fixed CPU times per frame (llprojectorpool::kStaticCapMs, kDynamicCapMs). The measured cost of a tile only
+    // predicts how many fit; it does not set the budget.
+    const std::vector<U32> static_picks = selectStatic(static_items, kStaticCapMs);
+    const std::vector<U32> dynamic_picks = selectDynamic(dynamic_items, kDynamicCapMs, kAvatarDrawsMax);
+    if (static_picks.empty() && dynamic_picks.empty())
     {
         return;
     }
@@ -774,22 +1088,29 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
-    // the in-frame cap (section 4.5): the first pick always runs, the others only while the measured time is inside the budget
-    const F32 frame_budget_ms = kStaticCapMs;
-    bool first_pick = true;
-    for (U32 key : picks)
-    {
-        if (!first_pick && mLastFrameRenderMs >= frame_budget_ms)
+    // the in-frame caps (section 4.5): the first pick of a list always runs, the others only while the measured time is inside
+    // that list's budget
+    auto run = [&](const std::vector<U32>& picks, F32 budget_ms, bool dynamic) {
+        F32 spent_ms = 0.f;
+        bool first_pick = true;
+        for (U32 key : picks)
         {
-            break;
+            if (!first_pick && spent_ms >= budget_ms)
+            {
+                break;
+            }
+            auto it = mRecords.find(key);
+            if (it != mRecords.end() && it->second.placed)
+            {
+                const F32 before = mLastFrameRenderMs;
+                renderTile(it->second, causes[key], dynamic);
+                spent_ms += mLastFrameRenderMs - before;
+                first_pick = false;
+            }
         }
-        auto it = mRecords.find(key);
-        if (it != mRecords.end() && it->second.placed)
-        {
-            renderTile(it->second);
-            first_pick = false;
-        }
-    }
+    };
+    run(static_picks, kStaticCapMs, false);
+    run(dynamic_picks, kDynamicCapMs, true);
 
     // put back what the tile renders changed
     setTileOrigin(0.f, 0.f);
@@ -882,6 +1203,18 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     st.costEmaMs = mCostEmaMs;
     st.lastFrameRenderMs = mLastFrameRenderMs;
     st.lastFrameRenders = mLastFrameRenders;
+    st.staticRenders = mStaticRenders;
+    st.dynamicRenders = mDynamicRenders;
+    st.lastFrameStatic = mLastFrameStatic;
+    st.lastFrameDynamic = mLastFrameDynamic;
+    st.pinnedObjects = (U32)mPins.pinnedObjects();
+    st.pendingTiles = mPendingTiles;
+    st.avatarTiles = mAvatarTiles;
+    st.dirtyBoxesLastFrame = mDirtyBoxes;
+    st.causes = mCauses;
+    st.frame = LLFrameTimer::getFrameCount();
+    st.dirtyAgeMsMax = mDirtyAgeMsMax;
+    st.dirtyRenders = mDirtyRenders;
     const U32 frame = LLFrameTimer::getFrameCount();
     for (const auto& entry : mRecords)
     {
@@ -908,6 +1241,7 @@ std::vector<LLProjectorShadows::TileInfo> LLProjectorShadows::getTiles() const
         t.size = rec.placed ? rec.rect.size : 0;
         t.drawnFrame = rec.drawnFrame;
         t.camDist = rec.camDist;
+        t.pending = rec.pending;
         tiles.push_back(t);
     }
     return tiles;
