@@ -53,6 +53,13 @@ it every frame, and a far tile only got a turn after the 250 ms "stale" deadline
   shadow up itself (permutation `PROJECTOR_SHADOW_POOL`), only inside the projector's frustum and on surfaces that face it, after
   the attenuation test. `sampleProjectorShadow` is the filtered lookup of 261253bd43 on the tile, with an exact `CLAMP_TO_EDGE`
   emulation at the tile's edge (no guard texels). The sun pass writes 1 in its projector channels; the slots stay empty.
+- **Ambiance is shadowed (P2c).** The projector's ambiance (the fill light, `getProjectedLightAmbiance`) used to be added without
+  the shadow ("unshadowed for consistency between forward and deferred?" in the stock code), so it leaked through walls the beam
+  stopped at. Under `PROJECTOR_SHADOW_POOL` only, both material branches (PBR and legacy) multiply it by the pool's shadow; the
+  specular and the environment reflection already did. Legacy (no pool define) is textually unchanged. `multiSpotLightF` is the
+  same file with `MULTI_SPOTLIGHT`, so it takes the same path. By design a surface facing away from the lamp gets the ambiance (N.L is
+  clamped above zero: "lit from any side"), so the facing skip of the lookup no longer skips a pixel while `proj_ambiance > 0`
+  (as it already kept env-mapped pixels). Cost: back-facing pixels inside the cone look the shadow up too, for lamps with an ambiance.
 - **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
   `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a 2048 tile at 4 m, with a 90 degree field of view), turned into texels of this
   tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
