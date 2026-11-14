@@ -891,6 +891,18 @@ void testP3Causes()
 
 void testP3DirtyList()
 {
+    {
+        DirtyList d;
+        Aabb b;
+        b.hi[0] = 1.f;
+        d.push(b, Cause::Edit);
+        d.push(b, Cause::Edit);
+        check(d.pending() == 1, "P3 an identical box right after the last (the hooks of one drawable) is kept once");
+        d.push(b, Cause::Mover);
+        b.hi[1] = 2.f;
+        d.push(b, Cause::Mover);
+        check(d.pending() == 3, "P3 a different cause or box is kept");
+    }
     DirtyList d;
     Aabb a{ { 0, 0, 0 }, { 1, 1, 1 } };
     d.push(a, Cause::Edit);
@@ -900,7 +912,9 @@ void testP3DirtyList()
     // a frame that loses boxes asks for everything, once; the cap is bounded
     for (size_t i = 0; i < DirtyList::kMaxPending + 100; ++i)
     {
-        d.push(a, Cause::Edit);
+        Aabb moving = a;
+        moving.hi[0] += float(i); // distinct boxes: identical neighbours are merged
+        d.push(moving, Cause::Edit);
     }
     check(d.pending() == DirtyList::kMaxPending, "P3 the pending list is bounded", double(d.pending()));
     const std::vector<DirtyBox>& g = d.swapForApply();
