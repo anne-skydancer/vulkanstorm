@@ -60,6 +60,7 @@ class OrbitTest(unittest.TestCase):
         check.sc = {"camera": {"height_m": 1.5, "look_distance_m": 10}, "settle": {"step_s": 0.0, "after_camera_s": 0.0},
                     "o1": {"yaw_step_deg": 90, "pitch_deg": []}}
         empty = {"pool": {"pool_present": True, "static_renders": 0, "lights_without_tile": 0, "tiles": []}}
+        no_crc = {"pool": {"pool_present": True, "static_renders": 2, "lights_without_tile": 0, "tiles": [{"key": 1}]}}
 
         class V:
             def agent_pos(self):
@@ -78,6 +79,10 @@ class OrbitTest(unittest.TestCase):
         g = check.gate_o1()
         self.assertEqual(g["status"], "NOT RUN")
         self.assertIn("no projector tile", g["why"])
+        check.stats = lambda: no_crc
+        g = check.gate_o1()
+        self.assertEqual(g["status"], "NOT RUN")
+        self.assertIn("no tile CRC", g["why"])
 
 
 if __name__ == "__main__":
