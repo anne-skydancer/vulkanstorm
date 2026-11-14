@@ -840,8 +840,6 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     const glm::mat4 m = trans * proj * view * glm::inverse(get_current_modelview());
     shader.uniformMatrix4fv(LLShaderMgr::PROJ_SHADOW_MATRIX, 1, GL_FALSE, glm::value_ptr(m));
     shader.uniform4f(LLShaderMgr::PROJ_SHADOW_TILE, (F32)rec->rect.x, (F32)rec->rect.y, (F32)rec->rect.size, 1.f / (F32)mAtlasSize);
-    // the filter's largest radius stays the same length in metres whatever the level makes of the tile (D5), at least one texel
-    shader.uniform1f(LLShaderMgr::PROJ_SHADOW_KERNEL_MAX, llmax(1.f, 10.f * (F32)rec->rect.size / (F32)rec->base));
 }
 
 void LLProjectorShadows::bindAtlas(LLGLSLShader& shader)
