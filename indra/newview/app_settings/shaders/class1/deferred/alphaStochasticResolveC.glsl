@@ -51,7 +51,7 @@ layout(binding = 0, rgba16f) uniform writeonly image2D alpha_st_out;
 
 bool stoch_has_history();
 bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv);
-vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size);
+vec4 stoch_history_catmull_rom(sampler2D history, vec2 puv, ivec2 size);
 void stoch_neighbourhood(ivec2 px, ivec2 size, vec4 cur, out vec4 mn, out vec4 mx);
 vec4 stoch_accumulate(vec4 hist, vec4 mn, vec4 mx, vec4 cur);
 
@@ -110,7 +110,7 @@ void main()
         vec2 puv;
         if (z < 1.0 && stoch_reproject(px, z, size, pp, puv))
         {
-            vec4 old = stoch_history_nearest(alpha_st_history, puv, size);
+            vec4 old = stoch_history_catmull_rom(alpha_st_history, puv, size);
             vec4 mn;
             vec4 mx;
             stoch_neighbourhood(px, size, cur, mn, mx);
