@@ -136,30 +136,30 @@ def other_line_merged(r):
 
 
 def upstream_mirror_integration(r):
-    # vkstorm-aleph tracks upstream; an integration branch merging upstream's
+    # vkstorm-canary tracks upstream; an integration branch merging upstream's
     # tip (which the line also points at) is not a base merge.
     upstream = r.commit("trunk", "upstream work")
     r.git("update-ref", "refs/remotes/upstream/master", upstream)
-    r.git("branch", "vkstorm-aleph", upstream)
-    r.publish("vkstorm-aleph")
+    r.git("branch", "vkstorm-canary", upstream)
+    r.publish("vkstorm-canary")
     r.branch("codex/canary-upstream", "vkstorm-rust")
     r.merge("codex/canary-upstream", upstream, "Merge upstream master into canary")
     code, out = r.check("origin/vkstorm-rust", "codex/canary-upstream")
     expect("CI: merging upstream that a mirror line tracks is allowed", code, 0, out)
     r.git("checkout", "-q", "codex/canary-upstream")
-    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-aleph"})
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-canary"})
     expect("hook: merging an upstream mirror line is allowed", code, 0, out)
 
 
 def upstream_line_own_commits(r):
-    # vkstorm-aleph carries its own commits (release's defaults) on top of
+    # vkstorm-canary carries its own commits (release's defaults) on top of
     # upstream. Merging those into a feature is a base merge; merging a newer
     # upstream tip into an integration branch still is not.
     upstream = r.commit("trunk", "upstream work")
     r.git("update-ref", "refs/remotes/upstream/master", upstream)
-    r.git("branch", "vkstorm-aleph", upstream)
-    own = r.commit("vkstorm-aleph", "aleph: release defaults")
-    r.publish("vkstorm-aleph")
+    r.git("branch", "vkstorm-canary", upstream)
+    own = r.commit("vkstorm-canary", "canary: release defaults")
+    r.publish("vkstorm-canary")
     newer = r.commit("trunk", "newer upstream work")
     r.git("update-ref", "refs/remotes/upstream/master", newer)
     r.branch("codex/canary-upstream", "vkstorm-rust")
@@ -167,11 +167,11 @@ def upstream_line_own_commits(r):
     code, out = r.check("origin/vkstorm-rust", "codex/canary-upstream")
     expect("CI: a newer upstream tip stays mergeable past the line's own commits", code, 0, out)
     r.branch("codex/a", "vkstorm-rust")
-    r.merge("codex/a", own, "Merge vkstorm-aleph into codex/a")
+    r.merge("codex/a", own, "Merge vkstorm-canary into codex/a")
     code, out = r.check("origin/vkstorm-rust", "codex/a")
     expect("CI: the upstream line's own commit merged into a feature is rejected", code, 1, out)
     r.git("checkout", "-q", "codex/canary-upstream")
-    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-aleph"})
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-canary"})
     expect("hook: merging the upstream line's own commits is refused", code, 1, out)
     # Without the upstream ref the whole line is protected (fail closed).
     r.git("update-ref", "-d", "refs/remotes/upstream/master")
