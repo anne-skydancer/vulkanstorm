@@ -2247,7 +2247,13 @@ void LLFloaterPreference::refreshEnabledState()
         // Legacy is the only method below OpenGL 4.0: the Stochastic item is not offered and a stored
         // 2 reads as Legacy (the setting itself is not written, so the choice survives a GPU upgrade)
         LLComboBox* method_combo = getChild<LLComboBox>("ShadowMethod");
-        method_combo->remove("2");   // false once it is gone
+        // LLComboBox::remove(const std::string&) matches the label, not the value ("Stochastic" here),
+        // so select the item by value and remove it by index (nothing happens once it is gone)
+        method_combo->setValue(LLSD("2"));
+        if (method_combo->getValue().asString() == "2")
+        {
+            method_combo->remove(method_combo->getCurrentIndex());
+        }
         // always show the method that runs, so a preset load, Cancel or reset never leaves the combo blank
         method_combo->setValue(LLSD((LLSD::Integer)LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), false)));
     }
