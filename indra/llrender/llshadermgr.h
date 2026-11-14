@@ -195,6 +195,7 @@ public:
         DEFERRED_NORM_CUTOFF,               //  "norm_cutoff"
         DEFERRED_SHADOW_TARGET_WIDTH,       //  "shadow_target_width"
         DEFERRED_SHADOW_LIGHT_SIZE,         //  "shadow_light_size" <Vulkanstorm/> light size (Stochastic)
+        DEFERRED_SHADOW_SOLID_ALPHA,        //  "shadow_solid_alpha" <Vulkanstorm/> alpha from which a caster texel is solid (Stochastic)
 
         DEFERRED_SSR_ITR_COUNT,             //  "iterationCount"
         DEFERRED_SSR_RAY_STEP,              //  "rayStep"
