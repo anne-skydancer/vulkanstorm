@@ -106,6 +106,34 @@ namespace
         const LLViewerTexture* image = volume->getTEImage(face);
         return image && (image->getComponents() == 4 || image->getComponents() == 2); // not yet loaded: unknown, counted when it finishes (LLFace::dirtyTexture)
     }
+
+    bool anyAlphaFace(LLVOVolume* volume)
+    {
+        const U8 faces = volume->getNumTEs();
+        for (U8 i = 0; i < faces; ++i)
+        {
+            if (alpha_face(volume, i))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // stores `now` in the object's POOL_ALPHA_FACE bit and returns the bit it held (main thread only, like every pool flag)
+    bool swapAlphaBit(LLVOVolume* volume, bool now)
+    {
+        const bool was = (volume->mPoolFlags & LLViewerObject::POOL_ALPHA_FACE) != 0;
+        if (now)
+        {
+            volume->mPoolFlags |= LLViewerObject::POOL_ALPHA_FACE;
+        }
+        else
+        {
+            volume->mPoolFlags &= ~LLViewerObject::POOL_ALPHA_FACE;
+        }
+        return was;
+    }
 }
 
 std::atomic<bool> LLShadowDirtyFeed::sTracking{ false };
@@ -309,6 +337,10 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         return;
     }
     LLViewerObject* object = drawable->getVObj();
+    if (LLVOVolume* volume = drawable->getVOVolume())
+    {
+        swapAlphaBit(volume, anyAlphaFace(volume)); // keep the "had an alpha face" bit current at every rebuild, put and edit
+    }
     if (skipped(drawable, object))
     {
         return;
@@ -372,18 +404,17 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
         return;
     }
     LLVOVolume* volume = drawable->getVOVolume();
-    if (!volume || skipped(drawable, volume))
+    if (!volume)
     {
         return;
     }
-    const U8 faces = volume->getNumTEs();
-    for (U8 i = 0; i < faces; ++i)
+    // Callers differ: some run before the change is applied (LLVOVolume::setTEColor), most after. So the prim's state at this
+    // call may be the old one or the new one; the stored bit is what the feed last saw. The tile is stale if either had an
+    // alpha face (a face turned opaque closes a hole the cached tile still has).
+    const bool was = swapAlphaBit(volume, anyAlphaFace(volume));
+    if (!skipped(drawable, volume) && texturedDirties(was, (volume->mPoolFlags & LLViewerObject::POOL_ALPHA_FACE) != 0))
     {
-        if (alpha_face(volume, i))
-        {
-            noteDrawable(drawable, Cause::Edit);
-            return;
-        }
+        noteDrawable(drawable, Cause::Edit);
     }
 }
 
