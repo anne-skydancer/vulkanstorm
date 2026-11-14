@@ -738,6 +738,7 @@ set(viewer_SOURCE_FILES
     llspatialpartition.cpp
     llstatslistener.cpp
     llstochastichistory.cpp
+    llprojectorshadows.cpp
     llspeakers.cpp
     llspeakingindicatormanager.cpp
     llsplitbutton.cpp
@@ -1606,6 +1607,8 @@ set(viewer_HEADER_FILES
     llspatialpartition.h
     llstatslistener.h
     llstochastichistory.h
+    llprojectorshadows.h
+    llprojectorshadowpool.h
     llstochasticstate.h
     llspeakers.h
     llspeakingindicatormanager.h
