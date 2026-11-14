@@ -40,6 +40,7 @@
 #include "llviewerobjectlist.h"
 #include "llviewerregion.h"
 #include "llvoavatar.h"
+#include "llvotree.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
@@ -805,17 +806,42 @@ namespace
         memcpy(&id, uuid.mData, sizeof(id));
         return id;
     }
+
+    // one tile lets go of an object (a prim or a tree)
+    void lower_pin(LLViewerObject* object)
+    {
+        if (LLVOVolume* volume = object ? dynamic_cast<LLVOVolume*>(object) : nullptr)
+        {
+            volume->unpinLampLOD();
+        }
+        else if (LLVOTree* tree = object ? dynamic_cast<LLVOTree*>(object) : nullptr)
+        {
+            tree->unpinLampLOD();
+        }
+    }
+
+    // A volume casts nothing into a tile when every face is fully transparent (and none has a glTF material, whose alpha is its
+    // own): holding it at full detail would only cost triangles.
+    bool volume_casts(const LLVOVolume* volume)
+    {
+        const S32 faces = volume->getNumTEs();
+        for (S32 i = 0; i < faces; ++i)
+        {
+            const LLTextureEntry* te = volume->getTE((U8)i);
+            if (!te || te->getColor().mV[VALPHA] > 0.004f || te->getGLTFRenderMaterial())
+            {
+                return true;
+            }
+        }
+        return faces == 0;
+    }
 }
 
 void LLProjectorShadows::unpinObject(const Id128& id)
 {
     LLUUID uuid;
     memcpy(uuid.mData, &id, sizeof(id));
-    LLViewerObject* object = gObjectList.findObject(uuid);
-    if (LLVOVolume* volume = object ? dynamic_cast<LLVOVolume*>(object) : nullptr)
-    {
-        volume->unpinLampLOD();
-    }
+    lower_pin(gObjectList.findObject(uuid));
 }
 
 // The object of a drawable that is going away is no longer held by any tile: an object created later with the same id is a new
@@ -836,10 +862,7 @@ void LLProjectorShadows::forgetPinned(const LLDrawable* drawable)
     LLViewerObject* live = gObjectList.findObject(object->getID());
     for (uint32_t i = 0; live && i < n; ++i)
     {
-        if (LLVOVolume* volume = dynamic_cast<LLVOVolume*>(live))
-        {
-            volume->unpinLampLOD();
-        }
+        lower_pin(live);
     }
 }
 
@@ -858,8 +881,18 @@ void LLProjectorShadows::unpinTile(U32 key)
 
 void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
 {
-    LLVOVolume* volume = drawable && !drawable->isDead() ? drawable->getVOVolume() : nullptr;
-    if (!volume || volume->isDead() || volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment())
+    LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
+    if (!object || object->isDead())
+    {
+        return;
+    }
+    LLVOVolume* volume = drawable->getVOVolume();
+    LLVOTree* tree = volume ? nullptr : dynamic_cast<LLVOTree*>(object);
+    if (!volume && !tree)
+    {
+        return;
+    }
+    if (volume && (volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment() || !volume_casts(volume)))
     {
         return;
     }
@@ -868,9 +901,17 @@ void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
     {
         return; // not in this light's volume: the object's detail is the camera's business
     }
-    if (mPins.touch(mRenderingRec->key, id_of(volume->getID())))
+    if (mPins.touch(mRenderingRec->key, id_of(object->getID())))
     {
-        volume->pinLampLOD(); // raises it to LOD 3 and rebuilds once; the tile is drawn again with the full detail, then holds
+        // raises it to the full detail and rebuilds once; the tile is drawn again with it, then holds
+        if (volume)
+        {
+            volume->pinLampLOD();
+        }
+        else
+        {
+            tree->pinLampLOD();
+        }
     }
 }
 
