@@ -40,8 +40,9 @@ class LLVector4a;
 //
 // Threads: every hook runs on the main thread (the render thread is the main thread in this viewer). A hook that runs elsewhere
 // changes nothing and flags the next frame "everything is stale", which is safe and costs one redraw of every tile. The
-// hooks are no-ops until a cache switches the feed on (setTracking). No GL, no frees, no shared state beyond this feed's
-// own list; nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
+// hooks are no-ops until a cache switches the feed on (setTracking); the classifier (noteServerUpdate) is the exception and
+// always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list;
+// nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
 class LLShadowDirtyFeed
 {
 public:
@@ -73,8 +74,9 @@ public:
 
     // ---- the hooks ----
     // A drawable's extents changed hands: added to or removed from a partition, moved, or rebuilt. Skips what is not a fixed
-    // caster (avatars, attachments, animesh, HUD, flexi, client-spun, movers, physical objects, render types that cast no
-    // lamp shadow).
+    // caster (avatars, attachments, animesh, HUD, flexi, client-spun, render types that cast no lamp shadow) and, while it is
+    // active (bridged: the tile's cull drops it), a mover or physical object whose linkset is not a lamp's own. A mover at rest
+    // is static and drawn, so it is a fixed caster: its changes push, and so does the edge where it becomes active or static.
     static void noteDrawable(LLDrawable* drawable, Cause cause);
 
     // LLPipeline::markRebuild: only a rebuild that can change the picture (volume, position, rigged) counts.
@@ -86,6 +88,12 @@ public:
     // LLViewerObject::processUpdateMessage: the classifier. Runs whether or not a cache is tracking (the bits are sticky for
     // the session). Pushes the object's extents when it turns into a mover or its physics flag changes.
     static void noteServerUpdate(LLViewerObject* object, bool pos_changed, bool rot_changed, bool velocity, bool omega);
+
+    // The roots of the linksets that hold a lamp the pool draws a tile for (the lamp's own linkset is the fixture: its changes
+    // push whatever its flags). Set once a frame by the pool; the pointers are only compared. Main thread.
+    static void setLampRoots(std::vector<const LLViewerObject*>& roots);
+    // Objects the classifier has flagged as movers since the feed started (stats).
+    static U32 moverObjects();
 
     // ---- the classifier's reads ----
     static llprojectorpool::ObjectFlags flagsOf(const LLViewerObject* object);

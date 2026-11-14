@@ -21,6 +21,8 @@
 
 #include "llshadowdirtyfeed.h"
 
+#include <algorithm>
+
 #include "lldrawable.h"
 #include "llspatialpartition.h"
 #include "llthread.h"
@@ -40,6 +42,8 @@ namespace
     std::atomic<bool> sOffThread{ false };
     bool sForced = false;
     Cause sForcedCause = Cause::Other;
+    std::vector<const LLViewerObject*> sLampRoots; // the roots of the lamps the pool holds tiles for (compared, never dereferenced)
+    std::atomic<U32> sMoverObjects{ 0 };           // objects flagged as movers since the feed started (the bit is sticky)
 
     Aabb to_aabb(const LLVector4a* ext)
     {
@@ -120,6 +124,7 @@ void LLShadowDirtyFeed::reset()
     sApplied = nullptr;
     sHaveFrame = false;
     sOffThread.store(false);
+    sLampRoots.clear();
 }
 
 // static
@@ -195,7 +200,52 @@ bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object)
         return true;
     }
     LLViewerObject* root = object->getRootEdit();
-    return hookSkips(flagsOf(object), flagsOf(root ? root : object));
+    if (!root)
+    {
+        root = object;
+    }
+    const ObjectFlags of = flagsOf(object), rf = flagsOf(root);
+    // The same rule as the tile's cull (bridgeCasts): a mover or physical linkset is out of the fixed layer only while it is
+    // active (bridged); at rest it is drawn like any fixed caster, and its changes push.
+    const bool active = drawable->isActive();
+    const bool lamp = std::binary_search(sLampRoots.begin(), sLampRoots.end(), static_cast<const LLViewerObject*>(root));
+    if (of.physical || of.mover || rf.physical || rf.mover)
+    {
+        // The object just became active (the tile that holds it at its old pose must drop it: push the extents it leaves) or
+        // static again (it is drawn from now on: push where it is). One push at each edge, whatever order the hooks run in.
+        const bool was_active = (object->mPoolFlags & LLViewerObject::POOL_ACTIVE) != 0;
+        if (was_active != active)
+        {
+            if (active)
+            {
+                object->mPoolFlags |= LLViewerObject::POOL_ACTIVE;
+            }
+            else
+            {
+                object->mPoolFlags &= ~LLViewerObject::POOL_ACTIVE;
+            }
+            return false;
+        }
+    }
+    return hookSkips(of, rf, active, lamp);
+}
+
+// static
+void LLShadowDirtyFeed::setLampRoots(std::vector<const LLViewerObject*>& roots)
+{
+    if (!on_main_thread())
+    {
+        return;
+    }
+    std::sort(roots.begin(), roots.end());
+    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
+    sLampRoots.swap(roots);
+}
+
+// static
+U32 LLShadowDirtyFeed::moverObjects()
+{
+    return sMoverObjects.load(std::memory_order_relaxed);
 }
 
 // static
@@ -310,6 +360,10 @@ void LLShadowDirtyFeed::noteServerUpdate(LLViewerObject* object, bool pos_change
     }
     if (after.mover)
     {
+        if (!before.mover)
+        {
+            sMoverObjects.fetch_add(1, std::memory_order_relaxed);
+        }
         object->mPoolFlags |= LLViewerObject::POOL_MOVER;
     }
 
