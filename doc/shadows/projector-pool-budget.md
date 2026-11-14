@@ -42,8 +42,9 @@ position of each in table 1).
    in view (or none lit; read the number off the API: `ProjectorShadows.stats` `slots.occupied` is the count of slot renders per
    frame) and collect a window: `python scripts/inworld/perf_check.py --scenario <scenario> --only current --frames 240`.
    In the window (`window_*.json`, `analyze_perf_check.py`) read, per slot count:
-   - view `spot shadow 0` and `spot shadow 1`: CPU ms and GPU ms (one slot render each; the empty-cull overhead of an
-     avatar-less render is the cost of an "empty" item the spec asks about for the avatar layer);
+   - view `spot shadow 0` and `spot shadow 1`: CPU ms and GPU ms (one slot render each, with casters). S0 does not
+     measure the CPU of an empty `renderShadow` item (spec section 6, avatar items): those views contain casters. P4 must
+     measure it (a slot render of a lamp whose cone holds no casters);
    - view `main`, pass `deferred lighting/sun program`: GPU ms (the sun pass including the two slot marches);
    - passes `deferred lighting/projectors` and `deferred lighting/fullscreen lights`: GPU ms (the lookup side);
    - draws and triangles of the two spot views.
@@ -56,7 +57,11 @@ position of each in table 1).
 
 Machine, driver, resolution, build id, date: ______ (none recorded yet).
 
-**Table 1. The 82178 Stochastic frame, nothing collecting**
+**Table 1. The Stochastic frame on the devel parity build (`-DVKS_GL_STATS=ON`, hooks compiled in and idle), nothing collecting**
+
+This is not the 82178 binary: `--no-glstats` still calls `GLSubmitStats.status` for the frame count, so the hooks must be
+in the build. The hook cost is read from `hook_bench` (run `perf_check.py` once without `--no-glstats`; `--no-glstats` skips
+`selfBench`). If the 82178 figure is needed on the 82178 binary itself, take it by another method and record it beside this one.
 
 | Scene | Place (region, position) | Resolution | fps | ms | Spread of the probes |
 |---|---|---|---|---|---|
@@ -85,6 +90,8 @@ covered Mpx per slot march) are estimates until it is filled.
 
 **Table 3. Projectors within reach (for D20, the 8192 atlas tier)**
 
+The eligibility test on colour is approximate: it tests the light's colour unscaled, while the draw loop multiplies by `light_scale` (1 outside reflection probes), so the counts equal the drawn lights in practice. Lights that are fading out and the selected light (`dist` 0) fall into every band.
+
 | Place | Nearby lights | Spotlights | Eligible | Within 16 m | Within 32 m | Within 64 m | Within reach (min(far clip, 128 m)) |
 |---|---|---|---|---|---|---|---|
 | | | | | | | | |
@@ -95,7 +102,7 @@ Rule: the 8192 tier is added only if the owner's places push the pool level to 2
 
 | Stage | Measured? | Frame cost change (ms) | Running total (ms) | Allowance (ms) | Within? |
 |---|---|---|---|---|---|
-| S0 (offline parts) | no code that draws; the new pass scopes cost one pointer test with the option off and are absent without `VKS_GL_STATS` | 0 | 0 | | |
+| S0 (offline parts) | not measured (no draw work added; the new pass scopes cost one pointer test with the option off and are absent without `VKS_GL_STATS`) | not measured | not measured | | |
 | P2 | | | | | |
 | P3 | | | | | |
 | P4 | | | | | |

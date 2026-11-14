@@ -58,8 +58,10 @@ def o1_steps(cfg):
 
 def judge_o1(baseline, states):
     """Failures of O-1: any change of the static renders or of a tile CRC against the first step, any light without a tile."""
-    base_renders, _, base_crcs = baseline
+    base_renders, base_without, base_crcs = baseline
     fails = []
+    if base_without:
+        fails.append("step 0: %d lights without a tile" % base_without)
     for i, (renders, without, crcs) in enumerate(states, 1):
         if renders != base_renders:
             fails.append("step %d: static renders %d -> %d" % (i, base_renders, renders))
@@ -122,6 +124,21 @@ class Check:
         self.camera_set = True
         self.save_restore()
 
+    def warm_up(self):
+        """Before the baseline: let the first fill finish. Waits after_camera_s, then polls until static_renders and
+        lights_without_tile are unchanged for 3 reads (at most 15 s), so step 0 is not read mid-fill."""
+        self.v.sleep(float(self.sc["settle"].get("after_camera_s", 0.5)))
+        last, same = None, 0
+        for _ in range(30):
+            self.v.check_abort()
+            st = pool_state(self.stats())[:2]
+            same = same + 1 if st == last else 0
+            if same >= 3:
+                return
+            last = st
+            self.v.sleep(0.5)
+        log("warm-up: pool counters still changing after 15 s; the baseline may be taken mid-fill")
+
     def gate_o1(self):
         first = self.stats()
         if not (first.get("pool") or {}).get("pool_present"):
@@ -129,9 +146,11 @@ class Check:
         pos = self.v.agent_pos()
         cam = [pos[0], pos[1], pos[2] + float(self.sc["camera"]["height_m"])]
         states = []
-        for yaw, pitch in o1_steps(self.sc.get("o1", {})):
+        for n, (yaw, pitch) in enumerate(o1_steps(self.sc.get("o1", {}))):
             self.v.check_abort()
             self.look(cam, yaw, pitch)
+            if n == 0:
+                self.warm_up()
             self.v.sleep(float(self.sc["settle"].get("step_s", 0.3)))
             states.append(pool_state(self.stats()))
         fails = judge_o1(states[0], states[1:])
