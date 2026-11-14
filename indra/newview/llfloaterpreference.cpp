@@ -2248,7 +2248,7 @@ void LLFloaterPreference::refreshEnabledState()
         // 2 reads as Legacy (the setting itself is not written, so the choice survives a GPU upgrade)
         LLComboBox* method_combo = getChild<LLComboBox>("ShadowMethod");
         // LLComboBox::remove(const std::string&) matches the label, not the value ("Stochastic" here),
-        // so select the item by value and remove it by index (nothing happens once it is gone)
+        // so select the item by value and remove it by index (no item is removed once it is gone)
         method_combo->setValue(LLSD("2"));
         if (method_combo->getValue().asString() == "2")
         {
