@@ -62,7 +62,7 @@ uniform vec2 screen_res;
 // reference depth is lowered by the slope times the tap's distance from the receiver point, so
 // a slanted lit surface does not shadow itself between the taps (acne on walls under a low sun).
 // Replaces the altitude term of the bias (RenderShadowBiasError), which only widened a constant
-// bias with height. Licensed LGPL-2.1 or GPL-3.
+// bias with height. Licensed GPL-3.0-or-later.
 #define PCF_RPDB_STEP 0.05      // metres
 #define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units
 vec2 pcfDepthGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
@@ -143,7 +143,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 // call the helpers (nothing in Legacy does yet, and without the define the Legacy text below is untouched).
 // The block needs no textureGather (GLSL 1.50). Written once for
 // the orthographic sun cascades of stage S1 (their matrices rotate and scale only: the rows of the
-// matrix are orthogonal, and the rows' lengths are the map's scales). Licensed LGPL-2.1 or GPL-3.
+// matrix are orthogonal, and the rows' lengths are the map's scales). Licensed GPL-3.0-or-later.
 //   * the receiver plane: the geometric normal of the surface, rebuilt from the depth buffer, instead
 //     of the G-buffer normal, which carries the normal map's bumps;
 //   * the plane's signed depth gradient in the map, and the bias in world units (texels of the map
