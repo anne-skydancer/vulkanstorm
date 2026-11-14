@@ -253,6 +253,10 @@ constexpr U32 LLPipeline::MAX_PREVIEW_HEIGHT = 2048;
 const F32 BACKLIGHT_DAY_MAGNITUDE_OBJECT = 0.1f;
 const F32 BACKLIGHT_NIGHT_MAGNITUDE_OBJECT = 0.08f;
 const F32 ALPHA_BLEND_CUTOFF = 0.598f;
+// <Vulkanstorm/> Stochastic shadows: shadow_solid_alpha of shadowAlphaMaskF.glsl. Blend faces are solid from 0.98 up and
+// dither below it; mask faces follow the creator's cutoff alone (0: never dither). Absent in the Legacy permutation.
+const F32 SHADOW_BLEND_SOLID_ALPHA = 0.98f;
+const F32 SHADOW_MASK_SOLID_ALPHA = 0.f;
 const F32 DEFERRED_LIGHT_FALLOFF = 0.5f;
 const U32 DEFERRED_VB_MASK = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0 | LLVertexBuffer::MAP_TEXCOORD1;
 
@@ -7698,6 +7702,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 if (mSimplePool->uploadMatrixPalette(pparams->mAvatar, pparams->mSkinInfo, lastAvatar, lastMeshId, skipLastSkin))
                 {
                     mSimplePool->pushBatch(*pparams, true, true);
@@ -7720,6 +7725,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 mSimplePool->pushBatch(*pparams, true, true);
             }
         }
@@ -11640,6 +11646,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_MASK_SOLID_ALPHA);
                 renderMaskedObjects(LLRenderPass::PASS_ALPHA_MASK, true, true, rigged);
             }
 
@@ -11657,6 +11664,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
                 gDeferredShadowFullbrightAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_MASK_SOLID_ALPHA);
                 renderFullbrightMaskedObjects(LLRenderPass::PASS_FULLBRIGHT_ALPHA_MASK, true, true, rigged);
             }
 

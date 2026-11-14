@@ -1456,8 +1456,9 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("norm_cutoff");
     mReservedUniforms.push_back("shadow_target_width");
     mReservedUniforms.push_back("shadow_light_size"); // <Vulkanstorm/> light size (Stochastic)
+    mReservedUniforms.push_back("shadow_solid_alpha"); // <Vulkanstorm/> solid-caster alpha threshold (Stochastic)
 
-    llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_LIGHT_SIZE + 1);
+    llassert(mReservedUniforms.size() == LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA + 1);
 
     mReservedUniforms.push_back("iterationCount");
     mReservedUniforms.push_back("rayStep");
