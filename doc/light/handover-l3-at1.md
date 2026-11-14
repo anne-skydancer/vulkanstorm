@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Sun and moon handover from the physical atmosphere (stages L3 and AT1 of item 4)
 
+> **On canary:** upstream moved the sky and cloud calculation into `skyF.glsl` and `cloudsF.glsl` (b9727dd841), and `skyV.glsl`/`cloudsV.glsl` are thin vertex shaders. Wherever this document or a code comment says the handover maths lives in `skyV.glsl` or `cloudsV.glsl`, read `skyF.glsl` or `cloudsF.glsl` on canary. The maths is the same, evaluated per fragment instead of per vertex (except `cloud_parallax`, which stays in `cloudsV.glsl`).
+
+
 The ground is lit by one light. It is the sun's by day and the moon's at night, and the two hand over
 smoothly around the horizon, by the sun's elevation (see Three phases). The sun's light comes from the physical atmosphere (`LLAtmosphere`,
 stage AT0, `indra/newview/llatmosphericlight.h`) instead of the old `exp(-(blue_density + haze_density / 4) *
@@ -119,9 +122,9 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
 |---|---|---|
 | `primary_light_dir` (eye space) | `LLPipeline::bindDeferredShader` | the shaders that took `sun_dir`/`moon_dir` by `sun_up_factor` |
 | `primary_light_color`, `primary_shadow_strength` | `LLSettingsVOSky::applySpecial` (every shader) | `atmosphericsFuncs.glsl` (`sunlit`, the haze), `shadowUtil.glsl` |
-| `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyV.glsl` |
-| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsV.glsl` |
-| `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyV.glsl`, `skyF.glsl`, `atmosphericsFuncs.glsl` |
+| `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyV.glsl` (`skyF.glsl` on canary) |
+| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsV.glsl` (`cloudsF.glsl` on canary) |
+| `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyV.glsl` (`skyF.glsl` on canary), `skyF.glsl`, `atmosphericsFuncs.glsl` |
 
 The shadow caster, the shadow light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.

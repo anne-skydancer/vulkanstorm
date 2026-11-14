@@ -222,9 +222,9 @@ def random_dir(rnd, min_z):
             return [a / l for a in v]
 
 
-# cloudsV uses srgbF's functions; the viewer attaches that file to the vertex stage of programs that calculate atmospherics
-SKY_VS = "#version 400 compatibility\n" + EXTRA + read('class1/environment/srgbF.glsl') + read('class1/deferred/cloudsV.glsl')
-SKY_FS = "#version 400 compatibility\n" + EXTRA + read('class1/deferred/cloudsF.glsl').replace('/*[EXTRA_CODE_HERE]*/', '')
+# on canary the sky maths is in cloudsF, which calls srgbF's functions; the viewer attaches that file to the fragment stage (hasSrgb)
+SKY_VS = "#version 400 compatibility\n" + EXTRA + read('class1/deferred/cloudsV.glsl')
+SKY_FS = "#version 400 compatibility\n" + EXTRA + read('class1/environment/srgbF.glsl') + read('class1/deferred/cloudsF.glsl').replace('/*[EXTRA_CODE_HERE]*/', '')
 # deferred/postDeferredNoTCV.glsl takes the screen triangle from a vertex buffer; here it comes from
 # gl_VertexID, with the same varying (0..1 over the target)
 MAP_VS = ("#version 400 compatibility\nout vec2 vary_fragcoord;\nvoid main() { vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
