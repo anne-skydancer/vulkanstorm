@@ -129,13 +129,6 @@ fi
 #export ASAN_OPTIONS="halt_on_error=0 detect_leaks=1 symbolize=1"
 #export UBSAN_OPTIONS="print_stacktrace=1 print_summary=1 halt_on_error=0"
 
-FSJEMALLOC="$(pwd)/lib/libjemalloc.so"
-if [ -f ${FSJEMALLOC} ]
-then
-        echo "Using jemalloc"
-        export LD_PRELOAD="${LD_PRELOAD}:${FSJEMALLOC}"
-fi
-
 ## Nothing worth editing below this line.
 ##-------------------------------------------------------------------
 
@@ -143,6 +136,16 @@ SCRIPTSRC=`readlink -f "$0" || echo "$0"`
 RUN_PATH=`dirname "${SCRIPTSRC}" || echo .`
 echo "Running from ${RUN_PATH}"
 cd "${RUN_PATH}"
+
+# <Vulkanstorm> The bundled allocator is found next to this script (RUN_PATH,
+# resolved through symlinks above), never in the caller's working directory,
+# and LD_PRELOAD gets no leading ":" when it was empty.
+FSJEMALLOC="${RUN_PATH}/lib/libjemalloc.so"
+if [ -f "${FSJEMALLOC}" ]
+then
+        echo "Using jemalloc"
+        export LD_PRELOAD="${LD_PRELOAD:+${LD_PRELOAD}:}${FSJEMALLOC}"
+fi
 
 # Re-register the secondlife:// protocol handler every launch, for now.
 ./etc/register_secondlifeprotocol.sh
