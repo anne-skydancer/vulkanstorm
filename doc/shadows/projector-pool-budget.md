@@ -176,3 +176,27 @@ In-world full-frame cost: not measured, owed at the S0 capture session; gates an
 | Cold start | a never-drawn record is predicted at most 0.0875 ms (a quarter of the cap), so about four tiles a frame after login or a teleport | by construction, unit test T7 |
 
 Label every cost "measured" (with scene, resolution, driver) or "estimate".
+
+## Measured full frame, 2026-11-14 (first in-world numbers)
+
+Three builds, one after the other, logged in unattended at the same spot (region position 121.6, 195.5, 34.0,
+about 45 m from the room that holds the four projectors, which are in the pool's reach but cover little of the
+view), nothing moved, the Stochastic shadow method, shadow detail 2, vsync off, no frame limiter, the viewer's
+background yield set to 0 for the measurement, window about 2560 x 1350, RTX 5070 Ti (driver 621.14). Each run:
+150 s to settle, then 130 s held still; the frame rate is the viewer's own log line (`display_stats`, one per
+10 s, 13 readings).
+
+| Build | Readings (fps) | Median | Frame | Against the baseline |
+|---|---|---|---|---|
+| Release as installed: 82178 built 2026-11-13 18:49 (8a797c1d61 plus the three hotfixes), two projector slots | 110.2 to 116.7 | 116.1 fps | 8.61 ms | baseline |
+| `vkstorm-devel` 2c2ebe3cb0: the pool through P2b (the 2 x average cap) | 124.5 to 127.8 | 127.2 fps | 7.86 ms | -0.75 ms (-8.7 %) |
+| P2c, 38176bf35c: the fixed 0.35 ms cap, every tile redrawn every frame | 124.9 to 127.2 | 126.1 fps | 7.93 ms | -0.68 ms (-7.9 %) |
+
+- Baseline + 5 % is 9.04 ms. Both pool builds are below the baseline itself.
+- P2c against P2b: +0.07 ms a frame (+0.9 %), inside the spread of the readings (2 to 3 % within a run). The earlier
+  estimate for the higher cap (+0.2 ms CPU, GPU unknown) was an upper bound; the full-frame cost here is smaller.
+- The baseline build is not the exact 8a797c1d61 binary the budget rule names: it carries the three hotfixes of
+  2026-11-13 (shadow teardown, hashed dither, no fallback), none of which changes the workload.
+- Limits of this measurement: one place, one run per build, the lamps in reach but mostly out of view, no avatar under
+  a lamp. A run from inside the lamp room, and the per-pass split (`perf_check.py`), are still owed.
+- Raw logs: `.captures/bench-20261114-191417/` on the owner's machine (not in the repository).
