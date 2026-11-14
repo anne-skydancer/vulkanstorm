@@ -34,6 +34,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -61,8 +62,8 @@ inline uint32_t pow2Round(double v)
         return 1;
     }
     // nearest power of two in the log domain
-    const double l = std::log2(v);
-    return uint32_t(1) << uint32_t(std::floor(l + 0.5));
+    const double l = std::min(std::floor(std::log2(v) + 0.5), 31.0); // v >= 2^32 would overflow the shift
+    return uint32_t(1) << uint32_t(l);
 }
 
 // d_ref  = min(1.5 * radius, 4 m)
@@ -70,7 +71,9 @@ inline uint32_t pow2Round(double v)
 inline uint32_t baseSize(float radius, float fov_radians)
 {
     const double d_ref = std::min(1.5 * double(radius), 4.0);
-    const double texels = 2.0 * std::tan(0.5 * double(fov_radians)) * d_ref / 0.004;
+    // tan() is non-monotone past pi: clamp the half angle to [0, 1.55] rad, far beyond any real fov
+    const double half = std::min(std::max(0.5 * double(fov_radians), 0.0), 1.55);
+    const double texels = 2.0 * std::tan(half) * d_ref / 0.004;
     const uint32_t n = pow2Round(texels);
     return std::min(std::max(n, kMinBase), kMaxBase);
 }
@@ -221,9 +224,15 @@ public:
     BuddyAtlas() = default;
     explicit BuddyAtlas(uint32_t atlas_size) { reset(atlas_size); }
 
-    // atlas_size must be a power of two >= kMinTile
+    // atlas_size should be a power of two >= kMinTile; anything else is rounded down to one, so
+    // no rect can ever lie outside the atlas
     void reset(uint32_t atlas_size)
     {
+        atlas_size = std::max<uint32_t>(atlas_size, kMinTile);
+        while (atlas_size & (atlas_size - 1))
+        {
+            atlas_size &= atlas_size - 1;
+        }
         mAtlas = atlas_size;
         mOrders = 0;
         while ((uint32_t(kMinTile) << mOrders) < atlas_size)
@@ -553,11 +562,16 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
     return py;
 }
 
-// Conservative box against six planes: false only when the box lies wholly outside one plane.
-// It never misses a box that touches the pyramid (no false negatives); a box near an edge or
-// corner may be reported although it does not touch (rare, costs one extra re-render).
+// Conservative box against the pyramid's bounds and six planes: false when the box lies wholly
+// outside the bounds or one plane. It never misses a box that touches the pyramid (no false
+// negatives); a box near an edge or corner may be reported although it does not touch (rare,
+// costs one extra re-render). The bounds test is part of it, so callers need nothing else.
 inline bool intersects(const Pyramid& py, const Aabb& box)
 {
+    if (!overlaps(py.bounds, box))
+    {
+        return false;
+    }
     for (const Plane& pl : py.planes)
     {
         float v[3];
@@ -612,54 +626,91 @@ private:
 };
 
 // An 8 m grid over the tiles' bounds: a dirty box only runs the six-plane test against tiles
-// that share one of its cells (F15).
+// that share one of its cells (F15). Boxes that are non-finite or cover more than kMaxCells cells
+// (a bad extent, a world-sized prim) never loop over cells: a stored one goes to a wide list that
+// every query returns, a query one returns every tile (conservative, bounded work).
 class TileGrid
 {
 public:
     static constexpr float kCell = 8.0f;
+    static constexpr int64_t kMaxCells = 4096;
 
-    void clear() { mCells.clear(); mCount = 0; }
+    void clear() { mCells.clear(); mWide.clear(); mAll.clear(); }
 
     // `index` is the caller's tile index; boxes must be in the same space as queries
     void add(uint32_t index, const Aabb& bounds)
     {
-        forCells(bounds, [&](uint64_t c) { mCells[c].push_back(index); });
-        ++mCount;
+        mAll.push_back(index);
+        int32_t lo[3], hi[3];
+        if (!cellRange(bounds, lo, hi))
+        {
+            mWide.push_back(index);
+            return;
+        }
+        forCells(lo, hi, [&](uint64_t c) { mCells[c].push_back(index); });
     }
 
     // Sorted, unique candidate indices whose bounds share a cell with `box`
     void candidates(const Aabb& box, std::vector<uint32_t>& out) const
     {
         out.clear();
-        forCells(box, [&](uint64_t c) {
-            auto it = mCells.find(c);
-            if (it != mCells.end())
-            {
-                out.insert(out.end(), it->second.begin(), it->second.end());
-            }
-        });
+        int32_t lo[3], hi[3];
+        if (!cellRange(box, lo, hi))
+        {
+            out = mAll;
+        }
+        else
+        {
+            out = mWide;
+            forCells(lo, hi, [&](uint64_t c) {
+                auto it = mCells.find(c);
+                if (it != mCells.end())
+                {
+                    out.insert(out.end(), it->second.begin(), it->second.end());
+                }
+            });
+        }
         std::sort(out.begin(), out.end());
         out.erase(std::unique(out.begin(), out.end()), out.end());
     }
 
 private:
-    static int32_t cellOf(float v) { return int32_t(std::floor(v / kCell)); }
+    static constexpr float kLimitM = 1.0e6f; // coordinates are clamped to this before the cell conversion
+
+    // false when the box is non-finite or spans more than kMaxCells cells
+    static bool cellRange(const Aabb& b, int32_t lo[3], int32_t hi[3])
+    {
+        int64_t cells = 1;
+        for (int i = 0; i < 3; ++i)
+        {
+            if (!std::isfinite(b.lo[i]) || !std::isfinite(b.hi[i]))
+            {
+                return false;
+            }
+            const float l = std::max(-kLimitM, std::min(kLimitM, b.lo[i]));
+            const float h = std::max(-kLimitM, std::min(kLimitM, b.hi[i]));
+            lo[i] = int32_t(std::floor(l / kCell));
+            hi[i] = int32_t(std::floor(h / kCell));
+            if (hi[i] < lo[i])
+            {
+                std::swap(lo[i], hi[i]);
+            }
+            cells *= int64_t(hi[i]) - lo[i] + 1;
+            if (cells > kMaxCells)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
     static uint64_t pack(int32_t x, int32_t y, int32_t z)
     {
         return (uint64_t(uint32_t(x) & 0x1fffffu) << 42) | (uint64_t(uint32_t(y) & 0x1fffffu) << 21) |
                uint64_t(uint32_t(z) & 0x1fffffu);
     }
     template <class F>
-    static void forCells(const Aabb& b, F&& f)
+    static void forCells(const int32_t lo[3], const int32_t hi[3], F&& f)
     {
-        // clamp absurd boxes so a world-sized box costs a bounded number of cells
-        constexpr int32_t kLimit = 1 << 18;
-        int32_t lo[3], hi[3];
-        for (int i = 0; i < 3; ++i)
-        {
-            lo[i] = std::max(-kLimit, std::min(kLimit, cellOf(b.lo[i])));
-            hi[i] = std::max(-kLimit, std::min(kLimit, cellOf(b.hi[i])));
-        }
         for (int32_t x = lo[0]; x <= hi[0]; ++x)
             for (int32_t y = lo[1]; y <= hi[1]; ++y)
                 for (int32_t z = lo[2]; z <= hi[2]; ++z)
@@ -667,7 +718,7 @@ private:
     }
 
     std::unordered_map<uint64_t, std::vector<uint32_t>> mCells;
-    uint32_t mCount = 0;
+    std::vector<uint32_t> mWide, mAll;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -676,6 +727,20 @@ private:
 
 constexpr float kStaleMs = 250.0f;     // an item stale for longer jumps the distance order
 constexpr uint32_t kDynamicDeadlineFrames = 4;
+
+// Prior for the cost of an item that has no history (never drawn) or a non-finite prediction.
+// A placeholder until S0 measures; it is also the floor, so a zero prediction cannot let a whole
+// cold start (login, teleport: up to 256 tiles) through one frame. The selection is
+// prediction-only; the in-frame LLTimer check of spec 4.5 belongs to the P2 caller.
+constexpr float kDefaultItemMs = 0.05f;
+
+inline float itemCost(float predicted)
+{
+    return std::isfinite(predicted) ? std::max(predicted, kDefaultItemMs) : kDefaultItemMs;
+}
+
+// std::sort needs a strict weak order: a NaN distance sorts last
+inline float sortDist(float d) { return std::isnan(d) ? std::numeric_limits<float>::infinity() : d; }
 
 struct StaticItem
 {
@@ -705,10 +770,12 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
         }
     }
     auto byDist = [](const StaticItem* a, const StaticItem* b) {
-        return a->cam_dist != b->cam_dist ? a->cam_dist < b->cam_dist : a->key < b->key;
+        const float da = sortDist(a->cam_dist), db = sortDist(b->cam_dist);
+        return da != db ? da < db : a->key < b->key;
     };
     auto byAge = [](const StaticItem* a, const StaticItem* b) {
-        return a->stale_ms != b->stale_ms ? a->stale_ms > b->stale_ms : a->key < b->key;
+        const float sa = std::isnan(a->stale_ms) ? 0.f : a->stale_ms, sb = std::isnan(b->stale_ms) ? 0.f : b->stale_ms;
+        return sa != sb ? sa > sb : a->key < b->key;
     };
     std::sort(never.begin(), never.end(), byDist);
     std::sort(stale.begin(), stale.end(), byAge);
@@ -720,12 +787,13 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
     {
         for (const StaticItem* it : *list)
         {
-            if (!out.empty() && spent + it->last_cpu_ms > t_s_ms)
+            const float cost = itemCost(it->last_cpu_ms);
+            if (!out.empty() && spent + cost > t_s_ms)
             {
                 return out; // over the cap: the order is kept, the rest waits
             }
             out.push_back(it->key);
-            spent += it->last_cpu_ms;
+            spent += cost;
         }
     }
     return out;
@@ -742,8 +810,11 @@ struct DynamicItem
 };
 
 // Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first.
-// Budget: CPU cap t_d_ms and at most a_max avatar draws. No floor: an item over budget keeps
-// its last content.
+// Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its
+// nearest a_max). No floor beyond that, with one exception that prevents permanent starvation:
+// when nothing has been picked yet, an item past the deadline runs even if its predicted cost
+// alone exceeds the cap (one such item per frame at most). Other items over budget keep their
+// last content.
 inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max)
 {
     std::vector<const DynamicItem*> order;
@@ -761,20 +832,24 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
         {
             return a->age_frames > b->age_frames;
         }
-        return a->cam_dist != b->cam_dist ? a->cam_dist < b->cam_dist : a->key < b->key;
+        const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
+        return ca != cb ? ca < cb : a->key < b->key;
     });
     std::vector<uint32_t> out;
     float spent = 0.f;
     uint32_t avatars = 0;
     for (const DynamicItem* it : order)
     {
-        if (spent + it->last_cpu_ms > t_d_ms || avatars + it->avatar_draws > a_max)
+        const float cost = itemCost(it->last_cpu_ms);
+        const uint32_t draws = std::min(it->avatar_draws, a_max);
+        const bool overdue = it->age_frames >= kDynamicDeadlineFrames && out.empty();
+        if ((spent + cost > t_d_ms && !overdue) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
         }
         out.push_back(it->key);
-        spent += it->last_cpu_ms;
-        avatars += it->avatar_draws;
+        spent += cost;
+        avatars += draws;
     }
     return out;
 }
