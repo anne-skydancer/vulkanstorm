@@ -267,6 +267,33 @@ def main():
                 100 * partial / diff.size, 'PASS' if ok else 'FAIL'))
             glBindTexture(TEX, 0)
             fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
+        # the D5 input setupLight sends for a shrunk level: the kernel clamp below 10 (max(1, 10 N / N_base)), atlas against
+        # standalone, with the same code
+        for km in (5.0, 1.0):
+            run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', standalone)], n)
+            glUniform4f(glGetUniformLocation(tile_prog, b'proj_shadow_tile'), 0.0, 0.0, float(n), 1.0 / n)
+            glUniform1f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km)
+            glDrawArrays(4, 0, 3)
+            glFinish()
+            km_standalone = read_output(out_tex, opts.grid)
+            ox, oy = A // 2, A // 4
+            if ox + n > A or oy + n > A:
+                continue
+            atlas = np.zeros((A, A), np.float32)
+            atlas[oy:oy + n, ox:ox + n] = picture
+            atlas_tex = texture(GL_DEPTH32F, A, A, atlas, GL_DEPTH)
+            run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', atlas_tex)], n)
+            glUniform4f(glGetUniformLocation(tile_prog, b'proj_shadow_tile'), float(ox), float(oy), float(n), 1.0 / A)
+            glUniform1f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km)
+            glDrawArrays(4, 0, 3)
+            glFinish()
+            km_atlas = read_output(out_tex, opts.grid)
+            dk = np.abs(km_atlas - km_standalone)
+            ok = bool(dk.max() == 0.0) and glGetError() == 0
+            failures += 0 if ok else 1
+            print('  N=%-4d kernel max %-4g atlas vs standalone: max abs diff %.9g  %s' % (n, km, dk.max(), 'PASS' if ok else 'FAIL'))
+            glBindTexture(TEX, 0)
+            fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
         fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(standalone)))
     if opts.time:
         W = 2560
