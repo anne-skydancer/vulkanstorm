@@ -10,7 +10,7 @@ Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shado
 Today's two slots (`mSpotShadow[0..1]`, window-sized maps) are handed from lamp to lamp by a view-dependent priority and are
 re-rendered every frame, so a lamp's shadow can vanish when the camera turns. The pool gives every projector within the shadows'
 reach (`min(RenderFarClip, 128 m)`, measured from the camera's position, with a hysteresis band) a tile of its own in a shared
-depth atlas. The tile's size and view come from the light alone; the caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera until those stages (P3 closes the caster LOD and the redraw on camera moves: see below).
+depth atlas. The tile's size and view come from the light alone; the caster LOD is closed by stage P3's pin (below) and the avatars' visibility (D7/D8) still follows the camera until P4.
 
 ## Stage P2: tiles replace the slots
 
@@ -42,18 +42,18 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
     an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the whole light and shadow budget (+5 %) is
     about 0.4 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
     lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms; `kDynamicCapMs` (0.30 ms) does not fit in that, so P4
-    must re-divide the cap between the static and the dynamic tiles (nothing is drawn dynamically before P4). The measured cost of a
+    must re-divide the cap between the static and the dynamic tiles (the dynamic schedule draws tiles from P3 on, for a moving lamp or an avatar in the light, so the two caps together can exceed the 0.4 ms in a frame that has both). The measured cost of a
     tile (`last_cpu_ms`) only predicts how many fit; it does not set the budget. A frame also stops rendering once the measured
     time reaches the budget (the first pick always runs, so a tile dearer than the budget still progresses). Until P3, a static
-    scene still re-renders every tile that fits.
+    scene re-rendered every tile that fits; from P3 it renders none.
   - **The Legacy-cost guarantee is dropped.** P2 and P2b promised that the pool costs at most what Legacy's two slot renders
     cost. With a fixed cap and no change tracking that no longer holds (four lamps cost about 0.28 ms of CPU a frame against
-    Legacy's two slots); it returns when P3 skips the tiles that did not change.
+    Legacy's two slots); P3 skips the tiles that did not change, so a static scene costs no tile render (but not nothing: see Stage P3, "What a static scene still costs"). Nothing of this is measured in-world.
   - **Cold start.** A record that was never drawn is predicted at `coldItemMs` (the running average, at most a quarter of the cap),
     not at the average's 0.5 ms start value, which is above the cap and would draw one tile a frame after login or a teleport.
   - *Why P2b starved tiles:* the budget was 2 x the running average of one render (0.14 ms at 0.07 ms), the two nearest tiles filled
     it every frame, and a far tile only got a turn after the 250 ms "stale" deadline (up to 24 frames at 58 fps).
-    `ProjectorShadows.stats` `pool.max_stale_frames` is the age of the oldest drawn tile.
+    `ProjectorShadows.stats` `pool.max_stale_frames` is, since P3, the age of the oldest PENDING tile (frames since the first change that touched it; 0 when none waits): a tile that is merely not redrawn is not stale.
 - **Lookup.** `setupSpotLight` calls `LLProjectorShadows::setupLight` instead of ranking lights: `proj_shadow_idx` (-1 until the tile
   is first drawn), `proj_shadow_matrix` (the matrix of the pose the tile was drawn with, so a lamp that moved keeps a coherent
   shadow until its tile is redrawn), `proj_shadow_tile` (x, y, N, 1/A). `spotLightF.glsl` looks the
@@ -101,8 +101,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 ### Known limits of P2
 
-- **Avatar shadows refresh less often than Legacy.** Legacy re-rendered its two slots, avatars included, every frame. P2 renders the tiles that fit the 0.35 ms cap (P2c; four at the measured 0.07 ms), oldest first, so with N lamps a tile (and the avatar's shadow in it) refreshes every ceil(N / tiles per frame) frames in a steady state with a fixed light set (every frame for four lamps). Distance no longer buys freshness: with 30 lamps at 7 tiles per frame, the lamp you stand under refreshes every 5 frames, like the farthest one. A walking avatar's shadow under the nearest lamps updates less often until P4 splits avatars out.
-- The caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera.
+- **Avatar shadows (P2).** Legacy re-rendered its two slots, avatars included, every frame. P2 rendered the tiles that fit the 0.35 ms cap, oldest first, so with N lamps an avatar's shadow refreshed every ceil(N / tiles per frame) frames. Since P3 a tile with an avatar in its light is a dynamic item drawn every frame under the dynamic cap (0.30 ms, at most 24 avatar draws; the items past the 4-frame deadline first), so a walking avatar's shadow refreshes every frame while the cap holds, and less often when more tiles hold avatars than the cap fits, until P4 splits avatars out of the tiles.
+- The avatars' visibility (D7/D8, P4) still follows the camera; the caster LOD no longer does (P3).
 - **Casters outside the main view: draw info is not camera-gated; loading still is.** A tile renders through the same `LLPipeline::renderShadow` as the sun cascades and Legacy's spot slots, with a camera built the same way (`generateSunShadow`, `pipeline.cpp:13073`-`13089`; `renderTile`). `renderShadow` runs `updateCull` and `stateSort`, and `stateSort` ends in `postSort`, which rebuilds the dirty groups it culled (`pipeline.cpp:3921`, `3954`). Beyond that, no group's draw info depends on the main view: a spatial group queues itself for a rebuild when it is created or dirtied (`llspatialpartition.cpp:315`, `437`, `480`, `606`; `LLPipeline::markRebuild`, `pipeline.cpp:3403`), and `rebuildPriorityGroups` (`pipeline.cpp:3120`, run every frame from `postSort`) builds every queued group whether or not any camera sees it. Occlusion is off during a shadow render (`sUseOcclusion = 0`). So a loaded caster the camera never saw has its draw info and appears in the tile. Three inputs still follow the main camera and are P3 work: (1) object loading: an object outside the near radius (`SceneLoadMinRadius`, 32 m) that never entered the main frustum or the rear sphere gets no drawable (`llvocache.cpp:1037`-`1060`; once loaded it stays, since eviction is disabled); (2) mesh and sculpt assets: a caster whose asset was never fetched is skipped (`llvovolume.cpp:6066`); (3) alpha-masked casters: their texture's virtual size comes from the main camera, so a texture never seen may stay low-resolution or unloaded (`llvovolume.cpp:889`-`905`, `6108`). The caster LOD (above) is the fourth.
 - A projector whose geometry the pool cannot use (field of view outside (0, 3.1 rad), zero or non-finite scale or radius) is not given a tile.
 - A failed atlas allocation is logged once and retried with a back-off (5 s up to 60 s).
@@ -130,40 +130,53 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `new` | never drawn: the first fill, a lamp that entered the range, an atlas that was made again. Drawn nearest first |
 | `lod_up` | the LOD pin raised an object in the light to full detail (once per object and tile, then it holds) |
 | `add_remove` | an object was put into or taken out of the scene inside the light (`LLSpatialPartition::put`/`remove`) |
-| `edit` | a fixed object in the light was rebuilt (volume, position, rigged), moved inside its octree group, or its geometry finished a delayed rebuild (a mesh that loaded) |
-| `mover` | an object turned into a mover or a physical one, or stopped being physical |
+| `edit` | a fixed object in the light was rebuilt (volume, rigged, a position-only rebuild), moved, retextured (a prim with a blended, alpha-masked or alpha-textured face), or its geometry finished a delayed rebuild (a mesh that loaded) |
+| `mover` | an object turned into a mover or a physical one, stopped being physical, or became active or static again (one push at each edge) |
 | `lamp` | the lamp's own pose changed: position more than 1 mm, rotation 1e-4, scale 1 mm, angle 1e-4, reach 1 cm |
 | `avatar` | an avatar is in the light (drawn into S until P4, so the tile is redrawn every frame), or it left (one more render) |
 | `lowres` | a layout change down-sized the tile (a blit): drawn again at its new size |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
-Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do a lamp's colour, intensity or falloff.
+Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection, bump changes: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A texture, material, bump or glow change dirties tiles only for a prim that has a blended, alpha-masked or alpha-textured face; an opaque prim's texture changes never do. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not.
 
 ### The hooks, and the thread each runs on
 
 All hooks push a box (the extents of what changed, agent space) with a cause into one double-buffered list
 (`LLShadowDirtyFeed`). `LLProjectorShadows::update` swaps it before any render of the frame (a change a render itself causes lands
 in the next frame), tests the boxes against the tile volumes through the 8 m grid (`ChangeIndex`), and keeps the first cause per
-tile. Every hook is a no-op until the pool holds tiles (`setTracking`), and every one runs on the main thread. A hook that runs
-elsewhere changes nothing and flags the next frame "everything is stale".
+tile. Every hook except the classifier is a no-op until the pool holds tiles (`setTracking`); the classifier always runs, so its
+sticky bits are right when tiles appear. Every hook runs on the main thread; a hook that runs elsewhere changes nothing and flags
+the next frame "everything is stale".
 
 | Hook | File | Runs on | Pushes | Skipped |
 |---|---|---|---|---|
 | `LLSpatialPartition::put` (after the octree insert) | `llspatialpartition.cpp` | main (`LLDrawable::movePartition`, `LLPipeline::addObject`) | extents, cause `add_remove` | not fixed casters |
 | `LLSpatialPartition::remove` (before the removal) | `llspatialpartition.cpp` | main (`LLPipeline::unlinkDrawable`, `move`) | extents, `add_remove` | not fixed casters |
 | `LLSpatialPartition::move`, in-group branch | `llspatialpartition.cpp` | main | extents after the update, `edit` | not fixed casters |
-| `LLPipeline::markRebuild(drawable, flag)` | `pipeline.cpp` | main (object updates, LOD, the pin) | extents when `flag & (VOLUME | POSITION | RIGGED)`, `edit` | `TCOORD`, `COLOR` only |
+| `LLPipeline::markRebuild(drawable, flag)` | `pipeline.cpp` | main (object updates, LOD, the pin) | extents when `rebuildDirties(flag)` (volume, rigged, position alone), `edit` | `TCOORD`, `COLOR`, `REBUILD_GEOMETRY` |
+| `LLPipeline::markTextured` | `pipeline.cpp` | main (the `setTE*` family, `markForUpdate`) | extents of a prim with an alpha face, `edit` | opaque prims |
+| `LLVOVolume::notifyMeshLoaded` | `llvovolume.cpp` | main (the mesh repository's callback, run from the main loop) | extents now, and again when the rebuild it waits for completes, `edit` | not fixed casters |
 | `LLPipeline::markMoved` | `pipeline.cpp` | main | the extents it moves from, `edit` | not fixed casters |
-| `LLPipeline::updateGeom` (a delayed rebuild completes) | `pipeline.cpp` | main (`display`) | extents, `edit` | not fixed casters |
+| `LLPipeline::updateGeom` (a delayed volume or rigged rebuild, or a mesh that loaded, completes) | `pipeline.cpp` | main (`display`) | extents, `edit` | not fixed casters |
 | `LLPipeline::shiftObjects` | `pipeline.cpp` | main (`LLWorld::updateAgentOffset`) | translates the pending boxes | |
 | `LLViewerObject::processUpdateMessage` (the classifier) | `llviewerobject.cpp` | main (the message handlers) | extents of the object (or its bridge) when it turns into a mover or its physics flag flips, `mover` | avatars |
 | `LLPipeline::unlinkDrawable` | `pipeline.cpp` | main (`LLDrawable::markDead`) | none: `remove` has pushed; calls `forget` (record, tile and pins) | |
 
 `LLSpatialGroup::addObject`/`removeObject` (the spec's choice) are not used: they run for the octree's own rebalancing
 (`handleInsertion`/`handleRemoval`) too, which is not a change of the scene. `put`/`remove` are the real insertions and removals
-and see the same drawables. Not fixed casters: avatars, attachments, HUD, animesh, flexible prims, client-spun parts, movers,
-physical objects (and children of a mover or physical root), and render types that cast no lamp shadow (particles, sky, water).
-`markRebuild(group)` is not hooked: it fires for alpha re-sorts and texture animation.
+and see the same drawables. Not fixed casters: avatars, attachments, HUD, animesh, flexible prims, client-spun parts, movers and
+physical objects while they are active (and children of an active mover or physical root; a mover at rest is static, drawn, and
+its changes push), and render types that cast no lamp shadow (particles, sky, water). Terrain and grass are left out too: their
+geometry follows the camera's distance (the terrain patch's render stride, the grass blade count), so counting them would redraw
+tiles as the camera moves; a tile keeps the terrain and grass it was drawn with (a known limit: a terraform shows in a tile only
+when something else redraws it). `markRebuild(group)` is not hooked: it fires for alpha re-sorts and texture animation.
+
+The hooks added in the review round, with their callers and threads: `LLShadowDirtyFeed::noteTextured` (from `LLPipeline::markTextured`,
+main thread only, returns off it), `noteMeshLoaded` / `meshLoaded` / `clearMeshLoaded` (from `LLVOVolume::notifyMeshLoaded` and
+`LLPipeline::updateGeom`, main), `setLampRoots` (once a frame from `LLProjectorShadows::update`, main), `LLProjectorShadows::forgetPinned`
+(from `forget`, itself from `LLPipeline::unlinkDrawable`, main, not while the viewer exits), `LLVOTree::pinLampLOD` / `unpinLampLOD`
+(from a tile render and from a tile's release, main). None frees, allocates GL objects or keeps static state beyond the feed's
+own main-thread list.
 
 Nothing else is new at a shared path: `LLPipeline::markVisible` drops a bridge only inside a tile render (`sLocalShadowPass`),
 `LLPipeline::renderShadowImpl` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
@@ -174,20 +187,30 @@ thread runs (`LLRender::shutdown`, `LLImageGL`, `LLVertexBuffer::cleanupClass` a
 
 Sticky for the session, per object (`LLViewerObject::mPoolFlags`): a mover is an object the simulator reported moving, either a
 velocity or an angular velocity on a root, or a position or rotation change after its creating update unless the agent has it
-selected. A physical object is one with the physics flag. Movers and physical roots are not in the fixed layer: `markVisible`
-drops their bridge from a tile's cull, and a change of theirs (or of any of their children) never makes a tile stale. The lamp's
-own linkset is the fixture and is never dropped. A moving part inside an otherwise still linkset (a spinning fan blade, a linked
+selected. A physical object is one with the physics flag. The position and rotation compares use tolerances above the terse-update
+quantisation (0.1 m, 1e-3 per quaternion component), so a full update after a terse one cannot read as a move; a real move below
+them is not classified, and the object stays a fixed caster whose own moves push. Movers and physical roots are not in the fixed
+layer **while they are active**: `markVisible` drops their bridge from a tile's cull, and the hooks skip them in the same
+state (`drawable->isActive()`), with one push at the edge where they become active (the tile that holds them at the old pose
+drops them) and one where they are static again (they are drawn from then on). A mover at rest, say a scripted door the simulator
+moved with no velocity, is a fixed caster whose changes push. The lamp's own linkset is the fixture: it is never dropped by the
+cull and its changes always push (`setLampRoots`). A moving part inside an otherwise still linkset (a spinning fan blade, a linked
 door, flexi) is batched with its group, so it casts with the pose of the last render and never invalidates a tile: a known limit.
 
 ### The LOD pin
 
 `pinCasters` (called from `renderShadowImpl` after the tile's cull and sort) walks the groups the tile is about to draw and, for
-every volume inside the light's volume that is not rigged, worn or a HUD, takes one pin for the tile (`PinBook`). The pin is a
-counter on the volume (`mLampLODPin`); `calcLOD` returns LOD 3 for a pinned volume, in the main view too, and the first pin of a
-volume below LOD 3 calls `forceLOD(3)` (cause `lod_up`: the tile is drawn once more with the full detail and then holds; two
-renders). A tile gives its pins back when its render no longer meets the object, when the tile is dropped, and at release (not at
-exit: the objects go with the world). Cost: the triangles of everything inside a lamp's light, in the main view too, at full detail;
-not measured here (it needs the in-world scene: `pool.pinned_objects` counts the volumes held).
+every volume or tree inside the light's volume that is not rigged, worn, a HUD or fully transparent (every face alpha 0 and no glTF
+material: it casts nothing), takes one pin for the tile (`PinBook`). The light's volume is the tile's render frustum (aspect
+included), the same region a change dirties the tile for. The pin is a counter on the object (`mLampLODPin`); `calcLOD` returns
+LOD 3 for a pinned volume, in the main view too, and the first pin of a volume below LOD 3 calls `forceLOD(3)` (cause `lod_up`:
+the tile is drawn once more with the full detail and then holds; two renders). A pinned tree has its trunk LOD held at 0, the best
+(`LLVOTree::idleUpdate`), because its trunk rebuilt with the camera's distance. The books are keyed by object id; an unlinked
+drawable drops its object from every tile's books (`forgetPinned`), so an object re-created with the same id is pinned again. A tile gives its pins back when its render no longer meets the object, when the tile is dropped, and at release (not at
+exit: the objects go with the world). Cost: the triangles of everything inside a lamp's light, in the main view too, at full detail,
+with **no ceiling** (a lamp over a dense scene pins all of it, and a prim that only some other lamp's tile cuts is pinned for it
+too); not measured, nothing in-world has been: `pool.pinned_objects` counts the objects held, `pool.pinned_triangles` their triangles at
+that detail (read when the stats are asked for), for the owner session to measure.
 
 The four camera-driven inputs the P2 audit listed:
 
@@ -205,7 +228,7 @@ moving, a down-sized tile, an avatar in the light or one that just left. A verdi
 no render. Items go to two schedules, each under its own fixed CPU cap:
 
 - **static** (`selectStatic`, 0.35 ms): the first fill nearest first, then stale tiles oldest first (frames since the change that
-  touched them);
+  touched them, or, for a tile stale only by its lamp's pose or a resize, since it was drawn);
 - **dynamic** (`selectDynamic`, 0.30 ms, at most 24 avatar draws): a lamp that is moving, or a tile with an avatar in its light
   (the avatars are still drawn into S until P4, so such a tile is a full render every frame): items past the 4-frame deadline
   first, then nearest first.
@@ -217,12 +240,29 @@ matrix is built from the pose the tile was drawn with, so a lagging picture stay
 The avatars a tile holds are the ones the render would draw (visible, not impostored): their visibility still follows the camera
 until P4, so an avatar that leaves the view makes its tile stale once.
 
+### What a static scene still costs
+
+No tile render, no index rebuild and no box test: a frame with no dirty box does one read of every lamp's spot parameters and pose
+(`read_spot`, `light_pose`, `poseChanged`: the pose-change detection, at most 256 lamps), one pass over the visible avatars' extents
+against each placed tile's volume, one `classifyTile` per tile, and the hooks' relaxed loads. A lamp's matrices and volume are rebuilt
+only when its pose changed or agent space shifted; the change index is built only on a frame that has boxes (or an overflow). Not
+measured in-world.
+
+### Cost of the P3 stage (what is and is not measured)
+
+Nothing is measured in-world. The caps are the design's: static 0.35 ms plus dynamic 0.30 ms of CPU per frame against a light and
+shadow budget of about 0.4 ms (an assumed 8 ms frame), so the two together do not fit when a lamp moves or an avatar stands in a
+light; P4 re-divides them. The LOD pin has no ceiling (above). `pool.pinned_triangles` and `pool.mover_objects` are there for the
+owner session to measure what the pin and the classifier cost.
+
 ### Stats
 
 `ProjectorShadows.stats` (development builds) gained `pool.rerender_causes` (renders by cause, cumulative), `static_renders` and
-`dynamic_renders` (cumulative), `last_frame_static_renders`, `last_frame_dynamic_renders`, `pinned_objects`, `pending_tiles`,
-`avatar_tiles`, `dirty_boxes_last_frame`, `frame`, `dirty_age_ms_max` (the longest a changed tile waited for its render, since the
-last `reset_ages`) and per tile `pending`.
+`dynamic_renders` (cumulative), `last_frame_static_renders`, `last_frame_dynamic_renders`, `pinned_objects`, `pinned_triangles`,
+`mover_objects` (objects flagged as movers since the feed started), `pending_tiles`, `avatar_tiles`, `dirty_boxes_last_frame`, `frame`,
+`dirty_age_ms_max` (the longest a changed tile waited for its render, since the last `reset_ages`), `dirty_renders` (renders a change
+caused: all but the first fills, lamp moves, avatars and resizes), `max_stale_frames` (the age of the oldest pending tile) and per tile
+`pending`, `avatar`, `pose_stale` and `lamp_moving`.
 
 ### Interfaces a second cache (the point lights' faces) reuses
 
@@ -241,8 +281,10 @@ What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, t
 - A moving part inside a still linkset, client spin and flexi cast with the pose of the last render.
 - Avatars are still drawn into S (a tile with an avatar in its light is a full render every frame, under the dynamic cap) and their
   visibility follows the camera until P4.
-- The mover classifier is sticky: a prim another avatar edits (a server-reported move after creation) stops casting lamp shadows
-  for the session. An object that arrives through the object cache and differs from its cached position counts as moved.
+- The mover classifier is sticky: a prim another avatar edits (a server-reported move after creation) is a mover for the session,
+  which is out of the fixed layer while it is active and a fixed caster while it rests. An object that arrives through the object
+  cache and differs from its cached position by more than the quantisation tolerance counts as moved.
+- Terrain and grass (their geometry follows the camera) and animated textures on alpha faces do not make a tile stale.
 - Texture detail of alpha-masked casters (above) and object loading by camera distance (above).
 - Not measured in-world: the LOD pin's triangle cost, the steady state of `rerender_causes` in the owner's rooms, and the hooks'
   CPU cost (a few relaxed loads per hook while no tile exists; one box push per change while tiles exist).
