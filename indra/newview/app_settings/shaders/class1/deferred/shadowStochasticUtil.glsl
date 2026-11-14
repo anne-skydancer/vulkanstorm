@@ -12,35 +12,36 @@
  * next to this object).
  *
  * Per pixel, 8 rays toward points on the light's disc (the sun or moon: the angular size
- * shadow_light_size; a projector: its emitter), each marched in a few steps through the
+ * shadow_light_size), each marched in a few steps through the
  * cascade's depth map, which is read as plain depth (the method switches the maps' compare mode off).
  * A ray is blocked when it crosses a stored surface between two nodes of its march, or is still behind
  * one at the end of it, the surface nearer the light than the receiver's plane at the texel read. The pixel's value is the fraction of free rays. The deferred sun pass
  * changes the rays every frame (shadow_st_frame) and the temporal resolve averages the frames; every
  * other program keeps shadow_st_frame at 0, which fixes each pixel's rays.
+ * A projector is not marched and not looked up in the sun pass: spotLightF.glsl calls sampleProjectorShadow (the projector
+ * shadow pool, PROJECTOR_SHADOW_POOL): a filtered lookup in the light's own tile of the pool's atlas (a blocker search, then a
+ * percentage-closer filter on bilinear gathers, at a fixed disc in the tile's uv, so the value depends on the tile alone).
+ * sampleSpotShadow, which the sun programs still call for their b and a channels, returns 1.
  */
 
 #define ST_RAYS 8
 #define ST_GOLDEN 2.39996323
 #define ST_STEPS_MAX 8
-#define ST_SPOT_STEPS 4
-#define ST_SPOT_EMITTER 0.15   // metres: width of a projector emitter
-#define ST_SPOT_MARCH 4.0      // metres: the longest march toward a projector
-// the constants below are this method's own, for the projectors
-#define ST_SPOT_BIAS_SCALE 0.8 // of spot_shadow_bias
-#define ST_SPOT_RPDB_MAX 0.004 // cap of the projectors' receiver-plane bias, shadow depth units
+// the projectors' filtered lookup (sampleProjectorShadow)
+#define ST_SPOT_LIGHT_SIZE 0.15    // metres: diameter of a projector's emitter disc, at its centre, at most the emitter prim's face
+#define ST_SPOT_SEARCH 8           // gathers of the blocker search
+#define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
+#define ST_SPOT_KERNEL_MIN 1.0     // map texels: the filter's radius at contact
+#define ST_SPOT_PLANE_SLOPE 8.0    // texels of depth per texel of offset the receiver plane may lower a tap's reference by
 
 uniform sampler2D shadowMap0; // plain depth: the method sets the maps' compare mode off
 uniform sampler2D shadowMap1;
 uniform sampler2D shadowMap2;
 uniform sampler2D shadowMap3;
-uniform sampler2D shadowMap4;
-uniform sampler2D shadowMap5;
 
 uniform vec3 primary_light_dir;       // eye space, unit
 uniform float primary_shadow_strength; // 1 full shadow, 0 none
 uniform vec2 shadow_res;
-uniform vec2 proj_shadow_res;
 uniform mat4 shadow_matrix[6];
 uniform vec4 shadow_clip;
 uniform float spot_shadow_bias;
@@ -257,18 +258,132 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     return mix(1.0, clamp(shadow, 0.0, 1.0), primary_shadow_strength);
 }
 
-// the eye of a projector matrix (view space)
-vec3 stProjectorEye(mat4 m)
+// <G1-BEGIN> (scripts/shadows/projector_pool_g1.py compiles everything from here to G1-END, with stubs for the rest)
+// ---- projectors: a filtered lookup. A blocker search, then a percentage-closer filter whose radius follows the
+// blockers' distance (PCSS, RTR4 7.6), on bilinear gathers of the light's tile at a fixed disc of offsets in the
+// tile's own uv (no screen, frame or pixel term: the value of a receiver depends on the tile alone).
+
+uniform sampler2D proj_shadow_atlas;  // the pool's live atlas (D32F, depth as is: no compare, NEAREST, CLAMP_TO_EDGE)
+uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^3 (of the pose the tile was drawn with)
+uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size
+uniform float proj_shadow_kernel_max; // texels: the cap of the search's and the filter's radius (10 at the tile's base size, kept in metres)
+
+// What the filter needs of a projector, from its matrix (bias * glm::perspective * rigid view * rigid inv_view, the
+// frustum symmetric; llprojectorshadows.cpp setupLight): with w = s.w the axial distance from the projector's centre, the
+// map depth is z = c0 - c1 / w and uv moves k / w per metre across the axis. The near plane is at w = c1 / c0.
+struct StSpot
 {
-    vec4 r0 = vec4(m[0][0], m[1][0], m[2][0], m[3][0]);
-    vec4 r1 = vec4(m[0][1], m[1][1], m[2][1], m[3][1]);
+    float c0;
+    float c1;
+    vec2 k;
+};
+
+StSpot stSpotSetup(mat4 m)
+{
+    vec3 r0 = vec3(m[0][0], m[1][0], m[2][0]);
+    vec3 r1 = vec3(m[0][1], m[1][1], m[2][1]);
+    vec4 r2 = vec4(m[0][2], m[1][2], m[2][2], m[3][2]);
     vec4 r3 = vec4(m[0][3], m[1][3], m[2][3], m[3][3]);
-    mat3 rows_t = mat3(r0.xyz, r1.xyz, r3.xyz);
-    return -vec3(r0.w, r1.w, r3.w) * inverse(rows_t);
+    StSpot sp;
+    sp.c0 = dot(r2.xyz, r3.xyz) / dot(r3.xyz, r3.xyz); // s.z = c0 s.w - c1 for every point
+    sp.c1 = sp.c0 * r3.w - r2.w;
+    sp.k = vec2(length(r0 - 0.5 * r3.xyz), length(r1 - 0.5 * r3.xyz));
+    return sp;
 }
 
-float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+// a fixed Vogel disc of n points (unit radius, equal area each), the same orientation everywhere in the map
+vec2 stSpotDisc(int k, int n)
 {
+    float r = sqrt((float(k) + 0.5) / float(n));
+    float phi = float(k) * ST_GOLDEN;
+    return r * vec2(cos(phi), sin(phi));
+}
+
+// The 2 x 2 texels of the tile whose bilinear footprint holds uv (tile-local), read with one gather at their shared
+// corner in the atlas (so the hardware picks the four texels the weights assume, whatever its sub-texel precision; the
+// atlas size is a power of two, so the corner is exact), in gather order (0,1) (1,1) (1,0) (0,0) from the quad's lower left
+// texel. Returns the stored depths z, and in ref the receiver's reference at each texel's centre: its depth c.z less the
+// constant bias, lowered (never raised) by the signed receiver plane g over the texel's offset, at most rp_max (S2's
+// form). f: uv's bilinear fraction in the quad.
+// edge (once per pixel): a tap of this pixel may leave the tile. The corner is then clamped into the tile and the
+// components are selected again so that every texel index is clamped to the tile, as CLAMP_TO_EDGE does on a standalone
+// map of the tile (bit for bit; no guard texels).
+vec4 stSpotQuadTile(vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
+{
+    float n = proj_shadow_tile.z;
+    vec2 res = vec2(n);
+    vec2 t = uv * res - 0.5;
+    vec2 b = floor(t);
+    f = t - b;
+    vec2 o = (b + 0.5) / res - c.xy;
+    vec2 e = 1.0 / res;
+    vec4 dx = o.x + vec4(0.0, e.x, e.x, 0.0);
+    vec4 dy = o.y + vec4(e.y, e.y, 0.0, 0.0);
+    ref = c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0);
+    vec2 q = edge ? clamp(b, vec2(0.0), vec2(n - 2.0)) : b;
+    vec4 z = textureGather(proj_shadow_atlas, (proj_shadow_tile.xy + q + 1.0) * proj_shadow_tile.w);
+    if (edge)
+    {
+        z = b.x >= n - 1.0 ? z.yyzz : (b.x < 0.0 ? z.xxww : z); // the left column read past the right edge / the right one past the left
+        z = b.y >= n - 1.0 ? z.xyyx : (b.y < 0.0 ? z.wzzw : z); // the lower row read past the top edge / the top one past the bottom
+    }
+    return z;
+}
+
+// The visibility of receiver c (tile uv and depth) through the light's tile. pen: the filter's radius in texels per
+// unit of map depth between the receiver and its blockers (x and y: the map's axes may differ in metres).
+float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen)
+{
+    vec2 res = vec2(proj_shadow_tile.z);
+    vec2 kmax = vec2(proj_shadow_kernel_max);
+    // the search: any blocker between the near plane (z = 0) and the receiver, in the disc its farthest one needs
+    vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), kmax);
+    float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
+    // the filter's radius never exceeds the search's (the blockers' mean depth is >= 0), so the search radius bounds every tap;
+    // one texel of margin covers the rounding of uv * res per tap
+    vec2 tc = c.xy * res - 0.5;
+    float r = max(rs.x, rs.y);
+    bool edge = any(lessThan(tc - r, vec2(1.0))) || any(greaterThan(tc + r, res - 2.0));
+    float z_sum = 0.0;
+    float n_blk = 0.0;
+    for (int k = 0; k < ST_SPOT_SEARCH; ++k)
+    {
+        vec4 ref;
+        vec2 f;
+        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 blk = vec4(lessThan(z, ref));
+        z_sum += dot(blk, z);
+        n_blk += blk.x + blk.y + blk.z + blk.w;
+    }
+    if (n_blk == 0.0)
+    {
+        return 1.0; // nothing between the receiver and the light
+    }
+    if (n_blk == float(4 * ST_SPOT_SEARCH))
+    {
+        return 0.0; // the umbra: the filter's disc lies inside the search's
+    }
+    // the filter: its radius from the blockers' mean depth (map depth is linear in 1 / distance, so the mean of z is
+    // the mean of 1 / distance the penumbra's width follows), weighted 1 - 0.9 r^2 over the disc
+    vec2 rf = clamp(pen * (c.z - z_sum / n_blk), vec2(ST_SPOT_KERNEL_MIN), kmax);
+    float lit = 0.0;
+    for (int k = 0; k < ST_SPOT_TAPS; ++k)
+    {
+        vec4 ref;
+        vec2 f;
+        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
+        lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
+    }
+    return lit / (0.55 * float(ST_SPOT_TAPS)); // the weights' sum
+}
+// <G1-END>
+
+// The visibility of this projector at the pixel (spotLightF.glsl, PROJECTOR_SHADOW_POOL). pos: view space; norm: the
+// G-buffer normal; pos_screen: the pixel's screen uv. 1 outside the light's frustum and beyond the shadows' reach.
+float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
+{
+    vec3 pos_px = pos; // the pixel's own position, for its geometric normal below
     pos += norm * spot_shadow_offset;
     // fades out with the camera distance, over the last 20 % of spot_shadow_reach
     float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
@@ -277,34 +392,35 @@ float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
     {
         return 1.0;
     }
-    mat4 m = shadow_matrix[4 + index];
+    mat4 m = proj_shadow_matrix;
     vec4 s0 = m * vec4(pos, 1.0);
-    // outside the projector's frustum it lights nothing: no march
+    // outside the projector's frustum it lights nothing: no lookup
     if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.5))))
     {
         return 1.0;
     }
-    vec2 grad = stSpotGradient(m, pos, norm, s0.xyz / s0.w);
-    vec3 eye = stProjectorEye(m);
-    vec3 to_eye = eye - pos;
-    float dist = length(to_eye);
-    vec3 ld = to_eye / dist;
-    vec3 t1 = normalize(cross(ld, abs(ld.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
-    vec3 t2 = cross(ld, t1);
-    vec2 nz = stNoise();
-    float theta = 6.28318531 * nz.x;
-    vec4 ds[ST_RAYS];
-    for (int k = 0; k < ST_RAYS; ++k)
-    {
-        float r = sqrt((float(k) + 0.5) / float(ST_RAYS));
-        float phi = float(k) * ST_GOLDEN + theta;
-        vec3 ek = eye + (0.5 * ST_SPOT_EMITTER * r) * (cos(phi) * t1 + sin(phi) * t2);
-        ds[k] = m * vec4(ek - pos, 0.0); // t = 1 reaches the emitter point
-    }
-    float t_max = min(ST_SPOT_MARCH, 0.9 * dist) / dist;
-    float z_bias = -spot_shadow_bias * ST_SPOT_BIAS_SCALE; // spot_shadow_bias is negative: the reference moves towards the light
-    float shadow = index == 0
-        ? stMarch(shadowMap4, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y)
-        : stMarch(shadowMap5, proj_shadow_res, s0, grad, z_bias, ST_SPOT_RPDB_MAX, ds, t_max, ST_SPOT_STEPS, nz.y);
+    vec3 c = s0.xyz / s0.w;
+    // the receiver plane: the geometric normal from the depth buffer (S2), not the normal-mapped one, from the pixel's
+    // own position (the light direction argument only feeds sin_theta, unused here)
+    float sin_theta;
+    vec3 ng = shadowReceiverGeometry(pos_screen, pos_px, norm, norm, sin_theta);
+    StSpot sp = stSpotSetup(m);
+    vec2 res = vec2(proj_shadow_tile.z);
+    // one texel of the map at the receiver, in map depth: the constant bias (S2's SHADOW_BIAS_TEXELS) and the unit of
+    // the plane bias's cap; dz/dw = c1 / w^2 times the texel's width w / (k N)
+    float z_tex = sp.c1 / (min(sp.k.x * res.x, sp.k.y * res.y) * s0.w);
+    // the emitter disc: ST_SPOT_LIGHT_SIZE, at most the emitter prim's face (the frustum's width at the near plane)
+    float light = min(ST_SPOT_LIGHT_SIZE, (sp.c1 / sp.c0) / max(sp.k.x, sp.k.y));
+    // a blocker at depth zb gives a penumbra of radius light / 2 * (1 / wb - 1 / w) metres per unit of axial distance,
+    // k * that in uv: 0.5 * light * k * (z - zb) / c1, here in texels per unit of z - zb
+    vec2 pen = (0.5 * light / sp.c1) * sp.k * res;
+    vec2 grad = stSpotGradient(m, pos, ng, c);
+    float shadow = stSpotFilterTile(c, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen);
     return mix(1.0, shadow, fade);
+}
+
+// The sun pass's b and a channels: unlit by the projectors (they shade themselves in spotLightF.glsl), so 1 exactly.
+float sampleSpotShadow(vec3 pos, vec3 norm, int index, vec2 pos_screen)
+{
+    return 1.0;
 }

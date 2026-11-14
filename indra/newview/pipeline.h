@@ -38,6 +38,7 @@
 #include "llgl.h"
 #include "lldrawable.h"
 #include "llrendertarget.h"
+#include "llprojectorshadows.h" // <Vulkanstorm/> projector shadow pool
 #include "llstochastichistory.h"
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
@@ -94,6 +95,7 @@ extern LLTrace::BlockTimerStatHandle FTM_RENDER_UI_2D;
 
 class LLPipeline
 {
+    friend class LLProjectorShadows; // <Vulkanstorm/> reads the nearby lights (the pool's light set)
 public:
     LLPipeline();
     ~LLPipeline();
@@ -908,6 +910,10 @@ public:
     LLPointer<LLDrawable>   mShadowSpotLight[2];
     F32                     mSpotLightFade[2];
     LLPointer<LLDrawable>   mTargetShadowSpotLight[2];
+    // <Vulkanstorm> the Stochastic method's projector shadows: one tile per projector in a shared atlas, instead of the
+    // two slots above (which then stay empty). Main render thread only.
+    LLProjectorShadows      mProjectorShadows;
+    // </Vulkanstorm>
 #if VKS_GL_STATS
     // development only (projector shadow pool, stage S0): what the projector shadow slots and the light set look like now.
     // Read by the LEAP API ProjectorShadows.stats (llprojectorshadowstatsapi.cpp). Main thread only.

@@ -98,9 +98,14 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
-weights of the other methods' blend bands. A projector is the same estimator toward its emitter (0.15 m,
-a fixed 0.15 m emitter), 4 steps over at most 4 m. The disc-edge profile converges to 0.84 to 0.87 of a disc light's
-width on the bench (within one map texel plus one pixel).
+weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (a blocker
+search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the blockers' distance for a
+0.15 m emitter, capped at the emitter prim's face and at 10 map texels), at a fixed disc of offsets in the map's own uv, with S2's
+texel bias and per-texel receiver plane. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
+width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
+within a map texel. The projector lookup costs 8 + 32 gathers per pixel inside the projector's frustum. Under Stochastic with
+detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
+`doc/shadows/projector-shadow-pool.md`), not the two slots through the sun pass.
 
 `shadow_st_frame` is the frame of the seeds. The deferred sun pass sets it from the history while it
 accumulates and to 0 otherwise; every other program leaves it at 0, which fixes each pixel's rays (a
@@ -110,15 +115,15 @@ actually read (S2's signed one-sided form), so a lit plane under a low sun stays
 ### M2: the history
 
 `LLStochasticHistory` (two full-size RGBA16F colours, counted in the texture memory: r sun, g linear view
-depth, b and a the two projector slots) is made on the main view when the method is Stochastic, freed
+depth, b and a the two projector slots of the Legacy method: 1 under Stochastic's projector shadow pool) is made on the main view when the method is Stochastic, freed
 otherwise and at a size change. The sun pass writes its rays as they are into `mRT->screen`;
 `shadowStochasticResolveF.glsl` blends them with the last frame's history (weight 1/8) after the engine's
 camera reprojection, reading the history from the 4 nearest texels, each kept only where its stored depth
 agrees (a revealed surface has none; under a quarter kept, none), clamped per channel to the 3x3 neighbourhood
 of this frame; `shadowStochasticComposeF.glsl` makes the light map of the result (r, b, a) and this frame's AO.
 A light that changed takes this frame's rays alone for its channel: the sun when its direction moved more
-than 0.5 degrees (the sun/moon handover, an editor drag), a projector slot when its light, position or
-direction changed. Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light
+than 0.5 degrees (the sun/moon handover, an editor drag); a projector has no channel while the pool
+draws its shadow (the slots stay empty, so the resolve takes 1). Cube snapshots and mirrors have no history (fixed seeds, the sun pass writes the light
 map). A snapshot sums 8 sun passes of different rays (`shadow_st_frame` 1 to 8) and averages them (the light
 map pass divides by 8). With SSAO on the light-map blur still runs, for the AO channel only when the
 history or the snapshot's passes made the shadow channels, and for all channels when there is no history to take
@@ -185,7 +190,7 @@ alone as GLSL 1.50.
   `RenderShadowOffset`: every program that links a shadow util (the sun and probe passes, and the forward
   `alphaF`, `pbralphaF`, `materialF`, `waterF` and `pbrmetallicroughnessF`) links Stochastic's util, which uses the
   world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. The projector shadows keep
-  their own bias (`spot_shadow_bias`, `spot_shadow_offset`) in both methods.
+  `spot_shadow_offset` in both methods; `spot_shadow_bias` is Legacy's only (Stochastic uses S2's texel bias).
 
 What stage S2 changed in the image of the stable-cascade methods: no per-pixel bump pattern in the receiver
 plane (a normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are

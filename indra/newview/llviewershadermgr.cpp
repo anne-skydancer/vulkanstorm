@@ -401,6 +401,13 @@ static bool use_stochastic_shadows()
 {
     return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
+
+// the projector shadow pool shades the projectors in their own programs (spotLightF.glsl, PROJECTOR_SHADOW_POOL);
+// the same test as LLProjectorShadows::wanted() (a detail below "sun and projectors" has no projector shadows)
+static bool use_projector_shadow_pool()
+{
+    return use_stochastic_shadows() && gSavedSettings.getS32("RenderShadowDetail") > 1;
+}
 // </Vulkanstorm>
 
 static void add_common_permutations(LLGLSLShader* shader)
@@ -2013,6 +2020,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredSpotLightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredSpotLightProgram);
+        if (use_projector_shadow_pool()) // <Vulkanstorm/>
+        {
+            gDeferredSpotLightProgram.addPermutation("PROJECTOR_SHADOW_POOL", "1");
+        }
 
         success = gDeferredSpotLightProgram.createShader();
         llassert(success);
@@ -2034,6 +2045,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredMultiSpotLightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredMultiSpotLightProgram);
+        if (use_projector_shadow_pool()) // <Vulkanstorm/>
+        {
+            gDeferredMultiSpotLightProgram.addPermutation("PROJECTOR_SHADOW_POOL", "1");
+        }
 
         success = gDeferredMultiSpotLightProgram.createShader();
         llassert(success);

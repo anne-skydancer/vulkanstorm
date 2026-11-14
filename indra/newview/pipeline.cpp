@@ -860,6 +860,7 @@ void LLPipeline::destroyGL()
 {
     stop_glerror();
     unloadShaders();
+    mProjectorShadows.release(); // <Vulkanstorm/> the projector shadow atlases, while the context lives (main thread: stopGL)
     mHighlightFaces.clear();
 
     resetDrawOrders();
@@ -1210,8 +1211,21 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
         }
     }
 
+    // <Vulkanstorm> the Stochastic method with projector shadows has a pool of tiles in two atlases (llprojectorshadows.cpp) in
+    // place of the two spot maps: made here (idempotent), where the spot maps are, and freed when the method or the detail leaves it
+    const bool projector_pool = RenderShadowMethod == LLShadowMethod::STOCHASTIC && shadow_detail > 1;
+    // </Vulkanstorm>
     if (!gCubeSnapshot) // hack to not allocate spot shadow maps during ReflectionMapManager init
     {
+        if (projector_pool)
+        {
+            // a failed allocation never fails the buffers and never changes the method: logged, tried again from update()
+            mProjectorShadows.ensureAllocated();
+            releaseSpotShadowTargets();
+        }
+        else
+        {
+            mProjectorShadows.release();
         // <ShadowLegacy id="spot-map-size">
         U32 width = (U32)(resX * scale);
         U32 height = width;
@@ -1233,6 +1247,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
             releaseSpotShadowTargets();
         }
         // </ShadowLegacy>
+        }
     }
 
 
@@ -1260,7 +1275,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
         }
     }
 
-    if (shadow_detail > 1 && !gCubeSnapshot)
+    if (shadow_detail > 1 && !gCubeSnapshot && !projector_pool)
     {
         for (U32 i = 0; i < 2; i++)
         {
@@ -1525,6 +1540,9 @@ void LLPipeline::releaseShadowBuffers()
         mHeroProbeRT.shadow[i].release();
     }
     releaseSpotShadowTargets();
+    // <Vulkanstorm/> the projector shadow pool: its atlases while the context lives (cleanup, main thread) and its records,
+    // which hold drawables, before mInitialized goes false
+    mProjectorShadows.release();
 }
 
 void LLPipeline::releaseScreenBuffers()
@@ -2173,6 +2191,8 @@ void LLPipeline::unlinkDrawable(LLDrawable *drawable)
             break;
         }
     }
+
+    mProjectorShadows.forget(drawablep); // <Vulkanstorm/> its record and tile, if it had one
 
     for (U32 i = 0; i < 2; ++i)
     {
@@ -10135,6 +10155,14 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
         }
     }
 
+    // <Vulkanstorm> the Stochastic method reads the projector shadows from the pool's atlas, in the spot programs only
+    if (LLProjectorShadows::wanted())
+    {
+        mProjectorShadows.bindAtlas(shader);
+        return;
+    }
+    // </Vulkanstorm>
+
     for (U32 i = 4; i < 6; i++)
     {
         S32 channel = shader.enableTexture(LLShaderMgr::DEFERRED_SHADOW0 + i);
@@ -11248,6 +11276,14 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
     shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(screen_origin));
     shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, proj_range);
     shader.uniform1f(LLShaderMgr::PROJECTOR_AMBIANCE, params.mV[2]);
+    // <Vulkanstorm> the projector shadow pool: this light's own tile, no ranking of lights by the view
+    if (LLProjectorShadows::wanted())
+    {
+        mProjectorShadows.setupLight(shader, drawablep);
+    }
+    else
+    {
+    // </Vulkanstorm>
     // <ShadowLegacy id="spot-rank">
     S32 s_idx = -1;
 
@@ -11301,6 +11337,7 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
     // make sure we didn't end up targeting the same spot light with both shadow maps
     llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
     // </ShadowLegacy>
+    } // <Vulkanstorm/>
 
     LLViewerTexture* img = volume->getLightTexture();
 
@@ -12906,6 +12943,21 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
     if (gen_shadow)
     {
+        // <Vulkanstorm> the Stochastic method draws one tile per projector into the pool's atlas (once a frame, not for probes);
+        // the two slots stay empty, so the sun pass and the temporal resolve see no projector (their b and a channels are 1)
+        const bool projector_pool = RenderShadowMethod == LLShadowMethod::STOCHASTIC;
+        if (projector_pool)
+        {
+            mShadowSpotLight[0] = mShadowSpotLight[1] = nullptr;
+            mTargetShadowSpotLight[0] = mTargetShadowSpotLight[1] = nullptr;
+            if (!gCubeSnapshot)
+            {
+                mProjectorShadows.update(camera);
+            }
+        }
+        else
+        {
+        // </Vulkanstorm>
         if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
         {
             // <ShadowLegacy id="spot-slots">
@@ -13053,6 +13105,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             }
         }
         // </ShadowLegacy>
+        } // <Vulkanstorm/>
     }
     else
     { //no spotlight shadows
