@@ -122,13 +122,15 @@ public:
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
         F32 lastFrameRenderMs = 0.f;
         U32 lastFrameRenders = 0;
-        U32 maxStaleFrames = 0;    // the oldest placed, drawn tile: frames since it was drawn
+        U32 maxStaleFrames = 0;    // the oldest PENDING tile: frames since the first change that touched it (0 when none waits)
         // P3
         U64 staticRenders = 0;     // since the atlases were made: renders of the static schedule (a tile's first fill and every change)
         U64 dynamicRenders = 0;    // ... of the dynamic schedule (a moving lamp, an avatar in the light)
         U32 lastFrameStatic = 0;
         U32 lastFrameDynamic = 0;
-        U32 pinnedObjects = 0;     // volumes held at full detail by at least one tile
+        U32 pinnedObjects = 0;     // prims and trees held at full detail by at least one tile (the LOD pin has no ceiling)
+        U64 pinnedTriangles = 0;   // their triangles at the held detail (read when the stats are asked for: the cost of the pin)
+        U32 moverObjects = 0;      // objects the classifier flagged as movers since the feed started (they are out of the fixed layer while active)
         U32 pendingTiles = 0;      // drawn tiles a change touched and the scheduler has not drawn again yet
         U32 avatarTiles = 0;       // tiles with an avatar in their light this frame
         U32 dirtyBoxesLastFrame = 0;
