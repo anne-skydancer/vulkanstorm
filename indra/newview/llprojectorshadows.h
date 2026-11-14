@@ -104,6 +104,7 @@ public:
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (the budget's unit)
         F32 lastFrameRenderMs = 0.f;
         U32 lastFrameRenders = 0;
+        U32 maxStaleFrames = 0;    // the oldest placed, drawn tile: frames since it was drawn
     };
     Stats getStats() const;
 

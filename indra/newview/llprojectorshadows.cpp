@@ -719,7 +719,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     layoutChanged();
 
     // the work list: every placed tile is an item (stage P2 has no change tracking, so each is a full render, in the order
-    // of llprojectorpool::selectStatic: never drawn first, then the longest waiting, then the nearest)
+    // of llprojectorpool::selectStatic: never drawn first, then the oldest first by frames, the nearest only breaking a tie)
     const F64 now = LLTimer::getTotalSeconds();
     std::vector<StaticItem> items;
     items.reserve(mRecords.size());
@@ -742,11 +742,12 @@ void LLProjectorShadows::update(LLCamera& camera)
         item.stale_ms = (F32)((now - rec.drawnTime) * 1000.0);
         item.cam_dist = rec.camDist;
         item.last_cpu_ms = rec.lastCpuMs;
+        item.age_frames = rec.drawnFrame == 0 ? 0u : frame - rec.drawnFrame;
         items.push_back(item);
     }
-    // The budget (P2): what today's two slot renders cost. A tile render is the same renderShadow, so the cost of two of them,
-    // measured as it runs (the average of the tiles drawn), is the time the pool may spend a frame.
-    const std::vector<U32> picks = selectStatic(items, 2.f * mCostEmaMs);
+    // The budget: a fixed CPU time per frame (llprojectorpool::kStaticCapMs). The measured cost of a tile only predicts how many
+    // fit; it does not set the budget (it used to, at 2 x the average, which let the nearest tiles use it up every frame).
+    const std::vector<U32> picks = selectStatic(items, kStaticCapMs);
     if (picks.empty())
     {
         return;
@@ -777,7 +778,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
 
     // the in-frame cap (section 4.5): the first pick always runs, the others only while the measured time is inside the budget
-    const F32 frame_budget_ms = 2.f * mCostEmaMs;
+    const F32 frame_budget_ms = kStaticCapMs;
     bool first_pick = true;
     for (U32 key : picks)
     {
@@ -884,6 +885,15 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     st.costEmaMs = mCostEmaMs;
     st.lastFrameRenderMs = mLastFrameRenderMs;
     st.lastFrameRenders = mLastFrameRenders;
+    const U32 frame = LLFrameTimer::getFrameCount();
+    for (const auto& entry : mRecords)
+    {
+        const Record& rec = entry.second;
+        if (rec.placed && rec.drawnFrame != 0 && frame >= rec.drawnFrame)
+        {
+            st.maxStaleFrames = std::max(st.maxStaleFrames, frame - rec.drawnFrame);
+        }
+    }
     return st;
 }
 

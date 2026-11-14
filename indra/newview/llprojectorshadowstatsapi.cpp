@@ -91,6 +91,7 @@ namespace
         pool["lights_without_tile"] = (S32)ps.lightsWithoutTile; // O-4: 0 after the first fill
         pool["tile_cost_ms"] = (F64)ps.costEmaMs;
         pool["last_frame_renders"] = (S32)ps.lastFrameRenders;
+        pool["max_stale_frames"] = (S32)ps.maxStaleFrames; // the oldest drawn tile, in frames (the scheduler bounds it)
         pool["last_frame_render_ms"] = (F64)ps.lastFrameRenderMs;
         LLSD tiles = LLSD::emptyArray();
         const bool with_crc = !req.has("crc") || req["crc"].asBoolean(); // on unless asked off: a read-back of each tile
