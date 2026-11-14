@@ -92,6 +92,8 @@ public:
     // The roots of the linksets that hold a lamp the pool draws a tile for (the lamp's own linkset is the fixture: its changes
     // push whatever its flags). Set once a frame by the pool; the pointers are only compared. Main thread.
     static void setLampRoots(std::vector<const LLViewerObject*>& roots);
+    // How many agent-space shifts the feed has seen (a cache that keeps volumes in agent space rebuilds them when it changes).
+    static U32 shifts();
     // Objects the classifier has flagged as movers since the feed started (stats).
     static U32 moverObjects();
 
