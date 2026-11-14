@@ -17,10 +17,10 @@ feature that later lands on the base through its PR is only a second parent
 of that PR's merge commit, never on the chain, so an earlier merge of that
 feature into another feature (stacked branches) stays allowed.
 
-Upstream-tracking lines (MIRROR_LINES; vkstorm-aleph tracks Firestorm master)
-carry upstream's commits plus their own (vkstorm-release's build defaults and
+Upstream-tracking lines (MIRROR_LINES; vkstorm-canary tracks Firestorm master)
+carry upstream's commits plus their own (Vulkanstorm's build defaults and
 CI). Upstream's commits on their chain are upstream history: bringing them in
-is an upstream integration, which canary takes through integration merges
+is an upstream integration, which canary takes through integration branches
 (AGENTS.md), so they are not checked. The line's own commits, those not
 reachable from the upstream ref (UPSTREAM_REF, default upstream/master;
 VKS_UPSTREAM_REF overrides it), are protected like any base line. Without
@@ -51,7 +51,7 @@ import sys
 BASE_PREFIX = "vkstorm-"
 # Lines that track upstream. Upstream's commits on their chain are exempt
 # (merging upstream brings them in by design); their own commits are not.
-MIRROR_LINES = ("vkstorm-aleph",)
+MIRROR_LINES = ("vkstorm-canary",)
 UPSTREAM_REF = os.environ.get("VKS_UPSTREAM_REF", "refs/remotes/upstream/master")
 
 

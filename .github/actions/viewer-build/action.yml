@@ -310,7 +310,7 @@ runs:
         set -euo pipefail
         shopt -s nullglob
         # Lines whose viewer_manifest.py diverts the archive to $RUNNER_TEMP
-        # under GitHub Actions (canary, aleph) leave it there, the others in
+        # under GitHub Actions (canary) leave it there, the others in
         # newview/; the suffixed package goes to newview/, where the upload
         # step reads it.
         packages=("${{ inputs.directory }}"/newview/*.tar.xz "$RUNNER_TEMP"/*.tar.xz)
