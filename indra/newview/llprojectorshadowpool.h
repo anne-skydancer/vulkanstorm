@@ -788,7 +788,6 @@ private:
 // Scheduler ordering (section 4.5)
 // ---------------------------------------------------------------------------------------------
 
-constexpr float kStaleMs = 250.0f;     // an item stale for longer jumps the distance order
 constexpr uint32_t kDynamicDeadlineFrames = 4;
 
 // Prior for the cost of an item that has no history (never drawn) or a non-finite prediction.
@@ -813,14 +812,16 @@ struct StaticItem
     float stale_ms = 0.f;       // time since dirty_frame
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
+    uint32_t age_frames = 0;    // frames since it was last drawn (the order of service)
 };
 
-// Ordered picks for this frame: never-drawn nearest first, then stale (> 250 ms) oldest first,
-// then the rest nearest first, until the CPU cap t_s_ms would be exceeded. At least one item
-// runs while any is pending (progress), even when its predicted cost alone exceeds the cap.
+// Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the
+// distance only breaks a tie), until the CPU cap t_s_ms would be exceeded. The order is round-robin by staleness, so
+// no tile waits longer than ceil(N / tiles per frame) frames, whatever its distance. At least one item runs while
+// any is pending (progress), even when its predicted cost alone exceeds the cap.
 inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms)
 {
-    std::vector<const StaticItem*> never, stale, rest;
+    std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
     {
         if (it.never_drawn)
@@ -829,24 +830,22 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
         }
         else if (it.pending)
         {
-            (it.stale_ms > kStaleMs ? stale : rest).push_back(&it);
+            rest.push_back(&it);
         }
     }
     auto byDist = [](const StaticItem* a, const StaticItem* b) {
         const float da = sortDist(a->cam_dist), db = sortDist(b->cam_dist);
         return da != db ? da < db : a->key < b->key;
     };
-    auto byAge = [](const StaticItem* a, const StaticItem* b) {
-        const float sa = std::isnan(a->stale_ms) ? 0.f : a->stale_ms, sb = std::isnan(b->stale_ms) ? 0.f : b->stale_ms;
-        return sa != sb ? sa > sb : a->key < b->key;
+    auto byAgeThenDist = [&byDist](const StaticItem* a, const StaticItem* b) {
+        return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : byDist(a, b);
     };
     std::sort(never.begin(), never.end(), byDist);
-    std::sort(stale.begin(), stale.end(), byAge);
-    std::sort(rest.begin(), rest.end(), byDist);
+    std::sort(rest.begin(), rest.end(), byAgeThenDist);
 
     std::vector<uint32_t> out;
     float spent = 0.f;
-    for (const auto* list : { &never, &stale, &rest })
+    for (const auto* list : { &never, &rest })
     {
         for (const StaticItem* it : *list)
         {
@@ -917,8 +916,12 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     return out;
 }
 
+// The static cap: a fixed CPU budget of the pool's tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
+// frame: it fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, and leaves 0.05 ms of the
+// +5 % light and shadow budget (about 0.4 ms) to the dynamic tiles. The measured cost only predicts what fits; it does not
+// set the budget.
+constexpr float kStaticCapMs = 0.35f;
 // Placeholders until S0 measures (spec 4.5); a devel-only debug override may replace them
-constexpr float kStaticCapMs = 0.25f;
 constexpr float kDynamicCapMs = 0.30f;
 constexpr uint32_t kAvatarDrawsMax = 24;
 
