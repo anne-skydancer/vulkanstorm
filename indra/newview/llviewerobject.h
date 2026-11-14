@@ -886,8 +886,9 @@ public:
     bool mCreateSelected;
 
     // <Vulkanstorm> The projector shadow pool's classifier (llshadowdirtyfeed.h): what the simulator told about this object's
-    // movement. Sticky for the object's life (POOL_ACTIVE, the drawable's last seen active state, is not). Main thread only.
-    enum EPoolFlags : U8 { POOL_CREATED_SEEN = 1, POOL_MOVER = 2, POOL_PHYSICAL = 4, POOL_ACTIVE = 8, POOL_MESH_LOADED = 16 };
+    // movement. Sticky for the object's life (POOL_ACTIVE, the drawable's last seen active state, and POOL_ALPHA_FACE, whether the
+    // feed last saw a silhouette-affecting face on this prim, are not). Main thread only.
+    enum EPoolFlags : U8 { POOL_CREATED_SEEN = 1, POOL_MOVER = 2, POOL_PHYSICAL = 4, POOL_ACTIVE = 8, POOL_MESH_LOADED = 16, POOL_ALPHA_FACE = 32 };
     U8 mPoolFlags = 0;
     // </Vulkanstorm>
 
