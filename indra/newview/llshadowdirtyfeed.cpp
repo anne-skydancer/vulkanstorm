@@ -36,6 +36,12 @@
 
 using namespace llprojectorpool;
 
+// the rule's constants are the viewer's own flags (the unit test checks the rule with these values)
+static_assert(kRebuildVolume == LLDrawable::REBUILD_VOLUME && kRebuildTcoord == LLDrawable::REBUILD_TCOORD &&
+              kRebuildColor == LLDrawable::REBUILD_COLOR && kRebuildPosition == LLDrawable::REBUILD_POSITION &&
+              kRebuildRigged == LLDrawable::REBUILD_RIGGED && kRebuildGeometry == LLDrawable::REBUILD_GEOMETRY &&
+              kRebuildAll == LLDrawable::REBUILD_ALL, "llprojectorpool's rebuild flags are LLDrawable's");
+
 namespace
 {
     // All of this is main-thread state; the one thing another thread may touch is sOffThread (an atomic flag).
@@ -321,10 +327,40 @@ void LLShadowDirtyFeed::noteRebuild(LLDrawable* drawable, U32 rebuild_flag)
     {
         return;
     }
-    const U32 mask = LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED;
-    if (rebuildDirties(rebuild_flag, mask))
+    if (rebuildDirties(rebuild_flag))
     {
         noteDrawable(drawable, Cause::Edit);
+    }
+}
+
+// static
+void LLShadowDirtyFeed::noteMeshLoaded(LLVOVolume* volume)
+{
+    if (!tracking() || !volume || !on_main_thread())
+    {
+        return;
+    }
+    volume->mPoolFlags |= LLViewerObject::POOL_MESH_LOADED;
+    if (volume->mDrawable.notNull())
+    {
+        noteDrawable(volume->mDrawable.get(), Cause::Edit);
+    }
+}
+
+// static
+bool LLShadowDirtyFeed::meshLoaded(const LLDrawable* drawable)
+{
+    const LLViewerObject* object = drawable ? drawable->getVObj() : nullptr;
+    return object && (object->mPoolFlags & LLViewerObject::POOL_MESH_LOADED) != 0;
+}
+
+// static
+void LLShadowDirtyFeed::clearMeshLoaded(const LLDrawable* drawable)
+{
+    LLViewerObject* object = drawable ? const_cast<LLDrawable*>(drawable)->getVObj().get() : nullptr;
+    if (object)
+    {
+        object->mPoolFlags &= ~LLViewerObject::POOL_MESH_LOADED;
     }
 }
 
