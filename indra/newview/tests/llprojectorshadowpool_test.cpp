@@ -12,8 +12,8 @@
 //   T6  a dirty box pushed during a render lands in the next frame (double buffer)
 //   T7  scheduler: never-drawn first, 250 ms deadline beats distance, avatar items never exceed
 //       A_max, no static starvation under a continuous dirty source
-//   T8  the 8192 atlas tier: tier choice by VRAM and GL_MAX_TEXTURE_SIZE, buddy and repack at 8192, level controller,
-//       compaction and the stats' sizes
+//   T8  the 8192 atlas tier: tier choice by VRAM, dedicated memory and GL_MAX_TEXTURE_SIZE, the buddy allocator, repack and level
+//       controller at 8192, and the P2b size rules (the radius cap and the emitter extent in the shader's and C++ side's twin)
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -115,15 +115,20 @@ namespace
     void testT8()
     {
         // the tier: 2048 below 3 GB, 4096, 8192 from 12 GB, never above what the driver can make
-        check(atlasTier(0, 16384) == 4096, "T8 unknown VRAM gets the default tier");
-        check(atlasTier(2048, 16384) == 2048, "T8 2 GB gets 2048");
-        check(atlasTier(3071, 16384) == 2048 && atlasTier(3072, 16384) == 4096, "T8 the 3 GB edge");
-        check(atlasTier(8192, 16384) == 4096, "T8 8 GB gets 4096");
-        check(atlasTier(12287, 16384) == 4096 && atlasTier(12288, 16384) == 8192, "T8 the 12 GB edge");
-        check(atlasTier(24576, 16384) == 8192, "T8 24 GB gets 8192");
-        check(atlasTier(24576, 4096) == 4096, "T8 GL_MAX_TEXTURE_SIZE 4096 limits it");
-        check(atlasTier(24576, 2048) == 2048 && atlasTier(24576, 1024) == 2048, "T8 never below the smallest tier");
-        check(atlasTier(24576, 0) == 8192, "T8 unknown max texture size does not limit");
+        check(atlasTier(0, 16384, true) == 4096, "T8 unknown VRAM gets the default tier");
+        check(atlasTier(2048, 16384, true) == 2048, "T8 2 GB gets 2048");
+        check(atlasTier(3071, 16384, true) == 2048 && atlasTier(3072, 16384, true) == 4096, "T8 the 3 GB edge");
+        check(atlasTier(8192, 16384, true) == 4096, "T8 8 GB gets 4096");
+        // a "12 GB" card reports a little under 12288 MB: the edge is 11 GB (11264 MB)
+        check(atlasTier(11263, 16384, true) == 4096 && atlasTier(11264, 16384, true) == 8192, "T8 the 11 GB edge");
+        check(atlasTier(12200, 16384, true) == 8192, "T8 a 12 GB card reporting 12200 MB gets 8192");
+        check(atlasTier(24576, 16384, true) == 8192, "T8 24 GB gets 8192");
+        // shared memory (a DXGI budget of system RAM) never gets 8192
+        check(atlasTier(24576, 16384, false) == 4096 && atlasTier(12288, 16384, false) == 4096, "T8 memory not known to be dedicated stays at 4096");
+        check(atlasTier(2048, 16384, false) == 2048, "T8 the small tier does not depend on dedicated memory");
+        check(atlasTier(24576, 4096, true) == 4096, "T8 GL_MAX_TEXTURE_SIZE 4096 limits it");
+        check(atlasTier(24576, 2048, true) == 2048 && atlasTier(24576, 1024, true) == 2048, "T8 never below the smallest tier");
+        check(atlasTier(24576, 0, true) == 8192, "T8 unknown max texture size does not limit");
         check(atlasBytes(2048) >> 20 == 32 && atlasBytes(4096) >> 20 == 128 && atlasBytes(8192) >> 20 == 512, "T8 MiB of S + L");
 
         const uint32_t atlas = 8192;
@@ -197,6 +202,21 @@ namespace
         check(plan.buddy.atlasSize() == 8192, "T8 the plan's buddy is the 8192 allocator", plan.buddy.atlasSize());
         BuddyAtlas big(atlas);
         check(!big.alloc(16384, r), "T8 a tile larger than the atlas is refused");
+
+        // P2b: the radius cap in metres: 0.04 m * k * N / w texels, clamped to 1 .. 12, per axis (x and y not swapped)
+        check(std::fabs(radiusCapTexels(2.0f, 1024, 10.0f) - 8.192f) < 1e-4f, "T8 cap k 2, N 1024, w 10 m = 8.192 texels", radiusCapTexels(2.0f, 1024, 10.0f));
+        check(std::fabs(radiusCapTexels(0.5f, 1024, 10.0f) - 2.048f) < 1e-4f, "T8 cap k 0.5, N 1024, w 10 m = 2.048 texels", radiusCapTexels(0.5f, 1024, 10.0f));
+        check(radiusCapTexels(2.0f, 1024, 10.0f) > radiusCapTexels(0.5f, 1024, 10.0f), "T8 the wider axis (larger k) gets the larger cap");
+        check(radiusCapTexels(2.0f, 64, 100.0f) == 1.0f, "T8 a small far tile: at least one texel");
+        check(radiusCapTexels(2.0f, 2048, 1.0f) == 12.0f, "T8 a large near tile: at most 12 texels");
+        // a level step halves the texels per metre and so the cap, above the one texel floor
+        check(std::fabs(radiusCapTexels(1.0f, 512, 4.0f) * 2.0f - radiusCapTexels(1.0f, 1024, 4.0f)) < 1e-5f, "T8 a level step halves the cap", radiusCapTexels(1.0f, 512, 4.0f));
+        // P2b: the emitter's extent: the prim's face, 2 cm .. 15 cm, never softer than P2's 15 cm
+        check(emitterExtent(0.05f) == 0.05f && emitterExtent(0.001f) == kEmitterMin && emitterExtent(0.5f) == 0.15f && emitterExtent(5.0f) == 0.15f, "T8 emitter extent clamps the face to 2 cm .. 15 cm");
+        check(emitterExtent(std::numeric_limits<float>::quiet_NaN()) == kEmitterMin && emitterExtent(std::numeric_limits<float>::infinity()) == kEmitterMin, "T8 a non-finite face gets the lower limit");
+        // the penumbra scale per axis: (0.5 / c1) * light * k * N, the x axis from light.x and k.x
+        check(std::fabs(penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f) - 204.8f) < 1e-3f, "T8 penumbra scale x", penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f));
+        check(std::fabs(penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f) - 10.24f) < 1e-3f, "T8 penumbra scale y (axes not swapped)", penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f));
     }
 
     // ---- T2 ----
