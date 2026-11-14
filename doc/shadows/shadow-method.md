@@ -240,6 +240,21 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 - The migration and preset rules are the renderer-free `llshadowmethod.h`, tested by
   `indra/newview/tests/llshadowmethod_test.cpp` (ci-checks).
 
+## Alpha casters
+
+How a semi-transparent texel casts depends on the method.
+
+- Legacy: the stock stipple. A texel below 0.88 alpha is stippled (every other texel column dropped), below 0.05 it casts
+  nothing, and blend faces are cut below 0.598 (`ALPHA_BLEND_CUTOFF`) first. The shader text with
+  `STOCHASTIC_SHADOW_ALPHA` undefined is the stock text (`scripts/tests/test_shadow_alpha_permutation.py`).
+- Stochastic: alpha-mask faces follow the creator's cutoff and nothing else: a hard cut, solid above it, no dither
+  (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws). Blend faces, whatever the material type: a texel at
+  0.98 alpha or more is solid, from 0.05 up to 0.98 it lets light through in proportion (a hashed per-texel dither,
+  anchored to the shadow map's texel), and below 0.05 it casts nothing (`shadow_solid_alpha` is 0.98 for the blend draws
+  in `renderAlphaObjects`). Classic (non-glTF) blend faces are still cut below 0.598 before the dither.
+- The avatar alpha shadow shaders (`avatarAlphaShadowF`, `avatarAlphaMaskShadowF`) carry the same branch, which is inert:
+  the avatar shadow pass never sets `minimum_alpha`.
+
 ## Cost
 
 Legacy costs what the PCF with the receiver-plane bias costs. The offline sun-light-pass bench

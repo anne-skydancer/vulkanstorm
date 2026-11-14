@@ -20,6 +20,7 @@ ROOT = Path(os.environ.get('VKSTORM_TEST_ROOT') or Path(__file__).resolve().pare
 SHADERS = ROOT / 'indra/newview/app_settings/shaders/class1/deferred'
 REFERENCE = ROOT / 'scripts/shadows/legacy_reference'
 MGR = ROOT / 'indra/newview/llviewershadermgr.cpp'
+PIPELINE = ROOT / 'indra/newview/pipeline.cpp'
 AVATAR_POOL = ROOT / 'indra/newview/lldrawpoolavatar.cpp'
 FILES = ['shadowAlphaMaskF', 'pbrShadowAlphaBlendF', 'avatarAlphaShadowF', 'avatarAlphaMaskShadowF']
 DEFINE = 'STOCHASTIC_SHADOW_ALPHA'
@@ -132,6 +133,35 @@ class ShadowAlphaPermutation(unittest.TestCase):
         start = src.index('add_common_permutations(LLGLSLShader')
         common = src[start:src.index('\n}\n', start)]
         self.assertNotIn(DEFINE, common)
+
+    def test_solid_threshold_is_098_for_blend_and_zero_for_mask(self):
+        # Stochastic: the dither runs below shadow_solid_alpha. The glTF blend shader hard-codes 0.98; the shared
+        # mask/blend shader reads the uniform, which the pipeline sets to 0.98 after each blend bind and to 0 after
+        # each mask bind (so mask faces follow the creator's cutoff and never dither).
+        blend = evaluate(self.read('pbrShadowAlphaBlendF'), True)
+        self.assertIn('if (alpha < 0.98)', blend)
+        mask = evaluate(self.read('shadowAlphaMaskF'), True)
+        self.assertIn('uniform float shadow_solid_alpha;', mask)
+        self.assertIn('if (alpha < shadow_solid_alpha)', mask)
+        self.assertNotIn('shadow_solid_alpha', evaluate(self.read('shadowAlphaMaskF'), False))
+        pipe = PIPELINE.read_text(encoding='utf-8').replace('\r\n', '\n')
+        self.assertRegex(pipe, r'SHADOW_BLEND_SOLID_ALPHA = 0\.98f;')
+        self.assertRegex(pipe, r'SHADOW_MASK_SOLID_ALPHA = 0\.f;')
+        call = r'sCurBoundShaderPtr->uniform1f\(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, (\w+)\);'
+        # every bind of the two shared programs is followed by the uniform, with the right value
+        for m in re.finditer(r'(gDeferredShadow(?:Fullbright)?AlphaMaskProgram)\.bind\(rigged\);', pipe):
+            tail = pipe[m.end():m.end() + 900]
+            nxt = re.search(r'\.bind\(', tail)
+            tail = tail[:nxt.start()] if nxt else tail
+            got = re.search(call, tail)
+            self.assertIsNotNone(got, m.group(0) + ' is not followed by the solid-alpha uniform')
+            draw = re.search(r'pushBatch|renderMaskedObjects|renderFullbrightMaskedObjects', tail)
+            self.assertIsNotNone(draw, m.group(0))
+            self.assertLess(got.start(), draw.start(), m.group(0) + ': the uniform is set after the draw')
+            want = 'SHADOW_BLEND_SOLID_ALPHA' if draw.group(0) == 'pushBatch' else 'SHADOW_MASK_SOLID_ALPHA'
+            self.assertEqual(got.group(1), want, m.group(0))
+        self.assertEqual(len(re.findall(call, pipe)), 4)
+        self.assertEqual(len(re.findall(r'gDeferredShadow(?:Fullbright)?AlphaMaskProgram\.bind\(rigged\);', pipe)), 4)
 
     def test_avatar_shadow_pass_never_sets_minimum_alpha(self):
         # The avatar alpha-shadow branch (the stock stipple, and the dither under Stochastic) is inert: it runs only
