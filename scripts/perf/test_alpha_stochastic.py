@@ -1023,5 +1023,158 @@ for total,n in ((4,4),(8,8),(16,8)):
 print(f'two layers whose subsets collide (seeds {SEED_A} and {SEED_B}) over a third: the back layer reads '
       +', '.join(f'S = {t} {nm}: {b:.3f} (exact {want[2]:.3f})' for t,nm,b,e in subset_report))
 
+# ---- sub-pixel camera pans: the history is read with a Catmull-Rom filter at the exact reprojected position
+# The nearest-texel read of before 2026-11-14 dropped the fraction of a pixel the camera moved every frame, and the
+# 1/8 blend accumulated it as a smear 1 to 2 px behind the image (frame 40 rmse 13 to 17 /255 at 0.25, 0.5, 1.3, 2.5 px
+# per frame, against 4 to 6 for plain 8 samples). True sub-pixel pans: the geometry is translated by frame * d pixels, the
+# reprojection is the exact clip-space translation, the reference is sorted alpha at the same position and samples.
+# The old resolve (git show of the parent commit) is the baseline: whole-pixel pans and the static view must equal it bit for bit.
+import numpy as np
+PAN_BEFORE_REF='0067dc4a73'
+def old_text(name,version=420):
+    text=subprocess.run(['git','show',PAN_BEFORE_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,
+        capture_output=True,text=True,check=True).stdout.replace('/*[EXTRA_CODE_HERE]*/','')
+    return ('#version %d\n'%version)+('#define COMPUTE_SHADER 1\n' if version==430 else '')+text
+getteximage=fn('glGetTexImage',None,U,I,U,U,P);uniform2f=fn('glUniform2f',None,I,C.c_float,C.c_float);uniform4fv=fn('glUniform4fv',None,I,I,C.POINTER(C.c_float))
+PAN_VS="""#version 420
+uniform float z; uniform vec2 pan; uniform vec2 vp; uniform int kind; uniform float angle;
+uniform vec4 strips[160];
+out vec2 obj; out vec2 across;
+void main(){
+  int k = gl_VertexID % 6; int s = gl_VertexID / 6;
+  vec2 c[6] = vec2[6](vec2(0,0),vec2(1,0),vec2(0,1),vec2(1,0),vec2(1,1),vec2(0,1));
+  vec2 q = c[k]; vec2 p;
+  if (kind == 0) { p = vec2(mix(-1.0, 2.0, q.x) * vp.x, mix(-0.5, 1.5, q.y) * vp.y); across = vec2(0.0); }
+  else {
+    vec4 st = strips[s]; float u = q.x * 2.0 - 1.0; float v = (q.y * 2.0 - 1.0) * vp.y;
+    vec2 dir = vec2(sin(angle), cos(angle)); vec2 nrm = vec2(cos(angle), -sin(angle));
+    p = vec2(st.x, vp.y * 0.5) + nrm * (u * st.y) + dir * v; across = vec2(u, float(s));
+  }
+  obj = p;
+  gl_Position = vec4((p + pan) / vp * 2.0 - 1.0, z, 1.0);
+}"""
+PAN_SHADE="""#version 420
+uniform float test_alpha; uniform vec3 test_rgb; uniform float period; uniform vec2 tdir; uniform float phase;
+in vec2 obj; in vec2 across; out vec4 frag_color;
+void main(){
+  float t = 0.55 + 0.45 * sin(6.2831853 * dot(obj, tdir) / period + phase);
+  float e = 1.0 - 0.35 * across.x * across.x;     // hair: darker towards the strip's sides
+  frag_color = vec4(test_rgb * (t * e), test_alpha);
+}"""
+PAN_VARIANT="""#version 420
+uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
+in vec2 obj; in vec2 across;
+void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }"""
+pan_variant=program([(0x8B31,PAN_VS),(0x8B30,PAN_VARIANT),(0x8B30,helper),(0x8B30,engine)])
+pan_shade=program([(0x8B31,PAN_VS),(0x8B30,PAN_SHADE)])
+PAN=[0.0]
+def pan_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=None,slope_y=0.):
+    g=slope;use(prog)
+    uniform1f(loc(prog,b'z'),z);uniform2f(loc(prog,b'pan'),PAN[0],0.0);uniform2f(loc(prog,b'vp'),float(W),float(H))
+    uniform1i(loc(prog,b'kind'),g['kind']);uniform1f(loc(prog,b'angle'),g.get('angle',0.))
+    count=1
+    if g['kind']==1:
+        arr=g['strips'];count=len(arr)//4;uniform4fv(loc(prog,b'strips'),count,(C.c_float*len(arr))(*arr))
+    if prog==pan_variant: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
+    else:
+        uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
+        uniform1f(loc(prog,b'period'),g['period']);uniform2f(loc(prog,b'tdir'),*g['tdir']);uniform1f(loc(prog,b'phase'),g['phase'])
+    draw(4,0,6*count)
+ref_ms=texms(RGBA32F,8);ref_fbo=fbo((COLOR0,TEXMS,ref_ms))
+ref_out=tex2d(RGBA32F,RGBA,FLOAT);ref_out_fbo=fbo((COLOR0,TEX2D,ref_out))
+avg_prog=program([(0x8B31,screen_vertex),(0x8B30,"""#version 420
+uniform sampler2DMS src; out vec4 frag_color;
+void main(){ ivec2 px=ivec2(gl_FragCoord.xy); vec4 s=vec4(0.0); for(int i=0;i<8;++i) s+=texelFetch(src,px,i); frag_color=s/8.0; }""")])
+def sorted_reference(layers,rgba):
+    # the exact image: sorted far to near over-blending at the 8 samples, averaged per pixel
+    bindfbo(FB,ref_fbo);drawbuffer(COLOR0);enable(MULTISAMPLE);disable(0x0C11)
+    clearcolor(*rgba);clear(0x4000);disable(DEPTH_TEST);disable(POLY_OFFSET)
+    enable(BLEND);blendsep(SRC_ALPHA,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
+    for z,a,rgb,seed,glow,geo in sorted(layers,key=lambda l:-l[0]): pan_layer(pan_shade,z,a,rgb,slope=geo)
+    disable(BLEND);disable(MULTISAMPLE)
+    bindfbo(FB,ref_out_fbo);use(avg_prog);bind_unit(9,TEXMS,ref_ms);uniform1i(loc(avg_prog,b'src'),9);draw(4,0,3)
+    out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
+    enable(DEPTH_TEST)
+    return np.frombuffer(out,dtype=np.float32).reshape(H,W,4).copy()
+def pan_hue(rng):
+    h=rng.uniform(0,1);sat=rng.uniform(0.5,0.9);v=rng.uniform(0.6,1.0)
+    i=int(h*6)%6;f=h*6-int(h*6);p,q,t=v*(1-sat),v*(1-sat*f),v*(1-sat*(1-f))
+    return [(v,t,p),(q,v,p),(p,v,t),(p,q,v),(t,p,v),(v,p,q)][i]
+def pan_tex(rng,lo,hi):
+    a=rng.uniform(0,math.pi);return dict(period=rng.uniform(lo,hi),tdir=(math.cos(a),math.sin(a)),phase=rng.uniform(0,6.28))
+def pan_scene(name):
+    if name=='T3':   # the three layers above, with texture detail (periods 5 to 11 px, colours that move with the surface)
+        cols=[(1.,0.,0.),(0.,1.,0.),(0.,0.,1.)];alph=(0.2,0.4,0.5);zs=(0.3,0.45,0.6);per=[(7.,0.3),(11.,1.9),(5.,2.6)]
+        return [L(zs[i],alph[i],cols[i],seed=5+i,slope=dict(kind=0,period=per[i][0],tdir=(math.cos(per[i][1]),math.sin(per[i][1])),phase=0.7*i)) for i in range(3)]
+    rng=np.random.default_rng(1000+sum(map(ord,name))%97);zs=np.linspace(0.2,0.7,10);layers=[]
+    for i in range(10):
+        a=float(rng.uniform(0.2,0.6));rgb=pan_hue(rng)
+        if name=='Q10': geo=dict(kind=0,**pan_tex(rng,4.,10.))   # ten full textured layers
+        else:   # S10: ten layers of parallel hair strips, 1.5 to 5 px wide, about 60 % coverage, tilted -20 to 20 degrees
+            ang=float(rng.uniform(-0.35,0.35));x=-260.0+rng.uniform(0,4);arr=[]
+            while x<W+60 and len(arr)<640:
+                hw=rng.uniform(0.75,2.5);x+=hw;arr+=[x,hw,0.,0.];x+=hw+rng.uniform(1.0,3.5)
+            geo=dict(kind=1,strips=arr,angle=ang,**pan_tex(rng,6.,16.))
+        layers.append(L(float(zs[i]),a,rgb,seed=101+i,slope=geo))
+    return layers
+def pan_reproj(d): return [1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*d/W,0.,0.,1.]
+PAN_MX,PAN_MY=max(8,W//10),max(4,H//32)   # the border left out: the columns that enter have no history
+def gauss_lp(img,sigma=1.5):
+    r=int(math.ceil(3*sigma));k=np.exp(-0.5*(np.arange(-r,r+1)/sigma)**2);k/=k.sum();out=img
+    for ax in (0,1):
+        pad=[(0,0)]*img.ndim;pad[ax]=(r,r);q=np.pad(out,pad,mode='edge')
+        out=sum(k[i]*np.take(q,range(i,i+img.shape[ax]),axis=ax) for i in range(2*r+1))
+    return out
+def pan_err(img,ref):
+    # rmse/255 on RGB, and of the same error image after a Gaussian blur of sigma 1.5 px (the smear's share)
+    e=(img[...,:3]-ref[...,:3]).astype(np.float64);lp=gauss_lp(e);c=(slice(PAN_MY,H-PAN_MY),slice(PAN_MX,W-PAN_MX))
+    return float(np.sqrt(np.mean(e[c]**2))*255),float(np.sqrt(np.mean(lp[c]**2))*255)
+def history_finite(T):
+    # the RGBA16F history (alpha x colour, alpha) of the last frame: nothing negative or NaN
+    bind_unit(10,TEX2D,T['tex'][T['idx']]);out=(C.c_float*(W*H*4))();getteximage(TEX2D,0,RGBA,FLOAT,out)
+    a=np.frombuffer(out,dtype=np.float32);assert np.isfinite(a).all() and (a>=0).all(),('the history holds a negative or NaN value',a.min())
+def pan_run(layers,d,old_prog,frames=40):
+    global resolve_prog
+    new_prog=resolve_prog;Ts={'old':new_temporal(pan_reproj(d)),'new':new_temporal(pan_reproj(d))};plain=[];last={}
+    identical=True;worst=0.;differing=0;sc=(0.5,0.5,0.5,0.0)
+    for f in range(1,frames+1):
+        TEMPORAL_FRAME[0]=f;PAN[0]=f*d
+        ref=sorted_reference(layers,sc)
+        plain.append(pan_err(np.array(stochastic(layers,8,8,scene_rgba=sc),dtype=np.float32).reshape(H,W,4),ref))
+        imgs={}
+        for key,prog in (('old',old_prog),('new',new_prog)):
+            resolve_prog=prog
+            imgs[key]=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts[key]),dtype=np.float32).reshape(H,W,4)
+        resolve_prog=new_prog
+        dd=np.abs(imgs['old']-imgs['new']);identical=identical and not dd.any()
+        worst=max(worst,float(dd.max()));differing=max(differing,int(np.count_nonzero(dd.max(axis=2))))
+        history_finite(Ts['new'])
+        if f==frames: last=dict(old=pan_err(imgs['old'],ref),new=pan_err(imgs['new'],ref))
+    return dict(plain=(float(np.mean([e[0] for e in plain])),float(np.mean([e[1] for e in plain]))),old=last['old'],new=last['new'],identical=identical,worst=worst,differing=differing)
+if True:
+    saved=(layer,variant,shade)
+    if FRAGMENT_RESOLVE: old_resolve=program([(0x8B31,screen_vertex),(0x8B30,old_text('alphaStochasticResolveF.glsl')),(0x8B30,old_text('stochasticResolveUtilF.glsl'))])
+    else: old_resolve=program([(COMPUTE,old_text('alphaStochasticResolveC.glsl',430)),(COMPUTE,old_text('stochasticResolveUtilF.glsl',430))])
+    layer,variant,shade=pan_layer,pan_variant,pan_shade
+    try:
+        set_opaque(1.0);pan_rows=[]
+        for name in ('T3','Q10','S10'):
+            layers=pan_scene(name)
+            for d in (0.0,1.0,4.0,0.25,0.5,1.3,2.5):
+                r=pan_run(layers,d,old_resolve);pan_rows.append((name,d,r))
+                if d==int(d):   # a whole-pixel pan and the static view: the same image as the nearest read, bit for bit
+                    # the hair strips' passes are not bit-deterministic on this GPU (the nearest resolve against itself differs by one
+                    # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
+                    assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
+                else:
+                    assert r['new'][1]<r['plain'][1],('the history beats 8 samples in low-pass error',name,d,r)
+                    if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats 8 samples in rmse on textured layers',name,d,r)
+                    assert r['new'][0]<0.6*r['old'][0] and r['new'][1]<0.5*r['old'][1],('the smear is gone',name,d,r)
+            checks+=1
+    finally:
+        layer,variant,shade=saved;TEMPORAL_FRAME[0]=0
+    print('sub-pixel camera pans, frame 40, rmse/255 (low-pass in brackets): scene px/frame | plain 8 samples | nearest history (before) | Catmull-Rom history (now)')
+    for name,d,r in pan_rows:
+        print(f"  {name:3s} {d:4.2f} | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['old'][0]:5.2f} ({r['old'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})"+(' | same image as the nearest read' if d==int(d) else ''))
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
