@@ -213,6 +213,30 @@ are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reproje
   If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
   allocation is tried again (1 s, doubling to 30 s, logged at that cadence). Switching the setting
   off releases the history and stops the accumulation at once.
+- The history is read with a Catmull-Rom filter at the exact reprojected position (`stoch_history_catmull_rom`, 4 x 4 texels, the
+  weights of Karis, "High Quality Temporal Supersampling", SIGGRAPH 2014, and Jimenez, "Filmic SMAA", SIGGRAPH 2016), then clamped to the 3 x 3 box and
+  blended 1/8 as before. Where the reprojection is a whole number of pixels in an axis (the offset from the texel's centre within 1/64 px, the
+  static view included) the weights of that axis are exactly 0, 1, 0, 0 and a view with both axes whole reads the one texel, so the
+  image is bit-identical to the nearest read. The filter's negative lobes are bounded by the clamp (its minimum is never negative), so the
+  RGBA16F history (alpha x colour, alpha) holds no negative or NaN value; taps off the screen clamp to the edge texel, and the
+  rules for no history are unchanged. The compute resolve calls the same function. The shadow producer's depth-checked bilinear read
+  (`stoch_history_bilinear`) is untouched. The history texture stays NEAREST (all reads are `texelFetch`), so the composite is unaffected.
+  Before 2026-11-14 the read was the nearest texel (`ivec2(puv * size)`): a camera move that is not a whole number of pixels a frame lost
+  its fractional part every frame, and the 1/8 blend accumulated the loss as a smear 1 to 2 px behind the image. Measured offline
+  (`test_alpha_stochastic.py`, 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position, low-pass in brackets after a
+  Gaussian of 1.5 px; a border of 25 x 8 px left out), panning 0.25, 0.5, 1.3 and 2.5 px a frame:
+
+  | scene | plain 8 samples | nearest history (before) | Catmull-Rom history (now) |
+  |---|---|---|---|
+  | three textured layers | 3.6 (0.71) | 12.8 to 14.9 (4.6 to 6.3) | 2.2 (0.47 to 0.49) |
+  | ten textured layers | 5.5 (1.08) | 15.5 to 17.5 (4.2 to 5.1) | 3.4 to 3.5 (0.71 to 0.72) |
+  | ten layers of hair strips | 4.95 (0.99) | 15.5 to 17.4 (4.9 to 6.0) | 6.2 to 6.6 (0.64 to 0.67) |
+
+  A whole-pixel pan (0, 1, 4 px a frame) gives the same image as before. Hair strips: the history does not beat plain 8 samples in rmse
+  there (6.2 to 6.6 against 4.95: the strips are 1.5 to 5 px wide and the 4 x 4 filter softens their detail), but it beats them in low-pass
+  error (0.64 to 0.67 against 0.99; the nearest read: 4.9 to 6.0): the smear is gone, what remains is the fine
+  detail the filter softens (a separate bench of the same scene read 6.0 against 4.96 and 0.58 against 0.98). The resolve pass costs the same: 0.281 against 0.283 ms (static) and 0.285 against 0.288 ms (0.5 px a frame) at 1920 x 1080, 0.508 against 0.502 and 0.506 against 0.503 ms at 2560 x 1440,
+  on the offline harness (RTX 5070 Ti, NVIDIA 621.14, ten textured layers, GPU timer query).
 - Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
   history ghosts, limited by the clamp.
 

@@ -62,6 +62,47 @@ vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size)
     return texelFetch(history, ivec2(puv * vec2(size)), 0);
 }
 
+// The transparency's history at the exact reprojected position, Catmull-Rom filtered over 4 x 4 texels
+// (the temporal history filter of Karis, "High Quality Temporal Supersampling", SIGGRAPH 2014; the
+// weights as in Jimenez, "Filmic SMAA", SIGGRAPH 2016). The nearest texel drops the sub-pixel part of
+// the camera's motion every frame, and the 1/8 blend accumulates it as a smear 1 to 2 px behind the
+// image. Where the reprojection is a whole number of pixels (an offset of the texel's centre within
+// 1/64 px, a static view included: the reprojection's float error is far below that, also at 4K) the weights are exactly 0, 1, 0, 0 and the one texel is read, as
+// the nearest read did: the result is then bit-identical. The negative lobes are bounded by the
+// 3 x 3 clamp of stoch_accumulate (the neighbourhood is never negative: nor is the result).
+vec4 stoch_history_catmull_rom(sampler2D history, vec2 puv, ivec2 size)
+{
+    vec2 u = puv * vec2(size);
+    ivec2 n = ivec2(u);                       // the texel the nearest read takes
+    vec2 d = u - (vec2(n) + 0.5);             // the offset from its centre, -0.5 to 0.5
+    d = vec2(abs(d.x) < 1.0 / 64.0 ? 0.0 : d.x, abs(d.y) < 1.0 / 64.0 ? 0.0 : d.y);
+    if (d.x == 0.0 && d.y == 0.0)
+    {
+        return texelFetch(history, n, 0);
+    }
+    ivec2 b = n - ivec2(d.x < 0.0 ? 1 : 0, d.y < 0.0 ? 1 : 0);   // the texel left of / below the position
+    vec2 t = d + vec2(d.x < 0.0 ? 1.0 : 0.0, d.y < 0.0 ? 1.0 : 0.0);
+    vec2 w0 = t * (-0.5 + t * (1.0 - 0.5 * t));
+    vec2 w1 = 1.0 + t * t * (-2.5 + 1.5 * t);
+    vec2 w2 = t * (0.5 + t * (2.0 - 1.5 * t));
+    vec2 w3 = t * t * (-0.5 + 0.5 * t);
+    float wx[4] = float[4](w0.x, w1.x, w2.x, w3.x);
+    float wy[4] = float[4](w0.y, w1.y, w2.y, w3.y);
+    vec4 h = vec4(0.0);
+    for (int j = 0; j < 4; ++j)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            float w = wx[i] * wy[j];
+            if (w != 0.0)
+            {
+                h += texelFetch(history, clamp(b + ivec2(i - 1, j - 1), ivec2(0), size - 1), 0) * w;
+            }
+        }
+    }
+    return h;
+}
+
 // For the shadow producer (not used by the transparency): bilinear history from the 4 nearest texels, each kept only where its stored linear depth
 // (channel depth_channel) agrees with the expected one (disocclusion); returns the kept weight.
 float stoch_history_bilinear(sampler2D history, vec2 puv, ivec2 size, float w_expected, int depth_channel, out vec4 hist)
