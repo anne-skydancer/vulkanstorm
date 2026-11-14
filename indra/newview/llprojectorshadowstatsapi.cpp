@@ -103,7 +103,7 @@ namespace
             tile["y"] = (S32)t.y;
             tile["drawn_frame"] = (S32)t.drawnFrame;
             tile["cam_dist"] = (F64)t.camDist;
-            if (with_crc && t.size && t.drawnFrame && glGetTextureSubImage)
+            if (with_crc && t.size && t.drawnFrame && gGLManager.mGLVersion >= 4.49f)   // GL 4.5 core: fetched only from 4.5 up (llgl.cpp); the version, not the address (-Werror=address)
             {
                 std::vector<F32> texels((size_t)t.size * t.size);
                 glGetTextureSubImage(gPipeline.mProjectorShadows.atlasS(), 0, (GLint)t.x, (GLint)t.y, 0, (GLsizei)t.size, (GLsizei)t.size, 1,
