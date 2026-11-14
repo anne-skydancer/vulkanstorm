@@ -8198,27 +8198,11 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
         releaseAlphaStochastic();
         return;
     }
-    if (!gAlphaStochasticShadersReady || !gAlphaStochasticExpandProgram.mProgramObject ||
-        !gAlphaStochasticCompositeProgram.mProgramObject)
-    {
-        // Not ready, not unavailable: the method stays selected, the blended faces are drawn with the
-        // plain alpha pass, and the next shader reload tries the shaders again.
-        LL_WARNS_ONCE("Pipeline") << "Stochastic transparency: its shaders did not build; the method stays selected "
-                                     "and the plain alpha pass draws the blended faces until a shader reload builds them" << LL_ENDL;
-        releaseAlphaStochastic();
-        return;
-    }
 
     if (mAlphaSTFBO && mAlphaSTWidth == w && mAlphaSTHeight == h && mAlphaSTPassSamples == pass)
     {
         updateAlphaStochasticHistory(); // the setting may have changed
         return; // already sized
-    }
-    // A failed allocation is tried again after 1 s, 2 s, 4 s ... 30 s, not on every frame; a
-    // screen buffer allocation tries at once (mAlphaSTRetryAt reset by its caller).
-    if (LLTimer::getElapsedSeconds() < mAlphaSTRetryAt)
-    {
-        return;
     }
     releaseAlphaStochastic();
     while (glGetError() != GL_NO_ERROR) {}
@@ -8248,8 +8232,6 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
         releaseAlphaStochastic();
         return;
     }
-    mAlphaSTRetryDelay = 0.5f;
-    mAlphaSTRetryAt = 0.0;
 
     mAlphaSTWidth = w;
     mAlphaSTHeight = h;

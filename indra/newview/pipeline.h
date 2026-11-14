@@ -827,8 +827,6 @@ public:
     U32 mAlphaSTWidth = 0;
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
-    F64 mAlphaSTRetryAt = 0.0;      // no allocation attempt before this time (LLTimer::getElapsedSeconds)
-    F32 mAlphaSTRetryDelay = 0.5f;  // doubled per failed attempt, at most 30 s
     // the temporal accumulation: the transparency's history in the stochastic engine (two
     // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and, on the
     // fragment path only (the default on every device), the full-size RGBA32F target of this frame's averaged samples

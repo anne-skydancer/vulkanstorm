@@ -30,7 +30,7 @@ on:
   # never builds twice; pushes build the vkstorm-* lines. No tag triggers a
   # build.
   push:
-    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-aleph"]
+    branches: ["vkstorm-release", "vkstorm-devel", "vkstorm-canary", "vkstorm-vulkan", "vkstorm-vulkan-rhi", "vkstorm-vulkan-direct", "vkstorm-rust", "vkstorm-aleph"]
     paths-ignore:
       - '.github/**'
       - '.gitignore'

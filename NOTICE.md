@@ -48,7 +48,7 @@ Firestorm files keep those files' headers. See
 
 Code available only under the GPL (for example the Aurora Viewer,
 GPL-3.0-or-later) can be used where its authors permit and the licence
-audit is updated. Aurora is still a design reference first. The night sky (not on `vkstorm-aleph`)
+audit is updated. Aurora is still a design reference first. The night sky
 (`indra/newview/llnightsky.*` and its data tools) is the owner's own work,
 relicensed by her from her Aurora fork.
 

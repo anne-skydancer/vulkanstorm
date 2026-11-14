@@ -30,9 +30,8 @@ shipped (`USE_MESAZINK` is off in the CI configuration). This line has no
 GPL-only code that is not compatible with GPL-3.0.
 
 Upstream Firestorm merges must keep it that way: check new upstream packages
-against this audit when integrating `upstream/master`. This line does not have the
-night sky, `alphaOITPackF.glsl` or `vlc_cache_gen.cpp`; their entries in the
-header lists below do not apply here.
+against this audit when integrating `upstream/master`. This line does not have
+`alphaOITPackF.glsl`; its entry in the header lists below does not apply here.
 
 ## Vivox removed (2026-11-08)
 

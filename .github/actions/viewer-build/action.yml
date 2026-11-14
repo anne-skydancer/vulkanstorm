@@ -384,7 +384,7 @@ runs:
           exit 1
         fi
 
-    - name: Run statistics, script metadata, transport, TLS and physics decomposition regression tests
+    - name: Run statistics, script metadata, transport, TLS, primitive, night sky and physics decomposition regression tests
       # Release builds (vkstorm-release pushes, publishing dispatches) build no tests.
       if: env.VIEWER_BUILD_TYPE != 'Release'
       shell: bash
@@ -392,7 +392,8 @@ runs:
         set -euo pipefail
         cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
         cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
-          --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver INTEGRATION_TEST_llmodel_decomposition \
+          --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
+          llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
           INTEGRATION_TEST_llcorehttp
         # The TLS test: this line's test helpers register tests with CTest,
         # so run it here, and fail unless it is found. The credential-store

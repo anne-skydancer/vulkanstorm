@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Offline GPU benchmark of the real night sky's shader (deferred/skyF.glsl), no viewer launch.
 
 Times a full-screen pass that evaluates night_sky() for every pixel with GL_TIME_ELAPSED
