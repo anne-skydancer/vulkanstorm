@@ -157,6 +157,7 @@ LLGLSLShader            gAlphaStochasticExpandProgram;
 LLGLSLShader            gAlphaStochasticCompositeProgram;
 LLGLSLShader            gAlphaStochasticResolveProgram;
 LLGLSLShader            gAlphaStochasticCurrentProgram;
+LLGLSLShader            gAlphaStochasticSmoothProgram;
 LLGLSLShader            gShadowStochasticResolveProgram;   // <Vulkanstorm/> Stochastic shadows
 LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Stochastic shadows
 bool                    gAlphaStochasticShadersReady = false;
@@ -292,9 +293,8 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
-// resolve is a fragment pass with a pre-pass target on every device (LLStochasticEngine::computeResolve:
-// GL compute stalls the frame in motion); the compute shader with imageStore (GL 4.3, GLSL 4.30) is kept
-// compiled for the Vulkan renderer; the OpenGL viewer never selects it. The
+// resolve is three fragment passes on every device (GL compute stalls the frame in motion; the transparency has no compute
+// resolve since 2026-11-14, the Vulkan renderer takes Aurora Viewer PR 3663's compute steps). The
 // device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
@@ -376,7 +376,8 @@ static void unload_stochastic_shaders()
                                   &gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1],
                                   &gDeferredPBRAlphaStochasticProgram[0], &gDeferredPBRAlphaStochasticProgram[1],
                                   &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram,
-                                  &gAlphaStochasticResolveProgram, &gAlphaStochasticCurrentProgram })
+                                  &gAlphaStochasticResolveProgram, &gAlphaStochasticCurrentProgram,
+                                  &gAlphaStochasticSmoothProgram })
     {
         shader->unload();
     }
@@ -1154,16 +1155,17 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     // <Vulkanstorm> the stochastic engine's sampling and the transparency's coverage masks, attached
     // to the alpha programs' alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional:
-    // without them the variants are not built, the method is not ready (logged) and sorted
-    // alpha draws the blended faces until a shader reload builds them; the viewer starts either way. The engine's resolve object is the fragment path's
-    // (the one path on every device); the compute resolve
-    // compiles its own objects.
+    // without them the variants are not built, the method is not ready (logged) and the blended
+    // faces are not drawn until a shader reload builds them (a broken shader set, never another
+    // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: the
+    // transparency's three passes and the Stochastic shadows' (whose compute resolve, A/B only,
+    // VKSTORM_STOCH_COMPUTE_RESOLVE=1, compiles its own objects).
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
         mFragmentShaderObjects.erase(*helper);
         // the fragment resolve (GL 4.0 to 4.2) attaches the engine's resolve object; the compute resolve compiles it as a compute object
-        const bool fragment_resolve = !LLStochasticEngine::computeResolve();
-        const bool needed = helper == &STOCH_RESOLVE_HELPER ? fragment_resolve && (stochastic_transparency_shaders() || stochastic_shadow_resolve_shaders())
+        const bool shadow_fragment_resolve = !LLStochasticEngine::computeResolve() && stochastic_shadow_resolve_shaders();
+        const bool needed = helper == &STOCH_RESOLVE_HELPER ? stochastic_transparency_shaders() || shadow_fragment_resolve
                                                             : stochastic_transparency_shaders();
         if (needed)
         {
@@ -3465,51 +3467,40 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
         // The temporal resolve is only the accumulation across frames: a build failure turns that
-        // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
-        // history), never the transparency and never another method. The path is decided once
-        // (LLStochasticEngine::computeResolve: the fragment resolve on every device;
-        // compute is never chosen in the OpenGL viewer) and exactly one is built.
+        // accumulation off (the frames keep their 4 samples; alphaStochasticResolveReady gates the
+        // history), never the transparency and never another method. Three fragment programs on every device:
+        // the measuring pass (this frame's samples averaged, their grain and the depths), the blend (the engine's
+        // resolve object attached) and the smooth (also with it, for the frame weight).
         gAlphaStochasticResolveProgram.mName = "Alpha Stochastic Temporal Resolve";
         gAlphaStochasticResolveProgram.mShaderFiles.clear();
         gAlphaStochasticResolveProgram.clearPermutations();
-        gAlphaStochasticResolveProgram.mFeatures.attachNothing = false;
         gAlphaStochasticCurrentProgram.mName = "Alpha Stochastic Current";
         gAlphaStochasticCurrentProgram.mShaderFiles.clear();
         gAlphaStochasticCurrentProgram.clearPermutations();
-        bool resolve_built = false;
-        if (LLStochasticEngine::computeResolve())
-        {
-            // one compute program: the transparency's part (this frame's samples averaged into a shared
-            // tile) and the engine's (stochasticResolveUtilF.glsl), both compiled as compute objects.
-            // attachNothing: the fragment helpers LLShaderMgr::attachShaderFeatures would attach
-            // (globalF.glsl) have no place in a compute link.
-            gAlphaStochasticResolveProgram.mFeatures.attachNothing = true;
-            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveC.glsl", GL_COMPUTE_SHADER));
-            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/stochasticResolveUtilF.glsl", GL_COMPUTE_SHADER));
-            gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-            resolve_built = ready && gAlphaStochasticResolveProgram.createShader();
-        }
-        else
-        {
-            // The default on every device: the averaging pre-pass (this frame's samples averaged once into an RGBA32F
-            // target) and the resolve (the engine's, with the transparency's value of this frame)
-            gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-            gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
-            gAlphaStochasticCurrentProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-            gAlphaStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
-            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-            gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
-            gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-            resolve_built = ready && mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) &&
-                            gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader();
-        }
+        gAlphaStochasticSmoothProgram.mName = "Alpha Stochastic Smooth";
+        gAlphaStochasticSmoothProgram.mShaderFiles.clear();
+        gAlphaStochasticSmoothProgram.clearPermutations();
+        gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticCurrentProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gAlphaStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
+        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gAlphaStochasticSmoothProgram.addPermutation("STOCH_RESOLVE", "1");
+        gAlphaStochasticSmoothProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticSmoothProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticSmoothF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticSmoothProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        const bool resolve_built = ready && mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) &&
+                                   gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader() &&
+                                   gAlphaStochasticSmoothProgram.createShader();
         if (ready && !resolve_built)
         {
-            LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve (" << (LLStochasticEngine::computeResolve() ? "compute" : "fragment")
-                                    << ") failed to build; the temporal accumulation is off and each frame keeps its "
-                                    << LLStochasticEngine::SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
+            LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve failed to build; the temporal accumulation is off and each frame keeps its "
+                               << LLStochasticEngine::TRANSPARENCY_SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
             gAlphaStochasticCurrentProgram.unload();
             gAlphaStochasticResolveProgram.unload();
+            gAlphaStochasticSmoothProgram.unload();
         }
         LLGLSLShader* bases[] = { &gDeferredAlphaProgram, &gDeferredSkinnedAlphaProgram,
                                   &gDeferredFullbrightAlphaMaskAlphaProgram, &gDeferredSkinnedFullbrightAlphaMaskAlphaProgram,

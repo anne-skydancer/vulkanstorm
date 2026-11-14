@@ -23,6 +23,21 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
   (`oit_stochastic_expand.wgsl` `fs_expand_ss`). No other Aurora code (GPL-3.0-only, by other
   authors) was used: the OpenGL resources, the passes in `LLDrawPoolAlpha`, the shader variants
   and the polygon offsets are written for this renderer.
+- The 2026-11-14 upgrade (S = 4 samples, the dither, the NaN guard and the grain-measuring resolve): the samples are the
+  multisample samples of the stochastic targets with the coverage through the hardware sample mask, as Enderton et al.
+  2010 describe it (S = the samples of the multisampled targets); the grain-measuring resolve (the grain of a pixel as the
+  standard error of its samples' colours, the frame weight from it, the last frame left out where the total alpha or the far
+  layer's position differ, the clamp box widened by the grain, the smooth of the leftover grain) and the set of guards against
+  values that are not finite are taken from Aurora Viewer PR 3663 (Gaalrauch, also credited Rohacan Hirons, GPL-3.0-or-later,
+  merged 2026-11-14; `oit_stochastic.wgsl` `cs_resolve`, `cs_temporal`, `cs_smooth`, `st_nan`, `st_sample`, `st_through`), mapped
+  onto this renderer's fragment passes (`alphaStochasticCurrentF.glsl`, `alphaStochasticResolveF.glsl`, `alphaStochasticSmoothF.glsl`,
+  `stochasticResolveUtilF.glsl`, `alphaStochasticCompositeF.glsl`); the notices of the ported functions and constants stay in those
+  files. The blue-noise tile is generated here (void and cluster, R. Ulichney, "The void-and-cluster method for dither array
+  generation", SPIE 1993: `scripts/perf/gen_stochastic_blue_noise.py`, `llstochasticbluenoise.h`) and the golden-ratio step is a Kronecker
+  sequence (one integer multiply). Where this renderer differs from the PR: the history keeps the four-vector (alpha x colour, alpha)
+  with the alpha correction made after the blend, not the corrected colour (offline the corrected colour made the low-frequency error
+  twice as large at S = 4); the total alpha is taken at every stochastic sample, not at one; the history is read with a Catmull-Rom
+  filter, not bilinear; and the smooth's reach is 0.5 grains, not 2 (below).
 - The decision: the owner, 2026-11-05, "stoch and ppll don't go well together. got to be 1 or
   the other. stoch is less expensive in my experience with aurora, and comparable quality with
   the algorithm used there."
@@ -31,12 +46,12 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
 
 The sampling and the temporal resolve are shared with the producers that will use them (the Stochastic
 shadow method, RenderShadowMethod 2, later): GLSL objects `stochasticSampleF.glsl` (hash, per-frame seed,
-mask lookup in the one S = 8 table, `stoch_masks`) and `stochasticResolveUtilF.glsl` (reprojection with the
+mask lookup in the transparency's S = 4 table with the blue-noise tile, `stoch_masks`) and `stochasticResolveUtilF.glsl` (reprojection with the
 last frame's matrices, Catmull-Rom (transparency) and depth-checked bilinear (shadow) history reads, the 3 x 3 clamp, the 1/8 blend,
 `stoch_reproj`, `stoch_weight`, `stoch_history_valid`; stage-neutral). The sampling object is compiled once
 and attached to the programs that sample (`STOCH_SAMPLE_OBJECT`, `LLShaderMgr::attachShaderFeatures`); the
-resolve util is listed in the producer's own `mShaderFiles` and compiled as that program's stage (a compute
-object for the compute resolve, kept compiled for the Vulkan renderer and never selected by the OpenGL viewer; the fragment resolve attaches it as a fragment object). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
+resolve util is attached as a fragment object (`STOCH_RESOLVE`) to the transparency's blend and smooth programs and to the shadows'
+resolve (the shadows' compute resolve, A/B only, compiles it as a compute object; the transparency's compute resolve is retired). The producer defines `vec4 stoch_current(ivec2)` and its `main()`. In C++, `llstochastichistory.h`:
 `LLStochasticEngine` (the mask table, counted textures) and `LLStochasticHistory`, one instance per producer
 (`allocate`, `release`, `beginFrame`, `seedFrame`, `historyUsed`, `setResolveUniforms`, `endFrame`,
 `invalidate`).
@@ -48,16 +63,17 @@ faces run on their own multisampled targets, as Aurora does without MSAA:
 
 | Target | Format | Use |
 |---|---|---|
-| accumulation | RGBA16F, P samples | alpha x colour and alpha, additive |
+| accumulation | RGBA16F, P = S = 4 samples | alpha x colour and alpha, additive |
 | transparency | RG16F, P samples | red: prod(1 - alpha), cleared to 1; green: the faces' glow |
 | stochastic depth | DEPTH_COMPONENT24, P samples | the opaque depth spread, then the faces' stochastic depth |
-| mask table | R32UI, 2048 x (S + 1) | row r: 2048 random r-subsets of the S sample bits |
+| mask table | R32UI, 2048 x (S + 3) | row r: 2048 random r-subsets of the S sample bits; the last two rows: the 64 x 64 blue-noise tile (ranks 0 to 4095) |
 
 P, the samples of one pass, is the most the device takes for the three formats up to 8 (NVIDIA
 621.01 honours only the low 4 bits of a texture-fetched `gl_SampleMask` at 16 samples). S, the
-samples in all, is 8 (`LLStochasticEngine::SAMPLES`; the 4 and 16 of the former debug setting `RenderAlphaStochasticSamples` are gone with it); S / P iterations run the depth
-and accumulation passes with the next P bits of the same mask. Memory: 16 B per sample, 128 B per
-pixel at P = 8 (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render resolution
+samples in all, is 4 since 2026-11-14 (`LLStochasticEngine::TRANSPARENCY_SAMPLES`; it was 8, shared with the shadows' ray count
+`SAMPLES`, which stays 8); S / P iterations run the depth and accumulation passes with the next P bits of the same mask (one
+iteration at S = 4). Memory: 16 B per sample, 64 B per
+pixel at P = 4 (127 MiB at 1920x1080, 225 MiB at 2560x1440), allocated at the render resolution
 while the method is selected and freed otherwise; nothing grows with the depth of the scene.
 
 `LLDrawPoolAlpha::renderStochastic` (`pipeline.cpp` holds the targets, the spread and the
@@ -74,9 +90,10 @@ composite):
    glowing faces' glow (`emissiveF.glsl`, `pbrglowF.glsl`, which now write the glow in green as
    well) into the green of the transparency target; the depth spread again before the next
    iteration;
-4. **temporal resolve** (`resolveAlphaStochasticTemporal`, fragment resolve on every device: `alphaStochasticCurrentF.glsl` + `alphaStochasticResolveF.glsl`; the compute `alphaStochasticResolveC.glsl` is kept compiled for the Vulkan renderer and never selected by the OpenGL viewer): this
-   frame's accumulation averaged over the samples, blended with the last frame's into the history
-   (see Temporal accumulation);
+4. **temporal resolve** (`resolveAlphaStochasticTemporal`, three fragment passes on every device: `alphaStochasticCurrentF.glsl`,
+   `alphaStochasticResolveF.glsl`, `alphaStochasticSmoothF.glsl`; the compute `alphaStochasticResolveC.glsl` is retired, the Vulkan renderer
+   takes the compute steps, doc/vulkan/stochastic-transparency-grain-resolve.md): this frame's accumulation averaged over the samples and
+   its grain measured, blended with the last frame's into the history by that grain, and smoothed (see Temporal accumulation);
 5. **composite** (`alphaStochasticCompositeF.glsl`) over the scene: the scene dimmed by the
    pixel's transparency (its glow in alpha dimmed alike), the accumulated colour added times the
    alpha correction (total alpha over accumulated alpha); the faces' glow, corrected the same
@@ -152,119 +169,95 @@ per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread
 The accumulation is part of the method, not a user choice: it is not in Preferences. The debug setting
 exists for debugging only, and is not persisted (see Settings).
 
-8 samples in one run of the passes, with the noise averaged over the frames, instead of 16 samples in
-two runs: the second run of the stochastic depth and accumulation is gone. The design and the weights
-are the author's Aurora Viewer's (feat/alpha-oit, `oit_stochastic.wgsl` `reprojected` and `cs_resolve`).
+4 samples in one run of the passes (S = 4 since 2026-11-14; 8 before), with the noise measured per pixel and averaged over the frames.
+The design is the author's Aurora Viewer's (`oit_stochastic.wgsl`) with the grain-measuring resolve of Aurora PR 3663 (see Provenance).
+The masks' seeds change every frame (`st_frame`, only with the accumulation on; the face identities stay stable, so layers keep
+their roles). Three fragment passes (`resolveAlphaStochasticTemporal`). OpenGL compute dispatches stall the frame in motion, so the
+compute resolve `alphaStochasticResolveC.glsl` is retired for the transparency (the Stochastic shadows keep theirs for A/B tests), and the Vulkan renderer takes the
+compute steps (doc/vulkan/stochastic-transparency-grain-resolve.md).
 
-- The masks' seeds change every frame (`st_frame` in the seed hash, only with the accumulation on; the
-  face identities stay stable, so layers keep their roles).
-- `alphaStochasticResolveC.glsl`, one compute dispatch after the accumulation (the compute resolve: not run by the OpenGL viewer, kept compiled
-  for the Vulkan renderer, where compute is
-  async; the fragment pair described below is the shipped resolve).
-  A 16 x 16 workgroup averages the samples of this frame's accumulated colour (alpha x colour, alpha)
-  once for its pixels and a one-pixel border into an 18 x 18 tile of shared memory (5 KB), so that the
-  resolve's 3 x 3 neighbourhood reads the tile instead of summing the samples nine times and no full-size
-  target holds the average (the sum is the same, in the same order as the shipped fragment pre-pass: identical on the measured NVIDIA; the changed passes take 0.05 to 0.07 ms less at 1080p, 0.13 ms at 1440p and
-  0.34 to 0.36 ms at 4K in the scenes with much transparency, and 0.02, 0.02 and 0.04 ms more in a sparse one,
-  on an RTX 5070 Ti, NVIDIA 621.14, offline harness). Then this frame's
-  averaged colour is blended 1/8 with the last frame's blended
-  colour taken where this pixel's nearest transparent surface was (the minimum of the stochastic depth
-  over the samples), moved by the camera alone (this frame's clip space to the last frame's, from the
-  matrices the history object keeps itself, `LLStochasticHistory`) and clamped
-  to the 3 x 3 minimum and maximum of this frame, as a TAA's history is. The result is written with
-  `imageStore` into the history texture that was not read, and is the next frame's history and the
-  composite's accumulated colour; the alpha correction there is this frame's total alpha
-  over its alpha, so an alpha change is never ghosted. The glow keeps the current frame's accumulation.
-  The program is `stochasticResolveUtilF.glsl` (the engine's part) and the transparency's file, both
-  compiled as compute objects (`LLShaderMgr::loadShaderFile`: `#version 430`, `COMPUTE_SHADER`), linked
-  with `attachNothing`.
-- Memory model: the stores are incoherent. `LLStochasticHistory::endComputeWrite` (called by `LLPipeline::resolveAlphaStochasticTemporal`) issues
-  `glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT)` after the dispatch:
-  the first makes the stores visible to the composite's and the next frame's texture fetches, the second
-  orders the stores of the frame after next (the history textures alternate) after those fetches. Nothing
-  else reads the history (no framebuffer or texture-update access), and the dispatch's own reads, the
-  accumulation and depth targets written by rendering, need no barrier.
-- Two resolve paths, one method: the OpenGL viewer runs the fragment resolve on every device
-  (`LLStochasticEngine::computeResolve` is false), decided once, and never changes at run time. Reason: an
-  OpenGL compute dispatch and the `glMemoryBarrier` it needs between graphics passes stall the frame while the
-  camera or avatar moves (seen with this compute resolve in a devel build, and earlier with compute for
-  OpenJPEG and geometry), and OpenGL has no async compute; compute belongs in the Vulkan renderer. The fragment
-  resolve is bit-identical to the compute one (A/B in motion is pending; the offline harness, above, slightly favours
-  compute, so the choice rests on the owner-observed stall, not on a bench). Its VRAM cost is 160 against 144 bytes a pixel (below). The compute resolve above
-  stays compiled but unused. The fragment pair: `alphaStochasticCurrentF.glsl` averages the samples once into an
-  RGBA32F target (`mAlphaSTCurrent`, option P), and `alphaStochasticResolveF.glsl` (with the engine's resolve
-  attached as a fragment object, `STOCH_RESOLVE`) draws the blend into the history's framebuffer that was not read
-  (the history has framebuffers only on this path; rendering needs no memory barrier). The two give the same
-  image (compared bit for bit offline on the measured NVIDIA, 24 frames, 4 scenes, 3 resolutions). A shader set of
-  the selected path that fails to build is an error, logged and retried at the next shader reload; the other path is
-  never taken in its place. Nothing in the OpenGL viewer selects the compute path (no setting, no environment variable).
-- No history on the first frame, after a resize, when the setting or the method is switched, or when the
-  frame before did not run the method (the history stamp is the frame counter).
-- Memory: two full-size RGBA16F colours (the history and the latest), 16 bytes a pixel: 33 MB at 1920 x
-  1080, 59 MB (56 MiB) at 2560 x 1440, allocated only while the setting is on, up front
-  (method selected, resize). With the passes' 8-sample targets (128 bytes a pixel) the method holds
-  160 bytes a pixel on the shipped fragment path, which also holds a full-size RGBA32F target of the averaged
-  samples (16 bytes a pixel, always allocated, counted at its real size): 316 MiB at 1920 x 1080, 563 MiB at
-  2560 x 1440, 1266 MiB at 3840 x 2160. The compute path (kept compiled for the Vulkan renderer, never selected by the OpenGL viewer) needs no such target: 144 bytes a
-  pixel, 285 / 506 / 1139 MiB.
-  All of it, the 8-sample targets and the
-  mask table included, is counted in the viewer's texture memory at its real size (`LLImageGLMemory::alloc_tex_image_exact`).
-  If the history cannot be made, the frames draw with their 8 samples, the setting stays on and the
-  allocation is tried again (1 s, doubling to 30 s, logged at that cadence). Switching the setting
-  off releases the history and stops the accumulation at once.
-- The history is read with a Catmull-Rom filter at the exact reprojected position (`stoch_history_catmull_rom`, 4 x 4 texels, the
-  weights of Karis, "High Quality Temporal Supersampling", SIGGRAPH 2014, and Jimenez, "Filmic SMAA", SIGGRAPH 2016), then clamped to the 3 x 3 box and
-  blended 1/8 as before. Where the reprojection is a whole number of pixels in an axis (the offset from the texel's centre within 1/64 px, the
-  static view included) the weights of that axis are exactly 0, 1, 0, 0 and a view with both axes whole reads the one texel, so the
-  image is bit-identical to the nearest read. The filter's negative lobes are bounded by the clamp (its minimum is never negative), so the
-  RGBA16F history (alpha x colour, alpha) holds no negative or NaN value; taps off the screen clamp to the edge texel, and the
-  rules for no history are unchanged. The compute resolve calls the same function. The shadow producer's depth-checked bilinear read
-  (`stoch_history_bilinear`) is untouched. The history texture stays NEAREST (all reads are `texelFetch`), so the composite is unaffected.
-  Before 2026-11-14 the read was the nearest texel (`ivec2(puv * size)`): a camera move that is not a whole number of pixels a frame lost
-  its fractional part every frame, and the 1/8 blend accumulated the loss as a smear 1 to 2 px behind the image. Measured offline
-  (`test_alpha_stochastic.py`, 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position, low-pass in brackets after a
-  Gaussian of 1.5 px; a border of 25 x 8 px left out), panning 0.25, 0.5, 1.3 and 2.5 px a frame:
+1. **Measure** (`alphaStochasticCurrentF.glsl`, two RGBA16F targets, 16 B/px, as the RGBA32F target they replace): per pixel, this
+   frame's accumulation (alpha x colour, alpha) averaged over the samples once; the **grain** (the standard error of the pixel's
+   colour: the spread of the samples' colours over the root of their effective count, times the accumulated alpha; 0 where one layer
+   covers the pixel, since every sample then holds its colour); the total alpha; and the nearest and farthest stochastic depth, stored as one minus
+   the window depth (a 16-bit float is fine near 0, not near 1). NaN samples count for nothing, infinite ones clamp to 65504, a NaN transparency hides nothing.
+2. **Blend** (`alphaStochasticResolveF.glsl` with the engine's `stochasticResolveUtilF.glsl`): this frame's weight is `st_frame_weight` of the grain
+   (1 where the colour is sure: sharp, no history; down to the engine's 1/8 where it is grainy; QUIET 0.004 of the colour, 0.05 floor). The last frame's
+   colour is read where the nearest layer was, moved by the camera alone, with the Catmull-Rom filter (unchanged), and left out
+   where its total alpha differs from this frame's (from 0.004, all of it at 0.016) or where the farthest layer (of the 3 x 3) has slid more than 1/4 px (all of it at 3/4 px) past
+   the nearest since. The history is clamped to the 3 x 3 box of this frame, widened by one grain of the pixel.
+   The history keeps this engine's format, the four-vector (alpha x colour, alpha); the alpha correction (this frame's total alpha over the
+   blended alpha) is made after the blend, so that an alpha change is never ghosted (the PR stores the corrected colour; offline that made the
+   low-frequency error twice as large at S = 4). Beside it, ping-pong with it, an RG16F texture: the last frame's total alpha (the PR's), and the part of the last frame left out (so that the smooth need not recompute it; the PR's R16F plus a recomputation).
+3. **Smooth** (`alphaStochasticSmoothF.glsl`, drawn over the first measuring target, which no later pass reads): what grain the blend leaves
+   (the pixel's grain times sqrt(w / (2 - w)), all of it where the history was left out) is averaged with the neighbours of a like total alpha (within 0.004) and a
+   colour within `ST_GRAIN_REACH` times that grain, radius 1 then 2; pixels with no grain leave early. The composite reads its output (already
+   alpha corrected); the total alpha that dims the scene is still the mean over the samples at the composite. **Deviation from the PR**: its
+   reach is 2; here 0.5. At 2 the smooth blurred textured layers (the pan scenes, T3 static: rmse/255 3.4 against 1.5 without the smooth); at
+   0.5 it does not (1.48), and it still averages a grainy pixel that has no history. The HDR range needed no other constant (values are clamped to 65504).
 
-  | scene | plain 8 samples | nearest history (before) | Catmull-Rom history (now) |
-  |---|---|---|---|
-  | three textured layers | 3.6 (0.71) | 12.8 to 14.9 (4.6 to 6.3) | 2.2 (0.47 to 0.49) |
-  | ten textured layers | 5.5 (1.08) | 15.5 to 17.5 (4.2 to 5.1) | 3.4 to 3.5 (0.71 to 0.72) |
-  | ten layers of hair strips | 4.95 (0.99) | 15.5 to 17.4 (4.9 to 6.0) | 6.2 to 6.6 (0.64 to 0.67) |
+The total alpha is still taken at every stochastic sample (not at one sample, as the PR does). The glow keeps the current frame's accumulation.
 
-  A whole-pixel pan (0, 1, 4 px a frame) gives the same image as before. Hair strips: the history does not beat plain 8 samples in rmse
-  there (6.2 to 6.6 against 4.95: the strips are 1.5 to 5 px wide and the 4 x 4 filter softens their detail), but it beats them in low-pass
-  error (0.64 to 0.67 against 0.99; the nearest read: 4.9 to 6.0): the smear is gone, what remains is the fine
-  detail the filter softens (a separate bench of the same scene read 6.0 against 4.96 and 0.58 against 0.98). The resolve pass costs the same. Nearest (before) against Catmull-Rom (now), median GPU timer query of 50 frames, ten textured layers, RTX 5070 Ti, NVIDIA 621.14:
+Dither: the pixel's xi of R = floor(alpha S + xi) is a 64 x 64 blue-noise tile (void and cluster; its ranks are in two spare rows of the mask table, one more `texelFetch`, no new binding),
+plus a per-face offset, plus the frame's golden-ratio step (frame x 2^32 / phi mod 2^32, one multiply); the subset of the covered samples is drawn afresh per face, triangle, pixel and
+frame from the table. Never a subset fixed over the frames, nor one rotation stride for all layers (measured 1.8 to 1.9 times worse).
 
-  | pan (px a frame, x y) | 1920 x 1080 | 2560 x 1440 |
-  |---|---|---|
-  | static | 0.278 against 0.286 ms | 0.496 against 0.496 ms |
-  | 0.5, 0 (4 taps: the y weights are 0, 1, 0, 0) | 0.280 against 0.278 ms | 0.497 against 0.499 ms |
-  | 0.5, 0.5 (all 16 taps) | 0.287 against 0.287 ms | 0.502 against 0.498 ms |
-  | 1.3, 0.7 (all 16 taps) | 0.289 against 0.282 ms | 0.498 against 0.505 ms |
+NaN guard (PR 3663's set, with a bit test of the exponent, not `isnan`): a fragment with a non-finite alpha is discarded in the alpha-only passes; the measuring pass and the
+composite zero NaN samples and clamp infinities; the Catmull-Rom taps skip non-finite texels, the 3 x 3 box skips non-finite values, and a blend that is
+not finite takes this frame's value; so the history never holds one. The harness injects NaN and infinite colours, NaN and infinite alphas and a NaN in one channel for six frames and checks the image, both history textures,
+the measuring targets and the pixels far from the injection (`test_alpha_stochastic.py`, "NaN guard").
 
-  The differences are within the timer's noise (about 0.01 ms): the pass is bound by its other reads, not by the history taps, so the
-  bilinear-optimised 9-tap form (which needs a LINEAR history) is not needed. The tests also pan vertically and diagonally.
-- Not reprojected: the surfaces' own motion (an avatar's hair in motion, an animated texture): there the
-  history ghosts, limited by the clamp.
+No history on the first frame, after a resize, when the setting or the method is switched, or when the frame before did not run the method (the history stamp is the frame counter).
+If the history cannot be made, the frames draw with their 4 samples, the setting stays on and the allocation is tried again (1 s, doubling to 30 s).
 
-Offline (`test_alpha_stochastic.py`, three layers of alpha 0.2, 0.4, 0.5, rmse/255 against exact, NVIDIA
-and Mesa Zink): 8 samples 5.77, 16 samples 3.74, 8 samples accumulated 5.91 at frame 1, 2.22 at frame 8,
-1.60 at frame 16, 1.56 at frame 40; the image changes by 0.95 between frames, against 6.99 for 8 re-seeded
-samples; after a 3 pixel camera move the columns at the edges of the layers read 1.30 with the history
-reprojected and 2.69 without; after an alpha change from 0.2/0.4/0.5 to 0.05/0.1/0.1 the first frame reads
-1.01 (0.81 without the history).
+Memory (B/px, from the allocations; the viewer logs it): the S = 4 targets 64 (accumulation 32, transparency 16, depth 16), the history 2 x (8 + 4) = 24, the measuring targets 16:
+**104**, against 160 before (128 + 16 + 16). At 1920 x 1080 that is 206 MiB against 316 MiB (-110 MiB), at 2560 x 1440 366 MiB against 563 MiB (-197 MiB). All of it is counted in the viewer's texture memory at its real size.
 
-Hair-like random strips (10 layers, alpha 0.2 to 0.6, rmse/255 against sorted alpha at every sample; plain
-8 samples 4.7 to 5.4, plain 16 samples 3.5 to 4.0): a camera pan of 1 or 4 pixels a frame, history
-reprojected, 2.9 and 2.5; surfaces moving 0.25, 0.5, 1 and 4 pixels a frame, not reprojected, 10.9, 13.1,
-14.8 and 15.1: the history ghosts there, three times the plain 8 samples. A variance clip of the history
-(mean plus or minus 0.75 deviations inside the minimum and maximum) gives 11.2 at 2 pixels a frame against
-15.6 for the minimum and maximum, and slows the convergence.
+The history is read with a Catmull-Rom filter at the exact reprojected position (`stoch_history_catmull_rom`, 4 x 4 texels, Karis 2014 and Jimenez 2016, unchanged), bit-identical to the nearest read for whole-pixel offsets.
+Not reprojected: the surfaces' own motion; there the history ghosts, limited by the clamp.
 
-Cost: the resolve pass alone, 0.5 to 0.7 ms at 1920 x 1080 and 1.7 to 2.0 ms at 2560 x 1440 on a machine
-under load (about the composite's own cost); the second run of the passes it replaces is, in the shaded
-bench above, 2.6 to 3.3 ms at 1080p and 4.8 to 6.7 ms at 1440p.
+### Measured against the viewer before the upgrade (offline, the viewer's shaders)
+
+`scripts/perf/test_alpha_stochastic.py` (the harness's pan scenes at 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position; RTX 5070 Ti, NVIDIA 621.14; before = the shaders of git ref `1f38b56b50`: S = 8, hashed dither, the 1/8 resolve):
+
+| scene | motion | plain 8 samples (before) | before: S = 8 + history | plain 4 samples | after: S = 4 + grain resolve |
+|---|---|---|---|---|---|
+| T3 (3 textured layers) | static | 3.72 | 1.07 | 6.86 | 1.48 |
+| T3 | 0.5 px a frame, reprojected | 3.71 | 2.22 | 6.82 | 2.32 |
+| T3 | 2.5 px | 3.46 | 1.54 | 6.45 | 1.80 |
+| Q10 (10 textured layers) | static | 5.51 | 1.77 | 8.40 | 2.25 |
+| Q10 | 0.5 px | 5.52 | 3.44 | 8.36 | 3.63 |
+| S10 (10 layers of hair strips) | static | 5.67 | 1.87 | 9.00 | 3.84 |
+| S10 | 0.5 px | 5.61 | 7.10 | 8.98 | 7.26 |
+| T3 / Q10 / S10 | surfaces moving 0.5 px, not reprojected | 3.71 / 5.52 / 5.61 | 14.9 / 17.4 / 18.0 | 6.82 / 8.36 / 8.98 | 15.6 / 18.2 / 12.0 |
+
+At S = 4 the upgrade is **not better than S = 8 with the old resolve in these scenes**: static it is 27 % to 105 % worse (the hair strips, S10: 1.87 to 3.84, are the worst case, which is the
+tapered-hair expectation turned up: not +10 %); on fractional pans 2 % to 5 % worse (T3, Q10, S10); moving surfaces ghost 5 % more on the textured layers and 33 % less on hair. The
+owner's offline simulation (`reports/stochastic-s4-plan-2026-11-14`) predicted static gains on its scenes (-75 / -46 / -20 / -18 %) that these textured scenes do not reproduce; the real shaders
+and these scenes are the measurement here. Against plain S = 4 the upgrade is far better (static 4.6 times on T3). The price of S = 4 is paid back in GPU time and memory (below). The smooth's reach was cut from the PR's 2 to 0.5
+for exactly this reason (reach 2: T3 static 3.41, and 4.56 at 0.5 px a frame). The first frame and the frames where the history is left out (a total alpha change, a far layer sliding) are smoothed: after an
+alpha change at frame 24 the first frame reads 1.05 against 1.74 without history. The harness checks that one layer has zero grain and takes no history, that two layers have grain, and that the history is left out when the total alpha changes (1.00 of the pixels) or the far layer slides 2 px (1.00; 0 at 0 and 0.1 px).
+
+NaN injection against the old pipeline (a NaN colour over 16 of 64 columns for 6 frames, then 33 clean frames): no value that is not finite in the image either before or after for this layout (the old clamp of the history
+to the 3 x 3 box happened to drop it); the upgrade holds at every stage for the harness's six injection forms.
+
+### GPU time per pass (median of 60 frames, ms; `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
+
+Total of the seven passes (alpha, depth, accumulation, measure, blend, smooth, composite), 1920 x 1080 / 2560 x 1440:
+
+| scene | before | after | difference |
+|---|---|---|---|
+| T3 static | 1.02 / 1.89 | 0.78 / 1.38 | -0.24 / -0.51 |
+| T3 pan 1.3, 0.7 | 1.05 / 1.91 | 0.81 / 1.43 | -0.24 / -0.48 |
+| Q10 static | 2.41 / 4.45 | 1.42 / 2.69 | -0.98 / -1.77 |
+| Q10 pan | 2.41 / 4.46 | 1.46 / 2.75 | -0.95 / -1.71 |
+| S10 static | 1.12 / 1.64 | 0.80 / 1.16 | -0.32 / -0.48 |
+| S10 pan | 1.20 / 1.75 | 0.87 / 1.25 | -0.33 / -0.50 |
+
+A saving of 0.24 to 0.98 ms at 1080p and 0.48 to 1.77 ms at 1440p in these scenes (the budget allows +0.43 ms of the 8.6 ms Stochastic frame). Per pass at 2560 x 1440, Q10 static, before / after, ms:
+alpha 0.44 / 0.35, depth 1.35 / 0.57, accumulation 1.63 / 0.86, measure 0.36 / 0.28, blend 0.25 / 0.15, smooth - / 0.26, composite 0.43 / 0.22. The new smooth costs 0.26 ms at 1440p
+(0.15 at 1080p); the saving is the S = 4 geometry passes and the composite no longer summing the accumulation samples. The offline accumulation shades with a light stand-in, not the viewer's alpha programs, so the saving in the viewer is not measured here.
+
 ## Edge pixels: attributes at the centroid (fixed 2026-11-05)
 
 Symptom (release 1.0.1.81947, rigged mesh hair close up in a dim interior): a fine regular lattice
@@ -297,14 +290,14 @@ anti-aliased form (3.4, 3.5), kept.
 | Recommendation | Here |
 |---|---|
 | 3.1 stratified masks: R = floor(alpha S + xi) samples, one S-choose-R subset | done (a table of 2048 random R-subsets per R) |
-| 3.1 dither R across a tile for further stratification | done per pixel with a white xi; a 64 x 64 blue-noise tile for xi measured: no gain (below), not adopted |
+| 3.1 dither R across a tile for further stratification | done since 2026-11-14: a 64 x 64 void-and-cluster blue-noise tile (two spare rows of the mask table), a per-face offset and the golden-ratio step of the frame; the 2026-11-06 measurement of a tile without the step found no gain (below), the temporal sequence is what the upgrade adds |
 | 3.3 alpha correction, total alpha over accumulated alpha | done (composite); a single layer is exact (test) |
 | 3.4 steps 1-5: opaque depth, total alpha, stochastic depth only, accumulation by the stochastic depth, composite | done; deviations: the opaque depth is spread over the samples (the scene is single-sampled), and the composite dims the scene by the pixel's mean transparency, not per sample (differs only on background edges inside a pixel) |
-| 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | done (S = 16 is two passes of 8 of one 16-bit mask) |
+| 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | done in the shaders (S = 16 is two passes of 8 of one 16-bit mask; tested); the viewer runs S = 4 in one pass |
 | 5 mask table of about 2047 masks | done (2048) |
 | 6 temporal coherence: seed by pixel and primitive id | done (pixel, face identity, triangle); the noise field is fixed in screen space |
 | 6 uneven noise at edges; alpha correction makes one-layer regions noise free | known properties |
-| 6 post processing: cross-bilateral filter on the total alpha | measured, rejected (below) |
+| 6 post processing: cross-bilateral filter on the total alpha | measured, rejected (below); the 2026-11-14 smooth averages by the measured grain and the total alpha instead (Temporal accumulation) |
 | 6 adaptive sampling, importance sampling for dark backgrounds | not adopted: S is a setting |
 | 6 mask selection: a pair of random S-choose-R masks does reasonably well | done; masks of fragments that differ in (face seed, triangle) are independent |
 
@@ -389,7 +382,7 @@ Exactly the draws PPLL captured, with the same exclusions:
 
 Preferences › Graphics › Rendering 2: "Alpha rendering method" (Sorted alpha / Stochastic
 transparency) only. Stochastic transparency is the same on every line (owner decision, 2026-11-08):
-8 samples with the temporal accumulation, and no other settings. The two settings above are
+4 samples with the temporal accumulation, and no other settings. The two settings above are
 debug settings with Persist 0: the settings loader (`LLControlGroup::loadFromFile`) does not load a
 value for a non-persisted control from a user settings file, and does not write one back, so a
 value an older build saved (16 samples, accumulation off) is ignored and dropped at the next
@@ -397,29 +390,29 @@ save. Only `--set` or the debug settings floater change them, for the session. U
 transparency; `RenderAlphaOITNodesPerPixel`, `RenderAlphaOITMemoryMB`, `RenderAlphaOITStats`
 and `RenderAlphaPPLLAvailable` are gone (a stale value in a settings file is ignored). Neither
 the method nor its samples are in the feature tables or the graphics presets, as PPLL's were
-not. Aurora's default is 16 samples; here 8 with the accumulation is fixed. Aurora's
+not. Aurora's default is 16 samples; here 4 (8 until 2026-11-14) with the accumulation is fixed. Aurora's
 findings: S = 8 (one run, one accumulation) costs what OIT off does on its hair fly-through,
 with a faint speckle on dark hair cards and more grain on broad glass; S = 16 runs the
 accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted alpha, S = 16
 1.38-1.46x).
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
-textures; the compute resolve, kept compiled for the Vulkan renderer and never selected by the OpenGL viewer, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
+textures; the Stochastic shadows' compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
 2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (160 bytes a
-pixel); the compute resolve (144 bytes a pixel) never in the OpenGL viewer. A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (100 bytes a pixel since 2026-11-14, 160 before). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
 allocation, a resize, a shader set that did not build) does not switch method (owner decision Q8, 2026-11-13: stochastic methods never fall back, replacing the
 2026-11-12 exception): the failure is logged, `RenderAlphaSortMethod` and `RenderShadowMethod` stay as selected, the shadows
 are not changed, and the blended faces are drawn by the plain alpha pass frame by frame (not dropped) while the engine is
 not ready. A failed allocation is tried again (every frame loop: 1 s, doubling to 30 s) and a shader set at the next shader
 reload, and stochastic transparency runs again by itself when they succeed. There is no notice.
-A history or temporal resolve that fails only drops the accumulation: each frame keeps its 8 samples. A snapshot larger than the window is taken in tiles
+A history or temporal resolve that fails only drops the accumulation: each frame keeps its 4 samples. A snapshot larger than the window is taken in tiles
 if the large buffer cannot have the targets, and fails with a message if the window's cannot either.
 
 ## Tests and measurements
 
-- Bit-identical check of the two resolves: run `python scripts/perf/test_alpha_stochastic.py` (fragment, default) and `STOCH_TEST_RESOLVE=compute python scripts/perf/test_alpha_stochastic.py`, each into a file, and diff them with the 'temporal resolve path' line removed (any other value of `STOCH_TEST_RESOLVE` exits with an error).
-- `scripts/perf/test_alpha_stochastic.py`: offscreen (the fragment resolve by default; `STOCH_TEST_RESOLVE=compute` runs the GL 4.3 compute resolve, `STOCH_TEST_SIZE=70x37` partial workgroups; `test_alpha_stochastic_edges.py` checks the compute resolve against a CPU model), the viewer's shaders with the viewer's pass
+- `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`) and after, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
+- `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue).
+- `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (16 in two
   passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,
   a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands

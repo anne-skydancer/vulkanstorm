@@ -30,10 +30,15 @@
 #include <utility>
 #include <vector>
 
+#include "llstochasticbluenoise.h"
+
 namespace LLStochasticEngine
 {
-    constexpr uint32_t SAMPLES = 8;      // samples in all; the table's S. The shaders take S as a parameter, but
-                                         // the one table the engine makes, and every producer, is for 8
+    constexpr uint32_t SAMPLES = 8;      // the Stochastic shadows' rays per pixel and frame (shadow work keeps 8)
+    constexpr uint32_t TRANSPARENCY_SAMPLES = 4;   // samples of the transparency's stochastic targets, in all (Enderton et al. 2010: S = the
+                                                   // multisample samples, coverage through the sample mask); the mask table's S. The shaders
+                                                   // take S as a parameter (st_samples)
+    constexpr uint32_t NOISE_ROWS = 2;   // rows of the mask table after row S that hold the blue-noise tile (BLUE_NOISE_SIZE^2 = 2 x SEEDS ranks)
     constexpr uint32_t SEEDS = 2048;     // columns of the table (STOCH_SEEDS in stochasticSampleF.glsl)
 
     // The identity of a blended fragment's face for the stochastic depth pass: a hash of its object's
@@ -107,6 +112,20 @@ namespace LLStochasticEngine
                 }
                 table.push_back(mask);
             }
+        }
+        return table;
+    }
+
+    // The transparency's table texture (R32UI, SEEDS columns): the rows 0 .. S of maskTable(S) and then
+    // NOISE_ROWS rows of the blue-noise tile's ranks (index y * 64 + x, column index & (SEEDS - 1), row
+    // S + 1 + index / SEEDS). One texture, one binding (stoch_masks).
+    inline std::vector<uint32_t> transparencyTable(uint32_t samples = TRANSPARENCY_SAMPLES)
+    {
+        std::vector<uint32_t> table = maskTable(samples);
+        static_assert(BLUE_NOISE_SIZE * BLUE_NOISE_SIZE == NOISE_ROWS * SEEDS, "the tile fills the spare rows");
+        for (uint32_t i = 0; i < BLUE_NOISE_SIZE * BLUE_NOISE_SIZE; ++i)
+        {
+            table.push_back(BLUE_NOISE[i]);
         }
         return table;
     }

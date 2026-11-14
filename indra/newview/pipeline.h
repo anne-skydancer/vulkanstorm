@@ -442,12 +442,11 @@ public:
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history (and the fragment path's averaged-samples target) freed
-    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's (the fragment pair; compute is never chosen in the OpenGL viewer)
-    void resolveAlphaStochasticTemporalFragment();
+    void resolveAlphaStochasticTemporal();  // this frame's accumulation measured for its grain, blended with the last frame's and smoothed (three fragment passes)
     bool alphaStochasticResolveReady() const; // the selected resolve's programs are built
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
-    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::SAMPLES; }
-    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? LLStochasticEngine::SAMPLES / mAlphaSTPassSamples : 0; }
+    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::TRANSPARENCY_SAMPLES; }
+    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? LLStochasticEngine::TRANSPARENCY_SAMPLES / mAlphaSTPassSamples : 0; }
     U32  getAlphaStochasticMasks() const { return LLStochasticEngine::getMasks(); }
     // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
     U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
@@ -819,7 +818,7 @@ public:
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
-    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 8 samples in all; the
+    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 4 samples in all; the
     // engine's mask table is held (mAlphaSTMasksHeld) while they are. All counted in the texture memory.
     U32 mAlphaSTFBO = 0;
     U32 mAlphaSTAccum = 0;
@@ -829,12 +828,16 @@ public:
     U32 mAlphaSTWidth = 0;
     U32 mAlphaSTHeight = 0;
     U32 mAlphaSTPassSamples = 0;
-    // the temporal accumulation: the transparency's history in the stochastic engine (two
-    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and, on the
-    // fragment path only (the default on every device), the full-size RGBA32F target of this frame's averaged samples
-    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
+    // the temporal accumulation: the transparency's history in the stochastic engine (two full-size RGBA16F
+    // colours and two RG16F (last total alpha, part of the last frame left out), the frame counter of the seeds and the
+    // validity rules), and the measuring pass's two full-size RGBA16F targets: this frame's averaged accumulation
+    // (mAlphaSTCurrent, which the smooth pass then draws over: it reads the history and mAlphaSTAux, not it) and its
+    // grain, total alpha and depths (mAlphaSTAux)
+    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F, 1.f / 8.f, GL_RG16F };
     U32 mAlphaSTCurrent = 0;
-    U32 mAlphaSTCurrentFBO = 0;
+    U32 mAlphaSTAux = 0;
+    U32 mAlphaSTCurrentFBO = 0;    // mAlphaSTCurrent, mAlphaSTAux
+    U32 mAlphaSTSmoothFBO = 0;     // mAlphaSTCurrent alone
     F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
     F64 mAlphaSTRetryTime = 0.0;
     // </Vulkanstorm>
