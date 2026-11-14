@@ -30,6 +30,9 @@
 #include "../test/lltut.h"
 #include "../../llxml/llcontrol.h"
 #include "llfile.h"
+// <FS:Beq> Implement the real translation interface rather than redefining it.
+#include "lltrans.h"
+// </FS:Beq>
 
 namespace
 {
@@ -46,12 +49,7 @@ static const std::string SYSTEM_GRID_LOGIN_PAGE("https://phoenixviewer.com/app/l
 //
 // Stub implementation for LLTrans
 //
-class LLTrans
-{
-public:
-    static std::string getString(std::string_view xml_desc, const LLStringUtil::format_map_t& args, bool def_string = false);
-    static void setDefaultArg(const std::string& name, const std::string& value);
-};
+// <FS:Beq/> The class declaration comes from lltrans.h; only functions are stubbed.
 
 // LLGridManager::setGridChoice() sets CURRENT_GRID as a default argument.
 // Stubbing it keeps llui's lltrans.obj, which also defines getString(), out
@@ -75,6 +73,10 @@ std::string LLTrans::getString(std::string_view xml_desc, const LLStringUtil::fo
 
 //----------------------------------------------------------------------------
 // Mock objects for the dependencies of the code we're testing
+
+// <FS:Beq> Grid selection updates translation arguments through this UI boundary.
+void LLTrans::setDefaultArg(const std::string&, const std::string&) {}
+// </FS:Beq>
 
 LLControlGroup::LLControlGroup(const std::string& name)
 : LLInstanceTracker<LLControlGroup, std::string>(name) {}
@@ -220,10 +222,10 @@ namespace tut
         ensure_equals("Known grids is a string-string map of size 2", known_grids.size(), 2);
         ensure_equals("Agni has the right name and label",
                       known_grids[std::string("util.agni.lindenlab.com")],
-                      SECOND_LIFE_MAIN_LABEL);
+                      std::string("Second Life")); // <FS:Beq/> Current grid label.
         ensure_equals("Aditi has the right name and label",
                       known_grids[std::string("util.aditi.lindenlab.com")],
-                      SECOND_LIFE_BETA_LABEL);
+                      std::string("Second Life Beta")); // <FS:Beq/> Current grid label.
         ensure_equals("name for agni",
                       LLGridManager::getInstance()->getGrid("util.agni.lindenlab.com"),
                       std::string("util.agni.lindenlab.com"));
@@ -235,7 +237,7 @@ namespace tut
                       LLGridManager::getInstance()->getUpdateServiceURL());
         ensure_equals("label for agni",
                       LLGridManager::getInstance()->getGridLabel("util.agni.lindenlab.com"),
-                      SECOND_LIFE_MAIN_LABEL);
+                      std::string("Second Life")); // <FS:Beq/> Current grid label.
 
         std::vector<std::string> login_uris;
         LLGridManager::getInstance()->getLoginURIs(std::string("util.agni.lindenlab.com"), login_uris);
@@ -248,7 +250,7 @@ namespace tut
                       std::string("https://secondlife.com/helpers/"));
         ensure_equals("Agni login page",
                       LLGridManager::getInstance()->getLoginPage("util.agni.lindenlab.com"),
-                      SYSTEM_GRID_LOGIN_PAGE);
+                      std::string("https://phoenixviewer.com/app/loginV3/")); // <FS:Beq/> Firestorm login page.
         ensure("Agni is a system grid",
                LLGridManager::getInstance()->isSystemGrid("util.agni.lindenlab.com"));
 
@@ -260,7 +262,7 @@ namespace tut
                       std::string("Aditi"));
         ensure_equals("label for aditi",
                       LLGridManager::getInstance()->getGridLabel("util.aditi.lindenlab.com"),
-                      SECOND_LIFE_BETA_LABEL);
+                      std::string("Second Life Beta")); // <FS:Beq/> Current grid label.
 
         LLGridManager::getInstance()->getLoginURIs(std::string("util.aditi.lindenlab.com"), login_uris);
 
@@ -273,7 +275,7 @@ namespace tut
                       std::string("https://secondlife.aditi.lindenlab.com/helpers/"));
         ensure_equals("Aditi login page",
                       LLGridManager::getInstance()->getLoginPage("util.aditi.lindenlab.com"),
-                      SYSTEM_GRID_LOGIN_PAGE);
+                      std::string("https://phoenixviewer.com/app/loginV3/")); // <FS:Beq/> Firestorm login page.
         ensure("Aditi is a system grid",
                LLGridManager::getInstance()->isSystemGrid("util.aditi.lindenlab.com"));
     }
@@ -290,15 +292,17 @@ namespace tut
 
         LLGridManager::getInstance()->initialize(TEST_FILENAME);
         std::map<std::string, std::string> known_grids = LLGridManager::getInstance()->getKnownGrids();
-        ensure_equals("a grid file doesn't add grids", known_grids.size(), 2);
+        // <FS:Beq> SL builds deliberately ignore external grid files.
+        ensure_equals("grid file cannot add grids in an SL build", known_grids.size(), 2);
+        // </FS:Beq>
 
         // Verify that Agni and Aditi were not overwritten
         ensure_equals("Agni has the right name and label",
                       known_grids[std::string("util.agni.lindenlab.com")],
-                      SECOND_LIFE_MAIN_LABEL);
+                      std::string("Second Life")); // <FS:Beq/> Current grid label.
         ensure_equals("Aditi has the right name and label",
                       known_grids[std::string("util.aditi.lindenlab.com")],
-                      SECOND_LIFE_BETA_LABEL);
+                      std::string("Second Life Beta")); // <FS:Beq/> Current grid label.
         ensure_equals("name for agni",
                       LLGridManager::getInstance()->getGrid("util.agni.lindenlab.com"),
                       std::string("util.agni.lindenlab.com"));
@@ -310,7 +314,7 @@ namespace tut
                       LLGridManager::getInstance()->getUpdateServiceURL());
         ensure_equals("label for agni",
                       LLGridManager::getInstance()->getGridLabel("util.agni.lindenlab.com"),
-                      SECOND_LIFE_MAIN_LABEL);
+                      std::string("Second Life")); // <FS:Beq/> Current grid label.
         std::vector<std::string> login_uris;
         LLGridManager::getInstance()->getLoginURIs(std::string("util.agni.lindenlab.com"), login_uris);
         ensure_equals("Number of login uris for agni", 1, login_uris.size());
@@ -322,7 +326,7 @@ namespace tut
                       std::string("https://secondlife.com/helpers/"));
         ensure_equals("Agni login page",
                       LLGridManager::getInstance()->getLoginPage("util.agni.lindenlab.com"),
-                      SYSTEM_GRID_LOGIN_PAGE);
+                      std::string("https://phoenixviewer.com/app/loginV3/")); // <FS:Beq/> Firestorm login page.
         ensure("Agni is a system grid",
                LLGridManager::getInstance()->isSystemGrid("util.agni.lindenlab.com"));
 
@@ -334,7 +338,7 @@ namespace tut
                       std::string("Aditi"));
         ensure_equals("label for aditi",
                       LLGridManager::getInstance()->getGridLabel("util.aditi.lindenlab.com"),
-                      SECOND_LIFE_BETA_LABEL);
+                      std::string("Second Life Beta")); // <FS:Beq/> Current grid label.
 
         LLGridManager::getInstance()->getLoginURIs(std::string("util.aditi.lindenlab.com"), login_uris);
         ensure_equals("Number of login uris for aditi", 1, login_uris.size());
@@ -346,18 +350,18 @@ namespace tut
                       std::string("https://secondlife.aditi.lindenlab.com/helpers/"));
         ensure_equals("Aditi login page",
                       LLGridManager::getInstance()->getLoginPage("util.aditi.lindenlab.com"),
-                      SYSTEM_GRID_LOGIN_PAGE);
+                      std::string("https://phoenixviewer.com/app/loginV3/")); // <FS:Beq/> Firestorm login page.
         ensure("Aditi is a system grid",
                LLGridManager::getInstance()->isSystemGrid("util.aditi.lindenlab.com"));
 
-        // The grids defined in the file are not known
-        ensure("alternative grid from the file is not known",
-               known_grids.find("altgrid.long.name") == known_grids.end());
-        ensure("minimal grid from the file is not known",
-               known_grids.find("minimal.long.name") == known_grids.end());
-        ensure_equals("unknown grid name resolves to nothing",
-                      LLGridManager::getInstance()->getGrid("altgrid.long.name"),
-                      std::string());
+        // <FS:Beq> Custom grid loading is disabled in the SL production code.
+        // Keep regression coverage that the file cannot enable another grid.
+        ensure_equals("alternative grid is not loaded",
+                      LLGridManager::getInstance()->getGrid("altgrid.long.name"), std::string());
+        ensure_equals("minimal grid is not loaded",
+                      LLGridManager::getInstance()->getGrid("minimal.long.name"), std::string());
+        // </FS:Beq>
+
     }
 
 
@@ -375,7 +379,7 @@ namespace tut
         LLGridManager::getInstance()->setGridChoice("util.agni.lindenlab.com");
         ensure_equals("getGridLabel",
                       LLGridManager::getInstance()->getGridLabel(),
-                      SECOND_LIFE_MAIN_LABEL);
+                      std::string("Second Life")); // <FS:Beq/> Current grid label.
         ensure_equals("getGridId",
                       LLGridManager::getInstance()->getGridId(),
                       std::string("Agni"));
@@ -387,11 +391,13 @@ namespace tut
                       std::string("https://secondlife.com/helpers/"));
         ensure_equals("getLoginPage",
                       LLGridManager::getInstance()->getLoginPage(),
-                      SYSTEM_GRID_LOGIN_PAGE);
+                      std::string("https://phoenixviewer.com/app/loginV3/")); // <FS:Beq/> Firestorm login page.
         ensure_equals("update url base for Agni", // relies on agni being the default
                       std::string("https://update.secondlife.com/update"),
                       LLGridManager::getInstance()->getUpdateServiceURL());
+        // <FS:Beq> Exercise grid classification through its public API.
         ensure("Is Agni a production grid", LLGridManager::getInstance()->isInSLMain());
+        // </FS:Beq>
         std::vector<std::string> uris;
         LLGridManager::getInstance()->getLoginURIs(uris);
         ensure_equals("getLoginURIs size", 1, uris.size());
@@ -399,19 +405,18 @@ namespace tut
                       uris[0],
                       std::string("https://login.agni.lindenlab.com/cgi-bin/login.cgi"));
 
-        // Grid files are not read (see test 2), so switch to the other
-        // system grid, which is not a production grid.
-        LLGridManager::getInstance()->setGridChoice("util.aditi.lindenlab.com");
-        ensure_equals("getGridLabel",
-                      LLGridManager::getInstance()->getGridLabel(),
-                      SECOND_LIFE_BETA_LABEL);
-        ensure_equals("getGridId",
-                      LLGridManager::getInstance()->getGridId(),
+        // <FS:Beq> Check the supported beta grid and reject unknown choices.
+        LLGridManager::getInstance()->setGridChoice("Aditi");
+        ensure_equals("beta grid label", LLGridManager::getInstance()->getGridLabel(),
+                      std::string("Second Life Beta"));
+        ensure_equals("beta grid id", LLGridManager::getInstance()->getGridId(), std::string("Aditi"));
+        ensure("beta is a system grid", LLGridManager::getInstance()->isSystemGrid());
+        ensure("beta is not production", !LLGridManager::getInstance()->isInSLMain());
+        LLGridManager::getInstance()->setGridChoice("altgrid.long.name");
+        ensure_equals("unknown grid cannot change selection", LLGridManager::getInstance()->getGridId(),
                       std::string("Aditi"));
-        ensure("Aditi is a system grid",
-               LLGridManager::getInstance()->isSystemGrid());
-        ensure("Aditi is not a production grid",
-               !LLGridManager::getInstance()->isInSLMain());
+        // </FS:Beq>
+
     }
 
 }

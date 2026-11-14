@@ -386,11 +386,7 @@ namespace tut
         {
             // Global initialization
             // <FS:Beq> Update login test interfaces, initialize fixture state, and cover OpenSim login flows.
-            // <Vulkanstorm> Our LLGridManager is still an LLSingleton
-            // (upstream later made it an LLSimpleton with createInstance()).
-            // LLGridManager::createInstance();
-            LLGridManager::getInstance();
-            // </Vulkanstorm>
+            LLGridManager::createInstance();
             gGridLoginURIs = {VIEWERLOGIN_URI};
             gOpenSimGrid = true;
             logininstance->setLastExecEvent(0);
@@ -555,4 +551,82 @@ namespace tut
         logininstance->connect(test_uri, agentCredential);
         ensure_equals("Default for agree to tos", gLoginCreds["params"]["read_critical"].asBoolean(), false);
     }
+    // <FS:Beq> Update login test interfaces, initialize fixture state, and cover OpenSim login flows.
+    template<> template<>
+    void lllogininstance_object::test<3>()
+    {
+        set_test_name("OpenSim login requests include grid-specific options");
+#ifdef OPENSIM
+        logininstance->connect(agentCredential);
+        ensure_equals("login method", gLoginCreds["method"].asString(), "login_to_simulator");
+        for (const char* option : {"currency", "max_groups", "search", "destination_guide_url", "avatar_picker_url"})
+        {
+            bool found = false;
+            for (const LLSD& requested : llsd::inArray(gLoginCreds["options"]))
+                found = found || requested.asString() == option;
+            ensure(std::string("request OpenSim option ") + option, found);
+        }
+        gOpenSimGrid = false;
+        logininstance->connect(agentCredential);
+        for (const LLSD& requested : llsd::inArray(gLoginCreds["options"]))
+            ensure("SL grid does not request OpenSim currency", requested.asString() != "currency");
+#else
+        skip("OpenSim-specific options");
+#endif
+    }
+
+    template<> template<>
+    void lllogininstance_object::test<4>()
+    {
+        set_test_name("missing login endpoints do not start a transport request");
+        gGridLoginURIs.clear();
+        logininstance->connect(agentCredential);
+        ensure("no transport connection without an endpoint", gLoginURI.empty());
+        ensure("no authentication success", !logininstance->authSuccess());
+    }
+
+    template<> template<>
+    void lllogininstance_object::test<5>()
+    {
+        set_test_name("explicit endpoint and authentication failure are propagated");
+        logininstance->connect("https://other.example.invalid/login", accountCredential);
+        ensure_equals("explicit endpoint", gLoginURI, "https://other.example.invalid/login");
+        LLSD response;
+        response["state"] = "offline";
+        response["change"] = "fail.login";
+        response["data"]["reason"] = "key";
+        response["progress"] = 0.0;
+        response["data"]["message"] = "Invalid test credentials";
+        gTestPump.post(response);
+        ensure("authentication failed", logininstance->authFailure());
+        ensure_equals("failure message", logininstance->getResponse()["message"].asString(), "Invalid test credentials");
+        logininstance->connect(agentCredential);
+        ensure("new attempt clears failure", !logininstance->authFailure());
+    }
+
+    template<> template<>
+    void lllogininstance_object::test<6>()
+    {
+        set_test_name("reconnect waits for an available endpoint and preserves request parameters");
+        logininstance->connect(agentCredential);
+        ensure_equals("initial endpoint", gLoginURI, VIEWERLOGIN_URI);
+        const LLSD request = gLoginCreds;
+
+        // A grid's endpoints can become unavailable between the initial
+        // connection and a TOS/critical-message retry.
+        gGridLoginURIs.clear();
+        gLoginURI.clear();
+        gLoginCreds.clear();
+        logininstance->reconnect();
+        ensure("no transport connection without a reconnect endpoint", gLoginURI.empty());
+        ensure("no request sent without a reconnect endpoint", gLoginCreds.isUndefined());
+        ensure("missing reconnect endpoint does not authenticate", !logininstance->authSuccess());
+
+        gGridLoginURIs = {"https://retry.example.invalid/login"};
+        logininstance->reconnect();
+        ensure_equals("reconnect uses the available endpoint", gLoginURI, gGridLoginURIs.front());
+        ensure_equals("reconnect retains the original authentication request", gLoginCreds, request);
+    }
+
+    // </FS:Beq>
 }
