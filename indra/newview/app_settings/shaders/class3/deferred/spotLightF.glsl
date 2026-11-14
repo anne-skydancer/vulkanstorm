@@ -76,6 +76,12 @@ vec4 texture2DLodSpecular(vec2 tc, float lod);
 
 vec4 getPosition(vec2 pos_screen);
 
+#if defined(PROJECTOR_SHADOW_POOL)
+// <Vulkanstorm> projector shadow pool (shadowStochasticUtil.glsl)
+float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen);
+// </Vulkanstorm>
+#endif
+
 const float M_PI = 3.14159265;
 
 void pbrPunctual(vec3 diffuseColor, vec3 specularColor,
@@ -111,6 +117,34 @@ void main()
         discard;
     }
 
+#if defined(PROJECTOR_SHADOW_POOL)
+    // <Vulkanstorm> projector shadow pool: this projector's own tile, looked up here and only where it lights the pixel:
+    // the attenuation first (it depends on dist only), then the shadow inside the projector's frustum on surfaces that face it
+    float dist_atten = calcLegacyDistanceAttenuation(dist, falloff);
+    if (dist_atten <= 0.0)
+    {
+        discard;
+    }
+
+    float shadow = 1.0;
+
+    if (proj_shadow_idx >= 0 && all(greaterThan(proj_tc.xy, vec2(0.0))) && all(lessThan(proj_tc.xy, vec2(1.0))))
+    {
+        vec3 n0 = getNorm(tc).xyz; // the decode getGBuffer does
+#if !defined(PROJECTOR_SHADOW_NO_FACING_SKIP)
+        // a surface that faces away gets at most 0.1 % of the lamp's front-on term (N.L is clamped), so its shadow is not looked up
+        if (dot(n0, proj_origin - pos) > 0.0)
+#endif
+        {
+            shadow = sampleProjectorShadow(pos, n0, tc);
+        }
+    }
+
+    GBufferInfo gb = getGBuffer(tc);
+
+    vec3 n = gb.normal;
+    // </Vulkanstorm>
+#else
     float shadow = 1.0;
 
     if (proj_shadow_idx >= 0)
@@ -130,6 +164,7 @@ void main()
     {
         discard;
     }
+#endif
 
     lv = proj_origin-pos.xyz;
     vec3  h, l, v = -normalize(pos);
