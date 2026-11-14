@@ -452,6 +452,14 @@ public:
     static void updateRenderComplexity();
     //<FS:Beq> FIRE-21445
     void forceLOD(S32 lod);
+
+    // <Vulkanstorm> The projector shadow pool's LOD pin (spec 4.4, D6): a projector tile that draws this volume holds it at full
+    // detail (LOD 3, the main view too), so what the tile shows cannot change with the camera. Counted per tile; the pin is
+    // lifted when the last tile lets go. Main thread only (the tile renders and the release both run there).
+    void pinLampLOD();
+    void unpinLampLOD();
+    U16 getLampLODPin() const { return mLampLODPin; }
+    // </Vulkanstorm>
     //</FS:Beq>
     LLViewerTextureAnim *mTextureAnimp;
     U8 mTexAnimMode;
@@ -469,6 +477,7 @@ private:
     bool        mFaceMappingChanged;
     LLFrameTimer mTextureUpdateTimer;
     S32         mLOD;
+    U16         mLampLODPin = 0; // <Vulkanstorm/> tiles that hold this volume at LOD 3
     bool        mLODChanged;
     bool        mSculptChanged;
     bool        mColorChanged;
