@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Reference for scripts/shadows/projector_pool_g1.py: the projector shadow lookup of commit 261253bd43 (Stochastic projector
 // shadows: a filtered lookup), on a standalone map with CLAMP_TO_EDGE, unchanged. G1 checks that the pool's tile lookup
-// (shadowStochasticUtil.glsl, stSpotFilterTile) gives the same value, bit for bit. The helpers stSpotDisc and the ST_SPOT_*
+// (shadowStochasticUtil.glsl, stSpotFilterTile) gives the same value (2 ulp against this reference; exactly the same against the same code on a standalone map). The helpers stSpotDisc and the ST_SPOT_*
 // defines come from the util under test; ST_SPOT_KERNEL_MAX is the 10.0 the reference had.
 #define ST_SPOT_KERNEL_MAX 10.0
 
