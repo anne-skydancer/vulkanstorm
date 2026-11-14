@@ -82,6 +82,11 @@ public:
     // LLPipeline::markRebuild: only a rebuild that can change the picture (volume, position, rigged) counts.
     static void noteRebuild(LLDrawable* drawable, U32 rebuild_flag);
 
+    // LLPipeline::markTextured: a texture, material, bump or glow change of a prim. Only a prim with a blended, alpha-masked or
+    // alpha-textured face counts (the silhouette of its shadow follows the texture); an opaque prim's texture changes and
+    // animated textures never push. A texture that finishes loading is LLFace::dirtyTexture's REBUILD_VOLUME (alpha textures).
+    static void noteTextured(LLDrawable* drawable);
+
     // LLPipeline::shiftObjects moved agent space by `offset`: pending boxes move with it.
     static void noteShift(const LLVector3& offset);
 
