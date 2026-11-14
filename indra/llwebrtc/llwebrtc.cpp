@@ -1447,7 +1447,7 @@ void LLWebRTCImpl::intSetMute(bool mute, int delay_ms)
         // <FS:TJ> [FIRE-36022] - Removing my USB headset crashes entire viewer
         try
         {
-        std::unique_lock lock(gAudioDeviceMutex, 1s);
+        std::unique_lock lock(*sAudioDeviceMutex, 1s); // <Vulkanstorm> the viewer-supplied mutex (this DLL has its own copy of gAudioDeviceMutex)
         if (!lock.owns_lock())
         {
             return;

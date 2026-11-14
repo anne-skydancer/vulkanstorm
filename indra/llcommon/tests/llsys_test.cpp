@@ -31,6 +31,7 @@
 #include "../test/lltut.h"
 #include "../test/namedtempfile.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <sstream>
@@ -50,8 +51,8 @@ namespace
         {
             for (const std::string& path : { src, gz, out, out + ".t", gz + ".t" })
             {
-                boost::system::error_code ec;
-                boost::filesystem::remove(path, ec);
+                std::error_code ec;
+                std::filesystem::remove(std::filesystem::path(path), ec);
             }
         }
         std::string src, gz, out;
@@ -71,8 +72,8 @@ namespace
 
     bool exists(const std::string& path)
     {
-        boost::system::error_code ec;
-        return boost::filesystem::exists(path, ec);
+        std::error_code ec;
+        return std::filesystem::exists(std::filesystem::path(path), ec);
     }
 
     // More than one gunzip_file() read buffer (32 KB) of uncompressed data.
@@ -175,15 +176,15 @@ namespace tut
         const std::string previous("previous cache contents\n");
         write_file(paths.src, "new cache contents\n");
         write_file(paths.gz, previous);
-        boost::filesystem::create_symlink("/dev/full", paths.gz + ".t");
+        std::filesystem::create_symlink("/dev/full", std::filesystem::path(paths.gz + ".t"));
         ensure("gzip_file() returns false", !gzip_file(paths.src, paths.gz));
         // Check the type before reading: /dev/full reads zeros forever.
         ensure("the previous file is still a regular file",
-               boost::filesystem::symlink_status(paths.gz).type() == boost::filesystem::regular_file);
+               std::filesystem::symlink_status(std::filesystem::path(paths.gz)).type() == std::filesystem::file_type::regular);
         ensure("the previous file is unchanged", read_file(paths.gz) == previous);
-        boost::system::error_code ec;
+        std::error_code ec;
         ensure("no temporary file left",
-               boost::filesystem::symlink_status(paths.gz + ".t", ec).type() == boost::filesystem::file_not_found);
+               std::filesystem::symlink_status(std::filesystem::path(paths.gz + ".t"), ec).type() == std::filesystem::file_type::not_found);
 #else
         skip("needs /dev/full to make gzclose() fail");
 #endif

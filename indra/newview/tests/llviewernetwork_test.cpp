@@ -51,11 +51,6 @@ static const std::string SYSTEM_GRID_LOGIN_PAGE("https://phoenixviewer.com/app/l
 //
 // <FS:Beq/> The class declaration comes from lltrans.h; only functions are stubbed.
 
-// LLGridManager::setGridChoice() sets CURRENT_GRID as a default argument.
-// Stubbing it keeps llui's lltrans.obj, which also defines getString(), out
-// of the link.
-void LLTrans::setDefaultArg(const std::string& name, const std::string& value) {}
-
 std::string LLTrans::getString(std::string_view xml_desc, const LLStringUtil::format_map_t& args, bool def_string)
 {
     std::string grid_label = std::string();

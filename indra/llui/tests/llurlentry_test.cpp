@@ -58,16 +58,9 @@ std::string rlvGetAnonym(const LLAvatarName&)
 #endif
 
 // Symbols the viewer defines in newview that llui and llrender reference:
-// llurlentry.cpp calls the RLVa rlvGetAnonym(), and llfontregistry.cpp in
-// llrender reads gSavedSettings.
+// llfontregistry.cpp in llrender reads gSavedSettings (rlvGetAnonym() is stubbed above).
 #include "llavatarname.h"
 #include "llcontrol.h"
-
-std::string rlvGetAnonym(const LLAvatarName& avName)
-{
-    static std::string strAnonym = "A resident";
-    return strAnonym;
-}
 
 LLControlGroup gSavedSettings("Global");
 
