@@ -42,8 +42,8 @@ class LLVOVolume;
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
 // own in a shared depth atlas S (the tiles as drawn), copied into the live atlas L, the only texture the lighting programs
 // read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light's pose, never from the
-// camera's orientation; the caster LOD and the avatars' visibility still follow the camera until P3/P4. The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL
-// half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
+// camera's orientation; the avatars' visibility still follows the camera until P4 (the casters are held at full detail by the
+// LOD pin). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
 // hooks, llshadowdirtyfeed.h, tested against the tile's volume through the 8 m grid), when its lamp's pose changed, or while an

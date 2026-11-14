@@ -1343,12 +1343,13 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     return out;
 }
 
-// The static cap: a fixed CPU budget of the pool's tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
+// The static cap: a fixed CPU budget of the pool's static tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
 // frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one): it fits four measured tiles (0.07 ms each,
 // owner session 2026-11-14) with a margin. The +5 % light and shadow budget is about 0.4 ms of that frame, so 0.05 ms
-// is left, and kDynamicCapMs below does not fit in it: P4 must re-divide the cap between the static and dynamic tiles
-// (it is not claimed to fit today; no dynamic tile is drawn before P4). The measured cost only predicts what fits; it
-// does not set the budget.
+// is left, and kDynamicCapMs below does not fit in it: the dynamic schedule (a moving lamp, an avatar in the light) draws tiles
+// from P3 on, so the two caps together can exceed the budget in a frame that has both; P4 must re-divide the cap between the
+// static and dynamic tiles (the sum is not claimed to fit today, and nothing in-world has measured it). The measured cost only
+// predicts what fits; it does not set the budget.
 constexpr float kStaticCapMs = 0.35f;
 // Placeholder until S0 measures (spec 4.5); a devel-only debug override may replace it
 constexpr float kDynamicCapMs = 0.30f;
