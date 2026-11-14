@@ -87,7 +87,7 @@ void main()
 }
 '''
 REF_BODY = '    oc = vec4(stSpotFilter(map, vec2(n_tile), c, g, z_bias, z_tex, pen));'
-TILE_BODY = '    oc = vec4(stSpotFilterTile(c, g, z_bias, z_tex, pen));'
+TILE_BODY = '    oc = vec4(stSpotFilterTile(c, g, z_bias, z_tex, pen, proj_shadow_kernel_max));'
 VS = '#version 400\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4 - 1, (gl_VertexID >> 1) * 4 - 1); gl_Position = vec4(p, 0.0, 1.0); }'
 
 # the helpers the reference shares with the code under test (StSpot, stSpotDisc, stSpotGradient are not needed here)
@@ -102,7 +102,9 @@ vec2 stSpotDisc(int k, int n)
 # the code under test carries its own stSpotDisc: take the reference's from there, not twice
 ref_src = (PREAMBLE + 'uniform sampler2D map;\nuniform sampler2D proj_shadow_atlas;\nuniform mat4 proj_shadow_matrix;\n'
            'uniform vec4 proj_shadow_tile;\nuniform float proj_shadow_kernel_max;\n' + HELPERS + reference + RECEIVER % REF_BODY)
-tile_src = PREAMBLE + under_test + RECEIVER % TILE_BODY
+# the largest radius (texels, per axis) is an argument of the lookup: sampleProjectorShadow derives it in metres (ST_SPOT_RADIUS_MAX_M);
+# the test feeds it as a uniform
+tile_src = PREAMBLE + 'uniform vec2 proj_shadow_kernel_max;\n' + under_test + RECEIVER % TILE_BODY
 
 glGenTextures = fn('glGenTextures', None, I, C.POINTER(U))
 glBindTexture = fn('glBindTexture', None, U, U)
@@ -236,7 +238,7 @@ def main():
         # the arithmetic of the two sources
         prog = run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', standalone)], n)
         glUniform4f(glGetUniformLocation(prog, b'proj_shadow_tile'), 0.0, 0.0, float(n), 1.0 / n)
-        glUniform1f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0)
+        glUniform2f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0, 10.0)
         glDrawArrays(4, 0, 3)
         glFinish()
         same_code = read_output(out_tex, opts.grid)
@@ -250,7 +252,7 @@ def main():
             atlas_tex = texture(GL_DEPTH32F, A, A, atlas, GL_DEPTH)
             prog = run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', atlas_tex)], n)
             glUniform4f(glGetUniformLocation(prog, b'proj_shadow_tile'), float(ox), float(oy), float(n), 1.0 / A)
-            glUniform1f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0)
+            glUniform2f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0, 10.0)
             glDrawArrays(4, 0, 3)
             glFinish()
             actual = read_output(out_tex, opts.grid)
@@ -267,12 +269,12 @@ def main():
                 100 * partial / diff.size, 'PASS' if ok else 'FAIL'))
             glBindTexture(TEX, 0)
             fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
-        # the D5 input setupLight sends for a shrunk level: the kernel clamp below 10 (max(1, 10 N / N_base)), atlas against
-        # standalone, with the same code
-        for km in (5.0, 1.0):
+        # the radius cap sampleProjectorShadow derives in metres (clamp(0.04 m k N / w, 1, 12) texels per axis): any value in
+        # [1, 12], the axes different, atlas against standalone, with the same code
+        for km in ((5.0, 5.0), (1.0, 1.0), (12.0, 1.0), (2.5, 7.0)):
             run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', standalone)], n)
             glUniform4f(glGetUniformLocation(tile_prog, b'proj_shadow_tile'), 0.0, 0.0, float(n), 1.0 / n)
-            glUniform1f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km)
+            glUniform2f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km[0], km[1])
             glDrawArrays(4, 0, 3)
             glFinish()
             km_standalone = read_output(out_tex, opts.grid)
@@ -284,14 +286,14 @@ def main():
             atlas_tex = texture(GL_DEPTH32F, A, A, atlas, GL_DEPTH)
             run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', atlas_tex)], n)
             glUniform4f(glGetUniformLocation(tile_prog, b'proj_shadow_tile'), float(ox), float(oy), float(n), 1.0 / A)
-            glUniform1f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km)
+            glUniform2f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km[0], km[1])
             glDrawArrays(4, 0, 3)
             glFinish()
             km_atlas = read_output(out_tex, opts.grid)
             dk = np.abs(km_atlas - km_standalone)
             ok = bool(dk.max() == 0.0) and glGetError() == 0
             failures += 0 if ok else 1
-            print('  N=%-4d kernel max %-4g atlas vs standalone: max abs diff %.9g  %s' % (n, km, dk.max(), 'PASS' if ok else 'FAIL'))
+            print('  N=%-4d kernel max %-10s atlas vs standalone: max abs diff %.9g  %s' % (n, '%g,%g' % km, dk.max(), 'PASS' if ok else 'FAIL'))
             glBindTexture(TEX, 0)
             fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
         fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(standalone)))
@@ -319,7 +321,7 @@ def main():
             glViewport(0, 0, W, 1440)
             glUniform2f(glGetUniformLocation(prog, b'grid'), float(W), 1440.0)
             glUniform4f(glGetUniformLocation(prog, b'proj_shadow_tile'), float(A // 2), float(A // 4), float(n), 1.0 / A)
-            glUniform1f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0)
+            glUniform2f(glGetUniformLocation(prog, b'proj_shadow_kernel_max'), 10.0, 10.0)
         t_ref, t_tile = gpu_ms(setup_ref), gpu_ms(setup_tile)
         print('lookup GPU time, 2560x1440 full screen, N=1024 (same receivers): standalone map %.3f ms, tile in the atlas %.3f ms (%+.1f %%)' % (
             t_ref, t_tile, 100 * (t_tile / t_ref - 1)))
