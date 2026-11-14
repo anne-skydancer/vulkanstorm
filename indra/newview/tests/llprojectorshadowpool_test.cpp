@@ -1056,6 +1056,10 @@ void testP3MoverRules()
           "P3 texture coordinates and colour (and REBUILD_MATERIAL) do not");
     check(!rebuildDirties(kRebuildGeometry) && !rebuildDirties(0), "P3 REBUILD_GEOMETRY (markForUpdate, selection, bump) does not");
     check(rebuildDirties(kRebuildPosition | kRebuildTcoord), "P3 a position rebuild with one texcoord flag still passes (not the whole set)");
+    check(texturedDirties(true, true), "P3 a retexture of a prim with an alpha face before and after dirties");
+    check(texturedDirties(true, false), "P3 a face turned opaque (alpha texture replaced by an RGB one) dirties: the hole closes");
+    check(texturedDirties(false, true), "P3 an opaque face turned alpha dirties: a hole opens");
+    check(!texturedDirties(false, false), "P3 opaque to opaque (a plain texture swap, an animated texture) does not dirty");
 }
 
 void testP3PinBook()
