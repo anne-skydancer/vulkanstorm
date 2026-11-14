@@ -99,12 +99,15 @@ class ShadowAlphaPermutation(unittest.TestCase):
             self.assertNotIn('floor(target_pos_x', on, name)   # the stipple's use
             body = dither_text(self.read(name))
             self.assertIn('if (ign >= alpha)', body, name)
+            on_lines = significant(evaluate(self.read(name), True).splitlines())
+            at = on_lines.index(DITHER)
+            self.assertTrue(any('minimum_alpha' in l for l in on_lines[:at]), name + ': dither outside the minimum_alpha branch')
             texts[name] = body
         self.assertEqual(len({tuple(b) for b in texts.values()}), 1, 'the dither differs between the shaders')
 
     def test_every_program_gets_the_permutation_under_the_stochastic_test(self):
         src = MGR.read_text(encoding='utf-8').replace('\r\n', '\n')
-        found = 0
+        found = set()
         for name in FILES:
             for m in re.finditer(r'(g\w+)\.mShaderFiles\.push_back\(make_pair\("deferred/' + name + r'\.glsl"', src):
                 prog = m.group(1)
@@ -112,13 +115,20 @@ class ShadowAlphaPermutation(unittest.TestCase):
                 self.assertRegex(block, r'if \(use_stochastic_shadows\(\)\)\s*\{[^{}]*\b' + prog +
                                  r'\.addPermutation\("' + DEFINE + r'", "1"\);',
                                  '%s links %s' % (prog, name))
-                found += 1
-        self.assertGreaterEqual(found, 5)   # mask, fullbright mask, glTF blend, avatar alpha, avatar mask
+                # make_rigged_variant copies mDefines when it is called, so the define must come first
+                rig = re.search(r'make_rigged_variant\(' + prog + r',', block)
+                if rig:
+                    self.assertLess(block.index('addPermutation("' + DEFINE), rig.start(),
+                                    '%s: the define is added after make_rigged_variant' % prog)
+                found.add(prog)
+        self.assertEqual(found, {'gDeferredShadowFullbrightAlphaMaskProgram', 'gDeferredShadowAlphaMaskProgram',
+                                 'gDeferredShadowGLTFAlphaBlendProgram', 'gDeferredAvatarAlphaShadowProgram',
+                                 'gDeferredAvatarAlphaMaskShadowProgram'})
 
     def test_define_is_added_only_there(self):
         src = MGR.read_text(encoding='utf-8').replace('\r\n', '\n')
         guarded = re.findall(r'if \(use_stochastic_shadows\(\)\)\s*\{[^{}]*\.addPermutation\("' + DEFINE + r'", "1"\);', src)
-        self.assertEqual(src.count(DEFINE), len(guarded), 'the define is added outside the stochastic test')
+        self.assertEqual(len(re.findall(r'addPermutation\("' + DEFINE + '"', src)), len(guarded), 'the define is added outside the stochastic test')
         start = src.index('add_common_permutations(LLGLSLShader')
         common = src[start:src.index('\n}\n', start)]
         self.assertNotIn(DEFINE, common)
