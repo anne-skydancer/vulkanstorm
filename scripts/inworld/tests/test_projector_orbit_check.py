@@ -146,16 +146,18 @@ class OrbitJudgeTest(unittest.TestCase):
         fails = poc.judge_o6_fan(a, {"static": 6, "dynamic": 3, "causes": {"edit": 1}})
         self.assertEqual(len(fails), 3)
 
-    def test_spot_is_drawn_every_frame_while_it_turns_and_once_more_when_it_stops(self):
+    def test_spot_is_drawn_every_frame_while_it_turns_and_its_final_pose_is_drawn_when_it_stops(self):
         before = {"frame": 100, "dynamic": 10, "static": 5, "without": 0}
         during = {"frame": 160, "dynamic": 70, "static": 5, "without": 0}
-        after = {"frame": 190, "dynamic": 70, "static": 6, "without": 0}
+        after = {"frame": 190, "dynamic": 70, "static": 5, "without": 0, "pose_stale": 0, "lamp_moving": 0}   # the final pose was a dynamic render
         self.assertEqual(poc.judge_o6_spot(before, during, after), [])
         slow = dict(during, dynamic=20)
         self.assertIn("not redrawn every frame", poc.judge_o6_spot(before, slow, after)[0])
-        self.assertIn("no static render after the spot stopped", poc.judge_o6_spot(before, during, dict(after, static=5))[0])
+        self.assertIn("still behind their lamp's pose", poc.judge_o6_spot(before, during, dict(after, pose_stale=1))[0])
+        self.assertIn("still read as moving", poc.judge_o6_spot(before, during, dict(after, lamp_moving=1))[0])
         self.assertIn("without a tile", poc.judge_o6_spot(before, dict(during, without=1), after)[0])
         self.assertIn("did not advance", poc.judge_o6_spot(before, dict(before), after)[0])
+        self.assertIn("did not advance after", poc.judge_o6_spot(before, during, dict(after, frame=160))[0])
 
     def test_lamp_edit_waits_at_most_250_ms(self):
         before = {"causes": {"edit": 2}, "dirty_age_ms_max": 0.0}
@@ -166,6 +168,19 @@ class OrbitJudgeTest(unittest.TestCase):
         status, why = poc.judge_o6_lamp(before, late)
         self.assertEqual(status, "FAIL")
         self.assertIn("400 ms", why)
+
+    def test_o2_leaves_avatar_tiles_out_and_judges_each_radius_by_its_own_first_lap(self):
+        base = sample(0, "baseline")
+        # radius 0: lap 1 settles with an edit (allowed by the caller), lap 2 is the gate; tile 2 holds an avatar and changes its CRC
+        r0a = dict(sample(1, "s0", 6, causes={"new": 5, "edit": 1}), settle=True, group=0, avatar_keys=["2"])
+        r0b = dict(sample(2, "s0", 6, causes={"new": 5, "edit": 1, "avatar": 2}, crcs={"1": 11, "2": 77}), settle=False, group=0, avatar_keys=["2"])
+        # radius 1: its own settling lap (a late arrival changes tile 1), then a gate lap equal to it
+        r1a = dict(sample(3, "s0", 6, causes={"new": 5, "edit": 2, "avatar": 2}, crcs={"1": 55, "2": 77}), settle=True, group=1)
+        r1b = dict(sample(4, "s0", 6, causes={"new": 5, "edit": 2, "avatar": 2}, crcs={"1": 55, "2": 77}), settle=False, group=1)
+        self.assertEqual(poc.judge_o2(base, [r0a, r0b, r1a, r1b], ("lod_up", "edit")), [])
+        # the same tile 1 change in a gate lap is a failure
+        bad = dict(r1b, crcs={"1": 56, "2": 77})
+        self.assertIn("tile CRC differs from the first lap for 1", poc.judge_o2(base, [r0a, r0b, r1a, bad], ("lod_up", "edit"))[0])
 
     def test_pool_extras_reads_the_p3_counters(self):
         st = {"pool": {"rerender_causes": {"edit": 2}, "dynamic_renders": 3, "static_renders": 4, "pinned_objects": 5, "frame": 6,
@@ -222,6 +237,36 @@ class OrbitGateAgainstTheFakeViewerTest(unittest.TestCase):
         self.assertEqual(g["status"], "NOT RUN")
         self.assertIn("no tile CRC", g["why"])
 
+    def test_o2_reports_avatar_tiles_and_honours_the_centre(self):
+        model = fake_pool()
+        model.avatar_tiles = {2}
+        check = make_check(model, self.tmp, o2={"radii_m": [3.0], "steps": 4, "laps": 2, "snapshots": False, "centre": [10.0, 20.0, 30.0]})
+        seen = []
+        orig = check.aim
+        check.aim = lambda cam, focus: (seen.append(focus), orig(cam, focus))[1]
+        g = check.gate_o2()
+        self.assertEqual(g["status"], "PASS", g)
+        self.assertEqual(g["avatar_tiles"], ["2"])
+        self.assertTrue(all(f[:2] == [10.0, 20.0] for f in seen))
+        check.cleanup()
+
+    def test_contact_sheet_keeps_each_picture_s_aspect(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        check = make_check(fake_pool(), self.tmp)
+        files = []
+        for i, size in enumerate([(640, 480), (1920, 1080)]):
+            f = pathlib.Path(self.tmp) / ("s%d.png" % i)
+            Image.new("RGB", size, (200, 10, 10)).save(f)
+            files.append(f)
+        out = check.contact_sheet(files, pathlib.Path(self.tmp) / "sheet.png")
+        with Image.open(out) as sheet:
+            self.assertEqual(sheet.size, (6 * 320, 180))
+            self.assertEqual(sheet.getpixel((10, 90)), (0, 0, 0))   # the 4:3 picture is centred in its cell, the margin is black
+            self.assertEqual(sheet.getpixel((160, 90)), (200, 10, 10))
+
     def test_o2_needs_two_laps(self):
         g = make_check(fake_pool(), self.tmp, o2={"radii_m": [3.0], "steps": 4, "laps": 1}).gate_o2()
         self.assertEqual(g["status"], "NOT RUN")
@@ -234,6 +279,12 @@ class OrbitGateAgainstTheFakeViewerTest(unittest.TestCase):
     def test_o6_is_not_run_unless_asked_for(self):
         self.assertEqual(make_check(fake_pool(), self.tmp).gate_o6()["status"], "NOT RUN")
 
+    def test_o6_passes_when_the_three_windows_behave(self):
+        check = make_check(ScriptedPool(), self.tmp, o6={"run": True, "windows": {"prompt_s": 0, "fan_s": 0, "spot_s": 0, "spot_stop_s": 0, "lamp_edit_s": 0}})
+        g = check.gate_o6()
+        self.assertEqual(g["status"], "PASS", g)
+        self.assertEqual({k: p["status"] for k, p in g["parts"].items()}, {"fan": "PASS", "spot": "PASS", "lamp_edit": "PASS"})
+
     def test_o6_runs_its_three_windows_and_names_the_part_that_did_not_run(self):
         model = fake_pool()
         check = make_check(model, self.tmp, o6={"run": True, "windows": {"prompt_s": 0, "fan_s": 0, "spot_s": 0, "spot_stop_s": 0, "lamp_edit_s": 0}})
@@ -243,6 +294,32 @@ class OrbitGateAgainstTheFakeViewerTest(unittest.TestCase):
         self.assertEqual(g["parts"]["spot"]["status"], "FAIL")
         self.assertEqual(g["parts"]["lamp_edit"]["status"], "NOT RUN")
         self.assertEqual(g["status"], "FAIL")
+
+
+class ScriptedPool:
+    """A PoolModel whose reads advance a script: the O-6 windows pass (the fan sees nothing, the spot turns for 60 frames and its final
+    pose is drawn as a dynamic item, an edited object under a lamp is drawn within 40 ms)."""
+
+    def __new__(cls):
+        import fake_viewer as fvm
+
+        class Model(fvm.PoolModel):
+            def __init__(self):
+                super().__init__()
+                self.reads = 0
+
+            def stats(self, d):
+                self.reads += 1
+                if self.reads == 5:        # the spot's window ends: it turned for 60 frames, drawn in each
+                    self.frame += 60
+                    self.dynamic += 60
+                elif self.reads == 6:      # it stopped; the frames go on and no tile is behind its pose
+                    self.frame += 30
+                elif self.reads == 8:      # an edit under a lamp
+                    self.causes["edit"] += 2
+                    self.dirty_age_ms_max = 40.0
+                return super().stats(d)
+        return Model()
 
 
 def fake_pool(**kw):

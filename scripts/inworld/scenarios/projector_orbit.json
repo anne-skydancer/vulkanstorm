@@ -6,7 +6,7 @@
   "settings": {"RenderShadowMethod": 2, "RenderShadowDetail": 2},
   "camera": {"height_m": 1.6, "look_distance_m": 10.0},
   "o1": {"yaw_step_deg": 15, "pitch_deg": [-60, -45, -30, -15, 15, 30, 45, 60]},
-  "o2": {"radii_m": [3.0, 8.0], "steps": 24, "laps": 2, "centre": "agent", "target_height_m": 0.5, "snapshots": true, "first_lap_causes": ["lod_up"]},
+  "o2": {"radii_m": [3.0, 8.0], "steps": 24, "laps": 2, "centre": "agent", "target_height_m": 0.5, "snapshots": true, "first_lap_causes": ["lod_up", "edit"]},
   "o4": {"route": [], "teleport_in": null},
   "o6": {"run": false, "windows": {"prompt_s": 10, "fan_s": 10, "spot_s": 12, "spot_stop_s": 5, "lamp_edit_s": 20, "limit_ms": 250}}
 }
