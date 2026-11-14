@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llviewerobject.h"
+#include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's classifier
 #include "llscripteditorws.h"
 
 #include "llaudioengine.h"
@@ -2398,6 +2399,11 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
     F32 vel_mag_sq = getVelocity().magVecSquared();
     F32 accel_mag_sq = getAcceleration().magVecSquared();
 
+    // <Vulkanstorm> what this update changes, for the projector shadow pool's mover classifier (read before the position and rotation are applied)
+    const bool pool_pos_changed = (test_pos_parent != new_pos_parent);
+    const bool pool_rot_changed = new_rot.isNotEqualEps(getRotation(), F_ALMOST_ZERO);
+    // </Vulkanstorm>
+
     if (  ((b_changed_status)||(test_pos_parent != new_pos_parent))
         ||(  (!isSelected())
            &&(  (vel_mag_sq != 0.f)
@@ -2470,6 +2476,11 @@ U32 LLViewerObject::processUpdateMessage(LLMessageSystem *mesgsys,
         }
         setChanged(ROTATED | SILHOUETTE);
     }
+
+    // <Vulkanstorm> the pool's classifier: a server-reported move after creation, a velocity or a spin on a root (main thread)
+    LLShadowDirtyFeed::noteServerUpdate(this, pool_pos_changed, pool_rot_changed, vel_mag_sq != 0.f || accel_mag_sq != 0.f,
+                                        !getAngularVelocity().isExactlyZero());
+    // </Vulkanstorm>
 
     if ( gShowObjectUpdates )
     {
