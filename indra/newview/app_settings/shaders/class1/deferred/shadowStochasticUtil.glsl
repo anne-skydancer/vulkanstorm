@@ -28,7 +28,7 @@
 #define ST_GOLDEN 2.39996323
 #define ST_STEPS_MAX 8
 // the projectors' filtered lookup (sampleProjectorShadow)
-#define ST_SPOT_RADIUS_MAX_M 0.04  // metres at the receiver: the largest radius of the search and of the filter (about 10 texels of a base-size tile at its reference distance)
+#define ST_SPOT_RADIUS_MAX_M 0.04  // metres at the receiver: the largest radius of the search and of the filter (about 10 texels of a 2048 tile at 4 m, 90 degrees)
 #define ST_SPOT_KERNEL_TEXELS_MAX 12.0 // texels: the same radius never exceeds this, so the fixed 8 + 32 gathers keep covering the disc
 #define ST_SPOT_SEARCH 8           // gathers of the blocker search
 #define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
