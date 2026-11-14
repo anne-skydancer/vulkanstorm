@@ -633,10 +633,10 @@ namespace
         // never-drawn first, nearest first, before anything dirty; then oldest (frames) first
         {
             std::vector<StaticItem> items;
-            items.push_back({ 1, false, true, 10.f, 1.f, 0.05f, 1 });      // dirty, near, 1 frame old
-            items.push_back({ 2, true, false, 0.f, 50.f, 0.05f, 0 });      // never drawn, far
-            items.push_back({ 3, true, false, 0.f, 5.f, 0.05f, 0 });       // never drawn, near
-            items.push_back({ 4, false, true, 900.f, 90.f, 0.05f, 50 });   // old
+            items.push_back({ 1, false, true, 1.f, 0.05f, 1 });      // dirty, near, 1 frame old
+            items.push_back({ 2, true, false, 50.f, 0.05f, 0 });      // never drawn, far
+            items.push_back({ 3, true, false, 5.f, 0.05f, 0 });       // never drawn, near
+            items.push_back({ 4, false, true, 90.f, 0.05f, 50 });   // old
             const std::vector<uint32_t> o = selectStatic(items, 10.f);
             check(o.size() == 4 && o[0] == 3 && o[1] == 2, "T7 never-drawn first, nearest first");
             check(o.size() == 4 && o[2] == 4 && o[3] == 1, "T7 then oldest, then the younger");
@@ -644,62 +644,67 @@ namespace
         // the age beats distance; the distance only breaks a tie
         {
             std::vector<StaticItem> items;
-            items.push_back({ 1, false, true, 0.f, 2.f, 0.05f, 3 });
-            items.push_back({ 2, false, true, 0.f, 100.f, 0.05f, 9 });
-            items.push_back({ 3, false, true, 0.f, 90.f, 0.05f, 8 });
+            items.push_back({ 1, false, true, 2.f, 0.05f, 3 });
+            items.push_back({ 2, false, true, 100.f, 0.05f, 9 });
+            items.push_back({ 3, false, true, 90.f, 0.05f, 8 });
             const std::vector<uint32_t> o = selectStatic(items, 10.f);
             check(o.size() == 3 && o[0] == 2 && o[1] == 3 && o[2] == 1, "T7 oldest first, whatever the distance");
             std::vector<StaticItem> tie;
-            tie.push_back({ 1, false, true, 0.f, 2.f, 0.05f, 4 });
-            tie.push_back({ 2, false, true, 0.f, 1.f, 0.05f, 4 });
+            tie.push_back({ 1, false, true, 2.f, 0.05f, 4 });
+            tie.push_back({ 2, false, true, 1.f, 0.05f, 4 });
             const std::vector<uint32_t> o2 = selectStatic(tie, 10.f);
             check(o2.size() == 2 && o2[0] == 2, "T7 equal ages: the nearest first");
         }
         // cap and progress: at least one item even when it alone exceeds the cap; none when idle
         {
             std::vector<StaticItem> items;
-            items.push_back({ 1, true, false, 0.f, 3.f, 0.9f });
-            items.push_back({ 2, true, false, 0.f, 4.f, 0.1f });
+            items.push_back({ 1, true, false, 3.f, 0.9f, 0 });
+            items.push_back({ 2, true, false, 4.f, 0.1f, 0 });
             const std::vector<uint32_t> o = selectStatic(items, 0.25f);
             check(o.size() == 1 && o[0] == 1, "T7 floor of one item over the cap", double(o.size()));
             std::vector<StaticItem> many;
-            for (uint32_t i = 1; i <= 20; ++i) many.push_back({ i, false, true, 10.f, float(i), 0.1f });
+            for (uint32_t i = 1; i <= 20; ++i) many.push_back({ i, false, true, float(i), 0.1f, 0 });
             const std::vector<uint32_t> o2 = selectStatic(many, 0.25f);
             check(o2.size() == 2, "T7 cap stops after two 0.1 ms items", double(o2.size()));
             std::vector<StaticItem> idle;
-            idle.push_back({ 1, false, false, 0.f, 1.f, 0.1f });
+            idle.push_back({ 1, false, false, 1.f, 0.1f, 0 });
             check(selectStatic(idle, 0.25f).empty(), "T7 a static scene renders nothing");
         }
-        // Simulated frames: every tile is pending each frame; its age is the frames since it was drawn (all start drawn at
-        // frame 0 with ages 0 to n-1 staggered by the caller). Returns the largest age seen when a tile was picked, and
-        // whether any tile was picked twice before all had been picked once (a round).
+        // Simulated frames: every tile is pending each frame and its age is the frames since it was drawn (all start as drawn
+        // at frame 0, so the first frames serve them by distance). The statistics start once every tile has been drawn once,
+        // which is when the order has settled into a steady round robin. Returns the largest age at which a tile was picked
+        // from then on, and whether any tile was picked twice before all had been picked once (a round).
         struct Sim { uint32_t worst = 0; bool twice = false; std::vector<uint32_t> served; };
         auto simulate = [](uint32_t n, float cost_ms, float cap_ms, uint32_t frames, bool near_first_distances) {
             std::vector<StaticItem> items;
             std::vector<uint32_t> drawn(n + 1, 0);
             for (uint32_t i = 1; i <= n; ++i)
             {
-                items.push_back({ i, false, true, 0.f, near_first_distances ? float(i) : float(n + 1 - i), cost_ms, 0 });
+                items.push_back({ i, false, true, near_first_distances ? float(i) : float(n + 1 - i), cost_ms, 0 });
             }
             Sim sim;
             sim.served.assign(n + 1, 0);
             std::set<uint32_t> round;
+            uint32_t drawn_once = 0;
+            bool settled = false; // every tile has been drawn once (at the end of an earlier frame)
             for (uint32_t f = 1; f <= frames; ++f)
             {
                 for (StaticItem& it : items) it.age_frames = f - drawn[it.key];
                 const std::vector<uint32_t> o = selectStatic(items, cap_ms);
                 for (uint32_t k : o)
                 {
-                    if (f > n) // the first round settles the staggered start; after it the order is a steady round robin
+                    if (settled)
                     {
                         sim.worst = std::max(sim.worst, f - drawn[k]);
                         if (round.count(k)) sim.twice = true;
                         round.insert(k);
                         if (round.size() == n) round.clear();
                     }
+                    if (drawn[k] == 0) ++drawn_once;
                     drawn[k] = f;
                     ++sim.served[k];
                 }
+                if (drawn_once == n) settled = true;
             }
             return sim;
         };
@@ -712,7 +717,7 @@ namespace
         // four cheap tiles: all four every frame under the fixed cap
         {
             std::vector<StaticItem> items;
-            for (uint32_t i = 1; i <= 4; ++i) items.push_back({ i, false, true, 0.f, float(i) * 3.f, 0.07f, 1 });
+            for (uint32_t i = 1; i <= 4; ++i) items.push_back({ i, false, true, float(i) * 3.f, 0.07f, 1 });
             check(selectStatic(items, kStaticCapMs).size() == 4, "T7 four cheap tiles all run every frame (fixed cap)");
             const Sim s4 = simulate(4, 0.07f, kStaticCapMs, 100, true);
             check(s4.worst == 1, "T7 four cheap tiles: every tile redrawn every frame", s4.worst);
@@ -725,10 +730,24 @@ namespace
             const Sim far30 = simulate(30, 0.1f, 0.6f + 0.01f, 150, false);
             check(far30.worst <= 5 && !far30.twice, "T7 30 tiles: the same with the distances reversed", far30.worst);
         }
+        // cold start with the viewer's real prior: the running average starts at 0.5 ms, above the whole cap, and a new
+        // record's prediction is coldItemMs, so several never-drawn tiles are served in one frame, not one
+        {
+            check(coldItemMs(0.5f) <= kStaticCapMs / 4.f, "T7 the cold prediction is at most a quarter of the cap", coldItemMs(0.5f));
+            check(coldItemMs(0.07f) == 0.07f, "T7 a measured average below the quarter is kept", coldItemMs(0.07f));
+            std::vector<StaticItem> cold;
+            for (uint32_t i = 1; i <= 20; ++i) cold.push_back({ i, true, false, float(i), coldItemMs(0.5f), 0 });
+            const std::vector<uint32_t> o = selectStatic(cold, kStaticCapMs);
+            check(o.size() >= 3 && o.size() <= 4, "T7 a 0.5 ms prior still serves several never-drawn tiles per frame", double(o.size()));
+            check(o.size() >= 1 && o[0] == 1, "T7 the nearest never-drawn tile first");
+            std::vector<StaticItem> old_prior;
+            for (uint32_t i = 1; i <= 20; ++i) old_prior.push_back({ i, true, false, float(i), 0.5f, 0 });
+            check(selectStatic(old_prior, kStaticCapMs).size() == 1, "T7 (the uncapped 0.5 ms prior would serve one tile)");
+        }
         // cold start: 20 never-drawn tiles with no history (cost 0, NaN) do not all run in one frame
         {
             std::vector<StaticItem> cold;
-            for (uint32_t i = 1; i <= 20; ++i) cold.push_back({ i, true, false, 0.f, float(i), 0.f });
+            for (uint32_t i = 1; i <= 20; ++i) cold.push_back({ i, true, false, float(i), 0.f, 0 });
             const size_t n = selectStatic(cold, 0.25f).size();
             check(n >= 4 && n <= 6, "T7 cold start is capped (about T_s / default)", double(n));
             for (StaticItem& it : cold) it.last_cpu_ms = std::numeric_limits<float>::quiet_NaN();

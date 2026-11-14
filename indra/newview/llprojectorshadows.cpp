@@ -391,7 +391,7 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
             Record fresh;
             fresh.key = mNextKey++;
             fresh.drawable = drawable;
-            fresh.lastCpuMs = mCostEmaMs;
+            fresh.lastCpuMs = coldItemMs(mCostEmaMs); // a never-drawn record's prediction leaves room for several per frame
             rec = &(mRecords[fresh.key] = fresh);
             mKeyOf[drawable] = fresh.key;
         }
@@ -680,7 +680,6 @@ void LLProjectorShadows::renderTile(Record& rec)
     r.drawn.dist = g.dist;
     r.drawn.valid = true;
     r.drawnFrame = LLFrameTimer::getFrameCount();
-    r.drawnTime = LLTimer::getTotalSeconds();
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     r.lastCpuMs = ms;
     mCostEmaMs += 0.2f * (ms - mCostEmaMs);
@@ -720,7 +719,6 @@ void LLProjectorShadows::update(LLCamera& camera)
 
     // the work list: every placed tile is an item (stage P2 has no change tracking, so each is a full render, in the order
     // of llprojectorpool::selectStatic: never drawn first, then the oldest first by frames, the nearest only breaking a tie)
-    const F64 now = LLTimer::getTotalSeconds();
     std::vector<StaticItem> items;
     items.reserve(mRecords.size());
     mLightsWithoutTile = 0;
@@ -739,7 +737,6 @@ void LLProjectorShadows::update(LLCamera& camera)
         item.key = rec.key;
         item.never_drawn = rec.drawnFrame == 0;
         item.pending = true;
-        item.stale_ms = (F32)((now - rec.drawnTime) * 1000.0);
         item.cam_dist = rec.camDist;
         item.last_cpu_ms = rec.lastCpuMs;
         item.age_frames = rec.drawnFrame == 0 ? 0u : frame - rec.drawnFrame;
