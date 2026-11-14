@@ -1027,8 +1027,13 @@ void testP3MoverRules()
     c.mover = true;
     check(!layerTransition(b, c), "P3 physical to physical-and-mover stays out of the layer: no transition");
     check(!layerTransition(a, a), "P3 no flag change, no transition");
-    check(rebuildDirties(0x1u, 0x7u) && rebuildDirties(0x4u, 0x7u) && !rebuildDirties(0x8u, 0x7u) && !rebuildDirties(0x10u | 0x20u, 0x7u),
-          "P3 the flag filter: volume, position and rigged pass; texture coordinates and colour do not");
+    // the real flag values (llshadowdirtyfeed.cpp checks them against lldrawable.h)
+    check(rebuildDirties(kRebuildVolume) && rebuildDirties(kRebuildRigged) && rebuildDirties(kRebuildPosition) && rebuildDirties(kRebuildAll),
+          "P3 the flag filter: volume, rigged, a position-only rebuild and REBUILD_ALL pass");
+    check(!rebuildDirties(kRebuildTcoord) && !rebuildDirties(kRebuildColor) && !rebuildDirties(kRebuildTcoord | kRebuildColor),
+          "P3 texture coordinates and colour (and REBUILD_MATERIAL) do not");
+    check(!rebuildDirties(kRebuildGeometry) && !rebuildDirties(0), "P3 REBUILD_GEOMETRY (markForUpdate, selection, bump) does not");
+    check(rebuildDirties(kRebuildPosition | kRebuildTcoord), "P3 a position rebuild with one texcoord flag still passes (not the whole set)");
 }
 
 void testP3PinBook()
