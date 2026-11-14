@@ -116,6 +116,9 @@ namespace
             tile["drawn_frame"] = (S32)t.drawnFrame;
             tile["cam_dist"] = (F64)t.camDist;
             tile["pending"] = t.pending;
+            tile["avatar"] = t.avatar;            // an avatar is in its light, or its last draw had one: redrawn until P4, so no CRC gate holds
+            tile["pose_stale"] = t.poseStale;     // the lamp's pose differs from the one the tile was drawn with
+            tile["lamp_moving"] = t.lampMoving;   // the lamp's pose changed since the last frame
             if (with_crc && t.size && t.drawnFrame && gGLManager.mGLVersion >= 4.49f)   // GL 4.5 core: fetched only from 4.5 up (llgl.cpp); the version, not the address (-Werror=address)
             {
                 std::vector<F32> texels((size_t)t.size * t.size);
@@ -125,7 +128,7 @@ namespace
             }
             tiles.append(tile);
         }
-        pool["tiles"] = tiles;  // per tile: key, size, drawn_frame, and (unless "crc": false) the crc32 of its texels in S
+        pool["tiles"] = tiles;  // per tile: key, size, drawn_frame, pending, avatar, pose_stale, lamp_moving, and (unless "crc": false) the crc32 of its texels in S
         LLSD causes = LLSD::emptyMap();   // renders by the cause that made the tile stale (new, lod_up, add_remove, edit, mover, lamp, avatar, lowres, other)
         for (size_t c = 0; c < llprojectorpool::kCauseCount; ++c)
         {
