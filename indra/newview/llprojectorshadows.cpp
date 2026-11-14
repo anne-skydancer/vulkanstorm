@@ -48,10 +48,7 @@ using namespace llprojectorpool;
 
 namespace
 {
-    // Atlas edge by video memory (spec 4.2, D20): 2048 below 3 GB, 4096 otherwise. The 8192 tier of >= 12 GB cards is only
-    // added if the measured places push the level to 2 or more (stage S0 counts them); it is not built.
-    constexpr U32 kTierSmall = 2048;
-    constexpr U32 kTierDefault = 4096;
+    constexpr U32 kTierSmall = kAtlasSmall; // the smallest atlas: the floor of the step-down on a failed allocation
 
     // What the pool uses of a spotlight, read once per use from the drawable (the geometry setupSpotLight and the Legacy
     // slot renders also use): the origin of the light's frustum, which has the prim's face as its near plane.
@@ -245,9 +242,11 @@ bool LLProjectorShadows::ensureAllocated()
     {
         return true;
     }
-    // one tier by video memory; a failed allocation tries the one below, and the smallest failing leaves the lights without a
-    // tile (never another method)
-    U32 size = (gGLManager.mVRAM > 0 && gGLManager.mVRAM < 3072) ? kTierSmall : kTierDefault;
+    // one tier by video memory (2048 below 3 GB, 4096, 8192 from 12 GB, within GL_MAX_TEXTURE_SIZE); a failed allocation tries
+    // the one below, and the smallest failing leaves the lights without a tile (never another method)
+    U32 size = atlasTier(gGLManager.mVRAM, (U32)llmax(gGLManager.mGLMaxTextureSize, 0));
+    LL_INFOS("ProjectorShadows") << "projector shadow pool: atlas tier " << size << " chosen for " << gGLManager.mVRAM
+                                 << " MB of video memory, GL_MAX_TEXTURE_SIZE " << gGLManager.mGLMaxTextureSize << LL_ENDL;
     for (; size >= kTierSmall; size >>= 1)
     {
         if (allocateAtlases(size))
@@ -261,7 +260,7 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.drawnFrame = 0;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
-                                         << ((U64)size * size * 8 >> 20) << " MiB)" << LL_ENDL;
+                                         << (atlasBytes(size) >> 20) << " MiB)" << LL_ENDL;
             return true;
         }
         if (!mAllocFailed)
