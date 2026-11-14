@@ -917,6 +917,14 @@ void testP3DirtyList()
 
 void testP3ChangeIndex()
 {
+    {
+        // a wide projector (aspect 2) is as wide as its render frustum across and not wider along: the same region the cull sees
+        const float o[3] = { 0, 0, 0 }, f[3] = { 0, 0, -1 }, r[3] = { 1, 0, 0 }, u[3] = { 0, 1, 0 };
+        const Pyramid wide = makePyramid(o, f, r, u, 2.f * 1.0f, 1.0f, 0.1f, 20.f); // tan_x = 2, tan_y = 1
+        auto box_at = [](float x, float y, float z) { Aabb b; b.lo[0] = x - .1f; b.hi[0] = x + .1f; b.lo[1] = y - .1f; b.hi[1] = y + .1f; b.lo[2] = z - .1f; b.hi[2] = z + .1f; return b; };
+        check(intersects(wide, box_at(15.f, 0.f, -10.f)), "P3 the wide side of an aspect-2 volume holds a box at tan 1.5");
+        check(!intersects(wide, box_at(0.f, 15.f, -10.f)), "P3 the narrow side does not hold a box at tan 1.5 (not widened)");
+    }
     std::mt19937 rng(7);
     std::uniform_real_distribution<float> pos(-60.f, 60.f), ext(0.2f, 6.f), fov(0.5f, 2.2f), rad(2.f, 20.f);
     std::vector<TileVolume> tiles;
