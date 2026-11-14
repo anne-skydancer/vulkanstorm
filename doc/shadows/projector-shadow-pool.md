@@ -33,10 +33,17 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   tiles a frame in P2; P3 stops that. A frame also stops rendering once the measured time reaches the budget (the first pick always runs).
 - **Lookup.** `setupSpotLight` calls `LLProjectorShadows::setupLight` instead of ranking lights: `proj_shadow_idx` (-1 until the tile
   is first drawn), `proj_shadow_matrix` (the matrix of the pose the tile was drawn with, so a lamp that moved keeps a coherent
-  shadow until its tile is redrawn), `proj_shadow_tile` (x, y, N, 1/A), `proj_shadow_kernel_max`. `spotLightF.glsl` looks the
+  shadow until its tile is redrawn), `proj_shadow_tile` (x, y, N, 1/A). `spotLightF.glsl` looks the
   shadow up itself (permutation `PROJECTOR_SHADOW_POOL`), only inside the projector's frustum and on surfaces that face it, after
   the attenuation test. `sampleProjectorShadow` is the filtered lookup of 261253bd43 on the tile, with an exact `CLAMP_TO_EDGE`
   emulation at the tile's edge (no guard texels). The sun pass writes 1 in its projector channels; the slots stay empty.
+- **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
+  `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a base-size tile at its reference distance), turned into texels of this
+  tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
+  is one texel (an edge is never narrower than the tile resolves, so a shrunk tile does not alias); the upper bound is 12 texels
+  because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
+  452 texels for 32 bilinear 2 x 2 taps, 3.5 times the coverage of one gather per tap) and the penumbra turns grainy before
+  it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
 - **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
   pool), so a tile's pattern does not depend on where the tile sits in the atlas.
 - **Lifetime.** Allocated in `allocateShadowBuffer` (the place of the spot maps, not for probe snapshots), released when the method
