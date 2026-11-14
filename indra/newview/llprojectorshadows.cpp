@@ -50,13 +50,12 @@ namespace
 {
     constexpr U32 kTierSmall = kAtlasSmall; // the smallest atlas: the floor of the step-down on a failed allocation
 
-    // The emitter's extent across the beam, in metres, for the penumbra: the prim's face, clamped. A bulb of a few
-    // centimetres still blurs a little (the lower limit: a point has no edge to render), a wall washer does not smear a room.
-    constexpr F32 kEmitterMin = 0.02f;
-    constexpr F32 kEmitterMax = 0.30f;
+    // The emitter's extent across the beam, in metres, for the penumbra: the prim's face, clamped (emitterExtent: 2 cm .. 15 cm). A
+    // bulb of a few centimetres still blurs a little; the upper limit is the constant of P2, so that no lamp is softer than
+    // before and only small emitters get sharper.
     F32 emitter_extent(F32 face)
     {
-        return std::isfinite(face) ? llclamp(face, kEmitterMin, kEmitterMax) : kEmitterMin;
+        return emitterExtent(face);
     }
 
     // What the pool uses of a spotlight, read once per use from the drawable (the geometry setupSpotLight and the Legacy
@@ -251,11 +250,14 @@ bool LLProjectorShadows::ensureAllocated()
     {
         return true;
     }
-    // one tier by video memory (2048 below 3 GB, 4096, 8192 from 12 GB, within GL_MAX_TEXTURE_SIZE); a failed allocation tries
-    // the one below, and the smallest failing leaves the lights without a tile (never another method)
-    U32 size = atlasTier(gGLManager.mVRAM, (U32)llmax(gGLManager.mGLMaxTextureSize, 0));
-    LL_INFOS("ProjectorShadows") << "projector shadow pool: atlas tier " << size << " chosen for " << gGLManager.mVRAM
-                                 << " MB of video memory, GL_MAX_TEXTURE_SIZE " << gGLManager.mGLMaxTextureSize << LL_ENDL;
+    // one tier by video memory (2048 below 3 GB, 4096, 8192 from about 12 GB of dedicated memory, within GL_MAX_TEXTURE_SIZE); a
+    // failed allocation tries the one below, and the smallest failing leaves the lights without a tile (never another method).
+    // The driver reports its dedicated memory (NVX_gpu_memory_info, WGL_AMD_gpu_association) or the viewer falls back to the DXGI
+    // budget, which on shared-memory graphics is system RAM: only the first counts for 8192 (llwindowwin32.cpp skips the DXGI
+    // raise in the same case).
+    const bool dedicated_vram = gGLManager.mHasNVXGpuMemoryInfo || gGLManager.mHasAMDAssociations;
+    U32 size = atlasTier(gGLManager.mVRAM, (U32)llmax(gGLManager.mGLMaxTextureSize, 0), dedicated_vram);
+    const U32 chosen = size;
     for (; size >= kTierSmall; size >>= 1)
     {
         if (allocateAtlases(size))
@@ -269,7 +271,9 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.drawnFrame = 0;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
-                                         << (atlasBytes(size) >> 20) << " MiB)" << LL_ENDL;
+                                         << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
+                                         << " MB of video memory (" << (dedicated_vram ? "dedicated" : "not known to be dedicated")
+                                         << "), GL_MAX_TEXTURE_SIZE " << gGLManager.mGLMaxTextureSize << LL_ENDL;
             return true;
         }
         if (!mAllocFailed)
