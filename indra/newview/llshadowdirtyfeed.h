@@ -79,6 +79,7 @@ public:
     // active (bridged: the tile's cull drops it), a mover or physical object whose linkset is not a lamp's own. A mover at rest
     // is static and drawn, so it is a fixed caster: its changes push, and so does the edge where it becomes active or static.
     static void noteDrawable(LLDrawable* drawable, Cause cause);
+    static void pushExtents(LLDrawable* drawable, Cause cause); // the drawable's extents, no skip test, no flag refresh
 
     // LLPipeline::markRebuild: only a rebuild that can change the picture counts (llprojectorpool::rebuildDirties: volume, rigged,
     // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set).
@@ -92,7 +93,9 @@ public:
 
     // LLPipeline::markTextured: a texture, material, bump or glow change of a prim. Only a prim with a blended, alpha-masked or
     // alpha-textured face counts (the silhouette of its shadow follows the texture); an opaque prim's texture changes and
-    // animated textures never push. A texture that finishes loading is LLFace::dirtyTexture's REBUILD_VOLUME (alpha textures).
+    // animated textures never push. A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any
+    // component count; its REBUILD_VOLUME for 4-component textures reaches noteRebuild as well). A prim the feed has not seen since
+    // tracking started (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like now.
     static void noteTextured(LLDrawable* drawable);
 
     // LLPipeline::shiftObjects moved agent space by `offset`: pending boxes move with it.
