@@ -44,7 +44,13 @@ void main()
         discard;
     }
 
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+    // <Vulkanstorm/> Stochastic shadows: a texel is solid from 0.98 up; below that it lets light through in
+    // proportion to its transparency (Legacy keeps the stock 0.88 below).
+    if (alpha < 0.98)
+#else
     if (alpha < 0.88) // treat as semi-transparent
+#endif
     {
 #if defined(STOCHASTIC_SHADOW_ALPHA)
         // <Vulkanstorm/> Stochastic shadows: hashed per-texel dither instead of the column stipple (see shadowAlphaMaskF.glsl)
