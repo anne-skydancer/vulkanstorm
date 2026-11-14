@@ -1457,6 +1457,7 @@ void LLVOVolume::notifyMeshLoaded()
 {
     mSculptChanged = true;
     gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_GEOMETRY);
+    LLShadowDirtyFeed::noteMeshLoaded(this); // <Vulkanstorm/> the projector shadow pool: a mesh arrived (REBUILD_GEOMETRY alone is not counted)
 
     if (!mSkinInfo && !mSkinInfoUnavaliable)
     {

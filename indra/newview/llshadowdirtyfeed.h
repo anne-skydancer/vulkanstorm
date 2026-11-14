@@ -28,6 +28,7 @@
 
 class LLDrawable;
 class LLViewerObject;
+class LLVOVolume;
 class LLVector4a;
 
 // The scene's change hooks (spec 4.4, P3), kept apart from any one cache: a hook pushes the extents of what changed, with a
@@ -79,8 +80,15 @@ public:
     // is static and drawn, so it is a fixed caster: its changes push, and so does the edge where it becomes active or static.
     static void noteDrawable(LLDrawable* drawable, Cause cause);
 
-    // LLPipeline::markRebuild: only a rebuild that can change the picture (volume, position, rigged) counts.
+    // LLPipeline::markRebuild: only a rebuild that can change the picture counts (llprojectorpool::rebuildDirties: volume, rigged,
+    // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set).
     static void noteRebuild(LLDrawable* drawable, U32 rebuild_flag);
+
+    // LLVOVolume::notifyMeshLoaded: a mesh arrived (it raises REBUILD_GEOMETRY, which markRebuild does not count): the extents are
+    // pushed now and again when the rebuild it waits for completes (LLPipeline::updateGeom asks meshLoaded and clears it).
+    static void noteMeshLoaded(LLVOVolume* volume);
+    static bool meshLoaded(const LLDrawable* drawable);
+    static void clearMeshLoaded(const LLDrawable* drawable);
 
     // LLPipeline::markTextured: a texture, material, bump or glow change of a prim. Only a prim with a blended, alpha-masked or
     // alpha-textured face counts (the silhouette of its shadow follows the texture); an opaque prim's texture changes and
