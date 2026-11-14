@@ -25,7 +25,8 @@ AVATAR_POOL = ROOT / 'indra/newview/lldrawpoolavatar.cpp'
 FILES = ['shadowAlphaMaskF', 'pbrShadowAlphaBlendF', 'avatarAlphaShadowF', 'avatarAlphaMaskShadowF']
 DEFINE = 'STOCHASTIC_SHADOW_ALPHA'
 OURS = re.compile(r'#\s*if\s+(!?)\s*defined\(' + DEFINE + r'\)$')
-DITHER = 'float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));'
+DITHER = ('float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + '
+          '0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));')   # P2: anchored to the projector tile's origin
 
 
 def significant(lines):
