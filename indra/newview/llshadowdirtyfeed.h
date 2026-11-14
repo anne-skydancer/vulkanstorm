@@ -112,7 +112,7 @@ public:
 
     // ---- the classifier's reads ----
     static llprojectorpool::ObjectFlags flagsOf(const LLViewerObject* object);
-    // The rule for the fixed layer: does this bridge (an active root and its linkset) cast into a static render? `lights_root`
+    // The rule for the fixed layer: does this bridge (an active root and its linkset) cast into a static render? `lights_drawable`
     // is the lamp whose tile is being drawn (its own linkset is the fixture); null outside a tile render.
     static bool bridgeCasts(const LLDrawable* bridge_root, const LLDrawable* lights_drawable);
 
