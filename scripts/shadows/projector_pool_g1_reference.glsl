@@ -64,4 +64,3 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     }
     return lit / (0.55 * float(ST_SPOT_TAPS)); // the weights' sum
 }
-
