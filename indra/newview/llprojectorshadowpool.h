@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <set>
 #include <unordered_map>
 #include <vector>
@@ -650,42 +651,106 @@ inline bool intersects(const Pyramid& py, const Aabb& box)
     return true;
 }
 
+// Why a tile was drawn again (spec 7.3, O-2 logs the cause of every re-render). One cause per render: the first that made the
+// tile stale since its last draw.
+enum class Cause : uint8_t
+{
+    New = 0,    // never drawn (first fill, a new tile, a pool that was reset)
+    LodUp,      // the LOD pin raised an object in the light to its full detail (once per object, then it holds)
+    AddRemove,  // an object was added to or removed from the light's volume
+    Edit,       // a fixed object in the light was edited, rebuilt or moved by its owner
+    Mover,      // an object turned into (or out of) a mover or a physical object
+    Lamp,       // the lamp's own reach, angle, size or position changed
+    Avatar,     // the tile holds an avatar (drawn into S until P4), or the avatar just left
+    Lowres,     // the tile was down-sized by a layout change and is drawn again at its new size
+    Other,      // anything else: a dirty list that overflowed, a hook off the main thread
+    Count
+};
+constexpr size_t kCauseCount = size_t(Cause::Count);
+
+inline const char* causeName(Cause c)
+{
+    static const char* const names[kCauseCount] = { "new", "lod_up", "add_remove", "edit", "mover", "lamp", "avatar", "lowres", "other" };
+    return size_t(c) < kCauseCount ? names[size_t(c)] : "other";
+}
+
+struct CauseCounts
+{
+    uint64_t n[kCauseCount] = {};
+    void add(Cause c) { ++n[size_t(c) < kCauseCount ? size_t(c) : size_t(Cause::Other)]; }
+    uint64_t total() const
+    {
+        uint64_t t = 0;
+        for (uint64_t v : n) t += v;
+        return t;
+    }
+};
+
+struct DirtyBox
+{
+    Aabb box;
+    Cause cause = Cause::Other;
+};
+
 // Dirty boxes, double buffered (T6): pushes go to the fill buffer; swapForApply() hands the
 // filled buffer to the frame and starts an empty one, so a push made while tiles render lands
-// in the next frame and is never cleared after a render (F9).
+// in the next frame and is never cleared after a render (F9). A box says "something changed in
+// here"; it names no tile, so any consumer that keeps tiles (the projector atlas, later the point-light face
+// atlas) can test it against its own volumes.
 class DirtyList
 {
 public:
-    void push(const Aabb& box) { mFill.push_back(box); }
+    // A frame with more boxes than this stops recording and asks for everything to be redrawn (a bounded list; a scene
+    // that changes this much at once is a load or a teleport, which redraws every tile anyway)
+    static constexpr size_t kMaxPending = 1u << 16;
+
+    void push(const Aabb& box, Cause cause = Cause::Other)
+    {
+        if (mFill.size() >= kMaxPending)
+        {
+            mFillOverflow = true;
+            return;
+        }
+        mFill.push_back({ box, cause });
+    }
+
+    // a change that cannot be given a box (a hook that ran off the main thread, a shift of the whole scene): every tile is stale
+    void pushEverything() { mFillOverflow = true; }
 
     // Moves the pending boxes out for this frame; the returned reference stays valid until the
     // next swapForApply().
-    const std::vector<Aabb>& swapForApply()
+    const std::vector<DirtyBox>& swapForApply()
     {
         mApply.swap(mFill);
         mFill.clear();
+        mApplyOverflow = mFillOverflow;
+        mFillOverflow = false;
         return mApply;
     }
+
+    // true when the list just handed out lost boxes (or was told "everything"): treat every tile as stale
+    bool everything() const { return mApplyOverflow; }
 
     // shiftObjects moves agent space: translate pending (not yet applied) boxes
     void translatePending(float dx, float dy, float dz)
     {
         const float d[3] = { dx, dy, dz };
-        for (Aabb& b : mFill)
+        for (DirtyBox& db : mFill)
         {
             for (int i = 0; i < 3; ++i)
             {
-                b.lo[i] += d[i];
-                b.hi[i] += d[i];
+                db.box.lo[i] += d[i];
+                db.box.hi[i] += d[i];
             }
         }
     }
 
     size_t pending() const { return mFill.size(); }
-    void clear() { mFill.clear(); mApply.clear(); }
+    void clear() { mFill.clear(); mApply.clear(); mFillOverflow = mApplyOverflow = false; }
 
 private:
-    std::vector<Aabb> mFill, mApply;
+    std::vector<DirtyBox> mFill, mApply;
+    bool mFillOverflow = false, mApplyOverflow = false;
 };
 
 // An 8 m grid over the tiles' bounds: a dirty box only runs the six-plane test against tiles
@@ -785,6 +850,302 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------
+// Which tiles a change touches (section 4.4, P3). Keyed by a tile's key, never by "the projector": the point-light face atlas
+// (six cached faces per lamp) feeds the same index with its faces' pyramids.
+// ---------------------------------------------------------------------------------------------
+
+struct TileVolume
+{
+    uint32_t key = 0;   // the caller's tile or face key
+    Pyramid pyramid;    // the volume the tile's picture depends on (agent space, the dirty boxes' space)
+};
+
+struct Hit
+{
+    uint32_t key = 0;
+    Cause cause = Cause::Other;
+};
+
+// Rebuilt once per frame from the tiles' current volumes; apply() tests a frame's dirty boxes through the 8 m grid (F15) and
+// names, once per tile, the cause of the first box that touched it. A list that overflowed (everything()) touches every tile.
+class ChangeIndex
+{
+public:
+    void rebuild(const std::vector<TileVolume>& tiles)
+    {
+        mTiles = tiles;
+        mGrid.clear();
+        for (uint32_t i = 0; i < mTiles.size(); ++i)
+        {
+            mGrid.add(i, mTiles[i].pyramid.bounds);
+        }
+    }
+
+    size_t size() const { return mTiles.size(); }
+
+    void apply(const std::vector<DirtyBox>& boxes, bool everything, std::vector<Hit>& out)
+    {
+        out.clear();
+        if (mTiles.empty())
+        {
+            return;
+        }
+        if (everything)
+        {
+            for (const TileVolume& t : mTiles)
+            {
+                out.push_back({ t.key, Cause::Other });
+            }
+            return;
+        }
+        std::vector<char> hit(mTiles.size(), 0);
+        size_t remaining = mTiles.size();
+        for (const DirtyBox& b : boxes)
+        {
+            if (remaining == 0)
+            {
+                break; // every tile is already stale: the other boxes cannot add a cause
+            }
+            mGrid.candidates(b.box, mCand);
+            for (uint32_t i : mCand)
+            {
+                if (!hit[i] && intersects(mTiles[i].pyramid, b.box))
+                {
+                    hit[i] = 1;
+                    --remaining;
+                    out.push_back({ mTiles[i].key, b.cause });
+                }
+            }
+        }
+    }
+
+private:
+    std::vector<TileVolume> mTiles;
+    TileGrid mGrid;
+    std::vector<uint32_t> mCand;
+};
+
+// ---------------------------------------------------------------------------------------------
+// The mover classifier and the rules built on it (section 4.4, D9). The viewer reads its objects and fills these structs.
+// ---------------------------------------------------------------------------------------------
+
+struct ObjectFlags
+{
+    bool physical = false;  // the simulator's physics flag (a pushable object)
+    bool mover = false;     // sticky for the session: the simulator reported it moving after it was created
+};
+
+// An object (or a bridge's root) casts into the fixed layer unless it is physical or a mover. The light's own linkset is the
+// fixture: it is never dropped, whatever its flags (P4).
+inline bool castsFixed(const ObjectFlags& root, bool is_lights_own_root)
+{
+    return is_lights_own_root || !(root.physical || root.mover);
+}
+
+// A change of an object that is a mover (or physical), or whose root is, never dirties a tile: it is not in the fixed layer, and a
+// moving part inside a still linkset casts with the pose of the last render (its moves never invalidate: the known limit).
+inline bool hookSkips(const ObjectFlags& obj, const ObjectFlags& root)
+{
+    return obj.physical || obj.mover || root.physical || root.mover;
+}
+
+struct ServerUpdate
+{
+    bool created_seen = false;  // an earlier update of this object has been processed (this one is not its creating update)
+    bool selected = false;      // the agent has the object selected: its edits are not movement
+    bool pos_changed = false;   // the update changed the position
+    bool rot_changed = false;   // the update changed the rotation
+    bool velocity = false;      // nonzero velocity or acceleration
+    bool omega = false;         // nonzero angular velocity
+    bool is_root = false;       // the object is the root of its linkset
+};
+
+// True when the update turns the object into a mover: a velocity or an angular velocity on a root (a child's omega is client
+// spin, a known limit), or a server-reported position or rotation change after the creating update unless the agent edits it.
+inline bool becomesMover(const ServerUpdate& u)
+{
+    if (u.is_root && (u.velocity || u.omega))
+    {
+        return true;
+    }
+    return u.created_seen && !u.selected && (u.pos_changed || u.rot_changed);
+}
+
+// A change of the flags that moves an object in or out of the fixed layer (physics on or off, a mover bit): its extents are
+// pushed dirty at the transition, old and new.
+inline bool layerTransition(const ObjectFlags& before, const ObjectFlags& after)
+{
+    return castsFixed(before, false) != castsFixed(after, false);
+}
+
+// Only a rebuild that can change what a tile shows dirties it: the volume, the position or the rigging. A texture
+// coordinate or colour rebuild (texture animation, a tint) never does (F4).
+inline bool rebuildDirties(uint32_t flags, uint32_t volume_position_rigged_mask)
+{
+    return (flags & volume_position_rigged_mask) != 0;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The LOD pin's books (section 4.4, D6). A tile pins the objects it draws at full detail (the viewer raises a counter on each
+// object); the books say, per render, which objects the tile now holds and which it lets go of. Keyed by tile and object id.
+// ---------------------------------------------------------------------------------------------
+
+struct Id128
+{
+    uint64_t a = 0, b = 0;
+    bool operator<(const Id128& o) const { return a != o.a ? a < o.a : b < o.b; }
+    bool operator==(const Id128& o) const { return a == o.a && b == o.b; }
+};
+
+class PinBook
+{
+public:
+    // A new render of the tile starts: what it touches from now on is what it holds afterwards.
+    void beginRender(uint32_t tile) { ++mTiles[tile].generation; }
+
+    // The tile's render meets the object. True when the tile did not hold it yet (the caller raises the object's counter).
+    bool touch(uint32_t tile, const Id128& id)
+    {
+        Tile& t = mTiles[tile];
+        auto it = t.held.find(id);
+        if (it != t.held.end())
+        {
+            it->second = t.generation;
+            return false;
+        }
+        t.held[id] = t.generation;
+        ++mRefs[id];
+        return true;
+    }
+
+    // The render is over: the objects the tile held and did not meet in it (they left the light, or were removed). The caller
+    // lowers their counters.
+    std::vector<Id128> endRender(uint32_t tile)
+    {
+        std::vector<Id128> gone;
+        auto tt = mTiles.find(tile);
+        if (tt == mTiles.end())
+        {
+            return gone;
+        }
+        Tile& t = tt->second;
+        for (auto it = t.held.begin(); it != t.held.end();)
+        {
+            if (it->second != t.generation)
+            {
+                gone.push_back(it->first);
+                unref(it->first);
+                it = t.held.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        return gone;
+    }
+
+    // The tile goes away (its lamp left range, the pool was released): everything it held
+    std::vector<Id128> releaseTile(uint32_t tile)
+    {
+        std::vector<Id128> all;
+        auto tt = mTiles.find(tile);
+        if (tt != mTiles.end())
+        {
+            for (const auto& e : tt->second.held)
+            {
+                all.push_back(e.first);
+                unref(e.first);
+            }
+            mTiles.erase(tt);
+        }
+        return all;
+    }
+
+    size_t heldBy(uint32_t tile) const
+    {
+        auto it = mTiles.find(tile);
+        return it == mTiles.end() ? 0 : it->second.held.size();
+    }
+    size_t pinnedObjects() const { return mRefs.size(); }              // distinct objects pinned by at least one tile
+    uint32_t refs(const Id128& id) const { auto it = mRefs.find(id); return it == mRefs.end() ? 0 : it->second; }
+
+private:
+    void unref(const Id128& id)
+    {
+        auto it = mRefs.find(id);
+        if (it != mRefs.end() && --it->second == 0)
+        {
+            mRefs.erase(it);
+        }
+    }
+    struct Tile
+    {
+        uint32_t generation = 0;
+        std::map<Id128, uint32_t> held; // object -> the generation that last met it
+    };
+    std::map<uint32_t, Tile> mTiles;
+    std::map<Id128, uint32_t> mRefs;
+};
+
+// ---------------------------------------------------------------------------------------------
+// What a tile needs this frame (section 4.4 and 4.5): one verdict from the facts the viewer reads, so a static scene is
+// provably free (no cause: no item).
+// ---------------------------------------------------------------------------------------------
+
+struct TileFacts
+{
+    bool never_drawn = false;     // drawn_frame == 0
+    bool pending = false;         // a dirty box touched it since its last draw
+    Cause pending_cause = Cause::Other;
+    bool pose_stale = false;      // the lamp's pose differs from the pose the tile was drawn with
+    bool lamp_moving = false;     // the lamp's pose changed since last frame (a moving lamp is a dynamic item, D10)
+    bool lowres = false;          // down-sized by a layout change, not yet drawn at the new size
+    bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame
+    bool drawn_with_avatar = false; // its last draw included an avatar (its picture has one baked in until P4)
+};
+
+struct TileVerdict
+{
+    bool needs_render = false;
+    bool dynamic = false;         // scheduled with the dynamic items (a moving lamp or an avatar under it), else with the static ones
+    Cause cause = Cause::Other;
+};
+
+inline TileVerdict classifyTile(const TileFacts& f)
+{
+    TileVerdict v;
+    if (f.never_drawn)
+    {
+        v.needs_render = true;
+        v.cause = Cause::New;
+        return v; // the first fill is the static schedule's (nearest first), never the dynamic one
+    }
+    v.dynamic = f.lamp_moving || f.holds_avatar;
+    if (f.pose_stale || f.lamp_moving)
+    {
+        v.needs_render = true;
+        v.cause = Cause::Lamp;
+    }
+    else if (f.pending)
+    {
+        v.needs_render = true;
+        v.cause = f.pending_cause;
+    }
+    else if (f.lowres)
+    {
+        v.needs_render = true;
+        v.cause = Cause::Lowres;
+    }
+    else if (f.holds_avatar || f.drawn_with_avatar)
+    {
+        v.needs_render = true; // an avatar in the light is redrawn every frame; the frame after it left, once more to clean the picture
+        v.cause = Cause::Avatar;
+    }
+    return v;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Scheduler ordering (section 4.5)
 // ---------------------------------------------------------------------------------------------
 
@@ -811,7 +1172,7 @@ struct StaticItem
     bool pending = false;       // needs a render (ignored when never_drawn; P2 has no change tracking, so every placed tile)
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
-    uint32_t age_frames = 0;    // frames since it was last drawn (the order of service)
+    uint32_t age_frames = 0;    // frames since it became stale (P3: since the first dirty box that touched it): the order of service
 };
 
 // Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the

@@ -14,6 +14,8 @@
 //       every cheap tile every frame, staleness bounded by ceil(N / tiles per frame), avatar items never exceed A_max
 //   T8  the 8192 atlas tier: tier choice by VRAM, dedicated memory and GL_MAX_TEXTURE_SIZE, the buddy allocator, repack and level
 //       controller at 8192, and the P2b size rules (the radius cap and the emitter extent in the shader's and C++ side's twin)
+//   P3  the change causes, the dirty list's bound, the grid index against brute force, the mover rules, the LOD pin's books,
+//       the tile verdict, and a static scene that draws nothing
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -22,8 +24,10 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <map>
 #include <random>
 #include <set>
+#include <string>
 
 using namespace llprojectorpool;
 
@@ -592,22 +596,22 @@ namespace
         DirtyList d;
         Aabb a{ { 0, 0, 0 }, { 1, 1, 1 } }, b{ { 5, 5, 5 }, { 6, 6, 6 } }, c{ { 9, 9, 9 }, { 10, 10, 10 } };
         d.push(a);
-        const std::vector<Aabb>& frame1 = d.swapForApply();
+        const std::vector<DirtyBox>& frame1 = d.swapForApply();
         check(frame1.size() == 1, "T6 frame 1 sees its push", double(frame1.size()));
         // pushes made while frame 1's tiles render
         d.push(b);
         d.push(c);
         check(frame1.size() == 1, "T6 a push during render does not enter the applied list", double(frame1.size()));
         check(d.pending() == 2, "T6 it waits", double(d.pending()));
-        const std::vector<Aabb>& frame2 = d.swapForApply();
-        check(frame2.size() == 2 && frame2[0].lo[0] == 5.f && frame2[1].lo[0] == 9.f, "T6 it lands next frame",
+        const std::vector<DirtyBox>& frame2 = d.swapForApply();
+        check(frame2.size() == 2 && frame2[0].box.lo[0] == 5.f && frame2[1].box.lo[0] == 9.f, "T6 it lands next frame",
               double(frame2.size()));
         check(d.swapForApply().empty(), "T6 and is not delivered twice");
         // shiftObjects moves pending boxes
         d.push(a);
         d.translatePending(10.f, 0.f, -1.f);
-        const std::vector<Aabb>& f4 = d.swapForApply();
-        check(f4.size() == 1 && f4[0].lo[0] == 10.f && f4[0].hi[2] == 0.f, "T6 translate pending");
+        const std::vector<DirtyBox>& f4 = d.swapForApply();
+        check(f4.size() == 1 && f4[0].box.lo[0] == 10.f && f4[0].box.hi[2] == 0.f, "T6 translate pending");
         // pose change thresholds
         Pose p0, p1;
         check(!poseChanged(p0, p1), "pose same");
@@ -859,6 +863,301 @@ void testBadInput()
     check(baseSize(1.f, 3.1415927f) >= kMinBase && baseSize(1.f, 3.1415927f) <= kMaxBase, "size rule: fov near pi stays in range");
     check(baseSize(1.f, 1.0e30f) <= kMaxBase, "size rule: huge fov stays in range");
 }
+
+// ---- P3: causes, the change index, the mover rules, the LOD pin's books, the tile verdict ----
+Pyramid pyramidAt(float x, float y, float z, float fov, float radius)
+{
+    const float o[3] = { x, y, z }, f[3] = { 0, 0, -1 }, r[3] = { 1, 0, 0 }, u[3] = { 0, 1, 0 };
+    return makePyramid(o, f, r, u, fov, 0.1f, radius);
+}
+
+void testP3Causes()
+{
+    check(std::string(causeName(Cause::New)) == "new" && std::string(causeName(Cause::LodUp)) == "lod_up" &&
+              std::string(causeName(Cause::AddRemove)) == "add_remove" && std::string(causeName(Cause::Edit)) == "edit" &&
+              std::string(causeName(Cause::Mover)) == "mover" && std::string(causeName(Cause::Lamp)) == "lamp" &&
+              std::string(causeName(Cause::Avatar)) == "avatar" && std::string(causeName(Cause::Lowres)) == "lowres" &&
+              std::string(causeName(Cause::Other)) == "other",
+          "P3 cause names");
+    check(std::string(causeName(Cause::Count)) == "other", "P3 an out-of-range cause is other");
+    CauseCounts c;
+    c.add(Cause::Edit);
+    c.add(Cause::Edit);
+    c.add(Cause::LodUp);
+    c.add(Cause::Count); // out of range counts as other, never writes past the array
+    check(c.n[size_t(Cause::Edit)] == 2 && c.n[size_t(Cause::LodUp)] == 1 && c.n[size_t(Cause::Other)] == 1 && c.total() == 4,
+          "P3 cause counts");
+}
+
+void testP3DirtyList()
+{
+    DirtyList d;
+    Aabb a{ { 0, 0, 0 }, { 1, 1, 1 } };
+    d.push(a, Cause::Edit);
+    d.push(a);
+    const std::vector<DirtyBox>& f = d.swapForApply();
+    check(f.size() == 2 && f[0].cause == Cause::Edit && f[1].cause == Cause::Other && !d.everything(), "P3 the box carries its cause");
+    // a frame that loses boxes asks for everything, once; the cap is bounded
+    for (size_t i = 0; i < DirtyList::kMaxPending + 100; ++i)
+    {
+        d.push(a, Cause::Edit);
+    }
+    check(d.pending() == DirtyList::kMaxPending, "P3 the pending list is bounded", double(d.pending()));
+    const std::vector<DirtyBox>& g = d.swapForApply();
+    check(g.size() == DirtyList::kMaxPending && d.everything(), "P3 an overflowed frame says everything");
+    d.swapForApply();
+    check(!d.everything(), "P3 the next frame starts clean");
+    d.pushEverything();
+    d.swapForApply();
+    check(d.everything(), "P3 pushEverything");
+    d.push(a);
+    d.clear();
+    check(d.pending() == 0 && d.swapForApply().empty() && !d.everything(), "P3 clear");
+}
+
+void testP3ChangeIndex()
+{
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<float> pos(-60.f, 60.f), ext(0.2f, 6.f), fov(0.5f, 2.2f), rad(2.f, 20.f);
+    std::vector<TileVolume> tiles;
+    for (uint32_t k = 0; k < 80; ++k)
+    {
+        tiles.push_back({ 100 + k, pyramidAt(pos(rng), pos(rng), pos(rng), fov(rng), rad(rng)) });
+    }
+    ChangeIndex index;
+    index.rebuild(tiles);
+    check(index.size() == 80, "P3 index size");
+    std::vector<Hit> hits;
+    int mismatches = 0;
+    for (int round = 0; round < 200; ++round)
+    {
+        std::vector<DirtyBox> boxes;
+        for (int i = 0; i < 6; ++i)
+        {
+            Aabb b;
+            const float cx = pos(rng), cy = pos(rng), cz = pos(rng), e = ext(rng);
+            b.lo[0] = cx - e; b.hi[0] = cx + e; b.lo[1] = cy - e; b.hi[1] = cy + e; b.lo[2] = cz - e; b.hi[2] = cz + e;
+            boxes.push_back({ b, i % 2 ? Cause::Edit : Cause::AddRemove });
+        }
+        index.apply(boxes, false, hits);
+        // brute force: each tile, the first box that intersects it names the cause
+        std::map<uint32_t, Cause> want;
+        for (const DirtyBox& b : boxes)
+        {
+            for (const TileVolume& t : tiles)
+            {
+                if (!want.count(t.key) && intersects(t.pyramid, b.box))
+                {
+                    want[t.key] = b.cause;
+                }
+            }
+        }
+        std::map<uint32_t, Cause> got;
+        for (const Hit& h : hits)
+        {
+            if (got.count(h.key))
+            {
+                ++mismatches; // a tile named twice
+            }
+            got[h.key] = h.cause;
+        }
+        if (got != want)
+        {
+            ++mismatches;
+        }
+    }
+    check(mismatches == 0, "P3 the grid index gives the brute-force hits, once per tile, with the first box's cause", mismatches);
+    index.apply({}, false, hits);
+    check(hits.empty(), "P3 no dirty box, no hit (a static scene)");
+    index.apply({}, true, hits);
+    check(hits.size() == 80 && hits[0].cause == Cause::Other, "P3 everything touches every tile");
+    ChangeIndex none;
+    none.rebuild({});
+    none.apply({ DirtyBox() }, true, hits);
+    check(hits.empty(), "P3 no tiles, no hits");
+    // a world-sized box (more than the grid's cell cap) is conservative, never a crash
+    Aabb wide{ { -1e6f, -1e6f, -1e6f }, { 1e6f, 1e6f, 1e6f } };
+    index.apply({ { wide, Cause::Edit } }, false, hits);
+    check(hits.size() == 80, "P3 a world-sized box touches every tile", double(hits.size()));
+    Aabb nan_box;
+    nan_box.lo[0] = std::numeric_limits<float>::quiet_NaN();
+    index.apply({ { nan_box, Cause::Edit } }, false, hits); // must not crash; a NaN box fails every plane test
+    check(true, "P3 a NaN box is survived");
+}
+
+void testP3MoverRules()
+{
+    ObjectFlags none, phys, mover;
+    phys.physical = true;
+    mover.mover = true;
+    check(castsFixed(none, false), "P3 a plain linkset casts");
+    check(!castsFixed(phys, false) && !castsFixed(mover, false), "P3 a physical object and a mover do not cast");
+    check(castsFixed(phys, true) && castsFixed(mover, true), "P3 the lamp's own linkset is the fixture: it casts whatever its flags");
+    check(hookSkips(mover, none) && hookSkips(phys, none) && hookSkips(none, mover) && hookSkips(none, phys), "P3 hooks skip movers and their roots");
+    check(!hookSkips(none, none), "P3 hooks keep ordinary objects");
+    ServerUpdate u;
+    check(!becomesMover(u), "P3 an empty update");
+    u.pos_changed = true;
+    check(!becomesMover(u), "P3 the creating update's position is not a move");
+    u.created_seen = true;
+    check(becomesMover(u), "P3 a later position change is a move");
+    u.selected = true;
+    check(!becomesMover(u), "P3 not while the agent edits the object");
+    u = ServerUpdate();
+    u.created_seen = true;
+    u.rot_changed = true;
+    check(becomesMover(u), "P3 a later rotation change is a move");
+    u = ServerUpdate();
+    u.is_root = true;
+    u.velocity = true;
+    check(becomesMover(u), "P3 a velocity on a root makes it a mover even in its first update");
+    u.velocity = false;
+    u.omega = true;
+    check(becomesMover(u), "P3 so does an angular velocity");
+    u.is_root = false;
+    check(!becomesMover(u), "P3 a child's angular velocity is client spin: a known limit, not a mover");
+    ObjectFlags a = none, b = none;
+    b.physical = true;
+    check(layerTransition(a, b) && layerTransition(b, a), "P3 physics on or off is a transition");
+    ObjectFlags c = b;
+    c.mover = true;
+    check(!layerTransition(b, c), "P3 physical to physical-and-mover stays out of the layer: no transition");
+    check(!layerTransition(a, a), "P3 no flag change, no transition");
+    check(rebuildDirties(0x1u, 0x7u) && rebuildDirties(0x4u, 0x7u) && !rebuildDirties(0x8u, 0x7u) && !rebuildDirties(0x10u | 0x20u, 0x7u),
+          "P3 the flag filter: volume, position and rigged pass; texture coordinates and colour do not");
+}
+
+void testP3PinBook()
+{
+    PinBook book;
+    const Id128 o1{ 1, 1 }, o2{ 2, 2 }, o3{ 3, 3 };
+    book.beginRender(10);
+    check(book.touch(10, o1) && book.touch(10, o2), "P3 a first render pins what it meets");
+    check(book.endRender(10).empty() && book.heldBy(10) == 2 && book.pinnedObjects() == 2, "P3 nothing is released after the first render");
+    // convergence: the second render meets the same objects: no new pin, no release
+    book.beginRender(10);
+    check(!book.touch(10, o1) && !book.touch(10, o2), "P3 the second render pins nothing new");
+    check(book.endRender(10).empty() && book.refs(o1) == 1, "P3 and releases nothing");
+    // an object that left the light is released at the end of the render that did not meet it
+    book.beginRender(10);
+    book.touch(10, o1);
+    book.touch(10, o3);
+    const std::vector<Id128> gone = book.endRender(10);
+    check(gone.size() == 1 && gone[0] == o2 && book.refs(o2) == 0 && book.refs(o3) == 1 && book.heldBy(10) == 2,
+          "P3 an object not met again is released, a new one is held");
+    // two tiles share an object: the count is two, and it falls with each tile
+    book.beginRender(11);
+    check(book.touch(11, o1), "P3 another tile pins the same object");
+    book.endRender(11);
+    check(book.refs(o1) == 2 && book.pinnedObjects() == 2, "P3 refcount per tile, distinct objects counted once");
+    const std::vector<Id128> all = book.releaseTile(10);
+    check(all.size() == 2 && book.refs(o1) == 1 && book.refs(o3) == 0 && book.heldBy(10) == 0, "P3 releasing a tile gives back everything it held");
+    book.releaseTile(11);
+    check(book.pinnedObjects() == 0, "P3 nothing stays pinned after every tile is released");
+    check(book.releaseTile(99).empty() && book.endRender(99).empty(), "P3 an unknown tile releases nothing");
+}
+
+void testP3Verdict()
+{
+    TileFacts f;
+    check(!classifyTile(f).needs_render, "P3 a static scene: a drawn tile with no change needs no render");
+    f.never_drawn = true;
+    TileVerdict v = classifyTile(f);
+    check(v.needs_render && !v.dynamic && v.cause == Cause::New, "P3 a new tile is drawn by the static schedule");
+    f.holds_avatar = true;
+    f.lamp_moving = true;
+    v = classifyTile(f);
+    check(!v.dynamic && v.cause == Cause::New, "P3 even with an avatar, the first fill is the static schedule's");
+    f = TileFacts();
+    f.pending = true;
+    f.pending_cause = Cause::LodUp;
+    v = classifyTile(f);
+    check(v.needs_render && !v.dynamic && v.cause == Cause::LodUp, "P3 a dirty tile keeps the cause of the dirty box");
+    f = TileFacts();
+    f.holds_avatar = true;
+    v = classifyTile(f);
+    check(v.needs_render && v.dynamic && v.cause == Cause::Avatar, "P3 an avatar in the light: redrawn, dynamic");
+    f = TileFacts();
+    f.drawn_with_avatar = true;
+    v = classifyTile(f);
+    check(v.needs_render && !v.dynamic && v.cause == Cause::Avatar, "P3 the avatar left: one more, static, render");
+    f = TileFacts();
+    f.lamp_moving = true;
+    v = classifyTile(f);
+    check(v.needs_render && v.dynamic && v.cause == Cause::Lamp, "P3 a moving lamp is a dynamic item");
+    f = TileFacts();
+    f.pose_stale = true;
+    v = classifyTile(f);
+    check(v.needs_render && !v.dynamic && v.cause == Cause::Lamp, "P3 a lamp that settled but whose tile is behind is a static item");
+    f = TileFacts();
+    f.lowres = true;
+    check(classifyTile(f).cause == Cause::Lowres, "P3 a down-sized tile is drawn again");
+    f.pending = true;
+    f.pending_cause = Cause::Edit;
+    check(classifyTile(f).cause == Cause::Edit, "P3 a change outranks the resize in the cause");
+}
+
+// A scene of eight lamps with no change and no avatar costs no render, for as long as it stays so: the scheduler is handed
+// nothing (the whole chain: dirty list, index, verdict, selection).
+void testP3StaticScene()
+{
+    std::vector<TileVolume> tiles;
+    for (uint32_t k = 0; k < 8; ++k)
+    {
+        tiles.push_back({ k + 1, pyramidAt(float(k) * 5.f, 0.f, 0.f, 1.5f, 8.f) });
+    }
+    ChangeIndex index;
+    DirtyList dirty;
+    int renders = 0;
+    for (int frame = 0; frame < 100; ++frame)
+    {
+        index.rebuild(tiles);
+        std::vector<Hit> hits;
+        index.apply(dirty.swapForApply(), dirty.everything(), hits);
+        std::vector<StaticItem> items;
+        for (const TileVolume& t : tiles)
+        {
+            TileFacts f;
+            f.never_drawn = frame == 0;
+            for (const Hit& h : hits)
+            {
+                if (h.key == t.key)
+                {
+                    f.pending = true;
+                    f.pending_cause = h.cause;
+                }
+            }
+            const TileVerdict v = classifyTile(f);
+            if (v.needs_render && !v.dynamic)
+            {
+                items.push_back({ t.key, f.never_drawn, true, float(t.key), 0.05f, 0 });
+            }
+        }
+        renders += int(selectStatic(items, kStaticCapMs).size());
+        if (frame == 50)
+        {
+            // one edit inside lamp 3's light; a camera that moved does not enter into it: one render, once
+            Aabb b;
+            for (int i = 0; i < 3; ++i) { b.lo[i] = tiles[2].pyramid.bounds.lo[i] + 1.f; b.hi[i] = b.lo[i] + 0.1f; }
+            dirty.push(b, Cause::Edit);
+        }
+    }
+    // frame 0 asks for all eight (the cap serves what fits, and the test counts what the scheduler returns, every frame
+    // the same eight are never-drawn only in frame 0): at most 8, then the one edit
+    check(renders >= 2, "P3 static scene: the fill and the edit were drawn", renders);
+    check(renders <= 8 + 1, "P3 static scene: nothing else was drawn in 100 frames (0 static renders per frame)", renders);
+}
+
+void testP3()
+{
+    testP3Causes();
+    testP3DirtyList();
+    testP3ChangeIndex();
+    testP3MoverRules();
+    testP3PinBook();
+    testP3Verdict();
+    testP3StaticScene();
+}
 } // namespace
 
 int main()
@@ -875,6 +1174,7 @@ int main()
     testT7();
     testT8();
     testBadInput();
+    testP3();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);
