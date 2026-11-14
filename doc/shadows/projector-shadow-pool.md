@@ -10,7 +10,7 @@ Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shado
 Today's two slots (`mSpotShadow[0..1]`, window-sized maps) are handed from lamp to lamp by a view-dependent priority and are
 re-rendered every frame, so a lamp's shadow can vanish when the camera turns. The pool gives every projector within the shadows'
 reach (`min(RenderFarClip, 128 m)`, measured from the camera's position, with a hysteresis band) a tile of its own in a shared
-depth atlas. The tile's size, view and content come from the light alone.
+depth atlas. The tile's size and view come from the light alone; the caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera until those stages.
 
 ## Stage P2: tiles replace the slots
 
@@ -29,8 +29,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   placement, then the tile renders the budget allows. P2 has no change tracking, so every tile is a full render (the fixed
   objects and the avatars into S, then S to L for the tile), ordered by `selectStatic` (never drawn first, then the longest
   waiting, then the nearest). **Budget:** twice the measured CPU cost of one tile render per frame, which is what today's two slot
-  renders cost, so the render cost is neutral against today by construction. A static scene therefore still re-renders about two
-  tiles a frame in P2; P3 stops that.
+  renders cost, so the render cost is at most today's for a visible lamp (a lamp in range but out of view still costs its tiles, which Legacy does not draw). A static scene therefore still re-renders about two
+  tiles a frame in P2; P3 stops that. A frame also stops rendering once the measured time reaches the budget (the first pick always runs).
 - **Lookup.** `setupSpotLight` calls `LLProjectorShadows::setupLight` instead of ranking lights: `proj_shadow_idx` (-1 until the tile
   is first drawn), `proj_shadow_matrix` (the matrix of the pose the tile was drawn with, so a lamp that moved keeps a coherent
   shadow until its tile is redrawn), `proj_shadow_tile` (x, y, N, 1/A), `proj_shadow_kernel_max`. `spotLightF.glsl` looks the
@@ -51,3 +51,10 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 | G1 lookup equivalence | `python scripts/shadows/projector_pool_g1.py` (offline GL, no viewer) | tile in the atlas equals the same code on a standalone map, max abs 0; within 2 ulp of the 261253bd43 source |
 | G4 Legacy | `check_legacy_shadows.py` (C++ regions), `check_legacy_glsl.py` (GLSL text) | identical |
 | G2, O-4, method switches, window toggle, quit | viewer, see the stage's PR | needs a world with projectors for the lookup parts |
+
+### Known limits of P2
+
+- **Avatar shadows refresh less often than Legacy.** Legacy re-rendered its two slots, avatars included, every frame. P2 renders about two tiles a frame, so with N lamps a tile (and the avatar's shadow in it) refreshes about every N/2 frames (roughly 250 ms in a 30-lamp room). A walking avatar's shadow under the nearest lamps updates less often until P4 splits avatars out.
+- The caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera.
+- A projector whose geometry the pool cannot use (field of view outside (0, 3.1 rad), zero or non-finite scale or radius) is not given a tile.
+- A failed atlas allocation is logged once and retried with a back-off (5 s up to 60 s).
