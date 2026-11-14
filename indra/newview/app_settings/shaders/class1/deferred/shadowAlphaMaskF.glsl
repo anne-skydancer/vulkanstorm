@@ -36,6 +36,12 @@ uniform float minimum_alpha;
 uniform float shadow_solid_alpha; // <Vulkanstorm/> 0.98 for blend faces; 0.0 for mask faces, which never dither
 #endif
 
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+// <Vulkanstorm/> projector shadow pool: the origin of the tile being rendered in the atlas (0 for every other pass), so the
+// dither does not depend on where the tile sits
+uniform vec2 shadow_tile_origin;
+#endif
+
 void main()
 {
     float alpha = diffuseLookup(vary_texcoord0.xy).a;
@@ -69,7 +75,7 @@ void main()
         // stable wherever the map is) keeps the fraction alpha of the texels, with no column period. It is still grain at
         // texel scale: static, with no per-layer or per-frame decorrelation, so only the ray jitter averages it. Only
         // blend faces reach it (shadow_solid_alpha is 0 for mask faces).
-        float ign = fract(52.9829189 * fract(0.06711056 * gl_FragCoord.x + 0.00583715 * gl_FragCoord.y));
+        float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + 0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));
         if (ign >= alpha)
         {
             discard;
