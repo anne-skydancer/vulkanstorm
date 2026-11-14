@@ -985,11 +985,24 @@ inline bool layerTransition(const ObjectFlags& before, const ObjectFlags& after)
     return castsFixed(before, false) != castsFixed(after, false);
 }
 
-// Only a rebuild that can change what a tile shows dirties it: the volume, the position or the rigging. A texture
-// coordinate or colour rebuild (texture animation, a tint) never does (F4).
-inline bool rebuildDirties(uint32_t flags, uint32_t volume_position_rigged_mask)
+// The drawable's rebuild flags as the viewer defines them (LLDrawable::EDrawableFlags; llshadowdirtyfeed.cpp static_asserts that
+// these match), so the rule below is tested with the real values: REBUILD_GEOMETRY is position | texcoord | colour, and
+// REBUILD_ALL adds the volume.
+constexpr uint32_t kRebuildVolume = 0x100, kRebuildTcoord = 0x200, kRebuildColor = 0x400, kRebuildPosition = 0x800, kRebuildRigged = 0x1000;
+constexpr uint32_t kRebuildGeometry = kRebuildPosition | kRebuildTcoord | kRebuildColor;
+constexpr uint32_t kRebuildAll = kRebuildGeometry | kRebuildVolume;
+
+// Only a rebuild that can change what a tile shows dirties it: a new volume or rigging, or a position-only rebuild. A texture
+// coordinate or colour rebuild (texture animation, a tint) does not (F4), and neither does the whole REBUILD_GEOMETRY set that
+// markForUpdate, selection and bump changes raise: it carries position only because it rebuilds everything, not because the
+// shape moved. A mesh arriving raises that set too and is counted on its own (LLShadowDirtyFeed::noteMeshLoaded).
+inline bool rebuildDirties(uint32_t flags)
 {
-    return (flags & volume_position_rigged_mask) != 0;
+    if (flags & (kRebuildVolume | kRebuildRigged))
+    {
+        return true;
+    }
+    return (flags & kRebuildPosition) != 0 && !((flags & kRebuildTcoord) && (flags & kRebuildColor));
 }
 
 // ---------------------------------------------------------------------------------------------
