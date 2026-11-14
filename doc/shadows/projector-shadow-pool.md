@@ -36,16 +36,43 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   blit for resized ones, then L to S in full).
 - **What a frame does** (`LLProjectorShadows::update`, from `generateSunShadow`, not for probes): the light set, the level and
   placement, then the tile renders the budget allows. P2 has no change tracking, so every tile is a full render (the fixed
-  objects and the avatars into S, then S to L for the tile), ordered by `selectStatic` (never drawn first, then the longest
-  waiting, then the nearest). **Budget:** twice the measured CPU cost of one tile render per frame, which is what today's two slot
-  renders cost, so the render cost is at most today's for a visible lamp (a lamp in range but out of view still costs its tiles, which Legacy does not draw). A static scene therefore still re-renders about two
-  tiles a frame in P2; P3 stops that. A frame also stops rendering once the measured time reaches the budget (the first pick always runs).
+  objects and the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
+  **oldest first by age in frames, the distance only breaking a tie**, so the order is a round robin by staleness.
+  - **Budget (P2c).** A fixed `kStaticCapMs` = **0.35 ms** of **CPU** time per frame for the tile renders. The frame-time basis is
+    an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the whole light and shadow budget (+5 %) is
+    about 0.4 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
+    lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms; `kDynamicCapMs` (0.30 ms) does not fit in that, so P4
+    must re-divide the cap between the static and the dynamic tiles (nothing is drawn dynamically before P4). The measured cost of a
+    tile (`last_cpu_ms`) only predicts how many fit; it does not set the budget. A frame also stops rendering once the measured
+    time reaches the budget (the first pick always runs, so a tile dearer than the budget still progresses). Until P3, a static
+    scene still re-renders every tile that fits.
+  - **The Legacy-cost guarantee is dropped.** P2 and P2b promised that the pool costs at most what Legacy's two slot renders
+    cost. With a fixed cap and no change tracking that no longer holds (four lamps cost about 0.28 ms of CPU a frame against
+    Legacy's two slots); it returns when P3 skips the tiles that did not change.
+  - **Cold start.** A record that was never drawn is predicted at `coldItemMs` (the running average, at most a quarter of the cap),
+    not at the average's 0.5 ms start value, which is above the cap and would draw one tile a frame after login or a teleport.
+  - *Why P2b starved tiles:* the budget was 2 x the running average of one render (0.14 ms at 0.07 ms), the two nearest tiles filled
+    it every frame, and a far tile only got a turn after the 250 ms "stale" deadline (up to 24 frames at 58 fps).
+    `ProjectorShadows.stats` `pool.max_stale_frames` is the age of the oldest drawn tile.
 - **Lookup.** `setupSpotLight` calls `LLProjectorShadows::setupLight` instead of ranking lights: `proj_shadow_idx` (-1 until the tile
   is first drawn), `proj_shadow_matrix` (the matrix of the pose the tile was drawn with, so a lamp that moved keeps a coherent
   shadow until its tile is redrawn), `proj_shadow_tile` (x, y, N, 1/A). `spotLightF.glsl` looks the
   shadow up itself (permutation `PROJECTOR_SHADOW_POOL`), only inside the projector's frustum and on surfaces that face it, after
   the attenuation test. `sampleProjectorShadow` is the filtered lookup of 261253bd43 on the tile, with an exact `CLAMP_TO_EDGE`
   emulation at the tile's edge (no guard texels). The sun pass writes 1 in its projector channels; the slots stay empty.
+- **Ambiance is shadowed (P2c).** The projector's ambiance (the fill light, `getProjectedLightAmbiance`) used to be added without
+  the shadow ("unshadowed for consistency between forward and deferred?" in the stock code), so it leaked through walls the beam
+  stopped at. Under `PROJECTOR_SHADOW_POOL` only, both material branches (PBR and legacy) multiply it by the pool's shadow; the
+  specular and the environment reflection already did. Legacy (no pool define) is textually unchanged. `multiSpotLightF` is the
+  same file with `MULTI_SPOTLIGHT`, so it takes the same path. By design a surface facing away from the lamp gets the ambiance (N.L is
+  clamped above zero: "lit from any side"), so the facing skip of the lookup no longer skips a non-PBR pixel while `proj_ambiance > 0`
+  (as it already kept env-mapped pixels). A PBR pixel keeps the skip: it weights the ambiance by N.L clamped to 1e-6 on a back
+  face, so the lookup would be wasted. Cost: back-facing non-PBR pixels inside the cone look the shadow up too, for lamps with an
+  ambiance. The strength of the shadow on the ambiance (full, as the beam) is the owner's to decide separately; the stock comment
+  "unshadowed for consistency between forward and deferred?" describes the non-pool path only.
+  **Look change (Stochastic, pool only):** the ambiance is now shadowed like the beam. A lamp inside a separate shade prim no
+  longer fills the room past an opaque shade, and on legacy materials the far side of a closed caster loses the fill it used to
+  get from the lamp's ambiance.
 - **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
   `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a 2048 tile at 4 m, with a 90 degree field of view), turned into texels of this
   tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
@@ -74,7 +101,7 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 ### Known limits of P2
 
-- **Avatar shadows refresh less often than Legacy.** Legacy re-rendered its two slots, avatars included, every frame. P2 renders about two tiles a frame, so with N lamps a tile (and the avatar's shadow in it) refreshes about every N/2 frames (roughly 250 ms in a 30-lamp room). A walking avatar's shadow under the nearest lamps updates less often until P4 splits avatars out.
+- **Avatar shadows refresh less often than Legacy.** Legacy re-rendered its two slots, avatars included, every frame. P2 renders the tiles that fit the 0.35 ms cap (P2c; four at the measured 0.07 ms), oldest first, so with N lamps a tile (and the avatar's shadow in it) refreshes every ceil(N / tiles per frame) frames in a steady state with a fixed light set (every frame for four lamps). Distance no longer buys freshness: with 30 lamps at 7 tiles per frame, the lamp you stand under refreshes every 5 frames, like the farthest one. A walking avatar's shadow under the nearest lamps updates less often until P4 splits avatars out.
 - The caster LOD (D6, P3) and the avatars' visibility (D7/D8, P4) still follow the camera.
 - **Casters outside the main view: draw info is not camera-gated; loading still is.** A tile renders through the same `LLPipeline::renderShadow` as the sun cascades and Legacy's spot slots, with a camera built the same way (`generateSunShadow`, `pipeline.cpp:13073`-`13089`; `renderTile`). `renderShadow` runs `updateCull` and `stateSort`, and `stateSort` ends in `postSort`, which rebuilds the dirty groups it culled (`pipeline.cpp:3921`, `3954`). Beyond that, no group's draw info depends on the main view: a spatial group queues itself for a rebuild when it is created or dirtied (`llspatialpartition.cpp:315`, `437`, `480`, `606`; `LLPipeline::markRebuild`, `pipeline.cpp:3403`), and `rebuildPriorityGroups` (`pipeline.cpp:3120`, run every frame from `postSort`) builds every queued group whether or not any camera sees it. Occlusion is off during a shadow render (`sUseOcclusion = 0`). So a loaded caster the camera never saw has its draw info and appears in the tile. Three inputs still follow the main camera and are P3 work: (1) object loading: an object outside the near radius (`SceneLoadMinRadius`, 32 m) that never entered the main frustum or the rear sphere gets no drawable (`llvocache.cpp:1037`-`1060`; once loaded it stays, since eviction is disabled); (2) mesh and sculpt assets: a caster whose asset was never fetched is skipped (`llvovolume.cpp:6066`); (3) alpha-masked casters: their texture's virtual size comes from the main camera, so a texture never seen may stay low-resolution or unloaded (`llvovolume.cpp:889`-`905`, `6108`). The caster LOD (above) is the fourth.
 - A projector whose geometry the pool cannot use (field of view outside (0, 3.1 rad), zero or non-finite scale or radius) is not given a tile.

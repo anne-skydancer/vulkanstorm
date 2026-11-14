@@ -43,8 +43,9 @@ class LLGLSLShader;
 // camera's orientation; the caster LOD and the avatars' visibility still follow the camera until P3/P4. The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL
 // half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
-// Stage P2: every tile is a full render (the fixed objects and the avatars into S, then copied to L), at most as many per
-// frame as today's two slot renders cost (the budget below); P3 renders only what changed, P4 splits avatars out.
+// Stage P2: every tile is a full render (the fixed objects and the avatars into S, then copied to L), as many per frame as fit
+// a fixed CPU cap of 0.35 ms (llprojectorpool::kStaticCapMs). The earlier guarantee that the pool costs at most what Legacy's
+// two slot renders cost is dropped until P3 skips unchanged tiles; P4 splits avatars out.
 //
 // Main render thread only. Every entry point asserts it and returns at once off it, or while the viewer exits; nothing
 // here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which worker threads with shared
@@ -101,9 +102,10 @@ public:
         U32 lightsWithoutTile = 0; // of them, with no drawn tile (the O-4 gate: 0 after the first fill)
         U64 tileRenders = 0;       // tile renders since the atlases were made
         U64 repacks = 0;
-        F32 costEmaMs = 0.f;       // CPU ms of one tile render (the budget's unit)
+        F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
         F32 lastFrameRenderMs = 0.f;
         U32 lastFrameRenders = 0;
+        U32 maxStaleFrames = 0;    // the oldest placed, drawn tile: frames since it was drawn
     };
     Stats getStats() const;
 
@@ -139,7 +141,6 @@ private:
         bool placed = false;
         DrawnPose drawn;
         U32 drawnFrame = 0;        // 0: never drawn, the lookup is off
-        F64 drawnTime = 0.0;       // seconds (LLTimer total) of the last render
         F32 camDist = 0.f;         // distance of the lamp's edge to the camera's position
         F32 lastCpuMs = 0.f;       // the cost of its last render (the scheduler's prediction)
         bool seen = false;         // in this frame's light set
@@ -171,7 +172,7 @@ private:
     std::unordered_map<const LLDrawable*, U32> mKeyOf;
     U32 mNextKey = 1;
     U32 mFrame = 0;                // the frame count update() last ran in
-    F32 mCostEmaMs = 0.5f;         // placeholder until the first tile render is timed
+    F32 mCostEmaMs = 0.5f;         // placeholder until the first tile render is timed (a new record's prediction is capped, coldItemMs)
     F64 mNextAllocTry = 0.0;       // seconds: when a failed allocation is tried again
     bool mAllocFailed = false;
     F64 mAllocBackoff = 5.0;       // seconds between allocation retries

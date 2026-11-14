@@ -137,8 +137,11 @@ void main()
 #if !defined(PROJECTOR_SHADOW_NO_FACING_SKIP)
         // a surface that faces away gets at most 0.1 % of the lamp's front-on term (N.L is clamped), so its shadow is not
         // looked up, unless it has an environment reflection of the projected image, which is lit from any side and
-        // multiplied by the shadow (envIntensity)
-        if (dot(n, proj_origin - pos) > 0.0 || gb.envIntensity > 0.0)
+        // multiplied by the shadow (envIntensity), or, on a non-PBR pixel, the projector has an ambiance: that ambiance is lit
+        // from any side too (N.L is clamped above zero) and is multiplied by the shadow, so it stops where the beam stops.
+        // A PBR pixel weights the ambiance by N.L clamped to 1e-6 on a back face, so its lookup would be wasted
+        if (dot(n, proj_origin - pos) > 0.0 || gb.envIntensity > 0.0
+            || (proj_ambiance > 0.0 && !GET_GBUFFER_FLAG(gb.gbufferFlag, GBUFFER_FLAG_HAS_PBR)))
 #endif
         {
             shadow = sampleProjectorShadow(pos, n, tc);
@@ -219,7 +222,11 @@ void main()
             amb_rgb = getProjectedLightAmbiance( amb_da, dist_atten, lit, nl, 1.0, proj_tc.xy ) * 3.25; //magic number to balance with legacy ambiance
             pbrPunctual(diffuseColor, specularColor, perceptualRoughness, metallic, n.xyz, v, normalize(lv), nl, diffPunc, specPunc);
 
+#if defined(PROJECTOR_SHADOW_POOL)
+            final_color += amb_rgb * shadow * clamp(nl * (diffPunc + specPunc), vec3(0), vec3(10)); // <Vulkanstorm> the ambiance is shadowed
+#else
             final_color += amb_rgb * clamp(nl * (diffPunc + specPunc), vec3(0), vec3(10));
+#endif
         }
     }
     else
@@ -251,7 +258,12 @@ void main()
             }
 
             amb_rgb = getProjectedLightAmbiance( amb_da, dist_atten, lit, nl, 1.0, proj_tc.xy );
+#if defined(PROJECTOR_SHADOW_POOL)
+            // <Vulkanstorm> the ambiance is shadowed here (the "unshadowed for consistency" comment above is the non-pool path's)
+            final_color += diffuse.rgb * amb_rgb * shadow * max(dot(-normalize(lv), n), 0.0);
+#else
             final_color += diffuse.rgb * amb_rgb * max(dot(-normalize(lv), n), 0.0);
+#endif
         }
 
         if (spec.a > 0.0)
