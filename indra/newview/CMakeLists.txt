@@ -938,7 +938,7 @@ list(APPEND viewer_SOURCE_FILES ${viewer_GLTF_SOURCE_FILES})
 
 # development only (OpenGL submission statistics): no empty object file when the option is off
 if (VKS_GL_STATS)
-  list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp)
+  list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp llprojectorshadowstatsapi.cpp)
 endif()
 # </FS:Ansariel> Group GLTF files into their subfolders
 
@@ -1107,6 +1107,7 @@ set(viewer_HEADER_FILES
     llagentlanguage.h
     llagentlistener.h
     llglsubmitstatsapi.h
+    llprojectorshadowstatsapi.h
     llagentpicksinfo.h
     llagentpilot.h
     llagentui.h

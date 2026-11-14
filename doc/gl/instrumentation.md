@@ -11,7 +11,7 @@ except five inert debug settings (nothing reads them).
 - **Build option:** `-DVKS_GL_STATS=ON` (off by default, off in CI, off on release). Off, every hook expands to nothing and the
   objects are the ones the code produced before. On, but not collecting, a hook is one pointer test.
 - **Where it lives:** `vkstorm-devel` and the feature branches built from it. The names (`VKS_GL_STATS`, `VKS_GLSTAT_*`,
-  `VKS_GLCMP_*`, `LLGLSubmit*`, `RenderGLSubmit*`, `llglsubmitstats*`) are in the forbidden list of
+  `VKS_GLCMP_*`, `LLGLSubmit*`, `RenderGLSubmit*`, `llglsubmitstats*`, and for the projector shadow pool `ProjectorShadowStats*`, `llprojectorshadowstatsapi*`) are in the forbidden list of
   `scripts/tests/check_release_hooks.py`, which runs on every PR except those into `vkstorm-devel` and `codex/` branches.
   An integration into release leaves these edits out: the `VKS_GLSTAT_*` / `VKS_GLCMP_*` lines, the two
   `llglsubmitstats*` and `llglsubmitstatsapi*` file pairs (they are added to the CMake source lists only when the option

@@ -44,6 +44,7 @@ from light_check import (Aborted, Viewer, camera_params, default_capture_root, f
                          write_json_atomic)
 
 API = "GLSubmitStats"
+PROJECTOR_API = "ProjectorShadows"    # optional: the slot and light-set counters recorded per preset
 REQUIRED_OPS = ["status", "windowBegin", "windowStop", "summary", "dump", "compareArm", "compareResults", "profileFrame"]
 SETTINGS = ["RenderGLSubmitStats", "RenderGLSubmitStatsGPU", "RenderGLSubmitCompare", "RenderGLSubmitCompareInject",
             "RenderGLSubmitPath", "RenderAlphaSortMethod"]
@@ -317,6 +318,14 @@ class Run:
             return None
         return round((int(b["frame_count"]) - int(a["frame_count"])) / dt_s, 2)
 
+    def projector_stats(self):
+        """The ProjectorShadows.stats reply (slots, light set, pool), or None when the viewer has no such API (older build)."""
+        try:
+            r = self.v.req(PROJECTOR_API, "stats")
+        except (LeapError, ConnectionLost):
+            return None
+        return {k: r.get(k) for k in ("shadow_method", "shadow_detail", "slots", "lights", "pool")}
+
     def probe_variants(self, variants, preset_no):
         """probe_repeats probes of the frame rate with nothing collecting per variant, the variants alternating in order between
         repeats (no drift bias). Returns {variant id: [fps, ...]}. One 5 s probe was far too noisy at 130 to 420 fps."""
@@ -390,6 +399,14 @@ class Run:
                                  "spread_pct": round(100.0 * (max(fps_samples) - min(fps_samples)) / fps_off, 2) if fps_off else None}
         else:
             fps_off = self.measure_fps_off()
+        info["projector_stats"] = self.projector_stats()
+        if self.args.no_glstats:
+            # the clean frame rate only: no window, so the GPU timers and the hooks cost nothing
+            info["fps_stats_off"] = fps_off
+            self.rows.append({"preset": key, "frames": 0, "gpu_frames": 0, "fps_wall": None, "fps_stats_off": fps_off,
+                              "variant": variant["id"] if variant else ""})
+            log("preset %s: %s fps with the statistics off (no window collected)" % (key, fps_off))
+            return
         start = time.monotonic()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
@@ -478,7 +495,7 @@ class Run:
             v.barrier()
             log("teleporting to %s; waiting %.0f s" % (t["region"], sc["settle"]["after_teleport_s"]))
             v.sleep(sc["settle"]["after_teleport_s"])
-        if sc["overhead"]["bench_iterations"]:
+        if sc["overhead"]["bench_iterations"] and not self.args.no_glstats:
             try:
                 b = v.req(API, "selfBench", iterations=int(sc["overhead"]["bench_iterations"]), timeout=120)
                 self.index["hook_bench"] = {k: b.get(k) for k in b if k.startswith(("ns_", "hooks_", "iterations"))}
@@ -488,7 +505,7 @@ class Run:
             except LeapError as exc:
                 self.warn("selfBench not available: %s" % exc)
         proof_ok = True
-        if sc["compare"]["enabled"] and sc["compare"]["prove_with_injection"]:
+        if sc["compare"]["enabled"] and sc["compare"]["prove_with_injection"] and not self.args.no_glstats:
             proof_ok = self.prove_injection()
         for self.preset_no, preset in enumerate(sc["presets"]):
             v.check_abort()
@@ -570,6 +587,9 @@ def parse_args(argv):
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", help="set a debug setting for the run (restored afterwards)")
     ap.add_argument("--viewer-log", default=None)
     ap.add_argument("--max-wait-s", type=float, default=None, help="seconds to wait for login (default: the scenario's login_timeout_s)")
+    ap.add_argument("--no-glstats", action="store_true",
+                    help="frame rate only: nothing collects (no window, no GPU timers, no identical-image check, no hook bench); "
+                         "per preset the probed fps (median of probe_repeats probes) and the ProjectorShadows.stats snapshot are recorded")
     args = ap.parse_args(argv)
     args.only = [s for s in (args.only or "").split(",") if s]
     vals = {}
