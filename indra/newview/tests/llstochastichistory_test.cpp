@@ -14,6 +14,7 @@
 #include "llstochasticstate.h"
 
 #include <bit>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -24,6 +25,8 @@
 constexpr unsigned long long MASK_HASH_4 = 0xc162a2078068620aULL;
 constexpr unsigned long long MASK_HASH_8 = 0xd8062231acc3d415ULL;
 constexpr unsigned long long MASK_HASH_16 = 0xa5bbb68bfab929d6ULL;
+// the transparency's table (maskTable(4) and the blue-noise tile in two rows): the same FNV-1a
+constexpr unsigned long long TRANSPARENCY_TABLE_HASH = 0x5718bc0545cbdcbeULL;
 struct LLStochasticFrameStateTest
 {
     static void setFrame(LLStochasticFrameState& s, uint32_t frame) { s.mFrame = frame; }
@@ -86,6 +89,52 @@ namespace
         check(fnv(maskTable(4)) == MASK_HASH_4, "MASK_HASH_4");
         check(fnv(maskTable(8)) == MASK_HASH_8, "MASK_HASH_8");
         check(fnv(maskTable(16)) == MASK_HASH_16, "MASK_HASH_16");
+    }
+
+    // The transparency's table: S = 4 (its own constant; the shadows' SAMPLES stays 8), the mask rows and then
+    // the blue-noise tile in the two spare rows, one texture
+    void test_transparency_table()
+    {
+        using namespace LLStochasticEngine;
+        static_assert(TRANSPARENCY_SAMPLES == 4 && SAMPLES == 8 && NOISE_ROWS == 2 && BLUE_NOISE_SIZE == 64);
+        const std::vector<uint32_t> table = transparencyTable();
+        check(table.size() == (size_t)(TRANSPARENCY_SAMPLES + 1 + NOISE_ROWS) * SEEDS, "the transparency table has the mask rows and the noise rows");
+        const std::vector<uint32_t> masks = maskTable(TRANSPARENCY_SAMPLES);
+        check(std::equal(masks.begin(), masks.end(), table.begin()), "its first rows are maskTable(S)");
+        std::vector<bool> seen(BLUE_NOISE_SIZE * BLUE_NOISE_SIZE, false);
+        bool permutation = true;
+        for (uint32_t i = 0; i < BLUE_NOISE_SIZE * BLUE_NOISE_SIZE; ++i)
+        {
+            const uint32_t v = table[masks.size() + i];
+            permutation = permutation && v == BLUE_NOISE[i] && v < seen.size() && !seen[v];
+            if (v < seen.size())
+            {
+                seen[v] = true;
+            }
+        }
+        check(permutation, "the tile holds the ranks 0 .. 4095, each once, in the spare rows");
+        // blue: the means of the 8 x 8 blocks of the tile (a low-pass of the torus) vary far less than white noise's
+        // (variance 1/12 / 64 = 0.0013 of the rank range squared)
+        double mean_sq = 0.0;
+        for (uint32_t by = 0; by < 8; ++by)
+        {
+            for (uint32_t bx = 0; bx < 8; ++bx)
+            {
+                double sum = 0.0;
+                for (uint32_t y = 0; y < 8; ++y)
+                {
+                    for (uint32_t x = 0; x < 8; ++x)
+                    {
+                        sum += (BLUE_NOISE[(by * 8 + y) * 64 + bx * 8 + x] + 0.5) / 4096.0;
+                    }
+                }
+                mean_sq += (sum / 64.0 - 0.5) * (sum / 64.0 - 0.5);
+            }
+        }
+        const double variance = mean_sq / 64.0;
+        std::printf("blue noise block-mean variance %.6f (white 0.001302), table hash 0x%016llx\n", variance, (unsigned long long)fnv(table));
+        check(variance < 0.00033, "the tile is blue: its block means vary under a quarter of white noise's");
+        check(fnv(table) == TRANSPARENCY_TABLE_HASH, "TRANSPARENCY_TABLE_HASH");
     }
 
     void test_state()
@@ -237,6 +286,7 @@ namespace
 int main()
 {
     test_masks();
+    test_transparency_table();
     test_state();
     test_seeds();
     test_light_change();

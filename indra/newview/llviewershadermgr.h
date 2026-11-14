@@ -220,8 +220,9 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 extern LLGLSLShader         gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // alpha-only variants of the GLTF scene's blended variants, by variant bits
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
-extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (compute is never chosen in the OpenGL viewer)
-extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the fragment path's averaging pre-pass (the default on every device)
+extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
+extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the measuring pass: the samples averaged, the grain and the depths
+extern LLGLSLShader         gAlphaStochasticSmoothProgram;  // the smooth of the grain the temporal blend leaves
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>
 // <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method

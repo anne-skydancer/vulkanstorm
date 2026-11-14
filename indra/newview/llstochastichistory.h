@@ -32,14 +32,15 @@ class LLGLSLShader;
 // the per-frame seed, the mask lookup in the table below: the transparency's) and
 // deferred/stochasticResolveUtilF.glsl (the temporal resolve, shared); a producer adds its own
 // stoch_current() and main(). The shadows' rays have their own noise; they take the history, the
-// reprojection and the clamp from here. Its C++ half is this file: the S = 8 mask table, textures counted
-// in the viewer's texture memory, and LLStochasticHistory.
+// reprojection and the clamp from here. Its C++ half is this file: the transparency's S = 4 mask table (with the
+// blue-noise tile), textures counted in the viewer's texture memory, and LLStochasticHistory.
 //
 // Main render thread only: everything here is made, used and freed by LLPipeline (the screen
 // buffer allocation and release, the alpha pool's passes, shiftObjects).
 namespace LLStochasticEngine
 {
-    // SAMPLES (8), SEEDS (2048) and maskTable() are in llstochasticstate.h (GL-free, unit tested)
+    // SAMPLES (8: the shadows' rays), TRANSPARENCY_SAMPLES (4), SEEDS (2048), maskTable() and transparencyTable() are in
+    // llstochasticstate.h (GL-free, unit tested)
 
     // The device runs stochastic transparency: GL 4.0 (gl_SampleMask, multisample textures) and GLSL 4.00.
     // One definition for the pipeline's allocation and the shader manager; logs once when a device
@@ -53,24 +54,24 @@ namespace LLStochasticEngine
     // (deviceSupported() false) runs Legacy and sorted alpha, by capability, as always.
     inline bool usable() { return deviceSupported(); }
 
-    // Which resolve runs: the fragment resolve with its pre-pass target (option P; 160 B/px) on every
-    // device, never changed at run time. OpenGL compute dispatches, with the glMemoryBarrier they need
-    // between graphics passes, stall the frame while the camera or avatar moves, and OpenGL has no
-    // async compute; compute belongs in the Vulkan renderer. The compute resolve (GL 4.3, GLSL 4.30,
-    // entry points loaded; 144 B/px) stays compiled but unused: nothing in the OpenGL viewer selects it
-    // (computeResolve() is always false; no setting, no environment variable). The two are the same
-    // method and give the same image (bit for bit on the measured NVIDIA). A shader set of the selected
-    // path that does not build is an error (logged, retried at the next shader reload); the other
-    // resolve path is never taken in its place. (The plain alpha pass then draws the blended faces meanwhile, see
-    // LLDrawPoolAlpha.)
+    // Which resolve the Stochastic shadows run: the fragment resolve on every device, never changed at run
+    // time. OpenGL compute dispatches, with the glMemoryBarrier they need between graphics passes, stall the
+    // frame while the camera or avatar moves, and OpenGL has no async compute; compute belongs in the Vulkan
+    // renderer. The shadows' compute resolve (GL 4.3, GLSL 4.30, entry points loaded) stays compiled but
+    // unused, selected only for A/B tests by the environment variable VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a
+    // device that supports it (debug only, not a setting). The transparency has no compute resolve (retired
+    // 2026-11-14: its grain-measuring resolve is three fragment passes). A shader set of the selected path that
+    // does not build is an error (logged, retried at the next shader reload); the other path is never taken in
+    // its place.
     bool computeResolve();
 
     // The image unit a compute resolve writes the history through: the shader declares binding = 0
-    // (alphaStochasticResolveC.glsl); image units are not texture units, LLTexUnit does not see them.
+    // (shadowStochasticResolveC.glsl); image units are not texture units, LLTexUnit does not see them.
     constexpr U32 RESOLVE_IMAGE_UNIT = 0;
 
-    // The one S = SAMPLES table (R32UI, SEEDS x (S + 1)), made by the first producer to ask and
-    // freed with the last. False: it could not be made (nothing is kept).
+    // The transparency's table (R32UI, SEEDS x (S + 1 + NOISE_ROWS), S = TRANSPARENCY_SAMPLES: the mask rows and the
+    // blue-noise tile), made by the first producer to ask and freed with the last. False: it could not be made
+    // (nothing is kept).
     bool acquireMasks();
     void releaseMasks();
     U32  getMasks();                // the texture name, 0 when none is held
@@ -90,7 +91,8 @@ namespace LLStochasticEngine
 }
 
 // One producer's temporal history: two full-size colours (this frame's is written while the last
-// frame's is read), made up front (method select, resize), the frame
+// frame's is read), and, where the producer has one, a second pair of a smaller format written beside them (the
+// transparency's last total alpha and the part of the last frame left out: RG16F), made up front (method select, resize), the frame
 // counter of the producer's seeds, and the rules that make the last frame's colour usable.
 // A producer owns one instance. The frame protocol, in the producer's passes:
 //   beginFrame(); the passes draw with seedFrame(); then, if temporal(), the resolve runs with
@@ -103,16 +105,19 @@ namespace LLStochasticEngine
 class LLStochasticHistory
 {
 public:
-    // format: GL_RGBA16F for the transparency and the shadows. weight: this producer's blend weight of the current frame.
-    explicit LLStochasticHistory(GLenum format, F32 weight = 1.f / 8.f) : mFormat(format), mWeight(weight) {}
+    // format: GL_RGBA16F for the transparency and the shadows. extra_format: GL_NONE, or the format of a second texture pair
+    // written by the same fragment resolve into colour attachment 1 (GL_RG16F for the transparency). weight: this producer's
+    // blend weight of the current frame.
+    explicit LLStochasticHistory(GLenum format, F32 weight = 1.f / 8.f, GLenum extra_format = GL_NONE)
+        : mFormat(format), mExtraFormat(extra_format), mWeight(weight) {}
     // no GL in the destructor (the pipeline is a global that outlives the context): release() first;
     // the destructor warns if it was not
     ~LLStochasticHistory();
     LLStochasticHistory(const LLStochasticHistory&) = delete;
     LLStochasticHistory& operator=(const LLStochasticHistory&) = delete;
 
-    // Both textures and their framebuffers, counted in the texture memory. False: nothing is kept,
-    // and the producer drops its accumulation (the transparency keeps its S = 8 samples).
+    // Both textures (and the extra pair) and their framebuffers, counted in the texture memory. False: nothing is kept,
+    // and the producer drops its accumulation (the transparency keeps its S = 4 samples).
     // framebuffers: the producer's resolve is a fragment pass (writeFramebuffer()); a compute resolve needs none.
     bool allocate(U32 width, U32 height, bool framebuffers = false);
     void release();                                         // freed, uncounted, invalid
@@ -131,6 +136,7 @@ public:
     U32  seedFrame() const { return mState.seedFrame(); }   // the producer's frame counter, never 0 while temporal
 
     U32  readTexture() const { return mTexture[mState.index()]; }          // the last frame's colour
+    U32  readExtraTexture() const { return mExtraTexture[mState.index()]; }   // the extra format's, of the last frame (0: none)
 
     // The compute resolve's write: bindWriteImage binds the texture that was not read as a write-only
     // image at `unit` (the format is the shader's rgba16f; asserted); endComputeWrite follows the
@@ -151,11 +157,14 @@ public:
     void bindWriteImage(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
     void endComputeWrite(U32 unit = LLStochasticEngine::RESOLVE_IMAGE_UNIT) const;
     U32  latestTexture() const { return mTexture[mState.index()]; }        // after endFrame: this frame's, the composite's input
+    U32  latestExtraTexture() const { return mExtraTexture[mState.index()]; }  // after endFrame: this frame's extra
 
     // stoch_reproj (this frame's clip space to the last frame's: last projection x last view x
     // inverse(projection x view), from the current matrices), stoch_weight and stoch_history_valid.
     // The shader is bound. Takes this frame's camera for endFrame().
     void setResolveUniforms(LLGLSLShader& shader);
+    // Only stoch_weight (a pass that smooths the resolved result and reads no history position).
+    void setWeightUniform(LLGLSLShader& shader) const;
     // Takes this frame's camera without a shader (setResolveUniforms does it; so does a unit test).
     void setCamera(const glm::mat4& modelview, const glm::mat4& projection);
     glm::mat4 reprojection() const;                         // the stoch_reproj of the camera set last
@@ -165,8 +174,10 @@ public:
 
 private:
     GLenum mFormat;
+    GLenum mExtraFormat;
     F32 mWeight;
     U32 mTexture[2] = { 0, 0 };
+    U32 mExtraTexture[2] = { 0, 0 };   // only with an extra format: colour attachment 1 of the same framebuffers
     U32 mFramebuffer[2] = { 0, 0 };    // only with allocate(w, h, true)
     U32 mWidth = 0;
     U32 mHeight = 0;

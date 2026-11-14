@@ -1720,6 +1720,8 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_history");
     mReservedUniforms.push_back("alpha_st_resolved");
     mReservedUniforms.push_back("alpha_st_current");
+    mReservedUniforms.push_back("alpha_st_aux");
+    mReservedUniforms.push_back("alpha_st_extra");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the cloud transmittance map and its lookup

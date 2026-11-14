@@ -35,30 +35,36 @@
 
 uniform int st_mode;               // 1 total alpha, 2 stochastic depth, 3 depth only
 uniform float st_min_alpha;        // mode 3: the cut under which a fragment is discarded
-uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
-uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::SAMPLES)
+uniform int st_samples_hw;         // samples of the pass's targets (at most 8; 4 with S = 4)
+uniform int st_samples;            // samples in all: the table's S, which is 4 (LLStochasticEngine::TRANSPARENCY_SAMPLES)
 uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
 uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)
 
 uint stoch_hash(uint v);
-uint stoch_frame_seed(uint seed, int frame);
-uint stoch_mask(float a, uint seed, uvec2 px, uint s);
+bool stoch_finite(float x);
+uint stoch_mask(float a, uint face_seed, int frame, uvec2 px, uint s);
 
 // The whole S-bit mask of a fragment of alpha a: the seed is the face's identity and the
-// triangle.
+// triangle; the engine mixes the frame in (the subset) and steps the dither with it.
 uint st_mask(float a)
 {
     uint seed = stoch_hash(uint(st_seed) * 0x9e3779b9u + 0x7f4a7c15u);
     seed = stoch_hash(seed ^ stoch_hash(uint(gl_PrimitiveID) + 0x632be5abu));
-    seed = stoch_frame_seed(seed, st_frame);
-    return stoch_mask(a, seed, uvec2(gl_FragCoord.xy), uint(st_samples));
+    return stoch_mask(a, seed, st_frame, uvec2(gl_FragCoord.xy), uint(st_samples));
 }
 
 // The value for gl_SampleMask[0]: every sample for the total alpha, this iteration's bits of
 // the mask, as the pass's samples, for the stochastic depth.
 int alpha_stochastic_mask(float a)
 {
+    // a non-finite alpha (a NaN or an infinity from a bad vertex or texture) is no fragment: it hides
+    // nothing, covers no sample and adds nothing (the mask of a NaN would be a bit pattern the table
+    // never holds, and the total alpha would take it)
+    if (!stoch_finite(a))
+    {
+        discard;
+    }
     if (st_mode == 3 && a < st_min_alpha)
     {
         discard;
