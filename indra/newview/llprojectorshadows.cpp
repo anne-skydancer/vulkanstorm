@@ -50,6 +50,15 @@ namespace
 {
     constexpr U32 kTierSmall = kAtlasSmall; // the smallest atlas: the floor of the step-down on a failed allocation
 
+    // The emitter's extent across the beam, in metres, for the penumbra: the prim's face, clamped. A bulb of a few
+    // centimetres still blurs a little (the lower limit: a point has no edge to render), a wall washer does not smear a room.
+    constexpr F32 kEmitterMin = 0.02f;
+    constexpr F32 kEmitterMax = 0.30f;
+    F32 emitter_extent(F32 face)
+    {
+        return std::isfinite(face) ? llclamp(face, kEmitterMin, kEmitterMax) : kEmitterMin;
+    }
+
     // What the pool uses of a spotlight, read once per use from the drawable (the geometry setupSpotLight and the Legacy
     // slot renders also use): the origin of the light's frustum, which has the prim's face as its near plane.
     struct SpotGeom
@@ -840,6 +849,9 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     const glm::mat4 m = trans * proj * view * glm::inverse(get_current_modelview());
     shader.uniformMatrix4fv(LLShaderMgr::PROJ_SHADOW_MATRIX, 1, GL_FALSE, glm::value_ptr(m));
     shader.uniform4f(LLShaderMgr::PROJ_SHADOW_TILE, (F32)rec->rect.x, (F32)rec->rect.y, (F32)rec->rect.size, 1.f / (F32)mAtlasSize);
+    // the emitter's size for the penumbra: the face of the projector prim (its scale across the beam) of the pose the tile was
+    // drawn with, clamped; the filter's largest radius is a length in the shader, so the level of the tile does not enter
+    shader.uniform2f(LLShaderMgr::PROJ_SHADOW_LIGHT_SIZE, emitter_extent(rec->drawn.scale.mV[VX]), emitter_extent(rec->drawn.scale.mV[VY]));
 }
 
 void LLProjectorShadows::bindAtlas(LLGLSLShader& shader)
