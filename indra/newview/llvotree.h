@@ -60,6 +60,12 @@ public:
                                             LLDataPacker *dp);
     /*virtual*/ void idleUpdate(LLAgent &agent, const F64 &time);
 
+    // <Vulkanstorm> The projector shadow pool's LOD pin (like LLVOVolume::pinLampLOD): a projector tile that draws this tree
+    // holds its trunk at the best detail, so the tile does not change with the camera's distance. Counted per tile. Main thread.
+    void pinLampLOD();
+    void unpinLampLOD();
+    // </Vulkanstorm>
+
     // Graphical stuff for objects - maybe broken out into render class later?
     /*virtual*/ void render(LLAgent &agent);
     /*virtual*/ void setPixelAreaAndAngle(LLAgent &agent);
@@ -172,6 +178,7 @@ protected:
     F32             mScaleStep;     // Multiplier for scale at each recursion level
     U8              mTrunkDepth;
     U32             mTrunkLOD;
+    U16             mLampLODPin = 0; // <Vulkanstorm/> tiles that hold this tree at the best trunk LOD
     F32             mLeafScale;     // Scales leaf texture when rendering
 
     F32             mBillboardScale;    //  How big to draw the billboard?
