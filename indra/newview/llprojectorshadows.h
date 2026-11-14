@@ -91,7 +91,7 @@ public:
     // From LLPipeline::unlinkDrawable (a drawable is going away): its record and tile are dropped.
     void forget(const LLDrawable* drawable);
 
-    // Counters for ProjectorShadows.stats (llprojectorshadowstatsapi.cpp) and the log.
+    // Counters for the development stats API and the log.
     struct Stats
     {
         bool present = false;
@@ -142,7 +142,6 @@ private:
         F64 drawnTime = 0.0;       // seconds (LLTimer total) of the last render
         F32 camDist = 0.f;         // distance of the lamp's edge to the camera's position
         F32 lastCpuMs = 0.f;       // the cost of its last render (the scheduler's prediction)
-        bool lowres = false;       // resized by a blit, awaiting its re-render
         bool seen = false;         // in this frame's light set
     };
 
@@ -165,7 +164,6 @@ private:
     U32 mFboS = 0;
     U32 mFboL = 0;
     U32 mAtlasSize = 0;
-    U32 mTierBytesLogged = 0;
 
     llprojectorpool::BuddyAtlas mBuddy;
     llprojectorpool::LevelController mLevel;
