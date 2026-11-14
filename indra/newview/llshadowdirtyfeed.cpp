@@ -24,9 +24,13 @@
 #include <algorithm>
 
 #include "lldrawable.h"
+#include "llgltfmaterial.h"
+#include "llmaterial.h"
+#include "lltextureentry.h"
 #include "llspatialpartition.h"
 #include "llthread.h"
 #include "llviewerobject.h"
+#include "llviewertexture.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
@@ -67,6 +71,34 @@ namespace
     {
         const S32 type = drawable->getRenderType();
         return type == LLPipeline::RENDER_TYPE_VOLUME || type == LLPipeline::RENDER_TYPE_TREE;
+    }
+
+    // a face whose silhouette in a shadow depends on its texture, material or UVs: blended, alpha-masked or carrying an alpha
+    // channel. An opaque face's texture never shows in a depth tile, so its changes (and its animated textures) are not counted.
+    bool alpha_face(LLVOVolume* volume, U8 face)
+    {
+        const LLTextureEntry* te = volume->getTE(face);
+        if (!te)
+        {
+            return false;
+        }
+        if (te->getColor().mV[VALPHA] < 0.999f)
+        {
+            return true;
+        }
+        const LLMaterialPtr material = te->getMaterialParams();
+        if (material.notNull() && (material->getDiffuseAlphaMode() == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND ||
+                                   material->getDiffuseAlphaMode() == LLMaterial::DIFFUSE_ALPHA_MODE_MASK))
+        {
+            return true;
+        }
+        const LLGLTFMaterial* gltf = te->getGLTFRenderMaterial();
+        if (gltf && gltf->mAlphaMode != LLGLTFMaterial::ALPHA_MODE_OPAQUE)
+        {
+            return true;
+        }
+        const LLViewerTexture* image = volume->getTEImage(face);
+        return image && (image->getComponents() == 4 || image->getComponents() == 2); // not yet loaded: unknown, counted when it finishes (LLFace::dirtyTexture)
     }
 }
 
@@ -293,6 +325,29 @@ void LLShadowDirtyFeed::noteRebuild(LLDrawable* drawable, U32 rebuild_flag)
     if (rebuildDirties(rebuild_flag, mask))
     {
         noteDrawable(drawable, Cause::Edit);
+    }
+}
+
+// static
+void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
+{
+    if (!tracking() || !drawable || !on_main_thread())
+    {
+        return;
+    }
+    LLVOVolume* volume = drawable->getVOVolume();
+    if (!volume || skipped(drawable, volume))
+    {
+        return;
+    }
+    const U8 faces = volume->getNumTEs();
+    for (U8 i = 0; i < faces; ++i)
+    {
+        if (alpha_face(volume, i))
+        {
+            noteDrawable(drawable, Cause::Edit);
+            return;
+        }
     }
 }
 
