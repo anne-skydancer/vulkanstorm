@@ -18,7 +18,16 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 - **Atlases.** Two `GL_DEPTH_COMPONENT32F` textures made through `LLStochasticEngine::newTexture2D` (NEAREST, no mips, counted in the
   texture memory): S holds the tiles as drawn, L is S plus whatever is drawn over it and is the only texture a lighting program
-  reads. 4096 x 4096 (2 x 64 MiB) by default, 2048 x 2048 below 3 GB of video memory. An allocation that fails tries the
+  reads. 4096 x 4096 (2 x 64 MiB) by default, 2048 x 2048 below 3 GB of video memory, and 8192 x 8192 (2 x 256 MiB) from 11 GB
+  (11264 MB: a "12 GB" card reports a little under 12288) of **dedicated** video memory (the driver's own report,
+  `NVX_gpu_memory_info` or `WGL_AMD_gpu_association`; the DXGI budget the viewer falls back to is system RAM on shared-memory
+  graphics, so Intel and AMD integrated graphics keep 4096; an AMD APU whose driver reports through neither extension is a known limit),
+  never wider than `GL_MAX_TEXTURE_SIZE`. The 8192 tier is there because the owner's in-world report (several lamps, every tile
+  shrinking) showed the 4096 atlas (four 2048 tiles, two at the 0.60 shrink threshold) too small; the 8192 one holds sixteen
+  (nine). Its extra 384 MiB counts in the viewer's texture budget: on a 12 GB card that budget is about 4.9 GB
+  (`RenderTextureVRAMDivisor` 2, then the 0.8 factor), so the tier takes 7.8 % of it (5.2 % on a 24 GB card), not 3 %; watch the
+  texture discard bias on 12 GB cards in-world. The chosen tier, the memory it was chosen for and `GL_MAX_TEXTURE_SIZE` are in the one
+  log line of a successful allocation. An allocation that fails tries the
   smaller size; if that fails, the projectors have no tile (lit without a shadow), the failure is logged and the allocation is
   tried again with a back-off (5 s, doubling up to 60 s). The method never changes.
 - **Tile size** from the light only (`baseSize`: radius and field of view), shrunk together by one power of two when the atlas
@@ -38,7 +47,7 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   the attenuation test. `sampleProjectorShadow` is the filtered lookup of 261253bd43 on the tile, with an exact `CLAMP_TO_EDGE`
   emulation at the tile's edge (no guard texels). The sun pass writes 1 in its projector channels; the slots stay empty.
 - **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
-  `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a base-size tile at its reference distance), turned into texels of this
+  `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a 2048 tile at 4 m, with a 90 degree field of view), turned into texels of this
   tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
   is one texel (an edge is never narrower than the tile resolves, so a shrunk tile does not alias); the upper bound is 12 texels
   because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
@@ -46,8 +55,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
 - **Emitter size from the prim (P2b).** The penumbra's light size is the projector prim's own face, `scale.x` and `scale.y` of the
   pose the tile was drawn with, as the uniform `proj_shadow_light_size` (metres along the map's u and v, each clamped to
-  2 cm .. 30 cm; the old constant was 15 cm, at most the near plane's width). A bulb prim gives a sharper shadow than before, a wall washer
-  a softer one up to the 4 cm radius cap. Nothing depends on the camera. The sun keeps `shadow_light_size`.
+  2 cm .. 15 cm; the old constant was 15 cm, at most the near plane's width). Only small emitters get sharper (a bulb prim, a face
+  under 15 cm); a face of 15 cm or more gives the penumbra it gave in P2, none is softer. Nothing depends on the camera. The sun keeps `shadow_light_size`.
 - **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
   pool), so a tile's pattern does not depend on where the tile sits in the atlas.
 - **Lifetime.** Allocated in `allocateShadowBuffer` (the place of the spot maps, not for probe snapshots), released when the method
