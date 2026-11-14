@@ -417,6 +417,7 @@ public:
         PROJ_SHADOW_ATLAS,                  //  "proj_shadow_atlas"
         PROJ_SHADOW_MATRIX,                 //  "proj_shadow_matrix"
         PROJ_SHADOW_TILE,                   //  "proj_shadow_tile"
+        PROJ_SHADOW_LIGHT_SIZE,             //  "proj_shadow_light_size"
         SHADOW_TILE_ORIGIN,                 //  "shadow_tile_origin"
         // </Vulkanstorm>
         END_RESERVED_UNIFORMS
