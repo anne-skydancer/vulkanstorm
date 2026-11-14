@@ -18,6 +18,8 @@ from licence_texts import (INSTALLER_LICENCE_HEADER, LICENCE_TEXTS,
 # sha256 of https://www.gnu.org/licenses/gpl-3.0.txt
 GPL3_SHA256 = '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986'
 VULKANSTORM = 'SPDX-License-Identifier: GPL-3.0-or-later'
+# The licence headers sit at the top of a file: look at this many bytes of it.
+HEADER_BYTES = 4000
 
 # SPDX identifiers that can be part of a GPL-3.0-or-later work.
 GPL3_COMPATIBLE = {
@@ -147,7 +149,7 @@ class SourceHeaderTest(unittest.TestCase):
     def test_vulkanstorm_files_are_gpl3_or_later(self):
         offenders = []
         for name, path in tracked_text_files():
-            head = path.read_bytes()[:1500].decode('utf-8', 'replace')
+            head = path.read_bytes()[:HEADER_BYTES].decode('utf-8', 'replace')
             if 'Copyright (C) 2026, Anne Skydancer' in head and VULKANSTORM not in head:
                 offenders.append(name)
         self.assertEqual(offenders, [])
@@ -155,7 +157,7 @@ class SourceHeaderTest(unittest.TestCase):
     def test_no_lgpl_option_in_source_headers(self):
         offenders = []
         for name, path in tracked_text_files():
-            for line in path.read_bytes()[:3000].decode('utf-8', 'replace').splitlines():
+            for line in path.read_bytes()[:HEADER_BYTES].decode('utf-8', 'replace').splitlines():
                 if 'SPDX-License-Identifier:' not in line:
                     continue
                 expression = spdx_expression(line.split('SPDX-License-Identifier:', 1)[1])
@@ -164,19 +166,22 @@ class SourceHeaderTest(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_vulkanstorm_viewer_headers_are_gpl3(self):
-        # A header that names itself "Vulkanstorm Viewer Source Code" is ours: no LGPL licence block.
+        # A header that calls itself the Vulkanstorm viewer's source code is ours: it must carry the
+        # GPL-3.0-or-later identifier and no LGPL licence block. The marker is split so that this file
+        # does not match itself.
         marker = 'Vulkanstorm Viewer ' + 'Source Code'
         offenders = []
         for name, path in tracked_text_files():
-            head = path.read_bytes()[:4000].decode('utf-8', 'replace')
+            head = path.read_bytes()[:HEADER_BYTES].decode('utf-8', 'replace')
             if marker not in head:
                 continue
             if VULKANSTORM not in head or 'viewerlgpl' in head or 'Lesser General Public' in head:
                 offenders.append(name)
         self.assertEqual(offenders, [])
 
-    def test_no_lgpl_wording_in_vulkanstorm_comments(self):
-        # Comments by Vulkanstorm that gave the licence of a block or design as LGPL (or LGPL or GPL-3).
+    def test_no_known_lgpl_wordings_in_comments(self):
+        # Two wordings that comments of ours once used to give a block's licence as the old one. The
+        # needles are split strings so that this file does not match itself.
         wording = ('Licensed LGPL-2.1 ' + 'or GPL-3', 'Anne Skydancer, ' + 'LGPL')
         offenders = []
         for name, path in tracked_text_files():
@@ -185,10 +190,29 @@ class SourceHeaderTest(unittest.TestCase):
                 offenders.append(name)
         self.assertEqual(offenders, [])
 
+    def test_no_comment_gives_a_vulkanstorm_licence_as_lgpl(self):
+        # A comment line in a source file (not a .md doc) that names Vulkanstorm or its author together
+        # with LGPL is wrong, unless the line also carries a Linden Lab, Firestorm or Phoenix marker
+        # (upstream text). The three words are built from parts so that this file does not match itself.
+        ours = re.compile('Vulkan' + 'storm|Anne ' + 'Skydancer')
+        lgpl = re.compile(r'\b' + 'LG' + r'PL\b')
+        upstream = re.compile('Linden ' + 'Lab|Linden ' + 'Research|Fire' + 'storm|Phoe' + 'nix')
+        comment = re.compile(r'^\s*(//|#|/\*|\*)')
+        suffixes = {'.cpp', '.h', '.glsl', '.py', '.cmake', '.sh'}
+        offenders = []
+        for name, path in tracked_text_files():
+            if path.suffix not in suffixes:
+                continue
+            for number, line in enumerate(path.read_bytes().decode('utf-8', 'replace').splitlines(), 1):
+                if (comment.match(line) and ours.search(line) and lgpl.search(line)
+                        and not upstream.search(line)):
+                    offenders.append('%s:%d: %s' % (name, number, line.strip()))
+        self.assertEqual(offenders, [])
+
     def test_every_spdx_expression_can_be_part_of_a_gpl3_work(self):
         offenders = []
         for name, path in tracked_text_files():
-            for line in path.read_bytes()[:3000].decode('utf-8', 'replace').splitlines():
+            for line in path.read_bytes()[:HEADER_BYTES].decode('utf-8', 'replace').splitlines():
                 if 'SPDX-License-Identifier:' not in line:
                     continue
                 expression = spdx_expression(line.split('SPDX-License-Identifier:', 1)[1])
