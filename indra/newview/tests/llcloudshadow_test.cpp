@@ -206,7 +206,7 @@ int main()
         check(c.origin.x != a.origin.x && c.origin.y == a.origin.y, "a move of more than a step moves the origin, in x only");
     }
 
-    // 7. the altitude fade (cloudsV.glsl altitude_blend_factor) is the dome point's height, not the
+    // 7. the altitude fade (cloudsF.glsl altitude_blend_factor) is the dome point's height, not the
     //    camera's: rebuilt from the dome point
     for (int i = 0; i < 500; ++i)
     {

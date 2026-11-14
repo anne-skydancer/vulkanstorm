@@ -18,7 +18,7 @@ What the shade is lit with depends on the sky:
     probes). Its `pbrBaseLight` branch is the classic one.
   * a PBR sky (reflection_probe_ambiance 1) takes the sky probe's irradiance,
     mix(amblit, E * ambiance, min(ambiance, 1)). E is computed here as the viewer's irradiance
-    capture sees the sky: the sky dome (skyV.glsl haze colour, skyF.glsl x2 and clamp 5, decoded
+    capture sees the sky: the sky dome (skyF.glsl haze colour, skyF.glsl x2 and clamp 5, decoded
     to linear and scaled by sky_hdr_scale = 2 sqrt(gamma)) with the capture's ambient uniform at 0
     and blue_horizon / blue_density reduced to their HSL lightness (RenderDesaturateIrradiance),
     cosine-convolved over the upper hemisphere (irradianceGenF.glsl: cosine-weighted, so E is
@@ -90,12 +90,12 @@ void main() {
     float phi = (float(a) + 0.5) / float(n_az) * 6.28318530718;
     float th = (float(e) + 0.5) / float(n_el) * 1.57079632679;
     vec3 dir = vec3(sin(th) * cos(phi), cos(th), sin(th) * sin(phi));
-    // skyV.glsl main(), for the view direction `dir` (y up)
+    // skyF.glsl main(), for the view direction `dir` (y up)
     vec3 rel_pos = dir;
     if (rel_pos.y > 0.) rel_pos *= (max_y / rel_pos.y);
     vec3 rel_pos_norm = normalize(rel_pos);
     float rel_pos_len = length(rel_pos);
-    float rel_pos_lightnorm_dot = dot(rel_pos_norm, sun_glow_norm.xyz); // L3: the sun's glow at the sun (skyV.glsl)
+    float rel_pos_lightnorm_dot = dot(rel_pos_norm, sun_glow_norm.xyz); // L3: the sun's glow at the sun (skyF.glsl)
     vec3 sunlight = (sun_up_factor == 1) ? sunlight_color : moonlight_color * 0.7;
     vec3 light_atten = (blue_density + vec3(haze_density * 0.25)) * (density_multiplier * max_y);
     vec3 combined_haze = max(abs(blue_density) + vec3(abs(haze_density)), vec3(1e-6));

@@ -44,7 +44,7 @@ What lights the shade depends on the sky (`reflectionProbeF.glsl`, `doProbeSampl
   takes the sky's `amblit` and no probe at all.
 - A **PBR** sky (`reflection_probe_ambiance` 1) takes the sky probe's irradiance,
   `mix(amblit, E, min(ambiance, 1))`. E is computed here the way the irradiance capture sees the
-  sky: the sky colour (skyV/skyF) with the capture's zero ambient and `blue_horizon`/`blue_density`
+  sky: the sky colour (skyF on this line) with the capture's zero ambient and `blue_horizon`/`blue_density`
   reduced to their HSL lightness (`RenderDesaturateIrradiance` 1), times `sky_hdr_scale`,
   cosine-convolved over the upper hemisphere. **Only the sky is in E.** The real probe also holds
   the ground and the scene, and the sun disc; they are not modelled, so a real PBR scene's shade

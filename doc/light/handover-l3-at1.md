@@ -77,11 +77,11 @@ centred on -dip instead of 0 (`PrimaryLightParams::horizon_dip_deg`: 0 for the g
 dip = acos(R / (R + h)) = 1.24 degrees for the 1.5 km layer on a 6360 km planet, so the sun still shines on the clouds after
 the ground's sunset: at dusk the clouds stay sunlit after the ground has switched to the moon, at dawn they take the sun before
 it. The clouds use the band weight alone, and the shadow fades are the ground's only. The dome uses the ground's band weight, the
-ground light uses t; the flat clouds' sun term (`cloudsV.glsl`) uses
+ground light uses t; the flat clouds' sun term (`cloudsF.glsl` on this line) uses
 `cloud_moon_blend` = t_cloud and the sun's transmittance at the cloud layer (`cloud_light_transmittance`), taken
 from the raw `sunlight_color` (the auto-adjust scale of `RenderSkyAutoAdjustSunColorScale` is not applied to the
 clouds; the ground's sun keeps it). The clouds' glow direction (`cloud_light_dir`, the clamped `cloud_dir`) and
-the sun attenuation of the below-cloud haze (`off_axis` in `cloudsV.glsl`) follow the same handover; the dome
+the sun attenuation of the below-cloud haze (`off_axis` in `cloudsF.glsl`) follow the same handover; the dome
 keeps `lightnorm`. The L2 cloud map composes: its weight is multiplied by `primary_shadow_strength`
 (`atmosphericsFuncs.glsl`).
 
@@ -92,7 +92,7 @@ shadow take; it points at nothing visible. The glows and the halo around a body 
 (a setting sun, a moon 55 degrees up and 90 degrees away) showed a large glow and a streak in the empty sky between them
 while the light swung, because the dome, the haze, the halo and the clouds' glow followed the route.
 
-- Dome (`skyV.glsl`) and the scene haze (`atmosphericsFuncs.glsl`): the sun's glow is centred on `sun_glow_norm` (the clamped
+- Dome (`skyF.glsl` on this line) and the scene haze (`atmosphericsFuncs.glsl`): the sun's glow is centred on `sun_glow_norm` (the clamped
   sun direction) with the weight (1 - band weight); the moon's glow (haze only; the dome never had one) is centred on
   `moon_glow_norm` with `moon_glow_factor` = band weight x moon_brightness / 4 x the moon disc's visibility. The sum is
   `sun_moon_glow_factor` as before. By day `moon_glow_factor` is 0 and the sun's share is exactly the factor, 1.
@@ -104,7 +104,7 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
 - The haze glow is damped by its own body's direction (`sun_dir`, `moon_dir`, eye space, the same uniforms the deferred pass
   binds), not by the blended light's, which at mid-handover points at neither body. A caller that passes no light direction
   (fullbright passes vec3(0)) is not damped, as before.
-- Unchanged on purpose: the sunlight attenuation of the dome (`off_axis` in `skyV.glsl`) and the water fog still use
+- Unchanged on purpose: the sunlight attenuation of the dome (`off_axis` in `skyF.glsl`) and the water fog still use
   `lightnorm`, the cloud self-shade offset and the cloud map the ground's light direction; the sun and moon discs are drawn at
   their own directions (`LLVOSky`).
 
@@ -119,9 +119,9 @@ while the light swung, because the dome, the haze, the halo and the clouds' glow
 |---|---|---|
 | `primary_light_dir` (eye space) | `LLPipeline::bindDeferredShader` | the shaders that took `sun_dir`/`moon_dir` by `sun_up_factor` |
 | `primary_light_color`, `primary_shadow_strength` | `LLSettingsVOSky::applySpecial` (every shader) | `atmosphericsFuncs.glsl` (`sunlit`, the haze), `shadowUtil.glsl` |
-| `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyV.glsl` |
-| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsV.glsl` |
-| `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyV.glsl`, `skyF.glsl`, `atmosphericsFuncs.glsl` |
+| `sun_moon_blend` (band weight) | `applySpecial` (sky group) | `skyF.glsl` |
+| `cloud_light_transmittance`, `cloud_moon_blend`, `cloud_light_dir` (the sun's) | `applySpecial` (sky group) | `cloudsF.glsl` |
+| `sun_glow_norm`, `moon_glow_norm`, `moon_glow_factor`, `moon_halo_weight` | `applySpecial` (any group) | `skyF.glsl`, `atmosphericsFuncs.glsl` |
 
 The shadow caster, the shadow light size, the cloud map's penumbra and HW light 0's direction follow the primary light. The
 sun shadow pass is skipped while the shadow is invisible.

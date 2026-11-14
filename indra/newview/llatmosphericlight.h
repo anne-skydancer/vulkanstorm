@@ -488,7 +488,7 @@ inline double profile_column_km(const DensityProfile& p, double top_km)
 
 // today's airmass, as a transmittance (the A/B debug setting and the legacy cloud light):
 // per channel lin(source e^(-(bd + hd/4) dm max_y path_scale / max(1e-6, mu))) / lin(source)
-// path_scale 1: the ground light (atmosphericsFuncs.glsl before L3); 0.5: the clouds' sun (cloudsV.glsl before L3)
+// path_scale 1: the ground light (atmosphericsFuncs.glsl before L3); 0.5: the clouds' sun (cloudsF.glsl before L3)
 inline Vec3 legacy_transmittance(const LegacySky& sky, double mu, double path_scale)
 {
     using detail::finite_or;
@@ -693,7 +693,7 @@ struct LLAtmosphere
     // path_factor scales the excess only. In the physical model a light that is lower in the air than the sun's (the cloud light)
     // gets its thinner air from the altitude: T is taken AT THE CLOUD LAYER (h_km = the cloud height setting, 1500 m), not by
     // halving the path. The excess has no altitude dependence, so path_factor is there only for it: the legacy cloud light
-    // (cloudsV.glsl, before L3) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
+    // (cloudsF.glsl, before L3) has half the airmass, and path_factor 0.5 gives a rig's cloud light that same half airmass. So AT1's
     // cloud light calls transmittance(h_cloud, mu, disc, 0.5); the sun and moon light on the ground use 1.
     // A non-finite argument gives 0 (a non-finite path_factor counts as 1, as in the GLSL).
     Vec3 transmittance(double h_km, double mu, double disc_sin, double path_factor = 1.0) const

@@ -397,8 +397,8 @@ runs:
           INTEGRATION_TEST_llcorehttp
         # The TLS test: this line's test helpers register tests with CTest,
         # so run it here, and fail unless it is found. The credential-store
-        # tests are not built on this line: llsechandler_basic_test.cpp no
-        # longer compiles against its LLCredential (no getGrid()).
+        # tests (llsechandler_basic, llsecapi, llviewernetwork) compile on this
+        # line but are left out of this step by choice.
         runners='llcorehttp'
         want=1
         tests="^INTEGRATION_TEST_RUNNER_($runners)$"

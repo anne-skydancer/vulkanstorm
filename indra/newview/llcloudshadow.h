@@ -38,7 +38,7 @@ namespace LLCloudShadow
 // LLSettingsSky::DOME_RADIUS and DOME_OFFSET
 constexpr double DOME_RADIUS = 15000.0;
 constexpr double DOME_OFFSET = 0.96;
-// the +50 m the cloud vertex shader adds to the vertex height (cloudsV.glsl) and the 512 m of
+// the +50 m the cloud shader adds to the vertex height (cloudsF.glsl on this line) and the 512 m of
 // the altitude fade
 constexpr double CLOUD_VERTEX_LIFT = 50.0;
 constexpr double ALTITUDE_FADE_START = 512.0;
@@ -106,7 +106,7 @@ inline Vec2 ground_texcoord(const Vec2& p, const Vec3& L, double cloud_scale, do
     return layer_texcoord({ p.x + o.x, p.y + o.y }, cloud_scale, R);
 }
 
-// cloudsV.glsl: altitude_blend_factor for the dome point in direction L. It does not depend on the
+// cloudsF.glsl: altitude_blend_factor for the dome point in direction L. It does not depend on the
 // camera: the dome moves with it.
 inline double altitude_blend(const Vec3& L, double max_y, double R = DOME_RADIUS, double dome_offset_fraction = DOME_OFFSET)
 {
