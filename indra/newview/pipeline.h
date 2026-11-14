@@ -1265,6 +1265,12 @@ public:
     static F32 RenderSpotShadowOffset;
     static F32 RenderSpotShadowBias;
     static LLDrawable* RenderSpotLight;
+    // <Vulkanstorm> A projector tile of the Stochastic method's pool is being drawn (LLProjectorShadows::renderTile): the fixed
+    // layer. Movers and physical objects are dropped from the cull (markVisible), and the casters the tile draws are held at full
+    // detail (the LOD pin, pinCasters). LOCAL_SHADOW_DYNAMIC is the avatar layer of stage P4.
+    enum ELocalShadowPass : U8 { LOCAL_SHADOW_NONE = 0, LOCAL_SHADOW_STATIC = 1, LOCAL_SHADOW_DYNAMIC = 2 };
+    static ELocalShadowPass sLocalShadowPass;
+    // </Vulkanstorm>
     static F32 RenderEdgeDepthCutoff;
     static F32 RenderEdgeNormCutoff;
     static LLVector3 RenderShadowGaussian;
