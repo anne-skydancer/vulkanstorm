@@ -42,6 +42,12 @@ ALLOWED = {
     'sun-splits': [('return;', 'return false;')],
     'sun-cascades': [],
     'sun-map-size': [],
+    # the projector (spot) shadow slots and their maps, kept verbatim for the projector shadow pool (Stochastic)
+    'spot-map-size': [],
+    'spot-map-compare': [],
+    'spot-slots': [],
+    'spot-render': [],
+    'spot-rank': [],
 }
 
 OPEN = re.compile(r'^\s*//\s*<ShadowLegacy\s+id="([^"]+)"\s*>\s*$')
