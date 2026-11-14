@@ -9,10 +9,13 @@ reports "pool": {"pool_present": false, ...}; a gate then ends as NOT RUN, never
   O-1 pure rotation   camera position fixed; yaw 360 deg and pitch -60..+60 deg; per step the pool's static renders, the
                       number of lights without a tile and the CRC32 of every static tile must not change.  (implemented; NOT RUN
                       with no projector tile in the baseline, or with no tile CRC: GL < 4.5 or "crc" off)
-  O-2 orbit           24 steps around a centre at 3 m and 8 m, two laps; lap 2 must show 0 renders and identical CRCs,
-                      every re-render with its cause.                                                      (stage P3)
+  O-2 orbit           24 steps around a centre at 3 m and 8 m, two laps each; every lap after the first changes nothing: 0 renders,
+                      no cause, identical CRCs. The first lap may only re-render from the LOD pin (cause lod_up). Each step
+                      can save a snapshot (o2.snapshots) and the last lap a contact sheet to look at.            (stage P3)
   O-4 never vanish    walk a route, teleport in: lights without a tile is 0 after the first fill.           (stage P2)
-  O-6 movers          a fan with a spinning child, a rotating spot, a second lamp with a dirty object.        (stage P3)
+  O-6 movers          three watch windows while you act in-world (o6.run): a fan with a spinning child under a lamp (no render),
+                      a rotating spot (a dynamic render every frame, a static one after it stops), an object edited under a
+                      second lamp (its tile waits at most 250 ms).                                              (stage P3)
 
 The camera is moved with LLAgent.setCameraParams as light_check.py does; settings are restored at the end and on error.
 stdout is the LEAP channel: this script only logs to stderr.
@@ -38,7 +41,8 @@ from leap_client import ConnectionLost, LeapError, LeapSession, ProtocolError, V
 from light_check import Aborted, Viewer, default_capture_root, log, write_json_atomic  # noqa: E402
 
 API = "ProjectorShadows"
-POOL_KEYS = ["pool_present", "level", "static_renders", "dynamic_renders", "lights_without_tile", "tiles", "rerender_causes"]
+POOL_KEYS = ["pool_present", "level", "static_renders", "dynamic_renders", "lights_without_tile", "tiles", "rerender_causes",
+             "pinned_objects", "frame", "pending_tiles", "dirty_age_ms_max"]
 SLOTS_KEYS = ["occupied", "targeted"]
 LIGHTS_KEYS = ["nearby", "spotlights", "eligible", "reach_m", "eligible_within_16m", "eligible_within_32m",
                "eligible_within_64m", "eligible_within_reach"]
@@ -92,6 +96,114 @@ def judge_o1(baseline, states):
     return fails
 
 
+def pool_extras(stats):
+    """The P3 counters of one stats reply: causes, dynamic renders, pinned objects, the frame, and each tile's drawn frame."""
+    pool = stats.get("pool") or {}
+    return {
+        "causes": {str(k): int(v) for k, v in (pool.get("rerender_causes") or {}).items()},
+        "dynamic": int(pool.get("dynamic_renders", 0)),
+        "static": int(pool.get("static_renders", 0)),
+        "pinned": int(pool.get("pinned_objects", 0)),
+        "frame": int(pool.get("frame", 0)),
+        "pending": int(pool.get("pending_tiles", 0)),
+        "without": int(pool.get("lights_without_tile", 0)),
+        "drawn": {str(t.get("key")): int(t.get("drawn_frame", 0)) for t in (pool.get("tiles") or [])},
+        "dirty_age_ms_max": float(pool.get("dirty_age_ms_max", 0.0)),
+    }
+
+
+def orbit_points(centre, radius, steps, height_m, target_height_m=0.0):
+    """(camera, focus) for each step of a circle of radius_m around centre (region coordinates), the camera height_m above
+    centre z, looking at the centre (target_height_m above it). The first point is east of the centre."""
+    pts = []
+    for i in range(int(steps)):
+        a = 2.0 * math.pi * i / steps
+        cam = [centre[0] + radius * math.cos(a), centre[1] + radius * math.sin(a), centre[2] + height_m]
+        pts.append((cam, [centre[0], centre[1], centre[2] + target_height_m]))
+    return pts
+
+
+def cause_delta(prev, cur):
+    """{cause: count change} between two cause maps, only the causes that changed."""
+    return {k: cur.get(k, 0) - prev.get(k, 0) for k in set(cur) | set(prev) if cur.get(k, 0) != prev.get(k, 0)}
+
+
+def judge_o2(baseline, samples, first_lap_causes=("lod_up",)):
+    """Failures of O-2. baseline: the sample before the orbit; samples: dicts with lap (1-based, over the whole run), tag, renders,
+    without, crcs, causes. Lap 1 (the first lap of the first radius) may re-render only from the causes in first_lap_causes
+    (the LOD pin lifting an object once); every later lap must change nothing: no render, no cause, no CRC against the first
+    lap's last step. A light without a tile fails at any step."""
+    fails = []
+    prev = baseline
+    ref_crcs = None
+    lap1 = [s for s in samples if s["lap"] == 1]
+    if lap1:
+        ref_crcs = lap1[-1]["crcs"]
+    for s in samples:
+        tag = "lap %d %s" % (s["lap"], s["tag"])
+        if s["without"]:
+            fails.append("%s: %d lights without a tile" % (tag, s["without"]))
+        delta = cause_delta(prev["causes"], s["causes"])
+        if s["lap"] == 1:
+            bad = {k: v for k, v in delta.items() if k not in first_lap_causes}
+            if bad:
+                fails.append("%s: re-render for %s (only %s allowed in the first lap)"
+                             % (tag, dict(sorted(bad.items())), ", ".join(first_lap_causes)))
+        else:
+            if s["renders"] != prev["renders"]:
+                fails.append("%s: static renders %d -> %d" % (tag, prev["renders"], s["renders"]))
+            if delta:
+                fails.append("%s: render causes changed: %s" % (tag, dict(sorted(delta.items()))))
+            if ref_crcs is not None and s["crcs"] != ref_crcs:
+                changed = sorted(k for k in set(s["crcs"]) | set(ref_crcs) if s["crcs"].get(k) != ref_crcs.get(k))
+                fails.append("%s: tile CRC differs from the first lap for %s" % (tag, ", ".join(changed[:8])))
+        prev = s
+    return fails
+
+
+def judge_o6_fan(before, after):
+    """The fan and its spinning child under a lamp (a client spin: a known limit): no static render, no dynamic render, no cause."""
+    fails = []
+    if after["static"] != before["static"]:
+        fails.append("static renders %d -> %d while the fan spun" % (before["static"], after["static"]))
+    if after["dynamic"] != before["dynamic"]:
+        fails.append("dynamic renders %d -> %d while the fan spun" % (before["dynamic"], after["dynamic"]))
+    delta = cause_delta(before["causes"], after["causes"])
+    if delta:
+        fails.append("render causes changed: %s" % dict(sorted(delta.items())))
+    return fails
+
+
+def judge_o6_spot(before, during, after, min_fraction=0.5):
+    """A rotating spot: while it turns, its tile is a dynamic item (drawn in at least min_fraction of the frames), no light is
+    without a tile, and once it stands still the tile is brought up to date by a static render."""
+    fails = []
+    frames = during["frame"] - before["frame"]
+    if frames <= 0:
+        return ["the frame counter did not advance (%d -> %d)" % (before["frame"], during["frame"])]
+    dyn = during["dynamic"] - before["dynamic"]
+    if dyn < min_fraction * frames:
+        fails.append("dynamic renders %d in %d frames: the rotating spot is not redrawn every frame" % (dyn, frames))
+    if before["without"] or during["without"] or after["without"]:
+        fails.append("a light was without a tile")
+    if after["static"] - during["static"] < 1:
+        fails.append("no static render after the spot stopped (its tile is behind its pose)")
+    return fails
+
+
+def judge_o6_lamp(before, after, limit_ms=250.0):
+    """An object edited under a second lamp: the renders the change caused (the static renders of the window that were not first fills,
+    not a lamp or an avatar) were drawn within limit_ms of the change reaching the pool (the pool reports the longest wait since the
+    last reset). Returns (status, why). NOT RUN when no change was seen: edit an object under a lamp while the window runs."""
+    changed = sum(max(0, after["causes"].get(k, 0) - before["causes"].get(k, 0)) for k in ("add_remove", "edit", "mover", "lod_up"))
+    if not changed:
+        return "NOT RUN", "no tile was drawn again for a changed object in the window: edit an object under a lamp while it runs"
+    wait = after.get("dirty_age_ms_max", 0.0)
+    if wait > limit_ms:
+        return "FAIL", "a changed tile waited %.0f ms (limit %.0f ms), %d renders" % (wait, limit_ms, changed)
+    return "PASS", "%d renders for changes, the longest wait %.0f ms" % (changed, wait)
+
+
 class Check:
     def __init__(self, viewer, scenario, outdir):
         self.v, self.sc, self.out = viewer, scenario, pathlib.Path(outdir)
@@ -137,11 +249,7 @@ class Check:
         a, p = math.radians(yaw), math.radians(pitch)
         d = float(self.sc["camera"]["look_distance_m"])
         focus = [cam[0] + d * math.cos(p) * math.cos(a), cam[1] - d * math.cos(p) * math.sin(a), cam[2] + d * math.sin(p)]
-        self.v.fire("LLAgent", "setCameraParams", camera_pos=cam, focus_pos=focus, camera_locked=True, focus_locked=True,
-                    camera_lag=0.0, focus_lag=0.0, camera_threshold=0.0, focus_threshold=0.0)
-        self.v.barrier()
-        self.camera_set = True
-        self.save_restore()
+        self.aim(cam, focus)
 
     def warm_up(self):
         """Before the baseline: let the first fill finish. Waits after_camera_s, then polls until static_renders and
@@ -183,6 +291,150 @@ class Check:
         fails = judge_o1(states[0], states[1:])
         return {"status": "FAIL" if fails else "PASS", "steps": len(states), "failures": fails[:50]}
 
+    def aim(self, cam, focus):
+        """Put the camera at cam looking at focus (region coordinates), locked, with no lag."""
+        self.v.fire("LLAgent", "setCameraParams", camera_pos=cam, focus_pos=focus, camera_locked=True, focus_locked=True,
+                    camera_lag=0.0, focus_lag=0.0, camera_threshold=0.0, focus_threshold=0.0)
+        self.v.barrier()
+        self.camera_set = True
+        self.save_restore()
+
+    def sample(self, tag, lap):
+        """One comparable reading of the pool: static renders, lights without a tile, tile CRCs, the render causes."""
+        st = self.stats()
+        renders, without, crcs = pool_state(st)
+        return {"lap": lap, "tag": tag, "renders": renders, "without": without, "crcs": crcs,
+                "causes": pool_extras(st)["causes"]}
+
+    def extras(self, reset_ages=False):
+        """The P3 counters without the tile read-back (cheap): the O-6 windows poll these."""
+        args = {"crc": False}
+        if reset_ages:
+            args["reset_ages"] = True
+        return pool_extras(self.v.req(API, "stats", **args))
+
+    def contact_sheet(self, files, out):
+        """A grid of the lap-2 snapshots to look at (Pillow, when installed): the same lamp shadows at every step is the pass."""
+        try:
+            from PIL import Image  # noqa: PLC0415
+        except ImportError:
+            self.report["warnings"].append("Pillow not installed: no contact sheet, the snapshots stay .bmp")
+            return None
+        thumbs = []
+        for f in files:
+            with Image.open(f) as im:
+                thumbs.append(im.convert("RGB").resize((320, 180)))
+        if not thumbs:
+            return None
+        cols = 6
+        rows = (len(thumbs) + cols - 1) // cols
+        sheet = Image.new("RGB", (cols * 320, rows * 180))
+        for i, t in enumerate(thumbs):
+            sheet.paste(t, ((i % cols) * 320, (i // cols) * 180))
+        sheet.save(out)
+        return str(out)
+
+    def gate_o2(self):
+        cfg = self.sc.get("o2") or {}
+        first = self.stats()
+        if not (first.get("pool") or {}).get("pool_present"):
+            return {"status": "NOT RUN", "why": "this viewer has no projector shadow pool (pool_present is false)"}
+        pos = self.v.agent_pos()
+        centre = [pos[0], pos[1], pos[2]]
+        height = float(self.sc["camera"]["height_m"])
+        radii = [float(r) for r in cfg.get("radii_m", [3.0, 8.0])]
+        steps = int(cfg.get("steps", 24))
+        laps = int(cfg.get("laps", 2))
+        if laps < 2:
+            return {"status": "NOT RUN", "why": "o2.laps must be at least 2: the second lap is the gate"}
+        sheet_dir = self.out / "o2"
+        take_snaps = bool(cfg.get("snapshots", False))
+        if take_snaps:
+            sheet_dir.mkdir(parents=True, exist_ok=True)
+        pts0 = orbit_points(centre, radii[0], steps, height, float(cfg.get("target_height_m", 0.5)))
+        self.aim(*pts0[0])
+        self.warm_up()
+        baseline = self.sample("baseline", 0)
+        if not baseline["crcs"]:
+            return {"status": "NOT RUN", "why": "no projector tile in the scene (the baseline has no tiles); go where a projector is in reach"}
+        if all(c is None for c in baseline["crcs"].values()):
+            return {"status": "NOT RUN", "why": "no tile CRC in the reply (GL < 4.5 or crc off); the orbit gate cannot compare tile contents"}
+        samples, lap_no, last_lap_files = [], 0, []
+        for radius in radii:
+            pts = orbit_points(centre, radius, steps, height, float(cfg.get("target_height_m", 0.5)))
+            for lap in range(laps):
+                lap_no += 1
+                files = []
+                for i, (cam, focus) in enumerate(pts):
+                    self.v.check_abort()
+                    self.aim(cam, focus)
+                    self.v.sleep(float(self.sc["settle"].get("step_s", 0.3)))
+                    samples.append(self.sample("r%gm s%02d" % (radius, i), lap_no))
+                    if take_snaps:
+                        name = sheet_dir / ("lap%d_r%g_s%02d.bmp" % (lap_no, radius, i))
+                        self.v.snapshot(str(name))
+                        files.append(name)
+                last_lap_files = files or last_lap_files
+        fails = judge_o2(baseline, samples, tuple(cfg.get("first_lap_causes", ["lod_up"])))
+        out = {"status": "FAIL" if fails else "PASS", "steps": len(samples), "failures": fails[:50],
+               "causes": cause_delta(baseline["causes"], samples[-1]["causes"]),
+               "first_lap_renders": samples[steps - 1]["renders"] - baseline["renders"] if len(samples) >= steps else None}
+        if last_lap_files:
+            out["contact_sheet"] = self.contact_sheet(last_lap_files, sheet_dir / "lap_last.png")
+        return out
+
+    def o6_window(self, what, seconds, prompt_s):
+        """Tell the operator what to do, give them prompt_s to do it, then return the readings at the window's start."""
+        log("ORBIT O-6: %s (window %.0f s, starts in %.0f s)" % (what, seconds, prompt_s))
+        self.v.sleep(prompt_s)
+        return self.extras()
+
+    def gate_o6(self):
+        cfg = self.sc.get("o6") or {}
+        if not cfg.get("run"):
+            return {"status": "NOT RUN", "why": "O-6 needs scripted objects and you in-world: set o6.run in the scenario"}
+        first = self.stats()
+        if not (first.get("pool") or {}).get("pool_present"):
+            return {"status": "NOT RUN", "why": "this viewer has no projector shadow pool (pool_present is false)"}
+        win = cfg.get("windows") or {}
+        prompt = float(win.get("prompt_s", 10))
+        parts = {}
+        # 1. the fan: a spinning child in a still linkset casts frozen and never invalidates
+        t = float(win.get("fan_s", 10))
+        before = self.o6_window("stand still, the fan with the spinning child turns under a lamp", t, prompt)
+        self.v.sleep(t)
+        fails = judge_o6_fan(before, self.extras())
+        parts["fan"] = {"status": "FAIL" if fails else "PASS", "failures": fails}
+        # 2. the rotating spot: a moving lamp is a dynamic item every frame; the tile catches up when it stops
+        t = float(win.get("spot_s", 12))
+        stop_s = float(win.get("spot_stop_s", 5))
+        before = self.o6_window("the rotating spot turns, then stop it after the window", t, prompt)
+        self.v.sleep(t)
+        during = self.extras()
+        log("ORBIT O-6: stop the rotating spot now (%.0f s)" % stop_s)
+        self.v.sleep(stop_s)
+        fails = judge_o6_spot(before, during, self.extras())
+        parts["spot"] = {"status": "FAIL" if fails else "PASS", "failures": fails}
+        # 3. an object edited under a second lamp: its tile is drawn again within 250 ms
+        t = float(win.get("lamp_edit_s", 20))
+        log("ORBIT O-6: edit an object under a lamp during the next %.0f s (starts in %.0f s)" % (t, prompt))
+        self.v.sleep(prompt)
+        before = self.extras(reset_ages=True)
+        self.v.sleep(t)
+        status, why = judge_o6_lamp(before, self.extras(), float(win.get("limit_ms", 250)))
+        parts["lamp_edit"] = {"status": status, "why": why}
+        statuses = [p["status"] for p in parts.values()]
+        if "FAIL" in statuses:
+            status = "FAIL"
+        elif all(s == "PASS" for s in statuses):
+            status = "PASS"
+        else:
+            status = "NOT RUN"
+        out = {"status": status, "parts": parts}
+        if status == "NOT RUN":
+            out["why"] = "parts not run: " + ", ".join(k for k, p in parts.items() if p["status"] == "NOT RUN")
+        return out
+
     @staticmethod
     def not_yet(name, stage):
         return {"status": "NOT RUN", "why": "%s is implemented in %s" % (name, stage)}
@@ -199,11 +451,12 @@ class Check:
             self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
         gates = self.report["gates"]
         gates["O-1"] = self.gate_o1()
-        gates["O-2"] = self.not_yet("O-2", "stage P3")
+        gates["O-2"] = self.gate_o2()
         gates["O-4"] = self.not_yet("O-4", "stage P2")
-        gates["O-6"] = self.not_yet("O-6", "stage P3")
+        gates["O-6"] = self.gate_o6()
         for name, g in gates.items():
-            log("ORBIT %s %s %s" % (g["status"], name, g.get("why") or "; ".join(g.get("failures", [])[:3])))
+            log("ORBIT %s %s %s" % (g["status"], name, g.get("why") or "; ".join(g.get("failures", [])[:3]) or "; ".join(
+                "%s %s" % (k, p["status"]) for k, p in (g.get("parts") or {}).items())))
         self.cleanup()
         ran = [g["status"] for g in gates.values() if g["status"] != "NOT RUN"]
         if "FAIL" in ran:
