@@ -62,7 +62,7 @@ uniform int sun_up_factor;
 // reference depth is lowered by the slope times the tap's distance from the receiver point, so
 // a slanted lit surface does not shadow itself between the taps (acne on walls under a low sun).
 // Replaces the altitude term of the bias (RenderShadowBiasError), which only widened a constant
-// bias with height. Licensed LGPL-2.1 or GPL-3.
+// bias with height. Licensed GPL-3.0-or-later.
 #define PCF_RPDB_STEP 0.05      // metres
 #define PCF_RPDB_MAX  0.004     // cap per tap, shadow depth units (as PCSS)
 vec2 pcfDepthGradient(mat4 m, vec3 pos, vec3 norm, vec3 c)
@@ -139,7 +139,7 @@ float pcfSpotShadow(sampler2DShadow shadowMap, vec4 stc, float bias_scale, vec2 
 #if defined(PCSS_SHADOW)
 // <Vulkanstorm> PCSS stage 1: rotated Poisson PCF with a receiver-plane depth bias.
 // Compiled only into the deferred sun program (gDeferredSunProgram) when RenderShadowPCSS is on;
-// every other consumer of this file gets the PCF above, unchanged. Licensed LGPL-2.1 or GPL-3.
+// every other consumer of this file gets the PCF above, unchanged. Licensed GPL-3.0-or-later.
 
 // angular size of the shadowing light, L = 2 tan(half angle) (physical sun times the sky's
 // sun_scale times RenderShadowPCSSLightSize); the penumbra width uses it from stage 2 on
