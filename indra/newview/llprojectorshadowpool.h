@@ -387,6 +387,7 @@ struct RepackPlan
     std::vector<Rect> placed;        // parallel to the requests (valid when ok)
     std::vector<Move> moves;         // drawn tiles with old content
     std::vector<uint32_t> unplaced;  // keys that did not fit (when !ok)
+    BuddyAtlas buddy;                // the allocator after the plan's allocations (valid when ok): the caller adopts it
 };
 
 // Places every request into a fresh atlas: descending size, then key, so the same set always
@@ -434,6 +435,7 @@ inline RepackPlan planRepack(const std::vector<LayoutRequest>& requests, uint32_
             }
         }
         std::sort(plan.moves.begin(), plan.moves.end(), [](const Move& a, const Move& b) { return a.key < b.key; });
+        plan.buddy = fresh;
     }
     return plan;
 }
