@@ -1027,9 +1027,11 @@ inline bool rebuildDirties(uint32_t flags)
 // alpha-masked, alpha-textured) before the change or has one after it: turning such a face opaque removes a hole from the
 // shadow, and an opaque face turning alpha cuts one. Opaque to opaque never does (the texture does not show in a depth tile),
 // so plain texture swaps and animated textures do not churn. `was` is what the feed last saw; the caller stores `now` after.
-inline bool texturedDirties(bool was, bool now)
+// `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
+// from Legacy) has an unknown `was`, taken as possibly alpha (one conservative push, after which it is known).
+inline bool texturedDirties(bool was, bool now, bool known)
 {
-    return was || now;
+    return !known || was || now;
 }
 
 // ---------------------------------------------------------------------------------------------
