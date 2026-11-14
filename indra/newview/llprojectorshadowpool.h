@@ -808,8 +808,7 @@ struct StaticItem
 {
     uint32_t key = 0;
     bool never_drawn = false;   // drawn_frame == 0
-    bool pending = false;       // dirty or lowres (ignored when never_drawn)
-    float stale_ms = 0.f;       // time since dirty_frame
+    bool pending = false;       // needs a render (ignored when never_drawn; P2 has no change tracking, so every placed tile)
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
     uint32_t age_frames = 0;    // frames since it was last drawn (the order of service)
@@ -917,13 +916,23 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
 }
 
 // The static cap: a fixed CPU budget of the pool's tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
-// frame: it fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, and leaves 0.05 ms of the
-// +5 % light and shadow budget (about 0.4 ms) to the dynamic tiles. The measured cost only predicts what fits; it does not
-// set the budget.
+// frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one): it fits four measured tiles (0.07 ms each,
+// owner session 2026-11-14) with a margin. The +5 % light and shadow budget is about 0.4 ms of that frame, so 0.05 ms
+// is left, and kDynamicCapMs below does not fit in it: P4 must re-divide the cap between the static and dynamic tiles
+// (it is not claimed to fit today; no dynamic tile is drawn before P4). The measured cost only predicts what fits; it
+// does not set the budget.
 constexpr float kStaticCapMs = 0.35f;
-// Placeholders until S0 measures (spec 4.5); a devel-only debug override may replace them
+// Placeholder until S0 measures (spec 4.5); a devel-only debug override may replace it
 constexpr float kDynamicCapMs = 0.30f;
 constexpr uint32_t kAvatarDrawsMax = 24;
+
+// The prediction of a record that has never been drawn: the running average of tile renders, but at most a quarter of the
+// static cap, so that the first average (a placeholder above the cap) does not let a cold start (login, teleport) through
+// one tile per frame; the first timed render replaces it with the record's own cost.
+inline float coldItemMs(float cost_ema_ms)
+{
+    return std::min(itemCost(cost_ema_ms), kStaticCapMs / 4.f);
+}
 
 } // namespace llprojectorpool
 
