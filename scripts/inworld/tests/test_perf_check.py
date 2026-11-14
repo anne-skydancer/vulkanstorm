@@ -187,6 +187,19 @@ class RunTest(unittest.TestCase):
             self.assertEqual(fv.settings, orig)
             self.assertNotIn(("GLSubmitStats", "windowBegin"), fv.log)
 
+    def test_no_glstats_measures_the_frame_rate_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, extra=["--no-glstats"])
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(index["presets"]), ["current", "east", "north", "south"])
+            for info in index["presets"].values():
+                self.assertIsNotNone(info["fps_stats_off"])
+                self.assertNotIn("summary", info)
+            for op in ("windowBegin", "dump", "compareArm", "selfBench", "profileFrame"):
+                self.assertNotIn(("GLSubmitStats", op), fv.log)
+
     def test_replies_stay_small(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(gl_stats=True, logs_dir=tmp)

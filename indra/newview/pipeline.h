@@ -908,6 +908,21 @@ public:
     LLPointer<LLDrawable>   mShadowSpotLight[2];
     F32                     mSpotLightFade[2];
     LLPointer<LLDrawable>   mTargetShadowSpotLight[2];
+#if VKS_GL_STATS
+    // development only (projector shadow pool, stage S0): what the projector shadow slots and the light set look like now.
+    // Read by the LEAP API ProjectorShadows.stats (llprojectorshadowstatsapi.cpp). Main thread only.
+    struct ProjectorShadowStats
+    {
+        U32 nearbyLights = 0;       // mNearbyLights (position-based, RenderLocalLightCount cap)
+        U32 spotlights = 0;         // of them, spotlights
+        U32 eligible = 0;           // of them, with radius > 0, a colour that is not black, not worn, not on an avatar
+        U32 eligibleWithin[4] = {}; // eligible and within 16 m, 32 m, 64 m, reach (min(RenderFarClip, 128 m)) of the camera, by Light::dist
+        F32 reach = 0.f;
+        U32 slotsOccupied = 0;      // mShadowSpotLight entries that are set (0, 1 or 2 slot renders this frame)
+        U32 slotsTargeted = 0;      // mTargetShadowSpotLight entries that are set
+    };
+    ProjectorShadowStats getProjectorShadowStats() const;
+#endif
 
     LLVector4               mSunClipPlanes;
     LLVector4               mSunOrthoClipPlanes;

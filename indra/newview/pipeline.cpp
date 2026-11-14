@@ -1212,6 +1212,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
     if (!gCubeSnapshot) // hack to not allocate spot shadow maps during ReflectionMapManager init
     {
+        // <ShadowLegacy id="spot-map-size">
         U32 width = (U32)(resX * scale);
         U32 height = width;
 
@@ -1231,6 +1232,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
         {
             releaseSpotShadowTargets();
         }
+        // </ShadowLegacy>
     }
 
 
@@ -1265,12 +1267,14 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
             LLRenderTarget* shadow_target = getSpotShadowTarget(i);
             if (shadow_target)
             {
+                // <ShadowLegacy id="spot-map-compare">
                 gGL.getTexUnit(0)->bind(shadow_target, true);
                 gGL.getTexUnit(0)->setTextureFilteringOption(LLTexUnit::TFO_ANISOTROPIC);
                 gGL.getTexUnit(0)->setTextureAddressMode(LLTexUnit::TAM_CLAMP);
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+                // </ShadowLegacy>
                 // <Vulkanstorm> Stochastic reads the stored depth itself (texelFetch), no comparison
                 if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
                 {
@@ -6305,6 +6309,44 @@ static F32 calc_light_dist(LLVOVolume* light, const LLVector3& cam_pos, F32 max_
     return dist;
 }
 
+#if VKS_GL_STATS
+LLPipeline::ProjectorShadowStats LLPipeline::getProjectorShadowStats() const
+{
+    ProjectorShadowStats st;
+    st.reach = llmin(RenderFarClip, 128.f);
+    const F32 bands[4] = { 16.f, 32.f, 64.f, st.reach };
+    for (const Light& light : mNearbyLights)
+    {
+        ++st.nearbyLights;
+        LLVOVolume* volume = light.drawable.notNull() ? light.drawable->getVOVolume() : nullptr;
+        if (!volume || !volume->isLightSpotlight())
+        {
+            continue;
+        }
+        ++st.spotlights;
+        if (volume->getLightRadius() <= 0.001f || volume->isAttachment() || volume->getAvatar() != nullptr
+            || volume->getLightLinearColor().magVecSquared() < 0.001f)
+        {
+            continue;
+        }
+        ++st.eligible;
+        for (U32 i = 0; i < 4; ++i)
+        {
+            if (light.dist <= bands[i])
+            {
+                ++st.eligibleWithin[i];
+            }
+        }
+    }
+    for (U32 i = 0; i < 2; ++i)
+    {
+        st.slotsOccupied += mShadowSpotLight[i].notNull() ? 1 : 0;
+        st.slotsTargeted += mTargetShadowSpotLight[i].notNull() ? 1 : 0;
+    }
+    return st;
+}
+#endif
+
 void LLPipeline::calcNearbyLights(LLCamera& camera)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
@@ -10472,6 +10514,7 @@ void LLPipeline::renderDeferredLighting()
         if ((RenderDeferredSSAO && !gCubeSnapshot) || RenderShadowDetail > 0)
         {
             LL_PROFILE_GPU_ZONE("sun program");
+            VKS_GLSTAT_PASS("sun program");
             sun_target->bindTarget();
             {  // paint shadow/SSAO light map (direct lighting lightmap)
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - sun shadow");
@@ -10797,6 +10840,7 @@ void LLPipeline::renderDeferredLighting()
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - projectors");
                 LL_PROFILE_GPU_ZONE("projectors");
+                VKS_GLSTAT_PASS("projectors");
                 LLGLDepthTest depth(GL_TRUE, GL_FALSE);
                 bindDeferredShader(gDeferredSpotLightProgram);
 
@@ -10840,6 +10884,7 @@ void LLPipeline::renderDeferredLighting()
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - fullscreen lights");
                 LLGLDepthTest depth(GL_FALSE);
                 LL_PROFILE_GPU_ZONE("fullscreen lights");
+                VKS_GLSTAT_PASS("fullscreen lights");
 
                 U32 count = 0;
 
@@ -11203,6 +11248,7 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
     shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(screen_origin));
     shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, proj_range);
     shader.uniform1f(LLShaderMgr::PROJECTOR_AMBIANCE, params.mV[2]);
+    // <ShadowLegacy id="spot-rank">
     S32 s_idx = -1;
 
     for (U32 i = 0; i < 2; i++)
@@ -11254,6 +11300,7 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
 
     // make sure we didn't end up targeting the same spot light with both shadow maps
     llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
+    // </ShadowLegacy>
 
     LLViewerTexture* img = volume->getLightTexture();
 
@@ -12861,6 +12908,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     {
         if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
         {
+            // <ShadowLegacy id="spot-slots">
             LLTrace::CountStatHandle<>* velocity_stat = LLViewerCamera::getVelocityStat();
             F32 fade_amt = gFrameIntervalSeconds.value()
                 * (F32)llmax(LLTrace::get_frame_recording().getLastRecording().getSum(*velocity_stat) / LLTrace::get_frame_recording().getLastRecording().getDuration().value(), 1.0);
@@ -12896,8 +12944,10 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                     }
                 }
             }
+            // </ShadowLegacy>
         }
 
+        // <ShadowLegacy id="spot-render">
         // this should never happen
         llassert(mShadowSpotLight[0] != mShadowSpotLight[1] || mShadowSpotLight[0].isNull());
 
@@ -13002,6 +13052,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 mSpotShadow[i].flush();
             }
         }
+        // </ShadowLegacy>
     }
     else
     { //no spotlight shadows

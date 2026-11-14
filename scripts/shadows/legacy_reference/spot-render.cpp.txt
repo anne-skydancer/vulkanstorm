@@ -1,0 +1,134 @@
+//! Reference excerpt "spot-render" for scripts/shadows/check_legacy_shadows.py.
+//! Source: indra/newview/pipeline.cpp (LLPipeline::generateSunShadow) of Firestorm 7.2.5, upstream ref
+//! upstream/Firestorm_7.2.5 at 4ac201fdc5 (identical at e3cd40d016), lines 11497-11600.
+//! Linden Lab / Firestorm code, LGPL-2.1 (see LICENSE-LGPL-2.1 and doc/licensing.md); stored unchanged
+//! as the oracle for the Legacy shadow method. Lines starting with //! are not part of the excerpt.
+//! SPDX-License-Identifier: LGPL-2.1-only
+//! Upstream file header of pipeline.cpp, which applies to this excerpt:
+//! /**
+//!  * @file pipeline.cpp
+//!  * @brief Rendering pipeline.
+//!  *
+//!  * $LicenseInfo:firstyear=2005&license=viewerlgpl$
+//!  * Second Life Viewer Source Code
+//!  * Copyright (C) 2010, Linden Research, Inc.
+//!  *
+//!  * This library is free software; you can redistribute it and/or
+//!  * modify it under the terms of the GNU Lesser General Public
+//!  * License as published by the Free Software Foundation;
+//!  * version 2.1 of the License only.
+//!  *
+//!  * This library is distributed in the hope that it will be useful,
+//!  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+//!  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+//!  * Lesser General Public License for more details.
+//!  *
+//!  * You should have received a copy of the GNU Lesser General Public
+//!  * License along with this library; if not, write to the Free Software
+//!  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+//!  *
+//!  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
+        // this should never happen
+        llassert(mShadowSpotLight[0] != mShadowSpotLight[1] || mShadowSpotLight[0].isNull());
+
+        for (S32 i = 0; i < 2; i++)
+        {
+            set_current_modelview(saved_view);
+            set_current_projection(saved_proj);
+
+            if (mShadowSpotLight[i].isNull())
+            {
+                continue;
+            }
+
+            LLVOVolume* volume = mShadowSpotLight[i]->getVOVolume();
+
+            if (!volume)
+            {
+                mShadowSpotLight[i] = NULL;
+                continue;
+            }
+
+            LLDrawable* drawable = mShadowSpotLight[i];
+
+            LLVector3 params = volume->getSpotLightParams();
+            F32 fov = params.mV[0];
+
+            //get agent->light space matrix (modelview)
+            LLVector3 center = drawable->getPositionAgent();
+            LLQuaternion quat = volume->getRenderRotation();
+
+            //get near clip plane
+            LLVector3 scale = volume->getScale();
+            LLVector3 at_axis(0, 0, -scale.mV[2] * 0.5f);
+            at_axis *= quat;
+
+            LLVector3 np = center + at_axis;
+            at_axis.normVec();
+
+            //get origin that has given fov for plane np, at_axis, and given scale
+            F32 dist = (scale.mV[1] * 0.5f) / tanf(fov * 0.5f);
+
+            LLVector3 origin = np - at_axis * dist;
+
+            LLMatrix4 mat(quat, LLVector4(origin, 1.f));
+
+            view[i + 4] = glm::make_mat4((F32*)mat.mMatrix);
+
+            view[i + 4] = glm::inverse(view[i + 4]);
+
+            //get perspective matrix
+            F32 near_clip = dist + 0.01f;
+            F32 width = scale.mV[VX];
+            F32 height = scale.mV[VY];
+            F32 far_clip = dist + volume->getLightRadius() * 1.5f;
+
+            F32 fovy = fov; // radians
+            F32 aspect = width / height;
+
+            proj[i + 4] = glm::perspective(fovy, aspect, near_clip, far_clip);
+
+            //translate and scale to from [-1, 1] to [0, 1]
+            glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
+                            0.0f, 0.5f, 0.0f, 0.0f,
+                            0.0f, 0.0f, 0.5f, 0.0f,
+                            0.5f, 0.5f, 0.5f, 1.0f);
+
+            set_current_modelview(view[i + 4]);
+            set_current_projection(proj[i + 4]);
+
+            mSunShadowMatrix[i + 4] = trans * proj[i + 4] * view[i + 4] * inv_view;
+
+            set_last_modelview(mShadowModelview[i + 4]);
+            set_last_projection(mShadowProjection[i + 4]);
+
+            mShadowModelview[i + 4] = view[i + 4];
+            mShadowProjection[i + 4] = proj[i + 4];
+
+            if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
+            {
+                LLCamera shadow_cam = camera;
+                shadow_cam.setFar(far_clip);
+                shadow_cam.setOrigin(origin);
+
+                LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+                //
+
+                mSpotShadow[i].bindTarget();
+                mSpotShadow[i].getViewport(gGLViewport);
+                mSpotShadow[i].clear();
+
+                static LLCullResult result[2];
+
+                LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SPOT_SHADOW0 + i);
+
+                RenderSpotLight = drawable;
+
+                renderShadow(view[i + 4], proj[i + 4], shadow_cam, result[i], false);
+
+                RenderSpotLight = nullptr;
+
+                mSpotShadow[i].flush();
+            }
+        }
