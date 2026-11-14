@@ -34,7 +34,8 @@
 //
 // The file is required. The viewer compares the SHA-256 of the whole file with the one compiled in
 // (LL_CLOUD_NOISE_SHA256, from indra/cmake/CloudNoise.cmake) and parses the container, checking every entry's own
-// hash; if anything is wrong it tells the user to reinstall and exits (LLAppViewer::init), not LL_ERRS.
+// hash; if anything is wrong LLAppViewer::init only logs a warning (the viewer starts anyway; it does not tell
+// the user or exit, and it is not LL_ERRS).
 //
 // This header is renderer-free and standalone (OpenSSL's EVP only), so that
 // indra/newview/tests/llcloudnoise_test.cpp builds without the viewer libraries.
