@@ -4,7 +4,7 @@
 
 The projector shadow pool replaces today's two view-driven projector shadow slots with one persistent shadow map per projector
 (spec: `reports/projector-pool-2026-11-13/design-final.md`, sections 3 to 9). Every stage reports its cost against the budget
-and keeps a running total. This file holds the measurement procedure and the tables. **Every table cell below is empty on
+and keeps a running total. This file holds the measurement procedure and the tables. **Every table cell below, except the offline Table 5 (P2b), is empty on
 purpose: S0's offline parts (guards, counters, scripts) are in the PR; the numbers come from the owner's capture session and are
 written in then.** Nothing here is measured yet, and no value in this file may be filled in from an estimate.
 
@@ -96,7 +96,11 @@ The eligibility test on colour is approximate: it tests the light's colour unsca
 |---|---|---|---|---|---|---|---|
 | | | | | | | | |
 
-Rule: the 8192 tier is added only if the owner's places push the pool level to 2 or more (spec D20).
+Rule (spec D20): the 8192 tier was to be added only if the owner's places push the pool level to 2 or more. P2b adds it on the owner's
+in-world report of the P2 build (several lamps, every tile shrinking) instead of waiting for this table: chosen from 11 GB of
+dedicated video memory (`NVX_gpu_memory_info` or `WGL_AMD_gpu_association`), within `GL_MAX_TEXTURE_SIZE`. The table still records
+how many lamps the owner's places have. Its 512 MiB counts in the viewer's texture budget (about 4.9 GB on a 12 GB card, so +384 MiB over
+4096 is 7.8 % of it, 5.2 % on 24 GB): watch the texture discard bias on 12 GB cards.
 
 **Table 4. Running total against the budget** (one row per stage, filled by that stage's PR)
 
@@ -104,8 +108,58 @@ Rule: the 8192 tier is added only if the owner's places push the pool level to 2
 |---|---|---|---|---|---|
 | S0 (offline parts) | not measured (no draw work added; the new pass scopes cost one pointer test with the option off and are absent without `VKS_GL_STATS`) | not measured | not measured | | |
 | P2 | | | | | |
+| P2b | offline per-pixel path only (table 5); in-world full-frame cost: not measured, owed at the S0 capture session; gates any release integration | see table 5 | not measured | | |
 | P3 | | | | | |
 | P4 | | | | | |
 | P5 | | | | | |
+
+**Table 5. P2b: the changed per-pixel path, offline (measured)**
+
+`python scripts/shadows/projector_pool_g1.py --time-pass` on an NVIDIA GeForce RTX 5070 Ti (driver 621.14, OpenGL 4.6), 2560x1440, every
+pixel a receiver inside the projector's frustum (the worst case: a lamp that covers the whole screen), median of 9 x 20 draws,
+2026-11-14. It compiles stSpotGradient through sampleProjectorShadow from the working file (after) and from
+`origin/codex/projector-pool-p2` (before; its kernel cap is `max(1, 10 N / N_base)`, N_base 2048), stubbing only
+`shadowReceiverGeometry` (identically on both sides). The matrix is built from real poses (the cube, the strip and the bulb of the
+columns; fov 1.5, radius 10 m), receivers are hashed inside the frustum from the near plane to 1.5 x the radius, and each tile is
+ray-cast from a floor and eight boxes with the same matrix. Emitter maximum 15 cm. "Filter off": the filter returns 1.0 at
+once (its inputs kept live), which isolates the arithmetic of the per-pixel derivation (matrix setup, light size, radius cap) and the
+receiver. Run-to-run noise of the same shader: at most 1.5 %. Penumbra pixels: the share of receivers with a visibility strictly between 0
+and 1. kmax: the share of receivers by the larger of the two per-axis radius caps (texels) after the change.
+
+| atlas | projector | N | before ms | after ms | delta | filter off: before ms | after ms | delta | penumbra pixels before / after | kmax 1 / (1,4] / (4,8] / (8,12) / 12 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 4096 | cube 0.5 m | 64 | 0.506 | 0.504 | -0.4 % | 0.050 | 0.050 | +0.6 % | 6.2 % / 6.2 % | 93% / 6% / 0% / 0% / 0% |
+| 4096 | cube 0.5 m | 256 | 0.501 | 0.411 | -17.9 % | 0.050 | 0.050 | +0.7 % | 1.9 % / 2.0 % | 66% / 27% / 5% / 1% / 1% |
+| 4096 | cube 0.5 m | 1024 | 0.760 | 0.711 | -6.4 % | 0.049 | 0.049 | +0.1 % | 1.3 % / 1.0 % | 0% / 66% / 18% / 6% / 10% |
+| 4096 | cube 0.5 m | 2048 | 0.789 | 0.790 | +0.2 % | 0.049 | 0.050 | +0.4 % | 1.1 % / 0.7 % | 0% / 27% / 39% / 13% / 21% |
+| 4096 | strip 5 x 0.2 m | 64 | 0.510 | 0.504 | -1.3 % | 0.050 | 0.050 | +0.9 % | 14.6 % / 14.6 % | 92% / 7% / 0% / 0% / 0% |
+| 4096 | strip 5 x 0.2 m | 256 | 0.410 | 0.404 | -1.6 % | 0.050 | 0.050 | +0.6 % | 7.2 % / 7.1 % | 65% / 27% / 6% / 1% / 1% |
+| 4096 | strip 5 x 0.2 m | 1024 | 0.602 | 0.571 | -5.1 % | 0.050 | 0.050 | +1.4 % | 5.0 % / 5.0 % | 26% / 40% / 18% / 5% / 12% |
+| 4096 | strip 5 x 0.2 m | 2048 | 0.610 | 0.675 | +10.6 % | 0.049 | 0.050 | +0.7 % | 4.8 % / 4.6 % | 26% / 11% / 28% / 13% / 22% |
+| 4096 | bulb 0.05 m | 64 | 0.510 | 0.508 | -0.3 % | 0.050 | 0.050 | +0.8 % | 6.3 % / 6.3 % | 92% / 7% / 1% / 0% / 0% |
+| 4096 | bulb 0.05 m | 256 | 0.505 | 0.418 | -17.2 % | 0.049 | 0.050 | +1.1 % | 1.8 % / 1.8 % | 65% / 27% / 5% / 2% / 2% |
+| 4096 | bulb 0.05 m | 1024 | 0.765 | 0.709 | -7.3 % | 0.049 | 0.050 | +0.2 % | 1.2 % / 1.0 % | 1% / 64% / 18% / 5% / 12% |
+| 4096 | bulb 0.05 m | 2048 | 0.787 | 0.792 | +0.6 % | 0.049 | 0.049 | +0.6 % | 1.2 % / 0.7 % | 1% / 25% / 39% / 13% / 22% |
+| 8192 | cube 0.5 m | 64 | 0.506 | 0.504 | -0.4 % | 0.050 | 0.050 | +0.8 % | 6.2 % / 6.2 % | 93% / 6% / 0% / 0% / 0% |
+| 8192 | cube 0.5 m | 256 | 0.496 | 0.406 | -18.1 % | 0.049 | 0.050 | +0.5 % | 1.9 % / 2.0 % | 66% / 27% / 5% / 1% / 1% |
+| 8192 | cube 0.5 m | 1024 | 0.779 | 0.725 | -7.0 % | 0.049 | 0.050 | +1.2 % | 1.3 % / 1.0 % | 0% / 66% / 18% / 6% / 10% |
+| 8192 | cube 0.5 m | 2048 | 0.794 | 0.775 | -2.3 % | 0.049 | 0.050 | +1.0 % | 1.1 % / 0.7 % | 0% / 27% / 39% / 13% / 21% |
+| 8192 | strip 5 x 0.2 m | 64 | 0.512 | 0.504 | -1.5 % | 0.050 | 0.051 | +0.8 % | 14.6 % / 14.6 % | 92% / 7% / 0% / 0% / 0% |
+| 8192 | strip 5 x 0.2 m | 256 | 0.411 | 0.404 | -1.9 % | 0.050 | 0.051 | +0.9 % | 7.2 % / 7.1 % | 65% / 27% / 6% / 1% / 1% |
+| 8192 | strip 5 x 0.2 m | 1024 | 0.586 | 0.543 | -7.3 % | 0.050 | 0.050 | +0.9 % | 5.0 % / 5.0 % | 26% / 40% / 18% / 5% / 12% |
+| 8192 | strip 5 x 0.2 m | 2048 | 0.616 | 0.677 | +9.9 % | 0.050 | 0.050 | +0.2 % | 4.8 % / 4.6 % | 26% / 11% / 28% / 13% / 22% |
+| 8192 | bulb 0.05 m | 64 | 0.510 | 0.508 | -0.4 % | 0.050 | 0.050 | +1.1 % | 6.3 % / 6.3 % | 92% / 7% / 1% / 0% / 0% |
+| 8192 | bulb 0.05 m | 256 | 0.501 | 0.416 | -17.0 % | 0.049 | 0.050 | +0.7 % | 1.8 % / 1.8 % | 65% / 27% / 5% / 2% / 2% |
+| 8192 | bulb 0.05 m | 1024 | 0.775 | 0.724 | -6.6 % | 0.049 | 0.049 | +0.4 % | 1.2 % / 1.0 % | 1% / 64% / 18% / 5% / 12% |
+| 8192 | bulb 0.05 m | 2048 | 0.784 | 0.771 | -1.7 % | 0.049 | 0.050 | +0.6 % | 1.2 % / 0.7 % | 1% / 25% / 39% / 13% / 22% |
+
+Reading: the arithmetic of the derivation costs +0.0003 to +0.0007 ms per full-screen pass (the filter-off columns: about +0.5 to +1.4 % of
+0.05 ms, within the noise). With the filter on, the change is neutral or faster at N = 64 to 1024 (cap at or under 12 texels and
+mostly under the old 10 or 5), because the radius caps of a shrunk tile are now in metres and no longer 1 to 10 texels of a tile
+that is smaller. It is **slower where the cap now reaches 12 texels at a full-size tile**: the strip projector at N = 2048 is
+**+10 %** (0.61 to 0.68 ms, +0.06 ms per full-screen pass; 22 % of its receivers are at the 12-texel cap, which the old rule capped at 10),
+the cube and the bulb at N = 2048 are +0.2 to +0.6 % at atlas 4096 and -2.3 to -1.7 % at 8192. The atlas size changes the
+timings by under 3 %. These are full-screen worst cases of one projector; a real frame shades only the pixels inside each frustum.
+In-world full-frame cost: not measured, owed at the S0 capture session; gates any release integration.
 
 Label every cost "measured" (with scene, resolution, driver) or "estimate".
