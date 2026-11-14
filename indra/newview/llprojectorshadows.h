@@ -204,6 +204,7 @@ private:
     void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
     void unpinTile(U32 key);
+    void forgetPinned(const LLDrawable* drawable);
     void unpinObject(const llprojectorpool::Id128& id);
     void pinDrawable(LLDrawable* drawable);
     void setTileOrigin(F32 x, F32 y);

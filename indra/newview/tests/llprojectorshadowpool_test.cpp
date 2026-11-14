@@ -1056,6 +1056,12 @@ void testP3PinBook()
     check(book.refs(o1) == 2 && book.pinnedObjects() == 2, "P3 refcount per tile, distinct objects counted once");
     const std::vector<Id128> all = book.releaseTile(10);
     check(all.size() == 2 && book.refs(o1) == 1 && book.refs(o3) == 0 && book.heldBy(10) == 0, "P3 releasing a tile gives back everything it held");
+    // an object that dies is dropped from every tile's books: a new object with the same id is pinned by its first render
+    check(book.forget(o1) == 1 && book.refs(o1) == 0 && book.heldBy(11) == 0, "P3 a killed object leaves every book");
+    book.beginRender(11);
+    check(book.touch(11, o1) && book.refs(o1) == 1, "P3 the object re-created with the same id is pinned again");
+    book.endRender(11);
+    check(book.forget(Id128{ 9, 9 }) == 0, "P3 forgetting an unknown object does nothing");
     book.releaseTile(11);
     check(book.pinnedObjects() == 0, "P3 nothing stays pinned after every tile is released");
     check(book.releaseTile(99).empty() && book.endRender(99).empty(), "P3 an unknown tile releases nothing");

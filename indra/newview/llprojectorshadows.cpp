@@ -349,6 +349,7 @@ void LLProjectorShadows::forget(const LLDrawable* drawable)
     {
         return;
     }
+    forgetPinned(drawable);
     auto key = mKeyOf.find(drawable);
     if (key == mKeyOf.end())
     {
@@ -814,6 +815,31 @@ void LLProjectorShadows::unpinObject(const Id128& id)
     if (LLVOVolume* volume = object ? dynamic_cast<LLVOVolume*>(object) : nullptr)
     {
         volume->unpinLampLOD();
+    }
+}
+
+// The object of a drawable that is going away is no longer held by any tile: an object created later with the same id is a new
+// object (its counter is zero) and must be pinned by its first render, not skipped as "already held". If the object lives on (its
+// drawable was rebuilt), the counters this pool raised on it are lowered.
+void LLProjectorShadows::forgetPinned(const LLDrawable* drawable)
+{
+    const LLViewerObject* object = drawable->getVObj();
+    if (!object || LLApp::isExiting())
+    {
+        return;
+    }
+    const uint32_t n = mPins.forget(id_of(object->getID()));
+    if (n == 0)
+    {
+        return;
+    }
+    LLViewerObject* live = gObjectList.findObject(object->getID());
+    for (uint32_t i = 0; live && i < n; ++i)
+    {
+        if (LLVOVolume* volume = dynamic_cast<LLVOVolume*>(live))
+        {
+            volume->unpinLampLOD();
+        }
     }
 }
 
