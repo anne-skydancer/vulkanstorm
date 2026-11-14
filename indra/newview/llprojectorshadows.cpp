@@ -758,9 +758,10 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 
 namespace
 {
-    // The light's view volume for the change tests, from the pose the tile is drawn with: the pyramid of its frustum, in agent
-    // space. A tile is square, so a wide projector (scale x over y) is covered by the wider angle: conservative, never smaller.
-    // Camera independent by construction: only the lamp's pose enters.
+    // The light's view volume for the change tests, from the pose the tile is drawn with: the pyramid of its render frustum
+    // (spot_matrices: perspective(fov, scale.x / scale.y)), in agent space. It is the same region the tile's cull sees, so the
+    // objects the LOD pin holds (the cull's, inside this volume) are the objects a change dirties the tile for. Camera
+    // independent by construction: only the lamp's pose enters.
     Pyramid light_volume(const SpotGeom& g, F32 far_clip)
     {
         LLVector3 fwd(0.f, 0.f, -1.f), right(1.f, 0.f, 0.f), up(0.f, 1.f, 0.f);
@@ -768,9 +769,8 @@ namespace
         right *= g.rot;
         up *= g.rot;
         const F32 aspect = g.scale.mV[VY] > 0.f ? g.scale.mV[VX] / g.scale.mV[VY] : 1.f;
-        const F32 half_tan = tanf(g.fov * 0.5f) * llmax(1.f, aspect);
-        const F32 fov = 2.f * atanf(half_tan);
-        return makePyramid(g.origin.mV, fwd.mV, right.mV, up.mV, fov, llmax(g.dist, 0.001f), far_clip);
+        const F32 tan_y = tanf(g.fov * 0.5f);
+        return makePyramid(g.origin.mV, fwd.mV, right.mV, up.mV, tan_y * aspect, tan_y, llmax(g.dist, 0.001f), far_clip);
     }
 
     Pose light_pose(const SpotGeom& g, LLDrawable* drawable)
