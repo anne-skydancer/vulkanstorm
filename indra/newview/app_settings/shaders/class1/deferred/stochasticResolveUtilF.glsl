@@ -57,6 +57,7 @@ bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv)
     return !(puv.x < 0.0 || puv.y < 0.0 || puv.x >= 1.0 || puv.y >= 1.0);
 }
 
+// Not called by the viewer: the pre-2026-11-14 transparency read, kept as the baseline of scripts/perf/test_alpha_stochastic.py.
 vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size)
 {
     return texelFetch(history, ivec2(puv * vec2(size)), 0);
@@ -67,12 +68,12 @@ vec4 stoch_history_nearest(sampler2D history, vec2 puv, ivec2 size)
 // weights as in Jimenez, "Filmic SMAA", SIGGRAPH 2016). The nearest texel drops the sub-pixel part of
 // the camera's motion every frame, and the 1/8 blend accumulates it as a smear 1 to 2 px behind the
 // image. Where the reprojection is a whole number of pixels (an offset of the texel's centre within
-// 1/64 px, a static view included: the reprojection's float error is far below that, also at 4K) the weights are exactly 0, 1, 0, 0 and the one texel is read, as
-// the nearest read did: the result is then bit-identical. The negative lobes are bounded by the
+// 1/64 px, a static view included: the reprojection's float error is far below that, also at 4K) the weights are
+// exactly 0, 1, 0, 0 and the one texel is read, as the nearest read did: the result is then bit-identical. The negative lobes are bounded by the
 // 3 x 3 clamp of stoch_accumulate (the neighbourhood is never negative: nor is the result).
 vec4 stoch_history_catmull_rom(sampler2D history, vec2 puv, ivec2 size)
 {
-    vec2 u = puv * vec2(size);
+    vec2 u = puv * vec2(size);                // puv is in [0, 1) (stoch_reproject), so u is not negative and ivec2(u) is its floor
     ivec2 n = ivec2(u);                       // the texel the nearest read takes
     vec2 d = u - (vec2(n) + 0.5);             // the offset from its centre, -0.5 to 0.5
     d = vec2(abs(d.x) < 1.0 / 64.0 ? 0.0 : d.x, abs(d.y) < 1.0 / 64.0 ? 0.0 : d.y);
