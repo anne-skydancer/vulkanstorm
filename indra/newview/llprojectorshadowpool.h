@@ -719,6 +719,16 @@ public:
             mFillOverflow = true;
             return;
         }
+        // one drawable's hooks fire in a row (the move, the partition's move, the rebuild): an identical box right after the last
+        // adds nothing
+        if (!mFill.empty())
+        {
+            const DirtyBox& last = mFill.back();
+            if (last.cause == cause && std::equal(box.lo, box.lo + 3, last.box.lo) && std::equal(box.hi, box.hi + 3, last.box.hi))
+            {
+                return;
+            }
+        }
         mFill.push_back({ box, cause });
     }
 
