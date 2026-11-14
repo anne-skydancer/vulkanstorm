@@ -39,6 +39,7 @@ namespace
     const std::vector<DirtyBox>* sApplied = nullptr;
     U32 sAppliedFrame = 0;
     bool sHaveFrame = false;
+    U32 sShifts = 0; // agent-space shifts seen (main thread)
     std::atomic<bool> sOffThread{ false };
     bool sForced = false;
     Cause sForcedCause = Cause::Other;
@@ -246,6 +247,12 @@ void LLShadowDirtyFeed::setLampRoots(std::vector<const LLViewerObject*>& roots)
 }
 
 // static
+U32 LLShadowDirtyFeed::shifts()
+{
+    return sShifts;
+}
+
+// static
 U32 LLShadowDirtyFeed::moverObjects()
 {
     return sMoverObjects.load(std::memory_order_relaxed);
@@ -301,6 +308,7 @@ void LLShadowDirtyFeed::noteShift(const LLVector3& offset)
         sOffThread.store(true);
         return;
     }
+    ++sShifts;
     sList.translatePending(offset.mV[VX], offset.mV[VY], offset.mV[VZ]);
 }
 

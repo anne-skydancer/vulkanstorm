@@ -983,9 +983,13 @@ void LLProjectorShadows::update(LLCamera& camera)
     updateLightSet(camera);
     layoutChanged();
 
-    // The lamps' poses and volumes, this frame's: from the lamp alone (never the camera).
-    std::vector<TileVolume> volumes;
-    volumes.reserve(mRecords.size());
+    // The lamps' poses, this frame's: from the lamp alone (never the camera). This is what a static scene still costs per frame:
+    // one read of every lamp's spot parameters and pose (the pose-change detection). A lamp's matrices and volume are built
+    // only when its pose changed (or agent space was shifted, which moves every volume), and the change index is rebuilt only
+    // on a frame with dirty boxes, below.
+    const U32 shifts = LLShadowDirtyFeed::shifts();
+    const bool shifted = shifts != mShiftsSeen;
+    mShiftsSeen = shifts;
     std::vector<const LLViewerObject*> lamp_roots; // the lamps' own linksets: fixtures, their changes always push (llshadowdirtyfeed)
     for (auto& entry : mRecords)
     {
@@ -999,6 +1003,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         if (!read_spot(rec.drawable, g))
         {
             rec.prevPoseValid = false;
+            rec.volumeValid = false;
             continue;
         }
         rec.curPose = light_pose(g, rec.drawable);
@@ -1006,34 +1011,48 @@ void LLProjectorShadows::update(LLCamera& camera)
         rec.prevPose = rec.curPose;
         rec.prevPoseValid = true;
         rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
-        glm::mat4 view, proj;
-        F32 far_clip = 0.f;
-        spot_matrices(g, view, proj, far_clip);
-        rec.volume = light_volume(g, far_clip);
-        if (rec.placed && rec.drawnFrame != 0)
+        if (shifted || !rec.volumeValid || poseChanged(rec.volumePose, rec.curPose))
         {
-            TileVolume tv;
-            tv.key = rec.key;
-            tv.pyramid = rec.volume;
-            volumes.push_back(tv);
+            glm::mat4 view, proj;
+            F32 far_clip = 0.f;
+            spot_matrices(g, view, proj, far_clip);
+            rec.volume = light_volume(g, far_clip);
+            rec.volumePose = rec.curPose;
+            rec.volumeValid = true;
         }
     }
-
     LLShadowDirtyFeed::setLampRoots(lamp_roots);
 
-    // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn)
-    mIndex.rebuild(volumes);
-    std::vector<Hit> hits;
-    mIndex.apply(boxes, everything, hits);
-    for (const Hit& hit : hits)
+    // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn); the index is lazy:
+    // built only when boxes arrived or the list says "everything"
+    if (!boxes.empty() || everything)
     {
-        auto it = mRecords.find(hit.key);
-        if (it != mRecords.end() && !it->second.pending)
+        std::vector<TileVolume> volumes;
+        volumes.reserve(mRecords.size());
+        for (auto& entry : mRecords)
         {
-            it->second.pending = true;
-            it->second.pendingCause = hit.cause;
-            it->second.dirtyFrame = frame;
-            it->second.dirtyTime = LLTimer::getTotalSeconds();
+            const Record& rec = entry.second;
+            if (rec.placed && rec.drawnFrame != 0 && rec.volumeValid)
+            {
+                TileVolume tv;
+                tv.key = rec.key;
+                tv.pyramid = rec.volume;
+                volumes.push_back(tv);
+            }
+        }
+        mIndex.rebuild(volumes);
+        std::vector<Hit> hits;
+        mIndex.apply(boxes, everything, hits);
+        for (const Hit& hit : hits)
+        {
+            auto it = mRecords.find(hit.key);
+            if (it != mRecords.end() && !it->second.pending)
+            {
+                it->second.pending = true;
+                it->second.pendingCause = hit.cause;
+                it->second.dirtyFrame = frame;
+                it->second.dirtyTime = LLTimer::getTotalSeconds();
+            }
         }
     }
 
