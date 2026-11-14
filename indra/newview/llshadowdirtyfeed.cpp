@@ -399,6 +399,9 @@ void LLShadowDirtyFeed::noteShift(const LLVector3& offset)
         sOffThread.store(true);
         return;
     }
+    // Boxes pushed after this call in the same shift would be in the wrong space for the drawables not yet shifted. The only
+    // hook LLDrawable::shiftPos fires is the REBUILD_ALL of a static drawable that is not a prim, a tree or terrain (grass),
+    // and grass is not a casting type (casting_type), so none follows for the types that count.
     ++sShifts;
     sList.translatePending(offset.mV[VX], offset.mV[VY], offset.mV[VZ]);
 }
