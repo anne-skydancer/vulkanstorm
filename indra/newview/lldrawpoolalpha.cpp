@@ -475,12 +475,11 @@ void LLDrawPoolAlpha::renderOITResidual()
 }
 
 // The per-pass uniforms of every alpha-only variant this pool binds (alphaStochasticF.glsl).
-void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
+void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
 {
     static const LLStaticHashedString sMode("st_mode");
     static const LLStaticHashedString sSamplesHW("st_samples_hw");
     static const LLStaticHashedString sSamples("st_samples");
-    static const LLStaticHashedString sIteration("st_iteration");
     static const LLStaticHashedString sFrame("st_frame");
     const S32 frame = (S32)gPipeline.getAlphaStochasticFrame();
     const S32 samples_hw = (S32)gPipeline.getAlphaStochasticPassSamples();
@@ -501,7 +500,6 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
                 program->uniform1i(sMode, mode);
                 program->uniform1i(sSamplesHW, samples_hw);
                 program->uniform1i(sSamples, samples);
-                program->uniform1i(sIteration, (S32)iteration);
                 program->uniform1i(sFrame, frame);
             }
         }
@@ -520,7 +518,6 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode, U32 iteration)
             program->uniform1i(sMode, mode);
             program->uniform1i(sSamplesHW, samples_hw);
             program->uniform1i(sSamples, samples);
-            program->uniform1i(sIteration, (S32)iteration);
             program->uniform1i(sFrame, frame);
         }
     }
@@ -598,7 +595,7 @@ bool LLDrawPoolAlpha::renderStochastic()
 
         {
             LL_PROFILE_GPU_ZONE("alpha stochastic total alpha");
-            setStochasticUniforms(1, 0);
+            setStochasticUniforms(1);
             gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_TRANS);
             forwardRender(true, ALPHA_ST_ALPHA);
             forwardRender(false, ALPHA_ST_ALPHA);
@@ -607,7 +604,7 @@ bool LLDrawPoolAlpha::renderStochastic()
         {
             LL_PROFILE_GPU_ZONE("alpha stochastic depth");
             resetStochasticOffset(LLStochasticLayerRank::UNITS_DEPTH);
-            setStochasticUniforms(2, 0);
+            setStochasticUniforms(2);
             gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_NONE);
             forwardRender(true, ALPHA_ST_DEPTH);
             forwardRender(false, ALPHA_ST_DEPTH);

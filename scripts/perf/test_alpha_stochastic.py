@@ -13,10 +13,10 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     (S = 8) and its blue-noise rows are the C++ ones (the hash in the C++ test);
   * mask coverage: the samples a fragment covers in the stochastic depth, read back per sample,
     are exactly the bits the independent Python model of st_mask predicts (pixel, face seed,
-    triangle, stratified R = floor(alpha S + xi)), for 16 samples in two passes of 8, 8 in one,
+    triangle, stratified R = floor(alpha S + xi)), for 8 samples in one pass,
     4 in one; their count is R, with mean alpha S; different face seeds give unrelated masks;
   * total alpha: 1 - prod(1 - alpha) exactly, whatever the visibility;
-  * visibility weighting and the composite: two layers whose estimate is exact at S = 16
+  * visibility weighting and the composite: two layers whose estimate is exact at S = 8
     (alpha 0.5), a noisy pair whose mean over the pixels converges, an opaque occluder;
   * the glow: accumulated like the colour, corrected, added to the scene alpha after the
     composite has dimmed it;
@@ -345,7 +345,7 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         if it: spread(n,spread_prog)
         # 2. stochastic depth
         bindfbo(FB,f);drawbuffer(NONE);depthmask(1);poly(1)
-        use(V);uniform1i(loc(V,b'st_mode'),2);uniform1i(loc(V,b'st_iteration'),it)
+        use(V);uniform1i(loc(V,b'st_mode'),2)
         with timed('stochastic depth'):
             for z,a,rgb,seed,glow,slope in layers: poly(1,seed);layer(V,z,a,seed=seed,slope=slope)
         if read_bits:
@@ -505,7 +505,7 @@ print(f'{len(nl_matrix)} sun N.L shader variants compile (alphaF, materialF, sof
 checks=0
 
 # ---- mask coverage: per sample, exactly the model's bits; R samples in all, mean alpha S
-for total,n in ((16,8),(8,8),(4,4)):
+for total,n in ((8,8),(4,4)):
     for a in (0.0,0.3,0.5,0.77,1.0):
         set_opaque(1.0)
         _,bits=stochastic([L(0.5,a,seed=12345)],total,n,read_bits=True)
@@ -521,7 +521,7 @@ for total,n in ((16,8),(8,8),(4,4)):
         lo=math.floor(a*total);assert all(c in (lo,min(lo+1,total)) for c in counts),('R',total,a,set(counts))
         mean=sum(counts)/len(counts);assert abs(mean-a*total)<=0.05*total+1e-9,('mean R',total,a,mean)
         checks+=1
-print(f'{checks} coverage cases: every sample as the model predicts (16 in two passes of 8, 8, 4), R = floor or ceil of alpha S, mean alpha S')
+print(f'{checks} coverage cases: every sample as the model predicts (8 and 4, each in one pass), R = floor or ceil of alpha S, mean alpha S')
 
 
 # ---- the GLTF scene's blended variants (pbrmetallicroughnessF.glsl itself, ALPHA_BLEND + ALPHA_STOCHASTIC, lit
@@ -592,7 +592,7 @@ gltf_cases=0
 for kind,gprog in gltf_variants.items():
     saved_variant=variant;variant=gprog
     try:
-        for total,n in ((16,8),(8,8),(4,4)):
+        for total,n in ((8,8),(4,4)):
             for a in (0.0,0.3,0.5,0.77,1.0):
                 set_opaque(1.0)
                 _,bits=stochastic([L(0.5,a,seed=12345)],total,n,read_bits=True)
@@ -628,7 +628,7 @@ for kind,gprog in gltf_variants.items():
     finally:
         variant=saved_variant
 print(f"{gltf_cases} GLTF blended variant cases (the viewer's pbrmetallicroughnessF.glsl, lit and unlit): every sample as the model predicts "
-      '(S = 16, 8, 4), total alpha, and the depth-only mode with its cut')
+      '(S = 8, 4), total alpha, and the depth-only mode with its cut')
 
 # different face seeds: unrelated masks; the same seed: the same mask
 set_opaque(1.0)
@@ -643,32 +643,32 @@ print(f'face seeds: the same seed repeats its masks; seeds 1 and 2 share the mas
 
 # ---- total alpha: white layers over black give the total alpha whatever the visibility
 set_opaque(1.0)
-for total,n in ((16,8),(8,8),(4,4)):
+for total,n in ((8,8),(4,4)):
     pix=stochastic([L(0.3,0.5,seed=7),L(0.6,0.25,seed=9),L(0.45,0.1,seed=11)],total,n)
     want=1-(1-0.5)*(1-0.25)*(1-0.1)
     worst=max(abs(p[c]-want) for p in pix for c in range(3))
     assert worst<2e-3,('total alpha',total,worst);checks+=1
-print(f'total alpha: 1 - prod(1 - alpha) = {want:.4f} on every pixel within 2e-3 (S = 16, 8, 4)')
+print(f'total alpha: 1 - prod(1 - alpha) = {want:.4f} on every pixel within 2e-3 (S = 8, 4)')
 
-# ---- visibility: red alpha 0.5 in front of green alpha 0.5 is exact at S = 16 and 8
-for total,n in ((16,8),(8,8)):
+# ---- visibility: red alpha 0.5 in front of green alpha 0.5 is exact at S = 8
+for total,n in ((8,8),):
     pix=stochastic([L(0.6,0.5,(0.,1.,0.),seed=3),L(0.3,0.5,(1.,0.,0.),seed=4)],total,n)
     worst=max(max(abs(p[0]-0.5),abs(p[1]-0.25),abs(p[2])) for p in pix)
     assert worst<2e-3,('two layers',total,worst);checks+=1
 # a noisy pair (alpha 0.3 over 0.6): the mean over the pixels converges to the exact image
-pix=stochastic([L(0.3,0.3,(1.,0.,0.),seed=5),L(0.6,0.6,(0.,1.,0.),seed=6)],16,8)
+pix=stochastic([L(0.3,0.3,(1.,0.,0.),seed=5),L(0.6,0.6,(0.,1.,0.),seed=6)],8,8)
 exact=(0.3,0.6*0.7,0.)
 mean=[sum(p[c] for p in pix)/len(pix) for c in range(3)]
 rmse=math.sqrt(sum((p[c]-exact[c])**2 for p in pix for c in range(3))/(3*len(pix)))
 assert all(abs(m-e)<0.01 for m,e in zip(mean,exact)),('mean',mean,exact)
 assert rmse<0.05,('rmse',rmse);checks+=1
-print(f'visibility: two layers of alpha 0.5 exact at S = 16 and 8; alpha 0.3 over 0.6 at S = 16: mean '
+print(f'visibility: two layers of alpha 0.5 exact at S = 8; alpha 0.3 over 0.6 at S = 8: mean '
       f'({mean[0]:.3f}, {mean[1]:.3f}) for ({exact[0]:.3f}, {exact[1]:.3f}), RMSE {rmse*255:.1f}/255')
 
 # an opaque occluder on the right half, at window depth 0.7 (the layers: 0.65 and 0.8), hides the
 # back layer there
 set_opaque(1.0,occluder=(W//2,0.7))
-pix=stochastic([L(0.6,0.5,(0.,1.,0.),seed=3),L(0.3,0.5,(1.,0.,0.),seed=4)],16,8,scene_rgba=(0.,0.,1.,0.))
+pix=stochastic([L(0.6,0.5,(0.,1.,0.),seed=3),L(0.3,0.5,(1.,0.,0.),seed=4)],8,8,scene_rgba=(0.,0.,1.,0.))
 for y in range(H):
     for x in range(W):
         p=pix[y*W+x]
@@ -679,7 +679,7 @@ print('occlusion: the layer behind the opaque surface leaves no colour and no co
 
 # ---- glow: the back layer's glow 0.8, visible on half its samples, over a scene glow of 0.5
 set_opaque(1.0)
-pix=stochastic([L(0.6,0.5,(0.,1.,0.),seed=3,glow=0.8),L(0.3,0.5,(1.,0.,0.),seed=4)],16,8,scene_rgba=(0.,0.,0.,0.5))
+pix=stochastic([L(0.6,0.5,(0.,1.,0.),seed=3,glow=0.8),L(0.3,0.5,(1.,0.,0.),seed=4)],8,8,scene_rgba=(0.,0.,0.,0.5))
 want=0.5*(1-0.75)+0.8*0.5
 worst=max(abs(p[3]-want) for p in pix)
 assert worst<3e-3,('glow',worst);checks+=1
@@ -697,7 +697,7 @@ BLUE=(0.,0.,1.,0.)
 def white_everywhere(pix): return max(max(abs(p[0]-1.0),abs(p[1]-1.0),abs(p[2]-1.0)) for p in pix)
 for sl in SLOPES:
     set_opaque(0.5,slope=sl[0],slope_y=sl[1])
-    for total,n in ((16,8),(8,8),(4,4)):
+    for total,n in ((8,8),(4,4)):
         worst=white_everywhere(stochastic([L(0.5,1.0,seed=8,slope=sl)],total,n,scene_rgba=BLUE))
         assert worst<2e-3,('decal on the plane',sl,total,worst)
         worst=white_everywhere(stochastic([L(0.5-ndc_shift(sl,1/3),1.0,seed=8,slope=sl)],total,n,scene_rgba=BLUE))
@@ -707,25 +707,25 @@ for sl in SLOPES:
             shown=sum(1 for p in behind if p!=BLUE)
             assert shown==0,('face behind the plane shows through it',sl,fraction,total,shown,W*H)
         checks+=1
-print(f'{len(SLOPES)} sloped opaque planes, S = 16, 8, 4: a face on the plane or a third of a pixel\'s depth in front '
+print(f'{len(SLOPES)} sloped opaque planes, S = 8, 4: a face on the plane or a third of a pixel\'s depth in front '
       'of it covers every pixel; one a third or a sixteenth of a pixel behind it leaves the scene exactly as sorted alpha does')
 
-# a decal on 60 random planes (inside the depth range), every pixel covered at S = 16
+# a decal on 60 random planes (inside the depth range), every pixel covered at S = 8
 rnd=random.Random(5);tried=0
 while tried<60:
     sl=(rnd.uniform(-0.35,0.35),rnd.uniform(-0.18,0.18))
     if abs(sl[0])+abs(sl[1])>0.45: continue
     tried+=1;set_opaque(0.5,slope=sl[0],slope_y=sl[1])
-    worst=white_everywhere(stochastic([L(0.5,1.0,seed=100+tried,slope=sl)],16,8,scene_rgba=BLUE))
+    worst=white_everywhere(stochastic([L(0.5,1.0,seed=100+tried,slope=sl)],8,8,scene_rgba=BLUE))
     assert worst<2e-3,('decal on a random plane',sl,worst)
 checks+=1
-print('a decal on 60 random sloped planes: every pixel covered (S = 16)')
+print('a decal on 60 random sloped planes: every pixel covered (S = 8)')
 
 # the same decal beside a depth edge: an opaque occluder nearer the eye over the right half; the
 # pixels next to the edge take the plane's gradient from their own side
 sl=(0.05,-0.03)
 set_opaque(0.5,slope=sl[0],slope_y=sl[1],occluder=(W//2,0.3))
-pix=stochastic([L(0.5,1.0,seed=8,slope=sl)],16,8,scene_rgba=BLUE)
+pix=stochastic([L(0.5,1.0,seed=8,slope=sl)],8,8,scene_rgba=BLUE)
 for y in range(H):
     for x in range(W):
         p=pix[y*W+x];want=(1.,1.,1.) if x<W//2 else (0.,0.,1.)
@@ -737,7 +737,7 @@ print('a decal beside a depth edge: covered up to the edge, hidden behind the oc
 # composite is the front face over the scene, as sorted alpha draws it
 sl=(0.05,-0.03)
 set_opaque(0.5,slope=sl[0],slope_y=sl[1])
-pix=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,(1.,1.,1.),seed=8,slope=sl),L(0.4,0.5,(1.,0.,0.),seed=9,slope=sl)],16,8,scene_rgba=BLUE)
+pix=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,(1.,1.,1.),seed=8,slope=sl),L(0.4,0.5,(1.,0.,0.),seed=9,slope=sl)],8,8,scene_rgba=BLUE)
 worst=max(max(abs(p[0]-0.5),abs(p[1]),abs(p[2]-0.5)) for p in pix)
 assert worst<2e-3,('front face over a hidden layer',worst);checks+=1
 print('a half-transparent face over an alpha 1 layer hidden behind the plane: exactly the face over the scene')
@@ -747,7 +747,7 @@ print('a half-transparent face over an alpha 1 layer hidden behind the plane: ex
 leaks=[]
 for sl in SLOPES:
     set_opaque(0.5,slope=sl[0],slope_y=sl[1])
-    behind=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,seed=8,slope=sl)],16,8,scene_rgba=BLUE,before=True)
+    behind=stochastic([L(0.5+ndc_shift(sl,1/3),1.0,seed=8,slope=sl)],8,8,scene_rgba=BLUE,before=True)
     leaks.append(sum(1 for p in behind if p!=BLUE))
 assert all(k>0 for k in leaks),('the 1.0.1.81943 passes should show the face behind the plane',leaks)
 # and without any offset its centre-depth spread loses samples of a face lying on the plane
@@ -1115,7 +1115,7 @@ def material_layer(z,diffuse,bump,spec,env,gloss,total,n,scene_rgba,fixed):
     ab,asp=(bump,spec) if own else STALE[spec==own_spec_shiny]
     def variant_pass(mode,it=0):
         bind_material(mat_variant,diffuse,ab,asp,env,gloss);uniform1f(loc(mat_variant,b'z'),z)
-        uniform1i(loc(mat_variant,b'st_mode'),mode);uniform1i(loc(mat_variant,b'st_iteration'),it)
+        uniform1i(loc(mat_variant,b'st_mode'),mode)
         uniform1i(loc(mat_variant,b'st_samples_hw'),n);uniform1i(loc(mat_variant,b'st_samples'),total)
         uniform1i(loc(mat_variant,b'st_seed'),21);bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(mat_variant,b'stoch_masks'),1)
         draw(4,0,3)
@@ -1157,18 +1157,18 @@ CASES=[('alpha 0 layer, glossy material, matte maps (a body layer)',red_clear,ow
 before=[]
 for name,dif,bump,spec,env,gloss in CASES:
     ref=material_sorted(0.0,dif,bump,spec,env,gloss,SKIN)
-    for total,n in ((16,8),(8,8),(4,4)):
+    for total,n in ((8,8),(4,4)):
         got=material_layer(0.0,dif,bump,spec,env,gloss,total,n,SKIN,fixed=True)
         worst=worst_rgb(got,ref)
         # one layer is exact (its accumulation passes on every sample, the total is exact); the
         # tolerance is the 16-bit float targets'
         assert worst<4e-3,('glaring material against sorted alpha',name,total,worst)
-    bad=material_layer(0.0,dif,bump,spec,env,gloss,16,8,SKIN,fixed=False)
+    bad=material_layer(0.0,dif,bump,spec,env,gloss,8,8,SKIN,fixed=False)
     before.append((name,worst_rgb(bad,ref),sum(1 for p,q in zip(bad,ref) if max(abs(p[c]-q[c]) for c in range(3))>4e-3)))
     checks+=1
 untouched=material_sorted(0.0,red_clear,own_bump_matte,own_spec_matte,0.4,0.6,SKIN)
 assert all(max(abs(p[c]-SKIN[c]) for c in range(3))<1e-3 for p in untouched),('sorted alpha should leave the skin as it is',untouched[0],untouched[W*H//2])
-print(f'{len(CASES)} blended legacy materials that can glare (materialF.glsl), S = 16, 8, 4: the composite equals sorted '
+print(f'{len(CASES)} blended legacy materials that can glare (materialF.glsl), S = 8, 4: the composite equals sorted '
       'alpha within 4e-3; an alpha 0 layer with matte maps leaves the opaque surface exactly as sorted alpha does')
 for name,worst,count in before:
     print(f'  before (alpha-only passes reading another face\'s normal and specular maps instead of its own): {name}: {count} of {W*H} pixels differ, worst {worst:.3f}')
@@ -1213,10 +1213,9 @@ T=new_temporal();first=stochastic(scene(),8,8,temporal=T)
 assert rmse(first,want)<=rmse(plain,want)+1e-3,('the first frame (smoothed) is no worse than the samples',rmse(first,want),rmse(plain,want))
 checks+=1
 # a static view: the noise averages over the frames
-single8=[];single16=None
+single8=[]
 for f in range(1,9):
     TEMPORAL_FRAME[0]=f;single8.append(rmse(stochastic(scene(),8,8),want))
-TEMPORAL_FRAME[0]=0;single16=rmse(stochastic(scene(),16,8),want)
 T=new_temporal();errs={};prev=None
 for f in range(1,41):
     TEMPORAL_FRAME[0]=f;pix=stochastic(scene(),8,8,temporal=T)
@@ -1226,10 +1225,9 @@ flicker=frame_rmse(prev,pix)
 TEMPORAL_FRAME[0]=1;a=stochastic(scene(),8,8);TEMPORAL_FRAME[0]=2;b=stochastic(scene(),8,8);flicker8=frame_rmse(a,b)
 mean8=sum(single8)/len(single8)
 assert errs[40]<0.55*mean8,('8 samples with the temporal accumulation against 8 samples',errs,mean8)
-assert errs[40]<single16,('and against 16 samples (single16)',errs[40],single16)
 assert flicker<0.25*flicker8,('the grain holds still between frames',flicker,flicker8)
 checks+=1
-print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 8 samples {mean8*255:.2f}, 16 samples {single16*255:.2f}; 8 samples '
+print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 8 samples {mean8*255:.2f}; 8 samples '
       f'accumulated: frame 1 {errs[1]*255:.2f}, 8 {errs[8]*255:.2f}, 16 {errs[16]*255:.2f}, 40 {errs[40]*255:.2f}; '
       f'rms change between frames {flicker*255:.2f} against {flicker8*255:.2f} without')
 # the camera moves 3 pixels: the history follows (reprojected), where without it the edges ghost
@@ -1476,7 +1474,7 @@ out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
 sorted_reddish=lattice_reddish([tuple(out[i*4:i*4+4]) for i in range(W*H)])
 assert sorted_reddish==0,('sorted alpha shades only where the centre is inside the triangle',sorted_reddish)
 lattice_report=[]
-for total,n in ((4,4),(8,8),(16,8)):
+for total,n in ((4,4),(8,8)):
     before=lattice_reddish(lattice_stochastic(lat_smooth,total,n))
     after=lattice_reddish(lattice_stochastic(lat_centroid,total,n))
     assert before>W*H//50,('without centroid the edge pixels should show the outside texels',total,before)
@@ -1519,7 +1517,7 @@ def gltf_lattice_white(gprog,total,n):
         layer,variant,shade=saved
     return sum(1 for p in pix if abs(p[0]-0.3)>0.01)   # not the island's grey: some of the white scene showing through
 glat_report=[]
-for total,n in ((4,4),(8,8),(16,8)):
+for total,n in ((4,4),(8,8)):
     leaks=gltf_lattice_white(glat_smooth,total,n);clean=gltf_lattice_white(glat_centroid,total,n)
     assert leaks>0,('without centroid the GLTF variant should leak at the island edges',total,leaks)
     assert clean==0,('the GLTF blended variant must not shade outside its island',total,clean)
@@ -1559,7 +1557,7 @@ def coincide(prog,total,n):
         variant=saved
 want=(0.5,0.25,0.125)
 subset_report=[]
-for total,n in ((4,4),(8,8),(16,8)):
+for total,n in ((4,4),(8,8)):
     for name,prog in (('hashed',variant),('rotated',variant_old)):
         pix=coincide(prog,total,n)
         mean=[sum(p[c] for p in pix)/len(pix) for c in range(3)]
