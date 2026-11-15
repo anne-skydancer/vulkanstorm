@@ -45,6 +45,7 @@
 #include "llvotree.h"
 #include "llvovolume.h"
 #include "pipeline.h"
+#include "llframecounters.h"
 
 #include <algorithm>
 #include <cmath>
@@ -383,6 +384,7 @@ U32 LLProjectorShadows::desiredSize(const Record& rec) const
 // (calcNearbyLights uses RenderLocalLightCount only as an on/off, >= 1; its six-light cap is the non-deferred path's).
 void LLProjectorShadows::updateLightSet(LLCamera& camera)
 {
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector updateLightSet"); // <Vulkanstorm> multicore stage 1
     const LLVector3 cam_pos = camera.getOrigin();
     const F32 reach = spotReach(LLPipeline::RenderFarClip);
 
@@ -555,6 +557,7 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
 // compaction when an arrival found no room). A layout that does not fit steps the level down once more.
 bool LLProjectorShadows::relayout()
 {
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector relayout"); // <Vulkanstorm> multicore stage 1
     std::vector<U32> bases;
     for (const auto& entry : mRecords)
     {
@@ -636,6 +639,7 @@ bool LLProjectorShadows::layoutChanged()
 // LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture; the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderTile"); // <Vulkanstorm> multicore stage 1
     SpotGeom g;
     if (!read_spot(rec.drawable, g))
     {
@@ -686,6 +690,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_SPOT_SHADOW0;
         LLPipeline::RenderSpotLight = rec.drawable;
+        LL_FRAME_COUNT_ADD(ProjectorTiles, 1); // <Vulkanstorm> multicore stage 1
         gPipeline.renderShadow(view, proj, shadow_cam, result, false);
         LLPipeline::RenderSpotLight = nullptr;
         gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
@@ -801,6 +806,7 @@ namespace
 
 F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
 {
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector drawAvatars"); // <Vulkanstorm> multicore stage 1
     const F64 cpu_start = LLTimer::getTotalSeconds();
 
     glBindFramebuffer(GL_FRAMEBUFFER, mFboL);
@@ -855,6 +861,7 @@ F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const gl
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_SPOT_SHADOW0;
         LLPipeline::RenderSpotLight = rec.drawable;
+        LL_FRAME_COUNT_ADD(ProjectorAvatarLayers, 1); // <Vulkanstorm> multicore stage 1
         gPipeline.renderShadow(view, proj, shadow_cam, result, false);
         LLPipeline::RenderSpotLight = nullptr;
         gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
@@ -874,6 +881,7 @@ void LLProjectorShadows::renderLayer(Record& rec)
     {
         return;
     }
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderLayer"); // <Vulkanstorm> multicore stage 1
     const F64 cpu_start = LLTimer::getTotalSeconds();
     SpotGeom g;
     g.origin = gAgent.getPosAgentFromGlobal(rec.drawn.originGlobal);
@@ -1073,6 +1081,7 @@ void LLProjectorShadows::pinCasters(LLCullResult& result)
     {
         return;
     }
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector pinCasters"); // <Vulkanstorm> multicore stage 1
     auto pin_group = [this](LLSpatialGroup* group) {
         if (!group || group->isDead())
         {
@@ -1112,6 +1121,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         return; // once a frame
     }
     mFrame = frame;
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector update"); // <Vulkanstorm> multicore stage 1: the whole per-frame pool update
     if (!active())
     {
         if (LLTimer::getTotalSeconds() < mNextAllocTry || !ensureAllocated())

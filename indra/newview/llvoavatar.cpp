@@ -5722,6 +5722,7 @@ bool LLVOAvatar::computeNeedsUpdate()
 //------------------------------------------------------------------------
 bool LLVOAvatar::updateCharacter(LLAgent &agent)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <Vulkanstorm> multicore stage 1
     updateDebugText();
 
     if (!mIsBuilt)
