@@ -1,0 +1,86 @@
+{
+  "name": "mc1_sl",
+  "description": "Multicore stage 1 (doc/perf/multicore-baseline-2026-11.md) on Second Life. The owner logs in by hand at home; the plugin records the login region, shows a local pop-up (Ready for the busy region: teleport there now), waits for the owner's teleport, settles, then runs three 60 s Tracy captures (MC1-still: the current camera; MC1-moving and MC1-moving-2: the camera turns at 10 deg/s), five teleports within the busy region and five between it and the login region (one continuous capture, MC1-teleports), then the frame rate for 60 s with no capture connected, and a final pop-up. Run with --no-glstats (the measuring build has no GLSubmitStats): frame rates come from the FrameCounters log lines.",
+  "settle": {
+    "post_login_s": 20.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "after_teleport_s": 20.0
+  },
+  "window": {
+    "seconds": 60
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false
+  },
+  "owner_teleport": {
+    "poll_s": 1.0,
+    "stable_polls": 3,
+    "timeout_s": 1800,
+    "ready_message": "Ready for the busy region: teleport there now.",
+    "done_message": "Session done: you can quit."
+  },
+  "presets": [
+    {
+      "id": "MC1-still",
+      "camera": null
+    },
+    {
+      "id": "MC1-moving",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      }
+    },
+    {
+      "id": "MC1-moving-2",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      }
+    }
+  ],
+  "teleports": {
+    "within": 5,
+    "offset": [
+      20,
+      0,
+      0
+    ],
+    "second": 5,
+    "pause_s": 8,
+    "timeout_s": 120,
+    "settle_s": 3,
+    "min_move_m": 5,
+    "capture_s": 360
+  },
+  "fps_probe": {
+    "seconds": 60,
+    "camera": {
+      "az_deg": 0.0,
+      "pitch_deg": 0.0
+    },
+    "motion": {
+      "orbit_deg_per_s": 10
+    }
+  },
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 0
+  },
+  "compare": {
+    "enabled": false,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": false
+  }
+}

@@ -361,3 +361,35 @@ The result is one of `not_slower`, `slower_explained` (by the alpha pass CPU tim
 report always shows the main view and alpha pass GPU deltas) or `inconclusive` (the presets disagree in sign). It warns when method 1
 shows no alpha draws or the same as method 0, which means stochastic probably was not in use. The question is answered by S1 and C both.
 Keep the run folders: later stages are gated by re-running this scenario and comparing (`--compare <baseline run>`).
+
+# Second Life session for the multicore baseline (`mc1_sl.json`, `mc1_sl_launch.ps1`)
+
+`perf_check.py` can run the whole stage 1 session (`doc/perf/multicore-baseline-2026-11.md`) on Second Life while you only log in and teleport once.
+The measuring build (Tracy on) has no `GLSubmitStats` API, so the scenario runs with `--no-glstats`: the plugin then takes frame rates
+from the viewer log's `FrameCounters: frames=N` line (once a second), and the data come from the Tracy captures.
+
+New options and scenario fields (all optional; the older scenarios are unchanged):
+
+- `--tracy-capture <tracy-capture.exe>`: for each measurement window (scenario `window.seconds`, default 60) and for the teleport
+  series, `tracy-capture -a 127.0.0.1 -o <run>/<id>.tracy -s <seconds> -f` is started just before the window and waited for. One capture at a
+  time; its stdout/stderr go to `<id>.capture.log` (stdout is the LEAP channel); `perf.json` `captures` lists each one with its UTC start, exit
+  code and file size; a failed capture makes the run exit 4. Abort or Ctrl-C stops a running capture.
+- Preset `"motion": {"orbit_deg_per_s": 10}` (needs a `camera`): during the window the camera turns around the avatar by `point_camera` calls (about 10 Hz).
+- `"owner_teleport": {...}`: after login and settle the plugin records the login region (the viewer log's `Entering region [Name]`; `--start-region`
+  as a fallback) and position, shows a local pop-up (`LLNotifications.requestAdd`, not nearby chat) and waits for you to teleport by hand: the region
+  cell (floor(global / 256)) changes and the position holds still for 3 polls. Then it settles (`after_teleport_s`) and measures there. At the end
+  it restores the settings and shows "Session done: you can quit."
+- `"teleports": {"within": 5, "second": 5, ...}`: N teleports within the region (start + offset, start, ...) and N between the busy region and
+  the login region (`--tp-region NAME [--tp-pos X,Y,Z]` overrides the login region), a return to the busy region when N is odd. Each is timed from the request
+  to the arrival (the agent's global position moves; `LLAgent` has no arrival event) and to the last movement; `perf.json` `teleports.results`. One
+  continuous capture (`MC1-teleports`, `capture_s`) covers the series. `--leap` splits at spaces: write a space in a region name as `%20`.
+- `"fps_probe": {"seconds": 60, ...}`: the frame rate with no capture connected (`fps_without_profiler` in `perf.json`).
+
+One command for the session (scratch profile `.captures\mc1-profile`, run folder `.captures\mc1-sl-<stamp>`):
+
+```powershell
+.\scripts\inworld\mc1_sl_launch.ps1                  # -TpRegion NAME overrides the second region; -DryRun is the login-screen check
+```
+
+Log in by hand (any region); when the pop-up asks, teleport to the busy region and leave the viewer alone. Not covered by the offline
+tests: the real LEAP notification, `LLAgent.getPosition` timing across a real teleport, and `tracy-capture` itself.
