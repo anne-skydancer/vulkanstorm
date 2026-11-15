@@ -1298,6 +1298,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             item.pending = true;
             item.cam_dist = rec.camDist;
             item.last_cpu_ms = full_ms;
+            item.avatar_draws = rec.holdsAvatar ? std::min<U32>(rec.avatarCount, kAvatarDrawsMax) : 0u;
             // the order of service: how long the tile has been waiting: frames since the first change that touched it, or, for a
             // tile whose only cause is its lamp's pose or a resize (no box), frames since it was drawn, so it cannot starve
             // behind tiles with dirty boxes
