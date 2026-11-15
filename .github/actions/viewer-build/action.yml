@@ -44,6 +44,10 @@ inputs:
     description: "The platform (.github/build-platforms.json); names its artifacts."
     required: false
     default: ""
+  tracy:
+    description: "'true' for a Tracy measuring build (devel only): USE_TRACY on, local only, OPENSIM on, RelWithDebInfo, uploaded as tracy-<short sha>-<platform>; no tests."
+    required: false
+    default: "false"
 runs:
   using: composite
   steps:
@@ -189,11 +193,24 @@ runs:
       shell: bash
       env:
         BUILD_DIRECTORY: ${{ inputs.directory }}
+        VKSTORM_TRACY: ${{ inputs.tracy }}
       run: |
         set -euo pipefail
         eval "$(autobuild source_environment -c ReleaseFS_open)"
         export LL_BUILD
         options=()
+        # A Tracy measuring build: Tracy on, on demand and local only (it never
+        # listens beyond localhost), and OPENSIM on, because it is measured on a
+        # local OpenSim region. Never a Release build (the workflow plans it
+        # RelWithDebInfo).
+        opensim=OFF; tracy=OFF; tracy_local=OFF
+        if [[ "$VKSTORM_TRACY" == true ]]; then
+          if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
+            echo "::error::a Tracy build must be RelWithDebInfo without a package"
+            exit 1
+          fi
+          opensim=ON; tracy=ON; tracy_local=ON
+        fi
         if [[ "$RUNNER_OS" == Windows ]]; then
           # The flags used by the successful local Release build.
           export LL_BUILD='/MD /O2 /Ob2 /std:c++20 /permissive- /Zc:wchar_t /Zi /GR /DLL_RELEASE=1 /DNDEBUG /D_SECURE_STL=0 /D_HAS_ITERATOR_DEBUGGING=0 /DWIN32 /D_WINDOWS /DLL_WINDOWS=1 /DUNICODE /D_UNICODE /DWINVER=0x0601 /D_WIN32_WINNT=0x0601 /DLL_OS_DRAGDROP_ENABLED=1 /DLIB_NDOF=1'
@@ -215,12 +232,13 @@ runs:
             -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
+            -DOPENSIM:BOOL="$opensim" -DINSTALL_PROPRIETARY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
-            -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
+            -DUSE_TRACY:BOOL="$tracy" -DUSE_VELOPACK:BOOL=OFF \
+            -DUSE_TRACY_ON_DEMAND:BOOL="$tracy" -DUSE_TRACY_LOCAL_ONLY:BOOL="$tracy_local" \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
         }
@@ -238,11 +256,20 @@ runs:
           python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
         fi
         python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
+        if [[ "$VKSTORM_TRACY" == true ]]; then
+          for entry in USE_TRACY USE_TRACY_ON_DEMAND USE_TRACY_LOCAL_ONLY OPENSIM; do
+            grep -qx "$entry:BOOL=ON" "$BUILD_DIRECTORY/CMakeCache.txt" \
+              || { echo "::error::$BUILD_DIRECTORY/CMakeCache.txt does not say $entry:BOOL=ON"; exit 1; }
+          done
+          echo "Tracy build: USE_TRACY, USE_TRACY_ON_DEMAND, USE_TRACY_LOCAL_ONLY and OPENSIM are ON" >> "$GITHUB_STEP_SUMMARY"
+        elif grep -qx 'USE_TRACY:BOOL=ON' "$BUILD_DIRECTORY/CMakeCache.txt"; then
+          echo "::error::USE_TRACY is ON in a build that is not a Tracy build"; exit 1
+        fi
 
     - name: Compile statistics type coverage before viewer
       # A compiled test source (llcommon/tests/lltrace_compile_test.cpp): not in Release builds,
-      # which build no tests.
-      if: env.VIEWER_BUILD_TYPE != 'Release'
+      # which build no tests. Nor do Tracy measuring builds.
+      if: env.VIEWER_BUILD_TYPE != 'Release' && inputs.tracy != 'true'
       shell: bash
       run: |
         cmake -S indra -B ${{ inputs.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
@@ -384,7 +411,7 @@ runs:
     # Release builds (vkstorm-release pushes, publishing dispatches) never build or run tests: LL_TESTS stays
     # off for Release. PR and qualification builds (RelWithDebInfo) run them.
     - name: Run statistics, script metadata, transport, TLS, primitive and night sky regression tests
-      if: env.VIEWER_BUILD_TYPE != 'Release'
+      if: env.VIEWER_BUILD_TYPE != 'Release' && inputs.tracy != 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -410,8 +437,29 @@ runs:
           ${{ inputs.directory }}/newview/Release/*_Setup.exe
           ${{ inputs.directory }}/newview/*.tar.xz
 
+    # A Tracy measuring build: the staged viewer (tracy-profiler.exe is staged
+    # next to it on Windows) plus the Tracy command-line tools of the package,
+    # kept 7 days. Never a release asset.
+    - name: Name the Tracy measuring build
+      id: tracy_name
+      if: inputs.tracy == 'true'
+      shell: bash
+      run: echo "name=tracy-$(git rev-parse --short=10 HEAD)-${{ inputs.platform }}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload Tracy measuring build
+      if: inputs.tracy == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ steps.tracy_name.outputs.name }}
+        retention-days: 7
+        if-no-files-found: error
+        path: |
+          ${{ inputs.directory }}/newview/RelWithDebInfo/
+          ${{ inputs.directory }}/newview/packaged/
+          ${{ inputs.directory }}/packages/bin/tracy-*
+
     - name: Upload qualification viewer
-      if: env.VIEWER_PACKAGE != 'ON'
+      if: env.VIEWER_PACKAGE != 'ON' && inputs.tracy != 'true'
       uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.platform }}-qualification-viewer

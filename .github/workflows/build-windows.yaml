@@ -50,6 +50,15 @@ on:
           vkstorm-devel publish.
         type: boolean
         default: false
+      tracy:
+        description: >-
+          Build a Tracy measuring build: RelWithDebInfo with USE_TRACY,
+          USE_TRACY_ON_DEMAND and USE_TRACY_LOCAL_ONLY on, and OPENSIM on.
+          Uploads the artifact tracy-<short sha>-windows (7 days). Never
+          published, never moves a tag; cannot be combined with publish.
+          Use it from a devel-based branch (doc/release_channels.md).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -74,6 +83,13 @@ jobs:
       release: ${{ steps.plan.outputs.release }}
       tag: ${{ steps.plan.outputs.tag }}
     steps:
+      - name: Refuse publish combined with tracy
+        # A Tracy build is never published and never moves a tag.
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.tracy == true
+        shell: bash
+        run: |
+          echo "::error::A Tracy build is never published: dispatch with tracy or with publish, not both"
+          exit 1
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -150,6 +166,7 @@ jobs:
         with:
           platform: windows
           directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
+          tracy: ${{ github.event_name == 'workflow_dispatch' && inputs.tracy == true && 'true' || 'false' }}
 
   # Advances this platform's tag (a tag with its release) once its build
   # succeeded; its step names the tag.

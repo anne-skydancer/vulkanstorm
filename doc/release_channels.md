@@ -92,6 +92,30 @@ published. A dispatch without `publish` is the on-demand RelWithDebInfo test
 build; with `publish` it publishes the Release package as
 `experimental-<platform>`.
 
+## Tracy measuring builds (vkstorm-devel only)
+
+Build Windows and Build Linux have a boolean dispatch input `tracy` (default
+off); Build Linux LTS does not. Dispatch the workflow on a vkstorm-devel-based
+branch (Actions, Run workflow, pick the branch, tick `tracy`, leave `publish`
+off). The build is RelWithDebInfo with `USE_TRACY`, `USE_TRACY_ON_DEMAND` and
+`USE_TRACY_LOCAL_ONLY` on (Tracy listens on localhost only and never
+broadcasts) and `OPENSIM` on, so it logs in to a local OpenSim region (the
+normal CI builds keep Tracy and OpenSim off). The configure step fails unless
+`CMakeCache.txt` says so. Tests are not built. A Tracy build is never a Release
+package and never published, and never moves a tag: `tracy` together with
+`publish` is refused at the start of the run, and a `tracy` dispatch on
+vkstorm-release still builds RelWithDebInfo. Pushes and pull requests never
+build with Tracy.
+
+The artifact is `tracy-<short sha>-<platform>` (`tracy-<10 characters>-windows`
+or `-linux`), kept 7 days. It holds the staged viewer directory
+(`newview/RelWithDebInfo/` on Windows, with `tracy-profiler.exe` staged next to
+the viewer; `newview/packaged/` on Linux) and the Tracy command-line tools of
+the package (`packages/bin/tracy-*`: `tracy-capture`, `tracy-csvexport`,
+`tracy-update`, plus `tracy-profiler` on Windows). Tracy is a profiling probe:
+this input is devel-only and stays out of vkstorm-release and vkstorm-canary
+integrations.
+
 Only vkstorm-release, vkstorm-canary and vkstorm-devel publish. vkstorm-canary
 and vkstorm-devel never move `windows-latest`, `linux-latest`, `linux-lts`,
 `stable` or `oldstable`.

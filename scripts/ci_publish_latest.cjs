@@ -53,14 +53,18 @@ function planPlatform({ eventName, ref, repository, inputs, platform }) {
     inputs = inputs || {};
     const truthy = value => value === true || value === 'true';
     const dispatch = eventName === 'workflow_dispatch';
+    // A Tracy measuring build (the tracy input) is RelWithDebInfo, never a
+    // Release package, never published and never moves a tag.
+    const tracy = dispatch && truthy(inputs.tracy);
+    if (tracy && truthy(inputs.publish)) throw new Error('A Tracy build is never published: dispatch with tracy or with publish, not both');
     const line = lines[ref];
-    const publishes = repository === 'anne-skydancer/vulkanstorm' && line !== undefined
+    const publishes = !tracy && repository === 'anne-skydancer/vulkanstorm' && line !== undefined
         && ((line.kind === 'main' && platforms[platform].automatic && ['push', 'schedule'].includes(eventName))
             || (dispatch && truthy(inputs.publish)));
     return {
         platform,
         entry: { platform, ...platforms[platform].build },
-        release: ref === 'refs/heads/vkstorm-release' || (dispatch && truthy(inputs.publish)),
+        release: !tracy && (ref === 'refs/heads/vkstorm-release' || (dispatch && truthy(inputs.publish))),
         tag: publishes ? channelFor(line.kind, platform).tag : '',
     };
 }

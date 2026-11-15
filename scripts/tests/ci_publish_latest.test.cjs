@@ -236,6 +236,13 @@ test('planPlatform: each platform workflow plans its own build and tag', () => {
     assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-canary', 'linux', { publish: 'true' }).tag, 'experimental-linux-latest');
     assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'linux-lts', { publish: true }).tag, 'preview-linux-lts');
     assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'windows', { publish: false }).release, false);
+    // A Tracy dispatch is RelWithDebInfo and never publishes, even on vkstorm-release; with publish it is refused.
+    for (const ref of ['refs/heads/vkstorm-release', 'refs/heads/vkstorm-devel']) {
+        const t = at('workflow_dispatch', ref, 'windows', { tracy: true, publish: false });
+        assert.deepEqual([t.release, t.tag], [false, '']);
+        assert.throws(() => at('workflow_dispatch', ref, 'linux', { tracy: 'true', publish: true }), /never published/);
+    }
+    assert.equal(at('push', 'refs/heads/vkstorm-release', 'windows', { tracy: true }).release, true);
     // Pull requests and other lines never publish; forks never publish.
     const pr = at('pull_request', 'refs/pull/7/merge', 'linux-lts');
     assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);

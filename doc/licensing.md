@@ -128,7 +128,8 @@ installer-contents check of CI requires them.
 | discord-rpc (`USE_DISCORD`) | MIT | OK |
 | OpenAL Soft (`USE_OPENAL`) | LGPL-2.1-or-later | OK |
 | Mesa / Zink (`USE_MESAZINK`) | MIT | OK, not shipped |
-| Tracy (`USE_TRACY`), Velopack (`USE_VELOPACK`) | BSD-3-Clause; MIT | OK |
+| Tracy (`USE_TRACY`; 3p-tracy 0.11.1) | BSD-3-Clause | OK; linked only into Tracy measuring builds (the CI `tracy` dispatch input, `doc/release_channels.md`; local builds with `--tracy`), never into a release package |
+| Velopack (`USE_VELOPACK`) | MIT | OK |
 
 The About box's credits list (`floater_about.xml`) still names some of
 these (Havok, FMOD, Kakadu) from the upstream text; they are not in our
