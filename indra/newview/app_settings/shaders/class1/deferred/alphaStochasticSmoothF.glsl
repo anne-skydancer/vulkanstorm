@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the

@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -153,5 +155,6 @@ void main()
         write_out(cur, total, 1.0);
         return;
     }
-    write_out(max(blended, vec4(0.0)), total, left_out);
+    // (no part over what the RGBA16F history holds: a half float stores a larger value as an infinity)
+    write_out(clamp(blended, vec4(0.0), vec4(ST_HDR_MAX)), total, left_out);
 }

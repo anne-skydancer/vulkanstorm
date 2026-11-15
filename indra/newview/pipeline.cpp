@@ -8595,8 +8595,10 @@ void LLPipeline::resolveAlphaStochasticTemporal()
         const S32 accum = bind_ms(current, LLShaderMgr::ALPHA_ST_ACCUM, mAlphaSTAccum);
         const S32 trans = bind_ms(current, LLShaderMgr::ALPHA_ST_TRANS, mAlphaSTTrans);
         const S32 stdepth = bind_ms(current, LLShaderMgr::ALPHA_ST_DEPTH, mAlphaSTDepth);
+        current.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);   // which samples hold a layer: not the scene's depth
         mScreenTriangleVB->setBuffer();
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+        current.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
         unbind_units({ { accum, MS }, { trans, MS }, { stdepth, MS } });
         current.unbind();
     }

@@ -369,7 +369,7 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         nxt=1-temporal['idx']
         _t=timed('measure');_t.__enter__()
         bindfbo(FB,temporal['curfbo']);fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(COLOR0,COLOR1));disable(BLEND);disable(DEPTH_TEST)
-        use(current_prog);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth)
+        use(current_prog);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(current_prog,b'depthMap'),11)
         uniform1i(loc(current_prog,b'alpha_st_accum'),4);uniform1i(loc(current_prog,b'alpha_st_trans'),5);uniform1i(loc(current_prog,b'alpha_st_depth'),6)
         uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
         draw(4,0,3)
@@ -1188,8 +1188,8 @@ for f in range(1,41):
 flicker=frame_rmse(prev,pix)
 TEMPORAL_FRAME[0]=1;a=stochastic(scene(),4,4);TEMPORAL_FRAME[0]=2;b=stochastic(scene(),4,4);flicker8=frame_rmse(a,b)
 mean8=sum(single8)/len(single8)
-assert errs[40]<0.55*mean8,('8 samples with the temporal accumulation against 8 samples',errs,mean8)
-assert errs[40]<single16,('and against 8 samples',errs[40],single16)
+assert errs[40]<0.55*mean8,('4 samples with the temporal accumulation against 4 samples',errs,mean8)
+assert errs[40]<single16,('and against 8 samples (single16)',errs[40],single16)
 assert flicker<0.25*flicker8,('the grain holds still between frames',flicker,flicker8)
 checks+=1
 print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 4 samples {mean8*255:.2f}, 8 samples {single16*255:.2f}; 4 samples '
@@ -1252,9 +1252,9 @@ T=new_temporal();two=lambda f:[L(0.3,0.5,(1.,0.,0.),seed=22),L(0.5,0.5,(0.,0.,1.
 run_frames(two,3,T);aux=read_tex(T['aux']);grain2=float(aux[...,0].mean())
 assert grain2>20*max(grain1,1e-5) and grain2>1e-3,('two layers have grain',grain1,grain2)
 assert np.isfinite(aux).all()
-# the depths: 1 - the nearest stochastic depth and 1 - the farthest (the opaque depth, window 1), as stored: the layer at clip z 0.3 is window depth 0.65
-near=float(aux[...,2].max());far=float(aux[...,3].min())
-assert abs(near-0.35)<2e-3 and far<=1e-6,('the depths are measured',near,far)
+# the depths: 1 - the nearest stochastic depth and 1 - the farthest transparent one (not the opaque depth behind the pixel: the layer at clip z 0.5 is window depth 0.75), as stored: the layer at clip z 0.3 is window depth 0.65
+near=float(aux[...,2].max());hit=aux[...,2]>1e-3;far=float(aux[...,3][hit].min())   # (over the pixels some layer covers)
+assert abs(near-0.35)<2e-3 and abs(far-0.25)<2e-3,('the depths are measured',near,far)
 checks+=1
 print(f'grain: one layer {grain1:.2e} (sharp, takes no history), two layers {grain2:.4f} (mean standard error of alpha x colour); depths 1 - z near {near:.3f}, far {far:.3f}')
 # the last frame is left out where the total alpha changes ...
@@ -1264,7 +1264,7 @@ pix=stochastic(scene((0.05,0.1,0.1)),4,4,temporal=T);extra=read_tex(T['extra'][T
 assert changed_left>0.9 and quiet_left<0.9,('the history is dropped where the total alpha changed',quiet_left,changed_left)
 # ... and where the camera has slid the far layer more than 1/4 px past the near one (a reprojection that shifts x with depth)
 def depth_shift(px_apart):
-    c=px_apart*2.0/W/1.4   # clip x += c * clip z: the layer at z 0.3 (clip -0.4) and the opaque depth 1.0 (clip 1) end up 1.4 c apart
+    c=px_apart*2.0/W/0.6   # clip x += c * clip z: the layers at z 0.3 (clip -0.4) and z 0.6 (clip 0.2), the nearest and the farthest transparent surface, end up 0.6 c apart
     return [1.,0.,0.,0., 0.,1.,0.,0., c,0.,1.,0., 0.,0.,0.,1.]   # column-major: column 2, row 0
 slid_left={}
 for apart in (0.0,0.1,2.0):
@@ -1592,10 +1592,10 @@ def history_finite(T):
     # the RGBA16F history (alpha x colour, alpha) of the last frame: nothing negative or NaN
     bind_unit(10,TEX2D,T['tex'][T['idx']]);out=(C.c_float*(W*H*4))();getteximage(TEX2D,0,RGBA,FLOAT,out)
     a=np.frombuffer(out,dtype=np.float32);assert np.isfinite(a).all() and (a>=0).all(),('the history holds a negative or NaN value',a.min())
-def pan_run(layers,d,old_prog,frames=40,moving=False):
+def pan_run(layers,d,old_prog,frames=40,moving=False,ablate=False):
     global resolve_prog
     new_prog=resolve_prog;rj=IDENT if moving else pan_reproj(d)   # moving surfaces: the geometry pans and the camera does not, so nothing is reprojected
-    Ts={'old':new_temporal(rj),'new':new_temporal(rj),'before':new_temporal(rj,old=True)};plain=[];plain_before=[];last={}
+    Ts={'old':new_temporal(rj),'new':new_temporal(rj),'before':new_temporal(rj,old=True),'s8':new_temporal(rj)};plain=[];plain_before=[];last={}
     identical=True;worst=0.;differing=0;sc=(0.5,0.5,0.5,0.0)
     for f in range(1,frames+1):
         TEMPORAL_FRAME[0]=f;PAN[0]=(f*d[0],f*d[1])
@@ -1608,11 +1608,12 @@ def pan_run(layers,d,old_prog,frames=40,moving=False):
             imgs[key]=np.array(stochastic(layers,4,4,scene_rgba=sc,temporal=Ts[key]),dtype=np.float32).reshape(H,W,4)
         resolve_prog=new_prog
         imgs['before']=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts['before'],pipe='old'),dtype=np.float32).reshape(H,W,4)
+        if ablate: imgs['s8']=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts['s8']),dtype=np.float32).reshape(H,W,4)   # the ablation: the new resolve at S = 8
         dd=np.abs(imgs['old']-imgs['new']);identical=identical and not dd.any()
         worst=max(worst,float(dd.max()));differing=max(differing,int(np.count_nonzero(dd.max(axis=2))))
         history_finite(Ts['new'])
-        if f==frames: last=dict(old=pan_err(imgs['old'],ref),new=pan_err(imgs['new'],ref),before=pan_err(imgs['before'],ref))
-    return dict(plain=(float(np.mean([e[0] for e in plain])),float(np.mean([e[1] for e in plain]))),plain_before=(float(np.mean([e[0] for e in plain_before])),float(np.mean([e[1] for e in plain_before]))),before=last['before'],old=last['old'],new=last['new'],identical=identical,worst=worst,differing=differing)
+        if f==frames: last=dict(old=pan_err(imgs['old'],ref),new=pan_err(imgs['new'],ref),before=pan_err(imgs['before'],ref),s8=pan_err(imgs['s8'],ref) if ablate else None)
+    return dict(plain=(float(np.mean([e[0] for e in plain])),float(np.mean([e[1] for e in plain]))),plain_before=(float(np.mean([e[0] for e in plain_before])),float(np.mean([e[1] for e in plain_before]))),before=last['before'],old=last['old'],new=last['new'],s8=last['s8'],identical=identical,worst=worst,differing=differing)
 # <<bench-shared:end>>
 if True:
     saved=(layer,variant,shade)
@@ -1624,14 +1625,15 @@ if True:
             layers=pan_scene(name)
             for d in ((0.,0.),(1.,0.),(4.,0.),(1.,1.),(0.25,0.),(0.5,0.),(1.3,0.),(2.5,0.),(0.,0.5),(0.5,0.5),(1.3,0.7),(-0.5,0.25)):
                 if d[1] and H<96: continue   # 40 frames of a vertical pan scroll a scene this short off the screen: run these at STOCH_TEST_SIZE=128x128 or more
-                r=pan_run(layers,d,old_resolve);pan_rows.append((name,d,r))
+                r=pan_run(layers,d,old_resolve,ablate=d in ((0.,0.),(0.5,0.),(2.5,0.)));pan_rows.append((name,d,r))
                 if d[0]==int(d[0]) and d[1]==int(d[1]):   # a whole-pixel pan and the static view: the same image as the nearest read, bit for bit
                     # the hair strips' passes are not bit-deterministic on this GPU (the nearest resolve against itself differs by one
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
                 else:
-                    assert r['new'][1]<r['plain'][1],('the history beats 8 samples in low-pass error',name,d,r)
-                    if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats 8 samples in rmse on textured layers',name,d,r)
+                    assert r['new'][1]<r['plain'][1],('the history beats plain 4 samples in low-pass error',name,d,r)
+                    if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 4 samples in rmse on textured layers',name,d,r)
+                    # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the S = 4 resolve; the bound was 0.6 and 0.5 for S = 8)
                     assert r['new'][0]<0.65*r['old'][0] and r['new'][1]<0.55*r['old'][1],('the smear is gone',name,d,r)
             checks+=1
     finally:
@@ -1639,6 +1641,9 @@ if True:
     print('sub-pixel camera pans, frame 40 (plain samples: the mean over the 40 frames), rmse/255 (low-pass in brackets): scene px/frame (x, y) | plain 8 samples (before) | the viewer before the upgrade (S = 8, 1/8 history) | plain 4 samples | nearest history, S = 4 | the upgrade (S = 4, grain resolve)')
     for name,d,r in pan_rows:
         print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['plain_before'][0]:5.2f} ({r['plain_before'][1]:4.2f}) | {r['before'][0]:5.2f} ({r['before'][1]:4.2f}) | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['old'][0]:5.2f} ({r['old'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})"+(' | same image as the nearest read' if d[0]==int(d[0]) and d[1]==int(d[1]) else ''))
+    print('ablation, frame 40, rmse/255: the new resolve (grain weight, smooth, box) at S = 8 against the viewer before the upgrade (S = 8, 1/8 history) and the upgrade at S = 4: scene px/frame | before | new resolve S = 8 | upgrade S = 4')
+    for name,d,r in pan_rows:
+        if r['s8'] is not None: print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['before'][0]:5.2f} | {r['s8'][0]:5.2f} | {r['new'][0]:5.2f}")
     # moving surfaces (the geometry moves, the camera does not: the history is not reprojected and ghosts, limited by the clamp):
     # the viewer before the upgrade against the upgrade, 40 frames
     layer,variant,shade=pan_layer,pan_variant,pan_shade
@@ -1656,19 +1661,25 @@ if True:
     for name,d,r in moving_rows:
         print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['plain_before'][0]:5.2f} ({r['plain_before'][1]:4.2f}) | {r['before'][0]:5.2f} ({r['before'][1]:4.2f}) | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})")
     # the NaN injection against the viewer before the upgrade: six frames of a layer with a NaN colour over 16 columns, then 33 clean frames
-    set_opaque(1.0);before_nan={}
+    set_opaque(1.0);before_nan={};injected_info={}
     saved_cut=(LAYER_SCISSOR,SCISSOR_SEEDS)
     for pipe,total in (('old',8),('new',4)):
         Tn=new_temporal(old=pipe=='old');LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31}
         for f in range(1,7):
             TEMPORAL_FRAME[0]=f;pix=stochastic(scene()+[L(0.2,0.4,(NAN,1.,1.),seed=31)],total,total,temporal=Tn,pipe=pipe)
         bad_injected=int(np.count_nonzero(~np.isfinite(np.array(pix))))
+        # the accumulation of the injected frame and the history, not the image alone: the old resolve's clamp can hide a poisoned history from the image
+        bad_cur=int(np.count_nonzero(~np.isfinite(read_tex(Tn['cur']))));bad_hist=sum(int(np.count_nonzero(~np.isfinite(read_tex(Tn['tex'][i])))) for i in (0,1))
+        injected_info[pipe]=(bad_cur,bad_hist)
         LAYER_SCISSOR=None;SCISSOR_SEEDS=None
         for f in range(7,40):
             TEMPORAL_FRAME[0]=f;pix=stochastic(scene(),total,total,temporal=Tn,pipe=pipe)
         before_nan[pipe]=(bad_injected,int(np.count_nonzero(~np.isfinite(np.array(pix)))))
     LAYER_SCISSOR,SCISSOR_SEEDS=saved_cut;TEMPORAL_FRAME[0]=0
     assert before_nan['new']==(0,0),('the upgrade holds no value that is not finite',before_nan)
-    print(f"NaN injection (a layer with a NaN colour over 16 of {W} columns, 6 frames, then 33 clean frames), values that are not finite in the image: before the upgrade {before_nan['old'][0]} then {before_nan['old'][1]}, the upgrade {before_nan['new'][0]} then {before_nan['new'][1]}")
+    # the injection reaches the old pipeline's accumulation or history (so the test cannot pass vacuously), and the upgrade holds none
+    assert injected_info['old'][0]>0 or injected_info['old'][1]>0,('the NaN injection reaches the old pipeline',injected_info)
+    assert injected_info['new']==(0,0),('the upgrade holds none in its accumulation or history',injected_info)
+    print(f"NaN injection (a layer with a NaN colour over 16 of {W} columns, 6 frames, then 33 clean frames), values that are not finite in the image: before the upgrade {before_nan['old'][0]} then {before_nan['old'][1]}, the upgrade {before_nan['new'][0]} then {before_nan['new'][1]}; non-finite values in the accumulation and the two histories after the injected frames: before the upgrade {injected_info['old']}, the upgrade {injected_info['new']}")
 print(f'{checks} stochastic transparency cases passed.')
 gl.wglMakeCurrent(None,None);gl.wglDeleteContext(context);user.ReleaseDC(window,hdc);user.DestroyWindow(window)
