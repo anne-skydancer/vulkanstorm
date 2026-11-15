@@ -1350,8 +1350,8 @@ set(viewer_HEADER_FILES
     llfloaterwindowsize.h
     llfloaterworldmap.h
     llfolderviewmodelinventory.h
-    llframecounters.h
     llfollowcam.h
+    llframecounters.h
     llfriendcard.h
     llflyoutcombobtn.h
     llgesturelistener.h
