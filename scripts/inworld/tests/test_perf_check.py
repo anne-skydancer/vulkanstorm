@@ -11,6 +11,8 @@ import json
 import pathlib
 import statistics
 import sys
+import threading
+import time
 import tempfile
 import unittest
 from unittest import mock
@@ -22,7 +24,7 @@ sys.path.insert(0, str(HERE.parent))
 import analyze_perf_check as apc  # noqa: E402
 import light_check as lc  # noqa: E402
 import perf_check as pc  # noqa: E402
-from fake_viewer import FakeViewer  # noqa: E402
+from fake_viewer import FakeViewer, PoolModel  # noqa: E402
 from leap_client import LeapError, LeapSession, ViewerGone  # noqa: E402
 
 SCENARIO = HERE.parent / "scenarios" / "gl_submit_g0.json"
@@ -557,6 +559,277 @@ class AnalysisTest(unittest.TestCase):
         self.assertAlmostEqual(r["vertex buffer changes per draw"], 0.9)
         self.assertAlmostEqual(r["redundant share of bindFast"], 0.2)
         self.assertAlmostEqual(r["mean mergeable run length (draws per run)"], 2.5)
+
+
+MC1_SL = HERE.parent / "scenarios" / "mc1_sl.json"
+SETTINGS_XML = HERE.parents[2] / "indra" / "newview" / "app_settings" / "settings.xml"
+
+
+class FakeCapture:
+    """A stand-in for the tracy-capture process: it exits (code 0) after `run_s` seconds and has written its file by then."""
+    instances = []
+
+    def __init__(self, cmd, stdin=None, stdout=None, stderr=None, run_s=0.4, never_exits=False):
+        self.cmd = cmd
+        self.t0 = time.monotonic()
+        self.run_s = run_s
+        self.never_exits = never_exits
+        self.terminated = False
+        self.code = None
+        FakeCapture.instances.append(self)
+
+    def poll(self):
+        if self.code is None and not self.never_exits and time.monotonic() - self.t0 >= self.run_s:
+            pathlib.Path(self.cmd[self.cmd.index("-o") + 1]).write_bytes(b"x" * 10)
+            self.code = 0
+        return self.code
+
+    def terminate(self):
+        self.terminated = True
+        self.code = 1
+
+    def wait(self, timeout=None):
+        return self.code
+
+    def kill(self):
+        self.code = 1
+
+
+class SeriesCapture(FakeCapture):
+    """The teleport series capture outlasts the series (as it must); the window captures are short."""
+    def __init__(self, cmd, **kw):
+        super().__init__(cmd, run_s=14.0 if "MC1-teleports" in " ".join(cmd) else 0.4, **kw)
+
+
+def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, **over):
+    """perf_check.execute on a viewer without GLSubmitStats, the way the MC1 launcher runs it: --no-glstats, a viewer log
+    holding the region line, the Tracy capture faked, the frame rate read from the log (faked)."""
+    sc = json.loads(MC1_SL.read_text(encoding="utf-8"))
+    sc["settle"] = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0}
+    sc["owner_teleport"].update({"poll_s": 0.2, "timeout_s": 15})
+    sc["window"] = {"seconds": 1}
+    sc["fps_probe"]["seconds"] = 1
+    sc["teleports"].update({"pause_s": 0, "settle_s": 0.3, "capture_s": 3, "timeout_s": 10})
+    sc.update(over)
+    scp = pathlib.Path(tmp) / "mc1.json"
+    scp.write_text(json.dumps(sc), encoding="utf-8")
+    vlog = pathlib.Path(tmp) / "viewer.log"
+    vlog.write_text(log_text, encoding="utf-8")
+    out = pathlib.Path(tmp) / "run"
+    argv = ["--scenario", str(scp), "--out", str(out), "--no-glstats", "--viewer-log", str(vlog),
+            "--tracy-capture", "C:/tracy/tracy-capture.exe"] + list(extra)
+    args = pc.parse_args(argv)
+    args.popen = popen
+    FakeCapture.instances.clear()
+    if hand:
+        def teleport_by_hand():
+            fv.agent_region, fv.agent_pos = "Busy", [100.0, 100.0, 30.0]
+            try:
+                with open(vlog, "a", encoding="utf-8") as f:
+                    f.write("Entering region [Busy]\n")
+            except OSError:
+                pass        # the test is over
+        threading.Timer(1.0, teleport_by_hand).start()
+    with mock.patch.object(lc, "viewer_window_state", return_value=None), \
+            mock.patch.object(pc, "fps_from_log", return_value=77.0):
+        code = pc.execute(session_for(fv), args, pc.load_scenario(scp), out)
+    return code, out
+
+
+class MC1Test(unittest.TestCase):
+    def test_the_scenario_loads_and_every_setting_it_names_exists(self):
+        sc = pc.load_scenario(MC1_SL)
+        self.assertEqual([p["id"] for p in sc["presets"]], ["MC1-still", "MC1-moving", "MC1-moving-2"])
+        self.assertEqual(sc["settle"]["post_login_s"], 20.0)
+        self.assertEqual(sc["window"]["seconds"], 60)
+        self.assertEqual((sc["teleports"]["within"], sc["teleports"]["second"]), (5, 5))
+        self.assertEqual(sc["fps_probe"]["seconds"], 60)
+        xml = SETTINGS_XML.read_text(encoding="utf-8")
+        for key in list(sc["settings"]) + pc.CAP_SETTINGS:
+            self.assertIn("<key>%s</key>" % key, xml)
+
+    def test_a_motion_preset_needs_a_camera(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = pathlib.Path(tmp) / "s.json"
+            p.write_text(json.dumps({"presets": [{"id": "a", "camera": None, "motion": {"orbit_deg_per_s": 5}}]}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                pc.load_scenario(p)
+
+    def test_fps_from_log_and_region_from_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = pathlib.Path(tmp) / "v.log"
+            f.write_text("junk\n", encoding="utf-8")
+            off = f.stat().st_size
+            with open(f, "a", encoding="utf-8") as fh:
+                for n in (10, 100, 120, 140):
+                    fh.write("INFO: FrameCounters: frames=%d skin_palette_calls=1\n" % n)
+                fh.write("Entering region [Ahern]\nEntering region [Bar Foo]\n")
+            self.assertEqual(pc.fps_from_log(f, off), 120.0)        # the first, partial second is dropped
+            self.assertIsNone(pc.fps_from_log(f, f.stat().st_size))
+            self.assertEqual(pc.region_from_log(f), "Bar Foo")
+            self.assertEqual(pc.region_from_log(f, first=True), "Ahern")
+            self.assertIsNone(pc.region_from_log(f, f.stat().st_size))
+
+    def test_a_full_run_captures_each_window_moves_the_camera_and_times_the_teleports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            # one capture per window, then the teleport series, one at a time, in this order
+            self.assertEqual([c["id"] for c in index["captures"]], ["MC1-still", "MC1-moving", "MC1-moving-2", "MC1-teleports"])
+            for c in index["captures"]:
+                self.assertEqual((c["exit_code"], c["size_bytes"]), (0, 10))
+                self.assertTrue(c["utc_start"].endswith("+00:00"))
+            self.assertEqual(FakeCapture.instances[0].cmd,
+                             ["C:/tracy/tracy-capture.exe", "-a", "127.0.0.1", "-o", str(run / "MC1-still.tracy"), "-s", "1", "-f"])
+            self.assertEqual(FakeCapture.instances[3].cmd[6], "3")      # the series: capture_s
+            for info in index["presets"].values():
+                self.assertEqual(info["fps_log"], 77.0)
+                self.assertTrue(info["tracy_connected"])
+            self.assertEqual(index["fps_without_profiler"], {"fps": 77.0, "seconds": 1.0, "tracy_connected": False})
+            # the camera turned during the moving windows (about 10 Hz)
+            foci = {tuple(round(x, 1) for x in c["focus_pos"]) for c in fv.cameras}
+            self.assertGreater(len(foci), 8)
+            # the teleports: 5 within the region (+ the return), 5 to the second region (+ the return), all timed
+            res = index["teleports"]["results"]
+            self.assertEqual([r["kind"] for r in res], ["within"] * 5 + ["return"] + ["second_region"] * 5 + ["return"])
+            # the owner's flow: the login region is recorded, a pop-up asks for the teleport, the teleports start in the busy region
+            self.assertEqual(index["login"]["region"], "Start")
+            self.assertEqual(index["busy"]["region"], "Busy")
+            self.assertEqual(index["teleports"]["start_region"], "Busy")
+            self.assertEqual(fv.notifications, [("SystemMessage", "Ready for the busy region: teleport there now."),
+                                                ("SystemMessage", "Session done: you can quit.")])
+            self.assertEqual([d["regionname"] for d in fv.tp_requests][4:6], ["Busy", "Busy"])
+            self.assertEqual([d["regionname"] for d in fv.tp_requests][-2:], ["Start", "Busy"])
+            self.assertEqual(fv.tp_requests[-2]["x"], 128.0)         # the login position
+            for r in res:
+                self.assertGreaterEqual(r["arrive_s"], 0.3)
+                self.assertLess(r["arrive_s"], 3.0)
+                self.assertGreaterEqual(r["last_move_s"], r["arrive_s"])
+            self.assertEqual((fv.agent_region, fv.agent_pos), ("Busy", [100.0, 100.0, 30.0]))
+            self.assertIsNone(fv.follow_cam)
+            self.assertEqual(fv.confirm_dialogs, [])        # LLAgent.requestTeleport would open a dialog nobody clicks
+            self.assertEqual(fv.settings["AFKTimeout"][1], 300)     # restored
+            self.assertNotIn("teleport_failures", index)
+
+    def test_neighbour_region_lines_do_not_name_the_regions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            vlog = pathlib.Path(tmp) / "viewer.log"
+
+            def arrive_with_neighbours():
+                fv.agent_region, fv.agent_pos = "Busy", [100.0, 100.0, 30.0]
+                with open(vlog, "a", encoding="utf-8") as f:
+                    f.write("Entering region [Busy]\nEntering region [Neighbour]\n")
+            threading.Timer(1.0, arrive_with_neighbours).start()
+            code, run = mc1_main(fv, tmp, hand=False, log_text="Entering region [Start]\nEntering region [StartNeighbour]\n",
+                                 owner_teleport={"poll_s": 0.2, "timeout_s": 15})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual((index["login"]["region"], index["busy"]["region"]), ("Start", "Busy"))
+
+    def test_a_failed_teleport_is_recorded_the_series_goes_on_and_the_owner_is_told(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            real = fv.api_LLTeleportHandler
+            fv.api_LLTeleportHandler = lambda op, d: None if d["x"] == 128.0 and d["regionname"] == "Start" else real(op, d)
+            code, run = mc1_main(fv, tmp, teleports={"within": 1, "second": 1, "pause_s": 0, "settle_s": 0.2, "capture_s": 14, "timeout_s": 1.0})
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            kinds = [(r["kind"], bool(r.get("failed"))) for r in index["teleports"]["results"]]
+            self.assertIn(("second_region", True), kinds)
+            self.assertIn(("return", False), kinds)
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_a_failed_run_tells_the_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, hand=False, owner_teleport={"poll_s": 0.2, "timeout_s": 1.0})
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_tp_region_overrides_the_login_region(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, extra=["--tp-region", "Other", "--tp-pos", "10,20,30"],
+                                 presets=[{"id": "MC1-still", "camera": None}], fps_probe=None)
+            self.assertEqual(code, 0)
+            second = [d for d in fv.tp_requests if d["regionname"] == "Other"]
+            self.assertEqual((len(second), second[0]["x"], second[0]["y"]), (3, 10.0, 20.0))
+
+    def test_no_arrival_within_the_timeout_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, hand=False, owner_teleport={"poll_s": 0.2, "timeout_s": 1.0})
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.tp_requests, [])
+            self.assertNotIn("Session done: you can quit.", [n[1] for n in fv.notifications])      # the request, then the problem pop-up
+
+    def test_an_unknown_start_region_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, _ = mc1_main(fv, tmp, log_text="nothing\n")
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.tp_requests, [])
+            self.assertEqual([n[1] for n in fv.notifications], ["Session ended with problems: see perf.json (you can quit)."])
+
+    def test_a_teleport_that_never_arrives_fails_the_run_and_stops_the_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            fv.tp_delay = 60.0
+            code, run = mc1_main(fv, tmp, popen=lambda cmd, **kw: FakeCapture(cmd, never_exits=True, **kw),
+                                 presets=[{"id": "MC1-still", "camera": None}], fps_probe=None,
+                                 teleports={"within": 1, "second": 0, "pause_s": 0, "settle_s": 0.2, "capture_s": 3, "timeout_s": 1.0})
+            self.assertEqual(code, 4)       # recorded as a failed teleport; the run goes on to the end
+            self.assertTrue(FakeCapture.instances[-1].terminated)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertTrue(index["teleports"]["results"][0]["failed"])
+
+    def test_a_stop_during_a_capture_stops_the_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            (pathlib.Path(tmp) / "run").mkdir()
+            threading.Timer(2.5, lambda: (pathlib.Path(tmp) / "run" / "STOP").write_text("x")).start()
+            code, run = mc1_main(fv, tmp, popen=lambda cmd, **kw: FakeCapture(cmd, never_exits=True, **kw))
+            self.assertEqual(code, 2)
+            self.assertTrue(FakeCapture.instances[0].terminated)
+            self.assertIsNone(fv.follow_cam)
+
+    def test_a_capture_that_exits_with_an_error_fails_the_run(self):
+        class Failing(FakeCapture):
+            def poll(self):
+                if self.code is None and time.monotonic() - self.t0 >= self.run_s:
+                    self.code = 1
+                return self.code
+        with tempfile.TemporaryDirectory() as tmp:
+            code, run = mc1_main(FakeViewer(), tmp, popen=Failing, teleports=None, fps_probe=None)
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertIn("MC1-still", index["capture_failures"])
+
+    def test_one_capture_at_a_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cap = pc.TracyCapture("tc.exe", tmp, popen=FakeCapture)
+            cap.start("a", 5)
+            with self.assertRaises(LeapError):
+                cap.start("b", 5)
+            cap.stop()
+
+    def test_dry_run_without_the_stats_api_checks_the_settings_and_the_capture_exe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, extra=["--dry-run", "--no-login-wait"])
+            self.assertEqual(code, 1)       # C:/tracy/tracy-capture.exe does not exist here
+            rows = json.loads((run / "dry_run.json").read_text(encoding="utf-8"))
+            by = {r["check"]: r["status"] for r in rows}
+            self.assertEqual(by["api"], "PASS")
+            self.assertEqual(by["setting RenderVSyncEnable"], "PASS")
+            self.assertEqual(by["tracy-capture"], "FAIL")
+            self.assertEqual(by["viewer log"], "PASS")
+            for api in ("LLAgent", "LLNotifications", "LLTeleportHandler"):
+                self.assertEqual(by["api " + api], "PASS")
+            self.assertEqual(fv.tp_requests, [])
 
 
 if __name__ == "__main__":

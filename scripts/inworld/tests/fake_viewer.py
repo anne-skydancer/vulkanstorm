@@ -137,6 +137,17 @@ class FakeViewer:
             "FSEnvironmentManualTransitionTime": 3.0}.items()}
         self.settings["RenderAtmospherePhysicalLight"] = ("Boolean", True)
         self.settings["RenderAlphaSortMethod"] = ("U32", 1)
+        self.settings.update({"RenderVSyncEnable": ("Boolean", False), "FSLimitFramerate": ("Boolean", False),
+                              "FramePerSecondLimit": ("U32", 0), "AFKTimeout": ("S32", 300)})
+        # the agent: a region (its global origin) and a position in it; a teleport arrives after tp_delay seconds
+        self.regions = {"Start": (256000.0, 256000.0), "Other": (256256.0, 256000.0), "Busy": (256512.0, 256000.0)}
+        self.agent_region = "Start"
+        self.agent_pos = [128.0, 64.0, 30.0]
+        self.tp_delay = 0.3
+        self.tp_requests = []
+        self.confirm_dialogs = []     # LLAgent.requestTeleport calls (each would open the TeleportViaSLAPP dialog)
+        self.notifications = []
+        self.cameras = []              # every setCameraParams
         if gl_stats:
             self.settings.update({"RenderGLSubmitStats": ("Boolean", False), "RenderGLSubmitStatsGPU": ("Boolean", True),
                                   "RenderGLSubmitCompare": ("S32", 0), "RenderGLSubmitCompareInject": ("S32", 0),
@@ -221,7 +232,7 @@ class FakeViewer:
             self._reply(d, {"status": True})
         elif op == "getAPIs":
             self._reply(d, {n: {"desc": n} for n in ("LLStartUp", "LLViewerControl", "LLFloaterReg", "UI", "LLWindow",
-                                                    "LLViewerWindow", "LLAgent", "LLInventory", "LLStats")
+                                                    "LLViewerWindow", "LLAgent", "LLInventory", "LLStats", "LLNotifications", "LLTeleportHandler")
                             + (("GLSubmitStats",) if self.gl_stats else ()) + (("ProjectorShadows",) if self.projector else ())})
         elif op == "getAPI":
             if d["api"] == "GLSubmitStats":
@@ -235,9 +246,9 @@ class FakeViewer:
                    "UI": ["getValue", "setSelectedByValue"],
                    "LLWindow": ["getPaths", "getInfo", "keyDown", "pasteText", "mouseDown", "mouseUp"],
                    "LLViewerWindow": ["saveSnapshot"],
-                   "LLAgent": ["getPosition", "setCameraParams", "setFollowCamActive", "removeCameraParams"],
+                   "LLAgent": ["getPosition", "requestTeleport", "setCameraParams", "setFollowCamActive", "removeCameraParams"],
                    "LLInventory": ["getBasicFolderID", "collectDescendantsIf", "getItemsInfo"],
-                   "LLStats": ["getPerfData"], "ProjectorShadows": ["stats"]}[d["api"]]
+                   "LLStats": ["getPerfData"], "LLNotifications": ["requestAdd"], "LLTeleportHandler": ["teleport"], "ProjectorShadows": ["stats"]}[d["api"]]
             ops = [o for o in ops if o not in self.drop_ops]
             self._reply(d, {"name": d["api"], "ops": [{"name": o} for o in ops]})
 
@@ -438,13 +449,33 @@ class FakeViewer:
 
     def api_LLAgent(self, op, d):
         if op == "getPosition":
-            self._reply(d, {"region": [128.0, 64.0, 30.0], "global": [1.0, 2.0, 3.0]})
+            ox, oy = self.regions[self.agent_region]
+            p = self.agent_pos
+            self._reply(d, {"region": list(p), "global": [ox + p[0], oy + p[1], p[2]]})
+        elif op == "requestTeleport":
+            # as in the real viewer: this operation opens a modal confirmation nobody clicks, so nothing moves
+            self.confirm_dialogs.append(d)
         elif op == "setCameraParams":
             self.follow_cam = d
+            self.cameras.append(d)
             if self.projector:
                 self.projector.on_camera(d["camera_pos"], d["focus_pos"])
         elif op in ("setFollowCamActive", "removeCameraParams"):
             self.follow_cam = None
+
+    def api_LLTeleportHandler(self, op, d):
+        if op == "teleport":
+            self.tp_requests.append(d)
+            target = [float(d["x"]), float(d["y"]), float(d["z"])]
+            region = d["regionname"]
+
+            def arrive():
+                self.agent_region, self.agent_pos = region, target
+            threading.Timer(self.tp_delay, arrive).start()
+
+    def api_LLNotifications(self, op, d):
+        if op == "requestAdd":
+            self.notifications.append((d["name"], d["substitutions"]["MESSAGE"]))
 
     def api_ProjectorShadows(self, op, d):
         if op == "stats" and self.projector:

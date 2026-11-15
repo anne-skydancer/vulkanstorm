@@ -45,7 +45,7 @@ inputs:
     required: false
     default: ""
   tracy:
-    description: "'true' for a Tracy measuring build (devel only): USE_TRACY on, local only, OPENSIM on, RelWithDebInfo, uploaded as tracy-<short sha>-<platform>; no tests."
+    description: "'true' for a Tracy measuring build (devel only): USE_TRACY on, local only, RelWithDebInfo, uploaded as tracy-<short sha>-<platform>; no tests."
     required: false
     default: "false"
 runs:
@@ -200,8 +200,7 @@ runs:
         export LL_BUILD
         options=()
         # A Tracy measuring build: Tracy on, on demand and local only (it never
-        # listens beyond localhost), and OPENSIM on (tracy_options, appended after the fixed flags so they win), because it is measured on a
-        # local OpenSim region. Never a Release build (the workflow plans it
+        # listens beyond localhost). tracy_options are appended after the fixed flags so they win. Never a Release build (the workflow plans it
         # RelWithDebInfo).
         tracy_options=()
         if [[ "$VKSTORM_TRACY" == true ]]; then
@@ -209,7 +208,7 @@ runs:
             echo "::error::a Tracy build must be RelWithDebInfo without a package"
             exit 1
           fi
-          tracy_options=(-DOPENSIM:BOOL=ON -DUSE_TRACY:BOOL=ON -DUSE_TRACY_ON_DEMAND:BOOL=ON -DUSE_TRACY_LOCAL_ONLY:BOOL=ON)
+          tracy_options=(-DUSE_TRACY:BOOL=ON -DUSE_TRACY_ON_DEMAND:BOOL=ON -DUSE_TRACY_LOCAL_ONLY:BOOL=ON)
         fi
         if [[ "$RUNNER_OS" == Windows ]]; then
           # The flags used by the successful local Release build.
@@ -257,11 +256,11 @@ runs:
         fi
         python scripts/ci_viewer_version.py "$BUILD_DIRECTORY/newview/viewer_version.txt"
         if [[ "$VKSTORM_TRACY" == true ]]; then
-          for entry in USE_TRACY USE_TRACY_ON_DEMAND USE_TRACY_LOCAL_ONLY OPENSIM; do
+          for entry in USE_TRACY USE_TRACY_ON_DEMAND USE_TRACY_LOCAL_ONLY; do
             grep -qx "$entry:BOOL=ON" "$BUILD_DIRECTORY/CMakeCache.txt" \
               || { echo "::error::$BUILD_DIRECTORY/CMakeCache.txt does not say $entry:BOOL=ON"; exit 1; }
           done
-          echo "Tracy build: USE_TRACY, USE_TRACY_ON_DEMAND, USE_TRACY_LOCAL_ONLY and OPENSIM are ON" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tracy build: USE_TRACY, USE_TRACY_ON_DEMAND and USE_TRACY_LOCAL_ONLY are ON" >> "$GITHUB_STEP_SUMMARY"
         elif grep -qx 'USE_TRACY:BOOL=ON' "$BUILD_DIRECTORY/CMakeCache.txt"; then
           echo "::error::USE_TRACY is ON in a build that is not a Tracy build"; exit 1
         fi

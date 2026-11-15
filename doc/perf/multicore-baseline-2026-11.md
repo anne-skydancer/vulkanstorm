@@ -52,11 +52,13 @@ Zone names: zones declared by function take the function name in csvexport (`LLA
 
 ## 2. The owner session (study 7.2, with the counters and the particle probe)
 
-Build (the bench README's `RelWithDebInfoOS` line fails with "Unknown argument --avx2"; use `RelWithDebInfoFS_open`, which also turns OpenSim on; the Tracy dispatch of Build Windows / Build Linux (PR #518) is the CI route):
-`autobuild configure -A 64 -c RelWithDebInfoFS_open -- --tracy --lto --avx2 "-DLL_TESTS:BOOL=FALSE"` then `autobuild build -A 64 -c RelWithDebInfoFS_open --no-configure`. Scenes: **S1**, the local OpenSim region with a dense OAR and the
-NPCs (30 from the spawner; OpenSim's cap is 40). Settings for every capture, written down once: vsync off, frame limiter
+Build (the bench README's `RelWithDebInfoOS` line fails with "Unknown argument --avx2"; use `RelWithDebInfoFS_open` with `--no-opensim` (OpenSim stays off); the Tracy dispatch of Build Windows / Build Linux (PR #518) is the CI route):
+`autobuild configure -A 64 -c RelWithDebInfoFS_open -- --tracy --lto --avx2 --no-opensim "-DLL_TESTS:BOOL=FALSE"` then `autobuild build -A 64 -c RelWithDebInfoFS_open --no-configure`. Scenes: for stage 1 the session of 2a below on Second Life replaces the
+S1 scene of the first study (the local OpenSim region with a dense OAR and 30 NPCs). Settings for every capture, written down once: vsync off, frame limiter
 off, one window size and field of view, default graphics preset, Shadow method Stochastic (the default). Use a scratch
 APPDATA/LOCALAPPDATA and log in by hand to the local region.
+
+**Steps 1 to 8 below are the superseded OpenSim procedure (kept for the particle stage 0); the stage 1 session on Second Life is 2a.**
 
 1. Load the dense OAR, `/8 spawn` the NPCs.
 2. **MC1-still:** sit on the camera seat, wait 20 s, `tracy-capture.exe -a 127.0.0.1 -o MC1-still.tracy -s 60 -f`.
@@ -69,6 +71,22 @@ APPDATA/LOCALAPPDATA and log in by hand to the local region.
    `RenderMaxPartCount` 8192, and the NPC-only baseline).
 8. Keep the viewer log (`<scratch APPDATA>\<viewer folder>\logs\*.log`), the window size and field of view, and send the
    `.tracy` files, the log and the teleport times.
+
+### 2a. The Second Life session (replaces the OpenSim region for stage 1)
+
+The owner session runs on Second Life at a crowded venue, driven by the LEAP plugin (`scripts/inworld/README.md`, "Second Life session"). The
+OpenSim region and the controlled particle-kit scenes are not used (the kit scenes are deferred; the particle probe is not part of this session).
+The measuring build is built without OpenSim.
+
+1. Run `scripts\inworld\mc1_sl_launch.ps1` (a scratch profile `.captures\mc1-profile-<stamp>`, new for every launch; it may keep your credentials if you tick "remember": delete it afterwards; the run folder is printed).
+2. Log in by hand at home (any region). The plugin settles 20 s and records the login region and position.
+3. A pop-up says "Ready for the busy region: teleport there now." Teleport to the venue and leave the viewer alone. The plugin sees the arrival
+   (region cell changed, position still for 3 polls) and settles 20 s.
+4. Unattended: `MC1-still` (current camera, 60 s capture), `MC1-moving` and `MC1-moving-2` (the camera turns around the avatar at 10 deg/s, 60 s
+   each), the teleports (5 within the region, 5 between the venue and the login region, plus one "return" teleport after each odd group, so 12 in all; one capture `MC1-teleports` of 360 s, each teleport timed in
+   `perf.json`, the returns are kind `return`; a teleport that fails is recorded and the series goes on), and the frame rate for 60 s with nothing connected (`fps_without_profiler`, from the `FrameCounters` log lines).
+5. The pop-up "Session done: you can quit." appears ("Session ended with problems: see perf.json" if anything failed, or the run was stopped); settings (vsync off, frame limiter off) are restored. Send the run folder (`*.tracy`,
+   `perf.json`, `viewer_log_excerpt.txt`) and the viewer log. Shadow method stays Stochastic (the default) and the scratch profile gives the default preset.
 
 ## 3. Pipeline: exports
 

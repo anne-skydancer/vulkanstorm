@@ -20,6 +20,11 @@ variants' settings are put back to the scenario's values in between.
 It restores your settings and camera at the end and on error (also on Ctrl-C; after a crash use --restore RUNDIR). Dev tooling only: nothing here is part of the viewer.
 stdout is the LEAP channel: this script only ever logs to stderr (the viewer copies it into its log).
 
+Moving camera, Tracy captures, teleports (README.md, "SL session"): a preset may carry "motion": {"orbit_deg_per_s": N}
+(the camera turns around the avatar during its window); --tracy-capture EXE records every window of "window.seconds" seconds
+with tracy-capture; a scenario "teleports" section times teleports within the region and to --tp-region and back. Without the
+GLSubmitStats API (a Tracy measuring build), with --no-glstats the frame rate comes from the viewer's "FrameCounters:" log lines.
+
 Modes: (default) run | --dry-run (read-only: the API, its operations, the settings) | --noop | --restore RUNDIR.
 Exit codes: 0 ok, 1 error, 2 stopped by a STOP file, 3 the pipe closed, 4 the check failed (the proof, or a
 compared pass differed), 5 protocol error.
@@ -31,10 +36,13 @@ import datetime as dt
 import json
 import os
 import pathlib
+import re
 import statistics
+import subprocess
 import sys
 import time
 import traceback
+import urllib.parse
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -56,8 +64,11 @@ DEFAULTS = {
     "description": "",
     "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600,
                "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0},
-    "window": {"frames": 120, "gpu": True},
+    "window": {"frames": 120, "gpu": True, "seconds": 60.0},
     "teleport": None,
+    "teleports": None,      # {"within": N, "offset": [x, y, z], "second": N, "pause_s", "timeout_s", "settle_s", "min_move_m", "capture_s"}
+    "owner_teleport": None,  # {"poll_s", "stable_polls", "timeout_s", "ready_message", "done_message"}: the owner teleports by hand
+    "fps_probe": None,      # {"seconds": 60, "camera": {...}, "motion": {...}}: the frame rate with no capture connected
     "settings": {},
     "variants": [],
     "camera": {"height_m": 2.5, "look_distance_m": 200.0},
@@ -120,7 +131,108 @@ def load_scenario(path):
     for p in sc["presets"]:
         if not all(c.isalnum() or c in "_.-" for c in p["id"]):
             raise ValueError("preset id %r must be a file-name-safe token" % p["id"])
+    for p in sc["presets"] + ([sc["fps_probe"]] if sc["fps_probe"] else []):
+        if p.get("motion") and not p.get("camera"):
+            raise ValueError("a preset with motion needs a camera")
     return sc
+
+
+def fps_from_log(path, offset, end=None):
+    """Mean frames per second over the "FrameCounters: frames=N" lines (one per second) the viewer wrote after byte `offset`
+    of its log (up to byte `end` when given; the first, partial second is dropped when there are more than two), or None."""
+    if not path:
+        return None
+    try:
+        with open(path, "rb") as f:
+            f.seek(offset)
+            text = f.read(None if end is None else max(0, end - offset)).decode("utf-8", "replace")
+    except OSError:
+        return None
+    vals = [int(m) for m in re.findall(r"FrameCounters: frames=(\d+)", text)]
+    if len(vals) > 2:
+        vals = vals[1:]
+    return round(sum(vals) / len(vals), 2) if vals else None
+
+
+def region_from_log(path, offset=0, first=False):
+    """A region the viewer entered ("Entering region [NAME]" in its log after byte `offset`): the last one, or the first with
+    first=True; None when there is none. The viewer logs the line for neighbour regions too, so the caller picks the line
+    that is the agent's own: the first of the session (login) or the first after a teleport began."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(offset)
+            text = f.read().decode("utf-8", "replace")
+    except (OSError, TypeError):
+        return None
+    found = re.findall(r"Entering region \[([^\]]+)\]", text)
+    return (found[0] if first else found[-1]) if found else None
+
+
+def log_size(path):
+    try:
+        return os.path.getsize(path) if path else 0
+    except OSError:
+        return 0
+
+
+def cell_of(glob):
+    """The region cell (256 m) of a global position: it changes when the agent changes region."""
+    return (int(glob[0] // 256), int(glob[1] // 256))
+
+
+def dist3(a, b):
+    return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
+
+
+class TracyCapture:
+    """One tracy-capture process at a time: `tracy-capture -a 127.0.0.1 -o <id>.tracy -s <seconds> -f`. Its stdout is not the
+    LEAP channel (it goes to a file with stderr)."""
+
+    def __init__(self, exe, outdir, popen=subprocess.Popen):
+        self.exe, self.out, self.popen = str(exe), pathlib.Path(outdir), popen
+        self.proc = None
+        self.cur = None
+
+    def start(self, cid, seconds):
+        if self.proc is not None:
+            raise LeapError("a Tracy capture is already running (%s)" % self.cur["id"])
+        path = self.out / (cid + ".tracy")
+        logf = open(self.out / (cid + ".capture.log"), "wb")
+        try:
+            self.proc = self.popen([self.exe, "-a", "127.0.0.1", "-o", str(path), "-s", str(int(seconds)), "-f"],
+                                   stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT)
+        finally:
+            logf.close()
+        self.cur = {"id": cid, "file": path.name, "seconds": int(seconds),
+                    "utc_start": dt.datetime.now(dt.timezone.utc).isoformat()}
+        log("Tracy capture %s started (%d s)" % (cid, seconds))
+
+    def running(self):
+        return self.proc is not None and self.proc.poll() is None
+
+    def finish(self, tick, timeout_s):
+        """Wait for the capture to exit (calling tick() while waiting); the record: exit code and file size."""
+        end = time.monotonic() + timeout_s
+        while self.running():
+            if time.monotonic() > end:
+                log("WARNING Tracy capture %s did not exit in %.0f s: stopped" % (self.cur["id"], timeout_s))
+                self.stop()
+                break
+            tick()
+        rec, path = dict(self.cur), self.out / self.cur["file"]
+        rec["exit_code"] = self.proc.poll()
+        rec["size_bytes"] = path.stat().st_size if path.is_file() else 0
+        self.proc = self.cur = None
+        log("Tracy capture %s: exit %s, %d bytes" % (rec["id"], rec["exit_code"], rec["size_bytes"]))
+        return rec
+
+    def stop(self):
+        if self.proc is not None and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
 
 
 def check_api(v):
@@ -191,8 +303,15 @@ class Run:
         self.base = {}          # the values the scenario's settings and --set gave (what a variant's other keys go back to)
         self.cleaned = False
         self.rows = []
+        self.motion = None
+        self.login = None           # {"region", "pos", "global"} where the owner logged in
+        self.busy_region = None     # the region the owner teleported to
+        self.tracy = TracyCapture(args.tracy_capture, outdir, getattr(args, "popen", subprocess.Popen)) if args.tracy_capture else None
+        self.vlog = getattr(args, "vlog", None)
+        self.fps_log = args.fps_from_log
         self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
-                      "window_failures": []}
+                      "window_failures": [], "captures": [], "capture_failures": [], "teleports": None,
+                      "fps_without_profiler": None}
 
     def warn(self, msg):
         log("WARNING " + msg)
@@ -217,15 +336,18 @@ class Run:
             return
         self.cleaned = True
         self.v.abort_file = None
+        if self.tracy:
+            self.tracy.stop()
         try:
             self.save_index()       # what was measured before the stop or the error
         except OSError as exc:
             log("could not write perf.json: %s" % exc)
         log("restoring the viewer")
-        try:
-            self.v.req(API, "windowStop")
-        except (LeapError, ConnectionLost):
-            pass
+        if not self.fps_log:
+            try:
+                self.v.req(API, "windowStop")
+            except (LeapError, ConnectionLost):
+                pass
         if self.camera_set:
             try:
                 self.v.release_camera()
@@ -252,7 +374,7 @@ class Run:
                 self.warn("the window did not finish in %.0f s (collected %d of %d, gpu %d)"
                           % (sc["settle"]["window_timeout_s"], collected, target, gpu))
                 return collected, gpu, time.monotonic() - start_wall
-            self.v.sleep(0.5)
+            self.tick(0.5)
 
     def compare_once(self, pass_id, inject=0):
         """Arm the check for the next frame and read its results."""
@@ -293,7 +415,32 @@ class Run:
             log("note: %s %s holds one distinct value" % (label, name))
         return ok
 
+    def tick(self, period):
+        """Wait `period` s; with a moving camera instead turn it on (about 10 Hz) by point_camera calls."""
+        m = self.motion
+        if not m:
+            self.v.sleep(period)
+            return
+        az = (m["az0"] + m["rate"] * (time.monotonic() - m["t0"])) % 360.0
+        self.v.point_camera(az, m["cfg"])
+        self.v.sleep(0.1)
+
+    def start_capture(self, cid, seconds):
+        if not self.tracy:
+            return False
+        self.tracy.start(cid, seconds)
+        return True
+
+    def finish_capture(self, started):
+        if not started:
+            return
+        rec = self.tracy.finish(lambda: self.tick(0.5), self.tracy.cur["seconds"] + 60.0)
+        self.index["captures"].append(rec)
+        if rec["exit_code"] != 0 or rec["size_bytes"] <= 0:
+            self.index["capture_failures"].append(rec["id"])
+
     def set_preset_camera(self, preset):
+        self.motion = None
         cam = preset.get("camera")
         if not cam:
             return
@@ -301,6 +448,9 @@ class Run:
                "height_m": float(cam.get("height_m", self.sc["camera"]["height_m"])),
                "look_distance_m": float(cam.get("look_m", self.sc["camera"]["look_distance_m"]))}
         self.v.point_camera(float(cam.get("az_deg", 0.0)), cfg)
+        rate = float((preset.get("motion") or {}).get("orbit_deg_per_s", 0.0))
+        if rate:
+            self.motion = {"az0": float(cam.get("az_deg", 0.0)), "rate": rate, "cfg": cfg, "t0": time.monotonic()}
         self.camera_set = True
         self.save_restore()
 
@@ -309,6 +459,8 @@ class Run:
         probe = float(self.sc["overhead"]["probe_s"])
         if probe <= 0:
             return None
+        if self.fps_log:
+            return self.log_fps_for(probe)
         a = self.v.req(API, "status")
         t0 = time.monotonic()
         self.v.sleep(probe)
@@ -317,6 +469,31 @@ class Run:
         if "frame_count" not in a or "frame_count" not in b or dt_s <= 0:
             return None
         return round((int(b["frame_count"]) - int(a["frame_count"])) / dt_s, 2)
+
+    def log_fps_for(self, seconds):
+        """Frame rate over `seconds` s, from the FrameCounters log lines (the camera moves meanwhile when a preset says so)."""
+        off = self.vlog.stat().st_size if self.vlog else 0
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            self.tick(0.5)
+        # only the lines written up to the deadline: the capture has ended by then, later lines are not "profiler connected"
+        return fps_from_log(self.vlog, off, log_size(self.vlog))
+
+    def log_window(self, key, preset):
+        """The measurement window without the GLSubmitStats API: window.seconds s (moving camera, Tracy capture when given)."""
+        seconds = float(self.sc["window"]["seconds"])
+        info = self.index["presets"].setdefault(key, {})
+        info["projector_stats"] = self.projector_stats()
+        started = self.start_capture(key, seconds)
+        t0 = time.monotonic()
+        fps = self.log_fps_for(seconds)
+        self.finish_capture(started)
+        self.motion = None
+        info.update({"seconds": seconds, "fps_log": fps, "tracy_connected": started, "wall_s": round(time.monotonic() - t0, 3),
+                     "moving": bool(preset.get("motion"))})
+        self.rows.append({"preset": key, "frames": 0, "gpu_frames": 0, "fps_wall": None, "fps_stats_off": None, "fps_log": fps,
+                          "variant": ""})
+        log("preset %s: %s fps over %.0f s%s" % (key, fps, seconds, " with Tracy connected" if started else ""))
 
     def projector_stats(self):
         """The ProjectorShadows.stats reply (slots, light set, pool), or None when the viewer has no such API (older build)."""
@@ -392,6 +569,9 @@ class Run:
             self.set_preset_camera(preset)
             self.v.sleep(sc["settle"]["after_camera_s"])
         self.v.wait_window_visible("the window of preset " + key)
+        if self.fps_log:
+            self.log_window(key, preset)
+            return
 
         if fps_samples is None and self.args.no_glstats:
             # no window to follow: the clean frame rate is the whole measurement, so it is a median of probe_repeats probes
@@ -417,9 +597,12 @@ class Run:
                               "variant": variant["id"] if variant else ""})
             log("preset %s: %s fps with the statistics off (no window collected)" % (key, fps_off))
             return
+        started = self.start_capture(key, float(sc["window"]["seconds"]))
         start = time.monotonic()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
+        self.finish_capture(started)
+        self.motion = None
         target = int(sc["window"]["frames"])
         if collected < target:
             self.index["window_failures"].append({"preset": key, "collected": collected, "target": target})
@@ -496,15 +679,15 @@ class Run:
         log("viewer window: %s" % (self.index["window_geometry"] or "unknown (not Windows, or not found)"))
         if caps.get("RenderVSyncEnable") or caps.get("FSLimitFramerate"):
             self.warn("vsync or the frame limiter is on (%s): the frame rates of this run are capped; turn them off for a measurement" % caps)
-        st = v.req(API, "status")
-        self.index["status_at_start"] = st
+        if not self.fps_log:
+            self.index["status_at_start"] = v.req(API, "status")
         if sc["teleport"]:
             t = sc["teleport"]
-            v.fire("LLAgent", "requestTeleport", regionname=t["region"], x=t.get("x", 128), y=t.get("y", 128), z=t.get("z", 30),
-                   skip_confirmation=True)
-            v.barrier()
+            self.request_teleport(t["region"], t.get("x", 128), t.get("y", 128), t.get("z", 30))
             log("teleporting to %s; waiting %.0f s" % (t["region"], sc["settle"]["after_teleport_s"]))
             v.sleep(sc["settle"]["after_teleport_s"])
+        if sc["owner_teleport"]:
+            self.wait_for_owner_teleport()
         if sc["overhead"]["bench_iterations"] and not self.args.no_glstats:
             try:
                 b = v.req(API, "selfBench", iterations=int(sc["overhead"]["bench_iterations"]), timeout=120)
@@ -531,6 +714,10 @@ class Run:
                     v.check_abort()
                     self.one_preset(preset, variant, set_camera=False, fps_samples=samples[variant["id"]])
             self.save_index()
+        if sc["teleports"]:
+            self.teleport_series()
+        if sc["fps_probe"]:
+            self.fps_probe()
         end_geo = window_geometry()
         self.index["window_geometry_end"] = end_geo
         start_geo = self.index.get("window_geometry")
@@ -538,7 +725,184 @@ class Run:
             self.warn("the viewer window changed size during the run (%s -> %s): the windows are not comparable" % (start_geo, end_geo))
         self.save_index()
         self.cleanup()
-        return proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
+        clean = (proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
+                 and not self.index["capture_failures"] and not self.index.get("teleport_failures"))
+        if sc["owner_teleport"]:
+            self.notify(self.handoff_cfg()["done_message"] if clean else self.handoff_cfg()["problem_message"])
+        return clean
+
+    def handoff_cfg(self):
+        return {"poll_s": 1.0, "stable_polls": 3, "timeout_s": 1800.0, "renotify_s": 180.0,
+                "problem_message": "Session ended with problems: see perf.json (you can quit).",
+                "ready_message": "Ready for the busy region: teleport there now.",
+                "done_message": "Session done: you can quit.", **self.sc["owner_teleport"]}
+
+    def notify(self, message):
+        """A pop-up for the owner only (a local notification, not nearby chat)."""
+        try:
+            self.v.fire("LLNotifications", "requestAdd", name="SystemMessage", substitutions={"MESSAGE": message})
+            self.v.barrier()
+        except LeapError as exc:
+            self.warn("the pop-up %r could not be shown: %s" % (message, exc))
+        log("pop-up: " + message)
+
+    def notify_problem(self):
+        """The owner is told to stay away from the viewer: on a failed or aborted run a pop-up says it is over."""
+        if self.sc["owner_teleport"]:
+            try:
+                self.notify(self.handoff_cfg()["problem_message"])
+            except Exception as exc:  # noqa: BLE001  (the connection may be gone)
+                log("the pop-up could not be shown: %s" % exc)
+
+    def wait_for_owner_teleport(self):
+        """Record where the owner logged in, ask for a teleport to the busy region, and wait until the region cell has changed
+        and the position holds still for stable_polls polls; then settle (after_teleport_s)."""
+        cfg = self.handoff_cfg()
+        pos, glob = self.agent_state()
+        name = self.args.start_region or region_from_log(self.vlog, first=True)     # the first line of the session is the home region
+        self.login = {"region": name, "pos": pos, "global": glob}
+        self.index["login"] = self.login
+        log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
+        if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
+            raise LeapError("the login region is unknown (no 'Entering region' line in the viewer log): pass --start-region NAME")
+        self.notify(cfg["ready_message"])
+        end = time.monotonic() + float(cfg["timeout_s"])
+        stable, last = 0, None
+        mark, renotify = log_size(self.vlog), time.monotonic() + float(cfg["renotify_s"])
+        while True:
+            self.v.sleep(float(cfg["poll_s"]))
+            reg, g = self.agent_state()
+            if time.monotonic() > renotify:
+                self.notify(cfg["ready_message"])       # a toast fades: ask again
+                renotify = time.monotonic() + float(cfg["renotify_s"])
+            if time.monotonic() > end:
+                raise LeapError("no teleport to another region within %.0f s" % float(cfg["timeout_s"]))
+            if cell_of(g) == cell_of(glob):
+                stable, last = 0, None
+                mark = log_size(self.vlog)      # the teleport's own log lines come after this
+                continue
+            stable = stable + 1 if last is not None and dist3(g, last) <= 1.0 else 1
+            last = g
+            if stable >= int(cfg["stable_polls"]):
+                break
+        busy = self.args.busy_region
+        for _ in range(0 if busy else 10):
+            busy = region_from_log(self.vlog, mark, first=True)     # the destination is logged before its neighbours
+            if busy and busy != name:
+                break
+            busy = None
+            self.v.sleep(1.0)       # the log line may lag
+        if not busy:
+            self.warn("the busy region's name could not be read from the viewer log: pass --busy-region NAME to time the teleports")
+        self.busy_region = busy
+        self.index["busy"] = {"region": busy, "pos": reg, "global": g}
+        log("arrived in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
+        self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
+
+    def request_teleport(self, region, x, y, z):
+        # LLAgent.requestTeleport still opens the "TeleportViaSLAPP" confirmation; this operation does not
+        self.v.fire("LLTeleportHandler", "teleport", regionname=region, x=x, y=y, z=z)
+        self.v.barrier()
+
+    def agent_state(self):
+        r = self.v.req("LLAgent", "getPosition")
+        return [float(c) for c in r["region"]], [float(c) for c in r["global"]]
+
+    def teleport_once(self, kind, region, xyz, cfg):
+        """Time one teleport: from the request until the agent's global position has moved min_move_m (the position only
+        changes on arrival), then until it holds still for settle_s. Raises when it has not arrived in timeout_s."""
+        _, before = self.agent_state()
+        t0 = time.monotonic()
+        utc = dt.datetime.now(dt.timezone.utc).isoformat()
+        self.request_teleport(region, xyz[0], xyz[1], xyz[2])
+        while True:
+            self.v.sleep(0.1)
+            reg, glob = self.agent_state()
+            if dist3(glob, before) > float(cfg["min_move_m"]):
+                arrive = time.monotonic() - t0
+                break
+            if time.monotonic() - t0 > float(cfg["timeout_s"]):
+                raise LeapError("teleport %s to %s did not arrive in %.0f s" % (kind, region, float(cfg["timeout_s"])))
+        last, still = glob, time.monotonic()
+        while time.monotonic() - still < float(cfg["settle_s"]) and time.monotonic() - t0 < float(cfg["timeout_s"]):
+            self.v.sleep(0.25)
+            reg, glob = self.agent_state()
+            if dist3(glob, last) > 1.0:
+                last, still = glob, time.monotonic()
+        rec = {"kind": kind, "region": region, "target": list(xyz), "request_utc": utc, "arrive_s": round(arrive, 3),
+               "last_move_s": round(still - t0, 3), "landed_region_pos": reg,
+               "miss_m": round(((reg[0] - xyz[0]) ** 2 + (reg[1] - xyz[1]) ** 2) ** 0.5, 2)}
+        log("teleport %s to %s: arrived after %.2f s, still since %.2f s (landed %.1f m from the target)" % (
+            kind, region, arrive, rec["last_move_s"], rec["miss_m"]))
+        return rec
+
+    def teleport_series(self):
+        """Timed teleports: N within the region (start offset, start, ...) and N to --tp-region and back to the start, each
+        timed from the request to the arrival; one continuous Tracy capture covers the series."""
+        cfg = {"within": 5, "offset": [20.0, 0.0, 0.0], "second": 5, "pause_s": 8.0, "timeout_s": 120.0, "settle_s": 3.0,
+               "min_move_m": 5.0, "capture_s": 360.0, **self.sc["teleports"]}
+        second = int(cfg["second"])
+        if self.login and self.login.get("region") and not self.args.tp_region:
+            other = (self.login["region"], list(self.login["pos"]))      # between the busy region and the login region
+        elif self.args.tp_region:
+            other = (self.args.tp_region, list(self.args.tp_pos))
+        else:
+            other = None
+        if second and not other:
+            raise LeapError("the scenario has teleports to a second region: pass --tp-region NAME (or log in first, with a log line)")
+        self.motion = None
+        if self.camera_set:
+            self.v.release_camera()
+            self.camera_set = False
+            self.save_restore()
+        start_region = self.busy_region or self.args.busy_region
+        if not start_region and not self.sc["owner_teleport"]:      # no owner flow: the region the agent is in
+            start_region = self.args.start_region or region_from_log(self.vlog)
+        if not start_region:
+            raise LeapError("the region of the teleports is unknown (not read from the viewer log): pass --busy-region NAME")
+        pos, glob = self.agent_state()
+        off = [float(c) for c in cfg["offset"]]
+        for i in (0, 1):
+            if pos[i] + off[i] > 250.0 or pos[i] + off[i] < 5.0:
+                off[i] = -off[i]
+        near = [pos[i] + off[i] for i in range(3)]
+        info = {"start_region": start_region, "start_pos": pos, "start_global": glob, "offset": off, "results": []}
+        self.index["teleports"] = info
+        log("teleport series: start %s %s; %d within the region, %d to a second region" % (start_region, pos, int(cfg["within"]), second))
+        plan = [("within", start_region, near if i % 2 == 0 else pos) for i in range(int(cfg["within"]))]
+        if int(cfg["within"]) % 2:
+            plan.append(("return", start_region, pos))
+        plan += [("second_region", *(other if i % 2 == 0 else (start_region, pos))) for i in range(second)]
+        if second % 2:
+            plan.append(("return", start_region, pos))
+        started = self.start_capture("MC1-teleports", float(cfg["capture_s"]))
+        for kind, region, xyz in plan:
+            self.v.check_abort()
+            try:
+                info["results"].append(self.teleport_once(kind, region, xyz, cfg))
+            except Aborted:
+                raise
+            except LeapError as exc:
+                self.warn("teleport %s to %s failed: %s" % (kind, region, exc))
+                info["results"].append({"kind": kind, "region": region, "target": list(xyz), "failed": True, "reason": str(exc)})
+                self.index.setdefault("teleport_failures", []).append(kind)
+            self.save_index()
+            self.v.sleep(float(cfg["pause_s"]))
+        if started and not self.tracy.running():
+            self.warn("the teleport series ran longer than the capture (%.0f s): its end is not in MC1-teleports" % float(cfg["capture_s"]))
+            self.index["capture_failures"].append("MC1-teleports (ended before the series)")
+        self.finish_capture(started)
+
+    def fps_probe(self):
+        """The frame rate with no capture connected (the viewer's own, for the doc's "fps without the profiler")."""
+        p = self.sc["fps_probe"]
+        secs = float(p.get("seconds", 60.0))
+        self.set_preset_camera(p)
+        self.v.sleep(self.sc["settle"]["after_camera_s"])
+        fps = self.log_fps_for(secs)
+        self.motion = None
+        self.index["fps_without_profiler"] = {"fps": fps, "seconds": secs, "tracy_connected": False}
+        log("fps without the profiler: %s over %.0f s" % (fps, secs))
 
     def save_index(self):
         write_json_atomic(self.out / "perf.json", self.index)
@@ -553,9 +917,31 @@ class Run:
 
 
 def dry_run(v, sc, args, outdir):
-    problems = check_api(v)
-    rows = [("api", "FAIL" if problems else "PASS", "; ".join(problems) or "%s has %d operations" % (API, len(REQUIRED_OPS)))]
-    if not problems:
+    if args.fps_from_log:
+        problems = []
+        rows = [("api", "PASS", "no %s API: frame rates come from the FrameCounters log lines" % API)]
+        for key in sorted(set(sc["settings"]) | set(CAP_SETTINGS)):
+            cur = v.try_control(key)
+            rows.append(("setting " + key, "PASS" if cur is not None else "FAIL", "" if cur is None else repr(cur.get("value"))))
+        if args.tracy_capture:
+            rows.append(("tracy-capture", "PASS" if os.path.isfile(args.tracy_capture) else "FAIL", args.tracy_capture))
+        rows.append(("viewer log", "PASS" if args.vlog else "FAIL", str(args.vlog or "not found (--viewer-log): no frame rate without it")))
+        need = {"LLAgent": ["getPosition"], "LLNotifications": ["requestAdd"]}
+        if sc["owner_teleport"] or sc["teleports"] or sc["teleport"]:
+            need["LLTeleportHandler"] = ["teleport"]
+        if any(p.get("camera") for p in sc["presets"]):
+            need["LLAgent"] += ["setCameraParams", "setFollowCamActive", "removeCameraParams"]
+        for api, ops in need.items():
+            try:
+                blob = json.dumps(v.req("LLLeap", "getAPI", api=api).get("ops"), default=str)
+                missing = [o for o in ops if '"%s"' % o not in blob]
+                rows.append(("api " + api, "FAIL" if missing else "PASS", ("missing ops: %s" % missing) if missing else "ops ok"))
+            except LeapError as exc:
+                rows.append(("api " + api, "FAIL", str(exc)))
+    else:
+        problems = check_api(v)
+        rows = [("api", "FAIL" if problems else "PASS", "; ".join(problems) or "%s has %d operations" % (API, len(REQUIRED_OPS)))]
+    if not problems and not args.fps_from_log:
         st = v.req(API, "status")
         rows.append(("status", "PASS", json.dumps(st, sort_keys=True)))
         for key in SETTINGS:
@@ -600,7 +986,26 @@ def parse_args(argv):
     ap.add_argument("--no-glstats", action="store_true",
                     help="frame rate only: nothing collects (no window, no GPU timers, no identical-image check, no hook bench); "
                          "per preset the probed fps (median of probe_repeats probes) and the ProjectorShadows.stats snapshot are recorded")
+    ap.add_argument("--tracy-capture", default=None, metavar="EXE", help="path of tracy-capture.exe: one capture per measurement window "
+                    "(window.seconds) and one for the teleport series, into the run folder")
+    ap.add_argument("--tp-region", default=None, metavar="NAME", help="override: the second region for the teleports instead of the login region (URL-escaped: %%20 is a space; "
+                    "--leap arguments cannot hold spaces)")
+    ap.add_argument("--tp-pos", default="128,128,30", metavar="X,Y,Z", help="position in --tp-region (default 128,128,30)")
+    ap.add_argument("--start-region", default=None, metavar="NAME", help="the region you log in to (default: the first "
+                    "'Entering region' line of the viewer log; URL-escaped like --tp-region)")
+    ap.add_argument("--busy-region", default=None, metavar="NAME", help="the region you teleport to, when its name cannot be read from "
+                    "the viewer log (URL-escaped like --tp-region)")
     args = ap.parse_args(argv)
+    args.fps_from_log = False
+    args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
+    args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
+    args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
+    try:
+        args.tp_pos = [float(c) for c in args.tp_pos.split(",")]
+        if len(args.tp_pos) != 3:
+            raise ValueError
+    except ValueError:
+        ap.error("--tp-pos needs X,Y,Z")
     args.only = [s for s in (args.only or "").split(",") if s]
     vals = {}
     for item in args.set:
@@ -636,11 +1041,20 @@ def execute(session, args, sc, outdir):
             v.wait_for_login(args.max_wait_s or sc["settle"]["login_timeout_s"])
             log("logged in; settling %.0f s" % sc["settle"]["post_login_s"])
             v.sleep(sc["settle"]["post_login_s"])
+        if args.no_glstats and check_api(v):
+            args.fps_from_log = True        # a Tracy measuring build: no GLSubmitStats; the frame rate comes from the log
+            log("no %s API: the frame rate comes from the FrameCounters lines of the viewer log" % API)
+            if sc["variants"]:
+                raise LeapError("variants need the %s API" % API)
+        args.vlog = vlog
         if args.dry_run:
             return dry_run(v, sc, args, outdir)
-        problems = check_api(v)
+        problems = [] if args.fps_from_log else check_api(v)
         if problems:
             log("FAILED: " + "; ".join(problems))
+            return 1
+        if args.fps_from_log and not vlog:
+            log("FAILED: the viewer log was not found (--viewer-log): no frame rate without it")
             return 1
         if args.frames:
             sc["window"]["frames"] = args.frames
@@ -657,18 +1071,20 @@ def execute(session, args, sc, outdir):
         log("done: %d presets in %s" % (len(run.rows), outdir))
         log("next: python %s %s" % (HERE / "analyze_perf_check.py", outdir))
         if not clean:
-            log("PERFCHECK FAILED: the proof or a compared pass failed (see perf.json, compare_*.json)")
+            log("PERFCHECK FAILED: the proof, a compared pass, a capture or a teleport failed (see perf.json, compare_*.json)")
             code = 4
     except Aborted as exc:
         log("aborted: %s" % exc)
         code = 2
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     except KeyboardInterrupt:
         log("interrupted: restoring the viewer")
         code = 2
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     except ViewerGone as exc:
         log("the pipe from the viewer reached end of file: %s (settings could not be restored; see restore.json)" % exc)
         code = 3
@@ -680,7 +1096,10 @@ def execute(session, args, sc, outdir):
         code = 1
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     finally:
+        if run is not None and run.tracy:
+            run.tracy.stop()
         if vlog and log_start is not None and not args.restore:
             try:
                 with open(vlog, "rb") as f:
