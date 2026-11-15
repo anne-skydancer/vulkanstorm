@@ -218,7 +218,8 @@ static void fill_vertices(float* src, int n, uint32_t seed) {
     std::mt19937 g(seed); std::uniform_real_distribution<float> U(-256.f, 256.f);
     const float special[] = {0.f, -0.f, 1e-40f, -1e-40f, INFINITY, -INFINITY, NAN, 3.0e38f, -3.0e38f, 1e-30f};
     for (int i = 0; i < 4 * n; ++i) src[i] = (i % 4 == 3) ? 1.f : U(g);
-    for (int i = 0; i < 64 && i < n; ++i) src[4 * i + (i % 3)] = special[i % 10];
+    // spread through the whole buffer (every 41st vertex, rotating over the specials and the xyz lanes), not just the head
+    for (int i = 0; i < n; i += 41) src[4 * i + ((i / 41) % 3)] = special[(i / 41) % 10];
 }
 
 static void bench_xf() {
@@ -254,6 +255,8 @@ static void bench_xf() {
 }
 
 // ---------------- K5 AABB against frustum planes ----------------
+// Only the AABB half of the viewer's cull test is benched: LLOctreeCull::AABBInFrustumNoFarClip is
+// llmin(AABBInFrustum, AABBSphereIntersect) (llspatialpartition.cpp:1089-1100); the sphere half is not here.
 // One box at a time, as LLCamera::AABBInFrustum (llcamera.cpp:207-244): for each plane with a valid octant mask, the box
 // corner nearest along the plane normal (center - radius*scaler[mask]) decides "outside" (return 0), the farthest corner
 // decides "intersects" (1); else "inside" (2). dot3 is (x*px + y*py) + z*pz (llvector4a.inl:315-326), d is -p.w by sign flip.
@@ -331,6 +334,12 @@ static void bench_aabb() {
     for (int b = 0; b < NB; ++b) {
         float c[3] = {P(g), P(g), P(g)}, r[3] = {R(g), R(g), R(g)};
         if (b % 997 == 0) { c[0] = 0.f; r[1] = 1e-40f; }      // a denormal radius and a box on the camera
+        // NaN and inf boxes: comparisons with NaN are false in both versions, inf centres and radii give inf - inf = NaN
+        if (b % 1009 == 0) c[1] = NAN;
+        if (b % 1013 == 0) r[0] = INFINITY;
+        if (b % 1019 == 0) c[2] = -INFINITY;
+        if (b % 1021 == 0) r[2] = NAN;
+        if (b % 1031 == 0) { c[0] = INFINITY; r[1] = INFINITY; }
         for (int k = 0; k < 3; ++k) { aos[8 * b + k] = c[k]; aos[8 * b + 4 + k] = r[k]; }
         aos[8 * b + 3] = aos[8 * b + 7] = 0.f;
         int blk = b / 8, lane = b % 8;
