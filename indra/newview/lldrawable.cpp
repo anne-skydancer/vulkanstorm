@@ -1551,7 +1551,7 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
                 // the non-camera exclusions stay (the pairing and renderShadow apply them to the body): friends-only, and a jelly doll
                 // or invisible avatar (RLV silhouette, derendered, too complex)
                 static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
-                const bool layer_ok = layer && avatarp->getOverallAppearance() == LLVOAvatar::AOA_NORMAL &&
+                const bool layer_ok = layer && avatarp->getOverallAppearance() == LLVOAvatar::AOA_NORMAL && LLPipeline::localShadowAvatarAllowed(avatarp) &&
                     (!friends_only() || avatarp->isControlAvatar() || avatarp->isSelf() || avatarp->isBuddy());
                 if (layer_ok || (!layer && avatarp->isVisible()))
                 {

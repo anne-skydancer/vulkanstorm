@@ -391,7 +391,7 @@ void LLDrawPoolAvatar::renderShadow(S32 pass)
     // </Vulkanstorm>
     // no shadows if the shadows are causing this avatar to breach the limit.
     // <Vulkanstorm> the avatar layer draws normal avatars only (not a jelly doll, an RLV silhouette, a derendered or too complex one)
-    const bool layer_skip = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC && oa != LLVOAvatar::AOA_NORMAL;
+    const bool layer_skip = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC && (oa != LLVOAvatar::AOA_NORMAL || !LLPipeline::localShadowAvatarAllowed(avatarp));
     // </Vulkanstorm>
     if (avatarp->isTooSlow() || impostor || layer_skip || (oa == LLVOAvatar::AOA_INVISIBLE))
     {
