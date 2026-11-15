@@ -30,7 +30,6 @@
 #include "llviewershadermgr.h"
 #include "pipeline.h"
 
-
 namespace
 {
     // the viewer's GL state the tile renders change, put back by the last scope of the frame
