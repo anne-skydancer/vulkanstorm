@@ -63,9 +63,9 @@ faces run on their own multisampled targets, as Aurora does without MSAA:
 
 | Target | Format | Use |
 |---|---|---|
-| accumulation | RGBA16F, P samples (P = S = 8 where the device takes 8) | alpha x colour and alpha, additive |
-| transparency | RG16F, P samples | red: prod(1 - alpha), cleared to 1; green: the faces' glow |
-| stochastic depth | DEPTH_COMPONENT24, P samples | the opaque depth spread, then the faces' stochastic depth |
+| accumulation | RGBA16F, 8 samples (S = 8) | alpha x colour and alpha, additive |
+| transparency | RG16F, 8 samples | red: prod(1 - alpha), cleared to 1; green: the faces' glow |
+| stochastic depth | DEPTH_COMPONENT24, 8 samples | the opaque depth spread, then the faces' stochastic depth |
 | mask table | R32UI, 2048 x (S + 3) | row r: 2048 random r-subsets of the S sample bits; the last two rows: the 64 x 64 blue-noise tile (ranks 0 to 4095) |
 
 The method needs 8 samples in one pass: the GL 4.6 base takes 8 for the colour, the depth and the `GL_MAX_SAMPLES` limits (NVIDIA
@@ -75,7 +75,7 @@ tried at 4 on 2026-11-14 and set back to 8 on 2026-11-15 (see Measured: at 4 the
 viewer before it, at 8 it is better in every scene). A device that takes fewer than 8 samples is below the floor, like one below GL 4.0:
 `allocateAlphaStochastic` leaves stochastic transparency off and sorted alpha is drawn (owner decision, 2026-11-15: the viewer is GL 4.6 based, no
 multi-pass fallback). There are no iterations: the lanes of one pass are never summed across passes. (The harness still checks the masks of 16
-samples as two passes of 8, a property of the mask table.) Memory: 16 B per sample, 128 B per pixel at P = 8 (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render
+samples as two passes of 8, a property of the mask table.) Memory: 16 B per sample, 128 B per pixel at 8 samples (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render
 resolution while the method is selected and freed otherwise; nothing grows with the depth of the scene.
 
 `LLDrawPoolAlpha::renderStochastic` (`pipeline.cpp` holds the targets, the spread and the
@@ -268,7 +268,7 @@ The measuring pass zeroes a NaN and clamps an infinity before the blend, so the 
 
 ### GPU time per pass (2560 x 1440, `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
 
-Per pass the median of 68 timed frames of a run (80 frames, the first 12 not timed), and of three runs the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of those seven pass times (alpha, depth, accumulation, measure, blend, smooth, composite). shipping = git ref `1f38b56b50` (S = 8, before the upgrade), c121 = `c121dc100c` (the upgrade before the mask: unmasked blend, a smooth pass of its own), now = this tree. The harness composite draws the colour and the glow pass; the viewer draws the glow only when a glowing face is drawn. RTX 5070 Ti, NVIDIA 621.14. ms:
+Per pass the median of 68 timed frames of a run (80 frames, the first 12 not timed), and of three runs the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of those pass times (alpha, depth, accumulation, measure, blend, smooth where it is a pass, composite). shipping = git ref `1f38b56b50` (S = 8, before the upgrade), c121 = `c121dc100c` (the upgrade before the mask: unmasked blend, a smooth pass of its own), now = this tree. The harness composite draws the colour and the glow pass; the viewer draws the glow only when a glowing face is drawn. RTX 5070 Ti, NVIDIA 621.14. ms:
 
 | scene | shipping | c121 | now | now - shipping | now - c121 |
 |---|---|---|---|---|---|
@@ -427,8 +427,8 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
 textures; the Stochastic shadows' compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
-2 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (168 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
+sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
 allocation, a resize, a shader set that did not build) does not switch method (owner decision Q8, 2026-11-13: stochastic methods never fall back, replacing the
 2026-11-12 exception): the failure is logged, `RenderAlphaSortMethod` and `RenderShadowMethod` stay as selected, the shadows
 are not changed, and the blended faces are drawn by the plain alpha pass frame by frame (not dropped) while the engine is

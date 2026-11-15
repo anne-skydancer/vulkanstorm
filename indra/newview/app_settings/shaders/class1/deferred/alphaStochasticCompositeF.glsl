@@ -26,8 +26,8 @@
 // cs_resolve, fs_composite, fs_composite_glow), per pixel in one pass:
 //   the transparency, the mean over the pass's samples of prod(1 - alpha), dims the scene
 //   (blend ONE, ONE_MINUS_SRC_ALPHA; the glow in the scene alpha dimmed the same way, ZERO,
-//   ONE_MINUS_SRC_ALPHA), and the accumulated alpha x colour, averaged over all the samples of
-//   every iteration, is added, times the alpha correction (total alpha over accumulated alpha).
+//   ONE_MINUS_SRC_ALPHA), and the accumulated alpha x colour, averaged over all the samples
+//   is added, times the alpha correction (total alpha over accumulated alpha).
 // With the temporal accumulation (st_temporal) the colour is the resolve's: this frame's accumulation blended with the
 // last frame's by its grain (alphaStochasticResolveF.glsl, into the history, which is not touched here) and smoothed
 // here, in the pass that draws it: what grain the blend leaves is averaged away with the neighbours whose colour is
@@ -47,7 +47,7 @@ out vec4 frag_color;
 uniform sampler2DMS alpha_st_accum; // alpha x colour, alpha (additive)
 uniform sampler2DMS alpha_st_trans; // red prod(1 - alpha), green the glow (additive)
 uniform int st_samples_hw;          // samples of the targets
-uniform int st_samples;             // samples in all, over the iterations
+uniform int st_samples;             // samples in all
 uniform int st_glow;
 uniform sampler2D alpha_st_history;  // the temporal accumulation's blended four-vector (RGBA16F)
 uniform sampler2D alpha_st_aux;      // this frame's (grain, total alpha, depths) (RGBA16F)
@@ -100,7 +100,7 @@ vec4 st_drawn(ivec2 px, out float corr)
     return vec4(max(min(h.rgb * corr, vec3(HDR_MAX)), vec3(0.0)), total);
 }
 
-// What the RGBA16F target of the smooth pass stored (round to half floats)
+// Rounds to half floats as the RGBA16F target of the old smooth pass stored (the smooth is folded into this pass)
 vec3 st_half(vec3 c)
 {
     return vec3(unpackHalf2x16(packHalf2x16(c.rg)).xy, unpackHalf2x16(packHalf2x16(vec2(c.b, 0.0))).x);

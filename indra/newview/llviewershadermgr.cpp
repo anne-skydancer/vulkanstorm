@@ -292,7 +292,7 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
-// resolve is three fragment passes on every device (GL compute stalls the frame in motion; the transparency has no compute
+// resolve is two fragment passes and the smooth in the composite on every device (GL compute stalls the frame in motion; the transparency has no compute
 // resolve since 2026-11-14, the Vulkan renderer takes Aurora Viewer PR 3663's compute steps). The
 // device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
