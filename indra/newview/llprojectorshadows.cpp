@@ -503,12 +503,16 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
     }
     // L's tiles that hold avatars are S's again before the moves: the whole-atlas copy L -> S below must not carry an avatar into S
     // (the fixed layer). The avatar layers come back with the dynamic schedule of the frame (the tiles keep avatarInLayer).
-    for (auto& entry : mRecords)
+    // (only when the whole-atlas copy runs: a repack with no moves leaves L's avatar layers as they are)
+    if (!plan.moves.empty())
     {
-        const Record& r = entry.second;
-        if (r.placed && r.drawnFrame != 0 && r.avatarInLayer)
+        for (auto& entry : mRecords)
         {
-            copyTile(mAtlasS, r.rect, mAtlasL, r.rect);
+            const Record& r = entry.second;
+            if (r.placed && r.drawnFrame != 0 && r.avatarInLayer)
+            {
+                copyTile(mAtlasS, r.rect, mAtlasL, r.rect);
+            }
         }
     }
     for (const Move& move : plan.moves)
@@ -1142,12 +1146,14 @@ void LLProjectorShadows::update(LLCamera& camera)
     // with every lamp whose volume its extents touch; nothing here reads the camera, the avatar's visibility or its impostor flag
     // (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts). A jelly
     // doll, an invisible or a too slow avatar and a UI avatar are not drawn by the avatar pool either.
+    static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     std::vector<Aabb> avatar_boxes;
     for (LLCharacter* character : LLCharacter::sInstances)
     {
         LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
         if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
-            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL)
+            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL ||
+            (friends_only() && !avatar->isControlAvatar() && !avatar->isSelf() && !avatar->isBuddy())) // as LLDrawPoolAvatar::renderShadow
         {
             continue;
         }
@@ -1282,7 +1288,8 @@ void LLProjectorShadows::update(LLCamera& camera)
         bool first_pick = true;
         for (U32 pk : packed)
         {
-            if (ledger.left(kFrameCapMs) <= 0.f || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
+            // the first static pick is exempt from the measured cap: the selection kept it (or it is the progress pick)
+            if ((ledger.left(kFrameCapMs) <= 0.f && (dynamic || !first_pick)) || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
             {
                 break;
             }
