@@ -327,12 +327,23 @@ two layers once.
 
 `update` pairs every avatar that casts with every lamp whose volume its extents touch. Nothing in it reads the camera: no
 `isVisible()`, no `isImpostor()`, no render distance. The avatars left out are those the avatar pool does not draw either: dead, a UI
-avatar, too slow (`isTooSlow`), a jelly doll or an invisible one (`getOverallAppearance() != AOA_NORMAL`). In the dynamic pass the camera
+avatar, too slow (`isTooSlow`), a jelly doll (which includes an RLV silhouette, a derendered and a too complex avatar) or an invisible one
+(`getOverallAppearance() != AOA_NORMAL`; `renderShadow` repeats that test in the dynamic pass), and, with `RenderAvatarFriendsOnly`,
+an avatar that is not a friend, the agent or a control avatar. In the dynamic pass the camera
 gates of the avatar path are bypassed (all behind `sLocalShadowPass == LOCAL_SHADOW_DYNAMIC`, so every other pass is unchanged):
 `stateSort` (render distance, `isVisible`), `markVisible` and `LLSpatialBridge::setVisible` / `updateDistance` for the attachments (the
 impostor test and the "visible within a frame" test), and `LLDrawPoolAvatar::renderShadow` (the impostor test). An impostored avatar
 casts in full with the pose of its last update; the avatar's own animation still follows the viewer's update rate for avatars out of
-view, which is not changed here (not measured: see "Not verified").
+view, which is not changed here (not measured: see "Not verified"). The dynamic pass does not stamp the camera's visibility
+(`LLDrawable::setVisible` skips `LLViewerOctreeEntryData::setVisible` in it), so an avatar behind the camera does not count as
+visible to the animation, the impostor ranking or `updateImpostors`.
+
+**Known limits (owner's walk session).** (1) The layer's LOD is not pinned: `pinCasters` runs for the fixed layer only, so an avatar's
+body and its worn objects take the LOD the camera's distance gives them, and their silhouette may change across an LOD boundary as
+the camera moves. (2) The avatar draws of a face are not capped: a face draws every avatar in its light, and the scheduler counts
+`min(avatars, A_max)`. A crowd under one lamp costs more than predicted for the first draw; the prediction follows `lastAvatarMs`
+afterwards. (3) `updateCull` still culls the whole bridge partition for the layer and `markVisible` filters it; the 0.04 ms a face is an
+estimate.
 
 ### The combined cap
 
@@ -347,7 +358,9 @@ the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `se
 
 - **Priority: the dynamic layer first.** An avatar or a moving lamp that lags is seen at once; a dirty static tile shows a stale
   shadow of something that changed, and its wait is bounded by the age order (oldest first). A static tile is never starved: the first
-  static candidate has a place every frame when it fits the cap at all (the dynamic layer gives up its last faces for it).
+  static candidate has a place every frame when it fits the cap (the dynamic layer gives up its last faces for it); one whose own
+  prediction is above the whole cap runs alone as the progress pick once it has waited 4 frames (or was never drawn), and that frame's
+  dynamic picks are dropped, so the overrun is that one item and a standing avatar cannot starve it.
 - **The sum of the predicted costs of a frame's picks never exceeds the cap**, except for the one progress pick: when nothing was spent
   yet in the frame, a single item whose own prediction is above the cap runs alone. Two caches share the cap through the frame ledger
   (`frameLedger()`): the second takes what the first left, and a frame in which the cap is spent serves nothing more.
