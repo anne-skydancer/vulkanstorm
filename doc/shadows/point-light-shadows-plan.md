@@ -14,6 +14,15 @@ avatars and many lights/transmission.md` (cited as "TM"; the other notes are cit
 `reports/Real time shadow casting techniques.md`). Earlier work: the planner verdict and the first survey of 2026-11-14
 (`reports/point-light-shadows-2026-11-14/` on the owner's machine, with the offline lookup bench `bench_point_lookup.py`).
 
+**Citation keys.** The notes are our research notes, kept on the owner's machine, not in the repository (`research_notes/` and
+`reports/` are untracked). Keys: TM = `research_notes/Shadow methods for avatars and many lights/transmission.md`; RT =
+`reports/Real time shadow casting techniques.md` (L:n = a line of its note `research_notes/Real time shadow casting
+techniques/local_light_shadows.md`, R:n = a line of the report); SM = `reports/Shadow methods for avatars and many lights.md`
+(R:n = a line of the report); in `research_notes/Shadow methods for avatars and many lights/`: GG1, GG2, GG3 = `gpugems1.md`,
+`gpugems2.md`, `gpugems3.md`; M = `proxies.md`; in `research_notes/Real time shadow casting techniques/`: A = `api_and_performance.md`,
+FILT = `filtering_soft_shadows.md`. Line numbers are those of the files on the owner's machine. The GPU Gems chapter numbers
+follow our notes and were not checked against the books.
+
 ## 1. Summary
 
 The in-world check of 2026-11-14 found 55 of the 59 lamps near the owner's living room are point lights with no shadow, so
@@ -625,7 +634,7 @@ dither above, or goes to CSSM2).
   pattern detail [I].
 
 **Open before building:**
-- How Second Life content sets alpha and colour for glass. Builders mostly use alpha blend with a tint in the diffuse colour, so
+- How Second Life content sets alpha and colour for glass. Builders mostly use alpha blend with a tint in the diffuse colour [unverified], so
   t has to be derived from base colour and alpha in a defined way; glTF transmission is absent in SL [unverified] (TM section 16).
 - Whether blended faces below 0.98 leave the solid tile (above).
 - Whether the tint tile fits the atlas budget (T3).
@@ -680,7 +689,7 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 |---|---|---|---|
 | Per-avatar maps | one shadow map per avatar and lamp (Unreal's per-object shadows) as an alternative to the dynamic layer L | the S to L copy plus avatar draw is the plan; this is the real alternative if the lag or the copy cost bites. Epic itself says a Movable light becomes the cheaper path at some caster count [I] | notes SM R:122, R:124 |
 | Transform-feedback skinning | skin an avatar once a frame, then draw the captured vertices into every face | core GL, not compute. It saves **GPU skinning only**: the lag table's limit is CPU submit (3.7), which this does not lower. Many separately rigged attachments mean many captures; alpha-masked parts need UVs in the stream. Not measured | GPU Gems 1 ch. 4, GG2 ch. 3, GG3 ch. 3; notes SM R:184-185, R:233-234 [I] |
-| Caster LOD chosen from the light | pick each caster's LOD from its size in the tile for far faces, then freeze it | conflicts with the LOD pin (3.6). Decide after Q0 measures the pin's main-view cost. SL creator LODs can change the silhouette. No source says the shadow pass may use another LOD than the pinned one [I] | GG1 ch. 28 (fewer bones for distant characters), notes M:124 |
+| Caster LOD chosen from the light | pick each caster's LOD from its size in the tile for far faces, then freeze it | conflicts with the LOD pin (3.6). Decide after Q0 measures the pin's main-view cost. SL creator LODs can change the silhouette [I]. No source says the shadow pass may use another LOD than the pinned one [I] | GG1 ch. 28 (fewer bones for distant characters), notes M:124 |
 | Clustered emitters sharing one cube | one set of faces for lamps that lie close together (a chandelier) | no source in the literature. Casters inside the cluster's radius are placed wrongly; every member needs identity exclusion (D4). Q0 counts the lamps within 15 cm of another, the `emitterExtent` clamp (3.10) | none; rests on the PCSS light-size formula [I] |
 
 ### 8.2 Considered and rejected
@@ -745,7 +754,7 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 - The 2026-11-14 lookup bench was not run again here: a viewer build was running, and GPU timings taken then are unreliable.
 - Scalability on AMD and Intel GPUs.
 - `gl_ClipDistance` routing to tiles (D′): nothing is built or measured, and the literature has no source for it.
-- That the Q2a coder's grep finds no volume or box on `LLDrawInfo` callers (3.3).
+- That the Q2a coder greps `LLDrawInfo` callers for a volume or box (3.3).
 - That the pools' face renders take the `STOCHASTIC_SHADOW_ALPHA` caster permutation (7.1): read per program, not per pass.
 - Whether Q5's tint tiles fit the atlas budget; how SL content sets alpha and colour for glass; the 2011 cost figures on today's GPUs.
 - The occlusion query's gain on point faces (an idea from the notes, no measurement), and the dilated PCF's look.
