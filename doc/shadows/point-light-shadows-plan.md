@@ -481,6 +481,123 @@ Then `perf_check.py --no-glstats` frames in the living room, the bedroom and out
 1440p. Before any number is recorded, `bench_point_lookup.py` moves into `scripts/shadows/` (default ref `origin/vkstorm-devel`)
 and is run again together with `point_faces_bench.py`, on an idle GPU.
 
+### 3.11 Q0 offline results (2026-11-15)
+
+`scripts/shadows/point_faces_bench.py` (CPU model and unit tests: `point_faces_model.py`, `scripts/tests/test_point_faces_model.py`; tables:
+`point_faces_report.py`; raw rows: `doc/shadows/point-faces-q0-results.jsonl`). Standalone GL through `scripts/perf/gl_test_context.py`, no
+viewer. Every figure below is [M] unless it says otherwise.
+
+**Hardware and state [M].** AMD Ryzen 9 9950X3D with CCD1 and SMT off on purpose (8 cores, 8 threads), 64 GiB, Windows 11 Pro 10.0.26300;
+NVIDIA GeForce RTX 5070 Ti, driver 621.14, OpenGL 4.6.0 compatibility context, `ARB_shader_viewport_layer_array` present. **Timing ran on
+2026-11-15 from about 19:04 to 19:18 local time.** A hotfix build was running when the bench started (18:55). The bench polled every 60 s for
+`cl.exe`, `link.exe`, `msbuild.exe`, `ninja.exe`, `vulkanstorm-bin.exe`, `SLPlugin.exe` and `tracy-capture.exe` and timed nothing until none
+ran (it waited 0, 240 or 480 s before a configuration); it checked the processes before and after each configuration. One configuration
+(room50k, face 128, mask 1) saw a build start during its timing; it was timed again on the quiet machine and replaced. Every stored row has no
+listed process after it. Limit: the check is a process-name poll before and after each configuration, not a continuous watch, and GPU
+clocks were not logged during the runs.
+
+**Method [M].** 9 runs of 20 repetitions after 3 warm-up repetitions; a run's value is the mean of its 20 repetitions, the figure is the median
+of the 9 run values; the methods are interleaved run by run. CPU = submit time (cull, sort, state and draw calls) with
+`time.perf_counter_ns` (QPC); GPU = `GL_TIME_ELAPSED` around the submit. The depth atlas is 3x2 tiles of `DEPTH_COMPONENT32F`; the lamp
+is at the origin, faces are 90 degrees, near 0.1 m, far 40 m. **Caveat: the CPU figures are Python and ctypes time.** An empty GL call
+costs 0.61 microseconds from Python here, so the CPU numbers follow the number of GL calls, plus a cull-and-sort model (numpy box tests, a
+Python sort of the draw list). A C++ submit costs less in absolute terms. The ratios between methods are the usable result, and the call counts
+are given next to them. Scenes: rooms of 48,400 / 194,400 / 972,000 triangles in 50 / 300 / 1500 draws (ten draws per spatial group and per
+vertex buffer, each draw with its own model matrix uniform); `straddleK` rooms of 194,400 triangles whose 30 groups were generated to touch K
+faces (achieved: K=3 to 6 all 30 groups; K=1 gave 7 groups at one face, 22 at two, 1 at three; K=2 gave 28 at two and 2 at three); and a skinned
+avatar proxy of 146,160 triangles in 6 draws with four bone matrices (its group touches one face). The natural rooms' groups touch 1 to 6
+faces (room1M: 17, 49, 70, 6, 5, 3 groups at 1 to 6). Masks of 1 / 2 / 3 / 6 faces are faces {0}, {0,1}, {0,2,4} and all six.
+
+**Equal work [M].** Every method's depth atlas is read back and compared with A's, in all 70 configurations. B, C, D, E and A with masks
+are **bit-identical** to A in every configuration. D′ is not bit-exact (the affine map and the clip planes change the last ulp). The
+tolerance is 1 mm of linear depth, and at most 1e-4 of the covered texels may differ in coverage or exceed it. D′ passes in all 70
+configurations: 2 coverage mismatches and 44 texels over 1 mm in total, out of 13.3 million covered texels; the worst texel differs by
+0.88 m (a neighbouring surface winning one edge pixel). The same triangles reach the same texels.
+
+**CPU submit, ms, face 256 (the face size does not change it)**
+
+| scene | mask | A | B | C | D | D′ | E | A+masks | D′+masks |
+|---|---|---|---|---|---|---|---|---|---|
+| room50k | 1 | 0.06 | 0.07 | 0.06 | 0.07 | 0.08 | 0.02 | 0.10 | 0.12 |
+| room50k | 3 | 0.15 | 0.19 | 0.06 | 0.07 | 0.08 | 0.03 | 0.20 | 0.12 |
+| room50k | 6 | 0.29 | 0.34 | 0.06 | 0.06 | 0.08 | 0.04 | 0.32 | 0.12 |
+| room200k | 1 | 0.31 | 0.21 | 0.32 | 0.35 | 0.39 | 0.07 | 0.28 | 0.31 |
+| room200k | 3 | 0.88 | 0.58 | 0.32 | 0.35 | 0.40 | 0.14 | 0.61 | 0.44 |
+| room200k | 6 | 1.70 | 1.16 | 0.31 | 0.36 | 0.40 | 0.20 | 1.14 | 0.47 |
+| room1M | 1 | 1.55 | 0.80 | 1.57 | 1.75 | 1.97 | 0.33 | 1.04 | 1.19 |
+| room1M | 3 | 4.36 | 2.31 | 1.56 | 1.75 | 1.96 | 0.60 | 2.41 | 1.85 |
+| room1M | 6 | 8.44 | 4.35 | 1.55 | 1.76 | 1.96 | 0.98 | 4.29 | 2.16 |
+| avatar | 6 | 0.03 | 0.06 | 0.01 | 0.01 | 0.02 | 0.02 | 0.06 | 0.06 |
+
+GL calls (draw calls), room1M, mask 6: A 18,914 (9,000), B 8,246 (3,920), C 3,154 (1,500), D 3,153 (1,500), D′ 3,159 (1,500), E 2,714 (900),
+A+masks 8,246 (3,920), D′+masks 3,159 (1,500).
+
+**CPU ratio A / D′ (the D7 gate is 2.0)**
+
+| scene | mask 1 | mask 2 | mask 3 | mask 6 |
+|---|---|---|---|---|
+| room50k | 0.73 | 1.48 | 2.01 | 3.80 |
+| room200k | 0.80 | 1.51 | 2.20 | 4.21 |
+| room1M | 0.79 | 1.50 | 2.22 | 4.30 |
+| avatar | 0.61 | 0.92 | 1.16 | 1.59 |
+
+**GPU, ms, face 256** (the face size changes it little: room200k at mask 6 runs 0.89 to 1.00 for A and 0.075 to 0.078 for D′ from 64 to 512)
+
+| scene | mask | A | B | C | D | D′ | E | A+masks | D′+masks |
+|---|---|---|---|---|---|---|---|---|---|
+| room50k | 6 | 0.018 | 0.019 | 0.019 | 0.018 | 0.027 | 0.021 | 0.019 | 0.026 |
+| room200k | 1 | 0.006 | 0.006 | 0.032 | 0.006 | 0.010 | 0.009 | 0.006 | 0.010 |
+| room200k | 3 | 0.118 | 0.013 | 0.040 | 0.024 | 0.036 | 0.024 | 0.013 | 0.026 |
+| room200k | 6 | 1.000 | 0.350 | 0.047 | 0.049 | 0.075 | 0.048 | 0.319 | 0.053 |
+| room1M | 1 | 0.615 | 0.019 | 0.570 | 0.927 | 0.991 | 0.039 | 0.019 | 0.072 |
+| room1M | 3 | 3.372 | 1.234 | 0.668 | 0.957 | 1.086 | 0.120 | 1.216 | 0.736 |
+| room1M | 6 | 7.474 | 3.514 | 0.722 | 0.986 | 1.123 | 0.244 | 3.223 | 1.117 |
+| avatar | 6 | 0.037 | 0.012 | 0.039 | 0.035 | 0.044 | 0.037 | 0.012 | 0.012 |
+
+GPU ratio D′ / A at mask 6: room50k 1.48, room200k 0.08, room1M 0.15, avatar 1.20 (at mask 1: 1.13, 1.65, 1.61, 1.00). A pays for every draw once
+per face (9,000 draws in the 1M room), so a large scene is draw-bound on the GPU. D′ pays per vertex and per clip plane, so it loses where the
+scene is small or the draw count low (the avatar: 20 % more than A).
+
+**Group masks [M]** (room200k with groups generated to touch K faces, mask 6, face 256; ms, CPU / GPU)
+
+| K | A | A+masks | D′ | D′+masks |
+|---|---|---|---|---|
+| 1 | 1.70 / 0.901 | 0.67 / 0.016 | 0.41 / 0.063 | 0.47 / 0.025 |
+| 2 | 1.69 / 0.900 | 0.75 / 0.018 | 0.40 / 0.063 | 0.48 / 0.028 |
+| 3 | 1.68 / 0.908 | 0.99 / 0.103 | 0.40 / 0.072 | 0.47 / 0.045 |
+| 4 | 1.69 / 0.905 | 1.27 / 0.168 | 0.40 / 0.072 | 0.47 / 0.053 |
+| 5 | 1.72 / 0.960 | 1.57 / 0.624 | 0.41 / 0.071 | 0.47 / 0.062 |
+| 6 | 1.70 / 0.990 | 1.86 / 1.056 | 0.40 / 0.080 | 0.47 / 0.080 |
+
+The mask cuts A's CPU time 2.5x when the groups touch one or two faces (0.67 against 1.70 ms) and its GPU time by 60x, but at six faces it
+costs 9 % more CPU and 7 % more GPU than A without it (the box tests, no draws saved). On D′ it costs about 0.07 ms of CPU for the tests and
+cuts the GPU time by up to 2.5x. On the natural rooms A+masks equals B in draws, and its CPU gain over A is 2.0x at 1M, mask 6;
+D′+masks against A+masks is 2.0x (1M), 2.4x (200k) and 2.7x (50k) at mask 6.
+
+**Which method wins where.** CPU: E is lowest nearly everywhere (0.98 ms at 1M, mask 6), but only for draws that share a vertex buffer (ten
+per buffer in this bench); the viewer draws per `LLDrawInfo` with its own buffer, texture and matrix, so E is not available to it without a
+rework outside this plan. Of the rest, C, D and D′ are within 0.4 ms of each other at 1M and cost one submit however many faces are in the
+mask; A and B grow with the mask. GPU: C, D and E are lowest on the large rooms; D′ is 14 % (1M) to 50 % (50k) above D (the clip distances), and still
+6.7x below A at 1M, mask 6. C is the slowest on small scenes (the geometry shader's fixed cost, about 0.03 ms) and needs a geometry-shader
+variant of every caster program. B beats A on CPU and GPU in every scene with 300 draws or more, because the face frustum removes draws.
+
+**D7 by the plan's own rule [recommendation only; no decision changed].** The rule: D′ must give at least 2x less CPU than A and pass the
+image check. The image check passes in all 70 configurations. **The 2x gate is met at masks of 3 and 6 faces** in every room (2.01 to 2.22
+at three faces, 3.80 to 4.30 at six). **It is not met at masks of 1 and 2 faces** (0.73 to 1.51; D′ is 1.25x to 1.4x A at one face and 1.5x better at
+two) **or for the avatar alone** (0.61 to 1.59). The faces a lamp renders when it fills are the full cube (mask 6), where the gain is about 4x
+and the GL calls fall 6x (18,914 to 3,159 at 1M). The loss at one face is small in absolute terms (0.02 ms at 50k, 0.08 ms at 200k, 0.42 ms
+at 1M). Outcome by the rule: **D′ passes where the lamp's whole cube is rendered and fails at one or two faces.** Adopt D′ if the owner accepts
+a single-face update costing up to 1.4x A's CPU; if one path for every mask must meet 2x, the gate is not met and D7 stays A. D′ needs no
+extension, so the AMD and Intel condition of D7 does not apply to it; the owner confirms. Group masks pay on A (2.5x CPU, 60x GPU when groups
+touch one or two faces) and on D′ (up to 2.5x GPU), and should go with whichever method is chosen.
+
+**Not measured.** AMD and Intel drivers (only this RTX 5070 Ti); the viewer's real caster programs (alpha-masked, tree, GLTF) with textures
+bound per draw, material changes between draws, and rigged avatars at 100 draws; Second Life or OpenSim content (the scenes are random grid
+patches, so the triangle sizes, overdraw and group shapes are synthetic); C++ submit cost (the CPU figures include Python and ctypes
+overhead); GPU clocks during the runs; a guard band at the tile edges for D′ (the clip planes sit exactly on the tile edge); other face-mask
+shapes than {0}, {0,1}, {0,2,4} and all six; the list of existing `gl_ClipDistance` users in the caster path (the plan asks Q0 for it; this
+bench does not make it); the 3.4 lookup bench and the in-world census.
+
 ## 4. Forward alpha and water
 
 - **Forward alpha** (alpha blending under stochastic transparency, `alphaF`, `pbralphaF`, the forward `materialF`, GLTF
