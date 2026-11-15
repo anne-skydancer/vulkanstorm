@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "lllocalshadows.h" // <Vulkanstorm/> setTileOrigin for the sun cascades
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
@@ -2827,6 +2828,19 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             LLSpatialPartition* part = region->getSpatialPartition(i);
             if (part)
             {
+                // <Vulkanstorm> the local shadow tiles split the scene in two layers: the fixed layer (static) has no avatar
+                // partitions, the avatar layer (dynamic) has only them and the bridges (the attachments are filtered in markVisible)
+                if (sLocalShadowPass == LOCAL_SHADOW_STATIC &&
+                    (i == LLViewerRegion::PARTITION_AVATAR || i == LLViewerRegion::PARTITION_CONTROL_AV))
+                {
+                    continue;
+                }
+                if (sLocalShadowPass == LOCAL_SHADOW_DYNAMIC &&
+                    i != LLViewerRegion::PARTITION_AVATAR && i != LLViewerRegion::PARTITION_CONTROL_AV && i != LLViewerRegion::PARTITION_BRIDGE)
+                {
+                    continue;
+                }
+                // </Vulkanstorm>
                 if (!hud_attachments ? LLViewerRegion::PARTITION_BRIDGE == i || hasRenderType(part->mDrawableType) : hasRenderType(part->mDrawableType))
                 {
                     part->cull(camera);
@@ -2835,7 +2849,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
         }
 
         //scan the VO Cache tree
-        LLVOCachePartition* vo_part = region->getVOCachePartition();
+        LLVOCachePartition* vo_part = sLocalShadowPass == LOCAL_SHADOW_DYNAMIC ? nullptr : region->getVOCachePartition(); // <Vulkanstorm/>
         if(vo_part)
         {
             // <FS:Beq> Fix area search again
@@ -3202,7 +3216,7 @@ void LLPipeline::markVisible(LLDrawable *drawablep, LLCamera& camera)
                     {
                         LLVOAvatar* av = vobj->asAvatar();
                         if (av &&
-                            ((!sImpostorRender && av->isImpostor()) //ignore impostor flag during impostor pass
+                            ((!sImpostorRender && sLocalShadowPass != LOCAL_SHADOW_DYNAMIC && av->isImpostor()) //ignore impostor flag during impostor pass (and in the local shadows' avatar layer: an impostored avatar casts in full) <Vulkanstorm/>
                              //|| av->isInMuteList() // <FS:Ansariel> Partially undo MAINT-5700: Draw imposter for muted avatars
                              || (LLVOAvatar::AOA_JELLYDOLL == av->getOverallAppearance() && !av->needsImpostorUpdate()) ))
                         {
@@ -3212,8 +3226,14 @@ void LLPipeline::markVisible(LLDrawable *drawablep, LLCamera& camera)
                 }
             }
             // <Vulkanstorm> a projector tile draws the fixed layer: a linkset the simulator reports moving, or a physical one, is
-            // not in it (unless it is the lamp's own linkset, the fixture)
-            if (sLocalShadowPass == LOCAL_SHADOW_STATIC && !LLShadowDirtyFeed::bridgeCasts(root, RenderSpotLight))
+            // not in it (unless it is the lamp's own linkset, the fixture); worn objects are the avatar layer's
+            if (sLocalShadowPass == LOCAL_SHADOW_STATIC &&
+                (root->getVObj()->isAttachment() || !LLShadowDirtyFeed::bridgeCasts(root, RenderSpotLight)))
+            {
+                return;
+            }
+            // the avatar layer draws the worn objects only
+            if (sLocalShadowPass == LOCAL_SHADOW_DYNAMIC && (!root->getVObj()->isAttachment() || root->getVObj()->isHUDAttachment()))
             {
                 return;
             }
@@ -3631,17 +3651,20 @@ void LLPipeline::stateSort(LLDrawable* drawablep, LLCamera& camera)
 
     if (drawablep->isAvatar())
     { //don't draw avatars beyond render distance or if we don't have a spatial group.
+        // <Vulkanstorm> the local shadows' avatar layer is chosen by the lamp's position (the pool's pairing), never by what the
+        // camera sees: the camera's render distance and visibility do not apply
         if ((drawablep->getSpatialGroup() == NULL) ||
-            (drawablep->getSpatialGroup()->mDistance > LLVOAvatar::sRenderDistance))
+            (sLocalShadowPass != LOCAL_SHADOW_DYNAMIC && drawablep->getSpatialGroup()->mDistance > LLVOAvatar::sRenderDistance))
         {
             return;
         }
 
         LLVOAvatar* avatarp = (LLVOAvatar*) drawablep->getVObj().get();
-        if (!avatarp->isVisible())
+        if (sLocalShadowPass != LOCAL_SHADOW_DYNAMIC && !avatarp->isVisible())
         {
             return;
         }
+        // </Vulkanstorm>
     }
 
     assertInitialized();
@@ -12583,7 +12606,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         // crossing, which re-anchors the world grid. Reset to 0 once after the loop.
         {
             const LLShadowCascadeFit::DitherOrigin origin = LLShadowCascadeFit::alphaDitherOrigin(box);
-            LLProjectorShadows::setTileOrigin(origin.x, origin.y);
+            LLLocalShadowGL::setTileOrigin(origin.x, origin.y);
             origin_set = true;
         }
         {
@@ -12602,8 +12625,8 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
     if (origin_set)
     {
         // <Vulkanstorm/> every pass but the sun cascades and the projector tiles expects origin 0; renderShadow leaves
-        // its own program bound, so rebind the one the callers expect (as the projector tile pass does)
-        LLProjectorShadows::setTileOrigin(0.f, 0.f);
+        // its own program bound, so rebind the one the callers expect (as LLLocalShadowGL::Scope does)
+        LLLocalShadowGL::setTileOrigin(0.f, 0.f);
         gDeferredShadowCubeProgram.bind();
     }
 }

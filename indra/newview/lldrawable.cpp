@@ -1543,9 +1543,12 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
             if (objparent->isAvatar())
             {
                 LLVOAvatar* avatarp = (LLVOAvatar*) objparent;
-                if (avatarp->isVisible())
+                // <Vulkanstorm> the local shadows' avatar layer is chosen by the lamp's position: the camera's visibility of the
+                // avatar, its age and its impostor flag do not apply (an impostored avatar casts in full)
+                const bool layer = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC;
+                if (layer || avatarp->isVisible())
                 {
-                    impostor = objparent->isAvatar() && !LLPipeline::sImpostorRender && ((LLVOAvatar*) objparent)->isImpostor();
+                    impostor = !layer && objparent->isAvatar() && !LLPipeline::sImpostorRender && ((LLVOAvatar*) objparent)->isImpostor();
                     loaded   = objparent->isAvatar() && ((LLVOAvatar*) objparent)->isFullyLoaded();
                 }
                 else
@@ -1555,12 +1558,13 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
             }
 
             if (!group ||
-                LLDrawable::getCurrentFrame() - av->getVisible() > 1 ||
+                (LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC && LLDrawable::getCurrentFrame() - av->getVisible() > 1) ||
                 impostor ||
                 !loaded)
             {
                 return;
             }
+            // </Vulkanstorm>
         }
     }
 
@@ -1632,7 +1636,7 @@ void LLSpatialBridge::updateDistance(LLCamera& camera_in, bool force_update)
     if (mDrawable->getVObj())
     {
         // Don't update if we are part of impostor, unles it's an impostor pass
-        if (!LLPipeline::sImpostorRender && mDrawable->getVObj()->isAttachment())
+        if (!LLPipeline::sImpostorRender && LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC && mDrawable->getVObj()->isAttachment()) // <Vulkanstorm/> the avatar layer draws an impostored avatar in full
         {
             LLDrawable* parent = mDrawable->getParent();
             if (parent && parent->getVObj())
