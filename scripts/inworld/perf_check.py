@@ -137,15 +137,15 @@ def load_scenario(path):
     return sc
 
 
-def fps_from_log(path, offset):
+def fps_from_log(path, offset, end=None):
     """Mean frames per second over the "FrameCounters: frames=N" lines (one per second) the viewer wrote after byte `offset`
-    of its log (the first, partial second is dropped when there are more than two), or None."""
+    of its log (up to byte `end` when given; the first, partial second is dropped when there are more than two), or None."""
     if not path:
         return None
     try:
         with open(path, "rb") as f:
             f.seek(offset)
-            text = f.read().decode("utf-8", "replace")
+            text = f.read(None if end is None else max(0, end - offset)).decode("utf-8", "replace")
     except OSError:
         return None
     vals = [int(m) for m in re.findall(r"FrameCounters: frames=(\d+)", text)]
@@ -154,14 +154,25 @@ def fps_from_log(path, offset):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def region_from_log(path):
-    """The last region the viewer entered ("Entering region [NAME]" in its log), or None."""
+def region_from_log(path, offset=0, first=False):
+    """A region the viewer entered ("Entering region [NAME]" in its log after byte `offset`): the last one, or the first with
+    first=True; None when there is none. The viewer logs the line for neighbour regions too, so the caller picks the line
+    that is the agent's own: the first of the session (login) or the first after a teleport began."""
     try:
-        text = pathlib.Path(path).read_text(encoding="utf-8", errors="replace") if path else ""
-    except OSError:
+        with open(path, "rb") as f:
+            f.seek(offset)
+            text = f.read().decode("utf-8", "replace")
+    except (OSError, TypeError):
         return None
     found = re.findall(r"Entering region \[([^\]]+)\]", text)
-    return found[-1] if found else None
+    return (found[0] if first else found[-1]) if found else None
+
+
+def log_size(path):
+    try:
+        return os.path.getsize(path) if path else 0
+    except OSError:
+        return 0
 
 
 def cell_of(glob):
@@ -465,8 +476,8 @@ class Run:
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             self.tick(0.5)
-        self.v.sleep(1.5)       # the last line
-        return fps_from_log(self.vlog, off)
+        # only the lines written up to the deadline: the capture has ended by then, later lines are not "profiler connected"
+        return fps_from_log(self.vlog, off, log_size(self.vlog))
 
     def log_window(self, key, preset):
         """The measurement window without the GLSubmitStats API: window.seconds s (moving camera, Tracy capture when given)."""
@@ -714,13 +725,15 @@ class Run:
             self.warn("the viewer window changed size during the run (%s -> %s): the windows are not comparable" % (start_geo, end_geo))
         self.save_index()
         self.cleanup()
+        clean = (proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
+                 and not self.index["capture_failures"] and not self.index.get("teleport_failures"))
         if sc["owner_teleport"]:
-            self.notify(self.handoff_cfg()["done_message"])
-        return (proof_ok and not self.index["compare_failures"] and not self.index["window_failures"]
-                and not self.index["capture_failures"])
+            self.notify(self.handoff_cfg()["done_message"] if clean else self.handoff_cfg()["problem_message"])
+        return clean
 
     def handoff_cfg(self):
-        return {"poll_s": 1.0, "stable_polls": 3, "timeout_s": 1800.0,
+        return {"poll_s": 1.0, "stable_polls": 3, "timeout_s": 1800.0, "renotify_s": 180.0,
+                "problem_message": "Session ended with problems: see perf.json (you can quit).",
                 "ready_message": "Ready for the busy region: teleport there now.",
                 "done_message": "Session done: you can quit.", **self.sc["owner_teleport"]}
 
@@ -733,12 +746,20 @@ class Run:
             self.warn("the pop-up %r could not be shown: %s" % (message, exc))
         log("pop-up: " + message)
 
+    def notify_problem(self):
+        """The owner is told to stay away from the viewer: on a failed or aborted run a pop-up says it is over."""
+        if self.sc["owner_teleport"]:
+            try:
+                self.notify(self.handoff_cfg()["problem_message"])
+            except Exception as exc:  # noqa: BLE001  (the connection may be gone)
+                log("the pop-up could not be shown: %s" % exc)
+
     def wait_for_owner_teleport(self):
         """Record where the owner logged in, ask for a teleport to the busy region, and wait until the region cell has changed
         and the position holds still for stable_polls polls; then settle (after_teleport_s)."""
         cfg = self.handoff_cfg()
         pos, glob = self.agent_state()
-        name = self.args.start_region or region_from_log(self.vlog)
+        name = self.args.start_region or region_from_log(self.vlog, first=True)     # the first line of the session is the home region
         self.login = {"region": name, "pos": pos, "global": glob}
         self.index["login"] = self.login
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
@@ -747,31 +768,40 @@ class Run:
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
+        mark, renotify = log_size(self.vlog), time.monotonic() + float(cfg["renotify_s"])
         while True:
             self.v.sleep(float(cfg["poll_s"]))
             reg, g = self.agent_state()
+            if time.monotonic() > renotify:
+                self.notify(cfg["ready_message"])       # a toast fades: ask again
+                renotify = time.monotonic() + float(cfg["renotify_s"])
             if time.monotonic() > end:
                 raise LeapError("no teleport to another region within %.0f s" % float(cfg["timeout_s"]))
             if cell_of(g) == cell_of(glob):
                 stable, last = 0, None
+                mark = log_size(self.vlog)      # the teleport's own log lines come after this
                 continue
             stable = stable + 1 if last is not None and dist3(g, last) <= 1.0 else 1
             last = g
             if stable >= int(cfg["stable_polls"]):
                 break
-        busy = region_from_log(self.vlog)
-        for _ in range(10):
+        busy = self.args.busy_region
+        for _ in range(0 if busy else 10):
+            busy = region_from_log(self.vlog, mark, first=True)     # the destination is logged before its neighbours
             if busy and busy != name:
                 break
+            busy = None
             self.v.sleep(1.0)       # the log line may lag
-            busy = region_from_log(self.vlog)
+        if not busy:
+            self.warn("the busy region's name could not be read from the viewer log: pass --busy-region NAME to time the teleports")
         self.busy_region = busy
         self.index["busy"] = {"region": busy, "pos": reg, "global": g}
         log("arrived in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
         self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
 
     def request_teleport(self, region, x, y, z):
-        self.v.fire("LLAgent", "requestTeleport", regionname=region, x=x, y=y, z=z, skip_confirmation=True)
+        # LLAgent.requestTeleport still opens the "TeleportViaSLAPP" confirmation; this operation does not
+        self.v.fire("LLTeleportHandler", "teleport", regionname=region, x=x, y=y, z=z)
         self.v.barrier()
 
     def agent_state(self):
@@ -825,9 +855,11 @@ class Run:
             self.v.release_camera()
             self.camera_set = False
             self.save_restore()
-        start_region = self.busy_region or self.args.start_region or region_from_log(self.vlog)
+        start_region = self.busy_region or self.args.busy_region
+        if not start_region and not self.sc["owner_teleport"]:      # no owner flow: the region the agent is in
+            start_region = self.args.start_region or region_from_log(self.vlog)
         if not start_region:
-            raise LeapError("the start region is unknown (no 'Entering region' line in the viewer log): pass --start-region NAME")
+            raise LeapError("the region of the teleports is unknown (not read from the viewer log): pass --busy-region NAME")
         pos, glob = self.agent_state()
         off = [float(c) for c in cfg["offset"]]
         for i in (0, 1):
@@ -846,9 +878,19 @@ class Run:
         started = self.start_capture("MC1-teleports", float(cfg["capture_s"]))
         for kind, region, xyz in plan:
             self.v.check_abort()
-            info["results"].append(self.teleport_once(kind, region, xyz, cfg))
+            try:
+                info["results"].append(self.teleport_once(kind, region, xyz, cfg))
+            except Aborted:
+                raise
+            except LeapError as exc:
+                self.warn("teleport %s to %s failed: %s" % (kind, region, exc))
+                info["results"].append({"kind": kind, "region": region, "target": list(xyz), "failed": True, "reason": str(exc)})
+                self.index.setdefault("teleport_failures", []).append(kind)
             self.save_index()
             self.v.sleep(float(cfg["pause_s"]))
+        if started and not self.tracy.running():
+            self.warn("the teleport series ran longer than the capture (%.0f s): its end is not in MC1-teleports" % float(cfg["capture_s"]))
+            self.index["capture_failures"].append("MC1-teleports (ended before the series)")
         self.finish_capture(started)
 
     def fps_probe(self):
@@ -883,6 +925,19 @@ def dry_run(v, sc, args, outdir):
             rows.append(("setting " + key, "PASS" if cur is not None else "FAIL", "" if cur is None else repr(cur.get("value"))))
         if args.tracy_capture:
             rows.append(("tracy-capture", "PASS" if os.path.isfile(args.tracy_capture) else "FAIL", args.tracy_capture))
+        rows.append(("viewer log", "PASS" if args.vlog else "FAIL", str(args.vlog or "not found (--viewer-log): no frame rate without it")))
+        need = {"LLAgent": ["getPosition"], "LLNotifications": ["requestAdd"]}
+        if sc["owner_teleport"] or sc["teleports"] or sc["teleport"]:
+            need["LLTeleportHandler"] = ["teleport"]
+        if any(p.get("camera") for p in sc["presets"]):
+            need["LLAgent"] += ["setCameraParams", "setFollowCamActive", "removeCameraParams"]
+        for api, ops in need.items():
+            try:
+                blob = json.dumps(v.req("LLLeap", "getAPI", api=api).get("ops"), default=str)
+                missing = [o for o in ops if '"%s"' % o not in blob]
+                rows.append(("api " + api, "FAIL" if missing else "PASS", ("missing ops: %s" % missing) if missing else "ops ok"))
+            except LeapError as exc:
+                rows.append(("api " + api, "FAIL", str(exc)))
     else:
         problems = check_api(v)
         rows = [("api", "FAIL" if problems else "PASS", "; ".join(problems) or "%s has %d operations" % (API, len(REQUIRED_OPS)))]
@@ -936,10 +991,13 @@ def parse_args(argv):
     ap.add_argument("--tp-region", default=None, metavar="NAME", help="override: the second region for the teleports instead of the login region (URL-escaped: %%20 is a space; "
                     "--leap arguments cannot hold spaces)")
     ap.add_argument("--tp-pos", default="128,128,30", metavar="X,Y,Z", help="position in --tp-region (default 128,128,30)")
-    ap.add_argument("--start-region", default=None, metavar="NAME", help="the region you log in to (default: the viewer log's last "
-                    "'Entering region' line; URL-escaped like --tp-region)")
+    ap.add_argument("--start-region", default=None, metavar="NAME", help="the region you log in to (default: the first "
+                    "'Entering region' line of the viewer log; URL-escaped like --tp-region)")
+    ap.add_argument("--busy-region", default=None, metavar="NAME", help="the region you teleport to, when its name cannot be read from "
+                    "the viewer log (URL-escaped like --tp-region)")
     args = ap.parse_args(argv)
     args.fps_from_log = False
+    args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
     args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
     args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     try:
@@ -1013,18 +1071,20 @@ def execute(session, args, sc, outdir):
         log("done: %d presets in %s" % (len(run.rows), outdir))
         log("next: python %s %s" % (HERE / "analyze_perf_check.py", outdir))
         if not clean:
-            log("PERFCHECK FAILED: the proof or a compared pass failed (see perf.json, compare_*.json)")
+            log("PERFCHECK FAILED: the proof, a compared pass, a capture or a teleport failed (see perf.json, compare_*.json)")
             code = 4
     except Aborted as exc:
         log("aborted: %s" % exc)
         code = 2
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     except KeyboardInterrupt:
         log("interrupted: restoring the viewer")
         code = 2
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     except ViewerGone as exc:
         log("the pipe from the viewer reached end of file: %s (settings could not be restored; see restore.json)" % exc)
         code = 3
@@ -1036,6 +1096,7 @@ def execute(session, args, sc, outdir):
         code = 1
         if run is not None:
             run.cleanup()
+            run.notify_problem()
     finally:
         if run is not None and run.tracy:
             run.tracy.stop()

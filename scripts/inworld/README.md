@@ -373,19 +373,21 @@ New options and scenario fields (all optional; the older scenarios are unchanged
 - `--tracy-capture <tracy-capture.exe>`: for each measurement window (scenario `window.seconds`, default 60) and for the teleport
   series, `tracy-capture -a 127.0.0.1 -o <run>/<id>.tracy -s <seconds> -f` is started just before the window and waited for. One capture at a
   time; its stdout/stderr go to `<id>.capture.log` (stdout is the LEAP channel); `perf.json` `captures` lists each one with its UTC start, exit
-  code and file size; a failed capture makes the run exit 4. Abort or Ctrl-C stops a running capture.
+  code and file size; a failed capture makes the run exit 4. Abort or Ctrl-C stops a running capture with a hard kill: that capture's file is not kept.
 - Preset `"motion": {"orbit_deg_per_s": 10}` (needs a `camera`): during the window the camera turns around the avatar by `point_camera` calls (about 10 Hz).
-- `"owner_teleport": {...}`: after login and settle the plugin records the login region (the viewer log's `Entering region [Name]`; `--start-region`
-  as a fallback) and position, shows a local pop-up (`LLNotifications.requestAdd`, not nearby chat) and waits for you to teleport by hand: the region
-  cell (floor(global / 256)) changes and the position holds still for 3 polls. Then it settles (`after_teleport_s`) and measures there. At the end
-  it restores the settings and shows "Session done: you can quit."
+- `"owner_teleport": {...}`: after login and settle the plugin records the login region (the first `Entering region [Name]` line of the viewer log, which is the agent's own region: the viewer logs neighbours
+  too; `--start-region` overrides) and position, shows a local pop-up (`LLNotifications.requestAdd`, not nearby chat) and waits for you to teleport by hand: the region
+  cell (floor(global / 256), assuming 256 m regions: walking over a border counts as arrival) changes and the position holds still for 3 polls (the pop-up repeats every 3 minutes). The busy region is the first
+  `Entering region` line after the teleport began (`--busy-region NAME` overrides; the teleports stop with an error when it is unknown). Then it settles (`after_teleport_s`) and measures there. At the end
+  it restores the settings and shows "Session done: you can quit.", or "Session ended with problems: see perf.json" on a failed or stopped run. `AFKTimeout` is set to 0 for the run.
 - `"teleports": {"within": 5, "second": 5, ...}`: N teleports within the region (start + offset, start, ...) and N between the busy region and
-  the login region (`--tp-region NAME [--tp-pos X,Y,Z]` overrides the login region), a return to the busy region when N is odd. Each is timed from the request
+  the login region (`--tp-region NAME [--tp-pos X,Y,Z]` overrides the login region), a return to the busy region when N is odd (so 12 teleports for 5 + 5, kind `return`). Teleports use the `LLTeleportHandler` `teleport` operation (`LLAgent.requestTeleport` opens a confirmation dialog). A failed teleport is recorded (`failed`, `teleport_failures`) and the series goes on. Each is timed from the request
   to the arrival (the agent's global position moves; `LLAgent` has no arrival event) and to the last movement; `perf.json` `teleports.results`. One
   continuous capture (`MC1-teleports`, `capture_s`) covers the series. `--leap` splits at spaces: write a space in a region name as `%20`.
+- The frame rate comes from `FrameCounters` lines of at least 1 s each, taken as 1 s: it reads low by up to one frame time per line (about 2.5 % at 20 fps, under 1 % at 60 fps). The plugin's camera and teleport polling (about 20 LEAP calls a second while moving) is a known small overhead in the measured windows.
 - `"fps_probe": {"seconds": 60, ...}`: the frame rate with no capture connected (`fps_without_profiler` in `perf.json`).
 
-One command for the session (scratch profile `.captures\mc1-profile`, run folder `.captures\mc1-sl-<stamp>`):
+One command for the session (scratch profile `.captures\mc1-profile-<stamp>`, new for every launch, which keeps credentials if you tick "remember": delete it afterwards; `-DryRun` uses a fresh profile under `.fixture-tmp`, run folder `.captures\mc1-sl-<stamp>`):
 
 ```powershell
 .\scripts\inworld\mc1_sl_launch.ps1                  # -TpRegion NAME overrides the second region; -DryRun is the login-screen check

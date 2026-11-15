@@ -12,7 +12,8 @@
   },
   "settings": {
     "RenderVSyncEnable": false,
-    "FSLimitFramerate": false
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0
   },
   "owner_teleport": {
     "poll_s": 1.0,

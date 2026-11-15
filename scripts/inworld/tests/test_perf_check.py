@@ -595,7 +595,13 @@ class FakeCapture:
         self.code = 1
 
 
-def mc1_main(fv, tmp, extra=(), popen=FakeCapture, log_text="Entering region [Start]\n", hand=True, **over):
+class SeriesCapture(FakeCapture):
+    """The teleport series capture outlasts the series (as it must); the window captures are short."""
+    def __init__(self, cmd, **kw):
+        super().__init__(cmd, run_s=14.0 if "MC1-teleports" in " ".join(cmd) else 0.4, **kw)
+
+
+def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, **over):
     """perf_check.execute on a viewer without GLSubmitStats, the way the MC1 launcher runs it: --no-glstats, a viewer log
     holding the region line, the Tracy capture faked, the frame rate read from the log (faked)."""
     sc = json.loads(MC1_SL.read_text(encoding="utf-8"))
@@ -661,6 +667,8 @@ class MC1Test(unittest.TestCase):
             self.assertEqual(pc.fps_from_log(f, off), 120.0)        # the first, partial second is dropped
             self.assertIsNone(pc.fps_from_log(f, f.stat().st_size))
             self.assertEqual(pc.region_from_log(f), "Bar Foo")
+            self.assertEqual(pc.region_from_log(f, first=True), "Ahern")
+            self.assertIsNone(pc.region_from_log(f, f.stat().st_size))
 
     def test_a_full_run_captures_each_window_moves_the_camera_and_times_the_teleports(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -701,6 +709,45 @@ class MC1Test(unittest.TestCase):
                 self.assertGreaterEqual(r["last_move_s"], r["arrive_s"])
             self.assertEqual((fv.agent_region, fv.agent_pos), ("Busy", [100.0, 100.0, 30.0]))
             self.assertIsNone(fv.follow_cam)
+            self.assertEqual(fv.confirm_dialogs, [])        # LLAgent.requestTeleport would open a dialog nobody clicks
+            self.assertEqual(fv.settings["AFKTimeout"][1], 300)     # restored
+            self.assertNotIn("teleport_failures", index)
+
+    def test_neighbour_region_lines_do_not_name_the_regions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            vlog = pathlib.Path(tmp) / "viewer.log"
+
+            def arrive_with_neighbours():
+                fv.agent_region, fv.agent_pos = "Busy", [100.0, 100.0, 30.0]
+                with open(vlog, "a", encoding="utf-8") as f:
+                    f.write("Entering region [Busy]\nEntering region [Neighbour]\n")
+            threading.Timer(1.0, arrive_with_neighbours).start()
+            code, run = mc1_main(fv, tmp, hand=False, log_text="Entering region [Start]\nEntering region [StartNeighbour]\n",
+                                 owner_teleport={"poll_s": 0.2, "timeout_s": 15})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual((index["login"]["region"], index["busy"]["region"]), ("Start", "Busy"))
+
+    def test_a_failed_teleport_is_recorded_the_series_goes_on_and_the_owner_is_told(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            real = fv.api_LLTeleportHandler
+            fv.api_LLTeleportHandler = lambda op, d: None if d["x"] == 128.0 and d["regionname"] == "Start" else real(op, d)
+            code, run = mc1_main(fv, tmp, teleports={"within": 1, "second": 1, "pause_s": 0, "settle_s": 0.2, "capture_s": 14, "timeout_s": 1.0})
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            kinds = [(r["kind"], bool(r.get("failed"))) for r in index["teleports"]["results"]]
+            self.assertIn(("second_region", True), kinds)
+            self.assertIn(("return", False), kinds)
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_a_failed_run_tells_the_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, hand=False, owner_teleport={"poll_s": 0.2, "timeout_s": 1.0})
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
 
     def test_tp_region_overrides_the_login_region(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -717,14 +764,15 @@ class MC1Test(unittest.TestCase):
             code, run = mc1_main(fv, tmp, hand=False, owner_teleport={"poll_s": 0.2, "timeout_s": 1.0})
             self.assertEqual(code, 1)
             self.assertEqual(fv.tp_requests, [])
-            self.assertEqual(len(fv.notifications), 1)      # the request, no "done"
+            self.assertNotIn("Session done: you can quit.", [n[1] for n in fv.notifications])      # the request, then the problem pop-up
 
     def test_an_unknown_start_region_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(projector=PoolModel())
             code, _ = mc1_main(fv, tmp, log_text="nothing\n")
             self.assertEqual(code, 1)
-            self.assertEqual((fv.tp_requests, fv.notifications), ([], []))
+            self.assertEqual(fv.tp_requests, [])
+            self.assertEqual([n[1] for n in fv.notifications], ["Session ended with problems: see perf.json (you can quit)."])
 
     def test_a_teleport_that_never_arrives_fails_the_run_and_stops_the_capture(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -733,8 +781,10 @@ class MC1Test(unittest.TestCase):
             code, run = mc1_main(fv, tmp, popen=lambda cmd, **kw: FakeCapture(cmd, never_exits=True, **kw),
                                  presets=[{"id": "MC1-still", "camera": None}], fps_probe=None,
                                  teleports={"within": 1, "second": 0, "pause_s": 0, "settle_s": 0.2, "capture_s": 3, "timeout_s": 1.0})
-            self.assertEqual(code, 1)
+            self.assertEqual(code, 4)       # recorded as a failed teleport; the run goes on to the end
             self.assertTrue(FakeCapture.instances[-1].terminated)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertTrue(index["teleports"]["results"][0]["failed"])
 
     def test_a_stop_during_a_capture_stops_the_capture(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -776,6 +826,9 @@ class MC1Test(unittest.TestCase):
             self.assertEqual(by["api"], "PASS")
             self.assertEqual(by["setting RenderVSyncEnable"], "PASS")
             self.assertEqual(by["tracy-capture"], "FAIL")
+            self.assertEqual(by["viewer log"], "PASS")
+            for api in ("LLAgent", "LLNotifications", "LLTeleportHandler"):
+                self.assertEqual(by["api " + api], "PASS")
             self.assertEqual(fv.tp_requests, [])
 
 
