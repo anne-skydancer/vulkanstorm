@@ -25,7 +25,7 @@
 constexpr unsigned long long MASK_HASH_4 = 0xc162a2078068620aULL;
 constexpr unsigned long long MASK_HASH_8 = 0xd8062231acc3d415ULL;
 constexpr unsigned long long MASK_HASH_16 = 0xa5bbb68bfab929d6ULL;
-// the transparency's table (maskTable(4) and the blue-noise tile in two rows): the same FNV-1a
+// the transparency's table (maskTable(8) and the blue-noise tile in two rows): the same FNV-1a
 constexpr unsigned long long TRANSPARENCY_TABLE_HASH = 0xec76aaa128658959ULL;
 struct LLStochasticFrameStateTest
 {

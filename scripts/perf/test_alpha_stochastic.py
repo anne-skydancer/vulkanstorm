@@ -6,7 +6,7 @@
 Reuses the standalone Windows GL bootstrap and shader compiler (gl_test_context.py) and runs the
 viewer's own stochastic transparency shaders (the stochastic engine's stochasticSampleF.glsl and
 stochasticResolveUtilF.glsl, and the transparency's alphaStochasticF.glsl, alphaStochasticExpandF.glsl,
-alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl + alphaStochasticSmoothF.glsl (the grain-measuring temporal resolve), alphaStochasticCompositeF.glsl) with the pass structure and GL state of LLPipeline /
+alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl (the grain-measuring temporal resolve, with its mask), alphaStochasticCompositeF.glsl (with the smooth)) with the pass structure and GL state of LLPipeline /
 LLDrawPoolAlpha::renderStochastic on a small target:
   * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run; the transparency's table
@@ -31,8 +31,11 @@ LLDrawPoolAlpha::renderStochastic on a small target:
   * the viewer's alpha and glow vertex programs (alphaV, fullbrightV, materialV, pbralphaV, emissiveV, pbrglowV),
     static and skinned, give one surface the same depth within the passes' margins (transform feedback of gl_Position),
     and a control that associates the matrix products the other way shows that the comparison sees a difference.
-  * the grain-measuring resolve at S = 8, and as iterations of 4 and 2 samples: the grain of one layer is 0 and its colour sharp, two layers have grain,
+  * the grain-measuring resolve at S = 8 (8 samples in one pass: the GL 4.6 base): the grain of one layer is 0 and its colour sharp, two layers have grain,
     the history is dropped where the total alpha changes or the far layer slides, the smooth leaves edges alone;
+  * the mask (the resolve and the composite draw only where something transparent was drawn) and the smooth folded into the composite:
+    over frame sequences (transparency appearing, moving, scattered, gone the next frame) the image, the history and the last
+    total alpha equal those of the passes before the mask (git ref c121dc100c: unmasked blend, separate smooth) bit for bit;
   * the NaN guard: NaN and infinite colours, alphas and transparencies injected into the passes never reach the
     history, the neighbours or the image.
 ;
@@ -163,14 +166,6 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gl_Position=
 variant=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
 void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper),(0x8B30,engine)])
-# a variant whose masks are given (the multi-pass test): the face's seed indexes FORCED_BITS, the S-bit mask, cut to the iteration's samples
-# as alpha_stochasticF.glsl cuts the hashed one
-forced=program([(0x8B31,vertex),(0x8B30,'''#version 420
-uniform float test_alpha; uniform int forced_bits; uniform int st_mode; uniform int st_iteration; uniform int st_samples_hw; out vec4 frag_color;
-void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0));
-  uint n=uint(st_samples_hw); uint shift=(uint(st_iteration)*n)%32u; uint bits=n>=32u?0xffffffffu:((1u<<n)-1u);
-  gl_SampleMask[0]= st_mode!=2 ? -1 : int((uint(forced_bits)>>shift)&bits); }''')])
-FORCED_BITS={}   # seed -> mask: when not empty, stochastic() draws the alpha-only passes with the forced variant
 # the ordinary program: shaded colour and alpha (the accumulation)
 shade=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; uniform vec3 test_rgb; out vec4 frag_color;
@@ -203,19 +198,11 @@ RANK_OF_SEED={}
 # depth noise injected into the accumulation and the glow, in polygon-offset units: the depth of a face in those passes
 # minus its depth in the stochastic depth (the viewer draws them with other programs); 0 = the same depth
 PASS_NOISE={2:0,3:0}
-composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
-# the temporal accumulation, three fragment passes: this frame's samples measured (averaged, their grain, the depths), blended with
-# the history with the engine's resolve object attached, and smoothed (the engine's object attached for the frame weight)
+composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
+# the temporal accumulation: this frame's samples measured (averaged, their grain, the depths, the mask), blended with
+# the history with the engine's resolve object attached; the composite smooths it (the engine's object attached for the frame weight)
 current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
-# where a pass holds fewer samples than S (2 or 4 of the 8) the iterations are measured one by one: the same file as two more programs
-# (ST_STAGE 1: an iteration's moments; 2: the moments of every iteration finished), as llviewershadermgr.cpp builds them
-def viewer_stage(stage):
-    text=viewer('alphaStochasticCurrentF.glsl');head,body=text.split('\n',1)
-    return head+'\n#define ST_STAGE %d\n'%stage+body
-moments_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer_stage(1))])
-measure_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer_stage(2))])
 resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
-smooth_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticSmoothF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
 # The before: the shaders of OLD_REF (the viewer before the 2026-11-14 upgrade: S = 8, the hashed dither, the temporal pair without
 # grain, the composite reading the history), from git, as the viewer compiled them then
 import subprocess
@@ -223,6 +210,14 @@ OLD_REF=os.environ.get('STOCH_OLD_REF','1f38b56b50')
 def old_viewer(name,version=420):
     text=subprocess.run(['git','show',OLD_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,capture_output=True,text=True,check=True).stdout
     return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
+REF_REF=os.environ.get('STOCH_REF_REF','c121dc100c')   # the commit before the mask: unmasked blend, a smooth pass of its own
+def ref_viewer(name,version=420):
+    text=subprocess.run(['git','show',REF_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,capture_output=True,text=True,check=True).stdout
+    return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
+ref_current=program([(0x8B31,screen_vertex),(0x8B30,ref_viewer('alphaStochasticCurrentF.glsl'))])
+ref_resolve=program([(0x8B31,screen_vertex),(0x8B30,ref_viewer('alphaStochasticResolveF.glsl')),(0x8B30,ref_viewer('stochasticResolveUtilF.glsl'))])
+ref_smooth=program([(0x8B31,screen_vertex),(0x8B30,ref_viewer('alphaStochasticSmoothF.glsl')),(0x8B30,ref_viewer('stochasticResolveUtilF.glsl'))])
+ref_composite=program([(0x8B31,screen_vertex),(0x8B30,ref_viewer('alphaStochasticCompositeF.glsl'))])
 VARIANT_OLD={}       # a new variant program -> its twin of the old pipeline (the before / after comparison)
 old_helper=old_viewer('alphaStochasticF.glsl');old_engine=old_viewer('stochasticSampleF.glsl')
 old_composite=program([(0x8B31,screen_vertex),(0x8B30,old_viewer('alphaStochasticCompositeF.glsl'))])
@@ -237,6 +232,7 @@ uniform sampler2DMS st_depth; uniform sampler2D opaque; uniform int samples; out
 void main(){ ivec2 px=ivec2(gl_FragCoord.xy); float o=texelFetch(opaque,px,0).r; uint m=0u;
   for(int s=0;s<samples;++s){ if(texelFetch(st_depth,px,s).r<o) m|=1u<<uint(s); } bits=uvec4(m,0u,0u,0u); }''')])
 
+drawbuffers=fn('glDrawBuffers',None,I,C.POINTER(U))
 def tex2d(fmt,ext_fmt,ext_type,data=None,w=W,h=H):
     t=U();gentex(1,C.byref(t));bindtex(TEX2D,t);teximage(TEX2D,0,fmt,w,h,0,ext_fmt,ext_type,data)
     texparam(TEX2D,MIN,NEAREST);texparam(TEX2D,MAG,NEAREST);texparam(TEX2D,0x813D,0);return t
@@ -263,11 +259,7 @@ targets={}
 for n in (2,4,8):
     accum=texms(RGBA16F,n);trans=texms(RG16F,n);depth=texms(D24,n)
     targets[n]=(fbo((COLOR0,TEXMS,accum),(COLOR1,TEXMS,trans),(DEPTH_ATT,TEXMS,depth)),accum,trans,depth)
-# the iteration moments (pipeline.cpp mAlphaSTMom*): RGBA32F sums, RGBA32F squares and alphas squared, RG16F depth range
-mom_sum=tex2d(RGBA32F,RGBA,FLOAT);mom_squares=tex2d(RGBA32F,RGBA,FLOAT);mom_depth=tex2d(RG16F,RGBA,FLOAT)
-mom_fbo=fbo((COLOR0,TEX2D,mom_sum),(COLOR1,TEX2D,mom_squares),(0x8CE2,TEX2D,mom_depth))
-blend_equation=fn('glBlendEquationSeparate',None,U,U);drawbuffers=fn('glDrawBuffers',None,I,C.POINTER(U))
-GL_MAX=0x8008;GL_FUNC_ADD=0x8006;COLOR2=0x8CE2
+COLOR2=0x8CE2;R8=0x8229
 assert geterror()==0
 
 def set_opaque(z,occluder=None,slope=0.,slope_y=0.):
@@ -301,19 +293,20 @@ def read_timers():
             fn('glDeleteQueries',None,I,C.POINTER(U))(1,C.byref(q))
         out[k]=vals
     TIMERS.clear();return out
-PER_ITERATION=[True]   # False: the measure of the lanes after the last iteration (the viewer before this fix), for the comparison of the multi-pass test
-LAYER_SCISSOR=None   # (x0, x1): the layers cover these columns only (the temporal tests move it)
+LAYER_SCISSOR=None   # (x0, x1) or (x0, x1, y0, y1): the layers cover these columns (rectangle) only (the temporal tests move it)
 SCISSOR_SEEDS=None   # with LAYER_SCISSOR: only the layers of these seeds are cut (None: all)
 TEMPORAL_FRAME=[0]   # the frame in the masks' seeds (st_frame)
 def layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
     if isinstance(slope,tuple): slope,slope_y=slope
     use(prog);uniform1f(loc(prog,b'z'),z);uniform1f(loc(prog,b'slope'),slope);uniform1f(loc(prog,b'slope_y'),slope_y)
-    if prog==forced: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'forced_bits'),FORCED_BITS[seed])
-    elif prog==variant or prog in VARIANT_OLD.values(): uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
+    if prog==variant or prog in VARIANT_OLD.values(): uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
     elif prog==shade: uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
     else: uniform1f(loc(prog,b'test_glow'),glow)
     cut=LAYER_SCISSOR and (SCISSOR_SEEDS is None or seed in SCISSOR_SEEDS)
-    if cut: enable(0x0C11);fn('glScissor',None,I,I,I,I)(LAYER_SCISSOR[0],0,LAYER_SCISSOR[1]-LAYER_SCISSOR[0],H)
+    if cut:
+        enable(0x0C11);r=LAYER_SCISSOR   # (x0, x1) the columns, or (x0, x1, y0, y1) a rectangle
+        y0,y1=(r[2],r[3]) if len(r)==4 else (0,H)
+        fn('glScissor',None,I,I,I,I)(r[0],y0,r[1]-r[0],y1-y0)
     draw(4,0,3)
     if cut: disable(0x0C11)
 
@@ -323,35 +316,16 @@ def spread(n,prog):
     use(prog);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(prog,b'depthMap'),0);draw(4,0,3)
     depthfunc(LEQUAL)
 
-def measure_iteration(it,n,accum,depth,main_fbo,last):
-    """LLPipeline::measureAlphaStochasticIteration: this iteration's lanes measured on their own, the sums added to the moment
-    targets (blend ONE, ONE), the depth range maxed (1 - nearest, farthest - 1), the accumulation cleared for the next iteration."""
-    with timed('measure'):
-        bindfbo(FB,mom_fbo);disable(DEPTH_TEST);disable(POLY_OFFSET);disable(MULTISAMPLE)
-        if it==0:
-            drawbuffers(3,(U*3)(COLOR0,COLOR1,COLOR2));clearf(0,(0.,0.,0.,0.));clearf(1,(0.,0.,0.,0.));clearf(2,(0.,-1.,0.,0.))
-        use(moments_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth)
-        uniform1i(loc(moments_prog,b'alpha_st_accum'),4);uniform1i(loc(moments_prog,b'alpha_st_depth'),6);uniform1i(loc(moments_prog,b'depthMap'),11)
-        uniform1i(loc(moments_prog,b'st_samples_hw'),n)
-        enable(BLEND);blendsep(ONE,ONE,ONE,ONE)
-        drawbuffers(3,(U*3)(COLOR0,COLOR1,NONE));uniform1i(loc(moments_prog,b'st_part'),0);draw(4,0,3)
-        drawbuffers(3,(U*3)(NONE,NONE,COLOR2));uniform1i(loc(moments_prog,b'st_part'),1);blend_equation(GL_MAX,GL_MAX);draw(4,0,3)
-        blend_equation(GL_FUNC_ADD,GL_FUNC_ADD)
-        bindfbo(FB,main_fbo)
-        if not last: drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
-        drawbuffer(NONE)
-        enable(DEPTH_TEST);enable(MULTISAMPLE)
-
 def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False,temporal=None,pipe='new',readback=True):
     """LLDrawPoolAlpha::renderStochastic over `layers` [(z, alpha, rgb, seed, glow, slope)], then
     the composite over a scene of `scene_rgba`; returns the scene's pixels (RGBA float). pipe 'old': the passes of the viewer
     before the 2026-11-14 upgrade (OLD_REF: S = 8, the hashed dither, the temporal pair without grain, the composite reading the
     history), for the before / after comparison."""
     old=pipe=='old'
-    V=VARIANT_OLD[variant] if old else (forced if FORCED_BITS else variant)
-    CMP=old_composite if old else composite
+    ref=pipe=='ref'   # the passes of REF_REF (the commit before the mask): the image and the history are compared with it
+    V=VARIANT_OLD[variant] if old else variant
+    CMP=old_composite if old else (ref_composite if ref else composite)
     f,accum,trans,depth=targets[n];iterations=total//n
-    per_iteration=temporal is not None and not old and iterations>1 and PER_ITERATION[0]   # alphaStochasticMeasuredPerIteration
     bindfbo(FB,f);enable(MULTISAMPLE);disable(0x0C11)
     drawbuffer(COLOR1);clearf(0,(1.,0.,0.,0.));drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
     spread_prog,offsets=(expand_before,BEFORE_OFFSET) if before else (expand,VIEWER_OFFSET)
@@ -387,7 +361,6 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         drawbuffer(COLOR1);blendsep(ONE,ONE,ONE,ONE);poly(3)
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: poly(3,seed);layer(glowprog,z,glow=glow,seed=seed,slope=slope)
-        if per_iteration: measure_iteration(it,n,accum,depth,f,it+1==iterations)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
     # 3b. the temporal accumulation
     if temporal is not None and old:
@@ -407,53 +380,60 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
             uniform1f(loc(old_resolve_full,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(old_resolve_full,b'stoch_history_valid'),1 if temporal['valid'] else 0)
             draw(4,0,3)
         temporal['idx']=nxt;temporal['valid']=True
-    # 3b. the temporal accumulation: this frame's samples measured, blended with the history by the grain, smoothed
+    # 3b. the temporal accumulation: this frame's samples measured (with the mask), blended with the history by the grain; 'ref':
+    # the commit before the mask, which then smooths in a pass of its own
     elif temporal is not None:
         nxt=1-temporal['idx']
+        CUR=ref_current if ref else current_prog;RES=ref_resolve if ref else resolve_prog
         _t=timed('measure');_t.__enter__()
-        bindfbo(FB,temporal['curfbo']);fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(COLOR0,COLOR1));disable(BLEND);disable(DEPTH_TEST)
-        if per_iteration:
-            # the moments of every iteration (measure_iteration) finished, with the total alpha
-            use(measure_prog);bind_unit(4,TEX2D,mom_sum);bind_unit(5,TEXMS,trans);bind_unit(6,TEX2D,mom_squares);bind_unit(7,TEX2D,mom_depth)
-            uniform1i(loc(measure_prog,b'alpha_st_mom_sum'),4);uniform1i(loc(measure_prog,b'alpha_st_trans'),5)
-            uniform1i(loc(measure_prog,b'alpha_st_mom_squares'),6);uniform1i(loc(measure_prog,b'alpha_st_mom_depth'),7)
-            uniform1i(loc(measure_prog,b'st_samples_hw'),n);uniform1i(loc(measure_prog,b'st_samples'),total)
-        else:
-            use(current_prog);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(current_prog,b'depthMap'),11)
-            uniform1i(loc(current_prog,b'alpha_st_accum'),4);uniform1i(loc(current_prog,b'alpha_st_trans'),5);uniform1i(loc(current_prog,b'alpha_st_depth'),6)
-            uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
+        bindfbo(FB,temporal['curfbo']);drawbuffers(2 if ref else 3,(U*3)(COLOR0,COLOR1,COLOR2));disable(BLEND);disable(DEPTH_TEST)
+        use(CUR);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(CUR,b'depthMap'),11)
+        uniform1i(loc(CUR,b'alpha_st_accum'),4);uniform1i(loc(CUR,b'alpha_st_trans'),5);uniform1i(loc(CUR,b'alpha_st_depth'),6)
+        uniform1i(loc(CUR,b'st_samples_hw'),n);uniform1i(loc(CUR,b'st_samples'),total)
         draw(4,0,3)
         _t.__exit__();_t=timed('blend');_t.__enter__()
-        bindfbo(FB,temporal['fbo'][nxt]);fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(COLOR0,COLOR1))
-        use(resolve_prog);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur']);bind_unit(9,TEX2D,temporal['aux'])
+        bindfbo(FB,temporal['fbo'][nxt]);drawbuffers(2,(U*2)(COLOR0,COLOR1))
+        use(RES);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur']);bind_unit(9,TEX2D,temporal['aux'])
         bind_unit(10,TEX2D,temporal['extra'][temporal['idx']])
-        uniform1i(loc(resolve_prog,b'alpha_st_current'),8);uniform1i(loc(resolve_prog,b'alpha_st_aux'),9);uniform1i(loc(resolve_prog,b'alpha_st_history'),7)
-        uniform1i(loc(resolve_prog,b'alpha_st_extra'),10)
-        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(resolve_prog,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
-        uniform1f(loc(resolve_prog,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(resolve_prog,b'stoch_history_valid'),1 if temporal['valid'] else 0)
-        draw(4,0,3)
-        _t.__exit__();_t=timed('smooth');_t.__enter__()
-        temporal['idx']=nxt;temporal['valid']=True
-        bindfbo(FB,temporal['smoothfbo']);drawbuffer(COLOR0)
-        use(smooth_prog);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(9,TEX2D,temporal['aux']);bind_unit(10,TEX2D,temporal['extra'][temporal['idx']])
-        uniform1i(loc(smooth_prog,b'alpha_st_history'),7);uniform1i(loc(smooth_prog,b'alpha_st_aux'),9);uniform1i(loc(smooth_prog,b'alpha_st_extra'),10)
-        uniform1f(loc(smooth_prog,b'stoch_weight'),temporal.get('weight',1/8))
+        uniform1i(loc(RES,b'alpha_st_current'),8);uniform1i(loc(RES,b'alpha_st_aux'),9);uniform1i(loc(RES,b'alpha_st_history'),7)
+        uniform1i(loc(RES,b'alpha_st_extra'),10)
+        if not ref: bind_unit(20,TEX2D,temporal['mask']);uniform1i(loc(RES,b'alpha_st_mask'),20)
+        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(RES,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
+        uniform1f(loc(RES,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(RES,b'stoch_history_valid'),1 if temporal['valid'] else 0)
         draw(4,0,3)
         _t.__exit__()
+        temporal['idx']=nxt;temporal['valid']=True
+        if ref:
+            _t=timed('smooth');_t.__enter__()
+            bindfbo(FB,temporal['smoothfbo']);drawbuffer(COLOR0)
+            use(ref_smooth);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(9,TEX2D,temporal['aux']);bind_unit(10,TEX2D,temporal['extra'][temporal['idx']])
+            uniform1i(loc(ref_smooth,b'alpha_st_history'),7);uniform1i(loc(ref_smooth,b'alpha_st_aux'),9);uniform1i(loc(ref_smooth,b'alpha_st_extra'),10)
+            uniform1f(loc(ref_smooth,b'stoch_weight'),temporal.get('weight',1/8))
+            draw(4,0,3)
+            _t.__exit__()
     # 4. composite over the scene, then the glow into its alpha
     bindfbo(FB,scene_fbo);drawbuffer(COLOR0);clearcolor(*scene_rgba);clear(0x4000)
     disable(DEPTH_TEST);enable(BLEND);blendsep(ONE,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
     use(CMP);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans)
-    resolved=(temporal['tex'][temporal['idx']] if old else temporal['cur']) if temporal is not None else opaque_depth   # the new pipeline: the smooth's colour drawn
-    bind_unit(7,TEX2D,resolved)
-    uniform1i(loc(CMP,b'alpha_st_accum'),4);uniform1i(loc(CMP,b'alpha_st_trans'),5);uniform1i(loc(CMP,b'alpha_st_resolved'),7)
+    uniform1i(loc(CMP,b'alpha_st_accum'),4);uniform1i(loc(CMP,b'alpha_st_trans'),5)
     uniform1i(loc(CMP,b'st_temporal'),1 if temporal is not None else 0)
-    if not old: uniform1i(loc(CMP,b'st_moments'),0)
+    if old or ref:
+        resolved=(temporal['tex'][temporal['idx']] if old else temporal['cur']) if temporal is not None else opaque_depth   # 'ref': the smooth's colour drawn
+        bind_unit(7,TEX2D,resolved);uniform1i(loc(CMP,b'alpha_st_resolved'),7)
+        if ref: uniform1i(loc(CMP,b'st_moments'),0)
+    else:
+        # the smooth is in the composite: the history (this frame's, after the blend), the aux, the extra and the mask
+        for unit,key,name in ((21,'history',b'alpha_st_history'),(22,'aux',b'alpha_st_aux'),(23,'extra',b'alpha_st_extra'),(24,'mask',b'alpha_st_mask')):   # units the other tests' bindings (up to 12) do not use
+            if temporal is None: t=opaque_depth
+            elif key=='history': t=temporal['tex'][temporal['idx']]
+            elif key=='extra': t=temporal['extra'][temporal['idx']]
+            else: t=temporal[key]
+            bind_unit(unit,TEX2D,t);uniform1i(loc(CMP,name),unit)
+        uniform1f(loc(CMP,b'stoch_weight'),(temporal or {}).get('weight',1/8))
     uniform1i(loc(CMP,b'st_samples_hw'),n);uniform1i(loc(CMP,b'st_samples'),total);uniform1i(loc(CMP,b'st_glow'),0)
     with timed('composite'):
         draw(4,0,3)
         blendsep(ZERO,ONE,ONE,ONE);uniform1i(loc(CMP,b'st_glow'),1)
-        if per_iteration: uniform1i(loc(CMP,b'st_moments'),1);bind_unit(7,TEX2D,mom_sum)   # the accumulation was cleared after each iteration
         draw(4,0,3)
     enable(DEPTH_TEST);assert geterror()==0
     if not readback: return None
@@ -1201,7 +1181,7 @@ assert before[2][2]==W*H,('the old binding should lose the shiny glass reflectio
 # by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.
 # <<bench-shared:begin>>
 IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
-def new_temporal(reproj=IDENT,old=False):
+def new_temporal(reproj=IDENT,old=False,ref=False):
     if old:   # the old pipeline's history: RGBA16F x2 and the averaged samples in RGBA32F
         tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)];fbos=[fbo((COLOR0,TEX2D,x)) for x in tex]
         cur=tex2d(RGBA32F,RGBA,FLOAT);curfbo=fbo((COLOR0,TEX2D,cur))
@@ -1209,9 +1189,13 @@ def new_temporal(reproj=IDENT,old=False):
     tex=[tex2d(RGBA16F,RGBA,FLOAT) for _ in range(2)]
     extra=[tex2d(RG16F,RGBA,FLOAT) for _ in range(2)]
     fbos=[fbo((COLOR0,TEX2D,x),(COLOR1,TEX2D,e)) for x,e in zip(tex,extra)]
-    cur=tex2d(RGBA16F,RGBA,FLOAT);aux=tex2d(RGBA16F,RGBA,FLOAT)   # this frame's averaged accumulation (the smooth then draws over it), its grain / total alpha / depths
-    curfbo=fbo((COLOR0,TEX2D,cur),(COLOR1,TEX2D,aux));smoothfbo=fbo((COLOR0,TEX2D,cur))
-    return dict(tex=tex,extra=extra,fbo=fbos,cur=cur,aux=aux,curfbo=curfbo,smoothfbo=smoothfbo,idx=0,valid=False,reproj=list(reproj))
+    cur=tex2d(RGBA16F,RGBA,FLOAT);aux=tex2d(RGBA16F,RGBA,FLOAT)   # this frame's averaged accumulation, its grain / total alpha / depths
+    if ref:   # the commit before the mask: a smooth pass draws over cur
+        curfbo=fbo((COLOR0,TEX2D,cur),(COLOR1,TEX2D,aux));smoothfbo=fbo((COLOR0,TEX2D,cur))
+        return dict(tex=tex,extra=extra,fbo=fbos,cur=cur,aux=aux,curfbo=curfbo,smoothfbo=smoothfbo,idx=0,valid=False,reproj=list(reproj))
+    mask=tex2d(R8,RGBA,FLOAT)   # 1 where anything transparent was drawn
+    curfbo=fbo((COLOR0,TEX2D,cur),(COLOR1,TEX2D,aux),(COLOR2,TEX2D,mask))
+    return dict(tex=tex,extra=extra,fbo=fbos,cur=cur,aux=aux,mask=mask,curfbo=curfbo,idx=0,valid=False,reproj=list(reproj))
 def rmse(pix,want,cols=None):
     xs=range(W) if cols is None else cols
     return math.sqrt(sum((pix[y*W+x][c]-want[c])**2 for y in range(H) for x in xs for c in range(3))/(3*H*len(xs)))
@@ -1310,45 +1294,6 @@ near=float(aux[...,2].max());hit=aux[...,2]>1e-3;far=float(aux[...,3][hit].min()
 assert abs(near-0.35)<2e-3 and abs(far-0.25)<2e-3,('the depths are measured',near,far)
 checks+=1
 print(f'grain: one layer {grain1:.2e} (sharp, takes no history), two layers {grain2:.4f} (mean standard error of alpha x colour); depths 1 - z near {near:.3f}, far {far:.3f}')
-# the passes run as iterations (a device that holds 2 or 4 samples a pass): each iteration is measured on its own, the moments and the
-# depth range combined, so the grain is that of the 8 samples of a single pass. The lanes of the iterations are added into the same
-# physical lanes: complementary masks (one layer covering the first half of the samples, the other the second half) sum to the same in
-# every lane, which read as no grain when the lanes were measured after the last iteration (PER_ITERATION False: the viewer before this fix)
-def measured_aux(layers,n,per_iteration=True,total=8):
-    PER_ITERATION[0]=per_iteration
-    T=new_temporal();TEMPORAL_FRAME[0]=1;pix=stochastic(layers,total,n,temporal=T);PER_ITERATION[0]=True
-    return read_tex(T['aux']),np.array(pix,dtype=np.float32).reshape(H,W,4)
-def covered_aux(aux): return aux[...,1]>1e-3   # the pixels some layer covers
-def hashed_scene(): return [L(0.3,0.5,(1.,0.,0.),seed=22),L(0.45,0.4,(0.,1.,0.),seed=24),L(0.5,0.5,(0.,0.,1.),seed=23)]
-FORCED_BITS.clear();FORCED_BITS.update({41:0x0F,42:0xF0})
-complementary=lambda:[L(0.3,0.5,(1.,0.,0.),seed=41),L(0.5,0.5,(0.,0.,1.),seed=42)]
-rows=[]
-for label,make,forced_masks in (('hashed masks, three layers',hashed_scene,False),('complementary masks (first half, second half of the 8 samples)',complementary,True)):
-    if not forced_masks: FORCED_BITS_SAVED=dict(FORCED_BITS);FORCED_BITS.clear()
-    else: FORCED_BITS.clear();FORCED_BITS.update(FORCED_BITS_SAVED)
-    ref,ref_pix=measured_aux(make(),8)
-    covered=covered_aux(ref)
-    gref=float(ref[...,0][covered].mean());assert gref>1e-3,(label,'the single pass of 8 measures grain',gref)
-    for n in (4,2):
-        aux,pix=measured_aux(make(),n)
-        # grain, total alpha, 1 - nearest depth, 1 - farthest depth: the same as the single pass (the lanes' values are the same; fp32 sums, 16F targets)
-        err=np.abs(aux-ref)
-        assert float(err[...,0].max())<=1e-3*max(gref,1e-3)+1e-4,(label,n,'the grain is the single pass\'s',float(err[...,0].max()),gref)
-        assert float(err[...,1].max())<2e-3,(label,n,'the total alpha',float(err[...,1].max()))
-        assert float(err[...,2:].max())<2e-3,(label,n,'the depth range',float(err[...,2:].max()))
-        assert float(np.abs(pix-ref_pix).max())<4e-3,(label,n,'the image',float(np.abs(pix-ref_pix).max()))
-        rows.append((label,n,float(aux[...,0][covered].mean()),gref,float(np.abs(pix-ref_pix).max())))
-    if forced_masks:
-        # before the fix: the lanes of 2 and 4 iterations summed, then measured
-        for n in (4,2):
-            old_aux,_=measured_aux(make(),n,per_iteration=False)
-            g_old=float(old_aux[...,0][covered].mean())
-            assert g_old<0.05*gref,(label,n,'the lanes summed over the iterations read (almost) no grain',g_old,gref)
-            rows.append(('before the fix: '+label,n,g_old,gref,0.0))
-FORCED_BITS.clear();PER_ITERATION[0]=True
-checks+=1
-print('grain of 8 samples held in passes of 8, 4 (two iterations) and 2 (four iterations), mean over the covered pixels: '+'; '.join(
-    f'{label}, {n} per pass: {g:.4f} against {gref:.4f}' + (f' (image differs by at most {d*255:.2f}/255)' if d else '') for label,n,g,gref,d in rows))
 # the last frame is left out where the total alpha changes ...
 T=new_temporal();run_frames(lambda f:scene(),12,T)
 extra=read_tex(T['extra'][T['idx']]);quiet_left=float(extra[...,1].mean())
@@ -1376,6 +1321,64 @@ plain_in=column_err(stochastic(scene(),8,8),[17,18],want)
 assert inside<0.5*plain_in,('and the layer is smoother than its 8 samples',inside,plain_in)
 checks+=1
 print(f'edge of a layer after 30 frames (rmse/255): the two columns outside {outside*255:.2f}, the two inside {inside*255:.2f} against {plain_in*255:.2f} for the 8 samples alone')
+
+# ---- the mask and the folded smooth (the composite does the like-neighbour averaging, the resolve and the composite draw only under
+# the mask): against the passes of REF_REF (unmasked blend, a smooth pass of its own) the image, the history, its last total alpha and the part left
+# out are the same bit for bit over a frame sequence: nothing, transparency appearing, moving, scattered (hair in the middle, a window in the
+# corner, an alpha 0 glow face, a face too faint to move the transparency), then gone the next frame, then back elsewhere
+set_opaque(1.0)
+def layers_of(kind):
+    if kind=='all': return scene()
+    if kind=='hair': return [L(0.3,0.5,(1.,0.,0.),seed=22),L(0.5,0.5,(0.,0.,1.),seed=23)]
+    if kind=='window': return [L(0.35,0.3,(0.2,0.6,1.),seed=51)]
+    if kind=='glow0': return [L(0.4,0.0,(1.,1.,1.),seed=52,glow=0.7)]       # alpha 0, a glow only
+    if kind=='faint': return [L(0.4,3e-4,(1.,0.5,0.),seed=53)]              # too faint to move the half-float transparency
+    return []
+def seq_frames():
+    seq=[]
+    full=None
+    for f in range(3): seq.append([('none',full)])
+    for f in range(4): seq.append([('all',full)])
+    for k in range(4): seq.append([('all',(4+3*k,28+3*k))])                 # moving
+    for k in range(4): seq.append([('hair',(W//2-8,W//2+8,H//2-6,H//2+6)),('window',(W-14,W,0,10)),('glow0',(2,12,H-8,H)),('faint',(20,44,4,12))])   # scattered
+    for f in range(2): seq.append([('none',full)])                              # gone the next frame
+    for k in range(3): seq.append([('window',(2+k,22+k,H-12,H)),('hair',(W-20,W-4,2,14))])   # back elsewhere
+    seq.append([('all',full)]);seq.append([('none',full)])
+    return seq
+def run_mask_sequence(reproj):
+    global LAYER_SCISSOR
+    Tn=new_temporal(reproj);Tr=new_temporal(reproj,ref=True);frames=0;worst=0.;masked=[]
+    for f,groups in enumerate(seq_frames(),1):
+        TEMPORAL_FRAME[0]=f
+        outs={}
+        for pipe,Tx in (('new',Tn),('ref',Tr)):
+            # the layers of every group, each in its own rectangle: stochastic() cuts layers by LAYER_SCISSOR, so a group is one call's layers
+            # drawn through the same pass structure: the groups' layers are concatenated with their rectangles set per layer below
+            allr=[(l,rect) for kind,rect in groups for l in layers_of(kind)]
+            RECTS.clear();RECTS.update({l[3]:rect for l,rect in allr})
+            outs[pipe]=np.array(stochastic([l for l,_ in allr],8,8,scene_rgba=(0.1,0.2,0.3,0.0),temporal=Tx,pipe=pipe),dtype=np.float32).reshape(H,W,4)
+        assert np.array_equal(outs['new'],outs['ref']),('the masked image is the unmasked one',f,float(np.abs(outs['new']-outs['ref']).max()))
+        for i in (0,1):
+            for key in ('tex','extra'):
+                assert np.array_equal(read_tex(Tn[key][i]),read_tex(Tr[key][i])),('the history is the unmasked one',f,key,i)
+        assert np.array_equal(read_tex(Tn['aux']),read_tex(Tr['aux'])),('aux',f)
+        if any(k=='glow0' for k,_ in groups): assert outs['new'][...,3].max()>0.1,('the glow face shows in the scene alpha',f)
+        masked.append(float(read_tex(Tn['mask'])[...,0].mean()));frames+=1
+    return frames,masked
+RECTS={}
+_orig_layer=layer
+def rect_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
+    global LAYER_SCISSOR
+    LAYER_SCISSOR=RECTS.get(seed);_orig_layer(prog,z,alpha,rgb,seed,glow,slope,slope_y);LAYER_SCISSOR=None
+layer=rect_layer
+try:
+    n_frames,coverage=run_mask_sequence(IDENT)
+    # the same with the camera panning 1.3, 0.7 px a frame (the history reprojected)
+    n_frames2,_=run_mask_sequence([1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*1.3/W,-2.0*0.7/H,0.,1.])
+finally:
+    layer=_orig_layer;LAYER_SCISSOR=None;TEMPORAL_FRAME[0]=0
+checks+=1
+print(f'mask and folded smooth: {n_frames} + {n_frames2} frames (nothing, appearing, moving, scattered with hair, a window, an alpha 0 glow face and a face too faint to move the transparency, gone the next frame, back elsewhere), static and panning: image, history, last total alpha and part left out identical to the passes before the mask (git {REF_REF}); mask covers {min(coverage)*100:.0f} to {max(coverage)*100:.0f} % of the pixels over the sequence')
 
 # ---- the NaN guard (Aurora Viewer PR 3663's set): NaN and infinite colours, alphas and transparencies never reach the history, the neighbours or the image
 NAN=float('nan');INF=float('inf')
@@ -1630,7 +1633,11 @@ def pan_layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=None,slope_y=0
     else:
         uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
         uniform1f(loc(prog,b'period'),g['period']);uniform2f(loc(prog,b'tdir'),*g['tdir']);uniform1f(loc(prog,b'phase'),g['phase'])
+    r=LAYER_SCISSOR   # (x0, x1) or (x0, x1, y0, y1), as layer() cuts
+    if r:
+        enable(0x0C11);y0,y1=(r[2],r[3]) if len(r)==4 else (0,H);fn('glScissor',None,I,I,I,I)(r[0],y0,r[1]-r[0],y1-y0)
     draw(4,0,6*count)
+    if r: disable(0x0C11)
 ref_ms=texms(RGBA32F,8);ref_fbo=fbo((COLOR0,TEXMS,ref_ms))
 ref_out=tex2d(RGBA32F,RGBA,FLOAT);ref_out_fbo=fbo((COLOR0,TEX2D,ref_out))
 avg_prog=program([(0x8B31,screen_vertex),(0x8B30,"""#version 420
@@ -1723,8 +1730,10 @@ if True:
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
                 else:
-                    # at S = 8 the hair strips on a pan are no better than the plain samples' smear share (the viewer before the upgrade is no better either: 'before' against 'plain_before'): within 5 %
-                    assert r['new'][1]<(r['plain'][1]*1.05 if name=='S10' else r['plain'][1]),('the history beats plain 8 samples in low-pass error (hair: within 5 %)',name,d,r)
+                    # at S = 8 the hair strips on a pan are a little better than the plain samples' smear share (the viewer before the upgrade is worse: 'before' against 'plain_before')
+                    # (hair: the measured frame-40 / plain low-pass ratio is 0.89 to 0.96 over these pans; the bound sits just above the worst, 0.98)
+                    assert r['new'][1]<(r['plain'][1]*0.98 if name=='S10' else r['plain'][1]),('the history beats plain 8 samples in low-pass error (hair: measured ratio at most 0.96, bound 0.98)',name,d,r['new'][1]/r['plain'][1],r)
+                    if name=='S10': assert r['new'][0]<r['before'][0],('hair: the upgrade beats the viewer before it in rmse',name,d,r)
                     if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 8 samples in rmse on textured layers',name,d,r)
                     # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the resolve; the bound was 0.6 and 0.5 before the upgrade)
                     assert r['new'][0]<0.65*r['old'][0] and r['new'][1]<0.55*r['old'][1],('the smear is gone',name,d,r)
