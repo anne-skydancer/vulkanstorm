@@ -219,6 +219,13 @@ F32 LLPipeline::RenderSpotShadowOffset;
 F32 LLPipeline::RenderSpotShadowBias;
 LLDrawable* LLPipeline::RenderSpotLight = nullptr;
 LLPipeline::ELocalShadowPass LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE; // <Vulkanstorm/>
+// <Vulkanstorm>
+const std::vector<const LLVOAvatar*>* LLPipeline::sLocalShadowAvatars = nullptr;
+bool LLPipeline::localShadowAvatarAllowed(const LLVOAvatar* avatar)
+{
+    return !sLocalShadowAvatars || std::find(sLocalShadowAvatars->begin(), sLocalShadowAvatars->end(), avatar) != sLocalShadowAvatars->end();
+}
+// </Vulkanstorm>
 F32 LLPipeline::RenderEdgeDepthCutoff;
 F32 LLPipeline::RenderEdgeNormCutoff;
 LLVector3 LLPipeline::RenderShadowGaussian;

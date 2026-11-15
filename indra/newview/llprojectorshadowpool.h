@@ -669,7 +669,7 @@ enum class Cause : uint8_t
     Edit,       // a fixed object in the light was edited, rebuilt or moved by its owner
     Mover,      // an object turned into (or out of) a mover or a physical object
     Lamp,       // the lamp's own reach, angle, size or position changed
-    Avatar,     // the tile holds an avatar (drawn into S until P4), or the avatar just left
+    Avatar,     // the tile holds an avatar (drawn into L over S, P4), or the avatar just left
     Lowres,     // the tile was down-sized by a layout change and is drawn again at its new size
     Other,      // anything else: a dirty list that overflowed, a hook off the main thread
     Count
@@ -1395,12 +1395,13 @@ struct FramePicks
     float predicted_ms = 0.f;      // the sum of the predicted costs of both lists
 };
 
-// The frame's merged selection under the shared cap: the dynamic items first (selectDynamic, up to kDynamicCapMs and A_max), then
-// the static ones in what is left of `cap_ms` (the first static candidate always has its place if it fits the cap: the dynamic layer
-// gives up its last faces for it, so a tile above the 0.15 ms floor is not starved) (the cap minus what earlier work of the frame already spent, kFrameCapMs at the
-// start). `progress_ok` says nothing was spent yet in this frame: then, and only then, one item whose prediction alone is above
-// the cap may run, so a large tile is never starved; otherwise the cap holds without exception. A dynamic item that is over the
-// cap alone is served at most every kDynamicDeadlineFrames frames, so the static list is not starved by it.
+// The frame's merged selection under the shared cap `cap_ms` (the cap minus what earlier work of the frame already spent, kFrameCapMs
+// at the start): the dynamic items first (selectDynamic, up to kDynamicCapMs and A_max), then the static ones in what is left.
+// The first static candidate always has its place if it fits the cap: the dynamic layer gives up its last faces for it. A first
+// static candidate that is above the whole cap runs alone as the progress pick once it has waited kDynamicDeadlineFrames frames (or was
+// never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
+// is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
+// without exception. A dynamic item that is over the cap alone is served at most every kDynamicDeadlineFrames frames.
 inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
                               uint32_t a_max, bool progress_ok)
 {
@@ -1452,6 +1453,20 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
                 left = cap_ms - dyn_ms;
             }
         }
+        else if (progress_ok && !head.empty())
+        {
+            // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
+            for (const StaticItem& it : st)
+            {
+                if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
+                {
+                    out.dynamic.clear();
+                    dyn_ms = 0.f;
+                    left = cap_ms;
+                    break;
+                }
+            }
+        }
     }
     out.fixed = selectStatic(st, std::max(left, 0.f) + kEps);
     float st_ms = 0.f;
@@ -1492,6 +1507,14 @@ struct FrameLedger
     float left(float cap_ms) const { return cap_ms - spent_ms; }
     bool untouched() const { return spent_ms <= 0.f; }
 };
+
+// The in-frame gate of one pick under the shared cap: it runs while the measured time left is positive. The one exemption is the first
+// static pick of a frame in which nothing else rendered (`alone`: ledger untouched and no dynamic picks): the selection kept it inside
+// the cap, or it is the progress pick. A first static pick behind spent dynamic work or an earlier cache is refused.
+inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone)
+{
+    return left_ms > 0.f || (!dynamic && first_pick && alone);
+}
 
 // the one ledger of the process (main thread only); a pool begins the frame with its frame count and adds what its renders measure
 inline FrameLedger& frameLedger()

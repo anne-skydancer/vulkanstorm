@@ -41,10 +41,12 @@
 #include "llviewerobjectlist.h"
 #include "llviewerregion.h"
 #include "llvoavatar.h"
+#include "llviewercontrol.h"
 #include "llvotree.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
+#include <algorithm>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -503,12 +505,16 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
     }
     // L's tiles that hold avatars are S's again before the moves: the whole-atlas copy L -> S below must not carry an avatar into S
     // (the fixed layer). The avatar layers come back with the dynamic schedule of the frame (the tiles keep avatarInLayer).
-    for (auto& entry : mRecords)
+    // (only when the whole-atlas copy runs: a repack with no moves leaves L's avatar layers as they are)
+    if (!plan.moves.empty())
     {
-        const Record& r = entry.second;
-        if (r.placed && r.drawnFrame != 0 && r.avatarInLayer)
+        for (auto& entry : mRecords)
         {
-            copyTile(mAtlasS, r.rect, mAtlasL, r.rect);
+            const Record& r = entry.second;
+            if (r.placed && r.drawnFrame != 0 && r.avatarInLayer)
+            {
+                copyTile(mAtlasS, r.rect, mAtlasL, r.rect);
+            }
         }
     }
     for (const Move& move : plan.moves)
@@ -751,6 +757,48 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 // the light's pose the tile holds (view, proj, origin), the avatar partitions and the worn objects are the only things it draws
 // (LLPipeline::LOCAL_SHADOW_DYNAMIC), and no camera test enters: an avatar behind the camera, or an impostor, casts like any other.
 // Depth is not cleared (S's copy is in L); the depth test composes the two layers. Leaves L's framebuffer bound.
+namespace
+{
+    struct AvatarCaster
+    {
+        const LLVOAvatar* avatar;
+        Aabb box;
+    };
+
+    // The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow,
+    // a normal appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only
+    // a friend, the agent or a control avatar. Nothing here reads the camera.
+    std::vector<AvatarCaster> casting_avatars()
+    {
+        static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
+        std::vector<AvatarCaster> out;
+        for (LLCharacter* character : LLCharacter::sInstances)
+        {
+            LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
+            if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
+                avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL ||
+                (friends_only() && !avatar->isControlAvatar() && !avatar->isSelf() && !avatar->isBuddy()))
+            {
+                continue;
+            }
+            const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
+            if (!ext)
+            {
+                continue;
+            }
+            AvatarCaster c;
+            c.avatar = avatar;
+            for (int i = 0; i < 3; ++i)
+            {
+                c.box.lo[i] = ext[0].getF32ptr()[i];
+                c.box.hi[i] = ext[1].getF32ptr()[i];
+            }
+            out.push_back(c);
+        }
+        return out;
+    }
+}
+
 F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
 {
     const F64 cpu_start = LLTimer::getTotalSeconds();
@@ -767,6 +815,28 @@ F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const gl
     LLRenderTarget::sCurResY = (U32)n;
     LLLocalShadowGL::setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_DYNAMIC;
+
+    // the face draws at most A_max avatars, the nearest to the lamp (the scheduler counts min(avatars, A_max) draws for it)
+    std::vector<const LLVOAvatar*> face_avatars;
+    {
+        std::vector<std::pair<F32, const LLVOAvatar*>> in_light;
+        for (const AvatarCaster& c : casting_avatars())
+        {
+            if (intersects(rec.volume, c.box))
+            {
+                const LLVector4a* ext = c.avatar->mDrawable->getSpatialExtents();
+                LLVector3 centre((ext[0].getF32ptr()[0] + ext[1].getF32ptr()[0]) * 0.5f, (ext[0].getF32ptr()[1] + ext[1].getF32ptr()[1]) * 0.5f,
+                                 (ext[0].getF32ptr()[2] + ext[1].getF32ptr()[2]) * 0.5f);
+                in_light.emplace_back((centre - origin).magVecSquared(), c.avatar);
+            }
+        }
+        std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+        for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
+        {
+            face_avatars.push_back(in_light[i].second);
+        }
+    }
+    LLPipeline::sLocalShadowAvatars = &face_avatars;
 
     {
         LLGLEnable scissor(GL_SCISSOR_TEST);
@@ -790,6 +860,7 @@ F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const gl
         gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
     }
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
+    LLPipeline::sLocalShadowAvatars = nullptr;
     llassert(LLRenderTarget::sCurFBO == mFboL);
     return (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
 }
@@ -1143,26 +1214,9 @@ void LLProjectorShadows::update(LLCamera& camera)
     // (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts). A jelly
     // doll, an invisible or a too slow avatar and a UI avatar are not drawn by the avatar pool either.
     std::vector<Aabb> avatar_boxes;
-    for (LLCharacter* character : LLCharacter::sInstances)
+    for (const AvatarCaster& c : casting_avatars())
     {
-        LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
-        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
-            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL)
-        {
-            continue;
-        }
-        const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
-        if (!ext)
-        {
-            continue;
-        }
-        Aabb b;
-        for (int i = 0; i < 3; ++i)
-        {
-            b.lo[i] = ext[0].getF32ptr()[i];
-            b.hi[i] = ext[1].getF32ptr()[i];
-        }
-        avatar_boxes.push_back(b);
+        avatar_boxes.push_back(c.box);
     }
 
     // the work list: the verdict of every placed tile (llprojectorpool::classifyTile). A static scene has none.
@@ -1275,14 +1329,16 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
-    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap (the first pick of the frame
-    // always does: the selection kept it inside the cap, or it is the progress pick) and, for the dynamic list, inside its own share
+    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap and, for the dynamic list,
+    // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
+    // no dynamic pick): the selection kept it inside the cap, or it is the progress pick (mayRunPick)
+    const bool alone = ledger.untouched() && picks.dynamic.empty();
     auto run = [&](const std::vector<U32>& packed, bool dynamic) {
         F32 own_ms = 0.f;
         bool first_pick = true;
         for (U32 pk : packed)
         {
-            if (ledger.left(kFrameCapMs) <= 0.f || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
+            if (!mayRunPick(ledger.left(kFrameCapMs), dynamic, first_pick, alone) || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
             {
                 break;
             }

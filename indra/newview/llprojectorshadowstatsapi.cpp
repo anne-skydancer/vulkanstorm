@@ -119,7 +119,7 @@ namespace
             tile["drawn_frame"] = (S32)t.drawnFrame;
             tile["cam_dist"] = (F64)t.camDist;
             tile["pending"] = t.pending;
-            tile["avatar"] = t.avatar;            // an avatar is in its light, or its last draw had one: redrawn until P4, so no CRC gate holds
+            tile["avatar"] = t.avatar;            // an avatar is in its light, or its last draw had one: its layer is redrawn on its own schedule; the CRC reads S, which holds no avatar
             tile["pose_stale"] = t.poseStale;     // the lamp's pose differs from the one the tile was drawn with
             tile["lamp_moving"] = t.lampMoving;   // the lamp's pose changed since the last frame
             if (with_crc && t.size && t.drawnFrame && gGLManager.mGLVersion >= 4.49f)   // GL 4.5 core: fetched only from 4.5 up (llgl.cpp); the version, not the address (-Werror=address)

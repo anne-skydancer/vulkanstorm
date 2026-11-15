@@ -1319,6 +1319,39 @@ void testP4Caps()
         check(q.dynamic.size() + q.fixed.size() == 1, "P4 progress: an untouched frame runs one over-cap item alone, never two", double(q.dynamic.size() + q.fixed.size()));
         check(q.dynamic.size() == 1, "P4 progress: the dynamic item has the priority");
     }
+    // a static tile above the whole cap is not starved by a standing avatar: after the wait it runs alone as the progress pick
+    {
+        const std::vector<DynamicItem> dyn = faces(3, 0.05f, 1);
+        std::vector<StaticItem> st = tiles(1, 0.5f);
+        const FramePicks young = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(young.dynamic.size() == 3 && young.fixed.empty(), "P4 a big static tile that has not waited yet leaves the cheap faces their frame");
+        st[0].age_frames = kDynamicDeadlineFrames;
+        const FramePicks old = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(old.fixed.size() == 1 && old.dynamic.empty(), "P4 a big static tile that has waited runs alone, the faces give way", double(old.fixed.size()));
+        const FramePicks spent = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, false);
+        check(spent.fixed.empty(), "P4 the big static tile does not run in a frame that has spent already");
+    }
+    // the in-frame gate (mayRunPick): the first static pick is exempt from the measured cap only when nothing else rendered this frame
+    {
+        // (a) the dynamic picks spent the ledger: the first static pick is refused
+        FrameLedger spent;
+        spent.begin(1);
+        spent.add(kFrameCapMs + 0.01f);
+        check(!mayRunPick(spent.left(kFrameCapMs), false, true, false), "P4 gate: a first static pick behind spent dynamic work is refused");
+        // (b) the progress case from selectFrame: dynamic empty, ledger untouched, the head above the whole cap is allowed
+        std::vector<StaticItem> st = tiles(1, 0.5f);
+        st[0].age_frames = kDynamicDeadlineFrames;
+        FrameLedger fresh;
+        fresh.begin(2);
+        const FramePicks pp = selectFrame(st, faces(3, 0.05f, 1), fresh.left(kFrameCapMs), kAvatarDrawsMax, fresh.untouched());
+        const bool alone = fresh.untouched() && pp.dynamic.empty();
+        check(alone && pp.fixed.size() == 1, "P4 gate: the progress case leaves dynamic empty, untouched ledger, one head");
+        check(mayRunPick(0.f, false, true, alone), "P4 gate: the progress head is allowed past the cap");
+        // (c) a second static pick with the ledger exhausted is refused, whatever `alone` says
+        check(!mayRunPick(0.f, false, false, true), "P4 gate: a second static pick with the ledger exhausted is refused");
+        check(!mayRunPick(0.f, true, true, true), "P4 gate: a dynamic pick is never exempt");
+        check(mayRunPick(0.1f, false, false, false), "P4 gate: inside the cap everything runs");
+    }
     // priority: the dynamic layer is served first, and the static tiles keep at least the floor
     {
         const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
