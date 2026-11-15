@@ -1536,6 +1536,14 @@ struct FrameLedger
     bool untouched() const { return spent_ms <= 0.f; }
 };
 
+// The in-frame gate of one pick under the shared cap: it runs while the measured time left is positive. The one exemption is the first
+// static pick of a frame in which nothing else rendered (`alone`: ledger untouched and no dynamic picks): the selection kept it inside
+// the cap, or it is the progress pick. A first static pick behind spent dynamic work or an earlier cache is refused.
+inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone)
+{
+    return left_ms > 0.f || (!dynamic && first_pick && alone);
+}
+
 // the one ledger of the process (main thread only); a pool begins the frame with its frame count and adds what its renders measure
 inline FrameLedger& frameLedger()
 {

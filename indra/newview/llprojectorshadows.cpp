@@ -1329,15 +1329,16 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
-    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap (the first pick of the frame
-    // always does: the selection kept it inside the cap, or it is the progress pick) and, for the dynamic list, inside its own share
+    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap and, for the dynamic list,
+    // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
+    // no dynamic pick): the selection kept it inside the cap, or it is the progress pick (mayRunPick)
+    const bool alone = ledger.untouched() && picks.dynamic.empty();
     auto run = [&](const std::vector<U32>& packed, bool dynamic) {
         F32 own_ms = 0.f;
         bool first_pick = true;
         for (U32 pk : packed)
         {
-            // the first static pick is exempt from the measured cap: the selection kept it (or it is the progress pick)
-            if ((ledger.left(kFrameCapMs) <= 0.f && (dynamic || !first_pick)) || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
+            if (!mayRunPick(ledger.left(kFrameCapMs), dynamic, first_pick, alone) || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
             {
                 break;
             }
