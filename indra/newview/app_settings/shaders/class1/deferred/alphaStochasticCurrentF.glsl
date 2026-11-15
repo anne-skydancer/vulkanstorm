@@ -1,6 +1,6 @@
 /**
  * @file alphaStochasticCurrentF.glsl
- * @brief Stochastic transparency: this frame's accumulation, its grain and its depths, measured per iteration
+ * @brief Stochastic transparency: this frame's accumulation, its grain and its depths, measured once per pixel
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -43,7 +43,7 @@
 
 out vec4 frag_data[3];
 
-uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the passes' samples
+uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the samples
 uniform sampler2DMS alpha_st_depth;  // the stochastic depth: the nearest transparent surface, or the opaque one
 uniform sampler2D depthMap;          // the scene depth (DEFERRED_DEPTH)
 uniform sampler2DMS alpha_st_trans;  // red prod(1 - alpha), green the glow (additive)
