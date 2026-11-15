@@ -379,7 +379,7 @@ public:
         NIGHT_SKY_STARS,                    //  "night_sky_stars"
         NIGHT_SKY_MILKY_WAY,                //  "night_sky_milky_way"
         // <Vulkanstorm> the stochastic engine (stochasticSampleF.glsl) and its transparency producer
-        // (alphaStochasticF.glsl, alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl + alphaStochasticSmoothF.glsl,
+        // (alphaStochasticF.glsl, alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl,
         // alphaStochasticCompositeF.glsl)
         STOCH_MASKS,                        //  "stoch_masks"
         ALPHA_ST_ACCUM,                     //  "alpha_st_accum"
@@ -387,13 +387,10 @@ public:
         ALPHA_ST_SEED,                      //  "st_seed"
         ALPHA_ST_DEPTH,                     //  "alpha_st_depth"
         ALPHA_ST_HISTORY,                   //  "alpha_st_history"
-        ALPHA_ST_RESOLVED,                  //  "alpha_st_resolved"
         ALPHA_ST_CURRENT,                   //  "alpha_st_current"
         ALPHA_ST_AUX,                       //  "alpha_st_aux"
         ALPHA_ST_EXTRA,                     //  "alpha_st_extra"
-        ALPHA_ST_MOM_SUM,                   //  "alpha_st_mom_sum"
-        ALPHA_ST_MOM_SQUARES,               //  "alpha_st_mom_squares"
-        ALPHA_ST_MOM_DEPTH,                 //  "alpha_st_mom_depth"
+        ALPHA_ST_MASK,                      //  "alpha_st_mask"
         // </Vulkanstorm>
         // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
         CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
