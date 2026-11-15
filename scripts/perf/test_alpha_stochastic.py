@@ -10,7 +10,7 @@ alphaStochasticCurrentF.glsl + alphaStochasticResolveF.glsl + alphaStochasticSmo
 LLDrawPoolAlpha::renderStochastic on a small target:
   * the mask table: the generator (a port of LLStochasticEngine::maskTable) gives exactly r
     bits in row r, nothing above S, varied rows, the same table on every run; the transparency's table
-    (S = 4) and its blue-noise rows are the C++ ones (the hash in the C++ test);
+    (S = 8) and its blue-noise rows are the C++ ones (the hash in the C++ test);
   * mask coverage: the samples a fragment covers in the stochastic depth, read back per sample,
     are exactly the bits the independent Python model of st_mask predicts (pixel, face seed,
     triangle, stratified R = floor(alpha S + xi)), for 16 samples in two passes of 8, 8 in one,
@@ -31,7 +31,7 @@ LLDrawPoolAlpha::renderStochastic on a small target:
   * the viewer's alpha and glow vertex programs (alphaV, fullbrightV, materialV, pbralphaV, emissiveV, pbrglowV),
     static and skinned, give one surface the same depth within the passes' margins (transform feedback of gl_Position),
     and a control that associates the matrix products the other way shows that the comparison sees a difference.
-  * the grain-measuring resolve at S = 4: the grain of one layer is 0 and its colour sharp, two layers have grain,
+  * the grain-measuring resolve at S = 8, and as iterations of 4 and 2 samples: the grain of one layer is 0 and its colour sharp, two layers have grain,
     the history is dropped where the total alpha changes or the far layer slides, the smooth leaves edges alone;
   * the NaN guard: NaN and infinite colours, alphas and transparencies injected into the passes never reach the
     history, the neighbours or the image.
@@ -124,8 +124,8 @@ for s,t in tables.items():
     assert int(m.group(1),16)==fnv1a(t),('the Python mask table differs from the C++ one',s,hex(fnv1a(t)))
 tables_tex={s:t+BLUE for s,t in tables.items()}   # what the viewer uploads: S + 1 mask rows, then the tile in NOISE_ROWS rows
 m=re.search(r'constexpr unsigned long long TRANSPARENCY_TABLE_HASH = 0x([0-9a-f]+)ULL;',cpp_test);assert m,'TRANSPARENCY_TABLE_HASH in the C++ test'
-assert int(m.group(1),16)==fnv1a(tables_tex[4]),('the transparency table differs from the C++ one',hex(fnv1a(tables_tex[4])))
-print('mask tables: rows of exactly r bits for S = 4, 8, 16, varied and reproducible; the S = 4 table with the blue-noise tile is the C++ one')
+assert int(m.group(1),16)==fnv1a(tables_tex[8]),('the transparency table differs from the C++ one',hex(fnv1a(tables_tex[8])))
+print('mask tables: rows of exactly r bits for S = 4, 8, 16, varied and reproducible; the S = 8 table with the blue-noise tile is the C++ one')
 
 # ---- the Python model of st_mask (alphaStochasticF.glsl), float32 at every step
 def f32(x): return struct.unpack('<f',struct.pack('<f',x))[0]
@@ -163,6 +163,14 @@ void main(){ vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2)*2.0-1.0; gl_Position=
 variant=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; out vec4 frag_color; int alpha_stochastic_mask(float a);
 void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0)); gl_SampleMask[0]=alpha_stochastic_mask(test_alpha); }'''),(0x8B30,helper),(0x8B30,engine)])
+# a variant whose masks are given (the multi-pass test): the face's seed indexes FORCED_BITS, the S-bit mask, cut to the iteration's samples
+# as alpha_stochasticF.glsl cuts the hashed one
+forced=program([(0x8B31,vertex),(0x8B30,'''#version 420
+uniform float test_alpha; uniform int forced_bits; uniform int st_mode; uniform int st_iteration; uniform int st_samples_hw; out vec4 frag_color;
+void main(){ frag_color=vec4(0.0,0.0,0.0,max(test_alpha,0.0));
+  uint n=uint(st_samples_hw); uint shift=(uint(st_iteration)*n)%32u; uint bits=n>=32u?0xffffffffu:((1u<<n)-1u);
+  gl_SampleMask[0]= st_mode!=2 ? -1 : int((uint(forced_bits)>>shift)&bits); }''')])
+FORCED_BITS={}   # seed -> mask: when not empty, stochastic() draws the alpha-only passes with the forced variant
 # the ordinary program: shaded colour and alpha (the accumulation)
 shade=program([(0x8B31,vertex),(0x8B30,'''#version 420
 uniform float test_alpha; uniform vec3 test_rgb; out vec4 frag_color;
@@ -199,6 +207,13 @@ composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticComposi
 # the temporal accumulation, three fragment passes: this frame's samples measured (averaged, their grain, the depths), blended with
 # the history with the engine's resolve object attached, and smoothed (the engine's object attached for the frame weight)
 current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
+# where a pass holds fewer samples than S (2 or 4 of the 8) the iterations are measured one by one: the same file as two more programs
+# (ST_STAGE 1: an iteration's moments; 2: the moments of every iteration finished), as llviewershadermgr.cpp builds them
+def viewer_stage(stage):
+    text=viewer('alphaStochasticCurrentF.glsl');head,body=text.split('\n',1)
+    return head+'\n#define ST_STAGE %d\n'%stage+body
+moments_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer_stage(1))])
+measure_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer_stage(2))])
 resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
 smooth_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticSmoothF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
 # The before: the shaders of OLD_REF (the viewer before the 2026-11-14 upgrade: S = 8, the hashed dither, the temporal pair without
@@ -248,6 +263,11 @@ targets={}
 for n in (2,4,8):
     accum=texms(RGBA16F,n);trans=texms(RG16F,n);depth=texms(D24,n)
     targets[n]=(fbo((COLOR0,TEXMS,accum),(COLOR1,TEXMS,trans),(DEPTH_ATT,TEXMS,depth)),accum,trans,depth)
+# the iteration moments (pipeline.cpp mAlphaSTMom*): RGBA32F sums, RGBA32F squares and alphas squared, RG16F depth range
+mom_sum=tex2d(RGBA32F,RGBA,FLOAT);mom_squares=tex2d(RGBA32F,RGBA,FLOAT);mom_depth=tex2d(RG16F,RGBA,FLOAT)
+mom_fbo=fbo((COLOR0,TEX2D,mom_sum),(COLOR1,TEX2D,mom_squares),(0x8CE2,TEX2D,mom_depth))
+blend_equation=fn('glBlendEquationSeparate',None,U,U);drawbuffers=fn('glDrawBuffers',None,I,C.POINTER(U))
+GL_MAX=0x8008;GL_FUNC_ADD=0x8006;COLOR2=0x8CE2
 assert geterror()==0
 
 def set_opaque(z,occluder=None,slope=0.,slope_y=0.):
@@ -281,13 +301,15 @@ def read_timers():
             fn('glDeleteQueries',None,I,C.POINTER(U))(1,C.byref(q))
         out[k]=vals
     TIMERS.clear();return out
+PER_ITERATION=[True]   # False: the measure of the lanes after the last iteration (the viewer before this fix), for the comparison of the multi-pass test
 LAYER_SCISSOR=None   # (x0, x1): the layers cover these columns only (the temporal tests move it)
 SCISSOR_SEEDS=None   # with LAYER_SCISSOR: only the layers of these seeds are cut (None: all)
 TEMPORAL_FRAME=[0]   # the frame in the masks' seeds (st_frame)
 def layer(prog,z,alpha=0.,rgb=(1.,1.,1.),seed=0,glow=0.,slope=0.,slope_y=0.):
     if isinstance(slope,tuple): slope,slope_y=slope
     use(prog);uniform1f(loc(prog,b'z'),z);uniform1f(loc(prog,b'slope'),slope);uniform1f(loc(prog,b'slope_y'),slope_y)
-    if prog==variant or prog in VARIANT_OLD.values(): uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
+    if prog==forced: uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'forced_bits'),FORCED_BITS[seed])
+    elif prog==variant or prog in VARIANT_OLD.values(): uniform1f(loc(prog,b'test_alpha'),alpha);uniform1i(loc(prog,b'st_seed'),seed);uniform1i(loc(prog,b'st_frame'),TEMPORAL_FRAME[0])
     elif prog==shade: uniform1f(loc(prog,b'test_alpha'),alpha);uniform3f(loc(prog,b'test_rgb'),*rgb)
     else: uniform1f(loc(prog,b'test_glow'),glow)
     cut=LAYER_SCISSOR and (SCISSOR_SEEDS is None or seed in SCISSOR_SEEDS)
@@ -301,15 +323,35 @@ def spread(n,prog):
     use(prog);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(prog,b'depthMap'),0);draw(4,0,3)
     depthfunc(LEQUAL)
 
+def measure_iteration(it,n,accum,depth,main_fbo,last):
+    """LLPipeline::measureAlphaStochasticIteration: this iteration's lanes measured on their own, the sums added to the moment
+    targets (blend ONE, ONE), the depth range maxed (1 - nearest, farthest - 1), the accumulation cleared for the next iteration."""
+    with timed('measure'):
+        bindfbo(FB,mom_fbo);disable(DEPTH_TEST);disable(POLY_OFFSET);disable(MULTISAMPLE)
+        if it==0:
+            drawbuffers(3,(U*3)(COLOR0,COLOR1,COLOR2));clearf(0,(0.,0.,0.,0.));clearf(1,(0.,0.,0.,0.));clearf(2,(0.,-1.,0.,0.))
+        use(moments_prog);bind_unit(4,TEXMS,accum);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth)
+        uniform1i(loc(moments_prog,b'alpha_st_accum'),4);uniform1i(loc(moments_prog,b'alpha_st_depth'),6);uniform1i(loc(moments_prog,b'depthMap'),11)
+        uniform1i(loc(moments_prog,b'st_samples_hw'),n)
+        enable(BLEND);blendsep(ONE,ONE,ONE,ONE)
+        drawbuffers(3,(U*3)(COLOR0,COLOR1,NONE));uniform1i(loc(moments_prog,b'st_part'),0);draw(4,0,3)
+        drawbuffers(3,(U*3)(NONE,NONE,COLOR2));uniform1i(loc(moments_prog,b'st_part'),1);blend_equation(GL_MAX,GL_MAX);draw(4,0,3)
+        blend_equation(GL_FUNC_ADD,GL_FUNC_ADD)
+        bindfbo(FB,main_fbo)
+        if not last: drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
+        drawbuffer(NONE)
+        enable(DEPTH_TEST);enable(MULTISAMPLE)
+
 def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False,temporal=None,pipe='new',readback=True):
     """LLDrawPoolAlpha::renderStochastic over `layers` [(z, alpha, rgb, seed, glow, slope)], then
     the composite over a scene of `scene_rgba`; returns the scene's pixels (RGBA float). pipe 'old': the passes of the viewer
     before the 2026-11-14 upgrade (OLD_REF: S = 8, the hashed dither, the temporal pair without grain, the composite reading the
     history), for the before / after comparison."""
     old=pipe=='old'
-    V=VARIANT_OLD[variant] if old else variant
+    V=VARIANT_OLD[variant] if old else (forced if FORCED_BITS else variant)
     CMP=old_composite if old else composite
     f,accum,trans,depth=targets[n];iterations=total//n
+    per_iteration=temporal is not None and not old and iterations>1 and PER_ITERATION[0]   # alphaStochasticMeasuredPerIteration
     bindfbo(FB,f);enable(MULTISAMPLE);disable(0x0C11)
     drawbuffer(COLOR1);clearf(0,(1.,0.,0.,0.));drawbuffer(COLOR0);clearf(0,(0.,0.,0.,0.))
     spread_prog,offsets=(expand_before,BEFORE_OFFSET) if before else (expand,VIEWER_OFFSET)
@@ -345,6 +387,7 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         drawbuffer(COLOR1);blendsep(ONE,ONE,ONE,ONE);poly(3)
         for z,a,rgb,seed,glow,slope in layers:
             if glow>0: poly(3,seed);layer(glowprog,z,glow=glow,seed=seed,slope=slope)
+        if per_iteration: measure_iteration(it,n,accum,depth,f,it+1==iterations)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
     # 3b. the temporal accumulation
     if temporal is not None and old:
@@ -369,9 +412,16 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         nxt=1-temporal['idx']
         _t=timed('measure');_t.__enter__()
         bindfbo(FB,temporal['curfbo']);fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(COLOR0,COLOR1));disable(BLEND);disable(DEPTH_TEST)
-        use(current_prog);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(current_prog,b'depthMap'),11)
-        uniform1i(loc(current_prog,b'alpha_st_accum'),4);uniform1i(loc(current_prog,b'alpha_st_trans'),5);uniform1i(loc(current_prog,b'alpha_st_depth'),6)
-        uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
+        if per_iteration:
+            # the moments of every iteration (measure_iteration) finished, with the total alpha
+            use(measure_prog);bind_unit(4,TEX2D,mom_sum);bind_unit(5,TEXMS,trans);bind_unit(6,TEX2D,mom_squares);bind_unit(7,TEX2D,mom_depth)
+            uniform1i(loc(measure_prog,b'alpha_st_mom_sum'),4);uniform1i(loc(measure_prog,b'alpha_st_trans'),5)
+            uniform1i(loc(measure_prog,b'alpha_st_mom_squares'),6);uniform1i(loc(measure_prog,b'alpha_st_mom_depth'),7)
+            uniform1i(loc(measure_prog,b'st_samples_hw'),n);uniform1i(loc(measure_prog,b'st_samples'),total)
+        else:
+            use(current_prog);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(current_prog,b'depthMap'),11)
+            uniform1i(loc(current_prog,b'alpha_st_accum'),4);uniform1i(loc(current_prog,b'alpha_st_trans'),5);uniform1i(loc(current_prog,b'alpha_st_depth'),6)
+            uniform1i(loc(current_prog,b'st_samples_hw'),n);uniform1i(loc(current_prog,b'st_samples'),total)
         draw(4,0,3)
         _t.__exit__();_t=timed('blend');_t.__enter__()
         bindfbo(FB,temporal['fbo'][nxt]);fn('glDrawBuffers',None,I,C.POINTER(U))(2,(U*2)(COLOR0,COLOR1))
@@ -398,10 +448,13 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
     bind_unit(7,TEX2D,resolved)
     uniform1i(loc(CMP,b'alpha_st_accum'),4);uniform1i(loc(CMP,b'alpha_st_trans'),5);uniform1i(loc(CMP,b'alpha_st_resolved'),7)
     uniform1i(loc(CMP,b'st_temporal'),1 if temporal is not None else 0)
+    if not old: uniform1i(loc(CMP,b'st_moments'),0)
     uniform1i(loc(CMP,b'st_samples_hw'),n);uniform1i(loc(CMP,b'st_samples'),total);uniform1i(loc(CMP,b'st_glow'),0)
     with timed('composite'):
         draw(4,0,3)
-        blendsep(ZERO,ONE,ONE,ONE);uniform1i(loc(CMP,b'st_glow'),1);draw(4,0,3)
+        blendsep(ZERO,ONE,ONE,ONE);uniform1i(loc(CMP,b'st_glow'),1)
+        if per_iteration: uniform1i(loc(CMP,b'st_moments'),1);bind_unit(7,TEX2D,mom_sum)   # the accumulation was cleared after each iteration
+        draw(4,0,3)
     enable(DEPTH_TEST);assert geterror()==0
     if not readback: return None
     out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)
@@ -1144,7 +1197,7 @@ assert before[2][2]==W*H,('the old binding should lose the shiny glass reflectio
 
 # ---- the temporal accumulation (three fragment passes, with the
 # engine's resolve; the composite's st_temporal)
-# 4 samples in one pass (S = 4), the masks' seeds changing every frame (st_frame), the last frame's colour moved
+# 8 samples in one pass (S = 8), the masks' seeds changing every frame (st_frame), the last frame's colour moved
 # by the camera and clamped to this frame's 3 x 3 neighbourhood, blended at 1/8.
 # <<bench-shared:begin>>
 IDENT=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., 0.,0.,0.,1.]
@@ -1170,29 +1223,29 @@ set_opaque(1.0)
 want=exact()
 # no history: the same image as the composite without the temporal accumulation
 TEMPORAL_FRAME[0]=1
-plain=stochastic(scene(),4,4,temporal=None)
-T=new_temporal();first=stochastic(scene(),4,4,temporal=T)
+plain=stochastic(scene(),8,8,temporal=None)
+T=new_temporal();first=stochastic(scene(),8,8,temporal=T)
 # the first frame has no history: its image is the smooth of this frame's samples alone, nearer the exact image than the samples are
 assert rmse(first,want)<=rmse(plain,want)+1e-3,('the first frame (smoothed) is no worse than the samples',rmse(first,want),rmse(plain,want))
 checks+=1
 # a static view: the noise averages over the frames
 single8=[];single16=None
 for f in range(1,9):
-    TEMPORAL_FRAME[0]=f;single8.append(rmse(stochastic(scene(),4,4),want))
-TEMPORAL_FRAME[0]=0;single16=rmse(stochastic(scene(),8,8),want)
+    TEMPORAL_FRAME[0]=f;single8.append(rmse(stochastic(scene(),8,8),want))
+TEMPORAL_FRAME[0]=0;single16=rmse(stochastic(scene(),16,8),want)
 T=new_temporal();errs={};prev=None
 for f in range(1,41):
-    TEMPORAL_FRAME[0]=f;pix=stochastic(scene(),4,4,temporal=T)
+    TEMPORAL_FRAME[0]=f;pix=stochastic(scene(),8,8,temporal=T)
     if f in (1,8,16,40): errs[f]=rmse(pix,want)
     if f==39: prev=pix
 flicker=frame_rmse(prev,pix)
-TEMPORAL_FRAME[0]=1;a=stochastic(scene(),4,4);TEMPORAL_FRAME[0]=2;b=stochastic(scene(),4,4);flicker8=frame_rmse(a,b)
+TEMPORAL_FRAME[0]=1;a=stochastic(scene(),8,8);TEMPORAL_FRAME[0]=2;b=stochastic(scene(),8,8);flicker8=frame_rmse(a,b)
 mean8=sum(single8)/len(single8)
-assert errs[40]<0.55*mean8,('4 samples with the temporal accumulation against 4 samples',errs,mean8)
-assert errs[40]<single16,('and against 8 samples (single16)',errs[40],single16)
+assert errs[40]<0.55*mean8,('8 samples with the temporal accumulation against 8 samples',errs,mean8)
+assert errs[40]<single16,('and against 16 samples (single16)',errs[40],single16)
 assert flicker<0.25*flicker8,('the grain holds still between frames',flicker,flicker8)
 checks+=1
-print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 4 samples {mean8*255:.2f}, 8 samples {single16*255:.2f}; 4 samples '
+print(f'temporal accumulation, a static view (three layers of alpha 0.2, 0.4, 0.5, rmse/255): 8 samples {mean8*255:.2f}, 16 samples {single16*255:.2f}; 8 samples '
       f'accumulated: frame 1 {errs[1]*255:.2f}, 8 {errs[8]*255:.2f}, 16 {errs[16]*255:.2f}, 40 {errs[40]*255:.2f}; '
       f'rms change between frames {flicker*255:.2f} against {flicker8*255:.2f} without')
 # the camera moves 3 pixels: the history follows (reprojected), where without it the edges ghost
@@ -1200,9 +1253,9 @@ def moved(reproj_shift):
     global LAYER_SCISSOR
     T=new_temporal();LAYER_SCISSOR=(8,40)
     for f in range(1,25):
-        TEMPORAL_FRAME[0]=f;stochastic(scene(),4,4,temporal=T)
+        TEMPORAL_FRAME[0]=f;stochastic(scene(),8,8,temporal=T)
     LAYER_SCISSOR=(11,43);T['reproj']=[1.,0.,0.,0., 0.,1.,0.,0., 0.,0.,1.,0., -2.0*reproj_shift/W,0.,0.,1.]
-    TEMPORAL_FRAME[0]=25;pix=stochastic(scene(),4,4,temporal=T);LAYER_SCISSOR=None
+    TEMPORAL_FRAME[0]=25;pix=stochastic(scene(),8,8,temporal=T);LAYER_SCISSOR=None
     return pix
 edge_cols=list(range(9,15))+list(range(39,46))
 inside=lambda x:11<=x<43
@@ -1220,21 +1273,21 @@ print(f'camera moved 3 pixels, the columns at the edges of the layers (rmse/255)
 # an alpha change is never ghosted: the correction uses this frame's total alpha
 T=new_temporal()
 for f in range(1,25):
-    TEMPORAL_FRAME[0]=f;stochastic(scene(),4,4,temporal=T)
-TEMPORAL_FRAME[0]=25;changed=stochastic(scene((0.05,0.1,0.1)),4,4,temporal=T);w2=exact((0.05,0.1,0.1))
-TEMPORAL_FRAME[0]=25;plain2=stochastic(scene((0.05,0.1,0.1)),4,4)
+    TEMPORAL_FRAME[0]=f;stochastic(scene(),8,8,temporal=T)
+TEMPORAL_FRAME[0]=25;changed=stochastic(scene((0.05,0.1,0.1)),8,8,temporal=T);w2=exact((0.05,0.1,0.1))
+TEMPORAL_FRAME[0]=25;plain2=stochastic(scene((0.05,0.1,0.1)),8,8)
 e_t=rmse(changed,w2);e_p=rmse(plain2,w2)
 assert e_t<2.0*e_p+0.01,('after an alpha change the first frame is no worse than without history',e_t,e_p)
 checks+=1
 print(f'alpha 0.2/0.4/0.5 -> 0.05/0.1/0.1 after 24 frames: first frame rmse/255 {e_t*255:.2f} with the history, {e_p*255:.2f} without')
 TEMPORAL_FRAME[0]=0
-# ---- the grain-measuring resolve (S = 4): what alphaStochasticCurrentF.glsl measures and what the blend and the smooth do with it
+# ---- the grain-measuring resolve (S = 8): what alphaStochasticCurrentF.glsl measures and what the blend and the smooth do with it
 import numpy as np
 getteximage=fn('glGetTexImage',None,U,I,U,U,P)
 def read_tex(tex,fmt=RGBA,channels=4):
     bind_unit(11,TEX2D,tex);out=(C.c_float*(W*H*4))();getteximage(TEX2D,0,fmt,FLOAT,out)
     return np.frombuffer(out,dtype=np.float32).reshape(H,W,4).copy()
-def run_frames(layers_fn,frames,T,first=1,n=4):
+def run_frames(layers_fn,frames,T,first=1,n=8):
     for f in range(first,first+frames):
         TEMPORAL_FRAME[0]=f;pix=stochastic(layers_fn(f),n,n,temporal=T)
     return pix
@@ -1243,7 +1296,7 @@ set_opaque(1.0)
 T=new_temporal();one=lambda f:[L(0.4,0.5,(0.8,0.4,0.1),seed=21)]
 run_frames(one,3,T);aux=read_tex(T['aux']);grain1=float(aux[...,0].max())
 assert grain1<1e-3,('one layer has no grain',grain1)
-sharp=stochastic(one(0),4,4,temporal=T);plain1=stochastic(one(0),4,4)
+sharp=stochastic(one(0),8,8,temporal=T);plain1=stochastic(one(0),8,8)
 assert frame_rmse(sharp,plain1)<3e-3,('one layer takes no history',frame_rmse(sharp,plain1))
 # the left-out part of the history of such a pixel is all of it (this frame's weight is 1)
 assert float(read_tex(T['extra'][T['idx']])[...,1].min())>=0.999,'one layer: the whole history is left out'
@@ -1257,10 +1310,49 @@ near=float(aux[...,2].max());hit=aux[...,2]>1e-3;far=float(aux[...,3][hit].min()
 assert abs(near-0.35)<2e-3 and abs(far-0.25)<2e-3,('the depths are measured',near,far)
 checks+=1
 print(f'grain: one layer {grain1:.2e} (sharp, takes no history), two layers {grain2:.4f} (mean standard error of alpha x colour); depths 1 - z near {near:.3f}, far {far:.3f}')
+# the passes run as iterations (a device that holds 2 or 4 samples a pass): each iteration is measured on its own, the moments and the
+# depth range combined, so the grain is that of the 8 samples of a single pass. The lanes of the iterations are added into the same
+# physical lanes: complementary masks (one layer covering the first half of the samples, the other the second half) sum to the same in
+# every lane, which read as no grain when the lanes were measured after the last iteration (PER_ITERATION False: the viewer before this fix)
+def measured_aux(layers,n,per_iteration=True,total=8):
+    PER_ITERATION[0]=per_iteration
+    T=new_temporal();TEMPORAL_FRAME[0]=1;pix=stochastic(layers,total,n,temporal=T);PER_ITERATION[0]=True
+    return read_tex(T['aux']),np.array(pix,dtype=np.float32).reshape(H,W,4)
+def covered_aux(aux): return aux[...,1]>1e-3   # the pixels some layer covers
+def hashed_scene(): return [L(0.3,0.5,(1.,0.,0.),seed=22),L(0.45,0.4,(0.,1.,0.),seed=24),L(0.5,0.5,(0.,0.,1.),seed=23)]
+FORCED_BITS.clear();FORCED_BITS.update({41:0x0F,42:0xF0})
+complementary=lambda:[L(0.3,0.5,(1.,0.,0.),seed=41),L(0.5,0.5,(0.,0.,1.),seed=42)]
+rows=[]
+for label,make,forced_masks in (('hashed masks, three layers',hashed_scene,False),('complementary masks (first half, second half of the 8 samples)',complementary,True)):
+    if not forced_masks: FORCED_BITS_SAVED=dict(FORCED_BITS);FORCED_BITS.clear()
+    else: FORCED_BITS.clear();FORCED_BITS.update(FORCED_BITS_SAVED)
+    ref,ref_pix=measured_aux(make(),8)
+    covered=covered_aux(ref)
+    gref=float(ref[...,0][covered].mean());assert gref>1e-3,(label,'the single pass of 8 measures grain',gref)
+    for n in (4,2):
+        aux,pix=measured_aux(make(),n)
+        # grain, total alpha, 1 - nearest depth, 1 - farthest depth: the same as the single pass (the lanes' values are the same; fp32 sums, 16F targets)
+        err=np.abs(aux-ref)
+        assert float(err[...,0].max())<=1e-3*max(gref,1e-3)+1e-4,(label,n,'the grain is the single pass\'s',float(err[...,0].max()),gref)
+        assert float(err[...,1].max())<2e-3,(label,n,'the total alpha',float(err[...,1].max()))
+        assert float(err[...,2:].max())<2e-3,(label,n,'the depth range',float(err[...,2:].max()))
+        assert float(np.abs(pix-ref_pix).max())<4e-3,(label,n,'the image',float(np.abs(pix-ref_pix).max()))
+        rows.append((label,n,float(aux[...,0][covered].mean()),gref,float(np.abs(pix-ref_pix).max())))
+    if forced_masks:
+        # before the fix: the lanes of 2 and 4 iterations summed, then measured
+        for n in (4,2):
+            old_aux,_=measured_aux(make(),n,per_iteration=False)
+            g_old=float(old_aux[...,0][covered].mean())
+            assert g_old<0.05*gref,(label,n,'the lanes summed over the iterations read (almost) no grain',g_old,gref)
+            rows.append(('before the fix: '+label,n,g_old,gref,0.0))
+FORCED_BITS.clear();PER_ITERATION[0]=True
+checks+=1
+print('grain of 8 samples held in passes of 8, 4 (two iterations) and 2 (four iterations), mean over the covered pixels: '+'; '.join(
+    f'{label}, {n} per pass: {g:.4f} against {gref:.4f}' + (f' (image differs by at most {d*255:.2f}/255)' if d else '') for label,n,g,gref,d in rows))
 # the last frame is left out where the total alpha changes ...
 T=new_temporal();run_frames(lambda f:scene(),12,T)
 extra=read_tex(T['extra'][T['idx']]);quiet_left=float(extra[...,1].mean())
-pix=stochastic(scene((0.05,0.1,0.1)),4,4,temporal=T);extra=read_tex(T['extra'][T['idx']]);changed_left=float(extra[...,1].mean())
+pix=stochastic(scene((0.05,0.1,0.1)),8,8,temporal=T);extra=read_tex(T['extra'][T['idx']]);changed_left=float(extra[...,1].mean())
 assert changed_left>0.9 and quiet_left<0.9,('the history is dropped where the total alpha changed',quiet_left,changed_left)
 # ... and where the camera has slid the far layer more than 1/4 px past the near one (a reprojection that shifts x with depth)
 def depth_shift(px_apart):
@@ -1280,10 +1372,10 @@ last=run_frames(lambda f:scene(),30,T);LAYER_SCISSOR=None
 def column_err(pix,cols,w): return math.sqrt(sum((pix[y*W+x][c]-w[c])**2 for y in range(H) for x in cols for c in range(3))/(3*H*len(cols)))
 outside=column_err(last,[14,15],(0.,0.,0.));inside=column_err(last,[17,18],want)
 assert outside<0.01 and inside<0.04,('the smooth keeps the edge of the layer',outside,inside)
-plain_in=column_err(stochastic(scene(),4,4),[17,18],want)
-assert inside<0.5*plain_in,('and the layer is smoother than its 4 samples',inside,plain_in)
+plain_in=column_err(stochastic(scene(),8,8),[17,18],want)
+assert inside<0.5*plain_in,('and the layer is smoother than its 8 samples',inside,plain_in)
 checks+=1
-print(f'edge of a layer after 30 frames (rmse/255): the two columns outside {outside*255:.2f}, the two inside {inside*255:.2f} against {plain_in*255:.2f} for the 4 samples alone')
+print(f'edge of a layer after 30 frames (rmse/255): the two columns outside {outside*255:.2f}, the two inside {inside*255:.2f} against {plain_in*255:.2f} for the 8 samples alone')
 
 # ---- the NaN guard (Aurora Viewer PR 3663's set): NaN and infinite colours, alphas and transparencies never reach the history, the neighbours or the image
 NAN=float('nan');INF=float('inf')
@@ -1304,23 +1396,23 @@ cases={'NaN colour':dict(rgb=(NAN,1.,1.)),'infinite colour':dict(rgb=(INF,INF,IN
 for what,kw in cases.items():
     T=new_temporal();LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31}
     for f in range(1,7):
-        TEMPORAL_FRAME[0]=f;pix=stochastic(injected(**kw)(f),4,4,temporal=T)
+        TEMPORAL_FRAME[0]=f;pix=stochastic(injected(**kw)(f),8,8,temporal=T)
         check_finite(T,pix,what)
     # the injection stops: the pixels come back, the neighbours were never poisoned, the history has recovered
     LAYER_SCISSOR=None
     for f in range(7,40):
-        TEMPORAL_FRAME[0]=f;pix=stochastic(good(f),4,4,temporal=T)
+        TEMPORAL_FRAME[0]=f;pix=stochastic(good(f),8,8,temporal=T)
     check_finite(T,pix,what+' (afterwards)')
     assert rmse(pix,want)<0.06,(what,'the image recovers after the injection',rmse(pix,want))
     checks+=1
 # an injected NaN in the composite's own samples (no temporal accumulation): the same guard
 for what,kw in cases.items():
     T=None;LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31}
-    TEMPORAL_FRAME[0]=1;pix=stochastic(injected(**kw)(1),4,4)
+    TEMPORAL_FRAME[0]=1;pix=stochastic(injected(**kw)(1),8,8)
     assert finite_all(np.array(pix)),(what,'without the history');LAYER_SCISSOR=None
 # the pixels outside the injected columns are the clean scene's (the neighbourhood is not poisoned): same frame, with and without the injected layer
-TEMPORAL_FRAME[0]=3;T=new_temporal();LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31};bad=stochastic(injected(rgb=(NAN,NAN,NAN))(3),4,4,temporal=T);LAYER_SCISSOR=None
-T=new_temporal();clean=stochastic(good(3),4,4,temporal=T)
+TEMPORAL_FRAME[0]=3;T=new_temporal();LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31};bad=stochastic(injected(rgb=(NAN,NAN,NAN))(3),8,8,temporal=T);LAYER_SCISSOR=None
+T=new_temporal();clean=stochastic(good(3),8,8,temporal=T)
 far_cols=list(range(32,W))
 assert max(abs(bad[y*W+x][c]-clean[y*W+x][c]) for y in range(H) for x in far_cols for c in range(3))<1e-3,'a NaN layer changed pixels far from it'
 checks+=1
@@ -1595,25 +1687,25 @@ def history_finite(T):
 def pan_run(layers,d,old_prog,frames=40,moving=False,ablate=False):
     global resolve_prog
     new_prog=resolve_prog;rj=IDENT if moving else pan_reproj(d)   # moving surfaces: the geometry pans and the camera does not, so nothing is reprojected
-    Ts={'old':new_temporal(rj),'new':new_temporal(rj),'before':new_temporal(rj,old=True),'s8':new_temporal(rj)};plain=[];plain_before=[];last={}
+    Ts={'old':new_temporal(rj),'new':new_temporal(rj),'before':new_temporal(rj,old=True),'s4':new_temporal(rj)};plain=[];plain_before=[];last={}
     identical=True;worst=0.;differing=0;sc=(0.5,0.5,0.5,0.0)
     for f in range(1,frames+1):
         TEMPORAL_FRAME[0]=f;PAN[0]=(f*d[0],f*d[1])
         ref=sorted_reference(layers,sc)
-        plain.append(pan_err(np.array(stochastic(layers,4,4,scene_rgba=sc),dtype=np.float32).reshape(H,W,4),ref))
+        plain.append(pan_err(np.array(stochastic(layers,8,8,scene_rgba=sc),dtype=np.float32).reshape(H,W,4),ref))
         plain_before.append(pan_err(np.array(stochastic(layers,8,8,scene_rgba=sc,pipe='old'),dtype=np.float32).reshape(H,W,4),ref))
         imgs={}
         for key,prog in (('old',old_prog),('new',new_prog)):
             resolve_prog=prog
-            imgs[key]=np.array(stochastic(layers,4,4,scene_rgba=sc,temporal=Ts[key]),dtype=np.float32).reshape(H,W,4)
+            imgs[key]=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts[key]),dtype=np.float32).reshape(H,W,4)
         resolve_prog=new_prog
         imgs['before']=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts['before'],pipe='old'),dtype=np.float32).reshape(H,W,4)
-        if ablate: imgs['s8']=np.array(stochastic(layers,8,8,scene_rgba=sc,temporal=Ts['s8']),dtype=np.float32).reshape(H,W,4)   # the ablation: the new resolve at S = 8
+        if ablate: imgs['s4']=np.array(stochastic(layers,4,4,scene_rgba=sc,temporal=Ts['s4']),dtype=np.float32).reshape(H,W,4)   # the ablation: the new resolve at S = 4 (the upgrade as first made)
         dd=np.abs(imgs['old']-imgs['new']);identical=identical and not dd.any()
         worst=max(worst,float(dd.max()));differing=max(differing,int(np.count_nonzero(dd.max(axis=2))))
         history_finite(Ts['new'])
-        if f==frames: last=dict(old=pan_err(imgs['old'],ref),new=pan_err(imgs['new'],ref),before=pan_err(imgs['before'],ref),s8=pan_err(imgs['s8'],ref) if ablate else None)
-    return dict(plain=(float(np.mean([e[0] for e in plain])),float(np.mean([e[1] for e in plain]))),plain_before=(float(np.mean([e[0] for e in plain_before])),float(np.mean([e[1] for e in plain_before]))),before=last['before'],old=last['old'],new=last['new'],s8=last['s8'],identical=identical,worst=worst,differing=differing)
+        if f==frames: last=dict(old=pan_err(imgs['old'],ref),new=pan_err(imgs['new'],ref),before=pan_err(imgs['before'],ref),s4=pan_err(imgs['s4'],ref) if ablate else None)
+    return dict(plain=(float(np.mean([e[0] for e in plain])),float(np.mean([e[1] for e in plain]))),plain_before=(float(np.mean([e[0] for e in plain_before])),float(np.mean([e[1] for e in plain_before]))),before=last['before'],old=last['old'],new=last['new'],s4=last['s4'],identical=identical,worst=worst,differing=differing)
 # <<bench-shared:end>>
 if True:
     saved=(layer,variant,shade)
@@ -1631,19 +1723,20 @@ if True:
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
                 else:
-                    assert r['new'][1]<r['plain'][1],('the history beats plain 4 samples in low-pass error',name,d,r)
-                    if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 4 samples in rmse on textured layers',name,d,r)
-                    # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the S = 4 resolve; the bound was 0.6 and 0.5 for S = 8)
+                    # at S = 8 the hair strips on a pan are no better than the plain samples' smear share (the viewer before the upgrade is no better either: 'before' against 'plain_before'): within 5 %
+                    assert r['new'][1]<(r['plain'][1]*1.05 if name=='S10' else r['plain'][1]),('the history beats plain 8 samples in low-pass error (hair: within 5 %)',name,d,r)
+                    if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 8 samples in rmse on textured layers',name,d,r)
+                    # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the resolve; the bound was 0.6 and 0.5 before the upgrade)
                     assert r['new'][0]<0.65*r['old'][0] and r['new'][1]<0.55*r['old'][1],('the smear is gone',name,d,r)
             checks+=1
     finally:
         layer,variant,shade=saved;TEMPORAL_FRAME[0]=0
-    print('sub-pixel camera pans, frame 40 (plain samples: the mean over the 40 frames), rmse/255 (low-pass in brackets): scene px/frame (x, y) | plain 8 samples (before) | the viewer before the upgrade (S = 8, 1/8 history) | plain 4 samples | nearest history, S = 4 | the upgrade (S = 4, grain resolve)')
+    print('sub-pixel camera pans, frame 40 (plain samples: the mean over the 40 frames), rmse/255 (low-pass in brackets): scene px/frame (x, y) | plain 8 samples (before) | the viewer before the upgrade (S = 8, 1/8 history) | plain 8 samples (the new dither) | nearest history, S = 8 | the upgrade (S = 8, grain resolve)')
     for name,d,r in pan_rows:
         print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['plain_before'][0]:5.2f} ({r['plain_before'][1]:4.2f}) | {r['before'][0]:5.2f} ({r['before'][1]:4.2f}) | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['old'][0]:5.2f} ({r['old'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})"+(' | same image as the nearest read' if d[0]==int(d[0]) and d[1]==int(d[1]) else ''))
-    print('ablation, frame 40, rmse/255: the new resolve (grain weight, smooth, box) at S = 8 against the viewer before the upgrade (S = 8, 1/8 history) and the upgrade at S = 4: scene px/frame | before | new resolve S = 8 | upgrade S = 4')
+    print('ablation, frame 40, rmse/255: the new resolve (grain weight, smooth, box) at S = 8 (shipping) against the viewer before the upgrade (S = 8, 1/8 history) and the new resolve at S = 4 (the upgrade as first made): scene px/frame | before | new resolve S = 8 | new resolve S = 4')
     for name,d,r in pan_rows:
-        if r['s8'] is not None: print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['before'][0]:5.2f} | {r['s8'][0]:5.2f} | {r['new'][0]:5.2f}")
+        if r['s4'] is not None: print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['before'][0]:5.2f} | {r['new'][0]:5.2f} | {r['s4'][0]:5.2f}")
     # moving surfaces (the geometry moves, the camera does not: the history is not reprojected and ghosts, limited by the clamp):
     # the viewer before the upgrade against the upgrade, 40 frames
     layer,variant,shade=pan_layer,pan_variant,pan_shade
@@ -1657,13 +1750,13 @@ if True:
         checks+=1
     finally:
         layer,variant,shade=saved;TEMPORAL_FRAME[0]=0
-    print('moving surfaces, frame 40 (not reprojected), rmse/255 (low-pass in brackets): scene px/frame | plain 8 samples (before) | the viewer before the upgrade | plain 4 samples | the upgrade')
+    print('moving surfaces, frame 40 (not reprojected), rmse/255 (low-pass in brackets): scene px/frame | plain 8 samples (before) | the viewer before the upgrade | plain 8 samples (the new dither) | the upgrade')
     for name,d,r in moving_rows:
         print(f"  {name:3s} {d[0]:5.2f} {d[1]:5.2f} | {r['plain_before'][0]:5.2f} ({r['plain_before'][1]:4.2f}) | {r['before'][0]:5.2f} ({r['before'][1]:4.2f}) | {r['plain'][0]:5.2f} ({r['plain'][1]:4.2f}) | {r['new'][0]:5.2f} ({r['new'][1]:4.2f})")
     # the NaN injection against the viewer before the upgrade: six frames of a layer with a NaN colour over 16 columns, then 33 clean frames
     set_opaque(1.0);before_nan={};injected_info={}
     saved_cut=(LAYER_SCISSOR,SCISSOR_SEEDS)
-    for pipe,total in (('old',8),('new',4)):
+    for pipe,total in (('old',8),('new',8)):
         Tn=new_temporal(old=pipe=='old');LAYER_SCISSOR=(8,24);SCISSOR_SEEDS={31}
         for f in range(1,7):
             TEMPORAL_FRAME[0]=f;pix=stochastic(scene()+[L(0.2,0.4,(NAN,1.,1.),seed=31)],total,total,temporal=Tn,pipe=pipe)

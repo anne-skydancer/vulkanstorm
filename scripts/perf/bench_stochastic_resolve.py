@@ -6,7 +6,7 @@ Runs the viewer's own shaders with the pass structure and GL state of LLPipeline
 (the harness of test_alpha_stochastic.py: its shared blocks are executed here, so the two cannot differ):
   before  the shaders of the git ref STOCH_OLD_REF (default 1f38b56b50, the viewer before the upgrade): S = 8 samples in
           one pass of 8, the hashed dither, the averaging pre-pass into RGBA32F, the 1/8 resolve, the composite;
-  after   the working tree: S = 4, the blue-noise / golden-ratio dither, the measuring pass, the grain-weighted blend, the
+  after   the working tree: S = 8, the blue-noise / golden-ratio dither, the measuring pass, the grain-weighted blend, the
           smooth, the composite, with the NaN guard.
 Scenes (the pan scenes of the test): T3 three textured layers, Q10 ten textured layers, S10 ten layers of hair strips; static
 and with a camera pan of 1.3, 0.7 px a frame (history reprojected). Per pass, the median of GL_TIME_ELAPSED queries over the
@@ -15,6 +15,7 @@ smooth, composite. Nothing is read back (the GPU time is the point; the errors a
 
     STOCH_TEST_SIZE=1920x1080 python scripts/perf/bench_stochastic_resolve.py
     STOCH_TEST_SIZE=2560x1440 BENCH_FRAMES=60 BENCH_SCENES=T3,Q10,S10 python scripts/perf/bench_stochastic_resolve.py
+    BENCH_PASS=4 (or 2) times the hardware that holds 4 (2) samples a pass: the iterations measured one by one
 """
 import os, re, sys, statistics
 from pathlib import Path
@@ -22,6 +23,7 @@ from pathlib import Path
 FRAMES = int(os.environ.get('BENCH_FRAMES', '60'))
 SCENES = os.environ.get('BENCH_SCENES', 'T3,Q10,S10').split(',')
 sys.argv = sys.argv[:1]   # the GL bootstrap reads --opengl
+PASS = int(os.environ.get('BENCH_PASS', '8'))   # samples per pass of the after pipeline: 8 (one pass), 4 or 2 (iterations, each measured on its own)
 WARM = 12   # the frames before the timed ones: the history has formed
 
 test_path = Path(__file__).with_name('test_alpha_stochastic.py')
@@ -43,7 +45,7 @@ KEYS = ['total alpha', 'stochastic depth', 'accumulation', 'measure', 'blend', '
 def run(name, pipe, pan):
     layers = get('pan_scene')(name)
     old = pipe == 'old'
-    total = 8 if old else 4
+    total = 8
     rj = get('pan_reproj')(pan)
     T = get('new_temporal')(rj, old=old)
     series = {k: [] for k in KEYS}
@@ -51,7 +53,7 @@ def run(name, pipe, pan):
     for f in range(1, FRAMES + 1):
         ns['TEMPORAL_FRAME'][0] = f
         ns['PAN'][0] = (f * pan[0], f * pan[1])
-        ns['stochastic'](layers, total, total, scene_rgba=(0.5, 0.5, 0.5, 0.0), temporal=T, pipe=pipe, readback=False)
+        ns['stochastic'](layers, total, total if old else PASS, scene_rgba=(0.5, 0.5, 0.5, 0.0), temporal=T, pipe=pipe, readback=False)
         get('geterror')()   # the queries need the frame done
         t = ns['read_timers']()
         if f > WARM:

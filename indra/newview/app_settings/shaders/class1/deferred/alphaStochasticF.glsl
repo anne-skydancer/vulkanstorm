@@ -35,8 +35,8 @@
 
 uniform int st_mode;               // 1 total alpha, 2 stochastic depth, 3 depth only
 uniform float st_min_alpha;        // mode 3: the cut under which a fragment is discarded
-uniform int st_samples_hw;         // samples of the pass's targets (at most 8; 4 with S = 4)
-uniform int st_samples;            // samples in all: the table's S, which is 4 (LLStochasticEngine::TRANSPARENCY_SAMPLES)
+uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
+uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::TRANSPARENCY_SAMPLES)
 uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
 uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)

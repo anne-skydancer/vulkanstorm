@@ -43,6 +43,7 @@ uniform int st_samples;             // samples in all, over the iterations
 uniform int st_glow;
 uniform sampler2D alpha_st_resolved; // the temporal accumulation, grain-measured and smoothed: the colour drawn (alpha corrected) and the total alpha
 uniform int st_temporal;             // 1: the colour pass takes alpha_st_resolved instead of the samples
+uniform int st_moments;              // 1 (glow pass, passes run as iterations): alpha_st_resolved is the sums over every iteration (alpha x colour, alpha)
 
 // Nothing that is not a finite number goes through (the passes sum what the faces give them, and a face's NaN would
 // take the pixel): a sample that is not a number counts for nothing, an infinite one is clamped to what the targets
@@ -81,12 +82,17 @@ void main()
         vec2 tg = texelFetch(alpha_st_trans, px, s).rg;
         trans += st_through(tg.r);
         glow += st_amount(tg.g);
-        if (st_temporal == 0 || st_glow != 0)
+        if (st_temporal == 0 || (st_glow != 0 && st_moments == 0))
         {
             accum += st_sample(texelFetch(alpha_st_accum, px, s));
         }
     }
     float total = clamp(1.0 - trans / float(max(st_samples_hw, 1)), 0.0, 1.0);
+    if (st_glow != 0 && st_moments != 0)
+    {
+        // the iterations were measured one by one and the accumulation cleared after each: the sums are the moments'
+        accum = st_sample(texelFetch(alpha_st_resolved, px, 0));
+    }
     accum /= float(max(st_samples, 1));
     float corr = accum.a > 1e-5 ? total / accum.a : 1.0;
     if (st_glow != 0)

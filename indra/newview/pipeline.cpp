@@ -8185,7 +8185,7 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //     by retryAlphaStochastic (with a backoff), the shaders by the next shader reload, and stochastic
 //     transparency returns by itself.
 // A history that fails (or a temporal resolve that did not build) only stops the temporal
-// accumulation: the passes run and each frame keeps its 4 samples. The targets, the mask table and the
+// accumulation: the passes run and each frame keeps its 8 samples. The targets, the mask table and the
 // history are made up front there, never from the alpha pool.
 
 namespace
@@ -8215,7 +8215,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
     sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers;
 #endif
 
-    // Samples in all: the transparency's 4 (Enderton et al. 2010: S = the multisample samples of the stochastic targets;
+    // Samples in all: the transparency's 8 (Enderton et al. 2010: S = the multisample samples of the stochastic targets;
     // the Stochastic shadows' 8 rays are theirs). Per pass: the most the device takes for the three formats up to 8, at
     // least 2; more in all than a pass holds run as iterations.
     const U32 samples = LLStochasticEngine::TRANSPARENCY_SAMPLES;
@@ -8388,21 +8388,31 @@ void LLPipeline::releaseAlphaStochasticHistory()
         glDeleteFramebuffers(1, &mAlphaSTSmoothFBO);
         mAlphaSTSmoothFBO = 0;
     }
+    if (mAlphaSTMomFBO)
+    {
+        glDeleteFramebuffers(1, &mAlphaSTMomFBO);
+        mAlphaSTMomFBO = 0;
+    }
     LLStochasticEngine::deleteTexture(mAlphaSTCurrent);
     LLStochasticEngine::deleteTexture(mAlphaSTAux);
+    LLStochasticEngine::deleteTexture(mAlphaSTMomSum);
+    LLStochasticEngine::deleteTexture(mAlphaSTMomSquares);
+    LLStochasticEngine::deleteTexture(mAlphaSTMomDepth);
 }
 
-// The resolve's three programs are built: the measuring pass, the blend and the smooth.
+// The resolve's programs are built: the measuring pass (and its two iteration programs), the blend and the smooth.
 bool LLPipeline::alphaStochasticResolveReady() const
 {
     return gAlphaStochasticResolveProgram.mProgramObject && gAlphaStochasticCurrentProgram.mProgramObject &&
+           gAlphaStochasticMomentsProgram.mProgramObject && gAlphaStochasticMeasureProgram.mProgramObject &&
            gAlphaStochasticSmoothProgram.mProgramObject;
 }
 
 // The temporal accumulation's history (two full-size colours and two of the extra pair) and the measuring pass's two
 // targets, made while the setting asks for it and the resolve shaders built, freed otherwise (or when the size changed:
 // the history is then lost). They are counted in the texture memory: 2 x (8 + 4) B/px of history, 16 B/px of
-// measuring targets (the smooth pass draws over the first of them).
+// measuring targets (the smooth pass draws over the first of them), and where a pass holds fewer samples than S another
+// 36 B/px of iteration moments.
 void LLPipeline::updateAlphaStochasticHistory()
 {
     static LLCachedControl<bool> temporal_setting(gSavedSettings, "RenderAlphaStochasticTemporal", true);
@@ -8431,12 +8441,26 @@ void LLPipeline::updateAlphaStochasticHistory()
         glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTSmoothFBO);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mAlphaSTCurrent, 0);
         ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        if (ok && mAlphaSTPassSamples < LLStochasticEngine::TRANSPARENCY_SAMPLES)
+        {
+            // the passes run as iterations: their moments are measured one by one
+            mAlphaSTMomSum = LLStochasticEngine::newTexture2D(GL_RGBA32F, mAlphaSTWidth, mAlphaSTHeight, GL_RGBA32F);
+            mAlphaSTMomSquares = LLStochasticEngine::newTexture2D(GL_RGBA32F, mAlphaSTWidth, mAlphaSTHeight, GL_RGBA32F);
+            mAlphaSTMomDepth = LLStochasticEngine::newTexture2D(GL_RG16F, mAlphaSTWidth, mAlphaSTHeight, GL_RG16F);
+            glGenFramebuffers(1, &mAlphaSTMomFBO);
+            glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTMomFBO);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mAlphaSTMomSum, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, mAlphaSTMomSquares, 0);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, mAlphaSTMomDepth, 0);
+            ok = mAlphaSTMomSum && mAlphaSTMomSquares && mAlphaSTMomDepth &&
+                 glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        }
         glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
     }
     ok = ok && glGetError() == GL_NO_ERROR;
     if (!ok)
     {
-        // The frames draw with their 4 samples alone until the history is there: it is tried again
+        // The frames draw with their 8 samples alone until the history is there: it is tried again
         // at the next screen buffer allocation (the setting stays on; nothing else is selected).
         LL_WARNS("Pipeline") << "Stochastic transparency's temporal accumulation: its history could not be allocated ("
                              << mAlphaSTWidth << "x" << mAlphaSTHeight << "); it is tried again at the next screen buffer allocation" << LL_ENDL;
@@ -8444,8 +8468,11 @@ void LLPipeline::updateAlphaStochasticHistory()
         return;
     }
     LL_INFOS("Pipeline") << "Stochastic transparency: temporal accumulation ("
-                         << ((mAlphaSTHistory.bytes() + (U64)mAlphaSTWidth * mAlphaSTHeight * 16) >> 20)
-                         << " MiB of history and measured samples, fragment resolve with the grain measured)" << LL_ENDL;
+                         << ((mAlphaSTHistory.bytes() + (U64)mAlphaSTWidth * mAlphaSTHeight * (16 + (mAlphaSTMomFBO ? 36 : 0))) >> 20)
+                         << " MiB of history and measured samples, fragment resolve with the grain measured"
+                         << (mAlphaSTMomFBO ? ", each of the " : ", ")
+                         << (mAlphaSTMomFBO ? LLStochasticEngine::TRANSPARENCY_SAMPLES / mAlphaSTPassSamples : 1u)
+                         << (mAlphaSTMomFBO ? " iterations measured on its own)" : " pass measured once)") << LL_ENDL;
 }
 
 bool LLPipeline::beginAlphaStochastic()
@@ -8524,6 +8551,86 @@ void LLPipeline::endAlphaStochastic()
     glBindFramebuffer(GL_FRAMEBUFFER, LLRenderTarget::sCurFBO);
 }
 
+// The moments of one iteration's lanes, added to the moment targets (stage 1 of alphaStochasticCurrentF.glsl). Where the
+// hardware holds fewer samples in a pass than S, the iterations add into the same lanes, so the grain and the depth range
+// cannot be measured on the lanes after the last one (complementary masks would sum to the same in every lane and read no
+// grain): each iteration is measured when it is done, the sums added across the iterations by blending, the depth range
+// by the maximum of (1 - nearest depth, farthest depth - 1), and the accumulation cleared for the next. Only where a pass
+// holds fewer than S samples and the temporal accumulation runs (alphaStochasticMeasuredPerIteration).
+void LLPipeline::measureAlphaStochasticIteration(U32 iteration)
+{
+    LL_PROFILE_GPU_ZONE("alpha stochastic iteration moments");
+    static const LLStaticHashedString sSamplesHW("st_samples_hw");
+    static const LLStaticHashedString sPart("st_part");
+    gGL.flush();
+    LLGLDepthTest depth(GL_FALSE, GL_FALSE);
+    LLGLDisable cull(GL_CULL_FACE);
+    LLGLDisable scissor(GL_SCISSOR_TEST);
+    gGL.setColorMask(true, true);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTMomFBO);
+    if (iteration == 0)
+    {
+        static const GLfloat zero[4] = { 0.f, 0.f, 0.f, 0.f };
+        static const GLfloat depth_start[4] = { 0.f, -1.f, 0.f, 0.f };   // nearest depth 1, farthest depth 0
+        static const GLenum all[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
+        glDrawBuffers(3, all);
+        glClearBufferfv(GL_COLOR, 0, zero);
+        glClearBufferfv(GL_COLOR, 1, zero);
+        glClearBufferfv(GL_COLOR, 2, depth_start);
+    }
+    LLGLSLShader& shader = gAlphaStochasticMomentsProgram;
+    shader.bind();
+    shader.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+    const S32 accum = shader.enableTexture(LLShaderMgr::ALPHA_ST_ACCUM, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (accum > -1)
+    {
+        gGL.getTexUnit(accum)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTAccum);
+    }
+    const S32 stdepth = shader.enableTexture(LLShaderMgr::ALPHA_ST_DEPTH, LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+    if (stdepth > -1)
+    {
+        gGL.getTexUnit(stdepth)->bindManual(LLTexUnit::TT_MULTISAMPLE_TEXTURE, mAlphaSTDepth);
+    }
+    shader.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);
+    mScreenTriangleVB->setBuffer();
+    {
+        LLGLEnable blend(GL_BLEND);
+        // the sums: added
+        static const GLenum sums[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_NONE };
+        glDrawBuffers(3, sums);
+        shader.uniform1i(sPart, 0);
+        gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE);
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+        // the depth range: the maximum
+        static const GLenum range[3] = { GL_NONE, GL_NONE, GL_COLOR_ATTACHMENT2 };
+        glDrawBuffers(3, range);
+        shader.uniform1i(sPart, 1);
+        glBlendEquationSeparate(GL_MAX, GL_MAX);
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+        glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    }
+    shader.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
+    for (S32 unit : { accum, stdepth })
+    {
+        if (unit > -1)
+        {
+            gGL.getTexUnit(unit)->unbind(LLTexUnit::TT_MULTISAMPLE_TEXTURE);
+        }
+    }
+    shader.unbind();
+
+    // the next iteration starts on empty lanes (the last one's lanes are never read again), back in the targets' framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTFBO);
+    if (iteration + 1 < getAlphaStochasticIterations())
+    {
+        static const GLfloat accum_clear[4] = { 0.f, 0.f, 0.f, 0.f };
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        glClearBufferfv(GL_COLOR, 0, accum_clear);
+    }
+    glDrawBuffer(GL_NONE);
+}
+
 // The grain-measuring resolve, three fragment passes (Aurora Viewer PR 3663's compute steps cs_resolve, cs_temporal and
 // cs_smooth on this engine's passes; alphaStochasticCurrentF.glsl, alphaStochasticResolveF.glsl and alphaStochasticSmoothF.glsl):
 //   1. measure: this frame's accumulation averaged over the samples once (mAlphaSTCurrent), and, in the second target
@@ -8588,19 +8695,38 @@ void LLPipeline::resolveAlphaStochasticTemporal()
         LL_PROFILE_GPU_ZONE("alpha stochastic measure");
         glBindFramebuffer(GL_FRAMEBUFFER, mAlphaSTCurrentFBO);
         glDrawBuffers(2, both);
-        LLGLSLShader& current = gAlphaStochasticCurrentProgram;
-        current.bind();
-        current.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
-        current.uniform1i(sSamples, (S32)LLStochasticEngine::TRANSPARENCY_SAMPLES);
-        const S32 accum = bind_ms(current, LLShaderMgr::ALPHA_ST_ACCUM, mAlphaSTAccum);
-        const S32 trans = bind_ms(current, LLShaderMgr::ALPHA_ST_TRANS, mAlphaSTTrans);
-        const S32 stdepth = bind_ms(current, LLShaderMgr::ALPHA_ST_DEPTH, mAlphaSTDepth);
-        current.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);   // which samples hold a layer: not the scene's depth
-        mScreenTriangleVB->setBuffer();
-        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
-        current.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
-        unbind_units({ { accum, MS }, { trans, MS }, { stdepth, MS } });
-        current.unbind();
+        if (alphaStochasticMeasuredPerIteration())
+        {
+            // the iterations' moments (measureAlphaStochasticIteration) finished, with the total alpha
+            LLGLSLShader& measure = gAlphaStochasticMeasureProgram;
+            measure.bind();
+            measure.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+            measure.uniform1i(sSamples, (S32)LLStochasticEngine::TRANSPARENCY_SAMPLES);
+            const S32 sum = bind_2d(measure, LLShaderMgr::ALPHA_ST_MOM_SUM, mAlphaSTMomSum);
+            const S32 squares = bind_2d(measure, LLShaderMgr::ALPHA_ST_MOM_SQUARES, mAlphaSTMomSquares);
+            const S32 range = bind_2d(measure, LLShaderMgr::ALPHA_ST_MOM_DEPTH, mAlphaSTMomDepth);
+            const S32 trans = bind_ms(measure, LLShaderMgr::ALPHA_ST_TRANS, mAlphaSTTrans);
+            mScreenTriangleVB->setBuffer();
+            mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+            unbind_units({ { sum, T2 }, { squares, T2 }, { range, T2 }, { trans, MS } });
+            measure.unbind();
+        }
+        else
+        {
+            LLGLSLShader& current = gAlphaStochasticCurrentProgram;
+            current.bind();
+            current.uniform1i(sSamplesHW, (S32)mAlphaSTPassSamples);
+            current.uniform1i(sSamples, (S32)LLStochasticEngine::TRANSPARENCY_SAMPLES);
+            const S32 accum = bind_ms(current, LLShaderMgr::ALPHA_ST_ACCUM, mAlphaSTAccum);
+            const S32 trans = bind_ms(current, LLShaderMgr::ALPHA_ST_TRANS, mAlphaSTTrans);
+            const S32 stdepth = bind_ms(current, LLShaderMgr::ALPHA_ST_DEPTH, mAlphaSTDepth);
+            current.bindTexture(LLShaderMgr::DEFERRED_DEPTH, &mRT->deferredScreen, true);   // which samples hold a layer: not the scene's depth
+            mScreenTriangleVB->setBuffer();
+            mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+            current.unbindTexture(LLShaderMgr::DEFERRED_DEPTH);
+            unbind_units({ { accum, MS }, { trans, MS }, { stdepth, MS } });
+            current.unbind();
+        }
     }
 
     {
@@ -8870,6 +8996,9 @@ void LLPipeline::compositeAlphaStochastic(bool glow)
     shader.uniform1i(sGlow, 0);
     static const LLStaticHashedString sTemporal("st_temporal");
     shader.uniform1i(sTemporal, mAlphaSTHistory.temporal() ? 1 : 0);
+    static const LLStaticHashedString sMoments("st_moments");
+    const bool per_iteration = alphaStochasticMeasuredPerIteration();
+    shader.uniform1i(sMoments, 0);
     // A float 2D texture on its unit whether or not it is read: a sampler of another type on a
     // unit that holds a multisample texture would fail the draw, and the R32UI mask table does
     // not match this float sampler either. Without the accumulation the white image stands in.
@@ -8903,6 +9032,12 @@ void LLPipeline::compositeAlphaStochastic(bool glow)
         // the blended faces' glow, corrected like their colour, added to the scene alpha
         gGL.blendFunc(LLRender::BF_ZERO, LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE);
         shader.uniform1i(sGlow, 1);
+        if (per_iteration && resolved > -1)
+        {
+            // the accumulation was cleared after each iteration: the glow's correction takes the sums over all of them
+            shader.uniform1i(sMoments, 1);
+            gGL.getTexUnit(resolved)->bindManual(LLTexUnit::TT_TEXTURE, mAlphaSTMomSum);
+        }
         mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
     }
 

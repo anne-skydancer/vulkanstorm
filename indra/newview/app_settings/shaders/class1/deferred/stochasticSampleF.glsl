@@ -24,7 +24,7 @@
 // the shadow programs of the Stochastic shadow method later (LLShaderMgr::attachShaderFeatures).
 // Producers keep their own identities (the face and triangle of a blended face) and their own
 // frame counters; the engine gives the hash, the per-frame seed and the stratified mask from the
-// transparency's table (S = LLStochasticEngine::TRANSPARENCY_SAMPLES = 4), dithered by a blue-noise tile.
+// transparency's table (S = LLStochasticEngine::TRANSPARENCY_SAMPLES = 8), dithered by a blue-noise tile.
 //
 // Monte Carlo against grain (stochastic transparency's coverage R = floor(a S + xi) of S samples is a
 // stratified estimate; its error is the grain the resolve measures and averages):
