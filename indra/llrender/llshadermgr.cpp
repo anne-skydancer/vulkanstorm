@@ -1655,6 +1655,9 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("alpha_st_current");
     mReservedUniforms.push_back("alpha_st_aux");
     mReservedUniforms.push_back("alpha_st_extra");
+    mReservedUniforms.push_back("alpha_st_mom_sum");
+    mReservedUniforms.push_back("alpha_st_mom_squares");
+    mReservedUniforms.push_back("alpha_st_mom_depth");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the cloud transmittance map and its lookup

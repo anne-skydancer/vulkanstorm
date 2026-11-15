@@ -157,6 +157,8 @@ LLGLSLShader            gAlphaStochasticExpandProgram;
 LLGLSLShader            gAlphaStochasticCompositeProgram;
 LLGLSLShader            gAlphaStochasticResolveProgram;
 LLGLSLShader            gAlphaStochasticCurrentProgram;
+LLGLSLShader            gAlphaStochasticMomentsProgram;
+LLGLSLShader            gAlphaStochasticMeasureProgram;
 LLGLSLShader            gAlphaStochasticSmoothProgram;
 LLGLSLShader            gShadowStochasticResolveProgram;   // <Vulkanstorm/> Stochastic shadows
 LLGLSLShader            gShadowStochasticComposeProgram;   // <Vulkanstorm/> Stochastic shadows
@@ -377,6 +379,7 @@ static void unload_stochastic_shaders()
                                   &gDeferredPBRAlphaStochasticProgram[0], &gDeferredPBRAlphaStochasticProgram[1],
                                   &gAlphaStochasticExpandProgram, &gAlphaStochasticCompositeProgram,
                                   &gAlphaStochasticResolveProgram, &gAlphaStochasticCurrentProgram,
+                                  &gAlphaStochasticMomentsProgram, &gAlphaStochasticMeasureProgram,
                                   &gAlphaStochasticSmoothProgram })
     {
         shader->unload();
@@ -3467,7 +3470,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
         bool ready = gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
         // The temporal resolve is only the accumulation across frames: a build failure turns that
-        // accumulation off (the frames keep their 4 samples; alphaStochasticResolveReady gates the
+        // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
         // history), never the transparency and never another method. Three fragment programs on every device:
         // the measuring pass (this frame's samples averaged, their grain and the depths), the blend (the engine's
         // resolve object attached) and the smooth (also with it, for the frame weight).
@@ -3477,6 +3480,22 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticCurrentProgram.mName = "Alpha Stochastic Current";
         gAlphaStochasticCurrentProgram.mShaderFiles.clear();
         gAlphaStochasticCurrentProgram.clearPermutations();
+        // the same measuring file as two more programs for the hardware that holds fewer samples per pass than S: one
+        // iteration's moments (ST_STAGE 1) and the moments of every iteration finished (ST_STAGE 2)
+        gAlphaStochasticMomentsProgram.mName = "Alpha Stochastic Iteration Moments";
+        gAlphaStochasticMomentsProgram.mShaderFiles.clear();
+        gAlphaStochasticMomentsProgram.clearPermutations();
+        gAlphaStochasticMomentsProgram.addPermutation("ST_STAGE", "1");
+        gAlphaStochasticMomentsProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticMomentsProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticMomentsProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        gAlphaStochasticMeasureProgram.mName = "Alpha Stochastic Measure";
+        gAlphaStochasticMeasureProgram.mShaderFiles.clear();
+        gAlphaStochasticMeasureProgram.clearPermutations();
+        gAlphaStochasticMeasureProgram.addPermutation("ST_STAGE", "2");
+        gAlphaStochasticMeasureProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
+        gAlphaStochasticMeasureProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
+        gAlphaStochasticMeasureProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gAlphaStochasticSmoothProgram.mName = "Alpha Stochastic Smooth";
         gAlphaStochasticSmoothProgram.mShaderFiles.clear();
         gAlphaStochasticSmoothProgram.clearPermutations();
@@ -3492,13 +3511,16 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticSmoothProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticSmoothF.glsl", GL_FRAGMENT_SHADER));
         gAlphaStochasticSmoothProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         const bool resolve_built = ready && mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) &&
-                                   gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader() &&
+                                   gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticMomentsProgram.createShader() &&
+                                   gAlphaStochasticMeasureProgram.createShader() && gAlphaStochasticResolveProgram.createShader() &&
                                    gAlphaStochasticSmoothProgram.createShader();
         if (ready && !resolve_built)
         {
             LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve failed to build; the temporal accumulation is off and each frame keeps its "
                                << LLStochasticEngine::TRANSPARENCY_SAMPLES << " samples (the next shader reload tries again)" << LL_ENDL;
             gAlphaStochasticCurrentProgram.unload();
+            gAlphaStochasticMomentsProgram.unload();
+            gAlphaStochasticMeasureProgram.unload();
             gAlphaStochasticResolveProgram.unload();
             gAlphaStochasticSmoothProgram.unload();
         }

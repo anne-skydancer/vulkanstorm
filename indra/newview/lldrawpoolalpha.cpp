@@ -551,6 +551,7 @@ bool LLDrawPoolAlpha::renderStochastic()
     mStochasticMasks = gPipeline.getAlphaStochasticMasks();
     mStochasticGlow = false;
     const U32 iterations = llmax(gPipeline.getAlphaStochasticIterations(), 1u);
+    const bool measured_per_iteration = gPipeline.alphaStochasticMeasuredPerIteration();
     {
         // Multisampled rasterization for the passes' targets (the viewer keeps it off). The
         // depth spread gives each sample the opaque surface's depth at that sample, so a face
@@ -594,6 +595,12 @@ bool LLDrawPoolAlpha::renderStochastic()
                 gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM);
                 forwardRender(true, ALPHA_ST_ACCUM);
                 forwardRender(false, ALPHA_ST_ACCUM);
+            }
+            if (measured_per_iteration)
+            {
+                // this iteration's lanes measured on their own before the next one adds to the same lanes
+                LLGLDisable no_offset(GL_POLYGON_OFFSET_FILL);
+                gPipeline.measureAlphaStochasticIteration(iteration);
             }
         }
     }

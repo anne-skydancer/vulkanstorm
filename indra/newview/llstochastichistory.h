@@ -32,7 +32,7 @@ class LLGLSLShader;
 // the per-frame seed, the mask lookup in the table below: the transparency's) and
 // deferred/stochasticResolveUtilF.glsl (the temporal resolve, shared); a producer adds its own
 // stoch_current() and main(). The shadows' rays have their own noise; they take the history, the
-// reprojection and the clamp from here. Its C++ half is this file: the transparency's S = 4 mask table (with the
+// reprojection and the clamp from here. Its C++ half is this file: the transparency's S = 8 mask table (with the
 // blue-noise tile), textures counted in the viewer's texture memory, and LLStochasticHistory.
 //
 // Main render thread only: everything here is made, used and freed by LLPipeline (the screen
@@ -117,7 +117,7 @@ public:
     LLStochasticHistory& operator=(const LLStochasticHistory&) = delete;
 
     // Both textures (and the extra pair) and their framebuffers, counted in the texture memory. False: nothing is kept,
-    // and the producer drops its accumulation (the transparency keeps its S = 4 samples).
+    // and the producer drops its accumulation (the transparency keeps its S = 8 samples).
     // framebuffers: the producer's resolve is a fragment pass (writeFramebuffer()); a compute resolve needs none.
     bool allocate(U32 width, U32 height, bool framebuffers = false);
     void release();                                         // freed, uncounted, invalid
