@@ -155,13 +155,13 @@ bool computeResolve()
 {
     // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
     // glMemoryBarrier it needs between graphics passes stall the frame while the camera or avatar
-    // moves, and OpenGL has no async compute. The compute resolve code stays compiled for the Vulkan
-    // renderer, but nothing in this viewer selects it (no setting, no environment variable).
+    // moves, and OpenGL has no async compute. The Stochastic shadows' compute resolve stays compiled
+    // for the Vulkan renderer; nothing in this viewer selects it (no setting, no environment variable).
     static bool logged_default = false;   // main render thread, the pipeline's allocation
     if (!logged_default && gGLManager.mGLVersion >= 3.99f)
     {
         logged_default = true;
-        LL_INFOS("Pipeline") << "Stochastic transparency: fragment resolve with the pre-pass target (every device, 160 B/px; GL compute stalls the frame in motion)" << LL_ENDL;
+        LL_INFOS("Pipeline") << "Stochastic shadows: fragment resolve (every device; GL compute stalls the frame in motion)" << LL_ENDL;
     }
     return false;
 }
@@ -170,8 +170,8 @@ bool acquireMasks()
 {
     if (!sMasks)
     {
-        const std::vector<U32> table = maskTable(SAMPLES);
-        sMasks = newTexture2D(GL_R32UI, SEEDS, SAMPLES + 1, GL_R32UI, table.data(), GL_RED_INTEGER, GL_UNSIGNED_INT);
+        const std::vector<U32> table = transparencyTable();
+        sMasks = newTexture2D(GL_R32UI, SEEDS, TRANSPARENCY_SAMPLES + 1 + NOISE_ROWS, GL_R32UI, table.data(), GL_RED_INTEGER, GL_UNSIGNED_INT);
         if (!sMasks)
         {
             return false;
@@ -209,11 +209,20 @@ bool LLStochasticHistory::allocate(U32 width, U32 height, bool framebuffers)
     {
         mTexture[i] = LLStochasticEngine::newTexture2D(mFormat, width, height, mFormat);
         ok = ok && mTexture[i];
+        if (mExtraFormat != GL_NONE)
+        {
+            mExtraTexture[i] = LLStochasticEngine::newTexture2D(mExtraFormat, width, height, mExtraFormat);
+            ok = ok && mExtraTexture[i];
+        }
         if (framebuffers)
         {
             glGenFramebuffers(1, &mFramebuffer[i]);
             glBindFramebuffer(GL_FRAMEBUFFER, mFramebuffer[i]);
             glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTexture[i], 0);
+            if (mExtraFormat != GL_NONE)
+            {
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, mExtraTexture[i], 0);
+            }
             ok = ok && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
         }
     }
@@ -242,6 +251,7 @@ void LLStochasticHistory::release()
             mFramebuffer[i] = 0;
         }
         LLStochasticEngine::deleteTexture(mTexture[i]);
+        LLStochasticEngine::deleteTexture(mExtraTexture[i]);
     }
     mWidth = mHeight = 0;
     mState.clear();
@@ -263,7 +273,7 @@ LLStochasticHistory::~LLStochasticHistory()
 
 void LLStochasticHistory::bindWriteImage(U32 unit) const
 {
-    // alphaStochasticResolveC.glsl declares layout(rgba16f)
+    // shadowStochasticResolveC.glsl declares layout(rgba16f)
     llassert(mFormat == GL_RGBA16F);
     glBindImageTexture(unit, mTexture[1 - mState.index()], 0, GL_FALSE, 0, GL_WRITE_ONLY, mFormat);
 }
@@ -301,6 +311,12 @@ void LLStochasticHistory::setResolveUniforms(LLGLSLShader& shader)
     shader.uniform1i(sValid, mState.used() ? 1 : 0);
 }
 
+void LLStochasticHistory::setWeightUniform(LLGLSLShader& shader) const
+{
+    static const LLStaticHashedString sWeight("stoch_weight");
+    shader.uniform1f(sWeight, mWeight);
+}
+
 void LLStochasticHistory::endFrame()
 {
     if (!mCameraSet)
@@ -316,5 +332,10 @@ void LLStochasticHistory::endFrame()
 
 U64 LLStochasticHistory::bytes() const
 {
-    return isAllocated() ? 2 * (U64)LLImageGL::dataFormatBytes(mFormat, mWidth, mHeight) : 0;
+    if (!isAllocated())
+    {
+        return 0;
+    }
+    return 2 * (U64)LLImageGL::dataFormatBytes(mFormat, mWidth, mHeight) +
+           (mExtraFormat != GL_NONE ? 2 * (U64)LLImageGL::dataFormatBytes(mExtraFormat, mWidth, mHeight) : 0);
 }

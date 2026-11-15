@@ -722,8 +722,8 @@ namespace
         {
             std::vector<StaticItem> items;
             for (uint32_t i = 1; i <= 4; ++i) items.push_back({ i, false, true, float(i) * 3.f, 0.07f, 1 });
-            check(selectStatic(items, kStaticCapMs).size() == 4, "T7 four cheap tiles all run every frame (fixed cap)");
-            const Sim s4 = simulate(4, 0.07f, kStaticCapMs, 100, true);
+            check(selectStatic(items, kFrameCapMs).size() == 4, "T7 four cheap tiles all run every frame (fixed cap)");
+            const Sim s4 = simulate(4, 0.07f, kFrameCapMs, 100, true);
             check(s4.worst == 1, "T7 four cheap tiles: every tile redrawn every frame", s4.worst);
         }
         // 30 tiles under a budget for 6: staleness at most 5 frames, nobody served twice before all once
@@ -737,16 +737,16 @@ namespace
         // cold start with the viewer's real prior: the running average starts at 0.5 ms, above the whole cap, and a new
         // record's prediction is coldItemMs, so several never-drawn tiles are served in one frame, not one
         {
-            check(coldItemMs(0.5f) <= kStaticCapMs / 4.f, "T7 the cold prediction is at most a quarter of the cap", coldItemMs(0.5f));
+            check(coldItemMs(0.5f) <= kFrameCapMs / 4.f, "T7 the cold prediction is at most a quarter of the cap", coldItemMs(0.5f));
             check(coldItemMs(0.07f) == 0.07f, "T7 a measured average below the quarter is kept", coldItemMs(0.07f));
             std::vector<StaticItem> cold;
             for (uint32_t i = 1; i <= 20; ++i) cold.push_back({ i, true, false, float(i), coldItemMs(0.5f), 0 });
-            const std::vector<uint32_t> o = selectStatic(cold, kStaticCapMs);
+            const std::vector<uint32_t> o = selectStatic(cold, kFrameCapMs);
             check(o.size() >= 3 && o.size() <= 4, "T7 a 0.5 ms prior still serves several never-drawn tiles per frame", double(o.size()));
             check(o.size() >= 1 && o[0] == 1, "T7 the nearest never-drawn tile first");
             std::vector<StaticItem> old_prior;
             for (uint32_t i = 1; i <= 20; ++i) old_prior.push_back({ i, true, false, float(i), 0.5f, 0 });
-            check(selectStatic(old_prior, kStaticCapMs).size() == 1, "T7 (the uncapped 0.5 ms prior would serve one tile)");
+            check(selectStatic(old_prior, kFrameCapMs).size() == 1, "T7 (the uncapped 0.5 ms prior would serve one tile)");
         }
         // cold start: 20 never-drawn tiles with no history (cost 0, NaN) do not all run in one frame
         {
@@ -1119,11 +1119,11 @@ void testP3Verdict()
     f = TileFacts();
     f.holds_avatar = true;
     v = classifyTile(f);
-    check(v.needs_render && v.dynamic && v.cause == Cause::Avatar, "P3 an avatar in the light: redrawn, dynamic");
+    check(!v.needs_render && v.needs_layer && v.dynamic && v.cause == Cause::Avatar, "P4 an avatar in the light: the avatar layer alone, dynamic (S is not drawn again)");
     f = TileFacts();
-    f.drawn_with_avatar = true;
+    f.avatar_in_layer = true;
     v = classifyTile(f);
-    check(v.needs_render && !v.dynamic && v.cause == Cause::Avatar, "P3 the avatar left: one more, static, render");
+    check(!v.needs_render && v.needs_layer && v.dynamic && v.cause == Cause::Avatar, "P4 the avatar left: one more layer pass restores L from S");
     f = TileFacts();
     f.lamp_moving = true;
     v = classifyTile(f);
@@ -1193,7 +1193,7 @@ void testP3StaticScene()
                 items.push_back({ k + 1, f.never_drawn, true, float(k + 1), 0.05f, 0 });
             }
         }
-        for (uint32_t key : selectStatic(items, kStaticCapMs))
+        for (uint32_t key : selectStatic(items, kFrameCapMs))
         {
             const uint32_t k = key - 1;
             if (!drawn[k])
@@ -1227,6 +1227,401 @@ void testP3StaticScene()
           "P3 static scene: after the fill the one edit draws exactly lamp 3, in the next frame, and nothing else in 100 frames", later_renders);
 }
 
+// ---- P4: the avatar layer, the combined cap, the per-owner feed rules ----
+
+std::vector<DynamicItem> faces(uint32_t n, float cost, uint32_t age, uint32_t pool = 0)
+{
+    std::vector<DynamicItem> v;
+    for (uint32_t i = 1; i <= n; ++i)
+    {
+        DynamicItem it;
+        it.key = i;
+        it.avatar = true;
+        it.age_frames = age;
+        it.cam_dist = float(i);
+        it.last_cpu_ms = cost;
+        it.avatar_draws = 1;
+        it.pool = pool;
+        v.push_back(it);
+    }
+    return v;
+}
+
+std::vector<StaticItem> tiles(uint32_t n, float cost, uint32_t pool = 0)
+{
+    std::vector<StaticItem> v;
+    for (uint32_t i = 1; i <= n; ++i)
+    {
+        StaticItem it;
+        it.key = i;
+        it.never_drawn = false;
+        it.pending = true;
+        it.cam_dist = float(i);
+        it.last_cpu_ms = cost;
+        it.age_frames = 1;
+        it.pool = pool;
+        v.push_back(it);
+    }
+    return v;
+}
+
+float predicted(const FramePicks& p, const std::vector<StaticItem>& st, const std::vector<DynamicItem>& dyn)
+{
+    float ms = 0.f;
+    for (uint32_t k : p.dynamic)
+    {
+        for (const DynamicItem& it : dyn)
+            if (packKey(it.pool, it.key) == k) ms += itemCost(it.last_cpu_ms);
+    }
+    for (uint32_t k : p.fixed)
+    {
+        for (const StaticItem& it : st)
+            if (packKey(it.pool, it.key) == k) ms += itemCost(it.last_cpu_ms);
+    }
+    return ms;
+}
+
+void testP4Caps()
+{
+    // the constants: one combined cap inside the +5 % allowance (about 0.4 ms), the dynamic layer's share and the static floor
+    check(kFrameCapMs <= 0.40f, "P4 the combined cap is inside the 0.4 ms of the +5 % allowance", kFrameCapMs);
+    check(std::fabs(kDynamicCapMs + kStaticCapMs - kFrameCapMs) < 1e-6f, "P4 the dynamic share and the static floor add up to the cap");
+    check(kDynamicCapMs > kStaticCapMs, "P4 the dynamic layer has the priority share");
+
+    // both kinds pending, many items of every cost: the picks of a frame never cost more than the cap
+    {
+        const float costs[] = { 0.03f, 0.05f, 0.07f, 0.1f, 0.12f, 0.2f };
+        bool never_over = true, both_served = true;
+        for (float cd : costs)
+        {
+            for (float cs : costs)
+            {
+                const std::vector<DynamicItem> dyn = faces(12, cd, 1);
+                const std::vector<StaticItem> st = tiles(12, cs);
+                const FramePicks p = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+                const float ms = predicted(p, st, dyn);
+                const bool single = p.dynamic.size() + p.fixed.size() == 1;
+                if (ms > kFrameCapMs + 1e-4f && !single) never_over = false;
+                if (std::fabs(ms - p.predicted_ms) > 1e-4f) never_over = false;
+                if (itemCost(cd) + itemCost(cs) <= kFrameCapMs && (p.dynamic.empty() || p.fixed.empty())) both_served = false;
+            }
+        }
+        check(never_over, "P4 combined cap: the predicted cost of a frame never exceeds the cap when both kinds are pending");
+        check(both_served, "P4 combined cap: both kinds are served whenever one of each fits");
+    }
+    // without the progress rule (something was already spent) the cap holds without exception, even for one big item
+    {
+        const std::vector<DynamicItem> dyn = faces(1, 0.5f, 9);   // overdue and over the cap alone
+        const std::vector<StaticItem> st = tiles(1, 0.5f);
+        const FramePicks p = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, false);
+        check(p.dynamic.empty() && p.fixed.empty(), "P4 no progress pick once the frame has spent: an item over the cap waits");
+        const FramePicks q = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(q.dynamic.size() + q.fixed.size() == 1, "P4 progress: an untouched frame runs one over-cap item alone, never two", double(q.dynamic.size() + q.fixed.size()));
+        check(q.dynamic.size() == 1, "P4 progress: the dynamic item has the priority");
+    }
+    // a static tile above the whole cap is not starved by a standing avatar: after the wait it runs alone as the progress pick
+    {
+        const std::vector<DynamicItem> dyn = faces(3, 0.05f, 1);
+        std::vector<StaticItem> st = tiles(1, 0.5f);
+        const FramePicks young = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(young.dynamic.size() == 3 && young.fixed.empty(), "P4 a big static tile that has not waited yet leaves the cheap faces their frame");
+        st[0].age_frames = kDynamicDeadlineFrames;
+        const FramePicks old = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(old.fixed.size() == 1 && old.dynamic.empty(), "P4 a big static tile that has waited runs alone, the faces give way", double(old.fixed.size()));
+        const FramePicks spent = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, false);
+        check(spent.fixed.empty(), "P4 the big static tile does not run in a frame that has spent already");
+    }
+    // the in-frame gate (mayRunPick): the first static pick is exempt from the measured cap only when nothing else rendered this frame
+    {
+        // (a) the dynamic picks spent the ledger: the first static pick is refused
+        FrameLedger spent;
+        spent.begin(1);
+        spent.add(kFrameCapMs + 0.01f);
+        check(!mayRunPick(spent.left(kFrameCapMs), false, true, false), "P4 gate: a first static pick behind spent dynamic work is refused");
+        // (b) the progress case from selectFrame: dynamic empty, ledger untouched, the head above the whole cap is allowed
+        std::vector<StaticItem> st = tiles(1, 0.5f);
+        st[0].age_frames = kDynamicDeadlineFrames;
+        FrameLedger fresh;
+        fresh.begin(2);
+        const FramePicks pp = selectFrame(st, faces(3, 0.05f, 1), fresh.left(kFrameCapMs), kAvatarDrawsMax, fresh.untouched());
+        const bool alone = fresh.untouched() && pp.dynamic.empty();
+        check(alone && pp.fixed.size() == 1, "P4 gate: the progress case leaves dynamic empty, untouched ledger, one head");
+        check(mayRunPick(0.f, false, true, alone), "P4 gate: the progress head is allowed past the cap");
+        // (c) a second static pick with the ledger exhausted is refused, whatever `alone` says
+        check(!mayRunPick(0.f, false, false, true), "P4 gate: a second static pick with the ledger exhausted is refused");
+        check(!mayRunPick(0.f, true, true, true), "P4 gate: a dynamic pick is never exempt");
+        check(mayRunPick(0.1f, false, false, false), "P4 gate: inside the cap everything runs");
+    }
+    // priority: the dynamic layer is served first, and the static tiles keep at least the floor
+    {
+        const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
+        const std::vector<StaticItem> st = tiles(10, 0.05f);
+        const FramePicks p = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(p.dynamic.size() == 4, "P4 the dynamic layer takes its share: 0.20 ms / 0.05 ms = 4 faces", double(p.dynamic.size()));
+        check(p.fixed.size() == 3, "P4 the static tiles get what is left, at least the floor: 0.15 ms / 0.05 ms = 3 tiles", double(p.fixed.size()));
+        check(p.dynamic[0] == packKey(0, 1), "P4 the nearest face first (by position)");
+        const FramePicks only_static = selectFrame(st, std::vector<DynamicItem>(), kFrameCapMs, kAvatarDrawsMax, true);
+        check(only_static.fixed.size() == 7, "P4 without dynamic work the static tiles may take the whole cap: 0.35 / 0.05 = 7", double(only_static.fixed.size()));
+        const FramePicks only_dyn = selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(only_dyn.dynamic.size() == 4, "P4 the dynamic layer alone never takes more than its share", double(only_dyn.dynamic.size()));
+    }
+    // a cap already spent by an earlier cache leaves less: the sum over both caches never exceeds the one cap
+    {
+        const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1, 1);
+        const std::vector<StaticItem> st = tiles(10, 0.05f, 1);
+        FrameLedger ledger;
+        ledger.begin(7);
+        ledger.add(0.20f);
+        const FramePicks p = selectFrame(st, dyn, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
+        const float ms = predicted(p, st, dyn);
+        check(ms + 0.20f <= kFrameCapMs + 1e-4f, "P4 a second cache spends only what the first left of the shared cap", ms);
+        check(!p.dynamic.empty() || !p.fixed.empty(), "P4 and still serves something");
+        check(unpackPool(p.dynamic.empty() ? p.fixed[0] : p.dynamic[0]) == 1 && unpackKey(p.dynamic.empty() ? p.fixed[0] : p.dynamic[0]) >= 1, "P4 picks come back with their pool and key");
+        ledger.add(0.20f);
+        const FramePicks none = selectFrame(st, dyn, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
+        check(none.dynamic.empty() && none.fixed.empty(), "P4 a spent cap serves nothing for the next cache", double(none.dynamic.size() + none.fixed.size()));
+        ledger.begin(8);
+        check(ledger.untouched() && std::fabs(ledger.left(kFrameCapMs) - kFrameCapMs) < 1e-6f, "P4 the ledger starts every frame with the whole cap");
+        ledger.begin(8);
+        ledger.add(0.1f);
+        ledger.begin(8);
+        check(!ledger.untouched(), "P4 beginning the same frame again keeps what was spent (two caches may begin it)");
+    }
+    // the A_max ceiling: with a cheap face the avatar draws bind before the CPU share
+    {
+        const std::vector<DynamicItem> dyn = faces(40, 0.05f, 1);
+        const std::vector<uint32_t> p = selectDynamic(dyn, 100.f, 24);
+        check(p.size() == 24, "P4 the avatar draws never exceed A_max, whatever the CPU share", double(p.size()));
+        check(selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, 3, true).dynamic.size() == 3, "P4 a small A_max binds before the CPU share");
+    }
+    // static tiles' avatars are charged against A_max with the dynamic picks' (a cold fill cannot draw more than A_max in a frame)
+    {
+        auto drawsOf = [](const FramePicks& p, const std::vector<StaticItem>& st, const std::vector<DynamicItem>& dyn, uint32_t a_max) {
+            uint32_t n = 0;
+            for (uint32_t k : p.dynamic)
+                for (const DynamicItem& d : dyn)
+                    if (packKey(d.pool, d.key) == k) n += d.avatar ? std::min(std::max(d.avatar_draws, 1u), a_max) : 0u;
+            for (uint32_t k : p.fixed)
+                for (const StaticItem& s : st)
+                    if (packKey(s.pool, s.key) == k) n += std::min(s.avatar_draws, a_max);
+            return n;
+        };
+        std::vector<DynamicItem> dyn = faces(4, 0.05f, 1);
+        std::vector<StaticItem> st = tiles(3, 0.05f);
+        for (StaticItem& s : st) s.avatar_draws = 3;
+        const FramePicks p = selectFrame(st, dyn, kFrameCapMs, 5, true);
+        check(drawsOf(p, st, dyn, 5) <= 5, "P4 static plus dynamic avatar draws never exceed A_max", double(drawsOf(p, st, dyn, 5)));
+        check(p.fixed.size() == 1, "P4 a static tile whose avatars do not fit the rest of A_max waits", double(p.fixed.size()));
+        // the first static tile keeps its place (the dynamic layer gives up faces for it): nothing starves
+        check(!p.fixed.empty() && unpackKey(p.fixed[0]) == 1, "P4 the head static tile with avatars is served");
+        // a tile with more avatars than A_max draws A_max of them and runs alone as the exemption
+        std::vector<StaticItem> big = tiles(1, 0.05f);
+        big[0].avatar_draws = 100;
+        const FramePicks q = selectFrame(big, faces(4, 0.05f, 1), kFrameCapMs, 3, true);
+        check(q.fixed.size() == 1 && drawsOf(q, big, faces(4, 0.05f, 1), 3) <= 3, "P4 an avatar tile above A_max runs at A_max draws");
+        // tiles without avatars are not charged
+        std::vector<StaticItem> none = tiles(3, 0.05f);
+        check(selectFrame(none, std::vector<DynamicItem>(), kFrameCapMs, 0, true).fixed.size() == 3, "P4 static tiles without avatars ignore A_max");
+        // making room for the head's avatar draws drops avatar faces only, and only when the head is served
+        {
+            std::vector<DynamicItem> mix(3);
+            for (uint32_t i = 0; i < 3; ++i) { mix[i].key = i + 1; mix[i].last_cpu_ms = 0.05f; mix[i].cam_dist = float(i); }
+            mix[0].avatar = true;
+            mix[0].avatar_draws = 3;
+            std::vector<StaticItem> head = tiles(1, 0.05f);
+            head[0].avatar_draws = 22;
+            const FramePicks r = selectFrame(head, mix, kFrameCapMs, 24, true);
+            check(r.dynamic.size() == 2 && r.fixed.size() == 1, "P4 only the avatar face yields to the head tile's draws");
+            std::vector<StaticItem> big = tiles(1, 0.5f);
+            big[0].avatar_draws = 22;
+            big[0].never_drawn = false;
+            big[0].age_frames = 0;
+            const FramePicks r2 = selectFrame(big, mix, 0.2f, 24, false);
+            check(r2.dynamic.size() == 3, "P4 dynamic faces are kept when the head is not served");
+        }
+    }
+    // pool packing: the same key in two pools is two items
+    check(packKey(1, 5) != packKey(0, 5) && unpackKey(packKey(1, 5)) == 5 && unpackPool(packKey(1, 5)) == 1, "P4 a packed key keeps its pool");
+}
+
+// The dynamic layer simulated over many frames: faces with an avatar, the nearest every frame, the rest by the 4-frame deadline.
+void testP4Layer()
+{
+    // 12 lamps with an avatar in their light, a face costs 0.05 ms: 4 a frame by the dynamic share. Every face is served within
+    // ceil(12 / 4) = 3 frames, and the nearest are served every frame as long as nothing is overdue.
+    const uint32_t n = 12;
+    std::vector<uint32_t> last(n + 1, 0);
+    uint32_t worst = 0;
+    bool far_served = true;
+    for (uint32_t frame = 1; frame <= 200; ++frame)
+    {
+        std::vector<DynamicItem> items;
+        for (uint32_t i = 1; i <= n; ++i)
+        {
+            DynamicItem it;
+            it.key = i;
+            it.avatar = true;
+            it.age_frames = frame - last[i];
+            it.cam_dist = float(i);
+            it.last_cpu_ms = 0.05f;
+            it.avatar_draws = 1;
+            items.push_back(it);
+        }
+        const FramePicks p = selectFrame(std::vector<StaticItem>(), items, kFrameCapMs, kAvatarDrawsMax, true);
+        for (uint32_t k : p.dynamic)
+        {
+            last[unpackKey(k)] = frame;
+        }
+        if (frame > 20)
+        {
+            for (uint32_t i = 1; i <= n; ++i)
+            {
+                worst = std::max(worst, frame - last[i]);
+            }
+        }
+    }
+    for (uint32_t i = 1; i <= n; ++i)
+    {
+        if (last[i] < 197) far_served = false;
+    }
+    check(far_served, "P4 layer: every face, near or far, is still served at the end of 200 frames");
+    check(worst <= kDynamicDeadlineFrames, "P4 layer: no face waits longer than the deadline", worst);
+    // the nearest alone (3 faces) run every frame
+    std::vector<DynamicItem> few = faces(3, 0.05f, 1);
+    bool every_frame = true;
+    for (int frame = 0; frame < 50; ++frame)
+    {
+        if (selectFrame(std::vector<StaticItem>(), few, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() != 3) every_frame = false;
+    }
+    check(every_frame, "P4 layer: the avatar faces within the share run every frame");
+
+    // the verdict: a static change and an avatar in the same tile: the fixed layer is redrawn (it includes the avatar layer)
+    TileFacts f;
+    f.pending = true;
+    f.pending_cause = Cause::Edit;
+    f.holds_avatar = true;
+    const TileVerdict v = classifyTile(f);
+    check(v.needs_render && !v.needs_layer && !v.dynamic, "P4 a tile with a change and an avatar is a static render (it draws the layer too)");
+    // an avatar alone never makes the fixed layer stale
+    TileFacts a;
+    a.holds_avatar = true;
+    a.avatar_in_layer = true;
+    check(!classifyTile(a).needs_render, "P4 an avatar never dirties the static tile");
+    // no avatar, nothing in L: a static scene stays free
+    check(!classifyTile(TileFacts()).needs_layer, "P4 no avatar, nothing to restore: no item");
+}
+
+// The lag table of the pull request: min(A_max left, CPU cap / per-face cost), then ceil(faces / per frame)
+void testP4Lag()
+{
+    // faces drawn every frame (the nearest) are part of A_max
+    check(layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0) == 4, "P4 lag: 0.20 ms at 0.05 ms a face is 4 faces a frame", layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0));
+    check(layerFacesPerFrame(kDynamicCapMs, 0.04f, kAvatarDrawsMax, 0) == 4, "P4 lag: a face below the scheduler floor is predicted at the floor");
+    check(layerFacesPerFrame(kDynamicCapMs, 0.10f, kAvatarDrawsMax, 0) == 2, "P4 lag: 0.10 ms a face is 2 faces a frame");
+    check(layerFacesPerFrame(kDynamicCapMs, 0.5f, kAvatarDrawsMax, 0) == 1, "P4 lag: a face over the share still runs alone");
+    check(layerFacesPerFrame(10.f, 0.05f, kAvatarDrawsMax, 0) == 24, "P4 lag: A_max binds first with a large share");
+    check(layerFacesPerFrame(10.f, 0.05f, kAvatarDrawsMax, 20) == 4, "P4 lag: A_max left after the every-frame draws");
+    check(layerFacesPerFrame(10.f, 0.05f, kAvatarDrawsMax, 30) == 0, "P4 lag: no draw left");
+    // the table of the PR: faces in range 4, 8, 12, 24 at 4 faces a frame; frames and ms at 60 and 120 fps
+    check(layerLagFrames(4, 4) == 1 && layerLagFrames(8, 4) == 2 && layerLagFrames(12, 4) == 3 && layerLagFrames(24, 4) == 6, "P4 lag: 4 / 8 / 12 / 24 faces take 1 / 2 / 3 / 6 frames");
+    check(layerLagFrames(5, 4) == 2 && layerLagFrames(0, 4) == 0, "P4 lag: rounding up, nothing to draw");
+    // the simulation agrees with the formula: 24 faces, 4 a frame, the oldest served first
+    {
+        const uint32_t n = 24;
+        std::vector<uint32_t> last(n + 1, 0);
+        uint32_t worst = 0;
+        for (uint32_t frame = 1; frame <= 300; ++frame)
+        {
+            std::vector<DynamicItem> items;
+            for (uint32_t i = 1; i <= n; ++i)
+            {
+                DynamicItem it;
+                it.key = i;
+                it.avatar = true;
+                it.age_frames = frame - last[i];
+                it.cam_dist = float(i);
+                it.last_cpu_ms = 0.05f;
+                it.avatar_draws = 1;
+                items.push_back(it);
+            }
+            for (uint32_t k : selectFrame(std::vector<StaticItem>(), items, kFrameCapMs, kAvatarDrawsMax, true).dynamic)
+            {
+                last[unpackKey(k)] = frame;
+            }
+            if (frame > 50)
+            {
+                for (uint32_t i = 1; i <= n; ++i) worst = std::max(worst, frame - last[i]);
+            }
+        }
+        check(worst <= layerLagFrames(n, layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0)) + 1, "P4 lag: the simulated worst wait is the formula's (plus the frame it was seen in)", worst);
+    }
+}
+
+void testP4Owners()
+{
+    // tracking per owner: the hooks run while any owner tracks; the pending boxes go only when the last owner leaves
+    uint32_t mask = 0;
+    const uint32_t proj = 1u, pts = 2u;
+    uint32_t next = ownerMaskAfter(mask, proj, true);
+    check(ownerEdge(mask, next) == OwnerEdge::First && next == proj, "P4 owners: the first owner switches the hooks on");
+    mask = next;
+    next = ownerMaskAfter(mask, pts, true);
+    check(ownerEdge(mask, next) == OwnerEdge::Neither && next == (proj | pts), "P4 owners: a second owner changes nothing for the hooks");
+    mask = next;
+    next = ownerMaskAfter(mask, proj, false);
+    check(ownerEdge(mask, next) == OwnerEdge::Neither && next == pts, "P4 owners: the projector pool releasing does not switch the hooks off or drop the point pool's boxes");
+    mask = next;
+    next = ownerMaskAfter(mask, pts, false);
+    check(ownerEdge(mask, next) == OwnerEdge::Last && next == 0, "P4 owners: the last owner leaving switches them off and drops the boxes");
+    check(ownerEdge(0, ownerMaskAfter(0, proj, false)) == OwnerEdge::Neither, "P4 owners: switching off what was never on is no edge");
+
+    // lamp roots per owner: one owner's list does not replace the other's
+    OwnerLists<int> roots;
+    std::vector<int> a = { 5, 3, 3, 9 };
+    std::vector<int> b = { 7, 3 };
+    check(roots.set(0, a), "P4 roots: the first owner's list is new");
+    check(roots.set(1, b), "P4 roots: the second owner's list is new");
+    check(roots.contains(5) && roots.contains(9) && roots.contains(7) && roots.contains(3) && !roots.contains(4), "P4 roots: the lookup sees the union of both owners");
+    check(roots.merged.size() == 4, "P4 roots: the union is sorted and de-duplicated", double(roots.merged.size()));
+    std::vector<int> a2 = { 3, 5, 9 };
+    check(!roots.set(0, a2), "P4 roots: the same list again changes nothing");
+    std::vector<int> a3 = { 11 };
+    roots.set(0, a3);
+    check(!roots.contains(5) && roots.contains(11) && roots.contains(7) && roots.contains(3), "P4 roots: replacing one owner's list keeps the other's lamps");
+    roots.clear(0);
+    check(!roots.contains(11) && roots.contains(7) && roots.contains(3), "P4 roots: one owner released: its roots go, the other's stay");
+    roots.clearAll();
+    check(!roots.contains(7), "P4 roots: a reset clears every owner");
+
+    // the frame's GL scope: one save and one restore however many caches render in the frame
+    ScopeCounter scopes;
+    int saves = 0, restores = 0;
+    for (int pool = 0; pool < 3; ++pool)
+    {
+        const bool outer = scopes.enter();
+        if (pool == 0) { /* the coordinator's scope */ }
+        if (outer) ++saves;
+        if (pool == 2)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (scopes.leave()) ++restores;
+            }
+        }
+    }
+    check(saves == 1 && restores == 1, "P4 scope: nested scopes of three caches save once and restore once", saves, restores);
+    ScopeCounter again;
+    check(again.enter() && !again.enter() && !again.leave() && again.leave(), "P4 scope: the last leave restores");
+}
+
+void testP4()
+{
+    testP4Caps();
+    testP4Layer();
+    testP4Lag();
+    testP4Owners();
+}
+
 void testP3()
 {
     testP3Causes();
@@ -1254,6 +1649,7 @@ int main()
     testT8();
     testBadInput();
     testP3();
+    testP4();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);

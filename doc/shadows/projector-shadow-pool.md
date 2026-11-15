@@ -15,7 +15,7 @@ Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shado
 Today's two slots (`mSpotShadow[0..1]`, window-sized maps) are handed from lamp to lamp by a view-dependent priority and are
 re-rendered every frame, so a lamp's shadow can vanish when the camera turns. The pool gives every projector within the shadows'
 reach (`min(RenderFarClip, 128 m)`, measured from the camera's position, with a hysteresis band) a tile of its own in a shared
-depth atlas. The tile's size and view come from the light alone; the caster LOD is closed by stage P3's pin (below) and the avatars' visibility (D7/D8) still follows the camera until P4.
+depth atlas. The tile's size and view come from the light alone; the caster LOD is closed by stage P3's pin (below) and, since stage P4 (below), the avatars are a dynamic layer chosen by position, never by what the camera sees.
 
 ## Stage P2: tiles replace the slots
 
@@ -41,13 +41,13 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   blit for resized ones, then L to S in full).
 - **What a frame does** (`LLProjectorShadows::update`, from `generateSunShadow`, not for probes): the light set, the level and
   placement, then the tile renders the budget allows. P2 has no change tracking, so every tile is a full render (the fixed
-  objects and the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
+  objects and, until P4, the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
   **oldest first by age in frames, the distance only breaking a tie**, so the order is a round robin by staleness.
-  - **Budget (P2c).** A fixed `kStaticCapMs` = **0.35 ms** of **CPU** time per frame for the tile renders. The frame-time basis is
+  - **Budget (P2c; re-divided in P4, see "Stage P4").** A fixed cap of **0.35 ms** of **CPU** time per frame for the tile renders (since P4 `kFrameCapMs`, shared with the dynamic layer). The frame-time basis is
     an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the whole light and shadow budget (+5 %) is
     about 0.4 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
-    lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms; `kDynamicCapMs` (0.30 ms) does not fit in that, so P4
-    must re-divide the cap between the static and the dynamic tiles (the dynamic schedule draws tiles from P3 on, for a moving lamp or an avatar in the light, so the two caps together can exceed the 0.4 ms in a frame that has both). The measured cost of a
+    lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms. (P2c and P3 added a second cap of 0.30 ms for the dynamic tiles, which
+    did not fit in the 0.05 ms: the two together could reach 0.65 ms in a frame that had both. P4 replaced the two by one combined cap.) The measured cost of a
     tile (`last_cpu_ms`) only predicts how many fit; it does not set the budget. A frame also stops rendering once the measured
     time reaches the budget (the first pick always runs, so a tile dearer than the budget still progresses). Until P3, a static
     scene re-rendered every tile that fits; from P3 it renders none.
@@ -106,8 +106,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 ### Known limits of P2
 
-- **Avatar shadows (P2).** Legacy re-rendered its two slots, avatars included, every frame. P2 rendered the tiles that fit the 0.35 ms cap, oldest first, so with N lamps an avatar's shadow refreshed every ceil(N / tiles per frame) frames. Since P3 a tile with an avatar in its light is a dynamic item drawn every frame under the dynamic cap (0.30 ms, at most 24 avatar draws; the items past the 4-frame deadline first), so a walking avatar's shadow refreshes every frame while the cap holds, and less often when more tiles hold avatars than the cap fits, until P4 splits avatars out of the tiles.
-- The avatars' visibility (D7/D8, P4) still follows the camera; the caster LOD no longer does (P3).
+- **Avatar shadows (P2, history).** Legacy re-rendered its two slots, avatars included, every frame. P2 rendered the tiles that fit the 0.35 ms cap, oldest first, so with N lamps an avatar's shadow refreshed every ceil(N / tiles per frame) frames. P3 made a tile with an avatar in its light a dynamic item (a full tile render every frame). P4 (below) draws the avatars as a layer over the tile instead: S is not drawn again for an avatar.
+- The caster LOD no longer follows the camera (P3), and since P4 neither do the avatars.
 - **Casters outside the main view: draw info is not camera-gated; loading still is.** A tile renders through the same `LLPipeline::renderShadow` as the sun cascades and Legacy's spot slots, with a camera built the same way (`generateSunShadow`, `pipeline.cpp:13073`-`13089`; `renderTile`). `renderShadow` runs `updateCull` and `stateSort`, and `stateSort` ends in `postSort`, which rebuilds the dirty groups it culled (`pipeline.cpp:3921`, `3954`). Beyond that, no group's draw info depends on the main view: a spatial group queues itself for a rebuild when it is created or dirtied (`llspatialpartition.cpp:315`, `437`, `480`, `606`; `LLPipeline::markRebuild`, `pipeline.cpp:3403`), and `rebuildPriorityGroups` (`pipeline.cpp:3120`, run every frame from `postSort`) builds every queued group whether or not any camera sees it. Occlusion is off during a shadow render (`sUseOcclusion = 0`). So a loaded caster the camera never saw has its draw info and appears in the tile. Three inputs still follow the main camera and are P3 work: (1) object loading: an object outside the near radius (`SceneLoadMinRadius`, 32 m) that never entered the main frustum or the rear sphere gets no drawable (`llvocache.cpp:1037`-`1060`; once loaded it stays, since eviction is disabled); (2) mesh and sculpt assets: a caster whose asset was never fetched is skipped (`llvovolume.cpp:6066`); (3) alpha-masked casters: their texture's virtual size comes from the main camera, so a texture never seen may stay low-resolution or unloaded (`llvovolume.cpp:889`-`905`, `6108`). The caster LOD (above) is the fourth.
 - A projector whose geometry the pool cannot use (field of view outside (0, 3.1 rad), zero or non-finite scale or radius) is not given a tile.
 - A failed atlas allocation is logged once and retried with a back-off (5 s up to 60 s).
@@ -138,7 +138,7 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `edit` | a fixed object in the light was rebuilt (volume, rigged, a position-only rebuild), moved, retextured (a prim with a blended, alpha-masked or alpha-textured face), or its geometry finished a delayed rebuild (a mesh that loaded) |
 | `mover` | an object turned into a mover or a physical one, stopped being physical, or became active or static again (one push at each edge) |
 | `lamp` | the lamp's own pose changed: position more than 1 mm, rotation 1e-4, scale 1 mm, angle 1e-4, reach 1 cm |
-| `avatar` | an avatar is in the light (drawn into S until P4, so the tile is redrawn every frame), or it left (one more render) |
+| `avatar` | P4: an avatar is in the light (the avatar layer of the tile is drawn again, S is not), or it left (one layer pass restores L from S) |
 | `lowres` | a layout change down-sized the tile (a blit): drawn again at its new size |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
@@ -184,7 +184,7 @@ main thread only, returns off it), `noteMeshLoaded` / `meshLoaded` / `clearMeshL
 own main-thread list.
 
 Nothing else is new at a shared path: `LLPipeline::markVisible` drops a bridge only inside a tile render (`sLocalShadowPass`),
-`LLPipeline::renderShadowImpl` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
+`LLPipeline::renderShadow` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
 (zero for every volume outside a pool tile). No free, no static state beyond the feed's own list was added to a function a worker
 thread runs (`LLRender::shutdown`, `LLImageGL`, `LLVertexBuffer::cleanupClass` are untouched).
 
@@ -204,7 +204,7 @@ door, flexi) is batched with its group, so it casts with the pose of the last re
 
 ### The LOD pin
 
-`pinCasters` (called from `renderShadowImpl` after the tile's cull and sort) walks the groups the tile is about to draw and, for
+`pinCasters` (called from `renderShadow` after the tile's cull and sort) walks the groups the tile is about to draw and, for
 every volume or tree inside the light's volume that is not rigged, worn, a HUD or fully transparent (every face alpha 0 and no glTF
 material: it casts nothing), takes one pin for the tile (`PinBook`). The light's volume is the tile's render frustum (aspect
 included), the same region a change dirties the tile for. The pin is a counter on the object (`mLampLODPin`); `calcLOD` returns
@@ -230,40 +230,37 @@ The four camera-driven inputs the P2 audit listed:
 
 `classifyTile` gives each placed tile one verdict from the facts: never drawn, a dirty box, the lamp's pose stale, the lamp
 moving, a down-sized tile, an avatar in the light or one that just left. A verdict of "nothing" is no item: a static scene costs
-no render. Items go to two schedules, each under its own fixed CPU cap:
+no render. Since P4 the verdict has two outputs: `needs_render` (the fixed layer S is drawn again, and S is copied to L with the
+avatars over it) and `needs_layer` (only the avatar layer). Items go to two lists that share one cap (Stage P4, "The combined cap"):
 
-- **static** (`selectStatic`, 0.35 ms): the first fill nearest first, then stale tiles oldest first (frames since the change that
+- **static** (`selectStatic`): the first fill nearest first, then stale tiles oldest first (frames since the change that
   touched them, or, for a tile stale only by its lamp's pose or a resize, since it was drawn);
-- **dynamic** (`selectDynamic`, 0.30 ms, at most 24 avatar draws): a lamp that is moving, or a tile with an avatar in its light
-  (the avatars are still drawn into S until P4, so such a tile is a full render every frame): items past the 4-frame deadline
-  first, then nearest first.
+- **dynamic** (`selectDynamic`, at most 24 avatar draws): a lamp that is moving (the whole tile every frame) and the avatar layers
+  (a tile with an avatar in its light, or one that just left): items past the 4-frame deadline first, then nearest first, by the
+  camera's position.
 
-The two caps together exceed the 0.4 ms budget when both are busy; the dynamic one is spent only while an avatar is under a lamp
-or a lamp moves, and P4 re-divides it (S/L split). A lamp that moves is drawn every frame with its current pose, and the lookup
+A lamp that moves is drawn every frame with its current pose, and the lookup
 matrix is built from the pose the tile was drawn with, so a lagging picture stays coherent (D10).
-
-The avatars a tile holds are the ones the render would draw (visible, not impostored): their visibility still follows the camera
-until P4, so an avatar that leaves the view makes its tile stale once.
 
 ### What a static scene still costs
 
 No tile render, no index rebuild and no box test: a frame with no dirty box does one read of every lamp's spot parameters and pose
-(`read_spot`, `light_pose`, `poseChanged`: the pose-change detection, at most 256 lamps), one pass over the visible avatars' extents
+(`read_spot`, `light_pose`, `poseChanged`: the pose-change detection, at most 256 lamps), one pass over the avatars' extents (every avatar that casts, since P4)
 against each placed tile's volume, one `classifyTile` per tile, and the hooks' relaxed loads. A lamp's matrices and volume are rebuilt
 only when its pose changed or agent space shifted; the change index is built only on a frame that has boxes (or an overflow). Not
 measured in-world.
 
 ### Cost of the P3 stage (what is and is not measured)
 
-Nothing is measured in-world. The caps are the design's: static 0.35 ms plus dynamic 0.30 ms of CPU per frame against a light and
-shadow budget of about 0.4 ms (an assumed 8 ms frame), so the two together do not fit when a lamp moves or an avatar stands in a
-light; P4 re-divides them. The LOD pin has no ceiling (above). `pool.pinned_triangles` and `pool.mover_objects` are there for the
+Nothing is measured in-world. P3 had the caps of the design: static 0.35 ms plus dynamic 0.30 ms of CPU per frame against a light and
+shadow budget of about 0.4 ms (an assumed 8 ms frame), which did not fit when a lamp moved or an avatar stood in a
+light; P4 replaced them by one combined cap (below). The LOD pin has no ceiling (above). `pool.pinned_triangles` and `pool.mover_objects` are there for the
 owner session to measure what the pin and the classifier cost.
 
 ### Stats
 
 `ProjectorShadows.stats` (development builds) gained `pool.rerender_causes` (renders by cause, cumulative), `static_renders` and
-`dynamic_renders` (cumulative), `last_frame_static_renders`, `last_frame_dynamic_renders`, `pinned_objects`, `pinned_triangles`,
+`dynamic_renders` (cumulative; since P4 a moving lamp redrawn whole), `layer_renders` (cumulative avatar layers), `last_frame_static_renders`, `last_frame_dynamic_renders`, `last_frame_layer_renders`, `last_frame_avatar_draws`, `pinned_objects`, `pinned_triangles`,
 `mover_objects` (objects flagged as movers since the feed started), `pending_tiles`, `avatar_tiles`, `dirty_boxes_last_frame`, `frame`,
 `dirty_age_ms_max` (the longest a changed tile waited for its render, since the last `reset_ages`), `dirty_renders` (renders a change
 caused: all but the first fills, lamp moves, avatars and resizes), `max_stale_frames` (the age of the oldest pending tile) and per tile
@@ -275,7 +272,11 @@ Nothing in these is about projectors; they are keyed by a tile or face key and a
 
 - `LLShadowDirtyFeed::beginFrame(frame)`: the frame's boxes with causes (idempotent per frame, so two caches may read them).
 - `llprojectorpool::ChangeIndex`: `rebuild(volumes)` with one `Pyramid` per tile or face, `apply(boxes, everything, hits)`.
-- `llprojectorpool::classifyTile(TileFacts)` and `selectStatic` / `selectDynamic`: the verdict and the order of work.
+- `llprojectorpool::classifyTile(TileFacts)` and `selectStatic` / `selectDynamic`: the verdict and the order of work; `selectFrame`
+  merges both lists of every cache under the one cap (items carry their pool; picks come back packed with it).
+- `llprojectorpool::frameLedger()` (what the caches spent in the frame) and `LLLocalShadowGL::Scope` (`lllocalshadows.h`: one save and
+  restore of the GL state for the frame's tile renders, the first scope saves and the last restores).
+- `LLShadowDirtyFeed::setTracking(owner, on)` and `setLampRoots(owner, roots)`: tracking and lamp roots per owner (P4).
 - `llprojectorpool::PinBook` plus `LLVOVolume::pinLampLOD`: the LOD pin's books by key.
 - `llprojectorpool::castsFixed`, `hookSkips`, `becomesMover`: the mover rules.
 
@@ -284,8 +285,7 @@ What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, t
 ### Known limits of P3
 
 - A moving part inside a still linkset, client spin and flexi cast with the pose of the last render.
-- Avatars are still drawn into S (a tile with an avatar in its light is a full render every frame, under the dynamic cap) and their
-  visibility follows the camera until P4.
+- (Closed by P4: the avatars are the dynamic layer, by position.)
 - The mover classifier is sticky: a prim another avatar edits (a server-reported move after creation) is a mover for the session,
   which is out of the fixed layer while it is active and a fixed caster while it rests. An object that arrives through the object
   cache and differs from its cached position by more than the quantisation tolerance counts as moved.
@@ -302,5 +302,108 @@ What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, t
   `noteShift` translates it once. A cache with its own list is not needed.
 - The mover and physical bits are on the object (`mPoolFlags`, read through `LLShadowDirtyFeed::flagsOf`); transitions push through the feed.
 - The pin counter on the volume is shared; each cache has its own `PinBook` keyed by tile, so two caches can pin one object.
-- Left for later: `renderTile` still takes the record (not `fbo, rect, view, proj, far, light, pass, two_sided`) and saves the GL state once per
+- Left for later (P4 shared the GL save and the caps; the rest remains): `renderTile` still takes the record (not `fbo, rect, view, proj, far, light, pass, two_sided`) and saves the GL state once per
   frame, not once around a tile list across caches; `LevelController` is unchanged (no demand callback); the caster faces stay front-only (D12).
+
+## Stage P4: the avatar layer
+
+Avatars were drawn into the static atlas S, and which avatars were drawn followed the camera (`isVisible()`, `isImpostor()`). P4 puts
+them into the dynamic layer, `LLPipeline::LOCAL_SHADOW_DYNAMIC` (declared in P3, unused until now), and divides the CPU between the
+two layers once.
+
+### S and L
+
+- **S holds the fixed layer only.** A tile render (`LOCAL_SHADOW_STATIC`) no longer culls the avatar partitions (`PARTITION_AVATAR`,
+  `PARTITION_CONTROL_AV`) and leaves the worn objects' bridges out (`markVisible`). No avatar change dirties a tile any more, and the
+  tile's cache is never invalidated by an avatar walking by.
+- **L is S plus the avatars in the light.** The avatar layer of a tile is: copy S to L for the tile (the avatars of the last pass are
+  gone), then draw the avatars in the light into L (`LOCAL_SHADOW_DYNAMIC`: the avatar partitions and the worn objects' bridges only, from the
+  pose the tile holds, no depth clear, the depth test composes the two). When the avatar has left, one more pass restores L from S.
+  A full tile render that holds an avatar does both (S, copy, avatars) in one go.
+- **A repack** (`applyPlan`) restores L from S for the tiles that hold an avatar before it copies L to S in full, so no avatar is ever
+  copied into S; the avatar layers are drawn again by the dynamic schedule of the same frame.
+
+### Pairing by position
+
+`update` pairs every avatar that casts with every lamp whose volume its extents touch. Nothing in it reads the camera: no
+`isVisible()`, no `isImpostor()`, no render distance. The avatars left out are those the avatar pool does not draw either: dead, a UI
+avatar, too slow (`isTooSlow`), a jelly doll (which includes an RLV silhouette, a derendered and a too complex avatar) or an invisible one
+(`getOverallAppearance() != AOA_NORMAL`; `renderShadow` repeats that test in the dynamic pass), and, with `RenderAvatarFriendsOnly`,
+an avatar that is not a friend, the agent or a control avatar. In the dynamic pass the camera
+gates of the avatar path are bypassed (all behind `sLocalShadowPass == LOCAL_SHADOW_DYNAMIC`, so every other pass is unchanged):
+`stateSort` (render distance, `isVisible`), `markVisible` and `LLSpatialBridge::setVisible` / `updateDistance` for the attachments (the
+impostor test and the "visible within a frame" test), and `LLDrawPoolAvatar::renderShadow` (the impostor test). An impostored avatar
+casts in full with the pose of its last update; the avatar's own animation still follows the viewer's update rate for avatars out of
+view, which is not changed here (not measured: see "Not verified"). The dynamic pass does not stamp the camera's visibility
+(`LLDrawable::setVisible` skips `LLViewerOctreeEntryData::setVisible` in it), so an avatar behind the camera does not count as
+visible to the animation, the impostor ranking or `updateImpostors`.
+
+**Known limits (owner's walk session).** (1) The layer's LOD is not pinned: `pinCasters` runs for the fixed layer only, so an avatar's
+body and its worn objects take the LOD the camera's distance gives them, and their silhouette may change across an LOD boundary as
+the camera moves. (2) A face draws at most A_max (24) avatars, the nearest to the lamp (`LLPipeline::sLocalShadowAvatars`, tested by the body in `renderShadow` and by the attachments in `LLSpatialBridge::setVisible`), so a crowd under one lamp is bounded by the count the scheduler predicts; the farther avatars of a crowd do not cast in that face. (3) `updateCull` still culls the whole bridge partition for the layer and `markVisible` filters it; the 0.04 ms a face is an
+estimate.
+
+### The combined cap
+
+P3 had two caps that could both be spent in one frame: static 0.35 ms and dynamic 0.30 ms, 0.65 ms, against about 0.4 ms of
+the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `selectFrame`):
+
+| | ms of CPU a frame | meaning |
+|---|---|---|
+| `kFrameCapMs` | **0.35** | everything the shadow caches' tile work spends in a frame, all caches together (4.4 % of an 8 ms frame; 0.05 ms of the 0.4 ms stays free) |
+| `kDynamicCapMs` | **0.20** | the dynamic layer's share, spent first (a moving lamp's tile, the avatar layers) |
+| `kStaticCapMs` | **0.15** | what the static tiles keep when the dynamic layer is full (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.35 |
+
+- **Priority: the dynamic layer first.** An avatar or a moving lamp that lags is seen at once; a dirty static tile shows a stale
+  shadow of something that changed, and its wait is bounded by the age order (oldest first). A static tile is never starved: the first
+  static candidate has a place every frame when it fits the cap (the dynamic layer gives up its last faces for it); one whose own
+  prediction is above the whole cap runs alone as the progress pick once it has waited 4 frames (or was never drawn), and that frame's
+  dynamic picks are dropped, so the overrun is that one item and a standing avatar cannot starve it.
+- **The sum of the predicted costs of a frame's picks never exceeds the cap**, except for the one progress pick: when nothing was spent
+  yet in the frame, a single item whose own prediction is above the cap runs alone. Two caches share the cap through the frame ledger
+  (`frameLedger()`): the second takes what the first left, and a frame in which the cap is spent serves nothing more.
+- **A_max covers the static tiles too.** A static tile that draws avatars (a first fill, a dirty or low-res tile) is charged `min(avatars, A_max)` draws (`StaticItem::avatar_draws`) against what the dynamic picks left of A_max; one that does not fit waits (the order is kept), and the head tile keeps its place (the dynamic layer gives up its last avatar faces for it, only when the head is served; so for a cold fill of avatar-heavy tiles the dynamic avatar faces yield to the head tile), so a cold fill never draws more than A_max avatars in a frame.
+- **In the frame** each render also checks the measured time against the cap (the dynamic list against its 0.20 ms share).
+- **Cold start** (`coldItemMs`) is at most a quarter of the cap (0.0875 ms): four first fills a frame with no avatar layer, one a frame
+  while the dynamic layer is full.
+- Unit-tested: the combined cap is never exceeded with both kinds pending, over six costs on each side; the dynamic share, the static
+  floor and the whole cap without dynamic work; the progress rule; two caches on one ledger.
+
+### Cost of one avatar face, and the lag table
+
+A face is one lamp's tile with an avatar in its light. **Estimate, not measured here:** an avatar layer costs about **0.04 ms** of CPU per
+face (the pool spec's 0.04 to 0.15 ms for a tile with 1 to 4 avatar draws, 0.0375 ms a draw); the scheduler predicts every item at no less
+than `kDefaultItemMs` = 0.05 ms and then at the item's own last measured cost (`lastAvatarMs`). The in-world cost per face is owed to the
+owner's walk session; `pool.last_frame_avatar_draws`, `last_frame_layer_renders` and `last_frame_render_ms` are the readings.
+
+Faces drawn a frame = **min(A_max left, dynamic CPU share / cost of a face)**, with A_max = 24 avatar draws (one per avatar in a lamp's
+volume), less the faces drawn every frame: with 0.20 ms and 0.05 ms that is **4 faces a frame** (A_max does not bind below 24 faces;
+with 20 draws taken it would be 4 as well, with 22 taken, 2). The wait of the last face of a set is `ceil(faces / per frame)` frames;
+the nearest faces (by the camera's position) are served every frame, the rest by the 4-frame deadline, oldest first:
+
+| faces with an avatar | frames | ms at 60 fps | ms at 120 fps |
+|---|---|---|---|
+| 4 | 1 | 17 | 8 |
+| 8 | 2 | 33 | 17 |
+| 12 | 3 | 50 | 25 |
+| 24 | 6 | 100 | 50 |
+
+(Estimated from the cap and the 0.05 ms floor; the unit tests simulate 12 and 24 faces and check the worst wait against the formula.
+With the measured 0.04 ms a face the share would hold 5 faces a frame; the scheduler's floor keeps it at 4.)
+
+### Single-owner pieces made shared
+
+- `LLShadowDirtyFeed::setTracking(owner, on)`: a mask of owners (`Projectors`, `Points`). The hooks record while any owner tracks; the last
+  owner to leave drops the pending boxes, and one leaving while another tracks neither switches the hooks off nor drops its boxes.
+  Callers: `LLProjectorShadows::ensureAllocated` and `release`, both main-thread only (the setter does nothing off it).
+- `LLShadowDirtyFeed::setLampRoots(owner, roots)`: one list per owner, the hooks test the sorted union (`OwnerLists`). Caller: the
+  projector pool's `update`, once a frame, main thread.
+- The caps (`selectFrame`, `frameLedger`) and the GL save and restore (`LLLocalShadowGL::Scope`, `lllocalshadows.h`) are shared. With
+  one pool in the viewer the scope opens and closes inside `update`; the point-light pool's coordinator will open one outer scope around
+  both updates, and the counter makes the inner ones neither save nor restore.
+
+### Not verified
+
+No in-world check: the walk under three lamps, the dancer under club lights, the impostored and the behind-the-camera avatar casting,
+attachments (rigid and rigged) in the layer, the per-face cost and the off-screen animation of paired avatars. The viewer was built and
+the login screen started only. The owner's walk session is owed.

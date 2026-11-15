@@ -1,10 +1,12 @@
 /**
  * @file alphaStochasticCurrentF.glsl
- * @brief Stochastic transparency: this frame's accumulation, averaged over the samples once
+ * @brief Stochastic transparency: this frame's accumulation, its grain and its depths, measured once per pixel
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -19,24 +21,111 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-out vec4 frag_color;   // RGBA32F: the value the temporal resolve reads, kept exactly
+// Two RGBA16F targets (16 B/px, as the RGBA32F target they replace) and a mask:
+//   0: the accumulation (alpha x colour, alpha) averaged over the samples, as the resolve blends it;
+//   1: the pixel's grain and total alpha, and its depths: (grain, total alpha, 1 - nearest stochastic depth,
+//      1 - farthest depth of a transparent layer that covers a sample), the depths as one minus the window depth because a 16-bit float is fine near 0 (a window depth
+//      near 1, which a distant surface has, is not);
+//   2: (R8, 1 B/px) the mask: 1 where anything transparent was drawn (a sample of the accumulation, a transparency under 1,
+//      the glow, a grain), 0 where every lane is empty. The blend and the composite run only under it: at a pixel with 0 the
+//      accumulation, the total alpha and the glow are 0, which is all they would have written or drawn (the passes' rules
+//      are in alphaStochasticResolveF.glsl and alphaStochasticCompositeF.glsl), so the result is the unmasked one, exactly.
+// The grain is the standard error of the pixel's colour: the samples of this pixel (the S = 8 samples of its
+// accumulation) each hold the colour of the layers that cover it, and their spread, over the root of their effective
+// count, is how far this frame's colour is from the colour a pixel of infinitely many samples would show. Where one
+// layer covers the pixel every sample holds its colour, the spread is 0 and the colour is exact: the resolve then
+// takes no history (sharp). The measure is Aurora Viewer PR 3663's (oit_stochastic.wgsl cs_resolve, Gaalrauch,
+// GPL-3.0-or-later), in the accumulation's own domain (alpha x colour: the alpha correction is made at the
+// composite, and the history keeps the uncorrected four-vector).
+// A sample that is not a number counts for nothing, one that is infinite is clamped to what the targets hold, and a
+// transparency that is not a number hides nothing: nothing non-finite leaves this pass.
+// The pass holds all S samples (8 per pass: the GL 4.6 base takes them); the lanes are never summed across passes.
 
-// The accumulated colour of this frame (alpha x colour, alpha) averaged over the samples, once
-// per pixel. The temporal resolve reads it for its pixel and for the 3 x 3 neighbourhood; this
-// pass spares it nine reads and sums of the samples. The sum is the one the resolve made, in the
-// same order, so that the result is bit for bit the same.
+out vec4 frag_data[3];
 
-uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the passes' samples
+uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the samples
+uniform sampler2DMS alpha_st_depth;  // the stochastic depth: the nearest transparent surface, or the opaque one
+uniform sampler2D depthMap;          // the scene depth (DEFERRED_DEPTH)
+uniform sampler2DMS alpha_st_trans;  // red prod(1 - alpha), green the glow (additive)
 uniform int st_samples_hw;           // samples of the targets
-uniform int st_samples;              // samples in all, over the iterations
+uniform int st_samples;              // samples in all
+
+const float HDR_MAX = 65504.0;       // the largest value an RGBA16F target holds
+
+bool st_nan(float x)
+{
+    return (floatBitsToUint(x) & 0x7fffffffu) > 0x7f800000u;
+}
+
+// A sample as the resolve takes it: nothing where a part is not a number, no part under 0 nor over what the target holds
+vec4 st_sample(vec4 a)
+{
+    bool bad = st_nan(a.r) || st_nan(a.g) || st_nan(a.b) || st_nan(a.a);
+    return bad ? vec4(0.0) : clamp(a, vec4(0.0), vec4(HDR_MAX));
+}
+
+// A sample of the transparency: between nothing and all of the light, and all of it where it is not a number
+float st_through(float x)
+{
+    return st_nan(x) ? 1.0 : clamp(x, 0.0, 1.0);
+}
+
+// A sample of the glow: what the composite takes (alphaStochasticCompositeF.glsl st_amount)
+float st_amount(float x)
+{
+    return st_nan(x) ? 0.0 : clamp(x, 0.0, HDR_MAX);
+}
 
 void main()
 {
     ivec2 px = ivec2(gl_FragCoord.xy);
     vec4 sum = vec4(0.0);
+    vec3 squares = vec3(0.0);   // the sum of (alpha x colour)^2 / alpha: the weighted second moment of the samples' colours
+    float alphas = 0.0;         // the sum of alpha^2: the effective count's divisor
+    float z_near = 1.0;
+    float z_far = 0.0;
+    float opaque = texelFetch(depthMap, px, 0).r;   // the scene depth the samples start from
+    float trans = 0.0;
+    float glow = 0.0;
     for (int s = 0; s < st_samples_hw; ++s)
     {
-        sum += texelFetch(alpha_st_accum, px, s);
+        vec4 a = st_sample(texelFetch(alpha_st_accum, px, s));
+        sum += a;
+        if (a.a > 1e-5)
+        {
+            squares += a.rgb * a.rgb / a.a;
+            alphas += a.a * a.a;
+        }
+        float d = texelFetch(alpha_st_depth, px, s).r;
+        z_near = min(z_near, d);
+        // the farthest transparent surface: a sample no layer covers still holds the opaque depth (the spread), which is no layer
+        // of the pixel (a pane in front of a wall would else slide against the wall under any camera motion and lose its history)
+        if (d < opaque - 1e-5)
+        {
+            z_far = max(z_far, d);
+        }
     }
-    frag_color = sum / float(max(st_samples, 1));
+    for (int s = 0; s < st_samples_hw; ++s)
+    {
+        vec2 tg = texelFetch(alpha_st_trans, px, s).rg;
+        trans += st_through(tg.r);
+        glow += st_amount(tg.g);
+    }
+    float total = clamp(1.0 - trans / float(max(st_samples_hw, 1)), 0.0, 1.0);
+
+    // The pixel's colour, grain and depths from the moments of all S samples
+    z_far = max(z_far, z_near);
+    vec4 cur = sum / float(max(st_samples, 1));
+    float grain = 0.0;
+    if (sum.a > 1e-5)
+    {
+        vec3 mean = sum.rgb / sum.a;
+        vec3 spread = max(squares / sum.a - mean * mean, vec3(0.0));
+        float count = sum.a * sum.a / max(alphas, 1e-10);
+        grain = cur.a * sqrt(max(spread.r, max(spread.g, spread.b)) / max(count - 1.0, 1.0));
+    }
+    frag_data[0] = vec4(min(cur.rgb, vec3(HDR_MAX)), min(cur.a, HDR_MAX));
+    frag_data[1] = vec4(min(grain, HDR_MAX), total, 1.0 - z_near, 1.0 - z_far);
+    bool drawn = any(notEqual(sum, vec4(0.0))) || total != 0.0 || glow > 0.0 || grain != 0.0;
+    frag_data[2] = vec4(drawn ? 1.0 : 0.0, 0.0, 0.0, 0.0);
 }

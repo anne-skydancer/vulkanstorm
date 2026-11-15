@@ -669,7 +669,7 @@ enum class Cause : uint8_t
     Edit,       // a fixed object in the light was edited, rebuilt or moved by its owner
     Mover,      // an object turned into (or out of) a mover or a physical object
     Lamp,       // the lamp's own reach, angle, size or position changed
-    Avatar,     // the tile holds an avatar (drawn into S until P4), or the avatar just left
+    Avatar,     // the tile holds an avatar (drawn into L over S, P4), or the avatar just left
     Lowres,     // the tile was down-sized by a layout change and is drawn again at its new size
     Other,      // anything else: a dirty list that overflowed, a hook off the main thread
     Count
@@ -1179,14 +1179,15 @@ struct TileFacts
     bool pose_stale = false;      // the lamp's pose differs from the pose the tile was drawn with
     bool lamp_moving = false;     // the lamp's pose changed since last frame (a moving lamp is a dynamic item, D10)
     bool lowres = false;          // down-sized by a layout change, not yet drawn at the new size
-    bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame
-    bool drawn_with_avatar = false; // its last draw included an avatar (its picture has one baked in until P4)
+    bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame (position only, never the view)
+    bool avatar_in_layer = false; // the live atlas L holds an avatar of this tile (drawn over S): it is redrawn, or cleaned once it left
 };
 
 struct TileVerdict
 {
-    bool needs_render = false;
-    bool dynamic = false;         // scheduled with the dynamic items (a moving lamp or an avatar under it), else with the static ones
+    bool needs_render = false;    // the tile's fixed layer S is drawn again (and S is copied to L, with the avatars over it when one is in the light)
+    bool needs_layer = false;     // only the avatar layer: S -> L for the tile, then the avatars over it (the fixed layer is unchanged)
+    bool dynamic = false;         // scheduled with the dynamic items (a moving lamp, or the avatar layer), else with the static ones
     Cause cause = Cause::Other;
 };
 
@@ -1199,7 +1200,9 @@ inline TileVerdict classifyTile(const TileFacts& f)
         v.cause = Cause::New;
         return v; // the first fill is the static schedule's (nearest first), never the dynamic one
     }
-    v.dynamic = f.lamp_moving || f.holds_avatar;
+    // P4: the avatars are in the dynamic layer (over S, in L), so an avatar never makes the fixed layer stale. A moving lamp
+    // redraws the whole tile every frame (the dynamic schedule, D10); every other change is the static schedule's.
+    v.dynamic = f.lamp_moving;
     if (f.pose_stale || f.lamp_moving)
     {
         v.needs_render = true;
@@ -1215,9 +1218,12 @@ inline TileVerdict classifyTile(const TileFacts& f)
         v.needs_render = true;
         v.cause = Cause::Lowres;
     }
-    else if (f.holds_avatar || f.drawn_with_avatar)
+    else if (f.holds_avatar || f.avatar_in_layer)
     {
-        v.needs_render = true; // an avatar in the light is redrawn every frame; the frame after it left, once more to clean the picture
+        // an avatar in the light is drawn again every frame the tile is served (nearest first, the rest under the shared cap);
+        // the frame after it left, once more to restore L from S
+        v.needs_layer = true;
+        v.dynamic = true;
         v.cause = Cause::Avatar;
     }
     return v;
@@ -1251,13 +1257,18 @@ struct StaticItem
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
     uint32_t age_frames = 0;    // how long it has waited: frames since the first dirty box that touched it, else since it was drawn
+    uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
+    uint32_t avatar_draws = 0;  // avatars the render draws over the tile (min(avatars in the light, A_max)); charged against A_max
 };
 
 // Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the
 // distance only breaks a tie), until the CPU cap t_s_ms would be exceeded. The order is round-robin by staleness, so
 // no tile waits longer than ceil(N / tiles per frame) frames, whatever its distance. At least one item runs while
 // any is pending (progress), even when its predicted cost alone exceeds the cap.
-inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms)
+// `a_left` is what the dynamic picks left of A_max: a static item whose avatar draws do not fit waits (the order is kept), except the
+// first one, which runs for progress (selectFrame makes room for it).
+inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
 {
     std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
@@ -1283,17 +1294,19 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
 
     std::vector<uint32_t> out;
     float spent = 0.f;
+    uint32_t avatars = 0;
     for (const auto* list : { &never, &rest })
     {
         for (const StaticItem* it : *list)
         {
             const float cost = itemCost(it->last_cpu_ms);
-            if (!out.empty() && spent + cost > t_s_ms)
+            if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
             {
-                return out; // over the cap: the order is kept, the rest waits
+                return out; // over the cap or A_max: the order is kept, the rest waits
             }
             out.push_back(it->key);
             spent += cost;
+            avatars += it->avatar_draws;
         }
     }
     return out;
@@ -1307,6 +1320,7 @@ struct DynamicItem
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;
     uint32_t avatar_draws = 0;  // avatars this item draws
+    uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
 };
 
 // Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first.
@@ -1354,24 +1368,296 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     return out;
 }
 
-// The static cap: a fixed CPU budget of the pool's static tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
-// frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one): it fits four measured tiles (0.07 ms each,
-// owner session 2026-11-14) with a margin. The +5 % light and shadow budget is about 0.4 ms of that frame, so 0.05 ms
-// is left, and kDynamicCapMs below does not fit in it: the dynamic schedule (a moving lamp, an avatar in the light) draws tiles
-// from P3 on, so the two caps together can exceed the budget in a frame that has both; P4 must re-divide the cap between the
-// static and dynamic tiles (the sum is not claimed to fit today, and nothing in-world has measured it). The measured cost only
-// predicts what fits; it does not set the budget.
-constexpr float kStaticCapMs = 0.35f;
-// Placeholder until S0 measures (spec 4.5); a devel-only debug override may replace it
-constexpr float kDynamicCapMs = 0.30f;
+// The per-frame CPU budget of ALL the shadow caches' tile work together (P4), in milliseconds, and its split. One number, shared by
+// every pool through the frame ledger (below): the dynamic layer (a moving lamp's tile, the avatar layers) and the static tiles
+// (a dirty or first-fill tile) are spent from it, never from two caps that add up (before P4: 0.35 + 0.30 ms).
+//   - kFrameCapMs 0.35 ms is 4.4 % of an 8 ms frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one). The +5 %
+//     light and shadow allowance is about 0.4 ms of that frame, so 0.05 ms stays free for the rest of the pool's CPU work.
+//   - Priority: the dynamic layer first, up to kDynamicCapMs 0.20 ms. An avatar or a moving lamp is seen to lag at once; a dirty
+//     static tile only shows a stale shadow of something that changed, and its wait is bounded by the age order of selectStatic.
+//   - The static tiles get what the dynamic layer left: at least kStaticCapMs = kFrameCapMs - kDynamicCapMs = 0.15 ms (two measured
+//     tiles of 0.07 ms), all 0.35 ms in a frame without dynamic work.
+//   - The sum of the predicted costs of a frame's picks never exceeds kFrameCapMs, except for one single item whose own prediction is
+//     above what is left, which runs alone when nothing else was spent in the frame (progress; selectFrame).
+// The measured cost only predicts what fits; it does not set the budget.
+constexpr float kFrameCapMs = 0.35f;
+constexpr float kDynamicCapMs = 0.20f;
+constexpr float kStaticCapMs = kFrameCapMs - kDynamicCapMs;
+// A_max: the avatar draws of a frame (one per avatar in a lamp's volume, at least one per avatar layer). The CPU share binds first
+// (0.20 ms / the 0.05 ms scheduler floor = 4 faces a frame); 24 is the ceiling a cheaper face could reach.
 constexpr uint32_t kAvatarDrawsMax = 24;
+
+// Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
+// functions, and a pick is unpacked afterwards. Keys stay below 2^28 (a pool's counter of records).
+constexpr uint32_t kPoolKeyBits = 28;
+inline uint32_t packKey(uint32_t pool, uint32_t key) { return (pool << kPoolKeyBits) | (key & ((1u << kPoolKeyBits) - 1u)); }
+inline uint32_t unpackPool(uint32_t packed) { return packed >> kPoolKeyBits; }
+inline uint32_t unpackKey(uint32_t packed) { return packed & ((1u << kPoolKeyBits) - 1u); }
+
+struct FramePicks
+{
+    std::vector<uint32_t> dynamic; // packed keys, in the order of service
+    std::vector<uint32_t> fixed;   // packed keys of the static schedule
+    float predicted_ms = 0.f;      // the sum of the predicted costs of both lists
+};
+
+// The frame's merged selection under the shared cap `cap_ms` (the cap minus what earlier work of the frame already spent, kFrameCapMs
+// at the start): the dynamic items first (selectDynamic, up to kDynamicCapMs and A_max), then the static ones in what is left.
+// The first static candidate always has its place if it fits the cap: the dynamic layer gives up its last faces for it. A first
+// static candidate that is above the whole cap runs alone as the progress pick once it has waited kDynamicDeadlineFrames frames (or was
+// never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
+// is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
+// without exception. A dynamic item that is over the cap alone is served at most every kDynamicDeadlineFrames frames.
+inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
+                              uint32_t a_max, bool progress_ok)
+{
+    FramePicks out;
+    std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
+    std::map<uint32_t, uint32_t> dyn_draws, st_draws;
+    std::vector<DynamicItem> d = dynamics;
+    for (DynamicItem& it : d)
+    {
+        it.key = packKey(it.pool, it.key);
+        dyn_cost[it.key] = itemCost(it.last_cpu_ms);
+        dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
+    }
+    std::vector<StaticItem> st = statics;
+    for (StaticItem& it : st)
+    {
+        it.key = packKey(it.pool, it.key);
+        it.avatar_draws = std::min(it.avatar_draws, a_max);
+        st_cost[it.key] = itemCost(it.last_cpu_ms);
+        st_draws[it.key] = it.avatar_draws;
+    }
+    // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
+    constexpr float kEps = 1e-4f;
+    float left = cap_ms;
+    if (left <= 0.f && !progress_ok)
+    {
+        return out;
+    }
+    out.dynamic = selectDynamic(d, std::min(kDynamicCapMs, std::max(left, 0.f)) + kEps, a_max);
+    float dyn_ms = 0.f;
+    for (uint32_t k : out.dynamic)
+    {
+        dyn_ms += dyn_cost[k];
+    }
+    if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
+    {
+        out.dynamic.clear(); // an over-cap item may only run alone, as the progress pick
+        dyn_ms = 0.f;
+    }
+    left -= dyn_ms;
+    uint32_t dyn_avatars = 0;
+    for (uint32_t k : out.dynamic)
+    {
+        dyn_avatars += dyn_draws[k];
+    }
+    // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
+    // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
+    if (!st.empty())
+    {
+        const std::vector<uint32_t> head = selectStatic(st, 0.f);
+        const float head_ms = head.empty() ? 0.f : st_cost[head[0]];
+        const uint32_t head_draws = head.empty() ? 0u : st_draws[head[0]];
+        if (head_ms <= cap_ms + kEps)
+        {
+            while (head_ms > left + kEps && !out.dynamic.empty())
+            {
+                dyn_ms -= dyn_cost[out.dynamic.back()];
+                dyn_avatars -= dyn_draws[out.dynamic.back()];
+                out.dynamic.pop_back();
+                left = cap_ms - dyn_ms;
+            }
+        }
+        else if (progress_ok && !head.empty())
+        {
+            // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
+            for (const StaticItem& it : st)
+            {
+                if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
+                {
+                    out.dynamic.clear();
+                    dyn_ms = 0.f;
+                    dyn_avatars = 0;
+                    left = cap_ms;
+                    break;
+                }
+            }
+        }
+        // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
+        // progress pick above): the dynamic layer gives up its last avatar faces for it (head_draws <= a_max); faces without avatar draws
+        // free nothing and stay
+        if (head_ms <= cap_ms + kEps || out.dynamic.empty())
+        {
+            while (head_draws + dyn_avatars > a_max && dyn_avatars > 0)
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && dyn_draws[out.dynamic[i - 1]] == 0)
+                {
+                    --i;
+                }
+                const uint32_t k = out.dynamic[i - 1];
+                dyn_ms -= dyn_cost[k];
+                dyn_avatars -= dyn_draws[k];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
+    }
+    out.fixed = selectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
+    float st_ms = 0.f;
+    for (uint32_t k : out.fixed)
+    {
+        st_ms += st_cost[k];
+    }
+    if (st_ms > left + kEps && !(progress_ok && out.dynamic.empty() && out.fixed.size() == 1))
+    {
+        // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
+        while (!out.fixed.empty() && st_ms > left + kEps)
+        {
+            st_ms -= st_cost[out.fixed.back()];
+            out.fixed.pop_back();
+        }
+    }
+    out.predicted_ms = dyn_ms + st_ms;
+    return out;
+}
+
+// The frame's spending, shared by every pool that runs a tile render in it (main thread only): a pool reads what the pools before it
+// spent and takes its cap from the rest.
+struct FrameLedger
+{
+    uint32_t frame = 0;
+    bool have = false;
+    float spent_ms = 0.f;
+    void begin(uint32_t f)
+    {
+        if (!have || f != frame)
+        {
+            frame = f;
+            have = true;
+            spent_ms = 0.f;
+        }
+    }
+    void add(float ms) { spent_ms += ms; }
+    float left(float cap_ms) const { return cap_ms - spent_ms; }
+    bool untouched() const { return spent_ms <= 0.f; }
+};
+
+// The in-frame gate of one pick under the shared cap: it runs while the measured time left is positive. The one exemption is the first
+// static pick of a frame in which nothing else rendered (`alone`: ledger untouched and no dynamic picks): the selection kept it inside
+// the cap, or it is the progress pick. A first static pick behind spent dynamic work or an earlier cache is refused.
+inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone)
+{
+    return left_ms > 0.f || (!dynamic && first_pick && alone);
+}
+
+// the one ledger of the process (main thread only); a pool begins the frame with its frame count and adds what its renders measure
+inline FrameLedger& frameLedger()
+{
+    static FrameLedger ledger;
+    return ledger;
+}
+
+// The lag of the avatar layer (P4): how many avatar faces (a lamp's tile with an avatar in its light is one face) a frame can draw,
+// and so how long the last face of a set waits. A frame draws min(A_max left after the faces drawn every frame, the dynamic CPU
+// share / the cost of one face) faces; the scheduler floors the cost of an item at kDefaultItemMs.
+inline uint32_t layerFacesPerFrame(float dynamic_cap_ms, float per_face_ms, uint32_t a_max, uint32_t every_frame_draws)
+{
+    const uint32_t spare = a_max > every_frame_draws ? a_max - every_frame_draws : 0u;
+    const float cost = itemCost(per_face_ms);
+    const float by_cpu = std::floor(dynamic_cap_ms / cost + 1e-4f);
+    const uint32_t cpu_faces = by_cpu > 0.f ? uint32_t(by_cpu) : 1u; // the progress pick: at least one face runs
+    return std::min(spare, cpu_faces);
+}
+
+// Frames until every one of `faces` faces has been drawn once, at `per_frame` a frame.
+inline uint32_t layerLagFrames(uint32_t faces, uint32_t per_frame)
+{
+    return per_frame == 0 ? 0u : (faces + per_frame - 1) / per_frame;
+}
+
+// The change feed's owners (llshadowdirtyfeed.h): which caches track, and the lamp roots each keeps, merged for the lookup. GL-free
+// and viewer-free so the unit test checks the rules. Each owner is one bit; owner indices 0 and 1 today.
+constexpr uint32_t kOwnerBits = 2;
+
+enum class OwnerEdge { Neither, First, Last };
+
+// the mask after an owner switches on or off, and the edge the feed acts on: First (the first owner on: the hooks start recording),
+// Last (the last one off: nobody reads the pending boxes any more: drop them). Another owner leaving changes neither.
+inline OwnerEdge ownerEdge(uint32_t was, uint32_t now)
+{
+    return (was == 0 && now != 0) ? OwnerEdge::First : ((was != 0 && now == 0) ? OwnerEdge::Last : OwnerEdge::Neither);
+}
+
+inline uint32_t ownerMaskAfter(uint32_t mask, uint32_t owner_bit, bool on)
+{
+    return on ? (mask | owner_bit) : (mask & ~owner_bit);
+}
+
+template <class T>
+struct OwnerLists
+{
+    std::vector<T> by[kOwnerBits];
+    std::vector<T> merged; // the sorted union
+
+    // replaces one owner's list (sorted and de-duplicated in place); true when it changed
+    bool set(uint32_t owner, std::vector<T>& list)
+    {
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
+        if (by[owner] == list)
+        {
+            return false;
+        }
+        by[owner].swap(list);
+        rebuild();
+        return true;
+    }
+    void clear(uint32_t owner)
+    {
+        by[owner].clear();
+        rebuild();
+    }
+    void clearAll()
+    {
+        for (auto& v : by)
+        {
+            v.clear();
+        }
+        merged.clear();
+    }
+    bool contains(const T& v) const { return std::binary_search(merged.begin(), merged.end(), v); }
+
+private:
+    void rebuild()
+    {
+        merged.clear();
+        for (const auto& v : by)
+        {
+            merged.insert(merged.end(), v.begin(), v.end());
+        }
+        std::sort(merged.begin(), merged.end());
+        merged.erase(std::unique(merged.begin(), merged.end()), merged.end());
+    }
+};
+
+// The frame's one save and restore of the GL state the tile renders change: the first scope saves, the last restores (a second
+// pool's update inside the same frame scope neither saves nor restores again).
+struct ScopeCounter
+{
+    int depth = 0;
+    bool enter() { return depth++ == 0; }
+    bool leave() { return --depth == 0; }
+};
 
 // The prediction of a record that has never been drawn: the running average of tile renders, but at most a quarter of the
 // static cap, so that the first average (a placeholder above the cap) does not let a cold start (login, teleport) through
 // one tile per frame; the first timed render replaces it with the record's own cost.
 inline float coldItemMs(float cost_ema_ms)
 {
-    return std::min(itemCost(cost_ema_ms), kStaticCapMs / 4.f);
+    return std::min(itemCost(cost_ema_ms), kFrameCapMs / 4.f);
 }
 
 } // namespace llprojectorpool
