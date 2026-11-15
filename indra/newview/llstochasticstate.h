@@ -34,7 +34,7 @@
 
 namespace LLStochasticEngine
 {
-    constexpr uint32_t SAMPLES = 8;      // the Stochastic shadows' rays per pixel and frame (shadow work keeps 8)
+    constexpr uint32_t SAMPLES = 8;      // the Stochastic shadows' rays per pixel and frame (shadow work keeps 8); the unit test pins it
     constexpr uint32_t TRANSPARENCY_SAMPLES = 4;   // samples of the transparency's stochastic targets, in all (Enderton et al. 2010: S = the
                                                    // multisample samples, coverage through the sample mask); the mask table's S. The shaders
                                                    // take S as a parameter (st_samples)
