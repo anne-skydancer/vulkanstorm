@@ -1159,8 +1159,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // without them the variants are not built, the method is not ready (logged) and the blended
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
     // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: it is
-    // attached to the transparency's temporal resolve and composite programs and to the Stochastic shadows' fragment resolve (whose compute resolve, A/B only,
-    // VKSTORM_STOCH_COMPUTE_RESOLVE=1, compiles its own objects).
+    // attached to the transparency's temporal resolve and composite programs and to the Stochastic shadows' fragment resolve (whose compute resolve, kept for the Vulkan renderer, compiles its own objects).
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
         mFragmentShaderObjects.erase(*helper);

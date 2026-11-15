@@ -633,7 +633,7 @@ bool LLProjectorShadows::layoutChanged()
 // One tile: the light's view (its pose now), the fixed objects into S (the static layer), then S -> L for the tile, then the avatars
 // in the light over it in L (the dynamic layer, drawAvatars). The cull frustum comes from the light's matrices. The tile's size and
 // view come from the light and the casters are held at full detail by the LOD pin (pinCasters, called from
-// LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture; the avatars are chosen by position alone.
+// LLPipeline::renderShadow), so nothing the camera does reaches the picture; the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
     SpotGeom g;
