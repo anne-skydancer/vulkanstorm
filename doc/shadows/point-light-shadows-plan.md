@@ -16,11 +16,13 @@ their light goes through walls. This plan gives every point light six cached sha
 the projector shadow pool's parts (change feed, change index, LOD pin, scheduler, PCSS filter) and looked up in the two
 deferred point-light programs.
 
-- **The pool's avatar layer (P4) is not done** [V]: avatars are still drawn into the static atlas S, and their visibility
-  follows the camera (`llprojectorshadows.cpp:645-648`, `:1059-1066`; `doc/shadows/projector-shadow-pool.md:13`, `:104-105`,
-  `:282-283`). `LOCAL_SHADOW_DYNAMIC` is declared and used nowhere (`pipeline.h:1271-1272`). No branch or PR carries P4. So
-  **P4 is stage 1 of this plan**, written so the point lights reuse it.
-- Stages: **P4** avatar layer, generic for both pools → **Q0** measure → **Q1** GL-free core → **Q2a** faces, the cheap
+- **The pool's avatar layer (P4) is done** [V]: it merged on vkstorm-devel as e7f368f1b9 (#515); its review follow-up is
+  PR #516 (`codex/projector-pool-p4-review`, not merged yet). Avatars are a dynamic layer L over the static atlas S and are
+  paired by position alone; `LOCAL_SHADOW_DYNAMIC` is in use; one combined frame cap serves all caches; tracking and lamp
+  roots are per owner; `LLLocalShadowGL::Scope` saves and restores the GL state once (`doc/shadows/projector-shadow-pool.md`,
+  "Stage P4"). The point lights reuse these parts. P4's walk session in-world is still owed, and Q2a relies on the avatar
+  layer, so it waits for that session.
+- Stages: **Q0** measure → **Q1** GL-free core → **Q2a** faces, the cheap
   tap for every lamp, avatars → **Q2b** near tier with PCSS → **Q3** cost levers. Optional **Q4** puts the cheap tap on
   forward alpha.
 - Cost, estimated, in the living room at 1440p: **0.3 to 1.2 ms** a frame in steady state, against the **1.11 ms** of
@@ -62,7 +64,7 @@ deferred point-light programs.
 | Volumes, change index | `:531` (`Pyramid`), `:578` (`makePyramid`), `:641` (`intersects`), `:778` (`TileGrid`), `:889` (`ChangeIndex`) | one pyramid per face, key = lamp key x 8 + face |
 | Fixed-layer rules | `:958` (`castsFixed`), `:968` (`hookSkips`), `:990` (`becomesMover`), `:1017` (`rebuildDirties`), `:1032` (`texturedDirties`) | as is |
 | LOD pin books | `:1049` (`PinBook`); counter on the volume (`LLVOVolume::pinLampLOD`) | a second `PinBook`; the counter is already shared |
-| Verdict and order of work | `:1174-1228` (`TileFacts`, `classifyTile`), `:1260` (`selectStatic`), `:1318` (`selectDynamic`), caps `:1364-1367` (0.35 ms static, 0.30 ms dynamic, 24 avatar draws) | merged across both pools (section 3.6) |
+| Verdict and order of work | `:1174-1228` (`TileFacts`, `classifyTile`), `:1260` (`selectStatic`), `:1318` (`selectDynamic`), caps (before P4: 0.35 ms static, 0.30 ms dynamic, 24 avatar draws; since P4 `kFrameCapMs` 0.35, `kDynamicCapMs` 0.20, `kStaticCapMs` 0.15) | shared across both pools through `selectFrame` (section 3.6) |
 | PCSS filter | `shadowStochasticUtil.glsl:262-381` (G1 block): `stSpotSetup` `:282`, `stSpotQuadTile` `:312`, `stSpotFilterTile` `:337`; caller `sampleProjectorShadow` `:385-426` | the tile is a uniform (`proj_shadow_tile`, `:269`); it must become a parameter |
 | GL half | `llprojectorshadows.cpp`: `allocateAtlases` `:172`, `freeAtlases` `:223`, `ensureAllocated` `:245`, `release` `:307`, `copyTile` `:464`, `blitTile` `:488`, `setTileOrigin` `:625`, `renderTile` `:649-757`, `pinCasters` `:920`, `update` `:949-1230`, `setupLight` `:1232`, `bindAtlas` `:1277` | atlas helpers to share (section 3.1) |
 | Pass flag | `pipeline.h:1268-1273`, `pipeline.cpp:221` | `sLocalShadowPass` and `RenderSpotLight` are already generic |
@@ -92,7 +94,8 @@ A static scene renders no tile.
 - `renderTile` saves and restores the GL state per pool (`llprojectorshadows.cpp:1164-1229`), and the caps are per pool. Two
   pools would each spend 0.35 + 0.30 ms.
 
-P4 fixes all three, because it re-divides the caps anyway.
+P4 fixed all three: one frame cap for all caches, per-owner tracking and lamp roots, one GL save and restore. The point
+pool reuses them (3.6).
 
 ### 2.3 Lifetime and threads (projector pool, the pattern to copy)
 
@@ -141,8 +144,8 @@ only on 4.6 contexts and has no other path.
 | GL-free core | `indra/newview/llpointshadowpool.h` (new), namespace `llpointpool`, reusing `llprojectorpool` types | face table and matrices, face pick, guard band, sizes per tier, demand, tier rule with hysteresis, face masks (avatar box vs face), merged schedule items |
 | GL half | `indra/newview/llpointshadows.h/.cpp` (new), class `LLPointShadows` | its own atlases S and L, records, `update`, `renderFaces`, `setupPointLight`, `setupPointBatch`, `bindAtlas`, `forget`, `pinCasters` |
 | Shared atlas helpers | `indra/newview/llshadowatlas.h/.cpp` (new, extracted from `llprojectorshadows.cpp:172-243`, `:464-499`, `:625-643`, `SavedState` `:146-153`) | the D32F pair and its framebuffers, copy, blit, tile origin, GL state save and restore. Two instances (one per pool). Alternative: duplicate the code. Rejected, because the two would drift |
-| Coordinator | `indra/newview/lllocalshadows.h/.cpp` (new, from P4) | once a frame: both pools prepare, one merged selection under shared caps, the renders, one GL state restore |
-| Change feed | `llshadowdirtyfeed.h/.cpp` | tracking becomes an owner mask (`acquireTracking(owner)`, `releaseTracking(owner)`); lamp roots kept per owner and merged for the lookup (P4) |
+| Coordinator | `indra/newview/lllocalshadows.h/.cpp` (exists since P4) | once a frame: both pools prepare, one merged selection under shared caps, the renders, one GL state restore |
+| Change feed | `llshadowdirtyfeed.h/.cpp` | tracking is an owner mask (`setTracking(owner, on)`) and lamp roots are kept per owner (`setLampRoots(owner, roots)`) since P4; the point pool adds the `Points` owner |
 | Pipeline hooks | `pipeline.cpp` | allocation and release beside `mProjectorShadows` (`:865`, `:1225-1230`, `:1547`), `forget` (`:2197`), `bindShadowMaps` (`:10148-10152`), the light loops (`:10756-10974`), `renderShadowImpl` cull and submit split (`:11596-11646`), two-sided faces (`:11625`), the update call (`:12951`) |
 | Shaders | `shadowStochasticUtil.glsl` (filter takes a tile; point lookups), `pointLightF.glsl`, `multiPointLightF.glsl` (permutation `POINT_SHADOW_POOL`, and `POINT_SHADOW_NEAR` for the near program) | |
 | Shader manager | `llviewershadermgr.cpp:1982-2003` (permutations), a near program `gDeferredPointShadowNearProgram` (`multiPointLightF`, `LIGHT_COUNT` 1), `llshadermgr.cpp:271` (the depth-common key also for `POINT_SHADOW_POOL`) | |
@@ -317,18 +320,20 @@ Atlas use [computed]:
   `add_remove`, `edit`, `mover`, `lamp`, `avatar`, `lowres`, `other`.
 - **LOD pin:** `pinCasters` over the sphere cull's groups, with the point pool's own `PinBook`. Pins are held for the lamp
   (one key per lamp) and cover everything inside the sphere box.
-- **One coordinator, shared caps (from P4):**
-  - `LLLocalShadows::update` collects the static and dynamic items of both pools; items carry the pool, the key and the
-    face mask;
-  - selection is `selectStatic` / `selectDynamic` over the merged lists. Static: never-drawn items nearest first, then
-    oldest first by frames. Dynamic: the 4-frame deadline first, then nearest by camera position;
-  - **one** static cap and **one** dynamic cap, **re-divided** (P4). Today each pool has 0.35 ms static plus 0.30 ms
-    dynamic (`llprojectorshadowpool.h:1364-1367`); naively shared by two pools that sum to 0.65 ms of CPU, against about
-    0.4 ms of headroom inside +5 %. Proposed, [E] until P4 measures: **static 0.20 ms and dynamic 0.20 ms, 0.40 ms for both
-    pools together** (the fill runs mostly when the dynamic work is idle, so the sum is rarely reached), plus `A_max`
-    avatar draws counted as face draws. P4 reports the measured sum in the club and the living room;
-  - the first pick of each pool's pending list always runs, so neither pool can starve the other. Q1 test P-7 checks this;
-  - one GL state save and restore per frame (`llprojectorshadows.cpp:1164-1229`, moved).
+- **One ledger, shared caps (implemented in P4):**
+  - the point pool joins the one frame ledger: its items go through `selectFrame` across pools, with the pool, the key and
+    the face mask on each item, and `LLLocalShadowGL::Scope` (a scope counter) saves and restores the GL state once for
+    all caches in the frame. The feed side is per owner: `setTracking(Points, on)` and `setLampRoots(Points, roots)`, so
+    the point pool neither overwrites the projectors' lamp roots nor drops their boxes;
+  - **one** combined cap: `kFrameCapMs` = **0.35 ms** for all caches together. The dynamic layer (`kDynamicCapMs` =
+    0.20 ms) is spent first; the static tiles keep at least `kStaticCapMs` = 0.15 ms, and get the whole 0.35 ms when there
+    is no dynamic work. A static tile whose predicted cost is above the cap runs alone as the progress pick once it has
+    waited 4 frames (or was never drawn). Before P4 each pool had 0.35 ms static plus 0.30 ms dynamic, which two pools
+    would have summed to 0.65 ms against about 0.4 ms of headroom inside +5 %; the combined cap holds the sum at 0.35 ms;
+  - `A_max` = 24 avatars a face, the nearest to the lamp first. P4's unit tests cover the combined cap, the progress pick
+    and the lag table; the sum measured in the club and the living room is owed to P4's walk session, then to Q2a;
+  - selection order: never-drawn static items nearest first, then oldest first; dynamic items with the 4-frame deadline
+    first, then nearest by camera position.
 - **Moving lamps** (rare: a scripted lamp, an animated fixture). A dynamic item redraws its faces under the dynamic cap,
   with the lookup built from the pose the faces were drawn with, so a lagging shadow stays coherent. This is the projectors'
   D10 rule.
@@ -338,7 +343,7 @@ Atlas use [computed]:
 
 ### 3.7 The avatar layer for point lights (owner decision 4)
 
-P4 sets up the layer for both pools: S holds the fixed layer, and L is S plus the avatars drawn over it. For points:
+P4 built the layer for the projector pool and the point pool reuses it: S holds the fixed layer, and L is S plus the avatars drawn over it. For points:
 
 - **Pairing, camera-independent:** every eligible avatar (`LLCharacter::sInstances`; not dead, muted, jelly-dolled, too
   slow or invisible), with its box tested against each face pyramid of each lamp within reach. The result is a face mask
@@ -347,24 +352,28 @@ P4 sets up the layer for both pools: S holds the fixed layer, and L is S plus th
   render types only, two-sided). When the avatar leaves, one restore copy S → L.
 - **Order** under the shared dynamic cap:
   1. the near-tier lamps' avatar faces every frame;
-  2. projector tiles with an avatar every frame (the P4 rule);
+  2. projector tiles with an avatar every frame (the P4 rule: the nearest faces by the camera's position every frame);
   3. the far lamps' faces round-robin, oldest first, with the 4-frame deadline.
-- **Lag** of a far lamp's avatar shadow [E, an estimate until P4 and Q2a measure it]: `ceil(far faces / spare draws)`
-  frames, where **spare = min(`A_max` spare, CPU cap / per-face cost)**. `A_max` spare is `A_max` minus the every-frame
-  draws (2 near lamps x 3 faces + 2 projector tiles = 8). The CPU term is what the dynamic cap leaves after those 8 draws:
-  `dynamic cap / c - 8` draws, with `c` the CPU cost of one avatar-face draw. `c` is not measured (the projector tile costs
-  0.07 ms with its cull and sort; an avatar-only face draw skips most of that), so the table takes 0.01 and 0.02 ms [E] with
-  the proposed 0.20 ms dynamic cap (20 and 10 draws a frame, so 12 and 2 spare). Two faces per avatar and far lamp, so
-  10 / 20 / 55 lamps are 20 / 40 / 110 faces. Frames, and ms at 60 fps:
+- **Lag** of a far lamp's avatar shadow, from P4's numbers [E, an estimate until the walk session and Q2a measure it]: an
+  avatar face costs about **0.04 ms** of CPU [E] (the pool spec's 0.04 to 0.15 ms for 1 to 4 avatar draws); the scheduler
+  predicts every item at no less than a **0.05 ms floor** (`kDefaultItemMs`), then at the item's own last measured cost.
+  The 0.20 ms dynamic share therefore holds **4 faces per frame**, and at most `A_max` = 24 avatars draw per face, nearest
+  first. The wait of the last face of a set is `ceil(faces / 4)` frames, the nearest faces being served every frame and the
+  rest by the 4-frame deadline, oldest first. Two faces per avatar and far lamp, so 10 / 20 / 55 lamps are 20 / 40 / 110
+  faces. Faces drawn every frame (2 near lamps x 3 faces + 2 projector tiles = 8) count against the same 4 a frame, so the
+  table is a best case, without that share:
 
-  | Avatar in far spheres | spare 2 (`A_max` 12 or 24, c = 0.02 ms) | spare 4 (`A_max` 12, c = 0.01 ms) | spare 12 (`A_max` 24, c = 0.01 ms) |
+  | Faces with an avatar | frames | ms at 60 fps | ms at 120 fps |
   |---|---|---|---|
-  | 10 | 10 / 167 ms | 5 / 83 ms | 2 / 33 ms |
-  | 20 | 20 / 333 ms | 10 / 167 ms | 4 / 67 ms |
-  | 55 | 55 / 917 ms | 28 / 467 ms | 10 / 167 ms |
+  | 4 | 1 | 17 | 8 |
+  | 8 | 2 | 33 | 17 |
+  | 12 | 3 | 50 | 25 |
+  | 24 | 6 | 100 | 50 |
+  | 40 (20 far lamps) | 10 | 167 | 83 |
+  | 110 (55 far lamps) | 28 | 467 | 233 |
 
-  The earlier table used `A_max` alone and so assumed the CPU cap would not bind. At c = 0.02 ms it does, and it caps the
-  spare at 2 whatever `A_max` is.
+  The first four rows are P4's table; the last two extend it with the same formula. If the in-world lag is too long, the
+  levers are a lower per-face cost (a measured `lastAvatarMs` below the 0.05 ms floor) or a bigger dynamic share.
 
 - **GPU cost per avatar face draw:** 0.012 ms at 146k triangles by the pool's 0.08 ms per Mtri, up to the 0.037 ms measured
   for a 2048 projector view [M, pool spec]. So `A_max` = 24 costs 0.3 to 0.9 ms of GPU while the avatar is under many
@@ -441,14 +450,14 @@ The headroom inside the owner's rooms is unknown; Q0 measures it.
 
 | Stage | GPU ms | CPU ms | Memory | Basis |
 |---|---|---|---|---|
-| P4 | 0.04 to 0.15 while an avatar stands under projectors (1 to 4 avatar draws); 0 otherwise | ≤ 0.20 (re-divided dynamic cap, 3.6) while an avatar is under a lamp; off-screen animation of paired avatars: unknown, measured | 0 | pool spec measurements [M], cap by construction |
+| P4 (done, #515) | 0.04 to 0.15 while an avatar stands under projectors (1 to 4 avatar draws); 0 otherwise | ≤ 0.20 (`kDynamicCapMs`, inside the 0.35 ms combined cap, 3.6) while an avatar is under a lamp; off-screen animation of paired avatars: unknown, measured in P4's walk session | 0 | pool spec measurements [M], cap by construction |
 | Q0 | 0 in release (development hooks only) | census only on request | 0 | |
 | Q1 | 0 | 0 | 0 | header and tests |
 | Q2a lookup, 53 far lamps | 0.16 to 0.31 (20 to 40 % coverage each, x 0.004 ms per lit Mpx) | < 0.05 (pose reads, uniforms) | **+128 MiB** (two 4096² D32F) | bench [M, lower bound: synthetic room, receiver-plane term stubbed, NVIDIA only] x coverage [E, a guess: the far-lamp coverage factor of 20 to 40 % is not measured] |
 | LOD pin on all lamps' spheres (every lamp, D2 of 2026-11-14) | unknown: a lamp over a dense room pins that room at full LOD in the main view too (up to the extra triangles `pinned_triangles` counts) | pin and unpin bookkeeping per lamp, < 0.05 | 0 | not estimated: Q0 measures it (3.10) |
-| Q2a avatar faces | 0.1 to 0.3 while the avatar is in lamp spheres (cap) | inside the shared 0.20 | 0 | 3.7 |
+| Q2a avatar faces | 0.1 to 0.3 while the avatar is in lamp spheres (cap) | inside the shared dynamic 0.20 | 0 | 3.7 |
 | Q2a static faces | 0 per frame after the fill | 0 | | P3 design |
-| Q2a fill transient | up to 0.1 to 1.2 per frame for 0.3 to 2.5 s | ≤ 0.20 per frame (static cap, 3.6; the fill lasts longer than the 0.3 to 2.5 s of the earlier 0.35 ms cap, about 1.75x) | | A: vertex x 6 at 0.08 ms per Mtri |
+| Q2a fill transient | up to 0.1 to 1.2 per frame for 0.3 to 2.5 s | ≤ 0.35 per frame (`kFrameCapMs`, 3.6; the static floor is 0.15 ms while dynamic work runs, and the fill takes the whole 0.35 ms when the dynamic layer is idle, so it lasts the 0.3 to 2.5 s above and only longer while avatars are drawn) | | A: vertex x 6 at 0.08 ms per Mtri |
 | Q2b, 2 near lamps | +0.06 to +0.38 (0.19 ms full-screen each x 15 to 100 % coverage) | ~0 | 0 (faces counted above) | bench [M] x coverage [E] |
 | Q3 | −11 % (4 lamps) to −27 % (one lamp) of the lookup for min/max [M offline]; the other levers unknown | +a fragment min/max pass per face draw (small faces: under 0.01 ms [E]) | +2 MiB (RG32F, 1/8 resolution of L) | 2026-11-14 bench |
 | Q4 (optional) | alpha pixels x 7 x 0.004 ms per Mpx | ~0 | 0 | |
@@ -494,7 +503,7 @@ at a time, one review round (reviewer + auditor → coder → checker).
 
 | Stage | Scope | Files | Tests and gates | Performance gate (1440p) | Owner check | Effort (calibrated) |
 |---|---|---|---|---|---|---|
-| **P4** Avatar layer (both pools) | S/L split: static renders without avatar types, avatars into L under `LOCAL_SHADOW_DYNAMIC`, restore copies; camera-independent pairing; paired avatars marked visible (attachments, full motion); impostors drawn in full in the dynamic pass (`lldrawpoolavatar.cpp:389`, `pipeline.cpp:3232`, `lldrawable.cpp:1543`, plus every `isImpostor()` site the coder lists: `lldrawable.cpp:1636` and others); coordinator with shared caps, re-divided to static 0.20 + dynamic 0.20 ms for both pools (3.6); feed tracking owner mask and per-owner lamp roots | `llprojectorshadows.*`, `llprojectorshadowpool.h`, `lllocalshadows.*` (new), `llshadowdirtyfeed.*`, `pipeline.cpp/.h`, `lldrawpoolavatar.cpp`, `lldrawable.cpp` | unit: merged selection never starves, avatar draws ≤ `A_max`; spec gates: an avatar under 3 lamps casts every frame (nearest) and within 4 frames (far); an impostored avatar casts; an avatar behind the camera casts in pose; O-1, O-2, O-6 pass; Legacy guards | frame in the club and the living room within 82178 + 5 %; static plus dynamic CPU ≤ 0.40 ms for both pools together; report off-screen animation cost, the CPU of an avatar-only `renderShadow` (this is `c`, 3.7), GPU per avatar draw | walk under 3 lamps; a dancer under club lights | 3 to 6 h |
+| ~~P4~~ Avatar layer (both pools) | **Done**: merged as e7f368f1b9 (#515); review follow-up #516 pending. Owed: the walk session in-world (a walk under 3 lamps, a dancer under club lights) before Q2a relies on the avatar layer | | | | | |
 | **Q0** Measure | census (3.10); `local lights` pass scope; `point_faces_bench.py`; `bench_point_lookup.py` into `scripts/shadows/` and run again on devel, with the receiver-plane term real and, if a card is available, on AMD or Intel; the LOD-pin measurement on all lamps' spheres (3.10); budget page `doc/shadows/point-shadow-budget.md` with empty tables | `llprojectorshadowstatsapi.cpp`, `pipeline.cpp/.h` (stats accessor, scope), scripts | `check_release_hooks.py` on the release-bound diff; benches on an idle GPU | adds nothing to a release frame | session: living room, bedroom, outside (frame, census, coverage) | 2 to 3 h + session |
 | **Q1** GL-free core | `llpointpool`: face table and matrices, pick with ties, guard band per tier, sizes and demand, tier rule with hysteresis, face masks, merged items, lag accounting; the GLSL twin of the face pick | `llpointshadowpool.h`, `tests/llpointshadowpool_test.cpp`, ci-checks step, `scripts/shadows/point_faces_g1.py` | P-1 pick against brute force on 10⁶ directions with exact ties; P-2 every tap of a seam receiver stays inside its tile for each tier's kmax, with both the face pick and the lookup taken from the normal-offset position (3.2); **P-8 emitter exclusion by identity**: for a long thin emitter, a rotated emitter and a large panel emitter, the emitter prim casts nothing into its own lamp, while an adjacent linked prim whose box overlaps the emitter's box still casts (a near-plane cut fails this); **P-9 pose key**: a prim spinning about any axis keeps the same pose key every frame; P-3 hysteresis never oscillates on a recorded walk, invariant under camera rotation; P-4 capacity (256 lamps at the floor ≤ 40 % of 4096); P-5 an upgrade keeps old faces until six new are drawn; P-6 lag bound; P-7 no pool starves; **G1-P**: GLSL face pick, uv and depth equal the C++ on shared vectors (pick exact, uv and depth ≤ 1 ulp) | none at runtime | — | 1.5 to 3 h |
 | **Q2a** Faces, cheap tap, avatars | `LLPointShadows` (atlases through `llshadowatlas`, sphere cull + mask submits, two-sided, emitter exclusion by identity, pins, S → L, avatar faces); filter refactor; `samplePointShadow` cheap tier; `pointLightF` and batch permutations; uniforms and binding; stats | `llpointshadows.*`, `llshadowatlas.*`, `pipeline.cpp/.h`, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `llviewershadermgr.cpp`, `llshadermgr.cpp`, `check_legacy_glsl.py` | G1 stays max abs 0 (projectors); G1-P extended to the lookup (atlas against a standalone face); Legacy guards; program count and link time before and after (3.1); static scene: 0 face renders a frame after the fill; O-1 style orbit on point faces (CRC unchanged while the camera orbits); light stops at a test wall; method and detail switches, window toggle, quit without GL errors; smoke launch | living room within 82178 + 5 %, the lookup ≤ 0.35 ms GPU, per-frame CPU ≤ 0.05 ms in a static scene; fill time and avatar lag reported | Release in-world: the living room (bleeding gone), walk for avatar shadows | 4 to 8 h |
@@ -502,7 +511,7 @@ at a time, one review round (reviewer + auditor → coder → checker).
 | **Q3** Levers | (a) hierarchical min/max early-out, a fragment pass per face draw, exact; (b) empty-face skip (a face with no caster: no sampling); (c) two-tier filter refinement: the near tier's lighter filter (8 + 16 taps) beyond a position-based distance with hysteresis (pool P5a); (d) importance skip: no lookup where the lamp's contribution is under one 8-bit step; (e) single-face perspective cull for one-face redraws. Only the ones Q2 shows are needed | shaders, `llpointshadows.cpp` | (a) and (b): image difference 0; (c) and (d): measured image change, penumbra at N and N/2 | each lever's gain measured; total within +5 % | — | 2 to 4 h |
 | **Q4** (optional) Forward alpha | cheap tap in the 7 forward slots | forward shaders, `setupHWLights` | Legacy GLSL guard for the forward shaders; alpha in a lamp room against the deferred surface behind it | measured | glass and hair in the living room | 1 to 2 h |
 
-**Total:** about 15 to 30 h of pipeline time, two to three days of wall clock, plus sessions for P4, Q0 and Q2.
+**Total:** about 12 to 24 h of pipeline time still to go (P4 is done), plus P4's walk session and the sessions for Q0 and Q2.
 
 ## 8. Decisions
 
@@ -570,8 +579,8 @@ P2 5–7 d and P3 6–8 d: **14.5 to 19 days**. Git on `vkstorm-devel` (dates 20
 **S0 to P3: about 19 hours of wall clock**, an owner session and the measured frame (19:34) included. P3 alone, specified at
 6 to 8 days, took about 2 hours from its first commit to its review round. So one specified day is about one hour of this
 pipeline. The stochastic transparency port (2026-11-04 to 11-06, about two days against a 16 to 25 day estimate) points the
-same way. The 2026-11-14 summary's 13 to 17 days for Q0 to Q3 corresponds to about 13 to 17 hours. With P4 and the
-optional Q4 added, this plan's total is **15 to 30 hours**. Viewer builds (one at a time on the owner's PC) and owner
+same way. The 2026-11-14 summary's 13 to 17 days for Q0 to Q3 corresponds to about 13 to 17 hours. With P4 done and the
+optional Q4 added, this plan's remaining total is **12 to 24 hours**. Viewer builds (one at a time on the owner's PC) and owner
 sessions come on top.
 
 ## 11. References and licences
