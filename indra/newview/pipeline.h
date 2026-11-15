@@ -443,6 +443,10 @@ public:
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history (and the fragment path's averaged-samples target) freed
+    // passes that hold fewer samples than S run as iterations: the temporal accumulation measures each one's lanes (the moments
+    // and the depth range, added across the iterations) instead of summing the lanes of different iterations
+    bool alphaStochasticMeasuredPerIteration() const { return mAlphaSTMomFBO && mAlphaSTHistory.temporal() && getAlphaStochasticIterations() > 1; }
+    void measureAlphaStochasticIteration(U32 iteration); // after an iteration's accumulation: its moments added to the moment targets, the accumulation cleared
     void resolveAlphaStochasticTemporal();  // this frame's accumulation measured for its grain, blended with the last frame's and smoothed (three fragment passes)
     bool alphaStochasticResolveReady() const; // the selected resolve's programs are built
     U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
@@ -819,7 +823,7 @@ public:
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
-    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 4 samples in all; the
+    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 8 samples in all; the
     // engine's mask table is held (mAlphaSTMasksHeld) while they are. All counted in the texture memory.
     U32 mAlphaSTFBO = 0;
     U32 mAlphaSTAccum = 0;
@@ -837,6 +841,13 @@ public:
     LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F, 1.f / 8.f, GL_RG16F };
     U32 mAlphaSTCurrent = 0;
     U32 mAlphaSTAux = 0;
+    // only where a pass holds fewer samples than S (2 or 4 of the 8): the moments of the iterations, measured one by one
+    // (RGBA32F sums of alpha x colour and alpha, RGBA32F sums of the squares over alpha and of alpha squared, RG16F
+    // 1 - nearest depth and farthest depth - 1), 36 B/px; a single pass of 8 has none
+    U32 mAlphaSTMomSum = 0;
+    U32 mAlphaSTMomSquares = 0;
+    U32 mAlphaSTMomDepth = 0;
+    U32 mAlphaSTMomFBO = 0;
     U32 mAlphaSTCurrentFBO = 0;    // mAlphaSTCurrent, mAlphaSTAux
     U32 mAlphaSTSmoothFBO = 0;     // mAlphaSTCurrent alone
     F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)

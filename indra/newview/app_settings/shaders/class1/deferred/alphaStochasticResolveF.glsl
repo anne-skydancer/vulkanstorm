@@ -39,7 +39,7 @@ out vec4 frag_data[2];   // 0: the history's colour (RGBA16F), 1: (total alpha, 
 //     where the history helped.
 // The history keeps this engine's format: the four-vector (alpha x colour, alpha), the alpha correction (total alpha
 // over the blended alpha) made at the composite, with this frame's total alpha so that an alpha change is never
-// ghosted. #3663 stores the corrected colour; offline that made the low-frequency error twice as large at S = 4.
+// ghosted. #3663 stores the corrected colour; offline that made the low-frequency error twice as large (measured offline at S = 4).
 // The last frame's total alpha is the second target of the history (RG16F, with the part left out).
 
 uniform sampler2D   alpha_st_current;  // this frame's averaged accumulation (RGBA16F)
