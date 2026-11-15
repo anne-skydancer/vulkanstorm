@@ -185,6 +185,7 @@ FACE_VP_ARR = (F*96)(*[x for m in FACE_VP for row in m for x in row])      # row
 PLANES = [np.array(M.frustum_planes(vp), dtype=np.float64) for vp in FACE_VP]
 TILE_MAPS = [M.tile_map(f) for f in range(6)]
 # the face list buffer: for every mask 0..63 the faces in it; baseinstance = FACE_OFF[mask]
+POPC = [M.popcount(_i) for _i in range(64)]  # per-draw popcount as a table lookup, so D' does the same Python work as D
 FACE_OFF = []; _flat = []
 for _m in range(64):
     FACE_OFF.append(len(_flat)); _flat.extend(M.mask_faces(_m))
@@ -461,7 +462,7 @@ def submit(method, g, sc, mask, size):
                 g.bind_vao(d.group.vao); cur = d.group
             if not sc.skinned:
                 g.umat(L['uModel'], 1, 0, d.model)
-            g.draw_inst_base(GL_TRIANGLES, d.count, GL_UINT, d.offset, M.popcount(em), FACE_OFF[em])
+            g.draw_inst_base(GL_TRIANGLES, d.count, GL_UINT, d.offset, POPC[em], FACE_OFF[em])
     elif method == 'E':
         L = begin(g, 'E', sc)
         groups = list(dict.fromkeys(d.group for d, _ in cull(sc)))
@@ -606,24 +607,28 @@ def main():
             for mn in ([6] if straddle else MASK_N):
                 mask = M.MASKS[mn]
                 methods = STRADDLE_METHODS if straddle else METHODS
-                waited = wait_quiet()
-                started = time.strftime('%H:%M:%S')
-                ref = None; checks = {}
-                for m in methods:
-                    run_once(m, sc, mask, atlas); img = atlas.readback()
-                    if ref is None:
-                        ref = img
-                    checks[m] = compare(ref, img) if m != 'A' else {'exact': True, 'ok': True, 'covered_texels': int((img < 1).sum())}
-                cpu, gpu = timing(methods, sc, mask, atlas)
-                row = {'scene': scene, 'triangles': sc.tris, 'draws': len(sc.draws), 'groups': len(sc.groups), 'size': size,
-                       'mask_faces': mn, 'group_hist': sc.group_hist[1:], 'waited_quiet_s': waited, 'started': started,
-                       'methods': {}}
-                for m in methods:
-                    calls, draws_ = call_counts(m, sc, mask, size)
-                    row['methods'][m] = {'cpu_ms': M.median(cpu[m]), 'cpu_min': min(cpu[m]), 'cpu_max': max(cpu[m]),
-                                         'gpu_ms': M.median(gpu[m]), 'gpu_min': min(gpu[m]), 'gpu_max': max(gpu[m]),
-                                         'gl_calls': calls, 'draw_calls': draws_, 'check': checks[m]}
-                row['busy_after'] = busy_processes(); row['finished'] = time.strftime('%H:%M:%S')
+                for attempt in range(5):
+                    waited = wait_quiet()
+                    started = time.strftime('%H:%M:%S')
+                    ref = None; checks = {}
+                    for m in methods:
+                        run_once(m, sc, mask, atlas); img = atlas.readback()
+                        if ref is None:
+                            ref = img
+                        checks[m] = compare(ref, img) if m != 'A' else {'exact': True, 'ok': True, 'covered_texels': int((img < 1).sum())}
+                    cpu, gpu = timing(methods, sc, mask, atlas)
+                    row = {'scene': scene, 'triangles': sc.tris, 'draws': len(sc.draws), 'groups': len(sc.groups), 'size': size,
+                           'mask_faces': mn, 'group_hist': sc.group_hist[1:], 'waited_quiet_s': waited, 'started': started,
+                           'methods': {}}
+                    for m in methods:
+                        calls, draws_ = call_counts(m, sc, mask, size)
+                        row['methods'][m] = {'cpu_ms': M.median(cpu[m]), 'cpu_min': min(cpu[m]), 'cpu_max': max(cpu[m]),
+                                             'gpu_ms': M.median(gpu[m]), 'gpu_min': min(gpu[m]), 'gpu_max': max(gpu[m]),
+                                             'gl_calls': calls, 'draw_calls': draws_, 'check': checks[m]}
+                    row['busy_after'] = busy_processes(); row['finished'] = time.strftime('%H:%M:%S')
+                    if not row['busy_after']:
+                        break
+                    print('busy after timing, retiming', row['busy_after'], flush=True)
                 with out.open('a') as fh:
                     fh.write(json.dumps(row) + '\n')
                 print(scene, size, mn, ' '.join('%s cpu %.2f gpu %.3f %s' % (m, row['methods'][m]['cpu_ms'], row['methods'][m]['gpu_ms'],
@@ -633,4 +638,5 @@ def main():
     print('done', flush=True)
 
 
-main()
+if __name__ == '__main__':
+    main()

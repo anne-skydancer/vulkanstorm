@@ -37,7 +37,7 @@ def ratio_table(rows, scenes, key, num, den, size):
         cells = []
         for k in (1, 2, 3, 6):
             r = [x for x in rows if x['scene'] == s and x['size'] == size and x['mask_faces'] == k]
-            cells.append('%.2f' % (r[0]['methods'][den][key]/r[0]['methods'][num][key]) if r else '')
+            cells.append('%.2f' % (r[0]['methods'][num][key]/r[0]['methods'][den][key]) if r else '')
         out.append('| %s | ' % s + ' | '.join(cells) + ' |')
     return '\n'.join(out)
 
@@ -82,8 +82,10 @@ def main(path):
             print(' | '.join('%s %d (%d)' % (LABEL[m], v['gl_calls'], v['draw_calls']) for m, v in r6[0]['methods'].items()))
     print('\n### Equal work\n'); print(checks(rows))
     plain = [s for s in scenes if not s.startswith('straddle')]
-    print("\n### CPU ratio A / D'\n"); print(ratio_table(rows, plain, 'cpu_ms', 'Dp', 'A', 256))
-    print("\n### GPU ratio D' / A (above 1 means D' is slower)\n"); print(ratio_table(rows, plain, 'gpu_ms', 'A', 'Dp', 256))
+    print("\n### CPU ratio A / D'\n"); print(ratio_table(rows, plain, 'cpu_ms', 'A', 'Dp', 256))
+    print("\n### GPU ratio D' / A (above 1 means D' is slower)\n"); print(ratio_table(rows, plain, 'gpu_ms', 'Dp', 'A', 256))
+    print("\n### CPU ratio A+masks / D'+masks\n"); print(ratio_table(rows, plain, 'cpu_ms', 'A_gm', 'Dp_gm', 256))
+    print("\n### GPU ratio D'+masks / A+masks (above 1 means D' is slower)\n"); print(ratio_table(rows, plain, 'gpu_ms', 'Dp_gm', 'A_gm', 256))
 
 
 if __name__ == '__main__':

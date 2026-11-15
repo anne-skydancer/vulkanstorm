@@ -5,7 +5,6 @@ face masks, the face matrices, the per-group box test against the six face frust
 affine tile map and clip planes of method D'."""
 from pathlib import Path
 import importlib.util
-import math
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
