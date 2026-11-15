@@ -1,5 +1,10 @@
 # Projector shadow pool
 
+> Development-only parts: the LEAP API `ProjectorShadows.stats` (`llprojectorshadowstatsapi`), `ProjectorShadowStats`, the `VKS_GL_STATS` hooks,
+> `scripts/inworld/projector_orbit_check.py` and `doc/shadows/projector-pool-budget.md`, which this page names, exist on `vkstorm-devel` only,
+> not on release, canary or rust. Read those mentions as a description of devel. The pool's counters (`LLProjectorShadows::Stats`) are collected
+> in the pool code, but only the devel stats API reads them.
+
 Spec: `reports/projector-pool-2026-11-13/design-final.md` (sections 3 to 9). This page says what is built, stage by stage. The
 pool is the Stochastic method's (`RenderShadowMethod` 2) projector shadow when `RenderShadowDetail` is 2 (sun and projectors).
 Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shadows/check_legacy_shadows.py`,
