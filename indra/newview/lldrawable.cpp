@@ -44,6 +44,7 @@
 #include "llviewerregion.h"
 #include "llvolume.h"
 #include "llvoavatar.h"
+#include "llviewercontrol.h"
 #include "llvovolume.h"
 #include "llvosurfacepatch.h" // for debugging
 #include "llworld.h"
@@ -1552,7 +1553,12 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
                 // <Vulkanstorm> the local shadows' avatar layer is chosen by the lamp's position: the camera's visibility of the
                 // avatar, its age and its impostor flag do not apply (an impostored avatar casts in full)
                 const bool layer = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC;
-                if (layer || avatarp->isVisible())
+                // the non-camera exclusions stay (the pairing and renderShadow apply them to the body): friends-only, and a jelly doll
+                // or invisible avatar (RLV silhouette, derendered, too complex)
+                static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
+                const bool layer_ok = layer && avatarp->getOverallAppearance() == LLVOAvatar::AOA_NORMAL &&
+                    (!friends_only() || avatarp->isControlAvatar() || avatarp->isSelf() || avatarp->isBuddy());
+                if (layer_ok || (!layer && avatarp->isVisible()))
                 {
                     impostor = !layer && objparent->isAvatar() && !LLPipeline::sImpostorRender && ((LLVOAvatar*) objparent)->isImpostor();
                     loaded   = objparent->isAvatar() && ((LLVOAvatar*) objparent)->isFullyLoaded();
