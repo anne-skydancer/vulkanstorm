@@ -252,7 +252,7 @@ Hair on a fractional pan (S10) is not better than its plain 8 samples in rmse (4
 The first frame and the frames where the history is left out (a total alpha change, a far layer sliding) are smoothed: after an
 alpha change at frame 24 the first frame reads 0.45 against 0.75 without history. The smooth's reach was cut from the PR's 2 to 0.5 (reach 2: T3 static 3.41).
 The harness checks that one layer has zero grain and takes no history, that two layers have grain, and that the history is left out when the total alpha changes (1.00 of the pixels) or the far layer slides 2 px (0.90; 0 at 0 and 0.1 px).
-The gain is the resolve, not the dither: the plain 8 samples with the new dither are as noisy as before (T3 3.73 against 3.63, Q10 5.50 against 5.48: not a gain); no A/B of the dither alone was run.
+The gain is the resolve, not the dither: the plain 8 samples with the new dither are as noisy as before (T3 3.73 against 3.63, Q10 5.50 against 5.48: not a gain); the dither alone is measured in the A/B below (static convergence only).
 
 **The mask and the folded smooth are exact.** `test_alpha_stochastic.py` runs the new passes and the passes of git `c121dc100c` (unmasked blend, a smooth of its own) side by side over two sequences of 22 frames, static and with a 1.3, 0.7 px pan: nothing, transparency appearing, moving, scattered (hair in the middle, a window in a corner, an alpha 0 face with only a glow, a face too faint to move the half-float transparency), gone the next frame, back elsewhere, everything, nothing. Every frame the image, both history textures, both of the last total alpha and part left out, and the aux target are equal bit for bit (`np.array_equal`). The test has teeth: without the glow clause in the mask the glow-only face fails it.
 
@@ -264,6 +264,91 @@ move together; the harness has no translating walk-through of a partly covering 
 NaN injection against the old pipeline (a NaN colour over 16 of 256 columns for 6 frames, then 33 clean frames): no value that is not finite in the image either before or after for this layout (the old clamp of the history
 to the 3 x 3 box happened to drop it from the image), but the old pipeline's accumulation and history held 4096 and 8192 non-finite values after the injected frames and the upgrade held none; the upgrade holds at every stage for the harness's six injection forms.
 The measuring pass zeroes a NaN and clamps an infinity before the blend, so the guards in the Catmull-Rom taps and the 3 x 3 box cannot be reached through this pipeline; they are defence in depth for a producer that does not measure first (and the Stochastic shadows' resolve, which shares `stochasticResolveUtilF.glsl`, now bit-tests its 16 taps too: identical for finite data, one test per tap more).
+
+### Dither A/B (offline, 2026-11-15)
+
+Question: what do the blue-noise tile and the golden-ratio step of the frame, the dither that shipped with the upgrade, gain over a hashed dither? Measured offline, with the viewer's shaders, S = 8, the shipping resolve, NaN guard and tile mask. Hardware for every number [M]: GL 4.6.0 NVIDIA 621.14, NVIDIA GeForce RTX 5070 Ti.
+
+The script that ran it (`ab_stochastic_dither.py`) is **not in the repository**: it is session tooling, kept off-tree. The method is stated here so it can be redone.
+
+- **Harness.** The shared blocks of `scripts/perf/test_alpha_stochastic.py` (the pan scenes, the sorted-alpha reference, the temporal history and the grain resolve), run at 256 x 144. The engine's `stochasticSampleF.glsl` is source-patched per variant (the script asserts that every patch changed the source); each variant is its own program, and all other passes are the shipping ones. The reference is sorted alpha at the same position.
+- **Variants.**
+  - **a**: white everywhere. The dither xi is a hash of face seed, pixel and frame; the mask subset is hashed as in b. This is the hashed dither the viewer used before the upgrade.
+  - **b0**: the blue-noise tile and the per-face offset, with a white (hashed) per-frame offset instead of the golden step.
+  - **b**: the shipping dither: blue tile, face offset and the golden-ratio step of the frame (`frame * 0x9e3779b9`); the mask subset is hashed afresh every frame.
+  - **c**: b, and a golden step on the subset too: the subset column is a per-fragment start (hash of face seed and pixel, constant over frames) plus `frame * 1265` mod 2048 (1265 is about 2048 times the golden fraction), instead of a fresh hash.
+- **Scenes.** T3 (3 textured layers), Q10 (10 textured layers), S10 (10 layers of hair strips), SC (scattered: the first six layers of S10 cut to a central rectangle of 40 % x 55 % of the frame, and the first two layers of Q10, shifted 0.01 in depth, as a window in the top-right corner; the layers and the reference are drawn only inside their rectangles).
+- **Runs.** Each scene 6 times (other layer seeds, offset 17 per run, and another frame base, 1000 per run), 40 frames after a history reset. A run's figure is the mean of frames 33 to 40 (the converged state); the tables give mean +- sd over the 6 runs. The same runs feed all four variants, so the differences are paired per run. Cases: static; pan 0.5, 0 px and 1.3, 0.7 px a frame (reprojected); surfaces moving 0.5 and 2 px a frame (not reprojected: ghosting).
+- **Metrics.** rmse/255 of the resolved image against the sorted reference, and the same after a 1.5 px Gaussian (the low-pass error, closer to what the eye sees). Convergence is the error at frames 1, 2, 4, 8 and 16 after the reset, static (the low-pass error at frames 1, 4 and 16).
+
+Resolved rmse/255, static, mean of frames 33-40 (lower is better):
+
+| scene | a | b0 | b (ships) | c |
+|---|---|---|---|---|
+| T3 | 0.948 +- 0.005 | 0.903 +- 0.045 | 0.795 +- 0.006 | 0.792 +- 0.006 |
+| Q10 | 1.554 +- 0.007 | 1.541 +- 0.015 | 1.520 +- 0.010 | 1.517 +- 0.008 |
+| S10 | 1.348 +- 0.005 | 1.342 +- 0.012 | 1.321 +- 0.005 | 1.316 +- 0.008 |
+| SC | 0.660 +- 0.009 | 0.657 +- 0.006 | 0.644 +- 0.008 | 0.646 +- 0.005 |
+
+Low-pass error/255, static, frames 33-40:
+
+| scene | a | b0 | b (ships) | c |
+|---|---|---|---|---|
+| T3 | 0.187 +- 0.003 | 0.163 +- 0.004 | 0.161 +- 0.005 | 0.160 +- 0.005 |
+| Q10 | 0.304 +- 0.004 | 0.299 +- 0.003 | 0.296 +- 0.003 | 0.296 +- 0.004 |
+| S10 | 0.266 +- 0.004 | 0.263 +- 0.001 | 0.259 +- 0.002 | 0.259 +- 0.005 |
+| SC | 0.136 +- 0.005 | 0.134 +- 0.001 | 0.135 +- 0.004 | 0.135 +- 0.002 |
+
+Resolved rmse/255, pan 0.5, 0 px (frames 33-40):
+
+| scene | a | b0 | b (ships) | c |
+|---|---|---|---|---|
+| T3 | 2.137 +- 0.004 | 2.136 +- 0.006 | 2.117 +- 0.012 | 2.117 +- 0.009 |
+| Q10 | 3.410 +- 0.006 | 3.409 +- 0.011 | 3.403 +- 0.007 | 3.408 +- 0.008 |
+| S10 | 5.046 +- 0.005 | 5.047 +- 0.006 | 5.045 +- 0.004 | 5.046 +- 0.006 |
+| SC | 2.395 +- 0.006 | 2.394 +- 0.005 | 2.391 +- 0.007 | 2.395 +- 0.008 |
+
+Resolved rmse/255, pan 1.3, 0.7 px (frames 33-40):
+
+| scene | a | b0 | b (ships) | c |
+|---|---|---|---|---|
+| T3 | 2.390 +- 0.004 | 2.386 +- 0.009 | 2.389 +- 0.006 | 2.388 +- 0.005 |
+| Q10 | 3.527 +- 0.007 | 3.526 +- 0.009 | 3.522 +- 0.009 | 3.525 +- 0.009 |
+| S10 | 4.781 +- 0.005 | 4.777 +- 0.007 | 4.778 +- 0.005 | 4.776 +- 0.003 |
+| SC | 2.170 +- 0.006 | 2.166 +- 0.009 | 2.167 +- 0.008 | 2.165 +- 0.004 |
+
+The low-pass error under both pans differs by at most 0.01 between variants (T3, a / b0 / b / c: 0.464 / 0.456 / 0.456 / 0.456 at 0.5, 0 px; 0.546 / 0.539 / 0.539 / 0.540 at 1.3, 0.7 px). The ghosting of surfaces moving 0.5 and 2 px without the camera is the same in the four variants to within 0.015 in every scene (rmse, T3 a / b0 / b / c: 15.446 / 15.445 / 15.435 / 15.435 at 0.5 px, 18.313 / 18.325 / 18.312 / 18.313 at 2 px).
+
+Convergence after a history reset, static, resolved rmse/255 (a / b0 / b / c):
+
+| scene | frame 1 | frame 2 | frame 4 | frame 8 | frame 16 |
+|---|---|---|---|---|---|
+| T3 | 3.807 / 3.768 / 3.784 / 3.788 | 3.260 / 3.200 / 3.173 / 3.175 | 2.629 / 2.592 / 2.525 / 2.527 | 1.758 / 1.709 / 1.578 / 1.579 | 1.081 / 1.064 / 0.915 / 0.920 |
+| Q10 | 5.384 / 5.383 / 5.376 / 5.366 | 5.327 / 5.326 / 5.304 / 5.301 | 4.497 / 4.509 / 4.491 / 4.486 | 3.088 / 3.091 / 3.066 / 3.065 | 1.846 / 1.839 / 1.809 / 1.814 |
+| S10 | 4.955 / 4.941 / 4.953 / 4.940 | 4.608 / 4.581 / 4.589 / 4.565 | 3.814 / 3.782 / 3.778 / 3.760 | 2.587 / 2.575 / 2.546 / 2.547 | 1.569 / 1.562 / 1.539 / 1.545 |
+| SC | 2.246 / 2.243 / 2.248 / 2.261 | 2.103 / 2.080 / 2.086 / 2.084 | 1.743 / 1.720 / 1.723 / 1.730 | 1.191 / 1.185 / 1.173 / 1.179 | 0.755 / 0.749 / 0.735 / 0.744 |
+
+The spread of b0 on T3 is the widest (+-0.134 at frame 8, +-0.117 at frame 16); b is +-0.010 and +-0.004. The low-pass error at frame 16, a / b0 / b / c: T3 0.210 / 0.180 / 0.176 / 0.179, Q10 0.372 / 0.359 / 0.359 / 0.362, S10 0.312 / 0.306 / 0.302 / 0.303, SC 0.151 / 0.149 / 0.148 / 0.152.
+
+Paired per-run differences of the resolved rmse/255 (negative: the first is better; mean +- sd of the difference):
+
+| difference | T3 | Q10 | S10 | SC |
+|---|---|---|---|---|
+| b - a, static, frames 33-40 | -0.153 +- 0.009 | -0.034 +- 0.013 | -0.027 +- 0.008 | -0.016 +- 0.006 |
+| b - b0, static, frames 33-40 | -0.108 +- 0.045 | -0.021 +- 0.016 | -0.021 +- 0.009 | -0.013 +- 0.011 |
+| c - b, static, frames 33-40 | -0.003 +- 0.004 | -0.003 +- 0.009 | -0.005 +- 0.009 | +0.002 +- 0.009 |
+| b - a, frame 16 after the reset | -0.166 +- 0.006 | -0.038 +- 0.015 | -0.030 +- 0.008 | -0.020 +- 0.009 |
+| c - b, frame 16 after the reset | +0.005 +- 0.005 | +0.005 +- 0.010 | +0.006 +- 0.012 | +0.009 +- 0.016 |
+| b - a, pan 0.5, 0 px | -0.020 +- 0.012 | -0.007 +- 0.011 | -0.001 +- 0.004 | -0.003 +- 0.008 |
+| b - a, moving 0.5 px | -0.011 +- 0.003 | -0.001 +- 0.008 | -0.006 +- 0.011 | -0.000 +- 0.004 |
+
+**Reading.**
+
+- **(b) is kept.** It ships. Static, it beats the hashed dither (a) in every scene: T3 0.948 to 0.795 (-16 %), Q10 -2 %, S10 -2 %, SC -2 %; on T3 the paired difference is many times its spread. The convergence gain shows from frame 4 on: T3 at frame 16 reads 1.081 for a and 0.915 for b, **-15.4 %** (paired -0.166 +- 0.006), against 1.064 +- 0.117 for b0.
+- **The blue tile alone (b0) is the weaker half.** The tile with a white per-frame offset gains little over a (T3 0.903 against 0.948, with a spread of 0.045 that the golden step cuts to 0.006): the golden step is what makes the frames of the history cover the tile evenly, so the gain needs both.
+- **(c) gives no gain over (b).** A golden step on the subset as well changes nothing the paired runs resolve: static c - b is within one sd in every scene (T3 -0.003 +- 0.004), at frame 16 it is slightly positive (+0.005 to +0.009), and under the pans and the moving cases it is within 0.005. The subset stays hashed afresh every frame, as shipped.
+- **Where the dither helps: static and slow convergence, most on the textured layers.** Under pans and for surfaces that move, the four variants are equal within noise (the history is reprojected off the tile's pixel grid, so the tile's structure does not survive); hair (S10) and the scattered scene (SC) gain 1 to 2 % static. The 2026-11-06 finding that a tile alone gains nothing stands for moving images; what the tile with the step adds is the static case.
+- Limits: 256 x 144, 6 runs, one GPU, an error against sorted alpha and not an in-world judgement. The script's timing mode (b against c, interleaved) was not run for this section, since c is not adopted; no cost of the dither is claimed here.
 
 ### GPU time per pass (2560 x 1440, `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
 
