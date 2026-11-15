@@ -1200,6 +1200,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
 
     if (!gCubeSnapshot) // hack to not allocate spot shadow maps during ReflectionMapManager init
     {
+        // <ShadowLegacy id="spot-map-size">
         U32 width = (U32)(resX * scale);
         U32 height = width;
 
@@ -1219,6 +1220,7 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
         {
             releaseSpotShadowTargets();
         }
+        // </ShadowLegacy>
     }
 
 
@@ -1253,12 +1255,14 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
             LLRenderTarget* shadow_target = getSpotShadowTarget(i);
             if (shadow_target)
             {
+                // <ShadowLegacy id="spot-map-compare">
                 gGL.getTexUnit(0)->bind(shadow_target, true);
                 gGL.getTexUnit(0)->setTextureFilteringOption(LLTexUnit::TFO_ANISOTROPIC);
                 gGL.getTexUnit(0)->setTextureAddressMode(LLTexUnit::TAM_CLAMP);
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+                // </ShadowLegacy>
                 // <Vulkanstorm> Stochastic reads the stored depth itself (texelFetch), no comparison
                 if (RenderShadowMethod == LLShadowMethod::STOCHASTIC)
                 {
@@ -11168,6 +11172,7 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
     shader.uniform3fv(LLShaderMgr::PROJECTOR_ORIGIN, 1, glm::value_ptr(screen_origin));
     shader.uniform1f(LLShaderMgr::PROJECTOR_RANGE, proj_range);
     shader.uniform1f(LLShaderMgr::PROJECTOR_AMBIANCE, params.mV[2]);
+    // <ShadowLegacy id="spot-rank">
     S32 s_idx = -1;
 
     for (U32 i = 0; i < 2; i++)
@@ -11219,6 +11224,7 @@ void LLPipeline::setupSpotLight(LLGLSLShader& shader, LLDrawable* drawablep)
 
     // make sure we didn't end up targeting the same spot light with both shadow maps
     llassert(mTargetShadowSpotLight[0] != mTargetShadowSpotLight[1] || mTargetShadowSpotLight[0].isNull());
+    // </ShadowLegacy>
 
     LLViewerTexture* img = volume->getLightTexture();
 
@@ -12780,6 +12786,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     {
         if (!gCubeSnapshot) //skip updating spot shadow maps during cubemap updates
         {
+            // <ShadowLegacy id="spot-slots">
             LLTrace::CountStatHandle<>* velocity_stat = LLViewerCamera::getVelocityStat();
             F32 fade_amt = gFrameIntervalSeconds.value()
                 * (F32)llmax(LLTrace::get_frame_recording().getLastRecording().getSum(*velocity_stat) / LLTrace::get_frame_recording().getLastRecording().getDuration().value(), 1.0);
@@ -12815,8 +12822,10 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                     }
                 }
             }
+            // </ShadowLegacy>
         }
 
+        // <ShadowLegacy id="spot-render">
         // this should never happen
         llassert(mShadowSpotLight[0] != mShadowSpotLight[1] || mShadowSpotLight[0].isNull());
 
@@ -12921,6 +12930,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 mSpotShadow[i].flush();
             }
         }
+        // </ShadowLegacy>
     }
     else
     { //no spotlight shadows

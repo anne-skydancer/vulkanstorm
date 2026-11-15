@@ -42,6 +42,14 @@ ALLOWED = {
     'sun-splits': [('return;', 'return false;')],
     'sun-cascades': [],
     'sun-map-size': [],
+    # the projector (spot) shadow slots and their maps, kept verbatim for the projector shadow pool (Stochastic)
+    'spot-map-size': [],
+    # upstream 7.3 spells the same GL constant (0x884E) GL_COMPARE_REF_TO_TEXTURE instead of GL_COMPARE_R_TO_TEXTURE
+    'spot-map-compare': [('glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_R_TO_TEXTURE);',
+                         'glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);')],
+    'spot-slots': [],
+    'spot-render': [],
+    'spot-rank': [],
 }
 
 OPEN = re.compile(r'^\s*//\s*<ShadowLegacy\s+id="([^"]+)"\s*>\s*$')
