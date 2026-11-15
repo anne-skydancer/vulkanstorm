@@ -184,7 +184,7 @@ main thread only, returns off it), `noteMeshLoaded` / `meshLoaded` / `clearMeshL
 own main-thread list.
 
 Nothing else is new at a shared path: `LLPipeline::markVisible` drops a bridge only inside a tile render (`sLocalShadowPass`),
-`LLPipeline::renderShadowImpl` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
+`LLPipeline::renderShadow` calls `pinCasters` only inside a tile render, and `LLVOVolume::calcLOD` reads `mLampLODPin`
 (zero for every volume outside a pool tile). No free, no static state beyond the feed's own list was added to a function a worker
 thread runs (`LLRender::shutdown`, `LLImageGL`, `LLVertexBuffer::cleanupClass` are untouched).
 
@@ -204,7 +204,7 @@ door, flexi) is batched with its group, so it casts with the pose of the last re
 
 ### The LOD pin
 
-`pinCasters` (called from `renderShadowImpl` after the tile's cull and sort) walks the groups the tile is about to draw and, for
+`pinCasters` (called from `renderShadow` after the tile's cull and sort) walks the groups the tile is about to draw and, for
 every volume or tree inside the light's volume that is not rigged, worn, a HUD or fully transparent (every face alpha 0 and no glTF
 material: it casts nothing), takes one pin for the tile (`PinBook`). The light's volume is the tile's render frustum (aspect
 included), the same region a change dirties the tile for. The pin is a counter on the object (`mLampLODPin`); `calcLOD` returns

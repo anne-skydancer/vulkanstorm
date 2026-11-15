@@ -220,7 +220,7 @@ extern LLGLSLShader         gPostSnapshotFrameProgram;   // <FS:Beq/> Snapshot F
 extern LLGLSLShader         gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // alpha-only variants of the GLTF scene's blended variants, by variant bits
 extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
-extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
+extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is kept for the Vulkan renderer only
 extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the measuring pass: the samples averaged, the grain and the depths
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>

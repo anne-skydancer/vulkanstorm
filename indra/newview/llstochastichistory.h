@@ -58,8 +58,8 @@ namespace LLStochasticEngine
     // time. OpenGL compute dispatches, with the glMemoryBarrier they need between graphics passes, stall the
     // frame while the camera or avatar moves, and OpenGL has no async compute; compute belongs in the Vulkan
     // renderer. The shadows' compute resolve (GL 4.3, GLSL 4.30, entry points loaded) stays compiled but
-    // unused, selected only for A/B tests by the environment variable VKSTORM_STOCH_COMPUTE_RESOLVE=1 on a
-    // device that supports it (debug only, not a setting). The transparency has no compute resolve (retired
+    // unused (nothing in this viewer selects it: no setting, no environment variable); it is kept for
+    // the Vulkan renderer. The transparency has no compute resolve (retired
     // 2026-11-14: its grain-measuring resolve is three fragment passes). A shader set of the selected path that
     // does not build is an error (logged, retried at the next shader reload); the other path is never taken in
     // its place.
