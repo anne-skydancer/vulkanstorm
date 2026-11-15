@@ -39,7 +39,7 @@ class LLGLSLShader;
 // buffer allocation and release, the alpha pool's passes, shiftObjects).
 namespace LLStochasticEngine
 {
-    // SAMPLES (8: the shadows' rays), TRANSPARENCY_SAMPLES (4), SEEDS (2048), maskTable() and transparencyTable() are in
+    // SAMPLES (8: the shadows' rays), TRANSPARENCY_SAMPLES (8), SEEDS (2048), maskTable() and transparencyTable() are in
     // llstochasticstate.h (GL-free, unit tested)
 
     // The device runs stochastic transparency: GL 4.0 (gl_SampleMask, multisample textures) and GLSL 4.00.

@@ -22,7 +22,7 @@
 /*[EXTRA_CODE_HERE]*/
 
 // Attached as a fragment object (STOCH_RESOLVE, LLShaderMgr::attachShaderFeatures) to each producer's resolve program
-// (alphaStochasticResolveF.glsl, alphaStochasticSmoothF.glsl and the shadows' shadowStochasticResolveF.glsl), or, for
+// (alphaStochasticResolveF.glsl and the shadows' shadowStochasticResolveF.glsl), or, for
 // the shadows' compute resolve (A/B only), compiled as a compute object. The file is
 // stage-neutral: it uses no stage built-ins (only uniforms, texelFetch and functions), so the same
 // source serves a compute or a fragment producer.
@@ -68,7 +68,7 @@ bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv)
 }
 
 // The transparency's grain-measuring resolve (alphaStochasticCurrentF.glsl measures, alphaStochasticResolveF.glsl blends,
-// alphaStochasticSmoothF.glsl smooths). The constants are Aurora Viewer PR 3663's (oit_stochastic.wgsl) except where the
+// alphaStochasticCompositeF.glsl smooths). The constants are Aurora Viewer PR 3663's (oit_stochastic.wgsl) except where the
 // PR's text says otherwise (doc/oit/stochastic-transparency.md).
 const float ST_HDR_MAX = 65504.0;    // the largest value of an RGBA16F target
 // The grain a colour drawn may keep, as a part of that colour (of a dim one, as a part of ST_QUIET_DIM): a pixel under
