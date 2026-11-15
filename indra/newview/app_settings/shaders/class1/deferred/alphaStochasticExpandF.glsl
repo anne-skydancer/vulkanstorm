@@ -22,7 +22,7 @@
 // The single-sampled opaque depth given to every sample of the stochastic passes' depth
 // (after the author's Aurora Viewer, oit_stochastic_expand.wgsl fs_expand_ss): a full-screen
 // triangle, depth test ALWAYS with writes, no colour. Run before the total alpha and before
-// each iteration of the stochastic depth pass.
+// the stochastic depth pass.
 //
 // Each sample takes the opaque surface's depth at its own position: the pixel centre's depth
 // extended along the surface's screen-space depth gradient, on each axis from the side whose
