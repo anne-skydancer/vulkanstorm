@@ -222,6 +222,8 @@ extern LLGLSLShader         gAlphaStochasticExpandProgram;
 extern LLGLSLShader         gAlphaStochasticCompositeProgram;
 extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
 extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the measuring pass: the samples averaged, the grain and the depths
+extern LLGLSLShader         gAlphaStochasticMomentsProgram; // an iteration's moments (passes that hold fewer samples than S)
+extern LLGLSLShader         gAlphaStochasticMeasureProgram; // the moments of every iteration finished (the same file as the measuring pass)
 extern LLGLSLShader         gAlphaStochasticSmoothProgram;  // the smooth of the grain the temporal blend leaves
 extern bool                 gAlphaStochasticShadersReady;
 // </Vulkanstorm>

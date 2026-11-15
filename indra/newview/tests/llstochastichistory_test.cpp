@@ -26,7 +26,7 @@ constexpr unsigned long long MASK_HASH_4 = 0xc162a2078068620aULL;
 constexpr unsigned long long MASK_HASH_8 = 0xd8062231acc3d415ULL;
 constexpr unsigned long long MASK_HASH_16 = 0xa5bbb68bfab929d6ULL;
 // the transparency's table (maskTable(4) and the blue-noise tile in two rows): the same FNV-1a
-constexpr unsigned long long TRANSPARENCY_TABLE_HASH = 0x5718bc0545cbdcbeULL;
+constexpr unsigned long long TRANSPARENCY_TABLE_HASH = 0xec76aaa128658959ULL;
 struct LLStochasticFrameStateTest
 {
     static void setFrame(LLStochasticFrameState& s, uint32_t frame) { s.mFrame = frame; }
@@ -91,12 +91,12 @@ namespace
         check(fnv(maskTable(16)) == MASK_HASH_16, "MASK_HASH_16");
     }
 
-    // The transparency's table: S = 4 (its own constant; the shadows' SAMPLES stays 8), the mask rows and then
+    // The transparency's table: S = 8 (its own constant, equal to the shadows' SAMPLES), the mask rows and then
     // the blue-noise tile in the two spare rows, one texture
     void test_transparency_table()
     {
         using namespace LLStochasticEngine;
-        static_assert(TRANSPARENCY_SAMPLES == 4 && SAMPLES == 8 && NOISE_ROWS == 2 && BLUE_NOISE_SIZE == 64);
+        static_assert(TRANSPARENCY_SAMPLES == 8 && SAMPLES == 8 && NOISE_ROWS == 2 && BLUE_NOISE_SIZE == 64);
         const std::vector<uint32_t> table = transparencyTable();
         check(table.size() == (size_t)(TRANSPARENCY_SAMPLES + 1 + NOISE_ROWS) * SEEDS, "the transparency table has the mask rows and the noise rows");
         const std::vector<uint32_t> masks = maskTable(TRANSPARENCY_SAMPLES);

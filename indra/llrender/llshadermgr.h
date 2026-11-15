@@ -391,6 +391,9 @@ public:
         ALPHA_ST_CURRENT,                   //  "alpha_st_current"
         ALPHA_ST_AUX,                       //  "alpha_st_aux"
         ALPHA_ST_EXTRA,                     //  "alpha_st_extra"
+        ALPHA_ST_MOM_SUM,                   //  "alpha_st_mom_sum"
+        ALPHA_ST_MOM_SQUARES,               //  "alpha_st_mom_squares"
+        ALPHA_ST_MOM_DEPTH,                 //  "alpha_st_mom_depth"
         // </Vulkanstorm>
         // <Vulkanstorm> cloud shadows (windlight/atmosphericsFuncs.glsl, deferred/cloudShadowMapF.glsl)
         CLOUD_SHADOW_MAP,                   //  "cloud_shadow_map"
