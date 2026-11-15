@@ -19,7 +19,7 @@ avatars and many lights/transmission.md` (cited as "TM"; the other notes are cit
 `reports/Real time shadow casting techniques.md` (L:n = a line of its note `research_notes/Real time shadow casting
 techniques/local_light_shadows.md`, R:n = a line of the report); SM = `reports/Shadow methods for avatars and many lights.md`
 (R:n = a line of the report); in `research_notes/Shadow methods for avatars and many lights/`: GG1, GG2, GG3 = `gpugems1.md`,
-`gpugems2.md`, `gpugems3.md`; M = `proxies.md`; in `research_notes/Real time shadow casting techniques/`: A = `api_and_performance.md`,
+`gpugems2.md`, `gpugems3.md`; M = `many_lights.md`; in `research_notes/Real time shadow casting techniques/`: A = `api_and_performance.md`,
 FILT = `filtering_soft_shadows.md`. Line numbers are those of the files on the owner's machine. The GPU Gems chapter numbers
 follow our notes and were not checked against the books.
 
