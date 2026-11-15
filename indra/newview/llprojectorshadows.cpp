@@ -22,6 +22,7 @@
 #include "llprojectorshadows.h"
 
 #include "llshadowdirtyfeed.h"
+#include "lllocalshadows.h"
 
 #include "llagent.h"
 #include "llapp.h"
@@ -141,16 +142,6 @@ namespace
     {
         return llmax(0.f, (drawable->getPositionAgent() - cam_pos).length() - radius);
     }
-
-    // the viewer's GL state the pool changes while it renders, put back at the end
-    struct SavedState
-    {
-        U32 fbo = 0;
-        U32 resX = 0, resY = 0;
-        S32 viewport[4] = {};
-        glm::mat4 view, proj, lastView, lastProj;
-        LLViewerCamera::eCameraID cameraId = LLViewerCamera::CAMERA_WORLD;
-    };
 }
 
 LLProjectorShadows::LLProjectorShadows()
@@ -269,7 +260,7 @@ bool LLProjectorShadows::ensureAllocated()
         if (allocateAtlases(size))
         {
             mAllocFailed = false;
-            LLShadowDirtyFeed::setTracking(true); // the scene's change hooks record from now on
+            LLShadowDirtyFeed::setTracking(LLShadowDirtyFeed::Owner::Projectors, true); // the scene's change hooks record from now on
             // every record starts again: a tile has to be drawn into the new atlas
             for (auto& entry : mRecords)
             {
@@ -279,7 +270,7 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.drawn.valid = false;
                 rec.pending = false;
                 rec.lowres = false;
-                rec.drawnWithAvatar = false;
+                rec.avatarInLayer = false;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
@@ -312,7 +303,7 @@ void LLProjectorShadows::release()
         return;
     }
     // order: the framebuffers, the textures, then every tile and record (the LOD pins of later stages are released with them)
-    LLShadowDirtyFeed::setTracking(false); // the hooks stop recording (and the pending boxes go)
+    LLShadowDirtyFeed::setTracking(LLShadowDirtyFeed::Owner::Projectors, false); // the hooks stop recording (and the pending boxes go)
     freeAtlases();
     clear(); // the records hold drawables: dropped with the tiles (a later allocation starts from the light set)
     mBuddy.reset(kTierSmall);
@@ -322,6 +313,7 @@ void LLProjectorShadows::release()
     mRepacks = 0;
     mStaticRenders = 0;
     mDynamicRenders = 0;
+    mLayerRenders = 0;
     mDirtyRenders = 0;
     mDirtyAgeMsMax = 0.f;
     mCauses = CauseCounts();
@@ -509,6 +501,16 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
             tex_unit->unbind(tex_unit->getCurrType());
         }
     }
+    // L's tiles that hold avatars are S's again before the moves: the whole-atlas copy L -> S below must not carry an avatar into S
+    // (the fixed layer). The avatar layers come back with the dynamic schedule of the frame (the tiles keep avatarInLayer).
+    for (auto& entry : mRecords)
+    {
+        const Record& r = entry.second;
+        if (r.placed && r.drawnFrame != 0 && r.avatarInLayer)
+        {
+            copyTile(mAtlasS, r.rect, mAtlasL, r.rect);
+        }
+    }
     for (const Move& move : plan.moves)
     {
         auto it = mRecords.find(move.key);
@@ -622,30 +624,10 @@ bool LLProjectorShadows::layoutChanged()
     return relayout();
 }
 
-void LLProjectorShadows::setTileOrigin(F32 x, F32 y)
-{
-    // the programs that dither the semi-transparent casters of a tile by the texel of the tile (not of the atlas)
-    LLGLSLShader* programs[] = {
-        &gDeferredShadowAlphaMaskProgram, &gDeferredShadowFullbrightAlphaMaskProgram, &gDeferredShadowGLTFAlphaBlendProgram,
-        &gDeferredAvatarAlphaShadowProgram, &gDeferredAvatarAlphaMaskShadowProgram
-    };
-    for (LLGLSLShader* program : programs)
-    {
-        for (LLGLSLShader* variant : { program, program->mRiggedVariant })
-        {
-            if (variant && variant->mProgramObject)
-            {
-                variant->bind();
-                variant->uniform2f(LLShaderMgr::SHADOW_TILE_ORIGIN, x, y);
-            }
-        }
-    }
-}
-
-// One tile: the light's view (its pose now), the fixed objects and the avatars into S, then S -> L for the tile. The cull
-// frustum comes from the light's matrices. The tile's size and view come from the light and the casters are held at full
-// detail by the LOD pin (pinCasters, called from LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture.
-// The avatars' visibility still follows the camera until P4.
+// One tile: the light's view (its pose now), the fixed objects into S (the static layer), then S -> L for the tile, then the avatars
+// in the light over it in L (the dynamic layer, drawAvatars). The cull frustum comes from the light's matrices. The tile's size and
+// view come from the light and the casters are held at full detail by the LOD pin (pinCasters, called from
+// LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture; the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
     SpotGeom g;
@@ -669,7 +651,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     glViewport(gGLViewport[0], gGLViewport[1], n, n);
     LLRenderTarget::sCurResX = (U32)n;
     LLRenderTarget::sCurResY = (U32)n;
-    setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
+    LLLocalShadowGL::setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
 
     // the LOD pin's books for this render: what the tile meets from here on is what it holds afterwards
     mPins.beginRender(rec.key);
@@ -713,6 +695,9 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
     copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
+    // the avatar layer (P4): the avatars in the light are drawn over the copy, in L only; S stays the fixed layer
+    const F32 avatar_ms = rec.holdsAvatar ? drawAvatars(rec, view, proj, g.origin, far_clip) : 0.f;
+    mLastFrameAvatarDraws += rec.holdsAvatar ? rec.avatarCount : 0;
 
     // the pose this tile now holds: the lookup matrix is built from it
     LLProjectorShadows::Record& r = rec;
@@ -736,11 +721,17 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     r.dirtyFrame = 0;
     r.dirtyTime = 0.0;
     r.lowres = false;
-    r.drawnWithAvatar = r.holdsAvatar;
+    r.avatarInLayer = r.holdsAvatar;
+    r.layerFrame = r.drawnFrame;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
-    r.lastCpuMs = ms;
-    mCostEmaMs += 0.2f * (ms - mCostEmaMs);
+    r.lastCpuMs = llmax(ms - avatar_ms, 0.f); // the fixed layer's cost; the avatar layer's is lastAvatarMs
+    if (rec.holdsAvatar)
+    {
+        r.lastAvatarMs = avatar_ms;
+    }
+    mCostEmaMs += 0.2f * (r.lastCpuMs - mCostEmaMs);
     mLastFrameRenderMs += ms;
+    frameLedger().add(ms);
     ++mLastFrameRenders;
     ++mTileRenders;
     mCauses.add(cause);
@@ -754,6 +745,94 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         ++mStaticRenders;
         ++mLastFrameStatic;
     }
+}
+
+// The dynamic layer of one tile (P4): the avatars in the light, drawn into L over the tile's copy of S. The tile's cull comes from
+// the light's pose the tile holds (view, proj, origin), the avatar partitions and the worn objects are the only things it draws
+// (LLPipeline::LOCAL_SHADOW_DYNAMIC), and no camera test enters: an avatar behind the camera, or an impostor, casts like any other.
+// Depth is not cleared (S's copy is in L); the depth test composes the two layers. Leaves L's framebuffer bound.
+F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
+{
+    const F64 cpu_start = LLTimer::getTotalSeconds();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mFboL);
+    LLRenderTarget::sCurFBO = mFboL;
+    const S32 n = (S32)rec.rect.size;
+    gGLViewport[0] = (S32)rec.rect.x;
+    gGLViewport[1] = (S32)rec.rect.y;
+    gGLViewport[2] = n;
+    gGLViewport[3] = n;
+    glViewport(gGLViewport[0], gGLViewport[1], n, n);
+    LLRenderTarget::sCurResX = (U32)n;
+    LLRenderTarget::sCurResY = (U32)n;
+    LLLocalShadowGL::setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
+    LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_DYNAMIC;
+
+    {
+        LLGLEnable scissor(GL_SCISSOR_TEST);
+        glScissor(gGLViewport[0], gGLViewport[1], n, n);
+
+        set_current_modelview(view);
+        set_current_projection(proj);
+        set_last_modelview(view);
+        set_last_projection(proj);
+
+        LLCamera shadow_cam = *LLViewerCamera::getInstance();
+        shadow_cam.setFar(far_clip);
+        shadow_cam.setOrigin(origin);
+        LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
+
+        static LLCullResult result;
+        LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_SPOT_SHADOW0;
+        LLPipeline::RenderSpotLight = rec.drawable;
+        gPipeline.renderShadow(view, proj, shadow_cam, result, false);
+        LLPipeline::RenderSpotLight = nullptr;
+        gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
+    }
+    LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
+    llassert(LLRenderTarget::sCurFBO == mFboL);
+    return (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
+}
+
+// The avatar layer alone: the tile's fixed layer is unchanged, so L's tile is S's tile again (the avatars of the last draw, which
+// may have moved or left, are gone) and the avatars in the light now are drawn over it. From the pose the tile holds, the one its
+// lookup matrix is built from.
+void LLProjectorShadows::renderLayer(Record& rec)
+{
+    if (!rec.drawn.valid)
+    {
+        return;
+    }
+    const F64 cpu_start = LLTimer::getTotalSeconds();
+    SpotGeom g;
+    g.origin = gAgent.getPosAgentFromGlobal(rec.drawn.originGlobal);
+    g.rot = rec.drawn.rot;
+    g.scale = rec.drawn.scale;
+    g.fov = rec.drawn.fov;
+    g.radius = rec.drawn.radius;
+    g.dist = rec.drawn.dist;
+    glm::mat4 view, proj;
+    F32 far_clip = 0.f;
+    spot_matrices(g, view, proj, far_clip);
+
+    copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
+    F32 avatar_ms = 0.f;
+    if (rec.holdsAvatar)
+    {
+        avatar_ms = drawAvatars(rec, view, proj, g.origin, far_clip);
+        rec.lastAvatarMs = avatar_ms;
+    }
+    rec.avatarInLayer = rec.holdsAvatar;
+    rec.layerFrame = LLFrameTimer::getFrameCount();
+    const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
+    mLastFrameRenderMs += ms;
+    frameLedger().add(ms);
+    ++mLastFrameRenders;
+    ++mTileRenders;
+    ++mLayerRenders;
+    ++mLastFrameLayer;
+    mLastFrameAvatarDraws += rec.holdsAvatar ? rec.avatarCount : 0;
+    mCauses.add(Cause::Avatar);
 }
 
 namespace
@@ -973,6 +1052,9 @@ void LLProjectorShadows::update(LLCamera& camera)
     mLastFrameRenders = 0;
     mLastFrameStatic = 0;
     mLastFrameDynamic = 0;
+    mLastFrameLayer = 0;
+    mLastFrameAvatarDraws = 0;
+    frameLedger().begin(frame);
 
     // the scene's changes since the last frame (swapped before any render of this frame, so a change a render itself causes
     // lands in the next frame: F9)
@@ -1021,7 +1103,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             rec.volumeValid = true;
         }
     }
-    LLShadowDirtyFeed::setLampRoots(lamp_roots);
+    LLShadowDirtyFeed::setLampRoots(LLShadowDirtyFeed::Owner::Projectors, lamp_roots);
 
     // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn); the index is lazy:
     // built only when boxes arrived or the list says "everything"
@@ -1056,13 +1138,16 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
-    // the avatars: a tile with one in its light is drawn again every frame (they are drawn into S until P4), nearest first
+    // The avatars of the dynamic layer (P4), by position alone: every avatar that casts, wherever the camera looks. An avatar is paired
+    // with every lamp whose volume its extents touch; nothing here reads the camera, the avatar's visibility or its impostor flag
+    // (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts). A jelly
+    // doll, an invisible or a too slow avatar and a UI avatar are not drawn by the avatar pool either.
     std::vector<Aabb> avatar_boxes;
     for (LLCharacter* character : LLCharacter::sInstances)
     {
         LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
-        // the avatars the tile render would draw (stateSort, LLDrawPoolAvatar: not impostors); their visibility follows the camera until P4
-        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || !avatar->isVisible() || avatar->isImpostor())
+        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
+            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL)
         {
             continue;
         }
@@ -1084,6 +1169,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     std::vector<StaticItem> static_items;
     std::vector<DynamicItem> dynamic_items;
     std::map<U32, Cause> causes;
+    std::set<U32> layer_only; // the dynamic items that are an avatar layer alone (the others redraw the whole tile)
     mLightsWithoutTile = 0;
     mPendingTiles = 0;
     mAvatarTiles = 0;
@@ -1118,21 +1204,35 @@ void LLProjectorShadows::update(LLCamera& camera)
         facts.lamp_moving = rec.lampMoving;
         facts.lowres = rec.lowres;
         facts.holds_avatar = rec.holdsAvatar;
-        facts.drawn_with_avatar = rec.drawnWithAvatar;
+        facts.avatar_in_layer = rec.avatarInLayer;
         const TileVerdict verdict = classifyTile(facts);
-        if (!verdict.needs_render)
+        if (!verdict.needs_render && !verdict.needs_layer)
         {
             continue;
         }
         causes[rec.key] = verdict.cause;
-        if (verdict.dynamic)
+        // the prediction of a full render: the fixed layer, plus the avatar layer when an avatar is in the light
+        const F32 full_ms = rec.lastCpuMs + (rec.holdsAvatar ? rec.lastAvatarMs : 0.f);
+        if (verdict.needs_layer)
+        {
+            DynamicItem item;
+            item.key = rec.key;
+            item.avatar = true;
+            item.age_frames = frame - rec.layerFrame; // the lag of the avatar in this tile: frames since its layer was last drawn
+            item.cam_dist = rec.camDist;
+            item.last_cpu_ms = rec.lastAvatarMs;
+            item.avatar_draws = rec.avatarCount;
+            dynamic_items.push_back(item);
+            layer_only.insert(rec.key);
+        }
+        else if (verdict.dynamic)
         {
             DynamicItem item;
             item.key = rec.key;
             item.avatar = rec.holdsAvatar;
             item.age_frames = frame - rec.drawnFrame;
             item.cam_dist = rec.camDist;
-            item.last_cpu_ms = rec.lastCpuMs;
+            item.last_cpu_ms = full_ms;
             item.avatar_draws = rec.avatarCount;
             dynamic_items.push_back(item);
         }
@@ -1143,7 +1243,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             item.never_drawn = rec.drawnFrame == 0;
             item.pending = true;
             item.cam_dist = rec.camDist;
-            item.last_cpu_ms = rec.lastCpuMs;
+            item.last_cpu_ms = full_ms;
             // the order of service: how long the tile has been waiting: frames since the first change that touched it, or, for a
             // tile whose only cause is its lamp's pose or a resize (no box), frames since it was drawn, so it cannot starve
             // behind tiles with dirty boxes
@@ -1152,28 +1252,18 @@ void LLProjectorShadows::update(LLCamera& camera)
             static_items.push_back(item);
         }
     }
-    // The budgets: fixed CPU times per frame (llprojectorpool::kStaticCapMs, kDynamicCapMs). The measured cost of a tile only
-    // predicts how many fit; it does not set the budget.
-    const std::vector<U32> static_picks = selectStatic(static_items, kStaticCapMs);
-    const std::vector<U32> dynamic_picks = selectDynamic(dynamic_items, kDynamicCapMs, kAvatarDrawsMax);
-    if (static_picks.empty() && dynamic_picks.empty())
+    // The budget: one CPU cap for the frame's tile work of every cache together (llprojectorpool::kFrameCapMs, split by
+    // selectFrame: the dynamic layer first, up to kDynamicCapMs, the static tiles in what is left). The measured cost of a tile only
+    // predicts how many fit; it does not set the budget. What an earlier cache spent in this frame is already off the cap.
+    const FrameLedger& ledger = frameLedger();
+    const FramePicks picks = selectFrame(static_items, dynamic_items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
+    if (picks.fixed.empty() && picks.dynamic.empty())
     {
         return;
     }
 
-    SavedState saved;
-    saved.fbo = LLRenderTarget::sCurFBO;
-    saved.resX = LLRenderTarget::sCurResX;
-    saved.resY = LLRenderTarget::sCurResY;
-    for (int i = 0; i < 4; ++i)
-    {
-        saved.viewport[i] = gGLViewport[i];
-    }
-    saved.view = get_current_modelview();
-    saved.proj = get_current_projection();
-    saved.lastView = get_last_modelview();
-    saved.lastProj = get_last_projection();
-    saved.cameraId = LLViewerCamera::sCurCameraID;
+    // one save and one restore of the GL state for the frame's tile renders (the last scope of the frame restores it)
+    LLLocalShadowGL::Scope gl_scope;
 
     // L is a lighting unit's texture until the next lookup binds it again: not while it is written
     for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
@@ -1185,48 +1275,37 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
 
-    // the in-frame caps (section 4.5): the first pick of a list always runs, the others only while the measured time is inside
-    // that list's budget
-    auto run = [&](const std::vector<U32>& picks, F32 budget_ms, bool dynamic) {
-        F32 spent_ms = 0.f;
+    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap (the first pick of the frame
+    // always does: the selection kept it inside the cap, or it is the progress pick) and, for the dynamic list, inside its own share
+    auto run = [&](const std::vector<U32>& packed, bool dynamic) {
+        F32 own_ms = 0.f;
         bool first_pick = true;
-        for (U32 key : picks)
+        for (U32 pk : packed)
         {
-            if (!first_pick && spent_ms >= budget_ms)
+            if (ledger.left(kFrameCapMs) <= 0.f || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
             {
                 break;
             }
+            const U32 key = unpackKey(pk);
             auto it = mRecords.find(key);
             if (it != mRecords.end() && it->second.placed)
             {
                 const F32 before = mLastFrameRenderMs;
-                renderTile(it->second, causes[key], dynamic);
-                spent_ms += mLastFrameRenderMs - before;
+                if (layer_only.count(key))
+                {
+                    renderLayer(it->second);
+                }
+                else
+                {
+                    renderTile(it->second, causes[key], dynamic);
+                }
+                own_ms += mLastFrameRenderMs - before;
                 first_pick = false;
             }
         }
     };
-    run(static_picks, kStaticCapMs, false);
-    run(dynamic_picks, kDynamicCapMs, true);
-
-    // put back what the tile renders changed
-    setTileOrigin(0.f, 0.f);
-    gDeferredShadowCubeProgram.bind(); // the program renderShadow leaves bound
-    glBindFramebuffer(GL_FRAMEBUFFER, saved.fbo);
-    LLRenderTarget::sCurFBO = saved.fbo;
-    for (int i = 0; i < 4; ++i)
-    {
-        gGLViewport[i] = saved.viewport[i];
-    }
-    glViewport(saved.viewport[0], saved.viewport[1], saved.viewport[2], saved.viewport[3]);
-    glScissor(saved.viewport[0], saved.viewport[1], saved.viewport[2], saved.viewport[3]); // not the last tile's box
-    LLRenderTarget::sCurResX = saved.resX;
-    LLRenderTarget::sCurResY = saved.resY;
-    set_current_modelview(saved.view);
-    set_current_projection(saved.proj);
-    set_last_modelview(saved.lastView);
-    set_last_projection(saved.lastProj);
-    LLViewerCamera::sCurCameraID = saved.cameraId;
+    run(picks.dynamic, true);
+    run(picks.fixed, false);
 }
 
 void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
@@ -1304,6 +1383,9 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     st.dynamicRenders = mDynamicRenders;
     st.lastFrameStatic = mLastFrameStatic;
     st.lastFrameDynamic = mLastFrameDynamic;
+    st.layerRenders = mLayerRenders;
+    st.lastFrameLayer = mLastFrameLayer;
+    st.lastFrameAvatarDraws = mLastFrameAvatarDraws;
     st.pinnedObjects = (U32)mPins.pinnedObjects();
     st.moverObjects = LLShadowDirtyFeed::moverObjects();
     for (const Id128& id : mPins.pinnedIds())
@@ -1351,6 +1433,9 @@ std::vector<LLProjectorShadows::TileInfo> LLProjectorShadows::getTiles() const
         t.drawnFrame = rec.drawnFrame;
         t.camDist = rec.camDist;
         t.pending = rec.pending;
+        t.avatar = rec.holdsAvatar || rec.avatarInLayer;
+        t.poseStale = rec.poseStale;
+        t.lampMoving = rec.lampMoving;
         tiles.push_back(t);
     }
     return tiles;

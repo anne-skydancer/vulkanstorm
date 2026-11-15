@@ -42,14 +42,15 @@ class LLVOVolume;
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
 // own in a shared depth atlas S (the tiles as drawn), copied into the live atlas L, the only texture the lighting programs
 // read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light's pose, never from the
-// camera's orientation; the avatars' visibility still follows the camera until P4 (the casters are held at full detail by the
-// LOD pin). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
+// camera's orientation (the casters are held at full detail by the LOD pin). Since P4 the avatars are a dynamic layer: S holds the
+// fixed layer, L is S plus the avatars in the light, paired by position alone (no visibility, no impostor test). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
 // hooks, llshadowdirtyfeed.h, tested against the tile's volume through the 8 m grid), when its lamp's pose changed, or while an
-// avatar is in its light (the avatars are still drawn into S until P4). A static scene costs no tile render. The casters a tile
-// draws are held at full detail (the LOD pin), so a camera that moves changes nothing in a tile. Movers and physical objects are
-// not in the fixed layer. The tiles still run under the fixed CPU caps of llprojectorpool (static 0.35 ms, dynamic 0.30 ms).
+// avatar is in its light (P4: only the avatar layer of that tile, over a fresh copy of S). A static scene costs no tile render. The
+// casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes nothing in a tile. Movers and physical
+// objects are not in the fixed layer. The tile work of a frame runs under one shared CPU cap (llprojectorpool::kFrameCapMs 0.35 ms:
+// the dynamic layer first, up to 0.20 ms, the static tiles in the rest).
 //
 // Interfaces a second cache (the point lights' faces) reuses, all keyed by a tile or face key and never by "the projector":
 // llshadowdirtyfeed.h (the hooks and the per-frame boxes), llprojectorpool::ChangeIndex (boxes against volumes),
@@ -125,9 +126,12 @@ public:
         U32 maxStaleFrames = 0;    // the oldest PENDING tile: frames since the first change that touched it (0 when none waits)
         // P3
         U64 staticRenders = 0;     // since the atlases were made: renders of the static schedule (a tile's first fill and every change)
-        U64 dynamicRenders = 0;    // ... of the dynamic schedule (a moving lamp, an avatar in the light)
+        U64 dynamicRenders = 0;    // ... of the dynamic schedule (a moving lamp redrawn whole)
         U32 lastFrameStatic = 0;
         U32 lastFrameDynamic = 0;
+        U64 layerRenders = 0;      // P4: avatar layers alone (S -> L for the tile, then the avatars over it), since the atlases were made
+        U32 lastFrameLayer = 0;
+        U32 lastFrameAvatarDraws = 0; // avatar draws of the last frame (the A_max share)
         U32 pinnedObjects = 0;     // prims and trees held at full detail by at least one tile (the LOD pin has no ceiling)
         U64 pinnedTriangles = 0;   // their triangles at the held detail (read when the stats are asked for: the cost of the pin)
         U32 moverObjects = 0;      // objects the classifier flagged as movers since the feed started (they are out of the fixed layer while active)
@@ -147,6 +151,9 @@ public:
         U32 key = 0, x = 0, y = 0, size = 0, drawnFrame = 0;
         F32 camDist = 0.f;
         bool pending = false;      // stale: waiting to be drawn again
+        bool avatar = false;       // an avatar is in its light, or L still holds one over the tile
+        bool poseStale = false;    // the lamp's pose differs from the pose the tile was drawn with
+        bool lampMoving = false;   // the lamp's pose changed since the last frame
     };
     std::vector<TileInfo> getTiles() const;
     U32 atlasS() const { return mAtlasS; }
@@ -194,7 +201,9 @@ private:
         bool lowres = false;               // down-sized by a layout change: drawn again at the new size
         bool holdsAvatar = false;          // an avatar is in its light this frame
         U32 avatarCount = 0;
-        bool drawnWithAvatar = false;      // its picture was drawn with an avatar in the light
+        bool avatarInLayer = false;        // L holds an avatar of this tile over S (the dynamic layer, P4): redrawn while served, restored from S after
+        F32 lastAvatarMs = llprojectorpool::kDefaultItemMs; // the CPU cost of its last avatar layer (the scheduler's prediction)
+        U32 layerFrame = 0;                // the frame its avatar layer was last drawn or restored (the lag of the dynamic layer)
     };
 
     bool allocateAtlases(U32 size);
@@ -207,16 +216,19 @@ private:
     void copyAtlas(U32 from_tex, U32 to_tex);
     void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
+    // The dynamic layer (P4): L's tile is S's tile again, and the avatars in the light are drawn over it (LOCAL_SHADOW_DYNAMIC: the avatar
+    // partitions and the worn objects only, from the pose the tile holds). Returns the CPU ms of the avatar draws.
+    F32 drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip);
+    void renderLayer(Record& rec);
     void unpinTile(U32 key);
     void forgetPinned(const LLDrawable* drawable);
     void unpinObject(const llprojectorpool::Id128& id);
     void pinDrawable(LLDrawable* drawable);
-    void setTileOrigin(F32 x, F32 y);
     void dropRecord(std::map<U32, Record>::iterator it);
     U32 desiredSize(const Record& rec) const;
 
-    U32 mAtlasS = 0;   // the tiles as drawn (static layer; in P2 everything is drawn into it)
-    U32 mAtlasL = 0;   // the live atlas: S plus whatever is drawn over it (P4); the only texture the lookups read
+    U32 mAtlasS = 0;   // the tiles as drawn: the fixed layer only (the avatars are not drawn into it since P4)
+    U32 mAtlasL = 0;   // the live atlas: S plus the avatars drawn over it (P4); the only texture the lookups read
     U32 mFboS = 0;
     U32 mFboL = 0;
     U32 mAtlasSize = 0;
@@ -249,6 +261,9 @@ private:
     U64 mDynamicRenders = 0;
     U32 mLastFrameStatic = 0;
     U32 mLastFrameDynamic = 0;
+    U64 mLayerRenders = 0;         // avatar layers drawn (P4)
+    U32 mLastFrameLayer = 0;
+    U32 mLastFrameAvatarDraws = 0;
     U32 mPendingTiles = 0;
     U32 mAvatarTiles = 0;
     U32 mDirtyBoxes = 0;
