@@ -41,7 +41,7 @@ class LLVector4a;
 //
 // Threads: every hook runs on the main thread (the render thread is the main thread in this viewer). A hook that runs elsewhere
 // changes nothing and flags the next frame "everything is stale", which is safe and costs one redraw of every tile. The
-// hooks are no-ops until a cache switches the feed on (setTracking); the classifier (noteServerUpdate) is the exception and
+// hooks are no-ops until a cache switches the feed on (setTracking, per owner); the classifier (noteServerUpdate) is the exception and
 // always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list;
 // nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
 class LLShadowDirtyFeed
@@ -50,9 +50,20 @@ public:
     using Cause = llprojectorpool::Cause;
 
     // ---- the consumers' side ----
-    // A cache that holds tiles switches the hooks on; off, they cost one relaxed load.
-    static void setTracking(bool on);
-    static bool tracking() { return sTracking.load(std::memory_order_relaxed); }
+    // The caches that use the feed. Tracking and the lamp roots are kept per owner (P4), so one cache releasing its tiles
+    // neither switches the hooks off nor drops the other's pending boxes or lamp roots.
+    enum class Owner : U32
+    {
+        Projectors = 1u << 0, // the projector pool (llprojectorshadows)
+        Points = 1u << 1      // the point-light face pool (a later stage)
+    };
+
+    // A cache that holds tiles switches the hooks on for itself; off, they cost one relaxed load. The hooks record while any
+    // owner tracks. The last owner to switch off drops every pending box (nobody is left to read them); an owner that switches
+    // off while another tracks drops only its own lamp roots. Main thread only (off it, nothing changes).
+    static void setTracking(Owner owner, bool on);
+    static bool tracking() { return sTracking.load(std::memory_order_relaxed) != 0; }
+    static bool tracking(Owner owner) { return (sTracking.load(std::memory_order_relaxed) & static_cast<U32>(owner)) != 0; }
 
     // Once per frame (idempotent within a frame, so two caches may call it): hands out the boxes pushed since the last frame.
     // The reference stays valid until the next frame's call.
@@ -106,8 +117,9 @@ public:
     static void noteServerUpdate(LLViewerObject* object, bool pos_changed, bool rot_changed, bool velocity, bool omega);
 
     // The roots of the linksets that hold a lamp the pool draws a tile for (the lamp's own linkset is the fixture: its changes
-    // push whatever its flags). Set once a frame by the pool; the pointers are only compared. Main thread.
-    static void setLampRoots(std::vector<const LLViewerObject*>& roots);
+    // push whatever its flags). Set once a frame by each pool for its own lamps (the feed tests the union); the pointers are only
+    // compared. Main thread.
+    static void setLampRoots(Owner owner, std::vector<const LLViewerObject*>& roots);
     // How many agent-space shifts the feed has seen (a cache that keeps volumes in agent space rebuilds them when it changes).
     static U32 shifts();
     // Objects the classifier has flagged as movers since the feed started (stats).
@@ -126,7 +138,7 @@ private:
     static void push(const llprojectorpool::Aabb& box, Cause cause);
     static bool skipped(LLDrawable* drawable, LLViewerObject* object);
 
-    static std::atomic<bool> sTracking;
+    static std::atomic<U32> sTracking; // the owners tracking, a mask of Owner
 };
 
 #endif // LL_LLSHADOWDIRTYFEED_H
