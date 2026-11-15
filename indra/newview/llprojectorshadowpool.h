@@ -1573,13 +1573,13 @@ inline uint32_t layerLagFrames(uint32_t faces, uint32_t per_frame)
 // and viewer-free so the unit test checks the rules. Each owner is one bit; owner indices 0 and 1 today.
 constexpr uint32_t kOwnerBits = 2;
 
-enum class OwnerEdge { None, First, Last };
+enum class OwnerEdge { Neither, First, Last };
 
 // the mask after an owner switches on or off, and the edge the feed acts on: First (the first owner on: the hooks start recording),
 // Last (the last one off: nobody reads the pending boxes any more: drop them). Another owner leaving changes neither.
 inline OwnerEdge ownerEdge(uint32_t was, uint32_t now)
 {
-    return (was == 0 && now != 0) ? OwnerEdge::First : ((was != 0 && now == 0) ? OwnerEdge::Last : OwnerEdge::None);
+    return (was == 0 && now != 0) ? OwnerEdge::First : ((was != 0 && now == 0) ? OwnerEdge::Last : OwnerEdge::Neither);
 }
 
 inline uint32_t ownerMaskAfter(uint32_t mask, uint32_t owner_bit, bool on)
