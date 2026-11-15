@@ -130,8 +130,8 @@ def header(ranks):
 
 namespace LLStochasticEngine
 {{
-    constexpr uint32_t BLUE_NOISE_SIZE = {N};     // the tile is BLUE_NOISE_SIZE x BLUE_NOISE_SIZE
-    constexpr uint16_t BLUE_NOISE[BLUE_NOISE_SIZE * BLUE_NOISE_SIZE] = {{
+    inline constexpr uint32_t BLUE_NOISE_SIZE = {N};     // the tile is BLUE_NOISE_SIZE x BLUE_NOISE_SIZE
+    inline constexpr uint16_t BLUE_NOISE[BLUE_NOISE_SIZE * BLUE_NOISE_SIZE] = {{
 {chr(10).join(rows)}
     }};
 }}

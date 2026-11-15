@@ -70,6 +70,7 @@ bool stoch_finite(float x)
 // offset (its seed), and the frame's golden-ratio step: frame * 2^32 / phi mod 2^32 (a Kronecker sequence, exact in
 // integers; frame 0, the fixed field, takes no step). The sum is a rotation of the tile modulo 1: every pixel's
 // values are uniform, and the tile's neighbours are spread.
+// (The table must be the one LLStochasticEngine::transparencyTable(S) builds: S + 1 mask rows, then the tile's NOISE_ROWS rows.)
 float stoch_dither(uvec2 px, uint face_seed, int frame, uint s)
 {
     uint at = (px.y & (STOCH_NOISE_SIZE - 1u)) * STOCH_NOISE_SIZE + (px.x & (STOCH_NOISE_SIZE - 1u));

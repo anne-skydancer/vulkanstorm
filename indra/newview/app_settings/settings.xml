@@ -12041,7 +12041,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaStochasticTemporal</key>
   <map>
     <key>Comment</key>
-    <string>Debug only, not in Preferences and not persisted: a value an older build saved is ignored. The accumulation is part of the method and on by default. Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in at one eighth. Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
+    <string>Debug only, not in Preferences and not persisted: a value an older build saved is ignored. The accumulation is part of the method and on by default. Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in, by a weight that comes from the pixel's measured grain (all of this frame where one layer covers the pixel, down to one eighth where the grain is large). Static views converge to a fine, steady image from 4 samples; moving objects can ghost a little.</string>
     <key>Persist</key>
     <integer>0</integer>
     <key>Type</key>

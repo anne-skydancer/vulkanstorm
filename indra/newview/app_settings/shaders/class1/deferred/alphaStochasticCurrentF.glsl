@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -22,7 +24,7 @@
 // Two RGBA16F targets (16 B/px, as the RGBA32F target they replace):
 //   0: the accumulation (alpha x colour, alpha) averaged over the samples, as the resolve blends it;
 //   1: the pixel's grain and total alpha, and its depths: (grain, total alpha, 1 - nearest stochastic depth,
-//      1 - farthest), the depths as one minus the window depth because a 16-bit float is fine near 0 (a window depth
+//      1 - farthest depth of a transparent layer that covers a sample), the depths as one minus the window depth because a 16-bit float is fine near 0 (a window depth
 //      near 1, which a distant surface has, is not).
 // The grain is the standard error of the pixel's colour: the samples of this pixel (the S = 4 samples of its
 // accumulation) each hold the colour of the layers that cover it, and their spread, over the root of their effective
@@ -39,6 +41,7 @@ out vec4 frag_data[2];
 uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the passes' samples
 uniform sampler2DMS alpha_st_trans;  // red prod(1 - alpha), green the glow (additive)
 uniform sampler2DMS alpha_st_depth;  // the stochastic depth: the nearest transparent surface, or the opaque one
+uniform sampler2D depthMap;          // the scene depth (DEFERRED_DEPTH)
 uniform int st_samples_hw;           // samples of the targets
 uniform int st_samples;              // samples in all, over the iterations
 
@@ -71,6 +74,7 @@ void main()
     float trans = 0.0;
     float z_near = 1.0;
     float z_far = 0.0;
+    float opaque = texelFetch(depthMap, px, 0).r;   // the scene depth the samples start from
     for (int s = 0; s < st_samples_hw; ++s)
     {
         vec4 a = st_sample(texelFetch(alpha_st_accum, px, s));
@@ -83,8 +87,14 @@ void main()
         trans += st_through(texelFetch(alpha_st_trans, px, s).r);
         float d = texelFetch(alpha_st_depth, px, s).r;
         z_near = min(z_near, d);
-        z_far = max(z_far, d);
+        // the farthest transparent surface: a sample no layer covers still holds the opaque depth (the spread), which is no layer
+        // of the pixel (a pane in front of a wall would else slide against the wall under any camera motion and lose its history)
+        if (d < opaque - 1e-5)
+        {
+            z_far = max(z_far, d);
+        }
     }
+    z_far = max(z_far, z_near);
     vec4 cur = sum / float(max(st_samples, 1));
     float total = clamp(1.0 - trans / float(max(st_samples_hw, 1)), 0.0, 1.0);
     float grain = 0.0;
