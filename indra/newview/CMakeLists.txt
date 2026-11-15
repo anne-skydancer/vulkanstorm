@@ -1252,6 +1252,7 @@ set(viewer_HEADER_FILES
     llfloaterexperiences.h
     llfloaterfixedenvironment.h
     llfloaterfonttest.h
+    llframecounters.h
     llfloaterforgetuser.h
     llfloatergesture.h
     llfloatergltfasseteditor.h

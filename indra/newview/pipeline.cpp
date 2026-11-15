@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "llframecounters.h"
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
@@ -2799,6 +2800,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_CULL);
     LL_PROFILE_GPU_ZONE("updateCull"); // should always be zero GPU time, but drop a timer to flush stuff out
+    LL_FRAME_COUNT_ADD(CullPasses, 1); // <Vulkanstorm> multicore stage 1
 
     bool water_clip = isWaterClip();
 
@@ -3497,6 +3499,7 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("stateSort");
+    LL_FRAME_COUNT_ADD(StateSortPasses, 1); // <Vulkanstorm> multicore stage 1
 
     if (hasAnyRenderType(LLPipeline::RENDER_TYPE_AVATAR,
                       LLPipeline::RENDER_TYPE_CONTROL_AV,

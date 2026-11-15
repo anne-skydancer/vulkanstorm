@@ -28,6 +28,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llskinningutil.h"
+#include "llframecounters.h"
 #include "llvoavatar.h"
 #include "llviewercontrol.h"
 #include "llmeshrepository.h"
@@ -132,6 +133,7 @@ void LLSkinningUtil::initSkinningMatrixPalette(
     LLVOAvatar *avatar)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    LL_FRAME_COUNT_ADD(SkinPaletteCalls, 1); // <Vulkanstorm> multicore stage 1 (K4)
 
     initJointNums(const_cast<LLMeshSkinInfo*>(skin), avatar);
 
@@ -176,6 +178,7 @@ void LLSkinningUtil::initSkinningMatrixPalette(
     const LLMatrix4a* w = world;
     LLMatrix4a* m = mat;
     LLMatrix4a* end = m + count;
+    LL_FRAME_COUNT_ADD(SkinPaletteJoints, count); // <Vulkanstorm> multicore stage 1 (K4)
 
     while (m < end)
     {

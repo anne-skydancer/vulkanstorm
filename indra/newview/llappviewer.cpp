@@ -63,6 +63,7 @@
 #include "llslurl.h"
 #include "llstartup.h"
 #include "llfocusmgr.h"
+#include "llframecounters.h"
 #include "llurlfloaterdispatchhandler.h"
 #include "llviewerjoystick.h"
 #include "llcalc.h"
@@ -2000,6 +2001,7 @@ bool LLAppViewer::doFrame()
     // pauses viewer (ex: macOS doesn't call oneFrame),
     // so stop tracking on exit.
     pauseMainloopTimeout();
+    LL_FRAME_COUNT_PLOT(); // <Vulkanstorm> multicore stage 1: the frame's counters, before the frame mark
     LL_PROFILER_FRAME_END;
 
     return ! LLApp::isRunning();
@@ -6368,7 +6370,10 @@ void LLAppViewer::idle()
         gPipeline.updateMove();
     }
 
-    LLWorld::getInstance()->updateParticles();
+    {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_APP("update particles"); // <Vulkanstorm> multicore stage 1
+        LLWorld::getInstance()->updateParticles();
+    }
 
     if (gAgentPilot.isPlaying() && gAgentPilot.getOverrideCamera())
     {
