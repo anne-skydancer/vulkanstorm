@@ -1252,7 +1252,6 @@ set(viewer_HEADER_FILES
     llfloaterexperiences.h
     llfloaterfixedenvironment.h
     llfloaterfonttest.h
-    llframecounters.h
     llfloaterforgetuser.h
     llfloatergesture.h
     llfloatergltfasseteditor.h
@@ -1351,6 +1350,7 @@ set(viewer_HEADER_FILES
     llfloaterwindowsize.h
     llfloaterworldmap.h
     llfolderviewmodelinventory.h
+    llframecounters.h
     llfollowcam.h
     llfriendcard.h
     llflyoutcombobtn.h

@@ -7,7 +7,7 @@
 //
 // With Tracy off (LL_PROFILER_CONFIGURATION below LL_PROFILER_CONFIG_TRACY) every macro expands to nothing: no counter
 // storage, no atomic, no argument evaluation, no log line. The adders are relaxed atomics because the events can in principle come from
-// more than one thread; the plot is read and reset on the main thread only (LLAppViewer::frame).
+// more than one thread; the plot is read and reset on the main thread only (LLAppViewer::doFrame).
 #ifndef LL_LLFRAMECOUNTERS_H
 #define LL_LLFRAMECOUNTERS_H
 
@@ -48,8 +48,7 @@ namespace LLFrameCounters
     inline void add(Counter c, std::uint32_t n) { gCounts[c].fetch_add(n, std::memory_order_relaxed); }
 
     // Main thread, once a frame: plot every counter and reset it. Tracy's csvexport cannot export plots, so the sums over each
-    // second also go to the log as one "FrameCounters:" line (frames, then each counter's total), the way the particle probe's
-    // ParticleProbe: line does.
+    // second also go to the log as one "FrameCounters:" line (frames, then each counter's total).
     inline void plotAndReset()
     {
         static std::uint64_t sums[NumCounters] = {};

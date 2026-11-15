@@ -877,11 +877,11 @@ F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const gl
 // lookup matrix is built from.
 void LLProjectorShadows::renderLayer(Record& rec)
 {
-    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderLayer"); // <Vulkanstorm> multicore stage 1
     if (!rec.drawn.valid)
     {
         return;
     }
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderLayer"); // <Vulkanstorm> multicore stage 1
     const F64 cpu_start = LLTimer::getTotalSeconds();
     SpotGeom g;
     g.origin = gAgent.getPosAgentFromGlobal(rec.drawn.originGlobal);
@@ -1077,11 +1077,11 @@ void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
 // it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves.
 void LLProjectorShadows::pinCasters(LLCullResult& result)
 {
-    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector pinCasters"); // <Vulkanstorm> multicore stage 1
     if (!mRenderingRec || !on_main_thread())
     {
         return;
     }
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector pinCasters"); // <Vulkanstorm> multicore stage 1
     auto pin_group = [this](LLSpatialGroup* group) {
         if (!group || group->isDead())
         {

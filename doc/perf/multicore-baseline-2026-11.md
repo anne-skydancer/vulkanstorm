@@ -25,7 +25,7 @@ Zones (existing macros, `llprofiler.h`; they are gated by `LLProfiler::active` a
 | `LLVOAvatar::updateCharacter` | `LLVOAvatar::updateCharacter` | avatar character update (idle row; `idleUpdate` already had a zone, this one splits motions and skeleton from it) |
 
 Parts of study 3.2 that already had a zone and were left alone: `df MainLoop`, `df idle`, `df Display`, `idle`,
-`idleNetwork`, `LLViewerObjectList::update`, region update (`FTM_REGION_UPDATE`), `updateMove` (`world update`), apparent
+`idle network`, `LLViewerObjectList::update`, region update (`FTM_REGION_UPDATE`), `updateMove` (`world update`), apparent
 angles (`FTM_LOD_UPDATE`), `createObjects`, `updateGeom`, `rebuildPriorityGroups`, `updateCull`, `generateSunShadow` (and
 `renderShadowImpl` below it), `updateImages`, `stateSort`, the reflection manager update, the hero probe update, `render_ui`
 (`HUD`, `UI 3D`, `UI 2D`), `Swap`.
@@ -35,10 +35,10 @@ Plots and log line (`indra/newview/llframecounters.h`; per frame, plotted just b
 | Plot | Counts | Why |
 |---|---|---|
 | `skin_palette_calls` | calls of `LLSkinningUtil::initSkinningMatrixPalette` | K4 call count (study 5.2) |
-| `skin_palette_joints` | `matMulUnsafe` calls inside them (sum of the joint counts) | K4 work per frame |
-| `cull_passes` | `LLPipeline::updateCull` | study 3.3: 9 passes expected without a mirror |
-| `state_sort_passes` | `LLPipeline::stateSort(camera, result)` | study 3.3 |
-| `projector_tiles` | projector pool static tile renders | study 3.3 and the 0.35 ms cap |
+| `skin_palette_joints` | sum of the joint counts of those calls | K4 work per frame |
+| `cull_passes` | `LLPipeline::updateCull`, including the projector tiles and avatar layers (they go through `renderShadow`) | study 3.3: world-view and shadow passes = `cull_passes - projector_tiles - projector_avatar_layers` (9 expected without a mirror) |
+| `state_sort_passes` | `LLPipeline::stateSort(camera, result)`, same composition | study 3.3 |
+| `projector_tiles` | projector pool static tile renders that reached `renderShadow` (after the early returns) | study 3.3 and the 0.35 ms cap |
 | `projector_avatar_layers` | projector pool avatar-layer passes | study 3.3 |
 
 `csvexport` cannot export plots (Tracy 0.11.1), so once a second the viewer log also gets one line,
@@ -46,11 +46,14 @@ Plots and log line (`indra/newview/llframecounters.h`; per frame, plotted just b
 projector_tiles=... projector_avatar_layers=...` (sums over the second). Divide by `frames` for a per-frame mean. The line is
 written only when Tracy is compiled in.
 
-Counts not taken: study 7.1 and 7.2 name no other count. Teleport settle time comes from the log (`LLSceneMonitor`).
+Counts not taken: study 7.1 and 7.2 name no other count. The counters are compiled in during every Tracy capture (relaxed atomics, one plot per counter per frame, one log line a second); that is part of the measured baseline. Teleport settle time comes from Tracy (below).
+
+Zone names: zones declared by function take the function name in csvexport (`LLAppViewer::idle`, `LLPipeline::createObjects`, `LLPipeline::stateSort`); the names above are shorthand. `-f` matches substrings (`-f idle` also hits `df idle` and `idle network`), so use `csvexport` on the full list once and pick exact names. `updateCull` and `stateSort` fire in every pass (world, 4 sun cascades, reflection probe, HUD, projector tiles); the per-event export `-u` is needed to attribute them to a pass by their parent zone. Category-gated zones need the Pipeline, App and Avatar profiler categories active at runtime.
 
 ## 2. The owner session (study 7.2, with the counters and the particle probe)
 
-Build: `scripts/inworld/opensim-bench/README.md` section 1. Scenes: **S1**, the local OpenSim region with a dense OAR and the
+Build (the bench README's `RelWithDebInfoOS` line fails with "Unknown argument --avx2"; use `RelWithDebInfoFS_open`, which also turns OpenSim on; the Tracy dispatch of Build Windows / Build Linux (PR #518) is the CI route):
+`autobuild configure -A 64 -c RelWithDebInfoFS_open -- --tracy --lto --avx2 "-DLL_TESTS:BOOL=FALSE"` then `autobuild build -A 64 -c RelWithDebInfoFS_open --no-configure`. Scenes: **S1**, the local OpenSim region with a dense OAR and the
 NPCs (30 from the spawner; OpenSim's cap is 40). Settings for every capture, written down once: vsync off, frame limiter
 off, one window size and field of view, default graphics preset, Shadow method Stochastic (the default). Use a scratch
 APPDATA/LOCALAPPDATA and log in by hand to the local region.
@@ -89,7 +92,7 @@ From the files:
 - main-thread ms per frame: `df MainLoop` mean; its split into the study 3.2 rows from `X.csv` and `X-self.csv`;
 - average fps, 1 % low (p99 frame time) and hitches (frames over 2x the median) from `X-frames.csv`;
 - the counters from the `FrameCounters:` log lines in the window of the capture (select by timestamp);
-- settle time after each teleport: the log timestamps to the `LLSceneMonitor` settle line;
+- settle time after each teleport: from Tracy, the time from the teleport until `createObjects` and `updateGeom` fall back under their steady-state mean (the log has no settle line; `SceneLoadingMonitorEnabled` is off by default);
 - noise: `MC1-moving` against `MC1-moving-2`, the study's gate is under 3 %.
 
 ## 4. Tables (to fill)
@@ -99,20 +102,20 @@ From the files:
 | Part | Zone | Study estimate | MC1-still ms | MC1-moving ms | MC1-moving-2 ms | Share of `df MainLoop` |
 |---|---|---|---|---|---|---|
 | idle | `idle` | 30 to 45 % | | | | |
-| network | `idleNetwork` | 3 to 10 % | | | | |
+| network | `idle network` | 3 to 10 % | | | | |
 | object updates | `LLViewerObjectList::update` | | | | | |
-| avatars | `LLVOAvatar::idleUpdate`, `LLVOAvatar::updateCharacter` | 10 to 25 % | | | | |
+| avatars | `LLVOAvatar::idleUpdate` (`updateCharacter` is a sub-zone of it: do not add the two) | 10 to 25 % | | | | |
 | regions | `FTM_REGION_UPDATE` | 1 to 5 % | | | | |
 | moves | `world update` | 1 to 5 % | | | | |
 | particles | `update particles` | 1 to 10 % | | | | |
 | apparent angles | `FTM_LOD_UPDATE` | 1 to 3 % | | | | |
 | render preparation | `Render` minus the GL parts | 35 to 50 % | | | | |
 | geometry create and rebuild | `createObjects`, `updateGeom`, `rebuildPriorityGroups` | 3 to 15 % | | | | |
-| world cull | `updateCull` (world) | 4 to 8 % | | | | |
+| world cull | `updateCull` under the display (world) parent zone | 4 to 8 % | | | | |
 | sun shadows | `generateSunShadow` | 10 to 20 % | | | | |
 | projector pool | `projector update` | at most 0.35 ms | | | | |
 | texture list | `updateImages` | 3 to 10 % | | | | |
-| world state sort | `stateSort` (world) | 8 to 15 % | | | | |
+| world state sort | `LLPipeline::stateSort` under the world parent zone (the inner per-drawable `stateSort` zone is separate) | 8 to 15 % | | | | |
 | reflection probe | reflection manager update, `Render Cube Face` | 3 to 8 % | | | | |
 | mirror | hero probe update | 0 to 20 % | | | | |
 | GL submission | `display - 5` and below | 15 to 30 % | | | | |
@@ -138,7 +141,7 @@ From the files:
 |---|---|---|---|
 | `skin_palette_calls` | | | K4: the call count; G3 cuts uploads first |
 | `skin_palette_joints` | | | |
-| `cull_passes` | | | 9 expected without a mirror |
+| `cull_passes` | | | minus projector_tiles and projector_avatar_layers: 9 expected without a mirror |
 | `state_sort_passes` | | | |
 | `projector_tiles` | | | |
 | `projector_avatar_layers` | | | |
