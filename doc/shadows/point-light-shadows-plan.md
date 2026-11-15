@@ -2,7 +2,9 @@
 <!-- Copyright (C) 2026, Anne Skydancer (Vulkanstorm) -->
 # Point-light shadows: implementation plan (study, 2026-11-15)
 
-Status: study only. Nothing here is built or measured in-world yet. Code references are to `origin/vkstorm-devel` at
+Status: study only. Nothing here is built or measured in-world yet. **Decisions D1, D2, D3, D4, D6, D7 and D8 were taken by
+the owner on 2026-11-15 ("as recommended") and are marked decided in section 8.** The auditor's findings of the same day
+are applied (sections 3.2, 3.6, 3.7, 3.4, 3.3, 5 and 9). Code references are to `origin/vkstorm-devel` at
 `1457ed0ea7`. Labels: **[V]** read in the code, **[M]** measured (machine and date given), **[E]** estimate, **[I]** inferred
 and not checked. Owner go: 2026-11-15. Earlier work: the planner verdict and the first survey of 2026-11-14
 (`reports/point-light-shadows-2026-11-14/` on the owner's machine, with the offline lookup bench `bench_point_lookup.py`).
@@ -144,6 +146,7 @@ only on 4.6 contexts and has no other path.
 | Pipeline hooks | `pipeline.cpp` | allocation and release beside `mProjectorShadows` (`:865`, `:1225-1230`, `:1547`), `forget` (`:2197`), `bindShadowMaps` (`:10148-10152`), the light loops (`:10756-10974`), `renderShadowImpl` cull and submit split (`:11596-11646`), two-sided faces (`:11625`), the update call (`:12951`) |
 | Shaders | `shadowStochasticUtil.glsl` (filter takes a tile; point lookups), `pointLightF.glsl`, `multiPointLightF.glsl` (permutation `POINT_SHADOW_POOL`, and `POINT_SHADOW_NEAR` for the near program) | |
 | Shader manager | `llviewershadermgr.cpp:1982-2003` (permutations), a near program `gDeferredPointShadowNearProgram` (`multiPointLightF`, `LIGHT_COUNT` 1), `llshadermgr.cpp:271` (the depth-common key also for `POINT_SHADOW_POOL`) | |
+| Program count | `llviewershadermgr.cpp:1982-2003` | **Growth.** `gDeferredMultiLightProgram[count-1]` has one program per batch size (16). Each gets a `POINT_SHADOW_POOL` variant (+16), `gDeferredLightProgram` gets one (+1) and the near program is new (+1): about **+18 programs** [I, from the loop at `:1982-2003`], and more if the same loop also multiplies by existing permutations. That adds shader compile and link time at start-up and in the program cache. Q2a counts the programs and the link time before and after, and builds the variants only under Stochastic detail 2 (`RenderShadowPointLights` on) so other settings pay nothing |
 | Stats | `llprojectorshadowstatsapi.cpp` (a `point` block in the same op; names keep the forbidden prefix) | devel builds only |
 
 ### 3.2 Faces
@@ -169,7 +172,9 @@ in an atlas, as in "six spotlights": Gerasimov, *Omnidirectional Shadow Mapping*
   [computed]. The far tier's single gather needs 1 texel of margin, so G = N/32 is enough. The near tier's PCSS radius is at
   most 12 texels (`ST_SPOT_KERNEL_TEXELS_MAX`) plus 1 for rounding, so G = 16 at both sizes. A receiver on the 45-degree
   boundary therefore never has a tap leave its face. The 2026-11-14 bench measured that with G = N/32 (all four sizes,
-  checked in the near tier at those sizes): 0 taps left a face, and the seam step (the same receiver looked up in both
+  checked in the near tier at those sizes): 0 taps left a face (**that zero came from the shader's `kmax` clamp to the
+  guard band, not from the guard band alone**: the bench clamps `kmax` the way the shader does, so it shows the clamp and
+  the band together are safe, not that G = N/32 alone is), and the seam step (the same receiver looked up in both
   neighbouring faces) was above 0.05 for 0.91 % of seam receivers at 64 texels and for 0.13 % or fewer at the larger sizes
   [M, RTX 5070 Ti, 2026-11-14]. Q1's test asserts the margin for every tier, and the shader also clamps `kmax` to G - 2 as
   a guard.
@@ -177,15 +182,25 @@ in an atlas, as in "six spotlights": Gerasimov, *Omnidirectional Shadow Mapping*
   programs with early-Z intact. Along each texel's ray, depth and radial distance are monotonic in each other, so the depth
   test keeps the same nearest caster either way. Seams are safe because every tap reads the one face the receiver picked
   (the guard band). They do not depend on the stored quantity. The lookup works in metres along the ray, where it needs
-  metres (bias, penumbra, kernel). LearnOpenGL and Gerasimov store radial distance because they sample a `samplerCube`
+  metres (bias, penumbra, kernel). **Decided (D1, 2026-11-15).** LearnOpenGL and Gerasimov store radial distance because they sample a `samplerCube`
   across seams, which this design does not do. Storing radial distance would need either `gl_FragDepth` in a new variant of
   every caster program (losing early-Z) or an R32F colour target, as in ogldev (+64 MiB per 4096 atlas, and a colour write
-  in every caster program). This differs from the "store radial distance" takeaway, so it is decision **D1**.
-- **Near plane = the emitter prim's box.** Per face, `near = clamp(half-extent of the emitter prim's agent AABB along that
-  face's axis, 2 cm, 1 m)`. The faces' near planes together clip exactly the box `|x| < hx, |y| < hy, |z| < hz` around the
-  light. So the emitter prim never casts into its own lamp, whether or not its geometry is batched with other prims. The
-  rest of the linkset (a shade, a base) casts: the linkset is the fixture. Decision **D4** covers the look this gives.
-  `far = 1.5 r` (the lit size).
+  in every caster program). This differs from the "store radial distance" takeaway; the owner chose it as decision **D1**.
+- **Normal-offset position (P-2).** The face pick and the lookup both use the receiver moved by the normal offset
+  (`spot_shadow_offset`), never the raw position. Picking from the raw position and looking up from the offset one can land
+  a tap on a face the receiver did not pick, outside its guard band. Q1 test P-2 therefore runs on the offset position: the
+  GLSL twin and the C++ pick the face from `pos + offset * n`, and every tap of that receiver stays in that face's tile.
+- **The emitter prim is excluded by identity, not by near planes (D4, decided).** Every face uses one small fixed near
+  plane (2 cm). The emitter prim (the prim that carries the light) is left out of every face render of its own lamp: the
+  face's caster filter skips that prim's drawable (and, where its faces are batched into a group's buffer, its draw
+  infos, matched by the owning volume). The rest of the linkset (a shade, a base) casts: the linkset is the fixture.
+  An earlier draft cut the emitter with per-face near planes, set from the half-extents of its agent AABB. That is wrong for
+  a non-cubic or large emitter: the three clipped half-extents describe a box, so a long thin tube, a rotated prim or a
+  ceiling panel either leaves part of itself casting into the lamp or cuts away neighbouring geometry (a wall, a shade)
+  that lies inside the box. Identity has neither problem. The skip is by the volume's identity, the way
+  `LLProjectorShadows` skips its own light's geometry. How the skip reaches batched draw infos is [I]; the Q2a coder lists
+  it, and if a draw info does not name its volume, the emitter prim is kept out of the group's batch for point-light
+  renders. Q1 tests the exclusion predicate (section 7). `far = 1.5 r` (the lit size).
 - **Two-sided casters**: `renderShadowImpl`'s `LLGLEnable cull(GL_CULL_FACE)` (`pipeline.cpp:11625`) becomes
   `cull(sLocalShadowTwoSided ? 0 : GL_CULL_FACE)`. The flag is set only inside point-face renders, so every other pass is
   unchanged.
@@ -210,7 +225,8 @@ behaviour for every existing caller, and it is not inside a ShadowLegacy region.
 **Recommendation: A.** Static faces are drawn only when something changes, so their cost is spread over the fill and the
 rare edits. A needs no new program, so the caster programs Legacy and the sun share stay untouched. D is the only option
 with a real CPU gain, but it needs an extension. Without that extension, D would need A as a fallback, which the rules
-forbid. Decision **D7**.
+forbid. **Decided (D7, 2026-11-15):** A, one sphere cull and one submit per face; D only if Q0 shows at least 2x less CPU
+and the AMD and Intel GL 4.6 drivers have the extension.
 
 **Q0 measures it offline** (`scripts/shadows/point_faces_bench.py`, standalone GL through `scripts/perf/gl_test_context.py`;
 no viewer, and only while no build runs). The scenes are synthetic rooms: 50k / 200k / 1M triangles in 50 / 300 / 1500 draws,
@@ -234,21 +250,23 @@ from the lamp's six origins.
 - **Far tier, the cheap tap:** one `textureGather`, four compares, bilinear weights (2 x 2 PCF). The receiver is moved by
   the normal offset `spot_shadow_offset` (0.04 m, `settings.xml:12190`) [V], and the bias is one texel at the receiver,
   converted to depth with the projector code's `z_tex`. The receiver plane is optional; Q0's lookup bench (V2 against V3)
-  picks it. Cost [M, 2026-11-14 bench, RTX 5070 Ti, 2560x1440]: **0.0038 to 0.0041 ms per lit Mpx per lamp** inside the
-  16-lamp batch, and 0.025 ms worst case (receivers in random order).
+  picks it. Cost [M, lower bound; 2026-11-14 bench, RTX 5070 Ti, 2560x1440]: **0.0038 to 0.0041 ms per lit Mpx per lamp**
+  inside the 16-lamp batch, and 0.025 ms worst case (receivers in random order). It is a lower bound: the bench ran a
+  synthetic room, with the receiver-plane term stubbed out, on NVIDIA only. AMD and Intel, a real scene and the full term
+  will cost more. Q0 repeats it (section 3.10).
 - **Near tier, PCSS:** `stSpotFilterTile` unchanged, with 8 search gathers and 32 filter gathers. Penumbra from the emitter
   extent: the emitter prim's scale clamped to 2 to 15 cm (`emitterExtent`, `llprojectorshadowpool.h:129`), the projectors'
-  rule. Largest radius 4 cm at the receiver (`ST_SPOT_RADIUS_MAX_M`), at most 12 texels and at most G - 2. Cost [M, same
-  bench]: **0.046 ms per lit Mpx at 512, 0.051 at 256** (worst case 0.19 / 0.14). A near lamp filling the 1440p screen costs
+  rule. Largest radius 4 cm at the receiver (`ST_SPOT_RADIUS_MAX_M`), at most 12 texels and at most G - 2. Cost [M, lower
+  bound, same bench and same limits]: **0.046 ms per lit Mpx at 512, 0.051 at 256** (worst case 0.19 / 0.14). A near lamp filling the 1440p screen costs
   about 0.19 to 0.21 ms.
 - **Bias in metres, camera-independent:** a normal offset of 0.04 m, plus one texel of this face at the receiver
   (`w * 2 tan_half / N` metres), lowered by the receiver plane where the near tier uses it. The camera position enters only
   through the shadows' reach fade, as for projectors (`sampleProjectorShadow:389-395`).
 
 **Uniforms.** Per pass: `point_shadow_atlas` (bound in `bindShadowMaps`) and `point_view_to_agent` (mat3). Per lamp: three
-vec4 holding the six face origins, and one vec4 `(N, 1/atlas, tier, emitter m)` with the near planes as a vec3
-(`hx, hy, hz`). In the batch these are arrays over `LIGHT_COUNT`: 16 x 5 vec4 = 80 vec4 on top of today's 32, against 256 at
-the GL minimum (1024 on the owner's card) [V limit]. The AMD dummy-reference block (`multiPointLightF.glsl:179-186`)
+vec4 holding the six face origins, and one vec4 `(N, 1/atlas, tier, emitter m)`; the near planes are the one fixed 2 cm value and need no uniform. In the batch these
+are arrays over `LIGHT_COUNT`: 16 x 4 vec4 = 64 vec4 on top of today's 32, against 256 at the GL minimum (1024 on the
+owner's card) [V limit]. The AMD dummy-reference block (`multiPointLightF.glsl:179-186`)
 extends to the new arrays. A lamp without six drawn faces has tier 0 (no lookup).
 
 **Where it runs** (C++, `pipeline.cpp:10756-10974`):
@@ -264,7 +282,7 @@ extends to the new arrays. A lamp without six drawn faces has tier 0 (no lookup)
 ### 3.5 Tiers by camera position, with hysteresis (owner decision 2)
 
 - **Near candidate:** the camera is inside the lamp's lit sphere (`|cam - centre| < 1.5 r`). Of the candidates, the K
-  nearest are near (**D2**, K = 2 recommended).
+  nearest are near (**D2**, decided: K = 2, confirmed after Q0).
 - **Enter** when a candidate is closer than the current K-th near lamp by more than `max(0.5 m, 15 %)`. **Leave** when the
   camera is beyond `1.5 r + 1 m`, or when displaced by that rule. Each change is held for at least 0.5 s.
 - Only the camera's **position** goes in, never its orientation. Q1 test: the same path with a spinning camera gives the
@@ -290,8 +308,10 @@ Atlas use [computed]:
 
 - **Records** per lamp (eligible: a point light in `mNearbyLights` within the reach, not worn, not on an avatar, not a HUD,
   a radius, not black). This is the projectors' `eligible` (`llprojectorshadows.cpp:116-138`) without the spot test. The
-  **pose** is the global position, the radius and the emitter AABB. Rotation does not enter, because the faces are
-  agent-aligned.
+  **pose** is the global position, the radius and a **rotation-invariant emitter size** (the length of the emitter prim's
+  scale vector, quantised to 1 cm, not its agent AABB). The agent AABB changes whenever a non-cubic prim turns, so a
+  spinning lamp prim would change the pose every frame and redraw all six faces every frame. Rotation does not enter, because
+  the faces are agent-aligned. Q1 test: a prim spinning about any axis gives the same pose key on every frame.
 - **Change index:** six pyramids per lamp (`makePyramid` with the face fov, near and far), keyed `lamp * 8 + face`. A dirty
   box marks only the faces it touches, with the first cause kept per face. Causes are the projectors': `new`, `lod_up`,
   `add_remove`, `edit`, `mover`, `lamp`, `avatar`, `lowres`, `other`.
@@ -302,7 +322,11 @@ Atlas use [computed]:
     face mask;
   - selection is `selectStatic` / `selectDynamic` over the merged lists. Static: never-drawn items nearest first, then
     oldest first by frames. Dynamic: the 4-frame deadline first, then nearest by camera position;
-  - **one** static cap (0.35 ms CPU) and **one** dynamic cap (0.30 ms CPU, plus `A_max` avatar draws counted as face draws);
+  - **one** static cap and **one** dynamic cap, **re-divided** (P4). Today each pool has 0.35 ms static plus 0.30 ms
+    dynamic (`llprojectorshadowpool.h:1364-1367`); naively shared by two pools that sum to 0.65 ms of CPU, against about
+    0.4 ms of headroom inside +5 %. Proposed, [E] until P4 measures: **static 0.20 ms and dynamic 0.20 ms, 0.40 ms for both
+    pools together** (the fill runs mostly when the dynamic work is idle, so the sum is rarely reached), plus `A_max`
+    avatar draws counted as face draws. P4 reports the measured sum in the club and the living room;
   - the first pick of each pool's pending list always runs, so neither pool can starve the other. Q1 test P-7 checks this;
   - one GL state save and restore per frame (`llprojectorshadows.cpp:1164-1229`, moved).
 - **Moving lamps** (rare: a scripted lamp, an animated fixture). A dynamic item redraws its faces under the dynamic cap,
@@ -325,14 +349,22 @@ P4 sets up the layer for both pools: S holds the fixed layer, and L is S plus th
   1. the near-tier lamps' avatar faces every frame;
   2. projector tiles with an avatar every frame (the P4 rule);
   3. the far lamps' faces round-robin, oldest first, with the 4-frame deadline.
-- **Lag** of a far lamp's avatar shadow [E]: `ceil(far faces / spare draws)` frames, where spare = `A_max` minus the
-  every-frame draws (2 near lamps x 3 faces + 2 projector tiles = 8):
+- **Lag** of a far lamp's avatar shadow [E, an estimate until P4 and Q2a measure it]: `ceil(far faces / spare draws)`
+  frames, where **spare = min(`A_max` spare, CPU cap / per-face cost)**. `A_max` spare is `A_max` minus the every-frame
+  draws (2 near lamps x 3 faces + 2 projector tiles = 8). The CPU term is what the dynamic cap leaves after those 8 draws:
+  `dynamic cap / c - 8` draws, with `c` the CPU cost of one avatar-face draw. `c` is not measured (the projector tile costs
+  0.07 ms with its cull and sort; an avatar-only face draw skips most of that), so the table takes 0.01 and 0.02 ms [E] with
+  the proposed 0.20 ms dynamic cap (20 and 10 draws a frame, so 12 and 2 spare). Two faces per avatar and far lamp, so
+  10 / 20 / 55 lamps are 20 / 40 / 110 faces. Frames, and ms at 60 fps:
 
-  | Avatar in far spheres (2 faces each) | `A_max` 12: frames / ms at 60 / 120 fps | `A_max` 24 |
-  |---|---|---|
-  | 10 | 5 / 83 / 42 | 2 / 33 / 17 |
-  | 20 | 10 / 167 / 83 | 3 / 50 / 25 |
-  | 55 | 28 / 467 / 233 | 7 / 117 / 58 |
+  | Avatar in far spheres | spare 2 (`A_max` 12 or 24, c = 0.02 ms) | spare 4 (`A_max` 12, c = 0.01 ms) | spare 12 (`A_max` 24, c = 0.01 ms) |
+  |---|---|---|---|
+  | 10 | 10 / 167 ms | 5 / 83 ms | 2 / 33 ms |
+  | 20 | 20 / 333 ms | 10 / 167 ms | 4 / 67 ms |
+  | 55 | 55 / 917 ms | 28 / 467 ms | 10 / 167 ms |
+
+  The earlier table used `A_max` alone and so assumed the CPU cap would not bind. At c = 0.02 ms it does, and it caps the
+  spare at 2 whatever `A_max` is.
 
 - **GPU cost per avatar face draw:** 0.012 ms at 146k triangles by the pool's 0.08 ms per Mtri, up to the 0.037 ms measured
   for a 2048 projector view [M, pool spec]. So `A_max` = 24 costs 0.3 to 0.9 ms of GPU while the avatar is under many
@@ -373,6 +405,7 @@ From `ProjectorShadows.stats` with a `point` block:
 | emitter AABB half-extents; linked prims whose box contains the light centre (the closed-shade predictor for D4) | per light |
 | estimated screen coverage (the projected sphere, clipped) | per light |
 | draws, triangles at the current LOD and at the pinned LOD, avatars inside the sphere | per light, on request (`census: true`): one sphere cull per lamp, only when asked |
+| **LOD pin on all lamps' spheres**: total pinned triangles over all lamps (union of the spheres), against the main view's triangles at the natural LOD; the extra main-view GPU ms with the pins held (frame with and without) | per frame, in the three rooms |
 | GPU ms of `local lights` (new `VKS_GLSTAT_PASS`) and `fullscreen lights` | per frame |
 
 Then `perf_check.py --no-glstats` frames in the living room, the bedroom and outside, Stochastic detail 2, vsync off, at
@@ -408,21 +441,30 @@ The headroom inside the owner's rooms is unknown; Q0 measures it.
 
 | Stage | GPU ms | CPU ms | Memory | Basis |
 |---|---|---|---|---|
-| P4 | 0.04 to 0.15 while an avatar stands under projectors (1 to 4 avatar draws); 0 otherwise | ≤ 0.30 (dynamic cap) while an avatar is under a lamp; off-screen animation of paired avatars: unknown, measured | 0 | pool spec measurements [M], cap by construction |
+| P4 | 0.04 to 0.15 while an avatar stands under projectors (1 to 4 avatar draws); 0 otherwise | ≤ 0.20 (re-divided dynamic cap, 3.6) while an avatar is under a lamp; off-screen animation of paired avatars: unknown, measured | 0 | pool spec measurements [M], cap by construction |
 | Q0 | 0 in release (development hooks only) | census only on request | 0 | |
 | Q1 | 0 | 0 | 0 | header and tests |
-| Q2a lookup, 53 far lamps | 0.16 to 0.31 (20 to 40 % coverage each, x 0.004 ms per lit Mpx) | < 0.05 (pose reads, uniforms) | **+128 MiB** (two 4096² D32F) | bench [M] x coverage [E] |
-| Q2a avatar faces | 0.1 to 0.3 while the avatar is in lamp spheres (cap) | inside the shared 0.30 | 0 | 3.7 |
+| Q2a lookup, 53 far lamps | 0.16 to 0.31 (20 to 40 % coverage each, x 0.004 ms per lit Mpx) | < 0.05 (pose reads, uniforms) | **+128 MiB** (two 4096² D32F) | bench [M, lower bound: synthetic room, receiver-plane term stubbed, NVIDIA only] x coverage [E, a guess: the far-lamp coverage factor of 20 to 40 % is not measured] |
+| LOD pin on all lamps' spheres (every lamp, D2 of 2026-11-14) | unknown: a lamp over a dense room pins that room at full LOD in the main view too (up to the extra triangles `pinned_triangles` counts) | pin and unpin bookkeeping per lamp, < 0.05 | 0 | not estimated: Q0 measures it (3.10) |
+| Q2a avatar faces | 0.1 to 0.3 while the avatar is in lamp spheres (cap) | inside the shared 0.20 | 0 | 3.7 |
 | Q2a static faces | 0 per frame after the fill | 0 | | P3 design |
-| Q2a fill transient | up to 0.1 to 1.2 per frame for 0.3 to 2.5 s | ≤ 0.35 per frame (cap) | | A: vertex x 6 at 0.08 ms per Mtri |
+| Q2a fill transient | up to 0.1 to 1.2 per frame for 0.3 to 2.5 s | ≤ 0.20 per frame (static cap, 3.6; the fill lasts longer than the 0.3 to 2.5 s of the earlier 0.35 ms cap, about 1.75x) | | A: vertex x 6 at 0.08 ms per Mtri |
 | Q2b, 2 near lamps | +0.06 to +0.38 (0.19 ms full-screen each x 15 to 100 % coverage) | ~0 | 0 (faces counted above) | bench [M] x coverage [E] |
 | Q3 | −11 % (4 lamps) to −27 % (one lamp) of the lookup for min/max [M offline]; the other levers unknown | +a fragment min/max pass per face draw (small faces: under 0.01 ms [E]) | +2 MiB (RG32F, 1/8 resolution of L) | 2026-11-14 bench |
 | Q4 (optional) | alpha pixels x 7 x 0.004 ms per Mpx | ~0 | 0 | |
 
-**Running total** (adding GPU and CPU as if serial, an upper bound) [E]:
+**Running total** (adding GPU and CPU as if serial, an upper bound) [E]. The benched terms are lower bounds [M, lower
+bound] (synthetic room, receiver-plane term stubbed, NVIDIA only) and the far-lamp coverage factor is a guess, so the real
+totals can be higher:
 - after Q2a: 0.2 to 0.7 ms;
 - after Q2b: 0.3 to 1.2 ms;
 - after Q3: about 0.25 to 1.0 ms.
+
+**These are this study's own stages only.** The budget is shared with every other open light and shadow stage (the
+unified-lighting and light-atlas stages, the stochastic shadow and transparency upgrades, projector work and the
+remaining shadow and light stages of the roadmap). Each stage's PR reports its own cost and the **running total including
+all of those**; the 1.11 ms headroom is spent from the whole list, not from this plan alone. Q0 records the current
+total on devel so each later stage subtracts from what is left.
 
 The 1.11 ms headroom measured at one place covers the low and middle of that range and not the top. **Decision points:**
 after Q0 (do the rooms have headroom?) and after Q2a (measured). If the cost does not fit, the order of cuts is:
@@ -437,7 +479,7 @@ Nothing integrates into release above 82178 + 5 %.
 
 | Setting | Before | After |
 |---|---|---|
-| Stochastic, detail 2 | point lights pass through walls; avatars cast no lamp shadow | light stops at walls (64-texel far faces leak along the base of a thin wall: about 10 to 20 cm wide at 3 m from the lamp, 5 to 10 cm at 128 [computed from the texel size]); near lamps give soft PCSS shadows with the emitter's size; avatars cast from every lamp, far lamps lagging (3.7); lamps inside a closed opaque linked shade light only through its openings (D4); reflections from probes no longer carry lamp light through walls; +128 MiB of video memory |
+| Stochastic, detail 2 | point lights pass through walls; avatars cast no lamp shadow | light stops at walls (64-texel far faces leak along the base of a thin wall: about 10 to 20 cm wide at 3 m from the lamp, 5 to 10 cm at 128 [computed from the texel size]); near lamps give soft PCSS shadows with the emitter's size; avatars cast from every lamp, far lamps lagging (3.7); the emitter prim casts nothing and the rest of its linkset does, so a lamp inside a closed opaque linked shade lights only through its openings (D4); reflections from probes no longer carry lamp light through walls; +128 MiB of video memory |
 | Stochastic, detail 0 or 1 | | unchanged |
 | Legacy (any detail) | | byte-identical: `check_legacy_shadows.py`, and `check_legacy_glsl.py` with `pointLightF.glsl` and `multiPointLightF.glsl` added to `PERMUTED` and `POINT_SHADOW_POOL`, `POINT_SHADOW_NEAR` to `UNDEFINED` |
 | Forward alpha | lamps unshadowed | unchanged until Q4 |
@@ -452,27 +494,30 @@ at a time, one review round (reviewer + auditor → coder → checker).
 
 | Stage | Scope | Files | Tests and gates | Performance gate (1440p) | Owner check | Effort (calibrated) |
 |---|---|---|---|---|---|---|
-| **P4** Avatar layer (both pools) | S/L split: static renders without avatar types, avatars into L under `LOCAL_SHADOW_DYNAMIC`, restore copies; camera-independent pairing; paired avatars marked visible (attachments, full motion); impostors drawn in full in the dynamic pass (`lldrawpoolavatar.cpp:389`, `pipeline.cpp:3232`, `lldrawable.cpp:1543`, plus every `isImpostor()` site the coder lists: `lldrawable.cpp:1636` and others); coordinator with shared caps; feed tracking owner mask and per-owner lamp roots | `llprojectorshadows.*`, `llprojectorshadowpool.h`, `lllocalshadows.*` (new), `llshadowdirtyfeed.*`, `pipeline.cpp/.h`, `lldrawpoolavatar.cpp`, `lldrawable.cpp` | unit: merged selection never starves, avatar draws ≤ `A_max`; spec gates: an avatar under 3 lamps casts every frame (nearest) and within 4 frames (far); an impostored avatar casts; an avatar behind the camera casts in pose; O-1, O-2, O-6 pass; Legacy guards | frame in the club and the living room within 82178 + 5 %; dynamic CPU ≤ 0.30 ms; report off-screen animation cost, the CPU of an avatar-only `renderShadow`, GPU per avatar draw | walk under 3 lamps; a dancer under club lights | 3 to 6 h |
-| **Q0** Measure | census (3.10); `local lights` pass scope; `point_faces_bench.py`; `bench_point_lookup.py` into `scripts/shadows/` and run again on devel; budget page `doc/shadows/point-shadow-budget.md` with empty tables | `llprojectorshadowstatsapi.cpp`, `pipeline.cpp/.h` (stats accessor, scope), scripts | `check_release_hooks.py` on the release-bound diff; benches on an idle GPU | adds nothing to a release frame | session: living room, bedroom, outside (frame, census, coverage) | 2 to 3 h + session |
-| **Q1** GL-free core | `llpointpool`: face table and matrices, pick with ties, guard band per tier, sizes and demand, tier rule with hysteresis, face masks, merged items, lag accounting; the GLSL twin of the face pick | `llpointshadowpool.h`, `tests/llpointshadowpool_test.cpp`, ci-checks step, `scripts/shadows/point_faces_g1.py` | P-1 pick against brute force on 10⁶ directions with exact ties; P-2 every tap of a seam receiver stays inside its tile for each tier's kmax; P-3 hysteresis never oscillates on a recorded walk, invariant under camera rotation; P-4 capacity (256 lamps at the floor ≤ 40 % of 4096); P-5 an upgrade keeps old faces until six new are drawn; P-6 lag bound; P-7 no pool starves; **G1-P**: GLSL face pick, uv and depth equal the C++ on shared vectors (pick exact, uv and depth ≤ 1 ulp) | none at runtime | — | 1.5 to 3 h |
-| **Q2a** Faces, cheap tap, avatars | `LLPointShadows` (atlases through `llshadowatlas`, sphere cull + mask submits, two-sided, emitter near planes, pins, S → L, avatar faces); filter refactor; `samplePointShadow` cheap tier; `pointLightF` and batch permutations; uniforms and binding; stats | `llpointshadows.*`, `llshadowatlas.*`, `pipeline.cpp/.h`, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `llviewershadermgr.cpp`, `llshadermgr.cpp`, `check_legacy_glsl.py` | G1 stays max abs 0 (projectors); G1-P extended to the lookup (atlas against a standalone face); Legacy guards; static scene: 0 face renders a frame after the fill; O-1 style orbit on point faces (CRC unchanged while the camera orbits); light stops at a test wall; method and detail switches, window toggle, quit without GL errors; smoke launch | living room within 82178 + 5 %, the lookup ≤ 0.35 ms GPU, per-frame CPU ≤ 0.05 ms in a static scene; fill time and avatar lag reported | Release in-world: the living room (bleeding gone), walk for avatar shadows | 4 to 8 h |
+| **P4** Avatar layer (both pools) | S/L split: static renders without avatar types, avatars into L under `LOCAL_SHADOW_DYNAMIC`, restore copies; camera-independent pairing; paired avatars marked visible (attachments, full motion); impostors drawn in full in the dynamic pass (`lldrawpoolavatar.cpp:389`, `pipeline.cpp:3232`, `lldrawable.cpp:1543`, plus every `isImpostor()` site the coder lists: `lldrawable.cpp:1636` and others); coordinator with shared caps, re-divided to static 0.20 + dynamic 0.20 ms for both pools (3.6); feed tracking owner mask and per-owner lamp roots | `llprojectorshadows.*`, `llprojectorshadowpool.h`, `lllocalshadows.*` (new), `llshadowdirtyfeed.*`, `pipeline.cpp/.h`, `lldrawpoolavatar.cpp`, `lldrawable.cpp` | unit: merged selection never starves, avatar draws ≤ `A_max`; spec gates: an avatar under 3 lamps casts every frame (nearest) and within 4 frames (far); an impostored avatar casts; an avatar behind the camera casts in pose; O-1, O-2, O-6 pass; Legacy guards | frame in the club and the living room within 82178 + 5 %; static plus dynamic CPU ≤ 0.40 ms for both pools together; report off-screen animation cost, the CPU of an avatar-only `renderShadow` (this is `c`, 3.7), GPU per avatar draw | walk under 3 lamps; a dancer under club lights | 3 to 6 h |
+| **Q0** Measure | census (3.10); `local lights` pass scope; `point_faces_bench.py`; `bench_point_lookup.py` into `scripts/shadows/` and run again on devel, with the receiver-plane term real and, if a card is available, on AMD or Intel; the LOD-pin measurement on all lamps' spheres (3.10); budget page `doc/shadows/point-shadow-budget.md` with empty tables | `llprojectorshadowstatsapi.cpp`, `pipeline.cpp/.h` (stats accessor, scope), scripts | `check_release_hooks.py` on the release-bound diff; benches on an idle GPU | adds nothing to a release frame | session: living room, bedroom, outside (frame, census, coverage) | 2 to 3 h + session |
+| **Q1** GL-free core | `llpointpool`: face table and matrices, pick with ties, guard band per tier, sizes and demand, tier rule with hysteresis, face masks, merged items, lag accounting; the GLSL twin of the face pick | `llpointshadowpool.h`, `tests/llpointshadowpool_test.cpp`, ci-checks step, `scripts/shadows/point_faces_g1.py` | P-1 pick against brute force on 10⁶ directions with exact ties; P-2 every tap of a seam receiver stays inside its tile for each tier's kmax, with both the face pick and the lookup taken from the normal-offset position (3.2); **P-8 emitter exclusion by identity**: for a long thin emitter, a rotated emitter and a large panel emitter, the emitter prim casts nothing into its own lamp, while an adjacent linked prim whose box overlaps the emitter's box still casts (a near-plane cut fails this); **P-9 pose key**: a prim spinning about any axis keeps the same pose key every frame; P-3 hysteresis never oscillates on a recorded walk, invariant under camera rotation; P-4 capacity (256 lamps at the floor ≤ 40 % of 4096); P-5 an upgrade keeps old faces until six new are drawn; P-6 lag bound; P-7 no pool starves; **G1-P**: GLSL face pick, uv and depth equal the C++ on shared vectors (pick exact, uv and depth ≤ 1 ulp) | none at runtime | — | 1.5 to 3 h |
+| **Q2a** Faces, cheap tap, avatars | `LLPointShadows` (atlases through `llshadowatlas`, sphere cull + mask submits, two-sided, emitter exclusion by identity, pins, S → L, avatar faces); filter refactor; `samplePointShadow` cheap tier; `pointLightF` and batch permutations; uniforms and binding; stats | `llpointshadows.*`, `llshadowatlas.*`, `pipeline.cpp/.h`, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `llviewershadermgr.cpp`, `llshadermgr.cpp`, `check_legacy_glsl.py` | G1 stays max abs 0 (projectors); G1-P extended to the lookup (atlas against a standalone face); Legacy guards; program count and link time before and after (3.1); static scene: 0 face renders a frame after the fill; O-1 style orbit on point faces (CRC unchanged while the camera orbits); light stops at a test wall; method and detail switches, window toggle, quit without GL errors; smoke launch | living room within 82178 + 5 %, the lookup ≤ 0.35 ms GPU, per-frame CPU ≤ 0.05 ms in a static scene; fill time and avatar lag reported | Release in-world: the living room (bleeding gone), walk for avatar shadows | 4 to 8 h |
 | **Q2b** Near tier | tier rule live (K, hysteresis), 256/512 faces with G 16, PCSS program, upgrade and downgrade paths | `llpointshadows.*`, `llpointshadowpool.h`, shaders, shader manager | P-3 and P-5 in-world: walk through doorways, the tier log shows no flapping; no frame with a near lamp unshadowed during the switch | the near lamps' GPU ≤ 0.2 ms each at full screen; total within +5 % | walk into the living room and out; recording reviewed for size, shape, edges and stability | 2 to 4 h |
 | **Q3** Levers | (a) hierarchical min/max early-out, a fragment pass per face draw, exact; (b) empty-face skip (a face with no caster: no sampling); (c) two-tier filter refinement: the near tier's lighter filter (8 + 16 taps) beyond a position-based distance with hysteresis (pool P5a); (d) importance skip: no lookup where the lamp's contribution is under one 8-bit step; (e) single-face perspective cull for one-face redraws. Only the ones Q2 shows are needed | shaders, `llpointshadows.cpp` | (a) and (b): image difference 0; (c) and (d): measured image change, penumbra at N and N/2 | each lever's gain measured; total within +5 % | — | 2 to 4 h |
 | **Q4** (optional) Forward alpha | cheap tap in the 7 forward slots | forward shaders, `setupHWLights` | Legacy GLSL guard for the forward shaders; alpha in a lamp room against the deferred surface behind it | measured | glass and hair in the living room | 1 to 2 h |
 
 **Total:** about 15 to 30 h of pipeline time, two to three days of wall clock, plus sessions for P4, Q0 and Q2.
 
-## 8. Decisions for the owner (recommendation first)
+## 8. Decisions
 
-| | Decision | Options (recommended first) |
+**Decided by the owner on 2026-11-15 ("as recommended"): D1, D2, D3, D4, D6, D7, D8.** The chosen option is the first one
+in each row. (D5 does not exist: the numbering follows the 2026-11-14 list.)
+
+| | Decision | Options (decided first) |
 |---|---|---|
-| **D1** | What a face stores | (a) **the face's perspective depth (D32F), the projectors' format and filter; metres along the ray in the lookup.** Seams are safe through the guard band, early-Z is kept, and the caster programs are unchanged. (b) Radial distance through `gl_FragDepth` (LearnOpenGL, Gerasimov): a new variant of every caster program, no early-Z. (c) An R32F colour target (ogldev): +64 MiB per 4096 atlas, and a colour write in every caster program |
-| **D2** | Number of near lamps K | (a) **2** (confirmed after Q0); (b) 1; (c) 3 |
-| **D3** | Point atlas size | (a) **4096 on every card from 3 GB (2048 below): 128 MiB**, enough for 59 lamps at 52 %; (b) the projectors' rule (8192 from 11 GB dedicated, 512 MiB) |
-| **D4** | What casts into a lamp of its own linkset | (a) **the emitter prim is cut by the per-face near planes; the rest of the linkset casts** (the fixture). Lamps inside a closed opaque shade light only through its openings, the same look change the projector ambiance made; Q0 counts how many of the owner's lamps that touches. (b) The whole lamp linkset casts nothing: light leaks through shades as today. (c) Only linked prims that contain the light centre are cut |
-| **D6** | Forward alpha | (a) **unshadowed in Q2; Q4 after the owner has seen Q2**; (b) in Q2; (c) never |
-| **D7** | Face rendering | (a) **one sphere cull, one submit per face in the mask (core GL, no new shader variants)**; switch to (b), the vertex-shader `gl_ViewportIndex` with instancing, only if Q0 shows at least 2x lower CPU and the extension is present on AMD and Intel GL 4.6 drivers; (c) one cull per face |
-| **D8** | What turns it on | (a) **Stochastic, detail 2 ("Sun/Moon + Projectors"), with a debug setting `RenderShadowPointLights` (default on) for A/B; no Preferences entry**; (b) a new detail level 3 |
+| **D1** DECIDED | What a face stores | (a) **the face's perspective depth (D32F), the projectors' format and filter; metres along the ray in the lookup.** Seams are safe through the guard band, early-Z is kept, and the caster programs are unchanged. (b) Radial distance through `gl_FragDepth` (LearnOpenGL, Gerasimov): a new variant of every caster program, no early-Z. (c) An R32F colour target (ogldev): +64 MiB per 4096 atlas, and a colour write in every caster program |
+| **D2** DECIDED | Number of near lamps K | (a) **2** (confirmed after Q0); (b) 1; (c) 3 |
+| **D3** DECIDED | Point atlas size | (a) **4096 on every card from 3 GB (2048 below): 128 MiB**, enough for 59 lamps at 52 %; (b) the projectors' rule (8192 from 11 GB dedicated, 512 MiB) |
+| **D4** DECIDED | What casts into a lamp of its own linkset | (a) **the emitter prim casts nothing, and the rest of the linkset casts** (the fixture). The cut is made by **excluding the emitter prim by identity**, not with per-face near planes (3.2: near planes fail for non-cubic or large emitters). Lamps inside a closed opaque shade light only through its openings, the same look change the projector ambiance made; Q0 counts how many of the owner's lamps that touches. (b) The whole lamp linkset casts nothing: light leaks through shades as today. (c) Only linked prims that contain the light centre are cut |
+| **D6** DECIDED | Forward alpha | (a) **unshadowed in Q2; Q4 optional, after the owner has seen Q2**; (b) in Q2; (c) never |
+| **D7** DECIDED | Face rendering | (a) **one sphere cull, one submit per face in the mask (core GL, no new shader variants)**; switch to (b), the vertex-shader `gl_ViewportIndex` with instancing, only if Q0 shows at least 2x lower CPU and the extension is present on AMD and Intel GL 4.6 drivers; (c) one cull per face |
+| **D8** DECIDED | What turns it on | (a) **Stochastic, detail 2 ("Sun/Moon + Projectors"), with a debug setting `RenderShadowPointLights` (default on) for A/B; no Preferences entry**; (b) a new detail level 3 |
 
 The other open points of 2026-11-14 are settled here: D2 of that list (pin for every lamp) is the LOD pin for every lamp
 (3.6), and D3 is D3 above.
@@ -483,6 +528,13 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 - **Cost:** the top of the estimate exceeds the measured headroom (section 5). The levers and cut order are planned; Q0 decides.
 - **Avatar layer:** with many lamps the GPU cost is real and the far lag is visible (3.7). It needs the owner's eye at Q2a.
 - **Look change (D4):** lamps in closed shades go dark outside their openings.
+- **Benched costs are lower bounds** [M, lower bound]: synthetic room, receiver-plane term stubbed, NVIDIA only. The
+  far-lamp coverage factor is a guess. The running totals can be higher, and they share the budget with every other open
+  light and shadow stage (section 5).
+- **Emitter identity on batched geometry:** the exclusion needs the draw info to name its volume (3.2); if it does not, the
+  emitter prim is kept out of the batch for point-light renders.
+- **Program count:** about +18 shader programs (3.1).
+- **LOD pin on all lamps:** its main-view cost is unmeasured until Q0.
 - **Fill transient:** with method A each face goes through the vertex stage for every draw in the sphere (up to about 1 ms
   GPU per frame during the fill) [E].
 - **Thin walls** at 64-texel faces leak along their base (section 6).
