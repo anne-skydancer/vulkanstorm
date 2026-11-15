@@ -340,9 +340,7 @@ visible to the animation, the impostor ranking or `updateImpostors`.
 
 **Known limits (owner's walk session).** (1) The layer's LOD is not pinned: `pinCasters` runs for the fixed layer only, so an avatar's
 body and its worn objects take the LOD the camera's distance gives them, and their silhouette may change across an LOD boundary as
-the camera moves. (2) The avatar draws of a face are not capped: a face draws every avatar in its light, and the scheduler counts
-`min(avatars, A_max)`. A crowd under one lamp costs more than predicted for the first draw; the prediction follows `lastAvatarMs`
-afterwards. (3) `updateCull` still culls the whole bridge partition for the layer and `markVisible` filters it; the 0.04 ms a face is an
+the camera moves. (2) A face draws at most A_max (24) avatars, the nearest to the lamp (`LLPipeline::sLocalShadowAvatars`, tested by the body in `renderShadow` and by the attachments in `LLSpatialBridge::setVisible`), so a crowd under one lamp is bounded by the count the scheduler predicts; the farther avatars of a crowd do not cast in that face. (3) `updateCull` still culls the whole bridge partition for the layer and `markVisible` filters it; the 0.04 ms a face is an
 estimate.
 
 ### The combined cap

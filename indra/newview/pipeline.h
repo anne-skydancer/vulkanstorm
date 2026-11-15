@@ -1255,6 +1255,9 @@ public:
     // detail (the LOD pin, pinCasters). LOCAL_SHADOW_DYNAMIC is the avatar layer of stage P4.
     enum ELocalShadowPass : U8 { LOCAL_SHADOW_NONE = 0, LOCAL_SHADOW_STATIC = 1, LOCAL_SHADOW_DYNAMIC = 2 };
     static ELocalShadowPass sLocalShadowPass;
+    // the avatars the layer draws in this face (the nearest to the lamp, at most the pool's A_max); null outside the layer
+    static const std::vector<const LLVOAvatar*>* sLocalShadowAvatars;
+    static bool localShadowAvatarAllowed(const LLVOAvatar* avatar);
     // </Vulkanstorm>
     static F32 RenderEdgeDepthCutoff;
     static F32 RenderEdgeNormCutoff;
