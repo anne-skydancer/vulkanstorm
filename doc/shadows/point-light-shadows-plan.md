@@ -612,10 +612,14 @@ cuts the GPU time by up to 2.5x. On the natural rooms A+masks equals B in draws,
 **Which method wins where.** CPU: E is lowest nearly everywhere (0.96 ms at 1M, mask 6), but only for draws that share a vertex buffer (ten
 per buffer in this bench); the viewer draws per `LLDrawInfo` with its own buffer, texture and matrix, so E is not available to it without a
 rework outside this plan. Of the rest, C, D and D′ are within 0.3 ms of each other at 1M and cost one submit however many faces are in the
-mask; A and B grow with the mask. GPU: C, D and E are lowest on the large rooms; D′ is about 3 % (1M) to 53 % (200k) above D, and 7.7x below A at 1M, mask 6
-(an upper bound, see above). C has the lowest GPU time at 1M with E (0.61 ms) but costs a fixed 0.03 ms or so on the smaller rooms at one to three faces
-(room200k mask 1: 0.033 ms against 0.006 to 0.011), and needs a geometry-shader variant of every caster program; at room50k mask 6 and on the avatar D′ is slower than C. B beats A
-on CPU and GPU in every scene with 300 draws or more, because the face frustum removes draws.
+mask; A and B grow with the mask. GPU: no method is lowest everywhere. At one or two faces the methods that cull per face are lowest where the
+face frustum removes most draws (B and A+masks: 0.018 ms at room1M mask 1, 0.008 ms at room200k mask 2); at room1M with two faces or more E is
+lowest (0.08 to 0.24 ms). With all six faces C, D and E are level at room200k (0.048 to 0.049 ms), and at room1M E (0.24 ms) is ahead of C (0.61),
+D′+masks (0.84), D (0.90) and D′ (0.93). At mask 6 D′ is 3.5 % (1M) to 53 % (200k) above D, and 7.7x below A at 1M (an upper bound, see above).
+C stays at 0.59 to 0.65 ms on room1M at every mask, has a floor the others do not (about 0.01 ms on room50k, 0.03 to 0.04 ms on room200k and the
+avatar at one to three faces; room200k mask 1: 0.033 ms against 0.006 to 0.011), and needs a geometry-shader variant of every caster program; at
+mask 6 D′ is slower than C on room50k and on the avatar. B beats A on CPU and GPU at every mask in the scenes with 300 draws or more, because the
+face frustum removes draws.
 
 **D7 by the plan's own rule [recommendation only; no decision changed].** The rule: D′ must give at least 2x less CPU than A and pass the
 image check. The image check passes in all 70 configurations. **Against plain A the 2x gate is met at masks of 3 and 6 faces** (2.14 to 2.40
