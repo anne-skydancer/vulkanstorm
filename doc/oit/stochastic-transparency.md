@@ -15,13 +15,13 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
   Skydancer since `90f68a8`, notably `e5950ced` the method, `9424d986` the passes at their own
   sample count and the alpha-only shading, `887dafa4` the glow, `2692cbfd` every anti-aliasing
   mode, `1e32ccb5`/`e5950ced` the face identity, and `64e09ebb` with the measurements that
-  replaced the per-pixel lists). Their author brings that work into Vulkanstorm under its dual
-  licence (LGPL-2.1-or-later or GPL-3.0-or-later). What was taken: the pass structure, the mask
+  replaced the per-pixel lists). Their author brings that work into Vulkanstorm under
+  GPL-3.0-or-later (the dual LGPL licence of that work was dropped on 2026-11-08). What was taken: the pass structure, the mask
   table generator (`oit_stochastic.rs` `mask_table`), the mask seeding (`object.wgsl`
   `st_mask`, `st_sub_mask`), the face identity hash (`types.rs` `oit_tie`), the composite and
   glow resolve (`oit_stochastic.wgsl`), the single-sample depth spread
   (`oit_stochastic_expand.wgsl` `fs_expand_ss`). No other Aurora code (GPL-3.0-only, by other
-  authors) was used: the OpenGL resources, the passes in `LLDrawPoolAlpha`, the shader variants
+  authors) was used, other than PR 3663 (next bullet): the OpenGL resources, the passes in `LLDrawPoolAlpha`, the shader variants
   and the polygon offsets are written for this renderer.
 - The 2026-11-14 upgrade (S = 4 samples, the dither, the NaN guard and the grain-measuring resolve): the samples are the
   multisample samples of the stochastic targets with the coverage through the hardware sample mask, as Enderton et al.
@@ -189,7 +189,7 @@ compute steps (doc/vulkan/stochastic-transparency-grain-resolve.md).
    The history keeps this engine's format, the four-vector (alpha x colour, alpha); the alpha correction (this frame's total alpha over the
    blended alpha) is made after the blend, so that an alpha change is never ghosted (the PR stores the corrected colour; offline that made the
    low-frequency error twice as large at S = 4). Beside it, ping-pong with it, an RG16F texture: the last frame's total alpha (the PR's), and the part of the last frame left out (so that the smooth need not recompute it; the PR's R16F plus a recomputation).
-3. **Smooth** (`alphaStochasticSmoothF.glsl`, drawn over the first measuring target, which no later pass reads): what grain the blend leaves
+3. **Smooth** (`alphaStochasticSmoothF.glsl`, drawn over the first measuring target, whose accumulation no later pass reads as the measuring output): what grain the blend leaves
    (the pixel's grain times sqrt(w / (2 - w)), all of it where the history was left out) is averaged with the neighbours of a like total alpha (within 0.004) and a
    colour within `ST_GRAIN_REACH` times that grain, radius 1 then 2; pixels with no grain leave early. The composite reads its output (already
    alpha corrected); the total alpha that dims the scene is still the mean over the samples at the composite. **Deviation from the PR**: its
@@ -220,26 +220,39 @@ Not reprojected: the surfaces' own motion; there the history ghosts, limited by 
 
 `scripts/perf/test_alpha_stochastic.py` (the harness's pan scenes at 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position; RTX 5070 Ti, NVIDIA 621.14; before = the shaders of git ref `1f38b56b50`: S = 8, hashed dither, the 1/8 resolve):
 
-| scene | motion | plain 8 samples (before) | before: S = 8 + history | plain 4 samples | after: S = 4 + grain resolve |
-|---|---|---|---|---|---|
-| T3 (3 textured layers) | static | 3.72 | 1.07 | 6.86 | 1.48 |
-| T3 | 0.5 px a frame, reprojected | 3.71 | 2.22 | 6.82 | 2.32 |
-| T3 | 2.5 px | 3.46 | 1.54 | 6.45 | 1.80 |
-| Q10 (10 textured layers) | static | 5.51 | 1.77 | 8.40 | 2.25 |
-| Q10 | 0.5 px | 5.52 | 3.44 | 8.36 | 3.63 |
-| S10 (10 layers of hair strips) | static | 5.67 | 1.87 | 9.00 | 3.84 |
-| S10 | 0.5 px | 5.61 | 7.10 | 8.98 | 7.26 |
-| T3 / Q10 / S10 | surfaces moving 0.5 px, not reprojected | 3.71 / 5.52 / 5.61 | 14.9 / 17.4 / 18.0 | 6.82 / 8.36 / 8.98 | 15.6 / 18.2 / 12.0 |
+| scene | motion | plain 8 samples (before) | before: S = 8 + history | plain 4 samples | after: S = 4 + grain resolve | ablation: the new resolve at S = 8 |
+|---|---|---|---|---|---|---|
+| T3 (3 textured layers) | static | 3.63 | 1.03 | 6.76 | 1.28 | 0.79 |
+| T3 | 0.5 px a frame, reprojected | 3.63 | 2.17 | 6.76 | 2.27 | 2.11 |
+| T3 | 2.5 px | 3.62 | 2.16 | 6.76 | 2.38 | 2.11 |
+| Q10 (10 textured layers) | static | 5.47 | 1.74 | 8.33 | 2.18 | 1.51 |
+| Q10 | 0.5 px | 5.48 | 3.45 | 8.33 | 3.58 | 3.41 |
+| Q10 | 2.5 px | 5.48 | 3.44 | 8.31 | 3.58 | 3.39 |
+| S10 (10 layers of hair strips) | static | 4.96 | 1.70 | 7.92 | 2.98 | 1.32 |
+| S10 | 0.5 px | 4.94 | 6.35 | 7.91 | 6.35 | 4.98 |
+| S10 | 2.5 px | 4.95 | 6.60 | 7.92 | 6.51 | 5.14 |
+| T3 / Q10 / S10 | surfaces moving 0.5 px, not reprojected | 3.63 / 5.48 / 4.94 | 14.8 / 17.5 / 17.2 | 6.76 / 8.33 / 7.91 | 15.5 / 18.2 / 10.9 | not run |
 
-At S = 4 the upgrade is **not better than S = 8 with the old resolve in these scenes**: static it is 27 % to 105 % worse (the hair strips, S10: 1.87 to 3.84, are the worst case, which is the
-tapered-hair expectation turned up: not +10 %); on fractional pans 2 % to 5 % worse (T3, Q10, S10); moving surfaces ghost 5 % more on the textured layers and 33 % less on hair. The
-owner's offline simulation (`reports/stochastic-s4-plan-2026-11-14`) predicted static gains on its scenes (-75 / -46 / -20 / -18 %) that these textured scenes do not reproduce; the real shaders
-and these scenes are the measurement here. Against plain S = 4 the upgrade is far better (static 4.6 times on T3). The price of S = 4 is paid back in GPU time and memory (below). The smooth's reach was cut from the PR's 2 to 0.5
-for exactly this reason (reach 2: T3 static 3.41, and 4.56 at 0.5 px a frame). The first frame and the frames where the history is left out (a total alpha change, a far layer sliding) are smoothed: after an
-alpha change at frame 24 the first frame reads 1.05 against 1.74 without history. The harness checks that one layer has zero grain and takes no history, that two layers have grain, and that the history is left out when the total alpha changes (1.00 of the pixels) or the far layer slides 2 px (1.00; 0 at 0 and 0.1 px).
+(The numbers are those of the review round's run, after the far-depth fix below; the first run of the PR had T3 / Q10 / S10 static 1.48 / 2.25 / 3.84.)
 
-NaN injection against the old pipeline (a NaN colour over 16 of 64 columns for 6 frames, then 33 clean frames): no value that is not finite in the image either before or after for this layout (the old clamp of the history
-to the 3 x 3 box happened to drop it); the upgrade holds at every stage for the harness's six injection forms.
+**Reading.** The grain resolve is the gain: at S = 8 it beats the viewer before the upgrade in every row (static 13 to 23 % better, hair on a fractional pan 22 % better,
+textured layers on a pan 1 to 3 % better). The S = 4 change is the price: at S = 4 the upgrade is **not better than S = 8 with the old resolve** on these scenes: static it is
+24 % (T3), 25 % (Q10) and 75 % (S10, the hair strips) worse; on a 0.5 px pan 5 % (T3), 4 % (Q10) and 0 % (S10) worse, and at 2.5 px T3 is 10 % worse; moving surfaces ghost 5 % to 4 % more on the textured layers
+and 37 % less on hair. The halved sample count costs about the root of two (+41 %) in a static view, as the variance of the accumulated mean goes with 1/S, and the hair strips more. The owner's offline
+simulation (`reports/stochastic-s4-plan-2026-11-14`) predicted static gains on its scenes (-75 / -46 / -20 / -18 %) that these scenes do not reproduce; the real shaders and these scenes are the measurement here.
+Against plain S = 4 the upgrade is far better (static 5.3 times on T3). The ablation (the same resolve, S = 8) is what lets the owner choose: S = 4 buys the GPU time and memory below at that
+image cost, S = 8 with the new resolve is better than today at today's sample cost. The ablation does not separate the smooth, the box widening and the weight from each other, and S = 4 with the old 1/8 weight at a floor of 1/16 (the variance equivalent) was not measured.
+The smooth's reach was cut from the PR's 2 to 0.5 for exactly this reason (reach 2: T3 static 3.41). The first frame and the frames where the history is left out (a total alpha change, a far layer sliding) are smoothed: after an
+alpha change at frame 24 the first frame reads 1.04 against 1.73 without history. The harness checks that one layer has zero grain and takes no history, that two layers have grain, and that the history is left out when the total alpha changes (1.00 of the pixels) or the far layer slides 2 px (0.90; 0 at 0 and 0.1 px).
+
+The farthest depth (review round): the first version took the farthest stochastic depth over all samples. A sample no layer covers still holds the opaque depth (the spread), so a pane in front of a
+wall had the wall as its "far layer", and any camera translation that slid the wall 3/4 px past the pane (a few pixels a frame at a few metres) dropped the history of all the glass. The measuring pass now reads the scene depth
+(`depthMap`, one more `texelFetch`) and takes the farthest depth only over the samples whose depth is in front of it. This raised the static quality (the numbers above) and keeps the history under translation where the layers
+move together; the harness has no translating walk-through of a partly covering layer over a distant wall (its reprojection is a pan, or a shift linear in depth between the layers), so that case is unmeasured in motion: in-world check.
+
+NaN injection against the old pipeline (a NaN colour over 16 of 256 columns for 6 frames, then 33 clean frames): no value that is not finite in the image either before or after for this layout (the old clamp of the history
+to the 3 x 3 box happened to drop it from the image), but the old pipeline's accumulation and history held 4096 and 8192 non-finite values after the injected frames and the upgrade held none; the upgrade holds at every stage for the harness's six injection forms.
+The measuring pass zeroes a NaN and clamps an infinity before the blend, so the guards in the Catmull-Rom taps and the 3 x 3 box cannot be reached through this pipeline; they are defence in depth for a producer that does not measure first (and the Stochastic shadows' resolve, which shares `stochasticResolveUtilF.glsl`, now bit-tests its 16 taps too: identical for finite data, one test per tap more).
 
 ### GPU time per pass (median of 60 frames, ms; `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
 
@@ -253,6 +266,8 @@ Total of the seven passes (alpha, depth, accumulation, measure, blend, smooth, c
 | Q10 pan | 2.41 / 4.46 | 1.46 / 2.75 | -0.95 / -1.71 |
 | S10 static | 1.12 / 1.64 | 0.80 / 1.16 | -0.32 / -0.48 |
 | S10 pan | 1.20 / 1.75 | 0.87 / 1.25 | -0.33 / -0.50 |
+
+Review round, re-measured after the depth read was added to the measuring pass (1440p, after - before): T3 -0.52 / -0.48 ms (static / pan), Q10 -1.77 / -1.71, S10 -0.48 / -0.49; the measuring pass costs the same within noise. The 1080p rerun ran on a GPU in another clock state (before and after both about 2x the table's totals) and saved 0.9 to 3.4 ms; the table's 1080p column is the first run's.
 
 A saving of 0.24 to 0.98 ms at 1080p and 0.48 to 1.77 ms at 1440p in these scenes (the budget allows +0.43 ms of the 8.6 ms Stochastic frame). Per pass at 2560 x 1440, Q10 static, before / after, ms:
 alpha 0.44 / 0.35, depth 1.35 / 0.57, accumulation 1.63 / 0.86, measure 0.36 / 0.28, blend 0.25 / 0.15, smooth - / 0.26, composite 0.43 / 0.22. The new smooth costs 0.26 ms at 1440p
@@ -298,7 +313,7 @@ anti-aliased form (3.4, 3.5), kept.
 | 6 temporal coherence: seed by pixel and primitive id | done (pixel, face identity, triangle); the noise field is fixed in screen space |
 | 6 uneven noise at edges; alpha correction makes one-layer regions noise free | known properties |
 | 6 post processing: cross-bilateral filter on the total alpha | measured, rejected (below); the 2026-11-14 smooth averages by the measured grain and the total alpha instead (Temporal accumulation) |
-| 6 adaptive sampling, importance sampling for dark backgrounds | not adopted: S is a setting |
+| 6 adaptive sampling, importance sampling for dark backgrounds | not adopted: the grain resolve measures the grain per pixel instead (S is fixed at 4 for the transparency) |
 | 6 mask selection: a pair of random S-choose-R masks does reasonably well | done; masks of fragments that differ in (face seed, triangle) are independent |
 
 Measurements (offline, the viewer's own shaders and pass structure on NVIDIA 621.01, 256 x 256,
@@ -324,7 +339,8 @@ Gaussian low-pass of sigma 1.5 pixels, the closer measure of what the eye sees):
   0.5 %. The same with a 64 x 64 blue-noise tile (void and cluster, sigma 1.5) for xi, shifted per
   triangle: within 1.5 % at every S and N. The error is dominated by the overlap of the masks of
   different layers, which no per-pixel pattern controls (paper, section 6: "it would seem difficult
-  to improve on that significantly"). Rejected: a texture and a binding for nothing.
+  to improve on that significantly"). Rejected then: a texture and a binding for nothing. (Superseded 2026-11-14: the tile now lives in two spare rows of the mask table that is bound anyway, so there is no new binding and one `texelFetch`. The gain is still not shown: the 2026-11-06 measurement stands, and no A/B of the tile plus the golden-ratio step against the hashed dither was run on S = 4 with the grain resolve; the harness result above cannot attribute any gain to them.
+The golden-ratio step is the same for every layer, the face's offset (its seed) differs; the owner's rule against equal strides concerned the mask subsets, which stay hashed per face, triangle, pixel and frame.)
 - Masks that coincide (the same subset on two layers over their overlap) make the layers occlude each
   other instead of blending: a bias of 27 to 44 grey levels and spectral peaks 100 to 600 times the
   mean on a quad lattice. This does happen: the subset of the mask table was the column of the pixel's

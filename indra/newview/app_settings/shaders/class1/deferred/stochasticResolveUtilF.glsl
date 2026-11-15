@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -37,11 +39,7 @@ uniform int   stoch_history_valid;   // the history holds the last frame, at thi
 vec4 stoch_current(ivec2 px);        // the producer's value of this frame
 
 // Whether a value is a finite number, tested on its bits (the exponent is all ones for an infinity and a NaN)
-bool stoch_finite(float x)
-{
-    return (floatBitsToUint(x) & 0x7f800000u) != 0x7f800000u;
-}
-
+// (stoch_finite(float) is in stochasticSampleF.glsl: one definition only, as both objects may meet in a program)
 bool stoch_finite4(vec4 v)
 {
     uvec4 e = floatBitsToUint(v) & uvec4(0x7f800000u);

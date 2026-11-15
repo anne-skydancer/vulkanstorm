@@ -27,8 +27,8 @@
 
 namespace LLStochasticEngine
 {
-    constexpr uint32_t BLUE_NOISE_SIZE = 64;     // the tile is BLUE_NOISE_SIZE x BLUE_NOISE_SIZE
-    constexpr uint16_t BLUE_NOISE[BLUE_NOISE_SIZE * BLUE_NOISE_SIZE] = {
+    inline constexpr uint32_t BLUE_NOISE_SIZE = 64;     // the tile is BLUE_NOISE_SIZE x BLUE_NOISE_SIZE
+    inline constexpr uint16_t BLUE_NOISE[BLUE_NOISE_SIZE * BLUE_NOISE_SIZE] = {
         102, 1435, 960, 2685, 4047, 706, 2269, 3619, 79, 3863, 726, 3222, 2148, 2851, 20, 2083,
         328, 1678, 3488, 2472, 2063, 3536, 290, 3810, 3272, 431, 4083, 815, 2962, 2494, 3966, 1104,
         3386, 1493, 2471, 2899, 3446, 1888, 2319, 43, 2807, 500, 3111, 2334, 1322, 1932, 3748, 550,

@@ -5,6 +5,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
  * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -101,12 +103,16 @@ void main()
     {
         discard;
     }
-    vec3 colour = min(accum.rgb * corr, vec3(HDR_MAX));
+    vec3 colour;
     if (st_temporal != 0)
     {
         // the colour drawn: blended, averaged with its like neighbours where it was grainy, corrected (alphaStochasticSmoothF.glsl)
         vec4 r = texelFetch(alpha_st_resolved, px, 0);
         colour = (st_nan(r.r) || st_nan(r.g) || st_nan(r.b)) ? vec3(0.0) : min(max(r.rgb, vec3(0.0)), vec3(HDR_MAX));
+    }
+    else
+    {
+        colour = min(accum.rgb * corr, vec3(HDR_MAX));
     }
     frag_color = vec4(colour, total);
 }
