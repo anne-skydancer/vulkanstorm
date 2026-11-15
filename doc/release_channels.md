@@ -157,8 +157,8 @@ off); Build Linux LTS does not. Dispatch the workflow on a vkstorm-devel-based
 branch (Actions, Run workflow, pick the branch, tick `tracy`, leave `publish`
 off). The build is RelWithDebInfo with `USE_TRACY`, `USE_TRACY_ON_DEMAND` and
 `USE_TRACY_LOCAL_ONLY` on (Tracy listens on localhost only and never
-broadcasts) and `OPENSIM` on, so it logs in to a local OpenSim region (the
-normal CI builds keep Tracy and OpenSim off). The configure step fails unless
+broadcasts); OpenSim stays off, as in every CI build (the normal CI builds keep Tracy
+off). The configure step fails unless
 `CMakeCache.txt` says so. Tests are not built. A Tracy build is never a Release
 package and never published, and never moves a tag: `tracy` together with
 `publish` is refused at the start of the run, and a `tracy` dispatch on
