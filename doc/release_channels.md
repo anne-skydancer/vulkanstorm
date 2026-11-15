@@ -65,7 +65,9 @@ Windows 10 or newer; Windows 7, 8 and 8.1 are no longer supported.
 Pull requests run all three workflows as RelWithDebInfo qualification
 builds, never published, so that the on-demand `linux-lts` build never rots.
 Pushes run Build Windows and Build Linux; Build Linux LTS runs on pull
-requests and on dispatch only. A FreeBSD build, `freebsd-latest` with
+requests and on dispatch only. Every RelWithDebInfo build carries the Tracy
+profiler (on demand, local connections only, `USE_TRACY_LOCAL_ONLY`), so a CI viewer can be profiled;
+the Release package never does (`scripts/ci_release_config.py`). A FreeBSD build, `freebsd-latest` with
 `experimental-freebsd-latest` and `preview-freebsd-latest`, is planned. It
 will be one more entry in `build-platforms.json` and one more workflow.
 

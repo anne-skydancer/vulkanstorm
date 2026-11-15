@@ -201,6 +201,14 @@ runs:
         else
           options+=(-DUSE_MESAZINK:BOOL=OFF -DUSE_INNOSETUP:BOOL=OFF)
         fi
+        # Tracy (study: doc/perf/multicore-baseline-2026-11.md) is in every test build (RelWithDebInfo: push, pull request,
+        # on-demand without publish), on demand and local only, never shipped; the Release package keeps it OFF
+        # (scripts/ci_release_config.py enforces that).
+        if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
+          options+=(-DUSE_TRACY:BOOL=OFF)
+        else
+          options+=(-DUSE_TRACY:BOOL=ON -DUSE_TRACY_LOCAL_ONLY:BOOL=ON)
+        fi
         {
           echo 'LL_BUILD<<VKSTORM_LL_BUILD'
           printf '%s\n' "$LL_BUILD"
@@ -220,7 +228,7 @@ runs:
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
-            -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
+            -DUSE_VELOPACK:BOOL=OFF \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
             -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
         }
