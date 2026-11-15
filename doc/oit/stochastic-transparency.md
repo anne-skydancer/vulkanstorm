@@ -74,8 +74,7 @@ samples in all, is 8 (`LLStochasticEngine::TRANSPARENCY_SAMPLES`; the Stochastic
 tried at 4 on 2026-11-14 and set back to 8 on 2026-11-15 (see Measured: at 4 the upgrade was statically grainier than the
 viewer before it, at 8 it is better in every scene). A device that takes fewer than 8 samples is below the floor, like one below GL 4.0:
 `allocateAlphaStochastic` leaves stochastic transparency off and sorted alpha is drawn (owner decision, 2026-11-15: the viewer is GL 4.6 based, no
-multi-pass fallback). There are no iterations: the lanes of one pass are never summed across passes. (The harness still checks the masks of 16
-samples as two passes of 8, a property of the mask table.) Memory: 16 B per sample, 128 B per pixel at 8 samples (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render
+multi-pass fallback). There are no iterations: the lanes of one pass are never summed across passes. (S = 16 as two passes of 8 was dropped from the harness on 2026-11-15 with the multi-pass path; the mask table itself still has an S = 16 generator.) Memory: 16 B per sample, 128 B per pixel at 8 samples (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render
 resolution while the method is selected and freed otherwise; nothing grows with the depth of the scene.
 
 `LLDrawPoolAlpha::renderStochastic` (`pipeline.cpp` holds the targets, the spread and the
@@ -123,7 +122,7 @@ pass's alpha. The ordinary programs are unchanged, so sorted alpha draws as befo
 The GLTF scene's blended variants (`pbrmetallicroughnessF.glsl` with `ALPHA_BLEND`, lit and unlit,
 single and multi-UV, static and rigged: eight) have alpha-only variants of their own
 (`gGLTFAlphaStochasticProgram`, built by `make_gltf_variant`), drawn by `GLTFSceneManager::render`
-in the same three passes. A GLTF blended asset behaves exactly like a blended prim face: wherever
+in the first two passes (total alpha and stochastic depth; the accumulation uses the ordinary variant, as for prims). A GLTF blended asset behaves exactly like a blended prim face: wherever
 the faces contribute depth, the asset does the same through a depth-only, colour-masked draw of its
 alpha-only variant in its mode 3 (every sample; fragments under the cut discarded): the depth of
 field pass (the faces' non-rigged draw, with the same 0.33 cut) and the rigged depth restore before
@@ -321,7 +320,7 @@ anti-aliased form (3.4, 3.5), kept.
 | 3.1 dither R across a tile for further stratification | done since 2026-11-14: a 64 x 64 void-and-cluster blue-noise tile (two spare rows of the mask table), a per-face offset and the golden-ratio step of the frame; the 2026-11-06 measurement of a tile without the step found no gain (below), the temporal sequence is what the upgrade adds |
 | 3.3 alpha correction, total alpha over accumulated alpha | done (composite); a single layer is exact (test) |
 | 3.4 steps 1-5: opaque depth, total alpha, stochastic depth only, accumulation by the stochastic depth, composite | done; deviations: the opaque depth is spread over the samples (the scene is single-sampled), and the composite dims the scene by the pixel's mean transparency, not per sample (differs only on background edges inside a pixel) |
-| 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | done in the shaders (S = 16 is two passes of 8 of one 16-bit mask; tested); the viewer runs S = 8 in one pass and needs a device that takes 8 (the GL 4.6 base) |
+| 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | S = 16 two-pass reference, dropped 2026-11-15 with the multi-pass path (the shader's iteration shift and the harness cases are gone); the viewer runs S = 8 in one pass and needs a device that takes 8 (the GL 4.6 base) |
 | 5 mask table of about 2047 masks | done (2048) |
 | 6 temporal coherence: seed by pixel and primitive id | done (pixel, face identity, triangle); the noise field is fixed in screen space |
 | 6 uneven noise at edges; alpha correction makes one-layer regions noise free | known properties |
@@ -427,7 +426,7 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
 textures; the Stochastic shadows' compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
-8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without the first three has
+8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without GL 4.0, or without 8 samples per pass for the colour, depth and `GL_MAX_SAMPLES` formats, has
 sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
 allocation, a resize, a shader set that did not build) does not switch method (owner decision Q8, 2026-11-13: stochastic methods never fall back, replacing the
 2026-11-12 exception): the failure is logged, `RenderAlphaSortMethod` and `RenderShadowMethod` stay as selected, the shadows
@@ -442,8 +441,8 @@ if the large buffer cannot have the targets, and fails with a message if the win
 - `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`), of the upgrade before the mask (`STOCH_REF_REF`, `c121dc100c`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
 - `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass
-  structure: the mask table, every covered sample against a Python model of the mask (16 in two
-  passes of 8, 8, 4), the total alpha, visibility and composite, an opaque occluder, the glow,
+  structure: the mask table, every covered sample against a Python model of the mask (8 and 4, each in
+  one pass), the total alpha, visibility and composite, an opaque occluder, the glow,
   a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands
   (sorted alpha, then the passes without and with `centroid`). NVIDIA 621.01 and Mesa Zink
   (`GALLIUM_DRIVER=zink`, `--opengl <Mesa opengl32.dll>`).

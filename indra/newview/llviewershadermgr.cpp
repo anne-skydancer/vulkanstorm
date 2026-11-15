@@ -1155,8 +1155,8 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // to the alpha programs' alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional:
     // without them the variants are not built, the method is not ready (logged) and the blended
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
-    // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: the
-    // transparency's three passes and the Stochastic shadows' (whose compute resolve, A/B only,
+    // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: it is
+    // attached to the transparency's temporal resolve and composite programs and to the Stochastic shadows' fragment resolve (whose compute resolve, A/B only,
     // VKSTORM_STOCH_COMPUTE_RESOLVE=1, compiles its own objects).
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
