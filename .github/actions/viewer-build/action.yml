@@ -200,16 +200,16 @@ runs:
         export LL_BUILD
         options=()
         # A Tracy measuring build: Tracy on, on demand and local only (it never
-        # listens beyond localhost), and OPENSIM on, because it is measured on a
+        # listens beyond localhost), and OPENSIM on (tracy_options, appended after the fixed flags so they win), because it is measured on a
         # local OpenSim region. Never a Release build (the workflow plans it
         # RelWithDebInfo).
-        opensim=OFF; tracy=OFF
+        tracy_options=()
         if [[ "$VKSTORM_TRACY" == true ]]; then
           if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
             echo "::error::a Tracy build must be RelWithDebInfo without a package"
             exit 1
           fi
-          opensim=ON; tracy=ON; tracy_local=ON
+          tracy_options=(-DOPENSIM:BOOL=ON -DUSE_TRACY:BOOL=ON -DUSE_TRACY_ON_DEMAND:BOOL=ON -DUSE_TRACY_LOCAL_ONLY:BOOL=ON)
         fi
         if [[ "$RUNNER_OS" == Windows ]]; then
           # The flags used by the successful local Release build.
@@ -232,15 +232,15 @@ runs:
             -DPACKAGE:BOOL="$VIEWER_PACKAGE" \
             -DVIEWER_CHANNEL:STRING=Vulkanstorm-Release -DROOT_PROJECT_NAME:STRING=Firestorm \
             -DPYTHON_EXECUTABLE:FILEPATH="$(python -c 'import sys; print(sys.executable)')" \
-            -DOPENSIM:BOOL="$opensim" -DINSTALL_PROPRIETARY:BOOL=OFF \
+            -DOPENSIM:BOOL=OFF -DINSTALL_PROPRIETARY:BOOL=OFF \
             -DUSE_KDU:BOOL=OFF -DUSE_SOLOUD:BOOL=ON \
             -DUSE_OPENAL:BOOL=OFF -DOPENAL:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=OFF -DFMODSTUDIO:BOOL=OFF \
             -DUSE_AVX2_OPTIMIZATION:BOOL=ON -DUSE_AVX_OPTIMIZATION:BOOL=OFF -DUSE_LTO:BOOL=ON \
             -DUSE_PRECOMPILED_HEADERS:BOOL=ON -DUSE_DISCORD:BOOL=OFF -DUSE_BUGSPLAT:BOOL=OFF \
-            -DUSE_TRACY:BOOL="$tracy" -DUSE_VELOPACK:BOOL=OFF \
-            -DUSE_TRACY_ON_DEMAND:BOOL="$tracy" -DUSE_TRACY_LOCAL_ONLY:BOOL="$tracy_local" \
+            -DUSE_TRACY:BOOL=OFF -DUSE_VELOPACK:BOOL=OFF \
             -DLL_TESTS:BOOL=OFF -DRELEASE_CRASH_REPORTING:BOOL=OFF \
-            -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING=
+            -DNON_RELEASE_CRASH_REPORTING:BOOL=OFF -DBUGSPLAT_DB:STRING= \
+            ${tracy_options[@]+"${tracy_options[@]}"}
         }
         for delay in 0 30 90; do
           sleep "$delay"
