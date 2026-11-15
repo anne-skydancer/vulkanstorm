@@ -1520,14 +1520,14 @@ void testP4Owners()
     check(ownerEdge(mask, next) == OwnerEdge::First && next == proj, "P4 owners: the first owner switches the hooks on");
     mask = next;
     next = ownerMaskAfter(mask, pts, true);
-    check(ownerEdge(mask, next) == OwnerEdge::None && next == (proj | pts), "P4 owners: a second owner changes nothing for the hooks");
+    check(ownerEdge(mask, next) == OwnerEdge::Neither && next == (proj | pts), "P4 owners: a second owner changes nothing for the hooks");
     mask = next;
     next = ownerMaskAfter(mask, proj, false);
-    check(ownerEdge(mask, next) == OwnerEdge::None && next == pts, "P4 owners: the projector pool releasing does not switch the hooks off or drop the point pool's boxes");
+    check(ownerEdge(mask, next) == OwnerEdge::Neither && next == pts, "P4 owners: the projector pool releasing does not switch the hooks off or drop the point pool's boxes");
     mask = next;
     next = ownerMaskAfter(mask, pts, false);
     check(ownerEdge(mask, next) == OwnerEdge::Last && next == 0, "P4 owners: the last owner leaving switches them off and drops the boxes");
-    check(ownerEdge(0, ownerMaskAfter(0, proj, false)) == OwnerEdge::None, "P4 owners: switching off what was never on is no edge");
+    check(ownerEdge(0, ownerMaskAfter(0, proj, false)) == OwnerEdge::Neither, "P4 owners: switching off what was never on is no edge");
 
     // lamp roots per owner: one owner's list does not replace the other's
     OwnerLists<int> roots;
