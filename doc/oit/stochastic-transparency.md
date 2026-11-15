@@ -294,20 +294,23 @@ The measuring pass zeroes a NaN and clamps an infinity before the blend, so the 
 
 ### GPU time per pass (2560 x 1440, `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
 
-Per pass the median of the timed frames of a run (150 frames, the first 12 not timed), and of four runs (one of 60 frames, three of 150) the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of the seven passes (alpha, depth, accumulation, measure, blend, smooth, composite), before = git ref `1f38b56b50` (S = 8), after = this tree at S = 8 in one pass, ms:
+Per pass the median of 68 timed frames of a run (80 frames, the first 12 not timed), and of three runs the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of those seven pass times (alpha, depth, accumulation, measure, blend, smooth, composite). shipping = git ref `1f38b56b50` (S = 8, before the upgrade), c121 = `c121dc100c` (the upgrade before the mask: unmasked blend, a smooth pass of its own), now = this tree. The harness composite draws the colour and the glow pass; the viewer draws the glow only when a glowing face is drawn. RTX 5070 Ti, NVIDIA 621.14. ms:
 
-| scene | before | after | difference |
-|---|---|---|---|
-| T3 static | 1.894 | 2.307 | +0.413 |
-| T3 pan 1.3, 0.7 | 1.911 | 2.376 | +0.465 |
-| Q10 static | 4.470 | 4.883 | +0.413 |
-| Q10 pan | 4.487 | 4.952 | +0.465 |
-| S10 static | 1.642 | 2.163 | +0.521 |
-| S10 pan | 1.744 | 2.286 | +0.542 |
+| scene | shipping | c121 | now | now - shipping | now - c121 |
+|---|---|---|---|---|---|
+| T3 static (full screen) | 1.897 | 2.310 | 2.275 | +0.378 | -0.035 |
+| T3 pan 1.3, 0.7 | 1.910 | 2.380 | 2.344 | +0.434 | -0.037 |
+| Q10 static | 4.464 | 4.877 | 4.837 | +0.373 | -0.039 |
+| Q10 pan | 4.472 | 4.945 | 4.902 | +0.430 | -0.043 |
+| S10 static (hair) | 1.640 | 2.162 | 1.812 | +0.172 | -0.350 |
+| S10 pan | 1.765 | 2.306 | 1.964 | +0.198 | -0.343 |
+| SC static (hair in the centre, a window in a corner, about 30 % covered) | 1.071 | 1.566 | 1.133 | +0.063 | -0.433 |
+| SC pan | 1.077 | 1.580 | 1.151 | +0.075 | -0.429 |
 
-S = 8 costs more than the viewer before the upgrade, not less (the S = 4 version saved 0.5 to 1.8 ms): +0.41 to +0.54 ms. The budget is the Stochastic frame of 8.6 ms + 5 % = +0.43 ms: T3 and Q10 static are inside it, the pans (+0.47) and the hair scene (+0.52, +0.54) are 0.04 to 0.11 ms over it. Per pass, Q10 static, before / after: alpha 0.437 / 0.437, depth 1.363 / 1.387,
-accumulation 1.628 / 1.631, measure 0.362 / 0.533, blend 0.253 / 0.140, smooth - / 0.263, composite 0.427 / 0.492. What was added is the smooth (+0.26), the measure (+0.17: the second target and the depth reads; hair +0.32) and the composite (+0.07, the NaN guard); the blend is cheaper (-0.11). The geometry passes are unchanged (the dither's blue-noise read is not
-visible in them). The offline accumulation shades with a light stand-in, not the viewer's alpha programs, so the saving or cost in the viewer is not measured here.
+The budget is the Stochastic frame of 8.6 ms + 5 % = +0.43 ms over the shipping S = 8. The full-screen scenes sit at +0.37 to +0.43 (T3 pan +0.434 and Q10 pan +0.430 are on the line, 0.004 over and 0 over); hair is +0.17 to +0.20 and the scattered scene +0.06 to +0.08, all inside it.
+Per pass, Q10 static, shipping / c121 / now: alpha 0.437 each, depth 1.361 / 1.387 / 1.387, accumulation 1.627 / 1.629 / 1.629, measure 0.361 / 0.532 / 0.527, blend 0.252 / 0.139 / 0.148, smooth - / 0.263 / folded, composite 0.425 / 0.490 / 0.710 (the composite now holds the smooth: 0.753 for the two in c121). Folding the smooth saves 0.04 on a full-screen scene (one fewer full-screen pass, its reads done in the composite's draw); the gain of the mask is where the transparency is not: composite 0.469 + 0.101 in c121 against 0.223 on hair, 0.466 + 0.051 against 0.083 on the scattered scene. The measuring pass stays full screen (it finds the mask), so it is the floor of the cost on a scene that covers little: 0.44 ms at 1440p.
+The mask costs nothing in the measure: the third target (R8) is within noise of the two-target version (0.470 against 0.471 on T3). Memory per pixel of the transparency's targets, history and measuring targets: shipping 160 B, c121 168 B, now 169 B (+1: the mask; the smooth drew over the first measuring target, so folding it frees nothing).
+The offline accumulation shades with a light stand-in, not the viewer's alpha programs, so the saving or cost in the viewer is not measured here.
 
 ## Edge pixels: attributes at the centroid (fixed 2026-11-05)
 
