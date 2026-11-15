@@ -147,7 +147,7 @@ void main()
     ivec2 px = ivec2(gl_FragCoord.xy);
     if (st_temporal != 0 && texelFetch(alpha_st_mask, px, 0).r == 0.0)
     {
-        discard;   // nothing drawn here (both passes would discard: no total alpha, no glow)
+        discard;   // nothing drawn here (neither the colour pass nor the glow pass (st_glow) would draw: no total alpha, no glow)
     }
     float trans = 0.0;
     float glow = 0.0;
