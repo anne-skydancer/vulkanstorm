@@ -54,7 +54,14 @@ namespace
     std::atomic<bool> sOffThread{ false };
     bool sForced = false;
     Cause sForcedCause = Cause::Other;
-    std::vector<const LLViewerObject*> sLampRoots; // the roots of the lamps the pool holds tiles for (compared, never dereferenced)
+    // the roots of the lamps each pool holds tiles for (compared, never dereferenced): one list per owner and their sorted union,
+    // which is what the hooks test
+    llprojectorpool::OwnerLists<const LLViewerObject*> sLampRoots;
+
+    inline U32 owner_index(LLShadowDirtyFeed::Owner owner)
+    {
+        return owner == LLShadowDirtyFeed::Owner::Projectors ? 0u : 1u;
+    }
     std::atomic<U32> sMoverObjects{ 0 };           // objects flagged as movers since the feed started (the bit is sticky)
 
     Aabb to_aabb(const LLVector4a* ext)
@@ -147,7 +154,7 @@ namespace
     }
 }
 
-std::atomic<bool> LLShadowDirtyFeed::sTracking{ false };
+std::atomic<U32> LLShadowDirtyFeed::sTracking{ 0 };
 
 LLShadowDirtyFeed::CauseScope::CauseScope(Cause cause) : mHad(sForced), mPrev(sForcedCause)
 {
@@ -162,17 +169,30 @@ LLShadowDirtyFeed::CauseScope::~CauseScope()
 }
 
 // static
-void LLShadowDirtyFeed::setTracking(bool on)
+void LLShadowDirtyFeed::setTracking(Owner owner, bool on)
 {
-    const bool was_on = sTracking.exchange(on, std::memory_order_relaxed);
-    if (!on && on_main_thread())
+    if (!on_main_thread())
     {
-        reset();
+        return; // the owners are main-thread caches; nothing changes off it
     }
-    else if (on && !was_on && on_main_thread())
+    const U32 bit = static_cast<U32>(owner);
+    const U32 was = sTracking.load(std::memory_order_relaxed);
+    const U32 now = llprojectorpool::ownerMaskAfter(was, bit, on);
+    sTracking.store(now, std::memory_order_relaxed);
+    const llprojectorpool::OwnerEdge edge = llprojectorpool::ownerEdge(was, now);
+    if (!on)
+    {
+        sLampRoots.clear(owner_index(owner));
+        if (edge == llprojectorpool::OwnerEdge::Last)
+        {
+            reset(); // the last owner is gone: nobody reads the pending boxes
+        }
+    }
+    else if (edge == llprojectorpool::OwnerEdge::First)
     {
         // the alpha bits are only kept while tracking: forget them all, so the first change of each object after this pushes
-        // once (conservatively) and then knows. A walk over the object list, once per switch-on.
+        // once (conservatively) and then knows. A walk over the object list, once per switch-on of the first owner (a second
+        // owner joins bits that were written for the first, which hold for any reader).
         const S32 count = gObjectList.getNumObjects();
         for (S32 i = 0; i < count; ++i)
         {
@@ -218,7 +238,7 @@ void LLShadowDirtyFeed::reset()
     sApplied = nullptr;
     sHaveFrame = false;
     sOffThread.store(false);
-    sLampRoots.clear();
+    sLampRoots.clearAll();
 }
 
 // static
@@ -302,7 +322,7 @@ bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object)
     // The same rule as the tile's cull (bridgeCasts): a mover or physical linkset is out of the fixed layer only while it is
     // active (bridged); at rest it is drawn like any fixed caster, and its changes push.
     const bool active = drawable->isActive();
-    const bool lamp = std::binary_search(sLampRoots.begin(), sLampRoots.end(), static_cast<const LLViewerObject*>(root));
+    const bool lamp = sLampRoots.contains(static_cast<const LLViewerObject*>(root));
     if (of.physical || of.mover || rf.physical || rf.mover)
     {
         // The object just became active (the tile that holds it at its old pose must drop it: push the extents it leaves) or
@@ -325,15 +345,13 @@ bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object)
 }
 
 // static
-void LLShadowDirtyFeed::setLampRoots(std::vector<const LLViewerObject*>& roots)
+void LLShadowDirtyFeed::setLampRoots(Owner owner, std::vector<const LLViewerObject*>& roots)
 {
     if (!on_main_thread())
     {
         return;
     }
-    std::sort(roots.begin(), roots.end());
-    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
-    sLampRoots.swap(roots);
+    sLampRoots.set(owner_index(owner), roots); // sorted and de-duplicated; the union is rebuilt only when this owner's list changed
 }
 
 // static

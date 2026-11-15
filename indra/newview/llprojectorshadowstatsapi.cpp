@@ -86,7 +86,10 @@ namespace
         pool["atlas_size"] = (S32)ps.atlasSize;
         pool["lights"] = (S32)ps.lights;
         pool["static_renders"] = (F64)ps.staticRenders;   // cumulative since the pool was allocated: the static schedule (the first fill and every change)
-        pool["dynamic_renders"] = (F64)ps.dynamicRenders; // ... the dynamic schedule (a moving lamp, an avatar in the light)
+        pool["dynamic_renders"] = (F64)ps.dynamicRenders; // ... the dynamic schedule (a moving lamp redrawn whole)
+        pool["layer_renders"] = (F64)ps.layerRenders;     // P4: avatar layers alone (S -> L for the tile, the avatars over it)
+        pool["last_frame_layer_renders"] = (S32)ps.lastFrameLayer;
+        pool["last_frame_avatar_draws"] = (S32)ps.lastFrameAvatarDraws;
         pool["last_frame_static_renders"] = (S32)ps.lastFrameStatic;
         pool["last_frame_dynamic_renders"] = (S32)ps.lastFrameDynamic;
         pool["pinned_objects"] = (S32)ps.pinnedObjects;   // prims and trees held at full detail by at least one tile (the LOD pin)
