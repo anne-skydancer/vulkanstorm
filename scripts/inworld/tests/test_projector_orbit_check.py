@@ -204,6 +204,7 @@ def make_check(model, tmp, o2=None, o6=None):
           "o6": o6 or {}}
     check = poc.Check(Viewer(session), sc, tmp)
     check.warm_up = lambda: None
+    check.fake_viewer = fv
     return check
 
 
@@ -275,6 +276,15 @@ class OrbitGateAgainstTheFakeViewerTest(unittest.TestCase):
         g = make_check(fake_pool(without=1), self.tmp).gate_o2()
         self.assertEqual(g["status"], "FAIL")
         self.assertTrue(any("lights without a tile" in f for f in g["failures"]))
+
+    def test_the_scenario_teleport_uses_the_handler_and_opens_no_dialog(self):
+        check = make_check(fake_pool(), self.tmp)
+        check.sc["teleport"] = {"region": "Busy", "x": 10, "y": 20, "z": 30}
+        check.sc["settle"]["after_teleport_s"] = 0.0
+        check.teleport()
+        self.assertEqual(check.fake_viewer.confirm_dialogs, [])   # LLAgent.requestTeleport would open a dialog nobody clicks
+        self.assertEqual([(d["regionname"], d["x"], d["y"], d["z"]) for d in check.fake_viewer.tp_requests], [("Busy", 10, 20, 30)])
+        check.cleanup()
 
     def test_o6_is_not_run_unless_asked_for(self):
         self.assertEqual(make_check(fake_pool(), self.tmp).gate_o6()["status"], "NOT RUN")

@@ -476,16 +476,20 @@ class Check:
     def not_yet(name, stage):
         return {"status": "NOT RUN", "why": "%s is implemented in %s" % (name, stage)}
 
+    def teleport(self):
+        t = self.sc.get("teleport")
+        if t:
+            # LLAgent.requestTeleport opens the modal "TeleportViaSLAPP" confirmation, which stalls a scripted run: the
+            # LLTeleportHandler "teleport" operation (as perf_check.py uses) does not
+            self.v.fire("LLTeleportHandler", "teleport", regionname=t["region"], x=t.get("x", 128), y=t.get("y", 128), z=t.get("z", 30))
+            self.v.barrier()
+            self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
+
     def go(self):
         self.save_restore()
         for k, val in self.sc.get("settings", {}).items():
             self.change(k, val)
-        t = self.sc.get("teleport")
-        if t:
-            self.v.fire("LLAgent", "requestTeleport", regionname=t["region"], x=t.get("x", 128), y=t.get("y", 128),
-                        z=t.get("z", 30), skip_confirmation=True)
-            self.v.barrier()
-            self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
+        self.teleport()
         gates = self.report["gates"]
         gates["O-1"] = self.gate_o1()
         gates["O-2"] = self.gate_o2()
