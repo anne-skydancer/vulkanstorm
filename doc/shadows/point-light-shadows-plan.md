@@ -6,8 +6,22 @@ Status: study only. Nothing here is built or measured in-world yet. **Decisions 
 the owner on 2026-11-15 ("as recommended") and are marked decided in section 8.** The auditor's findings of the same day
 are applied (sections 3.2, 3.6, 3.7, 3.4, 3.3, 5 and 9). Code references are to `origin/vkstorm-devel` at
 `1457ed0ea7`. Labels: **[V]** read in the code, **[M]** measured (machine and date given), **[E]** estimate, **[I]** inferred
-and not checked. Owner go: 2026-11-15. Earlier work: the planner verdict and the first survey of 2026-11-14
+and not checked. Owner go: 2026-11-15. **Additions of 2026-11-15** (owner: "OK"): method D′ and face masks per spatial group (3.3), Q3
+levers (f) to (h), a Q2a seed gate, the lists of later options, rejected methods and uncovered topics (8.1 to 8.3), and
+**Q5, tinted transmission, which is PROPOSED and not decided** (7.1; decisions T1 to T3 are open in section 8). Sources of
+the additions: the literature synthesis of 2026-11-15 as corrected by its audit, and `research_notes/Shadow methods for
+avatars and many lights/transmission.md` (cited as "TM"; the other notes are cited as "notes", with RT for
+`reports/Real time shadow casting techniques.md`). Earlier work: the planner verdict and the first survey of 2026-11-14
 (`reports/point-light-shadows-2026-11-14/` on the owner's machine, with the offline lookup bench `bench_point_lookup.py`).
+
+**Citation keys.** The notes are our research notes, kept on the owner's machine, not in the repository (`research_notes/` and
+`reports/` are untracked). Keys: TM = `research_notes/Shadow methods for avatars and many lights/transmission.md`; RT =
+`reports/Real time shadow casting techniques.md` (L:n = a line of its note `research_notes/Real time shadow casting
+techniques/local_light_shadows.md`, R:n = a line of the report); SM = `reports/Shadow methods for avatars and many lights.md`
+(R:n = a line of the report); in `research_notes/Shadow methods for avatars and many lights/`: GG1, GG2, GG3 = `gpugems1.md`,
+`gpugems2.md`, `gpugems3.md`; M = `many_lights.md`; in `research_notes/Real time shadow casting techniques/`: A = `api_and_performance.md`,
+FILT = `filtering_soft_shadows.md`. Line numbers are those of the files on the owner's machine. The GPU Gems chapter numbers
+follow our notes and were not checked against the books.
 
 ## 1. Summary
 
@@ -24,7 +38,7 @@ deferred point-light programs.
   layer, so it waits for that session.
 - Stages: **Q0** measure → **Q1** GL-free core → **Q2a** faces, the cheap
   tap for every lamp, avatars → **Q2b** near tier with PCSS → **Q3** cost levers. Optional **Q4** puts the cheap tap on
-  forward alpha.
+  forward alpha. **Q5**, tinted transmission for points and projectors, is **proposed only** (7.1; decisions T1 to T3, section 8).
 - Cost, estimated, in the living room at 1440p: **0.3 to 1.2 ms** a frame in steady state, against the **1.11 ms** of
   headroom measured at one place (devel 7.93 ms against the ceiling of 9.04 ms). The top of the range does not fit. Q0
   measures the owner's rooms before any code is written for the faces.
@@ -223,6 +237,7 @@ behaviour for every existing caller, and it is not inside a ShadowLegacy region.
 | B. One cull per face (the projector `renderTile`, six times) | (cull + sort + submit) x faces | each face draws only what is in it | none | core |
 | C. Geometry shader, `gl_ViewportIndex` (one submit, GS emits to the faces a triangle touches) | one submit | GS amplification (LearnOpenGL warns it is not necessarily faster) | a GS variant of every caster program (opaque, masked, fullbright masked, tree, GLTF opaque, mask and blend, avatar; rigged and not) | core 4.1 |
 | D. Vertex shader `gl_ViewportIndex`, instanced (one instance per face in the mask) | one submit | vertex x faces, as A | a VS variant of every caster VS; an instanced draw beside `LLVertexBuffer::drawRange` for the shadow pass | `ARB_shader_viewport_layer_array` (extension) |
+| **D′. Instancing with no extension** (new, ours; 2026-11-15) | one submit | vertex x faces in the mask, as D; clipper work for the clip planes [E] | a VS variant of every caster VS | core: `gl_ClipDistance` 3.0, `glDrawElementsInstancedBaseInstance` 4.2 (ARB_base_instance); the face comes from a per-instance vertex attribute, so no shader built-in and no `#version` change [I] |
 | E. Multi-draw indirect | fewer driver calls within one vertex buffer | as A or D | the viewer draws per `LLDrawInfo` with its own buffer, texture and matrix (`lldrawpool.cpp:432`, `:576`); MDI covers only draws that share a buffer | core 4.3 |
 
 **Recommendation: A.** Static faces are drawn only when something changes, so their cost is spread over the fill and the
@@ -231,10 +246,44 @@ with a real CPU gain, but it needs an extension. Without that extension, D would
 forbid. **Decided (D7, 2026-11-15):** A, one sphere cull and one submit per face; D only if Q0 shows at least 2x less CPU
 and the AMD and Intel GL 4.6 drivers have the extension.
 
+**Method D′ (new, 2026-11-15).** D without the extension. One viewport covers the whole atlas. The vertex shader maps the
+face's clip space into its tile with an affine map, `x' = s*x + o*w` and the same for y, which keeps the interpolation
+perspective-correct. Four `gl_ClipDistance` planes clip at the tile edges, guard band included, so a face never draws into
+its neighbour's tile. The face index comes from a **per-instance vertex attribute** (divisor 1), read from a small face-list buffer. The base instance of
+`glDrawElementsInstancedBaseInstance` offsets the instanced attribute fetches (ARB_base_instance, core GL 4.2), so the attribute
+itself gives the face [I; not tested]. **The literature has no clip-distance routing to
+tiles: this route is ours** [I; the notes' own proposal, with no published source]. Everything it needs is core GL 4.2 or older. The viewer's loader emits at most `#version 420` for non-compute shaders
+(`indra/llrender/llshadermgr.cpp:625-639` [V]), so the GLSL 4.60 built-in `gl_BaseInstance` is not available to these shaders and D′ does not
+use it. Raising the loader's version to 460 for these programs would be a wider change, which we avoid [I]. So the D7 condition "the extension is present on AMD and Intel" does not apply to D′.
+- **Gate:** Q0's bench gets D′ as a column. D′ must give the 2x CPU gain of D7 and pass the image check. **If D′ passes, the
+  AMD and Intel extension condition of D7 no longer applies; the owner confirms when Q0 reports.** The 2x CPU gate stays.
+- **Risks** [I until Q0 measures them]:
+  - a vertex-shader variant of every caster program (opaque, masked, fullbright masked, tree, GLTF, avatar, rigged or not),
+    on top of the +18 programs (3.1);
+  - the Legacy guard `check_legacy_glsl.py` must stay identical: the variants exist only in the point-pool permutation;
+  - clipped triangles may differ from method A in the last ulp, so **G1-P needs a stated tolerance** for D′ (Q1 states it
+    before Q2a relies on it);
+  - the interaction with the clip-plane use that exists today is unknown (Q0 lists every user of `gl_ClipDistance` and
+    of the fixed-function clip planes in the caster path);
+  - instancing saves CPU only, never raster [notes SM R:96, I]: without masks it draws every triangle six times.
+
+**Face masks per spatial group, for A and D′ (new, 2026-11-15).** Each spatial group's box (`LLViewerOctreeGroup`
+`mObjectExtents`, `llvieweroctree.h:264-265` [V]) is tested against the six face frusta, and the group is drawn only into
+the faces it touches. A draw info carries no box of its own [V: `LLDrawInfo`, `llspatialpartition.h:80-209`, has no
+extents member and no volume pointer], so the test is per group, once per cull.
+- **How it relates to what is in the plan.** Method B and Q3(e) already cull per face. The mask is new only as **one box
+  test per group (6 plane sets against one box) in place of N culls** [I].
+- **Source:** Olsson 2015, per-caster face masks. His "6x" saving includes camera-dependent receiver culling, whose stage
+  alone costs 1.8 to 3.5 ms [M in source: RT L:79]. We take only the box-against-face part, which does not depend on the
+  camera, and we do not take the receiver culling.
+- **Risk:** large SL groups that straddle a lamp touch all six faces and gain nothing. Olsson found batches over 512
+  triangles "significantly worse" [notes RT L:81, I].
+- **Census:** Q0 records the number of faces each group's mask covers (3.10).
+
 **Q0 measures it offline** (`scripts/shadows/point_faces_bench.py`, standalone GL through `scripts/perf/gl_test_context.py`;
 no viewer, and only while no build runs). The scenes are synthetic rooms: 50k / 200k / 1M triangles in 50 / 300 / 1500 draws,
 and a skinned 146k-triangle avatar proxy with four bone matrices. The faces are 64 / 128 / 256 / 512, with face masks of
-1, 2, 3 and 6. For each of A to E it measures CPU submit time (QPC) and GPU time (timer queries), median of 9 x 20. The
+1, 2, 3 and 6. Each of A and D′ also runs with the per-group masks and without them. For each of A to E and D′ it measures CPU submit time (QPC) and GPU time (timer queries), median of 9 x 20. The
 in-world census (3.10) adds the real draws and triangles per lamp sphere, which say where the owner's rooms fall on that
 grid.
 
@@ -262,6 +311,14 @@ from the lamp's six origins.
   rule. Largest radius 4 cm at the receiver (`ST_SPOT_RADIUS_MAX_M`), at most 12 texels and at most G - 2. Cost [M, lower
   bound, same bench and same limits]: **0.046 ms per lit Mpx at 512, 0.051 at 256** (worst case 0.19 / 0.14). A near lamp filling the 1440p screen costs
   about 0.19 to 0.21 ms.
+- **Q2a gate: the filter's seed comes from the light's texel, not the screen** (2026-11-15; the notes' check, SM R:175).
+  The near tier reuses the projectors' Vogel disc. Today `stSpotDisc` has one fixed orientation everywhere in the map
+  (`shadowStochasticUtil.glsl:295-301`, "the same orientation everywhere in the map") [V], and the G1 block contains no
+  rotation or screen-space hash [V: read `:262-381`]. So the reuse is camera-independent now. The gate keeps it so: any
+  rotation or jitter added to the disc for the point lookup is seeded from the lamp's texel (face, tile-local texel), never
+  from `pos_screen` or `gl_FragCoord`, or the shadows become camera-dependent and Uralsky-style fixed holes appear (notes SM
+  R:51, R:240 [I]). Test: the same receiver gives the same lookup value for two different camera orientations and screen
+  positions (a CRC over the lookup output of a static scene while the camera orbits, as O-1).
 - **Bias in metres, camera-independent:** a normal offset of 0.04 m, plus one texel of this face at the receiver
   (`w * 2 tan_half / N` metres), lowered by the receiver plane where the near tier uses it. The camera position enters only
   through the shadows' reach fade, as for projectors (`sampleProjectorShadow:389-395`).
@@ -413,6 +470,9 @@ From `ProjectorShadows.stats` with a `point` block:
 | attachment, on an avatar, `ACTIVE` (moving), root mover or physical | per light |
 | emitter AABB half-extents; linked prims whose box contains the light centre (the closed-shade predictor for D4) | per light |
 | estimated screen coverage (the projected sphere, clipped) | per light |
+| faces each spatial group's mask covers (box against the six face frusta, 3.3): a histogram of 1 to 6 | per light, on request |
+| lamps within 15 cm of another lamp (the `emitterExtent` clamp): the count and the cluster sizes | per frame |
+| faces per lamp that contain at least one blended caster (Q5's tint tiles, 7.1) and the blended draws and triangles there | per light, on request |
 | draws, triangles at the current LOD and at the pinned LOD, avatars inside the sphere | per light, on request (`census: true`): one sphere cull per lamp, only when asked |
 | **LOD pin on all lamps' spheres**: total pinned triangles over all lamps (union of the spheres), against the main view's triangles at the natural LOD; the extra main-view GPU ms with the pins held (frame with and without) | per frame, in the three rooms |
 | GPU ms of `local lights` (new `VKS_GLSTAT_PASS`) and `fullscreen lights` | per frame |
@@ -461,6 +521,8 @@ The headroom inside the owner's rooms is unknown; Q0 measures it.
 | Q2b, 2 near lamps | +0.06 to +0.38 (0.19 ms full-screen each x 15 to 100 % coverage) | ~0 | 0 (faces counted above) | bench [M] x coverage [E] |
 | Q3 | −11 % (4 lamps) to −27 % (one lamp) of the lookup for min/max [M offline]; the other levers unknown | +a fragment min/max pass per face draw (small faces: under 0.01 ms [E]) | +2 MiB (RG32F, 1/8 resolution of L) | 2026-11-14 bench |
 | Q4 (optional) | alpha pixels x 7 x 0.004 ms per Mpx | ~0 | 0 | |
+| Q5 (optional, **PROPOSED**) | small [E]; about 0 in rooms without glass; published: within +-1 ms of a plain map at 2048 squared on a GTX 280 [M in source, 2011] | one MRT pass per tile with blended casters, at tile draw only | 0 without glass; up to +480 MiB at full atlases, 96 MiB (4096² points) + 384 MiB (8192² projectors), +6 bytes a texel [E, arithmetic upper bound]; T3 (a) keeps it far lower | TM section 8, 7.1 |
+| D′ (if Q0 adopts it) | clipper work for four planes [E, unmeasured] | the CPU gate of 2x against A | 0 | 3.3 |
 
 **Running total** (adding GPU and CPU as if serial, an upper bound) [E]. The benched terms are lower bounds [M, lower
 bound] (synthetic room, receiver-plane term stubbed, NVIDIA only) and the far-lamp coverage factor is a guess, so the real
@@ -506,12 +568,91 @@ at a time, one review round (reviewer + auditor → coder → checker).
 | ~~P4~~ Avatar layer (both pools) | **Done**: merged as e7f368f1b9 (#515); review follow-up #516 pending. Owed: the walk session in-world (a walk under 3 lamps, a dancer under club lights) before Q2a relies on the avatar layer | | | | | |
 | **Q0** Measure | census (3.10); `local lights` pass scope; `point_faces_bench.py`; `bench_point_lookup.py` into `scripts/shadows/` and run again on devel, with the receiver-plane term real and, if a card is available, on AMD or Intel; the LOD-pin measurement on all lamps' spheres (3.10); budget page `doc/shadows/point-shadow-budget.md` with empty tables | `llprojectorshadowstatsapi.cpp`, `pipeline.cpp/.h` (stats accessor, scope), scripts | `check_release_hooks.py` on the release-bound diff; benches on an idle GPU | adds nothing to a release frame | session: living room, bedroom, outside (frame, census, coverage) | 2 to 3 h + session |
 | **Q1** GL-free core | `llpointpool`: face table and matrices, pick with ties, guard band per tier, sizes and demand, tier rule with hysteresis, face masks, merged items, lag accounting; the GLSL twin of the face pick | `llpointshadowpool.h`, `tests/llpointshadowpool_test.cpp`, ci-checks step, `scripts/shadows/point_faces_g1.py` | P-1 pick against brute force on 10⁶ directions with exact ties; P-2 every tap of a seam receiver stays inside its tile for each tier's kmax, with both the face pick and the lookup taken from the normal-offset position (3.2); **P-8 emitter exclusion by identity**: for a long thin emitter, a rotated emitter and a large panel emitter, the emitter prim casts nothing into its own lamp, while an adjacent linked prim whose box overlaps the emitter's box still casts (a near-plane cut fails this); **P-9 pose key**: a prim spinning about any axis keeps the same pose key every frame; P-3 hysteresis never oscillates on a recorded walk, invariant under camera rotation; P-4 capacity (256 lamps at the floor ≤ 40 % of 4096); P-5 an upgrade keeps old faces until six new are drawn; P-6 lag bound; P-7 no pool starves; **G1-P**: GLSL face pick, uv and depth equal the C++ on shared vectors (pick exact, uv and depth ≤ 1 ulp) | none at runtime | — | 1.5 to 3 h |
-| **Q2a** Faces, cheap tap, avatars | `LLPointShadows` (atlases through `llshadowatlas`, sphere cull + mask submits, two-sided, emitter exclusion by identity, pins, S → L, avatar faces); filter refactor; `samplePointShadow` cheap tier; `pointLightF` and batch permutations; uniforms and binding; stats | `llpointshadows.*`, `llshadowatlas.*`, `pipeline.cpp/.h`, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `llviewershadermgr.cpp`, `llshadermgr.cpp`, `check_legacy_glsl.py` | G1 stays max abs 0 (projectors); G1-P extended to the lookup (atlas against a standalone face); Legacy guards; program count and link time before and after (3.1); static scene: 0 face renders a frame after the fill; O-1 style orbit on point faces (CRC unchanged while the camera orbits); light stops at a test wall; method and detail switches, window toggle, quit without GL errors; smoke launch | living room within 82178 + 5 %, the lookup ≤ 0.35 ms GPU, per-frame CPU ≤ 0.05 ms in a static scene; fill time and avatar lag reported | Release in-world: the living room (bleeding gone), walk for avatar shadows | 4 to 8 h |
+| **Q2a** Faces, cheap tap, avatars | `LLPointShadows` (atlases through `llshadowatlas`, sphere cull + mask submits, two-sided, emitter exclusion by identity, pins, S → L, avatar faces); filter refactor; `samplePointShadow` cheap tier; `pointLightF` and batch permutations; uniforms and binding; stats | `llpointshadows.*`, `llshadowatlas.*`, `pipeline.cpp/.h`, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `llviewershadermgr.cpp`, `llshadermgr.cpp`, `check_legacy_glsl.py` | G1 stays max abs 0 (projectors); G1-P extended to the lookup (atlas against a standalone face); Legacy guards; program count and link time before and after (3.1); static scene: 0 face renders a frame after the fill; O-1 style orbit on point faces (CRC unchanged while the camera orbits; this is also the seed gate of 3.4: no screen-derived seed in the lookup); light stops at a test wall; method and detail switches, window toggle, quit without GL errors; smoke launch | living room within 82178 + 5 %, the lookup ≤ 0.35 ms GPU, per-frame CPU ≤ 0.05 ms in a static scene; fill time and avatar lag reported | Release in-world: the living room (bleeding gone), walk for avatar shadows | 4 to 8 h |
 | **Q2b** Near tier | tier rule live (K, hysteresis), 256/512 faces with G 16, PCSS program, upgrade and downgrade paths | `llpointshadows.*`, `llpointshadowpool.h`, shaders, shader manager | P-3 and P-5 in-world: walk through doorways, the tier log shows no flapping; no frame with a near lamp unshadowed during the switch | the near lamps' GPU ≤ 0.2 ms each at full screen; total within +5 % | walk into the living room and out; recording reviewed for size, shape, edges and stability | 2 to 4 h |
-| **Q3** Levers | (a) hierarchical min/max early-out, a fragment pass per face draw, exact; (b) empty-face skip (a face with no caster: no sampling); (c) two-tier filter refinement: the near tier's lighter filter (8 + 16 taps) beyond a position-based distance with hysteresis (pool P5a); (d) importance skip: no lookup where the lamp's contribution is under one 8-bit step; (e) single-face perspective cull for one-face redraws. Only the ones Q2 shows are needed | shaders, `llpointshadows.cpp` | (a) and (b): image difference 0; (c) and (d): measured image change, penumbra at N and N/2 | each lever's gain measured; total within +5 % | — | 2 to 4 h |
+| **Q3** Levers | (a) hierarchical min/max early-out, a fragment pass per face draw, exact; (b) empty-face skip (a face with no caster: no sampling); (c) two-tier filter refinement: the near tier's lighter filter (8 + 16 taps) beyond a position-based distance with hysteresis (pool P5a); (d) importance skip: no lookup where the lamp's contribution is under one 8-bit step; (e) single-face perspective cull for one-face redraws; **(f)** an occlusion query of an avatar against the face's cached static depth (7.2: skip the avatar's draw into a face when it is hidden there); **(g)** Cold War's dilated PCF for the far tier, and the world-unit kernel converted to texels (7.2); **(h)** degrade instead of lag (7.2). Only the ones Q2 shows are needed, **each of (f) to (h) like the existing levers** | shaders, `llpointshadows.cpp` | (a) and (b): image difference 0; (c) and (d): measured image change, penumbra at N and N/2; (f): the avatar's shadow equal to the unculled one except in the frame after it enters a face (one frame late); an avatar that moved since its query was issued counts as visible, and the gate has a case of movement within a face, from occluded to visible, where no frame may lose the shadow; (g): the same penumbra width at 64 and 128 tiles, measured against (c); (h): the lag table with the dropped casters listed | each lever's gain measured; total within +5 % | — | 2 to 4 h |
 | **Q4** (optional) Forward alpha | cheap tap in the 7 forward slots | forward shaders, `setupHWLights` | Legacy GLSL guard for the forward shaders; alpha in a lamp room against the deferred surface behind it | measured | glass and hair in the living room | 1 to 2 h |
+| **Q5** (optional, **PROPOSED, not decided**) Tinted transmission | one tint tile and one nearest-translucent-depth tile per face or projector tile that contains blended casters, one MRT pass at tile draw; the lookup multiplies the light by the tint (7.1) | `llshadowatlas.*`, `llpointshadows.*`, `llprojectorshadows.*`, the blended-caster programs, `shadowStochasticUtil.glsl`, `pointLightF.glsl`, `multiPointLightF.glsl`, `spotLightF.glsl`, shader manager, `check_legacy_glsl.py` | white tint gives max abs 0 against the untinted lookup (G1 style); a red pane in a test room: red light behind it, none in front; a tile with no glass costs nothing and allocates nothing; Legacy guards; no screen-derived seed | within the running +5 %; tint pass per glass tile and the extra fetch reported | glass in the living room, a stained-glass test prim | [E] 3 to 6 h, after Q2 and Q3; decisions T1 to T3 first |
 
 **Total:** about 12 to 24 h of pipeline time still to go (P4 is done), plus P4's walk session and the sessions for Q0 and Q2.
+The proposed Q5 would add [E] 3 to 6 h if the owner takes it.
+
+### 7.1 Q5: tinted transmission, "tinting through glass" (PROPOSED, not decided; 2026-11-15)
+
+The owner rule of 2026-11-13: transparent objects cast no shadow and tint the light that passes through. The solid cutoff is
+alpha at or above 0.98 (Q6, 2026-11-14). Today the pools draw no tint at all (below). Q5 adds the tint for **point lights and
+projectors**, because the two pools share `llshadowatlas`. Sources: TM sections 0, 1, 8, 14, 15 and 16 (the single-layer
+translucency colour map: Gosselin 2004, StarCraft II 2008, Crytek 2011; none of them was opened in primary form except SC2 [TM
+section 8: fetched]).
+
+**What the casters do today** [V]:
+
+| Caster | Under Stochastic detail 2 (`use_stochastic_shadows()`) | Legacy |
+|---|---|---|
+| Alpha-blended face | hashed dither of the map's texel (`ign`), keeps the fraction alpha of the texels, from 0.05 up to `shadow_solid_alpha` = 0.98, solid above (`shadowAlphaMaskF.glsl:58-82`, `pipeline.cpp:266-271`) | the 0.05 to 0.88 column stipple (`:84`), a fixed 50 % whatever alpha is |
+| Alpha-masked face | the creator's cutoff only, never dithers (`shadow_solid_alpha` = 0) | the same stipple below 0.88 |
+| Colour | none: `frag_color` is white | none |
+
+The pools use these caster programs (3.2), so under Stochastic the lamps get the grain, not the stipple, and no tint [V for the
+programs; I that the pool passes take the `STOCHASTIC_SHADOW_ALPHA` permutation, because the permutation is set per program in
+`llviewershadermgr.cpp:2638-2661`, not per pass]. **The column stipple must not be used for lamps** (TM section 0: it is the likely origin of the
+column bands and palm bars [I]); the Legacy permutation keeps it by the Legacy rule and is not the pools' path. Alpha-masked lace
+(TM case A) belongs to the solid tile with an alpha test and no tint; Q5 does not touch it. If Q5 is taken, blended faces below
+0.98 leave the dithered solid tile and go to the tint pass, or the lamp would be shadowed and tinted twice [I]; that is part of T1.
+
+**Design** (TM section 8 and section 15 option 5; single-layer translucency colour map) [I]:
+- When a tile is drawn, **one pass over the blended casters** writes, with MRT:
+  - an **RGBA8 tint target**, cleared to white, with the multiplicative blend `glBlendFunc(GL_ZERO, GL_SRC_COLOR)`. The product
+    is commutative, so the pass is order-independent;
+  - the **nearest translucent depth** (R16F or R32F, with a MIN blend equation; per-attachment blend equations are core since
+    GL 4.0);
+  - the pass is depth-tested against the **opaque tile**, with depth write off, so colour hidden behind opaque casters is not
+    written.
+- **Colour rule:** the blocked fraction is rho = alpha * (1 - t), with t from base colour times texture, so stained glass casts
+  its pattern (McGuire and Enderton 2011, TM section 1). The tint written is 1 - rho per channel.
+- **Lookup:** a receiver behind the nearest translucent depth multiplies the lamp's light by the tint. It is one extra fetch, made
+  only in tiles flagged as having glass.
+- **Static glass only**, cached with the static faces. Movers and physical objects do not cast locally (the casting rule), so
+  there is no dynamic tint layer.
+- **Sun:** out of scope. It would change the sun path (A4).
+
+**Memory.** Tint tiles exist only for faces that contain blended casters. Q0's census counts them (3.10). The upper bound is a
+full atlas pair: RGBA8 is 4 bytes a texel, the nearest-translucent depth R16F 2 bytes, so +6 bytes a texel, which for a 4096 atlas
+is 96 MiB [computed]. With the recommended scope (points and projectors) the pools are separate atlas instances (3.1) and the projector atlas can be 8192², which is 384 MiB, so the full-atlas upper bound is **480 MiB** [E, arithmetic]. T3 (a) keeps the real figure far below it; in a room with no glass it is 0 [E]. Q0's count decides whether the tiles go in the atlas pair or in
+a smaller side atlas.
+
+**Cost.** The published figure is within about +-1 ms of a plain map at 2048 squared and 1080p on a GTX 280 [M in source, TM
+section 8, 2011 hardware]. Ours is [E] small, and about zero in rooms without glass, because the pass and the fetch exist only
+for tiles with blended casters. It must fit the running +5 % total (section 5), and Q5 reports its own cost and the total.
+
+**Limits** [I, TM section 8]: one layer. Stacked tints multiply correctly, but a receiver between two panes gets the full product.
+It cannot tint on transmissive receivers, and there is no sheer or lace handling (TM case B, a sheer stays with the grain of the
+dither above, or goes to CSSM2).
+
+**Alternatives** (TM sections 7, 10, 14):
+- **CSSM2** (McGuire and Enderton 2011): several layers, sheer as well, with grain. RGB16F per tile (+6 bytes a texel), +0.1 to
+  3.2 ms a frame on a GTX 280 [M in source, 2011]. It also needs the lookup to run inside the PCSS kernel (TM section 15 item 3).
+- the **McGuire-Mara prefiltered** variant of CSSM: noise-free, a quarter-resolution transmittance per cache update, loses
+  pattern detail [I].
+
+**Open before building:**
+- How Second Life content sets alpha and colour for glass. Builders mostly use alpha blend with a tint in the diffuse colour [unverified], so
+  t has to be derived from base colour and alpha in a defined way; glTF transmission is absent in SL [unverified] (TM section 16).
+- Whether blended faces below 0.98 leave the solid tile (above).
+- Whether the tint tile fits the atlas budget (T3).
+
+### 7.2 Q3 levers added on 2026-11-15
+
+Each is used only if Q2 shows it is needed, as for levers (a) to (e). None is costed yet [E]; each reports its gain and the running
+total when it lands.
+
+| Lever | What | Source | Fit and risk |
+|---|---|---|---|
+| (f) | An occlusion query of an avatar's box against the face's cached static depth: if the box is fully hidden there, skip the avatar's draw into that face | GPU Gems 2 ch. 6, Wimmer and Bittner: about 4x in a city scene [M in source]; applying it to point faces is the notes' own idea [I] (notes GG2 L175-180) | camera-independent: it tests against the light's own depth. The result arrives one frame late, so an avatar entering a face may miss its shadow for one frame [I]. The same lag hits an avatar that moves from behind a static occluder into view without changing face [I]. Fix: an avatar whose box moved since its query was issued counts as visible (conservative), or its queried box is enlarged by its motion over one frame Adds query bookkeeping to the dynamic cap |
+| (g) | Cold War's dilated PCF for the far tier (contact hardening from one gather, no extra sample), and the world-unit kernel converted to texels so tiles of 64 and 128 look the same | Cold War, notes RT L:37 and L:183 [I] ("critical for scaling system") | the far tier's fixed 2x2 gather otherwise changes its world footprint when a tile changes size (3.5). Changes the look of the far tier: measured image change against the plain gather |
+| (h) | Degrade instead of lag: when the dynamic share is spent, drop the smallest dynamic casters first; the update rate of far lamps falls with their distance from the camera **position** | Cold War, RT L:33 and L:182; Flax, RT L:134 and notes A:144 [I] | answers the avatar lag of 3.7 (today the only answer is the lag itself). Distance by position keeps it camera-independent in direction. Risk: a dropped caster pops when it returns; the rule needs hysteresis |
+
+The cost lines of section 5 are unchanged until a lever is built.
 
 ## 8. Decisions
 
@@ -528,8 +669,57 @@ in each row. (D5 does not exist: the numbering follows the 2026-11-14 list.)
 | **D7** DECIDED | Face rendering | (a) **one sphere cull, one submit per face in the mask (core GL, no new shader variants)**; switch to (b), the vertex-shader `gl_ViewportIndex` with instancing, only if Q0 shows at least 2x lower CPU and the extension is present on AMD and Intel GL 4.6 drivers; (c) one cull per face |
 | **D8** DECIDED | What turns it on | (a) **Stochastic, detail 2 ("Sun/Moon + Projectors"), with a debug setting `RenderShadowPointLights` (default on) for A/B; no Preferences entry**; (b) a new detail level 3 |
 
+**Proposed, not decided (2026-11-15): Q5, tinted transmission.** The owner decides T1 to T3 after Q0 has counted the faces with
+blended casters. Recommendation first in each row.
+
+| | Decision | Options (recommended first) |
+|---|---|---|
+| **T1** PROPOSED | Tint method | (a) **the single-layer translucency colour map** (SC2, Crytek, Gosselin): deterministic, no grain, about the cost of a plain map, one layer; (b) CSSM2 (McGuire and Enderton 2011): multi-layer and sheer, with grain, RGB16F a tile, more cost; (c) none: lamps are not tinted |
+| **T2** PROPOSED | Scope | (a) **points and projectors** (the pools share `llshadowatlas`); (b) points only; (c) points and projectors now, the sun later (A4) |
+| **T3** PROPOSED | Memory | (a) **tint tiles only for faces that contain blended casters** (counted by Q0); (b) a tint tile for every face |
+
+**D7 amended (2026-11-15, owner "OK" to fold the plan additions in).** D7 is as decided (A, with D only on the 2x gate and the
+extension). The new method D′ (3.3) needs no extension, and **if D′ passes Q0's gates, D7's AMD and Intel extension condition
+no longer applies; the owner confirms when Q0 reports.** The 2x CPU gate stays.
+
 The other open points of 2026-11-14 are settled here: D2 of that list (pin for every lamp) is the LOD pin for every lamp
 (3.6), and D3 is D3 above.
+
+### 8.1 Later options (not in any stage yet)
+
+| Option | What | Why later | Source |
+|---|---|---|---|
+| Per-avatar maps | one shadow map per avatar and lamp (Unreal's per-object shadows) as an alternative to the dynamic layer L | the S to L copy plus avatar draw is the plan; this is the real alternative if the lag or the copy cost bites. Epic itself says a Movable light becomes the cheaper path at some caster count [I] | notes SM R:122, R:124 |
+| Transform-feedback skinning | skin an avatar once a frame, then draw the captured vertices into every face | core GL, not compute. It saves **GPU skinning only**: the lag table's limit is CPU submit (3.7), which this does not lower. Many separately rigged attachments mean many captures; alpha-masked parts need UVs in the stream. Not measured | GPU Gems 1 ch. 4, GG2 ch. 3, GG3 ch. 3; notes SM R:184-185, R:233-234 [I] |
+| Caster LOD chosen from the light | pick each caster's LOD from its size in the tile for far faces, then freeze it | conflicts with the LOD pin (3.6). Decide after Q0 measures the pin's main-view cost. SL creator LODs can change the silhouette [I]. No source says the shadow pass may use another LOD than the pinned one [I] | GG1 ch. 28 (fewer bones for distant characters), notes M:124 |
+| Clustered emitters sharing one cube | one set of faces for lamps that lie close together (a chandelier) | no source in the literature. Casters inside the cluster's radius are placed wrongly; every member needs identity exclusion (D4). Q0 counts the lamps within 15 cm of another, the `emitterExtent` clamp (3.10) | none; rests on the PCSS light-size formula [I] |
+
+### 8.2 Considered and rejected
+
+| Method | Reason | Source |
+|---|---|---|
+| Selection by what the camera sees | shadows pop when the camera turns | notes RT R:35 [I] |
+| Virtual or sparse maps | pages follow the depth buffer, so they are camera-dependent; the cost is for non-Nanite scenes; AMD advises never putting depth targets in sparse memory | notes A:79, A:94 [I] |
+| GPU-driven culling | compute, and it belongs to the Vulkan line. Multi-draw indirect itself is not compute and stays in the G-series (method E, 3.3) | notes A:32-35, A:54 [I] |
+| Screen-space noise and denoised shadows | they work in screen space, so they are camera-dependent | notes FILT L148, RT R:55-71 [I] |
+| The VSM family | light bleeds indoors | GG3 L72, RT R:53 [I] |
+| Dual-paraboloid maps | need finely tessellated casters (the test scene used 64 quads a wall); a 1024 map was needed to match a 512 cube; STALKER rejected them | notes M:71-72, L:120, GG2 L60 [I] |
+| Tetrahedral maps | no evidence it pays once faces are cached; the GPU Pro chapters (Liao; Doghramachi) are known only as snippets | notes L:122-123, L:133, L:139 [I] |
+| Imperfect shadow maps | valid only when the errors average out over many lights, not for direct shadows | notes M:38-48 [I] |
+
+### 8.3 Not covered by our bibliography
+
+- Sharing or clustering shadow maps between nearby lights, and treating a cluster as an area light, with error bounds.
+- The cost and precision of clip-distance routing to tiles, and clipper throughput (method D′ rests on this).
+- Point-light face timings on recent GPUs other than our own, and the cost of avatar-class casters.
+- AMD and Intel GL drivers: viewport and layer routing, `glCopyImageSubData` cost, slow partial clears. The extension is listed on Mesa
+  for Intel HD 3000 and HD 530 and on an NVIDIA MX450 [notes M:104]; **AMD on Windows and Intel Arc or Xe on Windows are
+  unconfirmed**, and the viewer also ships on Linux.
+- A perceptual threshold for an acceptable shadow lag.
+- Cache invalidation for user-built scenes at scale, beyond Insomniac's "unmoved for N seconds" rule, which is unproven.
+- Omnidirectional-shadow chapters of GPU Pro (Liao) and GPU Pro 6 (Doghramachi), which we have only as snippets. GPU Zen has none
+  (its one mention is the sun's virtual shadow maps, not read).
+- Modern-GPU numbers for coloured or stochastic transparent shadows: the newest are the GTX 280 figures of 2011 (TM section 16).
 
 ## 9. Risks, and what was not verified
 
@@ -551,6 +741,10 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
   the code, not a runtime path).
 - **Shared code touched:** the `renderShadowImpl` split, the two-sided flag and the feed's owner mask. Each is checked by the
   Legacy guards and the projector orbit gates.
+- **D′ (3.3):** a vertex-shader variant of every caster program, a last-ulp difference from A, and an unknown interaction with
+  existing clip-plane use. It is adopted only if Q0's bench passes the 2x CPU gate and the image check.
+- **Group masks (3.3):** a large group that straddles a lamp touches all six faces and gains nothing.
+- **Q5 (proposed):** the memory of the tint tiles, one layer only, and the unknown way SL content sets glass alpha and colour (7.1).
 - **LOD pin with no ceiling** across lamps: a lamp over a dense room pins all of it in the main view too. `pinned_triangles` reports it.
 
 **Not verified**
@@ -561,6 +755,11 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 - All in-world numbers: coverage, draws per sphere, avatar counts, the rooms' headroom, off-screen animation cost.
 - The 2026-11-14 lookup bench was not run again here: a viewer build was running, and GPU timings taken then are unreliable.
 - Scalability on AMD and Intel GPUs.
+- `gl_ClipDistance` routing to tiles (D′): nothing is built or measured, and the literature has no source for it.
+- That the Q2a coder greps `LLDrawInfo` callers for a volume or box (3.3).
+- That the pools' face renders take the `STOCHASTIC_SHADOW_ALPHA` caster permutation (7.1): read per program, not per pass.
+- Whether Q5's tint tiles fit the atlas budget; how SL content sets alpha and colour for glass; the 2011 cost figures on today's GPUs.
+- The occlusion query's gain on point faces (an idea from the notes, no measurement), and the dilated PCF's look.
 
 ## 10. Effort calibration
 
@@ -596,6 +795,13 @@ sessions come on top.
 - `ARB_shader_viewport_layer_array`, `ARB_viewport_array`, `ARB_multi_draw_indirect` (Khronos registry).
 - Rejected by the owner: dual-paraboloid (Brabec et al. 2002), tetrahedron (Liao 2010), voxel occupancy, the screen-space
   march. ReSTIR (Bitterli et al. 2020) belongs to the Vulkan / Aurora side.
+- Added 2026-11-15: Olsson, per-caster face masks (2015); Cold War (dilated PCF, world-unit kernel, degrade order); Flax (update
+  rate by distance); GPU Gems 2 ch. 6, Wimmer and Bittner (occlusion queries); GPU Gems 3 ch. 19 (static and dynamic split);
+  McGuire and Enderton, *Colored Stochastic Shadow Maps*, I3D 2011; Filion and McNaughton, *StarCraft II: Effects and
+  Techniques*, SIGGRAPH 2008 (translucent shadows); Gosselin, Sander and Mitchell 2004 (ShaderX3, cited only); Crytek 2011 (via
+  Bavoil and Jansen); McGuire and Mara 2016. Notes: `reports/Real time shadow casting techniques.md`,
+  `reports/Shadow methods for avatars and many lights.md` and `research_notes/Shadow methods for avatars and many
+  lights/transmission.md` (TM). Mostly secondary sources; figures marked [M in source] were measured by their authors, not by us.
 - LearnOpenGL *Point Shadows*: code CC BY-NC 4.0, not GPL-compatible. Used for the logic only, and no code is copied.
 - ogldev tutorial 43 (Etay Meiri): GPL-3.0-or-later. This plan takes no code from it (the six-pass structure and the
   `FLT_MAX` clear are ideas, not code). If a stage copies any, that stage adds the attribution to `NOTICE.md` and
