@@ -37,7 +37,6 @@ uniform int st_mode;               // 1 total alpha, 2 stochastic depth, 3 depth
 uniform float st_min_alpha;        // mode 3: the cut under which a fragment is discarded
 uniform int st_samples_hw;         // samples of the pass's targets (at most 8)
 uniform int st_samples;            // samples in all: the table's S, which is 8 (LLStochasticEngine::TRANSPARENCY_SAMPLES)
-uniform int st_iteration;          // the run of the depth and accumulation passes
 uniform int st_seed;               // the face's identity (LLDrawInfo::mStochasticSeed)
 uniform int st_frame;              // the frame, in the seed with the temporal accumulation (0: a fixed field)
 
@@ -54,8 +53,8 @@ uint st_mask(float a)
     return stoch_mask(a, seed, st_frame, uvec2(gl_FragCoord.xy), uint(st_samples));
 }
 
-// The value for gl_SampleMask[0]: every sample for the total alpha, this iteration's bits of
-// the mask, as the pass's samples, for the stochastic depth.
+// The value for gl_SampleMask[0]: every sample for the total alpha, the mask's bits (the
+// pass's samples, all 8) for the stochastic depth.
 int alpha_stochastic_mask(float a)
 {
     // a non-finite alpha (a NaN or an infinity from a bad vertex or texture) is no fragment: it hides
@@ -74,7 +73,6 @@ int alpha_stochastic_mask(float a)
         return -1;
     }
     uint n = uint(st_samples_hw);
-    uint shift = (uint(st_iteration) * n) % 32u;
     uint bits = n >= 32u ? 0xffffffffu : ((1u << n) - 1u);
-    return int((st_mask(a) >> shift) & bits);
+    return int(st_mask(a) & bits);
 }

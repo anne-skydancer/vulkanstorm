@@ -91,7 +91,7 @@ public:
     // blended faces and the composite; false when the targets are missing (the faces are not drawn
     // until the allocation is retried; there is no other method)
     bool renderStochastic();
-    void setStochasticUniforms(S32 mode, U32 iteration);
+    void setStochasticUniforms(S32 mode);
     void bindStochasticMasks(LLGLSLShader* shader);
     // the rigged depth and the residual draws (particles, custom blending) after the composite
     void renderOITResidual();
