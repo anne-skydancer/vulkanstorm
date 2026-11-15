@@ -30,7 +30,6 @@
 #include "llviewershadermgr.h"
 #include "pipeline.h"
 
-#include <glm/gtc/type_ptr.hpp>
 
 namespace
 {

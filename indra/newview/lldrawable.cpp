@@ -1460,7 +1460,13 @@ void LLSpatialBridge::transformExtents(const LLVector4a* src, LLVector4a* dst)
 
 void LLDrawable::setVisible(LLCamera& camera, std::vector<LLDrawable*>* results, bool for_select)
 {
-    LLViewerOctreeEntryData::setVisible();
+    // <Vulkanstorm> the local shadows' avatar layer must not stamp the camera's visibility (the stamp is not per camera: an avatar
+    // behind the camera would count as visible to the animation, the impostor ranking and updateImpostors of the frame)
+    if (LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC)
+    {
+        LLViewerOctreeEntryData::setVisible();
+    }
+    // </Vulkanstorm>
 
 #if 0 && !LL_RELEASE_FOR_DOWNLOAD
     //crazy paranoid rules checking

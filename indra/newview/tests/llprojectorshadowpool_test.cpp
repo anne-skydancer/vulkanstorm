@@ -1610,6 +1610,18 @@ void testP4Caps()
         check(q.dynamic.size() + q.fixed.size() == 1, "P4 progress: an untouched frame runs one over-cap item alone, never two", double(q.dynamic.size() + q.fixed.size()));
         check(q.dynamic.size() == 1, "P4 progress: the dynamic item has the priority");
     }
+    // a static tile above the whole cap is not starved by a standing avatar: after the wait it runs alone as the progress pick
+    {
+        const std::vector<DynamicItem> dyn = faces(3, 0.05f, 1);
+        std::vector<StaticItem> st = tiles(1, 0.5f);
+        const FramePicks young = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(young.dynamic.size() == 3 && young.fixed.empty(), "P4 a big static tile that has not waited yet leaves the cheap faces their frame");
+        st[0].age_frames = kDynamicDeadlineFrames;
+        const FramePicks old = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
+        check(old.fixed.size() == 1 && old.dynamic.empty(), "P4 a big static tile that has waited runs alone, the faces give way", double(old.fixed.size()));
+        const FramePicks spent = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, false);
+        check(spent.fixed.empty(), "P4 the big static tile does not run in a frame that has spent already");
+    }
     // priority: the dynamic layer is served first, and the static tiles keep at least the floor
     {
         const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
