@@ -357,6 +357,7 @@ the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `se
 - **The sum of the predicted costs of a frame's picks never exceeds the cap**, except for the one progress pick: when nothing was spent
   yet in the frame, a single item whose own prediction is above the cap runs alone. Two caches share the cap through the frame ledger
   (`frameLedger()`): the second takes what the first left, and a frame in which the cap is spent serves nothing more.
+- **A_max covers the static tiles too.** A static tile that draws avatars (a first fill, a dirty or low-res tile) is charged `min(avatars, A_max)` draws (`StaticItem::avatar_draws`) against what the dynamic picks left of A_max; one that does not fit waits (the order is kept), and the head tile keeps its place (the dynamic layer gives up its last avatar faces for it, only when the head is served; so for a cold fill of avatar-heavy tiles the dynamic avatar faces yield to the head tile), so a cold fill never draws more than A_max avatars in a frame.
 - **In the frame** each render also checks the measured time against the cap (the dynamic list against its 0.20 ms share).
 - **Cold start** (`coldItemMs`) is at most a quarter of the cap (0.0875 ms): four first fills a frame with no avatar layer, one a frame
   while the dynamic layer is full.

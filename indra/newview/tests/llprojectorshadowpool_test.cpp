@@ -1394,6 +1394,52 @@ void testP4Caps()
         check(p.size() == 24, "P4 the avatar draws never exceed A_max, whatever the CPU share", double(p.size()));
         check(selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, 3, true).dynamic.size() == 3, "P4 a small A_max binds before the CPU share");
     }
+    // static tiles' avatars are charged against A_max with the dynamic picks' (a cold fill cannot draw more than A_max in a frame)
+    {
+        auto drawsOf = [](const FramePicks& p, const std::vector<StaticItem>& st, const std::vector<DynamicItem>& dyn, uint32_t a_max) {
+            uint32_t n = 0;
+            for (uint32_t k : p.dynamic)
+                for (const DynamicItem& d : dyn)
+                    if (packKey(d.pool, d.key) == k) n += d.avatar ? std::min(std::max(d.avatar_draws, 1u), a_max) : 0u;
+            for (uint32_t k : p.fixed)
+                for (const StaticItem& s : st)
+                    if (packKey(s.pool, s.key) == k) n += std::min(s.avatar_draws, a_max);
+            return n;
+        };
+        std::vector<DynamicItem> dyn = faces(4, 0.05f, 1);
+        std::vector<StaticItem> st = tiles(3, 0.05f);
+        for (StaticItem& s : st) s.avatar_draws = 3;
+        const FramePicks p = selectFrame(st, dyn, kFrameCapMs, 5, true);
+        check(drawsOf(p, st, dyn, 5) <= 5, "P4 static plus dynamic avatar draws never exceed A_max", double(drawsOf(p, st, dyn, 5)));
+        check(p.fixed.size() == 1, "P4 a static tile whose avatars do not fit the rest of A_max waits", double(p.fixed.size()));
+        // the first static tile keeps its place (the dynamic layer gives up faces for it): nothing starves
+        check(!p.fixed.empty() && unpackKey(p.fixed[0]) == 1, "P4 the head static tile with avatars is served");
+        // a tile with more avatars than A_max draws A_max of them and runs alone as the exemption
+        std::vector<StaticItem> big = tiles(1, 0.05f);
+        big[0].avatar_draws = 100;
+        const FramePicks q = selectFrame(big, faces(4, 0.05f, 1), kFrameCapMs, 3, true);
+        check(q.fixed.size() == 1 && drawsOf(q, big, faces(4, 0.05f, 1), 3) <= 3, "P4 an avatar tile above A_max runs at A_max draws");
+        // tiles without avatars are not charged
+        std::vector<StaticItem> none = tiles(3, 0.05f);
+        check(selectFrame(none, std::vector<DynamicItem>(), kFrameCapMs, 0, true).fixed.size() == 3, "P4 static tiles without avatars ignore A_max");
+        // making room for the head's avatar draws drops avatar faces only, and only when the head is served
+        {
+            std::vector<DynamicItem> mix(3);
+            for (uint32_t i = 0; i < 3; ++i) { mix[i].key = i + 1; mix[i].last_cpu_ms = 0.05f; mix[i].cam_dist = float(i); }
+            mix[0].avatar = true;
+            mix[0].avatar_draws = 3;
+            std::vector<StaticItem> head = tiles(1, 0.05f);
+            head[0].avatar_draws = 22;
+            const FramePicks r = selectFrame(head, mix, kFrameCapMs, 24, true);
+            check(r.dynamic.size() == 2 && r.fixed.size() == 1, "P4 only the avatar face yields to the head tile's draws");
+            std::vector<StaticItem> big = tiles(1, 0.5f);
+            big[0].avatar_draws = 22;
+            big[0].never_drawn = false;
+            big[0].age_frames = 0;
+            const FramePicks r2 = selectFrame(big, mix, 0.2f, 24, false);
+            check(r2.dynamic.size() == 3, "P4 dynamic faces are kept when the head is not served");
+        }
+    }
     // pool packing: the same key in two pools is two items
     check(packKey(1, 5) != packKey(0, 5) && unpackKey(packKey(1, 5)) == 5 && unpackPool(packKey(1, 5)) == 1, "P4 a packed key keeps its pool");
 }
