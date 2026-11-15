@@ -830,7 +830,7 @@ public:
     // the temporal accumulation: the transparency's history in the stochastic engine (two full-size RGBA16F
     // colours and two RG16F (last total alpha, part of the last frame left out), the frame counter of the seeds and the
     // validity rules), and the measuring pass's two full-size RGBA16F targets: this frame's averaged accumulation
-    // (mAlphaSTCurrent, which the smooth pass then draws over: it reads the history and mAlphaSTAux, not it) and its
+    // (mAlphaSTCurrent, the averaged accumulation the blend reads; the composite reads the history, mAlphaSTAux, the extra pair and the mask, not it) and its
     // grain, total alpha and depths (mAlphaSTAux)
     LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F, 1.f / 8.f, GL_RG16F };
     U32 mAlphaSTCurrent = 0;
