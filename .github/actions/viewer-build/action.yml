@@ -203,7 +203,7 @@ runs:
         # listens beyond localhost), and OPENSIM on, because it is measured on a
         # local OpenSim region. Never a Release build (the workflow plans it
         # RelWithDebInfo).
-        opensim=OFF; tracy=OFF; tracy_local=OFF
+        opensim=OFF; tracy=OFF
         if [[ "$VKSTORM_TRACY" == true ]]; then
           if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
             echo "::error::a Tracy build must be RelWithDebInfo without a package"

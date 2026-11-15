@@ -243,6 +243,8 @@ test('planPlatform: each platform workflow plans its own build and tag', () => {
         assert.throws(() => at('workflow_dispatch', ref, 'linux', { tracy: 'true', publish: true }), /never published/);
     }
     assert.equal(at('push', 'refs/heads/vkstorm-release', 'windows', { tracy: true }).release, true);
+    assert.equal(at('pull_request', 'refs/pull/7/merge', 'windows', { tracy: true }).tag, '');
+    assert.equal(at('workflow_dispatch', 'refs/heads/vkstorm-devel', 'windows', { tracy: 'false', publish: true }).tag, 'preview-windows');
     // Pull requests and other lines never publish; forks never publish.
     const pr = at('pull_request', 'refs/pull/7/merge', 'linux-lts');
     assert.deepEqual([pr.tag, pr.release, pr.entry.platform, pr.entry.container.image], ['', false, 'linux-lts', 'ubuntu:24.04']);
