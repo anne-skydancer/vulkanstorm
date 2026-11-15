@@ -40,12 +40,14 @@ out vec4 frag_data[2];   // 0: the history's colour (RGBA16F), 1: (total alpha, 
 // The history keeps this engine's format: the four-vector (alpha x colour, alpha), the alpha correction (total alpha
 // over the blended alpha) made at the composite, with this frame's total alpha so that an alpha change is never
 // ghosted. #3663 stores the corrected colour; offline that made the low-frequency error twice as large (measured offline at S = 4).
+// Where the measuring pass's mask is 0 (nothing transparent drawn: every lane empty) the pixel is written empty at once.
 // The last frame's total alpha is the second target of the history (RG16F, with the part left out).
 
 uniform sampler2D   alpha_st_current;  // this frame's averaged accumulation (RGBA16F)
 uniform sampler2D   alpha_st_aux;      // (grain, total alpha, 1 - nearest depth, 1 - farthest depth) (RGBA16F)
 uniform sampler2D   alpha_st_history;  // the last frame's blended four-vector (RGBA16F)
 uniform sampler2D   alpha_st_extra;    // the last frame's (total alpha, part left out) (RG16F)
+uniform sampler2D   alpha_st_mask;     // 1 where anything transparent was drawn (alphaStochasticCurrentF.glsl, R8)
 
 bool stoch_has_history();
 bool stoch_reproject(ivec2 px, float z, ivec2 size, out vec4 pp, out vec2 puv);
@@ -85,6 +87,14 @@ void main()
 {
     ivec2 px = ivec2(gl_FragCoord.xy);
     ivec2 size = textureSize(alpha_st_history, 0);
+    if (texelFetch(alpha_st_mask, px, 0).r == 0.0)
+    {
+        // nothing drawn here: the accumulation and the total alpha are 0, and the result below is (0, 0, 0, 0) with the
+        // part left out 1 (cur.a <= 0): what it writes, without the reads. The history is written for every pixel
+        // (the textures alternate: a pixel left unwritten would keep the frame before last).
+        write_out(vec4(0.0), 0.0, 1.0);
+        return;
+    }
     vec4 cur = stoch_current(px);
     vec4 aux = texelFetch(alpha_st_aux, px, 0);
     float total = aux.g;

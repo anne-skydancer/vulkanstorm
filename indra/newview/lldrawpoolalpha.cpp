@@ -550,8 +550,6 @@ bool LLDrawPoolAlpha::renderStochastic()
     }
     mStochasticMasks = gPipeline.getAlphaStochasticMasks();
     mStochasticGlow = false;
-    const U32 iterations = llmax(gPipeline.getAlphaStochasticIterations(), 1u);
-    const bool measured_per_iteration = gPipeline.alphaStochasticMeasuredPerIteration();
     {
         // Multisampled rasterization for the passes' targets (the viewer keeps it off). The
         // depth spread gives each sample the opaque surface's depth at that sample, so a face
@@ -574,34 +572,20 @@ bool LLDrawPoolAlpha::renderStochastic()
             forwardRender(false, ALPHA_ST_ALPHA);
         }
 
-        for (U32 iteration = 0; iteration < iterations; ++iteration)
         {
-            if (iteration > 0)
-            {
-                LLGLDisable no_offset(GL_POLYGON_OFFSET_FILL);
-                gPipeline.spreadAlphaStochasticDepth();
-            }
-            {
-                LL_PROFILE_GPU_ZONE("alpha stochastic depth");
-                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
-                setStochasticUniforms(2, iteration);
-                gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_NONE);
-                forwardRender(true, ALPHA_ST_DEPTH);
-                forwardRender(false, ALPHA_ST_DEPTH);
-            }
-            {
-                LL_PROFILE_GPU_ZONE("alpha stochastic accumulation");
-                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
-                gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM);
-                forwardRender(true, ALPHA_ST_ACCUM);
-                forwardRender(false, ALPHA_ST_ACCUM);
-            }
-            if (measured_per_iteration)
-            {
-                // this iteration's lanes measured on their own before the next one adds to the same lanes
-                LLGLDisable no_offset(GL_POLYGON_OFFSET_FILL);
-                gPipeline.measureAlphaStochasticIteration(iteration);
-            }
+            LL_PROFILE_GPU_ZONE("alpha stochastic depth");
+            glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
+            setStochasticUniforms(2, 0);
+            gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_NONE);
+            forwardRender(true, ALPHA_ST_DEPTH);
+            forwardRender(false, ALPHA_ST_DEPTH);
+        }
+        {
+            LL_PROFILE_GPU_ZONE("alpha stochastic accumulation");
+            glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
+            gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM);
+            forwardRender(true, ALPHA_ST_ACCUM);
+            forwardRender(false, ALPHA_ST_ACCUM);
         }
     }
     gPipeline.endAlphaStochastic();
