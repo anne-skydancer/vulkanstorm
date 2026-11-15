@@ -1258,13 +1258,17 @@ struct StaticItem
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
     uint32_t age_frames = 0;    // how long it has waited: frames since the first dirty box that touched it, else since it was drawn
     uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
+    uint32_t avatar_draws = 0;  // avatars the render draws over the tile (min(avatars in the light, A_max)); charged against A_max
 };
 
 // Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the
 // distance only breaks a tie), until the CPU cap t_s_ms would be exceeded. The order is round-robin by staleness, so
 // no tile waits longer than ceil(N / tiles per frame) frames, whatever its distance. At least one item runs while
 // any is pending (progress), even when its predicted cost alone exceeds the cap.
-inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms)
+// `a_left` is what the dynamic picks left of A_max: a static item whose avatar draws do not fit waits (the order is kept), except the
+// first one, which runs for progress (selectFrame makes room for it).
+inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
 {
     std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
@@ -1290,17 +1294,19 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
 
     std::vector<uint32_t> out;
     float spent = 0.f;
+    uint32_t avatars = 0;
     for (const auto* list : { &never, &rest })
     {
         for (const StaticItem* it : *list)
         {
             const float cost = itemCost(it->last_cpu_ms);
-            if (!out.empty() && spent + cost > t_s_ms)
+            if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
             {
-                return out; // over the cap: the order is kept, the rest waits
+                return out; // over the cap or A_max: the order is kept, the rest waits
             }
             out.push_back(it->key);
             spent += cost;
+            avatars += it->avatar_draws;
         }
     }
     return out;
@@ -1407,17 +1413,21 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
 {
     FramePicks out;
     std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
+    std::map<uint32_t, uint32_t> dyn_draws, st_draws;
     std::vector<DynamicItem> d = dynamics;
     for (DynamicItem& it : d)
     {
         it.key = packKey(it.pool, it.key);
         dyn_cost[it.key] = itemCost(it.last_cpu_ms);
+        dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
     }
     std::vector<StaticItem> st = statics;
     for (StaticItem& it : st)
     {
         it.key = packKey(it.pool, it.key);
+        it.avatar_draws = std::min(it.avatar_draws, a_max);
         st_cost[it.key] = itemCost(it.last_cpu_ms);
+        st_draws[it.key] = it.avatar_draws;
     }
     // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
     constexpr float kEps = 1e-4f;
@@ -1438,17 +1448,24 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
         dyn_ms = 0.f;
     }
     left -= dyn_ms;
+    uint32_t dyn_avatars = 0;
+    for (uint32_t k : out.dynamic)
+    {
+        dyn_avatars += dyn_draws[k];
+    }
     // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
     // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
     if (!st.empty())
     {
         const std::vector<uint32_t> head = selectStatic(st, 0.f);
         const float head_ms = head.empty() ? 0.f : st_cost[head[0]];
+        const uint32_t head_draws = head.empty() ? 0u : st_draws[head[0]];
         if (head_ms <= cap_ms + kEps)
         {
             while (head_ms > left + kEps && !out.dynamic.empty())
             {
                 dyn_ms -= dyn_cost[out.dynamic.back()];
+                dyn_avatars -= dyn_draws[out.dynamic.back()];
                 out.dynamic.pop_back();
                 left = cap_ms - dyn_ms;
             }
@@ -1462,13 +1479,33 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
                 {
                     out.dynamic.clear();
                     dyn_ms = 0.f;
+                    dyn_avatars = 0;
                     left = cap_ms;
                     break;
                 }
             }
         }
+        // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
+        // progress pick above): the dynamic layer gives up its last avatar faces for it (head_draws <= a_max); faces without avatar draws
+        // free nothing and stay
+        if (head_ms <= cap_ms + kEps || out.dynamic.empty())
+        {
+            while (head_draws + dyn_avatars > a_max && dyn_avatars > 0)
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && dyn_draws[out.dynamic[i - 1]] == 0)
+                {
+                    --i;
+                }
+                const uint32_t k = out.dynamic[i - 1];
+                dyn_ms -= dyn_cost[k];
+                dyn_avatars -= dyn_draws[k];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
     }
-    out.fixed = selectStatic(st, std::max(left, 0.f) + kEps);
+    out.fixed = selectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
     float st_ms = 0.f;
     for (uint32_t k : out.fixed)
     {
