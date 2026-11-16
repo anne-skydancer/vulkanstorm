@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <random>
 
 namespace
@@ -182,6 +183,14 @@ namespace
         return c - std::floor(c);
     }
 
+    // the old corner formula against the new one: equal, or (when the compiler fuses a + b * c) apart by at most the
+    // rounding of the product, which is two float steps of the larger operand (anchor and k * texel nearly cancel)
+    bool same_corner(float got, float old, float anchor)
+    {
+        const float scale = std::max(std::fabs(anchor), std::fabs(old - anchor));
+        return got == old || std::fabs(got - old) <= 2.f * std::numeric_limits<float>::epsilon() * scale;
+    }
+
     // Finding N1: a camera walks (x, y and diagonal) past a fixed world point at the centre of a world texel. For the
     // map pixel that holds the point, the hash of (gl_FragCoord - origin) with the origin from alphaDitherOrigin must
     // be the same at every step: it depends only on the world texel (N) and on the 2^16 wrap epoch of k, which is
@@ -203,9 +212,13 @@ namespace
             const double ex = ex0 + dirx * stride * step, ey = ey0 + diry * stride * step;
             const float ax = (float)(-ex), ay = (float)(-ey); // the world origin, eye relative
             const auto box = LLShadowCascadeFit::snappedSquare(0.f, 0.f, r, res_x, res_y, ax, ay);
-            // the box corner is the formula it had before k was returned, bit for bit
-            check(box.min_x == ax + std::floor((0.f - r - ax) / tx) * tx && box.min_y == ay + std::floor((0.f - r - ay) / ty) * ty,
-                  "box corner is unchanged by k", box.min_x, box.min_y);
+            // the box corner is the formula it had before k was returned: bit for bit under the viewer's flags (no FP
+            // contraction: /fp:precise, -ffp-contract=off). This test is also compiled with plain g++, which fuses
+            // a + b * c into one FMA on a target that has it (the CI runner does); then only the rounding of the
+            // product differs (same_corner).
+            const float old_x = ax + std::floor((0.f - r - ax) / tx) * tx, old_y = ay + std::floor((0.f - r - ay) / ty) * ty;
+            check(same_corner(box.min_x, old_x, ax) && same_corner(box.min_y, old_y, ay), "box corner is unchanged by k",
+                  box.min_x - old_x, box.min_y - old_y);
             // k is the integer in (min - anchor) / texel
             const double qx = ((double)box.min_x - (double)ax) / tx, qy = ((double)box.min_y - (double)ay) / ty;
             check(std::llround(qx) == box.k_x && std::llround(qy) == box.k_y && std::fabs(qx - (double)box.k_x) < 0.05
