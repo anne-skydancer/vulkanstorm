@@ -54,7 +54,7 @@ bool stRvB(sampler2D map, ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float 
 
 // The edge line of the silhouette near texel p in one frame (sw: a along v, b along u; else a along u, b along v), in that
 // frame's texel coordinates relative to p. The boundary of column 0 nearest the receiver (fb), between rows j0 and j0 + 1; then
-// both ways along the edge while the boundary stays a monotone staircase of one-row steps (the necessary condition of a digital
+// both ways along the edge while the boundary stays a monotone staircase of one- or two-row steps (the necessary condition of a digital
 // straight segment), up to ST_RV_S columns a side, keeping the risers within ST_RV_D columns (at most ST_RV_K a side). A riser is where the
 // boundary moves by one row between two columns; its midpoint (the column boundary; the old and new boundary's mean height) is
 // where a straight edge crosses a row-centre height, to +- half a texel along the edge.
@@ -62,8 +62,8 @@ bool stRvB(sampler2D map, ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float 
 //     span they cover: an interpolation, never an extrapolation; a curve is cut by a short chord);
 //   else MLAA's line over the receiver's own run (the RBSM papers' discontinuity shapes): between the run's ends at half a step
 //     (Z and L; an end that is no step stays at the boundary), or two half-lines meeting at its middle (U).
-// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of two or more rows
-// within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
+// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of three or more rows
+// (or a non-monotone column) within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
 int stRvLine(sampler2D map, ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
 {
     bh = false;
@@ -211,8 +211,12 @@ float stRvVisibility(sampler2D map, vec3 c, vec2 g, float z_bias, float rp_max, 
             for (int i = -1; i <= 2; ++i)
                 if (stRvBlk(map, p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
     }
-    if (bits == 0u) return 1.0;
-    if (bits == 0xFFFFu) return 0.0;
+    if (bits == 0u || bits == 0xFFFFu)
+    {
+        // a clean window: the disc stays inside it (at least one texel to its edge) or P2's filter, which sees past it, decides
+        if (max(rw.x, rw.y) > 1.0) ok = false;
+        return bits == 0u ? 1.0 : 0.0;
+    }
     int hx = 0, vy = 0;
     for (int j = 0; j < 4; ++j)
         for (int i = 0; i < 3; ++i)
@@ -307,7 +311,7 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     }
     float rp_rv = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(max(rs.x, rs.y), ST_RV_HI) + 1.0));
     bool ok;
-    float v = stRvVisibility(map, c, g, z_bias, rp_rv, max(rphys, vec2(ST_RV_MIN)), ok);
+    float v = stRvVisibility(map, c, g, z_bias, rp_rv, max(min(rphys, vec2(ST_SPOT_KERNEL_MAX)), vec2(ST_RV_MIN)), ok);
     if (!ok)
     {
         return stSpotPCF(map, res, c, g, z_bias, rp_max, rf);

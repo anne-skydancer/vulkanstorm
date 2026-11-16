@@ -81,7 +81,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 - **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
   `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a 2048 tile at 4 m, with a 90 degree field of view), turned into texels of this
   tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
-  is one texel (an edge is never narrower than the tile resolves, so a shrunk tile does not alias); the upper bound is 12 texels
+  is one texel, the filter's floor (the edge reconstruction can draw an edge down to `ST_RV_MIN`, 0.25 texel, where the penumbra is narrower than
+  `ST_RV_HI`); the upper bound is 12 texels
   because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
   452 texels, and 32 bilinear 2 x 2 taps read 128 of them, 28 % against 41 % at the old 10 texels) and the penumbra turns grainy
   before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
@@ -101,8 +102,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   a contact (a foot on a floor) is no longer blurred by the farther blockers (head, shoulders). The receiver is offset along its
   geometric normal by one texel of the tile at the receiver, scaled by sin(theta) of the angle to the lamp, the way the sun's
   `shadowNormalOffsetPos` works (texel = w / (k N), `w` the axial distance); it replaces the fixed 4 cm `spot_shadow_offset`, which
-  pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light
-  (`scripts/shadows/proj_march_bench.py --edges`, 2.3 mm emitter): the toe's x50 lands within 1 mm of the reference on the 2048 and
+  pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light, before the edge reconstruction
+  (`scripts/shadows/proj_march_bench.py --edges`, P2's lookup; 2.3 mm emitter): the toe's x50 lands within 1 mm of the reference on the 2048 and
   1024 tiles (today 5 mm short), the value under the toe is 0 (the study measured 0.04 to 0.19 there with today's lookup and the 6 and 15 cm prims) and the toe's
   RMS falls from 0.17 to 0.05; the isolated lookup costs about 7 % more (three timing runs of the bench's
   `--time`, 2048 and 1024 tiles: today 0.112 to 0.115 ms, P2 0.120 to 0.122 ms for a 2560x1440 full-screen layer, a mean of +6.7 %,
@@ -121,8 +122,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 | Gate | How | Result |
 |---|---|---|
-| G1 lookup equivalence | `python scripts/shadows/projector_pool_g1.py` (offline GL, no viewer) | tile in the atlas equals the same code on a standalone map, max abs 0; within 2 ulp of the 261253bd43 source |
-| Edge reconstruction | `python scripts/shadows/proj_edges_bench.py --stairs --gates --grazing --time` (offline GL; the checkout's shader against the oracle, max abs 1e-5) | see "Edge reconstruction" |
+| G1 lookup equivalence | `python scripts/shadows/projector_pool_g1.py` (offline GL, no viewer) | tile in the atlas equals the same code on a standalone map, max abs 0 (atlas handling only: the reference carries the same filter rule and the edge reconstruction, so it is not an independent check of the lookup; the independent evidence is the analytic scans of `proj_edges_bench.py`) |
+| Edge reconstruction | offline GL, the checkout's shader against the bench's prototype (drift check, max abs 1e-5) and the analytic scans: `--stairs --gates --grazing --time` (2 to 45 degrees at 0.25 texel, under 2 degrees at 0.50 as the default angles run from 0.5, the avatar gates; `--grazing` and `--time` are reported, not gated); `--stairs --sizes 64,128,256,512,1024,2048` (small tiles, reported); `--stairs --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048` (width within 5 % at 2 degrees and up); `--stairs --p2-regime --softness 1 --plate-h 1.8 --fovs 2.0 --sizes 2048` (identical to P2, 1e-6) | see "Edge reconstruction" |
 | G4 Legacy | `check_legacy_shadows.py` (C++ regions), `check_legacy_glsl.py` (GLSL text) | identical |
 | G2, O-4, method switches, window toggle, quit | viewer, see the stage's PR | needs a world with projectors for the lookup parts |
 
@@ -159,18 +160,18 @@ Reveilles, 1995) for the staircase of a straight edge. No NVIDIA or Epic code wa
    the staircase.
 3. Otherwise `stRvVisibility`: the binary silhouette (a texel is blocked when its depth is below the receiver's reference at its centre,
    the filter's rule with the receiver plane; reads clamp to the tile as CLAMP_TO_EDGE does) in the 4 x 4 window around the receiver's
-   texel (4 gathers). All lit or all blocked returns that. The edge frame is the one whose rows the window flips between more often.
+   texel (4 gathers). All lit or all blocked returns that when the radius is at most one texel (the disc stays inside the window); a wider disc may reach past it, so the filter decides there. The edge frame is the one whose rows the window flips between more often.
 4. `stRvLine`: the boundary in the receiver's column, then a traversal both ways (up to `ST_RV_S` = 24 columns) while it stays a monotone
    staircase of one- or two-row steps. A riser's midpoint is where a straight edge crosses a row centre. With risers on both sides (at most
    `ST_RV_K` = 4 a side within `ST_RV_D` = 8 columns) the line is the least-squares line through the same number from each side (an
    interpolation); otherwise MLAA's line over the receiver's run (Z, L and U shapes). A jump of three rows, or no line, in the first frame
    tries the transposed frame. No single boundary (a feature thinner than the window, an end, a corner) returns to the filter.
-5. The visibility is the signed distance of the receiver to the line in units of the radius `max(rphys, ST_RV_MIN)` (0.25 texel, the
+5. The visibility is the signed distance of the receiver to the line in units of the radius `max(min(rphys, kmax), ST_RV_MIN)` (the 4 cm cap holds for the edge too) (0.25 texel, the
    narrowest edge: below the line's own accuracy it would only alias), turned into the share of a uniform disc on the lit side, which is
    the exact penumbra of a disc emitter for a straight edge.
 6. Between `ST_RV_LO` (1.5) and `ST_RV_HI` the result blends into the filter with `smoothstep`, so there is no seam where the penumbra
-   grows. The search keeps its own cap on the receiver plane's lowering; the reconstruction reads with a cap of at least `ST_RV_HI + 1`
-   texels of slope.
+   grows. The search keeps its own cap on the receiver plane's lowering; the reconstruction reads with a cap of
+   `max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs, ST_RV_HI) + 1))` texels, at least 8 * 3.5.
 
 The constants are `#define`s: no uniform, no setting, no Preferences entry. `sampleProjectorShadow` is unchanged, and it is the only
 caller of `stSpotFilterTile`: the sun and Legacy are untouched (the util is linked only under Stochastic).
@@ -194,7 +195,7 @@ every scan prints the difference, and the run fails above max abs 1e-5. Measured
 | shoulder x50 minus the reference | -0.8 / -0.9 / +3.4 mm | -0.8 / -0.9 / +3.5 mm |
 | shoulder 10 to 90 % (analytic 2.4 mm) | 3.4 / 6.2 / 12.4 mm | 2.4 / 2.2 / 3.3 mm |
 | lit plane tilted 0 to 75 degrees: darkening | 0 | 0 |
-| G1 (4096 and 8192) | | max abs 0 tile against standalone; 1.2e-7 (1 ulp) against the reference source |
+| G1 (4096 and 8192) | | max abs 0 tile against standalone; 1.2e-7 (1 ulp) against the reference source, which carries the same code |
 
 Gate thresholds follow the design's audit: the toe and shoulder x50 within 2 mm of the reference or no worse than P2's plus 0.1 mm (the
 512 shoulder is +3.4 mm for P2 itself); under 2 degrees the gate is 0.50 texel, not the audit's 0.45, because the full matrix measures
@@ -204,15 +205,25 @@ Gate thresholds follow the design's audit: the toe and shoulder x50 within 2 mm 
 
 | lamp, tile | P2 ms | RVreal ms | difference |
 |---|---|---|---|
-| fov 1.5, 2048 / 1024 / 512 | 0.1014 / 0.1027 / 0.1021 | 0.1427 / 0.1382 / 0.1361 | +0.041 / +0.036 / +0.034 ms (+41 / +35 / +33 %) |
-| fov 2.5, 2048 / 1024 / 512 | 0.1516 / 0.1535 / 0.1566 | 0.2043 / 0.2018 / 0.2000 | +0.053 / +0.048 / +0.043 ms (+35 / +32 / +28 %) |
+| fov 1.5, 2048 / 1024 / 512 | 0.1014 / 0.1025 / 0.1026 | 0.1454 / 0.1401 / 0.1372 | +0.044 / +0.038 / +0.035 ms (+43.5 / +36.7 / +33.7 %) |
+| fov 2.5, 2048 / 1024 / 512 | 0.1525 / 0.1536 / 0.1566 | 0.2049 / 0.2028 / 0.2014 | +0.052 / +0.049 / +0.045 ms (+34.4 / +32 / +28.7 %) |
 
-A first run gave +0.064 ms (+42 %) for fov 2.5, 2048 (that sample had a 7 % spread; the second run is above). Gate: at most +45 % of the
-lookup and 0.06 ms per full-screen layer at 1440p. Against the owner's floor (about 60 fps standing, never below 25 moving): four
+The scene's edge pixels (the partially lit share of the layer, printed by the bench) are 0.03 to 0.9 % of the pixels with the
+reconstruction (P2: 0.14 to 4.3 %), so most of the difference is the lookup's carrying cost and the search's pixels, not the fit.
+
+A first run gave +0.064 ms (+42 %) for fov 2.5, 2048 (that sample had a 7 % spread; the second run is above). Target (reported by the bench, not gated by its
+exit code): at most +45 % of the lookup and 0.06 ms per full-screen layer at 1440p. Against the owner's floor (about 60 fps standing, never below 25 moving): four
 overlapping lamps each covering 60 % of the screen add about 4 x 0.6 x 0.05 = 0.12 ms, 0.7 % of a 16.7 ms frame (60 to about 59.6 fps);
 the tile renders and the pool's scheduler are not touched. AMD and Intel are not measured: their register files differ, so the carrying
 cost may be higher (the prototype measured 5 to 7 % just for carrying the code). `ST_RV_S` 12 is the fallback (measured earlier: +17 to
 21 % for the lookup, and 2-degree edges then step 0.35 texel). The real `spotLightF` permutations' link time and occupancy were not measured.
+
+A wider lamp is dearer: with `--softness 1` (the slider's top, a 1 cm emitter instead of 2.3 mm) the same scene costs +0.071 ms (+69 %,
+two runs) at fov 1.5, 2048 and +0.059 ms (+39 %) at fov 2.5, 2048, so the 0.06 ms target is exceeded at fov 1.5; softness 0.5
+is +0.042 ms (+41 %). Pixels with a physical radius of 1 to 2.5 texels pay the search, the edge fit and, from 1.5 texels or on a
+fallback, the 32-tap filter as well (P2 plus the fit), and a wider lamp moves more silhouette pixels into that band. Their number is
+bounded by the silhouettes' length in pixels. A forced-fallback ceiling and a scene denser in edges than the bench's 24 plates were
+not measured; the fallbacks if the in-world check finds the band too dear are narrowing it (`ST_RV_HI` 2.0) and `ST_RV_S` 12.
 
 ### Limits
 
