@@ -131,7 +131,7 @@ From the files:
 Measured on the stage-1 build (`mc-stage1`, `RelWithDebInfoFS_open`, Tracy 0.11.1, LTO, AVX2, no OpenSim), Second Life, one dev machine
 (Ryzen 9 9950X3D), window 2560 x 1369 maximised, vsync off. Everything below is **main-thread CPU time with the Tracy client attached**
 unless it says otherwise (section 4.9 says what that means for reading it). CSV summaries of the tables sit in
-`doc/perf/multicore-baseline-2026-11/` (`frames.csv`, `blocks.csv`, `amdahl.csv`, `fps-timeline-manual.csv`); the `.tracy` files are not committed.
+`doc/perf/multicore-baseline-2026-11/` (`frames.csv`, `blocks.csv`, `amdahl.csv`, `fps-timeline-manual.csv`); the `.tracy` files are not committed. The CSV files in this folder are summaries of this report and carry its licence, GPL-3.0-or-later.
 
 ### 4.0 The captures and which are valid
 
@@ -206,7 +206,7 @@ Indented rows are inside the row above. Block totals overlap their children: do 
 | &nbsp;&nbsp;&nbsp;&nbsp;geometry rebuild (`rebuildPriorityGroups`) | 3.26 | 1.34 | 1.25 | 0.59 | 0.21 | 0.27 |
 | &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fill (`rebuildGeom`) | 2.26 | 1.15 | 1.08 | 0.33 | 0.10 | 0.13 |
 | &nbsp;&nbsp;&nbsp;&nbsp;texture list (`updateImages`) | 2.06 | 2.05 | 2.03 | 2.09 | 0.40 | 2.15 |
-| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;decode priority (`updateImageDecodePriority`) | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;decode priority (`updateImageDecodePriority`) | 1.70 | 1.85 | 1.85 | 1.95 | 0.30 | 1.96 |
 | &nbsp;&nbsp;&nbsp;&nbsp;deferred submission (`renderGeomDeferred` + `renderDeferredLighting` + `renderGeomPostDeferred`) | 6.41 | 4.71 | 4.94 | 5.60 | 1.69 | 7.89 |
 | &nbsp;&nbsp;UI (`render_ui`) | 1.09 | 0.80 | 0.74 | 0.74 | 0.33 | 0.89 |
 | &nbsp;&nbsp;`Swap` | 0.38 | 0.10 | 0.06 | 0.10 | 4.70 | 3.47 |
@@ -352,7 +352,7 @@ Self time from the `-e` export, worker-thread zones removed (texture and mesh de
 | 20 | `LLRender::syncMatrices` | 0.308 | 22481.7 | 0.343 | 0.414 |
 
 
-At Rooftops the order changes: `projector update` is **first** (5.36 ms self), then `Swap` (3.44 ms: the main thread waiting for the GPU or the driver), then `calcPixelArea - rigged` (1.52 ms). `calcPixelArea - rigged` is 1.3 to 1.5 ms in every crowded capture, and the enclosing `LLFace::calcPixelArea` is 1.95 ms at Risk, which is also the whole of `updateImageDecodePriority` (1.95 ms): **the texture list's flat 2.1 ms is the per-frame pixel area of the rigged faces of the avatars** (consistent with nesting; not checked per event).
+At Rooftops the order changes: `projector update` is **first** (5.36 ms self), then `Swap` (3.44 ms: the main thread waiting for the GPU or the driver), then `calcPixelArea - rigged` (1.52 ms). `calcPixelArea - rigged` is 1.3 to 1.5 ms in every crowded capture, and the enclosing `LLFace::calcPixelArea` is 1.95 ms at Risk. `calcPixelArea` has two callers: `updateImageDecodePriority` (llviewertexturelist.cpp:972, under `updateImages`) and `LLFace::getTextureVirtualSize` (llface.cpp:2357), reached from `LLVOVolume::updateTextures` (llvovolume.cpp:974) in `LLViewerObjectList::update`, the idle path. Each face is gated at 0.1 s, so whichever caller comes first pays. At Risk Ultra, about 1.61 ms of the 1.95 ms sits under `updateImageDecodePriority` (which has 0.34 ms self) and about 0.35 ms under `getTextureVirtualSize`; MC1-still has 0.46 ms (26 %) on the idle path. So `calcPixelArea` is 1.7 to 1.96 ms in total in the crowds, of which about 1.3 to 1.6 ms is under `updateImageDecodePriority`: **most of the texture list's flat 2.1 ms is the per-frame pixel area of the rigged faces of the avatars** (consistent with nesting; not checked per event).
 
 ### 4.6 Frame counters (per frame, from the `FrameCounters:` log lines in each capture's window)
 
@@ -485,7 +485,7 @@ The plan (`reports/cpp-modernisation-plan-2026-11-16/plan.md`, section 4): S, th
 2. **R shrinks.** N4 (measured 0.03 to 0.05 ms/frame against 0.1 to 1.5) and K7-a (0.003 to 0.04 ms/frame) are dropped; N8 (async sound load) is not justified. N1 and N3 stay only as arrival-hitch fixes (the 17.7 ms `notifyMeshLoaded` call; 0.6 ms/frame while meshes load) and should not hold FJ back. R's steady-state gain is under 0.1 ms/frame.
 3. **FJ's first user is the cascade cull + sort**, as the plan's order (cascades, world, tiles) says, and the data backs it: 4.3 to 4.6 ms (13 to 17 % of the frame) against 1.3 to 1.8 ms for the world view and 0.1 to 0.3 ms for the projector tiles. **The tiles can wait** until the pool update is understood; **5b (plan/fill/flush) is not justified by steady-state fps** (fill 0.1 to 0.3 ms; it matters only while a scene loads).
 4. **The serial GL submission of the shadow passes (5.1 ms at Risk, 10.4 ms at Rooftops) is as large as, or larger than, everything FJ can take.** It belongs to the GL programme (fewer or cheaper shadow draws, reuse of cascade results across frames), not to threads. FJ's best case is a 1.2 to 1.3 times speed-up; the shadow submission and the GPU decide the rest.
-5. **New FJ or R candidate: the texture list's pixel-area pass** (`updateImageDecodePriority`, 1.7 to 1.96 ms in every crowd, almost all of it `calcPixelArea` of rigged faces). It is as big as all the culls, data-parallel and probably cacheable per frame; the plan names the priority loop (C8) but not this cost. It should join FJ's first users.
+5. **New FJ or R candidate: the texture list's pixel-area pass** (`updateImageDecodePriority`, 1.7 to 1.96 ms in every crowd; the parallel candidate is the whole decode-priority pass, of which about 1.6 ms is `calcPixelArea` work, mostly of rigged faces). `calcPixelArea` totals 1.7 to 1.96 ms, but 0.3 to 0.46 ms of that sits under `LLVOVolume::updateTextures` on the idle path (`getTextureVirtualSize`), so the candidate is about 1.6 ms and a per-frame cache must cover both callers. The Amdahl table uses `updateImages` (2.06 ms), not `calcPixelArea`, so nothing is counted twice. It is as big as all the culls, data-parallel and probably cacheable per frame; the plan names the priority loop (C8) but not this cost. It should join FJ's first users.
 6. **Avatar animation (`updateCharacter`, 2.4 to 2.8 ms) is a bigger block than the culls** and comes next; K4 (palette SIMD) is worth at most 0.27 ms of the 0.8 ms of palette work, so it stays low, and K7 goes (see 2). **C-msg is not justified by averages** (`idle network` 0.15 to 0.23 ms, message handling 0.10 to 0.17 ms); one 482 ms `idle network` call in the Isle of Repose capture (the 499 ms frame) is a hitch to find, not an average cost.
 7. **A GPU-time capture comes before the gain gates of FJ.** Rooftops and Isle of Repose wait in `Swap`; the exports hold no GPU zones. Without GPU time a Rooftops fps gate may be unreachable by any CPU change.
 8. **Re-run the noise gate on settled scenes.** The scripted `MC1-still` is not a gate scene (taken during the mesh settle). Gates on the 1 % low use the median of three captures.

@@ -18,9 +18,10 @@ update_geom,Update Geom,0.436,0.4018,0.4312,0.485,0.0657,0.2196
 rebuild_priority_groups,LLPipeline::rebuildPriorityGroups,3.2648,1.3372,1.2486,0.5879,0.2145,0.2707
 rebuild_geom_fill,LLVolumeGeometryManager::rebuildGeom,2.2599,1.1477,1.0839,0.3327,0.0956,0.1252
 texture_list_updateImages,LLViewerTextureList::updateImages,2.0559,2.0526,2.029,2.0933,0.4004,2.1464
-texture_list_decode_priority,LLViewerTextureList::updateImageDecodePriority,0.0,0.0,0.0,0.0,0.0,0.0
-face_calcPixelArea,LLFace::calcPixelArea,0.0,0.0,0.0,0.0,0.0,0.0
-face_calcPixelArea_rigged,calcPixelArea - rigged,0.0,0.0,0.0,0.0,0.0,0.0
+texture_list_decode_priority,LLViewerTextureList::updateImageDecodePriority,1.7016,1.8476,1.8541,1.9486,0.2952,1.9574
+face_calcPixelArea,LLFace::calcPixelArea,1.7613,1.7576,1.7224,1.9542,0.2189,1.9546
+face_calcPixelArea_rigged,calcPixelArea - rigged,1.346,1.3264,1.2731,1.5323,0.1169,1.5636
+face_getTextureVirtualSize,LLFace::getTextureVirtualSize,0.4556,0.3001,0.2796,0.3692,0.0174,0.3855
 mesh_notifyLoadedMeshes,LLMeshRepository::notifyLoadedMeshes,0.6292,0.0553,0.0258,0.0321,0.0258,0.035
 texture_threads_pump,updateTextureThreads,0.0936,0.0639,0.0501,0.0286,0.032,0.0407
 work_queue_runFor,LL::WorkQueueBase::runFor,0.0252,0.021,0.0139,0.0249,0.0102,0.0289
