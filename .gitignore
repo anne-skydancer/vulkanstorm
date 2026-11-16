@@ -133,3 +133,14 @@ checks.json
 # Default language definitions are supplied by the pinned Autobuild package.
 indra/newview/app_settings/keywords_lua_default.xml
 indra/newview/app_settings/keywords_lsl_default.xml
+
+# In-world light check output (scripts/inworld); can be large.
+.captures/
+
+# Local scratch and study output, never committed: test and smoke temp (TEMP/TMP), worktrees,
+# study reports and research notes, the Autobuild installables cache.
+.fixture-tmp/
+work/
+reports/
+research_notes/
+.autobuild-installables/
