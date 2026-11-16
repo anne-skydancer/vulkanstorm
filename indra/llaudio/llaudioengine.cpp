@@ -515,7 +515,8 @@ bool LLAudioEngine::updateBufferForData(LLAudioData *adp, const LLUUID &audio_uu
         }
         else if (adp->hasLocalData())
         {
-            if (audio_uuid.notNull())
+            // a decode that already failed is not retried (it was marked corrupt)
+            if (audio_uuid.notNull() && !adp->hasDecodeFailed())
             {
                 LLAudioDecodeMgr::getInstance()->addDecodeRequest(audio_uuid);
             }
