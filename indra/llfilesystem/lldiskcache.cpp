@@ -236,17 +236,18 @@ void LLDiskCache::purge()
             break;
         }
 
-        auto this_file_size = entry.second.first;
-        deleted_size_total += this_file_size;
         auto uuid_as_string = gDirUtilp->getBaseFileName(entry.second.second, true);
-        uuid_as_string      = uuid_as_string.substr(CACHE_FILENAME_PREFIX.size() + 1, 36);  // skip "sl_cache_" and trailing "_N"
+        // skip "sl_cache_" and trailing "_N"; a stray shorter file name (the scan matches the prefix anywhere in
+        // the full path) must not make substr throw on the purge thread
+        uuid_as_string = (uuid_as_string.size() >= CACHE_FILENAME_PREFIX.size() + 1)
+                       ? uuid_as_string.substr(CACHE_FILENAME_PREFIX.size() + 1, 36)
+                       : std::string();
         // LL_INFOS() << "checking UUID=" <<uuid_as_string<< LL_ENDL;
         if (std::find(mSkipList.begin(), mSkipList.end(), uuid_as_string) != mSkipList.end())
         {
             // this is one of our protected items so no purging
             should_remove = false;
             action = purge_action::skip_file;
-            boost::filesystem::last_write_time(entry.second.second, ec);  // force these to the front of the list next time so that purge size works 
             skip++;
         }
         else{
@@ -264,6 +265,12 @@ void LLDiskCache::purge()
             if (ec.failed())
             {
                 LL_WARNS() << "Failed to delete cache file " << entry.second.second << ": " << ec.message() << LL_ENDL;
+            }
+            else
+            {
+                // count only what was really removed, so skipped static assets and failed deletes
+                // neither stop the purge short nor understate the stored cache size
+                deleted_size_total += entry.second.first;
             }
         }
     }
