@@ -2354,6 +2354,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
     if (size == 0)
     {
         LL_WARNS() << "No data to unzip." << LL_ENDL;
+        valid = false;
         return NULL;
     }
 
@@ -2367,6 +2368,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
     if (in == NULL)
     {
         LL_WARNS() << "Memory allocation failure." << LL_ENDL;
+        valid = false;
         return NULL;
     }
     is.read((char*) in, size);
@@ -2381,31 +2383,27 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
 
 
     S32 ret = inflateInit2(&strm,  windowBits | ENABLE_ZLIB_GZIP );
+    if (ret != Z_OK)
+    {
+        LL_WARNS() << "Failed to initialise the NavMesh unzip stream, zlib error: " << ret << LL_ENDL;
+        delete [] in;
+        valid = false;
+        return NULL;
+    }
     do
     {
         strm.avail_out = CHUNK;
         strm.next_out = out;
         ret = inflate(&strm, Z_NO_FLUSH);
-        if (ret == Z_STREAM_ERROR)
-        {
-            inflateEnd(&strm);
-            free(result);
-            delete [] in;
-            valid = false;
-        }
 
-        switch (ret)
+        // Every error return frees each buffer exactly once and ends the stream.
+        if (ret == Z_STREAM_ERROR || ret == Z_NEED_DICT || ret == Z_DATA_ERROR || ret == Z_MEM_ERROR)
         {
-        case Z_NEED_DICT:
-            ret = Z_DATA_ERROR;
-            [[fallthrough]];
-        case Z_DATA_ERROR:
-        case Z_MEM_ERROR:
             inflateEnd(&strm);
             free(result);
             delete [] in;
             valid = false;
-            break;
+            return NULL;
         }
 
         U32 have = CHUNK-strm.avail_out;

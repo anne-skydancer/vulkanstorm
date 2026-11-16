@@ -58,6 +58,12 @@ typedef U32 uint32_t;
 #include "stringize.h"
 #include "StringVec.h"
 #include <functional>
+#include <sstream>
+#ifdef LL_USESYSTEMLIBS
+# include <zlib.h>
+#else
+# include "zlib-ng/zlib.h"
+#endif
 
 typedef std::function<void(const LLSD& data, std::ostream& str)> FormatterFunction;
 typedef std::function<bool(std::istream& istr, LLSD& data, llssize max_bytes)> ParserFunction;
@@ -2315,4 +2321,83 @@ namespace tut
                         { return LLSDSerialize::fromBinary(data, istr, max_bytes) > 0; });
     }
 |*==========================================================================*/
+
+    // unzip_llsdNavMesh() must fail cleanly (no double free, no leak) on bad input
+    struct TestNavMeshUnzip {};
+    typedef tut::test_group<TestNavMeshUnzip> TestNavMeshUnzipGroup;
+    typedef TestNavMeshUnzipGroup::object TestNavMeshUnzipObject;
+    TestNavMeshUnzipGroup gTestNavMeshUnzipGroup("navmesh unzip");
+
+    static std::string gzipString(const std::string& src)
+    {
+        z_stream strm = {};
+        deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY);
+        std::string out(deflateBound(&strm, (uLong)src.size()) + 32, '\0');
+        strm.next_in = (Bytef*)src.data();
+        strm.avail_in = (uInt)src.size();
+        strm.next_out = (Bytef*)&out[0];
+        strm.avail_out = (uInt)out.size();
+        deflate(&strm, Z_FINISH);
+        out.resize(strm.total_out);
+        deflateEnd(&strm);
+        return out;
+    }
+
+    static U8* navMeshUnzip(const std::string& body, bool& valid, size_t& outsize)
+    {
+        std::istringstream is(body);
+        valid = true;
+        outsize = 0;
+        return unzip_llsdNavMesh(valid, outsize, is, (S32)body.size());
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<1>()
+    {
+        set_test_name("unzip_llsdNavMesh valid gzip body");
+        std::string src(100000, 'x');
+        for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
+        bool valid = false;
+        size_t outsize = 0;
+        U8* res = navMeshUnzip(gzipString(src), valid, outsize);
+        ensure("valid", valid);
+        ensure_equals("size", outsize, src.size());
+        ensure("content", res && memcmp(res, src.data(), src.size()) == 0);
+        free(res);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<2>()
+    {
+        set_test_name("unzip_llsdNavMesh corrupt body fails cleanly");
+        std::string src(100000, 'x');
+        for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
+        std::string gz = gzipString(src);
+        // corrupt the deflate data right after the 10 byte gzip header
+        for (size_t i = 10; i < 40 && i < gz.size(); ++i) gz[i] = (char)0xFF;
+        bool valid = true;
+        size_t outsize = 0;
+        U8* res = navMeshUnzip(gz, valid, outsize);
+        ensure("invalid", !valid);
+        ensure("no result", res == NULL);
+        // not a gzip stream at all
+        res = navMeshUnzip(std::string("this is not a compressed navmesh body"), valid, outsize);
+        ensure("invalid garbage", !valid);
+        ensure("no result garbage", res == NULL);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<3>()
+    {
+        set_test_name("unzip_llsdNavMesh truncated body fails cleanly");
+        std::string src(100000, 'x');
+        for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
+        std::string gz = gzipString(src);
+        gz.resize(gz.size() / 2);
+        bool valid = true;
+        size_t outsize = 0;
+        U8* res = navMeshUnzip(gz, valid, outsize);
+        ensure("invalid", !valid);
+        ensure("no result", res == NULL);
+    }
 }
