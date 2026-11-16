@@ -2544,6 +2544,17 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
                 return false;
             }
 
+            // The normal and texcoord blobs are read num_verts entries deep below without further
+            // checks: reject a face whose blobs are shorter than its position blob claims.
+            if ((!norm.empty() && norm.size() < static_cast<size_t>(num_verts) * 3 * 2)
+                || (!tc.empty() && tc.size() < static_cast<size_t>(num_verts) * 2 * 2))
+            {
+                LL_WARNS() << "Invalid vertex data (positions " << pos.size() << " normals " << norm.size() << " texcoords " << tc.size()
+                           << " bytes) for face index: " << i << " Total: " << face_count << LL_ENDL;
+                face.resizeIndices(0);
+                continue;
+            }
+
             face.resizeVertices(num_verts);
 
             if (num_verts > 0 && !face.mPositions)
