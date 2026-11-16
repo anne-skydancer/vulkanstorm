@@ -128,7 +128,7 @@ inline float radiusCapTexels(float k, uint32_t n, float w)
 }
 
 // the emitter's extent across the beam, in metres: 1 cm times the softness (RenderShadowLightSize), the same on both axes and
-// for every lamp. A negative or non-finite softness gets the default
+// for every lamp. Zero is accepted and gives a point emitter; a negative or non-finite softness gets the default
 inline float emitterExtent(float softness)
 {
     return kEmitterM * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);

@@ -218,7 +218,8 @@ namespace
         // a level step halves the texels per metre and so the cap, above the one texel floor
         check(std::fabs(radiusCapTexels(1.0f, 512, 4.0f) * 2.0f - radiusCapTexels(1.0f, 1024, 4.0f)) < 1e-5f, "T8 a level step halves the cap", radiusCapTexels(1.0f, 512, 4.0f));
         // the emitter's extent: a fixed 1 cm light times the softness (RenderShadowLightSize), whatever the prim
-        check(emitterExtent(1.0f) == 0.01f && emitterExtent(0.0f) == 0.0f, "T8 emitter extent is 1 cm at softness 1");
+        check(emitterExtent(1.0f) == 0.01f, "T8 emitter extent is 1 cm at softness 1");
+        check(emitterExtent(0.0f) == 0.0f, "T8 a softness of 0 is a zero-size emitter (hard shadows; the filter keeps its 1 texel minimum)");
         check(std::fabs(emitterExtent(kSoftnessDefault) - 0.0023f) < 1e-7f, "T8 emitter extent at the default softness 0.23 is 2.3 mm", emitterExtent(kSoftnessDefault));
         check(std::fabs(emitterExtent(0.5f) - 0.005f) < 1e-8f, "T8 emitter extent scales with the softness");
         check(emitterExtent(std::numeric_limits<float>::quiet_NaN()) == emitterExtent(kSoftnessDefault) && emitterExtent(std::numeric_limits<float>::infinity()) == emitterExtent(kSoftnessDefault)

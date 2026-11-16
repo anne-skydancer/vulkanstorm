@@ -39,9 +39,9 @@ Modes:
     python scripts/shadows/proj_march_bench.py --temporal [--out temporal.jsonl]
 Needs numpy and an OpenGL 4.x driver on Windows (scripts/perf/gl_test_context.py). Plain python, not -I (numpy is in the user site).
 
-Projector shadow sharpness P2 (branch codex/shadow-sharpness-p2): the working checkout's sampleProjectorShadow IS P2 now.
+Projector shadow sharpness P2: the working checkout's sampleProjectorShadow IS P2 now.
 'Today's lookup' (PCSS today), the tiles' G1 filter of the prototypes and the prototype P2 are compiled from the BASELINE util
-(--baseline-ref, default 5a091b9559, the file as it was before P2; the march and the inset variants also use it). The bench adds the method 'P2 real': the working checkout's shadowStochasticUtil.glsl compiled as it is
+(--baseline-ref, default 0991e142f4, the release tip before P2, whose util equals devel's 5a091b9559; the march and the inset variants also use it). The bench adds the method 'P2 real': the working checkout's shadowStochasticUtil.glsl compiled as it is
 (its own G1 block, sampleProjectorShadow, proj_shadow_origin), which must match the prototype. --edges prints the real shader's
 difference to the prototype and the P2 gates (toe x50 within 2 mm of the reference, the value under the toe at most 0.02, the
 toe RMS no worse than today's, shoulder x50 within 2 mm); --time gives the lookup cost against today's.
@@ -61,7 +61,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 ap = argparse.ArgumentParser()
 ap.add_argument('--repo', default=str(HERE.parents[1]))
-ap.add_argument('--baseline-ref', default='5a091b9559', help="git ref of the util before P2 (today's lookup and the prototype)")
+ap.add_argument('--baseline-ref', default='0991e142f4', help="git ref of the util before P2 (today's lookup and the prototype)")
 ap.add_argument('--no-march', action='store_true', help='skip the march (the slow part of --edges and --time)')
 ap.add_argument('--edges', action='store_true')
 ap.add_argument('--time', action='store_true')

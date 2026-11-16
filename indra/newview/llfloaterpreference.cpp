@@ -4140,13 +4140,13 @@ void LLPanelPreferenceGraphics::onShadowSoftnessSlider()
 
 void LLPanelPreferenceGraphics::onShadowSoftnessChanged()
 {
-    // typing in the number box, a preset, Cancel or Debug Settings: the slider follows (the slider's own change is skipped)
+    // typing in the number box, a preset, Cancel or Debug Settings: the slider follows, to its 0.01 step (the slider's own change is skipped)
     if (mShadowSoftnessBusy || !mShadowSoftness)
     {
         return;
     }
     const F32 pos = LLShadowMethod::softnessToPosition(gSavedSettings.getF32("RenderShadowLightSize"));
-    if (std::fabs(mShadowSoftness->getValueF32() - pos) > 1.0e-4f)
+    if (std::fabs(mShadowSoftness->getValueF32() - pos) > 0.0051f)
     {
         mShadowSoftness->setValue(pos);
     }
