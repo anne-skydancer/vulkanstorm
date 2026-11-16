@@ -138,3 +138,14 @@ firestorm.code-workspace
 .github/release.yaml
 
 checks.json
+
+# In-world light check output (scripts/inworld); can be large.
+.captures/
+
+# Local scratch and study output, never committed: test and smoke temp (TEMP/TMP), worktrees,
+# study reports and research notes, the Autobuild installables cache.
+.fixture-tmp/
+work/
+reports/
+research_notes/
+.autobuild-installables/
