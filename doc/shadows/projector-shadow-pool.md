@@ -30,7 +30,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   log line of a successful allocation. An allocation that fails tries the
   smaller size; if that fails, the projectors have no tile (lit without a shadow), the failure is logged and the allocation is
   tried again with a back-off (5 s, doubling up to 60 s). The method never changes.
-- **Tile size** from the light only (`baseSize`: radius and field of view), shrunk together by one power of two when the atlas
+- **Tile size** (P2: from the light only, `baseSize`: radius and field of view; since the tile-resolution PR from the lamp and the camera
+  position's distance to each tile, see "Tile resolution" at the end), shrunk together by one power of two when the atlas
   fills (`LevelController`: shrink above 60 % demand, grow back after 3 s at or below 45 %). Placement by a buddy allocator;
   arrivals and departures are incremental, a level step or a size change is one repack (copies for same-size tiles, a nearest
   blit for resized ones, then L to S in full).
@@ -569,3 +570,75 @@ tiles the old rectangle is unknown and the next pass copies the whole tile. Gate
 No in-world check: the walk under three lamps, the dancer under club lights, the impostored and the behind-the-camera avatar casting,
 attachments (rigid and rigged) in the layer, the per-face cost and the off-screen animation of paired avatars. The viewer was built and
 the login screen started only. The owner's walk session is owed.
+
+## Tile resolution: cells of a wide lamp and the camera position's sizing
+
+Owner report 2026-11-16: a projector's shadow on the floor has stepped edges. The step is the tile's texel (the filter cannot hide it:
+`reports/projector-edges-2026-11-16/design.md` section 2), so two things follow: more resolution where it matters (this section) and a
+straighter edge from the same texels (a separate PR). Rules kept: OpenGL 4.6, no compute; a tile's image depends on the lamp, the scene
+and its size only (the camera POSITION picks a size, never what the tile holds, and its direction enters nowhere); Legacy and the sun
+are untouched; no Preferences entry (the constants are in `llprojectorshadowpool.h`).
+
+### Cells (wide lamps)
+
+- A lamp wider than 90 degrees is split over its own image plane into `gu x gv` cells (`gridOf`, per axis: 1 up to tan = 1, then
+  `ceil(tan - 0.05)`, at most 4). A cell is a tile of its own: an off-axis sub-frustum with the lamp's projection centre, near and far
+  planes (`glm::frustum` over the cell's tangent rectangle, `tile_proj`), so a cell's depth is the lamp's depth and the lookup keeps the
+  lamp's matrix. A lamp up to 90 degrees keeps one tile, no guard and its old projection: its tile is drawn as before.
+- **Guard.** Every cell's frustum is widened by `kCellGuard` = 16 texels of its interior on each side (`cellTanRect`), so the filter's taps
+  at a seam read the neighbour's content (the filter's largest radius is 12 texels). A tile of `Nc` texels has an interior of
+  `Ni = Nc - 32` texels. The lamp's own border has no neighbour: the guard there is the lamp's frustum widened (real geometry).
+- **Lookup** (`shadowStochasticUtil.glsl`, `stCellPick` in the G1 block): the receiver's lamp-image position `c` (after the normal offset)
+  picks the cell `floor(c * g)`, the tile uv is `((c g - cell) Ni + G) / Nc`, the texel size, the bias, the penumbra's scale and the
+  radius cap use the virtual resolution `g Ni` (what one tile of the same texels would have), and the receiver plane's gradient is divided
+  by `g Ni / Nc`. Every tap reads that cell's tile. A cell without a drawn tile (`Nc` 0) lights without a shadow, like a lamp without one.
+  `stSpotQuadTile` and `stSpotFilterTile` take the tile as a parameter (`vec4`: atlas origin, size, 1 / atlas): the first step of the point
+  lights' Q2a refactor (`doc/shadows/point-light-shadows-plan.md` 3.4), the atlas stays the uniform; G1 stays max abs 0.
+- **Uniforms**: `proj_shadow_grid` (gu, gv, G; 1, 1, 0 for one tile) and `proj_shadow_cells[16]` (x, y, Nc, Ni; index = row * 4 +
+  column), set per lamp in `setupLight`. The lookup matrix is the lamp's, built from the pose of the most recently drawn cell; a cell drawn
+  from another pose (the lamp moved since) reads as not drawn until it is drawn again, so a lookup never mixes two poses.
+- **One record per tile.** `Record` is a tile: key = lamp << 4 | cell index (the point lights' `lamp * 8 + face` pattern), so the scheduler,
+  the change index, the LOD pins, the layers and the stats work per cell unchanged. A cell's change volume (`Record::volume`) is its widened
+  frustum at its current size (an object that only a neighbour's guard holds dirties both cells); `Record::core` is its interior, for the
+  camera distance and the own avatar. A lamp edited to another grid drops its tiles and starts again.
+
+### Sizing by the camera position
+
+- Per tile, every frame (`update`, from the lamp's pose and the camera's POSITION): `D` = the distance from the camera position to the
+  cell's interior volume (`pyramidDistance`, a lower bound, 0 inside), the target texel `T(D) = max(3 mm, 2 mm per m x D)`, the reference
+  depth `w_ref = min(1.5 r, 4 m, w_cam + 2 m)` (`w_cam`: the camera's axial depth in the lamp, inside its near and far; so the floor under
+  a standing camera gets the target), and the request `tan_w * w_ref / T(D) + 2 G` texels (`cellWanted`, `tan_w` the cell's wider axis).
+  A lamp of one tile is sized the same way (no guard); `baseSize` is no longer used by the pool.
+- **Hysteresis** (`SizeHysteresis`, per tile): the size is a power of two in `[64, 2048]`; it changes only when the request leaves 0.75
+  octave around it and has asked for the new size for 0.5 s. The first request sets the size at once.
+- **Budget**: the global `LevelController` (shrink above 60 % demand, grow back after 3 s at or below 45 %) shifts every tile together, as
+  before. The design's banded fit (nearer bands first) is not built: the global level is the model's second column (`design.md` 5.3).
+- **A size change in place** (`resizeInPlace`): a new rect is taken beside the old one, S's old content is blitted over (nearest) to the new
+  rect in S and in L, the old rect is freed, and the tile is drawn again at its size (cause `lowres`). The lookup never loses a shadow: it
+  reads the blocky content until the redraw. Only a level change, or no room in the buddy allocator, repacks the whole layout (the old
+  path: tile copies, blits, L to S in full); `resize_repacks` counts the fallbacks.
+- **The own avatar**: a cell draws the own avatar's layer every frame (past the cap) only when its interior holds some of it; a cell that
+  holds only the guard's overlap is served by deadline like any other avatar's face.
+
+### Stats
+
+`ProjectorShadows.stats` gains `cells` (tiles; `lights` counts the lamps), `resizes` (in-place size changes since the atlases were made),
+`resize_repacks`, and per tile `lamp` and `cell`. The owner's walk reads: the cell sizes against the camera distance, resizes per second
+(target under 30), repacks per second while walking (target under 1), the CPU per cell render, and the fps standing (60) and moving (25).
+
+### Gates
+
+| gate | how |
+|---|---|
+| rules | `llprojectorshadowpool_test` (`testCells`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`, the request never rises with the distance, the hysteresis (an oscillation of +-0.7 octave changes nothing, one change per hold, a bad request), the sizing is a function of the position alone |
+| G1 | `projector_pool_g1.py` (tile in the atlas against the standalone map, max abs 0) |
+| cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick |
+| Legacy, sun | `check_legacy_glsl.py`, `check_legacy_shadows.py` and their tests; `stSpotFilterTile` is reached only through `sampleProjectorShadow`, the sun programs call `sampleSpotShadow` |
+
+### Not verified (this section)
+
+In-world look and the real CPU cost of a cell render and of per-cell avatar layers; AMD and Intel; the seam between two cells of different
+sizes (a shift of the contour of at most 0.07 texel of the coarser in the offline model, `design.md` 5.2, not measured on this
+implementation); a wide lamp that moves (its cells are drawn over several frames: a cell from the older pose is lit without a shadow until
+redrawn); RV's traversal across a seam (the revectorization PR is separate, and its reach of 24 texels is longer than this guard of 16: the
+two must be reconciled when both land); the banded budget.

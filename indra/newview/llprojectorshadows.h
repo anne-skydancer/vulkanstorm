@@ -118,8 +118,11 @@ public:
         bool present = false;
         S32 level = 0;
         U32 atlasSize = 0;
-        U32 lights = 0;            // records: the lights in range
-        U32 lightsWithoutTile = 0; // of them, with no drawn tile (the O-4 gate: 0 after the first fill)
+        U32 lights = 0;            // the lamps in range
+        U32 cells = 0;             // their tiles (records): one per lamp, or the cells of a wide lamp
+        U32 lightsWithoutTile = 0; // of the tiles, with no drawn tile (the O-4 gate: 0 after the first fill)
+        U64 resizes = 0;           // tile size changes made in place (a new rect, a blit of the old content, a redraw), since the atlases were made
+        U64 resizeRepacks = 0;     // size changes that found no room and fell back to a whole repack
         U64 tileRenders = 0;       // tile renders since the atlases were made
         U64 repacks = 0;
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
@@ -151,6 +154,7 @@ public:
     struct TileInfo
     {
         U32 key = 0, x = 0, y = 0, size = 0, drawnFrame = 0;
+        U32 lamp = 0, cell = 0;    // the lamp's id and the cell's index (llprojectorpool::cellIndex; 0 for a lamp of one tile)
         F32 camDist = 0.f;
         bool pending = false;      // stale: waiting to be drawn again
         bool avatar = false;       // an avatar is in its light, or L still holds one over the tile
@@ -174,11 +178,20 @@ private:
         bool valid = false;
     };
 
+    // One tile: a lamp of one tile has one record, a wide lamp one per cell (key = lamp << 4 | cellIndex); the lamp's fields repeat in each.
     struct Record
     {
         U32 key = 0;
+        U32 lamp = 0;              // the lamp's id (mKeyOf)
+        U32 cell = 0;              // llprojectorpool::cellIndex(ci, cj)
+        int ci = 0, cj = 0;        // the cell's column and row on the lamp's image plane
+        llprojectorpool::CellGrid grid; // the lamp's cells (1 x 1: one tile, no guard)
         LLPointer<LLDrawable> drawable;
-        U32 base = 128;            // the light's own tile size (llprojectorpool::baseSize)
+        U32 base = 128;            // this tile's size from the camera position's distance to it (SizeHysteresis; the level shifts it down)
+        llprojectorpool::SizeHysteresis hyst;
+        F32 cellDist = 0.f;        // the camera position's distance to the tile's own volume (m), the sizing's input
+        llprojectorpool::Pyramid core;   // the cell's interior volume, agent space (sizing, the own avatar's cadence); the lamp's for one tile
+        U32 volumeNc = 0;                // the tile size `volume` (with its guard) was built for
         llprojectorpool::Rect rect;
         bool placed = false;
         DrawnPose drawn;
@@ -240,6 +253,8 @@ private:
     void unpinObject(const llprojectorpool::Id128& id);
     void pinDrawable(LLDrawable* drawable);
     void dropRecord(std::map<U32, Record>::iterator it);
+    void dropLamp(U32 lamp, const LLDrawable* drawable);
+    bool resizeInPlace(Record& rec, U32 want);
     U32 desiredSize(const Record& rec) const;
 
     U32 mAtlasS = 0;   // the tiles as drawn: the fixed layer only (the avatars are not drawn into it since P4)
@@ -262,6 +277,8 @@ private:
 
     U64 mTileRenders = 0;
     U64 mRepacks = 0;
+    U64 mResizes = 0;
+    U64 mResizeRepacks = 0;
     F32 mLastFrameRenderMs = 0.f;
     U32 mLastFrameRenders = 0;
     U32 mLightsWithoutTile = 0;
