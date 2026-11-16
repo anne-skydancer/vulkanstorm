@@ -405,6 +405,13 @@ region of the teleports instead of the login region) and `-Scenario NAME` from `
 - `mc1_sl_teleports_manual`: one 600 s capture while you teleport by hand between the busy and the home region. Busy regions such as Risk
   refuse automated in-region teleports (`NoGoodTPDestination`), which is why this scenario exists; it runs no series, so it needs no region name.
 
+- `mc1_rooftops` / `mc1_rooftops_moving`: the Rooftops shadow-cost split (still and moving, or the moving view alone), each view measured with the
+  `RenderShadowDetail` variants none / sun / all. Every variant of a moving preset turns the camera for its whole capture. After each variant switch
+  the script waits until the frame rate has settled (3 consecutive 1 s FrameCounters windows within 10 %, between `settle.warmup_min_s` 10 s and
+  `warmup_max_s` 45 s) and logs the wait. `perf.json` holds, per preset, `camera_log` (once a second: the camera the script commanded; the viewer has no
+  read-back), `warmup`, and `projector_stats` (plus `projector_stats_end` and `projector_delta`). A viewer without the `ProjectorShadows` API (it is
+  compiled only with `-DVKS_GL_STATS=ON`, so the Tracy measuring build has none) records `{"available": false, ...}` and says so once in the log.
+
 Measuring by hand (outside the scripted session): an unfocused viewer throttles itself (`BackgroundYieldTime`), so set `BackgroundYieldTime` to 0, and
 switch the frame cap off (`FSLimitFramerate` false), or the numbers read low. The scenarios already set the frame limiter off. Not covered by the offline
 tests: the real LEAP notification, `LLAgent.getPosition` timing across a real teleport, and `tracy-capture` itself.

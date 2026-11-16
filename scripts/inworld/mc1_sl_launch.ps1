@@ -14,6 +14,8 @@ and --tracy-capture, the throw-away noop plugin entry, and the run folder .captu
   .\mc1_sl_launch.ps1 -Scenario mc1_sl_teleports         (teleports only, one capture; needs -StartRegion or -TpRegion)
   .\mc1_sl_launch.ps1 -Scenario mc1_sl_teleports_manual  (one 600 s capture while you teleport by hand, for busy regions that refuse
                                                           automated teleports; no series, so no region name needed)
+  .\mc1_sl_launch.ps1 -Scenario mc1_rooftops_moving -StartRegion "Home" -BusyRegion "Busy"
+                                          (Rooftops: only the moving view, shadow variants none / sun / all, each after a warm-up)
   -Scenario mc1_sl (the default) is the full session: still, moving, teleports, fps probe.
   .\mc1_sl_launch.ps1 -DryRun             (at the login screen: --dry-run --no-login-wait, do not log in)
 
@@ -76,7 +78,7 @@ try {   # from here every path puts this window's folders back
 
     Write-Host "Run folder (captures, perf.json): $out"
     Write-Host "Scratch profile: $prof"
-    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } default { 'several' } }
+    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '10' } default { 'several' } }
     if (-not $DryRun) {
         Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'
         Write-Host ('(no minimising, no UI use) until the pop-up "Session done: you can quit" appears (about ' + $minutes + ' minutes).')

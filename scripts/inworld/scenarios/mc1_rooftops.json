@@ -5,7 +5,9 @@
     "post_login_s": 20.0,
     "after_camera_s": 4.0,
     "after_setting_s": 3.0,
-    "after_teleport_s": 20.0
+    "after_teleport_s": 20.0,
+    "warmup_min_s": 10.0,
+    "warmup_max_s": 45.0
   },
   "window": {
     "seconds": 60
