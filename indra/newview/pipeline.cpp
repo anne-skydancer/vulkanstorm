@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "lllocalshadows.h" // <Vulkanstorm/> setTileOrigin for the sun cascades
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
@@ -12602,10 +12603,16 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         mRT->shadow[j].getViewport(gGLViewport);
         mRT->shadow[j].clear();
 
+        // <Vulkanstorm> the hashed alpha dither of the Stochastic method belongs to the world texel, not to the map's:
+        // the box moves in whole world texels, so the map column plus the box corner's world index k is constant
+        // (origin = -k; the shaders hash gl_FragCoord - origin). Reset to 0 as every other pass expects.
+        LLLocalShadowGL::setTileOrigin((F32)-box.k_x, (F32)-box.k_y);
         {
             static LLCullResult result[4];
             renderShadow(view[j], proj[j], shadow_cam, result[j], true);
         }
+        LLLocalShadowGL::setTileOrigin(0.f, 0.f);
+        // </Vulkanstorm>
 
         mRT->shadow[j].flush();
 

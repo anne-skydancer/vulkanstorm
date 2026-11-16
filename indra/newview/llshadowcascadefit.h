@@ -95,6 +95,9 @@ namespace LLShadowCascadeFit
     struct Rect
     {
         float min_x, min_y, max_x, max_y;
+        // the corner's index on the world grid: min = anchor + k * texel, integer-valued. A world point's
+        // map column plus k is its world column, which never changes while the camera moves.
+        long long k_x = 0, k_y = 0;
     };
 
     // The orthographic box of a cascade in light-view space: it holds the square [c - r, c + r]
@@ -106,8 +109,10 @@ namespace LLShadowCascadeFit
         const float tx = 2.f * r / (res_x - 1.f);
         const float ty = 2.f * r / (res_y - 1.f);
         Rect out;
-        out.min_x = anchor_x + std::floor((cx - r - anchor_x) / tx) * tx;
-        out.min_y = anchor_y + std::floor((cy - r - anchor_y) / ty) * ty;
+        out.k_x = (long long)std::floor((cx - r - anchor_x) / tx);
+        out.k_y = (long long)std::floor((cy - r - anchor_y) / ty);
+        out.min_x = anchor_x + (float)out.k_x * tx;
+        out.min_y = anchor_y + (float)out.k_y * ty;
         out.max_x = out.min_x + res_x * tx;
         out.max_y = out.min_y + res_y * ty;
         return out;

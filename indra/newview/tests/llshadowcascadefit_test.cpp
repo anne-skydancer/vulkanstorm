@@ -10,6 +10,8 @@
 //   - the quantised radius only grows, by less than 1/16 of an octave;
 //   - the snapped box holds the sphere's square, spans exactly res texels, and its texel grid
 //     stays at the same world phase while the camera moves;
+//   - the box corner's world-grid index k (returned by snappedSquare) matches the box and keeps a world point's
+//     map column + k constant while the camera walks (the Stochastic alpha dither origin, finding N1);
 //   - the light view's up axis is a unit vector orthogonal to the light.
 
 #include "llshadowcascadefit.h"
@@ -168,6 +170,57 @@ namespace
             double dphase = std::fabs(phase - phase0);
             dphase = std::fmin(dphase, 1.0 - dphase);
             check(dphase < 0.05, "texel grid phase is fixed in the world", phase, phase0);
+        }
+    }
+
+    // Finding N1: the box corner's world-grid index k, returned by snappedSquare, makes a world point's
+    // "map column + k" constant while the camera walks. The shader hashes gl_FragCoord - origin with origin = -k,
+    // so the dither belongs to the world texel and does not re-roll.
+    void test_world_anchor()
+    {
+        const float r = LLShadowCascadeFit::quantizeRadius(6.83f);
+        const float res = 1456.f;
+        const double texel = 2.0 * r / (res - 1.0);
+        // sub-texel, exactly one texel, and multi-texel steps along the light-view x axis (eye relative)
+        const double steps[] = { 0.1 * texel, 0.5 * texel, texel, 3.7 * texel };
+        for (double stride : steps)
+        {
+            const double world_x = 131.2503; // a fixed point, light-view x of the world (eye independent)
+            const double eye_x0 = 128.0;
+            long long k_prev = 0, changes = 0;
+            double walked = 0.0;
+            long long wcol0 = 0;
+            for (int step = 0; step < 300; ++step)
+            {
+                const double eye_x = eye_x0 + stride * step;
+                const float cx = (float)(5.0), cy = 0.f; // the sphere centre, eye relative
+                const float ax = (float)(-eye_x), ay = 0.f; // the world origin, eye relative
+                const auto box = LLShadowCascadeFit::snappedSquare(cx, cy, r, res, res, ax, ay);
+                // k matches the box exactly: (min - anchor) / texel is the integer k
+                const double q = ((double)box.min_x - (double)ax) / texel;
+                check(std::llround(q) == box.k_x && std::fabs(q - (double)box.k_x) < 1e-2, "k matches (box.min - anchor) / texel", q, (double)box.k_x);
+                // the world point's map column, as the rasteriser sees it, plus k is its world column
+                const long long map_col = (long long)std::floor((world_x - eye_x - (double)box.min_x) / texel);
+                const long long world_col = map_col + box.k_x;
+                if (step == 0)
+                {
+                    wcol0 = world_col;
+                    k_prev = box.k_x;
+                }
+                check(world_col == wcol0, "map column + k is constant while walking", (double)world_col, (double)wcol0);
+                if (box.k_x != k_prev)
+                {
+                    ++changes;
+                    k_prev = box.k_x;
+                }
+                walked += stride;
+            }
+            // k changes only on whole texels moved: never more often than the texels walked, and not at all below one
+            check((double)changes <= walked / texel + 1.0, "k changes at most once per texel walked", (double)changes, walked / texel);
+            if (stride < texel)
+            {
+                check((double)changes < 300.0 * stride / texel + 1.5, "k stays put across sub-texel steps", (double)changes, 300.0 * stride / texel);
+            }
         }
     }
 
@@ -371,6 +424,7 @@ int main()
     test_sphere();
     test_quantize();
     test_snap();
+    test_world_anchor();
     test_up();
     test_depth();
     test_cull_margin();
