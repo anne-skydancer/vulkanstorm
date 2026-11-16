@@ -21,6 +21,7 @@
 #include "llprojectorshadowpool.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -871,6 +872,217 @@ Pyramid pyramidAt(float x, float y, float z, float fov, float radius)
     return makePyramid(o, f, r, u, fov, 0.1f, radius);
 }
 
+// The change index as it was before the flat scan (the 8 m grid rebuilt every frame): the oracle of the differential test
+// and the baseline of the bench.
+class GridChangeIndex
+{
+public:
+    void rebuild(const std::vector<TileVolume>& tiles)
+    {
+        mTiles = tiles;
+        mGrid.clear();
+        for (uint32_t i = 0; i < mTiles.size(); ++i)
+        {
+            mGrid.add(i, mTiles[i].pyramid.bounds);
+        }
+    }
+    void apply(const std::vector<DirtyBox>& boxes, bool everything, std::vector<Hit>& out)
+    {
+        out.clear();
+        if (mTiles.empty())
+        {
+            return;
+        }
+        if (everything)
+        {
+            for (const TileVolume& t : mTiles)
+            {
+                out.push_back({ t.key, Cause::Other });
+            }
+            return;
+        }
+        std::vector<char> hit(mTiles.size(), 0);
+        size_t remaining = mTiles.size();
+        for (const DirtyBox& b : boxes)
+        {
+            if (remaining == 0)
+            {
+                break;
+            }
+            mGrid.candidates(b.box, mCand);
+            for (uint32_t i : mCand)
+            {
+                if (!hit[i] && intersects(mTiles[i].pyramid, b.box))
+                {
+                    hit[i] = 1;
+                    --remaining;
+                    out.push_back({ mTiles[i].key, b.cause });
+                }
+            }
+        }
+    }
+
+private:
+    std::vector<TileVolume> mTiles;
+    TileGrid mGrid;
+    std::vector<uint32_t> mCand;
+};
+
+Pyramid randomPyramid(std::mt19937& rng, float world, float fov_lo, float fov_hi, float rad_lo, float rad_hi)
+{
+    std::uniform_real_distribution<float> pos(-world, world), fov(fov_lo, fov_hi), rad(rad_lo, rad_hi), dir(-1.f, 1.f);
+    const float o[3] = { pos(rng), pos(rng), pos(rng) };
+    float f[3] = { dir(rng), dir(rng), dir(rng) };
+    if (f[0] * f[0] + f[1] * f[1] + f[2] * f[2] < 1e-3f)
+    {
+        f[2] = -1.f;
+    }
+    detail::normalise(f);
+    float up_hint[3] = { 0.f, 1.f, 0.f };
+    if (std::fabs(f[1]) > 0.9f)
+    {
+        up_hint[0] = 1.f;
+        up_hint[1] = 0.f;
+    }
+    float r[3], u[3];
+    detail::cross(f, up_hint, r);
+    detail::normalise(r);
+    detail::cross(r, f, u);
+    return makePyramid(o, f, r, u, fov(rng), 0.1f, rad(rng));
+}
+
+std::vector<DirtyBox> randomBoxes(std::mt19937& rng, size_t count, float world)
+{
+    std::uniform_real_distribution<float> pos(-world, world), ext(0.05f, 8.f);
+    std::vector<DirtyBox> boxes;
+    for (size_t i = 0; i < count; ++i)
+    {
+        Aabb b;
+        for (int k = 0; k < 3; ++k)
+        {
+            const float c = pos(rng), e = ext(rng);
+            b.lo[k] = c - e;
+            b.hi[k] = c + e;
+        }
+        boxes.push_back({ b, Cause(rng() % unsigned(Cause::Count)) });
+    }
+    return boxes;
+}
+
+bool sameHits(const std::vector<Hit>& a, const std::vector<Hit>& b)
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        if (a[i].key != b[i].key || a[i].cause != b[i].cause)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The flat-scan index gives the old grid index's hits exactly: keys, causes and order.
+void testP3ChangeIndexDifferential()
+{
+    std::mt19937 rng(20261116);
+    std::vector<Hit> got, want;
+    int mismatches = 0, comparisons = 0;
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    for (int scene = 0; scene < 120; ++scene)
+    {
+        const size_t n_tiles = rng() % 301;
+        const size_t n_boxes = scene % 12 == 0 ? 5000 : rng() % 600;
+        std::vector<TileVolume> tiles;
+        for (size_t k = 0; k < n_tiles; ++k)
+        {
+            tiles.push_back({ uint32_t(1000 + k * 3), randomPyramid(rng, 80.f, 0.3f, 2.9f, 1.f, 20.f) });
+        }
+        if (scene % 5 == 0 && !tiles.empty())
+        {
+            tiles[rng() % tiles.size()].pyramid = randomPyramid(rng, 80.f, 0.3f, 2.9f, 1.f, 5000.f); // a world-sized tile
+        }
+        std::vector<DirtyBox> boxes = randomBoxes(rng, n_boxes, 90.f);
+        if (scene % 3 == 0)
+        {
+            Aabb odd;
+            for (int k = 0; k < 3; ++k) { odd.lo[k] = -1e6f; odd.hi[k] = 1e6f; }
+            boxes.insert(boxes.begin() + long(boxes.size() / 2), { odd, Cause::Edit });
+            for (int k = 0; k < 3; ++k) { odd.lo[k] = -3e38f; odd.hi[k] = 3e38f; }
+            boxes.push_back({ odd, Cause::Mover });
+            for (int k = 0; k < 3; ++k) { odd.lo[k] = nan; odd.hi[k] = 1.f; }
+            boxes.insert(boxes.begin() + long(boxes.size() / 3), { odd, Cause::Lamp });
+            for (int k = 0; k < 3; ++k) { odd.lo[k] = 0.f; odd.hi[k] = inf; }
+            boxes.insert(boxes.begin() + long(boxes.size() / 4), { odd, Cause::Avatar });
+        }
+        GridChangeIndex old_index;
+        ChangeIndex new_index;
+        old_index.rebuild(tiles);
+        new_index.rebuild(tiles);
+        for (int every = 0; every < 2; ++every)
+        {
+            old_index.apply(boxes, every != 0, want);
+            new_index.apply(boxes, every != 0, got);
+            ++comparisons;
+            if (!sameHits(got, want))
+            {
+                ++mismatches;
+            }
+        }
+    }
+    check(mismatches == 0, "P3 the flat-scan index gives the grid index's hits in the same order", mismatches, comparisons);
+}
+
+// The cost of the change index on a frame that has dirty boxes (R tiles, B boxes): the old grid against the flat scan.
+// Run with --bench-index.
+void benchChangeIndex()
+{
+    std::printf("change index, microseconds per frame (rebuild + apply): R tiles, B boxes\n");
+    std::printf("%6s %6s %12s %12s %8s\n", "R", "B", "grid (old)", "scan (new)", "speedup");
+    std::mt19937 rng(1);
+    for (int R : { 20, 60, 150, 300 })
+    {
+        std::vector<TileVolume> tiles; // one lamp mix per R: a third of the tiles are 20 m lamps, the rest 8 m
+        for (int k = 0; k < R; ++k)
+        {
+            tiles.push_back({ uint32_t(k + 1), randomPyramid(rng, 60.f, 0.5f, 2.2f, 1.f, k % 3 == 0 ? 20.f : 8.f) });
+        }
+        for (int B : { 0, 50, 500, 5000 })
+        {
+            const std::vector<DirtyBox> boxes = randomBoxes(rng, size_t(B), 70.f);
+            std::vector<Hit> hits;
+            const int reps = std::max(3, 20000 / (R + B / 10 + 10));
+            GridChangeIndex old_index;
+            ChangeIndex new_index;
+            double sink = 0, a = 1e30, b = 1e30; // the best of five trials of `reps` frames
+            for (int trial = 0; trial < 5; ++trial)
+            {
+                auto t0 = std::chrono::steady_clock::now();
+                for (int i = 0; i < reps; ++i)
+                {
+                    old_index.rebuild(tiles);
+                    old_index.apply(boxes, false, hits);
+                    sink += double(hits.size());
+                }
+                auto t1 = std::chrono::steady_clock::now();
+                for (int i = 0; i < reps; ++i)
+                {
+                    new_index.rebuild(tiles);
+                    new_index.apply(boxes, false, hits);
+                    sink += double(hits.size());
+                }
+                auto t2 = std::chrono::steady_clock::now();
+                a = std::min(a, std::chrono::duration<double, std::micro>(t1 - t0).count() / reps);
+                b = std::min(b, std::chrono::duration<double, std::micro>(t2 - t1).count() / reps);
+            }
+            std::printf("%6d %6d %12.1f %12.1f %7.1fx%s\n", R, B, a, b, a / std::max(b, 1e-3), sink < 0 ? "?" : "");
+        }
+    }
+}
+
 void testP3Causes()
 {
     check(std::string(causeName(Cause::New)) == "new" && std::string(causeName(Cause::LodUp)) == "lod_up" &&
@@ -1232,6 +1444,7 @@ void testP3()
     testP3Causes();
     testP3DirtyList();
     testP3ChangeIndex();
+    testP3ChangeIndexDifferential();
     testP3MoverRules();
     testP3PinBook();
     testP3Verdict();
@@ -1239,8 +1452,13 @@ void testP3()
 }
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+    if (argc > 1 && std::string(argv[1]) == "--bench-index")
+    {
+        benchChangeIndex();
+        return 0;
+    }
     testSizeRule();
     testBuddy();
     testT1();
