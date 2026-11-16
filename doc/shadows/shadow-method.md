@@ -101,7 +101,7 @@ plane, the world-unit bias and the normal offset are S2's helpers. The cascade i
 weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (a blocker
 search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the nearest blocker's distance for an
 emitter of 1 cm times `RenderShadowLightSize`, whatever the prim, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
-texel bias and per-texel receiver plane. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
+texel bias and per-texel receiver plane. Where the penumbra is narrower than 2.5 texels the filter is replaced by a straight edge fitted to the map's silhouette (edge reconstruction, `doc/shadows/projector-shadow-pool.md`). The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
 within a map texel. The projector lookup costs 8 + 32 gathers per pixel inside the projector's frustum. Under Stochastic with
 detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
