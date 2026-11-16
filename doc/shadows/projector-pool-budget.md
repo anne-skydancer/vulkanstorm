@@ -4,15 +4,18 @@
 
 The projector shadow pool replaces today's two view-driven projector shadow slots with one persistent shadow map per projector
 (spec: `reports/projector-pool-2026-11-13/design-final.md`, sections 3 to 9). Every stage reports its cost against the budget
-and keeps a running total. This file holds the measurement procedure and the tables. **Every table cell below, except the offline Table 5 (P2b), is empty on
+and reports it against the fps floor (see Budget). This file holds the measurement procedure and the tables. **Every table cell below, except the offline Table 5 (P2b), is empty on
 purpose: S0's offline parts (guards, counters, scripts) are in the PR; the numbers come from the owner's capture session and are
 written in then.** Nothing here is measured yet, and no value in this file may be filled in from an estimate.
 
 ## Budget
 
-Everything new for light and shadow, together, at the default tier, costs at most the Stochastic frame of build 1.0.1.82178
-(windows-latest at `8a797c1d61`, Shadow method Stochastic) + 5 % (AGENTS.md). The spec estimates the allowance at about 0.4 ms
-at an 8 ms frame [spec estimate, not measured]. Each pool stage reports its own cost and the running total.
+The budget is a frame-rate floor (AGENTS.md, owner 2026-11-16): about 60 fps standing still in a crowded room (about 60
+avatars) and never below 25 fps while moving, at the default tier. Each pool stage reports its cost in ms and fps against
+the floor, measured in-world in a crowded room, standing still and moving. The owner's in-world check is the frame-level gate.
+It replaces the former rule (everything new at most the Stochastic frame of build 1.0.1.82178, windows-latest at
+`8a797c1d61`, + 5 %, about 0.4 ms at an assumed 8 ms frame [spec estimate, not measured]), retired 2026-11-16. The 82178
+frame stays below as a reference point, and every figure taken against the +5 % allowance was measured under the retired rule.
 
 ## What S0 added (offline)
 
@@ -70,7 +73,7 @@ in the build. The hook cost is read from `hook_bench` (run `perf_check.py` once 
 | Outdoors | | | | | |
 | Projector club | | | | | |
 
-Allowance (frame + 5 %): ground room ___ ms, skybox ___ ms, outdoors ___ ms, club ___ ms.
+Reference (82178 frame; the former allowance was frame + 5 %, retired 2026-11-16): ground room ___ ms, skybox ___ ms, outdoors ___ ms, club ___ ms. The gate is the fps floor in Budget.
 
 **Table 2. Slot renders and sun pass by slot count** (mean per frame over the window)
 
@@ -102,14 +105,14 @@ dedicated video memory (`NVX_gpu_memory_info` or `WGL_AMD_gpu_association`), wit
 how many lamps the owner's places have. Its 512 MiB counts in the viewer's texture budget (about 4.9 GB on a 12 GB card, so +384 MiB over
 4096 is 7.8 % of it, 5.2 % on 24 GB): watch the texture discard bias on 12 GB cards.
 
-**Table 4. Running total against the budget** (one row per stage, filled by that stage's PR)
+**Table 4. Cost per stage** (one row per stage, filled by that stage's PR; the Running total and Allowance columns were set under the retired +5 % rule of 2026-11-16, the gate is now the fps floor in Budget, so a new row reports ms and fps against the floor)
 
 | Stage | Measured? | Frame cost change (ms) | Running total (ms) | Allowance (ms) | Within? |
 |---|---|---|---|---|---|
 | S0 (offline parts) | not measured (no draw work added; the new pass scopes cost one pointer test with the option off and are absent without `VKS_GL_STATS`) | not measured | not measured | | |
 | P2 | | | | | |
 | P2b | offline per-pixel path only (table 5); in-world full-frame cost: not measured, owed at the S0 capture session; gates any release integration | see table 5 | not measured | | |
-| P2c | estimate, not measured in-world. The tile timer is CPU only; each 2048 tile also pays a GPU clear, render and a 16 MB copy (S to L) that no number here includes | up to +0.35 ms CPU (fixed cap; about 0.28 ms for four lamps at the 0.07 ms of 2026-11-14), GPU not measured | not measured | about 0.4 ms (+5 % of an assumed 8 ms frame) | not shown; the Legacy-cost guarantee is dropped until P3 |
+| P2c | estimate, not measured in-world. The tile timer is CPU only; each 2048 tile also pays a GPU clear, render and a 16 MB copy (S to L) that no number here includes | up to +0.35 ms CPU (fixed cap; about 0.28 ms for four lamps at the 0.07 ms of 2026-11-14), GPU not measured | not measured | about 0.4 ms (+5 % of an assumed 8 ms frame; the former allowance, retired 2026-11-16) | not shown; the Legacy-cost guarantee is dropped until P3 |
 | P3 | | | | | |
 | P4 | | | | | |
 | P5 | | | | | |
@@ -172,7 +175,7 @@ In-world full-frame cost: not measured, owed at the S0 capture session; gates an
 | Staleness of the oldest tile | at most ceil(N / tiles per frame) frames (24 frames seen in P2b) | by construction, unit test T7; read `pool.max_stale_frames` (since P3 the age of the oldest pending tile, 0 in a static scene) |
 | Ambiance shadowed: the per-pixel function `sampleProjectorShadow` | unchanged, so `--time-pass` does not apply (it times that function) | not applicable |
 | Ambiance shadowed: lookups on back-facing pixels in the cone | extra lookups, one per such pixel for lamps with `proj_ambiance` > 0; each costs what Table 5 shows per full-screen pass, scaled by the share of the screen those pixels cover | estimate |
-| Running total of the light and shadow budget | the tile renders now take up to 0.35 ms CPU of the about 0.4 ms (+5 % of an assumed 8 ms frame) allowed; the timer is CPU only, GPU side (clear, render, 16 MB copy per 2048 tile) not measured | estimate, to be read in-world |
+| Cost of the tile renders against the budget | the tile renders now take up to 0.35 ms CPU (the former +5 % allowance of about 0.4 ms at an assumed 8 ms frame, retired 2026-11-16; the gate is now the fps floor, see AGENTS.md); the timer is CPU only, GPU side (clear, render, 16 MB copy per 2048 tile) not measured | estimate, to be read in-world |
 | Cold start | a never-drawn record is predicted at most 0.0875 ms (a quarter of the cap), so about four tiles a frame after login or a teleport | by construction, unit test T7 |
 
 Label every cost "measured" (with scene, resolution, driver) or "estimate".
@@ -192,7 +195,7 @@ background yield set to 0 for the measurement, window about 2560 x 1350, RTX 507
 | `vkstorm-devel` 2c2ebe3cb0: the pool through P2b (the 2 x average cap) | 124.5 to 127.8 | 127.2 fps | 7.86 ms | -0.75 ms (-8.7 %) |
 | P2c, 38176bf35c: the fixed 0.35 ms cap, every tile redrawn every frame | 124.9 to 127.2 | 126.1 fps | 7.93 ms | -0.68 ms (-7.9 %) |
 
-- Baseline + 5 % is 9.04 ms. Both pool builds are below the baseline itself.
+- Baseline + 5 % is 9.04 ms (the former ceiling, retired 2026-11-16; the gate is now the fps floor). Both pool builds are below the baseline itself.
 - P2c against P2b: +0.07 ms a frame (+0.9 %), inside the spread of the readings (2 to 3 % within a run). The earlier
   estimate for the higher cap (+0.2 ms CPU, GPU unknown) was an upper bound; the full-frame cost here is smaller.
 - The baseline build is not the exact 8a797c1d61 binary the budget rule names: it carries the three hotfixes of

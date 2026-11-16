@@ -164,7 +164,7 @@ The sky itself is not changed. Based on the L2b survey of 2026-11-11 (owner deci
 | Lookup pass 1080p, strength 1 | 0.0338 ms | 0.0338-0.0340 ms | +0.0000 to +0.0002 ms |
 | Map + lookups, 1080p | 0.0351 ms | 0.0354-0.0363 ms | +0.0003 to +0.0011 ms (gate +0.002) |
 
-VRAM: +0.34 MB (RG8, 0.67 MB with mips). CPU: one cached control and one `uniform4f` per frame. **Running light-stage total at 1080p** (L2 0.035 ms, L3/AT1 no GPU pass, L2b +0.0003 to +0.0011): 0.035-0.037 ms, within the 0.05 ms stage gate and far inside the "PCSS-on frame + 5 %" budget.
+VRAM: +0.34 MB (RG8, 0.67 MB with mips). CPU: one cached control and one `uniform4f` per frame. **Running light-stage total at 1080p** (L2 0.035 ms, L3/AT1 no GPU pass, L2b +0.0003 to +0.0011): 0.035-0.037 ms, within the 0.05 ms stage gate and far inside the "PCSS-on frame + 5 %" budget (measured against the former budget, retired 2026-11-16; the budget is now the fps floor, see AGENTS.md).
 
 ### What the owner checks in-world
 
