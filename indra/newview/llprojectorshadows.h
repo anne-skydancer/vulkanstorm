@@ -70,6 +70,11 @@ public:
     // makes for the PROJECTOR_SHADOW_POOL permutation of the spot light programs.
     static bool wanted();
 
+    // The programs that dither the semi-transparent casters by a texel origin: a projector tile's (so not of the atlas), or a sun
+    // cascade's wrapped world-grid index (LLShadowCascadeFit::alphaDitherOrigin, set in LLPipeline::generateSunCascadesStable).
+    // (0, 0) puts it back. Leaves the last program bound.
+    static void setTileOrigin(F32 x, F32 y);
+
     // The atlases and their framebuffers exist.
     bool active() const { return mAtlasS != 0 && mAtlasL != 0; }
 
@@ -214,7 +219,6 @@ private:
     void forgetPinned(const LLDrawable* drawable);
     void unpinObject(const llprojectorpool::Id128& id);
     void pinDrawable(LLDrawable* drawable);
-    void setTileOrigin(F32 x, F32 y);
     void dropRecord(std::map<U32, Record>::iterator it);
     U32 desiredSize(const Record& rec) const;
 

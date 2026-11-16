@@ -26,7 +26,7 @@ FILES = ['shadowAlphaMaskF', 'pbrShadowAlphaBlendF', 'avatarAlphaShadowF', 'avat
 DEFINE = 'STOCHASTIC_SHADOW_ALPHA'
 OURS = re.compile(r'#\s*if\s+(!?)\s*defined\(' + DEFINE + r'\)$')
 DITHER = ('float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + '
-          '0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));')   # P2: anchored to the projector tile's origin
+          '0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));')   # anchored to shadow_tile_origin: the projector tile's origin or the sun cascade's world-grid index
 
 
 def significant(lines):

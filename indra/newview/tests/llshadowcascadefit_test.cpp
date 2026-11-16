@@ -10,6 +10,8 @@
 //   - the quantised radius only grows, by less than 1/16 of an octave;
 //   - the snapped box holds the sphere's square, spans exactly res texels, and its texel grid
 //     stays at the same world phase while the camera moves;
+//   - the box corner's world-grid index k (returned by snappedSquare) matches the box and keeps a world point's
+//     map column + k constant while the camera walks (the Stochastic alpha dither origin, finding N1);
 //   - the light view's up axis is a unit vector orthogonal to the light.
 
 #include "llshadowcascadefit.h"
@@ -169,6 +171,121 @@ namespace
             dphase = std::fmin(dphase, 1.0 - dphase);
             check(dphase < 0.05, "texel grid phase is fixed in the world", phase, phase0);
         }
+    }
+
+    // The shader's hash (shadowAlphaMaskF.glsl), in float, of the fragment (fx, fy) minus the origin
+    float dither_hash(float fx, float fy, float origin_x, float origin_y)
+    {
+        const float a = 0.06711056f * (fx - origin_x) + 0.00583715f * (fy - origin_y);
+        const float b = a - std::floor(a);
+        const float c = 52.9829189f * b;
+        return c - std::floor(c);
+    }
+
+    // Finding N1: a camera walks (x, y and diagonal) past a fixed world point at the centre of a world texel. For the
+    // map pixel that holds the point, the hash of (gl_FragCoord - origin) with the origin from alphaDitherOrigin must
+    // be the same at every step: it depends only on the world texel (N) and on the 2^16 wrap epoch of k, which is
+    // the one place it may change (all points together). Eye positions are light-view coordinates of the eye; the
+    // world origin is at 0 there, so k = (eye - r) / texel for a sphere centred on the eye.
+    void walk_case(const char* name, double ex0, double ey0, double dirx, double diry, double stride, int steps,
+        float res_x, float res_y, bool expect_wrap)
+    {
+        const float r = LLShadowCascadeFit::quantizeRadius(6.83f);
+        const float tx = 2.f * r / (res_x - 1.f), ty = 2.f * r / (res_y - 1.f);
+        // the world point: the centre of the world texel under the middle of the walk
+        const double midx = ex0 + dirx * stride * steps / 2.0, midy = ey0 + diry * stride * steps / 2.0;
+        const long long nx = (long long)std::floor(midx / tx), ny = (long long)std::floor(midy / ty);
+        const double wx = ((double)nx + 0.5) * tx, wy = ((double)ny + 0.5) * ty;
+        long long kx_prev = 0, ky_prev = 0, epoch0 = 0, changes_x = 0, changes_y = 0, epoch_changes = 0, epoch_prev = 0;
+        float hash_ref = -1.f;
+        for (int step = 0; step <= steps; ++step)
+        {
+            const double ex = ex0 + dirx * stride * step, ey = ey0 + diry * stride * step;
+            const float ax = (float)(-ex), ay = (float)(-ey); // the world origin, eye relative
+            const auto box = LLShadowCascadeFit::snappedSquare(0.f, 0.f, r, res_x, res_y, ax, ay);
+            // the box corner is the formula it had before k was returned, bit for bit
+            check(box.min_x == ax + std::floor((0.f - r - ax) / tx) * tx && box.min_y == ay + std::floor((0.f - r - ay) / ty) * ty,
+                  "box corner is unchanged by k", box.min_x, box.min_y);
+            // k is the integer in (min - anchor) / texel
+            const double qx = ((double)box.min_x - (double)ax) / tx, qy = ((double)box.min_y - (double)ay) / ty;
+            check(std::llround(qx) == box.k_x && std::llround(qy) == box.k_y && std::fabs(qx - (double)box.k_x) < 0.05
+                  && std::fabs(qy - (double)box.k_y) < 0.05, name, qx, (double)box.k_x);
+            // the map pixel holding the world point (eye-relative position minus the corner)
+            const long long mx = (long long)std::floor((wx - ex - (double)box.min_x) / tx);
+            const long long my = (long long)std::floor((wy - ey - (double)box.min_y) / ty);
+            check(mx >= 0 && mx < (long long)res_x && my >= 0 && my < (long long)res_y, "the world point stays in the map", (double)mx, (double)my);
+            const auto origin = LLShadowCascadeFit::alphaDitherOrigin(box);
+            const float h = dither_hash((float)mx + 0.5f, (float)my + 0.5f, origin.x, origin.y);
+            // what the hash must be: the world texel's column minus the wrap epoch of k
+            const long long epoch_x = (long long)std::floor((double)box.k_x / 65536.0);
+            const long long epoch_y = (long long)std::floor((double)box.k_y / 65536.0);
+            const float want = dither_hash((float)(nx - 65536 * epoch_x) + 0.5f, (float)(ny - 65536 * epoch_y) + 0.5f, 0.f, 0.f);
+            check(h == want, name, h, want);
+            check(std::fabs(origin.x) < 65536.f && std::fabs(origin.y) < 65536.f, "the origin stays below 2^16", origin.x, origin.y);
+            const long long epoch = epoch_x * 1000003 + epoch_y;
+            if (step == 0)
+            {
+                hash_ref = h;
+                epoch0 = epoch;
+            }
+            else
+            {
+                changes_x += box.k_x != kx_prev;
+                changes_y += box.k_y != ky_prev;
+                if (epoch == epoch0)
+                {
+                    check(h == hash_ref, "the hash does not re-roll inside a wrap epoch", h, hash_ref);
+                }
+                epoch_changes += epoch != epoch_prev;
+            }
+            kx_prev = box.k_x;
+            ky_prev = box.k_y;
+            epoch_prev = epoch;
+        }
+        // k changes at most once per texel walked (per axis), the true bound: floor(distance / texel) + 1
+        const double walked_x = std::fabs(dirx) * stride * steps / tx, walked_y = std::fabs(diry) * stride * steps / ty;
+        check((double)changes_x <= std::floor(walked_x) + 1.0 && (double)changes_y <= std::floor(walked_y) + 1.0,
+              "k changes at most once per texel walked", (double)changes_x, walked_x);
+        if (expect_wrap)
+        {
+            check(epoch_changes >= 1, "the walk crosses a multiple of 2^16 in k", (double)epoch_changes);
+        }
+        else
+        {
+            check(epoch_changes == 0, "no wrap epoch change in this walk", (double)epoch_changes);
+        }
+    }
+
+    void test_world_anchor()
+    {
+        const float r = LLShadowCascadeFit::quantizeRadius(6.83f);
+        const double t = 2.0 * r / (1456.0 - 1.0);
+        const double r_d = r;
+        for (double stride : { 0.1 * t, 0.5 * t, 1.0 * t, 3.7 * t })
+        {
+            const int steps = 120;
+            walk_case("walk x", 60.0, 40.0, 1.0, 0.0, stride, steps, 1456.f, 1456.f, false);
+            walk_case("walk y", 60.0, 40.0, 0.0, 1.0, stride, steps, 1456.f, 1456.f, false);
+            walk_case("walk diagonal", 60.0, 40.0, 0.70710678, 0.70710678, stride, steps, 1456.f, 1456.f, false);
+            walk_case("non-square map", 60.0, 40.0, 0.70710678, -0.70710678, stride, steps, 1456.f, 728.f, false);
+            walk_case("negative k", -300.0, -200.0, 0.6, 0.8, stride, steps, 1456.f, 1456.f, false);
+            // k crosses zero mid-walk on both axes (the eye passes r): the epoch changes there, as at any multiple of 2^16
+            walk_case("k crosses zero", r_d - 0.5 * stride * steps, r_d - 0.5 * stride * steps, 1.0, 1.0, stride, steps,
+                      1456.f, 1456.f, true);
+            // far from the origin, the walk crosses k = 6 * 2^16: the grain re-rolls once, there only
+            const double wrap_eye = 6.0 * 65536.0 * t + r_d - 0.5 * stride * steps;
+            walk_case("large offset wraps", wrap_eye, wrap_eye * 0.5, 1.0, 0.0, stride, steps, 1456.f, 1456.f, true);
+        }
+        // a large offset without the wrap
+        walk_case("large offset, no wrap", 6.0 * 65536.0 * t + 100.0, 3000.0, 0.6, 0.8, 0.5 * t, 100, 1456.f, 1456.f, false);
+        // non-finite input gives k = 0 (no undefined cast)
+        const auto bad = LLShadowCascadeFit::snappedSquare(std::nanf(""), 0.f, r, 1456.f, 1456.f, 0.f, 0.f);
+        check(bad.k_x == 0, "NaN input gives k = 0");
+        const auto inf = LLShadowCascadeFit::snappedSquare(0.f, INFINITY, r, 1456.f, 1456.f, 0.f, 0.f);
+        check(inf.k_y == 0, "inf input gives k = 0");
+        // the wrap is a non-negative modulo
+        check(LLShadowCascadeFit::wrapDitherK(-1) == -65535.f && LLShadowCascadeFit::wrapDitherK(65536) == 0.f
+              && LLShadowCascadeFit::wrapDitherK(-65536) == 0.f && LLShadowCascadeFit::wrapDitherK(5) == -5.f, "wrapDitherK is a non-negative modulo");
     }
 
     void test_up()
@@ -371,6 +488,7 @@ int main()
     test_sphere();
     test_quantize();
     test_snap();
+    test_world_anchor();
     test_up();
     test_depth();
     test_cull_margin();
