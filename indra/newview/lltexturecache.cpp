@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltexturecache.h"
+#include "lltexturecachefast.h"
 
 #include "lldir.h"
 #include "llimage.h"
@@ -769,8 +770,15 @@ LLPointer<LLImageRaw> LLTextureCache::tryReadFromFastCache(const LLUUID& id, S32
 
 LLPointer<LLImageRaw> LLTextureCache::makeFastCacheImage(const S32* head, const U8* record, S32& discardlevel)
 {
+    // The header comes from the vkstorm-assets crate (vks_texcache_*_read_fast), whose reader
+    // multiplies with wrapping arithmetic and returns the dimensions as read: check every field
+    // before forming a product that sizes the copy below.
+    const S32 image_size = llTextureCacheFastPayloadSize(head, MAX_IMAGE_SIZE, TEXTURE_FAST_CACHE_DATA_SIZE);
+    if (image_size <= 0)
+    {
+        return NULL;
+    }
     discardlevel = head[3];
-    S32 image_size = head[0] * head[1] * head[2];
     U8* data = (U8*)ll_aligned_malloc_16(image_size);
     memcpy(data, record, image_size);
     LLPointer<LLImageRaw> raw = new LLImageRaw(data, head[0], head[1], head[2], true);
