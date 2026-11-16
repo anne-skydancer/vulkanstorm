@@ -78,7 +78,7 @@ try {   # from here every path puts this window's folders back
 
     Write-Host "Run folder (captures, perf.json): $out"
     Write-Host "Scratch profile: $prof"
-    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '10' } default { 'several' } }
+    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } default { 'several' } }
     if (-not $DryRun) {
         Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'
         Write-Host ('(no minimising, no UI use) until the pop-up "Session done: you can quit" appears (about ' + $minutes + ' minutes).')

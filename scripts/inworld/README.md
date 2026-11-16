@@ -407,8 +407,8 @@ region of the teleports instead of the login region) and `-Scenario NAME` from `
 
 - `mc1_rooftops` / `mc1_rooftops_moving`: the Rooftops shadow-cost split (still and moving, or the moving view alone), each view measured with the
   `RenderShadowDetail` variants none / sun / all. Every variant of a moving preset turns the camera for its whole capture. After each variant switch
-  the script waits until the frame rate has settled (3 consecutive 1 s FrameCounters windows within 10 %, between `settle.warmup_min_s` 10 s and
-  `warmup_max_s` 45 s) and logs the wait. `perf.json` holds, per preset, `camera_log` (once a second: the camera the script commanded; the viewer has no
+  the script waits until the frame rate has settled (the last `settle.warmup_stable_windows` 5 one-second FrameCounters windows each within `warmup_tolerance` 15 % of their median, between `warmup_min_s` 10 s and
+  `warmup_max_s` 45 s; the log is read once a second) and logs the wait. `perf.json` holds, per preset, `camera_log` (once a second: the camera the script commanded; the viewer has no
   read-back), `warmup`, and `projector_stats` (plus `projector_stats_end` and `projector_delta`). A viewer without the `ProjectorShadows` API (it is
   compiled only with `-DVKS_GL_STATS=ON`, so the Tracy measuring build has none) records `{"available": false, ...}` and says so once in the log.
 

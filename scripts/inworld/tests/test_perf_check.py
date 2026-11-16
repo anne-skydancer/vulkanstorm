@@ -602,7 +602,7 @@ class SeriesCapture(FakeCapture):
         super().__init__(cmd, run_s=14.0 if "MC1-teleports" in " ".join(cmd) else 0.4, **kw)
 
 
-def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, **over):
+def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, fps_from_log=False, **over):
     """perf_check.execute on a viewer without GLSubmitStats, the way the MC1 launcher runs it: --no-glstats, a viewer log
     holding the region line, the Tracy capture faked, the frame rate read from the log (faked)."""
     sc = json.loads(MC1_SL.read_text(encoding="utf-8"))
@@ -620,6 +620,7 @@ def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [
     argv = ["--scenario", str(scp), "--out", str(out), "--no-glstats", "--viewer-log", str(vlog),
             "--tracy-capture", "C:/tracy/tracy-capture.exe"] + list(extra)
     args = pc.parse_args(argv)
+    args.fps_from_log = fps_from_log
     args.popen = popen
     FakeCapture.instances.clear()
     if hand:
@@ -853,13 +854,13 @@ class MovingVariantsTest(unittest.TestCase):
     def _run(self, tmp, fv):
         presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
         settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
-                  "warmup_min_s": 0.05, "warmup_max_s": 0.5}
+                  "warmup_min_s": 0.05, "warmup_max_s": 0.5, "warmup_poll_s": 0.0}
         calls = []
 
-        def lines(path, off):
+        def lines(path, pos):
             calls.append(1)
-            return [100, 100, 100, 100]
-        with mock.patch.object(pc, "frames_per_second_lines", side_effect=lines):
+            return [100] * 6, pos
+        with mock.patch.object(pc, "read_new_frames", side_effect=lines):
             return mc1_main(fv, tmp, presets=presets, variants=self.VARIANTS, teleports=None, fps_probe=None, settle=settle,
                             window={"seconds": 2.5}, overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0}), calls
 
@@ -879,7 +880,21 @@ class MovingVariantsTest(unittest.TestCase):
                 self.assertEqual(set(log_[0]), {"t_s", "az_deg", "camera_pos", "focus_pos"})
                 self.assertTrue(info["moving"])
                 self.assertTrue(info["warmup"]["settled"])
-            self.assertEqual(len(index["warmups"]), 6)      # the probe and the measurement of each variant
+            self.assertEqual(len(index["warmups"]), 3)      # the measurement of each variant: the log frame rate runs no probe
+
+    def test_fps_log_mode_runs_no_probe_variants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            with mock.patch.object(pc.Run, "probe_variants", side_effect=AssertionError("probe")) as pv:
+                presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
+                settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+                          "warmup_min_s": 0.05, "warmup_max_s": 0.2, "warmup_poll_s": 0.0}
+                with mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+                    code, run = mc1_main(fv, tmp, presets=presets, variants=self.VARIANTS, teleports=None, fps_probe=None,
+                                         settle=settle, window={"seconds": 1.0}, fps_from_log=True,
+                                         overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
+            pv.assert_not_called()
+            self.assertEqual(code, 0)
 
     def test_a_preset_without_variants_stops_turning_after_its_capture(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -923,20 +938,53 @@ class MovingVariantsTest(unittest.TestCase):
         full = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops.json")
         self.assertEqual([p["id"] for p in full["presets"]], ["RT-still", "RT-moving"])
 
-    def test_settled_wants_three_close_nonzero_windows(self):
-        self.assertTrue(pc.settled([5, 100, 105, 98]))
-        self.assertFalse(pc.settled([100, 100]))
-        self.assertFalse(pc.settled([10, 100, 105, 60]))        # warming up: 60 is 43 % under 105
-        self.assertFalse(pc.settled([0, 0, 0]))
+    def test_settled_wants_the_last_windows_close_to_their_median(self):
+        self.assertTrue(pc.settled([5, 100, 105, 98, 100, 102]))
+        self.assertFalse(pc.settled([100, 100, 100, 100]))                  # fewer than 5 windows
+        self.assertFalse(pc.settled([10, 100, 105, 60, 100, 100]))          # warming up: 60 is 40 % under the median
+        self.assertFalse(pc.settled([0, 0, 0, 0, 0]))
+        self.assertTrue(pc.settled([100, 86, 114, 100, 100]))               # a moving camera: within 15 % of the median
+        self.assertFalse(pc.settled([100, 84, 100, 100, 100]))
         self.assertTrue(pc.settled([100, 91, 100], 3, 0.10))
         self.assertFalse(pc.settled([100, 89, 100], 3, 0.10))
+
+    def test_read_new_frames_reads_only_new_whole_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = pathlib.Path(tmp) / "v.log"
+            f.write_text("INFO: FrameCounters: frames=10\nINFO: FrameCounters: frames=20\nINFO: FrameCounters: fra", encoding="utf-8")
+            vals, pos = pc.read_new_frames(f, 0)
+            self.assertEqual(vals, [10, 20])
+            self.assertEqual(f.read_bytes()[pos:], b"INFO: FrameCounters: fra")      # the unfinished line waits
+            with open(f, "a", encoding="utf-8") as h:
+                h.write("mes=30\n")
+            vals, pos2 = pc.read_new_frames(f, pos)
+            self.assertEqual(vals, [30])
+            self.assertEqual(pc.read_new_frames(f, pos2), ([], pos2))
+            self.assertEqual(pc.read_new_frames(None, 7), ([], 7))
+
+    def test_warm_up_polls_the_log_incrementally_at_most_once_per_poll_period(self):
+        run = object.__new__(pc.Run)
+        run.sc = {"settle": {"warmup_min_s": 0.0, "warmup_max_s": 0.6, "warmup_poll_s": 0.25}}
+        run.vlog = None
+        run.index = {"warnings": []}
+        calls = []
+
+        def fake(path, pos):
+            calls.append(pos)
+            return [100] * 3, pos + 10
+        run.tick = lambda _p: time.sleep(0.05)
+        with mock.patch.object(pc, "read_new_frames", side_effect=fake):
+            res = run.warm_up()
+        self.assertLessEqual(len(calls), 4)             # not once per 0.05 s tick
+        self.assertEqual(calls, sorted(calls))          # the offset only advances
+        self.assertEqual(calls[1], 10)
 
     def test_warm_up_waits_for_the_minimum_then_until_settled_and_stops_at_the_maximum(self):
         with tempfile.TemporaryDirectory() as tmp:
             vlog = pathlib.Path(tmp) / "v.log"
             vlog.write_text("", encoding="utf-8")
             run = object.__new__(pc.Run)
-            run.sc = {"settle": {"warmup_min_s": 0.2, "warmup_max_s": 1.0}}
+            run.sc = {"settle": {"warmup_min_s": 0.2, "warmup_max_s": 1.0, "warmup_poll_s": 0.0}}
             run.vlog = vlog
             run.index = {"warnings": []}
 

@@ -63,7 +63,8 @@ DEFAULTS = {
     "name": "gl_submit",
     "description": "",
     "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600,
-               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0},
+               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0,
+               "warmup_min_s": 10.0, "warmup_max_s": 45.0, "warmup_stable_windows": 5, "warmup_tolerance": 0.15},
     "window": {"frames": 120, "gpu": True, "seconds": 60.0},
     "teleport": None,
     "teleports": None,      # {"within": N, "offset": [x, y, z], "second": N, "pause_s", "timeout_s", "settle_s", "min_move_m", "capture_s"}
@@ -154,25 +155,32 @@ def fps_from_log(path, offset, end=None):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
-def frames_per_second_lines(path, offset):
-    """The frames of each "FrameCounters: frames=N" line (one per second) written after byte `offset`, without the first (partial)."""
-    if not path:
-        return []
-    try:
-        with open(path, "rb") as f:
-            f.seek(offset)
-            text = f.read().decode("utf-8", "replace")
-    except OSError:
-        return []
-    return [int(m) for m in re.findall(r"FrameCounters: frames=(\d+)", text)][1:]
-
-
-def settled(vals, windows=3, tolerance=0.10):
-    """The last `windows` values are all non-zero and within `tolerance` of each other (spread over the largest)."""
+def settled(vals, windows=5, tolerance=0.15):
+    """The last `windows` values are all non-zero and each within `tolerance` of their median (a moving camera varies)."""
     if len(vals) < windows or windows < 2:
         return False
-    tail = vals[-windows:]
-    return min(tail) > 0 and (max(tail) - min(tail)) <= tolerance * max(tail)
+    tail = sorted(vals[-windows:])
+    if tail[0] <= 0:
+        return False
+    mid = len(tail) // 2
+    med = tail[mid] if len(tail) % 2 else (tail[mid - 1] + tail[mid]) / 2.0
+    return all(abs(v - med) <= tolerance * med for v in tail)
+
+
+def read_new_frames(path, pos):
+    """(frames of each complete "FrameCounters: frames=N" line written after byte `pos`, the new position). Only whole lines
+    are consumed, so a line being written is read next time."""
+    if not path:
+        return [], pos
+    try:
+        with open(path, "rb") as f:
+            f.seek(pos)
+            data = f.read()
+    except OSError:
+        return [], pos
+    end = data.rfind(b"\n") + 1
+    text = data[:end].decode("utf-8", "replace")
+    return [int(m) for m in re.findall(r"FrameCounters: frames=(\d+)", text)], pos + end
 
 
 def region_from_log(path, offset=0, first=False):
@@ -561,6 +569,10 @@ class Run:
                 reply = self.v.req("LLLeap", "getAPI", api=PROJECTOR_API, timeout=30)
                 ops = {str(o.get("name")) for o in (reply.get("ops") or []) if isinstance(o, dict)}
                 self._projector_api = "stats" in ops
+            except LeapTimeout:
+                self._projector_api = False
+                log("no reply from %s getAPI (timeout): projector_stats is recorded as unavailable" % PROJECTOR_API)
+                return False
             except LeapError:   # a lost connection (ConnectionLost) is deliberately not a LeapError: it propagates
                 self._projector_api = False
             if self._projector_api:
@@ -616,19 +628,26 @@ class Run:
 
     def warm_up(self):
         """After a setting change: wait until the frame rate has settled (the first seconds after a change run at a fraction of
-        the steady rate), judged from the FrameCounters log lines: warmup_stable_windows consecutive 1 s windows within
-        warmup_tolerance of each other, after at least warmup_min_s and at most warmup_max_s. Returns what happened."""
+        the steady rate), judged from the FrameCounters log lines: warmup_stable_windows last 1 s windows each within
+        warmup_tolerance of their median, after at least warmup_min_s and at most warmup_max_s. Returns what happened."""
         st = self.sc["settle"]
         lo, hi = float(st.get("warmup_min_s", 10.0)), float(st.get("warmup_max_s", 45.0))
-        n, tol = int(st.get("warmup_stable_windows", 3)), float(st.get("warmup_tolerance", 0.10))
-        off = self.vlog.stat().st_size if self.vlog else 0
+        n, tol = int(st.get("warmup_stable_windows", 5)), float(st.get("warmup_tolerance", 0.15))
+        poll = float(st.get("warmup_poll_s", 1.0))
+        pos = self.vlog.stat().st_size if self.vlog else 0
         t0 = time.monotonic()
-        stable, vals = False, []
+        stable, vals, first, last_poll = False, [], True, None
         while True:
             self.tick(0.5)
-            waited = time.monotonic() - t0
-            vals = frames_per_second_lines(self.vlog, off)
-            stable = settled(vals, n, tol)
+            now = time.monotonic()
+            waited = now - t0
+            if last_poll is None or now - last_poll >= poll:     # the log is read about once a second, only its new text
+                last_poll = now
+                new, pos = read_new_frames(self.vlog, pos)
+                if first and new:
+                    new, first = new[1:], False         # the first line is a partial window
+                vals += new
+                stable = settled(vals, n, tol)
             if waited >= hi or (waited >= lo and stable):
                 break
         res = {"waited_s": round(time.monotonic() - t0, 1), "settled": stable, "last_fps": vals[-n:]}
@@ -856,7 +875,10 @@ class Run:
                 # the same view measured once per variant, back to back (the camera is placed once)
                 self.set_preset_camera(preset)
                 v.sleep(sc["settle"]["after_camera_s"])
-                samples = self.probe_variants(sc["variants"], self.preset_no)
+                if self.fps_log:    # the probe samples are not used with the log frame rate: no 10-45 s warm-up per variant for nothing
+                    samples = {var["id"]: [] for var in sc["variants"]}
+                else:
+                    samples = self.probe_variants(sc["variants"], self.preset_no)
                 order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
                 for variant in order:
                     v.check_abort()

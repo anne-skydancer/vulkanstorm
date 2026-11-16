@@ -22,7 +22,7 @@
     "poll_s": 1.0,
     "stable_polls": 3,
     "timeout_s": 1800,
-    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 15 minutes).",
+    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 6 minutes, 9 at most).",
     "done_message": "Session done: you can quit."
   },
   "presets": [
