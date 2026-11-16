@@ -93,8 +93,13 @@ protected:
     std::string mOutFilename;
     LLLFSThread::handle_t mFileHandle;
 
+    // Closes mVF when it is open. The ov_callbacks close function (cache_close) deletes
+    // mInFilep, so it is null afterwards; never delete mInFilep while mVF is open.
+    void closeVF();
+
     LLFileSystem *mInFilep;
     OggVorbis_File mVF;
+    bool mVFOpen;
     S32 mCurrentSection;
 };
 
@@ -169,6 +174,7 @@ LLVorbisDecodeState::LLVorbisDecodeState(const LLUUID &uuid, const std::string &
     mBytesRead = -1;
     mUUID = uuid;
     mInFilep = NULL;
+    mVFOpen = false;
     mCurrentSection = 0;
     mOutFilename = out_filename;
     mFileHandle = LLLFSThread::nullHandle();
@@ -180,9 +186,25 @@ LLVorbisDecodeState::LLVorbisDecodeState(const LLUUID &uuid, const std::string &
 
 LLVorbisDecodeState::~LLVorbisDecodeState()
 {
-    if (!mDone)
+    if (mVFOpen)
     {
+        // Every path that leaves mVF open (decode errors, abandoned decodes) ends here
+        closeVF();
+    }
+    else
+    {
+        // never opened, or ov_open_callbacks failed and left the file to us
         delete mInFilep;
+        mInFilep = NULL;
+    }
+}
+
+void LLVorbisDecodeState::closeVF()
+{
+    if (mVFOpen)
+    {
+        mVFOpen = false;
+        ov_clear(&mVF); // cache_close deletes mInFilep
         mInFilep = NULL;
     }
 }
@@ -213,6 +235,7 @@ bool LLVorbisDecodeState::initDecode()
         LL_WARNS("AudioEngine") << r << " Input to vorbis decode does not appear to be an Ogg bitstream: " << mUUID << LL_ENDL;
         return(false);
     }
+    mVFOpen = true;
 
     S32 sample_count = (S32)ov_pcm_total(&mVF, -1);
     size_t size_guess = (size_t)sample_count;
@@ -258,8 +281,7 @@ bool LLVorbisDecodeState::initDecode()
         {
             LL_WARNS("AudioEngine") << "Bad asset encoded by: " << comment->vendor << LL_ENDL;
         }
-        delete mInFilep;
-        mInFilep = NULL;
+        closeVF();
         return false;
     }
 
@@ -271,8 +293,7 @@ bool LLVorbisDecodeState::initDecode()
     catch (std::bad_alloc&)
     {
         LL_WARNS("AudioEngine") << "Out of memory when trying to alloc buffer: " << size_guess << LL_ENDL;
-        delete mInFilep;
-        mInFilep = NULL;
+        closeVF();
         return false;
     }
 
@@ -419,7 +440,7 @@ bool LLVorbisDecodeState::finishDecode()
 
     if (mFileHandle == LLLFSThread::nullHandle())
     {
-        ov_clear(&mVF);
+        closeVF();
 
         // write "data" chunk length, in little-endian format
         S32 data_length = static_cast<S32>(mWAVBuffer.size()) - WAV_HEADER_SIZE;
@@ -527,8 +548,15 @@ void LLVorbisDecodeState::flushBadFile()
         mInFilep->remove();
 
         // <FS:ND> FIRE-15975; Delete the current file, or we might end with stale locks during the re-transfer
-        delete mInFilep;
-        mInFilep = NULL;
+        if (mVFOpen)
+        {
+            closeVF(); // deletes mInFilep through cache_close; a plain delete would leave mVF dangling
+        }
+        else
+        {
+            delete mInFilep;
+            mInFilep = NULL;
+        }
         // </FS:ND>
     }
 }
