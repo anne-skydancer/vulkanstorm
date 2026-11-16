@@ -386,7 +386,7 @@ Atlas use [computed]:
     0.20 ms while a static tile waits, the whole remaining cap when none does) is spent first; the static tiles keep at least
     `kStaticCapMs` = 0.15 ms while the dynamic layer takes its 0.20 ms, and get the whole 0.35 ms when there is no dynamic work. A static tile whose predicted cost is above the cap runs alone as the progress pick once it has
     waited 4 frames (or was never drawn). Before P4 each pool had 0.35 ms static plus 0.30 ms dynamic, which two pools
-    would have summed to 0.65 ms against about 0.4 ms of headroom inside +5 %; the combined cap holds the sum at 0.35 ms;
+    would have summed to 0.65 ms against about 0.4 ms of headroom inside the former +5 % budget (retired 2026-11-16); the combined cap holds the sum at 0.35 ms;
   - `A_max` = 24 avatars a face, the nearest to the lamp first. P4's unit tests cover the combined cap, the progress pick
     and the lag table; the sum measured in the club and the living room is owed to P4's walk session, then to Q2a;
   - selection order: never-drawn static items nearest first, then oldest first; dynamic items with the 4-frame deadline
@@ -653,18 +653,18 @@ bench does not make it); the 3.4 lookup bench and the in-world census.
 
 ## 5. Costs
 
-Budget: everything new for light and shadow, together, at the default tier, at most the Stochastic frame of 82178 (+5 %).
+Budget: a frame-rate floor (AGENTS.md, owner 2026-11-16): about 60 fps standing still in a crowded room (about 60 avatars) and never below 25 fps while moving, at the default tier. Each stage reports its cost in ms and fps against the floor, measured in-world in a crowded room, standing still and moving. The former rule (everything new at most the Stochastic frame of 82178 + 5 %) is retired; the anchors below were measured under it and stay as reference points.
 
 **Anchors** [M, RTX 5070 Ti, driver 621.14, about 2560 x 1350, one place 45 m from the projector room, 2026-11-14]:
 
 | Build | Frame |
 |---|---|
 | 82178 | 8.61 ms |
-| Ceiling (82178 + 5 %) | 9.04 ms |
+| Former ceiling (82178 + 5 %, retired 2026-11-16) | 9.04 ms |
 | devel P2c | 7.93 ms |
-| **Headroom** | **1.11 ms** at that place |
+| **Headroom** against the former ceiling | **1.11 ms** at that place |
 
-The headroom inside the owner's rooms is unknown; Q0 measures it.
+The headroom inside the owner's rooms is unknown; Q0 measures it as fps against the floor.
 
 **Per stage, steady state, the living room at 1440p (3.69 Mpx)** [E unless marked]:
 
@@ -691,20 +691,20 @@ totals can be higher:
 - after Q2b: 0.3 to 1.2 ms;
 - after Q3: about 0.25 to 1.0 ms.
 
-**These are this study's own stages only.** The budget is shared with every other open light and shadow stage (the
+**These are this study's own stages only.** The floor is shared with every other open light and shadow stage (the
 unified-lighting and light-atlas stages, the stochastic shadow and transparency upgrades, projector work and the
-remaining shadow and light stages of the roadmap). Each stage's PR reports its own cost and the **running total including
-all of those**; the 1.11 ms headroom is spent from the whole list, not from this plan alone. Q0 records the current
-total on devel so each later stage subtracts from what is left.
+remaining shadow and light stages of the roadmap). Each stage's PR reports its own cost in ms and fps against the floor,
+measured in-world in a crowded room (about 60 avatars), standing still and moving. Q0 records the current fps on devel so
+each later stage is read against it.
 
-The 1.11 ms headroom measured at one place covers the low and middle of that range and not the top. **Decision points:**
+The 1.11 ms of headroom measured at one place under the former rule covers the low and middle of that range and not the top. **Decision points:**
 after Q0 (do the rooms have headroom?) and after Q2a (measured). If the cost does not fit, the order of cuts is:
 1. Q3's min/max and the empty-face skip before Q2b;
 2. K = 1;
 3. a lower `A_max`;
 4. far faces at 64.
 
-Nothing integrates into release above 82178 + 5 %.
+Nothing integrates into release below the fps floor; the owner's in-world check is the frame-level gate.
 
 ## 6. Compatibility (what users see)
 
@@ -783,7 +783,7 @@ a smaller side atlas.
 
 **Cost.** The published figure is within about +-1 ms of a plain map at 2048 squared and 1080p on a GTX 280 [M in source, TM
 section 8, 2011 hardware]. Ours is [E] small, and about zero in rooms without glass, because the pass and the fetch exist only
-for tiles with blended casters. It must fit the running +5 % total (section 5), and Q5 reports its own cost and the total.
+for tiles with blended casters. It must hold the fps floor (section 5), and Q5 reports its own cost in ms and fps against it.
 
 **Limits** [I, TM section 8]: one layer. Stacked tints multiply correctly, but a receiver between two panes gets the full product.
 It cannot tint on transmissive receivers, and there is no sheer or lace handling (TM case B, a sheer stays with the grain of the
@@ -888,7 +888,7 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 - **Avatar layer:** with many lamps the GPU cost is real and the far lag is visible (3.7). It needs the owner's eye at Q2a.
 - **Look change (D4):** lamps in closed shades go dark outside their openings.
 - **Benched costs are lower bounds** [M, lower bound]: synthetic room, receiver-plane term stubbed, NVIDIA only. The
-  far-lamp coverage factor is a guess. The running totals can be higher, and they share the budget with every other open
+  far-lamp coverage factor is a guess. The running totals can be higher, and they share the fps floor with every other open
   light and shadow stage (section 5).
 - **Emitter identity on batched geometry:** the exclusion needs the draw info to name its volume (3.2); if it does not, the
   emitter prim is kept out of the batch for point-light renders.

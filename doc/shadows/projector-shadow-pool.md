@@ -39,7 +39,7 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   objects and, until P4, the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
   **oldest first by age in frames, the distance only breaking a tie**, so the order is a round robin by staleness.
   - **Budget (P2c; re-divided in P4, see "Stage P4").** A fixed cap of **0.35 ms** of **CPU** time per frame for the tile renders (since P4 `kFrameCapMs`, shared with the dynamic layer). The frame-time basis is
-    an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the whole light and shadow budget (+5 %) is
+    an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the former light and shadow budget (+5 %, retired 2026-11-16; the budget is now the fps floor, see AGENTS.md) was
     about 0.4 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
     lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms. (P2c and P3 added a second cap of 0.30 ms for the dynamic tiles, which
     did not fit in the 0.05 ms: the two together could reach 0.65 ms in a frame that had both. P4 replaced the two by one combined cap.) The measured cost of a
@@ -361,7 +361,7 @@ estimate.
 ### The combined cap
 
 P3 had two caps that could both be spent in one frame: static 0.35 ms and dynamic 0.30 ms, 0.65 ms, against about 0.4 ms of
-the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `selectFrame`):
+the former +5 % allowance (an assumed 8 ms frame; retired 2026-11-16, the budget is now the fps floor, see AGENTS.md). P4 has one (`llprojectorpool.h`, `selectFrame`):
 
 | | ms of CPU a frame | meaning |
 |---|---|---|
