@@ -2402,7 +2402,22 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl)
             }
 
             //copy out vertices
-            U32 num_verts = static_cast<U32>(pos.size())/(3*2);
+            const size_t num_verts_wide = pos.size() / (3 * 2);
+            // The normal and texcoord blobs are read num_verts entries deep without further
+            // checks below: reject a face whose blobs are shorter than its position blob claims
+            // (heap over-read otherwise). Face indices are U16; the cap is 65535 rather than 65536
+            // to match the vertex limit of mesh uploads and the check upstream applies in this
+            // function, so no valid asset is affected.
+            if (num_verts_wide > 65535
+                || (!norm.empty() && norm.size() < num_verts_wide * 3 * 2)
+                || (!tc.empty() && tc.size() < num_verts_wide * 2 * 2))
+            {
+                LL_WARNS() << "Invalid vertex data (positions " << pos.size() << " normals " << norm.size() << " texcoords " << tc.size()
+                           << " bytes) for face index: " << i << " Total: " << face_count << LL_ENDL;
+                face.resizeIndices(0);
+                continue;
+            }
+            U32 num_verts = static_cast<U32>(num_verts_wide);
             face.resizeVertices(num_verts);
 
             if (num_verts > 0 && !face.mPositions)
