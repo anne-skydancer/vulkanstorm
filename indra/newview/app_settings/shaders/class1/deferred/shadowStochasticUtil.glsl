@@ -277,6 +277,26 @@ uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^
 uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size
 uniform vec2 proj_shadow_light_size;  // metres: the emitter's extent across the beam, along the map's u and v axes: 1 cm times RenderShadowLightSize, whatever the prim
 uniform vec3 proj_shadow_origin;      // view space: the projection centre of the pose the tile was drawn with, where the emitter is (the lamp's anchor)
+uniform vec4 proj_shadow_grid;        // a wide lamp's cells: across u, across v (1 and 1: one tile, proj_shadow_tile), guard texels, unused
+uniform vec4 proj_shadow_cells[16];   // per cell (index = row * 4 + column): atlas texel origin x, y, tile size Nc, interior Ni (Nc 0: not drawn)
+
+// The tile of a wide lamp's cell that holds the lamp-image position uv (the lamp's matrix: [0,1]^2 over the whole image plane), and the
+// position in it: the cell is floor(uv g); its interior of Ni texels spans 1 / g of the image, behind a guard of G texels, so
+// uv_tile = ((uv g - cell) Ni + G) / Nc. gres: the virtual resolution of the lamp's texel grid (g Ni per axis, what one tile of the
+// same texels would have), and tscale: d uv_tile / d uv, to bring the receiver plane's gradient into the tile. Returns false for a cell
+// that has no drawn tile (Nc 0). Every tap of a receiver reads this one tile (the guard holds the neighbour's content past the seam).
+bool stCellPick(vec2 uv, out vec4 tile, out vec2 uv_tile, out vec2 gres, out vec2 tscale)
+{
+    vec2 gr = proj_shadow_grid.xy;
+    vec2 cell = clamp(floor(uv * gr), vec2(0.0), gr - 1.0);
+    vec4 ct = proj_shadow_cells[int(cell.y) * 4 + int(cell.x)];
+    tile = vec4(ct.xy, ct.z, proj_shadow_tile.w);
+    float k = ct.w / max(ct.z, 1.0);
+    uv_tile = (uv * gr - cell) * k + proj_shadow_grid.z / max(ct.z, 1.0);
+    gres = gr * ct.w;
+    tscale = gr * k;
+    return ct.z > 0.0;
+}
 
 // What the filter needs of a projector, from its matrix (bias * glm::perspective * rigid view * rigid inv_view, the
 // frustum symmetric; llprojectorshadows.cpp setupLight): with w = s.w the axial distance from the projector's centre, the
@@ -318,9 +338,9 @@ vec2 stSpotDisc(int k, int n)
 // edge (once per pixel): a tap of this pixel may leave the tile. The corner is then clamped into the tile and the
 // components are selected again so that every texel index is clamped to the tile, as CLAMP_TO_EDGE does on a standalone
 // map of the tile (bit for bit; no guard texels).
-vec4 stSpotQuadTile(vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
+vec4 stSpotQuadTile(vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
 {
-    float n = proj_shadow_tile.z;
+    float n = tile.z;
     vec2 res = vec2(n);
     vec2 t = uv * res - 0.5;
     vec2 b = floor(t);
@@ -331,7 +351,7 @@ vec4 stSpotQuadTile(vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool ed
     vec4 dy = o.y + vec4(e.y, e.y, 0.0, 0.0);
     ref = c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0);
     vec2 q = edge ? clamp(b, vec2(0.0), vec2(n - 2.0)) : b;
-    vec4 z = textureGather(proj_shadow_atlas, (proj_shadow_tile.xy + q + 1.0) * proj_shadow_tile.w);
+    vec4 z = textureGather(proj_shadow_atlas, (tile.xy + q + 1.0) * tile.w);
     if (edge)
     {
         z = b.x >= n - 1.0 ? z.yyzz : (b.x < 0.0 ? z.xxww : z); // the left column read past the right edge / the right one past the left
@@ -342,11 +362,11 @@ vec4 stSpotQuadTile(vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool ed
 
 // the blocking test of one texel of the tile for receiver c: the depth at the texel clamped into the tile (CLAMP_TO_EDGE, as
 // stSpotQuadTile), the reference at the texel's own (unclamped) centre, lowered by the receiver plane (stSpotQuadTile's rule)
-bool stRvBlk(ivec2 q, vec3 c, vec2 g, float z_bias, float rp_max)
+bool stRvBlk(vec4 tile, ivec2 q, vec3 c, vec2 g, float z_bias, float rp_max)
 {
-    int n = int(proj_shadow_tile.z);
+    int n = int(tile.z);
     ivec2 qc = clamp(q, ivec2(0), ivec2(n - 1));
-    float zs = texelFetch(proj_shadow_atlas, ivec2(proj_shadow_tile.xy) + qc, 0).r;
+    float zs = texelFetch(proj_shadow_atlas, ivec2(tile.xy) + qc, 0).r;
     vec2 d = (vec2(q) + 0.5) / float(n) - c.xy;
     return zs < c.z - z_bias + clamp(dot(g, d), -rp_max, 0.0);
 }
@@ -360,9 +380,9 @@ float stRvSegment(float t)
 }
 
 // one texel of the edge frame (a along the edge, b across) around texel p
-bool stRvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float rp_max)
+bool stRvB(vec4 tile, ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float rp_max)
 {
-    return stRvBlk(p + (sw ? ivec2(b, a) : ivec2(a, b)), c, g, z_bias, rp_max);
+    return stRvBlk(tile, p + (sw ? ivec2(b, a) : ivec2(a, b)), c, g, z_bias, rp_max);
 }
 
 // The edge line of the silhouette near texel p in one frame (sw: a along v, b along u; else a along u, b along v), in that
@@ -377,7 +397,7 @@ bool stRvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float r
 //     (Z and L; an end that is no step stays at the boundary), or two half-lines meeting at its middle (U).
 // Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of three or more rows
 // (or a non-monotone column) within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
-int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
+int stRvLine(vec4 tile, ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
 {
     bh = false;
     e0 = vec2(0.0);
@@ -387,8 +407,8 @@ int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias,
     float best = 1.0e9;
     for (int j = -2; j <= 1; ++j)
     {
-        bool lo = stRvB(p, sw, 0, j, c, g, z_bias, rp_max);
-        bool hi = stRvB(p, sw, 0, j + 1, c, g, z_bias, rp_max);
+        bool lo = stRvB(tile, p, sw, 0, j, c, g, z_bias, rp_max);
+        bool hi = stRvB(tile, p, sw, 0, j + 1, c, g, z_bias, rp_max);
         if (lo != hi)
         {
             ++nb;
@@ -397,7 +417,7 @@ int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias,
         }
     }
     if (nb != 1) return 0;
-    bool bl = stRvB(p, sw, 0, j0, c, g, z_bias, rp_max);
+    bool bl = stRvB(tile, p, sw, 0, j0, c, g, z_bias, rp_max);
     bh = !bl;
     float b0 = float(j0 + 1);
     int dirc = 0;
@@ -414,23 +434,23 @@ int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias,
         for (int i = 1; i <= ST_RV_S; ++i)
         {
             int k = stp * i;
-            bool a0 = stRvB(p, sw, k, cur, c, g, z_bias, rp_max);
-            bool a1 = stRvB(p, sw, k, cur + 1, c, g, z_bias, rp_max);
+            bool a0 = stRvB(tile, p, sw, k, cur, c, g, z_bias, rp_max);
+            bool a1 = stRvB(tile, p, sw, k, cur + 1, c, g, z_bias, rp_max);
             if (a0 == bl && a1 == bh) continue;
             // the boundary's move in this column: +-1 or +-2 rows (a slope up to 2 in this frame: near 45 degrees a curve turns
             // steeper than 1 on one side, and a move of two rows is two risers at the same column boundary)
             int mv = 0;
-            bool up2 = stRvB(p, sw, k, cur + 2, c, g, z_bias, rp_max);
-            bool dn1 = stRvB(p, sw, k, cur - 1, c, g, z_bias, rp_max);
+            bool up2 = stRvB(tile, p, sw, k, cur + 2, c, g, z_bias, rp_max);
+            bool dn1 = stRvB(tile, p, sw, k, cur - 1, c, g, z_bias, rp_max);
             if (a0 == bl && a1 == bl)
             {
                 if (up2 == bh) mv = 1;
-                else if (stRvB(p, sw, k, cur + 3, c, g, z_bias, rp_max) == bh) mv = 2;
+                else if (stRvB(tile, p, sw, k, cur + 3, c, g, z_bias, rp_max) == bh) mv = 2;
             }
             else if (a0 == bh && a1 == bh)
             {
                 if (dn1 == bl) mv = -1;
-                else if (stRvB(p, sw, k, cur - 2, c, g, z_bias, rp_max) == bl) mv = -2;
+                else if (stRvB(tile, p, sw, k, cur - 2, c, g, z_bias, rp_max) == bl) mv = -2;
             }
             if (mv == 0 && i <= 2 && ((a0 == bl && a1 == bl) || (a0 == bh && a1 == bh))) steep = true;
             int sg = mv > 0 ? 1 : (mv < 0 ? -1 : 0);
@@ -490,10 +510,10 @@ int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias,
 // (stRvLine) through the receiver's neighbourhood. The frame tried first is the one whose rows the 4 x 4 texels around p flip
 // between more often (an edge nearer u than v runs along u). ok = false where no single edge line holds (a feature thinner than
 // the window, an end or a corner next to p): the caller uses P2's PCF there.
-float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bool ok)
+float stRvVisibility(vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bool ok)
 {
     ok = true;
-    float n = proj_shadow_tile.z;
+    float n = tile.z;
     vec2 t = c.xy * n;
     ivec2 p = ivec2(floor(t));
     vec2 f = t - vec2(p);
@@ -505,7 +525,7 @@ float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bo
         for (int q = 0; q < 4; ++q)
         {
             ivec2 o = ivec2((q & 1) * 2 - 1, (q >> 1) * 2 - 1);      // the quad's lower left texel, relative to p
-            vec4 z = textureGather(proj_shadow_atlas, (proj_shadow_tile.xy + vec2(p + o) + 1.0) * proj_shadow_tile.w);
+            vec4 z = textureGather(proj_shadow_atlas, (tile.xy + vec2(p + o) + 1.0) * tile.w);
             vec2 d0 = (vec2(p + o) + 0.5) / n - c.xy;
             vec4 dx = d0.x + vec4(0.0, 1.0, 1.0, 0.0) / n;
             vec4 dy = d0.y + vec4(1.0, 1.0, 0.0, 0.0) / n;
@@ -522,7 +542,7 @@ float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bo
     {
         for (int j = -1; j <= 2; ++j)
             for (int i = -1; i <= 2; ++i)
-                if (stRvBlk(p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
+                if (stRvBlk(tile, p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
     }
     if (bits == 0u || bits == 0xFFFFu)
     {
@@ -540,10 +560,10 @@ float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bo
     bool sw = hx > vy;
     bool bh = false, bh2 = false;
     vec2 e0, e1, e0b, e1b;
-    int r = stRvLine(p, sw, sw ? f.x : f.y, sw ? f.y : f.x, c, g, z_bias, rp_max, bh, e0, e1);
+    int r = stRvLine(tile, p, sw, sw ? f.x : f.y, sw ? f.y : f.x, c, g, z_bias, rp_max, bh, e0, e1);
     if (r != 1)
     {
-        int r2 = stRvLine(p, !sw, sw ? f.y : f.x, sw ? f.x : f.y, c, g, z_bias, rp_max, bh2, e0b, e1b);
+        int r2 = stRvLine(tile, p, !sw, sw ? f.y : f.x, sw ? f.x : f.y, c, g, z_bias, rp_max, bh2, e0b, e1b);
         if (r2 == 1 || (r2 == 2 && r == 0))
         {
             sw = !sw;
@@ -574,15 +594,15 @@ float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bo
 
 // The percentage-closer filter at radius rf (texels per axis): ST_SPOT_TAPS bilinear gathers on the Vogel disc, weighted
 // 1 - 0.9 r^2 (the second loop of stSpotFilterTile; rp_max and edge as the search's).
-float stSpotPCF(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
+float stSpotPCF(vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
 {
-    vec2 res = vec2(proj_shadow_tile.z);
+    vec2 res = vec2(tile.z);
     float lit = 0.0;
     for (int k = 0; k < ST_SPOT_TAPS; ++k)
     {
         vec4 ref;
         vec2 f;
-        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 z = stSpotQuadTile(tile, c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
         vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
         lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
     }
@@ -592,9 +612,9 @@ float stSpotPCF(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
 // The visibility of receiver c (tile uv and depth) through the light's tile. pen: the filter's radius in texels per
 // unit of map depth between the receiver and its nearest blocker (x and y: the map's axes may differ in metres). kmax: the
 // largest radius in texels, per axis, at least ST_SPOT_KERNEL_MIN (sampleProjectorShadow derives it in metres).
-float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2 kmax)
+float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2 kmax)
 {
-    vec2 res = vec2(proj_shadow_tile.z);
+    vec2 res = vec2(tile.z);
     // the search: any blocker between the near plane (z = 0) and the receiver, in the disc its farthest one needs
     vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), kmax);
     float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
@@ -609,7 +629,7 @@ float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2
     {
         vec4 ref;
         vec2 f;
-        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 z = stSpotQuadTile(tile, c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, c, g, z_bias, rp_max, edge, ref, f);
         vec4 blk = vec4(lessThan(z, ref));
         n_blk += blk.x + blk.y + blk.z + blk.w;
         vec4 bz = blk * z;
@@ -631,20 +651,20 @@ float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2
     vec2 rf = clamp(rphys, vec2(ST_SPOT_KERNEL_MIN), kmax);
     if (rmax >= ST_RV_HI)
     {
-        return stSpotPCF(c, g, z_bias, rp_max, rf, edge); // the penumbra's blur already hides the staircase
+        return stSpotPCF(tile, c, g, z_bias, rp_max, rf, edge); // the penumbra's blur already hides the staircase
     }
     // a narrower penumbra: the straight edge of the silhouette, with its own cap on the receiver plane's lowering (max(SHADOW_PLANE_BIAS_MAX_TEXELS,
     // ST_SPOT_PLANE_SLOPE * (max(rs, ST_RV_HI) + 1)) texels, at least 8 * 3.5), and where it finds no single edge the filter
     float rp_rv = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(max(rs.x, rs.y), ST_RV_HI) + 1.0));
     bool ok;
-    float v = stRvVisibility(c, g, z_bias, rp_rv, max(min(rphys, kmax), vec2(ST_RV_MIN)), ok); // the 4 cm cap holds for the edge too
+    float v = stRvVisibility(tile, c, g, z_bias, rp_rv, max(min(rphys, kmax), vec2(ST_RV_MIN)), ok); // the 4 cm cap holds for the edge too
     if (!ok)
     {
-        return stSpotPCF(c, g, z_bias, rp_max, rf, edge);
+        return stSpotPCF(tile, c, g, z_bias, rp_max, rf, edge);
     }
     if (rmax > ST_RV_LO)
     {
-        v = mix(v, stSpotPCF(c, g, z_bias, rp_max, rf, edge), smoothstep(ST_RV_LO, ST_RV_HI, rmax)); // no seam where the penumbra grows
+        v = mix(v, stSpotPCF(tile, c, g, z_bias, rp_max, rf, edge), smoothstep(ST_RV_LO, ST_RV_HI, rmax)); // no seam where the penumbra grows
     }
     return v;
 }
@@ -669,7 +689,16 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         return 1.0;
     }
     StSpot sp = stSpotSetup(m);
+    // the map's texel grid: one tile (N per axis), or a wide lamp's cells (g Ni: the cell's interior, over the whole image)
+    bool cells = proj_shadow_grid.x * proj_shadow_grid.y > 1.5;
     vec2 res = vec2(proj_shadow_tile.z);
+    vec4 tile = proj_shadow_tile;
+    vec2 uv_tile;
+    vec2 tscale = vec2(1.0);
+    if (cells && !stCellPick(sr.xy / sr.w, tile, uv_tile, res, tscale))
+    {
+        return 1.0; // the cell has no tile yet: lit without a shadow, as a lamp without a tile
+    }
     // one texel of the map at the receiver, in metres (the map's coarser axis) and in map depth: the constant bias
     // (S2's SHADOW_BIAS_TEXELS) and the unit of the plane bias's cap; dz/dw = c1 / w^2 times the texel's width w / (k N)
     float kn = min(sp.k.x * res.x, sp.k.y * res.y);
@@ -688,6 +717,17 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         return 1.0;
     }
     vec3 c = s0.xyz / s0.w;
+    vec3 c_tile = c; // the receiver in the tile's own uv (the lamp's, for one tile)
+    if (cells)
+    {
+        // the offset receiver may be in the neighbour cell: its own tile, size and texel
+        if (!stCellPick(c.xy, tile, uv_tile, res, tscale))
+        {
+            return 1.0;
+        }
+        c_tile = vec3(uv_tile, c.z);
+        kn = min(sp.k.x * res.x, sp.k.y * res.y);
+    }
     float z_tex = sp.c1 / (kn * s0.w);
     // the emitter: a fixed 1 cm light times RenderShadowLightSize (proj_shadow_light_size, metres along the map's u and v),
     // centred on the projection centre, whatever the prim; the light's pose is the one the tile was drawn with, so
@@ -700,8 +740,8 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // there, so the cap in texels is ST_SPOT_RADIUS_MAX_M * k N / w. At least one texel (the filter's floor; the reconstruction draws an edge down to
     // ST_RV_MIN where the penumbra is narrower than ST_RV_HI), at most ST_SPOT_KERNEL_TEXELS_MAX (a wider disc is sampled coarser by the fixed taps)
     vec2 kmax = clamp(ST_SPOT_RADIUS_MAX_M * sp.k * res / s0.w, vec2(ST_SPOT_KERNEL_MIN), vec2(ST_SPOT_KERNEL_TEXELS_MAX));
-    vec2 grad = stSpotGradient(m, pos, ng, c);
-    float shadow = stSpotFilterTile(c, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, kmax);
+    vec2 grad = stSpotGradient(m, pos, ng, c) / tscale;
+    float shadow = stSpotFilterTile(tile, c_tile, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, kmax);
     return mix(1.0, shadow, fade);
 }
 

@@ -94,7 +94,7 @@ void main()
 }
 '''
 REF_BODY = '    oc = vec4(stSpotFilter(map, vec2(n_tile), c, g, z_bias, z_tex, pen));'
-TILE_BODY = '    oc = vec4(stSpotFilterTile(c, g, z_bias, z_tex, pen, proj_shadow_kernel_max));'
+TILE_BODY = '    oc = vec4(stSpotFilterTile(proj_shadow_tile, c, g, z_bias, z_tex, pen, proj_shadow_kernel_max));'
 VS = '#version 400\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4 - 1, (gl_VertexID >> 1) * 4 - 1); gl_Position = vec4(p, 0.0, 1.0); }'
 
 # the helpers the reference shares with the code under test (StSpot, stSpotDisc, stSpotGradient are not needed here)
