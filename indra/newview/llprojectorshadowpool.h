@@ -500,7 +500,7 @@ inline RepackPlan planRepack(const std::vector<LayoutRequest>& requests, uint32_
 }
 
 // ---------------------------------------------------------------------------------------------
-// Boxes, pyramid planes, the dirty list and the 8 m grid (sections 4.4)
+// Boxes, pyramid planes, the dirty list and the tile grid (kept for tests) (sections 4.4)
 // ---------------------------------------------------------------------------------------------
 
 struct Aabb
@@ -775,6 +775,7 @@ private:
 // that share one of its cells (F15). Boxes that are non-finite or cover more than kMaxCells cells
 // (a bad extent, a world-sized prim) never loop over cells: a stored one goes to a wide list that
 // every query returns, a query one returns every tile (conservative, bounded work).
+// Kept for the tests and the bench (T5, GridChangeIndex, the earlier design F15); ChangeIndex no longer uses it.
 class TileGrid
 {
 public:
@@ -886,9 +887,10 @@ struct Hit
 
 // Rebuilt once per frame from the tiles' current volumes; apply() tests a frame's dirty boxes against the tiles' volumes and
 // names, once per tile, the cause of the first box that touched it. A list that overflowed (everything()) touches every tile.
-// A flat scan in tile order (intersects() starts with the bounds test): a hundred-odd tiles cost less than the per-frame
-// 8 m grid it replaces, whose rebuild allocated per cell on every frame that had boxes. The hits come in the same order
-// as before (per box, ascending tile index).
+// A flat scan in tile order (intersects() starts with the bounds test); it allocates nothing per frame, unlike the 8 m grid it
+// replaces, which allocated per cell on every frame that had boxes. A box that misses the union of all (finite) tile bounds is
+// skipped at once. See `llprojectorshadowpool_test --bench-index` for the grid-versus-scan timings. The hits come in the same
+// order as before (per box, ascending tile index).
 class ChangeIndex
 {
 public:
@@ -899,6 +901,23 @@ public:
         for (size_t i = 0; i < mTiles.size(); ++i)
         {
             mBounds[i] = mTiles[i].pyramid.bounds; // contiguous, so the scan's first test does not walk the planes' memory
+        }
+        // The union of the tile bounds: a box outside it cannot touch any tile. A non-finite bound (which overlaps() never
+        // rejects) turns the shortcut off, so every box still gets the full scan.
+        mUseUnion = !mBounds.empty();
+        mUnion = mBounds.empty() ? Aabb() : mBounds[0];
+        for (const Aabb& a : mBounds)
+        {
+            for (int k = 0; k < 3; ++k)
+            {
+                if (!std::isfinite(a.lo[k]) || !std::isfinite(a.hi[k]))
+                {
+                    mUseUnion = false;
+                    break;
+                }
+                mUnion.lo[k] = std::min(mUnion.lo[k], a.lo[k]);
+                mUnion.hi[k] = std::max(mUnion.hi[k], a.hi[k]);
+            }
         }
     }
 
@@ -928,6 +947,10 @@ public:
             {
                 break; // every tile is already stale: the other boxes cannot add a cause
             }
+            if (mUseUnion && !overlaps(mUnion, b.box))
+            {
+                continue; // outside every tile's bounds: no tile can overlap it
+            }
             for (size_t i = 0; i < n; ++i)
             {
                 if (!mHit[i] && overlaps(mBounds[i], b.box) && intersects(mTiles[i].pyramid, b.box))
@@ -944,6 +967,8 @@ private:
     std::vector<TileVolume> mTiles;
     std::vector<Aabb> mBounds;
     std::vector<char> mHit;
+    Aabb mUnion;
+    bool mUseUnion = false;
 };
 
 // ---------------------------------------------------------------------------------------------
