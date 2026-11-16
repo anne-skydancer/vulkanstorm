@@ -12574,6 +12574,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
     glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
 {
+    bool origin_set = false; // the dither origin of the alpha passes was set for a cascade (reset after the loop)
     for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
     {
         if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
@@ -12743,14 +12744,19 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         mRT->shadow[j].clear();
 
         // <Vulkanstorm> the hashed alpha dither of the Stochastic method belongs to the world texel, not to the map's:
-        // the box moves in whole world texels, so the map column plus the box corner's world index k is constant
-        // (origin = -k; the shaders hash gl_FragCoord - origin). Reset to 0 as every other pass expects.
-        LLLocalShadowGL::setTileOrigin((F32)-box.k_x, (F32)-box.k_y);
+        // the box moves in whole world texels, so the map column plus the box corner's world index k is constant, and the
+        // shaders hash gl_FragCoord - origin with origin = -(k mod 2^16) (alphaDitherOrigin). The grain re-rolls only
+        // when k crosses a multiple of 2^16 (about 460 m of walking at the finest texel) and once at a region
+        // crossing, which re-anchors the world grid. Reset to 0 once after the loop.
+        {
+            const LLShadowCascadeFit::DitherOrigin origin = LLShadowCascadeFit::alphaDitherOrigin(box);
+            LLLocalShadowGL::setTileOrigin(origin.x, origin.y);
+            origin_set = true;
+        }
         {
             static LLCullResult result[4];
             renderShadow(view[j], proj[j], shadow_cam, result[j], true);
         }
-        LLLocalShadowGL::setTileOrigin(0.f, 0.f);
         // </Vulkanstorm>
 
         mRT->shadow[j].flush();
@@ -12759,6 +12765,13 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         {
             mShadowCamera[j+4] = shadow_cam;
         }
+    }
+    if (origin_set)
+    {
+        // <Vulkanstorm/> every pass but the sun cascades and the projector tiles expects origin 0; renderShadow leaves
+        // its own program bound, so rebind the one the callers expect (as LLLocalShadowGL::Scope does)
+        LLLocalShadowGL::setTileOrigin(0.f, 0.f);
+        gDeferredShadowCubeProgram.bind();
     }
 }
 // </Vulkanstorm>

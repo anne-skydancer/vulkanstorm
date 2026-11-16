@@ -37,8 +37,9 @@ uniform float shadow_solid_alpha; // <Vulkanstorm/> 0.98 for blend faces; 0.0 fo
 #endif
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-// <Vulkanstorm/> projector shadow pool: the origin of the tile being rendered in the atlas (0 for every other pass), so the
-// dither does not depend on where the tile sits
+// <Vulkanstorm/> dither origin: the origin of the projector tile being rendered in the atlas, so the dither does not
+// depend on where the tile sits; in a sun cascade pass (Stochastic) -(k mod 2^16), k the map corner's index on the world
+// grid, so the dither follows the world texel while the camera walks; 0 for every other pass
 uniform vec2 shadow_tile_origin;
 #endif
 
@@ -71,8 +72,8 @@ void main()
     {
 #if defined(STOCHASTIC_SHADOW_ALPHA)
         // <Vulkanstorm/> Stochastic shadows read one texel per ray; a stipple that drops every other texel column
-        // reads as columns of light and shade. A hashed per-texel dither (anchored to the map's texel, so it is
-        // stable wherever the map is) keeps the fraction alpha of the texels, with no column period. It is still grain at
+        // reads as columns of light and shade. A hashed per-texel dither (anchored to the world texel through shadow_tile_origin: the
+        // projector tile's origin, or the sun cascade's wrapped world-grid index; so it is stable wherever the map is) keeps the fraction alpha of the texels, with no column period. It is still grain at
         // texel scale: static, with no per-layer or per-frame decorrelation, so only the ray jitter averages it. Only
         // blend faces reach it (shadow_solid_alpha is 0 for mask faces).
         float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + 0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));

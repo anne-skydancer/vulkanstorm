@@ -95,27 +95,54 @@ namespace LLShadowCascadeFit
     struct Rect
     {
         float min_x, min_y, max_x, max_y;
-        // the corner's index on the world grid: min = anchor + k * texel, integer-valued. A world point's
-        // map column plus k is its world column, which never changes while the camera moves.
+        // the corner's index on the world grid: min = anchor + k * texel, integer-valued (0 for a non-finite input).
+        // A world point's map column plus k is its world column, which never changes while the camera moves.
         long long k_x = 0, k_y = 0;
     };
 
     // The orthographic box of a cascade in light-view space: it holds the square [c - r, c + r]
     // and spans exactly res texels of size t = 2r / (res - 1) per axis, its corner moved to a
     // whole number of texels from the anchor (the light-view position of the world origin), so
-    // the texel grid stays fixed in the world while the camera moves.
+    // the texel grid stays fixed in the world while the camera moves. It also returns the corner's world-grid
+    // index k (Rect::k_x, k_y), which the Stochastic alpha dither uses (alphaDitherOrigin) to key its hash to the
+    // world texel instead of the map texel.
     inline Rect snappedSquare(float cx, float cy, float r, float res_x, float res_y, float anchor_x, float anchor_y)
     {
         const float tx = 2.f * r / (res_x - 1.f);
         const float ty = 2.f * r / (res_y - 1.f);
         Rect out;
-        out.k_x = (long long)std::floor((cx - r - anchor_x) / tx);
-        out.k_y = (long long)std::floor((cy - r - anchor_y) / ty);
+        const float qx = std::floor((cx - r - anchor_x) / tx);
+        const float qy = std::floor((cy - r - anchor_y) / ty);
+        // a non-finite or absurd input gives k = 0 (no cast of NaN or inf, which is undefined)
+        out.k_x = (std::isfinite(qx) && std::fabs(qx) < 4.0e18f) ? (long long)qx : 0;
+        out.k_y = (std::isfinite(qy) && std::fabs(qy) < 4.0e18f) ? (long long)qy : 0;
         out.min_x = anchor_x + (float)out.k_x * tx;
         out.min_y = anchor_y + (float)out.k_y * ty;
         out.max_x = out.min_x + res_x * tx;
         out.max_y = out.min_y + res_y * ty;
         return out;
+    }
+
+    // The origin the Stochastic alpha dither subtracts from gl_FragCoord (shadow_tile_origin) in a sun cascade pass:
+    // origin = -(k mod 2^16), with the modulo non-negative. A map column m of a world point has world column m + k,
+    // so the hash argument m - origin = m + (k mod 2^16) follows the world texel, and it stays small (the float hash in
+    // shadowAlphaMaskF.glsl loses precision for large arguments). The grain therefore re-rolls only when k crosses a
+    // multiple of 2^16 (about 460 m of walking at the finest texel, 0.7 cm), and once when a region crossing re-anchors
+    // the world grid.
+    struct DitherOrigin
+    {
+        float x, y;
+    };
+
+    inline float wrapDitherK(long long k)
+    {
+        const long long m = ((k % 65536) + 65536) % 65536;
+        return -(float)m;
+    }
+
+    inline DitherOrigin alphaDitherOrigin(const Rect& box)
+    {
+        return { wrapDitherK(box.k_x), wrapDitherK(box.k_y) };
     }
 
     struct DepthRange
