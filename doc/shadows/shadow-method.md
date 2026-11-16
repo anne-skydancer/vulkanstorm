@@ -141,7 +141,7 @@ These are not gated by the method:
 
 - the light model: L2 cloud shadows, L3 `primary_light_dir` / `primary_shadow_strength`, the
   caster direction that follows the sun/moon handover, skipping the cascades while the shadow is
-  invisible;
+  invisible (Stochastic also skips them on a dark light, see "Dark gate");
 - three Vulkanstorm fixes made to the stock shadows: the sun-bias altitude term is gone, stock PCF
   has a receiver-plane bias (`pcfDepthGradient`), and the projector shadow fades with the
   Euclidean camera distance and `spot_shadow_reach`, not with the sun cascade splits.
@@ -269,17 +269,23 @@ The sun cascades (cull, sort and draw of four maps, with every avatar in each) a
 whose light is negligible gets nothing from them. Under Stochastic, `generateSunShadow` skips the cascade pass while the light
 that reaches the ground is too dim for a shadow to show; Legacy never does (it keeps Firestorm 7.2.5's code).
 
-- The decision light is `E = 3 x luminance(linear(primary light colour)) x sky sunlight scale` (`RenderSkySunlightScale`, or
-  the HDR one): the factor `pbrBaseLight` gives a white surface facing the light. It depends on the sky and the light only,
+- The decision light is `E = 3 x max(linear(primary light colour) channels) x sky sunlight scale` (`RenderSkySunlightScale`, or
+  the HDR one): the factor `pbrBaseLight` gives a white surface facing the light in its brightest channel (the shader lights
+  each channel on its own, so the largest channel is used, not the luminance). It depends on the sky and the light only,
   never on the camera, the view or the exposure. The primary light is the sun/moon handover's, so a lit moon counts. The cloud
-  shadow map and the atmosphere's haze only lower the light, so `E` is an upper bound for any surface.
-- Skip below `E < 1e-5`; render again above `1.1e-5` (the hysteresis band, so a light at the threshold does not flicker the
-  pass). The shadow strength (`primary_shadow_strength`) is multiplied by a fade that is 0 up to `1.1e-5`, a smoothstep to 1
-  at `2e-5`, and 1 above: nothing pops, and above twice the threshold the shadow is unchanged.
-- Why `1e-5`: a shadow changes a pixel by at most `E` (albedo is at most 1; the BRDF's `1/pi` is left out). One 8-bit step
-  near black is `1/(255 x 12.92) = 3.0e-4` in linear light. The brightest exposure is `RenderExposure`'s clamp (4) times the
-  dynamic exposure's maximum (`2 x sqrt(gamma)`, 4 for gamma 4), a gain of 16, so a shadow of the threshold light is at most
-  `1.6e-4`, about half a step.
+  shadow map and the atmosphere's haze only lower the light. Classic-mode lighting multiplies `sunlit` by a further 1.35
+  (`softenLightF.glsl`); that is not included.
+- Skip below `E < 5e-6`; render again above `5.5e-6` (the hysteresis band, so a light at the threshold does not flicker the
+  pass). The shadow strength (`primary_shadow_strength`) is multiplied by a fade that is 0 up to `5.5e-6`, a smoothstep to 1
+  at `1e-5`, and 1 above: nothing pops, and above twice the threshold the shadow is unchanged. The strength also weights the
+  cloud shadow map, so the fade moves the cloud shadows to the map's mean while `E < 1e-5`: invisible at that light level.
+- Why `5e-6`: for a diffuse or rough surface a shadow changes a channel by at most `E` (albedo is at most 1; the BRDF's `1/pi`
+  is left out). One 8-bit step near black is `1/(255 x 12.92) = 3.0e-4` in linear light. The brightest exposure is
+  `RenderExposure`'s clamp (4) times the dynamic exposure's maximum (`2 x sqrt(gamma)`; the EEP validator allows gamma up to 20),
+  a gain of 35.8 (16 for gamma 4), so a shadow of the threshold light is at most `1.8e-4`, 0.6 of a step, even then. A smooth
+  specular peak can reach `10 x E` (the clamp in `pbrBaseLight`): a few highlight pixels of up to a few steps near black in that
+  extreme, which the threshold accepts. With `RenderUseExposureSkySettings` (off by default) the exposure maximum comes from the
+  sky and is not bounded by gamma.
 - Exactly zero light: the skipped frame has strength 0, and the shadow term multiplies a zero light (`sunlit` is 0, and
   both sun terms of `pbrBaseLight` multiply it), so the image is the same with or without the cascades. This is an argument from
   the shader text, not a pixel comparison.
@@ -287,6 +293,9 @@ that reaches the ground is too dim for a shadow to show; Legacy never does (it k
   and the frame that opens it renders them before the shading reads them (the decision is one per main frame, in
   `LLEnvironment::updatePrimaryLight`, read by both the pass and the uniform). The reflection probe renders call the same
   `generateSunShadow` with the same decision, so they skip with the main view and are lit the same way.
+- A frame with strength 0 (skipped, or the resume band) also returns at the top of `sampleDirectionalShadow` in the Stochastic
+  shading passes, so the per-pixel ray march is skipped too (the result would be `mix(1, x, 0) = 1`). The GPU saving is not
+  measured yet. Legacy's `shadowUtil.glsl` is unchanged.
 - Projector and point-light shadows and the avatar shadow layers are separate and unaffected.
 - The renderer-free rule is `lldirectionalshadowgate.h`, tested by `indra/newview/tests/lldirectionalshadowgate_test.cpp`
   (ci-checks). The in-world readout of the decision exists on `vkstorm-devel` only.
