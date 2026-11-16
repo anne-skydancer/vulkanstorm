@@ -274,6 +274,7 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.pending = false;
                 rec.lowres = false;
                 rec.avatarInLayer = false;
+                rec.layerRectValid = false;
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
@@ -473,6 +474,28 @@ void LLProjectorShadows::copyTile(U32 from_tex, const Rect& src, U32 to_tex, con
     }
 }
 
+// S -> L over a rectangle of a tile (C3). The same two paths as copyTile, so the texels are the same bits.
+void LLProjectorShadows::copyTileTexels(const Rect& tile, const llprojectorpool::TexelRect& texels)
+{
+    if (texels.empty())
+    {
+        return;
+    }
+    const GLint x = (GLint)tile.x + texels.x0, y = (GLint)tile.y + texels.y0;
+    const GLsizei w = texels.x1 - texels.x0, h = texels.y1 - texels.y0;
+    if (gGLManager.mGLVersion >= 4.29f)
+    {
+        glCopyImageSubData(mAtlasS, GL_TEXTURE_2D, 0, x, y, 0, mAtlasL, GL_TEXTURE_2D, 0, x, y, 0, w, h, 1);
+    }
+    else
+    {
+        LLGLDisable scissor(GL_SCISSOR_TEST); // a blit is clipped by the scissor test
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, mFboS);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mFboL);
+        glBlitFramebuffer(x, y, x + w, y + h, x, y, x + w, y + h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    }
+}
+
 void LLProjectorShadows::copyAtlas(U32 from_tex, U32 to_tex)
 {
     Rect all;
@@ -540,6 +563,16 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         copyAtlas(mAtlasL, mAtlasS);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
+
+    // L's tiles were rewritten (or moved): the avatar footprints of the old layout say nothing about the new one, the next layer pass of
+    // each tile copies it whole (C3)
+    if (!plan.moves.empty())
+    {
+        for (auto& entry : mRecords)
+        {
+            entry.second.layerRectValid = false;
+        }
+    }
 
     // adopt the layout: the allocator the plan ended with
     mBuddy = plan.buddy;
@@ -701,9 +734,22 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
+    // S changed everywhere: the whole tile is copied, then the avatars are drawn over the copy, in L only (S stays the fixed layer)
     copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
-    // the avatar layer (P4): the avatars in the light are drawn over the copy, in L only; S stays the fixed layer
-    const F32 avatar_ms = rec.holdsAvatar ? drawAvatars(rec, view, proj, g.origin, far_clip) : 0.f;
+    F32 avatar_ms = 0.f;
+    if (rec.holdsAvatar)
+    {
+        const F64 face_start = LLTimer::getTotalSeconds();
+        const FaceAvatars face = faceAvatars(rec, view, proj, g.origin);
+        avatar_ms = (F32)((LLTimer::getTotalSeconds() - face_start) * 1000.0);
+        avatar_ms += drawAvatars(rec, face, view, proj, g.origin, far_clip);
+        rec.layerRect = face.rect;
+    }
+    else
+    {
+        rec.layerRect = llprojectorpool::TexelRect();
+    }
+    rec.layerRectValid = true;
     mLastFrameAvatarDraws += rec.holdsAvatar ? rec.avatarCount : 0;
 
     // the pose this tile now holds: the lookup matrix is built from it
@@ -800,7 +846,48 @@ namespace
     }
 }
 
-F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
+// The avatars a face draws, and the tile rectangle they cover (C3). The face draws at most A_max avatars, the nearest to the lamp (the
+// scheduler counts min(avatars, A_max) draws for it). The rectangle is the avatars' extents, grown by a margin for the lag of the
+// extents and the avatar's speed, projected through the tile's matrices; the whole tile when that is unknown, too large, or an avatar
+// is an impostor (its extents refresh only every 32-64 frames).
+LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const
+{
+    FaceAvatars face;
+    std::vector<std::pair<F32, const AvatarCaster*>> in_light;
+    const std::vector<AvatarCaster> casters = casting_avatars();
+    for (const AvatarCaster& c : casters)
+    {
+        if (intersects(rec.volume, c.box))
+        {
+            const LLVector3 centre((c.box.lo[0] + c.box.hi[0]) * 0.5f, (c.box.lo[1] + c.box.hi[1]) * 0.5f, (c.box.lo[2] + c.box.hi[2]) * 0.5f);
+            in_light.emplace_back((centre - origin).magVecSquared(), &c);
+        }
+    }
+    std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<llprojectorpool::Aabb> boxes;
+    bool whole = false;
+    for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
+    {
+        const AvatarCaster& c = *in_light[i].second;
+        LLVOAvatar* avatar = const_cast<LLVOAvatar*>(c.avatar);
+        face.avatars.push_back(c.avatar);
+        whole = whole || avatar->isImpostor();
+        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(avatar->getVelocity().magVec())));
+    }
+    const U32 n = rec.rect.size;
+    if (whole)
+    {
+        face.rect = llprojectorpool::wholeTileRect(n);
+    }
+    else
+    {
+        const glm::mat4 clip = proj * view;
+        face.rect = llprojectorpool::faceFootprint(glm::value_ptr(clip), boxes, n);
+    }
+    return face;
+}
+
+F32 LLProjectorShadows::drawAvatars(Record& rec, const FaceAvatars& face, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
 {
     const F64 cpu_start = LLTimer::getTotalSeconds();
 
@@ -817,31 +904,13 @@ F32 LLProjectorShadows::drawAvatars(Record& rec, const glm::mat4& view, const gl
     LLLocalShadowGL::setTileOrigin((F32)rec.rect.x, (F32)rec.rect.y);
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_DYNAMIC;
 
-    // the face draws at most A_max avatars, the nearest to the lamp (the scheduler counts min(avatars, A_max) draws for it)
-    std::vector<const LLVOAvatar*> face_avatars;
-    {
-        std::vector<std::pair<F32, const LLVOAvatar*>> in_light;
-        for (const AvatarCaster& c : casting_avatars())
-        {
-            if (intersects(rec.volume, c.box))
-            {
-                const LLVector4a* ext = c.avatar->mDrawable->getSpatialExtents();
-                LLVector3 centre((ext[0].getF32ptr()[0] + ext[1].getF32ptr()[0]) * 0.5f, (ext[0].getF32ptr()[1] + ext[1].getF32ptr()[1]) * 0.5f,
-                                 (ext[0].getF32ptr()[2] + ext[1].getF32ptr()[2]) * 0.5f);
-                in_light.emplace_back((centre - origin).magVecSquared(), c.avatar);
-            }
-        }
-        std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-        for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
-        {
-            face_avatars.push_back(in_light[i].second);
-        }
-    }
+    std::vector<const LLVOAvatar*> face_avatars = face.avatars;
     LLPipeline::sLocalShadowAvatars = &face_avatars;
 
     {
+        // the draw is limited to the footprint (C3): outside it L stays S's copy, which is what makes the next pass's copy exact
         LLGLEnable scissor(GL_SCISSOR_TEST);
-        glScissor(gGLViewport[0], gGLViewport[1], n, n);
+        glScissor(gGLViewport[0] + face.rect.x0, gGLViewport[1] + face.rect.y0, llmax(face.rect.x1 - face.rect.x0, 0), llmax(face.rect.y1 - face.rect.y0, 0));
 
         set_current_modelview(view);
         set_current_projection(proj);
@@ -887,13 +956,24 @@ void LLProjectorShadows::renderLayer(Record& rec)
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
 
-    copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
+    // C3: restore what the last pass drew over (its rectangle) and what this one will draw over (the new rectangle), not the whole tile;
+    // an unknown old rectangle (a fresh or repacked atlas) is the whole tile
     F32 avatar_ms = 0.f;
+    FaceAvatars face;
     if (rec.holdsAvatar)
     {
-        avatar_ms = drawAvatars(rec, view, proj, g.origin, far_clip);
+        const F64 face_start = LLTimer::getTotalSeconds();
+        face = faceAvatars(rec, view, proj, g.origin);
+        avatar_ms = (F32)((LLTimer::getTotalSeconds() - face_start) * 1000.0);
+    }
+    copyTileTexels(rec.rect, llprojectorpool::layerCopyRect(rec.layerRectValid, rec.layerRect, face.rect, rec.rect.size));
+    if (rec.holdsAvatar)
+    {
+        avatar_ms += drawAvatars(rec, face, view, proj, g.origin, far_clip);
         rec.lastAvatarMs = llprojectorpool::smoothedCostMs(rec.lastAvatarMs, avatar_ms);
     }
+    rec.layerRect = face.rect; // empty when no avatar is in the light: L is S again
+    rec.layerRectValid = true;
     rec.avatarInLayer = rec.holdsAvatar;
     rec.layerFrame = LLFrameTimer::getFrameCount();
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
