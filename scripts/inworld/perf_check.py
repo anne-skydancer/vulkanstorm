@@ -126,8 +126,8 @@ def load_scenario(path):
     if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
         raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' (they are joined to the preset id with '__')")
     ids = [p["id"] for p in sc["presets"]]
-    if not ids or len(ids) != len(set(ids)):
-        raise ValueError("the scenario needs at least one preset, with distinct ids")
+    if (not ids and not sc["teleports"]) or len(ids) != len(set(ids)):
+        raise ValueError("the scenario needs at least one preset (or a teleport series), with distinct ids")
     for p in sc["presets"]:
         if not all(c.isalnum() or c in "_.-" for c in p["id"]):
             raise ValueError("preset id %r must be a file-name-safe token" % p["id"])
