@@ -280,7 +280,7 @@ that reaches the ground is too dim for a shadow to show; Legacy never does (it k
 - Why `5e-6`: for a diffuse or rough surface a shadow changes a channel by at most `E` (albedo is at most 1; the BRDF's `1/pi`
   is left out). One 8-bit step near black is `1/(255 x 12.92) = 3.0e-4` in linear light. The brightest exposure is
   `RenderExposure`'s clamp (4) times the dynamic exposure's maximum (`2 x sqrt(gamma)`; the EEP validator allows gamma up to 20),
-  a gain of 35.8 (16 for gamma 4), so a shadow of the threshold light is at most `1.8e-4`, 0.6 of a step, even then. A smooth
+  a gain of 35.8 (16 for gamma 4), so a shadow of the threshold light is at most `1.8e-4`, 0.6 of a step, even then. With the classic-mode 1.35 factor (not in `E`) it is `0.6 x 1.35 = 0.81` of a step, still under one. A smooth
   specular peak can reach `10 x E` (the clamp in `pbrBaseLight`): a few highlight pixels of up to a few steps near black in that
   extreme, which the threshold accepts. With `RenderUseExposureSkySettings` (off by default) the exposure maximum comes from the
   sky and is not bounded by gamma.
