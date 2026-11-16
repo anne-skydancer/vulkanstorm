@@ -830,6 +830,12 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
                 break;
             }
 
+            if (c_length < 4)
+            {
+                // too short to hold the length field and the 00 01 marker; c_length - 4 below would wrap.
+                break;
+            }
+
             if (position + 2 + c_length > c_size)
             {
                 // comment extends past end of data, corruption, or all data not retrived yet.
