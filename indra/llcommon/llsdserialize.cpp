@@ -36,6 +36,7 @@
 
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <cstdint>
 
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
@@ -2363,7 +2364,8 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
     }
 
     U8* result = NULL;
-    U32 cur_size = 0;
+    size_t cur_size = 0;
+    size_t capacity = 0;
     z_stream strm;
 
     const U32 CHUNK = 0x4000;
@@ -2410,25 +2412,48 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
             return NULL;
         }
 
-        U32 have = CHUNK-strm.avail_out;
+        const size_t have = CHUNK - strm.avail_out;
+        const size_t needed = cur_size + have;
 
-        U8* new_result = (U8*) realloc(result, cur_size + have);
-        if (new_result == NULL)
+        if (needed < cur_size)
         {
-            LL_WARNS() << "Failed to unzip LLSD NavMesh block: can't reallocate memory, current size: " << cur_size
-                << " bytes; requested " << cur_size + have
-                << " bytes; total syze: ." << size << " bytes."
-                << LL_ENDL;
+            // size_t overflow (32 bit builds only)
+            LL_WARNS() << "Failed to unzip LLSD NavMesh block: size overflow." << LL_ENDL;
             inflateEnd(&strm);
-            if (result)
-            {
-                free(result);
-            }
+            free(result);
             delete[] in;
             valid = false;
             return NULL;
         }
-        result = new_result;
+
+        if (needed > capacity)
+        {
+            // Geometric growth: amortised O(n) copying instead of one realloc per chunk.
+            size_t new_capacity = needed;
+            if (capacity <= SIZE_MAX / 2 && capacity * 2 > new_capacity)
+            {
+                new_capacity = capacity * 2;
+            }
+            if (new_capacity < CHUNK)
+            {
+                new_capacity = CHUNK;
+            }
+            U8* new_result = (U8*) realloc(result, new_capacity);
+            if (new_result == NULL)
+            {
+                LL_WARNS() << "Failed to unzip LLSD NavMesh block: can't reallocate memory, current size: " << cur_size
+                    << " bytes; requested " << new_capacity
+                    << " bytes; total size: " << size << " bytes."
+                    << LL_ENDL;
+                inflateEnd(&strm);
+                free(result);
+                delete[] in;
+                valid = false;
+                return NULL;
+            }
+            result = new_result;
+            capacity = new_capacity;
+        }
         memcpy(result+cur_size, out, have);
         cur_size += have;
 
@@ -2442,6 +2467,17 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
         free(result);
         valid = false;
         return NULL;
+    }
+
+    if (result == NULL)
+    {
+        // an empty payload never allocated; callers expect a non-NULL block when valid
+        result = (U8*) malloc(1);
+        if (result == NULL)
+        {
+            valid = false;
+            return NULL;
+        }
     }
 
     //result now points to the decompressed LLSD block

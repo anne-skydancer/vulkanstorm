@@ -2270,7 +2270,7 @@ namespace tut
     }
 |*==========================================================================*/
 
-    // unzip_llsdNavMesh() must fail cleanly (no double free, no leak) on bad input
+    // unzip_llsdNavMesh() must fail cleanly on bad input; run under ASan or the debug CRT to catch double frees
     struct TestNavMeshUnzip {};
     typedef tut::test_group<TestNavMeshUnzip> TestNavMeshUnzipGroup;
     typedef TestNavMeshUnzipGroup::object TestNavMeshUnzipObject;
@@ -2337,7 +2337,7 @@ namespace tut
     template<> template<>
     void TestNavMeshUnzipObject::test<3>()
     {
-        set_test_name("unzip_llsdNavMesh truncated body fails cleanly");
+        set_test_name("unzip_llsdNavMesh truncated body fails cleanly (guards loop termination)");
         std::string src(100000, 'x');
         for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
         std::string gz = gzipString(src);
@@ -2345,6 +2345,51 @@ namespace tut
         bool valid = true;
         size_t outsize = 0;
         U8* res = navMeshUnzip(gz, valid, outsize);
+        ensure("invalid", !valid);
+        ensure("no result", res == NULL);
+    }
+
+    static std::string navMeshSample()
+    {
+        std::string src(200000, 'x');
+        for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
+        return src;
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<4>()
+    {
+        set_test_name("unzip_llsdNavMesh bad CRC trailer fails cleanly");
+        std::string gz = gzipString(navMeshSample());
+        gz[gz.size() - 8] ^= 0x01; // first CRC32 byte of the gzip trailer
+        bool valid = true;
+        size_t outsize = 0;
+        U8* res = navMeshUnzip(gz, valid, outsize);
+        ensure("invalid", !valid);
+        ensure("no result", res == NULL);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<5>()
+    {
+        set_test_name("unzip_llsdNavMesh bit flipped mid-stream fails cleanly");
+        std::string gz = gzipString(navMeshSample());
+        gz[gz.size() / 2] ^= 0x10; // after output was already produced
+        bool valid = true;
+        size_t outsize = 0;
+        U8* res = navMeshUnzip(gz, valid, outsize);
+        ensure("invalid", !valid);
+        ensure("no result", res == NULL);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<6>()
+    {
+        set_test_name("unzip_llsdNavMesh empty input");
+        std::istringstream is("");
+        bool valid = true;
+        size_t outsize = 0;
+        U8* res = unzip_llsdNavMesh(valid, outsize, is, 0);
         ensure("invalid", !valid);
         ensure("no result", res == NULL);
     }
