@@ -70,7 +70,7 @@ public:
     // makes for the PROJECTOR_SHADOW_POOL permutation of the spot light programs.
     static bool wanted();
 
-    // The programs that dither the semi-transparent casters by a texel origin: a projector tile's (so not of the atlas), or a sun
+    // The programs that dither the semi-transparent casters by a texel origin: a projector tile's (not of the atlas), or a sun
     // cascade's wrapped world-grid index (LLShadowCascadeFit::alphaDitherOrigin, set in LLPipeline::generateSunCascadesStable).
     // (0, 0) puts it back. Leaves the last program bound.
     static void setTileOrigin(F32 x, F32 y);
