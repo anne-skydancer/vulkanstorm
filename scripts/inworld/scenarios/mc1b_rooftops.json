@@ -1,6 +1,6 @@
 {
   "name": "mc1b_rooftops",
-  "description": "Multicore stage 1b and the sun-shadow cost study (doc/shadows/sun-shadow-cost-study.md, section 9): GPU time at the busy region. The owner logs in at home (-StartRegion) and teleports to the busy region (-BusyRegion, Rooftops at the 'TT Rooftops dark' altitude) when the pop-up asks. The tier is the feature table's Ultra list (soft_settings). RT-still, the camera as it is: sun (a), none (b), all, sun with RenderShadowSplits 2 (g). RT-moving, turning at 10 deg/s: sun (c), none (d), all. RT-fixed, a still view at heading 0 with its own sun run as the pair: moonlit night by World > Environment > Midnight (e), High tier with sun (f); these two come last because they change the sky and the draw distance. Every run: a warm-up until the frame rate has settled, a throw-away 10 s Tracy capture, a 60 s Tracy capture (GPU zones included) with the frame rate from the log and the camera heading once a second, then with -GpuWindow a GLSubmitStats window with GPU timers (window_<preset>.json).",
+  "description": "Multicore stage 1b and the sun-shadow cost study (doc/shadows/sun-shadow-cost-study.md, section 9): GPU time at the busy region. The owner logs in at home (-StartRegion) and teleports to the busy region (-BusyRegion, Rooftops at the 'TT Rooftops dark' altitude) when the pop-up asks. The tier is the feature table's Ultra list (soft_settings). RT-still, the camera as it is: sun (a), none (b), all, sun with RenderShadowSplits 2 (g). RT-moving, turning at 10 deg/s, in this order: all, none (d), sun (c). RT-fixed, a still view at heading 0 with its own sun run as the pair: moonlit night by World > Environment > Midnight (e), High tier with sun (f); these two come last because they change the sky and the draw distance. The script cannot read the selected environment: it assumes World > Environment > Shared Environment at the start and goes back to it. Every run: a warm-up until the frame rate has settled, a throw-away 10 s Tracy capture, a 60 s Tracy capture (GPU zones included) with the frame rate from the log and the camera heading once a second, then with -GpuWindow a GLSubmitStats window with GPU timers (window_<preset>.json).",
   "settle": {
     "post_login_s": 20.0,
     "after_camera_s": 4.0,
@@ -66,7 +66,7 @@
     "poll_s": 1.0,
     "stable_polls": 3,
     "timeout_s": 1800,
-    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 30 minutes). The sky turns to midnight for one run and comes back.",
+    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude). Keep World > Environment on Shared Environment (pick it now if you chose another sky). Then leave the viewer alone until the 'Session done' pop-up (about 30 minutes). The sky turns to midnight for one run and comes back to the shared environment.",
     "done_message": "Session done: you can quit."
   },
   "presets": [

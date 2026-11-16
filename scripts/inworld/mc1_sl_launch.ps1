@@ -23,8 +23,9 @@ and --tracy-capture, the throw-away noop plugin entry, and the run folder .captu
                                            window_<preset>.json, GPU ms per view and pass. Without that API the switch does nothing)
   .\mc1_sl_launch.ps1 -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
                                           (stage 1b with the sun-shadow cost study's runs, about 30 minutes: Ultra tier set by the
-                                           script; still: sun, none, all, two splits; turning: sun, none, all; fixed heading: sun,
-                                           midnight, High tier. See scenarios\mc1b_rooftops.json)
+                                           script; still: sun, none, all, two splits; turning: all, none, sun; fixed heading: sun,
+                                           midnight, High tier. Keep World > Environment on Shared Environment: the script cannot
+                                           read the selected sky and goes back to the shared one. See scenarios\mc1b_rooftops.json)
   -Scenario mc1_sl (the default) is the full session: still, moving, teleports, fps probe.
   .\mc1_sl_launch.ps1 -DryRun             (at the login screen: --dry-run --no-login-wait, do not log in)
 
@@ -37,7 +38,7 @@ param(
     [string]$Scenario = 'mc1_sl', # mc1_sl (captures, teleports, fps) or mc1_sl_teleports (teleports only)
     [string]$Exe = 'C:\Users\annes\source\repos\vulkanstorm\work\mc-stage1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe',
     [switch]$GpuWindow,          # after each capture: a GPU-timed GLSubmitStats window (a -DVKS_GL_STATS=ON build)
-    [int]$GpuWindowFrames = 600, # frames in that window
+    [ValidateRange(1, 100000)][int]$GpuWindowFrames = 600, # frames in that window (the viewer takes 1..100000)
     [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
@@ -90,8 +91,8 @@ try {   # from here every path puts this window's folders back
 
     Write-Host "Run folder (captures, perf.json): $out"
     Write-Host "Scratch profile: $prof"
-    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } 'mc1b_rooftops' { '25' } default { 'several' } }
-    if ($GpuWindow) { $minutes += ', plus up to half a minute for each GPU window' }
+    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } 'mc1b_rooftops' { '30 with -GpuWindow, 25 without' } default { 'several' } }
+    if ($GpuWindow -and $Scenario -ne 'mc1b_rooftops') { $minutes += ', plus up to half a minute per run for its GPU window' }
     if (-not $DryRun) {
         Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'
         Write-Host ('(no minimising, no UI use) until the pop-up "Session done: you can quit" appears (about ' + $minutes + ' minutes).')

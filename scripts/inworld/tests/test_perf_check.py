@@ -946,7 +946,9 @@ class MovingVariantsTest(unittest.TestCase):
             def finished(run_, started):
                 finish(run_, started)
                 order.append(("capture", None, False))
-            with mock.patch.object(pc.Run, "probe_variants", side_effect=AssertionError("probe")),                     mock.patch.object(pc.Run, "gpu_window", window), mock.patch.object(pc.Run, "finish_capture", finished),                     mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+            with mock.patch.object(pc.Run, "probe_variants", side_effect=AssertionError("probe")), \
+                    mock.patch.object(pc.Run, "gpu_window", window), mock.patch.object(pc.Run, "finish_capture", finished), \
+                    mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
                 code, run = mc1_main(fv, tmp, extra=["--gpu-window", "--frames", "7"], presets=presets, variants=self.VARIANTS,
                                      teleports=None, fps_probe=None, settle=settle, window={"seconds": 1.0},
                                      overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
@@ -1045,9 +1047,159 @@ class MovingVariantsTest(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in run.glob("*.tracy")),
                              ["A__none.tracy", "A__sun.tracy", "B__high.tracy", "B__night.tracy", "B__sun.tracy"])     # no warm-up file left
             for info in index["presets"].values():
-                self.assertEqual(info["warmup_capture"], {"seconds": 0.3, "exit_code": 0})
+                self.assertEqual(info["warmup_capture"], {"seconds": 1, "exit_code": 0})     # whole seconds for tracy-capture
+                self.assertEqual(info["environment"], "night" in info["variant"] and "midnight" or "shared")
                 self.assertIsNone(info["directional_shadows"])        # the fake has no DirectionalShadows API
+            self.assertEqual(list(run.glob("*.warmup*")), [])         # neither the capture nor its log is left
             self.assertEqual(len(index["captures"]), 5)               # the throw-away captures are not listed
+
+    QUICK = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+             "warmup_min_s": 0.05, "warmup_max_s": 0.2, "warmup_poll_s": 0.0}
+    NO_PROBE = {"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0}
+
+    def _quick(self, tmp, fv, presets, variants, extra=(), popen=None, **over):
+        kw = {"popen": popen} if popen else {}
+        with mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+            code, run = mc1_main(fv, tmp, extra=list(extra), presets=presets, variants=variants, teleports=None, fps_probe=None,
+                                 settle=dict(self.QUICK, **over.pop("settle", {})), window={"seconds": 1.0},
+                                 overhead=self.NO_PROBE, **kw, **over)
+        return code, run, json.loads((run / "perf.json").read_text(encoding="utf-8"))
+
+    def test_a_view_that_starts_on_the_variant_the_last_one_ended_on_still_gets_its_settings_pass_and_warm_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            presets = [{"id": "A", "camera": None}, {"id": "B", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}}]
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}}, {"id": "none", "settings": {"AFKTimeout": 2}}]
+            code, run, index = self._quick(tmp, fv, presets, variants)
+            self.assertEqual(code, 0)
+            # A runs sun, none; B (the alternation) none, sun: "none" is on both sides of the view change
+            self.assertEqual(list(index["presets"]), ["A__sun", "A__none", "B__none", "B__sun"])
+            self.assertEqual([w["variant"] for w in index["warmups"]], ["sun", "none", "none", "sun"])
+            for info in index["presets"].values():
+                self.assertIn("warmup", info)
+
+    def test_the_sky_switch_is_verified_by_the_dark_gate_and_recorded_and_put_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            fv.directional = {}
+            fv.settings["FSRepeatedEnvTogglesShared"] = ("Boolean", True)
+            seen = []
+            fv.on_op = lambda op, d: seen.append(fv.settings["FSRepeatedEnvTogglesShared"][1]) if op == "call" else None
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}},
+                        {"id": "night", "settings": {"AFKTimeout": 1}, "environment": "midnight"}]
+            code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], variants)
+            self.assertEqual(code, 0)
+            self.assertEqual(fv.ui_calls, [("World.EnvSettings", "midnight"), ("World.EnvSettings", "region")])
+            self.assertEqual(seen, [False, False])      # the toggle-back setting is off while the script switches
+            self.assertTrue(fv.settings["FSRepeatedEnvTogglesShared"][1])       # and restored
+            night, sun = index["presets"]["A__night"], index["presets"]["A__sun"]
+            self.assertEqual((sun["environment"], night["environment"]), ("shared", "midnight"))
+            self.assertEqual(night["environment_check"]["verified"], True)
+            self.assertNotIn("environment_check", sun)
+            self.assertNotIn("environment_failures", index)
+            # the readout at both ends of a run, with the frames the cascades were rendered in between
+            self.assertEqual(night["directional_shadows"]["decision_light"], 2.0e-5)
+            self.assertGreater(night["directional_delta"]["frames_rendered"], 0)
+            self.assertEqual(night["directional_delta"]["frames_skipped"], None)        # the fake reports none
+            self.assertIsNone(json.loads((run / "restore.json").read_text(encoding="utf-8"))["environment"])
+
+    def test_a_sky_that_did_not_change_fails_the_run_and_names_the_variant(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            fv.directional = {}
+            fv.sky_stuck = True
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}},
+                        {"id": "night", "settings": {"AFKTimeout": 1}, "environment": "midnight"}]
+            code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], variants)
+            self.assertEqual(code, 4)
+            self.assertEqual([(f["variant"], f["verified"]) for f in index["environment_failures"]], [("night", False)])
+            self.assertEqual(index["presets"]["A__night"]["environment_check"]["verified"], False)
+            self.assertEqual(len(index["captures"]), 2)       # both runs were still measured
+
+    def test_the_dark_gate_api_is_asked_for_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}}, {"id": "none", "settings": {"AFKTimeout": 2}}]
+            code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], variants)
+            self.assertEqual(code, 0)
+            self.assertEqual(sum(1 for pump, op in fv.log if pump == "DirectionalShadows"), 0)
+            for info in index["presets"].values():
+                self.assertIsNone(info["directional_shadows"])
+                self.assertIsNone(info["directional_shadows_end"])
+
+    def test_a_tier_value_the_viewer_clamps_is_recorded_and_still_put_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            fv.clamps = {"FramePerSecondLimit": 5}
+            variants = [{"id": "high", "settings": {"AFKTimeout": 1}, "soft_settings": {"FramePerSecondLimit": 7}},
+                        {"id": "sun", "settings": {"AFKTimeout": 1}}]
+            orig = pc.Run.apply_variant
+
+            def unclamp_then_apply(run_, variant):
+                if variant["id"] == "sun":
+                    fv.clamps = {}          # the way back takes
+                return orig(run_, variant)
+            with mock.patch.object(pc.Run, "apply_variant", unclamp_then_apply):
+                code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], variants)
+            self.assertEqual(code, 0)
+            self.assertEqual([(e["where"], e["key"]) for e in index["soft_settings_not_taken"]],
+                             [("variant high", "FramePerSecondLimit")])
+            # the viewer held 5 during "high"; the key was tracked although the 7 did not take, so "sun" put the 0 back
+            sets = [d for d in fv.set_log if d[0] == "FramePerSecondLimit"]
+            self.assertEqual([v for _, v in sets][:2], [7, 0])
+            self.assertEqual(int(fv.settings["FramePerSecondLimit"][1]), 0)
+
+    def test_a_failed_gpu_window_is_recorded_and_the_other_runs_go_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True)
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}}, {"id": "none", "settings": {"AFKTimeout": 2}}]
+            real = pc.Run.wait_window
+            calls = []
+
+            def flaky(run_, start):
+                calls.append(1)
+                if len(calls) == 1:
+                    raise pc.LeapError("boom")
+                return real(run_, start)
+            with mock.patch.object(pc.Run, "wait_window", flaky):
+                code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], variants, extra=["--gpu-window", "--frames", "7"])
+            self.assertEqual(code, 4)
+            self.assertEqual([(f["preset"], f.get("error")) for f in index["window_failures"]], [("A__sun", "boom")])
+            self.assertNotIn("window_file", index["presets"]["A__sun"])
+            self.assertEqual(index["presets"]["A__none"]["gpu_frames"], 7)
+            self.assertEqual(len(index["captures"]), 2)
+
+    def test_a_warm_up_capture_that_cannot_start_does_not_stop_the_run(self):
+        class NoWarmup(FakeCapture):
+            def __init__(self, cmd, **kw):
+                if ".warmup" in " ".join(cmd):
+                    raise OSError("cannot start")
+                super().__init__(cmd, **kw)
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            code, run, index = self._quick(tmp, fv, [{"id": "A", "camera": None}], [{"id": "sun", "settings": {"AFKTimeout": 1}}],
+                                           popen=NoWarmup, settle={"warmup_capture_s": 0.3})
+            self.assertEqual(code, 0)
+            info = index["presets"]["A__sun"]
+            self.assertEqual(info["warmup_capture"]["error"], "cannot start")
+            self.assertEqual(sorted(p.name for p in run.glob("A__sun*")), ["A__sun.capture.log", "A__sun.tracy"])
+            self.assertTrue(info["tracy_connected"])
+
+    def test_gpu_window_needs_the_no_glstats_flow(self):
+        with self.assertRaises(SystemExit), mock.patch("sys.stderr"):
+            pc.parse_args(["--gpu-window"])
+        self.assertTrue(pc.parse_args(["--gpu-window", "--no-glstats"]).gpu_window)
+
+    def test_an_empty_variant_list_and_an_unknown_environment_are_refused(self):
+        bad = [{"presets": [{"id": "a", "camera": None, "variants": []}], "variants": [{"id": "sun", "settings": {}}]},
+               {"presets": [{"id": "a", "camera": None}], "variants": [{"id": "n", "settings": {}, "environment": "region"}]},
+               {"presets": [{"id": "a", "camera": None}], "variants": [{"id": "n", "settings": {}, "environment": "dusk"}]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, doc in enumerate(bad):
+                p = pathlib.Path(tmp) / ("s%d.json" % i)
+                p.write_text(json.dumps(doc), encoding="utf-8")
+                with self.assertRaises(ValueError, msg=str(doc)):
+                    pc.load_scenario(p)
 
     def test_the_rooftops_scenarios_load(self):
         sc = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops_moving.json")
