@@ -887,18 +887,21 @@ struct Hit
     Cause cause = Cause::Other;
 };
 
-// Rebuilt once per frame from the tiles' current volumes; apply() tests a frame's dirty boxes through the 8 m grid (F15) and
+// Rebuilt once per frame from the tiles' current volumes; apply() tests a frame's dirty boxes against the tiles' volumes and
 // names, once per tile, the cause of the first box that touched it. A list that overflowed (everything()) touches every tile.
+// A flat scan in tile order (intersects() starts with the bounds test): a hundred-odd tiles cost less than the per-frame
+// 8 m grid it replaces, whose rebuild allocated per cell on every frame that had boxes. The hits come in the same order
+// as before (per box, ascending tile index).
 class ChangeIndex
 {
 public:
     void rebuild(const std::vector<TileVolume>& tiles)
     {
         mTiles = tiles;
-        mGrid.clear();
-        for (uint32_t i = 0; i < mTiles.size(); ++i)
+        mBounds.resize(mTiles.size());
+        for (size_t i = 0; i < mTiles.size(); ++i)
         {
-            mGrid.add(i, mTiles[i].pyramid.bounds);
+            mBounds[i] = mTiles[i].pyramid.bounds; // contiguous, so the scan's first test does not walk the planes' memory
         }
     }
 
@@ -919,20 +922,20 @@ public:
             }
             return;
         }
-        std::vector<char> hit(mTiles.size(), 0);
-        size_t remaining = mTiles.size();
+        const size_t n = mTiles.size();
+        mHit.assign(n, 0);
+        size_t remaining = n;
         for (const DirtyBox& b : boxes)
         {
             if (remaining == 0)
             {
                 break; // every tile is already stale: the other boxes cannot add a cause
             }
-            mGrid.candidates(b.box, mCand);
-            for (uint32_t i : mCand)
+            for (size_t i = 0; i < n; ++i)
             {
-                if (!hit[i] && intersects(mTiles[i].pyramid, b.box))
+                if (!mHit[i] && overlaps(mBounds[i], b.box) && intersects(mTiles[i].pyramid, b.box))
                 {
-                    hit[i] = 1;
+                    mHit[i] = 1;
                     --remaining;
                     out.push_back({ mTiles[i].key, b.cause });
                 }
@@ -942,8 +945,8 @@ public:
 
 private:
     std::vector<TileVolume> mTiles;
-    TileGrid mGrid;
-    std::vector<uint32_t> mCand;
+    std::vector<Aabb> mBounds;
+    std::vector<char> mHit;
 };
 
 // ---------------------------------------------------------------------------------------------
