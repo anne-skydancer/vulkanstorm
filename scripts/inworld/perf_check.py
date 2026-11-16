@@ -164,7 +164,8 @@ def region_from_log(path, offset=0, first=False):
             text = f.read().decode("utf-8", "replace")
     except (OSError, TypeError):
         return None
-    found = re.findall(r"Entering region \[([^\]]+)\]", text)
+    # the viewer logs "Entering region []" at login, before the name is known: skip empty names
+    found = [n for n in re.findall(r"Entering region \[([^\]]*)\]", text) if n.strip()]
     return (found[0] if first else found[-1]) if found else None
 
 
@@ -764,7 +765,7 @@ class Run:
         self.index["login"] = self.login
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
         if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
-            raise LeapError("the login region is unknown (no 'Entering region' line in the viewer log): pass --start-region NAME")
+            raise LeapError("the login region is unknown (the viewer logs no region name at login): start the session with -StartRegion NAME")
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
@@ -997,6 +998,7 @@ def parse_args(argv):
                     "the viewer log (URL-escaped like --tp-region)")
     args = ap.parse_args(argv)
     args.fps_from_log = False
+    args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
     args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
     args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
