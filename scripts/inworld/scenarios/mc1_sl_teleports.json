@@ -1,6 +1,6 @@
 {
   "name": "mc1_sl_teleports",
-  "description": "Multicore stage 1, teleports only (SL allows at most 6 teleports a minute, so 30 s pauses). The owner logs in at home (-StartRegion), teleports to the busy region (-BusyRegion) when the pop-up asks; the plugin then runs five teleports within it and five between it and the home region in one continuous Tracy capture (MC1-teleports), and a final pop-up. No still/moving captures, no fps probe.",
+  "description": "Multicore stage 1, teleports only (SL allows at most 6 teleports a minute, so 30 s pauses). The owner logs in at home (-StartRegion), teleports to the busy region (-BusyRegion) when the pop-up asks; the plugin then runs teleports between it and the home region only (busy regions such as Risk refuse teleports to arbitrary points inside them) in one continuous Tracy capture (MC1-teleports), and a final pop-up. No still/moving captures, no fps probe.",
   "settle": {
     "post_login_s": 20.0,
     "after_camera_s": 4.0,
@@ -24,7 +24,7 @@
   },
   "presets": [],
   "teleports": {
-    "within": 5,
+    "within": 0,
     "offset": [
       20,
       0,
