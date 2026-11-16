@@ -5,7 +5,7 @@ This is a design note, not a plan. Owner decision of 2026-11-16 (recorded in thi
 
 ## Why it is interesting
 
-With shadow maps, the cost of an avatar's shadow grows with the number of lights that see it. Every (avatar, light) pair needs its own drawing, scheduling and memory. With many avatars under many lamps, that becomes a large share of the frame.
+With shadow maps, the cost of an avatar's shadow grows with the number of lights that see it. Every (avatar, light) pair needs its own drawing and scheduling; the memory belongs to each light's tiles and faces, which all its casters share. With many avatars under many lamps, that becomes a large share of the frame.
 
 A crowd-shadow literature study of 2026-11-16 (kept outside the tree) made a rough estimate for 80 avatars, each in range of 4 lamps:
 - about 11.5 ms of shadow drawing a frame when every pair is redrawn at full rate;
