@@ -493,7 +493,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
     {
         for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent", "RenderCloudOpticalDepth",
-                                  "RenderShadowBlurSize", "RenderShadowLightSize",
+                                  "RenderShadowBlurSize",
                                   "RenderLightHandoverSwing", "RenderLightHandoverFade", "RenderMoonlightCompensation",
                                   "RenderMoonAdaptationDepth", "RenderAtmosphereHazeSlab", "RenderAtmospherePhysicalLight" })
         {
@@ -2257,7 +2257,6 @@ void LLFloaterPreference::refreshEnabledState()
     // the light size applies to the Stochastic method
     const bool softness_enabled = shadow_method_enabled
         && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()));
-    getChild<LLSliderCtrl>("ShadowLightSize")->setEnabled(softness_enabled);
     getChild<LLSliderCtrl>("ShadowSoftness")->setEnabled(softness_enabled);
     getChild<LLSpinCtrl>("ShadowSoftnessValue")->setEnabled(softness_enabled);
     if (!LLStochasticEngine::deviceSupported())

@@ -2357,22 +2357,6 @@ If you do not understand the distinction then leave this control alone."
        tool_tip="Scale of the shadow softening blur. 0 = no blur."
        top_pad="8"
        width="500"/>
-      <slider
-       control_name="RenderShadowLightSize"
-       decimal_digits="2"
-       follows="left|top"
-       height="16"
-       increment="0.05"
-       label="Soft shadow light size"
-       label_width="170"
-       layout="topleft"
-       left="10"
-       max_val="3"
-       min_val="0.1"
-       name="ShadowLightSize"
-       tool_tip="Multiplier of the sun and moon's apparent size for soft shadows. Larger = softer penumbra. Only used with the Stochastic shadow method."
-       top_pad="8"
-       width="500"/>
       <text
        follows="left|top"
        font="SansSerifBold"
