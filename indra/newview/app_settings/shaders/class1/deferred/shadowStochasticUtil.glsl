@@ -223,6 +223,10 @@ float stCascadeVisibility(int j, vec3 spos, vec3 ng, float sin_theta, vec3 L, ve
 
 float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 {
+    if (primary_shadow_strength <= 0.0)
+    {
+        return 1.0; // the dark gate or an invisible shadow: the final mix gives 1.0, so nothing to march
+    }
     vec3 light_dir = normalize(primary_light_dir);
     if (pos.z <= -shadow_clip.w)
     {

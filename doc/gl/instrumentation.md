@@ -16,7 +16,9 @@ except five inert debug settings (nothing reads them).
   An integration into release leaves these edits out: the `VKS_GLSTAT_*` / `VKS_GLCMP_*` lines, the two
   `llglsubmitstats*` and `llglsubmitstatsapi*` file pairs (they are added to the CMake source lists only when the option
   is on), the five debug settings, the CMake option, `indra/llrender/tests/llglsubmitimage_test.cpp` and the ci-checks step that
-  runs it, and the `check_release_hooks.py` names. The `check-pr.yaml` condition may stay.
+  runs it, and the `check_release_hooks.py` names. The `check-pr.yaml` condition may stay. The directional shadows' dark-gate
+  readout (`lldirectionalshadowreadout.*`, always compiled on devel) is another devel-only hook: an integration also deletes its
+  include and its `DirectionalShadowReadout::note` block in `pipeline.cpp`, and its `.cpp` and `.h` CMake lines.
 - **No Preferences entries.** Five debug settings, none persisted (see "How to read it").
 
 ## What is measured

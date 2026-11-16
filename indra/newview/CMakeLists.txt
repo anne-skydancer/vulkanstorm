@@ -946,6 +946,10 @@ if (VKS_GL_STATS)
 endif()
 # </FS:Ansariel> Group GLTF files into their subfolders
 
+# development only: the in-world readout of the directional shadows' dark gate; stripped by hand from a release
+# integration, enforced by scripts/tests/check_release_hooks.py
+list(APPEND viewer_SOURCE_FILES lldirectionalshadowreadout.cpp)
+
 if (OPENSIM)
     list(APPEND viewer_SOURCE_FILES
                 fsgridhandler.cpp
@@ -1176,6 +1180,8 @@ set(viewer_HEADER_FILES
     lldirpicker.h
     lldonotdisturbnotificationstorage.h
     lldndbutton.h
+    lldirectionalshadowgate.h
+    lldirectionalshadowreadout.h
     lldrawable.h
     lldrawpool.h
     lldrawpoolalpha.h
