@@ -217,9 +217,12 @@ namespace
         check(radiusCapTexels(2.0f, 2048, 1.0f) == 12.0f, "T8 a large near tile: at most 12 texels");
         // a level step halves the texels per metre and so the cap, above the one texel floor
         check(std::fabs(radiusCapTexels(1.0f, 512, 4.0f) * 2.0f - radiusCapTexels(1.0f, 1024, 4.0f)) < 1e-5f, "T8 a level step halves the cap", radiusCapTexels(1.0f, 512, 4.0f));
-        // P2b: the emitter's extent: the prim's face, 2 cm .. 15 cm, never softer than P2's 15 cm
-        check(emitterExtent(0.05f) == 0.05f && emitterExtent(0.001f) == kEmitterMin && emitterExtent(0.5f) == 0.15f && emitterExtent(5.0f) == 0.15f, "T8 emitter extent clamps the face to 2 cm .. 15 cm");
-        check(emitterExtent(std::numeric_limits<float>::quiet_NaN()) == kEmitterMin && emitterExtent(std::numeric_limits<float>::infinity()) == kEmitterMin, "T8 a non-finite face gets the lower limit");
+        // the emitter's extent: a fixed 1 cm light times the softness (RenderShadowLightSize), whatever the prim
+        check(emitterExtent(1.0f) == 0.01f && emitterExtent(0.0f) == 0.0f, "T8 emitter extent is 1 cm at softness 1");
+        check(std::fabs(emitterExtent(kSoftnessDefault) - 0.0023f) < 1e-7f, "T8 emitter extent at the default softness 0.23 is 2.3 mm", emitterExtent(kSoftnessDefault));
+        check(std::fabs(emitterExtent(0.5f) - 0.005f) < 1e-8f, "T8 emitter extent scales with the softness");
+        check(emitterExtent(std::numeric_limits<float>::quiet_NaN()) == emitterExtent(kSoftnessDefault) && emitterExtent(std::numeric_limits<float>::infinity()) == emitterExtent(kSoftnessDefault)
+              && emitterExtent(-1.0f) == emitterExtent(kSoftnessDefault), "T8 a negative or non-finite softness gets the default");
         // the penumbra scale per axis: (0.5 / c1) * light * k * N, the x axis from light.x and k.x
         check(std::fabs(penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f) - 204.8f) < 1e-3f, "T8 penumbra scale x", penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f));
         check(std::fabs(penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f) - 10.24f) < 1e-3f, "T8 penumbra scale y (axes not swapped)", penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f));
