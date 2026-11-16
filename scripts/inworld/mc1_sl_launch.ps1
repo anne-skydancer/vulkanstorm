@@ -15,6 +15,7 @@ param(
     [string]$TpRegion = '',
     [string]$StartRegion = '',   # the region you log in to (the viewer does not log its name at login)
     [string]$BusyRegion = '',    # the region you teleport to when the pop-up asks
+    [string]$Scenario = 'mc1_sl', # mc1_sl (captures, teleports, fps) or mc1_sl_teleports (teleports only)
     [string]$Exe = 'C:\Users\annes\source\repos\vulkanstorm\work\mc-stage1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe',
     [switch]$DryRun
 )
@@ -39,7 +40,7 @@ $env:APPDATA = "$prof\Roaming"
 $env:LOCALAPPDATA = "$prof\Local"
 
 $out   = (Join-Path $repo ".captures\mc1-sl-$stamp") -replace '\\', '/'
-$plugin = "$py $scripts/perf_check.py --scenario $scripts/scenarios/mc1_sl.json --out $out --no-glstats --tracy-capture " + ($tracy -replace '\\', '/')
+$plugin = "$py $scripts/perf_check.py --scenario $scripts/scenarios/$Scenario.json --out $out --no-glstats --tracy-capture " + ($tracy -replace '\\', '/')
 if ($TpRegion) { $plugin += ' --tp-region ' + [uri]::EscapeDataString($TpRegion) }   # a space is %20
 if ($StartRegion) { $plugin += ' --start-region ' + [uri]::EscapeDataString($StartRegion) }
 if ($BusyRegion)  { $plugin += ' --busy-region ' + [uri]::EscapeDataString($BusyRegion) }

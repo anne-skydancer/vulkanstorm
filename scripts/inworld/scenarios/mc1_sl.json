@@ -56,7 +56,7 @@
       0
     ],
     "second": 5,
-    "pause_s": 8,
+    "pause_s": 15,
     "timeout_s": 120,
     "settle_s": 3,
     "min_move_m": 5,
