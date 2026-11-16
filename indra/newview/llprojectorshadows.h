@@ -202,7 +202,8 @@ private:
         bool holdsAvatar = false;          // an avatar is in its light this frame
         U32 avatarCount = 0;
         bool avatarInLayer = false;        // L holds an avatar of this tile over S (the dynamic layer, P4): redrawn while served, restored from S after
-        F32 lastAvatarMs = llprojectorpool::kDefaultItemMs; // the CPU cost of its last avatar layer (the scheduler's prediction)
+        F32 lastAvatarMs = llprojectorpool::kDefaultItemMs; // the CPU cost of its last avatar layer (the scheduler's prediction, smoothed)
+        F32 avatarDist = 0.f;              // the camera position's distance to the nearest avatar in its light (the face's order of service)
         U32 layerFrame = 0;                // the frame its avatar layer was last drawn or restored (the lag of the dynamic layer)
     };
 

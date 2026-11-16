@@ -777,7 +777,8 @@ namespace
                 check(o4.size() == 1 && o4[0] == 31, "T7 only the overdue item runs when nothing fits the cap", o4.size());
             }
             items[30].age_frames = 0;
-            check(selectDynamic(items, 0.001f, 24).empty(), "T7 no floor: nothing fits the cap, nothing runs");
+            check(selectDynamic(items, 0.001f, 24).size() == 1, "T7 nothing fits the cap: only the first pick runs (C1: it runs every frame)");
+            check(selectDynamic(items, 0.001f, 24, false).empty(), "T7 no floor: with the frame spent nothing runs");
             std::vector<DynamicItem> big{ { 1, true, 0, 1.f, 0.01f, 30 }, { 2, true, 0, 2.f, 0.01f, 5 } };
             const std::vector<uint32_t> o3 = selectDynamic(big, 10.f, 24);
             check(o3.size() == 1 && o3[0] == 1,
@@ -787,7 +788,8 @@ namespace
             std::vector<DynamicItem> costly{ { 8, false, 9, 1.f, 0.5f, 0 } };
             check(selectDynamic(costly, 0.3f, 24).size() == 1, "T7 an overdue item over the CPU cap runs");
             std::vector<DynamicItem> costly_young{ { 8, false, 0, 1.f, 0.5f, 0 } };
-            check(selectDynamic(costly_young, 0.3f, 24).empty(), "T7 a young item over the CPU cap waits");
+            check(selectDynamic(costly_young, 0.3f, 24).size() == 1, "T7 a young item over the CPU cap runs alone too (C1)");
+            check(selectDynamic(costly_young, 0.3f, 24, false).empty(), "T7 an item over the CPU cap waits when the frame has spent");
             std::vector<DynamicItem> lamps{ { 1, false, 0, 1.f, 0.1f, 0 }, { 2, false, 0, 2.f, 0.1f, 0 },
                                             { 3, false, 0, 3.f, 0.1f, 0 }, { 4, false, 0, 4.f, 0.1f, 0 } };
             check(selectDynamic(lamps, 0.3f, 24).size() == 3, "T7 lamps follow the CPU cap, not A_max");
@@ -1363,7 +1365,7 @@ void testP4Caps()
         const FramePicks only_static = selectFrame(st, std::vector<DynamicItem>(), kFrameCapMs, kAvatarDrawsMax, true);
         check(only_static.fixed.size() == 7, "P4 without dynamic work the static tiles may take the whole cap: 0.35 / 0.05 = 7", double(only_static.fixed.size()));
         const FramePicks only_dyn = selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true);
-        check(only_dyn.dynamic.size() == 4, "P4 the dynamic layer alone never takes more than its share", double(only_dyn.dynamic.size()));
+        check(only_dyn.dynamic.size() == 7, "P4 the dynamic layer alone takes the whole cap when no static tile waits (C1): 0.35 / 0.05 = 7", double(only_dyn.dynamic.size()));
     }
     // a cap already spent by an earlier cache leaves less: the sum over both caches never exceeds the one cap
     {
@@ -1614,8 +1616,222 @@ void testP4Owners()
     check(again.enter() && !again.enter() && !again.leave() && again.leave(), "P4 scope: the last leave restores");
 }
 
-void testP4()
+// ---- The avatar layer's cadence (hotfix C1): faces drawn a frame and the worst gap, before and after ----
+//
+// One face = one lamp whose light holds an avatar. The simulation drives the scheduler the way LLProjectorShadows::update does: the
+// pick (selectFrame), then the in-frame gate (mayRunPick, the dynamic share) with the measured cost, which is what each pick adds to
+// the ledger. `legacy` is the release scheduler as it was before C1 (a fixed 0.20 ms share, only an overdue face may run over it,
+// lamp distance for the order, the last measured cost as the prediction); its pick is reproduced here from the old code.
+//   lamp_ties: every lamp at the same camera distance (0 indoors: the camera is inside every lamp's reach)
+//   shared_avatar: every lamp holds the SAME avatar (the owner's own), so the avatar distance ties as well
+struct CadenceResult
 {
+    double faces_per_frame = 0;
+    uint32_t worst_gap = 0;
+    uint32_t nearest_worst_gap = 0; // face 1, the one with the nearest avatar
+};
+
+std::vector<uint32_t> legacySelectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max)
+{
+    std::vector<const DynamicItem*> order;
+    for (const DynamicItem& it : items) order.push_back(&it);
+    std::sort(order.begin(), order.end(), [](const DynamicItem* a, const DynamicItem* b) {
+        const bool da = a->age_frames >= kDynamicDeadlineFrames, db = b->age_frames >= kDynamicDeadlineFrames;
+        if (da != db) return da;
+        if (da && a->age_frames != b->age_frames) return a->age_frames > b->age_frames;
+        const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
+        return ca != cb ? ca < cb : a->key < b->key;
+    });
+    std::vector<uint32_t> out;
+    float spent = 0.f;
+    uint32_t avatars = 0;
+    for (const DynamicItem* it : order)
+    {
+        const float cost = itemCost(it->last_cpu_ms);
+        const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
+        const bool overdue = it->age_frames >= kDynamicDeadlineFrames && out.empty();
+        if ((spent + cost > t_d_ms && !overdue) || avatars + draws > a_max) continue;
+        out.push_back(it->key);
+        spent += cost;
+        avatars += draws;
+    }
+    return out;
+}
+
+CadenceResult cadenceSim(uint32_t lamps, float cost, bool legacy, bool lamp_ties, bool shared_avatar, uint32_t frames = 600)
+{
+    std::vector<uint32_t> last(lamps + 1, 1);
+    std::vector<float> measured(lamps + 1, kDefaultItemMs); // lastAvatarMs
+    std::vector<uint32_t> worst(lamps + 1, 0);
+    uint64_t drawn = 0;
+    const uint32_t warm = 40;
+    for (uint32_t frame = 2; frame <= frames; ++frame)
+    {
+        std::vector<DynamicItem> items;
+        for (uint32_t i = 1; i <= lamps; ++i)
+        {
+            DynamicItem it;
+            it.key = i;
+            it.avatar = true;
+            it.age_frames = frame - last[i];
+            // before: the lamp's distance (a tie indoors); after: the camera position's distance to the nearest avatar
+            it.cam_dist = legacy ? (lamp_ties ? 0.f : float(i)) : (shared_avatar ? 3.f : float(i));
+            it.last_cpu_ms = measured[i];
+            it.avatar_draws = 1;
+            items.push_back(it);
+        }
+        FrameLedger ledger;
+        ledger.begin(frame);
+        std::vector<uint32_t> picks;
+        if (legacy)
+        {
+            const float left = ledger.left(kFrameCapMs);
+            for (uint32_t k : legacySelectDynamic(items, std::min(kDynamicCapMs, left) + 1e-4f, kAvatarDrawsMax)) picks.push_back(k);
+            float ms = 0.f;
+            for (uint32_t k : picks) ms += itemCost(measured[k]);
+            if (ms > left + 1e-4f && picks.size() != 1) picks.clear();
+        }
+        else
+        {
+            for (uint32_t k : selectFrame(std::vector<StaticItem>(), items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched()).dynamic)
+                picks.push_back(unpackKey(k));
+        }
+        const float share = legacy ? kDynamicCapMs : dynamicShareMs(false, kFrameCapMs);
+        float own = 0.f;
+        bool first = true;
+        for (uint32_t k : picks)
+        {
+            if (!mayRunPick(ledger.left(kFrameCapMs), true, first, false) || (!first && own >= share)) break;
+            if (frame > warm) worst[k] = std::max(worst[k], frame - last[k]);
+            last[k] = frame;
+            measured[k] = legacy ? cost : smoothedCostMs(measured[k], cost);
+            ledger.add(cost);
+            own += cost;
+            first = false;
+            if (frame > warm) ++drawn;
+        }
+    }
+    CadenceResult r;
+    r.faces_per_frame = double(drawn) / double(frames - warm);
+    for (uint32_t i = 1; i <= lamps; ++i) r.worst_gap = std::max(r.worst_gap, worst[i]);
+    r.nearest_worst_gap = worst[1];
+    return r;
+}
+
+void testP4Cadence(bool print_table)
+{
+    const float costs[] = { 0.04f, 0.07f, 0.10f, 0.15f, 0.20f, 0.30f };
+    if (print_table)
+    {
+        std::printf("cadence, indoors (every lamp ties at distance 0), one avatar under all lamps: faces drawn a frame / worst gap in frames\n");
+        std::printf("lamps  cost ms |   before        after\n");
+    }
+    for (uint32_t lamps = 1; lamps <= 5; ++lamps)
+    {
+        for (float cost : costs)
+        {
+            const CadenceResult before = cadenceSim(lamps, cost, true, true, true);
+            const CadenceResult after = cadenceSim(lamps, cost, false, true, true);
+            if (print_table)
+            {
+                std::printf("%5u  %7.2f | %5.2f / %-3u   %5.2f / %-3u\n", lamps, cost, before.faces_per_frame, before.worst_gap, after.faces_per_frame, after.worst_gap);
+            }
+            // never worse than before, in faces a frame and in the worst gap
+            check(after.faces_per_frame + 1e-9 >= before.faces_per_frame, "C1 cadence: no fewer faces a frame than before", lamps, cost);
+            check(after.worst_gap <= before.worst_gap, "C1 cadence: the worst gap is not longer than before", lamps, cost);
+            check(after.worst_gap <= kDynamicDeadlineFrames + 1, "C1 cadence: no face waits longer than the deadline (plus the frame it was seen in)", lamps, cost);
+            // whatever fits the whole cap is drawn every frame
+            const float need = float(lamps) * std::max(cost, kDefaultItemMs);
+            if (need <= kFrameCapMs - 1e-3f)
+            {
+                check(after.worst_gap == 1, "C1 cadence: faces that fit the cap run every frame", lamps, cost);
+            }
+            if (lamps == 1)
+            {
+                check(after.worst_gap == 1 && after.faces_per_frame > 0.99, "C1 cadence: a single face, however heavy, runs every frame", cost);
+            }
+        }
+    }
+    // the cases of the survey (sim_out.md): 3 lamps at 0.07 ms had two every frame and the third every 4th; one lamp at 0.21 ms every 4th
+    {
+        const CadenceResult b = cadenceSim(3, 0.07f, true, true, true), a = cadenceSim(3, 0.07f, false, true, true);
+        check(b.worst_gap == 4 && a.worst_gap == 1, "C1 cadence: 3 lamps at 0.07 ms: gap 4 before, every frame after", b.worst_gap, a.worst_gap);
+        const CadenceResult b1 = cadenceSim(1, 0.21f, true, true, true), a1 = cadenceSim(1, 0.21f, false, true, true);
+        check(b1.worst_gap == 4 && a1.worst_gap == 1, "C1 cadence: 1 lamp at 0.21 ms: gap 4 before, every frame after", b1.worst_gap, a1.worst_gap);
+    }
+    // indoors with avatars at different distances: the nearest avatar's face runs every frame, even when the lamps tie at 0 and
+    // the faces do not all fit
+    for (uint32_t lamps = 2; lamps <= 5; ++lamps)
+    {
+        for (float cost : costs)
+        {
+            const CadenceResult after = cadenceSim(lamps, cost, false, true, false);
+            // every frame while the faces fit; in a real overload (more face cost than the cap holds) the 4-frame deadline, the safety
+            // net, turns the service into a round robin and the nearest face waits like the others: bounded, never starved
+            if (cost <= 0.10f || (lamps <= 4 && cost <= 0.15f) || lamps == 1)
+            {
+                check(after.nearest_worst_gap == 1, "C1 cadence: indoors the nearest avatar's face is drawn every frame", lamps, cost);
+            }
+            check(after.nearest_worst_gap <= kDynamicDeadlineFrames + 1, "C1 cadence: in an overload the nearest face still waits at most the deadline", lamps, cost);
+        }
+    }
+    // the order: the avatar's distance first, then the age; the lamp's key decides nothing while ages differ
+    {
+        std::vector<DynamicItem> v = faces(3, 0.2f, 1);
+        v[0].cam_dist = v[1].cam_dist = v[2].cam_dist = 3.f; // one avatar under three lamps
+        v[0].age_frames = 1; v[1].age_frames = 3; v[2].age_frames = 2;
+        const std::vector<uint32_t> o = selectDynamic(v, 10.f, kAvatarDrawsMax);
+        check(o.size() == 3 && o[0] == 2 && o[1] == 3 && o[2] == 1, "C1 order: equal avatar distances are served oldest first, not by key");
+        v[2].cam_dist = 1.f;
+        check(selectDynamic(v, 10.f, kAvatarDrawsMax)[0] == 3, "C1 order: the nearest avatar first");
+        v[0].age_frames = kDynamicDeadlineFrames;
+        check(selectDynamic(v, 10.f, kAvatarDrawsMax)[0] == 1, "C1 order: an overdue face goes first (the safety net)");
+    }
+    // the share: the whole remaining cap without a waiting static tile, kDynamicCapMs with one
+    check(std::fabs(dynamicShareMs(false, kFrameCapMs) - kFrameCapMs) < 1e-6f, "C1 share: no static tile waiting, the whole cap");
+    check(std::fabs(dynamicShareMs(true, kFrameCapMs) - kDynamicCapMs) < 1e-6f, "C1 share: a static tile waiting, the fixed share");
+    check(dynamicShareMs(true, 0.1f) == 0.1f && dynamicShareMs(false, -1.f) == 0.f, "C1 share: never more than what is left");
+    {
+        const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
+        check(selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 7, "C1 share: 0.35 / 0.05 = 7 faces without a static tile");
+        check(selectFrame(tiles(1, 0.05f), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 4, "C1 share: with a static tile waiting, 4 faces as before");
+    }
+    // a heavy single face: alone, every frame; not over the cap when the frame has spent already
+    {
+        const std::vector<DynamicItem> heavy = faces(1, 0.6f, 0);
+        const FramePicks p = selectFrame(std::vector<StaticItem>(), heavy, kFrameCapMs, kAvatarDrawsMax, true);
+        check(p.dynamic.size() == 1, "C1 heavy: one face over the whole cap runs alone, young or not");
+        check(selectFrame(std::vector<StaticItem>(), heavy, 0.2f, kAvatarDrawsMax, false).dynamic.empty(), "C1 heavy: not once the frame has spent");
+        std::vector<DynamicItem> two = faces(2, 0.6f, 0);
+        check(selectFrame(std::vector<StaticItem>(), two, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "C1 heavy: never two over-cap faces");
+        // an over-cap face does not stop a face that fits when the frame has spent (the cheap one runs)
+        std::vector<DynamicItem> mix = faces(2, 0.6f, 0);
+        mix[1].last_cpu_ms = 0.06f;
+        const FramePicks m = selectFrame(std::vector<StaticItem>(), mix, 0.2f, kAvatarDrawsMax, false);
+        check(m.dynamic.size() == 1 && unpackKey(m.dynamic[0]) == 2, "C1 heavy: a face that fits still runs behind a heavy one when the frame has spent");
+    }
+    // the cost prediction: an EMA, a spike does not push a face out
+    {
+        float p = 0.08f;
+        p = smoothedCostMs(p, 0.30f);
+        check(p < 0.20f, "C1 smoothing: one spike of 0.30 ms leaves the prediction under the share", p);
+        for (int i = 0; i < 40; ++i) p = smoothedCostMs(p, 0.30f);
+        check(std::fabs(p - 0.30f) < 1e-3f, "C1 smoothing: a lasting change is followed", p);
+        check(smoothedCostMs(0.1f, std::numeric_limits<float>::quiet_NaN()) == 0.1f && smoothedCostMs(0.1f, -1.f) == 0.1f, "C1 smoothing: a bad sample is ignored");
+        check(smoothedCostMs(0.f, 0.2f) == 0.2f, "C1 smoothing: the first sample seeds it");
+    }
+    // the avatar's distance to the camera position (never the view direction)
+    {
+        Aabb b;
+        for (int i = 0; i < 3; ++i) { b.lo[i] = 0.f; b.hi[i] = 2.f; }
+        const float inside[3] = { 1.f, 1.f, 1.f }, out_x[3] = { 5.f, 1.f, 1.f }, corner[3] = { 5.f, 6.f, 1.f };
+        check(pointBoxDistance(inside, b) == 0.f && pointBoxDistance(out_x, b) == 3.f && std::fabs(pointBoxDistance(corner, b) - 5.f) < 1e-5f, "C1 distance: point to box");
+    }
+}
+
+void testP4(bool print_table)
+{
+    testP4Cadence(print_table);
     testP4Caps();
     testP4Layer();
     testP4Lag();
@@ -1634,8 +1850,9 @@ void testP3()
 }
 } // namespace
 
-int main()
+int main(int argc, char** argv)
 {
+    const bool print_table = argc > 1 && std::string(argv[1]) == "--table"; // the cadence table of the C1 commit
     testSizeRule();
     testBuddy();
     testT1();
@@ -1649,7 +1866,7 @@ int main()
     testT8();
     testBadInput();
     testP3();
-    testP4();
+    testP4(print_table);
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);
