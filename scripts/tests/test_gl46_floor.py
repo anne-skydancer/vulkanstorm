@@ -63,14 +63,14 @@ class GL46Floor(unittest.TestCase):
         for path in code_files():
             text = read(path)
             for gone in ('deviceSupported', 'LLShadowMethod::effective', 'sManualScratch', 'allocateConversionBuffer',
-                         'OpenGLPre30'):
+                         'OpenGLPre30', 'LLStochasticEngine::usable', 'RenderMaxOpenGLVersion'):
                 self.assertNotIn(gone, text, '%s: %s' % (path.relative_to(ROOT), gone))
 
     def test_docs_do_not_name_removed_gates(self):
         for path in list((ROOT / 'doc').rglob('*.md')) + [NEWVIEW / 'featuretable.txt', NEWVIEW / 'featuretable_linux.txt',
                                                          NEWVIEW / 'featuretable_mac.txt']:
             text = read(path)
-            for gone in ('deviceSupported', 'LLShadowMethod::effective'):
+            for gone in ('deviceSupported', 'LLShadowMethod::effective', 'LLStochasticEngine::usable'):
                 self.assertNotIn(gone, text, '%s: %s' % (path.relative_to(ROOT), gone))
 
 

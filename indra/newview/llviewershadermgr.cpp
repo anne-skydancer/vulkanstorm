@@ -1151,7 +1151,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
         mFragmentShaderObjects.erase(*helper);
-        // the fragment resolve (GL 4.0 to 4.2) attaches the engine's resolve object; the compute resolve compiles it as a compute object
+        // the fragment resolve (the default) attaches the engine's resolve object; the compute resolve compiles it as a compute object
         const bool shadow_fragment_resolve = stochastic_shadow_resolve_shaders() && !LLStochasticEngine::computeResolve();
         const bool needed = helper == &STOCH_RESOLVE_HELPER ? stochastic_transparency_shaders() || shadow_fragment_resolve
                                                             : stochastic_transparency_shaders();

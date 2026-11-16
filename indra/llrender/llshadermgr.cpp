@@ -605,7 +605,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
 
     // <Vulkanstorm> OpenGL 4.6 floor (newview/llglfloor.h): the viewer does not start below GL 4.6, which
     // brings GLSL 4.60, so there is exactly one header: 430 for compute and 420 for everything else
-    // (PR 2 of the floor moves both to 460).
+    // (a later floor change moves both to 460).
     if (type == GL_COMPUTE_SHADER)
     {
         shader_code_text[shader_code_count++] = strdup("#version 430\n");

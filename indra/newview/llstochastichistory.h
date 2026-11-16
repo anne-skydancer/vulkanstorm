@@ -46,7 +46,7 @@ namespace LLStochasticEngine
     // method never switches to another one on failure. A failed target allocation or shader build is logged,
     // the selected method stays, and the next natural point retries (LLPipeline::retryAlphaStochastic, the
     // next shader reload); meanwhile the pass that cannot run does no harm. Every device that starts meets
-    // the OpenGL 4.6 floor (llglfloor.h), so there is no capability gate.
+    // the OpenGL 4.6 floor (llglfloor.h), so there is no GL-version gate (the transparency's 8-samples-per-pass device test in LLPipeline remains).
 
     // Which resolve the Stochastic shadows run: the fragment resolve on every device, never changed at run
     // time. OpenGL compute dispatches, with the glMemoryBarrier they need between graphics passes, stall the

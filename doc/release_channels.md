@@ -62,7 +62,7 @@ refuses to install (silent installs too). The Linux launcher (`firestorm`
 wrapper script) checks it the same way. The Windows installer also needs
 Windows 10 or newer; Windows 7, 8 and 8.1 are no longer supported.
 
-Every package also needs OpenGL 4.6: a graphics card whose current driver
+Every package also needs OpenGL 4.6 (macOS, which stops at 4.1, is not a Vulkanstorm platform): a graphics card whose current driver
 reports it (expected: recent NVIDIA and AMD cards and Intel Skylake and newer;
 the exact list is not yet checked against user data). The
 viewer checks this at start-up, right after its window is created and before

@@ -1263,8 +1263,8 @@ bool LLAppViewer::init()
     gGLManager.printGLInfoString();
 
     // If we don't have the right GL requirements, exit.
-    // Below the OpenGL 4.6 floor the viewer has already exited (LLGLFloor::refuse, llglfloor.cpp), so this
-    // is a safety net only.
+    // Unreachable below the OpenGL 4.6 floor: LLGLFloor::enforce (llglfloor.cpp) is the only writer of
+    // mHasRequirements = false and exits the process first (fastQuit -> _exit). Kept so the Linden Lab code stays unchanged.
     if (!gGLManager.mHasRequirements)
     {
         // Already reported to the user

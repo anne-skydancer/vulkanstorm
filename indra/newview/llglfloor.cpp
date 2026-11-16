@@ -80,6 +80,7 @@ void LLGLFloor::enforce(LLWindow* window)
     // has no parent window and nothing of the viewer is left on screen. OSMessageBox hides the splash screen.
     LLWindowManager::destroyWindow(window);
     OSMessageBox(message(version, renderer), "Vulkanstorm", OSMB_OK);
+    LLSplashScreen::hide(); // OSMessageBox shows the splash again after the box closes
 
     // Exit as the failed-window path does (fastQuit removes the exec marker, so the next start is not counted as a crash).
     // Not a return through init(): the worker pools started by initThreads are idle but alive, and main()

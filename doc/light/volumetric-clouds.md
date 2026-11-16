@@ -36,7 +36,7 @@ mismatch; CI generates twice and compares the bytes and the pinned SHA-256.
 If the file is missing or damaged the viewer logs a warning (`LL_WARNS("InitInfo")`) and starts: until the clouds
 draw (L7-2) nothing reads the file, so there is no message box and no exit (owner decision, 2026-11-12; the
 `MBCloudNoiseDamaged` string is removed). The configure-time check in `CloudNoise.cmake` still stops a build without
-the file. The check runs before the cache is opened, on every machine, including GL 3 ones,
+the file. The check runs before the cache is opened, on every machine,
 because it does not depend on the renderer. It reads the file once (size checked first), hashes it twice (the whole
 file, then each entry), and frees the 8.6 MB again; the clouds will load and verify it again when they first draw. An
 open that fails is logged with its reason and tried once more after 200 ms. Besides a user who edits the file in a

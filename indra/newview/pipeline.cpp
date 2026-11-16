@@ -8320,7 +8320,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 #endif
 
     // The transparency's S = 8 samples (Enderton et al. 2010: S = the multisample samples of the stochastic targets; the
-    // Stochastic shadows' 8 rays are theirs) in one pass: the GL 4.6 base takes 8 for all three formats. A device that
+    // Stochastic shadows' 8 rays are theirs) in one pass: the GL 4.6 base requires it to take 8 where the driver reports it (the spec minimum is 1, so the check below stays). A device that
     // takes fewer cannot run it (sorted alpha is drawn); lanes are never summed across passes.
     const U32 pass = LLStochasticEngine::TRANSPARENCY_SAMPLES;
     const S32 device = llmin(gGLManager.mMaxColorTextureSamples, llmin(gGLManager.mMaxDepthTextureSamples, gGLManager.mMaxSamples));

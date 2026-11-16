@@ -309,8 +309,8 @@ class Check:
                 return {"status": "NOT RUN", "why": "no projector tile in the scene (the baseline has no tiles); "
                                                     "go where a projector is in reach"}
             if n == 0 and all(c is None for c in states[0][2].values()):
-                # no CRC to compare (the API leaves crc32 out below GL 4.5 or with "crc": false): not a pass either
-                return {"status": "NOT RUN", "why": "no tile CRC in the reply (GL < 4.5 or crc off); "
+                # no CRC to compare (the API leaves crc32 out with "crc": false or for an empty or undrawn tile): not a pass either
+                return {"status": "NOT RUN", "why": "no tile CRC in the reply (crc off or no drawn tile); "
                                                     "the rotation gate cannot compare tile contents"}
         fails = judge_o1(states[0], states[1:])
         return {"status": "FAIL" if fails else "PASS", "steps": len(states), "failures": fails[:50]}
