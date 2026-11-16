@@ -552,6 +552,7 @@ private:
     void hideDrawable( LLDrawable *pDrawable );
     void unhideDrawable( LLDrawable *pDrawable );
     void skipRenderingShadows();
+    bool mDirectionalShadowsDarkCleared = false; // <Vulkanstorm/> the cascade maps were cleared when the dark gate closed (main thread)
 
     // <FS:Ansariel> Reset VB during TP
     void initDeferredVB();

@@ -1590,6 +1590,7 @@ set(viewer_HEADER_FILES
     llsetkeybinddialog.h
     llshadowcascadefit.h
     llshadowmethod.h
+    lldirectionalshadowgate.h
     llsettingspicker.h
     llsettingsvo.h
     llsidepanelappearance.h
