@@ -511,8 +511,8 @@ accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted
 
 Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
 textures; the Stochastic shadows' compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
-8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without GL 4.0, or without 8 samples per pass for the colour, depth and `GL_MAX_SAMPLES` formats, has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without 8 samples per pass for the colour, depth and `GL_MAX_SAMPLES` formats, has
+sorted alpha: a capability gate (`sRenderAlphaStochasticSupported`; OpenGL 4.0 is part of the OpenGL 4.6 floor, which the viewer enforces at start-up). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
 allocation, a resize, a shader set that did not build) does not switch method (owner decision Q8, 2026-11-13: stochastic methods never fall back, replacing the
 2026-11-12 exception): the failure is logged, `RenderAlphaSortMethod` and `RenderShadowMethod` stay as selected, the shadows
 are not changed, and the blended faces are drawn by the plain alpha pass frame by frame (not dropped) while the engine is

@@ -191,6 +191,7 @@
 #include "llworldmapview.h"
 #include "pipeline.h"
 #include "llappviewer.h"
+#include "llglfloor.h"
 #include "llviewerdisplay.h"
 #include "llspatialpartition.h"
 #include "llviewerjoystick.h"
@@ -2023,7 +2024,9 @@ LLViewerWindow::LLViewerWindow(const Params& p)
     // create window
 
     U32 max_core_count = gSavedSettings.getU32("EmulateCoreCount");
-    F32 max_gl_version = gSavedSettings.getF32("RenderMaxOpenGLVersion");
+    // <Vulkanstorm> the OpenGL 4.6 floor: always ask for the newest context (the debug setting that lowered it is gone)
+    F32 max_gl_version = 4.6f;
+    // </Vulkanstorm>
 
     mWindow = LLWindowManager::createWindow(this,
         p.title, p.name, p.x, p.y, p.width, p.height, 0,
@@ -2036,6 +2039,13 @@ LLViewerWindow::LLViewerWindow(const Params& p)
         max_core_count,
         max_gl_version, //don't use window level anti-aliasing, windows only
         useLegacyCursors); // <FS:LO> Legacy cursor setting from main program
+
+    // <Vulkanstorm> OpenGL 4.6 floor (llglfloor.h): refuse to start below it, before anything draws
+    if (mWindow && !gHeadlessClient)
+    {
+        LLGLFloor::enforce(mWindow);
+    }
+    // </Vulkanstorm>
 
     if (NULL == mWindow)
     {
@@ -2100,10 +2110,6 @@ LLViewerWindow::LLViewerWindow(const Params& p)
     }
 
     LLFontManager::initClass();
-
-    // fonts use an GL_UNSIGNED_BYTE image format,
-    // so they need convertion, init buffers if needed
-    LLImageGL::allocateConversionBuffer();
 
     // Init font system, load default fonts and generate basic glyphs
     // currently it takes aprox. 0.5 sec and we would load these fonts anyway

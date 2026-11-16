@@ -565,16 +565,14 @@ void LLTexUnit::setTextureFilteringOptionFast(LLTexUnit::eTextureFilterOptions o
         }
     }
 
-    if (gGLManager.mHasAnisotropic)
+    // anisotropic filtering is core in OpenGL 4.6 (the floor)
+    if (LLImageGL::sGlobalUseAnisotropic && option == TFO_ANISOTROPIC)
     {
-        if (LLImageGL::sGlobalUseAnisotropic && option == TFO_ANISOTROPIC)
-        {
-            glTexParameterf(sGLTextureType[tex_type], GL_TEXTURE_MAX_ANISOTROPY, gGLManager.mMaxAnisotropy);
-        }
-        else
-        {
-            glTexParameterf(sGLTextureType[tex_type], GL_TEXTURE_MAX_ANISOTROPY, 1.f);
-        }
+        glTexParameterf(sGLTextureType[tex_type], GL_TEXTURE_MAX_ANISOTROPY, gGLManager.mMaxAnisotropy);
+    }
+    else
+    {
+        glTexParameterf(sGLTextureType[tex_type], GL_TEXTURE_MAX_ANISOTROPY, 1.f);
     }
 }
 
@@ -889,7 +887,7 @@ LLRender::~LLRender()
 bool LLRender::init(bool needs_vertex_buffer)
 {
 #if LL_WINDOWS
-    if (gGLManager.mHasDebugOutput && gDebugGL)
+    if (gDebugGL)
     { //setup debug output callback
         //glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_LOW_ARB, 0, NULL, GL_TRUE);
         glDebugMessageCallback((GLDEBUGPROC) gl_debug_callback, NULL);

@@ -448,7 +448,7 @@ bool addDeferredAttachments(LLRenderTarget& target, bool for_impostor = false)
     // </FS:Beq>
     static LLCachedControl<bool> has_emissive(gSavedSettings, "RenderEnableEmissiveBuffer", false);
     static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
-    bool hdr = has_hdr() && gGLManager.mGLVersion > 4.05f;
+    bool hdr = has_hdr();
 
     if (!hdr)
     {
@@ -995,7 +995,7 @@ bool LLPipeline::allocateScreenBufferInternal(U32 resX, U32 resY)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
 
     static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
-    bool hdr = gGLManager.mGLVersion > 4.05f && has_hdr();
+    bool hdr = has_hdr();
 
     if (mRT == &mMainRT)
     { // hacky -- allocate auxillary buffer
@@ -1404,7 +1404,7 @@ void LLPipeline::refreshCachedSettings()
     CameraFieldOfView = gSavedSettings.getF32("CameraFieldOfView");
     RenderShadowNoise = gSavedSettings.getF32("RenderShadowNoise");
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
-    RenderShadowMethod = LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()); // <Vulkanstorm/> shadow method, one clamp for every gate
+    RenderShadowMethod = LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")); // <Vulkanstorm/> shadow method, one clamp for every gate
     RenderShadowLightSize = gSavedSettings.getF32("RenderShadowLightSize");  // <Vulkanstorm/> light size (Stochastic)
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
@@ -8281,8 +8281,8 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //   4. composite (under the mask): the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha, smoothed where grain is left; the glow then added to the scene alpha.
 // Two different things keep the passes from running:
-//   - The capability gate (sRenderAlphaStochasticSupported, LLStochasticEngine::deviceSupported):
-//     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is fragment passes on every device). Below it sorted
+//   - The capability gate (sRenderAlphaStochasticSupported): the device takes 8 samples per pass (gl_SampleMask,
+//     multisample textures and the temporal resolve's fragment passes are in the OpenGL 4.6 floor). Below it sorted
 //     alpha runs: a device that cannot run the method, not a fallback.
 //   - Not ready (alphaStochasticReady), on a supported device: the targets are missing or of another
 //     size (an allocation that failed, or a screen buffer resized without them), or an alpha program's
@@ -8312,19 +8312,16 @@ namespace
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // the device only (GL 4.0, enough samples): a shader set that did not build does not clear this
+    // the device only (enough samples, tested below): a shader set that did not build does not clear this
     // flag; LLDrawPoolAlpha draws the plain alpha pass until alphaStochasticReady (a shader reload retries it).
-    sRenderAlphaStochasticSupported = LLStochasticEngine::deviceSupported();
+    sRenderAlphaStochasticSupported = true;
 #else
     sRenderAlphaStochasticSupported = false;
-#endif
-#if LL_WINDOWS && !LL_MESA
-    sRenderAlphaStochasticSupported = sRenderAlphaStochasticSupported && glTexImage2DMultisample && glDrawBuffers;
 #endif
 
     // The transparency's S = 8 samples (Enderton et al. 2010: S = the multisample samples of the stochastic targets; the
     // Stochastic shadows' 8 rays are theirs) in one pass: the GL 4.6 base takes 8 for all three formats. A device that
-    // takes fewer is below the floor like one below GL 4.0 (sorted alpha is drawn); lanes are never summed across passes.
+    // takes fewer cannot run it (sorted alpha is drawn); lanes are never summed across passes.
     const U32 pass = LLStochasticEngine::TRANSPARENCY_SAMPLES;
     const S32 device = llmin(gGLManager.mMaxColorTextureSamples, llmin(gGLManager.mMaxDepthTextureSamples, gGLManager.mMaxSamples));
     if (sRenderAlphaStochasticSupported && device < (S32)pass)
@@ -8736,7 +8733,7 @@ bool LLPipeline::beginShadowStochastic()
         mShadowSTFailedWidth = mShadowSTFailedHeight = 0;
         return false;
     }
-    if (mRT != &mMainRT || gCubeSnapshot || gSnapshot || !LLStochasticEngine::deviceSupported())
+    if (mRT != &mMainRT || gCubeSnapshot || gSnapshot)
     {
         mShadowSTHistory.beginFrame(false);   // not accumulating: seedFrame() reads 0 (fixed rays)
         return false;
@@ -9981,7 +9978,7 @@ void LLPipeline::renderFinalize()
     glClearColor(0, 0, 0, 0);
 
     static LLCachedControl<bool> has_hdr(gSavedSettings, "RenderHDREnabled", true);
-    bool hdr = gGLManager.mGLVersion > 4.05f && has_hdr();
+    bool hdr = has_hdr();
     if (hdr)
     {
         copyScreenSpaceReflections(&mRT->screen, &mSceneMap);
@@ -13200,11 +13197,6 @@ void LLPipeline::renderRiggedGroups(LLRenderPass* pass, U32 type, bool texture)
 
 void LLPipeline::profileAvatar(LLVOAvatar* avatar, bool profile_attachments)
 {
-    if (gGLManager.mGLVersion < 3.25f)
-    { // profiling requires GL 3.3 or later
-        return;
-    }
-
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
 
     // don't continue to profile an avatar that is known to be too slow

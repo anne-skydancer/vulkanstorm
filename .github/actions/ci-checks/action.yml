@@ -65,6 +65,12 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowmethod_test.cpp -o "$RUNNER_TEMP/shadow-method-test"
         "$RUNNER_TEMP/shadow-method-test"
+    - name: Check the OpenGL 4.6 floor (version rule and message)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llglfloor_test.cpp -o "$RUNNER_TEMP/gl-floor-test"
+        "$RUNNER_TEMP/gl-floor-test"
+        python3 scripts/tests/test_gl46_floor.py
     - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
       shell: bash
       run: |

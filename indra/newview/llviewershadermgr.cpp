@@ -291,10 +291,10 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 }
 
 // <Vulkanstorm> stochastic transparency: the alpha programs' variants need gl_SampleMask and
-// gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
+// gl_PrimitiveID in the fragment shader and multisample textures (both in the OpenGL 4.6 floor), and the temporal
 // resolve is two fragment passes and the smooth in the composite on every device (GL compute stalls the frame in motion; the transparency has no compute
 // resolve since 2026-11-14, the Vulkan renderer takes Aurora Viewer PR 3663's compute steps). The
-// device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
+// Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
 static const std::string STOCH_RESOLVE_HELPER = STOCH_RESOLVE_OBJECT;   // the engine's resolve, for the fragment path
@@ -306,13 +306,13 @@ static bool use_stochastic_shadows();
 // engine runs on this device (the history is the engine's).
 static bool stochastic_shadow_resolve_shaders()
 {
-    return use_stochastic_shadows() && LLStochasticEngine::deviceSupported();
+    return use_stochastic_shadows();
 }
 
 static bool stochastic_transparency_shaders()
 {
 #if LL_WINDOWS || LL_LINUX
-    return LLStochasticEngine::deviceSupported();
+    return true;
 #else
     return false;
 #endif
@@ -398,7 +398,7 @@ static void unload_stochastic_shaders()
 // <Vulkanstorm> shadow method Stochastic (2): whether the shader set is built for it
 static bool use_stochastic_shadows()
 {
-    return LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
+    return LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) == LLShadowMethod::STOCHASTIC && gSavedSettings.getS32("RenderShadowDetail") > 0;
 }
 
 // the projector shadow pool shades the projectors in their own programs (spotLightF.glsl, PROJECTOR_SHADOW_POOL);
@@ -822,8 +822,6 @@ void LLViewerShaderMgr::setShaders()
 
     LLVertexBuffer::unbind();
 
-    llassert((gGLManager.mGLSLVersionMajor > 1 || gGLManager.mGLSLVersionMinor >= 10));
-
 
     S32 light_class = 3;
     S32 interface_class = 2;
@@ -1016,10 +1014,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     shaders.push_back( make_pair( "avatar/avatarSkinV.glsl",                1 ) );
     shaders.push_back( make_pair( "avatar/objectSkinV.glsl",                1 ) );
     shaders.push_back( make_pair( "deferred/textureUtilV.glsl",             1 ) );
-    if (gGLManager.mGLSLVersionMajor >= 2 || gGLManager.mGLSLVersionMinor >= 30)
-    {
-        shaders.push_back( make_pair( "objects/indexedTextureV.glsl",           1 ) );
-    }
+    shaders.push_back( make_pair( "objects/indexedTextureV.glsl",           1 ) );
     shaders.push_back( make_pair( "objects/nonindexedTextureV.glsl",        1 ) );
 
     std::map<std::string, std::string> attribs;
@@ -1037,7 +1032,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     bool mirrors = gSavedSettings.getBOOL("RenderMirrors");
 
-    bool has_reflection_probes = gSavedSettings.getBOOL("RenderReflectionsEnabled") && gGLManager.mGLVersion > 3.99f;
+    bool has_reflection_probes = gSavedSettings.getBOOL("RenderReflectionsEnabled");
 
     S32 probe_level = llclamp(gSavedSettings.getS32("RenderReflectionProbeLevel"), 0, 3);
 
@@ -1071,7 +1066,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     // <Vulkanstorm> every shadow method but Legacy multiplies N.L by the shadow (sunShadowedDiffuse
     // in deferredUtil.glsl); Legacy leaves it undefined and keeps min()
-    if (LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::usable()) != LLShadowMethod::LEGACY)
+    if (LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")) != LLShadowMethod::LEGACY)
     {
         attribs["SHADOW_NL_MULTIPLY"] = "1";
     }
@@ -1109,12 +1104,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // (in order of shader function call depth for reference purposes, deepest level first)
 
     shaders.clear();
-    S32 ch = 1;
-
-    if (gGLManager.mGLSLVersionMajor > 1 || gGLManager.mGLSLVersionMinor >= 30)
-    { //use indexed texture rendering for GLSL >= 1.30
-        ch = llmax(LLGLSLShader::sIndexedTextureChannels, 1);
-    }
+    S32 ch = llmax(LLGLSLShader::sIndexedTextureChannels, 1); // indexed texture rendering
 
 
     std::vector<S32> index_channels;
@@ -3012,7 +3002,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         llassert(success);
     }
 
-    if (success && gGLManager.mGLVersion > 3.9f)
+    if (success)
     {
         std::vector<std::pair<std::string, std::string>> quality_levels = { {"12", "Low"},
                                                                              {"23", "Medium"},
@@ -3032,14 +3022,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
 
                 gFXAAProgram[i].clearPermutations();
                 gFXAAProgram[i].addPermutation("FXAA_QUALITY__PRESET", quality_pair.first);
-                if (gGLManager.mGLVersion > 3.9)
-                {
-                    gFXAAProgram[i].addPermutation("FXAA_GLSL_400", "1");
-                }
-                else
-                {
-                    gFXAAProgram[i].addPermutation("FXAA_GLSL_130", "1");
-                }
+                gFXAAProgram[i].addPermutation("FXAA_GLSL_400", "1");
 
                 gFXAAProgram[i].mShaderLevel = mShaderLevel[SHADER_DEFERRED];
                 success = gFXAAProgram[i].createShader();
@@ -3065,7 +3048,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
     }
 
-    if (gGLManager.mGLVersion > 3.15f && success)
+    if (success)
     {
         std::vector<std::pair<std::string, std::string>> quality_levels = { {"SMAA_PRESET_LOW", "Low"},
                                                                              {"SMAA_PRESET_MEDIUM", "Medium"},
@@ -3076,12 +3059,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         for (const auto& smaa_pair : quality_levels)
         {
             std::map<std::string, std::string> defines;
-            if (gGLManager.mGLVersion >= 4.f)
-                defines.emplace("SMAA_GLSL_4", "1");
-            else if (gGLManager.mGLVersion >= 3.1f)
-                defines.emplace("SMAA_GLSL_3", "1");
-            else
-                defines.emplace("SMAA_GLSL_2", "1");
+            defines.emplace("SMAA_GLSL_4", "1");
             defines.emplace("SMAA_PREDICATION", "0");
             defines.emplace("SMAA_REPROJECTION", "0");
             defines.emplace(smaa_pair.first, "1");
@@ -3177,7 +3155,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
     }
 
-    if (success && gGLManager.mGLVersion > 4.05f)
+    if (success)
     {
         gCASProgram.mName = "Contrast Adaptive Sharpening Shader";
         gCASProgram.mFeatures.hasSrgb = true;
@@ -3195,7 +3173,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
     }
 
-    if (success && gGLManager.mGLVersion > 4.05f)
+    if (success)
     {
         gCASLegacyGammaProgram.mName = "Contrast Adaptive Sharpening Legacy Gamma Shader";
         gCASLegacyGammaProgram.mFeatures.hasSrgb = true;
@@ -4073,7 +4051,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
         success = gGaussianProgram.createShader();
     }
 
-    if (success && gGLManager.mHasCubeMapArray)
+    if (success)
     {
         gRadianceGenProgram.mName = "Radiance Gen Shader";
         gRadianceGenProgram.mShaderFiles.clear();
@@ -4084,7 +4062,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
         success = gRadianceGenProgram.createShader();
     }
 
-    if (success && gGLManager.mHasCubeMapArray)
+    if (success)
     {
         gHeroRadianceGenProgram.mName = "Hero Radiance Gen Shader";
         gHeroRadianceGenProgram.mShaderFiles.clear();
@@ -4096,7 +4074,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
         success                              = gHeroRadianceGenProgram.createShader();
     }
 
-    if (success && gGLManager.mHasCubeMapArray)
+    if (success)
     {
         gIrradianceGenProgram.mName = "Irradiance Gen Shader";
         gIrradianceGenProgram.mShaderFiles.clear();

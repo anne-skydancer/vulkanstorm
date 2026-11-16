@@ -302,8 +302,8 @@ Same build and launch as the section above (`-DVKS_GL_STATS=ON` viewer, `--leap`
 
 **The numbers are from one machine: an RTX 5070 Ti.** Milliseconds are an upper-end view and say little about a weak GPU. The
 hardware-independent counters of **method 0** (draws, shader binds, palette uploads, uniform bytes, and the alpha samples
-from `GL_SAMPLES_PASSED`: samples, not fragments) are the gate for weak GPUs. Sorted alpha is the only transparency path of a GPU
-without OpenGL 4 (iGPUs, older GPUs, Intel chips capped at GL 3.3), so a later stage must not raise those counters in a crowd.
+from `GL_SAMPLES_PASSED`: samples, not fragments) are the gate for weak GPUs. Sorted alpha is the transparency path of a user who chooses it
+(the viewer needs OpenGL 4.6 since the floor, so no GPU is left without Stochastic), so a later stage must not raise those counters in a crowd.
 Method 1's samples (multisample targets, several passes) are not comparable to method 0's. An active sample query can perturb
 early-Z, so the frame rate measured with nothing collecting (`fps_stats_off`, the "frame ms" column) is the clean figure.
 That frame rate is the median of 3 probes of 5 s per method (the methods alternate between probes); the report shows the spread of the

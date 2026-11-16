@@ -56,7 +56,7 @@ namespace
         const LLPipeline::ProjectorShadowStats st = gPipeline.getProjectorShadowStats();
 
         r["compiled"] = true;
-        // effective values (what runs: a stored 2 runs as Legacy below GL 4.0), and the stored settings beside them
+        // effective values (what runs: the stored method, sanitized), and the stored settings beside them
         r["shadow_method"] = (S32)LLPipeline::RenderShadowMethod;
         r["shadow_detail"] = (S32)LLPipeline::RenderShadowDetail;
         r["shadow_method_setting"] = (S32)gSavedSettings.getU32("RenderShadowMethod");
@@ -122,7 +122,7 @@ namespace
             tile["avatar"] = t.avatar;            // an avatar is in its light, or its last draw had one: its layer is redrawn on its own schedule; the CRC reads S, which holds no avatar
             tile["pose_stale"] = t.poseStale;     // the lamp's pose differs from the one the tile was drawn with
             tile["lamp_moving"] = t.lampMoving;   // the lamp's pose changed since the last frame
-            if (with_crc && t.size && t.drawnFrame && gGLManager.mGLVersion >= 4.49f)   // GL 4.5 core: fetched only from 4.5 up (llgl.cpp); the version, not the address (-Werror=address)
+            if (with_crc && t.size && t.drawnFrame)   // GL 4.5 core, in the OpenGL 4.6 floor
             {
                 std::vector<F32> texels((size_t)t.size * t.size);
                 glGetTextureSubImage(gPipeline.mProjectorShadows.atlasS(), 0, (GLint)t.x, (GLint)t.y, 0, (GLsizei)t.size, (GLsizei)t.size, 1,

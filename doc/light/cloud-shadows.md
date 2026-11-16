@@ -51,7 +51,7 @@ shadows depend only on the world and the sky, never on the camera.
   `RenderCloudShadowStrength` is 0; clouds are hidden (Rendering Types); an HDRI replaces the sky; the
   sky has no cloud texture or `cloud_scale` < 0.001 (the same conditions under which the sky draws no
   clouds); the shader or the target failed to load. Only a 2D RG8 target, mips and a fragment pass are
-  needed (GL 3.0), so the GL3 tier keeps the shadows. Shaders that do not call `calcAtmosphericVarsLinear` for the
+  needed (GL 3.0, in the OpenGL 4.6 floor). Shaders that do not call `calcAtmosphericVarsLinear` for the
   sun never see the sampler.
 - **Settings:** `RenderCloudShadowStrength` (1.0), `RenderCloudShadowPenumbraHeight` (1500 m),
   `RenderCloudShadowExtent` (4096 m), and from L2b `RenderCloudOpticalDepth` (7.6, clamped to 3 - 30). On devel they are tuned live in the **Sky** tab (Preferences →

@@ -1263,10 +1263,11 @@ bool LLAppViewer::init()
     gGLManager.printGLInfoString();
 
     // If we don't have the right GL requirements, exit.
-    // ? AG: It seems we never set mHasRequirements to false
+    // Below the OpenGL 4.6 floor the viewer has already exited (LLGLFloor::refuse, llglfloor.cpp), so this
+    // is a safety net only.
     if (!gGLManager.mHasRequirements)
     {
-        // Already handled with a MBVideoDrvErr
+        // Already reported to the user
         LL_WARNS("InitInfo") << "gGLManager.mHasRequirements is false." << LL_ENDL;
         // quit immediately
         LL_PROFILER_FRAME_END;
@@ -1341,32 +1342,6 @@ bool LLAppViewer::init()
             }
         }
     }
-
-    // Obsolete? mExpectedGLVersion is always zero
-#if LL_WINDOWS
-    if (gGLManager.mGLVersion < LLFeatureManager::getInstance()->getExpectedGLVersion())
-    {
-        std::string url;
-        if (gGLManager.mIsIntel)
-        {
-            url = LLTrans::getString("IntelDriverPage");
-        }
-        else if (gGLManager.mIsNVIDIA)
-        {
-            url = LLTrans::getString("NvidiaDriverPage");
-        }
-        else if (gGLManager.mIsAMD)
-        {
-            url = LLTrans::getString("AMDDriverPage");
-        }
-
-        if (!url.empty())
-        {
-            LLNotificationsUtil::add("OldGPUDriver", LLSD().with("URL", url));
-        }
-    }
-#endif
-
 
     // save the graphics card
     gDebugInfo["GraphicsCard"] = LLFeatureManager::getInstance()->getGPUString();

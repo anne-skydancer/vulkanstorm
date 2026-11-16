@@ -454,21 +454,12 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
 void LLProjectorShadows::copyTile(U32 from_tex, const Rect& src, U32 to_tex, const Rect& dst)
 {
     llassert(src.size == dst.size);
-    // GL 4.3 core, fetched by LLGLManager only at 4.3 and above (llgl.cpp). Test the version, not the
-    // pointer: on Linux the function is linked directly and its address is never null (-Werror=address).
-    if (gGLManager.mGLVersion >= 4.29f)
-    {
-        glCopyImageSubData(from_tex, GL_TEXTURE_2D, 0, (GLint)src.x, (GLint)src.y, 0, to_tex, GL_TEXTURE_2D, 0, (GLint)dst.x,
-                           (GLint)dst.y, 0, (GLsizei)src.size, (GLsizei)src.size, 1);
-    }
-    else
-    {
-        // below GL 4.3: a blit between same-size rectangles with NEAREST gives the same bits
-        blitTile(from_tex == mAtlasS ? mFboS : mFboL, src, to_tex == mAtlasS ? mFboS : mFboL, dst);
-    }
+    // GL 4.3 core, in the OpenGL 4.6 floor (llglfloor.h)
+    glCopyImageSubData(from_tex, GL_TEXTURE_2D, 0, (GLint)src.x, (GLint)src.y, 0, to_tex, GL_TEXTURE_2D, 0, (GLint)dst.x,
+                       (GLint)dst.y, 0, (GLsizei)src.size, (GLsizei)src.size, 1);
 }
 
-// S -> L over a rectangle of a tile (C3). The same two paths as copyTile, so the texels are the same bits.
+// S -> L over a rectangle of a tile (C3). The same copy as copyTile, so the texels are the same bits.
 void LLProjectorShadows::copyTileTexels(const Rect& tile, const llprojectorpool::TexelRect& texels)
 {
     if (texels.empty())
@@ -477,17 +468,7 @@ void LLProjectorShadows::copyTileTexels(const Rect& tile, const llprojectorpool:
     }
     const GLint x = (GLint)tile.x + texels.x0, y = (GLint)tile.y + texels.y0;
     const GLsizei w = texels.x1 - texels.x0, h = texels.y1 - texels.y0;
-    if (gGLManager.mGLVersion >= 4.29f)
-    {
-        glCopyImageSubData(mAtlasS, GL_TEXTURE_2D, 0, x, y, 0, mAtlasL, GL_TEXTURE_2D, 0, x, y, 0, w, h, 1);
-    }
-    else
-    {
-        LLGLDisable scissor(GL_SCISSOR_TEST); // a blit is clipped by the scissor test
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, mFboS);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mFboL);
-        glBlitFramebuffer(x, y, x + w, y + h, x, y, x + w, y + h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-    }
+    glCopyImageSubData(mAtlasS, GL_TEXTURE_2D, 0, x, y, 0, mAtlasL, GL_TEXTURE_2D, 0, x, y, 0, w, h, 1);
 }
 
 void LLProjectorShadows::copyAtlas(U32 from_tex, U32 to_tex)
