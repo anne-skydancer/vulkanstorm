@@ -1824,6 +1824,12 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
 
                     while (joint != END_INFLUENCES && idx < weights.size())
                     {
+                        if (idx + 1 >= weights.size())
+                        {
+                            // truncated blob: the influence needs two bytes
+                            idx = (U32)weights.size();
+                            break;
+                        }
                         U16 influence = weights[idx++];
                         influence |= ((U16) weights[idx++] << 8);
 
@@ -1836,9 +1842,13 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
                         {
                             joint = END_INFLUENCES;
                         }
-                        else
+                        else if (idx < weights.size())
                         {
                             joint = weights[idx++];
+                        }
+                        else
+                        {
+                            joint = END_INFLUENCES; // truncated blob
                         }
                     }
                     F32 wsum = wght.mV[VX] + wght.mV[VY] + wght.mV[VZ] + wght.mV[VW];

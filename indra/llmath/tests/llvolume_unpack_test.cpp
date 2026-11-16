@@ -119,4 +119,21 @@ namespace tut
         ensure_equals("index 65535", unpack(face(3 * 6, 3 * 6, 3 * 4, {0, 1, 65535})), 0);
         ensure_equals("last valid index", unpack(face(3 * 6, 3 * 6, 3 * 4, {2, 1, 0})), 3);
     }
+
+    template<> template<>
+    void llvolume_unpack_test_object_t::test<6>()
+    {
+        set_test_name("a truncated Weights blob does not read past its end");
+        // two vertices; vertex 0: joint 1, influence 0x8000, end marker; vertex 1: joint 2, then the blob ends
+        // in the middle of an influence (1 byte) and, in the second case, right after an influence.
+        const U8 truncated_influence[] = { 1, 0x00, 0x80, 0xff, 2, 0x00 };
+        const U8 no_next_joint[] = { 1, 0x00, 0x80, 0xff, 2, 0x00, 0x80 };
+        for (const auto& blob : { LLSD::Binary(truncated_influence, truncated_influence + sizeof(truncated_influence)),
+                                  LLSD::Binary(no_next_joint, no_next_joint + sizeof(no_next_joint)) })
+        {
+            LLSD f = face(2 * 6, 2 * 6, 2 * 4, {0, 1, 0});
+            f["Weights"] = blob;
+            ensure_equals("unpack survives", unpack(f), 3);
+        }
+    }
 }
