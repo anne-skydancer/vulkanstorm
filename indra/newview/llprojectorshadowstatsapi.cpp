@@ -105,6 +105,7 @@ namespace
         pool["cells"] = (S32)ps.cells;
         pool["resizes"] = (F64)ps.resizes;                // tile size changes made in place (the camera position's sizing, the level)
         pool["resize_repacks"] = (F64)ps.resizeRepacks;   // size changes that found no room and repacked the whole layout
+        pool["resize_deferred"] = (F64)ps.resizeDeferred; // size changes held back by the per-frame limit
         pool["lights_without_tile"] = (S32)ps.lightsWithoutTile; // O-4: 0 after the first fill
         pool["tile_cost_ms"] = (F64)ps.costEmaMs;
         pool["last_frame_renders"] = (S32)ps.lastFrameRenders;

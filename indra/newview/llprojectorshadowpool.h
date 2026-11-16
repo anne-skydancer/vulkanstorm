@@ -69,6 +69,7 @@ inline uint32_t pow2Round(double v)
     return uint32_t(1) << uint32_t(l);
 }
 
+// Test-only: the pool sizes a wide lamp's cells by the camera position (cell sizing, below) and does not call this.
 // d_ref  = min(1.5 * radius, 4 m)
 // N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
 inline uint32_t baseSize(float radius, float fov_radians)
@@ -574,10 +575,6 @@ namespace detail
     }
 }
 
-// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
-// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
-// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
-// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
 // The general (off-axis) pyramid of a projector's frustum: x0 .. x1 and y0 .. y1 are the tangents of the side planes across the
 // right and up axes (a cell of a wide lamp's image plane, see the cell rules below); otherwise as makePyramid.
 inline Pyramid makeFrustumPyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
@@ -632,6 +629,10 @@ inline Pyramid makeFrustumPyramid(const float origin[3], const float fwd[3], con
     return py;
 }
 
+// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
+// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
+// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
+// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
 inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
                            float tan_x, float tan_y, float near_d, float far_d)
 {
@@ -1648,7 +1649,7 @@ inline float dynamicShareMs(bool statics_pending, float left_ms)
 }
 
 // Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
-// functions, and a pick is unpacked afterwards. Keys stay below 2^28 (a pool's counter of records).
+// functions, and a pick is unpacked afterwards. Keys stay below 2^28: a projector record key is lamp << 4 | cell, so the lamp counter stays below 2^24.
 constexpr uint32_t kPoolKeyBits = 28;
 inline uint32_t packKey(uint32_t pool, uint32_t key) { return (pool << kPoolKeyBits) | (key & ((1u << kPoolKeyBits) - 1u)); }
 inline uint32_t unpackPool(uint32_t packed) { return packed >> kPoolKeyBits; }
@@ -1990,24 +1991,28 @@ inline float coldItemMs(float cost_ema_ms)
 // Cells of a wide lamp and the camera position's sizing (projector tile resolution)
 // ---------------------------------------------------------------------------------------------
 //
-// A lamp wider than 90 degrees is split over its own image plane into g x g cells (per axis), each a tile of its own with a
+// A lamp wider than about 93 degrees (tan of the half-angle above 1.05) is split over its own image plane into g x g cells (per axis), each a tile of its own with a
 // sub-frustum off the same projection centre, near and far planes (so a cell's depth is the lamp's, and the lookup keeps the lamp's
 // matrix). Every cell carries a guard of kCellGuard texels on each side (its frustum widened by them), so the filter's taps at a
 // seam read the neighbour's content; a lamp with one cell keeps one tile and no guard. A cell's size follows the camera's POSITION
 // (its distance to the cell's volume: the way a game sizes a light's shadow), never the view direction, with hysteresis. The image of a
-// cell depends on the lamp, the scene and the cell's size only. Spec: reports/projector-edges-2026-11-16/design.md section 5.
+// cell depends on the lamp, the scene and the cell's size only. Spec: reports/projector-edges-2026-11-16/design.md section 5 (kept on
+// the owner's machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
 
 constexpr uint32_t kCellGuard = 16;       // texels on each side of a cell's interior (wide lamps only)
+static_assert(kCellGuard >= uint32_t(kKernelTexelsMax) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
 constexpr int      kMaxGrid = 4;          // cells per axis
 constexpr uint32_t kMaxCells = kMaxGrid * kMaxGrid;
 constexpr double   kTargetMinM = 0.003;   // metres: the floor texel the camera's near field is given (about 2.5 pixels at 1440p up close)
 constexpr double   kTargetPerM = 0.002;   // plus this much per metre of the camera position's distance to the cell
-constexpr double   kRefMaxM = 4.0;        // the largest axial reference depth (the 4 m of baseSize)
+constexpr double   kRefMaxM = 4.0;        // the largest axial reference depth (the old baseSize reference)
 constexpr double   kSlackM = 2.0;         // the receivers this far beyond the camera along the lamp's axis count as near
 constexpr double   kHystOctaves = 0.75;   // a size changes only when the request leaves this many octaves around it ...
 constexpr double   kHoldSeconds = 0.5;    // ... and the new size has been asked for this long
+constexpr uint32_t kMaxResizesPerFrame = 3; // in-place resizes of one frame (the rest wait: a burst is spread over frames)
 
-// Cells per axis for a half-angle tangent: 1 up to tan = 1 (a 90 degree lamp), then ceil(tan - 0.05), at most kMaxGrid.
+// Cells per axis for a half-angle tangent: 1 up to tan = 1.05 (a lamp up to about 93 degrees: ceil(tan - 0.05) is 1 there), then
+// ceil(tan - 0.05), at most kMaxGrid. (The early return keeps a NaN or a tiny tangent at 1.)
 inline int gridAxis(double tan_half)
 {
     if (!(tan_half > 1.0))
@@ -2080,6 +2085,14 @@ inline float pyramidDistance(const Pyramid& py, const float p[3])
     return d;
 }
 
+// The cell that holds an own avatar for the every-frame rule: the one whose interior volume contains the centre of the avatar's box
+// (so one cell per box, not every cell the box's width crosses near the apex). The other cells the box overlaps are served by deadline.
+inline bool cellHoldsOwn(const Pyramid& core, const Aabb& box)
+{
+    const float c[3] = { 0.5f * (box.lo[0] + box.hi[0]), 0.5f * (box.lo[1] + box.hi[1]), 0.5f * (box.lo[2] + box.hi[2]) };
+    return pyramidDistance(core, c) <= 0.f;
+}
+
 // T(D): the texel the camera position wants at distance D (m): about 2.5 pixels of a 1440p, 60 degree view
 inline double cellTargetM(double distance_m)
 {
@@ -2100,6 +2113,24 @@ inline double cellRefDepth(double radius, double w_cam, double near_d, double fa
 inline double cellWanted(double tan_w, double w_ref, double distance_m, uint32_t guard)
 {
     return tan_w * w_ref / cellTargetM(distance_m) + 2.0 * double(guard);
+}
+
+// The whole request of one cell, from the lamp and the camera's POSITION only (no view direction is an input, so the camera's
+// orientation cannot matter by the signature): the lamp's origin and forward axis (unit), its radius, near and far depths, the cell's
+// wider-axis tangent, the cell's interior volume and guard, and the camera's position. `distance_m` receives the camera's distance to the
+// cell's volume.
+inline double cellSizeRequest(const float lamp_origin[3], const float lamp_fwd[3], double radius, double near_d, double far_d, double tan_w,
+                              const Pyramid& core, uint32_t guard, const float cam_pos[3], float* distance_m = nullptr)
+{
+    const double w_cam = double(cam_pos[0] - lamp_origin[0]) * lamp_fwd[0] + double(cam_pos[1] - lamp_origin[1]) * lamp_fwd[1] +
+                         double(cam_pos[2] - lamp_origin[2]) * lamp_fwd[2];
+    const double w_ref = cellRefDepth(radius, w_cam, near_d, far_d);
+    const float dist = pyramidDistance(core, cam_pos);
+    if (distance_m)
+    {
+        *distance_m = dist;
+    }
+    return cellWanted(tan_w, w_ref, dist, guard);
 }
 
 // the size a request becomes: a power of two within [kMinTile, kMaxBase]

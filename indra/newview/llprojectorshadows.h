@@ -44,13 +44,13 @@ class LLVOVolume;
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
 // own in a shared depth atlas S (the tiles as drawn), copied into the live atlas L, the only texture the lighting programs
 // read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light's pose, never from the
-// camera's orientation (the casters are held at full detail by the LOD pin). Since P4 the avatars are a dynamic layer: S holds the
+// camera's orientation (the casters are held at full detail by the LOD pin); a wide lamp's cells (and every tile's size) follow the camera's position, in place and with hysteresis. Since P4 the avatars are a dynamic layer: S holds the
 // fixed layer, L is S plus the avatars in the light, paired by position alone (no visibility, no impostor test). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
 // hooks, llshadowdirtyfeed.h, tested against the tile's volume by a flat scan of the tile volumes), when its lamp's pose changed, or while an
 // avatar is in its light (P4: only the avatar layer of that tile, over a fresh copy of S). A static scene costs no tile render. The
-// casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes nothing in a tile. Movers and physical
+// casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes no tile's content (its position can change a tile's size: a redraw). Movers and physical
 // objects are not in the fixed layer. The tile work of a frame runs under one shared CPU cap (llprojectorpool::kFrameCapMs 0.35 ms:
 // the dynamic layer first, up to 0.20 ms, the static tiles in the rest).
 //
@@ -123,6 +123,7 @@ public:
         U32 lightsWithoutTile = 0; // of the tiles, with no drawn tile (the O-4 gate: 0 after the first fill)
         U64 resizes = 0;           // tile size changes made in place (a new rect, a blit of the old content, a redraw), since the atlases were made
         U64 resizeRepacks = 0;     // size changes that found no room and fell back to a whole repack
+        U64 resizeDeferred = 0;    // size changes held back by the per-frame limit (kMaxResizesPerFrame), retried the next frame
         U64 tileRenders = 0;       // tile renders since the atlases were made
         U64 repacks = 0;
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
@@ -235,7 +236,8 @@ private:
     // S -> L over a rectangle of the tile (tile texels), the same texels of both atlases
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
     void copyAtlas(U32 from_tex, U32 to_tex);
-    void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
+    void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst, U32 guard = 0);
+    void blitRect(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
     // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
     struct FaceAvatars
@@ -279,6 +281,7 @@ private:
     U64 mRepacks = 0;
     U64 mResizes = 0;
     U64 mResizeRepacks = 0;
+    U64 mResizeDeferred = 0;
     F32 mLastFrameRenderMs = 0.f;
     U32 mLastFrameRenders = 0;
     U32 mLightsWithoutTile = 0;
