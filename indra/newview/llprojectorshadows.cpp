@@ -48,6 +48,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -733,7 +734,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     r.lastCpuMs = llmax(ms - avatar_ms, 0.f); // the fixed layer's cost; the avatar layer's is lastAvatarMs
     if (rec.holdsAvatar)
     {
-        r.lastAvatarMs = avatar_ms;
+        r.lastAvatarMs = llprojectorpool::smoothedCostMs(r.lastAvatarMs, avatar_ms);
     }
     mCostEmaMs += 0.2f * (r.lastCpuMs - mCostEmaMs);
     mLastFrameRenderMs += ms;
@@ -891,7 +892,7 @@ void LLProjectorShadows::renderLayer(Record& rec)
     if (rec.holdsAvatar)
     {
         avatar_ms = drawAvatars(rec, view, proj, g.origin, far_clip);
-        rec.lastAvatarMs = avatar_ms;
+        rec.lastAvatarMs = llprojectorpool::smoothedCostMs(rec.lastAvatarMs, avatar_ms);
     }
     rec.avatarInLayer = rec.holdsAvatar;
     rec.layerFrame = LLFrameTimer::getFrameCount();
@@ -1210,9 +1211,11 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
 
     // The avatars of the dynamic layer (P4), by position alone: every avatar that casts, wherever the camera looks. An avatar is paired
-    // with every lamp whose volume its extents touch; nothing here reads the camera, the avatar's visibility or its impostor flag
+    // with every lamp whose volume its extents touch; nothing here reads the camera's view, the avatar's visibility or its impostor flag
+    // (the camera's position only orders the faces, below)
     // (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts). A jelly
     // doll, an invisible or a too slow avatar and a UI avatar are not drawn by the avatar pool either.
+    const F32 camera_pos[3] = { camera.getOrigin().mV[VX], camera.getOrigin().mV[VY], camera.getOrigin().mV[VZ] };
     std::vector<Aabb> avatar_boxes;
     for (const AvatarCaster& c : casting_avatars())
     {
@@ -1239,12 +1242,19 @@ void LLProjectorShadows::update(LLCamera& camera)
             continue;
         }
         rec.avatarCount = 0;
+        rec.avatarDist = std::numeric_limits<F32>::infinity();
         for (const Aabb& b : avatar_boxes)
         {
             if (intersects(rec.volume, b))
             {
                 ++rec.avatarCount; // also for a tile about to be drawn the first time: its picture holds the avatar
+                // the order of the face's service: the camera POSITION's distance to its nearest avatar (never the view direction)
+                rec.avatarDist = std::min(rec.avatarDist, pointBoxDistance(camera_pos, b));
             }
+        }
+        if (rec.avatarCount == 0)
+        {
+            rec.avatarDist = 0.f; // the avatar left: this face only restores L from S, which is cheap and first
         }
         rec.holdsAvatar = rec.avatarCount > 0;
         mAvatarTiles += rec.holdsAvatar ? 1 : 0;
@@ -1273,8 +1283,8 @@ void LLProjectorShadows::update(LLCamera& camera)
             item.key = rec.key;
             item.avatar = true;
             item.age_frames = frame - rec.layerFrame; // the lag of the avatar in this tile: frames since its layer was last drawn
-            item.cam_dist = rec.camDist;
-            item.last_cpu_ms = rec.lastAvatarMs;
+            item.cam_dist = rec.avatarDist;
+            item.last_cpu_ms = rec.holdsAvatar ? rec.lastAvatarMs : 0.f; // a face that only restores L from S costs the floor
             item.avatar_draws = rec.avatarCount;
             dynamic_items.push_back(item);
             layer_only.insert(rec.key);
@@ -1334,12 +1344,13 @@ void LLProjectorShadows::update(LLCamera& camera)
     // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
     // no dynamic pick): the selection kept it inside the cap, or it is the progress pick (mayRunPick)
     const bool alone = ledger.untouched() && picks.dynamic.empty();
+    const F32 dynamic_share = dynamicShareMs(!static_items.empty(), kFrameCapMs); // the whole cap when no static tile waits
     auto run = [&](const std::vector<U32>& packed, bool dynamic) {
         F32 own_ms = 0.f;
         bool first_pick = true;
         for (U32 pk : packed)
         {
-            if (!mayRunPick(ledger.left(kFrameCapMs), dynamic, first_pick, alone) || (!first_pick && dynamic && own_ms >= kDynamicCapMs))
+            if (!mayRunPick(ledger.left(kFrameCapMs), dynamic, first_pick, alone) || (!first_pick && dynamic && own_ms >= dynamic_share))
             {
                 break;
             }
