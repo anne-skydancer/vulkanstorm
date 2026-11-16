@@ -63,7 +63,12 @@
 #define _LLDISKCACHE
 
 #include "llsingleton.h"
+#include <atomic>
 #include <chrono>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_set>
 using namespace std::chrono;
 
 
@@ -153,10 +158,11 @@ class LLDiskCache :
         void removeOldVFSFiles();
 
         // <FS:Ansariel> Better asset cache size control
+        // The sizes and water marks are written on the main thread (settings) and read by the purge thread.
         void setMaxSizeBytes(uintmax_t size) { mMaxSizeBytes = size; }
         // <FS:Beq> High/Low water control
-        void setHighWaterPercentage(F32 HiPct) { mHighPercent = llclamp(HiPct, mLowPercent, 100.0);  };
-        void setLowWaterPercentage(F32 LowPct) { mLowPercent = llclamp(LowPct, 0.0, mHighPercent);  };
+        void setHighWaterPercentage(F32 HiPct) { mHighPercent = llclamp(HiPct, mLowPercent.load(), 100.0f);  };
+        void setLowWaterPercentage(F32 LowPct) { mLowPercent = llclamp(LowPct, 0.0f, mHighPercent.load());  };
         // </FS:Beq>
 
     private:
@@ -172,8 +178,9 @@ class LLDiskCache :
          * cache the directory size cos it takes forever to calculate it
          * 
          */
-        uintmax_t mStoredCacheSize{ 0 };
-        time_point<system_clock> mLastScanTime{ };
+        // Written by the purge thread (purge) and the main thread (dirFileSize), hence atomic.
+        std::atomic<uintmax_t> mStoredCacheSize{ 0 };
+        std::atomic<time_point<system_clock>> mLastScanTime{ time_point<system_clock>{} };
 
     private:
         /**
@@ -181,10 +188,10 @@ class LLDiskCache :
          * total size of the cache files in the cache directory will be
          * less than this value
          */
-        uintmax_t mMaxSizeBytes;
+        std::atomic<uintmax_t> mMaxSizeBytes;
         // <FS:Beq> High/Low water control
-        F32 mHighPercent { 95.0 };
-        F32 mLowPercent { 70.0 };
+        std::atomic<F32> mHighPercent { 95.0f };
+        std::atomic<F32> mLowPercent { 70.0f };
         // </FS:Beq>
 
         /**
@@ -201,7 +208,13 @@ class LLDiskCache :
          */
         bool mEnableCacheDebugInfo;
         
-        std::vector<std::string> mSkipList;  // <FS:Beq/> Vector of "static" untouchable assets that should never be purged
+        // <FS:Beq/> "static" untouchable assets that should never be purged. The set is immutable once
+        // published: prepopulateCacheWithStatic() (main thread) builds a new one and swaps it in under
+        // mSkipListMutex, purge() (purge thread) takes a snapshot of the pointer under the same mutex.
+        typedef std::unordered_set<std::string> skip_set_t;
+        std::shared_ptr<const skip_set_t> getSkipList() const;
+        mutable std::mutex mSkipListMutex;
+        std::shared_ptr<const skip_set_t> mSkipList{ std::make_shared<const skip_set_t>() };
 };
 
 class LLPurgeDiskCacheThread : public LLThread
