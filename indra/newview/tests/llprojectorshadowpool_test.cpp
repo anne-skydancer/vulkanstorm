@@ -1829,9 +1829,147 @@ void testP4Cadence(bool print_table)
     }
 }
 
+// ---- The avatar layer's footprint copy (hotfix C3) ----
+//
+// A pure model of a tile's L and S depth: the copy and the draw are the ones the pool issues. The gate: after every pass, L equals
+// what a whole-tile copy followed by the same scissored draw gives, bit for bit, everywhere (so in particular outside the rectangle).
+
+// column-major projection * view of a camera at the origin looking down -z (fov 90 degrees, square, near 0.1, far 100)
+void perspective90(float m[16])
+{
+    for (int i = 0; i < 16; ++i) m[i] = 0.f;
+    const float n = 0.1f, f = 100.f;
+    m[0] = 1.f;
+    m[5] = 1.f;
+    m[10] = -(f + n) / (f - n);
+    m[11] = -1.f;
+    m[14] = -2.f * f * n / (f - n);
+}
+
+Aabb box3(float x0, float y0, float z0, float x1, float y1, float z1)
+{
+    Aabb b;
+    b.lo[0] = x0; b.lo[1] = y0; b.lo[2] = z0;
+    b.hi[0] = x1; b.hi[1] = y1; b.hi[2] = z1;
+    return b;
+}
+
+void testP4Footprint()
+{
+    float m[16];
+    perspective90(m);
+    const uint32_t n = 1000;
+    // a box 1 m either side of the axis, 4 to 5 m ahead: at 4 m it spans +-0.25 of half the tile
+    {
+        TexelRect r;
+        const bool known = boxFootprint(m, box3(-1.f, -1.f, -5.f, 1.f, 1.f, -4.f), n, r);
+        check(known, "C3 footprint: a box ahead is known");
+        const int32_t lo = int32_t(std::floor((0.5f - 0.125f) * 1000.f)) - kFootprintMarginTexels;
+        const int32_t hi = int32_t(std::ceil((0.5f + 0.125f) * 1000.f)) + kFootprintMarginTexels;
+        check(r.x0 == lo && r.x1 == hi && r.y0 == lo && r.y1 == hi, "C3 footprint: the projected extents plus the texel margin", r.x0, r.x1);
+    }
+    // a corner behind the eye plane: unknown, so the whole tile
+    {
+        TexelRect r;
+        check(!boxFootprint(m, box3(-1.f, -1.f, -2.f, 1.f, 1.f, 1.f), n, r), "C3 footprint: a corner behind the eye plane is unknown");
+        const std::vector<Aabb> boxes{ box3(-1.f, -1.f, -2.f, 1.f, 1.f, 1.f) };
+        check(faceFootprint(m, boxes, n) == wholeTileRect(n), "C3 footprint: unknown falls back to the whole tile");
+        float bad[16];
+        for (int i = 0; i < 16; ++i) bad[i] = std::numeric_limits<float>::quiet_NaN();
+        check(faceFootprint(bad, std::vector<Aabb>{ box3(-1.f, -1.f, -5.f, 1.f, 1.f, -4.f) }, n) == wholeTileRect(n), "C3 footprint: a non-finite matrix falls back to the whole tile");
+    }
+    // too large: the whole tile; no avatar: nothing; a clamped box outside the tile: nothing
+    {
+        check(faceFootprint(m, std::vector<Aabb>{ box3(-3.f, -3.f, -2.f, 3.f, 3.f, -1.5f) }, n) == wholeTileRect(n), "C3 footprint: a box over half the tile is the whole tile");
+        check(faceFootprint(m, std::vector<Aabb>(), n).empty(), "C3 footprint: no avatar, no rectangle");
+        TexelRect r;
+        check(boxFootprint(m, box3(50.f, 0.f, -5.f, 52.f, 1.f, -4.f), n, r) && r.empty(), "C3 footprint: a box far off the tile's side covers nothing");
+        const TexelRect two = faceFootprint(m, std::vector<Aabb>{ box3(-1.f, -1.f, -5.f, -0.5f, 0.f, -4.f), box3(0.5f, 0.f, -5.f, 1.f, 1.f, -4.f) }, n);
+        TexelRect a, b;
+        boxFootprint(m, box3(-1.f, -1.f, -5.f, -0.5f, 0.f, -4.f), n, a);
+        boxFootprint(m, box3(0.5f, 0.f, -5.f, 1.f, 1.f, -4.f), n, b);
+        check(two == unionRect(a, b), "C3 footprint: several avatars give the union");
+    }
+    // rectangle helpers
+    {
+        const TexelRect a{ 10, 10, 20, 20 }, b{ 15, 5, 30, 12 };
+        check(unionRect(a, b) == TexelRect({ 10, 5, 30, 20 }), "C3 rect: union");
+        check(unionRect(TexelRect(), a) == a && unionRect(a, TexelRect()) == a && unionRect(TexelRect(), TexelRect()).empty(), "C3 rect: an empty rectangle is the identity of the union");
+        check(clampRect(TexelRect({ -5, -5, 2000, 7 }), 100) == TexelRect({ 0, 0, 100, 7 }) && clampRect(TexelRect({ 200, 0, 300, 5 }), 100).empty(), "C3 rect: clamped to the tile");
+        check(layerCopyRect(false, a, b, 64) == wholeTileRect(64), "C3 copy: an unknown old rectangle copies the whole tile");
+        check(layerCopyRect(true, a, b, 64) == unionRect(a, b), "C3 copy: the old and the new rectangle");
+        check(layerCopyRect(true, a, TexelRect(), 64) == a && layerCopyRect(true, TexelRect(), TexelRect(), 64).empty(), "C3 copy: an avatar that left restores its old rectangle; nothing, nothing");
+        check(footprintMarginM(0.f) == kFootprintMarginM && footprintMarginM(10.f) > footprintMarginM(2.f) && footprintMarginM(std::numeric_limits<float>::quiet_NaN()) == kFootprintMarginM, "C3 margin: grows with the speed");
+        check(inflateBox(box3(0, 0, 0, 1, 1, 1), 0.5f).lo[2] == -0.5f && inflateBox(box3(0, 0, 0, 1, 1, 1), 0.5f).hi[0] == 1.5f, "C3 margin: the box grows on every side");
+    }
+
+    // The gate: the incremental S -> L copy gives the whole-tile result bit for bit, over moving, growing, vanishing and unknown rectangles,
+    // and with an invalidation (a repack) in between. A depth write is a LESS test against what L holds, within the scissor.
+    {
+        const uint32_t t = 64;
+        std::mt19937 rng(12345);
+        std::uniform_real_distribution<float> depth(0.f, 1.f);
+        std::vector<float> S(t * t), L(t * t), ref(t * t);
+        for (float& v : S) v = depth(rng);
+        L = S;
+        TexelRect prev; // L equals S: nothing drawn yet
+        bool valid = true;
+        bool exact = true, outside_is_S = true;
+        uint32_t whole_copies = 0, partial_copies = 0;
+        auto draw = [&](std::vector<float>& tile, const TexelRect& scissor, uint32_t seed) {
+            std::mt19937 g(seed);
+            for (int32_t y = scissor.y0; y < scissor.y1; ++y)
+                for (int32_t x = scissor.x0; x < scissor.x1; ++x)
+                {
+                    const float d = depth(g);
+                    if ((g() & 3u) != 0u && d < tile[size_t(y) * t + size_t(x)]) tile[size_t(y) * t + size_t(x)] = d;
+                }
+        };
+        for (uint32_t frame = 0; frame < 500; ++frame)
+        {
+            TexelRect now; // the avatar moves, grows, vanishes, or is unknown (the whole tile)
+            const uint32_t kind = rng() % 10;
+            if (kind == 0) now = TexelRect();
+            else if (kind == 1) now = wholeTileRect(t);
+            else
+            {
+                const int32_t x = int32_t(rng() % 50), y = int32_t(rng() % 50), w = 1 + int32_t(rng() % 14), h = 1 + int32_t(rng() % 14);
+                now = clampRect(TexelRect({ x, y, x + w, y + h }), t);
+            }
+            if (frame % 97 == 50) valid = false; // a repack: L is unknown
+            if (!valid)
+            {
+                for (float& v : L) v = depth(rng); // unknown content: only the whole copy makes it S again
+            }
+            const TexelRect copy = layerCopyRect(valid, prev, now, t);
+            if (copy == wholeTileRect(t)) ++whole_copies; else ++partial_copies;
+            // the S -> L copy over `copy`
+            for (int32_t y = copy.y0; y < copy.y1; ++y)
+                for (int32_t x = copy.x0; x < copy.x1; ++x) L[size_t(y) * t + size_t(x)] = S[size_t(y) * t + size_t(x)];
+            draw(L, now, frame + 1);
+            // the reference: the whole tile copied, the same scissored draw
+            ref = S;
+            draw(ref, now, frame + 1);
+            if (L != ref) exact = false;
+            for (int32_t y = 0; y < int32_t(t); ++y)
+                for (int32_t x = 0; x < int32_t(t); ++x)
+                {
+                    const bool in = x >= now.x0 && x < now.x1 && y >= now.y0 && y < now.y1;
+                    if (!in && L[size_t(y) * t + size_t(x)] != S[size_t(y) * t + size_t(x)]) outside_is_S = false;
+                }
+            prev = now;
+            valid = true;
+        }
+        check(exact, "C3 gate: L equals a whole-tile copy plus the same scissored draw, bit for bit, every pass");
+        check(outside_is_S, "C3 gate: outside the footprint rectangle L is bit-exact S");
+        check(partial_copies > 300 && whole_copies > 10, "C3 gate: the run covered partial and whole copies", partial_copies, whole_copies);
+    }
+}
+
 void testP4(bool print_table)
 {
     testP4Cadence(print_table);
+    testP4Footprint();
     testP4Caps();
     testP4Layer();
     testP4Lag();

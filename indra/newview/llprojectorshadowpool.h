@@ -1387,6 +1387,52 @@ inline float smoothedCostMs(float previous, float sample)
     return previous + kCostSmoothing * (sample - previous);
 }
 
+// ---------------------------------------------------------------------------------------------
+// The avatar layer's footprint (C3): the part of a tile the avatars cover
+// ---------------------------------------------------------------------------------------------
+//
+// L's tile is S's tile plus the avatars. A face copies S -> L and draws only inside the rectangle the avatars cover (their extents,
+// grown by a margin, projected through the tile's matrices), not over the whole tile. The invariant that makes it exact: outside the
+// rectangle the last pass drew (`layerRect`), L equals S bit for bit, because every avatar draw is scissored to the rectangle it was
+// computed for. The next face copies S -> L over the union of the old and the new rectangle (the old avatar's pixels are restored,
+// the new ones are drawn over) and the result equals a whole-tile copy followed by the same scissored draw. When the footprint is
+// unknown (a corner at or behind the eye plane, a non-finite matrix, a fast or impostored avatar) or covers most of the tile, the
+// rectangle is the whole tile: the same rule, not a second method.
+
+struct TexelRect // [x0, x1) x [y0, y1) in tile texels
+{
+    int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    bool empty() const { return x1 <= x0 || y1 <= y0; }
+    int64_t area() const { return empty() ? 0 : int64_t(x1 - x0) * int64_t(y1 - y0); }
+    bool operator==(const TexelRect& o) const { return (empty() && o.empty()) || (x0 == o.x0 && y0 == o.y0 && x1 == o.x1 && y1 == o.y1); }
+};
+
+constexpr float kFootprintMarginM = 0.3f;        // the extents' lag at a walk (survey 2026-11-16), at the avatar, in metres
+constexpr float kFootprintSpeedSeconds = 0.15f;  // plus this many seconds of the avatar's speed (running, flying)
+constexpr int32_t kFootprintMarginTexels = 2;    // plus a rounding margin in the tile
+constexpr float kFootprintMaxFraction = 0.5f;    // above this share of the tile area the whole tile is copied
+
+inline TexelRect wholeTileRect(uint32_t n) { return TexelRect{ 0, 0, int32_t(n), int32_t(n) }; }
+
+inline TexelRect unionRect(const TexelRect& a, const TexelRect& b)
+{
+    if (a.empty())
+    {
+        return b.empty() ? TexelRect() : b;
+    }
+    if (b.empty())
+    {
+        return a;
+    }
+    return TexelRect{ std::min(a.x0, b.x0), std::min(a.y0, b.y0), std::max(a.x1, b.x1), std::max(a.y1, b.y1) };
+}
+
+inline TexelRect clampRect(const TexelRect& r, uint32_t n)
+{
+    TexelRect o{ std::max(r.x0, 0), std::max(r.y0, 0), std::min(r.x1, int32_t(n)), std::min(r.y1, int32_t(n)) };
+    return o.empty() ? TexelRect() : o;
+}
+
 // the distance from a point to a box (0 inside)
 inline float pointBoxDistance(const float p[3], const Aabb& b)
 {
@@ -1397,6 +1443,87 @@ inline float pointBoxDistance(const float p[3], const Aabb& b)
         d2 += d * d;
     }
     return std::sqrt(d2);
+}
+
+inline Aabb inflateBox(const Aabb& b, float m)
+{
+    Aabb o = b;
+    for (int i = 0; i < 3; ++i)
+    {
+        o.lo[i] -= m;
+        o.hi[i] += m;
+    }
+    return o;
+}
+
+// The margin (metres) around an avatar's extents for its speed (m/s).
+inline float footprintMarginM(float speed_mps)
+{
+    return kFootprintMarginM + (std::isfinite(speed_mps) ? std::max(speed_mps, 0.f) : 0.f) * kFootprintSpeedSeconds;
+}
+
+// The tile rectangle one box covers through `m`, the column-major clip matrix (projection * view, agent space to clip space) of the
+// tile. False when it is unknown: a corner at or behind the eye plane, or a non-finite value.
+inline bool boxFootprint(const float m[16], const Aabb& box, uint32_t n, TexelRect& out)
+{
+    float lo_x = std::numeric_limits<float>::max(), lo_y = lo_x, hi_x = -lo_x, hi_y = -lo_x;
+    for (int c = 0; c < 8; ++c)
+    {
+        const float x = (c & 1) ? box.hi[0] : box.lo[0];
+        const float y = (c & 2) ? box.hi[1] : box.lo[1];
+        const float z = (c & 4) ? box.hi[2] : box.lo[2];
+        const float cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+        const float cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const float cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+        if (!std::isfinite(cx) || !std::isfinite(cy) || !std::isfinite(cw) || cw <= 1e-4f)
+        {
+            return false;
+        }
+        const float tx = (cx / cw * 0.5f + 0.5f) * float(n);
+        const float ty = (cy / cw * 0.5f + 0.5f) * float(n);
+        lo_x = std::min(lo_x, tx);
+        hi_x = std::max(hi_x, tx);
+        lo_y = std::min(lo_y, ty);
+        hi_y = std::max(hi_y, ty);
+    }
+    // out of the int range (a huge box close to the eye): unknown
+    const float lim = 1e7f;
+    if (lo_x < -lim || lo_y < -lim || hi_x > lim || hi_y > lim)
+    {
+        return false;
+    }
+    TexelRect r{ int32_t(std::floor(lo_x)) - kFootprintMarginTexels, int32_t(std::floor(lo_y)) - kFootprintMarginTexels,
+                 int32_t(std::ceil(hi_x)) + kFootprintMarginTexels, int32_t(std::ceil(hi_y)) + kFootprintMarginTexels };
+    out = clampRect(r, n);
+    return true;
+}
+
+// The footprint of a face: the union over its avatars' (already grown) boxes, or the whole tile when any is unknown or the union covers
+// more than kFootprintMaxFraction of the tile. No avatar: empty.
+inline TexelRect faceFootprint(const float m[16], const std::vector<Aabb>& boxes, uint32_t n)
+{
+    TexelRect u;
+    for (const Aabb& b : boxes)
+    {
+        TexelRect r;
+        if (!boxFootprint(m, b, n, r))
+        {
+            return wholeTileRect(n);
+        }
+        u = unionRect(u, r);
+    }
+    if (double(u.area()) > double(kFootprintMaxFraction) * double(n) * double(n))
+    {
+        return wholeTileRect(n);
+    }
+    return u;
+}
+
+// What a layer pass copies S -> L: the old rectangle (L holds avatar pixels there) and the new one; the whole tile when the old one is
+// not known (a fresh atlas, a repack).
+inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const TexelRect& now, uint32_t n)
+{
+    return prev_valid ? clampRect(unionRect(prev, now), n) : wholeTileRect(n);
 }
 
 // The per-frame CPU budget of ALL the shadow caches' tile work together (P4), in milliseconds, and its split. One number, shared by

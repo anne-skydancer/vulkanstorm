@@ -33,6 +33,8 @@
 #include "llglheaders.h"
 #include "llrender.h"
 
+class LLVOAvatar;
+
 class LLCamera;
 class LLCullResult;
 class LLGLSLShader;
@@ -204,6 +206,9 @@ private:
         bool avatarInLayer = false;        // L holds an avatar of this tile over S (the dynamic layer, P4): redrawn while served, restored from S after
         F32 lastAvatarMs = llprojectorpool::kDefaultItemMs; // the CPU cost of its last avatar layer (the scheduler's prediction, smoothed)
         F32 avatarDist = 0.f;              // the camera position's distance to the nearest avatar in its light (the face's order of service)
+        // C3: L's tile equals S's tile outside layerRect (tile texels) when layerRectValid; else L's tile is unknown and the next layer pass copies it whole
+        llprojectorpool::TexelRect layerRect;
+        bool layerRectValid = false;
         U32 layerFrame = 0;                // the frame its avatar layer was last drawn or restored (the lag of the dynamic layer)
     };
 
@@ -214,12 +219,21 @@ private:
     bool relayout();
     void applyPlan(const std::vector<llprojectorpool::LayoutRequest>& requests, const llprojectorpool::RepackPlan& plan);
     void copyTile(U32 from_tex, const llprojectorpool::Rect& src, U32 to_tex, const llprojectorpool::Rect& dst);
+    // S -> L over a rectangle of the tile (tile texels), the same texels of both atlases
+    void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
     void copyAtlas(U32 from_tex, U32 to_tex);
     void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
     // The dynamic layer (P4): L's tile is S's tile again, and the avatars in the light are drawn over it (LOCAL_SHADOW_DYNAMIC: the avatar
     // partitions and the worn objects only, from the pose the tile holds). Returns the CPU ms of the avatar draws.
-    F32 drawAvatars(Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip);
+    // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
+    struct FaceAvatars
+    {
+        std::vector<const LLVOAvatar*> avatars;
+        llprojectorpool::TexelRect rect;
+    };
+    FaceAvatars faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const;
+    F32 drawAvatars(Record& rec, const FaceAvatars& face, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip);
     void renderLayer(Record& rec);
     void unpinTile(U32 key);
     void forgetPinned(const LLDrawable* drawable);
