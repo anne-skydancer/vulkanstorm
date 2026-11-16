@@ -2,6 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Standalone checks of llprojectorshadowpool.h (no viewer libraries, no GL):
+//   Options: --table (the cadence table of the C1 commit), --bench-index (the change-index bench, not run in CI).
 //   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llprojectorshadowpool_test.cpp
 // Spec: reports/projector-pool-2026-11-13/design-final.md, section 5 stage P1:
 //   T1  256 lights x 2048^2 fit at the floor
@@ -14,7 +15,7 @@
 //       every cheap tile every frame, staleness bounded by ceil(N / tiles per frame), avatar items never exceed A_max
 //   T8  the 8192 atlas tier: tier choice by VRAM, dedicated memory and GL_MAX_TEXTURE_SIZE, the buddy allocator, repack and level
 //       controller at 8192, and the P2b size rules (the radius cap and the emitter extent in the shader's and C++ side's twin)
-//   P3  the change causes, the dirty list's bound, the grid index against brute force, the mover rules, the LOD pin's books,
+//   P3  the change causes, the dirty list's bound, the change index against brute force, the mover rules, the LOD pin's books,
 //       the tile verdict, and a static scene that draws nothing
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
@@ -948,7 +949,9 @@ Pyramid randomPyramid(std::mt19937& rng, float world, float fov_lo, float fov_hi
     detail::cross(f, up_hint, r);
     detail::normalise(r);
     detail::cross(r, f, u);
-    return makePyramid(o, f, r, u, fov(rng), 0.1f, rad(rng));
+    const float fv = fov(rng); // named draws: the order of argument evaluation is unspecified
+    const float rd = rad(rng);
+    return makePyramid(o, f, r, u, fv, 0.1f, rd);
 }
 
 std::vector<DirtyBox> randomBoxes(std::mt19937& rng, size_t count, float world)
@@ -991,6 +994,7 @@ void testP3ChangeIndexDifferential()
     std::mt19937 rng(20261116);
     std::vector<Hit> got, want;
     int mismatches = 0, comparisons = 0;
+    size_t total_hits = 0, nonempty = 0;
     const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
     for (int scene = 0; scene < 120; ++scene)
     {
@@ -1027,17 +1031,91 @@ void testP3ChangeIndexDifferential()
             old_index.apply(boxes, every != 0, want);
             new_index.apply(boxes, every != 0, got);
             ++comparisons;
+            total_hits += want.size();
+            nonempty += want.empty() ? 0 : 1;
             if (!sameHits(got, want))
             {
                 ++mismatches;
             }
         }
     }
-    check(mismatches == 0, "P3 the flat-scan index gives the grid index's hits in the same order", mismatches, comparisons);
+    check(mismatches == 0, "P3 the flat-scan index gives the grid index's hits in the same order (mixed scenes: NaN, inf and 1e6 boxes)",
+          mismatches, comparisons);
+    check(total_hits > 0 && nonempty > size_t(comparisons) / 2, "P3 the differential scenes produce hits", total_hits, nonempty);
+
+    // Each odd box alone, first and last (no catch-all box before it, so the 3e38 box meets unhit tiles), against finite tiles
+    // and against tiles with NaN, inf and beyond-1e6 bounds, a zero-radius-like tile and a duplicate key.
+    int odd_mismatches = 0, odd_comparisons = 0;
+    Aabb odds[4];
+    for (int k = 0; k < 3; ++k)
+    {
+        odds[0].lo[k] = -1e6f;  odds[0].hi[k] = 1e6f;
+        odds[1].lo[k] = -3e38f; odds[1].hi[k] = 3e38f;
+        odds[2].lo[k] = nan;    odds[2].hi[k] = 1.f;
+        odds[3].lo[k] = 0.f;    odds[3].hi[k] = inf;
+    }
+    for (int scene = 0; scene < 64; ++scene)
+    {
+        const size_t n_tiles = 1 + rng() % 20;
+        std::vector<TileVolume> tiles;
+        for (size_t k = 0; k < n_tiles; ++k)
+        {
+            tiles.push_back({ uint32_t(1000 + k * 3), randomPyramid(rng, 80.f, 0.3f, 2.9f, 1.f, 20.f) });
+        }
+        Aabb& tb = tiles[rng() % tiles.size()].pyramid.bounds;
+        for (int k = 0; k < 3; ++k)
+        {
+            switch (scene % 5)
+            {
+            case 1: tb.lo[k] = nan; tb.hi[k] = nan; break;
+            case 2: tb.lo[k] = -inf; tb.hi[k] = inf; break;
+            case 3: tb.lo[k] = -2e6f; tb.hi[k] = 2e6f; break;
+            case 4: tb.hi[k] = tb.lo[k]; break; // zero extent
+            default: break;
+            }
+        }
+        if (n_tiles > 1)
+        {
+            tiles[1].key = tiles[0].key; // a duplicate key
+        }
+        for (const Aabb& odd : odds)
+        {
+            for (int layout = 0; layout < 3; ++layout)
+            {
+                std::vector<DirtyBox> boxes;
+                const std::vector<DirtyBox> rest = randomBoxes(rng, layout == 0 ? 0 : 20, 90.f);
+                if (layout == 1)
+                {
+                    boxes.push_back({ odd, Cause::Edit });
+                }
+                boxes.insert(boxes.end(), rest.begin(), rest.end());
+                if (layout != 1)
+                {
+                    boxes.push_back({ odd, Cause::Mover });
+                }
+                GridChangeIndex old_index;
+                ChangeIndex new_index;
+                old_index.rebuild(tiles);
+                new_index.rebuild(tiles);
+                for (int every = 0; every < 2; ++every)
+                {
+                    old_index.apply(boxes, every != 0, want);
+                    new_index.apply(boxes, every != 0, got);
+                    ++odd_comparisons;
+                    if (!sameHits(got, want))
+                    {
+                        ++odd_mismatches;
+                    }
+                }
+            }
+        }
+    }
+    check(odd_mismatches == 0, "P3 the flat-scan index matches the grid on odd boxes (1e6, 3e38, NaN, inf) and odd tiles", odd_mismatches,
+          odd_comparisons);
 }
 
 // The cost of the change index on a frame that has dirty boxes (R tiles, B boxes): the old grid against the flat scan.
-// Run with --bench-index.
+// Run with --bench-index (not run in CI). Rows: B boxes drawn over +/-70 m (near the tiles) and, marked far, over +/-400 m.
 void benchChangeIndex()
 {
     std::printf("change index, microseconds per frame (rebuild + apply): R tiles, B boxes\n");
@@ -1050,9 +1128,10 @@ void benchChangeIndex()
         {
             tiles.push_back({ uint32_t(k + 1), randomPyramid(rng, 60.f, 0.5f, 2.2f, 1.f, k % 3 == 0 ? 20.f : 8.f) });
         }
-        for (int B : { 0, 50, 500, 5000 })
+        for (int variant = 0; variant < 2; ++variant)
+        for (int B : variant == 0 ? std::vector<int>{ 0, 50, 500, 5000 } : std::vector<int>{ 500, 5000, 65536 })
         {
-            const std::vector<DirtyBox> boxes = randomBoxes(rng, size_t(B), 70.f);
+            const std::vector<DirtyBox> boxes = randomBoxes(rng, size_t(B), variant == 0 ? 70.f : 400.f);
             std::vector<Hit> hits;
             const int reps = std::max(3, 20000 / (R + B / 10 + 10));
             GridChangeIndex old_index;
@@ -1078,7 +1157,7 @@ void benchChangeIndex()
                 a = std::min(a, std::chrono::duration<double, std::micro>(t1 - t0).count() / reps);
                 b = std::min(b, std::chrono::duration<double, std::micro>(t2 - t1).count() / reps);
             }
-            std::printf("%6d %6d %12.1f %12.1f %7.1fx%s\n", R, B, a, b, a / std::max(b, 1e-3), sink < 0 ? "?" : "");
+            std::printf("%6d %6d %12.1f %12.1f %7.1fx%s%s\n", R, B, a, b, a / std::max(b, 1e-3), variant ? " far" : "", sink < 0 ? "?" : "");
         }
     }
 }
@@ -1200,7 +1279,7 @@ void testP3ChangeIndex()
             ++mismatches;
         }
     }
-    check(mismatches == 0, "P3 the grid index gives the brute-force hits, once per tile, with the first box's cause", mismatches);
+    check(mismatches == 0, "P3 the change index gives the brute-force hits, once per tile, with the first box's cause", mismatches);
     index.apply({}, false, hits);
     check(hits.empty(), "P3 no dirty box, no hit (a static scene)");
     index.apply({}, true, hits);
@@ -1209,7 +1288,7 @@ void testP3ChangeIndex()
     none.rebuild({});
     none.apply({ DirtyBox() }, true, hits);
     check(hits.empty(), "P3 no tiles, no hits");
-    // a world-sized box (more than the grid's cell cap) is conservative, never a crash
+    // a world-sized box (far larger than any tile) is conservative, never a crash
     Aabb wide{ { -1e6f, -1e6f, -1e6f }, { 1e6f, 1e6f, 1e6f } };
     index.apply({ { wide, Cause::Edit } }, false, hits);
     check(hits.size() == 80, "P3 a world-sized box touches every tile", double(hits.size()));
