@@ -39,6 +39,7 @@
 #include "llrender.h"
 #include "threadpool.h"
 #include "workqueue.h"
+#include <memory>
 #include <unordered_set>
 
 #define LL_IMAGEGL_THREAD_CHECK 0 //set to 1 to enable thread debugging for ImageGL
@@ -239,6 +240,18 @@ public:
 private:
     U32 createPickMask(S32 pWidth, S32 pHeight);
     void freePickMask();
+
+    // A pick mask built on the LLImageGL worker thread. mPickMask is read on the main thread
+    // (getMask), so the worker never touches it: it parks the finished mask here, and the lambda
+    // syncToMainThread posts installs it on the main thread together with the texture name.
+    // mask == nullptr with a pending update means "this texture has no pick mask".
+    struct PendingPickMask
+    {
+        std::unique_ptr<U8[]> mask;
+        U16 width = 0;
+        U16 height = 0;
+    };
+    std::shared_ptr<PendingPickMask> mPendingPickMask; // touched only by the LLImageGL worker thread (there is a single one) while it creates the texture
     bool isCompressed();
 
     LLPointer<LLImageRaw> mSaveData; // used for destroyGL/restoreGL
