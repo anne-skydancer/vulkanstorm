@@ -74,6 +74,7 @@
 		<string>RenderShaderLightingMaxLevel</string>
 		<string>RenderShadowDetail</string>
 		<string>RenderShadowMethod</string>
+		<string>RenderShadowLightSize</string>
 		<string>RenderShadowDistance</string>
 		<string>RenderShadowResolutionScale</string>
 		<string>RenderSkyAmbientScale</string>
