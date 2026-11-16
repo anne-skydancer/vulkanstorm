@@ -56,11 +56,11 @@
       0
     ],
     "second": 5,
-    "pause_s": 15,
+    "pause_s": 30,
     "timeout_s": 120,
     "settle_s": 3,
     "min_move_m": 5,
-    "capture_s": 360
+    "capture_s": 900
   },
   "fps_probe": {
     "seconds": 60,
