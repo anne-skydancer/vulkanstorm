@@ -944,6 +944,8 @@ list(APPEND viewer_SOURCE_FILES ${viewer_GLTF_SOURCE_FILES})
 if (VKS_GL_STATS)
   list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp llprojectorshadowstatsapi.cpp)
 endif()
+# development only: the in-world readout of the directional shadows' dark gate (left out of release)
+list(APPEND viewer_SOURCE_FILES lldirectionalshadowreadout.cpp)
 # </FS:Ansariel> Group GLTF files into their subfolders
 
 if (OPENSIM)
@@ -1600,6 +1602,8 @@ set(viewer_HEADER_FILES
     llsetkeybinddialog.h
     llshadowcascadefit.h
     llshadowmethod.h
+    lldirectionalshadowgate.h
+    lldirectionalshadowreadout.h
     llsettingspicker.h
     llsettingsvo.h
     llsidepanelappearance.h

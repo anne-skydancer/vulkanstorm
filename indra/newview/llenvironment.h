@@ -37,6 +37,7 @@
 #include "llsettingsdaycycle.h"
 
 #include "llglslshader.h"
+#include "lldirectionalshadowgate.h" // <Vulkanstorm/>
 
 #include <boost/signals2.hpp>
 
@@ -205,6 +206,11 @@ public:
         F32 moon_halo_weight = 0.f;       // MOON_HALO_WEIGHT: the weight of the halo and rainbow around the moon
         F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): shadow light size and the cloud shadow penumbra
         bool shadow_visible = true;       // the sun shadow pass has something to show
+        // the Stochastic method's dark gate (lldirectionalshadowgate.h): the decision light, the factor for the shadow strength
+        // (1 above twice the threshold, 0 skipped) and whether the cascade pass is skipped this frame
+        F32 direct_light = 1.f;
+        F32 dark_fade = 1.f;
+        bool dark_skip = false;
         bool valid = false;
     };
     const PrimaryLightState&    getPrimaryLight() const { return mPrimary; }
@@ -405,6 +411,7 @@ private:
     F32                         mLastCamYaw = 0.0f;
 
     PrimaryLightState           mPrimary; // <Vulkanstorm/> stage L3
+    LLDirectionalShadowGate::State mDarkShadowGate; // <Vulkanstorm/> stepped by updatePrimaryLight
 
     LLVector2                   mCloudScrollDelta;  // cumulative cloud delta
     bool                        mCloudScrollPaused;

@@ -30,6 +30,7 @@
 #include "llsettingsvo.h"
 
 #include "pipeline.h"
+#include "llshadowmethod.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -887,7 +888,9 @@ void LLSettingsVOSky::applySpecial(void *ptarget, bool force)
         // for every shader that lights or hazes (classic and PBR skies alike); the direction is in eye space and is set
         // by LLPipeline::bindDeferredShader
         shader->uniform3fv(LLShaderMgr::PRIMARY_LIGHT_COLOR, primary.color.mV);
-        shader->uniform1f(LLShaderMgr::PRIMARY_SHADOW_STRENGTH, primary.shadow_strength);
+        // the Stochastic method fades the directional shadow in over a dark light (lldirectionalshadowgate.h); Legacy keeps its own
+        const bool dark_gate = LLPipeline::RenderShadowMethod == LLShadowMethod::STOCHASTIC;
+        shader->uniform1f(LLShaderMgr::PRIMARY_SHADOW_STRENGTH, dark_gate ? primary.shadow_strength * primary.dark_fade : primary.shadow_strength);
     }
     // </Vulkanstorm>
     shader->uniform1f(LLShaderMgr::DENSITY_MULTIPLIER, getDensityMultiplier());
