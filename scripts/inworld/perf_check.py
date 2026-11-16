@@ -1045,8 +1045,8 @@ def execute(session, args, sc, outdir):
         if args.no_glstats and check_api(v):
             args.fps_from_log = True        # a Tracy measuring build: no GLSubmitStats; the frame rate comes from the log
             log("no %s API: the frame rate comes from the FrameCounters lines of the viewer log" % API)
-            if sc["variants"]:
-                raise LeapError("variants need the %s API" % API)
+            # variants work here too: each variant gets its own measured window (log_window), its own Tracy capture and
+            # its own frame rate from the log; only the clean-probe comparison of the GLSubmitStats path is absent
         args.vlog = vlog
         if args.dry_run:
             return dry_run(v, sc, args, outdir)
