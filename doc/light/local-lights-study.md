@@ -3,7 +3,7 @@
 # Local lights like real light, and point-light shadows on the projector pool (study, refresh of 2026-11-16)
 
 Status: study and design. Nothing here changes the viewer. It supersedes study #437 (branch `codex/local-lights-study`, from
-`vkstorm-devel` 8d8e31b797), which the owner closes. Everything is re-read on **`vkstorm-devel` 191c9985b9** (2026-11-16 18:55: projector
+`vkstorm-devel` 8d8e31b797), which is already closed. Everything is re-read on **`vkstorm-devel` 191c9985b9** (2026-11-16 18:55: projector
 pool P1 to P4, sharpness P2 #527, revectorized lamp edges #536, cells and camera-position tile sizing #539, OpenGL 4.6 floor #537, the dark
 sun skip #540, the change-index hotfix).
 
@@ -43,9 +43,9 @@ point-light occlusion are **still true**, line for line. The projector ambiance 
 shadow since P2c, so it stops where the beam stops (Legacy still adds it unshadowed). The two camera-chosen projector shadows are
 **fixed** by the pool (Stochastic, detail 2).
 
-**Today's numbers decide the order** (section 3). At Rooftops (about 50 avatars, Ultra) devel runs at **28 fps standing** with all shadows
-and 43 fps with none: the 60 fps floor is missed before any of this work, and the frame is main-thread CPU bound. The lamps cost
-**1.3 to 1.5 ms** a frame because **one projector tile is re-rendered every frame**, and the avatar-layer path never ran there.
+**Today's numbers decide the order** (section 3). At Rooftops (about 50 avatars, Ultra; a build **before #540, Tracy on**, preset "TT Rooftops dark") the viewer ran at **28 fps standing** with all shadows
+and 43 fps with none; the frame is main-thread CPU bound. Whether the 60 fps floor is still missed there on 191c9985b9 is **not measured**: #540 skips the dark sun cascades (the report's own section 7: 8.9 ms of 31.9 ms), so the current frame may be near the 'none + lamps' level (about 24.5 ms). One MC1 pass on the current tip is the first item of R0. The lamps cost
+**1.3 to 1.5 ms** a frame (same build) because **one projector tile is re-rendered every frame**, and the avatar-layer path never ran there.
 
 **That pool behaviour must be fixed first** (section 4). The point pool shares the pool's one CPU ledger: a projector tile that runs as the
 "progress pick" every frame leaves the ledger spent, and `selectFrame` then hands the point pool nothing (`llprojectorshadowpool.h:1725-1730`).
@@ -97,7 +97,7 @@ the functions it uses are unchanged since 8d8e31b797 [V: `git diff 8d8e31b797 or
 
 ## 3. What today's measurements say
 
-From Rooftops (six Tracy captures, about 45 to 50 avatars, Ultra, vsync and limiter off; main-thread ms) [M, owner's machine, 2026-11-16]:
+From Rooftops (six Tracy captures, about 45 to 50 avatars, Ultra, vsync and limiter off; main-thread ms; **build: devel 2026-11-15 + stage-1 Tracy zones + change-index hotfix, i.e. before #540, with Tracy attached**, so the figures include Tracy overhead and the sun cascades #540 now skips under a dark sky) [M, owner's machine, 2026-11-16]:
 
 | Capture (steady part) | Frame | fps |
 |---|---|---|
@@ -106,9 +106,10 @@ From Rooftops (six Tracy captures, about 45 to 50 avatars, Ultra, vsync and limi
 | still, all (sun + lamps) | 35.53 ms | 28.1 |
 | "moving" all / sun (the camera did not turn) | 27.97 / 25.92 ms | 35.8 / 38.6 |
 
-- **The floor is already missed there.** About 60 fps standing in a crowded room is 16.7 ms; Rooftops with no shadows at all is 23 ms.
-  So no lamp stage can be gated by "stays above 60 fps at Rooftops". Each stage here is gated by **what it adds** (ms and fps at a
-  given frame, table 7.1) and by the floor in the owner's own rooms.
+- **The floor was missed there, on that build.** About 60 fps standing in a crowded room is 16.7 ms; Rooftops with no shadows at all was 23 ms
+  (pre-#540, Tracy on). The same scenario on 191c9985b9 is unmeasured (R0). Either way no lamp stage is gated by "stays above 60 fps at
+  Rooftops"; each stage is gated by **what it adds** (ms and fps at a given frame, table 7.1) and by the floor in the owner's own rooms.
+  The R1 weight below (about 0.5 to 0.8 ms of 35.5) is relative to the pre-#540 frame.
 - **CPU, main thread.** The added frame time equals the added main-thread zone time; `Swap` waits are flat with shadows. GPU zones were not
   captured. A GPU cost we add may be partly hidden in today's waits [I]; this study counts it in full.
 - **The lamps cost 1.3 to 1.5 ms**: `projector update` 1.25 ms (of it `renderTile` 0.82, `pinCasters` 0.40, `drawAvatars` 0.14) plus
@@ -146,14 +147,16 @@ From Rooftops (six Tracy captures, about 45 to 50 avatars, Ultra, vsync and limi
 | H4 | a level cycle: demand above 60 % shrinks every tile, 3 s at or below 45 % grows them back; with camera-position sizing (#539) the request can sit across both thresholds | `LevelController` (`llprojectorshadowpool.h:161-190`) | only if the level flips every few seconds | `rerender_causes.lowres`, `resize_repacks`, `resizes` |
 | H5 | an LOD-pin cycle: an object at a tile's edge pinned in one render and released in the next | `pinCasters` / `PinBook` (`llprojectorshadows.cpp:832`, `:866-869`, `:1321-1350`) | unlikely (the pin is held while met) | `rerender_causes.lod_up`, `pinned_objects` over time |
 
-The memory note of the change-index hotfix already says it: "at Rooftops every lamp tile was fully redrawn every frame and the avatar-layer
+The owner's session notes of the change-index hotfix (`reports/emitter-shadows-plan-2026-11-13` and the pool in-world note; not in the repo) already say it: "at Rooftops every lamp tile was fully redrawn every frame and the avatar-layer
 path never ran ... read the LEAP stats in-world". The MC1 session tooling now records the projector stats per preset and warms up after a
 setting change (0f6c074e9e), so the reading is one run.
 
 ### 4.3 The fix (R1), by cause, and two changes that hold whatever the cause
 
-- **H1:** find the off-thread caller from R0's per-hook count and move its push onto the main thread: off-thread hooks append their box to a
-  small lock-protected side list that `beginFrame` drains (a box, not "everything"), and only an overflow of that list says "everything".
+- **H1:** find the off-thread caller from R0's per-hook count and move its push onto the main thread: off-thread hooks append only a **handle** (an `LLPointer` or id) plus the cause to a
+  small lock-protected side list that `beginFrame` drains; the box is computed **on the main thread** there, with a liveness check (the hooks
+  return early off-thread today because the box needs `getVObj()`, `getVOVolume()` and positions, which the main thread mutates, and a
+  drawable freed after the push must not be dereferenced). Only an overflow of the list says "everything".
   If the caller is a whole subsystem (a worker that moves drawables), its pushes are queued by the existing main-thread sync point of that
   worker instead [I: the caller is unknown until R0].
 - **H2:** a lamp whose pose changed in more than half of the last 2 s is "moving" for scheduling: its tile is drawn at the dynamic deadline
@@ -164,17 +167,19 @@ setting change (0f6c074e9e), so the reading is one run.
   and count level flips in the stats.
 - **Amortised cap (decision R-1, recommended).** The ledger carries the overrun of a progress pick into the next frames: a 1 ms tile puts
   the caches 0.65 ms in debt, and no static pick runs until the debt is paid (the own avatar's faces and the near-tier faces keep their
-  every-frame service). The **average** CPU then stays at or under 0.35 ms whatever a tile costs; a chronically stale tile costs 0.35 ms
+  every-frame service). **Debt accrues only from the progress pick**, never from exempt work; it is capped at 2 x `kFrameCapMs` (0.7 ms) and
+  decays (halves each second), so a p95 tile of 3 to 3.5 ms cannot stop static work for about 8 frames in a row, and continuous exempt
+  work (about 1 to 2 ms of own-avatar faces) cannot starve the static picks. The **average** CPU then stays at or under 0.35 ms whatever a tile costs; a chronically stale tile costs 0.35 ms
   a frame, not 1 ms, and it can no longer hide a cause. The cost is lag: a 1 ms tile is drawn every third frame instead of every frame.
-  It is a small change to `FrameLedger` and `selectFrame`, unit-tested like the combined cap.
+  It is a small change to `FrameLedger` (today a per-frame struct: the carried debt is new state) and `selectFrame`, unit-tested like the combined cap, with a case of continuous exempt work in which the static picks still run at a bounded interval, and a case of a 3.5 ms tile.
 - **The pin walk.** `pinCasters` is 0.40 ms of the 0.82 ms of `renderTile` at Rooftops. It walks every element of every culled group per
   render. R1 stamps each group with the frame of its last walk for this tile's book and skips a group whose element count and stamp did not
   change since; an `add_remove` box inside the group clears the stamp [E: about half the walk; R0 times it per tile].
 
-**Gate for R1** (the MC1 Rooftops scenario, standing and orbiting, the first 15 s dropped): `projector update` mean at or under 0.45 ms
-(the cap plus the own avatar's faces), static tile renders per frame near 0 once filled, layer renders present while avatars stand under
+**Gate for R1** (the MC1 Rooftops scenario, standing and orbiting, the first 15 s dropped): the tile and layer renders (`renderTile` + `renderLayer`, 0.82 ms today) at or under about 0.35 ms on average, i.e. `projector update` at or under about
+0.8 ms (the zone's fixed part, `updateLightSet` 0.14 + its own self time about 0.29, is about 0.43 ms and R1 does not touch it), static tile renders per frame near 0 once filled, layer renders present while avatars stand under
 lamps, p95 tile cost reported; in a static room 0 renders a frame; the orbit checks O-1, O-2, O-6; the pool's unit tests plus the debt
-cases. Expected gain at Rooftops: about **0.9 to 1.2 ms** a frame (28.1 to about 29 fps standing) [E].
+cases. Expected gain at Rooftops: about **0.5 to 0.8 ms** a frame (1.25 ms to about 0.78 at the cap, and to about 0.43 if tile renders drop to zero; 28.1 to about 28.8 fps on the pre-#540 frame) [E].
 
 ---
 
@@ -216,7 +221,7 @@ uniform calls through `sCurBoundShaderPtr`, and LL GLTF scene assets left out of
 As the plan (3.8, 3.9) and the pool: everything on the main thread, entry points return off it and while the viewer exits; allocation beside
 `mProjectorShadows` (`pipeline.cpp:1234`, `:1239`), release in `destroyGL` and `cleanup` (`:874`, `:1556`), `forget` from `unlinkDrawable`
 (`:2206`). Nothing goes into `LLRender::shutdown`, `LLImageGL` or `LLVertexBuffer::cleanupClass`. A failed allocation lights lamps without
-shadows (today's look), logs once, and retries with back-off. R1's off-thread side list is the one structure another thread touches: a
+shadows (today's look), logs once, and retries with back-off. R1's off-thread side list (handles, not boxes) is the one structure another thread touches: a
 mutex-guarded vector with a fixed cap, drained on the main thread; each stage PR greps every caller of each function it touches.
 
 ---
@@ -230,8 +235,9 @@ Illuminance from a point light at distance d (all in U; 1 U ≈ the clear PBR no
 `E(d) = I · W(d/R) / (d² + s_eff²)`, `W(x) = clamp(1 − xⁿ, 0, 1)²`, `R = 1.5 r` (worn: `min(1.5 r, 6 m)`), `I = κ(falloff, n) · R² · intensity · colour`,
 `s_eff = max(s, √(I / E_cap))`, **`s` = 1 cm** (was the prim's scale), `E_cap` = 6.5 U (worn 1 U).
 
-- **κ keeps today's luminous flux exactly** for every falloff (closed form; the bench integrates both curves: 1.0000 at falloff 0, 0.75, 2)
-  [M].
+- **κ keeps today's luminous flux exactly before the cap** for every falloff (closed form; the bench integrates both curves with s → 0 and no cap: 1.0000 at falloff 0, 0.75, 2)
+  [M]. With the 6.5 U cap the size floor (0.69 to 2.1 m in the examples below) removes the flux of the pixels the cap clips: capped lights lose
+  that part by design; the tables below show it per example (the near-field columns).
 - **The 1 cm emitter changes nothing in the tables** of #437: in every example the cap's size floor (0.69 m for the candle, 1.6 m for the
   room lamp, 2.1 m for the face light) is far above 1 cm, so the near field is the cap's, and the bench reproduces #437's numbers [M].
 - **Highlights stay as sharp as today** (decision L-2): the specular lobe widens by the 1 cm emitter only, not by the cap's virtual size.
@@ -291,8 +297,8 @@ Mip level of a 256-texel gobo along the club spot's axis (0 sharp, 8 fully blurr
 | Ambiance (L-1) | nothing new under (a): it is already shadowed on devel | — |
 | Flicker scripts that jitter the radius | deeper flicker at 1 to 2 m (bright/dim 2.0 → 2.7 at 1 m, 2.9 → 4.5 at 2 m) | accepted by the owner (2026-11-09) |
 
-Tools for the owner, as #437 section 6: the debug blend `RenderLocalLightPhysical` (0 = today, byte-identical, an equivalence gate in M2;
-1 = the new model), the caps as debug settings, no Preferences entry; the split-screen diagnostic stays on devel only
+Tools for the owner, as #437 section 6: the debug setting `RenderLocalLightPhysical` (0 = today, byte-identical, an equivalence gate in M2;
+1 = the new model), **a compile-time shader permutation** (programs rebuilt on change), not a runtime blend: a uniform blend would evaluate both curves per lit pixel per light, which the +0.083 ms measurement (one curve per program) does not cover. The permutation is off for Legacy and for value 0, so those shader texts stay identical, the caps as debug settings, no Preferences entry; the split-screen diagnostic stays on devel only
 (`check_release_hooks.py`). Release integration of M2 to M5 waits for L6 and the owner's in-world check of the caps, as decided.
 
 ### 6.5 Cost of the light model [M where marked]
@@ -306,7 +312,7 @@ two runs, lock held, no compiler or viewer running at start and end [M, RTX 5070
 | 1 | 0.056 ms | 0.056 ms | 0.000 | 0 (pass overhead dominates) |
 | 16 | 0.194 ms | 0.277 ms | **+0.083 ms** | +0.0014 ms |
 
-- The owner's 59-lamp room at 1440p, lamps covering 20 to 40 % of the screen: about **+0.06 to +0.12 ms** GPU [E from the measured rate].
+- The owner's 59-lamp room at 1440p, lamps covering 20 to 40 % of the screen: about **+0.06 to +0.12 ms** GPU [E from the measured rate; the coverage is a guess, the plan calls it "not measured"; at 100 % coverage the same rate gives about 0.25 ms]. Q0's census (lit pixels per lamp) gates quoting this as a cost.
 - CPU: the per-light constants (κ, n, I, s_eff, reach) change only when the light's parameters change; computed on change and cached on the
   volume, they cost nothing per frame [E].
 - Projectors (M5): a few ALU per lit pixel beside a lookup of 0.05 to 0.8 ms per full-screen lamp (`projector-pool-budget.md` table 5) [E,
@@ -332,23 +338,23 @@ two runs, lock held, no compiler or viewer running at start and end [M, RTX 5070
 | Stage | CPU (main thread) | GPU | Memory | Basis |
 |---|---|---|---|---|
 | R0 | 0 in release (devel stats) | 0 | 0 | |
-| R1 | **−0.9 to −1.2 ms** at Rooftops (lamps 1.3 to 1.5 → about 0.35 + own faces) | −0.1 to −0.3 (fewer tile renders) | 0 | Rooftops [M] × the debt rule [E] |
+| R1 | **−0.5 to −0.8 ms** at Rooftops (`projector update` 1.25 → about 0.78 at the cap, about 0.43 if no tile renders; pre-#540 build) | −0.1 to −0.3 (fewer tile renders) | 0 | Rooftops [M] × the debt rule [E] |
 | Q0 | 0 in release | 0 | 0 | census on request |
 | Q1 | 0 | 0 | 0 | header and tests |
 | Q2a-1 faces (D′) | 0 per frame once filled; the fill ≤ 0.35 ms a frame on average (debt) for 1.6 to 2.6 s at 60 fps (3.4 to 5.6 s at 28 fps) with 0.6 to 1 ms per lamp, up to 9 s at 3.4 ms per lamp | fill only: 0.05 (room200k) to 0.84 ms (room1M, upper bound) per six-face lamp, spread | **+128 MiB** (4096² D32F pair) | Q0 call counts, GL review C++ ratios [E]; Rooftops tile cost [M] |
-| Q2a-2 cheap tap, 53 far lamps | < 0.05 (uniforms) | **0.16 to 0.31** | 0 | 0.0038 to 0.0041 ms per lit Mpx per lamp [M, lower bound] × coverage [E] |
+| Q2a-2 cheap tap, 53 far lamps | < 0.05 (uniforms) | **0.16 to 0.31** (coverage 20 to 40 % is a guess; 100 % bound: 0.78) | 0 | 0.0038 to 0.0041 ms per lit Mpx per lamp [M, lower bound] × coverage [E] |
 | Q2a-3 avatar faces | inside the shared cap (≤ 0.35 total), plus the own avatar's 2 near lamps ≈ 0.1 | 0.012 ms per 146k-tri face; ≤ 0.3 while many avatars stand under lamps | 0 | plan 3.7, GL review [E] |
-| Q2b near tier, K = 2 | ~0 | **+0.06 to +0.38** (0.19 ms per lamp full screen × 15 to 100 % coverage) | 0 | [M lower bound] × [E] |
+| Q2b near tier, K = 2 | ~0 | **+0.06 to +0.38** (0.19 ms per lamp full screen × 15 to 100 % coverage; 100 % is the bound) | 0 | [M lower bound] × [E] |
 | Q3 levers | per lever | −11 to −27 % of the lookup (min/max) | +2 MiB | plan section 5 |
 | M1 | 0 | 0 | 0 | unit and tests |
-| M2 inverse square + size | ~0 (cached constants) | **+0.06 to +0.12** | 0 | section 6.5 [M rate] |
+| M2 inverse square + size | ~0 (cached constants) | **+0.06 to +0.12** (100 % coverage bound: about 0.25) | 0 | section 6.5 [M rate × guessed coverage] |
 | M3 falloff shape | 0 | 0 (the same `pow`) | 0 | |
 | M4 worn caps | 0 | 0 | 0 | per-light constants |
 | M5 projectors | 0 | small, not timed | 0 | [E] |
 
 **Running total, after everything, steady state in the owner's room** [E]: CPU about +0.1 ms a frame (own avatar's near faces and
-uniforms; the shared cap is spent only while something changes or avatars stand under lamps), GPU about **+0.3 to +0.8 ms**. At a 60 fps
-frame that is about −1 to −3 fps if the GPU is the limit, nothing if it is not. At Rooftops, R1's saving (about +0.8 fps) is larger than
+uniforms; the shared cap is spent only while something changes or avatars stand under lamps), GPU about **+0.3 to +0.8 ms** (inherits the guessed 20 to 40 % coverage; the 100 % bound is about 1.1 to 1.8 ms; Q0's census decides). At a 60 fps
+frame that is about −1 to −3 fps if the GPU is the limit, nothing if it is not. At Rooftops, R1's saving (about +0.4 to +0.6 fps on the pre-#540 frame) is about as large than
 everything the point and light-model stages add at steady state there (Rooftops has few point lamps in reach [I: not counted]).
 
 ---
@@ -359,7 +365,7 @@ everything the point and light-model stages add at steady state there (Rooftops 
 |---|---|---|
 | **R-1** | How the shared cap treats a tile that costs more than the cap | (a) **Amortised cap**: the overrun becomes debt that the next frames pay, so the average is ≤ 0.35 ms; a 1 ms tile is drawn every third frame. (b) Today's rule: one over-cap tile every frame, fix only the cause found by R0 |
 | **R-2** | Only if R0 finds restless objects (H3): an object that dirtied a lamp's tile in at least 8 of the last 32 frames | (a) **leaves the fixed layer like a mover while restless** (no lamp shadow from it; back after 10 s quiet), as the casting rule treats movers; (b) stays a caster, redrawn at the 4-frame deadline |
-| **L-1** | Projector ambiance (#437 decision 6 said "shadow fill, k 0.3"; P2c then shadowed it after the bleeding report) | (a) **keep devel's rule: ambiance × shadow, no fill**: light never reappears behind an occluder, and the bounce light in a shadow already comes from the reflection probes, which capture local lights (`llreflectionmapmanager.cpp:802-805`). (b) #437's fill, `E_beam (V + 0.3 · ambiance · (1 − V))`: it relights every shadow inside the cone, including behind walls |
+| **L-1** | Projector ambiance (#437 decision 6 said "shadow fill, k 0.3"; P2c then shadowed it after the bleeding report) | (a) **keep devel's rule: ambiance × shadow, no fill**: light never reappears behind an occluder, and the bounce light in a shadow comes from the reflection probes, which capture local lights; but the probes capture today's unshadowed point lights, so that bounce leaks through walls until the point tap also runs in the probe passes (Q2a-2 gate, section 10). (b) #437's fill, `E_beam (V + 0.3 · ambiance · (1 − V))`: it relights every shadow inside the cone, including behind walls |
 | **L-2** | Highlight size (#437 widened the specular lobe by the cap's virtual size) | (a) **the 1 cm emitter only**: highlights as sharp as today, consistent with the shadows. (b) widen by `s_eff` (0.3 to 6.5 m): broad, dim highlights near big lamps |
 | **L-3** | Projector focus (#437's lens used the prim's face as the aperture; a 1 cm aperture makes focus do nothing) | (a) **today's ramp mirrored about the focus**: beyond the focus exactly today, in front of it the same slope of blur; (b) a thin lens fitted to today's far-plane blur (physical shape, far softer just past the focus); (c) keep today's one-sided ramp |
 | T1 to T3 | Tinted transmission (plan 7.1, Q5) | still open from the plan; decide after Q0 counts the faces with glass |
@@ -374,16 +380,16 @@ release. Effort is pipeline time, calibrated in 9.1.
 
 | Stage | Scope | Gate (tests and performance) | Owner check | Risk | Effort |
 |---|---|---|---|---|---|
-| **R0** Read the pool | MC1 Rooftops run with projector stats per preset (exists, 0f6c074e9e); add an off-thread hook counter by hook name, level-flip count and per-tile cause to `ProjectorShadows.stats` and the `renderTile` zone text | `check_release_hooks.py`; one run; the cause table of 4.2 filled | the session (or an owner-authorised autologin) | the cause may be two of H1 to H5 | 0.5 to 1 h + session |
+| **R0** Read the pool | MC1 Rooftops run **on the current tip** (also fixes the dark-gate state and the post-#540 frame) with projector stats per preset (exists, 0f6c074e9e); add an off-thread hook counter by hook name, level-flip count and per-tile cause to `ProjectorShadows.stats` and the `renderTile` zone text | `check_release_hooks.py`; one run; the cause table of 4.2 filled | the session (or an owner-authorised autologin) | the cause may be two of H1 to H5 | 0.5 to 1 h + session |
 | **R1** Fix the pool | the cause (4.3); the amortised cap (R-1); the pin-walk stamp; H4 hysteresis if needed | 4.3's gate; unit tests for the debt; orbit O-1, O-2, O-6 | Rooftops standing and orbiting; a projector room walk | changing the projectors' lag (R-1) | 2 to 4 h |
 | **Q0** Census | plan 3.10 (lamps, coverage, draws per sphere, glass faces, LOD-pin cost on all spheres); the missing `local lights` GL pass scope | release hooks; benches on an idle GPU | living room, bedroom, outside (can share R0's session) | none | 1 to 2 h + session |
 | **Q1** GL-free core | plan Q1 + G1-P tolerances of the GL review (tile mode bit-exact, atlas ≤ 1 mm off silhouettes, ≤ 1e-5 flips, positions recorded); the near-only own-avatar rule (5.2) | P-1 to P-9, G1-P | — | none | 1.5 to 3 h |
 | **Q2a-1** Faces | `llshadowatlas` extraction; point atlas; D′ route (UBO, route shader object, 15 VS + 4 FS variants, `drawRange` seam, tile/atlas modes); `sCurBoundShaderPtr` for tree/terrain; emitter excluded by identity; group masks; pins; static fill under the shared ledger | leak 0; tile bit-exact; atlas within G1-P; dither identical; projector G1 max abs 0; program count and link time; 0 renders a frame after the fill; fill time reported | — (nothing visible yet) | +33 programs; AMD/Intel clip distances | 3 to 5 h |
-| **Q2a-2** Cheap tap | `samplePointShadow` far tier in `pointLightF`/`multiPointLightF` (permutation `POINT_SHADOW_POOL`), packed origins, binding | wall test; orbit CRC; Legacy GLSL guard; lookup ≤ 0.35 ms in the living room | **living room: no light through walls** | thin walls at 64-texel faces | 1.5 to 3 h |
+| **Q2a-2** Cheap tap | `samplePointShadow` far tier in `pointLightF`/`multiPointLightF` (permutation `POINT_SHADOW_POOL`), packed origins, binding; **extend `scripts/shadows/check_legacy_glsl.py`**: today it compares only `spotLightF`, four caster alpha shaders and three macros, so add `pointLightF`, `multiPointLightF`, `deferredUtil`, `pbralphaF`, `alphaF`, `materialF`, the glTF shader and the `POINT_SHADOW_POOL` macro (and the M2 permutation); the tap also runs in cube-snapshot, mirror and water passes (world-space lookups, same atlas) or has an explicit off switch | wall test; orbit CRC; extended Legacy GLSL guard passes; probe, mirror and water passes show no light through walls (or the switch is documented); lookup ≤ 0.35 ms in the living room | **living room: no light through walls** | thin walls at 64-texel faces | 1.5 to 3 h |
 | **Q2a-3** Avatars | point avatar layer, mode rule, near-only own exemption | bit-exact against A at one face; within the shared cap; lag per face count | walk under lamps | lag of far lamps | 2 to 3 h |
 | **Q2b** Near tier | K = 2, 256/512 faces, G 16, PCSS program | seam taps in tile; orbit CRC; ≤ 0.2 ms per near lamp full screen | walk in and out of the room, recording reviewed | tier flapping | 2 to 4 h |
 | **M1** Unit | `lllocallight.h`: κ, n, I, R, s_eff, caps, worn flag, projector apex gain, focus rule; GLSL vectors from the bench | flux identity, caps, vectors ≤ 1 ulp | — | none | 1 to 2 h |
-| **M2** Inverse square + size | one `localLightE()` used by `pointLightF`, `multiPointLightF`, `pbralphaF`, `alphaF`, `materialF`, glTF; 3.0/3.25 unified; prim cap; n = 4 for every falloff (falloff still a divisor through κ); debug blend | blend 0 byte-identical; 16-light pass ≤ +0.1 ms at 1440p | home at night, candles | look change | 2 to 4 h |
+| **M2** Inverse square + size | one `localLightE()` used by `pointLightF`, `multiPointLightF`, `pbralphaF`, `alphaF`, `materialF`, glTF; 3.0/3.25 unified (the legacy-material branch of `pointLightF`, about line 131 on, and the second branch of `multiPointLightF.glsl:147` apply no 3.25 at all, and forward PBR uses 3.0: three values, 1.0, 3.0 and 3.25; M2 states per branch what each becomes); prim cap; n = 4 for every falloff (falloff still a divisor through κ); the new curve is a compile-time permutation, **off for Legacy and value 0**; `check_legacy_glsl.py` extended (Q2a-2 row, same file list) | value 0 and Legacy: shader text identical (extended `check_legacy_glsl.py`); 16-light pass ≤ +0.1 ms at 1440p (the measured one-curve permutation) | home at night, candles | look change | 2 to 4 h |
 | **M3** Falloff shape | n = 4 / (1 + falloff) | flux identity per falloff | lamps with high falloff | look change | 0.5 to 1 h |
 | **M4** Worn caps | worn `E_cap` 1 U, reach ≤ 6 m | worn table of #437 reproduced | a portrait with a face light; a club crowd | social reaction | 0.5 to 1 h |
 | **M5** Projectors | apex inverse square; focus (L-3); edge from the blur; forward cone without `spot²` | blend 0 identical; spot pass ≤ +5 % of its own time | club beams and gobos | look change | 2 to 3 h |
@@ -396,7 +402,7 @@ after Q2a-2 to avoid conflicts. M-stage release integration waits for L6 and the
 
 ### 9.1 Effort calibration (git history of `vkstorm-devel`)
 
-| Piece | Spec or first estimate | Took (first commit → review fixes) |
+| Piece | Spec or first estimate | Took (first commit → review fixes; a **lower bound**: planning, coding and building before the first commit are not in it) |
 |---|---|---|
 | Projector pool S0 to P3 | 14.5 to 19 days | about 19 h (plan section 10) |
 | Tile resolution B1 + B2 (#539) | — | 15:37 → 16:07 on 2026-11-16, merged 18:14 |
@@ -404,8 +410,10 @@ after Q2a-2 to avoid conflicts. M-stage release integration waits for L6 and the
 | Change-index hotfix | — | 15:33 → 15:56 |
 | Stochastic transparency port | 16 to 25 days | about 2 days |
 
-So a stage here is 0.5 to 5 hours of pipeline time; the total is **about 21 to 38 hours**: R 3 to 5, Q 11 to 20 (Q0 offline is done), M 6 to
-11, plus two or three owner sessions and the one-build-at-a-time queue.
+The anchors are the S0 to P3 figure (about 19 h) and the stochastic port (about 2 days); the commit gaps above understate the whole pipeline.
+A stage here is 0.5 to 5 hours of pipeline time; the total is **about 20 to 36 hours**: R 2.5 to 5, Q 11 to 20 (Q0 offline is done), M 6 to
+11 (the plan's own Q2a estimate was 4 to 8 h; this study splits it into 6.5 to 11 h because it adds the D′ route, the near-only rule and the
+GLSL guard extension), plus two or three owner sessions and the one-build-at-a-time queue.
 
 ---
 
@@ -415,6 +423,7 @@ So a stage here is 0.5 to 5 hours of pipeline time; the total is **about 21 to 3
 - R0 may show more than one cause; R1's debt rule lengthens the projectors' lag under load (the owner sees it as slower updates of a
   changing scene, never as a missing shadow).
 - The LOD pin over 55 lamp spheres may raise the main view's triangles (no ceiling); Q0 measures it before Q2a.
+- Probe, mirror, snapshot and water-reflection passes: `calcNearbyLights` returns early for them (`pipeline.cpp:6433`) and `LLProjectorShadows::update` is skipped for `gCubeSnapshot` (`pipeline.cpp:13000`, `llprojectorshadows.cpp:1353`), so probe renders read an atlas filled for the main view, and probes capture the unshadowed point lights. Q2a-2 gate: world-space lookups with the same atlas in those passes, or an explicit off switch.
 - The point pool's GPU cost lands where Rooftops cannot tell (no GPU zones).
 - D′ on AMD and Intel (clip distances, location-15 attribute) is untested; tile mode is A's call sequence and is the safe half.
 - The light model is a visible change for every lit build; the blend and the owner's check are the guard.
@@ -424,7 +433,9 @@ So a stage here is 0.5 to 5 hours of pipeline time; the total is **about 21 to 3
 - Any in-world GPU time; any number on AMD or Intel; the C++ submit cost of point faces (Q0's CPU figures are Python).
 - The own-avatar exemption's real cost with many lamps (5.2 is an estimate from the 0.05 ms floor).
 - The pin walk's share after the stamp (an estimate).
-- Whether the water reflection draws local lights; how many point lamps are within reach at Rooftops.
+- Whether the water reflection, mirrors and probe passes draw local lights, and what the point tap does in them;
+- The Rooftops figures are pre-#540 with Tracy on; the current tip's frame there is unmeasured;
+- The 20 to 40 % screen coverage per lamp is a guess (Q0's census decides); how many point lamps are within reach at Rooftops.
 - The light model on legacy (non-PBR) materials and classic skies in-world; L6's effect on the caps.
 - The focus options (L-3) were compared on one projector; the projector lens math was not timed.
 
@@ -445,5 +456,5 @@ Named before designing; papers and talks used for their published formulas and d
 - Fernando, *Percentage-Closer Soft Shadows*, SIGGRAPH 2005 sketch: the near tier's filter (the projectors').
 - Koonce, *Deferred Shading in Tabula Rasa*, GPU Gems 3 ch. 19, and id Software, *DOOM (2016)*, SIGGRAPH 2016: a cached shadow pool with an
   update budget; the amortised cap of R-1 is the budget counted per second instead of per frame.
-- Olsson et al., per-caster face masks (2015): the group masks.
+- Olsson, Billeter, Assarsson, *More Efficient Virtual Shadow Maps for Many Lights*, IEEE TVCG 21(6), 2015 (and the 2014 talk): cube-face masks per cluster or bounding box; related to, not the same as, this study's per-group masks.
 - The plan's section 11 lists the rest (receiver-plane bias, normal offset, hierarchical min/max, translucency maps).
