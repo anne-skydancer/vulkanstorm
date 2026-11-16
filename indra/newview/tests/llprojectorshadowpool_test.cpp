@@ -790,8 +790,10 @@ namespace
             std::vector<DynamicItem> costly{ { 8, false, 9, 1.f, 0.5f, 0 } };
             check(selectDynamic(costly, 0.3f, 24).size() == 1, "T7 an overdue item over the CPU cap runs");
             std::vector<DynamicItem> costly_young{ { 8, false, 0, 1.f, 0.5f, 0 } };
-            check(selectDynamic(costly_young, 0.3f, 24).size() == 1, "T7 a young item over the CPU cap runs alone too (C1)");
-            check(selectDynamic(costly_young, 0.3f, 24, false).empty(), "T7 an item over the CPU cap waits when the frame has spent");
+            check(selectDynamic(costly_young, 0.3f, 24).empty(), "T7 a young moving-lamp item over the CPU cap waits for its deadline (only avatar faces run over the share every frame)");
+            std::vector<DynamicItem> costly_face{ { 8, true, 0, 1.f, 0.5f, 1 } };
+            check(selectDynamic(costly_face, 0.3f, 24).size() == 1, "T7 a young avatar face over the CPU cap runs alone, every frame (C1)");
+            check(selectDynamic(costly_face, 0.3f, 24, false).empty(), "T7 a face over the CPU cap waits when the frame has spent");
             std::vector<DynamicItem> lamps{ { 1, false, 0, 1.f, 0.1f, 0 }, { 2, false, 0, 2.f, 0.1f, 0 },
                                             { 3, false, 0, 3.f, 0.1f, 0 }, { 4, false, 0, 4.f, 0.1f, 0 } };
             check(selectDynamic(lamps, 0.3f, 24).size() == 3, "T7 lamps follow the CPU cap, not A_max");
@@ -1952,7 +1954,7 @@ std::vector<uint32_t> legacySelectDynamic(const std::vector<DynamicItem>& items,
 CadenceResult cadenceSim(uint32_t lamps, float cost, bool legacy, bool lamp_ties, bool shared_avatar, uint32_t frames = 600)
 {
     std::vector<uint32_t> last(lamps + 1, 1);
-    std::vector<float> measured(lamps + 1, kDefaultItemMs); // lastAvatarMs
+    std::vector<float> measured(lamps + 1, 0.f); // lastAvatarMs: 0 until measured (itemCost floors it at kDefaultItemMs)
     std::vector<uint32_t> worst(lamps + 1, 0);
     uint64_t drawn = 0;
     const uint32_t warm = 40;
@@ -2030,6 +2032,8 @@ void testP4Cadence(bool print_table)
             // never worse than before, in faces a frame and in the worst gap
             check(after.faces_per_frame + 1e-9 >= before.faces_per_frame, "C1 cadence: no fewer faces a frame than before", lamps, cost);
             check(after.worst_gap <= before.worst_gap, "C1 cadence: the worst gap is not longer than before", lamps, cost);
+            // the deadline bound holds up to about 5 lamps in overload: the deadline serves one overdue face a frame, so with more
+            // overdue faces than frames the wait is the number of lamps, not 4 (this table stops at 5)
             check(after.worst_gap <= kDynamicDeadlineFrames + 1, "C1 cadence: no face waits longer than the deadline (plus the frame it was seen in)", lamps, cost);
             // whatever fits the whole cap is drawn every frame
             const float need = float(lamps) * std::max(cost, kDefaultItemMs);
@@ -2110,6 +2114,21 @@ void testP4Cadence(bool print_table)
         check(std::fabs(p - 0.30f) < 1e-3f, "C1 smoothing: a lasting change is followed", p);
         check(smoothedCostMs(0.1f, std::numeric_limits<float>::quiet_NaN()) == 0.1f && smoothedCostMs(0.1f, -1.f) == 0.1f, "C1 smoothing: a bad sample is ignored");
         check(smoothedCostMs(0.f, 0.2f) == 0.2f, "C1 smoothing: the first sample seeds it");
+        // a fresh record predicts 0 (itemCost floors it at the default) and its first real sample is the prediction, not a blend with 0.05
+        check(itemCost(0.f) == kDefaultItemMs && smoothedCostMs(0.f, 0.3f) == 0.3f, "C1 smoothing: a zero prediction is floored by the scheduler and seeded by the first sample");
+        // a sample is clamped to twice the cap, so one hitch cannot make a face heavy for long
+        check(kCostSampleMaxMs == 2.f * kFrameCapMs, "C1 smoothing: the clamp is twice the frame cap");
+        check(smoothedCostMs(0.f, 50.f) == kCostSampleMaxMs, "C1 smoothing: a seed is clamped");
+        float q = 0.08f;
+        q = smoothedCostMs(q, 50.f);
+        check(q <= 0.08f + kCostSmoothing * (kCostSampleMaxMs - 0.08f) + 1e-6f, "C1 smoothing: a 50 ms hitch counts as 0.7 ms", q);
+        int frames_heavy = 0;
+        while (q > kDynamicCapMs && frames_heavy < 100)
+        {
+            q = smoothedCostMs(q, 0.08f);
+            ++frames_heavy;
+        }
+        check(frames_heavy <= 3, "C1 smoothing: after a hitch the face is not over the share for more than 3 frames", frames_heavy);
     }
     // the avatar's distance to the camera position (never the view direction)
     {
@@ -2190,7 +2209,14 @@ void testP4Footprint()
         check(layerCopyRect(false, a, b, 64) == wholeTileRect(64), "C3 copy: an unknown old rectangle copies the whole tile");
         check(layerCopyRect(true, a, b, 64) == unionRect(a, b), "C3 copy: the old and the new rectangle");
         check(layerCopyRect(true, a, TexelRect(), 64) == a && layerCopyRect(true, TexelRect(), TexelRect(), 64).empty(), "C3 copy: an avatar that left restores its old rectangle; nothing, nothing");
-        check(footprintMarginM(0.f) == kFootprintMarginM && footprintMarginM(10.f) > footprintMarginM(2.f) && footprintMarginM(std::numeric_limits<float>::quiet_NaN()) == kFootprintMarginM, "C3 margin: grows with the speed");
+        const Aabb point = box3(0, 0, 0, 0, 0, 0), unit = box3(0, 0, 0, 1, 1, 2);
+        const float nanf = std::numeric_limits<float>::quiet_NaN();
+        check(std::fabs(footprintMarginM(0.f, 0, point) - kFootprintMarginM) < 1e-6f, "C3 margin: the base");
+        check(std::fabs(footprintMarginM(0.f, 4, point) - (kFootprintMarginM + 4 * kFootprintStaleM)) < 1e-6f, "C3 margin: grows with the extents' refresh period");
+        check(footprintMarginM(0.f, 20, point) > footprintMarginM(0.f, 4, point) + 0.6f, "C3 margin: 25 avatars (period 20) more than doubles the margin of 5");
+        check(std::fabs(footprintMarginM(10.f, 0, point) - footprintMarginM(0.f, 0, point) - 10.f * kFootprintSpeedSeconds) < 1e-5f, "C3 margin: grows with the speed");
+        check(std::fabs(footprintMarginM(0.f, 0, unit) - footprintMarginM(0.f, 0, point) - kFootprintSizeFraction * std::sqrt(6.f)) < 1e-5f, "C3 margin: grows with the box diagonal");
+        check(footprintMarginM(nanf, -3, point) == kFootprintMarginM && std::isfinite(footprintMarginM(0.f, 4, box3(0, 0, 0, nanf, 1, 1))), "C3 margin: a bad speed, period or box adds nothing");
         check(inflateBox(box3(0, 0, 0, 1, 1, 1), 0.5f).lo[2] == -0.5f && inflateBox(box3(0, 0, 0, 1, 1, 1), 0.5f).hi[0] == 1.5f, "C3 margin: the box grows on every side");
     }
 

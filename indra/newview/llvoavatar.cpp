@@ -3191,6 +3191,13 @@ void LLVOAvatar::dumpAnimationState()
 //------------------------------------------------------------------------
 // idleUpdate()
 //------------------------------------------------------------------------
+static S32 sExtentUpdateFrequency = 0; // idleUpdate's upd_freq, for getExtentUpdatePeriod
+
+S32 LLVOAvatar::getExtentUpdatePeriod()
+{
+    return sExtentUpdateFrequency > 0 ? sExtentUpdateFrequency : 4; // 4: the AvatarExtentRefreshPeriodBatch default, before the first update
+}
+
 void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
@@ -3261,6 +3268,7 @@ void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
         upd_freq = (((gObjectList.getAvatarCount() - 1) / refreshMaxPerPeriod) + 1)*refreshPeriod;
         lastRecalibrationFrame = thisFrame;
     }
+    sExtentUpdateFrequency = upd_freq;
 
     if ((mLastAnimExtents[0]==LLVector3())||
         (mLastAnimExtents[1])==LLVector3())

@@ -353,8 +353,8 @@ the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `se
 | | ms of CPU a frame | meaning |
 |---|---|---|
 | `kFrameCapMs` | **0.35** | everything the shadow caches' tile work spends in a frame, all caches together (4.4 % of an 8 ms frame; 0.05 ms of the 0.4 ms stays free) |
-| `kDynamicCapMs` | **0.20** | the dynamic layer's share, spent first (a moving lamp's tile, the avatar layers) |
-| `kStaticCapMs` | **0.15** | what the static tiles keep when the dynamic layer is full (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.35 |
+| `kDynamicCapMs` | **0.20** | the dynamic layer's share while a static tile waits, spent first (a moving lamp's tile, the avatar layers). When no static tile waits, the share is the whole remaining cap (`dynamicShareMs`; hotfix C1) |
+| `kStaticCapMs` | **0.15** | what the static tiles keep when the dynamic layer takes its 0.20 ms (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.35 |
 
 - **Priority: the dynamic layer first.** An avatar or a moving lamp that lags is seen at once; a dirty static tile shows a stale
   shadow of something that changed, and its wait is bounded by the age order (oldest first). A static tile is never starved: the first
@@ -365,7 +365,7 @@ the +5 % allowance (an assumed 8 ms frame). P4 has one (`llprojectorpool.h`, `se
   yet in the frame, a single item whose own prediction is above the cap runs alone. Two caches share the cap through the frame ledger
   (`frameLedger()`): the second takes what the first left, and a frame in which the cap is spent serves nothing more.
 - **A_max covers the static tiles too.** A static tile that draws avatars (a first fill, a dirty or low-res tile) is charged `min(avatars, A_max)` draws (`StaticItem::avatar_draws`) against what the dynamic picks left of A_max; one that does not fit waits (the order is kept), and the head tile keeps its place (the dynamic layer gives up its last avatar faces for it, only when the head is served; so for a cold fill of avatar-heavy tiles the dynamic avatar faces yield to the head tile), so a cold fill never draws more than A_max avatars in a frame.
-- **In the frame** each render also checks the measured time against the cap (the dynamic list against its 0.20 ms share).
+- **In the frame** each render also checks the measured time against the cap (the dynamic list against its share: 0.20 ms while a static tile waits, the whole remaining cap when none does).
 - **Cold start** (`coldItemMs`) is at most a quarter of the cap (0.0875 ms): four first fills a frame with no avatar layer, one a frame
   while the dynamic layer is full.
 - Unit-tested: the combined cap is never exceeded with both kinds pending, over six costs on each side; the dynamic share, the static
@@ -379,19 +379,44 @@ than `kDefaultItemMs` = 0.05 ms and then at the item's own last measured cost (`
 owner's walk session; `pool.last_frame_avatar_draws`, `last_frame_layer_renders` and `last_frame_render_ms` are the readings.
 
 Faces drawn a frame = **min(A_max left, dynamic CPU share / cost of a face)**, with A_max = 24 avatar draws (one per avatar in a lamp's
-volume), less the faces drawn every frame: with 0.20 ms and 0.05 ms that is **4 faces a frame** (A_max does not bind below 24 faces;
-with 20 draws taken it would be 4 as well, with 22 taken, 2). The wait of the last face of a set is `ceil(faces / per frame)` frames;
-the nearest faces (by the camera's position) are served every frame, the rest by the 4-frame deadline, oldest first:
+volume), less the faces drawn every frame. The share has two regimes (hotfix C1, `dynamicShareMs`):
 
-| faces with an avatar | frames | ms at 60 fps | ms at 120 fps |
+- **while a static tile waits** it is 0.20 ms: with a 0.05 ms face that is **4 faces a frame**;
+- **when none waits** it is the whole remaining cap, 0.35 ms: up to **7 faces a frame** at the 0.05 ms floor.
+
+A_max does not bind below 24 faces. The wait of the last face of a set is `ceil(faces / per frame)` frames. The order of service is:
+the faces past the 4-frame deadline first (oldest first, the safety net), then the camera POSITION's distance to the face's nearest
+avatar (not the lamp's distance, which ties at 0 indoors), then the oldest. An avatar face whose own prediction is over the share runs
+alone, every frame, as the progress pick (a moving lamp's tile only once it is overdue). The prediction (`lastAvatarMs`) is an EMA
+(0.25) seeded by the first sample, each sample clamped to 0.7 ms (2 x the cap).
+
+Faces drawn a frame / worst gap in frames, indoors, one avatar under all lamps, no static tile waiting (a model of `update()`,
+`llprojectorshadowpool_test --table`; "before" is the release scheduler before C1, with its fixed 0.20 ms share):
+
+| lamps | cost per face (ms) | before | after |
 |---|---|---|---|
-| 4 | 1 | 17 | 8 |
-| 8 | 2 | 33 | 17 |
-| 12 | 3 | 50 | 25 |
-| 24 | 6 | 100 | 50 |
+| 1 | 0.30 | 0.25 / 4 | 1.00 / 1 |
+| 2 | 0.15 | 1.00 / 4 | 2.00 / 1 |
+| 3 | 0.07 | 2.00 / 4 | 3.00 / 1 |
+| 4 | 0.10 | 2.00 / 4 | 3.00 / 2 |
+| 5 | 0.07 | 2.00 / 4 | 5.00 / 1 |
+| 5 | 0.15 | 1.00 / 5 | 2.00 / 3 |
 
-(Estimated from the cap and the 0.05 ms floor; the unit tests simulate 12 and 24 faces and check the worst wait against the formula.
-With the measured 0.04 ms a face the share would hold 5 faces a frame; the scheduler's floor keeps it at 4.)
+(Estimated from the cap and the 0.05 ms floor; the real cost of a face is unmeasured. In a real overload, more face cost than the cap
+holds, the deadline turns the service into a round robin: the worst gap is then about the number of lamps, up to 5 in the model.)
+
+### Footprint copy (hotfix C3)
+
+An avatar layer pass does not copy and draw the whole tile. It copies S to L over the union of the rectangle the last pass drew and
+the one the avatars cover now, and scissors the avatar draw to the new one; outside the rectangle the last pass drew, L equals S bit for
+bit. The rectangle is the avatars' extents grown by a margin (`footprintMarginM`: 0.3 m + 0.04 m per frame of the extents' refresh
+period + 0.15 s of the avatar's speed + 0.15 of the box diagonal), projected through the tile's matrices, plus 2 texels. The margin
+covers stale extents: `calculateSpatialExtents` refreshes only every 4 to 20 frames (the period grows with the avatar count, 4 up to
+5 avatars) and the box is only translated by the pelvis in between; rigged attachments are inside the extents, with no padding of their
+own. The footprint is the whole tile when a corner is behind the eye plane, the matrix is not finite, an avatar is an impostor, or the
+rectangle covers more than half of the tile. A full tile render still copies the whole tile. After a new atlas or a repack that moves
+tiles the old rectangle is unknown and the next pass copies the whole tile. Gate: the unit test's pass model and
+`scripts/shadows/projector_layer_footprint_gate.py` (GPU, every pass) compare L with a whole-tile copy plus the same scissored draw.
 
 ### Single-owner pieces made shared
 

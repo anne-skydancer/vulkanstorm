@@ -737,12 +737,17 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     // S changed everywhere: the whole tile is copied, then the avatars are drawn over the copy, in L only (S stays the fixed layer)
     copyTile(mAtlasS, rec.rect, mAtlasL, rec.rect);
     F32 avatar_ms = 0.f;
+    bool avatar_drawn = false;
     if (rec.holdsAvatar)
     {
         const F64 face_start = LLTimer::getTotalSeconds();
         const FaceAvatars face = faceAvatars(rec, view, proj, g.origin);
         avatar_ms = (F32)((LLTimer::getTotalSeconds() - face_start) * 1000.0);
-        avatar_ms += drawAvatars(rec, face, view, proj, g.origin, far_clip);
+        if (!face.rect.empty()) // an empty footprint draws nothing
+        {
+            avatar_ms += drawAvatars(rec, face, view, proj, g.origin, far_clip);
+            avatar_drawn = true;
+        }
         rec.layerRect = face.rect;
     }
     else
@@ -778,7 +783,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     r.layerFrame = r.drawnFrame;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     r.lastCpuMs = llmax(ms - avatar_ms, 0.f); // the fixed layer's cost; the avatar layer's is lastAvatarMs
-    if (rec.holdsAvatar)
+    if (avatar_drawn)
     {
         r.lastAvatarMs = llprojectorpool::smoothedCostMs(r.lastAvatarMs, avatar_ms);
     }
@@ -808,7 +813,7 @@ namespace
 {
     struct AvatarCaster
     {
-        const LLVOAvatar* avatar;
+        LLVOAvatar* avatar;
         Aabb box;
     };
 
@@ -865,14 +870,14 @@ LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& re
     }
     std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     std::vector<llprojectorpool::Aabb> boxes;
+    const S32 period = LLVOAvatar::getExtentUpdatePeriod(); // how stale the extents can be
     bool whole = false;
     for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
     {
         const AvatarCaster& c = *in_light[i].second;
-        LLVOAvatar* avatar = const_cast<LLVOAvatar*>(c.avatar);
         face.avatars.push_back(c.avatar);
-        whole = whole || avatar->isImpostor();
-        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(avatar->getVelocity().magVec())));
+        whole = whole || c.avatar->isImpostor();
+        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
     }
     const U32 n = rec.rect.size;
     if (whole)
@@ -967,7 +972,7 @@ void LLProjectorShadows::renderLayer(Record& rec)
         avatar_ms = (F32)((LLTimer::getTotalSeconds() - face_start) * 1000.0);
     }
     copyTileTexels(rec.rect, llprojectorpool::layerCopyRect(rec.layerRectValid, rec.layerRect, face.rect, rec.rect.size));
-    if (rec.holdsAvatar)
+    if (rec.holdsAvatar && !face.rect.empty()) // an empty footprint draws nothing, and says nothing about the cost of a draw
     {
         avatar_ms += drawAvatars(rec, face, view, proj, g.origin, far_clip);
         rec.lastAvatarMs = llprojectorpool::smoothedCostMs(rec.lastAvatarMs, avatar_ms);
@@ -1291,10 +1296,11 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
 
     // The avatars of the dynamic layer (P4), by position alone: every avatar that casts, wherever the camera looks. An avatar is paired
-    // with every lamp whose volume its extents touch; nothing here reads the camera's view, the avatar's visibility or its impostor flag
-    // (the camera's position only orders the faces, below)
-    // (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts). A jelly
-    // doll, an invisible or a too slow avatar and a UI avatar are not drawn by the avatar pool either.
+    // with every lamp whose volume its extents touch; the pairing reads neither the camera's view, nor the avatar's visibility, nor its
+    // impostor flag (isVisible and isImpostor are the camera's: an avatar behind the camera, or one drawn as an impostor, still casts).
+    // The camera's POSITION only orders the faces (below), and faceAvatars reads isImpostor() only to size the footprint (an impostor's
+    // extents are stale, so it copies the whole tile). A jelly doll, an invisible or a too slow avatar and a UI avatar are not drawn by
+    // the avatar pool either.
     const F32 camera_pos[3] = { camera.getOrigin().mV[VX], camera.getOrigin().mV[VY], camera.getOrigin().mV[VZ] };
     std::vector<Aabb> avatar_boxes;
     for (const AvatarCaster& c : casting_avatars())

@@ -776,6 +776,9 @@ public:
     F32SecondsImplicit mLastImpostorUpdateFrameTime;
     const LLVector3*  getLastAnimExtents() const { return mLastAnimExtents; }
     void        setNeedsExtentUpdate(bool val) { mNeedsExtentUpdate = val; }
+    // The frames between two refreshes of an avatar's spatial extents (idleUpdate's upd_freq; in between the box is only translated
+    // by the pelvis). Main thread; 4 before the first update.
+    static S32  getExtentUpdatePeriod();
 
 private:
     LLVector3   mImpostorOffset;
