@@ -110,4 +110,13 @@ namespace tut
         ensure_equals("65536 vertices", unpack(face(65536 * 6, 0, 0, {0, 1, 2})), 0);
         ensure_equals("65535 vertices", unpack(face(65535 * 6, 0, 0, {0, 1, 2})), 3);
     }
+
+    template<> template<>
+    void llvolume_unpack_test_object_t::test<5>()
+    {
+        set_test_name("triangle index beyond the vertex count is rejected");
+        ensure_equals("index == num_verts", unpack(face(3 * 6, 3 * 6, 3 * 4, {0, 1, 3})), 0);
+        ensure_equals("index 65535", unpack(face(3 * 6, 3 * 6, 3 * 4, {0, 1, 65535})), 0);
+        ensure_equals("last valid index", unpack(face(3 * 6, 3 * 6, 3 * 4, {2, 1, 0})), 3);
+    }
 }

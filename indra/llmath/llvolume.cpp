@@ -1630,6 +1630,27 @@ bool LLVolume::unpackVolumeFacesInternal(const LLSD& mdl, bool optimize)
                 continue;
             }
             U32 num_verts = static_cast<U32>(num_verts_wide);
+
+            // Indices come from a separate blob; one that points past the vertices is an
+            // out-of-bounds read when the face is drawn or skinned.
+            {
+                bool indices_valid = true;
+                for (S32 j = 0; j < face.mNumIndices; ++j)
+                {
+                    if (face.mIndices[j] >= num_verts)
+                    {
+                        indices_valid = false;
+                        break;
+                    }
+                }
+                if (!indices_valid)
+                {
+                    LL_WARNS() << "Face index: " << i << " has triangle indices beyond its " << num_verts << " vertices. Total: " << face_count << LL_ENDL;
+                    face.resizeIndices(0);
+                    continue;
+                }
+            }
+
             face.resizeVertices(num_verts);
 
             if (num_verts > 0 && !face.mPositions)
