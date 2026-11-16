@@ -176,7 +176,7 @@ namespace
         check(monotone, "softness is strictly increasing with the position");
         check(round_trip, "value -> position -> value round-trips");
         check(round_trip_pos, "position -> value -> position round-trips");
-        // 0.01 steps of the slider are fine steps of the value (3 % or less), with no coarse jump
+        // 0.01 steps of the slider are fine steps of the value (about 3.1 %: the check allows under 4 %), with no coarse jump
         float worst = 0.0f;
         for (int i = 0; i < 100; ++i)
         {

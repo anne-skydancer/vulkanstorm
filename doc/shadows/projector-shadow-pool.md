@@ -86,7 +86,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   452 texels, and 32 bilinear 2 x 2 taps read 128 of them, 28 % against 41 % at the old 10 texels) and the penumbra turns grainy
   before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
 - **Emitter: a fixed 1 cm light (projector shadow sharpness P2).** Every lamp is a 1 cm light (SL's minimum prim size), whatever its
-  prim, centred on the projection centre (the lamp's anchor point). The penumbra's light size is the uniform
+  prim, at the apex of the lamp's frustum, the projection centre of the pose the tile was drawn with (the lamp's anchor point; the
+  uniform `proj_shadow_origin`, which the normal offset's direction to the lamp also uses). The penumbra's light size is the uniform
   `proj_shadow_light_size` = 0.01 m times `RenderShadowLightSize`, on both axes of the map (`emitterExtent`, `llprojectorshadowpool.h`);
   this replaces the prim's own face and its 2 cm .. 15 cm clamp (P2b). `RenderShadowLightSize` is the one softness factor of every
   light: the sun and moon keep their formula (0.53 degrees times the EEP sun or moon scale times the setting), a projector lamp is
@@ -103,7 +104,10 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light
   (`scripts/shadows/proj_march_bench.py --edges`, 2.3 mm emitter): the toe's x50 lands within 1 mm of the reference on the 2048 and
   1024 tiles (today 5 mm short), the value under the toe is 0 (the study measured 0.04 to 0.19 there with today's lookup and the 6 and 15 cm prims) and the toe's
-  RMS falls from 0.17 to 0.05; the lookup costs about 4 % more. Static shadows get it too: the lookup is the same for every tile.
+  RMS falls from 0.17 to 0.05; the isolated lookup costs about 7 % more (three timing runs of the bench's
+  `--time`, 2048 and 1024 tiles: today 0.112 to 0.115 ms, P2 0.120 to 0.122 ms for a 2560x1440 full-screen layer, a mean of +6.7 %,
+  0.008 ms per layer; the study measured +4 %, and earlier single runs of this change varied between -1 % and +6.5 %, so the
+  measurement noise on a shared PC is about 6 %). Static shadows get it too: the lookup is the same for every tile.
 - **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
   pool and the sun cascades), so a tile's pattern does not depend on where the tile sits in the atlas. The Stochastic sun
   cascades set the same uniform to `-(k mod 2^16)`, k the map corner's index on the world grid (`LLShadowCascadeFit::alphaDitherOrigin`),

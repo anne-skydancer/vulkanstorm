@@ -3,9 +3,9 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Projector shadows: today's PCSS lookup, the P2 fixes, the P1 inset and a sun-style march, against an analytic area light.
 
-Offline study bench (no viewer). It compiles the shader code under test from a checkout (--repo, default the devel
-worktree work/proj-march-study): from shadowStochasticUtil.glsl the G1 block, stSpotGradient, sampleProjectorShadow,
-stIGN, stNoise, stReference and stMarch (the sun's march, unchanged), and from shadowUtil.glsl the SHADOW_COMMON helpers
+Offline study bench (no viewer). It compiles the shader code under test from a checkout (--repo, default the checkout this
+script lives in): from shadowStochasticUtil.glsl the G1 block, stSpotGradient, sampleProjectorShadow, stIGN, stNoise,
+stReference and stMarch (the sun's march, unchanged), and from shadowUtil.glsl the SHADOW_COMMON helpers
 (shadowNormalOffsetPos and friends; shadowReceiverGeometry in its SHADOW_COMMON_NO_DEPTH form, so the receiver normal is
 the given one). Three prototypes are written here, never in the viewer:
 
@@ -30,6 +30,7 @@ Modes:
               and in the EMA(1/8) steady state.
   --time      GPU ms of a 2560x1440 view of the floor, every pixel a floor receiver inside the lamp frustum (timer queries,
               median of 9 x 20 draws) for each method, tile and emitter; reported per lit megapixel per lamp.
+  --grazing   acne check: a lit plane tilted 0-88 degrees to the lamp, scanned with its own normal (a correct lookup reads 1.0)
   --temporal  a walking avatar (1.4 m/s at 60 fps): the march with the sun's temporal resolve (EMA 1/8, 3x3 min/max clamp,
               static camera so no reprojection), against the instantaneous reference: lag and ghost of the toe and shoulder edges.
 
@@ -39,9 +40,9 @@ Modes:
 Needs numpy and an OpenGL 4.x driver on Windows (scripts/perf/gl_test_context.py). Plain python, not -I (numpy is in the user site).
 
 Projector shadow sharpness P2 (branch codex/shadow-sharpness-p2): the working checkout's sampleProjectorShadow IS P2 now.
-The bench therefore keeps today's lookup and its P2 prototype from the BASELINE util (--baseline-ref, a git ref of the file
-as it was before P2) and adds the method 'P2 real': the working checkout's shadowStochasticUtil.glsl compiled as it is
-(its own G1 block, sampleProjectorShadow, proj_origin), which must match the prototype. --edges prints the real shader's
+'Today's lookup' (PCSS today), the tiles' G1 filter of the prototypes and the prototype P2 are compiled from the BASELINE util
+(--baseline-ref, default 5a091b9559, the file as it was before P2; the march and the inset variants also use it). The bench adds the method 'P2 real': the working checkout's shadowStochasticUtil.glsl compiled as it is
+(its own G1 block, sampleProjectorShadow, proj_shadow_origin), which must match the prototype. --edges prints the real shader's
 difference to the prototype and the P2 gates (toe x50 within 2 mm of the reference, the value under the toe at most 0.02, the
 toe RMS no worse than today's, shoulder x50 within 2 mm); --time gives the lookup cost against today's.
 """
@@ -72,6 +73,7 @@ ap.add_argument('--rows', type=int, default=32, help='--edges: noise rows per sc
 ap.add_argument('--frames', type=int, default=64)
 ap.add_argument('--emitters', default='0.03,0.06,0.15')
 ap.add_argument('--sizes', default='2048,1024,512')
+ap.add_argument('--grazing', action='store_true', help='acne check: a lit plane tilted 60-88 degrees to the lamp, scanned with its own normal (should read 1.0 everywhere)')
 opts = ap.parse_args()
 REPO = Path(opts.repo)
 UTIL = REPO / 'indra/newview/app_settings/shaders/class1/deferred/shadowStochasticUtil.glsl'
@@ -231,6 +233,7 @@ uniform vec3 scan_a;
 uniform vec3 scan_b;
 uniform mat4 cam_inv;     // --time: clip -> view (world) of the camera
 uniform vec3 cam_pos;
+uniform vec3 recv_norm;   // the receiver's normal (--grazing: a tilted plane; otherwise the floor's)
 out vec4 oc;
 float VIS(vec3 pos, vec3 norm, vec2 ps)
 {
@@ -247,7 +250,7 @@ float VIS(vec3 pos, vec3 norm, vec2 ps)
 void main()
 {
     vec2 id = floor(gl_FragCoord.xy);
-    vec3 norm = vec3(0.0, 0.0, 1.0);
+    vec3 norm = recv_norm;
 #if TIMING
     vec4 q = cam_inv * vec4((gl_FragCoord.xy / grid) * 2.0 - 1.0, 1.0, 1.0);
     vec3 d = normalize(q.xyz / q.w - cam_pos);
@@ -348,6 +351,7 @@ glBindVertexArray(vao.value)
 # ---------------------------------------------------------------- scene
 H_L = opts.lamp_h
 LAMP = np.array([0.0, 0.0, H_L])
+RECV_NORM = (0.0, 0.0, 1.0)
 FOV = opts.fov
 
 
@@ -472,7 +476,8 @@ def set_common(prog, frame, steps_max, w, h):
     glUniform1f(glGetUniformLocation(prog, b'spot_shadow_offset'), 0.04)   # RenderSpotShadowOffset
     glUniform1f(glGetUniformLocation(prog, b'spot_shadow_reach'), 128.0)
     glUniform3f(glGetUniformLocation(prog, b'proj_light_pos'), *[float(v) for v in LAMP])
-    glUniform3f(glGetUniformLocation(prog, b'proj_origin'), *[float(v) for v in LAMP])
+    glUniform3f(glGetUniformLocation(prog, b'proj_shadow_origin'), *[float(v) for v in LAMP])
+    glUniform3f(glGetUniformLocation(prog, b'recv_norm'), *[float(v) for v in RECV_NORM])
     glUniform1i(glGetUniformLocation(prog, b'march_steps_max'), steps_max)
     glUniform2f(glGetUniformLocation(prog, b'grid'), float(w), float(h))
 
@@ -788,6 +793,45 @@ def temporal():
             print(json.dumps(row), flush=True)
 
 
+def grazing():
+    """Acne on a curved or grazing receiver: a single plane through the origin tilted by phi to the horizontal (normal
+    (sin phi, 0, cos phi)) is the only caster, so every receiver on it is lit and a correct lookup reads 1.0. The lamp is overhead,
+    so phi is the angle between the receiver's normal and the light. Reports the mean and the worst darkening (1 - v) of the
+    scan x in [-0.3, 0.3] for today's lookup and the real P2, per tile size and phi; the receiver plane and normal are exact."""
+    global RECV_NORM
+    progs = {'PCSS today': build(0), 'P2 real': build(3)}
+    tgt = Target(W_SCAN, 8)
+    tan_full = math.tan(0.5 * FOV)
+    print('| L | tile | phi | method | mean darkening | max darkening | receivers darker than 0.98 |')
+    print('|---|---|---|---|---|---|---|')
+    for L in [float(x) for x in opts.emitters.split(',')]:
+        m = lamp_matrix(L, tan_full)
+        for n in [int(x) for x in opts.sizes.split(',')]:
+            for phi in (0, 45, 60, 75, 85, 88):
+                sp, cp = math.sin(math.radians(phi)), math.cos(math.radians(phi))
+                u = ((np.arange(n) + 0.5) / n * 2 - 1) * tan_full
+                dx, dy = np.meshgrid(u, u)
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    t = cp * H_L / (cp - sp * dx)          # the ray (dx t, dy t, H - t) meets sin(phi) x + cos(phi) z = 0
+                hit = np.isfinite(t) & (t > 0)
+                pts = np.stack([dx * t, dy * t, H_L - t], -1)
+                sc = np.concatenate([pts, np.ones(pts.shape[:-1] + (1,))], -1) @ m.T
+                z = np.where(hit, sc[..., 2] / sc[..., 3], 1.0).astype(np.float32)
+                tex = texture(0x8CAC, n, n, np.clip(z, 0.0, 1.0), 0x1902)
+                RECV_NORM = (sp, 0.0, cp)
+                hw = min(0.3, 1.0 * cp / sp) if sp > 1e-6 else 0.3     # the scan stays within 1 m of the floor's height
+                a = np.array([-hw, 0.0, hw * sp / cp])
+                b = np.array([hw, 0.0, -hw * sp / cp])
+                for name, prog in progs.items():
+                    v = scan(prog, tgt, tex, m, n, L, a, b).mean(0)
+                    d = 1.0 - v
+                    print('| %g | %d | %d | %s | %.4f | %.3f | %.1f %% |' % (L, n, phi, name, d.mean(), d.max(), 100 * np.mean(v < 0.98)), flush=True)
+                free(tex)
+    RECV_NORM = (0.0, 0.0, 1.0)
+
+
+if opts.grazing:
+    grazing()
 if opts.edges:
     edges()
 if opts.time:
