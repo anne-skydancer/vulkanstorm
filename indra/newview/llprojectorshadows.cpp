@@ -46,6 +46,7 @@
 #include "llvovolume.h"
 #include "pipeline.h"
 #include "llframecounters.h"
+#include "llglsubmitstats.h" // VKS_GLSTAT_VIEW: nothing without -DVKS_GL_STATS=ON
 
 #include <algorithm>
 #include <array>
@@ -815,6 +816,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     }
 
     const F64 cpu_start = LLTimer::getTotalSeconds();
+    LL_PROFILE_GPU_ZONE("projector tile"); // <Vulkanstorm/> multicore stage 1b: one tile's fixed layer, copy and avatars
 
     glBindFramebuffer(GL_FRAMEBUFFER, mFboS);
     LLRenderTarget::sCurFBO = mFboS;
@@ -1090,6 +1092,7 @@ void LLProjectorShadows::renderLayer(Record& rec)
         return;
     }
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderLayer"); // <Vulkanstorm> multicore stage 1
+    LL_PROFILE_GPU_ZONE("projector layer"); // <Vulkanstorm/> multicore stage 1b: one tile's avatar layer redrawn
     const F64 cpu_start = LLTimer::getTotalSeconds();
     SpotGeom g;
     g.origin = gAgent.getPosAgentFromGlobal(rec.drawn.originGlobal);
@@ -1365,6 +1368,11 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
     mFrame = frame;
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector update"); // <Vulkanstorm> multicore stage 1: the whole per-frame pool update
+    // <Vulkanstorm> multicore stage 1b: the GPU time of the whole pool update (Tracy builds), and its own view in the
+    // submission statistics (-DVKS_GL_STATS=ON), where the tiles were counted into the enclosing view before
+    LL_PROFILE_GPU_ZONE("projector tiles");
+    VKS_GLSTAT_VIEW("projector tiles");
+    // </Vulkanstorm>
     if (!active())
     {
         if (LLTimer::getTotalSeconds() < mNextAllocTry || !ensureAllocated())

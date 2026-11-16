@@ -343,6 +343,7 @@ class Run:
         self.tracy = TracyCapture(args.tracy_capture, outdir, getattr(args, "popen", subprocess.Popen)) if args.tracy_capture else None
         self.vlog = getattr(args, "vlog", None)
         self.fps_log = args.fps_from_log
+        self.gl_window = bool(getattr(args, "gl_window", False))    # --gpu-window on a viewer that has the GLSubmitStats API
         self.index = {"scenario": scenario, "presets": {}, "warnings": [], "proof": None, "compare_failures": [],
                       "window_failures": [], "captures": [], "capture_failures": [], "teleports": None,
                       "fps_without_profiler": None}
@@ -377,7 +378,7 @@ class Run:
         except OSError as exc:
             log("could not write perf.json: %s" % exc)
         log("restoring the viewer")
-        if not self.fps_log:
+        if not self.fps_log or self.gl_window:
             try:
                 self.v.req(API, "windowStop")
             except (LeapError, ConnectionLost):
@@ -554,9 +555,33 @@ class Run:
         self.projector_end(info)
         info.update({"seconds": seconds, "fps_log": fps, "tracy_connected": started, "wall_s": round(time.monotonic() - t0, 3),
                      "moving": bool(preset.get("motion"))})
-        self.rows.append({"preset": key, "frames": 0, "gpu_frames": 0, "fps_wall": None, "fps_stats_off": None, "fps_log": fps,
-                          "variant": ""})
+        frames = gpu_frames = 0
+        if self.gl_window:
+            frames, gpu_frames = self.gpu_window(key, info)
+        self.rows.append({"preset": key, "frames": frames, "gpu_frames": gpu_frames, "fps_wall": None, "fps_stats_off": None,
+                          "fps_log": fps, "variant": ""})
         log("preset %s: %s fps over %.0f s%s" % (key, fps, seconds, " with Tracy connected" if started else ""))
+
+    def gpu_window(self, key, info):
+        """--gpu-window: after the capture has ended (so neither the capture nor the log frame rate holds the cost of the
+        timers), one GLSubmitStats window of window.frames frames with GPU timers, the camera still moving when the preset
+        says so; written to window_<key>.json (GPU ms per view and pass: the frame, the sun cascades, the projector tiles,
+        the G-buffer, the lighting). Returns (frames collected, frames with GPU time)."""
+        target = int(self.sc["window"]["frames"])
+        start = time.monotonic()
+        self.v.req(API, "windowBegin", frames=target, gpu=True)
+        collected, gpu_frames, wall = self.wait_window(start)
+        if collected < target:      # as in the statistics flow; GPU times that lag are a warning (wait_window)
+            self.index["window_failures"].append({"preset": key, "collected": collected, "target": target})
+        path = self.out / ("window_%s.json" % key)
+        self.v.req(API, "dump", kind="window", path=str(path).replace("\\", "/"))
+        summary = self.v.req(API, "summary", kind="window").get("summary")
+        totals = (summary or {}).get("totals") or {}
+        info.update({"frames": collected, "gpu_frames": gpu_frames, "window_wall_s": round(wall, 3), "summary": summary,
+                     "window_file": path.name})
+        log("preset %s: GPU window of %d frames (%d with GPU time), cpu %s ms, gpu %s ms a frame" % (
+            key, collected, gpu_frames, totals.get("cpu_ms"), totals.get("gpu_ms")))
+        return collected, gpu_frames
 
     _projector_api = None       # None unknown, True/False once checked
 
@@ -1157,6 +1182,10 @@ def parse_args(argv):
     ap.add_argument("--no-glstats", action="store_true",
                     help="frame rate only: nothing collects (no window, no GPU timers, no identical-image check, no hook bench); "
                          "per preset the probed fps (median of probe_repeats probes) and the ProjectorShadows.stats snapshot are recorded")
+    ap.add_argument("--gpu-window", action="store_true",
+                    help="with --no-glstats on a viewer that has the GLSubmitStats API (-DVKS_GL_STATS=ON): keep the log frame rate "
+                         "and the Tracy capture of each window, and after each capture collect one statistics window of --frames "
+                         "frames with GPU timers (window_<preset>.json: GPU ms per view and pass)")
     ap.add_argument("--tracy-capture", default=None, metavar="EXE", help="path of tracy-capture.exe: one capture per measurement window "
                     "(window.seconds) and one for the teleport series, into the run folder")
     ap.add_argument("--tp-region", default=None, metavar="NAME", help="override: the second region for the teleports instead of the login region (URL-escaped: %%20 is a space; "
@@ -1168,6 +1197,7 @@ def parse_args(argv):
                     "the viewer log (URL-escaped like --tp-region)")
     args = ap.parse_args(argv)
     args.fps_from_log = False
+    args.gl_window = False
     args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
     args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
@@ -1217,6 +1247,12 @@ def execute(session, args, sc, outdir):
             log("no %s API: the frame rate comes from the FrameCounters lines of the viewer log" % API)
             # variants work here too: each variant gets its own measured window (log_window), its own Tracy capture and
             # its own frame rate from the log; only the clean-probe comparison of the GLSubmitStats path is absent
+            if args.gpu_window:
+                log("--gpu-window: this viewer has no %s API (it needs -DVKS_GL_STATS=ON): no GPU window is collected" % API)
+        elif args.no_glstats and args.gpu_window:
+            args.fps_from_log = True        # the same flow on a viewer that has the API, plus a GPU-timed window per capture
+            args.gl_window = True
+            log("--gpu-window: the frame rate comes from the viewer log; a GPU-timed %s window follows each capture" % API)
         args.vlog = vlog
         if args.dry_run:
             return dry_run(v, sc, args, outdir)

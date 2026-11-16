@@ -368,6 +368,16 @@ Keep the run folders: later stages are gated by re-running this scenario and com
 The measuring build (Tracy on) has no `GLSubmitStats` API, so the scenario runs with `--no-glstats`: the plugin then takes frame rates
 from the viewer log's `FrameCounters: frames=N` line (once a second), and the data come from the Tracy captures.
 
+**GPU time (multicore stage 1b).** A Tracy build records GPU zones in every capture (`Frame`, `generateSunShadow`, `sun cascade 0..3`,
+`projector tiles` with a `projector tile` or `projector layer` per redraw, `renderGeomDeferred`, `renderDeferredLighting`,
+`renderFinalize`, `swap` and the finer ones); `tracy-profiler.exe` shows them, but `tracy-csvexport` 0.11.1 exports no GPU zone. For numbers,
+configure the measuring build with `-DVKS_GL_STATS=ON` as well and start the session with `-GpuWindow`
+(`perf_check.py --no-glstats --gpu-window --frames N`): the flow stays the one above (log frame rate, warm-up, one Tracy capture per
+window, projector stats), and after each capture has ended one `GLSubmitStats` window of N frames (600 from the launcher) with GPU
+timers is collected and written to `window_<preset>.json`: GPU ms per view (`frame`, `main`, `sun cascade 0..3`, `projector tiles`)
+and pass, read with `analyze_perf_check.py`. The window runs after the capture so neither the capture nor the log frame rate holds
+the cost of its timers. On a viewer without the API the switch does nothing.
+
 New options and scenario fields (all optional; the older scenarios are unchanged):
 
 - `--tracy-capture <tracy-capture.exe>`: for each measurement window (scenario `window.seconds`, default 60) and for the teleport

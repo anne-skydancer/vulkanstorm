@@ -12569,6 +12569,16 @@ void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& li
 }
 // </Vulkanstorm>
 
+#if LL_PROFILER_ENABLE_TRACY_OPENGL
+// <Vulkanstorm> multicore stage 1b: the Tracy GPU zone of sun cascade j (Tracy builds only)
+static const char* sun_cascade_gpu_zone(S32 j)
+{
+    static const char* const names[4] = { "sun cascade 0", "sun cascade 1", "sun cascade 2", "sun cascade 3" };
+    return names[llclamp(j, 0, 3)];
+}
+// </Vulkanstorm>
+#endif
+
 // <Vulkanstorm> shadow method Stochastic: the stable sun cascades (stage S1)
 void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
@@ -12739,6 +12749,8 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
 
         stop_glerror();
 
+        // <Vulkanstorm/> multicore stage 1b: the GPU time of this cascade (clear, casters, flush), to the end of the iteration
+        LL_PROFILE_GPU_ZONE_TRANSIENT(sun_cascade_gpu_zone(j));
         mRT->shadow[j].bindTarget();
         mRT->shadow[j].getViewport(gGLViewport);
         mRT->shadow[j].clear();

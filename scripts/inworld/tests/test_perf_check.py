@@ -930,6 +930,64 @@ class MovingVariantsTest(unittest.TestCase):
                 self.assertFalse(info["projector_stats"]["available"])
                 self.assertIn("VKS_GL_STATS", info["projector_stats"]["reason"])
 
+    def test_gpu_window_keeps_the_log_flow_and_adds_a_gpu_timed_window_after_each_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, projector=PoolModel())
+            presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
+            settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+                      "warmup_min_s": 0.05, "warmup_max_s": 0.2, "warmup_poll_s": 0.0}
+            order = []
+            begin, finish = pc.Run.gpu_window, pc.Run.finish_capture
+
+            def window(run_, key, info):
+                order.append(("window", key, run_.tracy.running()))
+                return begin(run_, key, info)
+
+            def finished(run_, started):
+                finish(run_, started)
+                order.append(("capture", None, False))
+            with mock.patch.object(pc.Run, "probe_variants", side_effect=AssertionError("probe")),                     mock.patch.object(pc.Run, "gpu_window", window), mock.patch.object(pc.Run, "finish_capture", finished),                     mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+                code, run = mc1_main(fv, tmp, extra=["--gpu-window", "--frames", "7"], presets=presets, variants=self.VARIANTS,
+                                     teleports=None, fps_probe=None, settle=settle, window={"seconds": 1.0},
+                                     overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(index["captures"]), 3)
+            self.assertEqual(len(index["warmups"]), 3)          # the log flow: a warm-up per variant, no probes
+            self.assertEqual([kind for kind, _, _ in order], ["capture", "window"] * 3)     # each window after its capture
+            self.assertFalse(any(running for kind, _, running in order if kind == "window"))
+            for key, info in index["presets"].items():
+                self.assertEqual(info["fps_log"], 77.0)
+                self.assertTrue(info["tracy_connected"])
+                self.assertEqual((info["frames"], info["gpu_frames"]), (7, 7))
+                self.assertEqual(info["summary"]["totals"]["gpu_ms"], 7.25)
+                self.assertIn("projector_delta", info)
+                doc = json.loads((run / info["window_file"]).read_text(encoding="utf-8"))
+                self.assertEqual(doc["gpu_frames"], 7)
+            self.assertEqual(index["window_failures"], [])
+
+    def test_a_gpu_window_that_stops_short_fails_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, gl_short_window=True)
+            with mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+                code, run = mc1_main(fv, tmp, extra=["--gpu-window", "--frames", "7"], presets=[{"id": "RT-still", "camera": None}],
+                                     variants=[], teleports=None, fps_probe=None, window={"seconds": 1.0},
+                                     settle={"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0,
+                                             "after_teleport_s": 0.0, "window_timeout_s": 1.0})
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["window_failures"], [{"preset": "RT-still", "collected": 3, "target": 7}])
+
+    def test_gpu_window_on_a_viewer_without_the_api_runs_the_plain_log_flow(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            with mock.patch.object(pc.Run, "gpu_window", side_effect=AssertionError("window")):
+                code, run = mc1_main(fv, tmp, extra=["--gpu-window"], presets=[{"id": "RT-still", "camera": None}], variants=[],
+                                     teleports=None, fps_probe=None, window={"seconds": 1.0})
+            self.assertEqual(code, 0)
+            info = json.loads((run / "perf.json").read_text(encoding="utf-8"))["presets"]["RT-still"]
+            self.assertNotIn("window_file", info)
+
     def test_the_rooftops_scenarios_load(self):
         sc = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops_moving.json")
         self.assertEqual([p["id"] for p in sc["presets"]], ["RT-moving"])
