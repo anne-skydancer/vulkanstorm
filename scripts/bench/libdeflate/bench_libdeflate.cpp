@@ -209,8 +209,8 @@ static int ld_ratio(const uint8_t* in, size_t n, double k, std::vector<uint8_t>*
 }
 
 // S2 "tls": a per-thread scratch buffer that only grows (start 512 KiB, the
-// size of today's thread_local chunk), doubling on INSUFFICIENT_SPACE, and
-// released back to 512 KiB after a call that needed more than 8 MiB.
+// size of today's thread_local chunk). On LIBDEFLATE_INSUFFICIENT_SPACE it grows to the next power of
+// two of max(2 x capacity, 4 x input) and retries; above 16 MiB it is released after the call.
 // The caller parses straight out of the buffer: no per-call allocation.
 struct TlsBuf
 {
@@ -218,7 +218,7 @@ struct TlsBuf
     size_t cap = 0;
 };
 static thread_local TlsBuf tls_out;
-static constexpr size_t TLS_START = 512 * 1024, TLS_KEEP = 8u * 1024 * 1024;
+static constexpr size_t TLS_START = 512 * 1024, TLS_KEEP = 16u * 1024 * 1024;
 
 static int ld_tls(const uint8_t* in, size_t n, const uint8_t*& out, size_t& out_n, LdStats& st)
 {
@@ -233,7 +233,9 @@ static int ld_tls(const uint8_t* in, size_t n, const uint8_t*& out, size_t& out_
         if (r == LIBDEFLATE_SUCCESS) { ++st.calls; out = tls_out.p.get(); return ZR_OK; }
         if (r != LIBDEFLATE_INSUFFICIENT_SPACE) return ZR_DATA_ERROR;
         if (tls_out.cap >= LD_CAP) return ZR_SIZE_ERROR;
-        size_t ncap = std::min(LD_CAP, std::max(tls_out.cap * 2, n * 8));
+        size_t want = std::max(tls_out.cap * 2, n * 4), ncap = TLS_START;
+        while (ncap < want && ncap < LD_CAP) ncap *= 2;
+        ncap = std::min(ncap, LD_CAP);
         std::unique_ptr<uint8_t[]> np(new (std::nothrow) uint8_t[ncap]);
         if (!np) return ZR_MEM_ERROR;
         tls_out.p = std::move(np);
@@ -250,6 +252,51 @@ static void ld_tls_release_if_big()
     }
 }
 
+// "zlib-ng scratch": the rival that keeps zlib-ng. One inflate(Z_FINISH)
+// straight into a per-thread scratch of its own (same start and keep sizes as
+// ld_tls); when it fills, the buffer doubles and inflate() continues where it
+// stopped (no restart, unlike libdeflate). One inflateInit per call, as today.
+static thread_local TlsBuf tls_zng;
+static int zng_scratch(const uint8_t* in, size_t n, const uint8_t*& out, size_t& out_n)
+{
+    if (!tls_zng.p)
+    {
+        tls_zng.p.reset(new (std::nothrow) uint8_t[TLS_START]);
+        tls_zng.cap = tls_zng.p ? TLS_START : 0;
+    }
+    z_stream strm{};
+    if (inflateInit(&strm) != Z_OK) return ZR_MEM_ERROR;
+    strm.next_in = const_cast<uint8_t*>(in);
+    strm.avail_in = (uInt)n;
+    size_t used = 0;
+    int ret;
+    for (;;)
+    {
+        strm.next_out = tls_zng.p.get() + used;
+        strm.avail_out = (uInt)(tls_zng.cap - used);
+        ret = inflate(&strm, Z_FINISH);
+        used = tls_zng.cap - strm.avail_out;
+        if (ret == Z_STREAM_END) break;
+        if (ret != Z_BUF_ERROR || strm.avail_out != 0 || tls_zng.cap >= LD_CAP) { inflateEnd(&strm); return ZR_DATA_ERROR; }
+        size_t ncap = std::min(LD_CAP, tls_zng.cap * 2);
+        std::unique_ptr<uint8_t[]> np(new (std::nothrow) uint8_t[ncap]);
+        if (!np) { inflateEnd(&strm); return ZR_MEM_ERROR; }
+        memcpy(np.get(), tls_zng.p.get(), used);
+        tls_zng.p = std::move(np);
+        tls_zng.cap = ncap;
+    }
+    inflateEnd(&strm);
+    out = tls_zng.p.get();
+    out_n = used;
+    if (tls_zng.cap > TLS_KEEP)
+    {
+        // the caller would parse first; the bench only needs the timing
+        tls_zng.p.reset(new (std::nothrow) uint8_t[TLS_START]);
+        tls_zng.cap = tls_zng.p ? TLS_START : 0;
+    }
+    return ZR_OK;
+}
+
 // S0 "exact": the output size is known (oracle; also the Milky Way map case).
 static int ld_exact(const uint8_t* in, size_t n, uint8_t* out, size_t out_cap, size_t& out_n)
 {
@@ -263,7 +310,7 @@ static int ld_exact(const uint8_t* in, size_t n, uint8_t* out, size_t out_cap, s
 static bool machine_busy(std::string* who = nullptr)
 {
     // a build (cl.exe, link.exe, MSBuild) disturbs timing: refuse to time then
-    static const char* names[] = { "cl.exe", "link.exe", "MSBuild.exe", "msbuild.exe", "cmake.exe", "ninja.exe" };
+    static const char* names[] = { "cl.exe", "link.exe", "MSBuild.exe", "cmake.exe", "ninja.exe", "rustc.exe", "cargo.exe", "clang-cl.exe", "lld-link.exe" };
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return false;
     PROCESSENTRY32W pe{};
@@ -475,6 +522,9 @@ static int cmd_verify(const std::string& pack, size_t limit)
             out_total += zn;
             in_total += b.z.size();
             ratios.push_back((double)zn / (double)b.z.size());
+            const uint8_t* so = nullptr; size_t sn = 0;
+            bool rival_ok = zng_scratch(b.z.data(), b.z.size(), so, sn) == ZR_OK && sn == zn && memcmp(so, zr, zn) == 0;
+            if (!rival_ok) printf("zlib-ng scratch rival differs on block %zu\n", bi);
             if (zn == ln && memcmp(zr, lo, zn) == 0) ++ident;
             else { ++differ; printf("BYTES DIFFER block %zu kind %s\n", bi, kind_name[b.kind]); }
         }
@@ -643,6 +693,7 @@ static const Strategy strategies[] = {
     { "libdeflate ratio x4, grow x2", 2, 4.0 },
     { "libdeflate ratio x8, grow x2", 2, 8.0 },
     { "libdeflate thread scratch", 3, 0 },
+    { "zlib-ng thread scratch (rival)", 4, 0 },
 };
 
 static double run_one(const Strategy& s, const Block& b, size_t ref_n, std::vector<uint8_t>& exact_buf, LdStats& st)
@@ -654,6 +705,7 @@ static double run_one(const Strategy& s, const Block& b, size_t ref_n, std::vect
     case 1: { size_t n = 0; ld_exact(b.z.data(), b.z.size(), exact_buf.data(), ref_n, n); break; }
     case 2: { size_t n = 0; ld_ratio(b.z.data(), b.z.size(), s.k, nullptr, n, st); break; }
     case 3: { const uint8_t* o = nullptr; size_t n = 0; ld_tls(b.z.data(), b.z.size(), o, n, st); ld_tls_release_if_big(); break; }
+    case 4: { const uint8_t* o = nullptr; size_t n = 0; zng_scratch(b.z.data(), b.z.size(), o, n); break; }
     }
     return std::chrono::duration<double, std::micro>(clk::now() - t0).count();
 }
@@ -703,40 +755,52 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
         printf("%s\n", machine_busy(&who) ? "  DISTURBED" : "");
     }
 
-    // whole-corpus distribution per strategy, single thread
-    printf("\n== whole corpus, single thread: per-block us (median / p99 / max) and total ==\n");
+    // whole-corpus distribution, single thread. The strategies run round-robin
+    // inside each repetition, so a drift in background load hits all of them;
+    // per block the best of the repetitions is kept, per corpus pass the
+    // minimum and the median.
+    printf("\n== whole corpus, single thread, strategies interleaved, %d reps ==\n", reps);
+    constexpr int NS = (int)(sizeof(strategies) / sizeof(strategies[0]));
     std::vector<uint8_t> exact_buf(max_ref + 64);
-    for (const Strategy& s : strategies)
+    std::vector<std::vector<double>> lat(NS, std::vector<double>(blocks.size(), 1e30));
+    std::vector<std::vector<double>> totals(NS);
+    LdStats stats[NS];
+    bool disturbed = false;
+    for (int r = 0; r < reps; ++r)
     {
         while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
-        std::vector<double> best_total;
-        std::vector<double> lat(blocks.size(), 1e30);
-        LdStats st;
-        for (int r = 0; r < reps; ++r)
+        for (int k = 0; k < NS; ++k)
         {
             auto t0 = clk::now();
             for (size_t i = 0; i < blocks.size(); ++i)
-                lat[i] = std::min(lat[i], run_one(s, blocks[i], ref[i], exact_buf, st));
-            best_total.push_back(ms_since(t0));
+                lat[k][i] = std::min(lat[k][i], run_one(strategies[k], blocks[i], ref[i], exact_buf, stats[k]));
+            totals[k].push_back(ms_since(t0));
         }
-        double tot = pct(best_total, 0.5);
-        printf("%-32s median %7.1f  p99 %8.1f  max %9.1f us | total %8.0f ms (median of %d) | %7.0f MB/s out | retries %llu / %llu calls\n",
-               s.name, pct(lat, 0.5), pct(lat, 0.99), pct(lat, 1.0), tot, reps, out_bytes / 1e3 / tot, st.retries, st.calls);
-        if (machine_busy(&who)) printf("  DISTURBED: %s started during this run\n", who.c_str());
-        fflush(stdout);
+        disturbed |= machine_busy(&who);
     }
+    for (int k = 0; k < NS; ++k)
+    {
+        double tmin = pct(totals[k], 0.0), tmed = pct(totals[k], 0.5);
+        printf("%-32s per block median %6.1f  p99 %8.1f  max %9.1f us | corpus min %6.0f ms, median %6.0f ms | %5.0f MB/s out (min) | retries %llu / %llu calls\n",
+               strategies[k].name, pct(lat[k], 0.5), pct(lat[k], 0.99), pct(lat[k], 1.0), tmin, tmed, out_bytes / 1e3 / tmin,
+               stats[k].retries, stats[k].calls);
+    }
+    if (disturbed) printf("  DISTURBED: a build ran during this section\n");
+    fflush(stdout);
 
     // threads: the mesh pool is 2 (llmeshrepository.cpp:984) plus the repo thread
-    printf("\n== threads: wall time for the corpus, static interleave ==\n");
+    printf("\n== threads: wall time for the corpus, static interleave, strategies round-robin, %d reps ==\n", reps);
+    const int tstrat[] = { 0, 4, 5 };
     for (int t = 1; t <= max_threads; ++t)
     {
-        for (const Strategy& s : strategies)
+        std::vector<double> walls[NS];
+        disturbed = false;
+        for (int r = 0; r < reps; ++r)
         {
-            if (s.id == 1 || (s.id == 2 && s.k == 8.0)) continue;
             while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
-            std::vector<double> walls;
-            for (int r = 0; r < reps; ++r)
+            for (int k : tstrat)
             {
+                const Strategy& s = strategies[k];
                 std::atomic<int> ready{ 0 };
                 std::atomic<bool> go{ false };
                 std::vector<std::thread> th;
@@ -754,13 +818,17 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
                 auto t0 = clk::now();
                 go = true;
                 for (auto& x : th) x.join();
-                walls.push_back(ms_since(t0));
+                walls[k].push_back(ms_since(t0));
             }
-            double w = pct(walls, 0.5);
-            printf("threads %d  %-32s %8.0f ms  %7.0f MB/s out\n", t, s.name, w, out_bytes / 1e3 / w);
-            if (machine_busy(&who)) printf("  DISTURBED: %s started during this run\n", who.c_str());
-            fflush(stdout);
+            disturbed |= machine_busy(&who);
         }
+        for (int k : tstrat)
+        {
+            double wmin = pct(walls[k], 0.0), wmed = pct(walls[k], 0.5);
+            printf("threads %d  %-32s min %6.0f ms  median %6.0f ms  %5.0f MB/s out (min)\n", t, strategies[k].name, wmin, wmed, out_bytes / 1e3 / wmin);
+        }
+        if (disturbed) printf("  DISTURBED: a build ran during this section\n");
+        fflush(stdout);
     }
 
     // memory: per-call heap for zlib-ng (hooked zalloc) and libdeflate's decompressor
@@ -876,15 +944,15 @@ static int cmd_synthetic(const std::string& pack, int reps)
     }
     std::string who;
     printf("== synthetic bodies from real mesh payload (best of %d, ms) ==\n", reps);
-    printf("size  | zlib: viewer loop | ld thread scratch, cold | ld scratch, warm | ld exact || gzip HTTP: llcorehttp 16 KiB loop | ld flatten + ISIZE hint\n");
+    printf("size  | zlib: viewer loop | ld thread scratch, cold | ld scratch, warm | ld exact | zlib-ng scratch, warm || gzip HTTP: llcorehttp 16 KiB loop | ld flatten + ISIZE hint\n");
     for (size_t mb : { 4, 8, 16 })
     {
         std::vector<uint8_t> src(raw.begin(), raw.begin() + mb * 1024 * 1024);
         std::vector<uint8_t> zz = zng_compress(src, MAX_WBITS);
         std::vector<uint8_t> gz = zng_compress(src, MAX_WBITS + 16);
         Block zb{ LOD3, zz };
-        double best[6] = { 1e30, 1e30, 1e30, 1e30, 1e30, 1e30 };
-        std::vector<uint8_t> ex(src.size() + 64);
+        double best[7] = { 1e30, 1e30, 1e30, 1e30, 1e30, 1e30, 1e30 };
+        std::vector<uint8_t> ex(src.size() + 64);  // reused by every rep: faulted in once
         for (int r = 0; r < reps; ++r)
         {
             while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
@@ -904,6 +972,8 @@ static int cmd_synthetic(const std::string& pack, int reps)
                 ld_tls_release_if_big();
             }
             best[3] = std::min(best[3], run_one(strategies[1], zb, src.size(), ex, st) / 1000);
+            run_one(strategies[5], zb, src.size(), ex, st);  // warm the zlib-ng scratch
+            best[6] = std::min(best[6], run_one(strategies[5], zb, src.size(), ex, st) / 1000);
             {
                 std::vector<std::unique_ptr<uint8_t[]>> outb;
                 auto t0 = clk::now();
@@ -913,18 +983,19 @@ static int cmd_synthetic(const std::string& pack, int reps)
             }
             {
                 auto t0 = clk::now();
-                std::vector<uint8_t> flat(gz.begin(), gz.end());  // BufferArray is chunked: one copy
+                std::unique_ptr<uint8_t[]> flat(new uint8_t[gz.size()]);  // BufferArray is chunked: one copy
+                memcpy(flat.get(), gz.data(), gz.size());
                 uint32_t isize;
-                memcpy(&isize, &flat[flat.size() - 4], 4);
-                std::vector<uint8_t> out(isize);
+                memcpy(&isize, &flat[gz.size() - 4], 4);
+                std::unique_ptr<uint8_t[]> out(new uint8_t[isize]);           // not zero-filled
                 size_t n = 0;
-                libdeflate_gzip_decompress(tls_decompressor(), flat.data(), flat.size(), out.data(), out.size(), &n);
+                libdeflate_gzip_decompress(tls_decompressor(), flat.get(), gz.size(), out.get(), isize, &n);
                 best[5] = std::min(best[5], ms_since(t0));
                 if (n != src.size()) printf("gzip size mismatch\n");
             }
         }
-        printf("%2zu MiB | %8.2f | %8.2f | %8.2f | %8.2f || %8.2f | %8.2f   (zlib %.2f MB, gzip %.2f MB)\n",
-               mb, best[0], best[1], best[2], best[3], best[4], best[5], zz.size() / 1e6, gz.size() / 1e6);
+        printf("%2zu MiB | %8.2f | %8.2f | %8.2f | %8.2f | %8.2f || %8.2f | %8.2f   (zlib %.2f MB, gzip %.2f MB)\n",
+               mb, best[0], best[1], best[2], best[3], best[6], best[4], best[5], zz.size() / 1e6, gz.size() / 1e6);
         if (machine_busy(&who)) printf("  DISTURBED: %s started during this run\n", who.c_str());
         fflush(stdout);
     }
@@ -934,43 +1005,74 @@ static int cmd_synthetic(const std::string& pack, int reps)
 // --------------------------------------------------------------------------
 // gzfile: gunzip_file (llsys.cpp:1368) vs whole-file libdeflate, decode only
 // --------------------------------------------------------------------------
-static int cmd_gzfile(const std::vector<std::string>& files, int reps)
+static int cmd_gzfile(const std::vector<std::string>& files, int reps, const std::string& tmpdir)
 {
+    // A is gunzip_file's loop (gzread 32 KiB, fwrite to "<dst>.t"); B reads the
+    // whole file, inflates once into a buffer sized by the gzip ISIZE trailer,
+    // and writes it. Both are timed with the file write (the real login path)
+    // and without it (decode only, A into a sink, B into memory).
     std::string who;
+    const std::string tmp = tmpdir + "/gzfile_bench.t";
     for (const std::string& path : files)
     {
-        std::ifstream f(path, std::ios::binary);
-        std::vector<uint8_t> gz((std::istreambuf_iterator<char>(f)), {});
-        double best_a = 1e30, best_b = 1e30;
-        std::vector<uint8_t> a_out, b_out;
-        for (int r = 0; r < reps; ++r)
+        std::wstring wp(path.begin(), path.end());
+        // reference output once, outside the timing
+        std::vector<uint8_t> ref;
         {
-            while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
-            a_out.clear();
-            auto t0 = clk::now();
-            std::wstring wp(path.begin(), path.end());
             gzFile src = gzopen_w(wp.c_str(), "rb");
             uint8_t buf[32768];
             int n;
-            while ((n = gzread(src, buf, sizeof(buf))) > 0) a_out.insert(a_out.end(), buf, buf + n);
+            while ((n = gzread(src, buf, sizeof(buf))) > 0) ref.insert(ref.end(), buf, buf + n);
             gzclose(src);
-            best_a = std::min(best_a, ms_since(t0));
-
-            t0 = clk::now();
-            std::ifstream g(path, std::ios::binary);
-            std::vector<uint8_t> in((std::istreambuf_iterator<char>(g)), {});
-            uint32_t isize;
-            memcpy(&isize, &in[in.size() - 4], 4);
-            b_out.assign(isize, 0);
-            size_t got = 0;
-            libdeflate_result res = libdeflate_gzip_decompress(tls_decompressor(), in.data(), in.size(), b_out.data(), b_out.size(), &got);
-            b_out.resize(res == LIBDEFLATE_SUCCESS ? got : 0);
-            best_b = std::min(best_b, ms_since(t0));
         }
-        printf("%s: %.2f MB gz -> %.2f MB | gzread 32 KiB loop %.1f ms | read whole + libdeflate %.1f ms | identical %s\n",
-               fs::path(path).filename().string().substr(0, 8).c_str(), gz.size() / 1e6, a_out.size() / 1e6, best_a, best_b,
-               a_out == b_out ? "yes" : "NO");
+        double a_file = 1e30, b_file = 1e30, a_dec = 1e30, b_dec = 1e30;
+        bool same = true;
+        size_t in_size = 0;
+        for (int r = 0; r < reps; ++r)
+        {
+            while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
+            for (int with_file = 0; with_file < 2; ++with_file)
+            {
+                auto t0 = clk::now();
+                gzFile src = gzopen_w(wp.c_str(), "rb");
+                FILE* dst = with_file ? fopen(tmp.c_str(), "wb") : nullptr;
+                uint8_t buf[32768];
+                int n;
+                while ((n = gzread(src, buf, sizeof(buf))) > 0)
+                    if (dst) fwrite(buf, 1, (size_t)n, dst);
+                gzclose(src);
+                if (dst) fclose(dst);
+                (with_file ? a_file : a_dec) = std::min(with_file ? a_file : a_dec, ms_since(t0));
+
+                t0 = clk::now();
+                FILE* f = fopen(path.c_str(), "rb");
+                _fseeki64(f, 0, SEEK_END);
+                in_size = (size_t)_ftelli64(f);
+                _fseeki64(f, 0, SEEK_SET);
+                std::unique_ptr<uint8_t[]> in(new uint8_t[in_size]);
+                size_t got_in = fread(in.get(), 1, in_size, f);
+                fclose(f);
+                uint32_t isize;
+                memcpy(&isize, &in[in_size - 4], 4);
+                std::unique_ptr<uint8_t[]> out(new uint8_t[isize]);
+                size_t got = 0;
+                libdeflate_result res = libdeflate_gzip_decompress(tls_decompressor(), in.get(), got_in, out.get(), isize, &got);
+                if (with_file)
+                {
+                    FILE* d = fopen(tmp.c_str(), "wb");
+                    fwrite(out.get(), 1, got, d);
+                    fclose(d);
+                }
+                (with_file ? b_file : b_dec) = std::min(with_file ? b_file : b_dec, ms_since(t0));
+                same = same && res == LIBDEFLATE_SUCCESS && got == ref.size() && memcmp(out.get(), ref.data(), got) == 0;
+            }
+        }
+        remove(tmp.c_str());
+        printf("%s: %.2f MB gz -> %.2f MB | decode only: gzread loop %.1f ms, whole + libdeflate %.1f ms | with file write: gunzip_file %.1f ms, whole + libdeflate %.1f ms | identical %s\n",
+               fs::path(path).filename().string().substr(0, 8).c_str(), in_size / 1e6, ref.size() / 1e6, a_dec, b_dec, a_file, b_file,
+               same ? "yes" : "NO");
         if (machine_busy(&who)) printf("  DISTURBED: %s started during this run\n", who.c_str());
+        fflush(stdout);
     }
     return 0;
 }
@@ -1087,6 +1189,7 @@ static int cmd_flipscan(const std::string& pack, size_t index)
 
 int main(int argc, char** argv)
 {
+    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     if (argc < 2)
     {
         printf("usage: %s pack|verify|pipeline|speed|synthetic|gzfile|fuzz ...\n", argv[0]);
@@ -1102,8 +1205,9 @@ int main(int argc, char** argv)
     if (cmd == "synthetic" && argc >= 3) return cmd_synthetic(argv[2], argc >= 4 ? atoi(argv[3]) : 7);
     if (cmd == "gzfile" && argc >= 3)
     {
-        std::vector<std::string> files(argv + 2, argv + argc);
-        return cmd_gzfile(files, 5);
+        // last argument: a scratch folder for the written file
+        std::vector<std::string> files(argv + 2, argv + argc - 1);
+        return cmd_gzfile(files, 7, argv[argc - 1]);
     }
     if (cmd == "flipscan" && argc >= 4) return cmd_flipscan(argv[2], (size_t)atoll(argv[3]));
     if (cmd == "fuzz" && argc >= 3)
