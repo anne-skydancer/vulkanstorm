@@ -48,7 +48,7 @@ class LLVOVolume;
 // fixed layer, L is S plus the avatars in the light, paired by position alone (no visibility, no impostor test). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
-// hooks, llshadowdirtyfeed.h, tested against the tile's volume through the 8 m grid), when its lamp's pose changed, or while an
+// hooks, llshadowdirtyfeed.h, tested against the tile's volume by a flat scan of the tile volumes), when its lamp's pose changed, or while an
 // avatar is in its light (P4: only the avatar layer of that tile, over a fresh copy of S). A static scene costs no tile render. The
 // casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes nothing in a tile. Movers and physical
 // objects are not in the fixed layer. The tile work of a frame runs under one shared CPU cap (llprojectorpool::kFrameCapMs 0.35 ms:

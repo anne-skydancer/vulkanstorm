@@ -162,7 +162,7 @@ Texture-coordinate and colour rebuilds (texture animation, tints) never make a t
 
 All hooks push a box (the extents of what changed, agent space) with a cause into one double-buffered list
 (`LLShadowDirtyFeed`). `LLProjectorShadows::update` swaps it before any render of the frame (a change a render itself causes lands
-in the next frame), tests the boxes against the tile volumes through the 8 m grid (`ChangeIndex`), and keeps the first cause per
+in the next frame), tests the boxes against the tile volumes by a flat scan of the tile volumes (`ChangeIndex`), and keeps the first cause per
 tile. Every hook except the classifier is a no-op until the pool holds tiles (`setTracking`); the classifier always runs, so its
 sticky bits are right when tiles appear. Every hook runs on the main thread; a hook that runs elsewhere changes nothing and flags
 the next frame "everything is stale".
