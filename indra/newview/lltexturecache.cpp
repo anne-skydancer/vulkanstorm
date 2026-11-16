@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lltexturecache.h"
+#include "lltexturecachefast.h"
 
 #include "llapr.h"
 #include "lldir.h"
@@ -2101,10 +2102,10 @@ LLPointer<LLImageRaw> LLTextureCache::readFromFastCache(const LLUUID& id, S32& d
             return NULL;
         }
 
-        S32 image_size = head[0] * head[1] * head[2];
-        if(image_size <= 0
-           || image_size > TEXTURE_FAST_CACHE_DATA_SIZE
-           || head[3] < 0) //invalid
+        // The header is file data: llTextureCacheFastPayloadSize checks every field before any
+        // product is formed (a signed 32-bit product can overflow or go positive from two negatives).
+        const S32 image_size = llTextureCacheFastPayloadSize(head, MAX_IMAGE_SIZE, TEXTURE_FAST_CACHE_DATA_SIZE);
+        if(image_size <= 0) //invalid
         {
             closeFastCache();
             return NULL;

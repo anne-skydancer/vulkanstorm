@@ -1638,6 +1638,7 @@ set(viewer_HEADER_FILES
     llteleporthistorystorage.h
     llterrainpaintmap.h
     lltexturecache.h
+    lltexturecachefast.h
     lltexturectrl.h
     lltexturefetch.h
     lltextureinfo.h
