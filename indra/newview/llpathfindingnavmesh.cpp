@@ -152,7 +152,7 @@ void LLPathfindingNavMesh::handleNavMeshResult(const LLSD &pContent, U32 pNavMes
 #endif
             // </FS>
             auto binSize = value.size();
-            std::string newStr(reinterpret_cast<const char *>(&value[0]), binSize);
+            std::string newStr(reinterpret_cast<const char *>(value.data()), binSize);
             std::istringstream streamdecomp( newStr );
             size_t decompBinSize = 0;
             bool valid = false;
