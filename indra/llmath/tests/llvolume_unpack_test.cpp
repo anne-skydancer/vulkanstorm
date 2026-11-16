@@ -136,4 +136,21 @@ namespace tut
             ensure_equals("unpack survives", unpack(f), 3);
         }
     }
+
+    template<> template<>
+    void llvolume_unpack_test_object_t::test<7>()
+    {
+        set_test_name("the network overload (vkstorm-assets crate) rejects indices beyond the vertex count");
+        for (const auto& c : { std::make_pair(std::vector<U16>{0, 1, 3}, 0), std::make_pair(std::vector<U16>{0, 1, 65535}, 0),
+                               std::make_pair(std::vector<U16>{2, 1, 0}, 3) })
+        {
+            LLSD mdl = LLSD::emptyArray();
+            mdl.append(face(3 * 6, 3 * 6, 3 * 4, c.first));
+            std::string z = zip_llsd(mdl);
+            LLVolumeParams params;
+            LLPointer<LLVolume> volume = new LLVolume(params, 1.f);
+            ensure("unpack ok", volume->unpackVolumeFaces(reinterpret_cast<U8*>(z.data()), static_cast<S32>(z.size())));
+            ensure_equals("indices kept or rejected", (S32)volume->getVolumeFace(0).mNumIndices, c.second);
+        }
+    }
 }

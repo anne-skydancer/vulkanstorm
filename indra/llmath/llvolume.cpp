@@ -1486,6 +1486,27 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size, bool optimize)
             LL_WARNS() << "Failed to allocate " << f.num_indices << " indices for face index: " << i << " Total: " << face_count << LL_ENDL;
             continue;
         }
+        // The crate hands the indices over unchecked. One that points past the vertices is an
+        // out-of-bounds read when the face is drawn or skinned: reject the face, as
+        // unpackVolumeFacesInternal does.
+        if (!f.incomplete && f.num_indices > 0)
+        {
+            bool indices_valid = true;
+            for (S32 j = 0; j < f.num_indices; ++j)
+            {
+                if (f.indices[j] >= f.num_vertices)
+                {
+                    indices_valid = false;
+                    break;
+                }
+            }
+            if (!indices_valid)
+            {
+                LL_WARNS() << "Face index: " << i << " has triangle indices beyond its " << f.num_vertices << " vertices. Total: " << face_count << LL_ENDL;
+                face.resizeIndices(0);
+                continue;
+            }
+        }
         face.resizeVertices(f.num_vertices);
         if (f.num_vertices > 0 && !face.mPositions)
         {
