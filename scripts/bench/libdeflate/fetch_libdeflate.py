@@ -18,6 +18,7 @@ import urllib.request
 VERSION = "1.26"
 URL = f"https://github.com/ebiggers/libdeflate/releases/download/v{VERSION}/libdeflate-{VERSION}.tar.gz"
 SHA256 = "125856d4656e0feab660f94842f835923410c9281fedbcee64598c918da42b5a"
+MAX_BYTES = 4 * 1024 * 1024  # the tarball is 187,565 bytes
 
 
 def main() -> int:
@@ -30,8 +31,20 @@ def main() -> int:
         return 2
     os.makedirs(out, exist_ok=True)
 
-    with urllib.request.urlopen(URL) as resp:
-        data = resp.read()
+    # bounded download: 60 s socket timeout, at most MAX_BYTES read in chunks
+    chunks = []
+    total = 0
+    with urllib.request.urlopen(URL, timeout=60) as resp:
+        while True:
+            chunk = resp.read(64 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_BYTES:
+                print(f"refusing: download exceeds {MAX_BYTES} bytes", file=sys.stderr)
+                return 1
+            chunks.append(chunk)
+    data = b"".join(chunks)
     digest = hashlib.sha256(data).hexdigest()
     if digest != SHA256:
         print(f"SHA-256 mismatch: got {digest}, want {SHA256}", file=sys.stderr)

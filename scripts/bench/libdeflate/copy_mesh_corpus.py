@@ -10,6 +10,7 @@ LLSD map. Nothing from the corpus belongs in git: point --out at the repo's
 Usage: python -I copy_mesh_corpus.py --cache <viewer cache dir> --out <dir>
 """
 import argparse
+import filecmp
 import os
 import shutil
 import struct
@@ -41,6 +42,7 @@ def main() -> int:
 
     copied = 0
     total = 0
+    collisions = 0
     for root, _dirs, files in os.walk(cache):
         for name in files:
             src = os.path.join(root, name)
@@ -52,14 +54,18 @@ def main() -> int:
             if not is_mesh_asset(head):
                 continue
             dst = os.path.join(out, name)
-            if os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src):
-                copied += 1
-                total += os.path.getsize(dst)
-                continue
+            if os.path.exists(dst):
+                if filecmp.cmp(src, dst, shallow=False):
+                    copied += 1      # copied by an earlier run
+                    total += os.path.getsize(dst)
+                    continue
+                # same name from another sub-folder (or a changed file): keep both
+                collisions += 1
+                dst = os.path.join(out, f"{collisions}_{name}")
             shutil.copyfile(src, dst)
             copied += 1
             total += os.path.getsize(dst)
-    print(f"mesh assets: {copied} files, {total / 1e6:.1f} MB -> {out}")
+    print(f"mesh assets: {copied} files, {total / 1e6:.1f} MB -> {out}; name collisions kept apart: {collisions}")
     return 0
 
 

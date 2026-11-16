@@ -210,15 +210,15 @@ static int ld_ratio(const uint8_t* in, size_t n, double k, std::vector<uint8_t>*
 
 // S2 "tls": a per-thread scratch buffer that only grows (start 512 KiB, the
 // size of today's thread_local chunk). On LIBDEFLATE_INSUFFICIENT_SPACE it grows to the next power of
-// two of max(2 x capacity, 4 x input) and retries; above 16 MiB it is released after the call.
-// The caller parses straight out of the buffer: no per-call allocation.
+// two of max(2 x capacity, 4 x input) and retries; above 16 MiB it is released after the
+// call, so a thread keeps up to 16 MiB. The caller parses straight out of the buffer.
 struct TlsBuf
 {
     std::unique_ptr<uint8_t[]> p;
     size_t cap = 0;
 };
 static thread_local TlsBuf tls_out;
-static constexpr size_t TLS_START = 512 * 1024, TLS_KEEP = 16u * 1024 * 1024;
+static constexpr size_t TLS_START = 512 * 1024, TLS_KEEP = 16u * 1024 * 1024, ZNG_KEEP = 1024 * 1024;
 
 static int ld_tls(const uint8_t* in, size_t n, const uint8_t*& out, size_t& out_n, LdStats& st)
 {
@@ -252,8 +252,42 @@ static void ld_tls_release_if_big()
     }
 }
 
+// "libdeflate sized": bounded memory. A fixed 512 KiB per-thread scratch (today's
+// chunk size) for inputs of at most 128 KiB (fits unless the ratio exceeds 4); any
+// larger input, or a small one that overflows, gets a one-off buffer of the next
+// power of two of 4 x input, doubled on overflow and freed by the caller after use.
+static thread_local std::unique_ptr<uint8_t[]> tls_fixed;
+static int ld_sized(const uint8_t* in, size_t n, const uint8_t*& out, size_t& out_n,
+                    std::unique_ptr<uint8_t[]>& owned, LdStats& st)
+{
+    if (!tls_fixed) tls_fixed.reset(new (std::nothrow) uint8_t[TLS_START]);
+    if (!tls_fixed) return ZR_MEM_ERROR;
+    if (n * 4 <= TLS_START)
+    {
+        libdeflate_result r = libdeflate_zlib_decompress(tls_decompressor(), in, n, tls_fixed.get(), TLS_START, &out_n);
+        if (r == LIBDEFLATE_SUCCESS) { ++st.calls; out = tls_fixed.get(); return ZR_OK; }
+        if (r != LIBDEFLATE_INSUFFICIENT_SPACE) return ZR_DATA_ERROR;
+        ++st.retries;
+    }
+    size_t cap = 2 * TLS_START;
+    while (cap < n * 4 && cap < LD_CAP) cap *= 2;
+    for (;;)
+    {
+        cap = std::min(cap, LD_CAP);
+        owned.reset(new (std::nothrow) uint8_t[cap]);
+        if (!owned) return ZR_MEM_ERROR;
+        libdeflate_result r = libdeflate_zlib_decompress(tls_decompressor(), in, n, owned.get(), cap, &out_n);
+        if (r == LIBDEFLATE_SUCCESS) { ++st.calls; out = owned.get(); return ZR_OK; }
+        owned.reset();
+        if (r != LIBDEFLATE_INSUFFICIENT_SPACE) return ZR_DATA_ERROR;
+        if (cap >= LD_CAP) return ZR_SIZE_ERROR;
+        cap *= 2;
+        ++st.retries;
+    }
+}
+
 // "zlib-ng scratch": the rival that keeps zlib-ng. One inflate(Z_FINISH)
-// straight into a per-thread scratch of its own (same start and keep sizes as
+// straight into a per-thread scratch of its own (512 KiB start, kept up to 1 MiB, as
 // ld_tls); when it fills, the buffer doubles and inflate() continues where it
 // stopped (no restart, unlike libdeflate). One inflateInit per call, as today.
 static thread_local TlsBuf tls_zng;
@@ -273,7 +307,7 @@ static int zng_scratch(const uint8_t* in, size_t n, const uint8_t*& out, size_t&
     for (;;)
     {
         strm.next_out = tls_zng.p.get() + used;
-        strm.avail_out = (uInt)(tls_zng.cap - used);
+        strm.avail_out = (uInt)std::min<size_t>(tls_zng.cap - used, UINT_MAX);
         ret = inflate(&strm, Z_FINISH);
         used = tls_zng.cap - strm.avail_out;
         if (ret == Z_STREAM_END) break;
@@ -288,7 +322,7 @@ static int zng_scratch(const uint8_t* in, size_t n, const uint8_t*& out, size_t&
     inflateEnd(&strm);
     out = tls_zng.p.get();
     out_n = used;
-    if (tls_zng.cap > TLS_KEEP)
+    if (tls_zng.cap > ZNG_KEEP)
     {
         // the caller would parse first; the bench only needs the timing
         tls_zng.p.reset(new (std::nothrow) uint8_t[TLS_START]);
@@ -364,16 +398,16 @@ template struct Rob<UnpackTag, &LLVolume::unpackVolumeFacesInternal>;
 // parser call and depth limit, reading straight from the scratch buffer.
 static int ld_unzip_llsd(LLSD& data, const uint8_t* in, S32 size, LdStats& st)
 {
+    // the bounded design (ld_sized): at most 512 KiB kept per thread
     const uint8_t* out = nullptr;
     size_t n = 0;
-    int r = ld_tls(in, (size_t)size, out, n, st);
+    std::unique_ptr<uint8_t[]> owned;
+    int r = ld_sized(in, (size_t)size, out, n, owned, st);
     if (r != ZR_OK) return r;
     llssize cur = (llssize)n;
     char* p = strip_deprecated_header((char*)out, cur);
     boost::iostreams::stream<boost::iostreams::array_source> istrm(p, cur);
-    int res = LLSDSerialize::fromBinary(data, istrm, cur, UNZIP_LLSD_MAX_DEPTH) ? ZR_OK : ZR_PARSE_ERROR;
-    ld_tls_release_if_big();
-    return res;
+    return LLSDSerialize::fromBinary(data, istrm, cur, UNZIP_LLSD_MAX_DEPTH) ? ZR_OK : ZR_PARSE_ERROR;
 }
 
 static LLVolumeParams mesh_params(const LLUUID& id)
@@ -501,7 +535,7 @@ static int cmd_verify(const std::string& pack, size_t limit)
     uint64_t adler_rejected_both = 0, adler_accepted = 0;
     uint64_t geo_blocks = 0, geo_ident = 0, geo_differ = 0, geo_both_fail = 0, geo_one_fail = 0, faces = 0, verts = 0, tris = 0;
     uint64_t llsd_blocks = 0, llsd_ident = 0, llsd_differ = 0;
-    uint64_t determinism_checked = 0, determinism_bad = 0;
+    uint64_t determinism_checked = 0, determinism_bad = 0, sized_bad = 0;
     uint64_t out_total = 0, in_total = 0;
     std::map<std::string, uint64_t> geo_reasons;
     std::vector<double> ratios;
@@ -525,6 +559,11 @@ static int cmd_verify(const std::string& pack, size_t limit)
             const uint8_t* so = nullptr; size_t sn = 0;
             bool rival_ok = zng_scratch(b.z.data(), b.z.size(), so, sn) == ZR_OK && sn == zn && memcmp(so, zr, zn) == 0;
             if (!rival_ok) printf("zlib-ng scratch rival differs on block %zu\n", bi);
+            {
+                const uint8_t* zo = nullptr; size_t zn2 = 0; std::unique_ptr<uint8_t[]> owned;
+                if (!(ld_sized(b.z.data(), b.z.size(), zo, zn2, owned, st) == ZR_OK && zn2 == zn && memcmp(zo, zr, zn) == 0))
+                { ++sized_bad; printf("libdeflate sized differs on block %zu\n", bi); }
+            }
             if (zn == ln && memcmp(zr, lo, zn) == 0) ++ident;
             else { ++differ; printf("BYTES DIFFER block %zu kind %s\n", bi, kind_name[b.kind]); }
         }
@@ -612,6 +651,7 @@ static int cmd_verify(const std::string& pack, size_t limit)
     for (auto& kv : geo_reasons) printf("  differ reason %s: %llu\n", kv.first.c_str(), kv.second);
     printf("viewer path vs itself (determinism control): %llu checked, %llu differ\n", determinism_checked, determinism_bad);
     printf("LLSD (skin + physics_convex) %llu: identical %llu, differ %llu\n", llsd_blocks, llsd_ident, llsd_differ);
+    printf("libdeflate sized variant (512 KiB kept) differs on %llu blocks\n", sized_bad);
     printf("libdeflate scratch retries %llu over %llu calls\n", st.retries, st.calls);
     return (differ || only_z || only_ld || adler_accepted || geo_differ || geo_one_fail || llsd_differ) ? 3 : 0;
 }
@@ -634,44 +674,51 @@ static int cmd_pipeline(const std::string& pack, int reps)
     {
         while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
         double t_inflate_z = 0, t_inflate_ld = 0, t_full_a = 0, t_full_b = 0, t_llsd_a = 0, t_llsd_b = 0;
+        // the order of the two paths alternates per block, so neither always runs
+        // second with the other's data in cache
+        size_t bi = 0;
         for (const Block* b : lods)
         {
-            uint8_t* r = nullptr; size_t n = 0;
-            auto t0 = clk::now();
-            zng_viewer_inflate(b->z.data(), (int32_t)b->z.size(), r, n);
-            t_inflate_z += ms_since(t0);
-            free(r);
-            const uint8_t* o = nullptr; size_t ln = 0;
-            t0 = clk::now();
-            ld_tls(b->z.data(), b->z.size(), o, ln, st);
-            t_inflate_ld += ms_since(t0);
-            ld_tls_release_if_big();
-            {
-                t0 = clk::now();
+            auto inflate_z = [&] {
+                uint8_t* r = nullptr; size_t n = 0;
+                auto t0 = clk::now();
+                zng_viewer_inflate(b->z.data(), (int32_t)b->z.size(), r, n);
+                t_inflate_z += ms_since(t0);
+                free(r);
+            };
+            auto inflate_ld = [&] {
+                const uint8_t* o = nullptr; size_t ln = 0;
+                auto t0 = clk::now();
+                std::unique_ptr<uint8_t[]> owned;
+                ld_sized(b->z.data(), b->z.size(), o, ln, owned, st);
+                owned.reset();
+                t_inflate_ld += ms_since(t0);
+            };
+            auto full_a = [&] {
+                auto t0 = clk::now();
                 LLPointer<LLVolume> v = new LLVolume(vp, lod_detail(b->kind));
                 v->unpackVolumeFaces(const_cast<U8*>(b->z.data()), (S32)b->z.size());
                 v = nullptr;
                 t_full_a += ms_since(t0);
-            }
-            {
-                t0 = clk::now();
+            };
+            auto full_b = [&] {
+                auto t0 = clk::now();
                 LLPointer<LLVolume> v = new LLVolume(vp, lod_detail(b->kind));
                 LLSD mdl;
                 if (ld_unzip_llsd(mdl, b->z.data(), (S32)b->z.size(), st) == ZR_OK)
                     ((*v).*get_ptr(UnpackTag{}))(mdl);
                 v = nullptr;
                 t_full_b += ms_since(t0);
-            }
+            };
+            if (bi++ % 2 == 0) { inflate_z(); inflate_ld(); full_a(); full_b(); }
+            else { inflate_ld(); inflate_z(); full_b(); full_a(); }
         }
+        bi = 0;
         for (const Block* b : llsds)
         {
-            LLSD a, c;
-            auto t0 = clk::now();
-            LLUZipHelper::unzip_llsd(a, b->z.data(), (S32)b->z.size());
-            t_llsd_a += ms_since(t0);
-            t0 = clk::now();
-            ld_unzip_llsd(c, b->z.data(), (S32)b->z.size(), st);
-            t_llsd_b += ms_since(t0);
+            auto run_a = [&] { LLSD a; auto t0 = clk::now(); LLUZipHelper::unzip_llsd(a, b->z.data(), (S32)b->z.size()); t_llsd_a += ms_since(t0); };
+            auto run_b = [&] { LLSD c; auto t0 = clk::now(); ld_unzip_llsd(c, b->z.data(), (S32)b->z.size(), st); t_llsd_b += ms_since(t0); };
+            if (bi++ % 2 == 0) { run_a(); run_b(); } else { run_b(); run_a(); }
         }
         printf("rep %d: LOD blocks %zu: inflate zlib-ng %.0f ms, libdeflate %.0f ms; full lodReceived unpack viewer %.0f ms, libdeflate %.0f ms\n",
                rep, lods.size(), t_inflate_z, t_inflate_ld, t_full_a, t_full_b);
@@ -694,6 +741,7 @@ static const Strategy strategies[] = {
     { "libdeflate ratio x8, grow x2", 2, 8.0 },
     { "libdeflate thread scratch", 3, 0 },
     { "zlib-ng thread scratch (rival)", 4, 0 },
+    { "libdeflate sized (512 KiB kept)", 5, 0 },
 };
 
 static double run_one(const Strategy& s, const Block& b, size_t ref_n, std::vector<uint8_t>& exact_buf, LdStats& st)
@@ -706,6 +754,7 @@ static double run_one(const Strategy& s, const Block& b, size_t ref_n, std::vect
     case 2: { size_t n = 0; ld_ratio(b.z.data(), b.z.size(), s.k, nullptr, n, st); break; }
     case 3: { const uint8_t* o = nullptr; size_t n = 0; ld_tls(b.z.data(), b.z.size(), o, n, st); ld_tls_release_if_big(); break; }
     case 4: { const uint8_t* o = nullptr; size_t n = 0; zng_scratch(b.z.data(), b.z.size(), o, n); break; }
+    case 5: { const uint8_t* o = nullptr; size_t n = 0; std::unique_ptr<uint8_t[]> owned; ld_sized(b.z.data(), b.z.size(), o, n, owned, st); break; }
     }
     return std::chrono::duration<double, std::micro>(clk::now() - t0).count();
 }
@@ -790,7 +839,7 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
 
     // threads: the mesh pool is 2 (llmeshrepository.cpp:984) plus the repo thread
     printf("\n== threads: wall time for the corpus, static interleave, strategies round-robin, %d reps ==\n", reps);
-    const int tstrat[] = { 0, 4, 5 };
+    const int tstrat[] = { 0, 4, 5, 6 };
     for (int t = 1; t <= max_threads; ++t)
     {
         std::vector<double> walls[NS];
@@ -944,14 +993,14 @@ static int cmd_synthetic(const std::string& pack, int reps)
     }
     std::string who;
     printf("== synthetic bodies from real mesh payload (best of %d, ms) ==\n", reps);
-    printf("size  | zlib: viewer loop | ld thread scratch, cold | ld scratch, warm | ld exact | zlib-ng scratch, warm || gzip HTTP: llcorehttp 16 KiB loop | ld flatten + ISIZE hint\n");
+    printf("size  | zlib: viewer loop | ld thread scratch, cold | ld scratch, warm | ld exact | zlib-ng scratch, warm | ld sized (bounded) || gzip HTTP: llcorehttp 16 KiB loop | ld flatten + ISIZE hint\n");
     for (size_t mb : { 4, 8, 16 })
     {
         std::vector<uint8_t> src(raw.begin(), raw.begin() + mb * 1024 * 1024);
         std::vector<uint8_t> zz = zng_compress(src, MAX_WBITS);
         std::vector<uint8_t> gz = zng_compress(src, MAX_WBITS + 16);
         Block zb{ LOD3, zz };
-        double best[7] = { 1e30, 1e30, 1e30, 1e30, 1e30, 1e30, 1e30 };
+        double best[8] = { 1e30, 1e30, 1e30, 1e30, 1e30, 1e30, 1e30, 1e30 };
         std::vector<uint8_t> ex(src.size() + 64);  // reused by every rep: faulted in once
         for (int r = 0; r < reps; ++r)
         {
@@ -974,6 +1023,7 @@ static int cmd_synthetic(const std::string& pack, int reps)
             best[3] = std::min(best[3], run_one(strategies[1], zb, src.size(), ex, st) / 1000);
             run_one(strategies[5], zb, src.size(), ex, st);  // warm the zlib-ng scratch
             best[6] = std::min(best[6], run_one(strategies[5], zb, src.size(), ex, st) / 1000);
+            best[7] = std::min(best[7], run_one(strategies[6], zb, src.size(), ex, st) / 1000);
             {
                 std::vector<std::unique_ptr<uint8_t[]>> outb;
                 auto t0 = clk::now();
@@ -994,8 +1044,8 @@ static int cmd_synthetic(const std::string& pack, int reps)
                 if (n != src.size()) printf("gzip size mismatch\n");
             }
         }
-        printf("%2zu MiB | %8.2f | %8.2f | %8.2f | %8.2f | %8.2f || %8.2f | %8.2f   (zlib %.2f MB, gzip %.2f MB)\n",
-               mb, best[0], best[1], best[2], best[3], best[6], best[4], best[5], zz.size() / 1e6, gz.size() / 1e6);
+        printf("%2zu MiB | %8.2f | %8.2f | %8.2f | %8.2f | %8.2f | %8.2f || %8.2f | %8.2f   (zlib %.2f MB, gzip %.2f MB)\n",
+               mb, best[0], best[1], best[2], best[3], best[6], best[7], best[4], best[5], zz.size() / 1e6, gz.size() / 1e6);
         if (machine_busy(&who)) printf("  DISTURBED: %s started during this run\n", who.c_str());
         fflush(stdout);
     }
