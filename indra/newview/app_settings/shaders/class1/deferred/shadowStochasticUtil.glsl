@@ -32,9 +32,9 @@
 #define ST_SPOT_KERNEL_TEXELS_MAX 12.0 // texels: the same radius never exceeds this, so the fixed 8 + 32 gathers keep covering the disc
 #define ST_SPOT_SEARCH 8           // gathers of the blocker search
 #define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
-#define ST_SPOT_KERNEL_MIN 1.0     // map texels: the filter's radius at contact
+#define ST_SPOT_KERNEL_MIN 1.0     // map texels: the floor of the filter's radius
 #define ST_SPOT_PLANE_SLOPE 8.0    // texels of depth per texel of offset the receiver plane may lower a tap's reference by
-// edge reconstruction (revectorization, stRv*): where the physical penumbra is narrower than the filter's 1 texel floor the
+// edge reconstruction (revectorization, stRv*): where the physical penumbra is narrower than ST_RV_HI (2.5 texels; it blends in from ST_RV_LO) the
 // shadow map's silhouette is a staircase of the tile's texels; the lookup then fits a straight edge to it
 #define ST_RV_S 24                 // texels: the run traversal's reach on each side of the receiver's texel
 #define ST_RV_K 4                  // risers a side the line is fitted to
@@ -367,7 +367,7 @@ bool stRvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float r
 
 // The edge line of the silhouette near texel p in one frame (sw: a along v, b along u; else a along u, b along v), in that
 // frame's texel coordinates relative to p. The boundary of column 0 nearest the receiver (fb), between rows j0 and j0 + 1; then
-// both ways along the edge while the boundary stays a monotone staircase of one-row steps (the necessary condition of a digital
+// both ways along the edge while the boundary stays a monotone staircase of one- or two-row steps (the necessary condition of a digital
 // straight segment), up to ST_RV_S columns a side, keeping the risers within ST_RV_D columns (at most ST_RV_K a side). A riser is where the
 // boundary moves by one row between two columns; its midpoint (the column boundary; the old and new boundary's mean height) is
 // where a straight edge crosses a row-centre height, to +- half a texel along the edge.
@@ -375,8 +375,8 @@ bool stRvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float r
 //     span they cover: an interpolation, never an extrapolation; a curve is cut by a short chord);
 //   else MLAA's line over the receiver's own run (the RBSM papers' discontinuity shapes): between the run's ends at half a step
 //     (Z and L; an end that is no step stays at the boundary), or two half-lines meeting at its middle (U).
-// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of two or more rows
-// within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
+// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of three or more rows
+// (or a non-monotone column) within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
 int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
 {
     bh = false;
@@ -524,8 +524,12 @@ float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bo
             for (int i = -1; i <= 2; ++i)
                 if (stRvBlk(p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
     }
-    if (bits == 0u) return 1.0;
-    if (bits == 0xFFFFu) return 0.0;
+    if (bits == 0u || bits == 0xFFFFu)
+    {
+        // a clean window: the disc stays inside it (at least one texel to its edge) or P2's filter, which sees past it, decides
+        if (max(rw.x, rw.y) > 1.0) ok = false;
+        return bits == 0u ? 1.0 : 0.0;
+    }
     int hx = 0, vy = 0;
     for (int j = 0; j < 4; ++j)
         for (int i = 0; i < 3; ++i)
@@ -629,11 +633,11 @@ float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2
     {
         return stSpotPCF(c, g, z_bias, rp_max, rf, edge); // the penumbra's blur already hides the staircase
     }
-    // a narrower penumbra: the straight edge of the silhouette, with its own cap on the receiver plane's lowering (at least the
-    // slope over ST_RV_HI + 1 texels), and where it finds no single edge the filter
+    // a narrower penumbra: the straight edge of the silhouette, with its own cap on the receiver plane's lowering (max(SHADOW_PLANE_BIAS_MAX_TEXELS,
+    // ST_SPOT_PLANE_SLOPE * (max(rs, ST_RV_HI) + 1)) texels, at least 8 * 3.5), and where it finds no single edge the filter
     float rp_rv = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(max(rs.x, rs.y), ST_RV_HI) + 1.0));
     bool ok;
-    float v = stRvVisibility(c, g, z_bias, rp_rv, max(rphys, vec2(ST_RV_MIN)), ok);
+    float v = stRvVisibility(c, g, z_bias, rp_rv, max(min(rphys, kmax), vec2(ST_RV_MIN)), ok); // the 4 cm cap holds for the edge too
     if (!ok)
     {
         return stSpotPCF(c, g, z_bias, rp_max, rf, edge);
@@ -693,8 +697,8 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // k * that in uv: 0.5 * light * k * (z - zb) / c1, here in texels per unit of z - zb
     vec2 pen = (0.5 / sp.c1) * light * sp.k * res;
     // the largest radius is a length at the receiver, not a count of texels: a texel of this tile is w / (k N) metres wide
-    // there, so the cap in texels is ST_SPOT_RADIUS_MAX_M * k N / w. At least one texel (an edge is never narrower than
-    // the tile resolves), at most ST_SPOT_KERNEL_TEXELS_MAX (a wider disc is sampled coarser by the fixed taps)
+    // there, so the cap in texels is ST_SPOT_RADIUS_MAX_M * k N / w. At least one texel (the filter's floor; the reconstruction draws an edge down to
+    // ST_RV_MIN where the penumbra is narrower than ST_RV_HI), at most ST_SPOT_KERNEL_TEXELS_MAX (a wider disc is sampled coarser by the fixed taps)
     vec2 kmax = clamp(ST_SPOT_RADIUS_MAX_M * sp.k * res / s0.w, vec2(ST_SPOT_KERNEL_MIN), vec2(ST_SPOT_KERNEL_TEXELS_MAX));
     vec2 grad = stSpotGradient(m, pos, ng, c);
     float shadow = stSpotFilterTile(c, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, kmax);

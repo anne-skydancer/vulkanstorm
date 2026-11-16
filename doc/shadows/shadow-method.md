@@ -103,7 +103,7 @@ search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whos
 emitter of 1 cm times `RenderShadowLightSize`, whatever the prim, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
 texel bias and per-texel receiver plane. Where the penumbra is narrower than 2.5 texels the filter is replaced by a straight edge fitted to the map's silhouette (edge reconstruction, `doc/shadows/projector-shadow-pool.md`). The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
-within a map texel. The projector lookup costs 8 + 32 gathers per pixel inside the projector's frustum. Under Stochastic with
+within a map texel. The projector lookup costs 8 search gathers plus 32 filter gathers where the penumbra is 2.5 texels or wider. Narrower, it costs the 8 plus the edge fit (4 window gathers and a few texel fetches), and the blend band from 1.5 to 2.5 texels and any fallback also pay the 32; the work is bounded by the silhouette pixels. See the Cost table in `projector-shadow-pool.md`. Under Stochastic with
 detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
 `doc/shadows/projector-shadow-pool.md`), not the two slots through the sun pass.
 
