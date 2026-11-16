@@ -1234,6 +1234,12 @@ inline TileVerdict classifyTile(const TileFacts& f)
 // ---------------------------------------------------------------------------------------------
 
 constexpr uint32_t kDynamicDeadlineFrames = 4;
+// The cadence of the avatar layer under overload (own-avatar hotfix): the user's own avatar is drawn every frame; the other avatars'
+// faces by the camera POSITION's distance to their nearest avatar (never the view direction): within kNearAvatarM every
+// kNearDeadlineFrames frames, farther every kDynamicDeadlineFrames. When everything fits the budget every face runs every frame.
+constexpr float kNearAvatarM = 10.f;
+constexpr uint32_t kNearDeadlineFrames = 2;
+constexpr uint32_t kOwnDeadlineFrames = 1;
 
 // Prior for the cost of an item that has no history (never drawn) or a non-finite prediction.
 // A placeholder until S0 measures; it is also the floor, so a zero prediction cannot let a whole
@@ -1321,16 +1327,34 @@ struct DynamicItem
     float last_cpu_ms = 0.f;
     uint32_t avatar_draws = 0;  // avatars this item draws
     uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
+    bool layer = false;         // an avatar layer face (the distance cadence applies); false for a moving lamp's whole tile
+    bool own = false;           // a layer face whose layer holds the user's own avatar: drawn every frame, exempt from the budget
 };
 
-// Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first (for an avatar face: the camera
-// position's distance to its nearest avatar), then the one that has waited longest, so ties rotate instead of starving by key.
-// Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its
-// nearest a_max). No floor beyond that, with two exceptions that prevent permanent starvation, for the FIRST pick of a frame only
-// (one such item per frame at most; selectFrame keeps it only as the progress pick, so it passes allow_over = false when the frame has
-// spent): it runs even if its predicted cost alone exceeds the cap when it is an avatar face (every frame: a heavy face is the
-// avatar's own shadow and must not step), or when any item is past the 4-frame deadline. A heavy moving-lamp tile keeps the old rule:
-// it runs only once it is overdue. Other items over budget keep their last content.
+// How many frames an item may wait while the frame is over budget: 1 for the own avatar's face (every frame), kNearDeadlineFrames for
+// a layer face whose nearest other avatar is within kNearAvatarM of the camera position, else kDynamicDeadlineFrames (also the
+// moving lamps' tiles and a face that only restores L from S).
+inline uint32_t dynamicDeadline(const DynamicItem& it)
+{
+    if (it.own)
+    {
+        return kOwnDeadlineFrames;
+    }
+    if (it.layer && it.avatar_draws > 0 && it.cam_dist <= kNearAvatarM)
+    {
+        return kNearDeadlineFrames;
+    }
+    return kDynamicDeadlineFrames;
+}
+
+// Dynamic picks: the faces of the own avatar first (every frame, whatever they cost: they are exempt from the budget, but their cost is
+// spent from it and they count against A_max), then the items past their own deadline (dynamicDeadline: 2 frames for a near avatar's
+// face, 4 for the rest; the most overdue first), then nearest first (for an avatar face: the camera position's distance to its nearest
+// other avatar), then the one that has waited longest, so ties rotate instead of starving by key.
+// Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its nearest a_max). No floor beyond that,
+// with one exception that prevents permanent starvation, for the FIRST pick of a frame only (selectFrame keeps it only as the
+// progress pick, so it passes allow_over = false when the frame has spent): an item past its deadline runs even if its predicted cost
+// alone exceeds the cap. Other items over budget keep their last content. When everything fits, every item runs every frame.
 inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max, bool allow_over = true)
 {
     std::vector<const DynamicItem*> order;
@@ -1338,15 +1362,19 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     {
         order.push_back(&it);
     }
-    std::sort(order.begin(), order.end(), [](const DynamicItem* a, const DynamicItem* b) {
-        const bool da = a->age_frames >= kDynamicDeadlineFrames, db = b->age_frames >= kDynamicDeadlineFrames;
-        if (da != db)
+    auto late = [](const DynamicItem* it) { // frames past the deadline, 1 on the frame it is due (0 when not yet due)
+        const uint32_t d = dynamicDeadline(*it);
+        return it->age_frames >= d ? it->age_frames - d + 1 : 0u;
+    };
+    std::sort(order.begin(), order.end(), [&late](const DynamicItem* a, const DynamicItem* b) {
+        if (a->own != b->own)
         {
-            return da;
+            return a->own;
         }
-        if (da && a->age_frames != b->age_frames)
+        const uint32_t la = late(a), lb = late(b);
+        if (la != lb)
         {
-            return a->age_frames > b->age_frames;
+            return la > lb;
         }
         const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
         if (ca != cb)
@@ -1362,8 +1390,8 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     {
         const float cost = itemCost(it->last_cpu_ms);
         const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
-        const bool may_over = allow_over && out.empty() && (it->avatar || it->age_frames >= kDynamicDeadlineFrames);
-        if ((spent + cost > t_d_ms && !may_over) || avatars + draws > a_max)
+        const bool may_over = allow_over && out.empty() && late(it) > 0;
+        if ((spent + cost > t_d_ms && !may_over && !it->own) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
         }
@@ -1626,20 +1654,48 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
     constexpr float kEps = 1e-4f;
     float left = cap_ms;
+    std::set<uint32_t> own_keys; // the own avatar's faces: never dropped (every frame, whatever the cap says)
+    for (const DynamicItem& it : d)
+    {
+        if (it.own)
+        {
+            own_keys.insert(it.key);
+        }
+    }
+    auto dropLastOther = [&](std::vector<uint32_t>& list) { // drops the last pick that is not an own face; false when only own faces remain
+        for (size_t i = list.size(); i > 0; --i)
+        {
+            if (!own_keys.count(list[i - 1]))
+            {
+                list.erase(list.begin() + (i - 1));
+                return true;
+            }
+        }
+        return false;
+    };
+    auto sumCost = [&](const std::vector<uint32_t>& list) {
+        float ms = 0.f;
+        for (uint32_t k : list)
+        {
+            ms += dyn_cost[k];
+        }
+        return ms;
+    };
     if (left <= 0.f && !progress_ok)
     {
+        out.dynamic = selectDynamic(d, 0.f, a_max, false); // only the own avatar's faces run past an exhausted cap
+        out.predicted_ms = sumCost(out.dynamic);
         return out;
     }
     out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
-    float dyn_ms = 0.f;
-    for (uint32_t k : out.dynamic)
-    {
-        dyn_ms += dyn_cost[k];
-    }
+    float dyn_ms = sumCost(out.dynamic);
     if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
     {
-        out.dynamic.clear(); // an over-cap item may only run alone, as the progress pick
-        dyn_ms = 0.f;
+        // an over-cap item may only run alone, as the progress pick; the own avatar's faces stay (they are exempt)
+        while (dyn_ms > left + kEps && dropLastOther(out.dynamic))
+        {
+            dyn_ms = sumCost(out.dynamic);
+        }
     }
     left -= dyn_ms;
     uint32_t dyn_avatars = 0;
@@ -1658,9 +1714,18 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
         {
             while (head_ms > left + kEps && !out.dynamic.empty())
             {
-                dyn_ms -= dyn_cost[out.dynamic.back()];
-                dyn_avatars -= dyn_draws[out.dynamic.back()];
-                out.dynamic.pop_back();
+                size_t i = out.dynamic.size();
+                while (i > 0 && own_keys.count(out.dynamic[i - 1]))
+                {
+                    --i; // an own face is never given up
+                }
+                if (i == 0)
+                {
+                    break; // only own faces remain: the head waits for a frame with room
+                }
+                dyn_ms -= dyn_cost[out.dynamic[i - 1]];
+                dyn_avatars -= dyn_draws[out.dynamic[i - 1]];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
                 left = cap_ms - dyn_ms;
             }
         }
@@ -1671,10 +1736,18 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
             {
                 if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
                 {
-                    out.dynamic.clear();
-                    dyn_ms = 0.f;
+                    // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
+                    // of that one item, so neither guarantee starves the other)
+                    while (dropLastOther(out.dynamic))
+                    {
+                    }
+                    dyn_ms = sumCost(out.dynamic);
                     dyn_avatars = 0;
-                    left = cap_ms;
+                    for (uint32_t k : out.dynamic)
+                    {
+                        dyn_avatars += dyn_draws[k];
+                    }
+                    left = out.dynamic.empty() ? cap_ms : 0.f;
                     break;
                 }
             }
@@ -1687,9 +1760,13 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
             while (head_draws + dyn_avatars > a_max && dyn_avatars > 0)
             {
                 size_t i = out.dynamic.size();
-                while (i > 0 && dyn_draws[out.dynamic[i - 1]] == 0)
+                while (i > 0 && (dyn_draws[out.dynamic[i - 1]] == 0 || own_keys.count(out.dynamic[i - 1])))
                 {
                     --i;
+                }
+                if (i == 0)
+                {
+                    break; // only own faces hold the avatar draws: the head waits
                 }
                 const uint32_t k = out.dynamic[i - 1];
                 dyn_ms -= dyn_cost[k];
@@ -1699,13 +1776,26 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
             }
         }
     }
+    // an overdue head that has no room beside the own avatar's faces runs beside them as the progress pick (one bounded overrun)
+    bool head_beside_own = false;
+    if (progress_ok && !st.empty() && !out.dynamic.empty())
+    {
+        const std::vector<uint32_t> head = selectStatic(st, 0.f);
+        if (!head.empty() && st_cost[head[0]] > left + kEps)
+        {
+            for (const StaticItem& it : st)
+            {
+                head_beside_own = head_beside_own || (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames));
+            }
+        }
+    }
     out.fixed = selectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
     float st_ms = 0.f;
     for (uint32_t k : out.fixed)
     {
         st_ms += st_cost[k];
     }
-    if (st_ms > left + kEps && !(progress_ok && out.dynamic.empty() && out.fixed.size() == 1))
+    if (st_ms > left + kEps && !(progress_ok && (out.dynamic.empty() || head_beside_own) && out.fixed.size() == 1))
     {
         // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
         while (!out.fixed.empty() && st_ms > left + kEps)
@@ -1742,9 +1832,9 @@ struct FrameLedger
 // The in-frame gate of one pick under the shared cap: it runs while the measured time left is positive. The one exemption is the first
 // static pick of a frame in which nothing else rendered (`alone`: ledger untouched and no dynamic picks): the selection kept it inside
 // the cap, or it is the progress pick. A first static pick behind spent dynamic work or an earlier cache is refused.
-inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone)
+inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone, bool own = false)
 {
-    return left_ms > 0.f || (!dynamic && first_pick && alone);
+    return left_ms > 0.f || own || (!dynamic && first_pick && alone);
 }
 
 // the one ledger of the process (main thread only); a pool begins the frame with its frame count and adds what its renders measure

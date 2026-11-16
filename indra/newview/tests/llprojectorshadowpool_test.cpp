@@ -777,7 +777,7 @@ namespace
                 check(o4.size() == 1 && o4[0] == 31, "T7 only the overdue item runs when nothing fits the cap", o4.size());
             }
             items[30].age_frames = 0;
-            check(selectDynamic(items, 0.001f, 24).size() == 1, "T7 nothing fits the cap: only the first pick runs (C1: it runs every frame)");
+            check(selectDynamic(items, 0.001f, 24).empty(), "T7 nothing fits the cap: a young face of another avatar waits for its deadline (only the own avatar runs every frame)");
             check(selectDynamic(items, 0.001f, 24, false).empty(), "T7 no floor: with the frame spent nothing runs");
             std::vector<DynamicItem> big{ { 1, true, 0, 1.f, 0.01f, 30 }, { 2, true, 0, 2.f, 0.01f, 5 } };
             const std::vector<uint32_t> o3 = selectDynamic(big, 10.f, 24);
@@ -790,8 +790,10 @@ namespace
             std::vector<DynamicItem> costly_young{ { 8, false, 0, 1.f, 0.5f, 0 } };
             check(selectDynamic(costly_young, 0.3f, 24).empty(), "T7 a young moving-lamp item over the CPU cap waits for its deadline (only avatar faces run over the share every frame)");
             std::vector<DynamicItem> costly_face{ { 8, true, 0, 1.f, 0.5f, 1 } };
-            check(selectDynamic(costly_face, 0.3f, 24).size() == 1, "T7 a young avatar face over the CPU cap runs alone, every frame (C1)");
-            check(selectDynamic(costly_face, 0.3f, 24, false).empty(), "T7 a face over the CPU cap waits when the frame has spent");
+            check(selectDynamic(costly_face, 0.3f, 24).empty(), "T7 a young face of another avatar over the CPU cap waits for its deadline");
+            costly_face[0].own = true;
+            check(selectDynamic(costly_face, 0.3f, 24).size() == 1, "T7 the own avatar's face over the CPU cap runs alone, every frame");
+            check(selectDynamic(costly_face, 0.3f, 24, false).size() == 1, "T7 ... even when the frame has spent");
             std::vector<DynamicItem> lamps{ { 1, false, 0, 1.f, 0.1f, 0 }, { 2, false, 0, 2.f, 0.1f, 0 },
                                             { 3, false, 0, 3.f, 0.1f, 0 }, { 4, false, 0, 4.f, 0.1f, 0 } };
             check(selectDynamic(lamps, 0.3f, 24).size() == 3, "T7 lamps follow the CPU cap, not A_max");
@@ -1802,11 +1804,13 @@ void testP4Cadence(bool print_table)
     }
     // a heavy single face: alone, every frame; not over the cap when the frame has spent already
     {
-        const std::vector<DynamicItem> heavy = faces(1, 0.6f, 0);
+        std::vector<DynamicItem> heavy = faces(1, 0.6f, 0);
+        heavy[0].own = heavy[0].layer = true; // the own avatar's face (another avatar's heavy face waits for its deadline)
         const FramePicks p = selectFrame(std::vector<StaticItem>(), heavy, kFrameCapMs, kAvatarDrawsMax, true);
-        check(p.dynamic.size() == 1, "C1 heavy: one face over the whole cap runs alone, young or not");
-        check(selectFrame(std::vector<StaticItem>(), heavy, 0.2f, kAvatarDrawsMax, false).dynamic.empty(), "C1 heavy: not once the frame has spent");
+        check(p.dynamic.size() == 1, "C1 heavy: the own avatar's face over the whole cap runs alone, young or not");
+        check(selectFrame(std::vector<StaticItem>(), heavy, 0.2f, kAvatarDrawsMax, false).dynamic.size() == 1, "C1 heavy: the own face runs even once the frame has spent");
         std::vector<DynamicItem> two = faces(2, 0.6f, 0);
+        two[0].own = two[0].layer = true;
         check(selectFrame(std::vector<StaticItem>(), two, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "C1 heavy: never two over-cap faces");
         // an over-cap face does not stop a face that fits when the frame has spent (the cheap one runs)
         std::vector<DynamicItem> mix = faces(2, 0.6f, 0);
@@ -1845,6 +1849,259 @@ void testP4Cadence(bool print_table)
         for (int i = 0; i < 3; ++i) { b.lo[i] = 0.f; b.hi[i] = 2.f; }
         const float inside[3] = { 1.f, 1.f, 1.f }, out_x[3] = { 5.f, 1.f, 1.f }, corner[3] = { 5.f, 6.f, 1.f };
         check(pointBoxDistance(inside, b) == 0.f && pointBoxDistance(out_x, b) == 3.f && std::fabs(pointBoxDistance(corner, b) - 5.f) < 1e-5f, "C1 distance: point to box");
+    }
+}
+
+// ---- The own avatar and the distance cadence (own-avatar hotfix) ----
+//
+// One own face (the user's avatar under a lamp), `near_n` faces whose nearest other avatar is 5 m from the camera position, `far_n` at
+// 20 m. `before` is the C1 scheduler (selectDynamic as C1 left it: one 4-frame deadline, an avatar face may run over the share as the first
+// pick, no own avatar), reproduced here; `after` is selectFrame. The measured cost of every face is `cost` (the prediction is exact, to
+// isolate the schedule). Gaps are frames between two draws of the same face, after a warm-up.
+struct OwnCadence
+{
+    uint32_t own_gap = 0, near_gap = 0, far_gap = 0;
+    double faces_per_frame = 0;
+};
+
+std::vector<uint32_t> c1SelectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max)
+{
+    std::vector<const DynamicItem*> order;
+    for (const DynamicItem& it : items) order.push_back(&it);
+    std::sort(order.begin(), order.end(), [](const DynamicItem* a, const DynamicItem* b) {
+        const bool da = a->age_frames >= kDynamicDeadlineFrames, db = b->age_frames >= kDynamicDeadlineFrames;
+        if (da != db) return da;
+        if (da && a->age_frames != b->age_frames) return a->age_frames > b->age_frames;
+        const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
+        if (ca != cb) return ca < cb;
+        return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : a->key < b->key;
+    });
+    std::vector<uint32_t> out;
+    float spent = 0.f;
+    uint32_t avatars = 0;
+    for (const DynamicItem* it : order)
+    {
+        const float cost = itemCost(it->last_cpu_ms);
+        const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
+        const bool may_over = out.empty() && (it->avatar || it->age_frames >= kDynamicDeadlineFrames);
+        if ((spent + cost > t_d_ms && !may_over) || avatars + draws > a_max) continue;
+        out.push_back(it->key);
+        spent += cost;
+        avatars += draws;
+    }
+    return out;
+}
+
+OwnCadence ownCadenceSim(uint32_t near_n, uint32_t far_n, float cost, bool before, uint32_t frames = 800)
+{
+    const uint32_t total = 1 + near_n + far_n; // key 1 is the own face
+    std::vector<uint32_t> last(total + 1, 1), worst(total + 1, 0);
+    uint64_t drawn = 0;
+    const uint32_t warm = 40;
+    for (uint32_t frame = 2; frame <= frames; ++frame)
+    {
+        std::vector<DynamicItem> items;
+        for (uint32_t i = 1; i <= total; ++i)
+        {
+            DynamicItem it;
+            it.key = i;
+            it.avatar = true;
+            it.layer = true;
+            it.own = !before && i == 1;
+            it.age_frames = frame - last[i];
+            it.cam_dist = i == 1 ? 2.f : (i <= 1 + near_n ? 5.f + 0.01f * float(i) : 20.f + 0.01f * float(i));
+            it.last_cpu_ms = cost;
+            it.avatar_draws = 1;
+            items.push_back(it);
+        }
+        FrameLedger ledger;
+        ledger.begin(frame);
+        std::vector<uint32_t> picks;
+        std::set<uint32_t> own;
+        if (before)
+        {
+            const float left = ledger.left(kFrameCapMs);
+            picks = c1SelectDynamic(items, left + 1e-4f, kAvatarDrawsMax);
+            float ms = 0.f;
+            for (size_t i = 0; i < picks.size(); ++i) ms += itemCost(cost);
+            if (ms > left + 1e-4f && picks.size() != 1) picks.clear();
+        }
+        else
+        {
+            own.insert(1);
+            for (uint32_t k : selectFrame(std::vector<StaticItem>(), items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched()).dynamic)
+                picks.push_back(unpackKey(k));
+        }
+        float spent = 0.f;
+        bool first = true;
+        for (uint32_t k : picks)
+        {
+            const bool is_own = own.count(k) > 0;
+            if (!mayRunPick(ledger.left(kFrameCapMs), true, first, false, is_own) || (!first && !is_own && spent >= kFrameCapMs)) break;
+            if (frame > warm) worst[k] = std::max(worst[k], frame - last[k]);
+            last[k] = frame;
+            ledger.add(cost);
+            spent += cost;
+            first = false;
+            if (frame > warm) ++drawn;
+        }
+    }
+    OwnCadence r;
+    r.faces_per_frame = double(drawn) / double(frames - warm);
+    r.own_gap = worst[1];
+    for (uint32_t i = 2; i <= total; ++i)
+    {
+        uint32_t& slot = i <= 1 + near_n ? r.near_gap : r.far_gap;
+        slot = std::max(slot, worst[i]);
+    }
+    return r;
+}
+
+void testOwnAvatarCadence(bool print_table)
+{
+    // the deadline classes
+    {
+        DynamicItem it;
+        it.avatar = true;
+        it.layer = true;
+        it.avatar_draws = 1;
+        it.cam_dist = kNearAvatarM;
+        check(dynamicDeadline(it) == kNearDeadlineFrames, "own cadence: an avatar at exactly kNearAvatarM is near (deadline 2)");
+        it.cam_dist = kNearAvatarM + 0.01f;
+        check(dynamicDeadline(it) == kDynamicDeadlineFrames, "own cadence: beyond kNearAvatarM the deadline is 4");
+        it.cam_dist = std::numeric_limits<float>::infinity();
+        check(dynamicDeadline(it) == kDynamicDeadlineFrames, "own cadence: an unknown distance is far");
+        it.cam_dist = 1.f;
+        it.avatar_draws = 0; // a face that only restores L from S
+        check(dynamicDeadline(it) == kDynamicDeadlineFrames, "own cadence: a restore-only face keeps deadline 4");
+        it.avatar_draws = 1;
+        it.layer = false; // a moving lamp's tile
+        check(dynamicDeadline(it) == kDynamicDeadlineFrames, "own cadence: a moving lamp's tile keeps deadline 4 whatever the distance");
+        it.layer = true;
+        it.own = true;
+        check(dynamicDeadline(it) == 1, "own cadence: the own avatar's face has deadline 1");
+    }
+    if (print_table)
+    {
+        std::printf("\nown-avatar cadence under overload (one own face, N near <= 10 m, F far), worst gap in frames own/near/far, faces a frame\n");
+        std::printf("near far  cost ms |   before (C1)            after\n");
+    }
+    const float costs[] = { 0.05f, 0.07f, 0.10f, 0.15f };
+    for (uint32_t near_n : { 0u, 1u, 2u, 3u, 4u })
+    {
+        for (uint32_t far_n : { 0u, 2u, 4u, 8u })
+        {
+            for (float cost : costs)
+            {
+                const OwnCadence b = ownCadenceSim(near_n, far_n, cost, true), a = ownCadenceSim(near_n, far_n, cost, false);
+                if (print_table)
+                {
+                    std::printf("%4u %3u  %7.2f | %2u/%2u/%2u %5.2f      %2u/%2u/%2u %5.2f\n", near_n, far_n, cost, b.own_gap, b.near_gap,
+                                b.far_gap, b.faces_per_frame, a.own_gap, a.near_gap, a.far_gap, a.faces_per_frame);
+                }
+                // the own face: every frame in every scenario, however heavy the overload
+                check(a.own_gap == 1, "own cadence: the own avatar's face is drawn every frame", double(near_n * 100 + far_n), cost);
+                // slots a frame holds at this cost (the whole cap: no static tile waits); the own face takes one every frame, a near face
+                // half of one, a far face a quarter. Where that fits, the near gap is <= 2 and the far gap <= 4; where it does not,
+                // the faces share what is left and the gaps are what the budget gives (printed above)
+                const float slots = std::floor(kFrameCapMs / std::max(cost, kDefaultItemMs) + 1e-4f);
+                const float load = 1.f + 0.5f * float(near_n) + 0.25f * float(far_n);
+                if (load + 1e-4f <= slots)
+                {
+                    check(a.near_gap <= kNearDeadlineFrames, "own cadence: near faces wait at most 2 frames where the budget holds it", double(near_n * 100 + far_n), cost);
+                    check(a.far_gap <= kDynamicDeadlineFrames, "own cadence: far faces wait at most 4 frames where the budget holds it", double(near_n * 100 + far_n), cost);
+                }
+                // everything fits: every face every frame, as before
+                if (float(1 + near_n + far_n) <= slots)
+                {
+                    check(a.near_gap <= 1 && a.far_gap <= 1 && a.own_gap == 1, "own cadence: when everything fits every face runs every frame", double(near_n * 100 + far_n), cost);
+                    check(b.near_gap <= 1 && b.far_gap <= 1, "own cadence: ... as before", double(near_n * 100 + far_n), cost);
+                }
+            }
+        }
+    }
+    // the own face runs past the cap and past an exhausted frame, alone or beside others, heavy or not
+    {
+        std::vector<DynamicItem> v = faces(3, 0.6f, 0); // all heavy (0.6 ms > the whole cap)
+        v[1].own = true;
+        v[1].layer = true;
+        for (bool ok : { true, false })
+        {
+            for (float cap : { kFrameCapMs, 0.2f, 0.f, -0.1f })
+            {
+                const FramePicks p = selectFrame(std::vector<StaticItem>(), v, cap, kAvatarDrawsMax, ok);
+                bool has_own = false;
+                for (uint32_t k : p.dynamic) has_own = has_own || unpackKey(k) == 2;
+                check(has_own && p.dynamic.size() == 1, "own cadence: a heavy own face runs alone, whatever the cap or the frame's spending", ok, cap);
+            }
+        }
+        // two own faces (the own avatar under two lamps) both run, beside cheap faces when they fit
+        std::vector<DynamicItem> w = faces(4, 0.05f, 0);
+        w[0].own = w[1].own = true;
+        const FramePicks p = selectFrame(std::vector<StaticItem>(), w, kFrameCapMs, kAvatarDrawsMax, true);
+        check(p.dynamic.size() == 4 && unpackKey(p.dynamic[0]) <= 2 && unpackKey(p.dynamic[1]) <= 2, "own cadence: the own faces come first, all of them");
+        // only the own faces remain when the cap is exhausted by an earlier cache
+        const FramePicks q = selectFrame(std::vector<StaticItem>(), w, 0.f, kAvatarDrawsMax, false);
+        check(q.dynamic.size() == 2, "own cadence: past an exhausted cap only the own faces run", q.dynamic.size());
+    }
+    // another avatar's heavy face is not exempt: over the share only once past its deadline (the own avatar alone has the exemption)
+    {
+        std::vector<DynamicItem> v = faces(1, 0.6f, 0);
+        v[0].layer = true;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.empty(), "own cadence: a heavy young face of another avatar waits");
+        v[0].age_frames = 2; // near deadline
+        v[0].cam_dist = 3.f;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "own cadence: ... and runs alone once past its deadline (near: 2)");
+        v[0].cam_dist = 30.f;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.empty(), "own cadence: a far one is not due at 2");
+        v[0].age_frames = kDynamicDeadlineFrames;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "own cadence: ... but at 4");
+    }
+    // a moving lamp's tile keeps C1's rule: over the share only once overdue (4 frames), whatever its distance
+    {
+        std::vector<DynamicItem> v = faces(1, 0.6f, 2);
+        v[0].avatar = false;
+        v[0].cam_dist = 1.f;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.empty(), "own cadence: a heavy moving lamp's tile waits at 2 frames");
+        v[0].age_frames = kDynamicDeadlineFrames;
+        check(selectFrame(std::vector<StaticItem>(), v, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "own cadence: ... runs alone at the deadline");
+    }
+    // the order under overload: own, then past-deadline (the more overdue first), then nearest
+    {
+        std::vector<DynamicItem> v = faces(4, 0.2f, 1);
+        v[0].cam_dist = 30.f; v[0].age_frames = 5;           // far, 2 frames past the deadline
+        v[1].cam_dist = 3.f;  v[1].age_frames = 2;           // near, due (1 past)
+        v[2].cam_dist = 8.f;  v[2].age_frames = 1;           // near, not due
+        v[3].cam_dist = 1.f;  v[3].own = true; v[3].age_frames = 1;
+        for (DynamicItem& it : v) it.layer = true;
+        const std::vector<uint32_t> o = selectDynamic(v, 10.f, kAvatarDrawsMax);
+        check(o.size() == 4 && o[0] == 4 && o[1] == 1 && o[2] == 2 && o[3] == 3, "own cadence: own first, then the most overdue, then the nearest");
+    }
+    // the static guarantees stay: the head still runs beside the dynamic layer, and beside an own face too
+    {
+        std::vector<DynamicItem> v = faces(6, 0.05f, 1);
+        for (DynamicItem& it : v) it.layer = true;
+        v[0].own = true;
+        const FramePicks p = selectFrame(tiles(1, 0.1f), v, kFrameCapMs, kAvatarDrawsMax, true);
+        check(p.fixed.size() == 1, "own cadence: the static head keeps its place", p.fixed.size());
+        check(!p.dynamic.empty() && unpackKey(p.dynamic[0]) == 1, "own cadence: ... and the own face stays first", p.dynamic.size());
+        // a heavy own face (0.6 ms) leaves no room: an overdue head runs beside it as the progress pick
+        std::vector<DynamicItem> h = faces(1, 0.6f, 1);
+        h[0].own = h[0].layer = true;
+        std::vector<StaticItem> st = tiles(1, 0.1f);
+        st[0].age_frames = kDynamicDeadlineFrames;
+        const FramePicks q = selectFrame(st, h, kFrameCapMs, kAvatarDrawsMax, true);
+        check(q.dynamic.size() == 1 && q.fixed.size() == 1, "own cadence: an overdue static head runs beside a heavy own face (progress)");
+        st[0].age_frames = 1;
+        const FramePicks r = selectFrame(st, h, kFrameCapMs, kAvatarDrawsMax, true);
+        check(r.dynamic.size() == 1 && r.fixed.empty(), "own cadence: a young head waits for room beside a heavy own face");
+        // the head alone above the cap: overdue, it takes the progress pick and the own face stays
+        std::vector<StaticItem> big = tiles(1, 0.6f);
+        big[0].age_frames = kDynamicDeadlineFrames;
+        std::vector<DynamicItem> o = faces(2, 0.05f, 1);
+        o[0].own = o[0].layer = true;
+        const FramePicks s = selectFrame(big, o, kFrameCapMs, kAvatarDrawsMax, true);
+        check(s.fixed.size() == 1 && s.dynamic.size() == 1 && unpackKey(s.dynamic[0]) == 1, "own cadence: an over-cap overdue head drops the other faces, not the own one");
     }
 }
 
@@ -1995,6 +2252,7 @@ void testP4Footprint()
 void testP4(bool print_table)
 {
     testP4Cadence(print_table);
+    testOwnAvatarCadence(print_table);
     testP4Footprint();
     testP4Caps();
     testP4Layer();

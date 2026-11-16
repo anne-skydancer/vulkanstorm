@@ -236,7 +236,8 @@ avatars over it) and `needs_layer` (only the avatar layer). Items go to two list
 - **static** (`selectStatic`): the first fill nearest first, then stale tiles oldest first (frames since the change that
   touched them, or, for a tile stale only by its lamp's pose or a resize, since it was drawn);
 - **dynamic** (`selectDynamic`, at most 24 avatar draws): a lamp that is moving (the whole tile every frame) and the avatar layers
-  (a tile with an avatar in its light, or one that just left): items past the 4-frame deadline first, then nearest first, by the
+  (a tile with an avatar in its light, or one that just left): the own avatar's faces first (every frame), then items past their
+  deadline (2 frames for a face whose nearest other avatar is within 10 m of the camera, else 4), then nearest first, by the
   camera's position.
 
 A lamp that moves is drawn every frame with its current pose, and the lookup
@@ -383,9 +384,8 @@ volume), less the faces drawn every frame. The share has two regimes (hotfix C1,
 - **when none waits** it is the whole remaining cap, 0.35 ms: up to **7 faces a frame** at the 0.05 ms floor.
 
 A_max does not bind below 24 faces. The wait of the last face of a set is `ceil(faces / per frame)` frames. The order of service is:
-the faces past the 4-frame deadline first (oldest first, the safety net), then the camera POSITION's distance to the face's nearest
-avatar (not the lamp's distance, which ties at 0 indoors), then the oldest. An avatar face whose own prediction is over the share runs
-alone, every frame, as the progress pick (a moving lamp's tile only once it is overdue). The prediction (`lastAvatarMs`) is an EMA
+the faces of the user's own avatar first, then the faces past their deadline (the most overdue first, the safety net), then the camera
+POSITION's distance to the face's nearest other avatar (not the lamp's distance, which ties at 0 indoors), then the oldest. The prediction (`lastAvatarMs`) is an EMA
 (0.25) seeded by the first sample, each sample clamped to 0.7 ms (2 x the cap).
 
 Faces drawn a frame / worst gap in frames, indoors, one avatar under all lamps, no static tile waiting (a model of `update()`,
@@ -402,6 +402,25 @@ Faces drawn a frame / worst gap in frames, indoors, one avatar under all lamps, 
 
 (Estimated from the cap and the 0.05 ms floor; the real cost of a face is unmeasured. In a real overload, more face cost than the cap
 holds, the deadline turns the service into a round robin: the worst gap is then about the number of lamps, up to 5 in the model.)
+
+### The own avatar and the distance cadence (own-avatar hotfix)
+
+Owner decision 2026-11-16. Only when the dynamic list does not fit the frame budget does the order matter; when everything fits, every
+face runs every frame, as in C1.
+
+- **The user's own avatar** (`gAgentAvatarp`, `LLVOAvatar::isSelf()`): every face whose avatar layer holds it (`DynamicItem::own`) is redrawn
+  every frame, always. It goes first, is exempt from the budget and from the deadline round robin (it counts against the CPU it spends and
+  A_max, so the others get what is left), and runs past an exhausted cap. A heavy own face that alone exceeds the share runs alone
+  (one bounded overrun). The static head keeps its place beside it when it fits; an overdue static head that has no room runs beside
+  the own faces as the progress pick (a second bounded overrun), so neither guarantee starves the other. Other avatars' faces have no
+  such exemption: a heavy face runs over the share only once past its deadline.
+- **Other avatars**, by the camera POSITION's distance to the nearest non-own avatar of the face (never the view direction): within
+  `kNearAvatarM` = 10 m the deadline is 2 frames, farther it is 4 (`dynamicDeadline`). A face that only restores L from S, and the
+  moving lamps' tiles, keep the 4-frame deadline (a moving lamp runs over the share only once overdue, as in C1).
+
+The bound is what the budget gives: the near faces' gap is at most 2 and the far faces' at most 4 where the load (1 own slot + half a slot
+per near face + a quarter per far face) fits the slots a frame holds (cap / face cost); beyond that the faces share what the own face
+leaves and the gaps grow (the table in the commit message, `llprojectorshadowpool_test --table`). The constants are not settings.
 
 ### Footprint copy (hotfix C3)
 
