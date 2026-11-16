@@ -1,0 +1,76 @@
+{
+  "name": "mc1_rooftops",
+  "description": "Busy-region shadow cost split (2026-11-16). The owner logs in at home (-StartRegion) and teleports to the busy region (-BusyRegion, Rooftops at the 'TT Rooftops dark' altitude) when the pop-up asks; after settling, two views (camera still; camera turning at 10 deg/s) are each measured with three shadow variants back to back: all shadows (RenderShadowDetail 2), sun/moon only (1), none (0). Every run is a 60 s Tracy capture plus the frame rate from the FrameCounters log lines. No teleports, no separate fps probe.",
+  "settle": {
+    "post_login_s": 20.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "after_teleport_s": 20.0
+  },
+  "window": {
+    "seconds": 60
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0,
+    "BackgroundYieldTime": 0
+  },
+  "owner_teleport": {
+    "poll_s": 1.0,
+    "stable_polls": 3,
+    "timeout_s": 1800,
+    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 15 minutes).",
+    "done_message": "Session done: you can quit."
+  },
+  "presets": [
+    {
+      "id": "RT-still",
+      "camera": null
+    },
+    {
+      "id": "RT-moving",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      }
+    }
+  ],
+  "teleports": null,
+  "fps_probe": null,
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 0
+  },
+  "compare": {
+    "enabled": false,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": false
+  },
+  "variants": [
+    {
+      "id": "all",
+      "settings": {
+        "RenderShadowDetail": 2
+      }
+    },
+    {
+      "id": "sun",
+      "settings": {
+        "RenderShadowDetail": 1
+      }
+    },
+    {
+      "id": "none",
+      "settings": {
+        "RenderShadowDetail": 0
+      }
+    }
+  ]
+}
