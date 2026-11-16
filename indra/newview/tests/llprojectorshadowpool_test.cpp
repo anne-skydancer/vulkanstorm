@@ -2568,6 +2568,213 @@ void testP3()
 }
 } // namespace
 
+// ---------------------------------------------------------------------------------------------
+// Cells of a wide lamp and the camera position's sizing (projector tile resolution)
+// ---------------------------------------------------------------------------------------------
+
+bool pointInPyramid(const Pyramid& py, const float p[3])
+{
+    return pyramidDistance(py, p) == 0.f;
+}
+
+void testCellGrid()
+{
+    check(gridAxis(0.5) == 1 && gridAxis(1.0) == 1, "up to a 90 degree lamp: one cell");
+    check(gridAxis(1.0 + 1e-9) == 1, "just over 90 degrees: still one cell (ceil(tan - 0.05))");
+    check(gridAxis(1.5) == 2 && gridAxis(std::tan(1.0)) == 2, "fov 2.0 (tan 1.557): 2 cells");
+    check(gridAxis(std::tan(1.25)) == 3, "fov 2.5: 3 cells");
+    check(gridAxis(std::tan(1.5)) == kMaxGrid && gridAxis(1e9) == kMaxGrid, "fov 3.0 and beyond: the cap");
+    check(gridAxis(std::nan("")) == 1 && gridAxis(-1.0) == 1, "bad input: one cell");
+    const CellGrid g = gridOf(std::tan(1.25), 1.0); // a wide prim: 3 across, 1 along
+    check(g.gu == 3 && g.gv == 1 && g.cells() && g.count() == 3 && g.guard() == kCellGuard, "gridOf: per axis");
+    check(!gridOf(1.0, 1.0).cells() && gridOf(1.0, 1.0).guard() == 0, "one tile has no guard");
+
+    // the cells divide [-tan, tan] on each axis into equal parts, and the guard widens each side by its texels of the interior
+    const double tx = std::tan(1.25), ty = std::tan(1.25) * 0.5;
+    const CellGrid grid = gridOf(tx, ty);
+    double span = 0.0;
+    for (int i = 0; i < grid.gu; ++i)
+    {
+        const CellTan t = cellTanRect(grid, tx, ty, i, 0, 480, 0);
+        span += t.x1 - t.x0;
+        check(std::fabs((t.x1 - t.x0) - 2.0 * tx / grid.gu) < 1e-12, "a cell width");
+        if (i > 0)
+        {
+            check(std::fabs(t.x0 - cellTanRect(grid, tx, ty, i - 1, 0, 480, 0).x1) < 1e-12, "neighbours share an edge");
+        }
+        const CellTan w = cellTanRect(grid, tx, ty, i, 0, 480, kCellGuard);
+        check(std::fabs((t.x0 - w.x0) - (t.x1 - t.x0) * kCellGuard / 480.0) < 1e-12 && std::fabs((w.x1 - t.x1) - (t.x0 - w.x0)) < 1e-12,
+              "the guard is kCellGuard interior texels on each side");
+    }
+    check(std::fabs(span - 2.0 * tx) < 1e-12, "the cells cover the image plane");
+    check(cellInterior(512, kCellGuard) == 480 && cellInterior(64, kCellGuard) == 32 && cellInterior(64, 0) == 64, "the interior of a tile");
+}
+
+void testCellPyramids()
+{
+    const float origin[3] = { 1.f, 2.f, 3.f };
+    const float fwd[3] = { 0.f, 0.f, -1.f }, right[3] = { 1.f, 0.f, 0.f }, up[3] = { 0.f, 1.f, 0.f };
+    const double tx = std::tan(1.25), ty = std::tan(1.25);
+    const float near_d = 0.3f, far_d = 6.f;
+    // the symmetric pyramid is the general one with the plain tangents
+    const Pyramid sym = makePyramid(origin, fwd, right, up, float(tx), float(ty), near_d, far_d);
+    const Pyramid gen = makeFrustumPyramid(origin, fwd, right, up, float(-tx), float(tx), float(-ty), float(ty), near_d, far_d);
+    for (int i = 0; i < 6; ++i)
+    {
+        check(sym.planes[i].d == gen.planes[i].d && sym.planes[i].n[0] == gen.planes[i].n[0] && sym.planes[i].n[1] == gen.planes[i].n[1] &&
+                  sym.planes[i].n[2] == gen.planes[i].n[2],
+              "makePyramid is the general pyramid with symmetric tangents");
+    }
+    const CellGrid grid = gridOf(tx, ty);
+    std::vector<Pyramid> cells, wide;
+    for (int j = 0; j < grid.gv; ++j)
+    {
+        for (int i = 0; i < grid.gu; ++i)
+        {
+            const CellTan t = cellTanRect(grid, tx, ty, i, j, 480, 0);
+            cells.push_back(makeFrustumPyramid(origin, fwd, right, up, float(t.x0), float(t.x1), float(t.y0), float(t.y1), near_d, far_d));
+            const CellTan w = cellTanRect(grid, tx, ty, i, j, 480, kCellGuard);
+            wide.push_back(makeFrustumPyramid(origin, fwd, right, up, float(w.x0), float(w.x1), float(w.y0), float(w.y1), near_d, far_d));
+        }
+    }
+    // the interiors partition the lamp: a point inside the lamp is in at least one cell (exactly one away from a seam), a point outside
+    // is in none; the widened pyramids contain their interiors
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<float> u(-1.f, 1.f), d(0.2f, 6.5f);
+    int seams = 0;
+    for (int n = 0; n < 20000; ++n)
+    {
+        const float z = d(rng);
+        const float p[3] = { origin[0] + u(rng) * float(tx) * 1.2f * z, origin[1] + u(rng) * float(ty) * 1.2f * z, origin[2] - z };
+        const bool in_lamp = pointInPyramid(sym, p);
+        int count = 0, wide_count = 0;
+        for (size_t c = 0; c < cells.size(); ++c)
+        {
+            const bool in = pointInPyramid(cells[c], p);
+            count += in;
+            wide_count += pointInPyramid(wide[c], p);
+            check(!in || pointInPyramid(wide[c], p), "the widened pyramid contains its interior");
+        }
+        if (in_lamp)
+        {
+            check(count >= 1, "a point in the lamp is in a cell");
+            seams += count > 1;
+        }
+        else
+        {
+            check(count == 0, "a point outside the lamp is in no cell");
+        }
+        check(wide_count >= count, "the guard only adds");
+    }
+    check(seams < 200, "points on two cells are the seams only", seams);
+    // a small box that lies in the neighbour guard, not in the cell itself, touches both widened pyramids (both tiles are dirtied by it)
+    const CellTan t0 = cellTanRect(grid, tx, ty, 0, 0, 480, 0);
+    const float zb = 3.f, xb = origin[0] + float(t0.x1) * zb + 0.002f * zb; // just past cell 0 right edge, inside its guard
+    Aabb box;
+    box.lo[0] = xb - 0.001f; box.hi[0] = xb + 0.001f;
+    box.lo[1] = origin[1] - float(ty) * zb * 0.5f - 0.001f; box.hi[1] = origin[1] - float(ty) * zb * 0.5f + 0.001f; // inside the lower row
+    box.lo[2] = origin[2] - zb - 0.001f; box.hi[2] = origin[2] - zb + 0.001f;
+    check(intersects(wide[0], box) && intersects(cells[1], box) && intersects(wide[1], box), "an object in a neighbour guard dirties both cells");
+    check(!intersects(cells[0], box), "... and is not in the first cell itself");
+    // the distance: 0 inside, a lower bound outside (exact in front of a face)
+    const float inside[3] = { origin[0], origin[1], origin[2] - 2.f };
+    check(pyramidDistance(sym, inside) == 0.f, "inside: distance 0");
+    const float behind[3] = { origin[0], origin[1], origin[2] + 1.5f }; // 1.5 m behind the apex, level with it
+    check(pyramidDistance(sym, behind) > 0.5f, "behind the apex: outside", pyramidDistance(sym, behind));
+    const float far_pt[3] = { origin[0], origin[1], origin[2] - far_d - 4.f };
+    check(std::fabs(pyramidDistance(sym, far_pt) - 4.f) < 1e-3f, "beyond the far plane: its distance", pyramidDistance(sym, far_pt));
+}
+
+void testCellSizing()
+{
+    // the request falls as the camera position moves away
+    const double w_ref = 2.5, tan_w = 2.0 * std::tan(1.25) / 3.0;
+    double last = 1e30;
+    for (double dist : { 0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 })
+    {
+        const double want = cellWanted(tan_w, w_ref, dist, kCellGuard);
+        check(want <= last + 1e-9, "the request never rises with the distance", dist, want);
+        last = want;
+    }
+    check(clampTile(cellWanted(tan_w, w_ref, 0.0, kCellGuard)) == 2048, "a cell next to the camera: the largest tile");
+    check(clampTile(cellWanted(tan_w, w_ref, 100.0, kCellGuard)) == kMinTile, "far from the camera: the smallest");
+    check(cellTargetM(0.0) == kTargetMinM && std::fabs(cellTargetM(10.0) - 0.02) < 1e-12 && cellTargetM(-3.0) == kTargetMinM, "the target texel");
+    // w_ref: the lamp 4 m at most; at most 2 m beyond the camera along the axis, inside the lamp depth range
+    check(cellRefDepth(8.0, 9.0, 0.1, 12.0) == 4.0, "w_ref is capped at 4 m");
+    check(std::fabs(cellRefDepth(8.0, 0.9, 0.1, 12.0) - 2.9) < 1e-12, "w_ref: 2 m beyond the camera depth");
+    check(std::fabs(cellRefDepth(8.0, -5.0, 0.1, 12.0) - 2.1) < 1e-12, "w_ref: a camera behind the lamp counts at its near plane");
+    check(cellRefDepth(1.0, 0.9, 0.1, 12.0) == 1.5, "w_ref: 1.5 radius for a small lamp");
+
+    // hysteresis: the first request sets the size; +-0.7 octave around it changes nothing; a larger request must hold for kHoldSeconds
+    SizeHysteresis h;
+    check(h.size() == 0, "no size yet");
+    check(!h.update(500.0, 0.0) && h.size() == 512, "the first request sets the size at once");
+    for (int n = 0; n < 600; ++n)
+    {
+        const double t = n / 60.0;
+        const double w = 512.0 * std::pow(2.0, 0.7 * std::sin(t * 6.0)); // an oscillation of +-0.7 octave
+        check(!h.update(w, t) && h.size() == 512, "an oscillation of +-0.7 octave changes nothing", t, w);
+    }
+    // a request two octaves away: the size changes after the hold, not before
+    const double t = 100.0;
+    check(!h.update(2048.0, t) && h.size() == 512, "a new request starts the hold");
+    check(!h.update(2048.0, t + 0.4) && h.size() == 512, "before the hold: unchanged");
+    check(h.update(2048.0, t + 0.5) && h.size() == 2048, "after the hold: the new size");
+    // a request that does not last is dropped
+    check(!h.update(256.0, t + 1.0) && !h.update(2048.0, t + 1.2) && !h.update(256.0, t + 1.4) && h.size() == 2048, "a request that comes and goes changes nothing");
+    // a walk back and forth across a threshold at 1 Hz (updated at 60 Hz): at most one change per hold, one per crossing
+    SizeHysteresis w;
+    w.update(1000.0, 0.0);
+    int changes = 0;
+    for (int n = 0; n < 60 * 20; ++n)
+    {
+        const double tt = n / 60.0;
+        const double want = (int(tt) % 2 == 0) ? 1000.0 : 250.0; // two octaves apart, every second
+        changes += w.update(want, tt);
+    }
+    check(changes <= 20 && changes >= 18, "one change per crossing, never more than one per hold", changes);
+    // bad input
+    SizeHysteresis b;
+    check(!b.update(std::nan(""), 0.0) && b.size() == 0 && !b.update(std::numeric_limits<double>::infinity(), 0.0) && b.size() == 0, "a bad request sets nothing");
+
+    // the sizing is a function of the camera POSITION alone: the same path gives the same sizes however the camera turns (the inputs
+    // are the lamp pose and the position; nothing of the view direction is passed)
+    const float origin[3] = { 0.f, 0.f, 2.5f }, fwd[3] = { 0.f, 0.f, -1.f }, right[3] = { 1.f, 0.f, 0.f }, up[3] = { 0.f, 1.f, 0.f };
+    const double tx = std::tan(1.25);
+    const CellGrid grid = gridOf(tx, tx);
+    std::vector<uint32_t> first, second;
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        std::vector<SizeHysteresis> hs(size_t(grid.count()));
+        std::vector<uint32_t>& out = pass ? second : first;
+        for (int step = 0; step < 300; ++step)
+        {
+            const float cam[3] = { -4.f + 8.f * float(step) / 300.f, 0.5f, 1.6f };
+            for (int j = 0; j < grid.gv; ++j)
+            {
+                for (int i = 0; i < grid.gu; ++i)
+                {
+                    const CellTan c = cellTanRect(grid, tx, tx, i, j, 480, 0);
+                    const Pyramid core = makeFrustumPyramid(origin, fwd, right, up, float(c.x0), float(c.x1), float(c.y0), float(c.y1), 0.3f, 12.f);
+                    const double w_cam = double(origin[2] - cam[2]);
+                    const double want = cellWanted(std::max(c.x1 - c.x0, c.y1 - c.y0), cellRefDepth(8.0, w_cam, 0.3, 12.0), pyramidDistance(core, cam), kCellGuard);
+                    hs[size_t(j * grid.gu + i)].update(want, step / 60.0);
+                    out.push_back(hs[size_t(j * grid.gu + i)].size());
+                }
+            }
+        }
+    }
+    check(first == second, "the same path gives the same sizes");
+    check(*std::max_element(first.begin(), first.end()) > *std::min_element(first.begin(), first.end()), "the walk changes sizes (the test is not vacuous)");
+}
+
+void testCells()
+{
+    testCellGrid();
+    testCellPyramids();
+    testCellSizing();
+}
+
 int main(int argc, char** argv)
 {
     const bool print_table = argc > 1 && std::string(argv[1]) == "--table"; // the cadence table of the C1 commit
@@ -2590,6 +2797,7 @@ int main(int argc, char** argv)
     testBadInput();
     testP3();
     testP4(print_table);
+    testCells();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);
