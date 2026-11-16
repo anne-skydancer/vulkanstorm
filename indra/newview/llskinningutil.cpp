@@ -156,7 +156,10 @@ void LLSkinningUtil::initSkinningMatrixPalette(
         }
         else
         {
-            mat[j] = skin->mInvBindMatrix[j];
+            // The multiply loop below overwrites mat[j] with invBind[j] * world[j] for every j, so the
+            // palette entry is given through world[j]: identity makes it the bind matrix. world[j] was
+            // otherwise left uninitialised.
+            world[j].setIdentity();
 #if DEBUG_SKINNING
             // This  shouldn't  happen   -  in  mesh  upload,  skinned
             // rendering  should  be disabled  unless  all joints  are
