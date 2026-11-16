@@ -414,14 +414,8 @@ void LLAudioDecodeMgr::Impl::startMoreDecodes()
             {
                 LLPointer<LLVorbisDecodeState> decode_state = beginDecodingAndWritingAudio(decode_id);
 
-                if (!decode_state)
-                {
-                    if (gAudiop)
-                        gAudiop->markSoundCorrupt(decode_id);
-
-                    // Audio decode has errored
-                    return decode_state;
-                }
+                // A null decode_state means the audio decode has errored. The reply on the main
+                // thread marks the sound corrupt: mCorruptData is not thread-safe.
 
                 // Disk write of decoded audio is now in progress off-thread
                 return decode_state;
@@ -502,6 +496,23 @@ LLPointer<LLVorbisDecodeState> beginDecodingAndWritingAudio(const LLUUID &decode
 
 void LLAudioDecodeMgr::Impl::enqueueFinishAudio(const LLUUID &decode_id, LLPointer<LLVorbisDecodeState>& decode_state)
 {
+    if (!decode_state)
+    {
+        // The decode errored on the worker thread. Count it here, on the main thread
+        // (the only one that touches mCorruptData), flag the audio data as failed and
+        // drop the placeholder: a null entry left in mDecodes counts against the
+        // concurrent decode limit forever.
+        llassert_always(gAudiop);
+        gAudiop->markSoundCorrupt(decode_id);
+        if (LLAudioData* adp = gAudiop->getAudioData(decode_id))
+        {
+            adp->setHasCompletedDecode(true);
+            adp->setHasDecodeFailed(true);
+        }
+        mDecodes.erase(decode_id);
+        return;
+    }
+
     // Assumed fast
     if (tryFinishAudio(decode_id, decode_state))
     {

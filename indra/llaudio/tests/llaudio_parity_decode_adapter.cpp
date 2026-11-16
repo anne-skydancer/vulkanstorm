@@ -71,15 +71,16 @@ namespace vks_audio_parity
                 const auto t0 = std::chrono::steady_clock::now();
                 LLPointer<LLVorbisDecodeState> decode_state = beginDecodingAndWritingAudio(id);
                 decode_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-                if (!decode_state)
-                {
-                    if (gAudiop)
-                        gAudiop->markSoundCorrupt(id);
-                }
                 return decode_state;
             },
-            [&returned, &state](LLPointer<LLVorbisDecodeState> decode_state)
+            [id, &returned, &state](LLPointer<LLVorbisDecodeState> decode_state)
             {
+                // As LLAudioDecodeMgr::Impl::enqueueFinishAudio handles a failed decode on the main
+                // thread: mark the sound corrupt (mCorruptData is main-thread only). The adapter does
+                // not set the completed/failed flags on the LLAudioData that the real reply sets, nor
+                // erase an mDecodes entry: that is on purpose, to keep the recorded corpus.
+                if (!decode_state && gAudiop)
+                    gAudiop->markSoundCorrupt(id);
                 state = decode_state;
                 returned = true;
             });
@@ -97,8 +98,8 @@ namespace vks_audio_parity
         // As enqueueFinishAudio and checkDecodesFinished poll it, once per
         // viewer frame; the frame also updates the LFS thread (which sleeps
         // paused until LLLFSThread::updateClass sees pending requests). A
-        // failed decode (null state) never finishes: the manager keeps it
-        // pending and the corrupt mark stops retries.
+        // failed decode (null state) never finishes: the manager marks it
+        // corrupt (which stops retries) and drops its entry.
         if (out.began)
         {
             while (!tryFinishAudio(id, state) && std::chrono::steady_clock::now() < deadline)
