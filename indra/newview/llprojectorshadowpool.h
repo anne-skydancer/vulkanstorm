@@ -1351,13 +1351,13 @@ struct DynamicItem
     uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
 };
 
-// Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first.
+// Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first (for an avatar face: the camera
+// position's distance to its nearest avatar), then the one that has waited longest, so ties rotate instead of starving by key.
 // Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its
 // nearest a_max). No floor beyond that, with one exception that prevents permanent starvation:
-// when nothing has been picked yet, an item past the deadline runs even if its predicted cost
-// alone exceeds the cap (one such item per frame at most). Other items over budget keep their
-// last content.
-inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max)
+// the FIRST pick of a frame runs even if its predicted cost alone exceeds the cap (one such item per frame at most; selectFrame
+// keeps it only as the progress pick, so it passes allow_over = false when the frame has spent). Other items over budget keep their last content.
+inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max, bool allow_over = true)
 {
     std::vector<const DynamicItem*> order;
     for (const DynamicItem& it : items)
@@ -1375,7 +1375,11 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
             return a->age_frames > b->age_frames;
         }
         const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
-        return ca != cb ? ca < cb : a->key < b->key;
+        if (ca != cb)
+        {
+            return ca < cb;
+        }
+        return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : a->key < b->key;
     });
     std::vector<uint32_t> out;
     float spent = 0.f;
@@ -1384,8 +1388,7 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     {
         const float cost = itemCost(it->last_cpu_ms);
         const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
-        const bool overdue = it->age_frames >= kDynamicDeadlineFrames && out.empty();
-        if ((spent + cost > t_d_ms && !overdue) || avatars + draws > a_max)
+        if ((spent + cost > t_d_ms && !(allow_over && out.empty())) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
         }
@@ -1394,6 +1397,34 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
         avatars += draws;
     }
     return out;
+}
+
+// The smoothed prediction of an avatar face's CPU cost (an EMA, factor 0.25): one slow measurement (driver time lands in the CPU
+// measurement) does not push a face out of the frame. A non-finite or negative sample leaves the prediction as it was.
+constexpr float kCostSmoothing = 0.25f;
+inline float smoothedCostMs(float previous, float sample)
+{
+    if (!std::isfinite(sample) || sample < 0.f)
+    {
+        return previous;
+    }
+    if (!std::isfinite(previous) || previous <= 0.f)
+    {
+        return sample;
+    }
+    return previous + kCostSmoothing * (sample - previous);
+}
+
+// the distance from a point to a box (0 inside)
+inline float pointBoxDistance(const float p[3], const Aabb& b)
+{
+    float d2 = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float d = std::max(std::max(b.lo[i] - p[i], p[i] - b.hi[i]), 0.f);
+        d2 += d * d;
+    }
+    return std::sqrt(d2);
 }
 
 // The per-frame CPU budget of ALL the shadow caches' tile work together (P4), in milliseconds, and its split. One number, shared by
@@ -1415,6 +1446,14 @@ constexpr float kStaticCapMs = kFrameCapMs - kDynamicCapMs;
 // (0.20 ms / the 0.05 ms scheduler floor = 4 faces a frame); 24 is the ceiling a cheaper face could reach.
 constexpr uint32_t kAvatarDrawsMax = 24;
 
+// The dynamic layer's share of the cap `left_ms`: kDynamicCapMs while a static tile waits (the static schedule keeps the rest), the
+// whole of what is left when none does (the unused 0.15 ms is no use to anyone else).
+inline float dynamicShareMs(bool statics_pending, float left_ms)
+{
+    const float left = std::max(left_ms, 0.f);
+    return statics_pending ? std::min(kDynamicCapMs, left) : left;
+}
+
 // Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
 // functions, and a pick is unpacked afterwards. Keys stay below 2^28 (a pool's counter of records).
 constexpr uint32_t kPoolKeyBits = 28;
@@ -1435,7 +1474,8 @@ struct FramePicks
 // static candidate that is above the whole cap runs alone as the progress pick once it has waited kDynamicDeadlineFrames frames (or was
 // never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
 // is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
-// without exception. A dynamic item that is over the cap alone is served at most every kDynamicDeadlineFrames frames.
+// without exception. A dynamic item that is over its share runs alone, every frame, as the progress pick (the overrun is that one
+// item); the dynamic share is the whole remaining cap when no static item waits (dynamicShareMs).
 inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
                               uint32_t a_max, bool progress_ok)
 {
@@ -1464,7 +1504,7 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     {
         return out;
     }
-    out.dynamic = selectDynamic(d, std::min(kDynamicCapMs, std::max(left, 0.f)) + kEps, a_max);
+    out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
     float dyn_ms = 0.f;
     for (uint32_t k : out.dynamic)
     {
