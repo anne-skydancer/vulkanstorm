@@ -29,7 +29,7 @@
 #define ST_STEPS_MAX 8
 // the projectors' filtered lookup (sampleProjectorShadow)
 #define ST_SPOT_RADIUS_MAX_M 0.04  // metres at the receiver: the largest radius of the search and of the filter (about 10 texels of a 2048 tile at 4 m, 90 degrees)
-#define ST_SPOT_KERNEL_TEXELS_MAX 12.0 // texels: the same radius never exceeds this, so the fixed 8 + 32 gathers keep covering the disc
+#define ST_SPOT_KERNEL_TEXELS_MAX 12.0 // texels: the same radius never exceeds this, so the fixed 8 + 32 gathers keep covering the disc (kCellGuard in llprojectorshadowpool.h must stay >= this + 2: static_assert there)
 #define ST_SPOT_SEARCH 8           // gathers of the blocker search
 #define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
 #define ST_SPOT_KERNEL_MIN 1.0     // map texels: the floor of the filter's radius
@@ -270,11 +270,11 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 // <G1-BEGIN> (scripts/shadows/projector_pool_g1.py compiles everything from here to G1-END, with stubs for the rest)
 // ---- projectors: a filtered lookup. A blocker search, then a percentage-closer filter whose radius follows the
 // blockers' distance (PCSS, RTR4 7.6), on bilinear gathers of the light's tile at a fixed disc of offsets in the
-// tile's own uv (no screen, frame or pixel term: the value of a receiver depends on the tile alone).
+// tile's own uv (no screen, frame or pixel term: the value of a receiver depends on its one tile, or its one cell of a wide lamp, alone).
 
 uniform sampler2D proj_shadow_atlas;  // the pool's live atlas (D32F, depth as is: no compare, NEAREST, CLAMP_TO_EDGE)
 uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^3 (of the pose the tile was drawn with)
-uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size
+uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size (a wide lamp: 0, 0, 0, 1 / atlas: its cells carry the rects)
 uniform vec2 proj_shadow_light_size;  // metres: the emitter's extent across the beam, along the map's u and v axes: 1 cm times RenderShadowLightSize, whatever the prim
 uniform vec3 proj_shadow_origin;      // view space: the projection centre of the pose the tile was drawn with, where the emitter is (the lamp's anchor)
 uniform vec4 proj_shadow_grid;        // a wide lamp's cells: across u, across v (1 and 1: one tile, proj_shadow_tile), guard texels, unused
@@ -337,7 +337,8 @@ vec2 stSpotDisc(int k, int n)
 // form). f: uv's bilinear fraction in the quad.
 // edge (once per pixel): a tap of this pixel may leave the tile. The corner is then clamped into the tile and the
 // components are selected again so that every texel index is clamped to the tile, as CLAMP_TO_EDGE does on a standalone
-// map of the tile (bit for bit; no guard texels).
+// map of the tile (bit for bit). The tile is taken as stored: a one-tile lamp has no guard texels; a cell's tile includes its guard, and a
+// tap reaches the clamped edge only if the kernel plus one texel exceeds the guard.
 vec4 stSpotQuadTile(vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
 {
     float n = tile.z;

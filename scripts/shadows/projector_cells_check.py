@@ -16,6 +16,8 @@ tile holds the neighbour's content past its seam). This check builds
 for receivers over the whole lamp image, seams included, with random depths, receiver-plane gradients and penumbra scales (the search
 radius runs from its 1 texel floor to the 12 texel cap; the guard holds 16). Both programs are compiled from the util file itself
 (the code between its G1-BEGIN and G1-END markers).
+Not covered: the glue in sampleProjectorShadow (the second pick for the offset receiver, the kn and z_tex recomputation, the
+gradient divided by tscale), which lies outside the G1 block; the tolerance is not G1's max abs 0 (another texel route).
 
 Pass: the largest difference is <= --tol (1e-4: the tile uv is the same texel position computed by another route, so the two differ in
 the rounding of a gather's weights, and a texel flip at a tap on a cell boundary is a different, equal read), and a cell that is not
@@ -150,7 +152,6 @@ def main():
     vao = U()
     glGenVertexArrays(1, C.byref(vao))
     glBindVertexArray(vao.value)
-    V = (gu * ni, gv * ni)  # virtual map: width, height... the lookup needs a square tile of N texels; use the larger side
     # the virtual tile must be square for the filter (res = vec2(tile.z)): the cells are square tiles, the lamp image is gu x gv cells,
     # so test a square grid, or compare per axis with N = gu * ni (the cells' texel is the same on both axes)
     if gu != gv:

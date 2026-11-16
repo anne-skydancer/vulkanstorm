@@ -2566,7 +2566,6 @@ void testP3()
     testP3Verdict();
     testP3StaticScene();
 }
-} // namespace
 
 // ---------------------------------------------------------------------------------------------
 // Cells of a wide lamp and the camera position's sizing (projector tile resolution)
@@ -2580,7 +2579,8 @@ bool pointInPyramid(const Pyramid& py, const float p[3])
 void testCellGrid()
 {
     check(gridAxis(0.5) == 1 && gridAxis(1.0) == 1, "up to a 90 degree lamp: one cell");
-    check(gridAxis(1.0 + 1e-9) == 1, "just over 90 degrees: still one cell (ceil(tan - 0.05))");
+    check(gridAxis(1.0 + 1e-9) == 1 && gridAxis(1.05) == 1, "just over 90 degrees: still one cell (ceil(tan - 0.05), up to tan 1.05)");
+    check(gridAxis(1.0501) == 2, "past tan 1.05 (about 93 degrees): two cells");
     check(gridAxis(1.5) == 2 && gridAxis(std::tan(1.0)) == 2, "fov 2.0 (tan 1.557): 2 cells");
     check(gridAxis(std::tan(1.25)) == 3, "fov 2.5: 3 cells");
     check(gridAxis(std::tan(1.5)) == kMaxGrid && gridAxis(1e9) == kMaxGrid, "fov 3.0 and beyond: the cap");
@@ -2737,35 +2737,67 @@ void testCellSizing()
     SizeHysteresis b;
     check(!b.update(std::nan(""), 0.0) && b.size() == 0 && !b.update(std::numeric_limits<double>::infinity(), 0.0) && b.size() == 0, "a bad request sets nothing");
 
-    // the sizing is a function of the camera POSITION alone: the same path gives the same sizes however the camera turns (the inputs
-    // are the lamp pose and the position; nothing of the view direction is passed)
+    // the sizing is a function of the camera POSITION alone: cellSizeRequest is the one composition update() uses, and its inputs are
+    // the lamp (origin, forward axis, radius, depths, tangent, cell volume) and the camera's position; no view direction is passed, so
+    // the camera's orientation cannot enter, by the signature
     const float origin[3] = { 0.f, 0.f, 2.5f }, fwd[3] = { 0.f, 0.f, -1.f }, right[3] = { 1.f, 0.f, 0.f }, up[3] = { 0.f, 1.f, 0.f };
     const double tx = std::tan(1.25);
     const CellGrid grid = gridOf(tx, tx);
-    std::vector<uint32_t> first, second;
-    for (int pass = 0; pass < 2; ++pass)
+    std::vector<uint32_t> first;
+    std::vector<SizeHysteresis> hs(size_t(grid.count()));
+    for (int step = 0; step < 300; ++step)
     {
-        std::vector<SizeHysteresis> hs(size_t(grid.count()));
-        std::vector<uint32_t>& out = pass ? second : first;
-        for (int step = 0; step < 300; ++step)
+        const float cam[3] = { -4.f + 8.f * float(step) / 300.f, 0.5f, 1.6f };
+        for (int j = 0; j < grid.gv; ++j)
         {
-            const float cam[3] = { -4.f + 8.f * float(step) / 300.f, 0.5f, 1.6f };
-            for (int j = 0; j < grid.gv; ++j)
+            for (int i = 0; i < grid.gu; ++i)
             {
-                for (int i = 0; i < grid.gu; ++i)
-                {
-                    const CellTan c = cellTanRect(grid, tx, tx, i, j, 480, 0);
-                    const Pyramid core = makeFrustumPyramid(origin, fwd, right, up, float(c.x0), float(c.x1), float(c.y0), float(c.y1), 0.3f, 12.f);
-                    const double w_cam = double(origin[2] - cam[2]);
-                    const double want = cellWanted(std::max(c.x1 - c.x0, c.y1 - c.y0), cellRefDepth(8.0, w_cam, 0.3, 12.0), pyramidDistance(core, cam), kCellGuard);
-                    hs[size_t(j * grid.gu + i)].update(want, step / 60.0);
-                    out.push_back(hs[size_t(j * grid.gu + i)].size());
-                }
+                const CellTan c = cellTanRect(grid, tx, tx, i, j, 480, 0);
+                const Pyramid core = makeFrustumPyramid(origin, fwd, right, up, float(c.x0), float(c.x1), float(c.y0), float(c.y1), 0.3f, 12.f);
+                const double tan_w = std::max(c.x1 - c.x0, c.y1 - c.y0);
+                float dist = -1.f;
+                const double want = cellSizeRequest(origin, fwd, 8.0, 0.3, 12.0, tan_w, core, kCellGuard, cam, &dist);
+                // the composition written out: w_cam along the axis, the reference depth, the distance to the volume
+                const double w_cam = double(origin[2] - cam[2]);
+                check(dist == pyramidDistance(core, cam) &&
+                          want == cellWanted(tan_w, cellRefDepth(8.0, w_cam, 0.3, 12.0), double(dist), kCellGuard),
+                      "cellSizeRequest is the composition of the three rules");
+                hs[size_t(j * grid.gu + i)].update(want, step / 60.0);
+                first.push_back(hs[size_t(j * grid.gu + i)].size());
             }
         }
     }
-    check(first == second, "the same path gives the same sizes");
     check(*std::max_element(first.begin(), first.end()) > *std::min_element(first.begin(), first.end()), "the walk changes sizes (the test is not vacuous)");
+}
+
+// The own avatar's every-frame rule: one cell per box (the one holding its centre), however many the box's width crosses
+void testCellOwn()
+{
+    const float origin[3] = { 0.f, 0.f, 0.f }, fwd[3] = { 1.f, 0.f, 0.f }, right[3] = { 0.f, 1.f, 0.f }, up[3] = { 0.f, 0.f, 1.f };
+    const double t = std::tan(1.25);
+    const CellGrid grid = gridOf(t, t);
+    std::vector<Pyramid> cores;
+    for (int j = 0; j < grid.gv; ++j)
+    {
+        for (int i = 0; i < grid.gu; ++i)
+        {
+            const CellTan c = cellTanRect(grid, t, t, i, j, 480, 0);
+            cores.push_back(makeFrustumPyramid(origin, fwd, right, up, float(c.x0), float(c.x1), float(c.y0), float(c.y1), 0.2f, 12.f));
+        }
+    }
+    // a 1.8 m wide, 2 m tall box close to the apex, wider than several cells there, centred in one cell
+    Aabb box;
+    box.lo[0] = 0.25f; box.hi[0] = 0.6f;
+    box.lo[1] = -0.9f; box.hi[1] = 0.9f;
+    box.lo[2] = -1.0f; box.hi[2] = 1.0f;
+    int overlapping = 0, holding = 0;
+    for (const Pyramid& py : cores)
+    {
+        overlapping += intersects(py, box) ? 1 : 0;
+        holding += cellHoldsOwn(py, box) ? 1 : 0;
+    }
+    check(overlapping > 4, "near the apex a box crosses more than 4 cells", overlapping);
+    check(holding == 1, "exactly one cell holds the own avatar's centre", holding);
 }
 
 void testCells()
@@ -2773,7 +2805,9 @@ void testCells()
     testCellGrid();
     testCellPyramids();
     testCellSizing();
+    testCellOwn();
 }
+} // namespace
 
 int main(int argc, char** argv)
 {
