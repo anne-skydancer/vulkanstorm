@@ -1942,6 +1942,7 @@ LLAudioData::LLAudioData(const LLUUID &uuid) :
 //return false when the audio file is corrupted.
 bool LLAudioData::load()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_MEDIA; // <Vulkanstorm> multicore stage 1
     // For now, just assume we're going to use one buffer per audiodata.
     if (mBufferp)
     {

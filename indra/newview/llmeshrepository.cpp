@@ -4962,6 +4962,7 @@ void LLMeshRepository::notifyDecompositionReceived(LLModel::Decomposition* decom
 
 void LLMeshRepository::notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVolume* volume, S32 lod)
 { //called from main thread
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME; // <Vulkanstorm> multicore stage 1
 
     //get list of objects waiting to be notified this mesh is loaded
     const auto& mesh_id = mesh_params.getSculptID();
