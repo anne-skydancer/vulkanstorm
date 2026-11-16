@@ -181,17 +181,16 @@ def main():
         if now:
             draw(2, *now, value)
         prev = now
-        if p % 10 == 0 or p == args.passes - 1:
-            glFinish()
-            L, R = download(tex[1]), download(tex[2])
-            bad = 0
-            for y in range(n):
-                row = (oy + y) * atlas + ox
-                if L[row:row + n] != R[row:row + n]:
-                    bad += 1
-            if bad:
-                failures += 1
-                print(f'FAIL pass {p}: {bad} rows of the tile differ from the whole-tile reference')
+        glFinish()
+        L, R = download(tex[1]), download(tex[2])
+        bad = 0
+        for y in range(n):
+            row = (oy + y) * atlas + ox
+            if L[row:row + n] != R[row:row + n]:
+                bad += 1
+        if bad:
+            failures += 1
+            print(f'FAIL pass {p}: {bad} rows of the tile differ from the whole-tile reference')
     glFinish()
     # outside the last rectangle L equals S as well
     L = download(tex[1])

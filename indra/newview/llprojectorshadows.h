@@ -204,7 +204,7 @@ private:
         bool holdsAvatar = false;          // an avatar is in its light this frame
         U32 avatarCount = 0;
         bool avatarInLayer = false;        // L holds an avatar of this tile over S (the dynamic layer, P4): redrawn while served, restored from S after
-        F32 lastAvatarMs = llprojectorpool::kDefaultItemMs; // the CPU cost of its last avatar layer (the scheduler's prediction, smoothed)
+        F32 lastAvatarMs = 0.f;            // the CPU cost of its last avatar layer (the scheduler's prediction, an EMA seeded by the first sample; 0: itemCost floors it)
         F32 avatarDist = 0.f;              // the camera position's distance to the nearest avatar in its light (the face's order of service)
         // C3: L's tile equals S's tile outside layerRect (tile texels) when layerRectValid; else L's tile is unknown and the next layer pass copies it whole
         llprojectorpool::TexelRect layerRect;
@@ -224,8 +224,6 @@ private:
     void copyAtlas(U32 from_tex, U32 to_tex);
     void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
-    // The dynamic layer (P4): L's tile is S's tile again, and the avatars in the light are drawn over it (LOCAL_SHADOW_DYNAMIC: the avatar
-    // partitions and the worn objects only, from the pose the tile holds). Returns the CPU ms of the avatar draws.
     // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
     struct FaceAvatars
     {
@@ -233,6 +231,8 @@ private:
         llprojectorpool::TexelRect rect;
     };
     FaceAvatars faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const;
+    // The dynamic layer (P4): L's tile is S's tile again, and the avatars in the light are drawn over it (LOCAL_SHADOW_DYNAMIC: the avatar
+    // partitions and the worn objects only, from the pose the tile holds), scissored to face.rect. Returns the CPU ms of the avatar draws.
     F32 drawAvatars(Record& rec, const FaceAvatars& face, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip);
     void renderLayer(Record& rec);
     void unpinTile(U32 key);
