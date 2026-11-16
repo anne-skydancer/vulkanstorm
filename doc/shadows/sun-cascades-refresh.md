@@ -47,23 +47,29 @@ Legacy keeps Firestorm 7.2.5's fit on purpose, so every #330 finding is still tr
 
 - **Levels.** Four square, orthographic, texel-snapped levels of fixed world size, centred on the camera
   *position*. Each level is selected by the point's distance from the camera, not by view depth. This is the
-  clipmap family: Tanner et al. 1998; Unreal's virtual shadow map clipmaps; Cyberpunk 2077's boxes around the
-  player.
+  clipmap family: Tanner et al. 1998; Unreal's virtual shadow map clipmaps. Cyberpunk 2077 uses boxes around the
+  player only for its *distant* shadow levels, and it deliberately rejected radial (map-based) selection for its
+  near cascades (§4).
 - **Cache.** Each level keeps a cached **static layer**, refreshed only when the camera has moved a guard band,
   when the light has moved half a texel, or when the scene changed inside the level. Each frame the static layer
   is copied into the live map and the **dynamic layer** is drawn over it: avatars, attachments, animesh and
-  moving objects. This is the static/dynamic split of Cyberpunk 2077, Insomniac's CSM scrolling, DOOM 2016 and
-  Unreal VSM, and it is what the projector pool already does (P3/P4).
+  moving objects. The precedent for *sun* cascades is Insomniac's CSM scrolling (static means unmoved for 5 s)
+  and Unreal VSM clipmap page caching; DOOM 2016 and Cyberpunk 2077 (local-light slices) split static from
+  dynamic for local lights, and it is what the projector pool already does (P3/P4).
 - **Reuse.** The scene change feed, change index, mover classifier and S-to-L copy of the projector pool are
   reused.
 
 **Cost** at Rooftops, still, estimated from the measured per-cascade numbers plus marked assumptions:
 
-- cascade CPU **9.35 to 2.0-4.1 ms**;
-- frame **31.9 to 26.1-28.1 ms** (31 to 35.5-38 fps);
+- cascade CPU **9.35 to 2.0-4.2 ms**, with a quiet change feed assumed (A1-A5 and §10);
+- frame **31.9 to 26.1-28.2 ms** (31 to 35.4-38.4 fps);
 - turning in place costs the same as standing still, against a full redraw every frame today;
-- the worst single frame while moving is 5.4-7.4 ms of cascade work against 9.35 today;
-- GPU: the per-frame copy measures **0.13 ms** for four 1920² maps (0.07 ms for half maps);
+- the worst single frame while moving, at one scheduled refresh per frame (the cap), is 5.4-7.4 ms of cascade
+  work against 9.35 today. A refresh-all frame (teleport, invalid cache, dark-gate reopening) is 10.7-12.6 ms,
+  15-35 % *more* than today, and is budgeted (§5.3);
+- GPU: the per-frame copy measures **0.13 ms** in the bench's fast mode for four 1920² maps (0.07 ms for half
+  maps). The slow mode the auditor saw doubles it, so read **0.13-0.26 ms** (0.30-0.60 ms at 4K);
+- every ms and fps here comes from Tracy-attached captures (§6);
 - memory: +59 MB at 2560x1440.
 
 **The 60 fps still target cannot be met by the cascades alone at Rooftops Ultra.** The same frame without any sun
@@ -75,7 +81,7 @@ shadow is 23.1 ms (43 fps). The cache closes about 45 to 65 % of the gap the cas
 - the shadow distance edge becomes a circle around the camera;
 - stage C2 changes nothing for a static scene, and moving casters update every frame as today.
 
-**Stages**, about 3 to 4.5 days of agent time with C4 optional. Effort is calibrated in §8.
+**Stages**, about 3 to 4.5 days of code time (not calendar time) with C4 optional. Effort is calibrated in §8.
 
 | Stage | Content |
 |---|---|
@@ -129,9 +135,13 @@ Ranked.
   (glass, sheers, alpha-blend foliage) re-rolls continuously while the camera moves. With 0.7 cm texels in level 0
   that is every frame while walking. The temporal resolve sees it as motion.
 - **Fix (hotfix):** before the sun cascade's alpha passes, pass the box's world-grid offset as the origin:
-  `setTileOrigin(-k_x, -k_y)`, with `k = (box.min - anchor) / texel` from `generateSunCascadesStable`, then reset to
-  0. This is the mechanism the projector pool already uses.
+  `setTileOrigin(-k_x, -k_y)`, with the integer `k` **returned by `snappedSquare`** (do not recompute it from `(box.min - anchor) / texel`:
+  `box.min` is float32 and the quotient can land at k - epsilon; if recomputed, use `llround`), then reset to 0.
+  This is the mechanism the projector pool already uses.
 - Present on `vkstorm-devel`, `-release`, `-canary` and `-rust` (all have `snappedSquare` and the hashed branch).
+  The patch is not one cherry-pick: `LLLocalShadowGL::setTileOrigin` (lllocalshadows.cpp:97) exists on devel and
+  release only; canary and rust have no lllocalshadows.cpp and keep `setTileOrigin` in llprojectorshadows.cpp.
+  Plan one small port per line.
   Legacy is untouched (stock stipple).
 
 **N2 (HIGH for caching, MEDIUM visible): the maps and the level choice follow the view direction.**
@@ -189,9 +199,9 @@ the standard references:
 | Stable CSM: bounding sphere, texel snapping, fixed sizes | Valient, "Stable Rendering of Cascaded Shadow Maps", ShaderX6 (2008); Microsoft, "Common Techniques to Improve Shadow Depth Maps"; MJP, "A Sampling of Shadow Techniques" (2013) | already S1. MJP's caveat that stability holds only "provided that your cascade partitions never change" is why the levels become camera-position-centred |
 | Normal offset; receiver-plane bias | Holbert, "Normal Offset Shadows", GDC 2011 poster; Isidoro, "Shadow Mapping: GPU-based Tips and Techniques", GDC 2006 | already S2 (world units) |
 | Clipmaps: levels centred on the viewer, fixed sizes, toroidal update | Tanner, Migdal, Jones, "The Clipmap", SIGGRAPH 1998; Asirvatham and Hoppe, "Terrain Rendering Using GPU-Based Geometry Clipmaps", GPU Gems 2 ch. 2 (toroidal addressing); Epic, "Virtual Shadow Maps" docs (directional-light clipmap levels centred on the camera position) | the level geometry (C1) and optional scrolling (C4) |
-| Camera-position boxes for distant sun shadows; static/dynamic slices; amortised far refresh with a day cycle | Dybisz and Witanowski, "Shadows Optimizations in Cyberpunk 2077", SIGGRAPH 2021 talk | near per frame / far cached is alternative D1-B; the static/dynamic split (C2) |
-| Scrolling cached cascades (static geometry reused, about 70 % skipped) | Acton, Day, Hastings, "CSM Scrolling", SIGGRAPH 2012 Advances (Insomniac) | the static layer, "static" inferred at run time, and toroidal strips (C4) |
-| Per-light cached static maps, copy static then draw dynamic | Courrèges, DOOM (2016) study; Unity HDRP cached shadows; Epic VSM page caching (static and dynamic copies) | the S-to-L copy (C2), as the projector pool does |
+| Camera-position boxes for the *distant* sun shadows (each 4x bigger, refreshed every few seconds); static/dynamic slices for *artificial (local) lights* only; near cascades drawn every frame | Dybisz and Witanowski, "Shadows Optimizations in Cyberpunk 2077", SIGGRAPH 2021 talk (text read by the auditor) | **Counter-evidence to option A.** The talk chose interval-based cascade selection (by pixel depth) over map-based selection, because map-based "leads to many objects being rendered unnecessarily, and also to uneven shadow resolution depending on light and camera angle": that is the omni cost the model prices at 1.6x. Its near cascades are per frame, so near-per-frame / far-cached (D1-B) is the closer precedent. It is cited here for the distant levels and local-light slices only |
+| Scrolling cached cascades (static geometry reused, about 70 % skipped) | Acton, Day, Hastings, "CSM Scrolling", SIGGRAPH 2012 Advances (Insomniac) | **the main precedent for the sun's static/dynamic split** (camera and light assumed stable, static = unmoved for 5 s): the static layer, "static" inferred at run time, and toroidal strips (C4) |
+| Per-light cached static maps, copy static then draw dynamic (the sun-cascade case is Unreal VSM clipmap page caching) | Courrèges, DOOM (2016) study; Unity HDRP cached shadows; Epic VSM page caching (static and dynamic copies) | the S-to-L copy (C2), as the projector pool does |
 | Amortised cascade updates | Kasyan, "Playing with Real-Time Shadows", SIGGRAPH 2013 course (Crytek) | the per-frame refresh budget. *Not read in full* (the literature report lists it as unread); cited for the idea only |
 | Temporal coherence and caching in general | Eisemann, Schwarz, Assarsson, Wimmer, *Real-Time Shadows* (CRC 2011) | background |
 | Rejected: tight per-frame refits | Lauritzen, Salvi, Lefohn, "Sample Distribution Shadow Maps", I3D 2011 / SIGGRAPH 2010 | view-dependent texels by construction; cannot be cached |
@@ -230,9 +240,14 @@ per-frame cost.
     radial reach.
   - 4:3 is 6-14 % coarser in levels 0-2.
   - Zoomed in to a 30 degree field of view: 1.5-1.8x coarser than S1 gives at that field of view. At 15 degrees:
-    2.1-2.5x coarser. S1 shrinks its slices with the field of view; fixed world sizes do not (decision D2).
-- **Rotation invariance.** Turning in place changes neither the maps nor any point's level (model §2: 0 of 16
-  turned views change; S1 changes 11). The map content moves 0 texels per degree.
+    2.1-2.5x coarser. S1 shrinks its slices with the field of view; fixed world sizes do not (decision D2). Photography and
+    alt-zoom use exactly these zooms, so this is a visible regression under the owner's "well-defined shadows"
+    rule. Mitigation with D2-A: an extra fine level 0, or FOV-stepped radii (D2-B), only when the camera angle is
+    below a threshold, for example 30 degrees. C1's in-world gate includes zoom captures at 15 and 30 degrees.
+- **Rotation invariance.** Turning in place changes neither the maps nor any point's level. This holds **by
+  construction** (the pick is a function of the distance alone; model §2 shows 0 of 16 turned views change and S1
+  changes 11, but the eye-centred count is not an independent test). The real test is C1's unit test on
+  `llshadowcascadefit.h`. The map content moves 0 texels per degree.
 - **Per-frame cost without the cache:** about today's. The level is drawn only inside the view's footprint
   (§5.3), the same cull box S1 computes (12680-12701), extended to the radial reach. C1 alone is therefore an
   image stage, not a cost stage.
@@ -261,17 +276,24 @@ Per level j of the main view (`mMainRT` only; probes and the hero probe stay unc
 - **Skip rule:** a level whose footprint held no dynamic caster this frame or the last, and whose S did not
   change, skips both the copy and the dynamic pass. Level 3 in a crowd usually qualifies.
 
-**Refresh triggers for S_j.** These are decided once per frame on the main thread at the top of
+**Refresh triggers for S_j.** C2 ships the fewest triggers that work: invalid, coverage, light, dirty. The soft
+coverage trigger and the age refresh are follow-ups: without measured feed rates (§10) every extra knob (guard
+band, 0.75 g, light threshold, age, budget, skip rule, D4/D5 dirty rules) is a guess. These are decided once per frame on the main thread at the top of
 `generateSunShadow`, before any cull:
 
 | Trigger | Rule | Kind |
 |---|---|---|
 | invalid | first use, allocation, size or setting change (`RenderShadowDistance`, method, detail, resolution), the dark gate or `shadow_hidden` closing (cleared once) and reopening | hard: refresh this frame |
 | coverage | the camera's light-space xy offset from c_j exceeds 0.75 g R_j (soft) or g R_j (hard); or its light-space depth leaves the headroom | soft is scheduled; hard is this frame |
-| light | the light's direction moved by more than θ_j = 0.5 texel_j / min(R_j, 40 m) since S_j was drawn (decision D7) | scheduled |
+| light | the light's direction moved by more than θ_j = 0.5 texel_j / R_j (0.03 degrees for every level) since S_j was drawn (decision D7); levels staggered | scheduled |
 | dirty | a change-feed box overlaps the level's square in light-space xy, at any depth towards the light | scheduled; C3 makes it a scissored partial refresh |
-| age | older than 10 s (safety net for anything the feed misses: animated alpha textures, linkset parts; see D4) | scheduled, staggered |
+| age (follow-up, not in the first C2) | older than 10 s (safety net for anything the feed misses: animated alpha textures, linkset parts; see D4) | scheduled, staggered |
 
+- **Hard-refresh budget.** An invalid cache would otherwise cost 10.7-12.6 ms in one frame. Hard refreshes are
+  spread: the finer levels first (L0, L1), the others over the next frames, with the old maps still read (their
+  lookup matrices are held, so they stay geometrically correct) or, on a first use, the level drawn uncached as
+  today. A frame never does more than two static refreshes. If the owner prefers one hitch, it is a single frame
+  of 10.7-12.6 ms against the 40 ms floor of 25 fps; C0 measures it.
 - **Budget.** At most one scheduled static refresh per frame: invalid and hard first, then coverage, light, dirty,
   age, nearest level first, oldest first. Model §5 gives the demand at 40 fps: walking 0.13 refreshes per frame,
   running 0.20, flying 0.64, all under the budget of 1.
@@ -328,7 +350,10 @@ avatar seen only through its sun shadow must keep animating as it does now.
 
 - **Stochastic method** (8 rays, s = 8 temporal; `doc/shadows/shadow-method.md`).
   - The rays use the current light direction through each level's held matrix. A held direction that lags by
-    less than θ_j displaces an occluder by at most half a texel, inside the penumbra.
+    less than θ_j displaces an occluder by at most half a texel for a caster as high as H above its receiver.
+    With H = R (D7) this holds for every caster the level can hold. With the earlier H = min(R, 40 m), a level-3
+    caster 200 m away moved about 0.58 m (2.5 texels of 23 cm) per step, more than its penumbra (about 0.2 m):
+    a visible jump of far shadows. That claim is withdrawn.
   - The history's light-change reset (more than 0.5 degree) is unchanged. A refresh step under half a texel goes
     through the 3x3 clamp over about 8 frames.
   - A static scene gives texel-identical maps refresh after refresh (snapping), so nothing new reaches the
@@ -336,7 +361,9 @@ avatar seen only through its sun shadow must keep animating as it does now.
 - **Sun softness rule** (EEP `sun_scale` x `RenderShadowLightSize` 0.23). It is a per-frame uniform for the rays
   only; the maps do not depend on it. The footprint (0.25 m), and with it the cull margin, are unchanged.
 - **#540 dark gate and the handover.** Closing either clears the maps once and marks every level invalid; opening
-  refreshes all four on that frame, which costs what today's every frame costs. During the handover's swing
+  refreshes all four on that frame. By the model that is **10.7-12.6 ms** (four static refreshes 8.68 ms plus the
+  dynamic layer), **15-35 % more than today's 9.35 ms**, not "what today costs". The same spike hits a teleport,
+  a region crossing, and a resolution or setting change. Hard refreshes therefore get a budget (§5.3). During the handover's swing
   (strength 0) no refresh runs, even though the direction moves through tens of degrees.
 - **Cloud shadows (L2).** These come from a separate world-anchored map multiplied in by `primary_shadow_strength`
   (`doc/light/cloud-shadows.md`). No interaction.
@@ -375,7 +402,7 @@ avatar seen only through its sun shadow must keep animating as it does now.
 | Alternative | For | Against | Verdict |
 |---|---|---|---|
 | A (recommended) all four levels camera-position-centred, each with S + L | turning costs nothing; the crowd-still case saves the most (near levels hold most static work); one rule everywhere | +4 depth maps of memory; zoomed views coarser | recommended |
-| B: near levels per frame (S1), far levels 2-3 centred and cached (Cyberpunk) | half the memory; C1 image change only far | the still crowd keeps levels 0-1 (4.75 ms at Rooftops) every frame; turning still redraws 0-1 | fallback if D1 or D6 say so |
+| B: near levels per frame (S1), far levels 2-3 centred and cached (Cyberpunk's own arrangement) | half the memory; C1 image change only far; the closer published precedent (§4) | the still crowd keeps levels 0-1 (4.75 ms at Rooftops) every frame; turning still redraws 0-1 | the closer precedent. A stays recommended for its larger saving, which rests on assumptions, so B remains live if C0's numbers disagree |
 | C: keep S1, cache only while the camera is still | no image change | turning (constant in SL: orbit, alt-cam) redraws everything; caches thrash | rejected |
 | D: amortise without a static/dynamic split (redraw far cascades every N frames, avatars included; Kasyan) | no extra memory, simplest | avatar shadows in far levels update at 1/N rate (visible lag); no help near | rejected |
 | E: FrameJobs only (threads, no cache) | no image change | upper bound about 4-4.5 ms of the 8.9 (report §2), and the serial submission stays | complementary, not a substitute |
@@ -396,27 +423,36 @@ Model §6, Rooftops Ultra still, inputs from the report's per-cascade table. Ass
 
 | Case | Cascade CPU today | Cascade CPU cached | Frame | fps |
 |---|---|---|---|---|
-| still, 4 h day cycle | 9.35 | 2.1-4.1 | 31.9 → 26.2-28.1 | 31.3 → 35.5-38.2 |
+| still, 4 h day cycle (light step H = R) | 9.35 | 2.2-4.2 | 31.9 → 26.2-28.2 | 31.3 → 35.4-38.1 |
 | still, fixed sky | 9.35 | 2.0-4.0 | 31.9 → 26.1-28.0 | 31.3 → 35.7-38.4 |
-| turning in place | 9.35 (est.: today redraws every frame) | 2.1-4.1 | as still | as still |
+| turning in place | 9.35 (est.: today redraws every frame) | 2.2-4.2 | as still | as still |
 | walking (translation, assumed 3.2 m/s) | 9.35 | 2.1-4.1 | 26.2-28.2 | 35.5-38.2 |
 | flying (assumed 16 m/s) | 9.35 | 2.7-4.6 | 26.7-28.7 | 34.9-37.4 |
-| worst single moving frame (largest refresh + dynamic) | 9.35 | 5.4-7.4 | | |
+| worst single moving frame (largest refresh + dynamic; one scheduled refresh every frame, the budget cap) | 9.35 | 5.4-7.4 | | |
+| refresh-all frame (invalid cache, teleport, dark-gate reopening, setting change; unbudgeted) | 9.35 | 10.7-12.6 | 31.9 → 33.3-35.2 | 31.3 → 28.4-30.0, one frame |
 
 **Against the fps floor:**
 
 - **Still crowded: 60 fps (16.7 ms) is out of reach at Rooftops Ultra from the cascades alone.** Without any sun
   shadow the frame is 23.1 ms (43 fps); the remaining gap is the crowd (avatar update about 3.6 ms), deferred
   submission (about 8 ms) and Swap stalls (report §5).
-- **Moving: the 25 fps floor (40 ms) holds today** (35.8 fps at the frozen moving heading), and the cache only
-  lowers it.
-- Dirty-driven refreshes (edits, loads, terrain/LOD per D5) are **not** in these numbers. C0 measures their rate.
+- **Moving: not established.** The mean was 35.8 fps at a *frozen* moving heading, with no shadow-cost series for
+  a turning camera (the Rooftops report §3 says not to use the moving none/sun/all captures as one). The
+  multicore baseline records a 1 % low of 13 fps at Rooftops with 38 hitches in 60 s, and the cascade `stateSort`
+  p95 is 10-29 ms against a mean of 4-7 ms: both already below the floor today. The floor is "never below 25", so
+  means decide nothing. C0 captures an orbiting run and reports p95 and 1 % low; the cache should lower the
+  hitches too.
+- **Tracy.** All cascade ms and fps in this section are Tracy-attached (the multicore baseline measures the
+  profiler at +4.6 % of the frame at Rooftops and 1.38x on zone-dense work such as cull and sort, 58 % of the
+  cascade time, and calls them upper bounds). The saving is probably about 5 % high, and shares are more
+  reliable than ms. C0 re-measures without the profiler.
+- Dirty-driven refreshes (edits, loads, terrain/LOD per D5) are **not** in these numbers. C0 measures their rate (§10: the quiet-feed assumption).
 
 ### GPU
 
 | Item | 1920x1080 (map 1440²) | 2560x1440 (1920²) | 3840x2160 (2880²) | Basis |
 |---|---|---|---|---|
-| Copy S → L, four whole maps | 0.080 ms | 0.134 ms | 0.299 ms | **measured**, RTX 5070 Ti, driver 621.14, `bench_sun_cascade_copy.py`, `GL_TIME_ELAPSED` median of 60; another process held about 39 % GPU at the start, so these are upper bounds |
+| Copy S → L, four whole maps | 0.080 ms | 0.134 ms | 0.299 ms | **measured**, RTX 5070 Ti, driver 621.14, `bench_sun_cascade_copy.py`, `GL_TIME_ELAPSED` median of 60. These are the fast mode (the GPU at 1 % use reproduced them). The bench has a slow mode that doubles the time (auditor: 0.254-0.257 ms at 1440p, 0.60 ms at 4K), so read **0.13-0.26 ms at 2560x1440 and 0.30-0.60 ms at 4K** (about 1.5 % and 3.6 % of 16.7 ms): best case to slow mode, not "upper bounds". The bench now fills the source maps with random 24-bit depth (before, they were never written); three runs with the fill still gave the fast mode, so the slow mode is not reproduced here. C0 adds an in-viewer GL timer zone |
 | Copy, four half maps (view footprint only) | 0.035 | 0.071 | 0.150 | measured, same run |
 | Depth clear, four maps (reference) | 0.015 | 0.022 | 0.035 | measured, same run |
 | Copy on a mid GPU (about 360-450 GB/s) | 0.16-0.20 | 0.27-0.33 | 0.6-0.75 | **(est.)** bandwidth ratio; the measured copy runs at about 880 GB/s, the 5070 Ti's peak |
@@ -468,14 +504,19 @@ The cache reuses P3/P4's feed and copy.
 
 | Stage | Scope | Cost / saving | Gate: offline | Gate: in-world (owner) | Risk | Effort |
 |---|---|---|---|---|---|---|
-| **H** (hotfix, every line) | world-anchored dither origin for the sun alpha passes (§5.2) | 0 CPU (a few uniform sets per cascade), 0 GPU | a unit test that `k` is constant per world texel while walking (`sun_cascade_cache_model.py --check` has the model of it); `test_shadow_alpha_permutation.py`; Legacy check | glass and sheers while walking: the grain stays | low | 0.25 d per line |
+| **H** (hotfix, every line) | world-anchored dither origin for the sun alpha passes (§5.2) | 0 CPU (a few uniform sets per cascade), 0 GPU | a unit test that `k` is constant per world texel while walking (the model's `--check` of it holds by construction, so it is not evidence), and a check that the `k` returned by the real `snappedSquare` matches the hash origin; `test_shadow_alpha_permutation.py`; Legacy check | glass and sheers while walking: the grain stays | low | 0.25 d per line, as per-line build time (one small port per line, not one cherry-pick) |
 | **C0** (devel only) | measurement: GPU timer zones for the four cascades; per-level counts of static vs avatar drawables; Tracy zone args for sort share; feed boxes per frame and their causes in the sun levels; MC1 Rooftops still + orbiting (camera re-armed per variant, 0f6c074e9e) | none (probes, devel only, kept out of release by `check_release_hooks.py`) | none | one capture session | low | 0.5 d + a session |
 | **C1** | camera-position levels of fixed world size, radial selection in the Stochastic util, probes follow; renderer-free in `llshadowcascadefit.h` with tests | CPU about today (± the footprint change); GPU +1 `length()` per pixel; texel per §5.1 | `llshadowcascadefit_test.cpp`: radius rule, selection by distance, rotation invariance (same world point, many yaws: same level shares and world texel); the model's `--check`; `bench_shadow_stochastic.py`; Legacy gates | turn in place, zoom, walk, look at the shadow-distance edge | low-medium (image change; D2) | 0.5-1 d |
-| **C2** | S/L per level, refresh triggers, one refresh per frame, wider dynamic set, region-shift translate, skip rule, stats (devel) | still Rooftops: cascade CPU 9.35 → 2.0-4.1 ms (est.), frame 31.9 → 26-28 ms; GPU +0.07-0.13 ms copy at 1920²; +59 MB | a scheduler harness on scripted camera paths, like the pool's FakeViewer: still → 0 static renders; 360-degree turn → 0; walk/run/fly within ±10 % of model §5; light motion as §5; a dirty box → one refresh of the levels it touches. Unit tests for the rules; Legacy gates | Rooftops MC1 still/orbit: cascade zones and per-level refresh counters; image: avatars, vehicles, doors, flexi and particles-free movers cast live in every level; region crossing; sunset on a day cycle | medium: dynamic-set completeness; visibility-stamp consumers (§10) | 1.5-2 d |
-| **C3** | scissored partial refresh; light threshold and terrain/LOD rule tuned on C2's counts | refresh cost proportional to the changed area | harness: a 1 m door in level 3 redraws about (1 m / 23 cm)² texels, not the level | edit and rez in a busy sim while watching the frame time | low-medium | 0.5-1 d |
+| **C2** | S/L per level, refresh triggers, one refresh per frame, wider dynamic set, region-shift translate, skip rule, stats (devel) | still Rooftops: cascade CPU 9.35 → 2.0-4.2 ms (est., quiet feed), frame 31.9 → 26-28 ms; GPU +0.07-0.26 ms copy at 1920²; +59 MB; refresh-all frame 10.7-12.6 ms, budgeted | a scheduler harness on scripted camera paths, like the pool's FakeViewer: still → 0 static renders; 360-degree turn → 0; walk/run/fly within ±10 % of model §5; light motion as §5; a dirty box → one refresh of the levels it touches. Unit tests for the rules; Legacy gates | Rooftops MC1 still/orbit: cascade zones and per-level refresh counters; image: avatars, vehicles, doors, flexi and particles-free movers cast live in every level; region crossing; sunset on a day cycle | medium: dynamic-set completeness; visibility-stamp consumers (§10) | 1.5-2 d |
+| **C3** (gated on C2's measured dirty rate, like C4) | scissored partial refresh; light threshold and terrain/LOD rule tuned on C2's counts | refresh cost proportional to the changed area | harness: a 1 m door in level 3 redraws about (1 m / 23 cm)² texels, not the level | edit and rez in a busy sim while watching the frame time | low-medium | 0.5-1 d |
 | **C4** (optional) | toroidal scrolling of coverage refreshes | only if C2 shows coverage refreshes dominate moving frames | wrap addressing in the util bit-identical to the unwrapped map; strip culling | fly across regions | medium | 1 d |
 
-Total without C4: about 3-4.5 days of agent time, plus the owner's sessions. Each stage is a `codex/` feature PR
+Total without C4: about 3-4.5 days of **code time**, not calendar time: it leaves out the stabilisation tail.
+P1-P4 took about 33 h (2026-11-14 01:35 to 11-15 10:33), and the next 36 h brought at least five hotfix commits
+(c0128b85db, 0257d5be98, a793499727, 13b7d28981 on the change-index scan cost, 69bc5a2acf) and three feature PRs
+(#527, #536, #539); the Rooftops report still finds a lamp tile re-rendered every frame. C2 touches the main sun
+path, which the pool did not, with four levels and sort/cull flags: plan for a hotfix tail and owner sessions on
+top. The code estimates for C1, C2 and H look right. Each stage is a `codex/` feature PR
 against `vkstorm-devel` (C0's probes stay on devel). H is a hotfix applied to every line.
 
 ## 9. Decisions for the owner
@@ -484,12 +525,13 @@ The recommended option comes first in each.
 
 1. **D1, level geometry.**
    - **A:** all four levels camera-position-centred with S + L.
-   - B: only levels 2-3 (Cyberpunk); levels 0-1 stay S1 and are drawn every frame (saves about 4 ms instead of about
+   - B: only levels 2-3 (Cyberpunk's arrangement, the closer published precedent); levels 0-1 stay S1 and are drawn every frame (saves about 4 ms instead of about
      6-7 at Rooftops still, half the memory).
    - C: keep S1 and cache only while still.
 2. **D2, zoom.**
    - **A:** fixed world sizes; zoomed views get 1.5-2.5x coarser texels than S1 gives at that field of view today
-     (shadows stop depending on the lens).
+     (shadows stop depending on the lens). Offered with it: an extra fine level 0, or FOV-stepped radii (B), only
+     below a field-of-view threshold; the regression is a C1 in-world gate (zoom at 15 and 30 degrees).
    - B: radii follow the field of view in steps (zoom invalidates the cache; shadows depend on the lens again).
 3. **D3, guard band.**
    - **A:** g = 0.125: texels 7-30 % finer than S1 at the default view; walking 0.13 refreshes a frame.
@@ -505,8 +547,10 @@ The recommended option comes first in each.
    - **A:** S for all four levels (+59 MB at 2560x1440, +133 MB at 4K).
    - B: levels 2-3 only (goes with D1-B).
 7. **D7, light stepping.**
-   - **A:** redraw when a caster at min(R, 40 m) would move half a texel (about every 1.2 s for levels 0-1 and
-     3.6-6.7 s for 2-3 on a 4 h day; never with a fixed sky).
+   - **A:** redraw when a caster at height R would move half a texel: 0.03 degrees for every level, so about every
+     1.2 s on a 4 h day (never with a fixed sky), levels staggered. Amortised about 0.19 ms (model §6) against
+     0.10 ms with the earlier H = min(R, 40 m) cap, which let far shadows jump by more than their penumbra.
+     C2's in-world gate adds a far-caster check.
    - B: Cyberpunk: near levels every frame, far every few seconds.
    - C: one texel.
 8. **D8, the dither hotfix (H).**
@@ -516,14 +560,30 @@ The recommended option comes first in each.
 ## 10. Risks, and what was not verified
 
 - **No GPU baseline.** The Rooftops captures have no GPU zones, so the GPU saving of the cache is not known; C0
-  adds timer zones. The copy cost was measured offline with another GPU load present (upper bound).
-- **The avatar share of the sort (A2) is assumed.** It moves the still estimate between 2.0 and 4.1 ms. C0
+  adds timer zones. The copy cost was measured offline: 0.13 ms in the fast mode, 0.26 ms in the auditor's slow mode (§6).
+- **The avatar share of the sort (A2) is assumed.** It moves the still estimate between 2.0 and 4.2 ms. C0
   measures it.
 - **The omni factor is an area proxy** (model §4). Scenes are not uniform: a camera at a sim edge or in a skybox
   has less behind it, and a city has more.
+- **The headline saving rests on a quiet change feed, which nothing measured.**
+  - The Rooftops report finds a stale lamp tile re-rendered in 97 % of frames, cause unknown. The multicore
+    baseline records 38,123 mesh fetches in 113 s while settling after a teleport.
+  - Each load, rebuild, LOD or terrain change pushes a box. A sun cache would be a third `Owner` that keeps the
+    feed's tracking permanently on; today the hooks run only while the pool holds tiles. That hook cost with
+    the feed always on is not priced.
+  - Overflow of the 65,536-box list, or an off-thread hook, marks "everything stale", and for the sun that means
+    refreshing all levels (10.7-12.6 ms). Under D5-A, terrain and LOD rebuilds dirty the big levels (L2 3.4 ms,
+    L3 2.1 ms).
+  - A1-A5 are assumptions; A5 (the 1.5 ms of shared sort moving to the world pass) is not verified for a
+    dynamic-only pass.
+  - The stated worst case is one scheduled refresh every frame (5.4-7.4 ms, still under today's 9.35). **C0 must
+    measure per-frame dirty boxes by cause and by level before C2 is committed**, and price the hooks with the
+    feed always on.
 - **Change-feed rates in SL scenes are unknown**: edits, mesh loads, LOD and terrain rebuilds while walking. They
   decide how often S refreshes outside the camera and light triggers. The pool's own steady-state
   `rerender_causes` is also not measured in-world (projector-shadow-pool.md, "Not verified").
+- **All ms and fps are Tracy-attached** (Rooftops +4.6 % of the frame; zone-dense cull and sort inflated more).
+  See §6.
 - **Today's turning cost is not measured.** The Rooftops moving captures had a frozen camera for sun and all (report
   §3). The orbit fix 0f6c074e9e is not yet captured.
 - **Visibility stamps.** Objects seen only through the sun shadow get a visibility stamp only on refresh frames
@@ -543,7 +603,7 @@ The recommended option comes first in each.
 
 ```
 python scripts/shadows/sun_cascade_cache_model.py           # the tables of sections 1-6 (seconds, no GPU)
-python scripts/shadows/sun_cascade_cache_model.py --check   # invariants: rotation, dither anchor, S1 port
+python scripts/shadows/sun_cascade_cache_model.py --check   # S1 port constants (real checks); rotation and dither anchor hold by construction, not evidence
 python scripts/shadows/bench_sun_cascade_copy.py            # GPU: copy and clear timings (takes the GPU bench lock)
 ```
 

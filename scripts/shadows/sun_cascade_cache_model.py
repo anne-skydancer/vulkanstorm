@@ -319,9 +319,9 @@ def table_refresh(out, res=1920, sd=192.0):
     out.append("\nLight motion: a caster H metres above its receiver moves H * dtheta. Redraw when that reaches tau = 0.5 texel.")
     out.append("texel/R = 2/(res-1) for every level, so with H = R the threshold angle is the same for all levels.")
     lv = eye_levels(d, res, 0.125)
-    out.append("level | texel (cm) | threshold deg, H = min(R, 40 m) | s between redraws, day 4 h | day 1 h | fixed sky")
+    out.append("level | texel (cm) | threshold deg, H = R | s between redraws, day 4 h | day 1 h | fixed sky")
     for L in lv:
-        H = min(L['radius'], 40.0)
+        H = L['radius']
         theta = 0.5 * L['texel'] / H
         deg = math.degrees(theta)
         out.append(f"  {L['j']}   | {100 * L['texel']:6.2f}     | {deg:7.4f}  | {deg / (360.0 / 14400.0):7.2f} | {deg / (360.0 / 3600.0):6.2f} | never")
@@ -375,10 +375,10 @@ def table_cost(out, omni, res=1920, sd=192.0):
     out.append("one static refresh, per level (ms): " + ", ".join(f"L{j} {s:.2f}" for j, s in enumerate(stat)))
     out.append("\ncase | cascade CPU today | cascade CPU cached | frame today -> cached (ms) | fps")
     cases = []
-    # still: light refresh only (4 h day, H = min(R, 40))
+    # still: light refresh only (4 h day, H = R)
     still_amort = 0.0
     for j, L in enumerate(lv):
-        H = min(L['radius'], 40.0)
+        H = L['radius']
         sec = math.degrees(0.5 * L['texel'] / H) / (360.0 / 14400.0)
         still_amort += stat[j] / (sec * 38.0)
     cases.append(("still, 4 h day", still_amort, still_amort))
@@ -398,6 +398,9 @@ def table_cost(out, omni, res=1920, sd=192.0):
     worst = max(stat)
     out.append(f"worst single frame while moving (one static refresh of the largest level plus the dynamic layer): "
                f"{bracket(dyn_lo + worst, dyn_hi + worst)} ms against today's {today:.2f}")
+    allr = sum(stat)
+    out.append(f"refresh-all frame (invalid cache, dark-gate reopening, teleport; all four static refreshes plus the dynamic layer): "
+               f"{bracket(dyn_lo + allr, dyn_hi + allr)} ms against today's {today:.2f}")
     out.append(f"for reference: no sun shadows, still, {FRAME_STILL_NONE:.2f} ms ({1000.0 / FRAME_STILL_NONE:.1f} fps); "
                "the floor is 16.7 ms still (60 fps) and 40 ms moving (25 fps)")
 
@@ -417,6 +420,9 @@ def checks():
     if split_distances(0.25, 192.0, 3.0)[1] != 1.25 * (0.25 + 191.75 / 64.0):
         print("FAIL split_distances")
         fails += 1
+    # NOTE: the two checks below hold BY CONSTRUCTION (the eye-centred pick is a function of the distance alone, and the
+    # world column is col + kx from the same kx). They document the rule; they are not evidence. The real tests are
+    # C++ unit tests on llshadowcascadefit.h (C1) and a check that k from the real snappedSquare matches the hash origin (H).
     out = []
     f = table_rotation(out)
     if f:

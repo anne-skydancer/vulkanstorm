@@ -140,6 +140,14 @@ def main():
         for k in range(4):
             bind_fbo(GL_FRAMEBUFFER, fbos[k])
             fbo_tex(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tex[4 + k], 0)
+        # Fill the source maps with incompressible depth (random 24-bit values): an unwritten map can copy
+        # faster than a real one, and noise is the worst case for any depth compression.
+        tex_sub = fn("glTexSubImage2D", None, U, I, I, I, I, I, U, U, P)
+        noise = os.urandom(side * side * 4)
+        for k in range(4):
+            bind_texture(GL_TEXTURE_2D, tex[k])
+            tex_sub(GL_TEXTURE_2D, 0, 0, 0, side, side, 0x1902, 0x1405, C.cast(C.c_char_p(noise), P))
+        del noise
         clear_depth(1.0)
         viewport(0, 0, side, side)
 
