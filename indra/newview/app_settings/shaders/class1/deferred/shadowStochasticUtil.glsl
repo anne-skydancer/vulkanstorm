@@ -34,6 +34,15 @@
 #define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
 #define ST_SPOT_KERNEL_MIN 1.0     // map texels: the filter's radius at contact
 #define ST_SPOT_PLANE_SLOPE 8.0    // texels of depth per texel of offset the receiver plane may lower a tap's reference by
+// edge reconstruction (revectorization, stRv*): where the physical penumbra is narrower than the filter's 1 texel floor the
+// shadow map's silhouette is a staircase of the tile's texels; the lookup then fits a straight edge to it
+#define ST_RV_S 24                 // texels: the run traversal's reach on each side of the receiver's texel
+#define ST_RV_K 4                  // risers a side the line is fitted to
+#define ST_RV_D 8                  // columns a side within which risers count
+#define ST_RV_MIN 0.25             // texels: the narrowest radius of the reconstructed edge (sharp, not a step)
+#define ST_RV_LO 1.5               // texels: from this physical radius the result blends towards the percentage-closer filter ...
+#define ST_RV_HI 2.5               // ... which it is from here on (the staircase is under the penumbra's blur)
+#define ST_RV_PI 3.14159265
 
 uniform sampler2D shadowMap0; // plain depth: the method sets the maps' compare mode off
 uniform sampler2D shadowMap1;
@@ -331,6 +340,251 @@ vec4 stSpotQuadTile(vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool ed
     return z;
 }
 
+// the blocking test of one texel of the tile for receiver c: the depth at the texel clamped into the tile (CLAMP_TO_EDGE, as
+// stSpotQuadTile), the reference at the texel's own (unclamped) centre, lowered by the receiver plane (stSpotQuadTile's rule)
+bool stRvBlk(ivec2 q, vec3 c, vec2 g, float z_bias, float rp_max)
+{
+    int n = int(proj_shadow_tile.z);
+    ivec2 qc = clamp(q, ivec2(0), ivec2(n - 1));
+    float zs = texelFetch(proj_shadow_atlas, ivec2(proj_shadow_tile.xy) + qc, 0).r;
+    vec2 d = (vec2(q) + 0.5) / float(n) - c.xy;
+    return zs < c.z - z_bias + clamp(dot(g, d), -rp_max, 0.0);
+}
+
+// the share of a uniform disc (the emitter's own shape: for a straight edge this is the exact penumbra of a disc light) on the
+// side x > t of the line x = t, t in units of the disc's radius
+float stRvSegment(float t)
+{
+    t = clamp(t, -1.0, 1.0);
+    return (acos(t) - t * sqrt(max(1.0 - t * t, 0.0))) / ST_RV_PI;
+}
+
+// one texel of the edge frame (a along the edge, b across) around texel p
+bool stRvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float rp_max)
+{
+    return stRvBlk(p + (sw ? ivec2(b, a) : ivec2(a, b)), c, g, z_bias, rp_max);
+}
+
+// The edge line of the silhouette near texel p in one frame (sw: a along v, b along u; else a along u, b along v), in that
+// frame's texel coordinates relative to p. The boundary of column 0 nearest the receiver (fb), between rows j0 and j0 + 1; then
+// both ways along the edge while the boundary stays a monotone staircase of one-row steps (the necessary condition of a digital
+// straight segment), up to ST_RV_S columns a side, keeping the risers within ST_RV_D columns (at most ST_RV_K a side). A riser is where the
+// boundary moves by one row between two columns; its midpoint (the column boundary; the old and new boundary's mean height) is
+// where a straight edge crosses a row-centre height, to +- half a texel along the edge.
+//   risers on both sides: the least-squares line through the same number from each side (the receiver's column lies inside the
+//     span they cover: an interpolation, never an extrapolation; a curve is cut by a short chord);
+//   else MLAA's line over the receiver's own run (the RBSM papers' discontinuity shapes): between the run's ends at half a step
+//     (Z and L; an end that is no step stays at the boundary), or two half-lines meeting at its middle (U).
+// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of two or more rows
+// within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
+int stRvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
+{
+    bh = false;
+    e0 = vec2(0.0);
+    e1 = vec2(1.0, 0.0);
+    int j0 = 99;
+    int nb = 0;
+    float best = 1.0e9;
+    for (int j = -2; j <= 1; ++j)
+    {
+        bool lo = stRvB(p, sw, 0, j, c, g, z_bias, rp_max);
+        bool hi = stRvB(p, sw, 0, j + 1, c, g, z_bias, rp_max);
+        if (lo != hi)
+        {
+            ++nb;
+            float dd = abs(fb - float(j + 1));
+            if (dd < best) { best = dd; j0 = j; }
+        }
+    }
+    if (nb != 1) return 0;
+    bool bl = stRvB(p, sw, 0, j0, c, g, z_bias, rp_max);
+    bh = !bl;
+    float b0 = float(j0 + 1);
+    int dirc = 0;
+    float ra_r[ST_RV_K], rh_r[ST_RV_K], ra_l[ST_RV_K], rh_l[ST_RV_K];
+    int n_r = 0, n_l = 0;
+    float kr = float(ST_RV_S + 1), kl = -float(ST_RV_S + 1), sr = 0.0, sl = 0.0;
+    bool steep = false;
+    for (int side = 0; side < 2; ++side)
+    {
+        int stp = side == 0 ? 1 : -1;
+        int cur = j0;               // the boundary lies between rows cur and cur + 1 in the column last visited
+        int nr = 0;
+        bool first = true;
+        for (int i = 1; i <= ST_RV_S; ++i)
+        {
+            int k = stp * i;
+            bool a0 = stRvB(p, sw, k, cur, c, g, z_bias, rp_max);
+            bool a1 = stRvB(p, sw, k, cur + 1, c, g, z_bias, rp_max);
+            if (a0 == bl && a1 == bh) continue;
+            // the boundary's move in this column: +-1 or +-2 rows (a slope up to 2 in this frame: near 45 degrees a curve turns
+            // steeper than 1 on one side, and a move of two rows is two risers at the same column boundary)
+            int mv = 0;
+            bool up2 = stRvB(p, sw, k, cur + 2, c, g, z_bias, rp_max);
+            bool dn1 = stRvB(p, sw, k, cur - 1, c, g, z_bias, rp_max);
+            if (a0 == bl && a1 == bl)
+            {
+                if (up2 == bh) mv = 1;
+                else if (stRvB(p, sw, k, cur + 3, c, g, z_bias, rp_max) == bh) mv = 2;
+            }
+            else if (a0 == bh && a1 == bh)
+            {
+                if (dn1 == bl) mv = -1;
+                else if (stRvB(p, sw, k, cur - 2, c, g, z_bias, rp_max) == bl) mv = -2;
+            }
+            if (mv == 0 && i <= 2 && ((a0 == bl && a1 == bl) || (a0 == bh && a1 == bh))) steep = true;
+            int sg = mv > 0 ? 1 : (mv < 0 ? -1 : 0);
+            if (first)
+            {
+                first = false;
+                if (side == 0) { kr = float(k); sr = float(sg); } else { kl = float(k); sl = float(sg); }
+            }
+            int d = sg * stp;       // left to right
+            if (mv == 0 || (dirc != 0 && d != dirc)) break;
+            dirc = d;
+            if (i > ST_RV_D || nr >= ST_RV_K) break;
+            float ra = side == 0 ? float(k) : float(k + 1);
+            for (int m = 0; m < 2; ++m)
+            {
+                if (m >= abs(mv) || nr >= ST_RV_K) break;
+                float rh = float(cur + 1 + sg * m) + 0.5 * float(sg);
+                if (side == 0) { ra_r[nr] = ra; rh_r[nr] = rh; } else { ra_l[nr] = ra; rh_l[nr] = rh; }
+                ++nr;
+            }
+            cur += mv;
+        }
+        if (side == 0) n_r = nr; else n_l = nr;
+    }
+    int nu = min(n_r, n_l);
+    if (nu >= 1)
+    {
+        float sa = 0.0, sh = 0.0, saa = 0.0, sah = 0.0;
+        for (int i = 0; i < ST_RV_K; ++i)
+        {
+            if (i >= nu) break;
+            sa += ra_r[i] + ra_l[i];
+            sh += rh_r[i] + rh_l[i];
+            saa += ra_r[i] * ra_r[i] + ra_l[i] * ra_l[i];
+            sah += ra_r[i] * rh_r[i] + ra_l[i] * rh_l[i];
+        }
+        float fn = float(2 * nu);
+        float den = fn * saa - sa * sa;
+        float beta = den > 1.0e-6 ? (fn * sah - sa * sh) / den : 0.0;
+        float alpha = (sh - beta * sa) / fn;
+        e0 = vec2(-1.0, alpha - beta);
+        e1 = vec2(1.0, alpha + beta);
+        return 1;
+    }
+    float al = kl + 1.0, ar = kr;
+    e0 = vec2(al, b0 + 0.5 * sl);
+    e1 = vec2(ar, b0 + 0.5 * sr);
+    if (sl == sr && sl != 0.0)
+    {
+        float mid = 0.5 * (al + ar);
+        if (fa < mid) e1 = vec2(mid, b0); else e0 = vec2(mid, b0);
+    }
+    return steep ? 2 : 1;
+}
+
+// The revectorized visibility of receiver c: the share of a disc of radius rw (texels per axis) on the lit side of the edge line
+// (stRvLine) through the receiver's neighbourhood. The frame tried first is the one whose rows the 4 x 4 texels around p flip
+// between more often (an edge nearer u than v runs along u). ok = false where no single edge line holds (a feature thinner than
+// the window, an end or a corner next to p): the caller uses P2's PCF there.
+float stRvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bool ok)
+{
+    ok = true;
+    float n = proj_shadow_tile.z;
+    vec2 t = c.xy * n;
+    ivec2 p = ivec2(floor(t));
+    vec2 f = t - vec2(p);
+    // the 4 x 4 texels p + [-1, 2]^2: four gathers (texel reads where the window leaves the tile, CLAMP_TO_EDGE as stRvBlk)
+    uint bits = 0u;
+    int ni = int(n);
+    if (all(greaterThanEqual(p, ivec2(1))) && all(lessThanEqual(p, ivec2(ni - 3))))
+    {
+        for (int q = 0; q < 4; ++q)
+        {
+            ivec2 o = ivec2((q & 1) * 2 - 1, (q >> 1) * 2 - 1);      // the quad's lower left texel, relative to p
+            vec4 z = textureGather(proj_shadow_atlas, (proj_shadow_tile.xy + vec2(p + o) + 1.0) * proj_shadow_tile.w);
+            vec2 d0 = (vec2(p + o) + 0.5) / n - c.xy;
+            vec4 dx = d0.x + vec4(0.0, 1.0, 1.0, 0.0) / n;
+            vec4 dy = d0.y + vec4(1.0, 1.0, 0.0, 0.0) / n;
+            vec4 ref = c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0);
+            bvec4 b = lessThan(z, ref);                              // gather order (0,1) (1,1) (1,0) (0,0)
+            int bx = o.x + 1, by = o.y + 1;                          // window coordinates of the quad's lower left texel
+            if (b.w) bits |= 1u << uint(by * 4 + bx);
+            if (b.z) bits |= 1u << uint(by * 4 + bx + 1);
+            if (b.x) bits |= 1u << uint((by + 1) * 4 + bx);
+            if (b.y) bits |= 1u << uint((by + 1) * 4 + bx + 1);
+        }
+    }
+    else
+    {
+        for (int j = -1; j <= 2; ++j)
+            for (int i = -1; i <= 2; ++i)
+                if (stRvBlk(p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
+    }
+    if (bits == 0u) return 1.0;
+    if (bits == 0xFFFFu) return 0.0;
+    int hx = 0, vy = 0;
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 3; ++i)
+        {
+            hx += int(((bits >> uint(j * 4 + i)) ^ (bits >> uint(j * 4 + i + 1))) & 1u);
+            vy += int(((bits >> uint(i * 4 + j)) ^ (bits >> uint(i * 4 + j + 4))) & 1u);
+        }
+    bool sw = hx > vy;
+    bool bh = false, bh2 = false;
+    vec2 e0, e1, e0b, e1b;
+    int r = stRvLine(p, sw, sw ? f.x : f.y, sw ? f.y : f.x, c, g, z_bias, rp_max, bh, e0, e1);
+    if (r != 1)
+    {
+        int r2 = stRvLine(p, !sw, sw ? f.y : f.x, sw ? f.x : f.y, c, g, z_bias, rp_max, bh2, e0b, e1b);
+        if (r2 == 1 || (r2 == 2 && r == 0))
+        {
+            sw = !sw;
+            bh = bh2;
+            e0 = e0b;
+            e1 = e1b;
+            r = 1;
+        }
+    }
+    if (r == 0)
+    {
+        ok = false;
+        return 1.0;
+    }
+    // to tile texels, then to units of the filter radius per axis (the disc is an ellipse in texels when k.x != k.y)
+    vec2 q0 = (sw ? e0.yx : e0) / rw;
+    vec2 q1 = (sw ? e1.yx : e1) / rw;
+    vec2 fq = f / rw;
+    vec2 dir = normalize(q1 - q0);
+    vec2 nrm = vec2(-dir.y, dir.x);
+    vec2 up = sw ? vec2(1.0 / rw.x, 0.0) : vec2(0.0, 1.0 / rw.y);   // +b, the high row's side
+    float side = dot(nrm, up) >= 0.0 ? 1.0 : -1.0;
+    float dist = dot(fq - q0, nrm) * side;                           // > 0: on the high row's side
+    float lit = bh ? -dist : dist;                                   // > 0: on the lit side
+    return stRvSegment(-lit);
+}
+
+
+// The percentage-closer filter at radius rf (texels per axis): ST_SPOT_TAPS bilinear gathers on the Vogel disc, weighted
+// 1 - 0.9 r^2 (the second loop of stSpotFilterTile; rp_max and edge as the search's).
+float stSpotPCF(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
+{
+    vec2 res = vec2(proj_shadow_tile.z);
+    float lit = 0.0;
+    for (int k = 0; k < ST_SPOT_TAPS; ++k)
+    {
+        vec4 ref;
+        vec2 f;
+        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
+        lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
+    }
+    return lit / (0.55 * float(ST_SPOT_TAPS)); // the weights' sum
+}
+
 // The visibility of receiver c (tile uv and depth) through the light's tile. pen: the filter's radius in texels per
 // unit of map depth between the receiver and its nearest blocker (x and y: the map's axes may differ in metres). kmax: the
 // largest radius in texels, per axis, at least ST_SPOT_KERNEL_MIN (sampleProjectorShadow derives it in metres).
@@ -368,17 +622,27 @@ float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2
     // the filter: its radius from the nearest blocker's depth (contact hardening: an edge is as sharp as its closest
     // contact allows, where the blockers' mean would blur the contact with the farther ones; map depth is linear in
     // 1 / distance, which is what the penumbra's width follows), weighted 1 - 0.9 r^2 over the disc
-    vec2 rf = clamp(pen * (c.z - z_near), vec2(ST_SPOT_KERNEL_MIN), kmax);
-    float lit = 0.0;
-    for (int k = 0; k < ST_SPOT_TAPS; ++k)
+    vec2 rphys = pen * (c.z - z_near); // the physical radius in texels, not yet floored at one texel
+    float rmax = max(rphys.x, rphys.y);
+    vec2 rf = clamp(rphys, vec2(ST_SPOT_KERNEL_MIN), kmax);
+    if (rmax >= ST_RV_HI)
     {
-        vec4 ref;
-        vec2 f;
-        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
-        vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
-        lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
+        return stSpotPCF(c, g, z_bias, rp_max, rf, edge); // the penumbra's blur already hides the staircase
     }
-    return lit / (0.55 * float(ST_SPOT_TAPS)); // the weights' sum
+    // a narrower penumbra: the straight edge of the silhouette, with its own cap on the receiver plane's lowering (at least the
+    // slope over ST_RV_HI + 1 texels), and where it finds no single edge the filter
+    float rp_rv = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(max(rs.x, rs.y), ST_RV_HI) + 1.0));
+    bool ok;
+    float v = stRvVisibility(c, g, z_bias, rp_rv, max(rphys, vec2(ST_RV_MIN)), ok);
+    if (!ok)
+    {
+        return stSpotPCF(c, g, z_bias, rp_max, rf, edge);
+    }
+    if (rmax > ST_RV_LO)
+    {
+        v = mix(v, stSpotPCF(c, g, z_bias, rp_max, rf, edge), smoothstep(ST_RV_LO, ST_RV_HI, rmax)); // no seam where the penumbra grows
+    }
+    return v;
 }
 // <G1-END>
 
