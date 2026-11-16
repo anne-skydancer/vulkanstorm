@@ -10,10 +10,12 @@
 > - PPLL, the order-independent transparency these documents describe, was
 >   replaced by stochastic transparency on 2026-11-05
 >   ([../oit/stochastic-transparency.md](../oit/stochastic-transparency.md)).
-> - Ray-traced shadows are noted as an option for the new renderer
->   ([ray-traced-shadows-option.md](ray-traced-shadows-option.md), 2026-11-16).
 >
 > This study is kept as a record of the earlier analysis.
+>
+> Newer design notes for the new renderer:
+> - [ray-traced-shadows-option.md](ray-traced-shadows-option.md)
+>   (2026-11-16): ray-traced shadows as an option.
 
 Audited source baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Target: **Windows and Linux**. User mandate: compare all suitable architectures, including native Vulkan and general graphics abstractions. This report changes no viewer code and includes no runtime measurements, GPU captures, native implementation or build qualification.
 
