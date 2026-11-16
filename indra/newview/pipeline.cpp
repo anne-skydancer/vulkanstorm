@@ -12829,12 +12829,28 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
 
     // <Vulkanstorm> stage L3: skipped while the shadow is invisible (the light swings from one body to the other, or
     // both are dark); the sun diffuse test stays for a missing sky
-    if (primary_light.valid ? !primary_light.shadow_visible : mSunDiffuse == LLColor4::black)
+    // The Stochastic method also skips while the light that reaches the ground is too dim for a shadow to show
+    // (lldirectionalshadowgate.h; the decision is LLEnvironment's, once per main frame, from the sky and the light only). The
+    // frames in the gate have shadow strength 0 in the shaders, so the maps are not read with weight: they are cleared once
+    // when the gate closes (not every frame) and drawn again, before they are read, on the frame the gate opens. The probe
+    // renders (gCubeSnapshot) take the same decision from the same primary light, so they skip with the main view.
+    const bool dark_skip = RenderShadowMethod == LLShadowMethod::STOCHASTIC && primary_light.valid && primary_light.dark_skip;
+    if (dark_skip)
+    {
+        if (!mDirectionalShadowsDarkCleared)
+        {
+            skipRenderingShadows();
+            mDirectionalShadowsDarkCleared = true;
+        }
+    }
+    else if (primary_light.valid ? !primary_light.shadow_visible : mSunDiffuse == LLColor4::black)
     { //sun diffuse is totally black shadows don't matter
+        mDirectionalShadowsDarkCleared = false;
         skipRenderingShadows();
     }
     else
     {
+        mDirectionalShadowsDarkCleared = false;
         // <Vulkanstorm> shadow method: the cascades of the chosen method
         if (RenderShadowMethod == LLShadowMethod::LEGACY)
         {
