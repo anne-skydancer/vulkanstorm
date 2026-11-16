@@ -95,7 +95,7 @@ namespace LLShadowCascadeFit
     struct Rect
     {
         float min_x, min_y, max_x, max_y;
-        // the corner's index on the world grid: min = anchor + k * texel, integer-valued (0 for a non-finite input).
+        // the corner's index on the world grid: min = anchor + k * texel, integer-valued (0 for a non-finite or absurdly large input).
         // A world point's map column plus k is its world column, which never changes while the camera moves.
         long long k_x = 0, k_y = 0;
     };
