@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Reference for scripts/shadows/projector_pool_g1.py: the projector shadow lookup of commit 261253bd43 (Stochastic projector
-// shadows: a filtered lookup), on a standalone map with CLAMP_TO_EDGE, unchanged. G1 checks that the pool's tile lookup
+// shadows: a filtered lookup), on a standalone map with CLAMP_TO_EDGE, unchanged except for the filter radius, which follows
+// the blocker nearest the receiver (the largest blocking depth) instead of the blockers' mean (projector shadow sharpness P2). G1 checks that the pool's tile lookup
 // (shadowStochasticUtil.glsl, stSpotFilterTile) gives the same value (2 ulp against this reference; exactly the same against the same code on a standalone map). The helpers stSpotDisc and the ST_SPOT_*
 // defines come from the util under test; ST_SPOT_KERNEL_MAX is the 10.0 the reference had.
 #define ST_SPOT_KERNEL_MAX 10.0
@@ -31,7 +32,7 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     // the search: any blocker between the near plane (z = 0) and the receiver, in the disc its farthest one needs
     vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), vec2(ST_SPOT_KERNEL_MAX));
     float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
-    float z_sum = 0.0;
+    float z_near = 0.0;
     float n_blk = 0.0;
     for (int k = 0; k < ST_SPOT_SEARCH; ++k)
     {
@@ -39,8 +40,9 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
         vec2 f;
         vec4 z = stSpotQuad(map, c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, res, c, g, z_bias, rp_max, ref, f);
         vec4 blk = vec4(lessThan(z, ref));
-        z_sum += dot(blk, z);
         n_blk += blk.x + blk.y + blk.z + blk.w;
+        vec4 bz = blk * z;
+        z_near = max(z_near, max(max(bz.x, bz.y), max(bz.z, bz.w)));
     }
     if (n_blk == 0.0)
     {
@@ -50,9 +52,8 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     {
         return 0.0; // the umbra: the filter's disc lies inside the search's
     }
-    // the filter: its radius from the blockers' mean depth (map depth is linear in 1 / distance, so the mean of z is
-    // the mean of 1 / distance the penumbra's width follows), weighted 1 - 0.9 r^2 over the disc
-    vec2 rf = clamp(pen * (c.z - z_sum / n_blk), vec2(ST_SPOT_KERNEL_MIN), vec2(ST_SPOT_KERNEL_MAX));
+    // the filter: its radius from the nearest blocker's depth (contact hardening), weighted 1 - 0.9 r^2 over the disc
+    vec2 rf = clamp(pen * (c.z - z_near), vec2(ST_SPOT_KERNEL_MIN), vec2(ST_SPOT_KERNEL_MAX));
     float lit = 0.0;
     for (int k = 0; k < ST_SPOT_TAPS; ++k)
     {
