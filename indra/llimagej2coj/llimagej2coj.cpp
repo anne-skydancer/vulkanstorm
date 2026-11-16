@@ -75,6 +75,29 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     const S32 max_bytes = base.getMaxBytes() ? base.getMaxBytes() : data_size;
     const U32 discard = (U32)llmax(0, (S32)base.mDiscardLevel);
 
+    // Refuse a header that would make the decode allocate gigabytes, before the crate allocates. The
+    // limit applies after the discard factor (what is decoded and copied) and is far above
+    // MAX_IMAGE_SIZE (4096): larger images decode and display today. 16384 x 16384 x 4 is 1 GB.
+    {
+        constexpr U32 MAX_DECODE_DIMENSION = 16384;
+        VksJ2cMetadata meta{};
+        if (vks_j2c_metadata(base.getData(), (size_t)data_size, &meta))
+        {
+            const U32 shift = llmin(discard, 31u);
+            const U64 round = (U64(1) << shift) - 1;
+            const U64 reduced_w = (U64(meta.width) + round) >> shift;
+            const U64 reduced_h = (U64(meta.height) + round) >> shift;
+            if (reduced_w > MAX_DECODE_DIMENSION || reduced_h > MAX_DECODE_DIMENSION)
+            {
+                LL_WARNS("Texture") << "J2C header declares " << reduced_w << "x" << reduced_h << " after discard level "
+                                    << discard << ", refusing to decode" << LL_ENDL;
+                base.setLastError("Image too large");
+                base.decodeFailed();
+                return true; // done
+            }
+        }
+    }
+
     VksJ2cDecoded* decoded = vks_j2c_decode(base.getData(), (size_t)data_size, (size_t)max_bytes,
                                             discard, (U32)llmax(0, first_channel), (U32)llmax(0, max_channel_count));
     if (!decoded)
@@ -87,6 +110,17 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     U32 width = 0, height = 0, channels = 0, components = 0;
     vks_j2c_decoded_size(decoded, &width, &height, &channels, &components);
 
+    // raw_image takes U16 dimensions and at most 4 channels here; truncating would leave a buffer smaller
+    // than the decoded image that vks_j2c_decoded_copy then fills.
+    if (width == 0 || height == 0 || width > 65535u || height > 65535u || channels < 1 || channels > 4)
+    {
+        vks_j2c_decoded_free(decoded);
+        LL_WARNS("Texture") << "decodeImpl: unsupported J2C geometry " << width << "x" << height << " channels " << channels << LL_ENDL;
+        base.setLastError("Unsupported image geometry");
+        base.decodeFailed();
+        return true; // done
+    }
+
     raw_image.resize((U16)width, (U16)height, (S8)channels);
     U8* rawp = raw_image.getData();
     if (!rawp)
@@ -97,8 +131,9 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
         return true; // done
     }
 
-    const size_t bytes = (size_t)width * height * channels;
-    if (!vks_j2c_decoded_copy(decoded, rawp, bytes))
+    // the copy is bounded by the size of the buffer that was really allocated
+    const size_t bytes = (size_t)raw_image.getDataSize();
+    if (bytes != (size_t)width * height * channels || !vks_j2c_decoded_copy(decoded, rawp, bytes))
     {
         vks_j2c_decoded_free(decoded);
         base.setLastError("Decoded size mismatch");

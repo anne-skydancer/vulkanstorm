@@ -306,4 +306,30 @@ namespace tut
             ensure("auxiliary mask level " + std::to_string(i), high ? ap[i] > 120 : ap[i] < 120);
         }
     }
+
+    // A header declaring more than 16384 after the discard factor is refused before the crate
+    // allocates; a wide image below that limit (above MAX_IMAGE_SIZE) still decodes.
+    template<> template<>
+    void j2coj_object::test<8>()
+    {
+        {
+            LLPointer<LLImageRaw> src = new LLImageRaw(17000, 64, 3);
+            memset(src->getData(), 0x55, src->getDataSize());
+            LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+            j2c->setReversible(true);
+            ensure("17000-wide encode", j2c->encode(src, 0.0f));
+            LLPointer<LLImageRaw> raw;
+            ensure("17000-wide decode is refused", !decodeAt(j2c, 0, 0, raw));
+        }
+        {
+            LLPointer<LLImageRaw> src = new LLImageRaw(5000, 64, 3);
+            memset(src->getData(), 0x55, src->getDataSize());
+            LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+            j2c->setReversible(true);
+            ensure("5000-wide encode", j2c->encode(src, 0.0f));
+            LLPointer<LLImageRaw> raw;
+            ensure("5000-wide decode", decodeAt(j2c, 0, 0, raw));
+            ensure_equals("5000-wide width", (S32)raw->getWidth(), 5000);
+        }
+    }
 }
