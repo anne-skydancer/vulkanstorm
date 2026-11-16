@@ -2321,7 +2321,7 @@ namespace tut
         std::string src(100000, 'x');
         for (size_t i = 0; i < src.size(); ++i) src[i] = (char)(i * 31 + (i >> 7));
         std::string gz = gzipString(src);
-        // corrupt the deflate data right after the 10 byte gzip header
+        // corrupt the deflate data right after the 10-byte gzip header
         for (size_t i = 10; i < 40 && i < gz.size(); ++i) gz[i] = (char)0xFF;
         bool valid = true;
         size_t outsize = 0;

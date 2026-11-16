@@ -166,7 +166,7 @@ void LLPathfindingNavMesh::handleNavMeshResult(const LLSD &pContent, U32 pNavMes
             {
                 llassert(pUncompressedNavMeshContainer);
                 mNavMeshData.resize( decompBinSize );
-                memcpy( &mNavMeshData[0], &pUncompressedNavMeshContainer[0], decompBinSize );
+                memcpy( mNavMeshData.data(), &pUncompressedNavMeshContainer[0], decompBinSize );
                 status = kNavMeshRequestCompleted;
             }
             if ( pUncompressedNavMeshContainer )
