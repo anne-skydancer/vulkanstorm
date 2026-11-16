@@ -28,8 +28,9 @@ It adds:
 - code findings in the shadow path (section 7);
 - the capture list for the stage-1b session (section 9).
 
-The literature is Real-Time Rendering, 4th ed. (RTR4), ch. 7 "Shadows" (§7.4 and §7.4.1, with their reference
-numbers) and ch. 19 (§19.6 detail culling, §19.8 culling systems, §19.9 level of detail); GPU Gems 1-3; and the talks
+The literature is Real-Time Rendering, 4th ed. (RTR4), ch. 7 "Shadows" (§7.4, with its reference numbers; the chapter
+extract read for this study puts the cascade and efficiency paragraphs under §7.4 and its first subsection, so they
+are cited as §7.4) and ch. 19 (§19.6 detail culling, §19.8 culling systems, §19.9 level of detail); GPU Gems 1-3; and the talks
 and papers those cite. These are references only. No NVIDIA or Epic sample code was read or copied.
 
 ## 1. Summary
@@ -45,37 +46,40 @@ This study's new numbers from the same captures [measured]:
 - **The time goes to the work around the draws:**
   - building the render map and the sort, about 0.8 ms per cascade;
   - the cull, about 0.4-0.5 ms per far cascade;
-  - the **alpha-blend caster pass**, 1.01 ms. It is larger than the opaque static draws in every cascade past the first;
+  - the **alpha-blend caster pass**, 1.01 ms (with Tracy). It is 64 % of the cascades' draws (4,399 of 6,894) and
+    larger than the opaque static draws in every cascade past the first;
   - avatars and rigged attachments, about 1.4 ms.
 
 **Where this disagrees with earlier readings.**
 
 - The multicore baseline's "5-10 ms of serial GL submission" included the projector pool's unzoned 5.4 ms (fixed
   since) and the CPU work inside the draw rows.
-- The part that is really bound to the GL context is about 1 ms [inferred]. So shadow multi-draw-indirect (G6) acts on
-  a smaller slice than the GL study's 10-16× suggests. Its 10-16× is a driver-side bench ratio, and the driver side here
-  is under 1 ms.
+- The draw rows are 3.87 ms in all. About 3.1 ms of that is main-thread work against the one GL context (the audit
+  of #545 counted it), and about 0.8 ms is the draw calls themselves. At Risk the same
+  "minus culls and sorts" rest was 5.1 ms, of which the projector pool's self time was 1.4 ms: about 3.7 ms, the same
+  order. So shadow multi-draw-indirect (G6) acts on a smaller slice than the GL study's 10-16× suggests: that ratio is
+  for the driver-side submission loop, here about 0.8 ms.
 - The cost is per-frame CPU work that repeats an unchanged answer. **Reuse across frames is the lever, as #542 says.**
   Nothing in the wider option space beats it.
 
 **Ranked recommendations** (CPU saving at Rooftops still, from 9.35 ms of cascade time; each option alone;
 section 4 has the detail):
 
-| Rank | Option | Technique and source | Saving alone | Image change | Effort (calibrated) |
+| Rank | Option | Technique and source | Cascade CPU saved, alone | Image change | Effort (calibrated) |
 |---|---|---|---|---|---|
-| 1 | **Static/dynamic cache on camera-position levels (#542 C1+C2)** | Clipmap levels (Tanner et al. 1998; GPU Gems 2 ch. 2); CSM scrolling (Day/Acton 2012, RTR4 [329]); "if nothing changes within a map's frustum, it need not be recomputed" (RTR4 §7.4.1); static maps plus a per-frame dynamic map (Flagship Studios, RTR4 §7.4.1) | **5.2-7.4 ms** [inferred, #542 model] | C1: level texels change, distance edge becomes a circle; C2: none for a static scene | 2-3 d (#542) |
-| 2 | **Stage Q: code findings plus the alpha-blend loop hoist** | Pure efficiency, keeps the logic (section 7); state sorting and batching, RTR4 ch. 18 | 0.2-0.5 ms [inferred from measured 1.01 ms pass] | none (bit-exact: depth-only order is free) | 0.5 d |
-| 3 | **Small-caster culling per level** | Remove tiny occluders (Persson 2012 [1381], Valient 2012 [1811], in RTR4 §7.4.1); detail culling (RTR4 §19.6) | 0.2-1.2 ms today; it also cuts the cache's refresh frames and the rigged attachments [inferred, A1-A2] | sub-texel casters leave the far levels (their shadow is under one texel already) | 0.5-1 d |
+| 1 | **Static/dynamic cache on camera-position levels (#542 C1+C2)** | Clipmap levels (Tanner et al. 1998; GPU Gems 2 ch. 2); CSM scrolling (Day/Acton 2012, RTR4 [329]); "if nothing changes within a map's frustum, it need not be recomputed" (RTR4 §7.4); static maps plus a per-frame dynamic map (Flagship Studios, RTR4 §7.4) | **5.2-7.4 ms** cascade CPU; **3.7-5.9 ms** of frame, after the shared sort returns to the world pass [inferred, #542 model] | C1: level texels change, distance edge becomes a circle; C2: none for a static scene | 2-3 d (#542) |
+| 2 | **Stage Q: code findings plus the alpha-blend loop hoist** | Pure efficiency, keeps the logic (section 7); state sorting and batching, RTR4 ch. 18 | 0.2-0.35 ms [inferred from the measured 1.01 ms pass] | none (bit-exact: depth-only order is free) | 0.5 d |
+| 3 | **Small-caster culling per level** | Remove tiny occluders (Persson 2012 [1381], Valient 2012 [1811], in RTR4 §7.4); detail culling (RTR4 §19.6) | 0.1-1.2 ms today; it also cuts the cache's refresh frames and the rigged attachments [inferred, A1-A2; waits on the size histogram] | sub-texel casters leave the far levels (their shadow is under one texel already) | 1-1.5 d |
 | 4 | **Parallel culls (multicore 5c)** | Data-parallel culling (multicore study §6.5) | 0.6-1.7 ms today; 0.3-0.6 ms under the cache [inferred, A4] | none | 2-4 d (multicore study) |
-| 5 | **Skin palettes in one UBO (G3)** | Uniform buffers per draw range (AZDO, Everitt et al., GDC 2014; GL study P3) | 0.3-0.5 ms in the cascades, plus the main view [inferred, A5] | none | about 1 d |
-| 6 | **Shadow MDI on arenas (G4-G6)** | Multi-draw-indirect (RTR4 §19.8; AZDO 2014); per-cascade single submission (GPU Gems 3 ch. 10 §10.3) | 1.3-2.3 ms today; 0.2-0.5 ms per frame under the cache, but a large cut of refresh frames [inferred, A6-A7] | none | 5-9 d with arenas (LL core: high upstream risk) |
+| 5 | **Skin palettes in one UBO (G3)** | Uniform buffers per draw range (AZDO, Everitt, Foley, McDonald, Sellers, GDC 2014; GL study P3) | 0.3-0.5 ms in the cascades, plus the main view [inferred, A5] | none | about 1 d |
+| 6 | **Shadow MDI on arenas (G4-G6)** | Multi-draw-indirect (RTR4 §19.8; AZDO 2014); per-cascade single submission (GPU Gems 3 ch. 10 §10.3) | 1.2-2.0 ms today; about 0.1-0.2 ms per frame under the cache (the rigged layer), but a large cut of refresh frames [inferred, A6-A7] | none | 5-9 d with arenas (LL core: high upstream risk) |
 | 7 | Probe faces read the main view's levels | **[own idea]** (section 5) | 0.34-0.40 ms [measured probe call] | probe shadows coarser | 0.5 d after C1 |
-| — | Fewer levels, or a shorter shadow distance at Ultra | PSSM split count (GPU Gems 3 ch. 10); z-partitioning (RTR4 §7.4.1) | 0.5-1.2 ms (3 levels); 1.2-2.1 ms (128 m) [inferred] | coarser or shorter shadows | 0.25 d |
+| — | Fewer levels, or a shorter shadow distance at Ultra | PSSM split count (GPU Gems 3 ch. 10); z-partitioning (RTR4 §7.4) | 0.5-1.2 ms (3 levels); 1.2-2.1 ms (128 m) [inferred] | coarser or shorter shadows | 0.25 d |
 
 **Combined, in the recommended order** (Q → C1 → C2 → 5c → G3 → G4-G6), the cascades go from 9.35 ms to about
-**0.8-3.1 ms** at Rooftops still [inferred, model 5a]. The frame goes from 31.9 to about 24.8-27.1 ms (31 → 37-40 fps).
+**1.0-3.2 ms** at Rooftops still [inferred, model 5a]. The frame goes from 31.9 to about 25.1-27.3 ms (31 → 37-40 fps).
 
-Without the cache (C2 declined) the same CPU stages give 4.3-7.0 ms (model 5b), with no image change.
+Without the cache (C2 declined) the same CPU stages give 4.8-7.2 ms (model 5b), with no image change.
 
 **Neither path reaches 60 fps at Rooftops Ultra.** The same frame with no sun shadow at all is 23.1 ms (43 fps). The
 rest is the crowd's update, deferred submission and Swap stalls (multicore baseline). The fps floor at Rooftops needs
@@ -87,8 +91,8 @@ stage-1b session must capture so that the GPU cost of each pass can be folded in
 **Proposed order:**
 
 1. **1b session** (capture list, section 9).
-2. **Q**: code findings, the alpha-blend hoist, small-caster culling. Small, bit-exact or near, and every saving stays
-   after the cache.
+2. **Q**: code findings, the alpha-blend hoist, small-caster culling. Small and bit-exact or near. Under the cache its
+   static cut folds into the refresh frames (they get cheaper); per frame only its cut of the rigged attachments stays.
 3. **#542 C1, then C2.** Their decisions D1-D8 are with the owner.
 4. **5c.** Its first target changes under the cache: the cascades' culls become small dynamic-only passes, so the
    world view becomes 5c's best first user.
@@ -98,7 +102,7 @@ stage-1b session must capture so that the GPU cost of each pass can be folded in
    levels for the dynamic layer.
 
 **Owner decisions** are in section 10: the order (recommended above); the small-caster threshold; the tier defaults;
-the moon; the probe faces; the impostor rule (Q9a of 2026-11-13 is not in the code, and doing it costs time); and the
+the moon; the probe faces; the impostor rule (Q9a of 2026-11-13 is not in the code, and doing it costs frame time); and the
 G-series scope for shadows.
 
 ## 2. What the cascades cost today (Rooftops Ultra, still) [measured]
@@ -111,8 +115,14 @@ Source:
   the main `generateSunShadow` call.
 
 The attribution tool is `scripts/perf/tracy_cascade_zones.py` (added here); `LLRenderPass::pushBatch` as a zone
-name gives the draw calls. The outputs are in `.fixture-tmp/sun-cost-study/`. The table is the model's section 1
-(`sun_shadow_cost_model.py`).
+name gives the draw calls, and `child@parent` restricts a zone to one pass. It was re-run on the committed version
+and reproduces every tool-derived row below exactly (the total, cull, sort and draw columns of the first row block are
+the Rooftops report's) (`.fixture-tmp/sun-cost-study/repro_0111.txt`, exporter 0.11.1; the `shadow alpha blend`
+row also with exporter 0.15.0, `repro_0150.txt`). It is valid for `sun` and `none` captures only: in an `all` capture
+the projector tiles' passes sit inside `generateSunShadow` too. The table is the model's section 1
+(`sun_shadow_cost_model.py`). The cull, sort and draw totals per cascade are the Rooftops report's own attribution;
+the sub-rows are this tool's. They differ slightly (sort 4.07 against 4.18 ms), because the tool also counts nested
+zones of the same name.
 
 | ms per frame | cascade 0 | 1 | 2 | 3 | sum |
 |---|---|---|---|---|---|
@@ -125,6 +135,7 @@ name gives the draw calls. The outputs are in `.fixture-tmp/sun-cost-study/`. Th
 | of which `rebuildPriorityGroups` (first sort) | **0.55** | 0.01 | 0.01 | 0.01 | 0.57 |
 | opaque static (`pushBatches`) | 0.03 | 0.15 | 0.25 | 0.28 | 0.71 |
 | **alpha-blend casters** (`renderAlphaObjects`) | 0.05 | 0.24 | 0.35 | 0.38 | **1.01** |
+| of which draws (`pushBatch` inside the pass) | 154 | 981 | 1,538 | 1,727 | **4,399** |
 | alpha masked + material masks + grass | 0.14 | 0.16 | 0.14 | 0.14 | 0.58 |
 | rigged (`pushRigged*Batches`) | 0.32 | 0.27 | 0.14 | 0.13 | 0.86 |
 | avatar pool (`renderShadow`) | 0.46 | 0.05 | 0.04 | 0.04 | 0.59 |
@@ -145,17 +156,20 @@ How to read it:
    - the octree walk;
    - mark-visible;
    - pushing every draw info into the render map (pipeline.cpp:4023-4041).
-3. **The alpha-blend casters are the largest draw category in the far cascades.** `renderAlphaObjects`
-   (pipeline.cpp:7781-7860) does the following per draw:
-   - rebinds the program and sets four or five uniforms;
+3. **The alpha-blend casters are the largest draw category in the far cascades:** 4,399 of the 6,894 cascade draws
+   (64 %). `renderAlphaObjects` (pipeline.cpp:7781-7860) does the following per draw:
+   - calls `bind()` on the program and sets four or five uniforms (`LLGLSLShader::bind` inside the pass: 3,589 calls,
+     0.039 ms; the program rarely changes, so the real rebind cost is small);
    - walks the whole alpha render map twice, once per rigged flag.
 
+   About 0.23 µs per alpha draw against 0.11 µs per `pushBatch`. The 1.01 ms carries about seven Tracy zones per alpha
+   draw, so without the profiler the pass is smaller, and the hoist's share is capped at about 0.2-0.35 ms (A3).
    Section 7, F4.
 4. **The GL draw is cheap here.** 0.77 ms for 6,894 draws is about 0.11 µs each with the Tracy zone. The GL study
    measured 0.22 µs per depth-only draw in a single-threaded bench. The viewer runs with the NVIDIA driver's threaded
    optimisation, so the app thread queues rather than validates [inferred].
-5. **Avatars and rigged attachments cost about 1.45 ms**, two thirds of it in cascades 0-1. Rigged meshes appear in
-   every cascade: 0.13-0.14 ms in each far one.
+5. **Avatars and rigged attachments cost about 1.45 ms**, about three quarters of it (76 %) in cascades 0-1. Rigged
+   meshes appear in every cascade: 0.13-0.14 ms in each far one.
 
 **Where earlier numbers disagree, with the evidence.**
 
@@ -163,8 +177,11 @@ How to read it:
   `generateSunShadow` minus its culls and sorts. At Rooftops that rest held the projector pool's 5.4 ms of unzoned
   self time, which the hotfixes `13b7d28981` and `e74e5c85be` removed (multicore study §2 table). It also holds the
   draw rows' CPU work: render map iteration, texture binds, palette math.
-- In the split capture the four cascades' draw rows are 3.87 ms. Of these, 0.77 ms is the draw call itself and
-  1.45 ms is avatars. The part that no worker thread can take is therefore about 1-1.5 ms, not 5-10 [inferred].
+- In the split capture the four cascades' draw rows are 3.87 ms. About 3.1 ms of it runs against the one GL context
+  today (state, binds, uniforms, the draws; the audit of #545 counted it), and about 0.8 ms is the draw calls
+  themselves (`pushBatch`).
+  Risk agrees: its 5.1 ms rest held 1.4 ms of projector self time, so about 3.7 ms. The serial part is therefore about
+  3-4 ms, not 5-10, and only about 0.8 ms of it is driver submission [inferred from measured].
 - Consequence for the GL programme: shadow MDI (G6) saves real time, mostly by replacing the render map walk and
   per-draw state. It does **not** buy the 10-16× the bench ratio suggests at the frame level (section 4.5).
 - #542's model: its inputs are the same per-cascade totals, so its cached figure (2.0-4.2 ms) stands. Its assumption
@@ -247,8 +264,8 @@ in this repo has been one to three hotfixes (P1-P4).
 **4.1.1 Static/dynamic cache on camera-position levels (#542 C1+C2).** Recommended, rank 1.
 
 - **Source [lit]:**
-  - RTR4 §7.4.1, "Efficiency": a map whose frustum saw no change need not be recomputed.
-  - RTR4 §7.4.1 cites Flagship Studios' split into a per-frame map for nearby dynamic objects and once-generated
+  - RTR4 §7.4, "Efficiency": a map whose frustum saw no change need not be recomputed.
+  - RTR4 §7.4 cites Flagship Studios' split into a per-frame map for nearby dynamic objects and once-generated
     static maps.
   - Clipmaps: Tanner, Migdal, Jones, SIGGRAPH 1998; Asirvatham and Hoppe, GPU Gems 2 ch. 2.
   - Day/Acton, "CSM Scrolling", SIGGRAPH 2012 [329].
@@ -269,7 +286,7 @@ in this repo has been one to three hotfixes (P1-P4).
 
 **4.1.2 Lower update rate for the far levels' dynamic layer.**
 
-- **Source [lit]:** RTR4 §7.4.1, "more distant maps updated less than once a frame (risk with large moving objects)",
+- **Source [lit]:** RTR4 §7.4, "more distant maps updated less than once a frame (risk with large moving objects)",
   citing Kasyan 2013 [865], Pesce 2011 and 2012 [1389, 1391], and Crytek [1678, 1679]. Cyberpunk 2077 refreshes its
   distant levels every few seconds (Dybisz and Witanowski, SIGGRAPH 2021).
 - **Here:** after C2, levels 2-3 draw their dynamic layer (avatars beyond about 25 m, active movers) every second
@@ -290,54 +307,68 @@ in this repo has been one to three hotfixes (P1-P4).
 
 **4.1.4 A high-resolution static map instead of the far cascades.**
 
-- **Source [lit]:** RTR4 §7.4.1, citing Rainbow Six Siege [415] and Ryse [1590].
+- **Source [lit]:** RTR4 §7.4, citing Rainbow Six Siege [415] and Ryse [1590].
 - **Here:** C2's cached level 3 is this already, kept up to date by the feed. A separate baked map would need a fixed
   sun, and the sun moves on every EEP day cycle. **Not pursued separately.**
 
 ### 4.2 Caster culling
 
-**4.2.1 Small-caster culling per level.** Recommended, part of stage Q.
+**4.2.1 Small-caster culling per level.** Recommended, part of stage Q; its threshold and saving wait on the size
+histogram (section 9, item 7).
 
 - **Source [lit]:**
-  - RTR4 §7.4.1, "remove tiny occluders", citing Persson, "Creating Vast Game Worlds" (Avalanche), SIGGRAPH 2012 [1381]
-    and Valient, "Shadows + Games: Practical Considerations", SIGGRAPH 2012 [1811];
+  - RTR4 §7.4, "remove tiny occluders", citing Persson, "Creating Vast Game Worlds" (Avalanche), SIGGRAPH 2012 [1381]
+    and Valient, "Shadows + Games: Practical Considerations", SIGGRAPH 2012 [1811] (titles as in RTR4's bibliography;
+    the talks themselves were not read);
   - RTR4 §19.6, detail culling: drop objects whose projection is below a size threshold. Here the projection is into the
     level's texels, not the screen.
-- **Here:**
-  - A caster whose bounding diameter is below **one texel of its level** is not drawn into that level. At 1920² and
-    192 m that is 0.7 / 4.2 / 14.2 / 33.4 cm for levels 0-3 (model section 3).
-  - Two places, both gated to the Stochastic sun cascades:
-    1. in `LLOctreeCullShadow::frustumCheckObjects` (`llspatialpartition.cpp:1153`), a group whose object extents are
-       below the threshold is rejected. This saves cull, sort and draw;
-    2. in `postSort`'s render-map build (pipeline.cpp:4031-4041), under `sShadowRender`, a non-rigged `LLDrawInfo` whose
-       `mExtents` are below the threshold is not pushed. This saves the draw.
-  - Rigged attachments are tested by the attachment drawable's radius at `markVisible`.
-  - The threshold is a pure function in `llshadowcascadefit.h`, with a unit test.
-  - Level 0 is exempt.
-  - The avatar body is never culled.
-  - Projector tiles are not affected (their pass flag differs).
-- **Saving:** 0.2-1.2 ms today, depending on how many of the 6,523 draws in levels 1-3 are that small (A1 10-30 %, A2
-  0-50 %; model section 4).
-  - It also shrinks every C2 refresh and the rigged-attachment part of the dynamic layer: rings, nails, eyelashes,
-    small jewellery.
+- **What the code offers (checked):**
+  - `LLDrawInfo` has **no extents** (`llspatialpartition.h:80-170`). A draw info batches the faces of one spatial group
+    that share state into one index range (`genDrawInfo`, `llvovolume.cpp:5857`), so a small object's faces usually sit
+    inside a larger draw info and cannot be dropped alone.
+  - Extents exist per face (`LLFace::mExtents`, `llface.cpp:872`), per group (object extents, `llvieweroctree.h:265`)
+    and per drawable.
+- **Here, three levels of test, all gated to the Stochastic sun cascades:**
+  1. **Group:** in `LLOctreeCullShadow::frustumCheckObjects` (`llspatialpartition.cpp:1153`), a group whose object extents
+     are below the threshold is rejected. That saves cull, sort and draw, but only for groups that hold small things
+     only.
+  2. **Bridges:** a linkset or attachment bridge has its own partition and draw infos, so its drawable radius at
+     `markVisible` decides for all its draws. This covers the rigged attachments (rings, nails, eyelashes, small
+     jewellery) and small active objects.
+  3. **Draw info (optional):** a per-draw-info extent, the union of the batched faces' `mExtents`, computed in
+     `genDrawInfo` and tested in `postSort`'s render-map build (pipeline.cpp:4031-4041). It costs 32 B per draw info and
+     is an LL-core diff (`llspatialpartition.h`, `llvovolume.cpp`). Only if the histogram shows that 1 and 2 leave most
+     of the small draws.
+  - Level 0 is exempt, the avatar body is never culled, and projector tiles are not affected (their pass flag differs).
+- **The threshold must not depend on the camera (camera independence).**
+  - Under S1 a level's texel follows the field of view and the aspect through the slice sphere and `quantizeRadius`.
+    A threshold of "one texel" would therefore make casters appear and disappear with zoom.
+  - So the threshold is a **fixed size in metres per level**: one texel of that level at the default view (60 degrees,
+    16:9, the tier's map size), for example 4.2 / 14 / 33 cm for levels 1-3 at Ultra. It is computed once from the tier
+    in `llshadowcascadefit.h`, with a unit test that it does not change with the field of view.
+  - After C1 the levels have fixed world sizes, so the per-level threshold is fixed by construction.
+  - A caster near a level boundary is drawn into the finer level and not into the coarser one. In the blend band the
+    lookup picks either level per pixel, so its shadow fades out across the band instead of popping. No hysteresis is
+    needed, since the decision depends only on the caster's size and the level, never on the frame.
+- **Saving:** 0.1-1.2 ms today (A1 5-25 %, A2 0-50 %; model section 4). A1 may be at the low end, because batching
+  folds small faces into larger draw infos; the histogram decides.
+  - It also shrinks every C2 refresh and the rigged-attachment part of the dynamic layer.
   - GPU: fewer tiny triangles, which rasterise worst [inferred].
 - **Image:**
   - The casters removed throw a shadow under one texel of the level, which today appears as a single snapped texel
-    that blinks as the box moves by a texel.
-  - Removing it is stabler, not worse.
+    that blinks as the box moves by a texel. Removing it is stabler, not worse.
   - The 0.25 m filter footprint and the 8 rays already average over 4-36 texels in levels 0-1, so a sub-texel caster
     contributes almost nothing there [inferred].
   - Risk: a lattice of many thin casters (a fence of 3 cm rails in level 2) loses a shadow it should have as a whole.
-    That is why the threshold is per object and is a debug setting (`RenderShadowSmallCasterTexels`, default 1.0,
-    0 = off), not a Preferences entry.
-- **Effort:** 0.5-1 d.
-- **Upstream risk:** low to medium (two LL functions, a few lines each).
+    That is why the test is per object and is a debug setting (`RenderShadowSmallCasterTexels`, the multiple of the
+    default-view texel, default 1.0, 0 = off), not a Preferences entry.
+- **Effort:** 1-1.5 d with tests 1 and 2; about 1 d more with test 3.
+- **Upstream risk:** medium for tests 1 and 2 (LL functions, a few lines each); medium-high for test 3 (LL-core data
+  structure).
 - **Interactions:**
-  - C1 changes the level texels (finer at the default view). The threshold follows the level, so the rule carries
-    over.
+  - C1 makes the threshold fixed by construction.
   - C2 refreshes get cheaper.
   - It adds nothing to G6.
-- **Needs from 1b:** a histogram of draw-info sizes per level (section 9, item 7).
 
 **4.2.2 Receiver-aware culling.**
 
@@ -383,7 +414,7 @@ in this repo has been one to three hotfixes (P1-P4).
 
 **4.3.1 Shadow LOD bias.**
 
-- **Source [lit]:** RTR4 §7.4.1, "LOD proxies cast shadows", citing Cars 2 [652] and Killzone Shadow Fall [1812];
+- **Source [lit]:** RTR4 §7.4, "LOD proxies cast shadows", citing Cars 2 [652] and Killzone Shadow Fall [1812];
   RTR4 §19.9; Cyberpunk 2077 swaps character meshes in shadows (2021).
 - **Here:** a drawable's LOD is chosen from the main camera's distance. Each LOD's geometry lives in its own vertex
   buffers, rebuilt on change. Two consequences:
@@ -406,7 +437,7 @@ in this repo has been one to three hotfixes (P1-P4).
 deformation "always invalidates cached pages".
 
 - **Skin palettes in one UBO (G3).**
-  - **Source [lit]:** Everitt, McDonald, Riccio, Hart, "Approaching Zero Driver Overhead in OpenGL", GDC 2014; GL
+  - **Source [lit]:** Everitt, Foley, McDonald, Sellers, "Approaching Zero Driver Overhead in OpenGL", GDC 2014; GL
     study P3.
   - **Saving:** the rigged batches are 0.86 ms in the cascades and palettes are uploaded per pass. 0.3-0.5 ms [inferred,
     A5], plus the main view and probes.
@@ -428,7 +459,7 @@ deformation "always invalidates cached pages".
 
 - **Source [lit]:**
   - Zhang et al., GPU Gems 3 ch. 10 (split count, practical split scheme);
-  - RTR4 §7.4.1 (z-partitioning, Eq. 7.5; "each slice 2-3× the depth range of the previous").
+  - RTR4 §7.4 (z-partitioning, logarithmic or blended; "each slice 2-3× the depth range of the previous").
 - Texel per level at 1920², 60 degrees, 16:9 (model section 2) [port of `llshadowcascadefit.h`]:
 
   | Distance | Levels | Texel per level (cm) | Far edges (m) |
@@ -458,17 +489,18 @@ deformation "always invalidates cached pages".
 
 - **Source [lit]:**
   - RTR4 §19.8 (indirect draw commands in culling systems);
-  - Everitt et al., AZDO, GDC 2014;
+  - Everitt, Foley, McDonald, Sellers, AZDO, GDC 2014;
   - GPU Gems 3 ch. 10 §10.3 (one submission per split);
   - the GL study's bench: arena + `glMultiDrawElementsIndirect` 10-16× on the depth-only submission loop, image
     identical [measured, 2026-11-11, RTX 5070 Ti].
 - **Here:** GL study §4.6: a draw list (G4), arenas with base vertex (G5), MDI per cascade with matrices in an SSBO
   (G6). Depth-only order is free (GL_LESS, min depth), so every draw can merge.
 - **Saving [inferred, A6-A7]:**
-  - today: 1.3-2.3 ms. The static opaque draws are 0.71 ms; the alpha, masked and grass passes need their texture per
+  - today: 1.2-2.0 ms. The static opaque draws are 0.71 ms; the alpha, masked and grass passes need their texture per
     draw, so they merge only per texture run (1.6-3.4× in the bench). The render-map walk is replaced by the draw list;
-  - under C2: 0.2-0.5 ms per frame (the dynamic layer, rigged after G3). The **refresh frames** gain most: a level
-    refresh is a static draw of thousands of casters.
+  - under C2: about 0.1-0.2 ms per frame (the rigged layer after G3; the avatar pool's `renderSkinned` draws from
+    per-avatar buffers, which are not arena geometry). The **refresh frames** gain most: a level refresh is a static
+    draw of thousands of casters.
   - GPU: +2-3 % on the passes [measured, GL study].
 - **Image:** none (bit-exact, compare harness of G0).
 - **Effort:** the GL study gave 2-3 weeks per stage in human terms. Calibrated against this repo, about 5-9 pipeline
@@ -495,7 +527,7 @@ deformation "always invalidates cached pages".
 **4.5.3 Single-pass rendering of several levels for the dynamic layer.**
 
 - **Source [lit]:**
-  - RTR4 §7.4.1, "single-pass multi-map rendering": geometry-shader replication (Frostbite, Andersson and Johansson,
+  - RTR4 §7.4, "single-pass multi-map rendering": geometry-shader replication (Frostbite, Andersson and Johansson,
     GDC 2009 [41]) and instanced layered rendering into depth arrays (Rákos, "Massive Number of Shadow-Casting Lights with Layered Rendering", OpenGL Insights 2012 [1456]);
   - GPU Gems 3 ch. 10 §10.3 (geometry-shader cloning).
 - **Here:** after C2, the avatars drawn into levels 0 and 1 (and 2) each frame could be drawn once, instanced per level.
@@ -540,15 +572,17 @@ What could matter once the CPU drops, each to be decided on 1b:
 | Overdraw | unknown | opaque before masked (already so); front-to-back within the opaque pass helps only if fragment-bound | RTR4 ch. 18 |
 | Sun lookup in the lighting pass | unknown (8 rays × 2-8 steps) | not a shadow-pass cost; capture it to separate it | `shadowStochasticUtil.glsl` |
 
-D16 changes depth precision. Level 3's range of about 3R ≈ 600 m gives 0.9 cm steps against a 33 cm texel. It is not
-bit-exact, so it needs an owner decision, and only if 1b shows bandwidth matters.
+D16 changes depth precision. Level 3's depth range is 3R ≈ 960 m at Ultra (R = 320 m), so a D16 step is 1.46 cm
+against a 33 cm texel. It is not bit-exact, and D16 is not a reliable saving on AMD (research note
+`research_notes/Real time shadow casting techniques/api_and_performance.md:60`), so it needs an owner decision, and only
+if 1b shows bandwidth matters on more than one vendor.
 
 ### 4.8 Moon nights
 
 - Today a moonlit night costs exactly what a day costs. #540 skips the cascades only below the visibility threshold
   (E < 5e-6, pipeline.cpp:12974-12987).
 - **Source [lit]:**
-  - RTR4 §7.4.1, "many lights": spend shadow work by the light's contribution;
+  - RTR4 §7.4, "many lights": spend shadow work by the light's contribution;
   - Call of Duty: Black Ops Cold War scales each light's shadow resolution by importance under a budget (Myers 2021,
     in the repo's literature report).
 - **Options:**
@@ -589,7 +623,7 @@ bit-exact, so it needs an owner decision, and only if 1b shows bandwidth matters
 - **Risk:** the lookup of the probe programs (forward probe shaders) must take the main matrices. The `mSunShadowMatrix`
   array is shared today, and the probe pass overwrites entries 0-1 (pipeline.cpp:12738). The probe update runs after
   the main view (`llappviewer.cpp:1803`), so the order is safe, but it is fragile.
-- **Literature anchor:** the closest is RTR4 §7.4.1's static maps "generated once" and reused (Flagship Studios). No
+- **Literature anchor:** the closest is RTR4 §7.4's static maps "generated once" and reused (Flagship Studios). No
   source shares cascades with probes.
 
 **5.2 A static caster mesh per level for light-step refreshes (after C2).**
@@ -600,7 +634,7 @@ bit-exact, so it needs an owner decision, and only if 1b shows bandwidth matters
   agent space) could be copied once into a position-only buffer with one index list. A light-only refresh is then one
   draw per level instead of 1,500-2,600.
 - **Literature anchor:** precomputed caster lists per light (Pettineo, "Rendering the Alternate History of The Order:
-  1886", SIGGRAPH 2015 [1405], RTR4 §7.4.1). Merging the casters into one private position buffer is our variant.
+  1886", SIGGRAPH 2015 [1405], RTR4 §7.4). Merging the casters into one private position buffer is our variant.
 - **Saving:** light refreshes become nearly free. The worst moving frame drops by a level's static draw.
 - **Cost:** memory. Level 3 may hold millions of triangles; at 12 B a vertex plus indices, tens of MB. Cap it by level,
   or levels 2-3 only.
@@ -617,7 +651,7 @@ Overlap and dependencies:
 | | Q (code + small casters) | C1 | C2 | 5c | G3 | G4-G6 | 5.1 probes | 5.2 static mesh |
 |---|---|---|---|---|---|---|---|---|
 | depends on | — | — | C1 | FrameJobs (stage 2) | — | G3 for rigged; arenas | C1 | C2 |
-| per-frame saving after C2 | small casters: rigged attachments; F4 for dynamic alpha | — | — | dynamic culls only | full | dynamic layer only | full | none |
+| per-frame saving after C2 | small casters: rigged attachments only | — | — | dynamic culls only | full | rigged layer only | full | none |
 | refresh-frame saving after C2 | full | — | — | full | — | full | — | light refreshes |
 | upstream risk | low-medium | medium | medium | high (multicore study) | medium | high | low | low |
 
@@ -626,12 +660,12 @@ Cumulative, Rooftops still, cascade CPU (model section 5, [inferred]):
 | Stage | Cascade CPU (ms) | Frame (ms) | fps |
 |---|---|---|---|
 | today | 9.35 | 31.9 | 31.3 |
-| Q | 7.66-8.92 | 30.2-31.5 | 31.8-33.1 |
+| Q | 7.92-9.02 | 30.5-31.6 | 31.7-32.8 |
 | C1 | same | same | same |
-| C2 | 2.00-4.20 | 26.0-28.2 | 35.4-38.4 |
-| 5c | 1.74-3.62 | 25.8-27.7 | 36.1-38.8 |
-| G3 | 1.23-3.37 | 25.3-27.4 | 36.5-39.6 |
-| G4-G6 | 0.76-3.07 | 24.8-27.1 | 36.9-40.3 |
+| C2 | 1.87-4.17 | 25.9-28.2 | 35.4-38.6 |
+| 5c | 1.60-3.60 | 25.7-27.6 | 36.2-39.0 |
+| G3 | 1.17-3.35 | 25.2-27.4 | 36.5-39.6 |
+| G4-G6 | 1.03-3.21 | 25.1-27.3 | 36.7-39.9 |
 
 The frame column includes the 1.5 ms shared sort, which the world pass pays again once the cascades stop sorting
 static content (#542 A5).
@@ -640,22 +674,23 @@ Without C2 (no image change):
 
 | Stage | Cascade CPU (ms) | Frame (ms) | fps |
 |---|---|---|---|
-| Q | 7.66-8.92 | 30.2-31.5 | 31.8-33.1 |
-| 5c | 6.14-8.33 | 28.7-30.9 | 32.4-34.8 |
-| G3 | 5.63-8.08 | 28.2-30.6 | 32.7-35.5 |
-| G4-G6 | 4.33-6.98 | 26.9-29.5 | 33.9-37.2 |
+| Q | 7.92-9.02 | 30.5-31.6 | 31.7-32.8 |
+| 5c | 6.43-8.43 | 29.0-31.0 | 32.3-34.5 |
+| G3 | 6.00-8.18 | 28.6-30.7 | 32.5-35.0 |
+| G4-G6 | 4.82-7.19 | 27.4-29.7 | 33.6-36.5 |
 
 Why this order:
 
 1. **Q first.** It is small, it is needed in either path, it reduces the refresh cost the cache will pay, and its
-   cleanups make C2's diff smaller. Section 7 lists its contents.
+   cleanups make C2's diff smaller. Under the cache its static cut folds into the refreshes; per frame only its cut of
+   the rigged attachments remains (the model's C2 row keeps that and nothing else). Section 7 lists its contents.
 2. **C1 then C2.** C2 is the largest saving by a wide margin (5-7 ms). Its decisions are #542's D1-D8.
 3. **5c after C2.** Its target is decided on C2's numbers (4.6).
 4. **G3** helps every view, shadows included, at low risk.
 5. **The G-series continues on its own track.** Under C2, G6's shadow value is mostly the refresh frames. 5.2 may serve
    those cheaper.
 
-Against the floor: the model's end point at Rooftops Ultra is 37-40 fps still. Moving is unmeasured (the Rooftops
+Against the floor: the model's end point at Rooftops Ultra is 37-40 fps still (25.1-27.3 ms). Moving is unmeasured (the Rooftops
 moving captures had a frozen camera). Under C2, turning costs what standing costs. The 1 % low (13 fps, multicore
 baseline) is dominated by load hitches and the sort's p95 (10-29 ms). The cache removes most of the per-frame sort, so
 it should cut the tail too. That needs 1b and C0 numbers.
@@ -666,21 +701,22 @@ Owner rule: report every bug, leak, inefficiency, overengineering or cruft met i
 dead code only with proof, including by name.
 
 **Hotfix candidates (bugs):** none proven. F11 is a behaviour against the owner's camera-independence rule, inherited
-from upstream, not a regression. Its fix adds cost, so it is a decision (D6), not a hotfix.
+from upstream, not a regression. Its fix adds cost, so it is a decision (D6), not a hotfix. Q's cleanups (F1-F6) live in
+code both shadow methods run, so their gate includes the G0 compare under Legacy as well (section 8).
 
 | # | Label | Where | Evidence | What it should become | Stage |
 |---|---|---|---|---|---|
 | F1 | **dead code** | pipeline.cpp:11734-11738, `if (LLPipeline::sUseOcclusion > 1) doOcclusion(shadow_cam);` in `renderShadowImpl` | The same function sets `sUseOcclusion = 0` at :11636 and restores it at :11850. Every writer of `sUseOcclusion` is outside the render path: the `UseOcclusion` settings handler (`llviewercontrol.cpp:540`), `refreshCachedSettings` (pipeline.cpp:1352), the display and snapshot paths (`llviewerdisplay.cpp:912, 1052, 1365, 1396, 1487, 1542`; `llviewerwindow.cpp:6672`; `llfloater360capture.cpp:489, 622`) and `LLDisableOcclusionCulling` (pipeline.cpp:12066-12081, used around `generateSunShadow`). None is reachable between :11636 and :11734 (the cull, sort and opaque draws make no settings change). The branch is unreachable | delete the branch (LL code, a five-line upstream diff) | Q |
 | F2 | **dead code** | pipeline.cpp:11694-11700, `struct CompareVertexBuffer` | a local type, never referenced in the function (it cannot be referenced elsewhere) | delete | Q |
-| F3 | **cruft** | pipeline.cpp:11711-11717 (`if (shadow_detail <= 2) setColorMask(false, false)`, "if not using VSM"); `shadowF.glsl` writes `frag_color` | The sun maps have no colour attachment: allocated with colour format 0 (pipeline.cpp:1211), and `addColorAttachment(0)` returns at once (`llrendertarget.cpp`). Colour writes are no-ops for any `RenderShadowDetail`. Value 3 is reachable only through Debug Settings: the XUI combos offer 0-2 (`floater_preferences_graphics_advanced.xml:750`, `floater_phototools.xml:876`), and the menu toggles 0/2 (`menu_viewer.xml:4842`, `LLAdvancedClickRenderShadowOption`, `llviewermenu.cpp:10420-10436`). No VSM path exists | mask colour unconditionally in the sun cascades. A depth-only opaque program (no colour output) is a GPU candidate, gated on 1b (4.5.2). Legacy shares the function; the change is identical in image, but it keeps `check_legacy_shadows.py` green only if outside `<ShadowLegacy>` regions (it is) | Q |
+| F3 | **cruft** | pipeline.cpp:11711-11717 (`if (shadow_detail <= 2) setColorMask(false, false)`, "if not using VSM"); `shadowF.glsl` writes `frag_color` | The sun maps have no colour attachment: allocated with colour format 0 (pipeline.cpp:1211), and `addColorAttachment(0)` returns at once (`llrendertarget.cpp`). Colour writes are no-ops for any `RenderShadowDetail`. Value 3 is reachable only through Debug Settings or a saved graphics preset that already holds it: the XUI controls offer 0-2 (`floater_preferences_graphics_advanced.xml:750`, `floater_phototools.xml:876`, `panel_fs_performance_preferences.xml:366`, `panel_performance_preferences.xml:304`, `panel_preferences_graphics1.xml:319`, and their translations under `skins/default/xui/*/`), the menu toggles 0/2 (`menu_viewer.xml:4842`, `LLAdvancedClickRenderShadowOption`, `llviewermenu.cpp:10420-10436`), presets save and restore the value (`app_settings/graphic_preset_controls.xml:75`), the setting is declared at `settings.xml:13264`, and the benches use 1 and 2 (`scripts/perf/bench_shadow_legacy.py`, `bench_shadow_stochastic.py`). No VSM path exists | mask colour unconditionally in the sun cascades. A depth-only opaque program (no colour output) is a GPU candidate, gated on 1b (4.5.2). Legacy shares the function; the change is identical in image, but it keeps `check_legacy_shadows.py` green only if outside `<ShadowLegacy>` regions (it is) | Q |
 | F4 | **inefficiency** (measured 1.01 ms) | `renderAlphaObjects`, pipeline.cpp:7781-7860 | per draw: `bind()` (a `gGL.flush()` and a profile zone even when bound, `llglslshader.cpp:1052-1080`) plus 4-5 uniform sets through the cache; the whole `PASS_ALPHA` map is walked twice, once per rigged flag (:7803-7814) | one walk that buckets draws by (rigged, GLTF); bind each program once and set its uniforms once; draw each bucket. Depth-only, so order across buckets cannot change the map (min depth); bit-exact by the G0 compare harness | Q |
-| F5 | **inefficiency** | pipeline.cpp:12988-12992 (`shadow_hidden`) → `skipRenderingShadows` :14042-14052 | clears the four maps every frame while the shadow is hidden (handover band, moonless sky). The dark gate beside it clears once (`mDirectionalShadowsDarkCleared`) | share the clear-once flag (the maps are not read with weight while hidden) | Q |
+| F5 | **inefficiency** | pipeline.cpp:12988-12992 (`shadow_hidden`) → `skipRenderingShadows` :14042-14052 | clears the four maps every frame while the shadow is hidden (handover band, moonless sky). The dark gate beside it clears once (`mDirectionalShadowsDarkCleared`) | share the clear-once flag (the maps are not read with weight while hidden). Note: `mDirectionalShadowsDarkCleared` is one flag for every render-target pack, and the probe passes switch `mRT` to the auxiliary pack (`llreflectionmapmanager.cpp:799`), so whichever pass closes the gate first clears only its own pack's maps. Harmless: no pack's maps are read with weight while the shadow is hidden or dark, and every pack redraws before its next weighted read | Q |
 | F6 | inefficiency (low) | pipeline.cpp:12631-12651 | a cascade turned off by `RenderShadowSplits` (a debug setting) is bound and cleared every frame | clear once while off | Q |
 | F7 | overengineering (low) | `LLDisableOcclusionCulling` in `generateSunShadow` (:12789) and the save/zero/restore in `renderShadowImpl` (:11635-11636, :11850) | occlusion is turned off twice on the sun path | keep `renderShadowImpl`'s (the projector tiles call `renderShadow` directly, `llprojectorshadows.cpp:859, 1073`); the outer one is redundant but harmless (LL code: leave unless touched anyway) | — |
-| F8 | cruft (needs proof) | pipeline.cpp:11837 and :12774, `gDeferredShadowCubeProgram.bind()` | binds the occlusion-box program after every shadow pass; nothing in the shadow pass draws with it (F1 is the only occlusion use) | verify that the next draw after `generateSunShadow` and after the projector tiles binds its own program, then drop. Not proven dead: callers may rely on "some program is bound" for `gGL` immediate-mode draws | Q (verify), else leave |
+| F8 | leave (deliberate) | pipeline.cpp:11837 and :12774, `gDeferredShadowCubeProgram.bind()` | binds the occlusion-box program after every shadow pass; nothing in the shadow pass draws with it. The bind at :12774 was added on purpose by the N1 hotfix ("rebind the one the callers expect"), so callers rely on a bound program after the shadow pass | leave both binds | — |
 | F9 | structure (blocks 5c and C2) | pipeline.cpp:12757, `static LLCullResult result[4]` | shared by the main view and the probe passes (`gCubeSnapshot` uses 0-1); a per-pass, per-pack result is needed for parallel culls and for keeping a level's result across frames | per-pack, per-layer results (#542 §5.5 already plans this) | C2 |
 | F10 | inefficiency (low, Tracy-inflated) | `renderGeomShadow` (pipeline.cpp:4721-4766) → `LLDrawPoolAvatar::renderShadow` (`lldrawpoolavatar.cpp:358-366`) | every avatar pool is called 3 times per cascade (about 145 calls in cascades 1-3), most returning at `mDrawFace.empty()`; 0.04-0.05 ms per cascade with the zone on, near 0 without | none needed; noted so that nobody chases it | — |
-| F11 | **behaviour against the rule** (inherited) | `lldrawpoolavatar.cpp:388-399`; pipeline.cpp:3256 (attachments) | an impostored avatar and its attachments cast no sun shadow; impostor status follows the camera's ranking (16 non-impostors at Ultra, `featuretable.txt:366`), so an avatar's shadow appears and vanishes with the camera. The 2026-11-13 decision Q9a ("impostored avatars in full in sun maps") is not in the code | decision D6: implement Q9a (cost below) or keep the upstream rule | after C2 (the dynamic layer is where it would cost) |
+| F11 | **behaviour against the rule** (inherited) | `lldrawpoolavatar.cpp:388-399`; pipeline.cpp:3256 (attachments) | an impostored avatar and its attachments cast no sun shadow; impostor status follows the camera's ranking (16 non-impostors at Ultra, `featuretable.txt:366`), so an avatar's shadow appears and vanishes with the camera. `isTooSlow()` (`lldrawpoolavatar.cpp:396`) is a second way an avatar's shadow disappears (render-time limit). The 2026-11-13 decision Q9a (`reports/shadow-model-study-2026-11-13/recommendation.md:458`, "drawn in full at a light-derived level of detail") is not in the code; it is carried over here, while that study's Q1 (deterministic maps for every light) was superseded | decision D6: implement Q9a (cost below) or keep the upstream rule | after C2 (the dynamic layer is where it would cost) |
 
 What implementing Q9a would cost [inferred]:
 
@@ -709,7 +745,7 @@ the same gates:
 | Stage | Scope | Gate: offline | Gate: in-world (owner) | Expected (Rooftops still) | Effort |
 |---|---|---|---|---|---|
 | **1b** (running) | GPU zones per cascade, GL window with GPU timers | — | the session, section 9 | GPU numbers; the CPU/GPU split | (other agent) |
-| **Q** | F1-F6 (and F8 if proven); F4 alpha-blend buckets; small-caster cull (4.2.1) with a debug setting, a unit-tested threshold in `llshadowcascadefit.h`, and per-level dropped counts in the Tracy zone arguments | G0 compare: cascades bit-identical with the cull at 0, **under both Legacy and Stochastic** (F1-F6 and F4 touch `renderShadowImpl` and `renderAlphaObjects`, which both methods run; neither is in a `<ShadowLegacy>` region, so the text gate does not cover them: the compare must); unit test of the threshold; Legacy gates | one Rooftops capture: cascade zones, dropped draws per level; a look at fences and railings in levels 2-3 | −0.4 to −1.7 ms (model 5a, Q row) | 0.5-1 d |
+| **Q** | F1-F6; F4 alpha-blend buckets; small-caster cull (4.2.1, tests 1 and 2) with a debug setting, a unit-tested fixed per-level threshold in `llshadowcascadefit.h`, and per-level dropped counts in the Tracy zone arguments | G0 compare: cascades bit-identical with the cull at 0, **under both Legacy and Stochastic** (F1-F6 and F4 touch `renderShadowImpl` and `renderAlphaObjects`, which both methods run; neither is in a `<ShadowLegacy>` region, so the text gate does not cover them: the compare must); unit test of the threshold; Legacy gates | one Rooftops capture: cascade zones, dropped draws per level; a look at fences and railings in levels 2-3 | −0.3 to −1.4 ms (model 5a, Q row) | 1-1.5 d |
 | **C1** (#542) | camera-position levels, radial selection | #542 | #542 (turn, zoom, edge) | ± 0 (image stage) | 0.5-1 d |
 | **C2** (#542) | S/L cache, triggers, dynamic set | #542 | #542 | 2.0-4.2 ms cascade CPU | 1.5-2 d |
 | **5c** (multicore) | parallel culls; first target chosen on C2's numbers | multicore study | multicore study | −0.3 to −0.6 (under C2) | 2-4 d |
@@ -768,9 +804,11 @@ The 1b measuring build (8c4814273c, `work/mc1b-gpu-timing`) already has:
 
 **Not in the 1b build. Add it if the build can still take it; otherwise it is Q's first commit and #542's C0:**
 
-7. The size histogram of shadow draw infos per level: `LLDrawInfo::mExtents` diameter in level texels, in buckets
-   <0.5, 0.5-1, 1-2, 2-4, >4. That gives A1 for the small-caster cull. A devel-only counter (`check_release_hooks.py`
-   names).
+7. The size histogram of shadow casters per level, in default-view texels of the level, buckets <0.5, 0.5-1, 1-2, 2-4,
+   >4, counted three ways: groups (object extents), bridges (drawable radius), and draw infos. `LLDrawInfo` has no
+   extents, so the probe computes each draw info's bounds from its vertex range in the buffer's CPU copy (measurement
+   only). That gives A1 and says whether test 3 of 4.2.1 is worth its LL-core diff. A devel-only counter
+   (`check_release_hooks.py` names).
 8. Static versus dynamic draws per level (bridge kind: avatar, attachment, active, static). That gives #542's A1-A3.
 9. Change-feed boxes per frame per level, by cause (#542 C0).
 
@@ -783,9 +821,10 @@ The recommended option is first in each.
    - B: G-series first (G3-G6), cache later. No image change for longer, but the smaller saving (model 5b), and
      LL-core risk first.
    - C: 5c first, as the multicore plan has it. Its cascade target shrinks once C2 lands.
-2. **D2, small-caster cull.**
-   - **A:** diameter below 1 texel of the level, levels 1-3, static casters and rigged attachments, never avatar bodies,
-     debug setting `RenderShadowSmallCasterTexels` (1.0; 0 = off).
+2. **D2, small-caster cull.** Decided after the size histogram (section 9, item 7).
+   - **A:** diameter below one default-view texel of the level (a fixed size per level, so zoom changes nothing),
+     levels 1-3, groups and bridges (static casters and rigged attachments), never avatar bodies, debug setting
+     `RenderShadowSmallCasterTexels` (1.0; 0 = off). Per-draw-info extents (test 3) only if the histogram asks.
    - B: 0.5 texel (safer for thin lattices, about half the saving).
    - C: 2 texels (more saving, visible on fences).
 3. **D3, Ultra tier defaults.**
@@ -802,7 +841,7 @@ The recommended option is first in each.
    - **A:** after C1, probes near the camera read the main levels (5.1); probes beyond level 3's reach keep their own
      passes.
    - B: keep the probes' own two passes.
-6. **D6, impostored avatars (F11, Q9a of 2026-11-13).**
+6. **D6, impostored avatars (F11; Q9a, `reports/shadow-model-study-2026-11-13/recommendation.md:458`).**
    - **A:** implement Q9a after C2 and G3, on the dynamic layer, with small-caster culling of attachments; budget
      +0.5-1.5 ms at Rooftops [inferred].
    - B: keep the upstream rule (impostors cast nothing; shadows follow the camera's impostor ranking).
@@ -822,8 +861,14 @@ The recommended option is first in each.
   more reliable.
 - **One scene, one GPU, one driver** (RTX 5070 Ti, NVIDIA 621.14, threaded optimisation on). The cheap GL draw
   (0.11 µs) may not hold on AMD, Intel or Mesa, where G6's value could be larger.
-- **Small-caster share (A1) is assumed.** Section 9 item 7 measures it. If few casters are small, Q's saving is the
-  low end (0.4 ms).
+- **Small-caster share (A1) is assumed**, and may be low because draw infos batch many faces. Section 9 item 7
+  measures it. If few casters are small, Q's saving is the low end (about 0.3 ms).
+- **The model's `--check` tests self-consistency only** (sums, the S1 port, monotone plans). Its measured inputs are
+  typed-in constants from the report and from the attribution tool, not re-read from a capture.
+- **Map size:** the model uses 1920² maps; the viewer allocates `BlurHappySize(sqrt(w*h))` = 1936² at 2560x1440
+  (pipeline.cpp:1185), so the real texels are about 0.8 % finer. No conclusion changes.
+- **The attribution tool** is valid for `sun` and `none` captures only (the projector tiles render inside
+  `generateSunShadow` in `all` captures).
 - **The alpha-blend share (A3) is assumed.** The pass is measured (1.01 ms); how much of it is rebinding is not. F4
   is right on its own terms (fewer redundant binds and uniform sets).
 - **5c's parallel share of the sort (A4b) is assumed.** The sort writes shared pools, and `rebuildMesh` is GL.
@@ -831,14 +876,14 @@ The recommended option is first in each.
   does not measure the feed.
 - **The moving case is unmeasured.** The Rooftops moving captures had a frozen camera for sun and all (Rooftops split
   §3).
-- **F8 is unproven**, and is only to be dropped after the check.
 - **Own idea 5.1** depends on probe programs taking the main matrices. Not traced in every forward probe shader.
 - **Literature:**
   - the RTR4 chapter 7 text and the bibliography were read in the owner-supplied copy (cited by section and
     reference number, nothing copied);
   - GPU Gems chapters are cited by number and title from the books' tables of contents; their listings were not
     re-read for this study;
-  - Kasyan 2013 and Valient 2012 are known through RTR4's summary only.
+  - Kasyan 2013, Persson 2012 and Valient 2012 are known through RTR4's summary and bibliography only (titles as
+    listed there; not verified against the talks).
 - **No viewer build was made** (one build at a time on the owner's PC). Nothing here is called safe.
 
 ## 12. Running the tools
@@ -849,4 +894,7 @@ python scripts/shadows/sun_shadow_cost_model.py --check   # invariants: sums, S1
 ```
 
 `scripts/perf/tracy_cascade_zones.py` reads a Tracy capture through `tracy-csvexport -u` and attributes each zone
-to its cascade (section 2). It takes about 1.5 minutes per zone on a 1.4 GB capture; the docstring gives the call.
+to its cascade (section 2); `child@parent` restricts a zone to one pass. It reads the CSV by its header, so it works
+with exporter 0.11.1 (the measuring build's `packages/bin`, six columns) and 0.15.0 (winget, a seventh `value` column);
+both were run on the Rooftops capture with identical results. It takes about 1.5 minutes per zone on a 1.4 GB capture;
+the docstring gives the call. Valid for `sun` and `none` captures only.

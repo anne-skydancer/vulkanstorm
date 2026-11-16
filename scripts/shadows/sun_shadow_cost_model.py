@@ -13,8 +13,12 @@ with the assumptions the study names, and prints the tables of the study:
   5. the recommended order, cumulative, and the order without the cache, with frame time and fps.
 
 Every number that is not measured is a named assumption (A..), printed next to the result. The level geometry
-is a port of llshadowcascadefit.h (splitDistances, sliceSphere, quantizeRadius, snapShadowDistance), checked by
---check against values the study quotes. Run:
+is a port of llshadowcascadefit.h (splitDistances, sliceSphere, quantizeRadius, snapShadowDistance).
+
+--check tests self-consistency only: sums, the S1 port against values #542 quotes, and that no plan stage adds cost.
+The measured inputs (CASCADE, DRAWS, ZONES) are typed-in constants, not re-read from a capture. CASCADE comes from the
+Rooftops report's per-cascade table, ZONES from this study's attribution (scripts/perf/tracy_cascade_zones.py). The two
+attributions differ slightly (sort 4.07 against 4.18 ms; the tool also counts nested zones of the same name). Run:
 
     python scripts/shadows/sun_shadow_cost_model.py           # all tables
     python scripts/shadows/sun_shadow_cost_model.py --check   # invariants
@@ -73,16 +77,21 @@ CACHE_RESULT = (2.0, 4.2)
 
 # ------------------------------------------------------------------ assumptions (each printed where it is used)
 A = {
-    'A1 small casters, share of static draws in levels 1-3 below the cull size': (0.10, 0.30),
+    'A1 small casters, share of static and rigged draws in levels 1-3 below the cull size (draw infos batch many faces, so it may be low)': (0.05, 0.25),
     'A2 small-caster cull also skips their cull+sort work (share of it)': (0.0, 0.5),
-    'A3 alpha-blend loop: share of the pass that is per-draw rebinding': (0.20, 0.45),
+    'A3 alpha-blend loop: share of the measured pass that is per-draw rebinding (the pass time carries about 7 Tracy zones per draw)': (0.20, 0.35),
     'A4b 5c: share of the net sort that becomes parallel (the sort writes shared pools; rebuildMesh is GL)': (0.0, 0.5),
     'A4 5c parallel efficiency against the ideal 6-wide split': (0.50, 0.75),
     'A5 G3 palette UBO: share of the rigged-batch time it removes': (0.30, 0.60),
     'A6 MDI: share of the static draw time it removes (textured passes merge per texture run only)': (0.40, 0.65),
-    'A7 MDI: share of the dynamic draw time it removes (rigged needs G3)': (0.25, 0.50),
+    'A7 MDI: share of the rigged draw time it removes (needs G3; the avatar pool is not arena geometry)': (0.25, 0.50),
     'A9 shadow distance 192 -> 128: share of levels 2-3 time removed': (0.25, 0.45),
 }
+
+
+A1 = 'A1 small casters, share of static and rigged draws in levels 1-3 below the cull size (draw infos batch many faces, so it may be low)'
+A3 = 'A3 alpha-blend loop: share of the measured pass that is per-draw rebinding (the pass time carries about 7 Tracy zones per draw)'
+A7 = 'A7 MDI: share of the rigged draw time it removes (needs G3; the avatar pool is not arena geometry)'
 
 
 # ------------------------------------------------------------------ level geometry (port of llshadowcascadefit.h)
@@ -165,6 +174,7 @@ def table_breakdown(out):
 
 def table_levels(out):
     out.append('2. Level geometry of the stable cascades (S1), 60 deg vertical fov, 16:9, split exponent 3 [port of llshadowcascadefit.h]')
+    out.append('   (the viewer allocates BlurHappySize(sqrt(w*h)) = 1936^2 at 2560x1440, not 1920^2: texels about 0.8 % finer)')
     out.append('   map   distance  levels  texel per level (cm)                     level far edges (m)')
     for res in (1440, 1920):
         for sd in (192.0, 160.0, 128.0):
@@ -191,16 +201,16 @@ def table_small(out):
 def option_savings(tot):
     """Standalone CPU saving of each option at Rooftops still (ms per frame), (low, high)."""
     lv13_static = sum(c['draw'] - c['pool'] - c['rigged'] for c in CASCADE[1:])
+    lv13_rigged = sum(c['rigged'] for c in CASCADE[1:])
     lv13_sortcull = sum(c['sort'] + c['cull'] for c in CASCADE[1:])
     rigged = sum(c['rigged'] for c in CASCADE)
-    dyn = sum(c['pool'] + c['rigged'] for c in CASCADE)
-    a1 = A['A1 small casters, share of static draws in levels 1-3 below the cull size']
+    a1 = A['A1 small casters, share of static and rigged draws in levels 1-3 below the cull size (draw infos batch many faces, so it may be low)']
     a2 = A['A2 small-caster cull also skips their cull+sort work (share of it)']
-    a3 = A['A3 alpha-blend loop: share of the pass that is per-draw rebinding']
+    a3 = A['A3 alpha-blend loop: share of the measured pass that is per-draw rebinding (the pass time carries about 7 Tracy zones per draw)']
     a4 = A['A4 5c parallel efficiency against the ideal 6-wide split']
     a5 = A['A5 G3 palette UBO: share of the rigged-batch time it removes']
     a6 = A['A6 MDI: share of the static draw time it removes (textured passes merge per texture run only)']
-    a7 = A['A7 MDI: share of the dynamic draw time it removes (rigged needs G3)']
+    a7 = A['A7 MDI: share of the rigged draw time it removes (needs G3; the avatar pool is not arena geometry)']
     a9 = A['A9 shadow distance 192 -> 128: share of levels 2-3 time removed']
     a4b = A['A4b 5c: share of the net sort that becomes parallel (the sort writes shared pools; rebuildMesh is GL)']
     sort_net = tot['sort'] - SHARED_SORT
@@ -209,11 +219,12 @@ def option_savings(tot):
     lv23 = CASCADE[2]['total'] + CASCADE[3]['total']
     opts = [
         ('cache C1+C2 (#542)', tot['total'] - CACHE_RESULT[1], tot['total'] - CACHE_RESULT[0], '#542 model, quiet feed'),
-        ('small-caster cull', a1[0] * lv13_static, a1[1] * lv13_static + a1[1] * a2[1] * lv13_sortcull, 'A1, A2'),
+        ('small-caster cull', a1[0] * (lv13_static + lv13_rigged),
+         a1[1] * (lv13_static + lv13_rigged) + a1[1] * a2[1] * lv13_sortcull, 'A1, A2'),
         ('alpha-blend loop hoist', a3[0] * ALPHA_BLEND_MS, a3[1] * ALPHA_BLEND_MS, 'A3; measured pass %.2f ms' % ALPHA_BLEND_MS),
         ('5c parallel cull (+ part of the sort)', a4[0] * reach_lo, a4[1] * reach_hi, 'A4, A4b; net of the shared sort'),
         ('G3 palette UBO', a5[0] * rigged, a5[1] * rigged, 'A5'),
-        ('G4-G6 shadow MDI (static+rigged)', a6[0] * tot['stat'] + a7[0] * dyn, a6[1] * tot['stat'] + a7[1] * dyn, 'A6, A7'),
+        ('G4-G6 shadow MDI (static+rigged)', a6[0] * tot['stat'] + a7[0] * rigged, a6[1] * tot['stat'] + a7[1] * rigged, 'A6, A7'),
         ('3 levels instead of 4', 0.4 * (CASCADE[0]['total'] - SHARED_SORT), 1.0 * (CASCADE[0]['total'] - SHARED_SORT),
          'level 0 net of the shared sort; its casters, avatars first, move into the wider level 1'),
         ('shadow distance 192 -> 128 m', a9[0] * lv23, a9[1] * lv23, 'A9 (tier default change)'),
@@ -242,24 +253,26 @@ def frame_and_fps(cascade_ms, cached):
 
 def plan_rows(cached_path):
     """Cumulative cascade CPU (best, worst) per stage. The state is split into components so that each stage
-    reduces only what is left: cs = cull + sort (net of the shared sort), stat = static draws, rig = rigged batches,
+    reduces only what is left: cull, sort (with the shared sort), stat = static draws, rig = rigged batches,
     pool = avatar pool. best pairs the low end of what is left with the high end of each saving."""
-    a1 = A['A1 small casters, share of static draws in levels 1-3 below the cull size']
+    a1 = A[A1]
     a2 = A['A2 small-caster cull also skips their cull+sort work (share of it)']
-    a3 = A['A3 alpha-blend loop: share of the pass that is per-draw rebinding']
+    a3 = A[A3]
     a4 = A['A4 5c parallel efficiency against the ideal 6-wide split']
+    a4b = A['A4b 5c: share of the net sort that becomes parallel (the sort writes shared pools; rebuildMesh is GL)']
     a5 = A['A5 G3 palette UBO: share of the rigged-batch time it removes']
     a6 = A['A6 MDI: share of the static draw time it removes (textured passes merge per texture run only)']
-    a7 = A['A7 MDI: share of the dynamic draw time it removes (rigged needs G3)']
-    lv13_static = sum(c['draw'] - c['pool'] - c['rigged'] for c in CASCADE[1:])
-    lv13_cs = sum(c['sort'] + c['cull'] for c in CASCADE[1:])
-    total = sum(c['total'] for c in CASCADE)
+    a7 = A[A7]
     rig = sum(c['rigged'] for c in CASCADE)
     pool = sum(c['pool'] for c in CASCADE)
     stat = sum(c['draw'] for c in CASCADE) - rig - pool
-    cs = total - stat - rig - pool  # includes the shared sort
+    lv13_static = sum(c['draw'] - c['pool'] - c['rigged'] for c in CASCADE[1:])
+    lv13_rigged = sum(c['rigged'] for c in CASCADE[1:])
+    lv13_cull = sum(c['cull'] for c in CASCADE[1:])
+    lv13_sort = sum(c['sort'] for c in CASCADE[1:])
     # two states: best (index 0) and worst (index 1)
-    st = [dict(cs=cs, stat=stat, rig=rig, pool=pool) for _ in range(2)]
+    st = [dict(cull=sum(c['cull'] for c in CASCADE), sort=sum(c['sort'] for c in CASCADE), stat=stat, rig=rig, pool=pool)
+          for _ in range(2)]
     rows = []
 
     def add(name, cached):
@@ -267,33 +280,36 @@ def plan_rows(cached_path):
         rows.append((name, vals[0], vals[1], cached))
 
     add('today', False)
-    # Q: small-caster cull (static draws of levels 1-3, optionally their cull+sort) and the alpha-blend hoist (a static
-    # and rigged pass; booked against the static draws)
+    # Q: the alpha-blend hoist first (a static-draw cost), then the small-caster cull on what is left of the static
+    # draws of levels 1-3 and on their rigged attachments, and optionally on their cull and sort (A2)
     for i, hi in ((0, 1), (1, 0)):
-        st[i]['stat'] -= a1[hi] * lv13_static + a3[hi] * ALPHA_BLEND_MS
-        st[i]['cs'] -= a1[hi] * a2[hi] * lv13_cs
+        hoist = a3[hi] * ALPHA_BLEND_MS
+        st[i]['stat'] -= hoist + a1[hi] * max(lv13_static - hoist, 0.0)
+        st[i]['rig'] -= a1[hi] * lv13_rigged
+        st[i]['cull'] -= a1[hi] * a2[hi] * lv13_cull
+        st[i]['sort'] -= a1[hi] * a2[hi] * lv13_sort
     add('Q: code findings, alpha-blend hoist, small-caster cull', False)
     if cached_path:
         add('C1: camera-position levels (image stage)', False)
         # C2: per frame only the dynamic layer is culled, sorted and drawn, plus amortised refreshes and the copy.
-        # #542 gives the cached total (CACHE_RESULT); the dynamic draws (rig + pool) are measured, the rest is cull+sort,
-        # refreshes and copies. The static draws go (they are in the refreshes).
+        # #542 gives the cached total (CACHE_RESULT) on today's dynamic draws. Q's cut of the rigged attachments stays
+        # (it is per frame); its static cut folds into the refreshes. The rest of the cached total is cull, sort,
+        # refreshes and the copy, split half cull, half sort for 5c.
         for i in (0, 1):
-            dyn = st[i]['rig'] + st[i]['pool']
+            rest = max(CACHE_RESULT[i] - (rig + pool), 0.0)
             st[i]['stat'] = 0.0
-            st[i]['cs'] = max(CACHE_RESULT[i] - dyn, 0.0)
-        add('C2: static/dynamic cache (#542 C2; Q folds into the refreshes)', True)
-        a4b = A['A4b 5c: share of the net sort that becomes parallel (the sort writes shared pools; rebuildMesh is GL)']
+            st[i]['cull'] = 0.5 * rest
+            st[i]['sort'] = 0.5 * rest
+        add("C2: static/dynamic cache (#542 C2; Q's static cut folds into it)", True)
         for i, hi in ((0, 1), (1, 0)):
-            # the per-frame passes are dynamic only: assume half of what is left is cull, half sort
-            st[i]['cs'] -= a4[hi] * 5.0 / 6.0 * (0.5 + 0.5 * a4b[hi]) * st[i]['cs']
+            st[i]['cull'] -= a4[hi] * 5.0 / 6.0 * st[i]['cull']
+            st[i]['sort'] -= a4[hi] * a4b[hi] * 5.0 / 6.0 * st[i]['sort']
         add('5c: parallel culls of the per-frame passes (+ part of the sort)', True)
     else:
-        a4b = A['A4b 5c: share of the net sort that becomes parallel (the sort writes shared pools; rebuildMesh is GL)']
-        cull = sum(c['cull'] for c in CASCADE)
         for i, hi in ((0, 1), (1, 0)):
-            sort_net = max(st[i]['cs'] - cull - SHARED_SORT, 0.0)
-            st[i]['cs'] -= a4[hi] * 5.0 / 6.0 * (cull + a4b[hi] * sort_net)
+            sort_net = max(st[i]['sort'] - SHARED_SORT, 0.0)
+            st[i]['cull'] -= a4[hi] * 5.0 / 6.0 * st[i]['cull']
+            st[i]['sort'] -= a4[hi] * a4b[hi] * 5.0 / 6.0 * sort_net
         add('5c: parallel culls of the four cascades (+ part of the sort)', False)
     for i, hi in ((0, 1), (1, 0)):
         st[i]['rig'] -= a5[hi] * st[i]['rig']
@@ -301,8 +317,7 @@ def plan_rows(cached_path):
     for i, hi in ((0, 1), (1, 0)):
         st[i]['stat'] -= a6[hi] * st[i]['stat']
         st[i]['rig'] -= a7[hi] * st[i]['rig']
-        st[i]['pool'] -= a7[hi] * st[i]['pool']
-    add('G4-G6: shadow MDI' + (' (dynamic layer; refresh frames gain most)' if cached_path else ' (static + rigged)'), cached_path)
+    add('G4-G6: shadow MDI' + (' (rigged layer; refresh frames gain most)' if cached_path else ' (static + rigged)'), cached_path)
     return rows
 
 
