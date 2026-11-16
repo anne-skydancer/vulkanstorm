@@ -988,6 +988,67 @@ class MovingVariantsTest(unittest.TestCase):
             info = json.loads((run / "perf.json").read_text(encoding="utf-8"))["presets"]["RT-still"]
             self.assertNotIn("window_file", info)
 
+    def test_dry_run_with_gpu_window_says_whether_the_viewer_can_collect_it(self):
+        for gl_stats, want in ((True, "PASS"), (False, "FAIL")):
+            with tempfile.TemporaryDirectory() as tmp:
+                code, run = mc1_main(FakeViewer(gl_stats=gl_stats), tmp, extra=["--dry-run", "--no-login-wait", "--gpu-window"])
+                by = {r["check"]: r for r in json.loads((run / "dry_run.json").read_text(encoding="utf-8"))}
+                self.assertEqual(by["gpu window"]["status"], want)
+                self.assertEqual("is there" in by["api"]["detail"], gl_stats)
+
+    def test_the_stage_1b_scenario_loads_and_names_only_settings_and_variants_that_exist(self):
+        sc = pc.load_scenario(HERE.parent / "scenarios" / "mc1b_rooftops.json")
+        self.assertEqual([(p["id"], p["variants"]) for p in sc["presets"]],
+                         [("RT-still", ["sun", "none", "all", "splits2"]), ("RT-moving", ["sun", "none", "all"]),
+                          ("RT-fixed", ["sun", "night", "high"])])
+        self.assertEqual(sc["settle"]["warmup_capture_s"], 10.0)
+        by = {v["id"]: v for v in sc["variants"]}
+        self.assertEqual(by["night"]["environment"], "midnight")
+        self.assertEqual((sc["soft_settings"]["RenderShadowDistance"], by["high"]["soft_settings"]["RenderShadowDistance"]), (192.0, 128.0))
+        xml = SETTINGS_XML.read_text(encoding="utf-8")
+        keys = set(sc["settings"]) | set(sc["soft_settings"])
+        for v in sc["variants"]:
+            keys |= set(v["settings"]) | set(v.get("soft_settings", {}))
+        for key in sorted(keys):
+            self.assertIn("<key>%s</key>" % key, xml)
+
+    def test_a_preset_naming_an_unknown_variant_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = pathlib.Path(tmp) / "s.json"
+            p.write_text(json.dumps({"presets": [{"id": "a", "camera": None, "variants": ["nope"]}],
+                                     "variants": [{"id": "sun", "settings": {}}]}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                pc.load_scenario(p)
+
+    def test_presets_pick_their_variants_the_sky_is_set_and_put_back_and_tier_settings_are_soft(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            presets = [{"id": "A", "camera": None, "variants": ["sun", "none"]},
+                       {"id": "B", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "variants": ["sun", "night", "high"]}]
+            variants = [{"id": "sun", "settings": {"AFKTimeout": 1}}, {"id": "none", "settings": {"AFKTimeout": 2}},
+                        {"id": "night", "settings": {"AFKTimeout": 1}, "environment": "midnight"},
+                        {"id": "high", "settings": {"AFKTimeout": 1}, "soft_settings": {"FramePerSecondLimit": 7, "NoSuchTierSetting": 1}}]
+            settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+                      "warmup_min_s": 0.05, "warmup_max_s": 0.2, "warmup_poll_s": 0.0, "warmup_capture_s": 0.3}
+            with mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+                code, run = mc1_main(fv, tmp, presets=presets, variants=variants, teleports=None, fps_probe=None, settle=settle,
+                                     window={"seconds": 1.0}, soft_settings={"AlsoMissing": 3},
+                                     overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            # the second preset runs its variants in reverse (the alternation), each preset only its own
+            self.assertEqual(list(index["presets"]), ["A__sun", "A__none", "B__high", "B__night", "B__sun"])
+            self.assertEqual(fv.ui_calls, [("World.EnvSettings", "midnight"), ("World.EnvSettings", "region")])
+            self.assertEqual([(e["where"], e["key"]) for e in index["soft_settings_not_taken"]],
+                             [("scenario", "AlsoMissing"), ("variant high", "NoSuchTierSetting")])
+            self.assertEqual(int(fv.settings["FramePerSecondLimit"][1]), 0)      # the tier value went back after the variant
+            self.assertEqual(sorted(p.name for p in run.glob("*.tracy")),
+                             ["A__none.tracy", "A__sun.tracy", "B__high.tracy", "B__night.tracy", "B__sun.tracy"])     # no warm-up file left
+            for info in index["presets"].values():
+                self.assertEqual(info["warmup_capture"], {"seconds": 0.3, "exit_code": 0})
+                self.assertIsNone(info["directional_shadows"])        # the fake has no DirectionalShadows API
+            self.assertEqual(len(index["captures"]), 5)               # the throw-away captures are not listed
+
     def test_the_rooftops_scenarios_load(self):
         sc = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops_moving.json")
         self.assertEqual([p["id"] for p in sc["presets"]], ["RT-moving"])

@@ -376,7 +376,29 @@ configure the measuring build with `-DVKS_GL_STATS=ON` as well and start the ses
 window, projector stats), and after each capture has ended one `GLSubmitStats` window of N frames (600 from the launcher) with GPU
 timers is collected and written to `window_<preset>.json`: GPU ms per view (`frame`, `main`, `sun cascade 0..3`, `projector tiles`)
 and pass, read with `analyze_perf_check.py`. The window runs after the capture so neither the capture nor the log frame rate holds
-the cost of its timers. On a viewer without the API the switch does nothing.
+the cost of its timers. On a viewer without the API the switch does nothing (and `--dry-run` reports it as a failure).
+
+`mc1b_rooftops` is the stage 1b session (`doc/shadows/sun-shadow-cost-study.md`, section 9, on its study branch), about 30 minutes:
+
+| View | Runs (in this order) |
+|---|---|
+| `RT-still`, the camera as it is | `sun`, `none`, `all` (`RenderShadowDetail` 1, 0, 2), `splits2` (sun with `RenderShadowSplits` 2) |
+| `RT-moving`, turning at 10 deg/s | `all`, `none`, `sun` |
+| `RT-fixed`, still at heading 0 | `sun` (the pair of the next two), `night` (World > Environment > Midnight), `high` (the High tier, sun) |
+
+It uses four scenario fields that are new with it:
+
+- `soft_settings` (scenario and variant): settings applied like `settings`, except that one the viewer lacks or does not take
+  (a clamped value) is recorded in `perf.json` (`soft_settings_not_taken`) and the run goes on. The scenario's are the feature
+  table's Ultra list, the `high` variant's are the values in which the High list differs, so the tier does not depend on what the
+  scratch profile picked. A variant's `soft_settings` go back to the scenario's values when the next variant starts.
+- a preset's `variants`: the ids of the variants this view is measured with (default: all of them).
+- a variant's `environment`: a `World.EnvSettings` menu name (`midnight`, `noon`, ...), selected with `UI.call`; the shared
+  environment comes back with the next variant and at the end. `perf.json` records the dark gate's readout
+  (`directional_shadows`, the `DirectionalShadows.stats` reply) at the start of every run, which says whether the night run
+  rendered its cascades or was skipped as too dark.
+- `settle.warmup_capture_s`: after the warm-up of a run, a throw-away Tracy capture of that many seconds, deleted at once, so
+  the first seconds of a profiler connection are in no measured capture.
 
 New options and scenario fields (all optional; the older scenarios are unchanged):
 

@@ -8776,6 +8776,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("shadow stochastic resolve");
+    VKS_GLSTAT_PASS("shadow stochastic resolve"); // <Vulkanstorm/> multicore stage 1b: the map's reading apart from "sun program"
 
     // which lights are the same as last frame: a channel whose light moved or changed has no history
     // (the rules are LLShadowLightChange, llstochasticstate.h, unit tested)

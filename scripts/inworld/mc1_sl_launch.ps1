@@ -21,6 +21,10 @@ and --tracy-capture, the throw-away noop plugin entry, and the run folder .captu
                                            is a 60 s Tracy capture, which holds the GPU zones, and then, on a build configured with
                                            -DVKS_GL_STATS=ON, one GLSubmitStats window of -GpuWindowFrames frames with GPU timers:
                                            window_<preset>.json, GPU ms per view and pass. Without that API the switch does nothing)
+  .\mc1_sl_launch.ps1 -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
+                                          (stage 1b with the sun-shadow cost study's runs, about 30 minutes: Ultra tier set by the
+                                           script; still: sun, none, all, two splits; turning: sun, none, all; fixed heading: sun,
+                                           midnight, High tier. See scenarios\mc1b_rooftops.json)
   -Scenario mc1_sl (the default) is the full session: still, moving, teleports, fps probe.
   .\mc1_sl_launch.ps1 -DryRun             (at the login screen: --dry-run --no-login-wait, do not log in)
 
@@ -86,7 +90,7 @@ try {   # from here every path puts this window's folders back
 
     Write-Host "Run folder (captures, perf.json): $out"
     Write-Host "Scratch profile: $prof"
-    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } default { 'several' } }
+    $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } 'mc1b_rooftops' { '25' } default { 'several' } }
     if ($GpuWindow) { $minutes += ', plus up to half a minute for each GPU window' }
     if (-not $DryRun) {
         Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'

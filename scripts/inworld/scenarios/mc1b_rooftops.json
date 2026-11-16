@@ -1,0 +1,182 @@
+{
+  "name": "mc1b_rooftops",
+  "description": "Multicore stage 1b and the sun-shadow cost study (doc/shadows/sun-shadow-cost-study.md, section 9): GPU time at the busy region. The owner logs in at home (-StartRegion) and teleports to the busy region (-BusyRegion, Rooftops at the 'TT Rooftops dark' altitude) when the pop-up asks. The tier is the feature table's Ultra list (soft_settings). RT-still, the camera as it is: sun (a), none (b), all, sun with RenderShadowSplits 2 (g). RT-moving, turning at 10 deg/s: sun (c), none (d), all. RT-fixed, a still view at heading 0 with its own sun run as the pair: moonlit night by World > Environment > Midnight (e), High tier with sun (f); these two come last because they change the sky and the draw distance. Every run: a warm-up until the frame rate has settled, a throw-away 10 s Tracy capture, a 60 s Tracy capture (GPU zones included) with the frame rate from the log and the camera heading once a second, then with -GpuWindow a GLSubmitStats window with GPU timers (window_<preset>.json).",
+  "settle": {
+    "post_login_s": 20.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "after_teleport_s": 20.0,
+    "warmup_min_s": 10.0,
+    "warmup_max_s": 45.0,
+    "warmup_capture_s": 10.0
+  },
+  "window": {
+    "seconds": 60
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0,
+    "BackgroundYieldTime": 0,
+    "RenderShadowSplits": 3
+  },
+  "soft_settings": {
+    "RenderAnisotropic": true,
+    "RenderAvatarLODFactor": 1.0,
+    "RenderAvatarMaxComplexity": 350000,
+    "RenderAvatarMaxNonImpostors": 16,
+    "RenderAvatarPhysicsLODFactor": 1.0,
+    "RenderCASSharpness": 0.4,
+    "RenderDeferredSSAO": true,
+    "RenderExposure": 1.0,
+    "RenderFSAASamples": 3,
+    "RenderFSAAType": 2,
+    "RenderFarClip": 256.0,
+    "RenderFlexTimeFactor": 1.0,
+    "RenderGlowResolutionPow": 9,
+    "RenderHeroProbeConservativeUpdateMultiplier": 4,
+    "RenderHeroProbeDistance": 16.0,
+    "RenderHeroProbeResolution": 2048,
+    "RenderHeroProbeUpdateRate": 2,
+    "RenderLocalLightCount": 8192,
+    "RenderMaxPartCount": 8192,
+    "RenderMaxTextureResolution": 2048,
+    "RenderMirrors": false,
+    "RenderReflectionProbeCount": 256,
+    "RenderReflectionProbeDetail": 1,
+    "RenderReflectionProbeLevel": 3,
+    "RenderReflectionsEnabled": true,
+    "RenderScreenSpaceReflections": false,
+    "RenderShadowDetail": 2,
+    "RenderShadowDistance": 192.0,
+    "RenderShadowMethod": 2,
+    "RenderTerrainDetail": 1,
+    "RenderTerrainLODFactor": 2.0,
+    "RenderTerrainPBRDetail": 0,
+    "RenderTerrainPBRPlanarSampleCount": 3,
+    "RenderTonemapMix": 0.7,
+    "RenderTonemapType": 1,
+    "RenderTransparentWater": true,
+    "RenderTreeLODFactor": 1.0,
+    "RenderVolumeLODFactor": 3.0,
+    "WLSkyDetail": 128,
+    "WindLightUseAtmosShaders": true
+  },
+  "owner_teleport": {
+    "poll_s": 1.0,
+    "stable_polls": 3,
+    "timeout_s": 1800,
+    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 30 minutes). The sky turns to midnight for one run and comes back.",
+    "done_message": "Session done: you can quit."
+  },
+  "presets": [
+    {
+      "id": "RT-still",
+      "camera": null,
+      "variants": [
+        "sun",
+        "none",
+        "all",
+        "splits2"
+      ]
+    },
+    {
+      "id": "RT-moving",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      },
+      "variants": [
+        "sun",
+        "none",
+        "all"
+      ]
+    },
+    {
+      "id": "RT-fixed",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "variants": [
+        "sun",
+        "night",
+        "high"
+      ]
+    }
+  ],
+  "teleports": null,
+  "fps_probe": null,
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 0
+  },
+  "compare": {
+    "enabled": false,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": false
+  },
+  "variants": [
+    {
+      "id": "sun",
+      "settings": {
+        "RenderShadowDetail": 1
+      }
+    },
+    {
+      "id": "none",
+      "settings": {
+        "RenderShadowDetail": 0
+      }
+    },
+    {
+      "id": "all",
+      "settings": {
+        "RenderShadowDetail": 2
+      }
+    },
+    {
+      "id": "splits2",
+      "settings": {
+        "RenderShadowDetail": 1,
+        "RenderShadowSplits": 2
+      }
+    },
+    {
+      "id": "night",
+      "settings": {
+        "RenderShadowDetail": 1
+      },
+      "environment": "midnight"
+    },
+    {
+      "id": "high",
+      "settings": {
+        "RenderShadowDetail": 1
+      },
+      "soft_settings": {
+        "RenderAvatarMaxComplexity": 300000,
+        "RenderAvatarMaxNonImpostors": 11,
+        "RenderFSAASamples": 2,
+        "RenderFarClip": 128.0,
+        "RenderHeroProbeConservativeUpdateMultiplier": 8,
+        "RenderHeroProbeDistance": 8.0,
+        "RenderHeroProbeResolution": 512,
+        "RenderLocalLightCount": 2048,
+        "RenderMaxPartCount": 4096,
+        "RenderReflectionProbeCount": 128,
+        "RenderReflectionProbeLevel": 2,
+        "RenderShadowDistance": 128.0,
+        "RenderTreeLODFactor": 0.5,
+        "RenderVolumeLODFactor": 2.0,
+        "WLSkyDetail": 96
+      }
+    }
+  ]
+}

@@ -415,6 +415,9 @@ class FakeViewer:
         self.sky_applied_count += 1
 
     def api_UI(self, op, d):
+        if op == "call":        # fire and forget: no reply
+            self.ui_calls = getattr(self, "ui_calls", []) + [(d.get("function"), d.get("parameter"))]
+            return
         path = d["path"]
         last = path.rsplit("/", 1)[-1]
         if op == "getValue":

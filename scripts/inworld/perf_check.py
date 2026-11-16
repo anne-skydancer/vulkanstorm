@@ -71,6 +71,7 @@ DEFAULTS = {
     "owner_teleport": None,  # {"poll_s", "stable_polls", "timeout_s", "ready_message", "done_message"}: the owner teleports by hand
     "fps_probe": None,      # {"seconds": 60, "camera": {...}, "motion": {...}}: the frame rate with no capture connected
     "settings": {},
+    "soft_settings": {},    # like settings, but one that the viewer lacks or does not take is a recorded warning, not an error
     "variants": [],
     "camera": {"height_m": 2.5, "look_distance_m": 200.0},
     "presets": [{"id": "current", "camera": None}],
@@ -126,6 +127,13 @@ def load_scenario(path):
     vids = [v.get("id") for v in sc["variants"]]
     if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
         raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' (they are joined to the preset id with '__')")
+    for v in sc["variants"]:
+        if not isinstance(v.get("soft_settings", {}), dict) or not isinstance(v.get("environment", ""), str):
+            raise ValueError("a variant's soft_settings must be an object and its environment a World.EnvSettings name")
+    for p in sc["presets"]:
+        unknown = [i for i in p.get("variants", []) if i not in vids]
+        if unknown:
+            raise ValueError("preset %r names variants the scenario does not have: %s" % (p.get("id"), unknown))
     ids = [p["id"] for p in sc["presets"]]
     if (not ids and not sc["teleports"]) or len(ids) != len(set(ids)):
         raise ValueError("the scenario needs at least one preset (or a teleport series), with distinct ids")
@@ -328,6 +336,7 @@ class Run:
         self.orig = {}
         self.camera_set = False
         self.variant_keys = set()
+        self.soft_keys = set()      # of variant_keys: those a variant's soft_settings set
         self.preset_no = 0
         self.current_variant = None
         self.base = {}          # the values the scenario's settings and --set gave (what a variant's other keys go back to)
@@ -338,6 +347,7 @@ class Run:
         self.heading_log = None         # the open per-second log of cam_now (one capture), or None
         self.heading_t0 = self.heading_last = 0.0
         self.last_warmup = None
+        self.environment = None     # the World.EnvSettings name a variant selected (None: the shared environment)
         self.login = None           # {"region", "pos", "global"} where the owner logged in
         self.busy_region = None     # the region the owner teleported to
         self.tracy = TracyCapture(args.tracy_capture, outdir, getattr(args, "popen", subprocess.Popen)) if args.tracy_capture else None
@@ -366,6 +376,36 @@ class Run:
         self.v.set_control(key, value)
         return True
 
+    def soft_change(self, key, value, where):
+        """Set a tier setting; one the viewer lacks or does not take (a clamped value) is recorded and the run goes on."""
+        try:
+            if self.change(key, value):
+                return True
+            problem = "no such setting"
+        except LeapError as exc:
+            problem = str(exc)
+        self.index.setdefault("soft_settings_not_taken", []).append({"where": where, "key": key, "value": value, "problem": problem})
+        self.warn("%s: %s=%r not applied (%s)" % (where, key, value, problem))
+        return False
+
+    def set_environment(self, name):
+        """Select a fixed sky by the World > Environment menu action (noon, midnight, ...); None goes back to the shared
+        environment. The menu action toggles: selecting the current one again would undo it, so only changes are sent."""
+        if name == self.environment:
+            return
+        self.v.fire("UI", "call", function="World.EnvSettings", parameter=name or "region")
+        self.environment = name
+        log("environment: %s" % (name or "shared (region)"))
+
+    def directional_stats(self):
+        """The dark gate's readout (DirectionalShadows.stats: decision light, skipped or not), or None without the API."""
+        try:
+            r = self.v.req("DirectionalShadows", "stats")
+        except LeapError:
+            return None
+        return {k: r.get(k) for k in ("known", "skipped", "decision_light", "threshold", "strength_factor",
+                                      "frames_skipped", "frames_rendered")}
+
     def cleanup(self):
         if self.cleaned:
             return
@@ -383,6 +423,11 @@ class Run:
                 self.v.req(API, "windowStop")
             except (LeapError, ConnectionLost):
                 pass
+        if self.environment is not None:
+            try:
+                self.set_environment(None)
+            except (LeapError, ConnectionLost) as exc:
+                log("environment not restored: %s" % exc)
         if self.camera_set:
             try:
                 self.v.release_camera()
@@ -544,7 +589,18 @@ class Run:
         """The measurement window without the GLSubmitStats API: window.seconds s (moving camera, Tracy capture when given)."""
         seconds = float(self.sc["window"]["seconds"])
         info = self.index["presets"].setdefault(key, {})
+        warm_s = float(self.sc["settle"].get("warmup_capture_s", 0.0))
+        if warm_s > 0 and self.tracy:
+            # a throw-away capture: the first seconds of a connection (the profiler's start-up traffic) are not measured
+            self.tracy.start(key + ".warmup", warm_s)
+            rec = self.tracy.finish(lambda: self.tick(0.5), warm_s + 60.0)
+            try:
+                (self.out / rec["file"]).unlink()
+            except OSError:
+                pass
+            info["warmup_capture"] = {"seconds": warm_s, "exit_code": rec["exit_code"]}
         info["projector_stats"] = self.projector_record()
+        info["directional_shadows"] = self.directional_stats()
         started = self.start_capture(key, seconds)
         t0 = time.monotonic()
         self.open_heading_log()
@@ -720,13 +776,23 @@ class Run:
         if self.current_variant == variant["id"]:
             return
         wanted = variant.get("settings", {})
+        soft = variant.get("soft_settings", {})
         for key in sorted(self.variant_keys):
-            if key not in wanted and key in self.orig:
-                self.v.set_control(key, self.base.get(key, self.orig[key]))
+            if key not in wanted and key not in soft and key in self.orig:
+                back = self.base.get(key, self.orig[key])
+                if key in self.soft_keys:
+                    self.soft_change(key, back, "after variant %s" % self.current_variant)
+                else:
+                    self.v.set_control(key, back)
+        for key, val in soft.items():       # a variant's own settings win over its tier
+            if key not in wanted and self.soft_change(key, val, "variant %s" % variant["id"]):
+                self.variant_keys.add(key)
+                self.soft_keys.add(key)
         for key, val in wanted.items():
             if not self.change(key, val):
                 raise LeapError("variant %s: the viewer has no setting %s" % (variant["id"], key))
             self.variant_keys.add(key)
+        self.set_environment(variant.get("environment") or None)
         self.current_variant = variant["id"]
         if self.fps_log and self.vlog:
             self.last_warmup = self.warm_up()
@@ -858,6 +924,9 @@ class Run:
         self.save_restore()
         # the collection itself needs no setting (a window collects by itself); these keep the GPU timers on
         # for the whole run and make the run's settings explicit
+        for k, val in sc["soft_settings"].items():      # the tier first: settings and --set win over it
+            if k not in sc["settings"] and k not in self.args.set_values and self.soft_change(k, val, "scenario"):
+                self.base[k] = val
         for k, val in {**sc["settings"], **self.args.set_values}.items():
             if self.change(k, val):
                 self.base[k] = val
@@ -905,6 +974,8 @@ class Run:
                 else:
                     samples = self.probe_variants(sc["variants"], self.preset_no)
                 order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
+                if preset.get("variants"):      # this view is measured with these variants only
+                    order = [var for var in order if var["id"] in preset["variants"]]
                 for variant in order:
                     v.check_abort()
                     self.one_preset(preset, variant, set_camera=False, fps_samples=samples[variant["id"]])
@@ -1115,7 +1186,12 @@ class Run:
 def dry_run(v, sc, args, outdir):
     if args.fps_from_log:
         problems = []
-        rows = [("api", "PASS", "no %s API: frame rates come from the FrameCounters log lines" % API)]
+        rows = [("api", "PASS", ("%s is there; --gpu-window" if args.gl_window else "no %s API") % API
+                 + ": frame rates come from the FrameCounters log lines")]
+        if args.gpu_window:     # asked for and missing is a failure here, before a session is spent on it
+            rows.append(("gpu window", "PASS" if args.gl_window else "FAIL",
+                         "a GPU-timed window of %d frames follows each capture" % int(args.frames or sc["window"]["frames"])
+                         if args.gl_window else "this viewer has no %s API (it needs -DVKS_GL_STATS=ON)" % API))
         for key in sorted(set(sc["settings"]) | set(CAP_SETTINGS)):
             cur = v.try_control(key)
             rows.append(("setting " + key, "PASS" if cur is not None else "FAIL", "" if cur is None else repr(cur.get("value"))))
