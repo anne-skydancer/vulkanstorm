@@ -434,6 +434,26 @@ public:
             *channels = image->numcomps;
         }
 
+        // Refuse a header that would make opj_decode allocate gigabytes. The limit applies to the
+        // size AFTER the discard (reduce) factor, which is what gets allocated and copied, and is
+        // deliberately far above MAX_IMAGE_SIZE (4096): images larger than that decode and display
+        // today (e.g. on OpenSim), so nothing that works now is refused. 16384 x 16384 x 4 channels
+        // is 1 GB, the most the old path could be asked for in practice.
+        {
+            constexpr U32 MAX_DECODE_DIMENSION = 16384;
+            const U32 ref_w = (image->x1 > image->x0) ? (image->x1 - image->x0) : 0;
+            const U32 ref_h = (image->y1 > image->y0) ? (image->y1 - image->y0) : 0;
+            const U32 round = (1u << discard_level) - 1;
+            const U64 reduced_w = ((U64)ref_w + round) >> discard_level;
+            const U64 reduced_h = ((U64)ref_h + round) >> discard_level;
+            if (reduced_w > MAX_DECODE_DIMENSION || reduced_h > MAX_DECODE_DIMENSION)
+            {
+                LL_WARNS("Texture") << "J2C header declares " << reduced_w << "x" << reduced_h
+                                    << " after discard level " << (U32)discard_level << ", refusing to decode" << LL_ENDL;
+                return false;
+            }
+        }
+
         OPJ_BOOL decoded = opj_decode(decoder, stream, image);
 
         // count was zero.  The latter is just a sanity check before we
@@ -897,6 +917,27 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     // do size the texture to the mem we'll acrually use...
     U32 width = image->comps[0].w;
     U32 height = image->comps[0].h;
+
+    // Refuse what the copy loop below cannot handle: it strides every component by comps[0].w,
+    // and raw_image takes U16 dimensions (the copy loop runs over the full U32 extent), so a
+    // mismatching component, a decoded size beyond U16 or an odd channel count would read or
+    // write out of bounds. There is no MAX_IMAGE_SIZE limit here: images above 4096 work today.
+    bool image_ok = (channels >= 1 && channels <= 4
+                     && width > 0 && height > 0
+                     && width <= 65535u && height <= 65535u
+                     && (S32)image->numcomps >= first_channel + channels);
+    for (S32 comp = first_channel; image_ok && comp < first_channel + channels; comp++)
+    {
+        const opj_image_comp_t& c = image->comps[comp];
+        image_ok = (c.w == width && c.h == height && c.factor == f);
+    }
+    if (!image_ok)
+    {
+        LL_WARNS("Texture") << "decodeImpl: unsupported J2C geometry " << width << "x" << height << " channels " << channels << LL_ENDL;
+        base.setLastError("Unsupported image geometry");
+        base.decodeFailed();
+        return true; // done
+    }
 
     raw_image.resize(U16(width), U16(height), S8(channels));
 
