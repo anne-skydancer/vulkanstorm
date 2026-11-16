@@ -307,8 +307,8 @@ from the lamp's six origins.
   synthetic room, with the receiver-plane term stubbed out, on NVIDIA only. AMD and Intel, a real scene and the full term
   will cost more. Q0 repeats it (section 3.10).
 - **Near tier, PCSS:** `stSpotFilterTile` unchanged, with 8 search gathers and 32 filter gathers. Penumbra from the emitter
-  extent: the emitter prim's scale clamped to 2 to 15 cm (`emitterExtent`, `llprojectorshadowpool.h:129`), the projectors'
-  rule. Largest radius 4 cm at the receiver (`ST_SPOT_RADIUS_MAX_M`), at most 12 texels and at most G - 2. Cost [M, lower
+  extent: a fixed 1 cm light times `RenderShadowLightSize` (`emitterExtent`, `llprojectorshadowpool.h`; projector shadow sharpness P2), the
+  projectors' rule, whatever the prim. Largest radius 4 cm at the receiver (`ST_SPOT_RADIUS_MAX_M`), at most 12 texels and at most G - 2. Cost [M, lower
   bound, same bench and same limits]: **0.046 ms per lit Mpx at 512, 0.051 at 256** (worst case 0.19 / 0.14). A near lamp filling the 1440p screen costs
   about 0.19 to 0.21 ms.
 - **Q2a gate: the filter's seed comes from the light's texel, not the screen** (2026-11-15; the notes' check, SM R:175).
@@ -471,7 +471,7 @@ From `ProjectorShadows.stats` with a `point` block:
 | emitter AABB half-extents; linked prims whose box contains the light centre (the closed-shade predictor for D4) | per light |
 | estimated screen coverage (the projected sphere, clipped) | per light |
 | faces each spatial group's mask covers (box against the six face frusta, 3.3): a histogram of 1 to 6 | per light, on request |
-| lamps within 15 cm of another lamp (the `emitterExtent` clamp): the count and the cluster sizes | per frame |
+| lamps within 15 cm of another lamp (the cluster radius is a Q0 parameter; it was the former 15 cm `emitterExtent` clamp): the count and the cluster sizes | per frame |
 | faces per lamp that contain at least one blended caster (Q5's tint tiles, 7.1) and the blended draws and triangles there | per light, on request |
 | draws, triangles at the current LOD and at the pinned LOD, avatars inside the sphere | per light, on request (`census: true`): one sphere cull per lamp, only when asked |
 | **LOD pin on all lamps' spheres**: total pinned triangles over all lamps (union of the spheres), against the main view's triangles at the natural LOD; the extra main-view GPU ms with the pins held (frame with and without) | per frame, in the three rooms |
@@ -852,7 +852,7 @@ The other open points of 2026-11-14 are settled here: D2 of that list (pin for e
 | Per-avatar maps | one shadow map per avatar and lamp (Unreal's per-object shadows) as an alternative to the dynamic layer L | the S to L copy plus avatar draw is the plan; this is the real alternative if the lag or the copy cost bites. Epic itself says a Movable light becomes the cheaper path at some caster count [I] | notes SM R:122, R:124 |
 | Transform-feedback skinning | skin an avatar once a frame, then draw the captured vertices into every face | core GL, not compute. It saves **GPU skinning only**: the lag table's limit is CPU submit (3.7), which this does not lower. Many separately rigged attachments mean many captures; alpha-masked parts need UVs in the stream. Not measured | GPU Gems 1 ch. 4, GG2 ch. 3, GG3 ch. 3; notes SM R:184-185, R:233-234 [I] |
 | Caster LOD chosen from the light | pick each caster's LOD from its size in the tile for far faces, then freeze it | conflicts with the LOD pin (3.6). Decide after Q0 measures the pin's main-view cost. SL creator LODs can change the silhouette [I]. No source says the shadow pass may use another LOD than the pinned one [I] | GG1 ch. 28 (fewer bones for distant characters), notes M:124 |
-| Clustered emitters sharing one cube | one set of faces for lamps that lie close together (a chandelier) | no source in the literature. Casters inside the cluster's radius are placed wrongly; every member needs identity exclusion (D4). Q0 counts the lamps within 15 cm of another, the `emitterExtent` clamp (3.10) | none; rests on the PCSS light-size formula [I] |
+| Clustered emitters sharing one cube | one set of faces for lamps that lie close together (a chandelier) | no source in the literature. Casters inside the cluster's radius are placed wrongly; every member needs identity exclusion (D4). Q0 counts the lamps within 15 cm of another, the former `emitterExtent` clamp, now only a cluster radius (3.10) | none; rests on the PCSS light-size formula [I] |
 
 ### 8.2 Considered and rejected
 

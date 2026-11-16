@@ -122,7 +122,7 @@ pixel a receiver inside the projector's frustum (the worst case: a lamp that cov
 `origin/codex/projector-pool-p2` (before; its kernel cap is `max(1, 10 N / N_base)`, N_base 2048), stubbing only
 `shadowReceiverGeometry` (identically on both sides). The matrix is built from real poses (the cube, the strip and the bulb of the
 columns; fov 1.5, radius 10 m), receivers are hashed inside the frustum from the near plane to 1.5 x the radius, and each tile is
-ray-cast from a floor and eight boxes with the same matrix. Emitter maximum 15 cm. "Filter off": the filter returns 1.0 at
+ray-cast from a floor and eight boxes with the same matrix. Emitter maximum 15 cm (the then prim-face clamp; the emitter is now a fixed 1 cm light and `--time-pass` was removed: `proj_march_bench.py --time` measures the cost). "Filter off": the filter returns 1.0 at
 once (its inputs kept live), which isolates the arithmetic of the per-pixel derivation (matrix setup, light size, radius cap) and the
 receiver. Run-to-run noise of the same shader: at most 1.5 %. Penumbra pixels: the share of receivers with a visibility strictly between 0
 and 1. kmax: the share of receivers by the larger of the two per-axis radius caps (texels) after the change.

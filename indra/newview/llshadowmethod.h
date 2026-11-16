@@ -14,6 +14,7 @@
 #ifndef LL_LLSHADOWMETHOD_H
 #define LL_LLSHADOWMETHOD_H
 
+#include <cmath>
 #include <cstdint>
 
 namespace LLShadowMethod
@@ -95,6 +96,29 @@ namespace LLShadowMethod
             return { false, false };
         }
         return { new_is_default, true };
+    }
+
+    // The softness slider of Preferences (Graphics, Rendering 2): RenderShadowLightSize, 0.05 .. 1.0, on a logarithmic
+    // slider whose centre (position 0.5) is the default 0.23: two log halves, 0.05 -> 0.23 on the left and 0.23 -> 1.0 on
+    // the right. The setting keeps the real value; only the slider's position is mapped.
+    constexpr float SOFTNESS_MIN = 0.05f;
+    constexpr float SOFTNESS_CENTRE = 0.23f;   // the default of RenderShadowLightSize
+    constexpr float SOFTNESS_MAX = 1.0f;
+
+    // slider position [0, 1] -> value (positions outside are clamped)
+    inline float softnessFromPosition(float pos)
+    {
+        pos = pos < 0.0f ? 0.0f : (pos > 1.0f ? 1.0f : pos);
+        return pos < 0.5f ? SOFTNESS_MIN * std::pow(SOFTNESS_CENTRE / SOFTNESS_MIN, pos * 2.0f)
+                           : SOFTNESS_CENTRE * std::pow(SOFTNESS_MAX / SOFTNESS_CENTRE, (pos - 0.5f) * 2.0f);
+    }
+
+    // value -> slider position [0, 1] (values outside the range are clamped to its ends)
+    inline float softnessToPosition(float value)
+    {
+        value = value < SOFTNESS_MIN ? SOFTNESS_MIN : (value > SOFTNESS_MAX ? SOFTNESS_MAX : value);
+        return value < SOFTNESS_CENTRE ? 0.5f * std::log(value / SOFTNESS_MIN) / std::log(SOFTNESS_CENTRE / SOFTNESS_MIN)
+                                        : 0.5f + 0.5f * std::log(value / SOFTNESS_CENTRE) / std::log(SOFTNESS_MAX / SOFTNESS_CENTRE);
     }
 
     struct PresetMapping

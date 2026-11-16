@@ -30,6 +30,8 @@
 // Gems 3 ch. 10 on caster culling), conservative box-against-plane culling (Assarsson and
 // Moller 2000). No code is taken from any of them.
 
+#include "llshadowmethod.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -110,14 +112,14 @@ inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture, bool dedicated
 // the memory of the two atlases of one tier (D32F, 4 bytes a texel), in bytes
 constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull; }
 
-// The penumbra's size rules (P2b), the C++ twins of sampleProjectorShadow's (shadowStochasticUtil.glsl), per axis of the map
+// The penumbra's size rules (P2b: the radius cap; the emitter is a fixed 1 cm light), the C++ twins of sampleProjectorShadow's (shadowStochasticUtil.glsl), per axis of the map
 // (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; w: the receiver's axial distance from the
 // projector's centre (m); n: the tile size (texels); c1: the depth term of the projector's matrix (z = c0 - c1 / w).
 constexpr float kRadiusMaxM = 0.04f;        // ST_SPOT_RADIUS_MAX_M: the largest radius of the search and filter, metres at the receiver
 constexpr float kKernelTexelsMin = 1.0f;    // ST_SPOT_KERNEL_MIN
 constexpr float kKernelTexelsMax = 12.0f;   // ST_SPOT_KERNEL_TEXELS_MAX
-constexpr float kEmitterMin = 0.02f;        // metres: the emitter extent's lower limit (a point has no edge to render)
-constexpr float kEmitterMax = 0.15f;        // metres: the upper limit, the constant of P2: no lamp is softer than before
+constexpr float kEmitterM = 0.01f;          // metres: every lamp is a 1 cm light (SL's minimum prim size), whatever its prim
+constexpr float kSoftnessDefault = LLShadowMethod::SOFTNESS_CENTRE; // RenderShadowLightSize's default (one constant: llshadowmethod.h)
 
 // clamp(ST_SPOT_RADIUS_MAX_M * k * N / w, 1, 12)
 inline float radiusCapTexels(float k, uint32_t n, float w)
@@ -125,10 +127,11 @@ inline float radiusCapTexels(float k, uint32_t n, float w)
     return std::min(std::max(kRadiusMaxM * k * (float)n / w, kKernelTexelsMin), kKernelTexelsMax);
 }
 
-// the emitter's extent across the beam: the prim's face, clamped (a bad value gets the lower limit)
-inline float emitterExtent(float face)
+// the emitter's extent across the beam, in metres: 1 cm times the softness (RenderShadowLightSize), the same on both axes and
+// for every lamp. A negative or non-finite softness gets the default
+inline float emitterExtent(float softness)
 {
-    return std::isfinite(face) ? std::min(std::max(face, kEmitterMin), kEmitterMax) : kEmitterMin;
+    return kEmitterM * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
 }
 
 // texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N

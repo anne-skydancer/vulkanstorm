@@ -116,6 +116,7 @@
 #include "llteleporthistorystorage.h"
 #include "llproxy.h"
 #include "llweb.h"
+#include <cmath>
 // [RLVa:KB] - Checked: 2010-03-18 (RLVa-1.2.0a)
 #include "rlvactions.h"
 // [/RLVa:KB]
@@ -492,7 +493,7 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
     {
         for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent", "RenderCloudOpticalDepth",
-                                  "RenderShadowBlurSize", "RenderShadowLightSize",
+                                  "RenderShadowBlurSize",
                                   "RenderLightHandoverSwing", "RenderLightHandoverFade", "RenderMoonlightCompensation",
                                   "RenderMoonAdaptationDepth", "RenderAtmosphereHazeSlab", "RenderAtmospherePhysicalLight" })
         {
@@ -2254,8 +2255,10 @@ void LLFloaterPreference::refreshEnabledState()
         && LLFeatureManager::getInstance()->isFeatureAvailable("RenderShadowMethod");
     getChild<LLComboBox>("ShadowMethod")->setEnabled(shadow_method_enabled);
     // the light size applies to the Stochastic method
-    getChild<LLSliderCtrl>("ShadowLightSize")->setEnabled(shadow_method_enabled
-        && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported())));
+    const bool softness_enabled = shadow_method_enabled
+        && LLShadowMethod::usesStableCascades(LLShadowMethod::effective(gSavedSettings.getU32("RenderShadowMethod"), LLStochasticEngine::deviceSupported()));
+    getChild<LLSliderCtrl>("ShadowSoftness")->setEnabled(softness_enabled);
+    getChild<LLSpinCtrl>("ShadowSoftnessValue")->setEnabled(softness_enabled);
     if (!LLStochasticEngine::deviceSupported())
     {
         // Legacy is the only method below OpenGL 4.0: the Stochastic item is not offered and a stored
@@ -4092,8 +4095,46 @@ bool LLPanelPreferenceGraphics::postBuild()
     }
     // </Vulkanstorm>
 
+    // <Vulkanstorm> Shadow softness (Rendering 2)
+    mShadowSoftness = findChild<LLSliderCtrl>("ShadowSoftness");
+    if (mShadowSoftness)
+    {
+        mShadowSoftness->setCommitCallback(boost::bind(&LLPanelPreferenceGraphics::onShadowSoftnessSlider, this));
+        if (LLControlVariable* size = gSavedSettings.getControl("RenderShadowLightSize"))
+        {
+            mShadowSoftnessConnection = size->getSignal()->connect(boost::bind(&LLPanelPreferenceGraphics::onShadowSoftnessChanged, this));
+        }
+        onShadowSoftnessChanged();
+    }
+    // </Vulkanstorm>
+
     return LLPanelPreference::postBuild();
 }
+
+// <Vulkanstorm> Shadow softness
+void LLPanelPreferenceGraphics::onShadowSoftnessSlider()
+{
+    // the slider's position is the setting's logarithmic view; the setting keeps the real value
+    const F32 value = LLShadowMethod::softnessFromPosition(mShadowSoftness->getValueF32());
+    mShadowSoftnessBusy = true;
+    gSavedSettings.setF32("RenderShadowLightSize", value);
+    mShadowSoftnessBusy = false;
+}
+
+void LLPanelPreferenceGraphics::onShadowSoftnessChanged()
+{
+    // typing in the number box, a preset, Cancel or Debug Settings: the slider follows (the slider's own change is skipped)
+    if (mShadowSoftnessBusy || !mShadowSoftness)
+    {
+        return;
+    }
+    const F32 pos = LLShadowMethod::softnessToPosition(gSavedSettings.getF32("RenderShadowLightSize"));
+    if (std::fabs(mShadowSoftness->getValueF32() - pos) > 1.0e-4f)
+    {
+        mShadowSoftness->setValue(pos);
+    }
+}
+// </Vulkanstorm>
 
 // <Vulkanstorm> Night sky place
 void LLPanelPreferenceGraphics::onNightSkyPlaceChanged()

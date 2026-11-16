@@ -455,6 +455,17 @@ private:
     boost::signals2::scoped_connection mNightSkyPlaceConnection;
     // </Vulkanstorm>
 
+    // <Vulkanstorm> Shadow softness (Rendering 2): the slider is the logarithmic view of RenderShadowLightSize (its
+    // position, 0 to 1, is mapped by LLShadowMethod::softnessFromPosition); the number box beside it is bound to the
+    // setting itself, so it shows and accepts the real value. A change of the setting (typing, a preset, Cancel) moves
+    // the slider; the slider sets the setting.
+    void onShadowSoftnessSlider();
+    void onShadowSoftnessChanged();
+    LLSliderCtrl* mShadowSoftness = nullptr;
+    boost::signals2::scoped_connection mShadowSoftnessConnection;
+    bool mShadowSoftnessBusy = false;
+    // </Vulkanstorm>
+
     LOG_CLASS(LLPanelPreferenceGraphics);
 };
 
