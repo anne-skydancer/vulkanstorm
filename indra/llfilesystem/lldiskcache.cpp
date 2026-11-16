@@ -39,6 +39,11 @@
 
 #include "lldiskcache.h"
 
+// purge() and the main thread share these without a lock; they must never fall back to a hidden mutex.
+static_assert(std::atomic<uintmax_t>::is_always_lock_free, "disk cache size must be lock-free");
+static_assert(std::atomic<F32>::is_always_lock_free, "disk cache water marks must be lock-free");
+static_assert(std::atomic<time_point<system_clock>>::is_always_lock_free, "disk cache scan time must be lock-free");
+
  /**
   * The prefix inserted at the start of a cache file filename to
   * help identify it as a cache file. It's probably not required
@@ -170,8 +175,14 @@ void LLDiskCache::purge()
     }
 
     // <FS:Beq> add high water/low water thresholds to reduce the churn in the cache.
-    LL_DEBUGS("LLDiskCache") << "Cache is " << (int)(((F32)file_size_total)/mMaxSizeBytes*100.0) << "% full" << LL_ENDL;
-    if( file_size_total < mMaxSizeBytes * (mHighPercent/100) )
+    // One consistent snapshot of the settings the main thread may change while we run.
+    const uintmax_t max_size_bytes = mMaxSizeBytes.load();
+    const F32 high_percent = mHighPercent.load();
+    const F32 low_percent = mLowPercent.load();
+    const std::shared_ptr<const skip_set_t> skip_list = getSkipList();
+
+    LL_DEBUGS("LLDiskCache") << "Cache is " << (int)(((F32)file_size_total)/max_size_bytes*100.0) << "% full" << LL_ENDL;
+    if( file_size_total < max_size_bytes * (high_percent/100) )
     {
         // Nothing to do here 
         LL_DEBUGS("LLDiskCache") << "Not exceded high water - do nothing" << LL_ENDL;
@@ -186,7 +197,7 @@ void LLDiskCache::purge()
 
 
     // <FS:Beq> add high water/low water thresholds to reduce the churn in the cache.
-    auto target_size = (uintmax_t)(mMaxSizeBytes * (mLowPercent/100));
+    auto target_size = (uintmax_t)(max_size_bytes * (low_percent/100));
     LL_INFOS() << "Purging cache to a maximum of " << target_size << " bytes" << LL_ENDL;
     // </FS:Beq>
 
@@ -243,7 +254,7 @@ void LLDiskCache::purge()
                        ? uuid_as_string.substr(CACHE_FILENAME_PREFIX.size() + 1, 36)
                        : std::string();
         // LL_INFOS() << "checking UUID=" <<uuid_as_string<< LL_ENDL;
-        if (std::find(mSkipList.begin(), mSkipList.end(), uuid_as_string) != mSkipList.end())
+        if (skip_list->find(uuid_as_string) != skip_list->end())
         {
             // this is one of our protected items so no purging
             should_remove = false;
@@ -334,7 +345,7 @@ void LLDiskCache::purge()
             line << entry.first << "  ";
             line << entry.second.first << "  ";
             line << entry.second.second;
-            line << " (" << file_size_total - deleted_so_far << "/" << mMaxSizeBytes << ")"; // <FS:Beq/> update the debug logging to be more useful
+            line << " (" << file_size_total - deleted_so_far << "/" << max_size_bytes << ")"; // <FS:Beq/> update the debug logging to be more useful
             LL_INFOS() << line.str() << LL_ENDL;
         }
 // <FS:Beq> make the summary stats more easily enabled.
@@ -366,16 +377,18 @@ const std::string LLDiskCache::getCacheInfo()
     LL_PROFILE_ZONE_SCOPED; // <FS:Beq/> add some instrumentation
     std::ostringstream cache_info;
 
-    F32 max_in_mb = (F32)mMaxSizeBytes / (1024.0f * 1024.0f);
+    const uintmax_t max_size_bytes = mMaxSizeBytes.load();
+    F32 max_in_mb = (F32)max_size_bytes / (1024.0f * 1024.0f);
     // <FS:Beq> stall prevention. We still need to make sure this initialised when called at startup.
     F32 percent_used;
-    if (mStoredCacheSize > 0)
+    const uintmax_t stored_size = mStoredCacheSize.load();
+    if (stored_size > 0)
     {
-        percent_used = ((F32)mStoredCacheSize / (F32)mMaxSizeBytes) * 100.0f;
+        percent_used = ((F32)stored_size / (F32)max_size_bytes) * 100.0f;
     }
     else
     {
-        percent_used = ((F32)dirFileSize(sCacheDir) / (F32)mMaxSizeBytes) * 100.0f; 
+        percent_used = ((F32)dirFileSize(sCacheDir) / (F32)max_size_bytes) * 100.0f; 
     }
     // </FS:Beq>
     cache_info << std::fixed;
@@ -387,10 +400,17 @@ const std::string LLDiskCache::getCacheInfo()
 }
 
 // <FS:Beq> Copy static items into cache and add to the skip list that prevents their purging
-// Note that there is no de-duplication nor other validation of the list.
+// The list is a set (duplicates collapse); it is not otherwise validated.
+std::shared_ptr<const LLDiskCache::skip_set_t> LLDiskCache::getSkipList() const
+{
+    std::lock_guard<std::mutex> lock(mSkipListMutex);
+    return mSkipList;
+}
+
 void LLDiskCache::prepopulateCacheWithStatic()
 {
-    mSkipList.clear();
+    // Build the new set privately; purge() on the purge thread keeps using the previous snapshot meanwhile.
+    auto new_skip_list = std::make_shared<skip_set_t>();
 
     std::vector<std::string> from_folders;
     from_folders.emplace_back(gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "fs_static_assets"));
@@ -421,17 +441,19 @@ void LLDiskCache::prepopulateCacheWithStatic()
                         LL_WARNS("LLDiskCache") << "Failed to copy " << from_asset_file << " to " << to_asset_file << LL_ENDL;
                     }
                 }
-                if (std::find(mSkipList.begin(), mSkipList.end(), uuid_as_string) == mSkipList.end())
+                if (new_skip_list->insert(uuid_as_string).second)
                 {
                     if (mEnableCacheDebugInfo)
                     {
                         LL_INFOS("LLDiskCache") << "Adding " << uuid_as_string << " to skip list" << LL_ENDL;
                     }
-                    mSkipList.emplace_back(uuid_as_string);
                 }
             }
         }
     }
+
+    std::lock_guard<std::mutex> lock(mSkipListMutex);
+    mSkipList = std::move(new_skip_list);
 }
 // </FS:Beq>
 
@@ -520,7 +542,7 @@ uintmax_t LLDiskCache::updateCacheSize(const uintmax_t newsize)
 {
     mStoredCacheSize = newsize;
     mLastScanTime = system_clock::now();
-    return mStoredCacheSize;
+    return newsize;
 }
 
 uintmax_t LLDiskCache::dirFileSize(const std::string& dir, bool force)
@@ -530,13 +552,14 @@ uintmax_t LLDiskCache::dirFileSize(const std::string& dir, bool force)
 
     const auto current_time = system_clock::now();
 
-    const auto time_difference = duration_cast<seconds>(current_time - mLastScanTime);
+    const auto time_difference = duration_cast<seconds>(current_time - mLastScanTime.load());
 
     // Check if the cached result can be used
     if( !force && time_difference < cache_duration )
     {
-        LL_DEBUGS("LLDiskCache") << "Using cached result: " << mStoredCacheSize << LL_ENDL;
-        return mStoredCacheSize;
+        const uintmax_t stored_size = mStoredCacheSize.load();
+        LL_DEBUGS("LLDiskCache") << "Using cached result: " << stored_size << LL_ENDL;
+        return stored_size;
     }
 // </FS:Beq>
     uintmax_t total_file_size = 0;
