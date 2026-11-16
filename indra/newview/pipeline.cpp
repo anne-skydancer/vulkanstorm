@@ -12575,7 +12575,8 @@ void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& li
 static const char* sun_cascade_gpu_zone(S32 j)
 {
     static const char* const names[4] = { "sun cascade 0", "sun cascade 1", "sun cascade 2", "sun cascade 3" };
-    return names[llclamp(j, 0, 3)];
+    llassert(j >= 0 && j < 4); // the cascade loop's own range
+    return names[j];
 }
 // </Vulkanstorm>
 #endif
@@ -13032,6 +13033,9 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             mTargetShadowSpotLight[0] = mTargetShadowSpotLight[1] = nullptr;
             if (!gCubeSnapshot)
             {
+                // <Vulkanstorm/> multicore stage 1b: the pool update is its own view in the submission statistics
+                // (-DVKS_GL_STATS=ON); its draws were counted into the enclosing view before
+                VKS_GLSTAT_VIEW("projector tiles");
                 mProjectorShadows.update(camera);
             }
         }

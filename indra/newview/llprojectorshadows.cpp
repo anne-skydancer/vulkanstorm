@@ -46,7 +46,6 @@
 #include "llvovolume.h"
 #include "pipeline.h"
 #include "llframecounters.h"
-#include "llglsubmitstats.h" // VKS_GLSTAT_VIEW: nothing without -DVKS_GL_STATS=ON
 
 #include <algorithm>
 #include <array>
@@ -1368,11 +1367,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     }
     mFrame = frame;
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector update"); // <Vulkanstorm> multicore stage 1: the whole per-frame pool update
-    // <Vulkanstorm> multicore stage 1b: the GPU time of the whole pool update (Tracy builds), and its own view in the
-    // submission statistics (-DVKS_GL_STATS=ON), where the tiles were counted into the enclosing view before
-    LL_PROFILE_GPU_ZONE("projector tiles");
-    VKS_GLSTAT_VIEW("projector tiles");
-    // </Vulkanstorm>
+    LL_PROFILE_GPU_ZONE("projector tiles"); // <Vulkanstorm/> multicore stage 1b: the GPU time of the whole pool update (Tracy builds)
     if (!active())
     {
         if (LLTimer::getTotalSeconds() < mNextAllocTry || !ensureAllocated())
