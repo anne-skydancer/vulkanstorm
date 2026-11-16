@@ -96,7 +96,8 @@ LLLocalShadowGL::Scope::~Scope()
 // static
 void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
 {
-    // the programs that dither the semi-transparent casters of a tile by the texel of the tile (not of the atlas)
+    // the programs that dither the semi-transparent casters by a texel origin: the tile's (not the atlas'), or the sun
+    // cascade's wrapped world-grid index (generateSunCascadesStable)
     LLGLSLShader* programs[] = {
         &gDeferredShadowAlphaMaskProgram, &gDeferredShadowFullbrightAlphaMaskProgram, &gDeferredShadowGLTFAlphaBlendProgram,
         &gDeferredAvatarAlphaShadowProgram, &gDeferredAvatarAlphaMaskShadowProgram
