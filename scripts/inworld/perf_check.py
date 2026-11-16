@@ -63,7 +63,8 @@ DEFAULTS = {
     "name": "gl_submit",
     "description": "",
     "settle": {"post_login_s": 20.0, "after_camera_s": 4.0, "after_teleport_s": 30.0, "login_timeout_s": 3600,
-               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0},
+               "window_timeout_s": 180.0, "compare_wait_s": 6.0, "after_setting_s": 3.0,
+               "warmup_min_s": 10.0, "warmup_max_s": 45.0, "warmup_stable_windows": 5, "warmup_tolerance": 0.15},
     "window": {"frames": 120, "gpu": True, "seconds": 60.0},
     "teleport": None,
     "teleports": None,      # {"within": N, "offset": [x, y, z], "second": N, "pause_s", "timeout_s", "settle_s", "min_move_m", "capture_s"}
@@ -126,8 +127,8 @@ def load_scenario(path):
     if len(vids) != len(set(vids)) or not all(isinstance(i, str) and i and all(c.isalnum() or c in ".-" for c in i) for i in vids):
         raise ValueError("variant ids must be distinct tokens of letters, digits, '.' and '-' (they are joined to the preset id with '__')")
     ids = [p["id"] for p in sc["presets"]]
-    if not ids or len(ids) != len(set(ids)):
-        raise ValueError("the scenario needs at least one preset, with distinct ids")
+    if (not ids and not sc["teleports"]) or len(ids) != len(set(ids)):
+        raise ValueError("the scenario needs at least one preset (or a teleport series), with distinct ids")
     for p in sc["presets"]:
         if not all(c.isalnum() or c in "_.-" for c in p["id"]):
             raise ValueError("preset id %r must be a file-name-safe token" % p["id"])
@@ -154,6 +155,34 @@ def fps_from_log(path, offset, end=None):
     return round(sum(vals) / len(vals), 2) if vals else None
 
 
+def settled(vals, windows=5, tolerance=0.15):
+    """The last `windows` values are all non-zero and each within `tolerance` of their median (a moving camera varies)."""
+    if len(vals) < windows or windows < 2:
+        return False
+    tail = sorted(vals[-windows:])
+    if tail[0] <= 0:
+        return False
+    mid = len(tail) // 2
+    med = tail[mid] if len(tail) % 2 else (tail[mid - 1] + tail[mid]) / 2.0
+    return all(abs(v - med) <= tolerance * med for v in tail)
+
+
+def read_new_frames(path, pos):
+    """(frames of each complete "FrameCounters: frames=N" line written after byte `pos`, the new position). Only whole lines
+    are consumed, so a line being written is read next time."""
+    if not path:
+        return [], pos
+    try:
+        with open(path, "rb") as f:
+            f.seek(pos)
+            data = f.read()
+    except OSError:
+        return [], pos
+    end = data.rfind(b"\n") + 1
+    text = data[:end].decode("utf-8", "replace")
+    return [int(m) for m in re.findall(r"FrameCounters: frames=(\d+)", text)], pos + end
+
+
 def region_from_log(path, offset=0, first=False):
     """A region the viewer entered ("Entering region [NAME]" in its log after byte `offset`): the last one, or the first with
     first=True; None when there is none. The viewer logs the line for neighbour regions too, so the caller picks the line
@@ -164,7 +193,8 @@ def region_from_log(path, offset=0, first=False):
             text = f.read().decode("utf-8", "replace")
     except (OSError, TypeError):
         return None
-    found = re.findall(r"Entering region \[([^\]]+)\]", text)
+    # the viewer logs "Entering region []" at login, before the name is known: skip empty names
+    found = [n for n in re.findall(r"Entering region \[([^\]]*)\]", text) if n.strip()]
     return (found[0] if first else found[-1]) if found else None
 
 
@@ -304,6 +334,10 @@ class Run:
         self.cleaned = False
         self.rows = []
         self.motion = None
+        self.cam_now = None             # the camera last commanded: az_deg, camera_pos, focus_pos
+        self.heading_log = None         # the open per-second log of cam_now (one capture), or None
+        self.heading_t0 = self.heading_last = 0.0
+        self.last_warmup = None
         self.login = None           # {"region", "pos", "global"} where the owner logged in
         self.busy_region = None     # the region the owner teleported to
         self.tracy = TracyCapture(args.tracy_capture, outdir, getattr(args, "popen", subprocess.Popen)) if args.tracy_capture else None
@@ -420,10 +454,33 @@ class Run:
         m = self.motion
         if not m:
             self.v.sleep(period)
+            self.sample_heading()
             return
         az = (m["az0"] + m["rate"] * (time.monotonic() - m["t0"])) % 360.0
-        self.v.point_camera(az, m["cfg"])
+        cam, focus = self.v.point_camera(az, m["cfg"])
+        self.cam_now = {"az_deg": round(az, 2), "camera_pos": [round(float(c), 2) for c in cam],
+                        "focus_pos": [round(float(c), 2) for c in focus]}
         self.v.sleep(0.1)
+        self.sample_heading()
+
+    def sample_heading(self):
+        """Once a second while a heading log is open: the camera the script last commanded (the viewer has no read-back)."""
+        if self.heading_log is None or not self.cam_now:
+            return
+        now = time.monotonic()
+        if now - self.heading_last >= 1.0:
+            self.heading_last = now
+            self.heading_log.append({"t_s": round(now - self.heading_t0, 1), **self.cam_now})
+
+    def open_heading_log(self):
+        self.heading_log = []
+        self.heading_t0 = self.heading_last = time.monotonic()
+        self.heading_last -= 1.0        # the first sample at once
+        self.sample_heading()
+
+    def close_heading_log(self):
+        out, self.heading_log = self.heading_log, None
+        return out
 
     def start_capture(self, cid, seconds):
         if not self.tracy:
@@ -441,13 +498,16 @@ class Run:
 
     def set_preset_camera(self, preset):
         self.motion = None
+        self.cam_now = None
         cam = preset.get("camera")
         if not cam:
             return
         cfg = {"pitch_deg": float(cam.get("pitch_deg", 0.0)),
                "height_m": float(cam.get("height_m", self.sc["camera"]["height_m"])),
                "look_distance_m": float(cam.get("look_m", self.sc["camera"]["look_distance_m"]))}
-        self.v.point_camera(float(cam.get("az_deg", 0.0)), cfg)
+        cam_pos, focus = self.v.point_camera(float(cam.get("az_deg", 0.0)), cfg)
+        self.cam_now = {"az_deg": float(cam.get("az_deg", 0.0)), "camera_pos": [round(float(c), 2) for c in cam_pos],
+                        "focus_pos": [round(float(c), 2) for c in focus]}
         rate = float((preset.get("motion") or {}).get("orbit_deg_per_s", 0.0))
         if rate:
             self.motion = {"az0": float(cam.get("az_deg", 0.0)), "rate": rate, "cfg": cfg, "t0": time.monotonic()}
@@ -483,25 +543,119 @@ class Run:
         """The measurement window without the GLSubmitStats API: window.seconds s (moving camera, Tracy capture when given)."""
         seconds = float(self.sc["window"]["seconds"])
         info = self.index["presets"].setdefault(key, {})
-        info["projector_stats"] = self.projector_stats()
+        info["projector_stats"] = self.projector_record()
         started = self.start_capture(key, seconds)
         t0 = time.monotonic()
+        self.open_heading_log()
         fps = self.log_fps_for(seconds)
         self.finish_capture(started)
-        self.motion = None
+        # the orbit goes on for the next variant of this preset (one_preset ends it for a preset without variants)
+        info["camera_log"] = self.close_heading_log()
+        self.projector_end(info)
         info.update({"seconds": seconds, "fps_log": fps, "tracy_connected": started, "wall_s": round(time.monotonic() - t0, 3),
                      "moving": bool(preset.get("motion"))})
         self.rows.append({"preset": key, "frames": 0, "gpu_frames": 0, "fps_wall": None, "fps_stats_off": None, "fps_log": fps,
                           "variant": ""})
         log("preset %s: %s fps over %.0f s%s" % (key, fps, seconds, " with Tracy connected" if started else ""))
 
+    _projector_api = None       # None unknown, True/False once checked
+
+    def projector_available(self):
+        """Whether the viewer has the ProjectorShadows API, asked once. The API is compiled only with -DVKS_GL_STATS=ON, like
+        GLSubmitStats: the Tracy measuring build has neither, and a request to a pump nobody listens on would wait the whole
+        LEAP timeout for nothing (it did: projector_stats was null for every preset)."""
+        if self._projector_api is None:
+            try:
+                reply = self.v.req("LLLeap", "getAPI", api=PROJECTOR_API, timeout=30)
+                ops = {str(o.get("name")) for o in (reply.get("ops") or []) if isinstance(o, dict)}
+                self._projector_api = "stats" in ops
+            except LeapTimeout:
+                self._projector_api = False
+                log("no reply from %s getAPI (timeout): projector_stats is recorded as unavailable" % PROJECTOR_API)
+                return False
+            except LeapError:   # a lost connection (ConnectionLost) is deliberately not a LeapError: it propagates
+                self._projector_api = False
+            if self._projector_api:
+                log("the %s API is there: its counters are recorded per preset (projector_stats)" % PROJECTOR_API)
+            else:
+                log("no %s API in this viewer (it needs a build with -DVKS_GL_STATS=ON): projector_stats is recorded as unavailable" % PROJECTOR_API)
+        return self._projector_api
+
     def projector_stats(self):
-        """The ProjectorShadows.stats reply (slots, light set, pool), or None when the viewer has no such API (older build)."""
-        try:
-            r = self.v.req(PROJECTOR_API, "stats")
-        except LeapError:   # a lost connection (ConnectionLost) is deliberately not a LeapError: it propagates
+        """The ProjectorShadows.stats reply (slots, light set, pool without the tile list), or None when the viewer has no such
+        API or the call fails. crc=false: the tile read-back would stall the frame."""
+        if not self.projector_available():
             return None
-        return {k: r.get(k) for k in ("shadow_method", "shadow_detail", "slots", "lights", "pool")}
+        try:
+            r = self.v.req(PROJECTOR_API, "stats", crc=False)
+        except LeapError:
+            return None
+        out = {k: r.get(k) for k in ("shadow_method", "shadow_detail", "slots", "lights")}
+        pool = dict(r.get("pool") or {})
+        pool.pop("tiles", None)
+        out["pool"] = pool
+        return out
+
+    def projector_record(self):
+        stats = self.projector_stats()
+        if stats is None:
+            return {"available": False, "reason": "no %s API in this viewer (built without VKS_GL_STATS=ON) or the call failed" % PROJECTOR_API}
+        return stats
+
+    # the cumulative pool counters whose change over a capture says what the pool did meanwhile
+    PROJECTOR_DELTAS = ("static_renders", "dynamic_renders", "layer_renders", "dirty_renders", "repacks")
+
+    def projector_end(self, info):
+        """Stats again at the end of the capture, and the change of the cumulative counters and render causes over it."""
+        start = info.get("projector_stats")
+        if not isinstance(start, dict) or start.get("available") is False:
+            return
+        end = self.projector_stats()
+        if end is None:
+            return
+        info["projector_stats_end"] = end
+        a, b = start.get("pool") or {}, end.get("pool") or {}
+        delta = {k: round(float(b[k]) - float(a[k]), 3) for k in self.PROJECTOR_DELTAS if k in a and k in b}
+        ca, cb = a.get("rerender_causes") or {}, b.get("rerender_causes") or {}
+        delta["rerender_causes"] = {k: round(float(cb[k]) - float(ca.get(k, 0)), 3) for k in cb}
+        info["projector_delta"] = delta
+
+    def wait(self, seconds):
+        """Wait `seconds` s with the camera turning on (tick) when the preset moves."""
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            self.tick(min(0.5, max(0.0, end - time.monotonic())))
+
+    def warm_up(self):
+        """After a setting change: wait until the frame rate has settled (the first seconds after a change run at a fraction of
+        the steady rate), judged from the FrameCounters log lines: warmup_stable_windows last 1 s windows each within
+        warmup_tolerance of their median, after at least warmup_min_s and at most warmup_max_s. Returns what happened."""
+        st = self.sc["settle"]
+        lo, hi = float(st.get("warmup_min_s", 10.0)), float(st.get("warmup_max_s", 45.0))
+        n, tol = int(st.get("warmup_stable_windows", 5)), float(st.get("warmup_tolerance", 0.15))
+        poll = float(st.get("warmup_poll_s", 1.0))
+        pos = self.vlog.stat().st_size if self.vlog else 0
+        t0 = time.monotonic()
+        stable, vals, first, last_poll = False, [], True, None
+        while True:
+            self.tick(0.5)
+            now = time.monotonic()
+            waited = now - t0
+            if last_poll is None or now - last_poll >= poll:     # the log is read about once a second, only its new text
+                last_poll = now
+                new, pos = read_new_frames(self.vlog, pos)
+                if first and new:
+                    new, first = new[1:], False         # the first line is a partial window
+                vals += new
+                stable = settled(vals, n, tol)
+            if waited >= hi or (waited >= lo and stable):
+                break
+        res = {"waited_s": round(time.monotonic() - t0, 1), "settled": stable, "last_fps": vals[-n:]}
+        log("warm-up after the setting change: %.1f s, %s (last frame rates %s)" % (
+            res["waited_s"], "settled" if stable else "NOT settled at the maximum wait", res["last_fps"]))
+        if not stable:
+            self.warn("the frame rate had not settled after %.0f s of warm-up (last %s)" % (hi, res["last_fps"]))
+        return res
 
     def probe_variants(self, variants, preset_no):
         """probe_repeats probes of the frame rate with nothing collecting per variant, the variants alternating in order between
@@ -549,7 +703,11 @@ class Run:
                 raise LeapError("variant %s: the viewer has no setting %s" % (variant["id"], key))
             self.variant_keys.add(key)
         self.current_variant = variant["id"]
-        self.v.sleep(float(self.sc["settle"].get("after_setting_s", 3.0)))
+        if self.fps_log and self.vlog:
+            self.last_warmup = self.warm_up()
+            self.index.setdefault("warmups", []).append({"variant": variant["id"], **self.last_warmup})
+        else:
+            self.wait(float(self.sc["settle"].get("after_setting_s", 3.0)))
 
     def one_preset(self, preset, variant=None, set_camera=True, fps_samples=None):
         sc = self.sc
@@ -565,12 +723,17 @@ class Run:
             info["preset"] = pid
             info["variant"] = variant["id"]
             info["variant_settings"] = variant.get("settings", {})
+            if self.last_warmup:
+                info["warmup"] = self.last_warmup
+                self.last_warmup = None
         if set_camera:
             self.set_preset_camera(preset)
             self.v.sleep(sc["settle"]["after_camera_s"])
         self.v.wait_window_visible("the window of preset " + key)
         if self.fps_log:
             self.log_window(key, preset)
+            if variant is None:
+                self.motion = None
             return
 
         if fps_samples is None and self.args.no_glstats:
@@ -589,7 +752,7 @@ class Run:
                                  "spread_pct": round(100.0 * (max(fps_samples) - min(fps_samples)) / fps_off, 2) if fps_off else None}
         else:
             fps_off = self.measure_fps_off()
-        info["projector_stats"] = self.projector_stats()
+        info["projector_stats"] = self.projector_record()
         if self.args.no_glstats:
             # the clean frame rate only: no window, so the GPU timers and the hooks cost nothing
             info["fps_stats_off"] = fps_off
@@ -599,10 +762,14 @@ class Run:
             return
         started = self.start_capture(key, float(sc["window"]["seconds"]))
         start = time.monotonic()
+        self.open_heading_log()
         self.v.req(API, "windowBegin", frames=int(sc["window"]["frames"]), gpu=bool(sc["window"]["gpu"]))
         collected, gpu_frames, wall = self.wait_window(start)
         self.finish_capture(started)
-        self.motion = None
+        info["camera_log"] = self.close_heading_log()
+        self.projector_end(info)
+        if variant is None:
+            self.motion = None
         target = int(sc["window"]["frames"])
         if collected < target:
             self.index["window_failures"].append({"preset": key, "collected": collected, "target": target})
@@ -708,11 +875,15 @@ class Run:
                 # the same view measured once per variant, back to back (the camera is placed once)
                 self.set_preset_camera(preset)
                 v.sleep(sc["settle"]["after_camera_s"])
-                samples = self.probe_variants(sc["variants"], self.preset_no)
+                if self.fps_log:    # the probe samples are not used with the log frame rate: no 10-45 s warm-up per variant for nothing
+                    samples = {var["id"]: [] for var in sc["variants"]}
+                else:
+                    samples = self.probe_variants(sc["variants"], self.preset_no)
                 order = sc["variants"] if self.preset_no % 2 == 0 else list(reversed(sc["variants"]))
                 for variant in order:
                     v.check_abort()
                     self.one_preset(preset, variant, set_camera=False, fps_samples=samples[variant["id"]])
+                self.motion = None      # the orbit ran for every variant; the next preset sets its own camera
             self.save_index()
         if sc["teleports"]:
             self.teleport_series()
@@ -764,7 +935,7 @@ class Run:
         self.index["login"] = self.login
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
         if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
-            raise LeapError("the login region is unknown (no 'Entering region' line in the viewer log): pass --start-region NAME")
+            raise LeapError("the login region is unknown (the viewer logs no region name at login): pass --start-region NAME (the launcher's -StartRegion NAME)")
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
@@ -997,9 +1168,9 @@ def parse_args(argv):
                     "the viewer log (URL-escaped like --tp-region)")
     args = ap.parse_args(argv)
     args.fps_from_log = False
+    args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
     args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
-    args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     try:
         args.tp_pos = [float(c) for c in args.tp_pos.split(",")]
         if len(args.tp_pos) != 3:
@@ -1044,8 +1215,8 @@ def execute(session, args, sc, outdir):
         if args.no_glstats and check_api(v):
             args.fps_from_log = True        # a Tracy measuring build: no GLSubmitStats; the frame rate comes from the log
             log("no %s API: the frame rate comes from the FrameCounters lines of the viewer log" % API)
-            if sc["variants"]:
-                raise LeapError("variants need the %s API" % API)
+            # variants work here too: each variant gets its own measured window (log_window), its own Tracy capture and
+            # its own frame rate from the log; only the clean-probe comparison of the GLSubmitStats path is absent
         args.vlog = vlog
         if args.dry_run:
             return dry_run(v, sc, args, outdir)

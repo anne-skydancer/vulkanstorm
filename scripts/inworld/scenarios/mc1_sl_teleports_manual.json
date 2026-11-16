@@ -1,0 +1,45 @@
+{
+  "name": "mc1_sl_teleports_manual",
+  "description": "Multicore stage 1, teleports by hand. The owner logs in at home (-StartRegion), teleports to the busy region (-BusyRegion) when the pop-up asks; about 20 s after arriving one Tracy capture (MC1-teleports-manual) runs for 600 s while the owner teleports by hand between the busy region and home (about five round trips, 30 s or more apart); then the final pop-up. No automated teleports (busy regions such as Risk refuse teleports to points inside them), no still/moving captures, no fps probe.",
+  "settle": {
+    "post_login_s": 20.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "after_teleport_s": 20.0
+  },
+  "window": {
+    "seconds": 600
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0
+  },
+  "owner_teleport": {
+    "poll_s": 1.0,
+    "stable_polls": 3,
+    "timeout_s": 1800,
+    "ready_message": "Teleport to the busy region now. About 20 s after you arrive a 10-minute capture starts: then teleport by hand busy region -> home -> busy region, about 5 round trips, 30 s or more apart, until the 'Session done' pop-up.",
+    "done_message": "Session done: you can quit."
+  },
+  "presets": [
+    {
+      "id": "MC1-teleports-manual",
+      "camera": null
+    }
+  ],
+  "teleports": null,
+  "fps_probe": null,
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 0
+  },
+  "compare": {
+    "enabled": false,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": false
+  }
+}

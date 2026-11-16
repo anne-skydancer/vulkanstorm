@@ -235,6 +235,8 @@ class FakeViewer:
                                                     "LLViewerWindow", "LLAgent", "LLInventory", "LLStats", "LLNotifications", "LLTeleportHandler")
                             + (("GLSubmitStats",) if self.gl_stats else ()) + (("ProjectorShadows",) if self.projector else ())})
         elif op == "getAPI":
+            if d["api"] == "ProjectorShadows" and not self.projector:
+                return self._reply(d, {"error": "no such API ProjectorShadows"})
             if d["api"] == "GLSubmitStats":
                 if not self.gl_stats:
                     return self._reply(d, {"error": "no such API GLSubmitStats"})

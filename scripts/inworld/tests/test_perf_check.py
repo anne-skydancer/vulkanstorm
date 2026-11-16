@@ -227,6 +227,7 @@ class RunTest(unittest.TestCase):
 
         run.v = Viewer(LeapError("no such API"))
         self.assertIsNone(run.projector_stats())
+        run = object.__new__(pc.Run)        # the availability answer is cached per run
         run.v = Viewer(ViewerGone("pipe closed"))
         with self.assertRaises(ViewerGone):
             run.projector_stats()
@@ -601,7 +602,7 @@ class SeriesCapture(FakeCapture):
         super().__init__(cmd, run_s=14.0 if "MC1-teleports" in " ".join(cmd) else 0.4, **kw)
 
 
-def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, **over):
+def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [Start]\n", hand=True, fps_from_log=False, **over):
     """perf_check.execute on a viewer without GLSubmitStats, the way the MC1 launcher runs it: --no-glstats, a viewer log
     holding the region line, the Tracy capture faked, the frame rate read from the log (faked)."""
     sc = json.loads(MC1_SL.read_text(encoding="utf-8"))
@@ -619,6 +620,7 @@ def mc1_main(fv, tmp, extra=(), popen=SeriesCapture, log_text="Entering region [
     argv = ["--scenario", str(scp), "--out", str(out), "--no-glstats", "--viewer-log", str(vlog),
             "--tracy-capture", "C:/tracy/tracy-capture.exe"] + list(extra)
     args = pc.parse_args(argv)
+    args.fps_from_log = fps_from_log
     args.popen = popen
     FakeCapture.instances.clear()
     if hand:
@@ -648,6 +650,16 @@ class MC1Test(unittest.TestCase):
         for key in list(sc["settings"]) + pc.CAP_SETTINGS:
             self.assertIn("<key>%s</key>" % key, xml)
 
+    def test_the_teleport_scenarios_load_and_an_empty_one_is_refused(self):
+        for name in ("mc1_sl_teleports", "mc1_sl_teleports_manual"):
+            sc = pc.load_scenario(HERE.parent / "scenarios" / (name + ".json"))
+            self.assertTrue(sc["presets"] or sc["teleports"])
+        with tempfile.TemporaryDirectory() as tmp:
+            p = pathlib.Path(tmp) / "s.json"
+            p.write_text(json.dumps({"presets": [], "teleports": None}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                pc.load_scenario(p)
+
     def test_a_motion_preset_needs_a_camera(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = pathlib.Path(tmp) / "s.json"
@@ -663,7 +675,7 @@ class MC1Test(unittest.TestCase):
             with open(f, "a", encoding="utf-8") as fh:
                 for n in (10, 100, 120, 140):
                     fh.write("INFO: FrameCounters: frames=%d skin_palette_calls=1\n" % n)
-                fh.write("Entering region [Ahern]\nEntering region [Bar Foo]\n")
+                fh.write("Entering region []\nEntering region [Ahern]\nEntering region [Bar Foo]\nEntering region []\n")
             self.assertEqual(pc.fps_from_log(f, off), 120.0)        # the first, partial second is dropped
             self.assertIsNone(pc.fps_from_log(f, f.stat().st_size))
             self.assertEqual(pc.region_from_log(f), "Bar Foo")
@@ -830,6 +842,171 @@ class MC1Test(unittest.TestCase):
             for api in ("LLAgent", "LLNotifications", "LLTeleportHandler"):
                 self.assertEqual(by["api " + api], "PASS")
             self.assertEqual(fv.tp_requests, [])
+
+
+class MovingVariantsTest(unittest.TestCase):
+    """The camera turns for every variant of a moving preset, each variant waits for the frame rate to settle, and the
+    projector stats are recorded (or said to be missing)."""
+
+    VARIANTS = [{"id": "none", "settings": {"AFKTimeout": 1}}, {"id": "sun", "settings": {"AFKTimeout": 2}},
+                {"id": "all", "settings": {"AFKTimeout": 3}}]
+
+    def _run(self, tmp, fv):
+        presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
+        settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+                  "warmup_min_s": 0.05, "warmup_max_s": 0.5, "warmup_poll_s": 0.0}
+        calls = []
+
+        def lines(path, pos):
+            calls.append(1)
+            return [100] * 6, pos
+        with mock.patch.object(pc, "read_new_frames", side_effect=lines):
+            return mc1_main(fv, tmp, presets=presets, variants=self.VARIANTS, teleports=None, fps_probe=None, settle=settle,
+                            window={"seconds": 2.5}, overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0}), calls
+
+    def test_every_variant_orbits_for_its_whole_capture_and_logs_the_heading(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            (code, run), calls = self._run(tmp, fv)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(index["presets"]), ["RT-moving__all", "RT-moving__none", "RT-moving__sun"])
+            for key, info in index["presets"].items():
+                log_ = info["camera_log"]
+                self.assertGreaterEqual(len(log_), 2, key)
+                azs = [e["az_deg"] for e in log_]
+                self.assertGreater(len(set(azs)), 1, "the view was frozen in " + key)
+                self.assertTrue(all(b != a for a, b in zip(azs, azs[1:])), key)
+                self.assertEqual(set(log_[0]), {"t_s", "az_deg", "camera_pos", "focus_pos"})
+                self.assertTrue(info["moving"])
+                self.assertTrue(info["warmup"]["settled"])
+            self.assertEqual(len(index["warmups"]), 3)      # the measurement of each variant: the log frame rate runs no probe
+
+    def test_fps_log_mode_runs_no_probe_variants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            with mock.patch.object(pc.Run, "probe_variants", side_effect=AssertionError("probe")) as pv:
+                presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
+                settle = {"post_login_s": 0.0, "after_camera_s": 0.0, "after_setting_s": 0.0, "after_teleport_s": 0.0,
+                          "warmup_min_s": 0.05, "warmup_max_s": 0.2, "warmup_poll_s": 0.0}
+                with mock.patch.object(pc, "read_new_frames", side_effect=lambda p, pos: ([100] * 6, pos)):
+                    code, run = mc1_main(fv, tmp, presets=presets, variants=self.VARIANTS, teleports=None, fps_probe=None,
+                                         settle=settle, window={"seconds": 1.0}, fps_from_log=True,
+                                         overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
+            pv.assert_not_called()
+            self.assertEqual(code, 0)
+
+    def test_a_preset_without_variants_stops_turning_after_its_capture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            presets = [{"id": "RT-moving", "camera": {"az_deg": 0.0, "pitch_deg": 0.0}, "motion": {"orbit_deg_per_s": 10}}]
+            code, run = mc1_main(fv, tmp, presets=presets, variants=[], teleports=None, fps_probe=None, window={"seconds": 2.5},
+                                 overhead={"probe_s": 0.3, "probe_repeats": 1, "bench_iterations": 0})
+            self.assertEqual(code, 0)
+            n = len(fv.cameras)
+            time.sleep(0.5)
+            self.assertEqual(len(fv.cameras), n)
+
+    def test_projector_stats_are_recorded_with_the_counter_deltas_but_not_the_tiles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            (code, run), _ = self._run(tmp, fv)
+            info = json.loads((run / "perf.json").read_text(encoding="utf-8"))["presets"]["RT-moving__none"]
+            self.assertIn("rerender_causes", info["projector_stats"]["pool"])
+            self.assertNotIn("tiles", info["projector_stats"]["pool"])
+            self.assertIn("projector_stats_end", info)
+            self.assertIn("static_renders", info["projector_delta"])
+            self.assertIn("new", info["projector_delta"]["rerender_causes"])
+
+    def test_a_viewer_without_the_api_is_said_to_lack_it_once_and_is_not_waited_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer()
+            t0 = time.monotonic()
+            (code, run), _ = self._run(tmp, fv)
+            self.assertEqual(code, 0)
+            self.assertLess(time.monotonic() - t0, 25.0)      # no 30 s LEAP timeout per preset
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            for info in index["presets"].values():
+                self.assertFalse(info["projector_stats"]["available"])
+                self.assertIn("VKS_GL_STATS", info["projector_stats"]["reason"])
+
+    def test_the_rooftops_scenarios_load(self):
+        sc = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops_moving.json")
+        self.assertEqual([p["id"] for p in sc["presets"]], ["RT-moving"])
+        self.assertEqual([v["id"] for v in sc["variants"]], ["none", "sun", "all"])
+        self.assertEqual([v["settings"]["RenderShadowDetail"] for v in sc["variants"]], [0, 1, 2])
+        full = pc.load_scenario(HERE.parent / "scenarios" / "mc1_rooftops.json")
+        self.assertEqual([p["id"] for p in full["presets"]], ["RT-still", "RT-moving"])
+
+    def test_settled_wants_the_last_windows_close_to_their_median(self):
+        self.assertTrue(pc.settled([5, 100, 105, 98, 100, 102]))
+        self.assertFalse(pc.settled([100, 100, 100, 100]))                  # fewer than 5 windows
+        self.assertFalse(pc.settled([10, 100, 105, 60, 100, 100]))          # warming up: 60 is 40 % under the median
+        self.assertFalse(pc.settled([0, 0, 0, 0, 0]))
+        self.assertTrue(pc.settled([100, 86, 114, 100, 100]))               # a moving camera: within 15 % of the median
+        self.assertFalse(pc.settled([100, 84, 100, 100, 100]))
+        self.assertTrue(pc.settled([100, 91, 100], 3, 0.10))
+        self.assertFalse(pc.settled([100, 89, 100], 3, 0.10))
+
+    def test_read_new_frames_reads_only_new_whole_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            f = pathlib.Path(tmp) / "v.log"
+            f.write_text("INFO: FrameCounters: frames=10\nINFO: FrameCounters: frames=20\nINFO: FrameCounters: fra", encoding="utf-8")
+            vals, pos = pc.read_new_frames(f, 0)
+            self.assertEqual(vals, [10, 20])
+            self.assertEqual(f.read_bytes()[pos:], b"INFO: FrameCounters: fra")      # the unfinished line waits
+            with open(f, "a", encoding="utf-8") as h:
+                h.write("mes=30\n")
+            vals, pos2 = pc.read_new_frames(f, pos)
+            self.assertEqual(vals, [30])
+            self.assertEqual(pc.read_new_frames(f, pos2), ([], pos2))
+            self.assertEqual(pc.read_new_frames(None, 7), ([], 7))
+
+    def test_warm_up_polls_the_log_incrementally_at_most_once_per_poll_period(self):
+        run = object.__new__(pc.Run)
+        run.sc = {"settle": {"warmup_min_s": 0.0, "warmup_max_s": 0.6, "warmup_poll_s": 0.25}}
+        run.vlog = None
+        run.index = {"warnings": []}
+        calls = []
+
+        def fake(path, pos):
+            calls.append(pos)
+            return [100] * 3, pos + 10
+        run.tick = lambda _p: time.sleep(0.05)
+        with mock.patch.object(pc, "read_new_frames", side_effect=fake):
+            res = run.warm_up()
+        self.assertLessEqual(len(calls), 4)             # not once per 0.05 s tick
+        self.assertEqual(calls, sorted(calls))          # the offset only advances
+        self.assertEqual(calls[1], 10)
+
+    def test_warm_up_waits_for_the_minimum_then_until_settled_and_stops_at_the_maximum(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vlog = pathlib.Path(tmp) / "v.log"
+            vlog.write_text("", encoding="utf-8")
+            run = object.__new__(pc.Run)
+            run.sc = {"settle": {"warmup_min_s": 0.2, "warmup_max_s": 1.0, "warmup_poll_s": 0.0}}
+            run.vlog = vlog
+            run.index = {"warnings": []}
+
+            def make_tick(frames):
+                it = iter(frames)
+
+                def tick(_period):
+                    time.sleep(0.05)
+                    with open(vlog, "a", encoding="utf-8") as f:
+                        f.write("INFO: FrameCounters: frames=%d\n" % next(it, frames[-1]))
+                return tick
+            run.tick = make_tick([5, 20, 60, 100, 101, 99, 100, 100])
+            res = run.warm_up()
+            self.assertTrue(res["settled"])
+            self.assertGreaterEqual(res["waited_s"], 0.2)
+            self.assertTrue(all(v >= 90 for v in res["last_fps"]))
+            vlog.write_text("", encoding="utf-8")
+            run.tick = make_tick([int(10 * 1.5 ** i) for i in range(40)])
+            res = run.warm_up()
+            self.assertFalse(res["settled"])
+            self.assertGreaterEqual(res["waited_s"], 1.0)
+            self.assertEqual(len(run.index["warnings"]), 1)
 
 
 if __name__ == "__main__":

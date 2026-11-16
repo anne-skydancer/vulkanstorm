@@ -1,0 +1,74 @@
+{
+  "name": "mc1_rooftops_moving",
+  "description": "Rerun of the moving half of mc1_rooftops (2026-11-16): RT-moving only, camera turning at 10 deg/s through every variant (none, sun, all = RenderShadowDetail 0, 1, 2), each after a warm-up wait until the frame rate has settled. Every run is a 60 s Tracy capture plus the frame rate from the FrameCounters log lines; perf.json also holds a per-second camera log. Same login and teleport hand-off as mc1_rooftops.",
+  "settle": {
+    "post_login_s": 20.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "after_teleport_s": 20.0,
+    "warmup_min_s": 10.0,
+    "warmup_max_s": 45.0
+  },
+  "window": {
+    "seconds": 60
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0,
+    "BackgroundYieldTime": 0
+  },
+  "owner_teleport": {
+    "poll_s": 1.0,
+    "stable_polls": 3,
+    "timeout_s": 1800,
+    "ready_message": "Teleport to the busy region now (Rooftops, at the 'TT Rooftops dark' altitude), then leave the viewer alone until the 'Session done' pop-up (about 6 minutes, 9 at most).",
+    "done_message": "Session done: you can quit."
+  },
+  "presets": [
+    {
+      "id": "RT-moving",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      }
+    }
+  ],
+  "teleports": null,
+  "fps_probe": null,
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 0
+  },
+  "compare": {
+    "enabled": false,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": false
+  },
+  "variants": [
+    {
+      "id": "none",
+      "settings": {
+        "RenderShadowDetail": 0
+      }
+    },
+    {
+      "id": "sun",
+      "settings": {
+        "RenderShadowDetail": 1
+      }
+    },
+    {
+      "id": "all",
+      "settings": {
+        "RenderShadowDetail": 2
+      }
+    }
+  ]
+}
