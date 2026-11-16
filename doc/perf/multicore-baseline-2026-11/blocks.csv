@@ -1,0 +1,53 @@
+block,zone,MC1-still,MC1-moving,MC1-moving-2,MC1-risk-ultra-still,MC1-home-ultra-still,MC1-busy2-ultra-still
+frame,FTM_FRAME,28.3214,23.8751,23.5013,24.7091,10.962,35.5114
+idle,df idle,7.1716,5.9444,5.6974,6.4229,1.3319,6.4618
+object_list_update,LLViewerObjectList::update,5.0683,4.1496,4.0843,4.2609,0.585,4.612
+avatar_idleUpdate,LLVOAvatar::idleUpdate,4.4568,3.5572,3.4981,3.5447,0.5581,4.031
+avatar_updateCharacter,LLVOAvatar::updateCharacter,3.0231,2.461,2.4428,2.4049,0.3597,2.7621
+avatar_updateMotions,LLCharacter::updateMotions,2.6689,1.9723,2.0023,2.0845,0.2865,2.4256
+avatar_skin_palette_init,LLSkinningUtil::initSkinningMatrixPalette,0.2701,0.2217,0.218,0.2691,0.0228,0.274
+avatar_skin_palette_upload,LLRenderPass::uploadMatrixPalette,0.5893,0.4493,0.4464,0.5412,0.0658,0.6521
+particles,update particles,0.4974,0.3763,0.3406,0.7479,0.0893,0.1745
+idle_network,idle network,0.1709,0.1402,0.1365,0.1457,0.1381,0.2259
+process_messages,FTM_PROCESS_MESSAGES,0.1189,0.0927,0.0902,0.0978,0.1168,0.1686
+apparent_angles,FTM_LOD_UPDATE,0.4539,0.4,0.3808,0.4946,0.0431,0.5206
+hud_update,FTM_HUD_UPDATE,0.0714,0.0722,0.07,0.0811,0.0131,0.0978
+display,df Display,20.7527,17.5905,17.526,18.0994,9.4864,28.7831
+render,Render,19.2451,15.941,15.8308,16.4354,8.8442,27.707
+update_geom,Update Geom,0.436,0.4018,0.4312,0.485,0.0657,0.2196
+rebuild_priority_groups,LLPipeline::rebuildPriorityGroups,3.2648,1.3372,1.2486,0.5879,0.2145,0.2707
+rebuild_geom_fill,LLVolumeGeometryManager::rebuildGeom,2.2599,1.1477,1.0839,0.3327,0.0956,0.1252
+texture_list_updateImages,LLViewerTextureList::updateImages,2.0559,2.0526,2.029,2.0933,0.4004,2.1464
+texture_list_decode_priority,LLViewerTextureList::updateImageDecodePriority,1.7016,1.8476,1.8541,1.9486,0.2952,1.9574
+face_calcPixelArea,LLFace::calcPixelArea,1.7613,1.7576,1.7224,1.9542,0.2189,1.9546
+face_calcPixelArea_rigged,calcPixelArea - rigged,1.346,1.3264,1.2731,1.5323,0.1169,1.5636
+face_getTextureVirtualSize,LLFace::getTextureVirtualSize,0.4556,0.3001,0.2796,0.3692,0.0174,0.3855
+mesh_notifyLoadedMeshes,LLMeshRepository::notifyLoadedMeshes,0.6292,0.0553,0.0258,0.0321,0.0258,0.035
+texture_threads_pump,updateTextureThreads,0.0936,0.0639,0.0501,0.0286,0.032,0.0407
+work_queue_runFor,LL::WorkQueueBase::runFor,0.0252,0.021,0.0139,0.0249,0.0102,0.0289
+sun_shadows_generateSunShadow,LLPipeline::generateSunShadow,10.7067,9.8164,9.7893,9.3989,2.4172,14.9539
+shadow_render_renderShadowImpl,LLPipeline::renderShadowImpl,10.3345,9.0403,8.827,7.9428,2.3437,9.4431
+projector_update,projector update,0.6635,1.034,1.1155,1.7829,0.3048,6.3993
+projector_updateLightSet,projector updateLightSet,0.0128,0.0195,0.0202,0.0203,0.0047,0.1077
+projector_pinCasters,projector pinCasters,0.2112,0.1791,0.1088,0.2079,0.1006,0.4193
+projector_renderTile,projector renderTile,0.398,0.2799,0.1704,0.363,0.1687,0.9309
+projector_drawAvatars,projector drawAvatars,0.0111,0.0,0.0,0.0062,0.1002,0.205
+projector_renderLayer,projector renderLayer,0.008,0.0,0.0,0.0033,0.0885,0.0
+deferred_renderGeomDeferred,LLPipeline::renderGeomDeferred,1.176,1.0579,1.0353,1.2267,0.4385,1.3866
+deferred_renderDeferredLighting,LLPipeline::renderDeferredLighting,2.7034,1.8602,1.988,2.2347,0.655,3.4154
+deferred_renderGeomPostDeferred,LLPipeline::renderGeomPostDeferred,2.5317,1.7933,1.9159,2.1383,0.5959,3.0834
+render_ui,render_ui,1.09,0.7993,0.7401,0.738,0.3313,0.8887
+swap,Swap,0.3779,0.1018,0.0593,0.0967,4.7009,3.4663
+reflection_probe_df_Snapshot,df Snapshot,1.5349,1.6494,1.6959,1.6657,0.6414,1.0792
+O2_cullAvatarsByPixelArea,LLVOAvatar::cullAvatarsByPixelArea,0.0372,0.05,0.0303,0.0352,0.0046,0.0532
+O2_LLAudioData_load,LLAudioData::load,0.002,0.0022,0.0015,0.0002,0.0006,0.0002
+O2_notifyMeshLoaded,LLMeshRepository::notifyMeshLoaded,0.0956,0.0217,0.0021,0.0015,0.0006,0.0014
+O2_LLHUDNameTag_updateAll,LLHUDNameTag::updateAll,0.025,0.0173,0.0155,0.028,0.0018,0.0332
+updateCull_world,LLPipeline::updateCull (world),0.436,0.453,0.406,0.384,0.162,0.634
+updateCull_sun,LLPipeline::updateCull (sun),1.169,1.45,1.395,1.305,0.41,1.456
+updateCull_projector,LLPipeline::updateCull (projector),0.036,0.027,0.016,0.04,0.03,0.11
+updateCull_probe,LLPipeline::updateCull (probe),0.084,0.113,0.117,0.113,0.05,0.062
+stateSort_world,LLPipeline::stateSort (world),1.204,0.562,0.574,0.957,0.137,1.126
+stateSort_sun,LLPipeline::stateSort (sun),5.448,3.919,3.822,2.955,0.741,3.123
+stateSort_projector,LLPipeline::stateSort (projector),0.056,0.021,0.013,0.035,0.049,0.15
+stateSort_probe,LLPipeline::stateSort (probe),0.046,0.061,0.064,0.072,0.023,0.035
