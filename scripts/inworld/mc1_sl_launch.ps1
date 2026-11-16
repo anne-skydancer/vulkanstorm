@@ -26,10 +26,20 @@ $scripts = ($PSScriptRoot -replace '\\', '/')
 $tracy   = Join-Path (Split-Path $Exe | Split-Path | Split-Path) 'packages\bin\tracy-capture.exe'
 foreach ($f in @($Exe, $tracy)) { if (-not (Test-Path $f)) { throw "missing: $f" } }
 
-# the real interpreter, not the Microsoft Store alias
-$py = $null
-try { $py = (& py -c "import sys;print(sys.executable)" 2>$null) } catch { }
-if (-not $py) { $py = 'C:/Users/annes/AppData/Local/Python/pythoncore-3.15-64/python.exe' }
+# The user's real folders, read from Windows (not from $env:, which an earlier run in this window may have pointed at a
+# scratch profile); every change to $env: below is undone before this script returns.
+$realLocal   = [Environment]::GetFolderPath('LocalApplicationData')
+$realRoaming = [Environment]::GetFolderPath('ApplicationData')
+$saved = @{ APPDATA = $env:APPDATA; LOCALAPPDATA = $env:LOCALAPPDATA }
+
+# the real interpreter, not the Microsoft Store alias: the installed one first, then py with the real folders
+$py = Join-Path $realLocal 'Python\pythoncore-3.15-64\python.exe'
+if (-not (Test-Path $py)) {
+    $env:LOCALAPPDATA = $realLocal; $env:APPDATA = $realRoaming
+    try { $py = (& py -c "import sys;print(sys.executable)" 2>$null | Select-Object -Last 1) } catch { $py = $null }
+    $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
+}
+if (-not $py -or -not (Test-Path $py) -or ($py -notmatch 'pythonw?\.exe$')) { throw "no Python interpreter found (got: $py)" }
 $py = ($py -replace '\\', '/')
 
 # scratch profile; the dry run gets a fresh one every time (it must never find saved credentials)
@@ -53,5 +63,11 @@ if (-not $DryRun) {
     Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'
     Write-Host '(no minimising, no UI use) until the pop-up "Session done: you can quit" appears (about 15 minutes).'
 }
-Set-Location (Split-Path $Exe)
-& $Exe --leap $plugin --leap $noop
+Push-Location (Split-Path $Exe)
+try {
+    & $Exe --leap $plugin --leap $noop
+} finally {
+    # the viewer keeps its scratch environment; this PowerShell window gets its own folders back
+    $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
+    Pop-Location
+}
