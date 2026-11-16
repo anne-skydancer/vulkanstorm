@@ -383,8 +383,8 @@ Atlas use [computed]:
     all caches in the frame. The feed side is per owner: `setTracking(Points, on)` and `setLampRoots(Points, roots)`, so
     the point pool neither overwrites the projectors' lamp roots nor drops their boxes;
   - **one** combined cap: `kFrameCapMs` = **0.35 ms** for all caches together. The dynamic layer (`kDynamicCapMs` =
-    0.20 ms) is spent first; the static tiles keep at least `kStaticCapMs` = 0.15 ms, and get the whole 0.35 ms when there
-    is no dynamic work. A static tile whose predicted cost is above the cap runs alone as the progress pick once it has
+    0.20 ms while a static tile waits, the whole remaining cap when none does) is spent first; the static tiles keep at least
+    `kStaticCapMs` = 0.15 ms while the dynamic layer takes its 0.20 ms, and get the whole 0.35 ms when there is no dynamic work. A static tile whose predicted cost is above the cap runs alone as the progress pick once it has
     waited 4 frames (or was never drawn). Before P4 each pool had 0.35 ms static plus 0.30 ms dynamic, which two pools
     would have summed to 0.65 ms against about 0.4 ms of headroom inside +5 %; the combined cap holds the sum at 0.35 ms;
   - `A_max` = 24 avatars a face, the nearest to the lamp first. P4's unit tests cover the combined cap, the progress pick
@@ -414,8 +414,8 @@ P4 built the layer for the projector pool and the point pool reuses it: S holds 
 - **Lag** of a far lamp's avatar shadow, from P4's numbers [E, an estimate until the walk session and Q2a measure it]: an
   avatar face costs about **0.04 ms** of CPU [E] (the pool spec's 0.04 to 0.15 ms for 1 to 4 avatar draws); the scheduler
   predicts every item at no less than a **0.05 ms floor** (`kDefaultItemMs`), then at the item's own last measured cost.
-  The 0.20 ms dynamic share therefore holds **4 faces per frame**, and at most `A_max` = 24 avatars draw per face, nearest
-  first. The wait of the last face of a set is `ceil(faces / 4)` frames, the nearest faces being served every frame and the
+  The 0.20 ms dynamic share (while a static tile waits; 0.35 ms, **7 faces**, when none does) therefore holds **4 faces per
+  frame**, and at most `A_max` = 24 avatars draw per face, nearest first. The wait of the last face of a set is `ceil(faces / 4)` frames, the nearest faces being served every frame and the
   rest by the 4-frame deadline, oldest first. Two faces per avatar and far lamp, so 10 / 20 / 55 lamps are 20 / 40 / 110
   faces. Faces drawn every frame (2 near lamps x 3 faces + 2 projector tiles = 8) count against the same 4 a frame, so the
   table is a best case, without that share:

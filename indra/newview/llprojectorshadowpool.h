@@ -1326,9 +1326,11 @@ struct DynamicItem
 // Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first (for an avatar face: the camera
 // position's distance to its nearest avatar), then the one that has waited longest, so ties rotate instead of starving by key.
 // Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its
-// nearest a_max). No floor beyond that, with one exception that prevents permanent starvation:
-// the FIRST pick of a frame runs even if its predicted cost alone exceeds the cap (one such item per frame at most; selectFrame
-// keeps it only as the progress pick, so it passes allow_over = false when the frame has spent). Other items over budget keep their last content.
+// nearest a_max). No floor beyond that, with two exceptions that prevent permanent starvation, for the FIRST pick of a frame only
+// (one such item per frame at most; selectFrame keeps it only as the progress pick, so it passes allow_over = false when the frame has
+// spent): it runs even if its predicted cost alone exceeds the cap when it is an avatar face (every frame: a heavy face is the
+// avatar's own shadow and must not step), or when any item is past the 4-frame deadline. A heavy moving-lamp tile keeps the old rule:
+// it runs only once it is overdue. Other items over budget keep their last content.
 inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max, bool allow_over = true)
 {
     std::vector<const DynamicItem*> order;
@@ -1360,7 +1362,8 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     {
         const float cost = itemCost(it->last_cpu_ms);
         const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
-        if ((spent + cost > t_d_ms && !(allow_over && out.empty())) || avatars + draws > a_max)
+        const bool may_over = allow_over && out.empty() && (it->avatar || it->age_frames >= kDynamicDeadlineFrames);
+        if ((spent + cost > t_d_ms && !may_over) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
         }
@@ -1372,14 +1375,19 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
 }
 
 // The smoothed prediction of an avatar face's CPU cost (an EMA, factor 0.25): one slow measurement (driver time lands in the CPU
-// measurement) does not push a face out of the frame. A non-finite or negative sample leaves the prediction as it was.
+// measurement) does not push a face out of the frame. Each sample is clamped to kCostSampleMaxMs (2 x kFrameCapMs, asserted below the
+// cap) before it is blended, so one hitch cannot make a face "heavy" for dozens of frames. A zero prediction (a record that has not
+// drawn a layer yet; itemCost floors it at kDefaultItemMs) is seeded by the first real sample. A non-finite or negative sample leaves
+// the prediction as it was.
 constexpr float kCostSmoothing = 0.25f;
+constexpr float kCostSampleMaxMs = 0.70f;
 inline float smoothedCostMs(float previous, float sample)
 {
     if (!std::isfinite(sample) || sample < 0.f)
     {
         return previous;
     }
+    sample = std::min(sample, kCostSampleMaxMs);
     if (!std::isfinite(previous) || previous <= 0.f)
     {
         return sample;
@@ -1396,7 +1404,7 @@ inline float smoothedCostMs(float previous, float sample)
 // rectangle the last pass drew (`layerRect`), L equals S bit for bit, because every avatar draw is scissored to the rectangle it was
 // computed for. The next face copies S -> L over the union of the old and the new rectangle (the old avatar's pixels are restored,
 // the new ones are drawn over) and the result equals a whole-tile copy followed by the same scissored draw. When the footprint is
-// unknown (a corner at or behind the eye plane, a non-finite matrix, a fast or impostored avatar) or covers most of the tile, the
+// unknown (a corner at or behind the eye plane, a non-finite matrix, an impostored avatar) or covers most of the tile, the
 // rectangle is the whole tile: the same rule, not a second method.
 
 struct TexelRect // [x0, x1) x [y0, y1) in tile texels
@@ -1407,8 +1415,14 @@ struct TexelRect // [x0, x1) x [y0, y1) in tile texels
     bool operator==(const TexelRect& o) const { return (empty() && o.empty()) || (x0 == o.x0 && y0 == o.y0 && x1 == o.x1 && y1 == o.y1); }
 };
 
-constexpr float kFootprintMarginM = 0.3f;        // the extents' lag at a walk (survey 2026-11-16), at the avatar, in metres
+// The margin around an avatar's extents. The extents are what can lag: LLVOAvatar refreshes them only every `period` frames (4 up to 5
+// avatars, 8 at 10, 20 at 25) and translates them by the pelvis in between, so a limb or a rigged attachment (inside the extents, with
+// no padding of its own) can leave the box by what it moved in that time. The margin therefore grows with the period, with the speed
+// (running, flying) and with the size of the box.
+constexpr float kFootprintMarginM = 0.3f;        // base, at the avatar, in metres
+constexpr float kFootprintStaleM = 0.04f;        // plus this many metres per frame of the extents' refresh period
 constexpr float kFootprintSpeedSeconds = 0.15f;  // plus this many seconds of the avatar's speed (running, flying)
+constexpr float kFootprintSizeFraction = 0.15f;  // plus this share of the box diagonal (a wing or a tail swings in proportion)
 constexpr int32_t kFootprintMarginTexels = 2;    // plus a rounding margin in the tile
 constexpr float kFootprintMaxFraction = 0.5f;    // above this share of the tile area the whole tile is copied
 
@@ -1456,10 +1470,18 @@ inline Aabb inflateBox(const Aabb& b, float m)
     return o;
 }
 
-// The margin (metres) around an avatar's extents for its speed (m/s).
-inline float footprintMarginM(float speed_mps)
+// The margin (metres) around an avatar's extents `box` for its speed (m/s) and the frames between two refreshes of the extents.
+inline float footprintMarginM(float speed_mps, int32_t extent_period_frames, const Aabb& box)
 {
-    return kFootprintMarginM + (std::isfinite(speed_mps) ? std::max(speed_mps, 0.f) : 0.f) * kFootprintSpeedSeconds;
+    float diag2 = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float d = box.hi[i] - box.lo[i];
+        diag2 += d * d;
+    }
+    const float diag = std::isfinite(diag2) ? std::sqrt(diag2) : 0.f;
+    return kFootprintMarginM + float(std::max(extent_period_frames, 0)) * kFootprintStaleM +
+           (std::isfinite(speed_mps) ? std::max(speed_mps, 0.f) : 0.f) * kFootprintSpeedSeconds + diag * kFootprintSizeFraction;
 }
 
 // The tile rectangle one box covers through `m`, the column-major clip matrix (projection * view, agent space to clip space) of the
@@ -1531,18 +1553,22 @@ inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const Tex
 // (a dirty or first-fill tile) are spent from it, never from two caps that add up (before P4: 0.35 + 0.30 ms).
 //   - kFrameCapMs 0.35 ms is 4.4 % of an 8 ms frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one). The +5 %
 //     light and shadow allowance is about 0.4 ms of that frame, so 0.05 ms stays free for the rest of the pool's CPU work.
-//   - Priority: the dynamic layer first, up to kDynamicCapMs 0.20 ms. An avatar or a moving lamp is seen to lag at once; a dirty
-//     static tile only shows a stale shadow of something that changed, and its wait is bounded by the age order of selectStatic.
+//   - Priority: the dynamic layer first. An avatar or a moving lamp is seen to lag at once; a dirty static tile only shows a stale
+//     shadow of something that changed, and its wait is bounded by the age order of selectStatic. Two regimes (dynamicShareMs): while a
+//     static tile waits, the dynamic layer gets kDynamicCapMs 0.20 ms; while none waits it gets the whole remaining cap (up to 7 faces
+//     at the 0.05 ms floor), since the other 0.15 ms would go unused.
 //   - The static tiles get what the dynamic layer left: at least kStaticCapMs = kFrameCapMs - kDynamicCapMs = 0.15 ms (two measured
-//     tiles of 0.07 ms), all 0.35 ms in a frame without dynamic work.
+//     tiles of 0.07 ms) while the dynamic layer takes its 0.20 ms, all 0.35 ms in a frame without dynamic work.
 //   - The sum of the predicted costs of a frame's picks never exceeds kFrameCapMs, except for one single item whose own prediction is
 //     above what is left, which runs alone when nothing else was spent in the frame (progress; selectFrame).
 // The measured cost only predicts what fits; it does not set the budget.
 constexpr float kFrameCapMs = 0.35f;
 constexpr float kDynamicCapMs = 0.20f;
 constexpr float kStaticCapMs = kFrameCapMs - kDynamicCapMs;
+static_assert(kCostSampleMaxMs == 2.f * kFrameCapMs, "a cost sample is clamped to twice the frame cap");
 // A_max: the avatar draws of a frame (one per avatar in a lamp's volume, at least one per avatar layer). The CPU share binds first
-// (0.20 ms / the 0.05 ms scheduler floor = 4 faces a frame); 24 is the ceiling a cheaper face could reach.
+// (0.20 ms / the 0.05 ms scheduler floor = 4 faces a frame while a static tile waits, 0.35 / 0.05 = 7 when none does); 24 is the
+// ceiling a cheaper face could reach.
 constexpr uint32_t kAvatarDrawsMax = 24;
 
 // The dynamic layer's share of the cap `left_ms`: kDynamicCapMs while a static tile waits (the static schedule keeps the rest), the
@@ -1568,13 +1594,14 @@ struct FramePicks
 };
 
 // The frame's merged selection under the shared cap `cap_ms` (the cap minus what earlier work of the frame already spent, kFrameCapMs
-// at the start): the dynamic items first (selectDynamic, up to kDynamicCapMs and A_max), then the static ones in what is left.
+// at the start): the dynamic items first (selectDynamic, up to dynamicShareMs and A_max), then the static ones in what is left.
 // The first static candidate always has its place if it fits the cap: the dynamic layer gives up its last faces for it. A first
 // static candidate that is above the whole cap runs alone as the progress pick once it has waited kDynamicDeadlineFrames frames (or was
 // never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
 // is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
-// without exception. A dynamic item that is over its share runs alone, every frame, as the progress pick (the overrun is that one
-// item); the dynamic share is the whole remaining cap when no static item waits (dynamicShareMs).
+// without exception. An avatar face that is over its share runs alone, every frame, as the progress pick (the overrun is that one
+// item; a moving lamp's tile only once it is overdue); the dynamic share is the whole remaining cap when no static item waits
+// (dynamicShareMs).
 inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
                               uint32_t a_max, bool progress_ok)
 {
@@ -1729,7 +1756,8 @@ inline FrameLedger& frameLedger()
 
 // The lag of the avatar layer (P4): how many avatar faces (a lamp's tile with an avatar in its light is one face) a frame can draw,
 // and so how long the last face of a set waits. A frame draws min(A_max left after the faces drawn every frame, the dynamic CPU
-// share / the cost of one face) faces; the scheduler floors the cost of an item at kDefaultItemMs.
+// share / the cost of one face) faces (the share is kDynamicCapMs while a static tile waits, else the whole cap); the scheduler floors
+// the cost of an item at kDefaultItemMs.
 inline uint32_t layerFacesPerFrame(float dynamic_cap_ms, float per_face_ms, uint32_t a_max, uint32_t every_frame_draws)
 {
     const uint32_t spare = a_max > every_frame_draws ? a_max - every_frame_draws : 0u;
