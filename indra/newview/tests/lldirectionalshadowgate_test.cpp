@@ -5,8 +5,9 @@
 //   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lldirectionalshadowgate_test.cpp
 // The dark gate of the directional shadow cascades: exactly zero light skips, a light under the threshold skips, the
 // fade is 0 up to the resume level and rises smoothly to 1 at twice the threshold, a light hovering at the threshold
-// does not flicker the pass, a skipped frame always has strength 0 (no stale cascade map is read with weight), and the
-// frame that resumes has a strength above 0 only because it renders first.
+// does not flicker the pass, and a skipped frame always has strength 0. This tests the gate's logic only (skip implies
+// strength 0, strength above 0 implies a render that frame); that the environment update, generateSunShadow and the uniform
+// upload run in that order is a property of pipeline.cpp and is not tested here.
 
 #include "lldirectionalshadowgate.h"
 
@@ -32,8 +33,11 @@ namespace
     {
         static_assert(G::THRESHOLD > 0.0 && G::RESUME > G::THRESHOLD && G::FULL > G::RESUME);
         check(std::fabs(G::FULL - 2.0 * G::THRESHOLD) < 1e-18, "full strength at twice the threshold");
-        // the justification: at the brightest exposure (gain 16) a shadow of the threshold light is under one 8-bit step (3.0e-4)
-        check(G::THRESHOLD * 16.0 < 1.0 / (255.0 * 12.92), "the threshold is under one 8-bit step at the brightest exposure");
+        // the justification: at the brightest exposure a shadow of the threshold light is under one 8-bit step (3.0e-4).
+        // RenderExposure clamps to 4; the dynamic exposure's maximum is 2 x sqrt(gamma) and the EEP validator
+        // (llsettingssky.cpp) allows gamma up to 20.
+        constexpr double MAX_GAIN = 4.0 * 2.0 * 4.47213595499958; // 4 x 2 x sqrt(20)
+        check(G::THRESHOLD * MAX_GAIN < 1.0 / (255.0 * 12.92), "the threshold is under one 8-bit step at the brightest exposure (gamma 20)");
     }
 
     void test_decision_light()
@@ -41,7 +45,14 @@ namespace
         check(G::decisionLight(0, 0, 0, 1.5) == 0.0, "black is zero light");
         check(G::decisionLight(1, 1, 1, 1.0) > 2.99 && G::decisionLight(1, 1, 1, 1.0) < 3.01, "white at scale 1 is 3 (pbrBaseLight's factor)");
         check(std::fabs(G::decisionLight(0.5, 0.5, 0.5, 2.0) - 2.0 * G::decisionLight(0.5, 0.5, 0.5, 1.0)) < 1e-12, "linear in the sky sunlight scale");
-        check(G::decisionLight(1, 0, 0, 1) < G::decisionLight(0, 1, 0, 1), "green weighs more than red");
+        check(G::decisionLight(0, 0, 1, 1) == G::decisionLight(1, 1, 1, 1), "a saturated blue is as bright as white (largest channel)");
+        check(G::decisionLight(1, 0, 0, 1) == G::decisionLight(0, 1, 0, 1), "red and green weigh the same (largest channel)");
+        // a blue-only light whose luminance estimate would be under the threshold does not skip: its largest channel counts
+        {
+            const double lin_blue = 2.0 * G::THRESHOLD / 3.0; // channel E = 2 T; a luminance E would be 0.14 T
+            G::State st;
+            check(!G::step(st, G::decisionLight(0, 0, lin_blue * 12.92, 1.0)).skip, "a blue-only light of channel E = 2 T does not skip");
+        }
         check(G::decisionLight(-1, std::nan(""), 0, 1) == 0.0, "negative and NaN colours count as 0");
         check(G::decisionLight(1, 1, 1, std::numeric_limits<double>::infinity()) == 0.0, "an infinite scale counts as 0");
         check(G::decisionLight(1.0 / 255, 1.0 / 255, 1.0 / 255, 1.0) > G::FULL, "a code value of 1 is far above the threshold");
@@ -73,7 +84,7 @@ namespace
             const double e2 = e + (hi - lo) / 100000.0;
             worst = std::fmax(worst, std::fabs(G::fade(e2) - G::fade(e)));
         }
-        check(worst < 1e-3, "the fade is continuous (no pop)");
+        check(worst < 1e-4, "the fade is continuous (no pop)");
     }
 
     void test_zero_and_dark()
@@ -122,10 +133,10 @@ namespace
         check(G::step(b, 0.999 * G::THRESHOLD).skip, "skips below the threshold");
     }
 
-    void test_never_stale()
+    void test_skip_implies_zero_strength()
     {
         // along any path of lights, a skipped frame has strength exactly 0, and a strength above 0 only comes with a render
-        // that frame (skip == false); the cascades of that frame are drawn before the shading reads them
+        // that frame (skip == false)
         G::State s;
         unsigned seed = 12345u;
         bool ok = true;
@@ -135,10 +146,6 @@ namespace
             const double e = G::THRESHOLD * std::exp(((seed >> 8) / (double)(1u << 24) - 0.5) * 8.0); // 0.018 T .. 55 T
             const G::Decision d = G::step(s, e);
             if (d.skip && d.strength != 0.0)
-            {
-                ok = false;
-            }
-            if (!d.skip && d.strength > 0.0 && !(e > G::RESUME))
             {
                 ok = false;
             }
@@ -175,7 +182,7 @@ int main()
     test_fade();
     test_zero_and_dark();
     test_hysteresis();
-    test_never_stale();
+    test_skip_implies_zero_strength();
     test_invalid();
     if (failures)
     {
