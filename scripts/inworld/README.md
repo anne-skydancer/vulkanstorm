@@ -390,8 +390,21 @@ New options and scenario fields (all optional; the older scenarios are unchanged
 One command for the session (scratch profile `.captures\mc1-profile-<stamp>`, new for every launch, which keeps credentials if you tick "remember": delete it afterwards; `-DryRun` uses a fresh profile under `.fixture-tmp`, run folder `.captures\mc1-sl-<stamp>`):
 
 ```powershell
-.\scripts\inworld\mc1_sl_launch.ps1                  # -TpRegion NAME overrides the second region; -DryRun is the login-screen check
+.\scripts\inworld\mc1_sl_launch.ps1                  # -TpRegion NAME overrides the second region; -StartRegion/-BusyRegion/-Scenario below; -DryRun is the login-screen check
 ```
 
-Log in by hand (any region); when the pop-up asks, teleport to the busy region and leave the viewer alone. Not covered by the offline
+Log in by hand (any region); when the pop-up asks, teleport to the busy region and leave the viewer alone.
+
+Launcher parameters: `-StartRegion NAME` (the region you log in to: the viewer does not log it at login; `--start-region` in `perf_check.py`),
+`-BusyRegion NAME` (the region you teleport to, used when the viewer log does not give it; `--busy-region`), `-TpRegion NAME` (the second
+region of the teleports instead of the login region) and `-Scenario NAME` from `scripts\inworld\scenarios`:
+
+- `mc1_sl` (default): still, moving, teleport series (12 teleports, 30 s pauses, one 900 s capture) and the fps probe, about 15 minutes.
+- `mc1_sl_teleports`: the teleport series only (6 teleports between the busy and the home region, one 420 s capture). It needs `-StartRegion`
+  or `-TpRegion`; the launcher refuses to start without one.
+- `mc1_sl_teleports_manual`: one 600 s capture while you teleport by hand between the busy and the home region. Busy regions such as Risk
+  refuse automated in-region teleports (`NoGoodTPDestination`), which is why this scenario exists; it runs no series, so it needs no region name.
+
+Measuring by hand (outside the scripted session): an unfocused viewer throttles itself (`BackgroundYieldTime`), so set `BackgroundYieldTime` to 0, and
+switch the frame cap off (`FSLimitFramerate` false), or the numbers read low. The scenarios already set the frame limiter off. Not covered by the offline
 tests: the real LEAP notification, `LLAgent.getPosition` timing across a real teleport, and `tracy-capture` itself.

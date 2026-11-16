@@ -19,7 +19,7 @@
     "poll_s": 1.0,
     "stable_polls": 3,
     "timeout_s": 1800,
-    "ready_message": "Teleport to Risk now. About 20 s after you arrive a 10-minute capture starts: then teleport by hand Risk -> Isle of Repose -> Risk, about 5 round trips, 30 s or more apart, until the 'Session done' pop-up.",
+    "ready_message": "Teleport to the busy region now. About 20 s after you arrive a 10-minute capture starts: then teleport by hand busy region -> home -> busy region, about 5 round trips, 30 s or more apart, until the 'Session done' pop-up.",
     "done_message": "Session done: you can quit."
   },
   "presets": [

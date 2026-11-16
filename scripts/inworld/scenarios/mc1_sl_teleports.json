@@ -35,7 +35,7 @@
     "timeout_s": 120,
     "settle_s": 3,
     "min_move_m": 5,
-    "capture_s": 900
+    "capture_s": 420
   },
   "fps_probe": null,
   "overhead": {

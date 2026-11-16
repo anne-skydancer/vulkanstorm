@@ -88,7 +88,7 @@ The measuring build is built without OpenSim.
 3. A pop-up says "Ready for the busy region: teleport there now." Teleport to the venue and leave the viewer alone. The plugin sees the arrival
    (region cell changed, position still for 3 polls) and settles 20 s.
 4. Unattended: `MC1-still` (current camera, 60 s capture), `MC1-moving` and `MC1-moving-2` (the camera turns around the avatar at 10 deg/s, 60 s
-   each), the teleports (5 within the region, 5 between the venue and the login region, plus one "return" teleport after each odd group, so 12 in all; one capture `MC1-teleports` of 360 s, each teleport timed in
+   each), the teleports (5 within the region, 5 between the venue and the login region, plus one "return" teleport after each odd group, so 12 in all at 30 s pauses; one capture `MC1-teleports` of 900 s, each teleport timed in
    `perf.json`, the returns are kind `return`; a teleport that fails is recorded and the series goes on), and the frame rate for 60 s with nothing connected (`fps_without_profiler`, from the `FrameCounters` log lines).
 5. The pop-up "Session done: you can quit." appears ("Session ended with problems: see perf.json" if anything failed, or the run was stopped); settings (vsync off, frame limiter off) are restored. Send the run folder (`*.tracy`,
    `perf.json`, `viewer_log_excerpt.txt`) and the viewer log. Shadow method stays Stochastic (the default) and the scratch profile gives the default preset.

@@ -765,7 +765,7 @@ class Run:
         self.index["login"] = self.login
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
         if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
-            raise LeapError("the login region is unknown (the viewer logs no region name at login): start the session with -StartRegion NAME")
+            raise LeapError("the login region is unknown (the viewer logs no region name at login): pass --start-region NAME (the launcher's -StartRegion NAME)")
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
@@ -1001,7 +1001,6 @@ def parse_args(argv):
     args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     args.busy_region = urllib.parse.unquote(args.busy_region) if args.busy_region else None
     args.tp_region = urllib.parse.unquote(args.tp_region) if args.tp_region else None
-    args.start_region = urllib.parse.unquote(args.start_region) if args.start_region else None
     try:
         args.tp_pos = [float(c) for c in args.tp_pos.split(",")]
         if len(args.tp_pos) != 3:

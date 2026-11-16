@@ -648,6 +648,16 @@ class MC1Test(unittest.TestCase):
         for key in list(sc["settings"]) + pc.CAP_SETTINGS:
             self.assertIn("<key>%s</key>" % key, xml)
 
+    def test_the_teleport_scenarios_load_and_an_empty_one_is_refused(self):
+        for name in ("mc1_sl_teleports", "mc1_sl_teleports_manual"):
+            sc = pc.load_scenario(HERE.parent / "scenarios" / (name + ".json"))
+            self.assertTrue(sc["presets"] or sc["teleports"])
+        with tempfile.TemporaryDirectory() as tmp:
+            p = pathlib.Path(tmp) / "s.json"
+            p.write_text(json.dumps({"presets": [], "teleports": None}), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                pc.load_scenario(p)
+
     def test_a_motion_preset_needs_a_camera(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = pathlib.Path(tmp) / "s.json"
@@ -663,7 +673,7 @@ class MC1Test(unittest.TestCase):
             with open(f, "a", encoding="utf-8") as fh:
                 for n in (10, 100, 120, 140):
                     fh.write("INFO: FrameCounters: frames=%d skin_palette_calls=1\n" % n)
-                fh.write("Entering region [Ahern]\nEntering region [Bar Foo]\n")
+                fh.write("Entering region []\nEntering region [Ahern]\nEntering region [Bar Foo]\nEntering region []\n")
             self.assertEqual(pc.fps_from_log(f, off), 120.0)        # the first, partial second is dropped
             self.assertIsNone(pc.fps_from_log(f, f.stat().st_size))
             self.assertEqual(pc.region_from_log(f), "Bar Foo")
