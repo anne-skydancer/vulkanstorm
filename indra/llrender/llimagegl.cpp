@@ -1681,6 +1681,12 @@ bool LLImageGL::createGLTexture(S32 discard_level, const U8* data_in, bool data_
 
     bool main_thread = on_main_thread();
 
+    if (!main_thread)
+    {
+        // never install a pick mask left over from an earlier upload that did not reach syncToMainThread
+        mPendingPickMask.reset();
+    }
+
     if (defer_copy)
     {
         data_in = nullptr;
@@ -1746,6 +1752,7 @@ bool LLImageGL::createGLTexture(S32 discard_level, const U8* data_in, bool data_
         LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("cglt - late setImage");
         if (!setImage(data_in, data_hasmips, new_texname))
         {
+            mPendingPickMask.reset();
             return false;
         }
     }
@@ -1827,6 +1834,9 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
         }
     }
 
+    // hand the pick mask built by this upload (if any) to the main thread with the texture name
+    std::shared_ptr<PendingPickMask> pick_mask = std::move(mPendingPickMask);
+
     ref();
     LL::WorkQueue::postMaybe(
         mMainQueue,
@@ -1834,6 +1844,13 @@ void LLImageGL::syncToMainThread(LLGLuint new_tex_name)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("cglt - delete callback");
             syncTexName(new_tex_name);
+            if (pick_mask)
+            {
+                freePickMask();
+                mPickMask = pick_mask->mask.release();
+                mPickMaskWidth = pick_mask->width;
+                mPickMaskHeight = pick_mask->height;
+            }
             unref();
         });
 
@@ -2397,21 +2414,46 @@ void LLImageGL::updatePickMask(S32 width, S32 height, const U8* data_in)
         return ;
     }
 
+    // Off the main thread the mask is built privately and handed over by syncToMainThread.
+    const bool main_thread = on_main_thread();
+
     if (mFormatType != GL_UNSIGNED_BYTE ||
         ((mFormatPrimary != GL_RGBA)
       && (mFormatPrimary != GL_SRGB_ALPHA)))
     {
         //cannot generate a pick mask for this texture
-        freePickMask();
+        if (main_thread)
+        {
+            freePickMask();
+        }
+        else
+        {
+            mPendingPickMask = std::make_shared<PendingPickMask>();
+        }
         return;
     }
 
-
-#ifdef SHOW_ASSERT
-    const U32 pickSize = createPickMask(width, height);
-#else // SHOW_ASSERT
-    createPickMask(width, height);
-#endif // SHOW_ASSERT
+    U8* pick_mask;
+    U32 pickSize;
+    if (main_thread)
+    {
+        pickSize = createPickMask(width, height);
+        pick_mask = mPickMask;
+    }
+    else
+    {
+        // same geometry as createPickMask
+        const U32 pick_width = width/2 + 1;
+        const U32 pick_height = height/2 + 1;
+        pickSize = (pick_width * pick_height + 7) / 8;
+        auto pending = std::make_shared<PendingPickMask>();
+        pending->mask.reset(new U8[pickSize]());
+        pending->width = static_cast<U16>(pick_width - 1);
+        pending->height = static_cast<U16>(pick_height - 1);
+        pick_mask = pending->mask.get();
+        mPendingPickMask = std::move(pending);
+    }
+    (void)pickSize; // only used by the assert below
 
     U32 pick_bit = 0;
 
@@ -2427,7 +2469,7 @@ void LLImageGL::updatePickMask(S32 width, S32 height, const U8* data_in)
                 U32 pick_offset = pick_bit%8;
                 llassert(pick_idx < pickSize);
 
-                mPickMask[pick_idx] |= 1 << pick_offset;
+                pick_mask[pick_idx] |= 1 << pick_offset;
             }
 
             ++pick_bit;
