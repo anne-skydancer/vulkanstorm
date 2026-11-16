@@ -33,8 +33,9 @@ in float pos_w;
 in vec2 vary_texcoord0;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-// <Vulkanstorm/> projector shadow pool: the origin of the tile being rendered in the atlas (0 for every other pass), so the
-// dither does not depend on where the tile sits
+// <Vulkanstorm/> dither origin: the origin of the projector tile being rendered in the atlas, so the dither does not
+// depend on where the tile sits; in a sun cascade pass (Stochastic) -(k mod 2^16), k the map corner's index on the world
+// grid, so the dither follows the world texel while the camera walks; 0 for every other pass
 uniform vec2 shadow_tile_origin;
 #endif
 
