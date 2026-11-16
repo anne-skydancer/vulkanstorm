@@ -23,6 +23,11 @@ Zones (existing macros, `llprofiler.h`; they are gated by `LLProfiler::active` a
 | `projector renderLayer` | `LLProjectorShadows::renderLayer` | the avatar layer's composite |
 | `update particles` | `LLAppViewer::idle`, around `LLWorld::updateParticles` | particles (idle row) |
 | `LLVOAvatar::updateCharacter` | `LLVOAvatar::updateCharacter` | avatar character update (idle row; `idleUpdate` already had a zone, this one splits motions and skeleton from it) |
+| `LLVOAvatar::cullAvatarsByPixelArea` | `LLVOAvatar::cullAvatarsByPixelArea` | avatar cull by pixel area (delta report section 8 step 2, O2; Avatar category) |
+| `LLAudioData::load` | `LLAudioData::load` | sound decode on the main thread (O2; Media category) |
+| `LLMeshRepository::notifyMeshLoaded` | `LLMeshRepository::notifyMeshLoaded` | mesh-loaded notification to waiting objects (O2; Volume category) |
+
+`LLHUDNameTag::updateAll` (O2) already had a zone (UI category), so nothing was added for it.
 
 Parts of study 3.2 that already had a zone and were left alone: `df MainLoop`, `df idle`, `df Display`, `idle`,
 `idle network`, `LLViewerObjectList::update`, region update (`FTM_REGION_UPDATE`), `updateMove` (`world update`), apparent

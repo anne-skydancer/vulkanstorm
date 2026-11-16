@@ -11961,6 +11961,7 @@ S32 LLVOAvatar::getUnbakedPixelAreaRank()
 // static
 void LLVOAvatar::cullAvatarsByPixelArea()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <Vulkanstorm> multicore stage 1
     LLCharacter::sInstances.sort([](LLCharacter* lhs, LLCharacter* rhs)
         {
             return ((LLVOAvatar*)lhs)->mVisibilityPreference > ((LLVOAvatar*)rhs)->mVisibilityPreference;
