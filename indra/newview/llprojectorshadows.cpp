@@ -1522,6 +1522,9 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     // whatever its prim; the filter's largest radius is a length in the shader, so the level of the tile does not enter
     const F32 emitter = emitterExtent(LLPipeline::RenderShadowLightSize);
     shader.uniform2f(LLShaderMgr::PROJ_SHADOW_LIGHT_SIZE, emitter, emitter);
+    // the emitter's place: the projection centre of the same drawn pose as the matrix (not the lamp's live pose), in eye space
+    const glm::vec4 origin_eye = get_current_modelview() * glm::vec4(g.origin.mV[VX], g.origin.mV[VY], g.origin.mV[VZ], 1.0f);
+    shader.uniform3f(LLShaderMgr::PROJ_SHADOW_ORIGIN, origin_eye.x, origin_eye.y, origin_eye.z);
 }
 
 void LLProjectorShadows::bindAtlas(LLGLSLShader& shader)

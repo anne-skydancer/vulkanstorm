@@ -46,7 +46,6 @@ uniform vec2 shadow_res;
 uniform mat4 shadow_matrix[6];
 uniform vec4 shadow_clip;
 uniform float spot_shadow_bias;
-uniform float spot_shadow_offset;
 uniform float spot_shadow_reach;
 
 // angular size of the shadowing light, L = 2 tan(half angle): the physical sun times the sky's
@@ -268,7 +267,7 @@ uniform sampler2D proj_shadow_atlas;  // the pool's live atlas (D32F, depth as i
 uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^3 (of the pose the tile was drawn with)
 uniform vec4 proj_shadow_tile;        // atlas texel origin x, y; tile size N (texels); 1 / atlas size
 uniform vec2 proj_shadow_light_size;  // metres: the emitter's extent across the beam, along the map's u and v axes: 1 cm times RenderShadowLightSize, whatever the prim
-uniform vec3 proj_origin;             // view space: the projector's centre, where the emitter is (spotLightF.glsl declares the same uniform)
+uniform vec3 proj_shadow_origin;      // view space: the projection centre of the pose the tile was drawn with, where the emitter is (the lamp's anchor)
 
 // What the filter needs of a projector, from its matrix (bias * glm::perspective * rigid view * rigid inv_view, the
 // frustum symmetric; llprojectorshadows.cpp setupLight): with w = s.w the axial distance from the projector's centre, the
@@ -341,7 +340,7 @@ float stSpotFilterTile(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2
     // the search: any blocker between the near plane (z = 0) and the receiver, in the disc its farthest one needs
     vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), kmax);
     float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
-    // the filter's radius never exceeds the search's (the blockers' mean depth is >= 0), so the search radius bounds every tap;
+    // the filter's radius never exceeds the search's (the nearest blocker's depth is >= 0), so the search radius bounds every tap;
     // one texel of margin covers the rounding of uv * res per tap
     vec2 tc = c.xy * res - 0.5;
     float r = max(rs.x, rs.y);
@@ -410,7 +409,7 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // the receiver plane: the geometric normal from the depth buffer (S2), not the normal-mapped one, from the pixel's
     // own position; and the sine of its angle to the projector's centre (the normal offset's scale)
     float sin_theta;
-    vec3 ng = shadowReceiverGeometry(pos_screen, pos_px, norm, normalize(proj_origin - pos_px), sin_theta);
+    vec3 ng = shadowReceiverGeometry(pos_screen, pos_px, norm, normalize(proj_shadow_origin - pos_px), sin_theta);
     // the normal offset: one texel of the tile at the receiver along the geometric normal, scaled by sin(theta) so that a
     // surface facing the lamp is not moved (the sun's rule, shadowNormalOffsetPos; it replaces the fixed 4 cm)
     pos = shadowNormalOffsetPos(pos, ng, sin_theta, texel_m);
