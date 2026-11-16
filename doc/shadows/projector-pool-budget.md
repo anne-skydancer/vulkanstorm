@@ -203,3 +203,20 @@ background yield set to 0 for the measurement, window about 2560 x 1350, RTX 507
 - Limits of this measurement: one place, one run per build, the lamps in reach but mostly out of view, no avatar under
   a lamp. A run from inside the lamp room, and the per-pass split (`perf_check.py`), are still owed.
 - Raw logs: `.captures/bench-20261114-191417/` on the owner's machine (not in the repository).
+
+## Tile resolution (cells of a wide lamp, camera-position sizing)
+
+Costs by part (`reports/projector-edges-2026-11-16/design.md` section 4, kept on the owner's machine (`reports/` is untracked); the offline ones re-measured on this implementation, RTX 5070 Ti,
+621.14, 2560x1440, median of 9 x 20, no build running):
+
+| part | when | cost |
+|---|---|---|
+| the cell pick in the lookup | every lit pixel of a wide lamp | within noise: `projector_cells_check.py --time`, cells against one virtual tile of the same texels |
+| guard bands | memory, inside the existing atlases (no new texture; tiers 32 / 128 / 512 MiB) | `(Ni + 32)^2 / Ni^2` of a cell's interior: +14 % at Ni 480, +31 % at 224 |
+| size changes while walking | CPU, a blit and a redraw per change (`resizes`, `resize_repacks` in the stats) | owed: the owner's walk, with the burst of resizes (`resize_deferred`, at most 3 resizes per frame) |
+| first fill of a wide lamp | login, teleport | up to 16 tiles instead of 1, nearest first, under the same 0.35 ms cap: a longer fill (lag, not fps) |
+| the own avatar in a wide lamp | CPU per frame, past the cap | one layer per lamp: the cell whose interior holds the centre of the avatar's box (the other cells the box crosses by deadline) |
+
+The atlas budget is unchanged (60 % demand, 3 s to grow back); the camera position moves bytes between tiles (finer near, coarser far),
+and a lamp of one tile far from the camera now gets a smaller tile than `baseSize` gave it. The fps floor (about 60 standing in a crowded
+room, never below 25 moving) is measured in-world, owed.

@@ -48,6 +48,7 @@
 #include "llframecounters.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <glm/gtc/matrix_transform.hpp>
@@ -107,6 +108,31 @@ namespace
         const F32 near_clip = g.dist + 0.01f;
         far_clip = g.dist + g.radius * 1.5f;
         proj = glm::perspective(g.fov, g.scale.mV[VX] / g.scale.mV[VY], near_clip, far_clip);
+    }
+
+    // The projection of one tile of a lamp: the lamp's own for a lamp of one tile (so the tile is drawn as it always was), a cell's off-axis
+    // sub-frustum for a wide lamp: the cell's rectangle of the lamp's image plane widened by the guard (the same near and far planes
+    // and the same depth function, so a cell's depth is the lamp's). nc: the tile's size in texels.
+    glm::mat4 tile_proj(const SpotGeom& g, const CellGrid& grid, int ci, int cj, U32 nc)
+    {
+        const F32 near_clip = g.dist + 0.01f;
+        const F32 far_clip = g.dist + g.radius * 1.5f;
+        const F32 aspect = g.scale.mV[VX] / g.scale.mV[VY];
+        if (!grid.cells())
+        {
+            return glm::perspective(g.fov, aspect, near_clip, far_clip);
+        }
+        const double ty = std::tan(0.5 * double(g.fov));
+        const double tx = ty * double(aspect);
+        const CellTan t = cellTanRect(grid, tx, ty, ci, cj, cellInterior(nc, grid.guard()), grid.guard());
+        return glm::frustum(F32(t.x0 * near_clip), F32(t.x1 * near_clip), F32(t.y0 * near_clip), F32(t.y1 * near_clip), near_clip, far_clip);
+    }
+
+    // the cells of a lamp (one for a lamp of one tile): its grid from the tangents of its half angles
+    CellGrid spot_grid(const SpotGeom& g)
+    {
+        const double ty = std::tan(0.5 * double(g.fov));
+        return gridOf(ty * double(g.scale.mV[VX] / g.scale.mV[VY]), ty);
     }
 
     // a projector the pool shadows: a spotlight with a radius and a colour, on a prim that is not worn (D11)
@@ -308,6 +334,9 @@ void LLProjectorShadows::release()
     mAllocFailed = false;
     mTileRenders = 0;
     mRepacks = 0;
+    mResizes = 0;
+    mResizeRepacks = 0;
+    mResizeDeferred = 0;
     mStaticRenders = 0;
     mDynamicRenders = 0;
     mLayerRenders = 0;
@@ -345,17 +374,10 @@ void LLProjectorShadows::forget(const LLDrawable* drawable)
     {
         return;
     }
-    auto it = mRecords.find(key->second);
-    if (it != mRecords.end())
-    {
-        dropRecord(it);
-    }
-    else
-    {
-        mKeyOf.erase(key);
-    }
+    dropLamp(key->second, drawable);
 }
 
+// one tile goes (its rect is freed, its LOD pins are given back); the lamp's entry in mKeyOf is dropLamp's
 void LLProjectorShadows::dropRecord(std::map<U32, Record>::iterator it)
 {
     Record& rec = it->second;
@@ -364,8 +386,59 @@ void LLProjectorShadows::dropRecord(std::map<U32, Record>::iterator it)
         mBuddy.free(rec.rect);
     }
     unpinTile(rec.key);
-    mKeyOf.erase(rec.drawable.get());
     mRecords.erase(it);
+}
+
+// every tile of a lamp (its one tile, or its cells) and its entry in mKeyOf
+void LLProjectorShadows::dropLamp(U32 lamp, const LLDrawable* drawable)
+{
+    for (U32 cell = 0; cell < kMaxCells; ++cell)
+    {
+        auto it = mRecords.find((lamp << 4) | cell);
+        if (it != mRecords.end())
+        {
+            dropRecord(it);
+        }
+    }
+    mKeyOf.erase(drawable);
+}
+
+// A tile's size changes (the camera position moved relative to it, or the level shifted): a new rect is taken beside the old one, the old
+// content is blitted over (nearest: the tile is blocky until it is drawn again at its size, the lookup never loses it; a wide lamp's
+// cell is blitted by its interior, so the content sits where the lookup reads it, and its guard strips hold the stretched edge until
+// the redraw), then the old rect is freed. Growth takes this same path as shrinking (design 5.4 asked for draw-then-free for growth:
+// not built; the redraw is the first static pick of the frame, so the blocky content is bounded by the scheduler). No whole-atlas repack:
+// that is relayout's fallback, counted, when the buddy has no room for the new rect.
+bool LLProjectorShadows::resizeInPlace(Record& rec, U32 want)
+{
+    Rect nr;
+    if (!mBuddy.alloc(want, nr))
+    {
+        return false;
+    }
+    if (rec.drawnFrame != 0)
+    {
+        const U32 saved_fbo = LLRenderTarget::sCurFBO;
+        for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
+        {
+            LLTexUnit* tex_unit = gGL.getTexUnit(unit);
+            if (tex_unit && tex_unit->getCurrTexture() == mAtlasL)
+            {
+                tex_unit->unbind(tex_unit->getCurrType());
+            }
+        }
+        const U32 guard = rec.grid.guard();
+        blitTile(mFboS, rec.rect, mFboS, nr, guard); // S: the fixed layer (the rects are disjoint: the new one was allocated while the old is held)
+        // L: its own old content, so an avatar layer stays (blocky) until the redraw; a tile with none holds S's content
+        blitTile(rec.avatarInLayer ? mFboL : mFboS, rec.rect, mFboL, nr, guard);
+        glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
+        rec.lowres = true;
+        rec.layerRectValid = false; // the old footprint is in the old rect's texels
+    }
+    mBuddy.free(rec.rect);
+    rec.rect = nr;
+    ++mResizes;
+    return true;
 }
 
 U32 LLProjectorShadows::desiredSize(const Record& rec) const
@@ -400,23 +473,65 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
         {
             return;
         }
-        Record* rec = nullptr;
+        SpotGeom geom;
+        if (!read_spot(drawable, geom))
+        {
+            return;
+        }
+        // the lamp's cells (one tile for a lamp up to about 93 degrees); a lamp edited to another grid starts again with the new cells
+        const CellGrid grid = spot_grid(geom);
+        U32 lamp = was_in ? known->second : 0u;
         if (was_in)
         {
-            rec = &mRecords[known->second];
+            auto first = mRecords.find(lamp << 4);
+            if (first == mRecords.end() || first->second.grid != grid)
+            {
+                dropLamp(lamp, drawable); // `known` is gone with it
+                lamp = 0;
+            }
         }
-        else
+        if (lamp == 0)
         {
-            Record fresh;
-            fresh.key = mNextKey++;
-            fresh.drawable = drawable;
-            fresh.lastCpuMs = coldItemMs(mCostEmaMs); // a never-drawn record's prediction leaves room for several per frame
-            rec = &(mRecords[fresh.key] = fresh);
-            mKeyOf[drawable] = fresh.key;
+            // a record key is lamp << 4 | cell and the scheduler packs 28 bits: the lamp counter wraps inside 24 bits, skipping live ids
+            constexpr U32 kLampIds = 1u << (kPoolKeyBits - 4);
+            do
+            {
+                if (mNextKey >= kLampIds)
+                {
+                    mNextKey = 1;
+                }
+                lamp = mNextKey++;
+            } while (mRecords.find(lamp << 4) != mRecords.end());
+            mKeyOf[drawable] = lamp;
         }
-        rec->seen = true;
-        rec->camDist = dist;
-        rec->base = baseSize(volume->getLightRadius(), volume->getSpotLightParams().mV[0]);
+        for (int cj = 0; cj < grid.gv; ++cj)
+        {
+            for (int ci = 0; ci < grid.gu; ++ci)
+            {
+                const U32 cell = cellIndex(ci, cj);
+                auto found = mRecords.find((lamp << 4) | cell);
+                Record* rec = nullptr;
+                if (found != mRecords.end())
+                {
+                    rec = &found->second;
+                }
+                else
+                {
+                    Record fresh;
+                    fresh.key = (lamp << 4) | cell;
+                    fresh.lamp = lamp;
+                    fresh.cell = cell;
+                    fresh.ci = ci;
+                    fresh.cj = cj;
+                    fresh.grid = grid;
+                    fresh.drawable = drawable;
+                    fresh.lastCpuMs = coldItemMs(mCostEmaMs); // a never-drawn record's prediction leaves room for several per frame
+                    rec = &(mRecords[fresh.key] = fresh);
+                }
+                rec->seen = true;
+                rec->camDist = dist;
+            }
+        }
     };
 
     for (const LLPipeline::Light& light : gPipeline.mNearbyLights)
@@ -424,30 +539,30 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
         consider(light.drawable);
     }
     // lights that left mNearbyLights keep their record until their own drop distance (P14)
-    std::vector<LLPointer<LLDrawable>> held;
+    std::set<LLDrawable*> held;
     for (auto& entry : mRecords)
     {
         if (!entry.second.seen)
         {
-            held.push_back(entry.second.drawable);
+            held.insert(entry.second.drawable.get());
         }
     }
     for (LLDrawable* drawable : held)
     {
         consider(drawable);
     }
-    // everything not seen is out: free its tile (the buddy blocks merge back)
-    for (auto it = mRecords.begin(); it != mRecords.end();)
+    // everything not seen is out: free its tiles (the buddy blocks merge back)
+    std::vector<std::pair<U32, const LLDrawable*>> gone;
+    for (const auto& entry : mRecords)
     {
-        if (!it->second.seen)
+        if (!entry.second.seen)
         {
-            auto gone = it++;
-            dropRecord(gone);
+            gone.emplace_back(entry.second.lamp, entry.second.drawable.get());
         }
-        else
-        {
-            ++it;
-        }
+    }
+    for (const auto& lamp : gone)
+    {
+        dropLamp(lamp.first, lamp.second);
     }
 }
 
@@ -478,7 +593,26 @@ void LLProjectorShadows::copyAtlas(U32 from_tex, U32 to_tex)
     copyTile(from_tex, all, to_tex, all);
 }
 
-void LLProjectorShadows::blitTile(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst)
+// A tile into a tile of another size. For a cell (guard > 0) the whole tile goes first (the guard strips then hold the stretched edge,
+// not stale data), then the interior over the interior: the lookup reads a cell at (guard + f * interior) / size, so the interiors are
+// what must register across sizes.
+void LLProjectorShadows::blitTile(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst, U32 guard)
+{
+    blitRect(from_fbo, src, to_fbo, dst);
+    if (guard > 0 && src.size > 2 * guard && dst.size > 2 * guard)
+    {
+        Rect si = src, di = dst;
+        si.x += guard;
+        si.y += guard;
+        si.size -= 2 * guard;
+        di.x += guard;
+        di.y += guard;
+        di.size -= 2 * guard;
+        blitRect(from_fbo, si, to_fbo, di);
+    }
+}
+
+void LLProjectorShadows::blitRect(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst)
 {
     LLGLDisable scissor(GL_SCISSOR_TEST); // a blit is clipped by the scissor test
     glBindFramebuffer(GL_READ_FRAMEBUFFER, from_fbo);
@@ -488,7 +622,7 @@ void LLProjectorShadows::blitTile(U32 from_fbo, const Rect& src, U32 to_fbo, con
 }
 
 // Applies a repack (spec 4.3), in one frame and with no name swap: every drawn tile S[old] -> L[new] (a copy at the same
-// size, bit exact; a blit at another, the tile is then low resolution until it is drawn again), then L -> S in full, so both
+// size, bit exact; a blit at another, by the cell's interior for a wide lamp, the tile is then low resolution until it is drawn again), then L -> S in full, so both
 // atlases hold the new layout with the old content.
 void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, const RepackPlan& plan)
 {
@@ -529,7 +663,7 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         }
         else
         {
-            blitTile(mFboS, move.src, mFboL, move.dst);
+            blitTile(mFboS, move.src, mFboL, move.dst, it->second.grid.guard());
             it->second.lowres = true; // drawn again at its new size
         }
     }
@@ -610,13 +744,32 @@ bool LLProjectorShadows::layoutChanged()
         bases.push_back(entry.second.base);
     }
     bool need_relayout = mLevel.update(bases, mAtlasSize, gFrameIntervalSeconds.value(), false);
+    U32 resizes_now = 0;
     for (auto& entry : mRecords)
     {
         Record& rec = entry.second;
         const U32 want = desiredSize(rec);
         if (rec.placed && rec.rect.size != want)
         {
-            need_relayout = true; // the light's own size changed (its radius or its angle was edited)
+            // the tile's size changed (the camera position moved, or the lamp was edited): in place when the buddy has room for the new
+            // rect; a level change (need_relayout) or no room repacks the whole layout, which places this tile at its size too
+            if (!need_relayout)
+            {
+                if (resizes_now >= kMaxResizesPerFrame)
+                {
+                    ++mResizeDeferred; // a burst (many tiles crossing their band together) is spread over frames: this one keeps its size
+                    continue;
+                }
+                if (resizeInPlace(rec, want))
+                {
+                    ++resizes_now;
+                }
+                else
+                {
+                    need_relayout = true;
+                    ++mResizeRepacks;
+                }
+            }
         }
         else if (!rec.placed && !need_relayout)
         {
@@ -643,7 +796,8 @@ bool LLProjectorShadows::layoutChanged()
 // One tile: the light's view (its pose now), the fixed objects into S (the static layer), then S -> L for the tile, then the avatars
 // in the light over it in L (the dynamic layer, drawAvatars). The cull frustum comes from the light's matrices. The tile's size and
 // view come from the light and the casters are held at full detail by the LOD pin (pinCasters, called from
-// LLPipeline::renderShadowImpl), so nothing the camera does reaches the picture; the avatars are chosen by position alone.
+// LLPipeline::renderShadowImpl), so what the picture holds does not depend on the camera; only the tile's size follows the camera's
+// position (a size change redraws it); the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector renderTile"); // <Vulkanstorm> multicore stage 1
@@ -655,6 +809,10 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     glm::mat4 view, proj;
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
+    if (rec.grid.cells())
+    {
+        proj = tile_proj(g, rec.grid, rec.ci, rec.cj, rec.rect.size); // this cell's sub-frustum, guard included
+    }
 
     const F64 cpu_start = LLTimer::getTotalSeconds();
 
@@ -943,6 +1101,10 @@ void LLProjectorShadows::renderLayer(Record& rec)
     glm::mat4 view, proj;
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
+    if (rec.grid.cells())
+    {
+        proj = tile_proj(g, rec.grid, rec.ci, rec.cj, rec.rect.size);
+    }
 
     // C3: restore what the last pass drew over (its rectangle) and what this one will draw over (the new rectangle), not the whole tile;
     // an unknown old rectangle (a fresh or repacked atlas) is the whole tile
@@ -990,6 +1152,26 @@ namespace
         const F32 aspect = g.scale.mV[VY] > 0.f ? g.scale.mV[VX] / g.scale.mV[VY] : 1.f;
         const F32 tan_y = tanf(g.fov * 0.5f);
         return makePyramid(g.origin.mV, fwd.mV, right.mV, up.mV, tan_y * aspect, tan_y, llmax(g.dist, 0.001f), far_clip);
+    }
+
+    // The volume of one tile for the change tests: a lamp of one tile has the lamp's (light_volume); a cell has its sub-pyramid. With the
+    // guard (guard = true, at the tile's size nc) it is the region the tile's render sees: an object that only a neighbour's guard holds
+    // changes this tile too. Without it, the cell's own interior: the camera position's distance (the sizing) and the avatar's cadence.
+    Pyramid cell_volume(const SpotGeom& g, F32 far_clip, const CellGrid& grid, int ci, int cj, U32 nc, bool guard)
+    {
+        if (!grid.cells())
+        {
+            return light_volume(g, far_clip);
+        }
+        LLVector3 fwd(0.f, 0.f, -1.f), right(1.f, 0.f, 0.f), up(0.f, 1.f, 0.f);
+        fwd *= g.rot;
+        right *= g.rot;
+        up *= g.rot;
+        const double ty = std::tan(0.5 * double(g.fov));
+        const double tx = ty * double(g.scale.mV[VX] / g.scale.mV[VY]);
+        const uint32_t gd = guard ? grid.guard() : 0u;
+        const CellTan t = cellTanRect(grid, tx, ty, ci, cj, cellInterior(nc, grid.guard()), gd);
+        return makeFrustumPyramid(g.origin.mV, fwd.mV, right.mV, up.mV, float(t.x0), float(t.x1), float(t.y0), float(t.y1), llmax(g.dist, 0.001f), far_clip);
     }
 
     Pose light_pose(const SpotGeom& g, LLDrawable* drawable)
@@ -1205,47 +1387,95 @@ void LLProjectorShadows::update(LLCamera& camera)
     mDirtyBoxes = (U32)boxes.size();
 
     updateLightSet(camera);
-    layoutChanged();
 
     // The lamps' poses, this frame's: from the lamp alone (never the camera). This is what a static scene still costs per frame:
-    // one read of every lamp's spot parameters and pose (the pose-change detection). A lamp's matrices and volume are built
-    // only when its pose changed (or agent space was shifted, which moves every volume), and the change index is rebuilt only
-    // on a frame with dirty boxes, below.
+    // one read of every lamp's spot parameters and pose (the pose-change detection). A tile's interior volume is built only when its
+    // lamp's pose changed (or agent space was shifted, which moves every volume), and the change index is rebuilt only on a frame
+    // with dirty boxes, below. The camera's POSITION enters here and nowhere else: it picks each tile's size (cellWanted: its distance
+    // to the tile's volume), never what the tile holds.
     const U32 shifts = LLShadowDirtyFeed::shifts();
     const bool shifted = shifts != mShiftsSeen;
     mShiftsSeen = shifts;
+    const LLVector3 cam_origin = camera.getOrigin();
+    const F32 cam_point[3] = { cam_origin.mV[VX], cam_origin.mV[VY], cam_origin.mV[VZ] };
+    const F64 now_s = LLTimer::getTotalSeconds();
     std::vector<const LLViewerObject*> lamp_roots; // the lamps' own linksets: fixtures, their changes always push (llshadowdirtyfeed)
+    U32 lamp_read = 0;
+    bool lamp_ok = false;
+    SpotGeom lamp_g;
+    Pose lamp_pose;
     for (auto& entry : mRecords)
     {
         Record& rec = entry.second;
-        if (LLViewerObject* lamp = rec.drawable.notNull() ? rec.drawable->getVObj().get() : nullptr)
+        // the lamp's geometry and pose are read once for its tiles (they are consecutive: the key is lamp << 4 | cell)
+        if (lamp_read != rec.lamp)
         {
-            LLViewerObject* lamp_root = lamp->getRootEdit();
-            lamp_roots.push_back(lamp_root ? lamp_root : lamp);
+            lamp_read = rec.lamp;
+            if (LLViewerObject* lamp = rec.drawable.notNull() ? rec.drawable->getVObj().get() : nullptr)
+            {
+                LLViewerObject* lamp_root = lamp->getRootEdit();
+                lamp_roots.push_back(lamp_root ? lamp_root : lamp);
+            }
+            lamp_ok = read_spot(rec.drawable, lamp_g);
+            if (lamp_ok)
+            {
+                lamp_pose = light_pose(lamp_g, rec.drawable);
+            }
         }
-        SpotGeom g;
-        if (!read_spot(rec.drawable, g))
+        const SpotGeom& g = lamp_g;
+        if (!lamp_ok)
         {
             rec.prevPoseValid = false;
             rec.volumeValid = false;
             continue;
         }
-        rec.curPose = light_pose(g, rec.drawable);
+        rec.curPose = lamp_pose;
         rec.lampMoving = rec.prevPoseValid && poseChanged(rec.prevPose, rec.curPose);
         rec.prevPose = rec.curPose;
         rec.prevPoseValid = true;
         rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
+        const F32 far_clip = g.dist + g.radius * 1.5f; // spot_matrices' far plane
         if (shifted || !rec.volumeValid || poseChanged(rec.volumePose, rec.curPose))
         {
-            glm::mat4 view, proj;
-            F32 far_clip = 0.f;
-            spot_matrices(g, view, proj, far_clip);
-            rec.volume = light_volume(g, far_clip);
+            rec.core = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, 0, false);
+            rec.volumeNc = 0; // the tile's own volume (with its guard) is built below, at the tile's size
             rec.volumePose = rec.curPose;
             rec.volumeValid = true;
         }
+        // the tile's size from the camera position: its distance to the tile's interior volume, and the lamp's axial depth of the camera
+        LLVector3 fwd(0.f, 0.f, -1.f);
+        fwd *= g.rot;
+        const float lamp_origin[3] = { g.origin.mV[VX], g.origin.mV[VY], g.origin.mV[VZ] };
+        const float lamp_fwd[3] = { fwd.mV[VX], fwd.mV[VY], fwd.mV[VZ] };
+        const double ty = std::tan(0.5 * double(g.fov));
+        const double tx = ty * double(g.scale.mV[VX] / g.scale.mV[VY]);
+        const double tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the cell's wider axis: the tile is square
+        rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
+        rec.base = rec.hyst.size();
+        if (rec.grid.cells())
+        {
+            rec.camDist = rec.cellDist; // the order of service: the nearest cells first (a single tile keeps the lamp sphere's distance, set in updateLightSet)
+        }
     }
     LLShadowDirtyFeed::setLampRoots(LLShadowDirtyFeed::Owner::Projectors, lamp_roots);
+
+    layoutChanged();
+    // the volume of each tile as it is drawn (a cell's frustum is widened by its guard in texels, so its world width follows its size)
+    for (auto& entry : mRecords)
+    {
+        Record& rec = entry.second;
+        const U32 nc = rec.placed ? rec.rect.size : desiredSize(rec);
+        if (rec.volumeValid && rec.volumeNc != nc)
+        {
+            SpotGeom g;
+            if (read_spot(rec.drawable, g))
+            {
+                F32 far_clip = g.dist + g.radius * 1.5f;
+                rec.volume = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, nc, true);
+                rec.volumeNc = nc;
+            }
+        }
+    }
 
     // which drawn tiles a change touched (the first cause that made a tile stale is kept until it is drawn); the index is lazy:
     // built only when boxes arrived or the list says "everything"
@@ -1321,7 +1551,16 @@ void LLProjectorShadows::update(LLCamera& camera)
             if (intersects(rec.volume, b))
             {
                 ++rec.avatarCount;
-                holds_own = true; // the own avatar's face is drawn every frame (not ordered by distance)
+                if (!rec.grid.cells() || cellHoldsOwn(rec.core, b))
+                {
+                    holds_own = true; // the own avatar's face is drawn every frame (not ordered by distance): of a wide lamp's cells, the one holding the box's centre
+                }
+                else
+                {
+                    // a cell the avatar's box overlaps but whose interior does not hold the box's centre: by deadline like the others, so the
+                    // faces that run every frame past the cap are one per lamp for the own avatar, not every cell its width crosses
+                    rec.avatarDist = std::min(rec.avatarDist, pointBoxDistance(camera_pos, b));
+                }
             }
         }
         for (const Aabb& b : avatar_boxes)
@@ -1471,18 +1710,32 @@ void LLProjectorShadows::update(LLCamera& camera)
 
 void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
 {
-    const Record* rec = nullptr;
+    // the lamp's tiles: its one tile, or its cells. The lookup matrix is one per lamp, built from the pose of the most recently drawn
+    // tile; a cell drawn from another pose (the lamp moved since) reads as not drawn until it is drawn again (lit, no shadow), so that
+    // no lookup mixes two poses.
+    const Record* ref = nullptr;
+    std::array<const Record*, kMaxCells> cell_rec{};
     auto key = mKeyOf.find(light);
     if (key != mKeyOf.end())
     {
-        auto it = mRecords.find(key->second);
-        if (it != mRecords.end())
+        // the lamp's records are consecutive in the map (key = lamp << 4 | cell): the one tile's lamp has one, a wide lamp's has its cells
+        for (auto it = mRecords.lower_bound(key->second << 4); it != mRecords.end() && (it->first >> 4) == key->second; ++it)
         {
-            rec = &it->second;
+            const U32 cell = it->first & 15u;
+            const Record& r = it->second;
+            if (!(active() && r.placed && r.drawnFrame != 0 && r.drawn.valid))
+            {
+                continue;
+            }
+            cell_rec[cell] = &r;
+            if (!ref || r.drawnFrame > ref->drawnFrame)
+            {
+                ref = &r;
+            }
         }
     }
     // a light with no drawn tile has no lookup (proj_shadow_idx -1): it is lit without a shadow until its first render
-    const bool has_tile = active() && rec && rec->placed && rec->drawnFrame != 0 && rec->drawn.valid;
+    const bool has_tile = ref != nullptr;
     shader.uniform1i(LLShaderMgr::PROJECTOR_SHADOW_INDEX, has_tile ? 0 : -1);
     shader.uniform1f(LLShaderMgr::PROJECTOR_SHADOW_FADE, 0.f); // the Legacy slots' fade; the pool's tiles do not fade in (D21)
     if (!has_tile)
@@ -1493,12 +1746,12 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     // until its tile is drawn again), taken into this frame's eye space: tile-local [0,1], so the shader's filter needs no
     // atlas term
     SpotGeom g;
-    g.origin = gAgent.getPosAgentFromGlobal(rec->drawn.originGlobal);
-    g.rot = rec->drawn.rot;
-    g.scale = rec->drawn.scale;
-    g.fov = rec->drawn.fov;
-    g.radius = rec->drawn.radius;
-    g.dist = rec->drawn.dist;
+    g.origin = gAgent.getPosAgentFromGlobal(ref->drawn.originGlobal);
+    g.rot = ref->drawn.rot;
+    g.scale = ref->drawn.scale;
+    g.fov = ref->drawn.fov;
+    g.radius = ref->drawn.radius;
+    g.dist = ref->drawn.dist;
     glm::mat4 view, proj;
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
@@ -1508,7 +1761,31 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
                           0.5f, 0.5f, 0.5f, 1.0f);
     const glm::mat4 m = trans * proj * view * glm::inverse(get_current_modelview());
     shader.uniformMatrix4fv(LLShaderMgr::PROJ_SHADOW_MATRIX, 1, GL_FALSE, glm::value_ptr(m));
-    shader.uniform4f(LLShaderMgr::PROJ_SHADOW_TILE, (F32)rec->rect.x, (F32)rec->rect.y, (F32)rec->rect.size, 1.f / (F32)mAtlasSize);
+    const CellGrid& grid = ref->grid;
+    if (!grid.cells())
+    {
+        shader.uniform4f(LLShaderMgr::PROJ_SHADOW_TILE, (F32)ref->rect.x, (F32)ref->rect.y, (F32)ref->rect.size, 1.f / (F32)mAtlasSize);
+        shader.uniform4f(LLShaderMgr::PROJ_SHADOW_GRID, 1.f, 1.f, 0.f, 0.f);
+    }
+    else
+    {
+        // the cells: x, y, Nc, Ni of each (Nc 0: not drawn, or drawn from another pose than the matrix's), indexed row * 4 + column
+        F32 cells[kMaxCells * 4] = {};
+        for (U32 cell = 0; cell < kMaxCells; ++cell)
+        {
+            const Record* r = cell_rec[cell];
+            if (r && !poseChanged(ref->drawnPose, r->drawnPose))
+            {
+                cells[cell * 4 + 0] = (F32)r->rect.x;
+                cells[cell * 4 + 1] = (F32)r->rect.y;
+                cells[cell * 4 + 2] = (F32)r->rect.size;
+                cells[cell * 4 + 3] = (F32)cellInterior(r->rect.size, grid.guard());
+            }
+        }
+        shader.uniform4f(LLShaderMgr::PROJ_SHADOW_TILE, 0.f, 0.f, 0.f, 1.f / (F32)mAtlasSize);
+        shader.uniform4f(LLShaderMgr::PROJ_SHADOW_GRID, (F32)grid.gu, (F32)grid.gv, (F32)grid.guard(), 0.f);
+        shader.uniform4fv(LLShaderMgr::PROJ_SHADOW_CELLS, kMaxCells, cells);
+    }
     // the emitter's size for the penumbra: every lamp is a 1 cm light times RenderShadowLightSize (the sun's softness factor),
     // whatever its prim; the filter's largest radius is a length in the shader, so the level of the tile does not enter
     const F32 emitter = emitterExtent(LLPipeline::RenderShadowLightSize);
@@ -1537,7 +1814,11 @@ LLProjectorShadows::Stats LLProjectorShadows::getStats() const
     st.present = active();
     st.level = mLevel.level();
     st.atlasSize = mAtlasSize;
-    st.lights = (U32)mRecords.size();
+    st.lights = (U32)mKeyOf.size();
+    st.cells = (U32)mRecords.size();
+    st.resizes = mResizes;
+    st.resizeRepacks = mResizeRepacks;
+    st.resizeDeferred = mResizeDeferred;
     st.lightsWithoutTile = mLightsWithoutTile;
     st.tileRenders = mTileRenders;
     st.repacks = mRepacks;
@@ -1592,6 +1873,8 @@ std::vector<LLProjectorShadows::TileInfo> LLProjectorShadows::getTiles() const
         const Record& rec = entry.second;
         TileInfo t;
         t.key = rec.key;
+        t.lamp = rec.lamp;
+        t.cell = rec.cell;
         t.x = rec.rect.x;
         t.y = rec.rect.y;
         t.size = rec.placed ? rec.rect.size : 0;

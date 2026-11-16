@@ -102,6 +102,10 @@ namespace
         pool["dirty_age_ms_max"] = (F64)ps.dirtyAgeMsMax; // the longest a changed tile waited for its render since the last "reset_ages"
         pool["dirty_renders"] = (F64)ps.dirtyRenders;
         pool["repacks"] = (F64)ps.repacks;
+        pool["cells"] = (S32)ps.cells;
+        pool["resizes"] = (F64)ps.resizes;                // tile size changes made in place (the camera position's sizing, the level)
+        pool["resize_repacks"] = (F64)ps.resizeRepacks;   // size changes that found no room and repacked the whole layout
+        pool["resize_deferred"] = (F64)ps.resizeDeferred; // size changes held back by the per-frame limit
         pool["lights_without_tile"] = (S32)ps.lightsWithoutTile; // O-4: 0 after the first fill
         pool["tile_cost_ms"] = (F64)ps.costEmaMs;
         pool["last_frame_renders"] = (S32)ps.lastFrameRenders;
@@ -113,6 +117,8 @@ namespace
         {
             LLSD tile;
             tile["key"] = (S32)t.key;
+            tile["lamp"] = (S32)t.lamp;           // the lamp's id; a wide lamp's cells share it (key = lamp << 4 | cell)
+            tile["cell"] = (S32)t.cell;           // llprojectorpool::cellIndex: row * 4 + column on the lamp's image plane (0 for one tile)
             tile["size"] = (S32)t.size;
             tile["x"] = (S32)t.x;
             tile["y"] = (S32)t.y;

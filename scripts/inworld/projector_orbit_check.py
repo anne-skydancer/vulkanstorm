@@ -12,7 +12,10 @@ reports "pool": {"pool_present": false, ...}; a gate then ends as NOT RUN, never
   O-2 orbit           24 steps around a centre (o2.centre: "agent" or [x, y, z] in region coordinates) at 3 m and 8 m, two laps each.
                       The first lap of each radius settles (it may re-render from the LOD pin, lod_up, and from a mesh or prim
                       that arrives late, edit: o2.first_lap_causes); the second changes nothing: 0 renders, no cause, the CRCs
-                      of that radius's first lap. Tiles with an avatar in their light are left out of the comparison (they are
+                      of that radius's first lap. A tile's image depends on the lamp, the scene and the tile's size, and the size
+                      follows the camera's POSITION (with hysteresis): an orbit can resize a tile, which redraws it (cause
+                      "lowres", counted and tolerated, like the avatar) and changes its CRC; a tile whose size differs from the
+                      first lap's is left out of the CRC comparison (the sizes are in the tiles' stats). Tiles with an avatar in their light are left out of the comparison (they are
                       redrawn every frame until P4) and reported (avatar_tiles). Limit: at 8 m an object still loading into
                       view during the second lap fails the gate; run it again once the scene has loaded. Each step can save a
                       snapshot (o2.snapshots) and the last lap a contact sheet to look at.                        (stage P3)
@@ -117,6 +120,7 @@ def pool_extras(stats):
         "pose_stale": sum(1 for t in (pool.get("tiles") or []) if t.get("pose_stale")),
         "lamp_moving": sum(1 for t in (pool.get("tiles") or []) if t.get("lamp_moving")),
         "avatar_keys": sorted(str(t.get("key")) for t in (pool.get("tiles") or []) if t.get("avatar")),
+        "sizes": {str(t.get("key")): t.get("size") for t in (pool.get("tiles") or [])},
     }
 
 
@@ -141,7 +145,7 @@ def judge_o2(baseline, samples, first_lap_causes=("lod_up",)):
     without, crcs, causes, and optionally settle (the first lap of a radius; default: lap 1), group (the radius' index, default 0)
     and avatar_keys (tiles with an avatar in their light). A settling lap may re-render only from the causes in first_lap_causes
     (the LOD pin lifting an object once, a late mesh); every other lap must change nothing: no render, no cause, no CRC against the
-    last step of its radius's settling lap. Tiles that held an avatar in any sample are left out of the CRC comparison (the avatars
+    last step of its radius's settling lap (a "lowres" redraw after a size change is tolerated, and a tile whose size changed is not compared). Tiles that held an avatar in any sample are left out of the CRC comparison (the avatars
     are drawn into the tiles every frame until P4), and the cause "avatar" and as many renders are tolerated. A light without a
     tile fails at any step."""
     fails = []
@@ -150,28 +154,33 @@ def judge_o2(baseline, samples, first_lap_causes=("lod_up",)):
         skip |= set(str(k) for k in s.get("avatar_keys", []))
     prev = baseline
     refs = {}
+    ref_sizes = {}
     for s in samples:
         if s.get("settle", s["lap"] == 1):
             refs[s.get("group", 0)] = s["crcs"]   # the last step of the settling lap
+            ref_sizes[s.get("group", 0)] = s.get("sizes", {})
     for s in samples:
         tag = "lap %d %s" % (s["lap"], s["tag"])
         if s["without"]:
             fails.append("%s: %d lights without a tile" % (tag, s["without"]))
         delta = cause_delta(prev["causes"], s["causes"])
         avatar_renders = max(0, delta.pop("avatar", 0))
+        lowres_renders = max(0, delta.pop("lowres", 0)) if not s.get("settle", s["lap"] == 1) else 0  # a camera-position size change redraws a tile
         if s.get("settle", s["lap"] == 1):
             bad = {k: v for k, v in delta.items() if k not in first_lap_causes}
             if bad:
                 fails.append("%s: re-render for %s (only %s allowed in a settling lap)"
                              % (tag, dict(sorted(bad.items())), ", ".join(first_lap_causes)))
         else:
-            if s["renders"] - prev["renders"] > avatar_renders:
+            if s["renders"] - prev["renders"] > avatar_renders + lowres_renders:
                 fails.append("%s: static renders %d -> %d" % (tag, prev["renders"], s["renders"]))
             if delta:
                 fails.append("%s: render causes changed: %s" % (tag, dict(sorted(delta.items()))))
             ref = refs.get(s.get("group", 0))
             if ref is not None:
-                changed = sorted(k for k in set(s["crcs"]) | set(ref) if k not in skip and s["crcs"].get(k) != ref.get(k))
+                sizes, rsizes = s.get("sizes", {}), ref_sizes.get(s.get("group", 0), {})
+                changed = sorted(k for k in set(s["crcs"]) | set(ref)
+                                 if k not in skip and s["crcs"].get(k) != ref.get(k) and sizes.get(k) == rsizes.get(k))
                 if changed:
                     fails.append("%s: tile CRC differs from the first lap for %s" % (tag, ", ".join(changed[:8])))
         prev = s
@@ -329,7 +338,7 @@ class Check:
         renders, without, crcs = pool_state(st)
         ex = pool_extras(st)
         return {"lap": lap, "tag": tag, "renders": renders, "without": without, "crcs": crcs, "causes": ex["causes"],
-                "avatar_keys": ex["avatar_keys"]}
+                "avatar_keys": ex["avatar_keys"], "sizes": ex["sizes"]}
 
     def extras(self, reset_ages=False):
         """The P3 counters without the tile read-back (cheap): the O-6 windows poll these."""
