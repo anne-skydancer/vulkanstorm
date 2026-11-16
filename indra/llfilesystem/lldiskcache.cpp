@@ -246,7 +246,11 @@ void LLDiskCache::purge()
         const auto& filename = entry.second.second;
         const fsyspath native_path(filename);
         auto uuid_as_string = gDirUtilp->getBaseFileName(filename, true);
-        uuid_as_string = uuid_as_string.substr(CACHE_FILENAME_PREFIX.size() + 1, 36);
+        // skip "sl_cache_" and trailing "_N"; a stray shorter file name (the scan matches the prefix anywhere in
+        // the full path) must not make substr throw on the purge thread
+        uuid_as_string = (uuid_as_string.size() >= CACHE_FILENAME_PREFIX.size() + 1)
+                       ? uuid_as_string.substr(CACHE_FILENAME_PREFIX.size() + 1, 36)
+                       : std::string();
         purge_action action;
         if (std::find(mSkipList.begin(), mSkipList.end(), uuid_as_string) != mSkipList.end())
         {
