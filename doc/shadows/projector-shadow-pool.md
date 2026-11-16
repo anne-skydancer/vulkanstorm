@@ -85,10 +85,25 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
   452 texels, and 32 bilinear 2 x 2 taps read 128 of them, 28 % against 41 % at the old 10 texels) and the penumbra turns grainy
   before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
-- **Emitter size from the prim (P2b).** The penumbra's light size is the projector prim's own face, `scale.x` and `scale.y` of the
-  pose the tile was drawn with, as the uniform `proj_shadow_light_size` (metres along the map's u and v, each clamped to
-  2 cm .. 15 cm; the old constant was 15 cm, at most the near plane's width). Only small emitters get sharper (a bulb prim, a face
-  under 15 cm); a face of 15 cm or more gives the penumbra it gave in P2, none is softer. Nothing depends on the camera. The sun keeps `shadow_light_size`.
+- **Emitter: a fixed 1 cm light (projector shadow sharpness P2).** Every lamp is a 1 cm light (SL's minimum prim size), whatever its
+  prim, centred on the projection centre (the lamp's anchor point). The penumbra's light size is the uniform
+  `proj_shadow_light_size` = 0.01 m times `RenderShadowLightSize`, on both axes of the map (`emitterExtent`, `llprojectorshadowpool.h`);
+  this replaces the prim's own face and its 2 cm .. 15 cm clamp (P2b). `RenderShadowLightSize` is the one softness factor of every
+  light: the sun and moon keep their formula (0.53 degrees times the EEP sun or moon scale times the setting), a projector lamp is
+  0.01 m times the setting, and point lights will use the same rule. Its default is 0.23 (it was 1.0), so a lamp's emitter is 2.3 mm
+  and the sun's disc is 0.23 of its physical size by default. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider
+  next to the Shadow method (Stochastic only): 0.05 to 1.0, logarithmic in two halves meeting at 0.23, in 0.01 steps of its
+  position, with an editable number box that shows and accepts the real value (`LLShadowMethod::softnessFromPosition` and
+  `softnessToPosition`). Graphic presets save and load it. Nothing depends on the camera.
+- **Contact hardening and a texel normal offset (P2).** The filter's radius follows the blocker nearest the receiver (the largest
+  map depth among the blocking texels of the search), not the blockers' mean: an edge is as sharp as its closest contact allows, and
+  a contact (a foot on a floor) is no longer blurred by the farther blockers (head, shoulders). The receiver is offset along its
+  geometric normal by one texel of the tile at the receiver, scaled by sin(theta) of the angle to the lamp, the way the sun's
+  `shadowNormalOffsetPos` works (texel = w / (k N), `w` the axial distance); it replaces the fixed 4 cm `spot_shadow_offset`, which
+  pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light
+  (`scripts/shadows/proj_march_bench.py --edges`, 2.3 mm emitter): the toe's x50 lands within 1 mm of the reference on the 2048 and
+  1024 tiles (today 5 mm short), the value under the toe is 0 (the study measured 0.04 to 0.19 there with today's lookup and the 6 and 15 cm prims) and the toe's
+  RMS falls from 0.17 to 0.05; the lookup costs about 4 % more. Static shadows get it too: the lookup is the same for every tile.
 - **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
   pool and the sun cascades), so a tile's pattern does not depend on where the tile sits in the atlas. The Stochastic sun
   cascades set the same uniform to `-(k mod 2^16)`, k the map corner's index on the world grid (`LLShadowCascadeFit::alphaDitherOrigin`),
