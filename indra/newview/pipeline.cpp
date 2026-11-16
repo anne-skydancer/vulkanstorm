@@ -12815,6 +12815,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
     // frames in the gate have shadow strength 0 in the shaders, so the maps are not read with weight: they are cleared once
     // when the gate closes (not every frame) and drawn again, before they are read, on the frame the gate opens. The probe
     // renders (gCubeSnapshot) take the same decision from the same primary light, so they skip with the main view.
+    const bool shadow_hidden = primary_light.valid ? !primary_light.shadow_visible : mSunDiffuse == LLColor4::black;
     const bool dark_skip = RenderShadowMethod == LLShadowMethod::STOCHASTIC && primary_light.valid && primary_light.dark_skip;
     if (dark_skip)
     {
@@ -12824,7 +12825,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             mDirectionalShadowsDarkCleared = true;
         }
     }
-    else if (primary_light.valid ? !primary_light.shadow_visible : mSunDiffuse == LLColor4::black)
+    else if (shadow_hidden)
     { //sun diffuse is totally black shadows don't matter
         mDirectionalShadowsDarkCleared = false;
         skipRenderingShadows();
