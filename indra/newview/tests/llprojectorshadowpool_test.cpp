@@ -2,7 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Standalone checks of llprojectorshadowpool.h (no viewer libraries, no GL):
-//   Options: --table (the cadence table of the C1 commit), --bench-index (the change-index bench, not run in CI).
+//   Options: --bench-index (the change-index bench, not run in CI).
 //   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llprojectorshadowpool_test.cpp
 // Spec: reports/projector-pool-2026-11-13/design-final.md, section 5 stage P1:
 //   T1  256 lights x 2048^2 fit at the floor
