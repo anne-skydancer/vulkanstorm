@@ -116,8 +116,8 @@ constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull;
 constexpr float kRadiusMaxM = 0.04f;        // ST_SPOT_RADIUS_MAX_M: the largest radius of the search and filter, metres at the receiver
 constexpr float kKernelTexelsMin = 1.0f;    // ST_SPOT_KERNEL_MIN
 constexpr float kKernelTexelsMax = 12.0f;   // ST_SPOT_KERNEL_TEXELS_MAX
-constexpr float kEmitterMin = 0.02f;        // metres: the emitter extent's lower limit (a point has no edge to render)
-constexpr float kEmitterMax = 0.15f;        // metres: the upper limit, the constant of P2: no lamp is softer than before
+constexpr float kEmitterM = 0.01f;          // metres: every lamp is a 1 cm light (SL's minimum prim size), whatever its prim
+constexpr float kSoftnessDefault = 0.23f;   // RenderShadowLightSize's default: the emitter's (and the sun's) size multiplier
 
 // clamp(ST_SPOT_RADIUS_MAX_M * k * N / w, 1, 12)
 inline float radiusCapTexels(float k, uint32_t n, float w)
@@ -125,10 +125,11 @@ inline float radiusCapTexels(float k, uint32_t n, float w)
     return std::min(std::max(kRadiusMaxM * k * (float)n / w, kKernelTexelsMin), kKernelTexelsMax);
 }
 
-// the emitter's extent across the beam: the prim's face, clamped (a bad value gets the lower limit)
-inline float emitterExtent(float face)
+// the emitter's extent across the beam, in metres: 1 cm times the softness (RenderShadowLightSize), the same on both axes and
+// for every lamp. A negative or non-finite softness gets the default
+inline float emitterExtent(float softness)
 {
-    return std::isfinite(face) ? std::min(std::max(face, kEmitterMin), kEmitterMax) : kEmitterMin;
+    return kEmitterM * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
 }
 
 // texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N
