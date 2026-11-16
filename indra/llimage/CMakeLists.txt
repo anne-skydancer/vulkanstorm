@@ -73,6 +73,12 @@ if (LL_TESTS)
     llimageworker.cpp
     )
   LL_ADD_PROJECT_UNIT_TESTS(llimage "${llimage_TEST_SOURCE_FILES}")
+
+  # INTEGRATION TESTS
+  include(LLAddBuildTest)
+  if (NOT USE_KDU)
+    LL_ADD_INTEGRATION_TEST(llimagej2c_decode "" "llimage;llimagej2coj;llfilesystem;llmath;llcommon")
+  endif (NOT USE_KDU)
 endif (LL_TESTS)
 
 
