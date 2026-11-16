@@ -603,74 +603,16 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     BOOST_STATIC_ASSERT(LL_ARRAY_SIZE(extra_code_text) < LL_ARRAY_SIZE(shader_code_text));
 
 
-    S32 major_version = gGLManager.mGLSLVersionMajor;
-    S32 minor_version = gGLManager.mGLSLVersionMinor;
-
-    // <Vulkanstorm> compute shaders are GLSL 4.30 (GL 4.3). The caller gates on the device; an older
-    // GLSL here is an error, never a different shader.
-    if (type == GL_COMPUTE_SHADER && (major_version < 4 || (major_version == 4 && minor_version < 30)))
+    // <Vulkanstorm> OpenGL 4.6 floor (newview/llglfloor.h): the viewer does not start below GL 4.6, which
+    // brings GLSL 4.60, so there is exactly one header: 430 for compute and 420 for everything else
+    // (a later floor change moves both to 460).
+    if (type == GL_COMPUTE_SHADER)
     {
-        LL_WARNS("ShaderLoading") << "A compute shader needs GLSL 4.30, this device has " << major_version << "."
-                                  << minor_version << ": " << open_file_name << LL_ENDL;
-        fclose(file);
-        return 0;
-    }
-
-    if (major_version == 1 && minor_version < 30)
-    {
-        llassert(false); // GL 3.1 or later required
+        shader_code_text[shader_code_count++] = strdup("#version 430\n");
     }
     else
     {
-        if (major_version >= 4)
-        {
-            //set version to 400 or 420 (430 for a compute shader, checked above)
-            if (type == GL_COMPUTE_SHADER)
-            {
-                shader_code_text[shader_code_count++] = strdup("#version 430\n");
-            }
-            else if (minor_version >= 20)
-            {
-                shader_code_text[shader_code_count++] = strdup("#version 420\n");
-            }
-            else
-            {
-                shader_code_text[shader_code_count++] = strdup("#version 400\n");
-            }
-        }
-        else if (major_version == 3)
-        {
-            if (minor_version <= 29)
-            {
-                // OpenGL 3.2 had GLSL version 1.50.  anything after that the version numbers match.
-                // https://www.khronos.org/opengl/wiki/Core_Language_(GLSL)#OpenGL_and_GLSL_versions
-                shader_code_text[shader_code_count++] = strdup("#version 150\n");
-            }
-            else
-            {
-                shader_code_text[shader_code_count++] = strdup("#version 330\n");
-            }
-        }
-        else
-        {
-            // OpenGL 3.2 had GLSL version 1.50.  anything after that the version numbers match.
-            if (type == GL_GEOMETRY_SHADER || minor_version >= 50)
-            {
-                //set version to 1.50
-                shader_code_text[shader_code_count++] = strdup("#version 150\n");
-                //some implementations of GLSL 1.30 require integer precision be explicitly declared
-                extra_code_text[extra_code_count++] = strdup("precision mediump int;\n");
-                extra_code_text[extra_code_count++] = strdup("precision highp float;\n");
-            }
-            else
-            {
-                //set version to 1.40
-                shader_code_text[shader_code_count++] = strdup("#version 140\n");
-                //some implementations of GLSL 1.30 require integer precision be explicitly declared
-                extra_code_text[extra_code_count++] = strdup("precision mediump int;\n");
-                extra_code_text[extra_code_count++] = strdup("precision highp float;\n");
-            }
-        }
+        shader_code_text[shader_code_count++] = strdup("#version 420\n");
     }
 
     if (type == GL_FRAGMENT_SHADER)
@@ -766,8 +708,8 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
             extra_code_text[extra_code_count++] = strdup("return texture(tex0, texcoord);\n");
             extra_code_text[extra_code_count++] = strdup("}\n");
         }
-        else if (major_version > 1 || minor_version >= 30)
-        {  //switches are supported in GLSL 1.30 and later
+        else
+        {
             if (gGLManager.mIsNVIDIA)
             { //switches are unreliable on some NVIDIA drivers
                 for (S32 i = 0; i < texture_index_channels; ++i)
@@ -795,11 +737,6 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
                 extra_code_text[extra_code_count++] = strdup("\treturn ret;\n");
                 extra_code_text[extra_code_count++] = strdup("}\n");
             }
-        }
-        else
-        { //should never get here.  Indexed texture rendering requires GLSL 1.30 or later
-            // (for passing integers between vertex and fragment shaders)
-            LL_ERRS() << "Indexed texture rendering requires GLSL 1.30 or later." << LL_ENDL;
         }
     }
 
@@ -1066,7 +1003,7 @@ void LLShaderMgr::initShaderCache(bool enabled, const LLUUID& old_cache_version,
     LL_PROFILE_ZONE_SCOPED;
     LL_INFOS("ShaderMgr") << "Initializing shader cache" << LL_ENDL;
 
-    mShaderCacheEnabled = gGLManager.mGLVersion >= 4.09 && enabled;
+    mShaderCacheEnabled = enabled;
 
     if(!mShaderCacheEnabled || mShaderCacheVersion.notNull())
         return;

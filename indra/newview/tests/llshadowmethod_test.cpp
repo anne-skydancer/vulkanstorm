@@ -47,18 +47,14 @@ namespace
             && LLShadowMethod::usesStableCascades(LLShadowMethod::sanitize(4000000000u)), "a stored 1 or unknown value is a stable-cascade method");
         for (std::uint32_t v : { 0u, 1u, 2u, 3u, 4000000000u })
         {
-            check(LLShadowMethod::effective(v, true) == LLShadowMethod::sanitize(v), "a capable device runs the sanitized method");
-            check(LLShadowMethod::effective(v, true) != LLShadowMethod::RETIRED_PCSS, "no value runs the removed method");
+            check(LLShadowMethod::sanitize(v) != LLShadowMethod::RETIRED_PCSS, "no value runs the removed method");
         }
-        check(LLShadowMethod::effective(2, false) == LLShadowMethod::LEGACY, "Stochastic on a device below GL 4.0 is Legacy");
-        check(LLShadowMethod::effective(1, false) == LLShadowMethod::LEGACY, "a stored 1 on a device below GL 4.0 is Legacy");
-        check(LLShadowMethod::effective(0, false) == LLShadowMethod::LEGACY, "Legacy is unchanged on such a device");
-        check(LLShadowMethod::effective(3, false) == LLShadowMethod::LEGACY, "an unknown value is Stochastic, so Legacy on such a device");
-        check(LLShadowMethod::effective(1, true) == LLShadowMethod::STOCHASTIC, "a stored 1 on a capable device is Stochastic");
+        check(LLShadowMethod::sanitize(0) == LLShadowMethod::LEGACY, "Legacy stays a valid, selectable method");
         check(LLShadowMethod::DEFAULT == LLShadowMethod::STOCHASTIC, "unknown values read as the default, Stochastic");
-        // Owner decision Q8 (2026-11-13): the method is chosen by the capability alone. No run-time failure
-        // (an allocation or a shader build) is an input here, so none can turn Stochastic into Legacy.
-        check(LLShadowMethod::effective(LLShadowMethod::STOCHASTIC, true) == LLShadowMethod::STOCHASTIC, "Q8: Stochastic stays Stochastic on a capable device");
+        // Owner decision Q8 (2026-11-13): the method is chosen by the stored value alone (every device that
+        // starts meets the OpenGL 4.6 floor). No run-time failure (an allocation or a shader build) is an input
+        // here, so none can turn Stochastic into Legacy.
+        check(LLShadowMethod::sanitize(LLShadowMethod::STOCHASTIC) == LLShadowMethod::STOCHASTIC, "Q8: Stochastic stays Stochastic");
     }
 
     void test_migration()

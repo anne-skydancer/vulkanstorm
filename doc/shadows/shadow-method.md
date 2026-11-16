@@ -16,7 +16,7 @@ Shadows heading. It replaced the "Soft shadows (PCSS)" checkbox (`RenderShadowPC
 | Later shadow stages (S2-S9, S7b) | No | Yes (S2 below). The deferred sun pass uses the world-unit bias and the geometric receiver plane; the forward receivers (alpha, PBR, water) use Stochastic's own util with fixed rays |
 | Settings used | `RenderShadowSplitExponent` x/y/z, `RenderShadowErrorCutoff`, `RenderShadowFOVCutoff` | `RenderShadowDistance`, `RenderShadowSplitExponent` y, `RenderShadowLightSize` |
 
-A device below OpenGL 4.0 runs Stochastic as Legacy (`LLShadowMethod::effective`).
+Every device that starts meets the OpenGL 4.6 floor, so both methods run everywhere; Legacy is a user choice.
 
 ## PCSS is removed
 
@@ -27,8 +27,7 @@ PCSS (value 1: rotated Poisson PCF, blocker search, contact hardening, the `PCSS
 folder's README.txt says how). `vkstorm-release` still has PCSS until the stochastic integration PR lands there.
 
 - `LLShadowMethod::RETIRED_PCSS = 1` stays unused, so 2 keeps meaning Stochastic in stored settings and presets.
-  `DEFAULT = STOCHASTIC`: a stored 1 and any other unknown value read as Stochastic (`sanitize`), which `effective`
-  turns into Legacy where Stochastic is not supported. At startup a stored 1 (or unknown value) is also written
+  `DEFAULT = STOCHASTIC`: a stored 1 and any other unknown value read as Stochastic (`sanitize`). At startup a stored 1 (or unknown value) is also written
   back as 2, so the combo shows it. A preset file that stores 1 selects Stochastic the same way.
 - The `RenderShadowPCSS` checkbox migration (once per install) now maps on to Stochastic, off to Legacy; the
   preset rule is the same.
@@ -36,8 +35,8 @@ folder's README.txt says how). `vkstorm-release` still has PCSS until the stocha
   setting unless the new one is already set (it wins), and the old setting is reset to its default (it stays
   declared, hidden and retired, so the user file can be read). A preset file with the old key and no new key maps
   it on loading. The rules are `migrateLightSize` and `presetNeedsLightSizeMapping` in `llshadowmethod.h`.
-- Feature tables: every list that recommended PCSS (1) recommends Stochastic (2); the device gate keeps GL < 4.0
-  on Legacy.
+- Feature tables: every list that recommended PCSS (1) recommends Stochastic (2); no device is
+  below the OpenGL 4.6 floor.
 - Kept, as they serve Stochastic (and Legacy later): the stable cascades (S1), the method-neutral
   `SHADOW_COMMON` helpers (S2), the N·L multiply, and the stochastic util and resolve. Legacy is unchanged.
 
@@ -55,8 +54,7 @@ allocated, only the accumulation is turned off, with a log line, and the 8 rays 
 still Stochastic. No run-time fallback (owner decision Q8, 2026-11-13, replacing the 2026-11-12 exception): if the stochastic
 transparency targets cannot be allocated or a stochastic shader does not build, the failure is logged, the selected
 methods stay (no switch to sorted alpha or Legacy shadows, no notice) and the retry comes at the next natural point (the
-allocation backoff, the next shader reload). Devices below OpenGL 4.0 are Legacy and sorted by design
-(`LLStochasticEngine::usable()` is the capability).
+allocation backoff, the next shader reload). A device below OpenGL 4.6 does not start (see "No capability gate" below), so there is no Legacy-by-capability case.
 
 M0 to M2 shipped as one PR.
 
@@ -77,10 +75,8 @@ M0 to M2 shipped as one PR.
   program binary cache hashes defines, not attached objects, so the method is part of the program hash
   (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy keeps its cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
   probe pass included.
-- Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`, as for the stochastic
-  transparency) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
-  item and a stored 2 reads as Legacy (`LLShadowMethod::effective`, unit tested). The setting is never written, so the
-  choice survives a GPU upgrade. This is a capability choice, not a run-time fallback.
+- No GL-version gate for the shadow method: the viewer does not start below OpenGL 4.6 (`indra/newview/llglfloor.h`), so there is no
+  device that cannot run Stochastic. Legacy stays a valid, stored and selectable method.
 - The combo has the items "Legacy" and "Stochastic". `scripts/tests/test_shadow_method_tables.py`
   checks that the feature tables recommend 0 or 2 and never 1, the combo, that PCSS is gone from the shaders and
   the shader manager, and that the util has no groundwork defines.

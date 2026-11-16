@@ -137,20 +137,6 @@ void deleteTexture(U32& name)
     name = 0;
 }
 
-bool deviceSupported()
-{
-    // 3.99 / 4.29 as llgl.cpp: mGLVersion is a float
-    const bool ok = gGLManager.mGLVersion >= 3.99f && gGLManager.mGLSLVersionMajor >= 4;
-    if (!ok)
-    {
-        LL_INFOS_ONCE("Pipeline") << "The stochastic engine needs OpenGL 4.0; this device reports GL "
-                                  << gGLManager.mGLVersion << ", GLSL " << gGLManager.mGLSLVersionMajor << "."
-                                  << gGLManager.mGLSLVersionMinor << ": stochastic transparency is off (sorted alpha is used),"
-                                  << " and the Stochastic shadows' sun pass has no accumulation" << LL_ENDL;
-    }
-    return ok;
-}
-
 bool computeResolve()
 {
     // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the
@@ -165,41 +151,21 @@ bool computeResolve()
     if (!force_compute)
     {
         static bool logged_default = false;   // main render thread, the pipeline's allocation
-        if (!logged_default && gGLManager.mGLVersion >= 3.99f)
+        if (!logged_default)
         {
             logged_default = true;
             LL_INFOS("Pipeline") << "Stochastic shadows: fragment resolve (every device; GL compute stalls the frame in motion)" << LL_ENDL;
         }
         return false;
     }
-    const bool glsl = gGLManager.mGLSLVersionMajor > 4 || (gGLManager.mGLSLVersionMajor == 4 && gGLManager.mGLSLVersionMinor >= 30);
-    bool capable = gGLManager.mGLVersion >= 4.29f && glsl;
-#if LL_WINDOWS && !LL_MESA
-    // Only Windows (without Mesa) loads these as nullable function pointers (llglheaders.h, llgl.cpp);
-    // Linux and Mesa declare them as linked prototypes (GL_GLEXT_PROTOTYPES), which are never null, so
-    // there is nothing to test there.
-    // GL 4.3 reports the compute entry points; a driver that does not load them cannot be forced to the compute
-    // resolve (an A/B test only; the fragment resolve is the default everywhere)
-    if (capable && !(glDispatchCompute && glBindImageTexture && glMemoryBarrier))
-    {
-        capable = false;
-    }
-#endif
+    // OpenGL 4.6 (the floor) has the compute entry points and GLSL 4.60
     static bool logged = false;   // main render thread, the pipeline's allocation
-    if (!logged && gGLManager.mGLVersion >= 3.99f)
+    if (!logged)
     {
         logged = true;
-        if (capable)
-        {
-            LL_INFOS("Pipeline") << "Stochastic shadows: compute resolve (GL 4.3 and later), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test" << LL_ENDL;
-        }
-        else
-        {
-            LL_WARNS("Pipeline") << "Stochastic shadows: VKSTORM_STOCH_COMPUTE_RESOLVE is set but the compute resolve is not available (needs GL 4.3, GLSL 4.30 and the compute entry points); the fragment resolve is used" << LL_ENDL;
-        }
+        LL_INFOS("Pipeline") << "Stochastic shadows: compute resolve (GL 4.3 and later), forced by VKSTORM_STOCH_COMPUTE_RESOLVE for an A/B test" << LL_ENDL;
     }
-    const bool compute = capable;
-    return compute;
+    return true;
 }
 
 bool acquireMasks()

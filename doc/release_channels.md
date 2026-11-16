@@ -62,6 +62,17 @@ refuses to install (silent installs too). The Linux launcher (`firestorm`
 wrapper script) checks it the same way. The Windows installer also needs
 Windows 10 or newer; Windows 7, 8 and 8.1 are no longer supported.
 
+Every package also needs OpenGL 4.6 (macOS, which stops at 4.1, is not a Vulkanstorm platform): a graphics card whose current driver
+reports it (expected: recent NVIDIA and AMD cards and Intel Skylake and newer;
+the exact list is not yet checked against user data). The
+viewer checks this at start-up, right after its window is created and before
+anything is drawn, and below 4.6 it shows a plain message naming the graphics
+card and the OpenGL version it found, then closes; there is no installer check.
+Intel chips below 4.6 are no longer run in a GL 3.3 mode, and software
+renderers such as llvmpipe (OpenGL 4.5) are refused too. After a driver update
+that brings a device to 4.6, use "reset graphics to recommended" once: a
+graphics profile stored by the old GL 3.3 mode is not changed by the update.
+
 Pull requests run all three workflows as RelWithDebInfo qualification
 builds, never published, so that the on-demand `linux-lts` build never rots.
 Pushes run Build Windows and Build Linux; Build Linux LTS runs on pull

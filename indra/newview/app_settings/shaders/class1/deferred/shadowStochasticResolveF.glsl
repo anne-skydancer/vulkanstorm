@@ -1,6 +1,6 @@
 /**
  * @file shadowStochasticResolveF.glsl
- * @brief The Stochastic shadow method's temporal resolve, fragment stage (GL 4.0 to 4.2)
+ * @brief The Stochastic shadow method's temporal resolve, fragment stage
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code

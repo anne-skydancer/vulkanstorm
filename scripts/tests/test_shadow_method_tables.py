@@ -28,15 +28,12 @@ class ShadowMethodTables(unittest.TestCase):
                 self.assertEqual(3, len(row), (table.name, row))
                 self.assertIn(row[2], ('0', '2'), (table.name, row))
 
-    def test_gl3_list_stores_legacy(self):
-        """Below OpenGL 4.0 Stochastic does not run: the GL3 list stores Legacy for the method."""
+    def test_no_gl3_lists(self):
+        """The viewer needs OpenGL 4.6: no table has a GL3, OpenGLPre30 or TexUnit8orLess list any more."""
         for table in sorted(NEWVIEW.glob('featuretable*.txt')):
-            text = table.read_text()
-            block = text[text.index('list GL3'):]
-            end = block.find('\nlist ', 1)
-            block = block if end < 0 else block[:end]
-            rows = [l.split() for l in block.splitlines() if l.startswith('RenderShadowMethod')]
-            self.assertEqual([['RenderShadowMethod', '1', '0']], rows, table.name)
+            lists = [l.split()[1] for l in table.read_text().splitlines() if l.startswith('list ')]
+            for gone in ('GL3', 'OpenGLPre30', 'TexUnit8orLess'):
+                self.assertNotIn(gone, lists, table.name)
 
     def test_combo_items(self):
         xml = (NEWVIEW / 'skins/default/xui/en/panel_preferences_graphics1.xml').read_text()

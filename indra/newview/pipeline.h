@@ -748,7 +748,7 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.0+, its shaders built)
+    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (the device takes 8 samples per pass)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
     static bool             sRenderGlow;

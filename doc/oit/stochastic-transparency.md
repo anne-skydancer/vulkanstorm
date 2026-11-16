@@ -72,7 +72,7 @@ The method needs 8 samples in one pass: the GL 4.6 base takes 8 for the colour, 
 621.01 honours only the low 4 bits of a texture-fetched `gl_SampleMask` at 16 samples, so a pass is never wider than 8). S, the
 samples in all, is 8 (`LLStochasticEngine::TRANSPARENCY_SAMPLES`; the Stochastic shadows' ray count `SAMPLES` is 8 too). It was
 tried at 4 on 2026-11-14 and set back to 8 on 2026-11-15 (see Measured: at 4 the upgrade was statically grainier than the
-viewer before it, at 8 it is better in every scene). A device that takes fewer than 8 samples is below the floor, like one below GL 4.0:
+viewer before it, at 8 it is better in every scene). A device that takes fewer than 8 samples cannot run it:
 `allocateAlphaStochastic` leaves stochastic transparency off and sorted alpha is drawn (owner decision, 2026-11-15: the viewer is GL 4.6 based, no
 multi-pass fallback). There are no iterations: the lanes of one pass are never summed across passes. (S = 16 as two passes of 8 was dropped from the harness on 2026-11-15 with the multi-pass path; the mask table itself still has an S = 16 generator.) Memory: 16 B per sample, 128 B per pixel at 8 samples (253 MiB at 1920x1080, 450 MiB at 2560x1440), allocated at the render
 resolution while the method is selected and freed otherwise; nothing grows with the depth of the scene.
@@ -509,10 +509,10 @@ with a faint speckle on dark hair cards and more grain on broad glass; S = 16 ru
 accumulation twice. The bench below finds the same here (S = 8 0.75-0.80x sorted alpha, S = 16
 1.38-1.46x).
 
-Requirements: Windows or Linux, OpenGL 4.0 (GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
+Requirements: Windows or Linux, the OpenGL 4.6 floor (the method itself uses GLSL 4.00 for `gl_SampleMask` and `gl_PrimitiveID`, multisample
 textures; the Stochastic shadows' compute resolve, kept for A/B tests, also needs GL 4.3, GLSL 4.30: `imageStore`, `glMemoryBarrier`), at least
-8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without GL 4.0, or without 8 samples per pass for the colour, depth and `GL_MAX_SAMPLES` formats, has
-sorted alpha: a capability gate (`LLStochasticEngine::deviceSupported`, GL 4.0). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
+8 samples for the three formats, and every prim alpha program's alpha-only variant built. A device without 8 samples per pass for the colour, depth and `GL_MAX_SAMPLES` formats, has
+sorted alpha: a capability gate (`sRenderAlphaStochasticSupported`; the OpenGL 4.6 floor is enforced at start-up). On every device the fragment resolve runs (169 bytes a pixel on a device that takes 8 samples in a pass, 160 before 2026-11-14). A device that has the capability but whose targets or alpha-only shaders are not ready (a failed
 allocation, a resize, a shader set that did not build) does not switch method (owner decision Q8, 2026-11-13: stochastic methods never fall back, replacing the
 2026-11-12 exception): the failure is logged, `RenderAlphaSortMethod` and `RenderShadowMethod` stay as selected, the shadows
 are not changed, and the blended faces are drawn by the plain alpha pass frame by frame (not dropped) while the engine is
