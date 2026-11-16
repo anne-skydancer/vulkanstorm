@@ -11,6 +11,7 @@
 
 #include "llshadowmethod.h"
 
+#include <cmath>
 #include <cstdio>
 #include <initializer_list>
 #include <map>
@@ -144,6 +145,46 @@ namespace
         check(!m.copyToNew && !m.resetOld, "a second run does nothing");
     }
 
+    bool near(float a, float b, float tol) { return std::fabs(a - b) <= tol; }
+
+    // the softness slider: ends, centre at exactly 0.23, monotone, value -> position -> value, position -> value -> position
+    void test_softness()
+    {
+        using namespace LLShadowMethod;
+        check(softnessFromPosition(0.0f) == SOFTNESS_MIN, "softness position 0 is 0.05");
+        check(near(softnessFromPosition(1.0f), SOFTNESS_MAX, 1.0e-6f), "softness position 1 is 1.0");
+        check(softnessFromPosition(0.5f) == SOFTNESS_CENTRE, "softness position 0.5 is exactly 0.23");
+        check(softnessToPosition(SOFTNESS_CENTRE) == 0.5f, "softness 0.23 is exactly position 0.5");
+        check(softnessToPosition(SOFTNESS_MIN) == 0.0f && near(softnessToPosition(SOFTNESS_MAX), 1.0f, 1.0e-6f), "softness ends map to positions 0 and 1");
+        check(softnessFromPosition(-1.0f) == SOFTNESS_MIN && near(softnessFromPosition(2.0f), SOFTNESS_MAX, 1.0e-6f), "positions outside are clamped");
+        check(softnessToPosition(0.0f) == 0.0f && near(softnessToPosition(5.0f), 1.0f, 1.0e-6f), "values outside are clamped");
+        // each half is logarithmic: the quarter positions are the geometric means of the half's ends
+        check(near(softnessFromPosition(0.25f), std::sqrt(SOFTNESS_MIN * SOFTNESS_CENTRE), 1.0e-6f), "the left half is logarithmic");
+        check(near(softnessFromPosition(0.75f), std::sqrt(SOFTNESS_CENTRE * SOFTNESS_MAX), 1.0e-6f), "the right half is logarithmic");
+        float prev = 0.0f;
+        bool monotone = true, round_trip = true, round_trip_pos = true;
+        for (int i = 0; i <= 1000; ++i)
+        {
+            const float pos = (float)i / 1000.0f;
+            const float v = softnessFromPosition(pos);
+            monotone = monotone && v > prev;
+            prev = v;
+            round_trip_pos = round_trip_pos && near(softnessToPosition(v), pos, 1.0e-5f);
+            const float value = SOFTNESS_MIN + (SOFTNESS_MAX - SOFTNESS_MIN) * pos;
+            round_trip = round_trip && near(softnessFromPosition(softnessToPosition(value)) / value, 1.0f, 1.0e-5f);
+        }
+        check(monotone, "softness is strictly increasing with the position");
+        check(round_trip, "value -> position -> value round-trips");
+        check(round_trip_pos, "position -> value -> position round-trips");
+        // 0.01 steps of the slider are fine steps of the value (about 3.1 %: the check allows under 4 %), with no coarse jump
+        float worst = 0.0f;
+        for (int i = 0; i < 100; ++i)
+        {
+            worst = std::fmax(worst, softnessFromPosition((float)(i + 1) / 100.0f) / softnessFromPosition((float)i / 100.0f) - 1.0f);
+        }
+        check(worst < 0.04f, "a 0.01 slider step changes the value by under 4 %");
+    }
+
     void test_rewrite()
     {
         using namespace LLShadowMethod;
@@ -180,6 +221,7 @@ int main()
     test_values();
     test_migration();
     test_light_size();
+    test_softness();
     test_rewrite();
     test_presets();
     test_preset_file();

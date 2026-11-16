@@ -99,8 +99,8 @@ rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther tha
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
 weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (a blocker
-search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the blockers' distance for a
-emitter of the projector prim's own face, 2 to 15 cm, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
+search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the nearest blocker's distance for an
+emitter of 1 cm times `RenderShadowLightSize`, whatever the prim, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
 texel bias and per-texel receiver plane. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
 width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
 within a map texel. The projector lookup costs 8 + 32 gathers per pixel inside the projector's frustum. Under Stochastic with
@@ -187,8 +187,9 @@ alone as GLSL 1.50.
   Stochastic calls them, and so can any other method. Under Stochastic nothing reads `RenderShadowBias` and
   `RenderShadowOffset`: every program that links a shadow util (the sun and probe passes, and the forward
   `alphaF`, `pbralphaF`, `materialF`, `waterF` and `pbrmetallicroughnessF`) links Stochastic's util, which uses the
-  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. The projector shadows keep
-  `spot_shadow_offset` in both methods; `spot_shadow_bias` is Legacy's only (Stochastic uses S2's texel bias).
+  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. Legacy's projector shadows keep
+  `spot_shadow_offset`; the Stochastic projector lookup offsets by one tile texel along the geometric normal instead
+  (the sun's rule); `spot_shadow_bias` is Legacy's only (Stochastic uses S2's texel bias).
 
 What stage S2 changed in the image of the stable-cascade methods: no per-pixel bump pattern in the receiver
 plane (a normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
@@ -232,8 +233,10 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
   Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
   the quality slider and the recommended-settings re-applies like every graphics setting, and the
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the light size (`RenderShadowLightSize`, a debug setting) applies with Stochastic.
-- Graphic presets carry `RenderShadowMethod` (`graphic_preset_controls.xml`). A preset file written
+  feature are unavailable, and the Shadow softness slider (Rendering 2, below the
+  combo) is enabled with Stochastic. `RenderShadowLightSize` defaults to 0.23 and scales the sun, the moon and every
+  projector lamp (a fixed 1 cm light); see `projector-shadow-pool.md`.
+- Graphic presets carry `RenderShadowMethod` and `RenderShadowLightSize` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
   becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).
 - One-time migration (`RenderShadowMethodMigrated`): at startup, after the user settings are read and
