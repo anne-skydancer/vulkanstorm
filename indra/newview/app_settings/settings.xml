@@ -12510,13 +12510,13 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowLightSize</key>
   <map>
     <key>Comment</key>
-    <string>Stochastic shadow method only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size. Was RenderShadowPCSSLightSize.</string>
+    <string>Stochastic shadow method only: the softness of every shadow, Shadow softness in Preferences (Graphics, Rendering 2; 0.05 to 1.0). The sun's and moon's angular size is the physical 0.53 degrees times the sky's sun or moon scale times this; a projector lamp is a fixed 1 cm light, 0.01 m times this (point lights will follow the same rule). Was RenderShadowPCSSLightSize.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>F32</string>
     <key>Value</key>
-    <real>1.0</real>
+    <real>0.23</real>
   </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>
