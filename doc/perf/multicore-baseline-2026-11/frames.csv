@@ -1,0 +1,7 @@
+capture,place,frames,seconds,fps,frame_ms_mean,frame_ms_median,frame_ms_p99,low1_fps_from_p99,worst1pct_fps_mean,frame_ms_max,hitches_over_2x_median,skin_palette_calls,skin_palette_joints,cull_passes,state_sort_passes,projector_tiles,projector_avatar_layers
+MC1-still,Risk (scripted),2117,59.94,35.3,28.33,24.0,97.8,10.2,8.8,140.1,123,321.92,11381.05,9.45,9.65,0.35,0.1
+MC1-moving,Risk (scripted),2518,60.13,41.86,23.89,22.2,45.27,22.1,18.7,65.7,26,277.05,9922.44,9.31,9.49,0.31,0.0
+MC1-moving-2,Risk (scripted),2544,59.79,42.53,23.51,23.11,34.29,29.2,25.3,54.7,3,287.77,10311.68,9.15,9.3,0.15,0.0
+MC1-risk-ultra-still,Risk,2431,60.05,40.47,24.71,23.96,35.23,28.4,24.0,60.1,4,358.03,14058.24,10.08,10.31,0.99,0.09
+MC1-home-ultra-still,Isle of Repose,5478,60.07,91.18,10.97,10.6,20.06,49.9,22.2,498.8,47,47.0,1798.0,11.06,11.06,0.18,1.88
+MC1-busy2-ultra-still,Rooftops,1690,59.98,28.16,35.51,33.49,75.28,13.3,11.8,96.0,38,399.6,14084.6,10.72,11.05,1.08,0.63
