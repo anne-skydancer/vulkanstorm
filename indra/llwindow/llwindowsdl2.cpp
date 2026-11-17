@@ -709,7 +709,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
     if (width == 0)
         width = 1024;
     if (height == 0)
-        width = 768;
+        height = 768; // <Vulkanstorm/> was `width = 768`
 
     mFullscreen = fullscreen;
 
