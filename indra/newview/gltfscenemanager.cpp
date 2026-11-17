@@ -316,6 +316,18 @@ void GLTFSceneManager::save(const std::string& filename)
     }
 }
 
+// <Vulkanstorm> The asset's UBOs were never deleted. They are freed when an object's asset is dropped or replaced (here)
+// and when the object dies (LLVOVolume::markDead), always on the main thread with the GL context current.
+// The upload copy (mUploadingAsset) is never released: it carries the original's buffer names.
+static void releaseAssetGL(LLViewerObject* obj)
+{
+    if (obj && obj->mGLTFAsset)
+    {
+        obj->mGLTFAsset->releaseGL();
+    }
+}
+// </Vulkanstorm>
+
 void GLTFSceneManager::load(const std::string& filename)
 {
     std::shared_ptr<Asset> asset = std::make_shared<Asset>();
@@ -330,6 +342,7 @@ void GLTFSceneManager::load(const std::string& filename)
 
         if (obj)
         { // assign to self avatar
+            releaseAssetGL(obj); // <Vulkanstorm/> the asset it replaces is no longer drawn
             obj->mGLTFAsset = asset;
             obj->markForUpdate();
             if (std::find(mObjects.begin(), mObjects.end(), obj) == mObjects.end())
@@ -411,6 +424,7 @@ void GLTFSceneManager::onGLTFBinLoadComplete(const LLUUID& id, LLAssetType::ETyp
                             {
                                 LL_WARNS("GLTF") << "Failed to prepare GLTF asset: " << id << ". Marking as missing." << LL_ENDL;
                                 obj->mIsGLTFAssetMissing = true;
+                                releaseAssetGL(obj); // <Vulkanstorm/>
                                 obj->mGLTFAsset = nullptr;
                             }
                         }
@@ -532,6 +546,7 @@ void GLTFSceneManager::update()
 
                         if (mUploadingObject)
                         {
+                            releaseAssetGL(mUploadingObject); // <Vulkanstorm/>
                             mUploadingObject->mGLTFAsset = nullptr;
                             mUploadingObject->mIsGLTFAssetMissing = false;
                             mUploadingObject->setGLTFAsset(assetId);
