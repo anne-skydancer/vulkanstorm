@@ -96,6 +96,12 @@ no "clamp after the lookup" proposal: variant c already clamps per pixel, after 
 bright channel approaches 1, so a tiny error in a bright, low-gamma sky is amplified. The other five are skies with the sun at 0 degrees in the day branch (next section). The legacyGamma
 display is part of the reference, so this is real; variant a has the same limit.
 
+**Phase 2 check cases (owner, 2026-11-17).** The ten skies variant c fails are likely intentional looks:
+- five bright skies with an extreme legacy gamma (Surreal - Flirt (Paulina), Surreal - Brazil (Paulina), [TOR] DUSK - Fairytale glow, [TOR] SCIFI - Ramshagguld 1 and [TOR] SCIFI - Ramshagguld 2; gamma 0.07 to 0.54), where upstream's gamma curve magnifies the table's interpolation error;
+- five presets with the sun parked exactly at 0 degrees (sunrise and sunset looks: Places Beach Cay, [TOR] SCIFI - Rainbowtek, Bryn Oh's Rusted Gears, [TOR] SCIFI - Grit & shame, [TOR] FOGGY - Das fog), where the day/night branch is float rounding and the L3 band (an accepted difference) applies.
+
+No new mechanism is added for them now. Phase 2 (in the viewer, against installed upstream) renders all ten as named check cases, judged by eye. If the gamma five differ visibly, the fix is targeted (for example a finer table where gamma is extreme), not a redesign.
+
 ### The 58 skies with the sun at the horizon (|elevation| <= 0.0011 degrees)
 
 For these the day / night branch is float rounding: upstream decides with the float32 quaternion's z, and a sun at 0.0000 or -0.0003 degrees flips it (**numeric limit: below about
@@ -186,6 +192,7 @@ and the viewer's geometry on both sides, **today's release / devel look against 
 4. The glow at several screen scales and in motion; the table indexed by `rel_pos`'s direction (geometry section); AT2-2's gate: variant c's cost against the zone variants.
 5. The blend: the table rebuilt per blend step; its cost and any visible step.
 6. Release / devel per-vertex against upstream per-pixel on the real dome; exposure sweep over the night skies; the horizon at the avatar's height; Sunrise, Midday and Sunset once fetched.
+7. The ten variant c failures as named check cases (the Phase 2 check cases note under Results): the five extreme-gamma skies and the five sun-at-0 presets, judged by eye; a targeted fix only if the gamma five differ visibly.
 
 ## Reproduce
 
