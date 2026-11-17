@@ -2315,7 +2315,7 @@ bool LLVolume::unpackVolumeFaces(std::istream& is, S32 size)
     //input stream is now pointing at a zlib compressed block of LLSD
     //decompress block
     LLSD mdl;
-    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, is, size, UNZIP_MESH_MAX_OUT);
+    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, is, size, UNZIP_ASSET_MAX_OUT);
     if (uzip_result != LLUZipHelper::ZR_OK)
     {
         LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD with code " << uzip_result << " , will probably fetch from sim again." << LL_ENDL;
@@ -2329,7 +2329,7 @@ bool LLVolume::unpackVolumeFaces(U8* in_data, S32 size)
     //input data is now pointing at a zlib compressed block of LLSD
     //decompress block
     LLSD mdl;
-    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, in_data, size, UNZIP_MESH_MAX_OUT);
+    U32 uzip_result = LLUZipHelper::unzip_llsd(mdl, in_data, size, UNZIP_ASSET_MAX_OUT);
     if (uzip_result != LLUZipHelper::ZR_OK)
     {
         LL_DEBUGS("MeshStreaming") << "Failed to unzip LLSD blob for LoD with code " << uzip_result << " , will probably fetch from sim again." << LL_ENDL;

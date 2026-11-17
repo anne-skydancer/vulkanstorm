@@ -851,8 +851,11 @@ public:
 // Output caps for the inflate helpers below, so a decompression bomb in region or server data
 // cannot exhaust memory or freeze the calling thread. 0 means no cap.
 constexpr size_t UNZIP_NO_CAP = 0;
-constexpr size_t UNZIP_MESH_MAX_OUT = 64u * 1024 * 1024;       // mesh blocks and materials
-constexpr size_t UNZIP_NAVMESH_MAX_OUT = 256u * 1024 * 1024;   // navmesh
+// Mesh LODs, skin and decomposition blocks, materials and model data: the largest legitimate LOD block
+// is about 15 to 22 MB decompressed, so 64 MiB leaves a wide margin and still stops a bomb early.
+constexpr size_t UNZIP_ASSET_MAX_OUT = 64u * 1024 * 1024;
+// Navmesh: much larger than any asset block; 256 MiB is the owner's decision.
+constexpr size_t UNZIP_NAVMESH_MAX_OUT = 256u * 1024 * 1024;
 
 class LL_COMMON_API LLUZipHelper : public LLRefCount
 {
@@ -867,9 +870,9 @@ public:
         ZR_BUFFER_ERROR,
         ZR_VERSION_ERROR
     } EZipRresult;
-    // return OK or reason for failure
-    static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out = UNZIP_NO_CAP);
-    static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out = UNZIP_NO_CAP);
+    // return OK or reason for failure; max_out is required so every caller chooses its cap
+    static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out);
+    static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out);
 };
 
 //dirty little zip functions -- yell at davep
