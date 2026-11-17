@@ -101,6 +101,7 @@
 #include "llanimstatelabels.h"
 #include "lltrans.h"
 #include "llappearancemgr.h"
+#include "llthread.h" // <Vulkanstorm/> on_main_thread()
 // [RLVa:KB] - Checked: RLVa-2.0.1
 #include "rlvactions.h"
 #include "rlvhandler.h"
@@ -978,6 +979,13 @@ void LLVOAvatar::markDead()
     }
     mVoiceVisualizer->markDead();
     LLLoadedCallbackEntry::cleanUpCallbackList(&mCallbackTextureList) ;
+    // <Vulkanstorm> the profiling timer query was generated per avatar and never deleted; markDead runs on the main thread
+    if (mGPUTimerQuery != 0 && on_main_thread())
+    {
+        glDeleteQueries(1, &mGPUTimerQuery);
+        mGPUTimerQuery = 0;
+    }
+    // </Vulkanstorm>
     LLViewerObject::markDead();
 }
 
