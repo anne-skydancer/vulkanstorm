@@ -2010,6 +2010,24 @@ void LLRender::color3fv(const GLfloat* c)
     color4f(c[0],c[1],c[2],1);
 }
 
+// <Vulkanstorm> The diffuse colour is a shader uniform, but vertices queued by begin/end stay pending until a flush, so they were drawn
+// with the colour set last (debug boxes took the next box's colour). Draw the complete pending primitives first. A partial primitive
+// (a colour set between the vertices of a triangle or line) is left alone: flush would drop it.
+void LLRender::flushPendingForUniform()
+{
+    // Strip, fan and loop modes always flush at end(), so what is pending there is mid-primitive.
+    if (mCount == 0 || (mMode != LLRender::TRIANGLES && mMode != LLRender::LINES && mMode != LLRender::POINTS))
+    {
+        return;
+    }
+    if ((mMode == LLRender::TRIANGLES && mCount % 3 != 0) || (mMode == LLRender::LINES && mCount % 2 != 0))
+    {
+        return;
+    }
+    flush();
+}
+// </Vulkanstorm>
+
 void LLRender::diffuseColor3f(F32 r, F32 g, F32 b)
 {
     LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr;
@@ -2017,6 +2035,7 @@ void LLRender::diffuseColor3f(F32 r, F32 g, F32 b)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4f(LLShaderMgr::DIFFUSE_COLOR, r,g,b,1.f);
     }
 }
@@ -2028,6 +2047,7 @@ void LLRender::diffuseColor3fv(const F32* c)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4f(LLShaderMgr::DIFFUSE_COLOR, c[0], c[1], c[2], 1.f);
     }
 }
@@ -2039,6 +2059,7 @@ void LLRender::diffuseColor4f(F32 r, F32 g, F32 b, F32 a)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4f(LLShaderMgr::DIFFUSE_COLOR, r,g,b,a);
     }
 }
@@ -2050,6 +2071,7 @@ void LLRender::diffuseColor4fv(const F32* c)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4fv(LLShaderMgr::DIFFUSE_COLOR, 1, c);
     }
 }
@@ -2061,6 +2083,7 @@ void LLRender::diffuseColor4ubv(const U8* c)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4f(LLShaderMgr::DIFFUSE_COLOR, c[0]/255.f, c[1]/255.f, c[2]/255.f, c[3]/255.f);
     }
 }
@@ -2072,6 +2095,7 @@ void LLRender::diffuseColor4ub(U8 r, U8 g, U8 b, U8 a)
 
     if (shader)
     {
+        flushPendingForUniform(); // <Vulkanstorm/>
         shader->uniform4f(LLShaderMgr::DIFFUSE_COLOR, r/255.f, g/255.f, b/255.f, a/255.f);
     }
 }
