@@ -18,6 +18,8 @@
 #include <list>
 // std headers
 #include <fstream>
+#include <chrono>
+#include <thread>
 // external library headers
 #include "llapr.h"
 #include "apr_thread_proc.h"
@@ -1430,5 +1432,62 @@ namespace tut
                                  "partial line");
         waitfor(*py.mPy);
         ensure("postend never triggered", listener.mTriggered);
+    }
+
+    template<> template<>
+    void object::test<25>()
+    {
+        set_test_name("large stdin write reaches a busy reader exactly once");
+        // Regression: on Windows, apr_file_write() on the nonblocking pipe
+        // issued an overlapped WriteFile() and, when the pipe was full, gave
+        // up with EAGAIN and 0 bytes written, then cancelled the I/O. If the
+        // reader drained the pipe meanwhile, the chunk had been written after
+        // all, WritePipe resent it and the child saw it twice. So the child
+        // here lets the pipe fill, then reads as fast as it can in odd-sized
+        // pieces while the parent keeps writing into it, and compares the
+        // stream with the expected sequence of 32-bit counters at the end.
+        const unsigned count = 2 * 1024 * 1024;     // 8 MiB
+        PythonProcessLauncher py(get_test_name(),
+                                 "import os, random, struct, sys, time\n"
+                                 "n = 4 * " + std::to_string(count) + "\n"
+                                 "time.sleep(0.5)\n"
+                                 "parts = []\n"
+                                 "seen = 0\n"
+                                 "while seen < n:\n"
+                                 "    data = os.read(0, random.randint(1, 9000))\n"
+                                 "    if not data:\n"
+                                 "        break\n"
+                                 "    parts.append(data)\n"
+                                 "    seen += len(data)\n"
+                                 "got = b''.join(parts)\n"
+                                 "want = struct.pack('<%dI' % (n // 4), *range(n // 4))\n"
+                                 "if got != want:\n"
+                                 "    k = next((i for i in range(min(len(got), len(want))) if got[i] != want[i]), min(len(got), len(want)))\n"
+                                 "    sys.exit('stream differs at offset %d (got %d bytes, expected %d)' % (k, len(got), len(want)))\n");
+        py.mParams.files.add(LLProcess::FileParam("pipe")); // stdin
+        py.launch();
+        std::string payload(count * 4, '\0');
+        for (unsigned v = 0; v < count; ++v)
+        {
+            payload[4*v    ] = char( v        & 0xff);
+            payload[4*v + 1] = char((v >>  8) & 0xff);
+            payload[4*v + 2] = char((v >> 16) & 0xff);
+            payload[4*v + 3] = char((v >> 24) & 0xff);
+        }
+        LLProcess::WritePipe& childin(py.mPy->getWritePipe(LLProcess::STDIN));
+        childin.get_ostream().write(payload.data(), payload.size());
+        childin.get_ostream().flush();
+        // Pump "mainloop" as fast as we can (yield() waits a whole second),
+        // so we keep hitting the full pipe at the instant the child reads.
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (py.mPy->isRunning() && std::chrono::steady_clock::now() < deadline)
+        {
+            LLEventPumps::instance().obtain("mainloop").post(LLSD());
+            std::this_thread::yield();
+        }
+        LLEventPumps::instance().obtain("mainloop").post(LLSD());
+        ensure("child never finished", ! py.mPy->isRunning());
+        ensure_equals("bad child termination", py.mPy->getStatus().mState, LLProcess::EXITED);
+        ensure_equals("child saw a corrupt stdin stream", py.mPy->getStatus().mData, 0);
     }
 } // namespace tut
