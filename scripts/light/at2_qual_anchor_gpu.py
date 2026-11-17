@@ -15,6 +15,7 @@ Needs Windows and a GPU; run only when no viewer or build is running.
 
     python scripts/light/at2_qual_anchor_gpu.py            # prints the ANCHOR table for scripts/light/at2_qual.py
 """
+import io
 import math
 import subprocess
 import sys
@@ -23,16 +24,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 argv, sys.argv = sys.argv, sys.argv[:1]
+_stdout, sys.stdout = sys.stdout, io.StringIO()   # the GL bootstrap prints a "GL:" line on import: keep it out of the table
 import bench_atmosphere as b  # noqa: E402
+GL_LINE = sys.stdout.getvalue().strip()
+sys.stdout = _stdout
 
-UPSTREAM = 'upstream/master'
+UPSTREAM = 'bd03bafe69195460df8023ae9f9487a9031ae010'   # upstream/master when this was written (FirestormViewer/phoenix-firestorm)
 SKY_PATHS = ['indra/newview/app_settings/shaders/class1/deferred/skyF.glsl',
              'indra/newview/app_settings/shaders/class1/environment/srgbF.glsl']
 # library skies (file names) and, per sky, the sample directions: (label, elevation, azimuth from the light), where the light is the
 # sun by day and the moon by night. 'sun' entries are relative: elevation = the light's elevation + the offset.
+# day skies, two real night skies (the sun at -60 and -90 degrees; the moon is the light), two skies with glow.z > 0 (0.4 and 10), a sky with
+# max_y 0 (undefined: rel_pos collapses; the expected output is black)
 SKIES = ['Default.xml', 'Sunset.xml', 'Foggy.xml', '[TOR] MIDDAY - Salmon.xml', '[TOR] MIDDAY - Pleasantrie.xml',
-         'Alchemy Immortalis - Fog Lifting.xml', '[TOR] NIGHT - That spells moon 1.xml']
-SAMPLES = [('zenith', 90.0, 0.0), ('horizon', 2.0, 90.0), ('mid', 45.0, 135.0), ('near-light', None, 14.75), ('light-core', None, 0.0)]
+         'Alchemy Immortalis - Fog Lifting.xml', '(SS) Atmos 02:00 2.xml', 'A-12AM.xml', 'Phototools- rara Fall Home Light.xml',
+         'Phototools- Yellow Stars 01.xml', '[TOR] SPECIAL - Puur.xml']
+SAMPLES = [('zenith', 90.0, 0.0), ('horizon', 2.0, 90.0), ('low', 0.5, 45.0), ('mid', 45.0, 135.0), ('near-light', None, 14.75),
+           ('light+10', None, 0.0), ('light-core', None, 0.0)]
 LIGHT_CORE_OFFSET = 0.4   # degrees above the light, in the flat zone of haze_glow (acos(0.999) = 2.56 degrees)
 
 VS = """#version 400 compatibility
@@ -60,6 +68,8 @@ def light_of(p):
 
 
 def main():
+    print(f'# upstream {UPSTREAM} skyF.glsl, srgbF.glsl; {GL_LINE}; python {sys.version.split()[0]}')
+    print('# columns: sky, sample, light elevation, el, az, frag_data[0] (x2, clamp 5, sRGB-encoded)')
     with tempfile.TemporaryDirectory(prefix='at2_qual_up_') as tmp:
         fs = upstream_fs(Path(tmp))
     prog = b.build([(b.VERT, VS), (b.FRAG, fs)])
@@ -74,9 +84,7 @@ def main():
         gf = 1.0 if sun_up else p['moon_brightness'] * 0.25
         for label, el, az in SAMPLES:
             if el is None:
-                el = math.degrees(le) + (LIGHT_CORE_OFFSET if label == 'light-core' else 0.0)
-            if label == 'near-light':
-                el = math.degrees(le)
+                el = math.degrees(le) + {'light-core': LIGHT_CORE_OFFSET, 'light+10': -10.0 if math.degrees(le) > 80.0 else 10.0}.get(label, 0.0)
             tgt.bind()
             b.use(prog)
             for u, v in (('lightnorm', ln), ('sunlight_color', p['sunlight_color']), ('moonlight_color', p['sunlight_color']),

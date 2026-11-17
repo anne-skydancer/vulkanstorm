@@ -61,7 +61,7 @@ enum Path
 {
     kClassic = 0,  // no reflection_probe_ambiance key (the library; cached Midday (Legacy), Midnight): sky_hdr_scale 1, final_scale 1.1, tonemap mix 0
     kPbr = 1,      // reflection_probe_ambiance != 0: sky_hdr_scale 2 sqrt(gamma), tonemap on (the GPU bench's path)
-    kPbrZero = 2,  // the key is present and 0 (the code default): sky_hdr_scale 1, not classic (final_scale 1), tonemap on
+    kPbrZero = 2,  // the key is present and 0 (the code default): sky_hdr_scale 1, not classic (final_scale 1); the display is the classic one (NO_POST + legacyGamma)
 };
 
 struct V3
@@ -250,23 +250,40 @@ struct Lab
     double L, a, b;
 };
 
-Lab display_lab(V3 lin, int path)
+// The display chain of upstream's pipeline.cpp (7885-7915) and postDeferredTonemap.glsl. A sky with reflection_probe_ambiance 0 (every
+// classic sky, as llsettingssky.cpp:1177-1181 sets it, and the code default) takes the NO_POST path plus legacyGamma: clamp 0..1,
+// linear_to_srgb, then c = 1 - (1 - c)^gamma with the sky's gamma uniform. A sky with a nonzero ambiance (kPbr) takes the tone map (ACES Hill,
+// RenderTonemapType 1, mix 1, exposure 1) and plain sRGB. The result is the 8-bit code of the RGBA8 readback.
+void display_codes(V3 lin, int path, double gamma, unsigned char* out)
 {
     V3 c = lin;
-    if (path != kClassic)
+    if (path == kPbr)
     {
         c = mat3_mul(kAcesIn, lin);
         c = { rrt(c.r), rrt(c.g), rrt(c.b) };
         c = mat3_mul(kAcesOut, c);
     }
     double ch[3] = { c.r, c.g, c.b };
+    for (int i = 0; i < 3; ++i)
+    {
+        const double x = std::isnan(ch[i]) ? 0.0 : std::min(std::max(ch[i], 0.0), 1.0);
+        double s = x < 0.0031308 ? x * 12.92 : 1.055 * std::pow(x, 0.41666) - 0.055; // srgbF.glsl's exponent
+        if (path != kPbr)
+        {
+            s = 1.0 - std::pow(1.0 - std::min(std::max(s, 0.0), 1.0), gamma); // legacyGamma
+        }
+        out[i] = static_cast<unsigned char>(std::round(std::min(std::max(s, 0.0), 1.0) * 255.0)); // RGBA8 readback
+    }
+}
+
+Lab display_lab(V3 lin, int path, double gamma = 1.0)
+{
+    unsigned char b8[3];
+    display_codes(lin, path, gamma, b8);
     double q[3];
     for (int i = 0; i < 3; ++i)
     {
-        const double x = std::min(std::max(ch[i], 0.0), 1.0);
-        const double s = x < 0.0031308 ? x * 12.92 : 1.055 * std::pow(x, 0.41666) - 0.055; // srgbF.glsl's exponent
-        const double b8 = std::round(std::min(std::max(s, 0.0), 1.0) * 255.0);           // RGBA8 readback
-        q[i] = srgb_to_linear(b8 / 255.0);
+        q[i] = srgb_to_linear(b8[i] / 255.0);
     }
     auto f = [](double t) { return t > 0.008856 ? std::cbrt(t) : 7.787 * t + 16.0 / 116.0; };
     const double X = (0.4124 * q[0] + 0.3576 * q[1] + 0.1805 * q[2]) / 0.95047;
