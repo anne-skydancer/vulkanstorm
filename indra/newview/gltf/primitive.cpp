@@ -340,35 +340,59 @@ bool Primitive::prep(Asset& asset)
         // load vertex data
         if (attribName == "POSITION")
         {
-            copy(asset, accessor, mPositions);
+            if (!copy(asset, accessor, mPositions))
+            {
+                return false;
+            }
         }
         else if (attribName == "NORMAL")
         {
-            copy(asset, accessor, mNormals);
+            if (!copy(asset, accessor, mNormals))
+            {
+                return false;
+            }
         }
         else if (attribName == "TANGENT")
         {
-            copy(asset, accessor, mTangents);
+            if (!copy(asset, accessor, mTangents))
+            {
+                return false;
+            }
         }
         else if (attribName == "COLOR_0")
         {
-            copy(asset, accessor, mColors);
+            if (!copy(asset, accessor, mColors))
+            {
+                return false;
+            }
         }
         else if (attribName == "TEXCOORD_0")
         {
-            copy(asset, accessor, mTexCoords0);
+            if (!copy(asset, accessor, mTexCoords0))
+            {
+                return false;
+            }
         }
         else if (attribName == "TEXCOORD_1")
         {
-            copy(asset, accessor, mTexCoords1);
+            if (!copy(asset, accessor, mTexCoords1))
+            {
+                return false;
+            }
         }
         else if (attribName == "JOINTS_0")
         {
-            copy(asset, accessor, mJoints);
+            if (!copy(asset, accessor, mJoints))
+            {
+                return false;
+            }
         }
         else if (attribName == "WEIGHTS_0")
         {
-            copy(asset, accessor, mWeights);
+            if (!copy(asset, accessor, mWeights))
+            {
+                return false;
+            }
         }
     }
 
@@ -376,7 +400,10 @@ bool Primitive::prep(Asset& asset)
     if (mIndices != INVALID_INDEX)
     {
         Accessor& accessor = asset.mAccessors[mIndices];
-        copy(asset, accessor, mIndexArray);
+        if (!copy(asset, accessor, mIndexArray))
+        {
+            return false;
+        }
 
         for (auto& idx : mIndexArray)
         {

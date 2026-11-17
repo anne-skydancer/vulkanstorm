@@ -210,10 +210,12 @@ mat4 getGLTFTransform()
 
     vec4 w = weight4;
 
-    uint i1 = joint.x*3u;
-    uint i2 = joint.y*3u;
-    uint i3 = joint.z*3u;
-    uint i4 = joint.w*3u;
+    // Vulkanstorm: clamp so a bad joint index cannot read past the uniform block (3 vec4 per joint)
+    uvec4 j = min(joint, uvec4(uint(MAX_NODES_PER_GLTF_OBJECT) / 3u - 1u));
+    uint i1 = j.x*3u;
+    uint i2 = j.y*3u;
+    uint i3 = j.z*3u;
+    uint i4 = j.w*3u;
 
     // lerp the joints
     vec4 v0 = gltf_joints[i1+0u] * w.x + gltf_joints[i2+0u] * w.y + gltf_joints[i3+0u] * w.z + gltf_joints[i4+0u] * w.w;

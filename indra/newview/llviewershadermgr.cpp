@@ -432,7 +432,10 @@ static bool make_gltf_variant(LLGLSLShader& shader, LLGLSLShader& variant, LLGLS
 
     U32 node_size = 16 * 3;
     U32 max_nodes = gGLManager.mMaxUniformBlockSize / node_size;
-    variant.addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes));
+    // Vulkanstorm: the shader declares MAX_NODES_PER_GLTF_OBJECT as a count of vec4, three per node,
+    // so the block is max_nodes * 48 bytes (<= the uniform block limit), the size
+    // LLSkinningUtil::getMaxGLTFJointCount() uploads
+    variant.addPermutation("MAX_NODES_PER_GLTF_OBJECT", std::to_string(max_nodes * 3));
 
     U32 material_size = 16 * 12;
     U32 max_materials = gGLManager.mMaxUniformBlockSize / material_size;
