@@ -216,6 +216,10 @@ protected:
 
     HWND        mWindowHandle = 0;  // window handle
     HGLRC       mhRC = 0;           // OpenGL rendering context
+    // <Vulkanstorm>
+    S32         mContextMajor = 0;  // GL version the main context was created with (worker contexts use exactly this; 0 = legacy)
+    S32         mContextMinor = 0;
+    // </Vulkanstorm>
     HDC         mhDC = 0;           // Windows Device context handle
     HINSTANCE   mhInstance;     // handle to application instance
     RECT        mOldMouseClip;  // Screen rect to which the mouse cursor was globally constrained before we changed it in clipMouse()
