@@ -100,7 +100,7 @@ display is part of the reference, so this is real; variant a has the same limit.
 - five bright skies with an extreme legacy gamma (Surreal - Flirt (Paulina), Surreal - Brazil (Paulina), [TOR] DUSK - Fairytale glow, [TOR] SCIFI - Ramshagguld 1 and [TOR] SCIFI - Ramshagguld 2; gamma 0.07 to 0.54), where upstream's gamma curve magnifies the table's interpolation error;
 - five presets with the sun parked exactly at 0 degrees (sunrise and sunset looks: Places Beach Cay, [TOR] SCIFI - Rainbowtek, Bryn Oh's Rusted Gears, [TOR] SCIFI - Grit & shame, [TOR] FOGGY - Das fog), where the day/night branch is float rounding and the L3 band (an accepted difference) applies.
 
-No new mechanism is added for them now. Phase 2 (in the viewer, against installed upstream) renders all ten as named check cases, judged by eye. If the gamma five differ visibly, the fix is targeted (for example a finer table where gamma is extreme), not a redesign.
+No new mechanism is added for them now. Phase 2 measures these ten skies quantitatively, upstream against ours in the viewer: per-pixel dE on the captured images, with the same criteria as phase 1 (worst cell <= 2 and <= 5, mean), for the screen and every photo path. Where any of them misses, we tweak what is needed (for example a finer table where gamma is extreme, or handling the sun-at-0 branch) until the creator's intent is rendered exactly, i.e. within the phase-1 thresholds against upstream. The L3 band stays the one accepted difference for the five horizon skies.
 
 ### The 58 skies with the sun at the horizon (|elevation| <= 0.0011 degrees)
 
@@ -192,7 +192,7 @@ and the viewer's geometry on both sides, **today's release / devel look against 
 4. The glow at several screen scales and in motion; the table indexed by `rel_pos`'s direction (geometry section); AT2-2's gate: variant c's cost against the zone variants.
 5. The blend: the table rebuilt per blend step; its cost and any visible step.
 6. Release / devel per-vertex against upstream per-pixel on the real dome; exposure sweep over the night skies; the horizon at the avatar's height; Sunrise, Midday and Sunset once fetched.
-7. The ten variant c failures as named check cases (the Phase 2 check cases note under Results): the five extreme-gamma skies and the five sun-at-0 presets, judged by eye; a targeted fix only if the gamma five differ visibly.
+7. The ten variant c failures, measured quantitatively as in the Phase 2 check cases note under Results (per-pixel dE, phase-1 criteria, screen and every photo path); tweak until within the phase-1 thresholds against upstream, with the L3 band as the one accepted difference for the five horizon skies.
 
 ## Reproduce
 
