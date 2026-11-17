@@ -457,6 +457,10 @@ public:
     std::map<std::string, GLuint> mVertexShaderObjects;
     std::map<std::string, GLuint> mFragmentShaderObjects;
 
+    // <Vulkanstorm> delete the GL objects the two maps still hold (main GL thread), then clear them
+    void deleteShaderObjects();
+    // </Vulkanstorm>
+
     //global (reserved slot) shader parameters
     std::vector<std::string> mReservedAttribs;
 

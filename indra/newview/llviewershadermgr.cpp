@@ -797,8 +797,7 @@ void LLViewerShaderMgr::setShaders()
     reentrance = true;
 
     // Make sure the compiled shader map is cleared before we recompile shaders.
-    mVertexShaderObjects.clear();
-    mFragmentShaderObjects.clear();
+    deleteShaderObjects(); // <Vulkanstorm/> delete what the maps hold before forgetting it (a warm binary cache leaked about 25 per reload)
 
     initAttribsAndUniforms();
     gPipeline.releaseGLBuffers();
