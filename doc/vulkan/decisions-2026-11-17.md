@@ -66,7 +66,7 @@ The owner accepted V1, V2 and V4 to V7 as recommended. V3 is the Slang row above
 
 **FSR host side.** The FSR 3.1 host code is Rust over ash, using AMD's MIT-licensed shaders as SPIR-V. The FidelityFX SDK is not linked. This follows from the no-FFI rule.
 
-**Frame generation.** It is out for now (owner), so it must not be designed out: keep the motion vectors, a present path that can take interpolated frames, and the HUD-less colour target available.
+**Frame generation.** It is out for now (owner). Because it may come later, the renderer must not rule it out: keep the motion vectors, a present path that can take interpolated frames, and a colour target without the HUD available.
 
 **Slang path.**
 
