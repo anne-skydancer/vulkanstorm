@@ -34,6 +34,7 @@
 #include "stdtypes.h"
 
 #include "llsd.h"
+#include "llsdserialize.h"
 #include <boost/json.hpp>
 
 /// Convert a parsed JSON structure into LLSD maintaining member names and
@@ -53,6 +54,11 @@
 ///
 /// For maps and arrays child entries will be converted and added to the structure.
 /// Order is preserved for an array but not for objects.
+///
+/// A document of more than max_nodes values (default LLSDParser::MAX_NODES_DEFAULT; remote bodies pass
+/// LLSDParser::nodeBudgetForBytes(size)) gives an undefined LLSD and a warning, as the LLSD parsers
+/// do; 0 is unlimited.
+LLSD LlsdFromJson(const boost::json::value &val, size_t max_nodes);
 LLSD LlsdFromJson(const boost::json::value &val);
 
 /// Convert an LLSD object into Parsed JSON object maintaining member names and
