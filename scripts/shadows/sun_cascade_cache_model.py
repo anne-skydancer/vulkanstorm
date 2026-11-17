@@ -16,7 +16,7 @@ study quotes:
   4. the static-layer area of an eye-centred level against S1's per-frame cull box (the "omni factor");
   5. refresh intervals of a cached level: camera translation (guard band) and the light's motion;
   6. the per-frame CPU bracket at Rooftops (measured inputs from
-     reports/rooftops-ultra-shadow-split-2026-11-16.md, assumptions marked).
+     doc/shadows/rooftops-ultra-shadow-split-2026-11-16.md, assumptions marked).
 
 Run: python scripts/shadows/sun_cascade_cache_model.py [--check]
 --check runs the invariants only (exit 1 on failure): eye-centred levels pick the same level and the
@@ -329,7 +329,7 @@ def table_refresh(out, res=1920, sd=192.0):
 
 # ---------------------------------------------------------------- 6. CPU bracket at Rooftops
 
-# measured, reports/rooftops-ultra-shadow-split-2026-11-16.md section 2 (still sun, ms per frame, main thread)
+# measured, doc/shadows/rooftops-ultra-shadow-split-2026-11-16.md section 2 (still sun, ms per frame, main thread)
 ROOF = dict(
     total=[2.71, 2.04, 2.31, 2.29],
     cull=[0.07, 0.38, 0.50, 0.46],

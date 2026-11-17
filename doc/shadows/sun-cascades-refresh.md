@@ -120,7 +120,7 @@ Ranked.
 - All four cascades are culled, sorted and drawn every frame (`generateSunCascadesStable`, pipeline.cpp:12572-12756;
   S1 was cut "uncached", 9d99398c7c).
 - Measured at Rooftops still (sun minus none): **+8.9 ms net, 28 % of the frame**. Per cascade it is 2.71 / 2.04 /
-  2.31 / 2.29 ms. Cull + sort is 58 % and GL submission 42 % (`reports/rooftops-ultra-shadow-split-2026-11-16.md` §2).
+  2.31 / 2.29 ms. Cull + sort is 58 % and GL submission 42 % (`doc/shadows/rooftops-ultra-shadow-split-2026-11-16.md` §2).
 - The multicore baseline counts sun shadows at 38-42 % of the main-thread frame, and their serial GL submission at
   5-10 ms. It names "reuse of cascade results across frames" as the lever no thread can replace
   (`doc/perf/multicore-baseline-2026-11.md` §§ 4.x, conclusion 4).
@@ -190,7 +190,7 @@ tiles. For the sun this design does not pin (the levels cover up to 256 m); see 
 
 ## 4. Literature (named techniques; references only, no sample code)
 
-The repo's own reading (`reports/Real time shadow casting techniques.md`, sources marked read/fetched there) and
+The repo's own reading (`reports/Real time shadow casting techniques.md`, a local research report, not committed; sources marked read/fetched there) and
 the standard references:
 
 | Technique | Source | What this design takes |
@@ -362,8 +362,8 @@ avatar seen only through its sun shadow must keep animating as it does now.
   only; the maps do not depend on it. The footprint (0.25 m), and with it the cull margin, are unchanged.
 - **#540 dark gate and the handover.** Closing either clears the maps once and marks every level invalid; opening
   refreshes all four on that frame. By the model that is **10.7-12.6 ms** (four static refreshes 8.68 ms plus the
-  dynamic layer), **15-35 % more than today's 9.35 ms**, not "what today costs". The same spike hits a teleport,
-  a region crossing, and a resolution or setting change. Hard refreshes therefore get a budget (§5.3). During the handover's swing
+  dynamic layer), **15-35 % more than today's 9.35 ms**, not "what today costs". The same spike hits a teleport
+  and a resolution or setting change. Hard refreshes therefore get a budget (§5.3). During the handover's swing
   (strength 0) no refresh runs, even though the direction moves through tens of degrees.
 - **Cloud shadows (L2).** These come from a separate world-anchored map multiplied in by `primary_shadow_strength`
   (`doc/light/cloud-shadows.md`). No interaction.

@@ -28,6 +28,7 @@ LOCK = Path(os.environ.get("VKS_GPU_BENCH_LOCK", str(MAIN / ".fixture-tmp" / "gp
 
 
 def take_lock():
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
     while True:
         try:
             fd = os.open(str(LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
