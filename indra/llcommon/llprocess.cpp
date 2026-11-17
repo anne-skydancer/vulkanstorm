@@ -33,6 +33,7 @@
 #include "stringize.h"
 #include "llapr.h"
 #include "apr_signal.h"
+#include "apr_portable.h"
 #include "llevents.h"
 #include "llexception.h"
 
@@ -148,6 +149,12 @@ public:
         // Essential to initialize our std::ostream with our special streambuf!
         mStream(&mStreambuf)
     {
+#if LL_WINDOWS
+        // the handle stays owned by the APR pool
+        apr_os_file_get(&mHandle, mPipe);
+        mEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+        mOverlapped.hEvent = mEvent;
+#endif
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("WritePipe"),
                     boost::bind(&WritePipeImpl::tick, this, _1));
@@ -162,9 +169,108 @@ public:
 #endif
     }
 
-    virtual std::ostream& get_ostream() { return mStream; }
-    virtual size_type size() const { return mStreambuf.size(); }
+#if LL_WINDOWS
+    ~WritePipeImpl()
+    {
+        // The LLProcess destroys its pipes before the APR pool that owns the
+        // handle. Our overlapped write refers to mChunk and mOverlapped, which
+        // must stay valid until the kernel is done with them. After the
+        // cancellation the write completes at once; give up on waiting only
+        // if the handle is not valid any more (then nothing can be pending).
+        if (mPending && ! HasOverlappedIoCompleted(&mOverlapped))
+        {
+            DWORD done;
+            if (CancelIoEx(mHandle, &mOverlapped) || GetLastError() == ERROR_NOT_FOUND)
+            {
+                GetOverlappedResult(mHandle, &mOverlapped, &done, TRUE);
+            }
+        }
+        CloseHandle(mEvent);
+    }
+#endif // LL_WINDOWS
 
+    virtual std::ostream& get_ostream() { return mStream; }
+    virtual size_type size() const
+    {
+#if LL_WINDOWS
+        return mStreambuf.size() + (mPending ? mPendingLen : 0);
+#else
+        return mStreambuf.size();
+#endif
+    }
+
+#if LL_WINDOWS
+    bool tick(const LLSD&)
+    {
+        // Do not use apr_file_write() here. On Windows, the parent end of the
+        // pipe is an overlapped handle, and when the pipe is full APR's
+        // apr_file_write() waits zero time for its WriteFile() to complete,
+        // cancels it, and reports EAGAIN with 0 bytes written
+        // (apr/file_io/win32/readwrite.c). It never checks the outcome of the
+        // cancellation. The pipe may have accepted the chunk, or part of it,
+        // before the cancellation took effect (a child that starts reading at
+        // that instant), so we resent data the child already had.
+        //
+        // So own the write: start an overlapped WriteFile() on a private copy
+        // of the chunk and ask the kernel, on later ticks, whether it
+        // completed. A write to a byte-mode pipe is all-or-nothing from our
+        // side: it completes once the pipe has accepted every byte. Never
+        // block, and never cancel.
+        if (mPending)
+        {
+            DWORD done = 0;
+            if (! GetOverlappedResult(mHandle, &mOverlapped, &done, FALSE))
+            {
+                DWORD err = GetLastError();
+                if (err == ERROR_IO_INCOMPLETE)
+                {
+                    return false;           // child hasn't made room yet
+                }
+                // e.g. the child closed its end
+                LL_WARNS("LLProcess") << "WriteFile(" << mPendingLen << ") on " << mDesc
+                                      << " failed with " << err << LL_ENDL;
+                mStreambuf.consume(mStreambuf.size());
+            }
+            mPending = false;
+            mPendingLen = 0;
+        }
+
+        while (mStreambuf.size())
+        {
+            // 64 KiB: the capacity of the pipe
+            if (mChunk.empty())
+            {
+                mChunk.resize(64 * 1024);
+            }
+            const std::size_t len(boost::asio::buffer_copy(boost::asio::buffer(mChunk),
+                                                           mStreambuf.data()));
+            mStreambuf.consume(len);
+            mOverlapped = OVERLAPPED();
+            mOverlapped.hEvent = mEvent;
+            DWORD done = 0;
+            if (WriteFile(mHandle, mChunk.data(), DWORD(len), &done, &mOverlapped))
+            {
+                // completed at once
+                LL_DEBUGS("LLProcess") << "wrote " << done << " of " << len
+                                       << " bytes to " << mDesc << LL_ENDL;
+                continue;
+            }
+            DWORD err = GetLastError();
+            if (err == ERROR_IO_PENDING)
+            {
+                // The pipe is full. mChunk now belongs to the write until it
+                // completes; look again next tick.
+                mPending = true;
+                mPendingLen = len;
+                break;
+            }
+            LL_WARNS("LLProcess") << "WriteFile(" << len << ") on " << mDesc
+                                  << " failed with " << err << LL_ENDL;
+            mStreambuf.consume(mStreambuf.size());
+        }
+        return false;
+    }
+#else // ! LL_WINDOWS
     bool tick(const LLSD&)
     {
         typedef boost::asio::streambuf::const_buffers_type const_buffer_sequence;
@@ -186,16 +292,9 @@ public:
                 std::size_t remainlen = boost::asio::buffer_size(*bufi);
                 while (remainlen)
                 {
-                    // Tackle the current buffer in discrete chunks. On
-                    // Windows, we've observed strange failures when trying to
-                    // write big lengths (~1 MB) in a single operation. Even a
-                    // 32K chunk seems too large. At some point along the way
-                    // apr_file_write() returns 11 (Resource temporarily
-                    // unavailable, i.e. EAGAIN) and says it wrote 0 bytes --
-                    // even though it did write the chunk! Our next write
-                    // attempt retries with the same chunk, resulting in the
-                    // chunk being duplicated at the child end. Using smaller
-                    // chunks is empirically more reliable.
+                    // Tackle the current buffer in discrete chunks. (The
+                    // Windows pipe, where big writes once seemed to fail, is
+                    // handled separately above.)
                     std::size_t towrite((std::min)(remainlen, std::size_t(4*1024)));
                     apr_size_t written(towrite);
                     apr_status_t err = apr_file_write(mPipe, remainptr, &written);
@@ -243,10 +342,19 @@ public:
 
         return false;
     }
+#endif // ! LL_WINDOWS
 
 private:
     std::string mDesc;
     apr_file_t* mPipe;
+#if LL_WINDOWS
+    HANDLE mHandle = INVALID_HANDLE_VALUE;
+    HANDLE mEvent = NULL;
+    OVERLAPPED mOverlapped = {};
+    std::vector<char> mChunk;       // the data of the pending write
+    std::size_t mPendingLen = 0;
+    bool mPending = false;
+#endif
     LLTempBoundListener mConnection;
     boost::asio::streambuf mStreambuf;
     std::ostream mStream;
@@ -810,6 +918,9 @@ LLProcess::~LLProcess()
     {
         kill("destructor");
     }
+
+    // The pipes refer to handles owned by the pool: they go first.
+    mPipes.clear();
 
     if (mPool)
     {
