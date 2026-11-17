@@ -23,9 +23,13 @@ except five inert debug settings (nothing reads them).
 
 ## What is measured
 
-Counters are per frame, per **view** (`main`, `sun cascade 0..3`, `spot shadow 0..1`, `probe face`, `hud`, `frame` for
-everything else, and `probe face > sun cascade 0` for a view inside a view) and per **pass** (a path of scopes inside the view:
+Counters are per frame, per **view** (`main`, `sun cascade 0..3`, `spot shadow 0..1`, `projector tiles` for the whole
+update of the Stochastic method's projector pool (since multicore stage 1b; before, it was counted into `frame`),
+`probe face`, `hud`, `frame` for everything else, and `probe face > sun cascade 0` for a view inside a view) and per
+**pass** (a path of scopes inside the view:
 `gbuffer`, `geom deferred/SIMPLE 0`, `shadow opaque 1`, `deferred lighting/geom post-deferred/ALPHA 0`, `update geom`, ...).
+The reading of the sun's shadow maps is two passes under `deferred lighting`: `sun program` (the lookup) and, with the Stochastic
+method's temporal resolve, `shadow stochastic resolve` (since multicore stage 1b).
 
 **Counters are exclusive** (attributed to the innermost scope); **CPU ms and GPU ms are inclusive** of the scopes inside
 them, so sums of times over a view's passes are not the view's time (the view's own row is).

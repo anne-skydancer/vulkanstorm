@@ -236,6 +236,9 @@ namespace LLProfiler
 #if LL_PROFILER_ENABLE_TRACY_OPENGL
 #define LL_PROFILE_GPU_ZONE(name)         TracyGpuZone(name);
 #define LL_PROFILE_GPU_ZONEC(name,color)  TracyGpuZoneC(name,color);
+// <Vulkanstorm/> a GPU zone whose name is chosen at run time. The argument is evaluated up to twice (the pointer and its
+// strlen), so it must be a pure expression; Tracy copies the string, so it need not outlive the statement.
+#define LL_PROFILE_GPU_ZONE_TRANSIENT(name) TracyGpuZoneTransient(___tracy_gpu_zone, name, true);
 #define LL_PROFILER_GPU_COLLECT           TracyGpuCollect;
 #define LL_PROFILER_GPU_CONTEXT           TracyGpuContext;
 #define LL_PROFILER_GPU_CONTEXT_NS(name, size)           TracyGpuContext;TracyGpuContextName(name,size);
@@ -243,6 +246,7 @@ namespace LLProfiler
 #else
 #define LL_PROFILE_GPU_ZONE(name)           (void)name;
 #define LL_PROFILE_GPU_ZONEC(name,color)    (void)name;(void)color;
+#define LL_PROFILE_GPU_ZONE_TRANSIENT(name) // <Vulkanstorm/> nothing: the name is not evaluated
 #define LL_PROFILER_GPU_COLLECT
 #define LL_PROFILER_GPU_CONTEXT
 #define LL_PROFILER_GPU_CONTEXT_NAMED(name) (void)name;

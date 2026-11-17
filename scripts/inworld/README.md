@@ -368,6 +368,51 @@ Keep the run folders: later stages are gated by re-running this scenario and com
 The measuring build (Tracy on) has no `GLSubmitStats` API, so the scenario runs with `--no-glstats`: the plugin then takes frame rates
 from the viewer log's `FrameCounters: frames=N` line (once a second), and the data come from the Tracy captures.
 
+**GPU time (multicore stage 1b).** A Tracy build records GPU zones in every capture (`Frame`, `generateSunShadow`, `sun cascade 0..3`,
+`projector tiles` with a `projector tile` or `projector layer` per redraw, `renderGeomDeferred`, `renderDeferredLighting`,
+`renderFinalize`, `swap` and the finer ones); `tracy-profiler.exe` shows them, but `tracy-csvexport` 0.11.1 exports no GPU zone. For numbers,
+configure the measuring build with `-DVKS_GL_STATS=ON` as well and start the session with `-GpuWindow`
+(`perf_check.py --no-glstats --gpu-window --frames N`): the flow stays the one above (log frame rate, warm-up, one Tracy capture per
+window, projector stats), and after each capture has ended one `GLSubmitStats` window of N frames (600 from the launcher) with GPU
+timers is collected and written to `window_<preset>.json`: GPU ms per view (`frame`, `main`, `sun cascade 0..3`, `projector tiles`)
+and pass, read with `analyze_perf_check.py`. The window runs after the capture so neither the capture nor the log frame rate holds
+the cost of its timers. On a viewer without the API the switch does nothing (and `--dry-run` reports it as a failure).
+A window whose requests fail is recorded (`window_failures`, with the error) and the session goes on. `--gpu-window` without
+`--no-glstats` is refused.
+
+`mc1b_rooftops` is the stage 1b session (`doc/shadows/sun-shadow-cost-study.md`, section 9, on its study branch), about 30 minutes:
+
+| View | Runs (in this order) |
+|---|---|
+| `RT-still`, the camera as it is | `sun`, `none`, `all` (`RenderShadowDetail` 1, 0, 2), `splits2` (sun with `RenderShadowSplits` 2) |
+| `RT-moving`, turning at 10 deg/s | `all`, `none`, `sun` |
+| `RT-fixed`, still at heading 0 | `sun` (the pair of the next two), `night` (World > Environment > Midnight), `high` (the High tier, sun) |
+
+It uses four scenario fields that are new with it:
+
+- `soft_settings` (scenario and variant): settings applied like `settings`, except that one the viewer lacks or does not take
+  (a clamped value) is recorded in `perf.json` (`soft_settings_not_taken`) and the run goes on. The scenario's are the feature
+  table's Ultra list, the `high` variant's are the values in which the High list differs, so the tier does not depend on what the
+  scratch profile picked. A variant's `soft_settings` go back to the scenario's values when the next variant starts, also
+  those whose value did not take (the viewer may hold a clamped one).
+- a preset's `variants`: the ids of the variants this view is measured with (default: all of them; an empty list is refused).
+  Every view applies its first variant afresh, with its warm-up, also when the previous view ended on the same one.
+- a variant's `environment`: one of `sunrise`, `noon`, `legacy noon`, `sunset`, `midnight` (the World > Environment menu),
+  selected with `UI.call World.EnvSettings`; the shared environment comes back with the next variant and at the end.
+  **The script cannot read which environment is selected** (no LEAP API and no setting holds it): it assumes the shared
+  environment at the start, which the hand-off pop-up asks for, and it goes back to the shared one, not to a sky you had
+  picked. `FSRepeatedEnvTogglesShared` is off for the run, so selecting a sky never toggles back. After the switch and its
+  warm-up the dark gate's decision light must have changed: if it did not, the run is listed in `environment_failures` and the
+  session ends "with problems"; without the readout the switch is only a warning (`environment_check.verified` null).
+  Each run records its `environment`; `restore.json` holds it for `--restore`.
+- `settle.warmup_capture_s`: after the warm-up of a run, a throw-away Tracy capture of that many seconds (whole seconds, at
+  least 1), deleted at once with its log, so the first seconds of a profiler connection are in no measured capture. When it
+  cannot start, the run goes on.
+
+Every run of the log flow records the dark gate's readout (`DirectionalShadows.stats`, when the viewer has the API: asked once)
+at its start and its end (`directional_shadows`, `directional_shadows_end`) and the frames the cascades were rendered and
+skipped in between (`directional_delta`), which says whether the night run rendered its cascades or was skipped as too dark.
+
 New options and scenario fields (all optional; the older scenarios are unchanged):
 
 - `--tracy-capture <tracy-capture.exe>`: for each measurement window (scenario `window.seconds`, default 60) and for the teleport

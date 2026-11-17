@@ -8776,6 +8776,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     LL_PROFILE_GPU_ZONE("shadow stochastic resolve");
+    VKS_GLSTAT_PASS("shadow stochastic resolve"); // <Vulkanstorm/> multicore stage 1b: the map's reading apart from "sun program"
 
     // which lights are the same as last frame: a channel whose light moved or changed has no history
     // (the rules are LLShadowLightChange, llstochasticstate.h, unit tested)
@@ -12569,6 +12570,17 @@ void LLPipeline::generateSunCascadesLegacy(LLCamera& camera, const LLVector3& li
 }
 // </Vulkanstorm>
 
+#if LL_PROFILER_ENABLE_TRACY_OPENGL
+// <Vulkanstorm> multicore stage 1b: the Tracy GPU zone of sun cascade j (Tracy builds only)
+static const char* sun_cascade_gpu_zone(S32 j)
+{
+    static const char* const names[4] = { "sun cascade 0", "sun cascade 1", "sun cascade 2", "sun cascade 3" };
+    llassert(j >= 0 && j < 4); // the cascade loop's own range
+    return names[j];
+}
+// </Vulkanstorm>
+#endif
+
 // <Vulkanstorm> shadow method Stochastic: the stable sun cascades (stage S1)
 void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
@@ -12739,6 +12751,8 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
 
         stop_glerror();
 
+        // <Vulkanstorm/> multicore stage 1b: the GPU time of this cascade (clear, casters, flush), to the end of the iteration
+        LL_PROFILE_GPU_ZONE_TRANSIENT(sun_cascade_gpu_zone(j));
         mRT->shadow[j].bindTarget();
         mRT->shadow[j].getViewport(gGLViewport);
         mRT->shadow[j].clear();
@@ -13019,6 +13033,9 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
             mTargetShadowSpotLight[0] = mTargetShadowSpotLight[1] = nullptr;
             if (!gCubeSnapshot)
             {
+                // <Vulkanstorm/> multicore stage 1b: the pool update is its own view in the submission statistics
+                // (-DVKS_GL_STATS=ON); its draws were counted into the enclosing view before
+                VKS_GLSTAT_VIEW("projector tiles");
                 mProjectorShadows.update(camera);
             }
         }

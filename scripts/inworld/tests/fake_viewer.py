@@ -237,6 +237,10 @@ class FakeViewer:
         elif op == "getAPI":
             if d["api"] == "ProjectorShadows" and not self.projector:
                 return self._reply(d, {"error": "no such API ProjectorShadows"})
+            if d["api"] == "DirectionalShadows":
+                if getattr(self, "directional", None) is None:
+                    return self._reply(d, {"error": "no such API DirectionalShadows"})
+                return self._reply(d, {"name": "DirectionalShadows", "ops": [{"name": "stats"}]})
             if d["api"] == "GLSubmitStats":
                 if not self.gl_stats:
                     return self._reply(d, {"error": "no such API GLSubmitStats"})
@@ -271,7 +275,8 @@ class FakeViewer:
             return self._reply(d, {"error": "In group 'Global', unrecognized control key '%s'" % key})
         typ, val = self.settings[key]
         if op == "set":
-            val = d["value"]
+            self.set_log = getattr(self, "set_log", []) + [(key, d["value"])]
+            val = getattr(self, "clamps", {}).get(key, d["value"])    # clamps: {key: the value the viewer holds whatever is set}
             self.settings[key] = (typ, val)
         if self.u32_as_string and typ == "U32":
             val = str(val)
@@ -415,6 +420,11 @@ class FakeViewer:
         self.sky_applied_count += 1
 
     def api_UI(self, op, d):
+        if op == "call":        # fire and forget: no reply
+            self.ui_calls = getattr(self, "ui_calls", []) + [(d.get("function"), d.get("parameter"))]
+            if d.get("function") == "World.EnvSettings" and not getattr(self, "sky_stuck", False):
+                self.sky = d.get("parameter")
+            return
         path = d["path"]
         last = path.rsplit("/", 1)[-1]
         if op == "getValue":
@@ -478,6 +488,15 @@ class FakeViewer:
     def api_LLNotifications(self, op, d):
         if op == "requestAdd":
             self.notifications.append((d["name"], d["substitutions"]["MESSAGE"]))
+
+    def api_DirectionalShadows(self, op, d):
+        """The dark gate's readout, when the test gave the fake a `directional` dict; the decision light follows the sky."""
+        base = getattr(self, "directional", None)
+        if base is None:
+            return self._reply(d, {"error": "no such pump DirectionalShadows"})
+        base["frames_rendered"] = base.get("frames_rendered", 0.0) + 10.0
+        light = 2.0e-5 if getattr(self, "sky", "region") == "midnight" else 1.5
+        self._reply(d, dict(base, known=True, skipped=False, decision_light=light, threshold=5e-6, strength_factor=1.0))
 
     def api_ProjectorShadows(self, op, d):
         if op == "stats" and self.projector:
