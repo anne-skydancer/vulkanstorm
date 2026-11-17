@@ -1382,7 +1382,9 @@ U8* LLVertexBuffer::mapVertexBuffer(LLVertexBuffer::AttributeType type, U32 inde
     // Region tracking not needed on apple silicon - it recreates entire buffer
     // While mIsApple can be encountered under windows, this is a
     // macOS OpenGL behavior workaround. LL_ARM64 check might be not needed
-    if (!gGLManager.mIsApple)
+    if (!gGLManager.mIsApple && count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
+#else
+    if (count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
 #endif
     {
         U32 start = mOffsets[type] + sTypeSize[type] * index;
@@ -1421,7 +1423,9 @@ U8* LLVertexBuffer::mapIndexBuffer(U32 index, S32 count)
     }
 
 #if LL_DARWIN || LL_ARM64
-    if (!gGLManager.mIsApple)
+    if (!gGLManager.mIsApple && count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
+#else
+    if (count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
 #endif
     {
         U32 start = sizeof(U16) * index;
@@ -1457,6 +1461,12 @@ U8* LLVertexBuffer::mapIndexBuffer(U32 index, S32 count)
 //  dst -- mMappedData or mMappedIndexData
 void LLVertexBuffer::flush_vbo(GLenum target, U32 start, U32 end, void* data, U8* dst)
 {
+    // <Vulkanstorm> an empty range (end == start - 1, which wraps to 0xFFFFFFFF for start 0) made the block loop below never end
+    if (end == start - 1)
+    {
+        return;
+    }
+    // </Vulkanstorm>
 #if LL_DARWIN || LL_ARM64
     if (gGLManager.mIsApple)
     {
