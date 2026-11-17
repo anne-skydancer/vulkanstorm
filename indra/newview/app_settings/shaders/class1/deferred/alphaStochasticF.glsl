@@ -53,6 +53,12 @@ uint st_mask(float a)
     return stoch_mask(a, seed, st_frame, uvec2(gl_FragCoord.xy), uint(st_samples));
 }
 
+// The depth-only mode: the shader needs only the alpha (no glare, no shading)
+bool alpha_stochastic_depth_only()
+{
+    return st_mode == 3;
+}
+
 // The value for gl_SampleMask[0]: every sample for the total alpha, the mask's bits (the
 // pass's samples, all 8) for the stochastic depth.
 int alpha_stochastic_mask(float a)

@@ -32,6 +32,7 @@
 #ifdef ALPHA_STOCHASTIC
 // <Vulkanstorm> stochastic transparency's alpha-only variant (alphaStochasticF.glsl)
 int alpha_stochastic_mask(float a);
+bool alpha_stochastic_depth_only(); // mode 3: the opaque scene's depth (the rigged depth restore)
 #endif
 
 #define DIFFUSE_ALPHA_MODE_NONE     0
@@ -284,7 +285,7 @@ float getEmissive(vec4 diffcol)
 
 float getShadow(vec3 pos, vec3 norm)
 {
-#ifdef HAS_SUN_SHADOW
+#if defined(HAS_SUN_SHADOW) && !defined(ALPHA_STOCHASTIC) // <Vulkanstorm/> the alpha-only variant never uses the shadow
     #if (DIFFUSE_ALPHA_MODE == DIFFUSE_ALPHA_MODE_BLEND)
         return sampleDirectionalShadow(pos, norm, vary_texcoord0.xy);
     #else
@@ -313,8 +314,9 @@ void main()
     // before the specular and normal maps are fetched (the author's Aurora Viewer,
     // st_material_alpha: the driver does not reliably drop the fetches by itself). A material
     // that can glare (shiny glass: reflections on a clear diffuse) runs the shading below and
-    // takes its alpha at the end, so its reflections keep their coverage.
-    if ((env_intensity <= 0.0 && specular_color.a <= 0.0) || diffcol.a >= 1.0)
+    // takes its alpha at the end, so its reflections keep their coverage. The depth-only mode 3 (the
+    // rigged depth restore) never needs the glare: the fragment covers every sample either way.
+    if (alpha_stochastic_depth_only() || (env_intensity <= 0.0 && specular_color.a <= 0.0) || diffcol.a >= 1.0)
     {
         frag_color = vec4(0.0, 0.0, 0.0, max(diffcol.a * vertex_color.a, 0.0));
         gl_SampleMask[0] = alpha_stochastic_mask(diffcol.a * vertex_color.a);
@@ -338,13 +340,22 @@ void main()
 
     vec3 pos = vary_position;
 
-    float shadow = getShadow(pos, norm);
+    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
+
+    // <Vulkanstorm> the sun march only where the shadow can reach the output: a non-glossy fragment
+    // turned away from the sun (N.L <= 0) has da = 0, and sunShadowedDiffuse(0, shadow) is 0 for any
+    // shadow in [0, 1]. A glossy one always takes it: calcHalfVectors clamps nl and nh to 1e-6, so
+    // its back-face specular below still scales with the shadow.
+    float shadow = 1.0;
+    if (glossiness > 0.0 || dot(norm.xyz, light_dir.xyz) > 0.0)
+    {
+        shadow = getShadow(pos, norm);
+    }
+    // </Vulkanstorm>
 
     vec4 diffuse = diffcol;
 
     vec3 color = vec3(0,0,0);
-
-    vec3 light_dir = primary_light_dir; // <Vulkanstorm/> L3: the primary light
 
     float bloom = 0.0;
     vec3 sunlit;

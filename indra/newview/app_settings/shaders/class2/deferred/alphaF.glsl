@@ -185,12 +185,6 @@ void main()
 #endif
     vec3 norm = vary_norm;
 
-    float shadow = 1.0f;
-
-#if defined(HAS_SUN_SHADOW) && !defined(ALPHA_STOCHASTIC) // <Vulkanstorm/> no shadow in the alpha-only variant
-    shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, frag);
-#endif
-
 #ifdef USE_DIFFUSE_TEX
     vec4 diffuse_tap = texture(diffuseMap,vary_texcoord0.xy);
 #endif
@@ -276,6 +270,19 @@ void main()
 
     float final_da = da;
           final_da = clamp(final_da, 0.0f, 1.0f);
+
+    // <Vulkanstorm> the sun march only for a fragment the sun reaches: a surface turned away from it
+    // (N.L <= 0) has final_da = 0, and every combine of sunShadowedDiffuse (min(da, shadow), or da x
+    // shadow) is then 0 for any shadow in [0, 1]; nothing else reads the shadow. It follows the diffuse
+    // fetch and the live discards above. No shadow in the alpha-only variant (it returned already).
+    float shadow = 1.0f;
+#if defined(HAS_SUN_SHADOW) && !defined(ALPHA_STOCHASTIC)
+    if (da > 0.0)
+    {
+        shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, frag);
+    }
+#endif
+    // </Vulkanstorm>
 
     vec4 color = vec4(0.0);
 
