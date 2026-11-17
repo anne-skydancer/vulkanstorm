@@ -555,6 +555,17 @@ bool Asset::prep()
             return false;
         }
     }
+
+    // Vulkanstorm: node.mSkin comes from the asset and indexes mSkins at draw time
+    for (auto& node : mNodes)
+    {
+        if (node.mSkin >= 0 && (size_t)node.mSkin >= mSkins.size())
+        {
+            LL_WARNS("GLTF") << "Node references skin " << node.mSkin << " out of range" << LL_ENDL;
+            return false;
+        }
+    }
+
     if (mLoadIntoVRAM)
     {
         // prepare vertex buffers

@@ -419,24 +419,94 @@ namespace LL
             }
         }
 
-        // copy data from accessor to strider
-        template<class T>
-        inline void copy(Asset& asset, Accessor& accessor, LLStrider<T>& dst)
+        // Vulkanstorm: the number of bytes one element of the accessor occupies when tightly packed,
+        // or 0 for an unknown type
+        inline size_t accessorElementSize(const Accessor& accessor)
         {
-            if (accessor.mBufferView == INVALID_INDEX
-                || accessor.mBufferView >= asset.mBufferViews.size())
+            size_t components = 0;
+            switch (accessor.mType)
             {
-                LL_WARNS("GLTF") << "Invalid buffer" << LL_ENDL;
-                return;
+            case Accessor::Type::SCALAR: components = 1; break;
+            case Accessor::Type::VEC2: components = 2; break;
+            case Accessor::Type::VEC3: components = 3; break;
+            case Accessor::Type::VEC4: components = 4; break;
+            case Accessor::Type::MAT2: components = 4; break;
+            case Accessor::Type::MAT3: components = 9; break;
+            case Accessor::Type::MAT4: components = 16; break;
+            default: return 0;
             }
-            const BufferView& bufferView = asset.mBufferViews[accessor.mBufferView];
-            if (bufferView.mBuffer >= asset.mBuffers.size())
+
+            size_t component_size = 0;
+            switch (accessor.mComponentType)
+            {
+            case Accessor::ComponentType::FLOAT:
+            case Accessor::ComponentType::UNSIGNED_INT:
+                component_size = 4;
+                break;
+            case Accessor::ComponentType::SHORT:
+            case Accessor::ComponentType::UNSIGNED_SHORT:
+                component_size = 2;
+                break;
+            case Accessor::ComponentType::BYTE:
+            case Accessor::ComponentType::UNSIGNED_BYTE:
+                component_size = 1;
+                break;
+            default: return 0;
+            }
+            return components * component_size;
+        }
+
+        // Vulkanstorm: accessor, buffer view and buffer indices and the byte range come from the asset;
+        // check that every element the copy reads lies inside the buffer. On success returns the
+        // first byte of the accessor in the buffer.
+        inline const U8* validateAccessorRange(const Asset& asset, const Accessor& accessor)
+        {
+            if (accessor.mBufferView < 0
+                || (size_t)accessor.mBufferView >= asset.mBufferViews.size())
             {
                 LL_WARNS("GLTF") << "Invalid buffer view" << LL_ENDL;
-                return;
+                return nullptr;
+            }
+            const BufferView& bufferView = asset.mBufferViews[accessor.mBufferView];
+            if (bufferView.mBuffer < 0 || (size_t)bufferView.mBuffer >= asset.mBuffers.size())
+            {
+                LL_WARNS("GLTF") << "Invalid buffer" << LL_ENDL;
+                return nullptr;
             }
             const Buffer& buffer = asset.mBuffers[bufferView.mBuffer];
-            const U8* src = buffer.mData.data() + bufferView.mByteOffset + accessor.mByteOffset;
+
+            const size_t elem_size = accessorElementSize(accessor);
+            if (elem_size == 0 || accessor.mCount < 0 || bufferView.mByteOffset < 0
+                || accessor.mByteOffset < 0 || bufferView.mByteStride < 0)
+            {
+                LL_WARNS("GLTF") << "Invalid accessor" << LL_ENDL;
+                return nullptr;
+            }
+
+            // all terms are non-negative S32 or sizes of a loaded buffer, and U64 holds the products
+            const U64 stride = bufferView.mByteStride == 0 ? elem_size : (U64)bufferView.mByteStride;
+            const U64 count = (U64)accessor.mCount;
+            const U64 first = (U64)bufferView.mByteOffset + (U64)accessor.mByteOffset;
+            const U64 last = count == 0 ? first : first + (count - 1) * stride + elem_size;
+            if (last > buffer.mData.size())
+            {
+                LL_WARNS("GLTF") << "Accessor reads past the end of its buffer" << LL_ENDL;
+                return nullptr;
+            }
+            return buffer.mData.data() + first;
+        }
+
+        // copy data from accessor to strider; returns false (and copies nothing) if the accessor
+        // does not fit its buffer. dst must hold accessor.mCount elements.
+        template<class T>
+        inline bool copy(Asset& asset, Accessor& accessor, LLStrider<T>& dst)
+        {
+            const U8* src = validateAccessorRange(asset, accessor);
+            if (!src)
+            {
+                return false;
+            }
+            const BufferView& bufferView = asset.mBufferViews[accessor.mBufferView];
 
             switch (accessor.mComponentType)
             {
@@ -460,17 +530,23 @@ namespace LL
                 break;
             default:
                 LL_ERRS("GLTF") << "Invalid component type" << LL_ENDL;
-                break;
+                return false;
             }
+            return true;
         }
 
-        // copy data from accessor to vector
+        // copy data from accessor to vector; on an invalid accessor dst is left empty and false is returned
         template<class T>
-        inline void copy(Asset& asset, Accessor& accessor, std::vector<T>& dst)
+        inline bool copy(Asset& asset, Accessor& accessor, std::vector<T>& dst)
         {
+            dst.clear();
+            if (!validateAccessorRange(asset, accessor))
+            {
+                return false;
+            }
             dst.resize(accessor.mCount);
             LLStrider<T> strider = dst.data();
-            copy(asset, accessor, strider);
+            return copy(asset, accessor, strider);
         }
 
 
