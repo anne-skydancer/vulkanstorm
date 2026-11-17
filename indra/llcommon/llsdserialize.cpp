@@ -2285,111 +2285,140 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is,
 
 LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out)
 {
-    U8* result = NULL;
-    llssize cur_size = 0;
-    z_stream strm;
+    // One inflate(Z_FINISH) into a per-thread scratch buffer, grown geometrically and resumed where the stream
+    // stopped. The LLSD is parsed straight from the scratch, which nothing keeps a pointer into after the call.
+    // A call that needed more than SCRATCH_KEEP gives the buffer back, so steady-state memory stays at the
+    // initial size per thread.
+    constexpr size_t SCRATCH_INITIAL = 1024 * 512;
+    constexpr size_t SCRATCH_KEEP = 1024 * 1024 * 2;
 
-    constexpr U32 CHUNK = 1024 * 512;
-
-    static thread_local std::unique_ptr<U8[]> out;
-    if (!out)
+    struct Scratch
     {
-        out = std::unique_ptr<U8[]>(new(std::nothrow) U8[CHUNK]);
+        std::unique_ptr<U8[]> buf;
+        size_t capacity = 0;
+    };
+    static thread_local Scratch scratch;
+
+    // Gives an oversized scratch back on every exit path.
+    struct Trim
+    {
+        Scratch& s;
+        ~Trim()
+        {
+            if (s.capacity > SCRATCH_KEEP)
+            {
+                s.buf.reset();
+                s.capacity = 0;
+            }
+        }
+    } trim{ scratch };
+
+    if (!scratch.buf)
+    {
+        scratch.buf.reset(new(std::nothrow) U8[SCRATCH_INITIAL]);
+        if (!scratch.buf)
+        {
+            return ZR_MEM_ERROR;
+        }
+        scratch.capacity = SCRATCH_INITIAL;
     }
 
+    // Output of exactly max_out bytes is allowed, one more is not: the buffer never grows past max_out + 1, the byte that proves the overrun.
+    const size_t limit = (max_out != UNZIP_NO_CAP) ? max_out + 1 : SIZE_MAX;
+
+    z_stream strm;
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
     strm.opaque = Z_NULL;
     strm.avail_in = size;
     strm.next_in = const_cast<U8*>(in);
 
-    S32 ret = inflateInit(&strm);
-
-    do
+    if (inflateInit(&strm) != Z_OK)
     {
-        strm.avail_out = CHUNK;
-        strm.next_out = out.get();
-        ret = inflate(&strm, Z_NO_FLUSH);
-        switch (ret)
+        return ZR_MEM_ERROR;
+    }
+
+    size_t cur_size = 0;
+    S32 ret = Z_OK;
+    for (;;)
+    {
+        if (cur_size == scratch.capacity || cur_size >= limit)
         {
-        case Z_NEED_DICT:
-        case Z_DATA_ERROR:
+            if (cur_size >= limit)
+            {
+                LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
+                    << " bytes; input size: " << size << " bytes." << LL_ENDL;
+                inflateEnd(&strm);
+                return ZR_SIZE_ERROR;
+            }
+            size_t new_capacity = scratch.capacity <= SIZE_MAX / 2 ? scratch.capacity * 2 : SIZE_MAX;
+            if (new_capacity > limit)
+            {
+                new_capacity = limit;
+            }
+            std::unique_ptr<U8[]> bigger(new(std::nothrow) U8[new_capacity]);
+            if (!bigger)
+            {
+                inflateEnd(&strm);
+                return ZR_MEM_ERROR;
+            }
+            memcpy(bigger.get(), scratch.buf.get(), cur_size);
+            scratch.buf = std::move(bigger);
+            scratch.capacity = new_capacity;
+        }
+
+        const size_t room = (scratch.capacity < limit ? scratch.capacity : limit) - cur_size;
+        const uInt avail_out = room > UINT_MAX ? UINT_MAX : (uInt)room;
+        strm.next_out = scratch.buf.get() + cur_size;
+        strm.avail_out = avail_out;
+        ret = inflate(&strm, Z_FINISH);
+        cur_size += avail_out - strm.avail_out;
+
+        if (ret == Z_STREAM_END)
+        {
+            if (cur_size >= limit)
+            {
+                // the stream ended exactly at max_out + 1 bytes: over the cap
+                LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
+                    << " bytes; input size: " << size << " bytes." << LL_ENDL;
+                inflateEnd(&strm);
+                return ZR_SIZE_ERROR;
+            }
+            break;
+        }
+        if (ret == Z_NEED_DICT || ret == Z_DATA_ERROR)
         {
             inflateEnd(&strm);
-            // free(result);
-            if( result )
-                free(result);
             return ZR_DATA_ERROR;
         }
-        case Z_STREAM_ERROR:
-        case Z_BUF_ERROR:
+        if (ret == Z_MEM_ERROR)
         {
             inflateEnd(&strm);
-            free(result);
+            return ZR_MEM_ERROR;
+        }
+        if (ret == Z_STREAM_ERROR || (ret == Z_BUF_ERROR && strm.avail_out != 0))
+        {
+            // Z_BUF_ERROR with room left: the input ended before the stream did
+            inflateEnd(&strm);
             return ZR_BUFFER_ERROR;
         }
-
-        case Z_MEM_ERROR:
-        {
-            inflateEnd(&strm);
-            // free(result);
-            if( result )
-                free(result);
-            return ZR_MEM_ERROR;
-        }
-        }
-
-        U32 have = CHUNK-strm.avail_out;
-
-        if (max_out != UNZIP_NO_CAP && (size_t)cur_size + have > max_out)
-        {
-            LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
-                << " bytes; input size: " << size << " bytes." << LL_ENDL;
-            inflateEnd(&strm);
-            free(result);
-            return ZR_SIZE_ERROR;
-        }
-
-        U8* new_result = (U8*)realloc(result, cur_size + have);
-        if (new_result == NULL)
-        {
-            inflateEnd(&strm);
-            if (result)
-            {
-                free(result);
-            }
-            return ZR_MEM_ERROR;
-        }
-        result = new_result;
-        memcpy(result+cur_size, out.get(), have);
-        cur_size += have;
-
-    } while (ret == Z_OK && ret != Z_STREAM_END);
+        // Z_BUF_ERROR (or Z_OK) with the output full: grow or continue where the stream stopped
+    }
 
     inflateEnd(&strm);
 
-    if (ret != Z_STREAM_END)
+    //scratch now holds the decompressed LLSD block
+    llssize parse_size = (llssize)cur_size;
+    char* result_ptr = strip_deprecated_header((char*)scratch.buf.get(), parse_size);
+
+    boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, parse_size);
+
+    // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
+    if (LLSDSerialize::fromBinary(data, istrm, parse_size, LLSD_UNTRUSTED_MAX_DEPTH,
+                                  // UNZIP_NO_CAP means a trusted local file (see UNZIP_NO_CAP): no node budget either
+                                  max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : UNZIP_ASSET_MAX_NODES) == LLSDParser::PARSE_FAILURE)
     {
-        // free(result);
-        if( result )
-            free(result);
-        return ZR_DATA_ERROR;
-    }
-
-    //result now points to the decompressed LLSD block; freed on every path, a throw out of the parser included
-    std::unique_ptr<U8, decltype(&free)> result_guard(result, &free);
-    {
-        char* result_ptr = strip_deprecated_header((char*)result, cur_size);
-
-        boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
-
-        // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
-        if (LLSDSerialize::fromBinary(data, istrm, cur_size, LLSD_UNTRUSTED_MAX_DEPTH,
-                                      // UNZIP_NO_CAP means a trusted local file (see UNZIP_NO_CAP): no node budget either
-                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : UNZIP_ASSET_MAX_NODES) == LLSDParser::PARSE_FAILURE)
-        {
-            return ZR_PARSE_ERROR;
-        }
+        return ZR_PARSE_ERROR;
     }
 
     return ZR_OK;

@@ -2821,4 +2821,46 @@ namespace tut
         ensure_equals("nested json at budget", LlsdFromJson(nested, 204).size(), 2);
         ensure("nested json over budget", LlsdFromJson(nested, 203).isUndefined());
     }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<10>()
+    {
+        set_test_name("unzip_llsd single-call scratch: round trips across the growth and release thresholds, error codes");
+        // sizes below, at and above the 512 KiB start, the doubling steps and the 2 MiB release threshold
+        const size_t sizes[] = { 0, 1, 1000, 512 * 1024 - 20, 512 * 1024, 512 * 1024 + 100, 1024 * 1024 + 7, 3 * 1024 * 1024 + 11, 9 * 1024 * 1024 };
+        U32 seed = 12345;
+        for (size_t n : sizes)
+        {
+            std::string payload(n, 'a');
+            for (size_t i = 0; i < n; i += 3)
+            {
+                seed = seed * 1664525u + 1013904223u;
+                payload[i] = (char)(seed >> 24);
+            }
+            LLSD src = LLSD::emptyMap();
+            src["s"] = payload;
+            const std::string z = zip_llsd(src);
+            const U8* in = reinterpret_cast<const U8*>(z.data());
+            // twice: the second call runs on the scratch the first one left (or released)
+            for (int pass = 0; pass < 2; ++pass)
+            {
+                LLSD out;
+                ensure_equals("round trip result", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_OK);
+                ensure("round trip bytes", out["s"].asString() == payload);
+            }
+            // a cap of exactly the output size succeeds only from that size up; the output is the map around the string
+            LLSD out;
+            ensure_equals("cap too small", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), n / 2 + 1), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+            if (n >= 1000)
+            {
+                // truncated input: the stream ends before its end marker
+                ensure_equals("truncated", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)(z.size() / 2), UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_BUFFER_ERROR);
+                std::string bad = z;
+                bad[0] = (char)0xFF;
+                ensure_equals("bad header", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(bad.data()), (S32)bad.size(), UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_DATA_ERROR);
+            }
+        }
+        LLSD out;
+        ensure_equals("empty input", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(""), 0, UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_BUFFER_ERROR);
+    }
 }
