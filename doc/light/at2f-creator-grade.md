@@ -70,23 +70,23 @@ black. The 41 split into:
 
 - 21 with no sunlight (`sunlight_color` 0): the creator lit the sky with `ambient` alone;
 - 7 with no atmosphere (`density_multiplier` 0);
-- 13 where the mapping removes all scattering: `blue_horizon` 0 sets the Rayleigh albedo to 0, and Earth's ozone takes a thin
-  channel's whole column (`LLAtmosphere::fromLegacy`, CLAMP_OZONE), which bounds the grey aerosol to 0 in every channel. Example:
-  `[TOR] SCIFI - Conciergist` (its red column is 0.0041, Earth's ozone alone would be 0.0049 in red; `fromLegacy` reports
-  CLAMP_OZONE and gives aerosol extinction 0).
+- 13 where the mapping leaves no scattering, by design: `blue_horizon` 0 sets the Rayleigh albedo to 0, and
+  `LLAtmosphere::fromLegacy` keeps each channel's column exactly as today's sunlight reaches the ground at noon before fitting Earth's
+  ozone and a grey aerosol inside it; when ozone fills a thin channel's whole column (CLAMP_OZONE), a grey aerosol has no room in any
+  channel. The creator's sunlight wins over the sky's scattering. Example: `[TOR] SCIFI - Conciergist` (its red column is 0.0041,
+  Earth's ozone alone would be 0.0049 in red; the aerosol extinction is 0).
 
-**This needs an owner decision.** R puts the sky's energy under physics; for ambient-lit, atmosphere-less and mapping-zeroed skies that
-makes the sky much darker relative to its sun than the creator made it, or black. Options: (a) accept it as the trade-off of R;
-(b) a floor on the sky's energy relative to the creator's (for example, the creator's sky at the physical sky's light or at a fixed
-fraction of its own, whichever is brighter); (c) treat skies with no sun or no atmosphere as a painted dome (the creator's sky as
-emitted light, energy unchanged), keeping R for every sky with an atmosphere; (d) fix the 13 mapping cases in `fromLegacy` (the ozone
-clamp should not zero the aerosol of channels that have room), independently of (a) to (c).
+**Owner decision (2026-11-17).** The principle is creator intent for every EEP, with each EEP sky a filter on the physical sky
+whose result is the same as today. The sky you see keeps today's look, including its brightness relative to the sun, and creator
+intent wins over the white-card rule (F4). The light the sky casts stays physical in level with the creator's tint (decision D4's
+deeper shade stands); where the physical sky casts no light, as for these 41 skies, the cast light is today's, from the creator's
+ambient. The mapping behind the 13 agrees with that principle and stays as it is.
 
 ### F4. The white-card rule clips 33 graded skies
 
 On the graded sky, 33 skies (5 %) break the rule of 2026-11-11: outside the aureole up to 4.18x the card (`[TOR] SCIFI - Big pink`),
-inside it up to 3.62x (`Places Las Legunas`). A further 29 use the aureole's 2x allowance. Under R the rule bounds the grade, so the
-brightest parts of those 33 skies would be clipped. The full list is in the run's summary.
+inside it up to 3.62x (`Places Las Legunas`). A further 29 use the aureole's 2x allowance. The owner's decision of 2026-11-17 keeps today's look for them: under the
+filter rule creator intent wins, and the white-card rule bounds the physical sky and the light it casts. The full list is in the run's summary.
 
 ### F5. The haze on objects cannot be graded by a ratio alone
 
