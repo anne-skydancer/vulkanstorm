@@ -754,6 +754,83 @@ class MC1Test(unittest.TestCase):
             self.assertIn(("return", False), kinds)
             self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
 
+    def test_auto_handoff_teleports_to_the_busy_pos_without_a_pop_up_asking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy", "--busy-pos", "100,100,30"])
+            self.assertEqual(code, 0)
+            self.assertEqual((fv.tp_requests[0]["regionname"], fv.tp_requests[0]["x"]), ("Busy", 100.0))
+            self.assertNotIn("Ready for the busy region: teleport there now.", [n[1] for n in fv.notifications])
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual((index["login"]["region"], index["busy"]["region"]), ("Start", "Busy"))
+
+    def test_auto_handoff_already_in_the_busy_region_ignores_case_and_does_not_teleport(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, run = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "sTART", "--start-region", "Start"],
+                                 teleports=None, fps_probe=None, presets=[{"id": "MC1-still", "camera": None}])
+            self.assertEqual(code, 0)
+            self.assertEqual(fv.tp_requests, [])
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["busy"]["region"], "sTART")
+
+    def test_auto_handoff_without_busy_pos_fails_cleanly_when_not_in_the_busy_region(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, _ = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy"])
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.tp_requests, [])
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_auto_handoff_retries_once_then_ends_the_run_with_the_problem_pop_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            fv.api_LLTeleportHandler = lambda op, d: fv.tp_requests.append(d)      # refused: the agent never moves
+            code, _ = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy", "--busy-pos", "100,100,30"],
+                               teleports={"within": 0, "second": 0, "timeout_s": 1.0, "settle_s": 0.2})
+            self.assertEqual(code, 1)
+            self.assertEqual(len(fv.tp_requests), 2)
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_auto_handoff_accepts_a_late_first_arrival_on_the_retry_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+
+            def late(run, kind, region, xyz, cfg):
+                fv.agent_region, fv.agent_pos = region, list(xyz)       # it arrives, but after the wait gave up
+                raise pc.LeapError("did not arrive")
+            with mock.patch.object(pc.Run, "teleport_once", late):
+                code, run = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy", "--busy-pos", "100,100,30"],
+                                     teleports=None, fps_probe=None, presets=[{"id": "MC1-still", "camera": None}])
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["busy"]["region"], "Busy")
+
+    def test_auto_handoff_ends_the_run_when_the_landing_misses_by_more_than_a_few_metres(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            real = fv.api_LLTeleportHandler
+            fv.api_LLTeleportHandler = lambda op, d: real(op, dict(d, x=d["x"] + 40.0))
+            code, _ = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy", "--busy-pos", "100,100,30"])
+            self.assertEqual(code, 1)
+
+    def test_auto_handoff_login_timeout_ends_cleanly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            with mock.patch.object(pc.Viewer, "wait_for_login", side_effect=pc.LeapTimeout("login did not finish in 300 s")):
+                code, _ = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy", "--busy-pos", "1,1,1"])
+            self.assertEqual(code, 1)
+            self.assertEqual(fv.tp_requests, [])
+            self.assertEqual(fv.notifications[-1][1], "Session ended with problems: see perf.json (you can quit).")
+
+    def test_auto_handoff_is_inert_when_the_scenario_has_no_owner_teleport(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(projector=PoolModel())
+            code, _ = mc1_main(fv, tmp, hand=False, extra=["--auto-handoff", "--busy-region", "Busy"], owner_teleport=None,
+                               teleports=None, fps_probe=None, presets=[{"id": "MC1-still", "camera": None}])
+            self.assertEqual(code, 0)
+            self.assertEqual(fv.tp_requests, [])
+
     def test_a_failed_run_tells_the_owner(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(projector=PoolModel())

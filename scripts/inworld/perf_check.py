@@ -1144,6 +1144,8 @@ class Run:
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
         if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
             raise LeapError("the login region is unknown (the viewer logs no region name at login): pass --start-region NAME (the launcher's -StartRegion NAME)")
+        if self.args.auto_handoff:
+            return self.auto_handoff(name, glob)
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
@@ -1176,6 +1178,45 @@ class Run:
         self.busy_region = busy
         self.index["busy"] = {"region": busy, "pos": reg, "global": g}
         log("arrived in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
+        self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
+
+    def auto_handoff(self, login_region, glob):
+        """--auto-handoff (an autologin run, nobody to click). The viewer logs in at its last location, which -SetupLogin left at the
+        measuring spot. Already in --busy-region (names compare case-insensitively): that position is the spot, no teleport. Otherwise
+        a teleport to --busy-pos with the teleport series' own code, one retry (an arrival that was only late is accepted), and the run
+        ends (LeapError: the problem pop-up and a non-zero exit) when it fails or lands more than 5 m off. It never waits for a human."""
+        busy = self.args.busy_region
+        if not busy:
+            raise LeapError("--auto-handoff needs --busy-region NAME (the launcher's -BusyRegion NAME)")
+        pos0, _ = self.agent_state()
+        if login_region and login_region.casefold() == busy.casefold():
+            log("auto hand-off: logged in at %s %s, the measuring spot: no teleport" % (busy, pos0))
+        elif not self.args.busy_pos:
+            raise LeapError("auto hand-off: logged in at %r, not in the busy region %r, and no --busy-pos X,Y,Z (the launcher's -BusyPos) to teleport "
+                            "to: redo -SetupLogin and quit at the measuring spot" % (login_region, busy))
+        else:
+            target = tuple(self.args.busy_pos)
+            cfg = {"timeout_s": 120.0, "settle_s": 3.0, "min_move_m": 5.0, **(self.sc["teleports"] or {})}
+            rec = None
+            for attempt in (1, 2):
+                if attempt == 2:      # the first teleport may only have been late: accept it when the agent is there now
+                    reg, g = self.agent_state()
+                    if cell_of(g) != cell_of(glob) and ((reg[0] - target[0]) ** 2 + (reg[1] - target[1]) ** 2) ** 0.5 <= 5.0:
+                        log("auto hand-off: the first teleport arrived late, at %s" % (reg,))
+                        break
+                try:
+                    rec = self.teleport_once("handoff", busy, target, cfg)
+                    break
+                except LeapError as exc:
+                    log("auto hand-off: attempt %d to teleport to %s failed: %s" % (attempt, busy, exc))
+                    if attempt == 2:
+                        raise LeapError("auto hand-off failed twice (the region may refuse automated teleports): ending the run")
+            if rec and rec["miss_m"] > 5.0:
+                raise LeapError("auto hand-off landed %.1f m from the target %s: ending the run" % (rec["miss_m"], target))
+        reg, g = self.agent_state()
+        self.busy_region = busy
+        self.index["busy"] = {"region": busy, "pos": reg, "global": g}
+        log("in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
         self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
 
     def request_teleport(self, region, x, y, z):
@@ -1387,7 +1428,16 @@ def parse_args(argv):
                     "'Entering region' line of the viewer log; URL-escaped like --tp-region)")
     ap.add_argument("--busy-region", default=None, metavar="NAME", help="the region you teleport to, when its name cannot be read from "
                     "the viewer log (URL-escaped like --tp-region)")
+    ap.add_argument("--busy-pos", default=None, metavar="X,Y,Z", help="with --auto-handoff: where to teleport in --busy-region when the login is not already there")
+    ap.add_argument("--auto-handoff", action="store_true", help="an unattended (autologin) run: teleport to --busy-region by LEAP instead of "
+                    "asking the owner to do it (skipped when already there; one retry; then the run ends with the problem pop-up)")
     args = ap.parse_args(argv)
+    if args.busy_pos:
+        try:
+            args.busy_pos = [float(c) for c in args.busy_pos.split(",")]
+            assert len(args.busy_pos) == 3
+        except (ValueError, AssertionError):
+            ap.error("--busy-pos takes X,Y,Z numbers")
     if args.gpu_window and not args.no_glstats:
         ap.error("--gpu-window belongs to the --no-glstats flow (without --no-glstats every preset already collects a window)")
     args.fps_from_log = False
@@ -1433,7 +1483,19 @@ def execute(session, args, sc, outdir):
             return restore_run(v, args)
         if not args.no_login_wait:
             log("waiting for login (log in by hand; the script starts when the scene is up)")
-            v.wait_for_login(args.max_wait_s or sc["settle"]["login_timeout_s"])
+            try:
+                v.wait_for_login(args.max_wait_s or sc["settle"]["login_timeout_s"])
+            except LeapTimeout as exc:
+                if not args.auto_handoff:
+                    raise
+                log("FAILED: autologin did not reach the world (%s): the viewer is at the login screen, showed an error, or the grid is down" % exc)
+                try:
+                    v.fire("LLNotifications", "requestAdd", name="SystemMessage", substitutions={"MESSAGE": (sc.get("owner_teleport") or {}).get(
+                        "problem_message", "Session ended with problems: see perf.json (you can quit).")})
+                    v.barrier()
+                except Exception as exc2:  # noqa: BLE001  (the login screen may not take it)
+                    log("the pop-up could not be shown: %s" % exc2)
+                return 1
             log("logged in; settling %.0f s" % sc["settle"]["post_login_s"])
             v.sleep(sc["settle"]["post_login_s"])
         if args.no_glstats and check_api(v):
