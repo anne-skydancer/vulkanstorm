@@ -36,6 +36,7 @@
 
 #include <boost/iostreams/device/array.hpp>
 #include <boost/iostreams/stream.hpp>
+#include <climits>
 #include <cstdint>
 
 #ifdef LL_USESYSTEMLIBS
@@ -2269,8 +2270,8 @@ std::string zip_llsd(LLSD& data)
 }
 
 //decompress a block of LLSD from provided istream
-// not very efficient -- creats a copy of decompressed LLSD block in memory
-// and deserializes from that copy using LLSDSerialize
+// the compressed input is copied into memory first (the output is not: it is parsed straight from a
+// per-thread scratch buffer, see the pointer overload)
 LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out)
 {
     std::unique_ptr<U8[]> in = std::unique_ptr<U8[]>(new(std::nothrow) U8[size]);
@@ -2287,8 +2288,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 {
     // One inflate(Z_FINISH) into a per-thread scratch buffer, grown geometrically and resumed where the stream
     // stopped. The LLSD is parsed straight from the scratch, which nothing keeps a pointer into after the call.
-    // A call that needed more than SCRATCH_KEEP gives the buffer back, so steady-state memory stays at the
-    // initial size per thread.
+    // A call that needed more than SCRATCH_KEEP gives the buffer back, so at most 2 MiB stay retained per thread
+    // (the old loop kept a fixed 512 KiB); about 5 calling threads (mesh repo, 2 LOD pool workers, main, model loader).
     constexpr size_t SCRATCH_INITIAL = 1024 * 512;
     constexpr size_t SCRATCH_KEEP = 1024 * 1024 * 2;
 
@@ -2324,7 +2325,14 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
     }
 
     // Output of exactly max_out bytes is allowed, one more is not: the buffer never grows past max_out + 1, the byte that proves the overrun.
-    const size_t limit = (max_out != UNZIP_NO_CAP) ? max_out + 1 : SIZE_MAX;
+    const size_t limit = (max_out != UNZIP_NO_CAP && max_out < SIZE_MAX) ? max_out + 1 : SIZE_MAX;
+
+    auto overCap = [&]()
+    {
+        LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
+            << " bytes; input size: " << size << " bytes." << LL_ENDL;
+        return ZR_SIZE_ERROR;
+    };
 
     z_stream strm;
     strm.zalloc = Z_NULL;
@@ -2333,9 +2341,11 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
     strm.avail_in = size;
     strm.next_in = const_cast<U8*>(in);
 
-    if (inflateInit(&strm) != Z_OK)
+    const int init_ret = inflateInit(&strm);
+    if (init_ret != Z_OK)
     {
-        return ZR_MEM_ERROR;
+        return init_ret == Z_VERSION_ERROR ? ZR_VERSION_ERROR
+             : init_ret == Z_MEM_ERROR ? ZR_MEM_ERROR : ZR_DATA_ERROR;
     }
 
     size_t cur_size = 0;
@@ -2346,10 +2356,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         {
             if (cur_size >= limit)
             {
-                LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
-                    << " bytes; input size: " << size << " bytes." << LL_ENDL;
                 inflateEnd(&strm);
-                return ZR_SIZE_ERROR;
+                return overCap();
             }
             size_t new_capacity = scratch.capacity <= SIZE_MAX / 2 ? scratch.capacity * 2 : SIZE_MAX;
             if (new_capacity > limit)
@@ -2379,10 +2387,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
             if (cur_size >= limit)
             {
                 // the stream ended exactly at max_out + 1 bytes: over the cap
-                LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
-                    << " bytes; input size: " << size << " bytes." << LL_ENDL;
                 inflateEnd(&strm);
-                return ZR_SIZE_ERROR;
+                return overCap();
             }
             break;
         }
