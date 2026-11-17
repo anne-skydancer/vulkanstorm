@@ -130,12 +130,8 @@ bool Animation::Sampler::prep(Asset& asset)
     mMinTime = (F32)accessor.mMin[0];
     mMaxTime = (F32)accessor.mMax[0];
 
-    mFrameTimes.resize(accessor.mCount);
-
-    LLStrider<F32> frame_times = mFrameTimes.data();
-    copy(asset, accessor, frame_times);
-
-    return true;
+    // Vulkanstorm: an accessor that does not fit its buffer fails the asset
+    return copy(asset, accessor, mFrameTimes);
 }
 
 
@@ -248,9 +244,8 @@ bool Animation::RotationChannel::prep(Asset& asset, Animation::Sampler& sampler)
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
 
-    copy(asset, accessor, mRotations);
-
-    return true;
+    // Vulkanstorm: an accessor that does not fit its buffer fails the asset
+    return copy(asset, accessor, mRotations);
 }
 
 void Animation::RotationChannel::apply(Asset& asset, Sampler& sampler, F32 time)
@@ -281,9 +276,8 @@ bool Animation::TranslationChannel::prep(Asset& asset, Animation::Sampler& sampl
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
 
-    copy(asset, accessor, mTranslations);
-
-    return true;
+    // Vulkanstorm: an accessor that does not fit its buffer fails the asset
+    return copy(asset, accessor, mTranslations);
 }
 
 void Animation::TranslationChannel::apply(Asset& asset, Sampler& sampler, F32 time)
@@ -315,9 +309,8 @@ bool Animation::ScaleChannel::prep(Asset& asset, Animation::Sampler& sampler)
 {
     Accessor& accessor = asset.mAccessors[sampler.mOutput];
 
-    copy(asset, accessor, mScales);
-
-    return true;
+    // Vulkanstorm: an accessor that does not fit its buffer fails the asset
+    return copy(asset, accessor, mScales);
 }
 
 void Animation::ScaleChannel::apply(Asset& asset, Sampler& sampler, F32 time)
@@ -411,26 +404,29 @@ void Skin::uploadMatrixPalette(Asset& asset)
         glGenBuffers(1, &mUBO);
     }
 
+    // Vulkanstorm: prep() guarantees every joint index is a valid node. Joints without an
+    // inverse bind matrix (absent accessor or too few entries) use identity, the glTF default.
     size_t joint_count = llmin<size_t>(max_joints, mJoints.size());
 
-    std::vector<mat4> t_mp;
-
-    t_mp.resize(joint_count);
+    // Vulkanstorm: always upload the whole declared block (max_joints matrices, identity beyond
+    // joint_count) so a per-vertex joint index past the skin reads defined data
+    std::vector<mat4> t_mp(max_joints, mat4(1.f));
 
     for (U32 i = 0; i < joint_count; ++i)
     {
         Node& joint = asset.mNodes[mJoints[i]];
         // build matrix palette in asset space
-        t_mp[i] = joint.mAssetMatrix * mInverseBindMatricesData[i];
+        const mat4 ibm = i < mInverseBindMatricesData.size() ? mInverseBindMatricesData[i] : mat4(1.f);
+        t_mp[i] = joint.mAssetMatrix * ibm;
     }
 
     std::vector<F32> glmp;
 
-    glmp.resize(joint_count * 12);
+    glmp.resize((size_t)max_joints * 12);
 
     F32* mp = glmp.data();
 
-    for (U32 i = 0; i < joint_count; ++i)
+    for (U32 i = 0; i < max_joints; ++i)
     {
         F32* m = glm::value_ptr(t_mp[i]);
 
@@ -461,8 +457,28 @@ bool Skin::prep(Asset& asset)
 {
     if (mInverseBindMatrices != INVALID_INDEX)
     {
+        // Vulkanstorm: indices come from the asset; validate before use
+        if (mInverseBindMatrices < 0 || (size_t)mInverseBindMatrices >= asset.mAccessors.size())
+        {
+            LL_WARNS("GLTF") << "Skin has an invalid inverseBindMatrices accessor" << LL_ENDL;
+            return false;
+        }
         Accessor& accessor = asset.mAccessors[mInverseBindMatrices];
-        copy(asset, accessor, mInverseBindMatricesData);
+        if (!copy(asset, accessor, mInverseBindMatricesData))
+        {
+            LL_WARNS("GLTF") << "Skin inverseBindMatrices accessor does not fit its buffer" << LL_ENDL;
+            return false;
+        }
+    }
+
+    // Vulkanstorm: uploadMatrixPalette() indexes the node list by joint
+    for (S32 joint : mJoints)
+    {
+        if (joint < 0 || (size_t)joint >= asset.mNodes.size())
+        {
+            LL_WARNS("GLTF") << "Skin joint index out of range" << LL_ENDL;
+            return false;
+        }
     }
 
     return true;
