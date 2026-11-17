@@ -92,18 +92,28 @@ public:
 
     /**
      * Node budget: the most LLSD values (every scalar, map and array) one parse() or parseLines()
-     * may build before it fails with PARSE_FAILURE.
+     * may build before it fails with PARSE_FAILURE and an undefined result.
      *
-     * An LLSD value costs tens of bytes of heap (the Impl, plus a slot or a map entry and key), while a
-     * value can take a single byte of input ('!' undefined, an empty array), so input of a few hundred
-     * MiB (an inflated payload within its cap) could otherwise build several GiB. 1 << 23 nodes bounds a
-     * parse to about 0.5 GiB. The largest real payloads are far below it: an AIS inventory reply or a
-     * capabilities reply is well under 2M nodes (about 30 nodes per item), mesh headers and materials are
-     * a few thousand, and a navmesh or an embedded asset is a handful of nodes around big binary leaves.
-     * Trusted local data that needs more passes MAX_NODES_UNLIMITED.
+     * A value can take one byte of input (binary or notation '!', an empty array is six) but costs
+     * heap: about 100 to 300 bytes on MSVC depending on the shape (a scalar in an array about 100, an empty
+     * map or array element about 150 to 280). The input is the only bound otherwise, so a payload within
+     * its inflate cap (64 MiB for assets) or a long HTTP body could build gigabytes.
+     *
+     * MAX_NODES_DEFAULT (1 << 23, 1 to 2 GiB at worst) is the ceiling for sources without a better
+     * measure. Sources that know their size use less or scale with it:
+     *  - unzip_llsd with a byte cap: UNZIP_ASSET_MAX_NODES (see there);
+     *  - HTTP and JSON replies: nodeBudgetForBytes(body size), which ties the heap to what the server sent;
+     *  - trusted local files that may be large (the inventory cache): MAX_NODES_UNLIMITED.
      */
     static constexpr size_t MAX_NODES_DEFAULT = size_t(1) << 23;
     static constexpr size_t MAX_NODES_UNLIMITED = 0;
+    /// The budget for a body of body_bytes from a server: at least the default, and one node per 16 bytes
+    /// above it. Real replies run at 50 bytes or more per node (AIS XML about 50), so they never reach it;
+    /// a flood of tiny values is held to a heap proportional to what was sent.
+    static constexpr size_t nodeBudgetForBytes(size_t body_bytes)
+    {
+        return body_bytes / 16 > MAX_NODES_DEFAULT ? body_bytes / 16 : MAX_NODES_DEFAULT;
+    }
     void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; }
 
 
@@ -214,9 +224,23 @@ protected:
 
     /**
      * @brief Count one more LLSD value about to be built.
-     * @return false, with a warning the first time, once the node budget is spent.
+     * @return false, with a warning, once the node budget is spent; the parse then unwinds.
      */
-    bool chargeNode() const;
+    bool chargeNode() const
+    {
+        if (mMaxNodes == MAX_NODES_UNLIMITED)
+        {
+            return true;
+        }
+        if (mNodesLeft == 0)
+        {
+            return nodeBudgetSpent();
+        }
+        --mNodesLeft;
+        return true;
+    }
+    bool nodeBudgetSpent() const;
+    S32 parseWithBudget(std::istream& istr, LLSD& data, S32 max_depth);
 
 protected:
     /**
@@ -232,6 +256,8 @@ protected:
     /** @brief The node budget (see setMaxNodes()) and what is left of it in the current parse. */
     size_t mMaxNodes;
     mutable size_t mNodesLeft;
+    /** @brief The current parse stopped on the node budget: its partial result is discarded. */
+    mutable bool mNodesSpent;
 
     /**
      * @brief Use line-based reading to get text
@@ -878,7 +904,18 @@ public:
 
 // Output caps for the inflate helpers below, so a decompression bomb in region or server data
 // cannot exhaust memory or freeze the calling thread. 0 means no cap.
+//
+// UNZIP_NO_CAP is a trusted local file (the backup import) and also removes the node budget below.
 constexpr size_t UNZIP_NO_CAP = 0;
+// The node budget of unzip_llsd with a byte cap. The largest real blocks are a few thousand nodes: a rigged
+// mesh skin block (joint names and 4x4 bind matrices for up to about 110 joints) is about 2000, a decomposition
+// block and a materials reply a few hundred (hulls and vertex data are binary leaves), a mesh LOD block about
+// 12 per face. 1 << 20 leaves a margin of two orders of magnitude and, at about 100 to 300 bytes per node,
+// bounds a parse of a 64 MiB inflated block (UNZIP_ASSET_MAX_OUT) to about 100 to 300 MiB.
+constexpr size_t UNZIP_ASSET_MAX_NODES = size_t(1) << 20;
+// Maximum nesting for LLSD from a remote or untrusted source: real mesh headers, metadata and assets nest
+// below ten levels, and the parser recursion and the LLSD destructor stay well inside the stack at 96.
+constexpr S32 LLSD_UNTRUSTED_MAX_DEPTH = 96;
 // Mesh LODs, skin and decomposition blocks, materials and model data: the largest legitimate LOD block
 // is about 15 to 22 MB decompressed, so 64 MiB leaves a wide margin and still stops a bomb early.
 constexpr size_t UNZIP_ASSET_MAX_OUT = 64u * 1024 * 1024;

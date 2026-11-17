@@ -298,7 +298,27 @@ private:
 
     void startSkipping();
     bool depthLimitReached(); // <Vulkanstorm/>
-    bool nodeLimitReached();  // <Vulkanstorm/>
+    // <Vulkanstorm> Called with depthLimitReached(), before a value is added: once the node budget is spent, stop
+    // expat and fail the parse, so a payload of many tiny values cannot build far more heap than its size.
+    bool nodeLimitReached()
+    {
+        if (mMaxNodes == LLSDParser::MAX_NODES_UNLIMITED)
+        {
+            return false;
+        }
+        if (mNodesLeft > 0)
+        {
+            --mNodesLeft;
+            return false;
+        }
+        LL_WARNS() << "LLSD XML parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
+        mStackElements.pop();
+        mNodesExceeded = true;
+        XML_StopParser(mParser, XML_FALSE);
+        startSkipping();
+        return true;
+    }
+    // </Vulkanstorm>
 
     enum Element {
         ELEMENT_LLSD,
@@ -344,8 +364,8 @@ private:
     S32 mMaxDepth;
     bool mDepthExceeded;
     // The node budget: values left, 0 limit meaning unlimited; mNodesExceeded once spent, as mDepthExceeded.
-    size_t mMaxNodes;
-    size_t mNodesLeft;
+    size_t mMaxNodes = LLSDParser::MAX_NODES_DEFAULT;
+    size_t mNodesLeft = LLSDParser::MAX_NODES_DEFAULT;
     bool mNodesExceeded;
     // </Vulkanstorm>
 
@@ -438,8 +458,16 @@ S32 LLSDXMLParser::Impl::parse(std::istream& input, LLSD& data)
     {
         if (mEmitErrors)
         {
-            LL_INFOS() << "LLSDXMLParser::Impl::parse: LLSD nested " << mMaxDepth << " levels deep or more, or too many values" << LL_ENDL;
+            if (mNodesExceeded)
+            {
+                LL_INFOS() << "LLSDXMLParser::Impl::parse: more than " << mMaxNodes << " LLSD values" << LL_ENDL;
+            }
+            else
+            {
+                LL_INFOS() << "LLSDXMLParser::Impl::parse: LLSD nested " << mMaxDepth << " levels deep or more" << LL_ENDL;
+            }
         }
+        mResult.clear();
         data = LLSD();
         return LLSDParser::PARSE_FAILURE;
     }
@@ -536,8 +564,16 @@ S32 LLSDXMLParser::Impl::parseLines(std::istream& input, LLSD& data)
     {
         if (mEmitErrors)
         {
-            LL_INFOS() << "LLSDXMLParser::Impl::parseLines: LLSD nested " << mMaxDepth << " levels deep or more, or too many values" << LL_ENDL;
+            if (mNodesExceeded)
+            {
+                LL_INFOS() << "LLSDXMLParser::Impl::parseLines: more than " << mMaxNodes << " LLSD values" << LL_ENDL;
+            }
+            else
+            {
+                LL_INFOS() << "LLSDXMLParser::Impl::parseLines: LLSD nested " << mMaxDepth << " levels deep or more" << LL_ENDL;
+            }
         }
+        mResult.clear();
         data = LLSD();
         return LLSDParser::PARSE_FAILURE;
     }
@@ -575,8 +611,6 @@ void LLSDXMLParser::Impl::reset()
 
     mMaxDepth = -1; // <Vulkanstorm/>
     mDepthExceeded = false; // <Vulkanstorm/>
-    mMaxNodes = LLSDParser::MAX_NODES_DEFAULT; // <Vulkanstorm/>
-    mNodesLeft = mMaxNodes; // <Vulkanstorm/>
     mNodesExceeded = false; // <Vulkanstorm/>
 
     mGracefullStop = false;
@@ -785,28 +819,6 @@ bool LLSDXMLParser::Impl::depthLimitReached()
     return true;
 }
 
-// <Vulkanstorm> Called with depthLimitReached(), before a value is added: once the node budget is spent, stop
-// expat and fail the parse, so a payload of many tiny values cannot build far more heap than its size.
-bool LLSDXMLParser::Impl::nodeLimitReached()
-{
-    if (mMaxNodes == LLSDParser::MAX_NODES_UNLIMITED)
-    {
-        return false;
-    }
-    if (mNodesLeft > 0)
-    {
-        --mNodesLeft;
-        return false;
-    }
-    LL_WARNS() << "LLSD XML parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
-    mStackElements.pop();
-    mNodesExceeded = true;
-    XML_StopParser(mParser, XML_FALSE);
-    startSkipping();
-    return true;
-}
-// </Vulkanstorm>
-
 void LLSDXMLParser::Impl::endElementHandler(const XML_Char* name)
 {
     #ifdef XML_PARSER_PERFORMANCE_TESTS
@@ -822,7 +834,7 @@ void LLSDXMLParser::Impl::endElementHandler(const XML_Char* name)
         }
         return;
     }
-    if (mDepthExceeded) // <Vulkanstorm/> expat was stopped
+    if (mDepthExceeded || mNodesExceeded) // <Vulkanstorm/> expat was stopped
     {
         return;
     }
@@ -961,7 +973,7 @@ void LLSDXMLParser::Impl::characterDataHandler(const XML_Char* data, int length)
     XML_Timer timer( &charDataTime );
     #endif  // XML_PARSER_PERFORMANCE_TESTS
 
-    if (mDepthExceeded) // <Vulkanstorm/> expat was stopped
+    if (mDepthExceeded || mNodesExceeded) // <Vulkanstorm/> expat was stopped
     {
         return;
     }

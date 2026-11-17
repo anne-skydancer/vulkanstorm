@@ -144,7 +144,7 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
     LLSD result_LLSD;
     if(!response_raw.empty())
     {
-        result_LLSD = LlsdFromJson(boost::json::parse(response_raw));
+        result_LLSD = LlsdFromJson(boost::json::parse(response_raw), LLSDParser::nodeBudgetForBytes(response_raw.size()));
     }    
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
     bool success = (status.getType() == HTTP_OK);

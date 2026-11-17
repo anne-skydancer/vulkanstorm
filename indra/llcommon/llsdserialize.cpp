@@ -56,7 +56,7 @@
 
 // File constants
 static const size_t MAX_HDR_LEN = 20;
-static const S32 UNZIP_LLSD_MAX_DEPTH = 96;
+
 static const char LEGACY_NON_HEADER[] = "<llsd>";
 const std::string LLSD_BINARY_HEADER("LLSD/Binary");
 const std::string LLSD_XML_HEADER("LLSD/XML");
@@ -381,7 +381,7 @@ static const char BINARY_FALSE_SERIAL = '0';
  * LLSDParser
  */
 LLSDParser::LLSDParser()
-    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mParseLines(false)
+    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mNodesSpent(false), mParseLines(false)
 {
 }
 
@@ -393,8 +393,7 @@ S32 LLSDParser::parse(std::istream& istr, LLSD& data, llssize max_bytes, S32 max
 {
     mCheckLimits = LLSDSerialize::SIZE_UNLIMITED != max_bytes;
     mMaxBytesLeft = max_bytes;
-    mNodesLeft = mMaxNodes;
-    return doParse(istr, data, max_depth);
+    return parseWithBudget(istr, data, max_depth);
 }
 
 
@@ -403,8 +402,7 @@ S32 LLSDParser::parseLines(std::istream& istr, LLSD& data)
 {
     mCheckLimits = false;
     mParseLines = true;
-    mNodesLeft = mMaxNodes;
-    return doParse(istr, data);
+    return parseWithBudget(istr, data, -1);
 }
 
 
@@ -464,20 +462,26 @@ void LLSDParser::account(llssize bytes) const
     if(mCheckLimits) mMaxBytesLeft -= bytes;
 }
 
-bool LLSDParser::chargeNode() const
+// Run doParse() with a fresh node budget; a parse that stopped on the budget leaves no partial tree.
+S32 LLSDParser::parseWithBudget(std::istream& istr, LLSD& data, S32 max_depth)
 {
-    if (mMaxNodes == MAX_NODES_UNLIMITED)
+    mNodesLeft = mMaxNodes;
+    mNodesSpent = false;
+    S32 result = doParse(istr, data, max_depth);
+    if (mNodesSpent)
     {
-        return true;
+        data.clear();
+        result = PARSE_FAILURE;
     }
-    if (mNodesLeft == 0)
-    {
-        // The parse unwinds on the failure, so this is logged once.
-        LL_WARNS() << "LLSD parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
-        return false;
-    }
-    --mNodesLeft;
-    return true;
+    return result;
+}
+
+bool LLSDParser::nodeBudgetSpent() const
+{
+    mNodesSpent = true;
+    // The parse unwinds on the failure, so this is logged once.
+    LL_WARNS() << "LLSD parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
+    return false;
 }
 
 
@@ -2381,9 +2385,9 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
 
         // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
-        if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH,
-                                      // an uncapped (trusted local) inflate gets no node budget either
-                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : LLSDParser::MAX_NODES_DEFAULT) == LLSDParser::PARSE_FAILURE)
+        if (LLSDSerialize::fromBinary(data, istrm, cur_size, LLSD_UNTRUSTED_MAX_DEPTH,
+                                      // UNZIP_NO_CAP means a trusted local file (see UNZIP_NO_CAP): no node budget either
+                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : UNZIP_ASSET_MAX_NODES) == LLSDParser::PARSE_FAILURE)
         {
             return ZR_PARSE_ERROR;
         }
