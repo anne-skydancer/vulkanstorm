@@ -51,9 +51,9 @@ anchor values come from `scripts/light/at2f_anchor_gpu.py`. Raw rows: `doc/light
   multiple-scattering and irradiance tables built, sampled with the slab-split march at 64 steps (D1), at 20 m above the ground. The
   ground term of `sky_radiance` is not evaluated: every direction measured is above the horizon from a camera above the ground (the
   first run's branch for it was dead).
-  P is anchored to the bench's physical figures for the same pixels. The bench's physical sky is its own Python mapping (study 4.2),
+  P is anchored to the bench's physical figures for the same pixels. The bench's physical sky is its own Python mapping (`scripts/light/bench_atmosphere.py`, the "EEP -> physical" section),
   not `fromLegacy`, so the two agree only where the mappings do. Default, the mapping's calibration sky: zenith 0.0802 (bench 0.0782),
-  horizon 0.1541 (0.1573), near-sun 0.1343 (0.1265), irradiance/pi 0.0977 (0.0962): within 6 %, so k's unit is the bench's. Elsewhere they
+  horizon 0.1541 (0.1573), near-sun 0.1343 (0.1265), irradiance/pi 0.0977 (0.0962): within 6.2 %, so k's unit is the bench's. Elsewhere they
   differ, by the model and not by units: Sunset 0.09x the bench's irradiance, Salmon 1.38x, Pleasantrie 0.37x, Fog Lifting 0.86x, Foggy
   2.38x (the bench prints irradiance / pi).
 - **The energy factor k.** The scalar that brings W's horizontal irradiance (luminance, cosine-weighted upper hemisphere) to P's. It is

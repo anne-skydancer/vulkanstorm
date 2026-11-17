@@ -88,7 +88,7 @@ light directions change, §4.1):
 
 **Effort, calibrated on this repo's history:** about **5-7.5 days of agent time** for AT2-1 to AT2-5 and AT2-F pass 2, with review
 rounds (the decisions of 2026-11-17 add about 1.5-2 days: the filter tables in AT2-1, the near-sun glow and the capture-path checks in
-AT2-2, and the offline pass 2). It excludes owner turnaround and the one-build-at-a-time queue; the owner checks in-world once, on the installed viewer after release. For comparison, AT0 took about 4 h, L3 + AT1 about a day with two fix rounds, and AT2-0 about 8 h. The AT2 survey's 12-16
+AT2-2, and the offline pass 2). It excludes owner turnaround and the one-build-at-a-time queue; the owner checks in-world once, on the installed viewer after release. For comparison, AT0 took about 4 h, L3 + AT1 about a day with two fix rounds, and AT2-0 about 7.5 h. The AT2 survey's 12-16
 agent-days was inflated about 3×.
 
 **Recommendation:**
@@ -581,7 +581,7 @@ Replaces the restated "[decided]" item "the drawn sky physical, with L6 compensa
   library figures; the library's "Default" is the Midday (Legacy) look, not the code default. Sunrise, Midday and Sunset are not in the
   local cache and need a one-off fetch in a later owner session; nothing was fetched for this study.
 - **Measured (AT2-F, `doc/light/at2f-creator-grade.md`; 612 library day skies, each on its own draw path).** The sky-view table must
-  store the product (today's look per texel, P x G = W): the filtered sky is then within dE 0.05 of today on average (the physical sky's
+  store the product (today's look per texel, P x G = W): the filtered sky is then within dE 0.05 of today (the median over the skies of each sky's mean; the physical sky's
   own table error is 0.03). Storing the ratio W / P and multiplying by P fails in the tails (worst cell above dE 10 in 82 skies against
   65 for the product, up to dE 157), so the filter is not stored as a ratio. Physics alone reaches dE 2 for 9 % of skies. The worst
   cells of the product are near the sun: 273 of the 327 skies whose worst cell is above dE 2 have it within 10 degrees, and 183 of
