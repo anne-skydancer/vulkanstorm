@@ -361,6 +361,16 @@ everything the point and light-model stages add at steady state there (Rooftops 
 
 ## 8. Decisions for the owner (open only; recommended first)
 
+**Decided 2026-11-17.** The owner delegated these to "literature, correctness and best practice for good quality at reasonable cost", and to the simplest path with the best performance. The options below are kept as offered.
+
+- **R-1 = (a), the amortised cap.** A tile that costs more than the cap is still drawn, and its overrun is paid by the following frames, so the average stays within 0.35 ms. That is the standard way of budgeting shadow-atlas updates: the projector pool's own P3/P4 rule, and the cached local-light atlases of DOOM 2016 and Cyberpunk 2077 (section 4). It is one counter in the existing scheduler, not a new mechanism. A changing scene shows a costly lamp's shadow a little later, and never without it.
+- **R-2 = (a), applied only if R0 finds restless objects.** An object that dirties a lamp's tile in at least 8 of the last 32 frames leaves the fixed layer while it is restless, exactly as movers already do under the casting rule, and returns after 10 s quiet. It reuses the existing mover path, so there is no second redraw path. (b) would add per-object redraws for objects that are by definition changing all the time.
+- **L-1 = (a), keep devel's rule: ambiance × shadow, no fill.** An occluder blocks all of a lamp's direct light, its ambiance term included, so light never reappears behind a wall. The light in a shadow is indirect and belongs to the reflection probes. The known leak (the probes capture unshadowed point lights) is fixed where it arises, at the Q2a-2 gate (section 10), not by relighting shadows.
+- **L-2 = (a), highlights from the 1 cm emitter.** The width of a specular highlight follows the emitter's real size (sphere and area lights widen the lobe by the source's solid angle; Karis 2013, "Real Shading in Unreal Engine 4"). The emitter is 1 cm, the same size the shadows use, so highlights stay as sharp as today and agree with the shadows. (b) would widen them by a virtual cap size that is not a physical source.
+- **L-3 = (a), today's ramp mirrored about the focus.** Defocus blur grows on both sides of the focal plane (the thin-lens circle of confusion; Potmesil and Chakravarty 1981), so focus now works in front of the focal distance as well. Beyond it, the look stays exactly today's, which is what creators tuned their projectors against. (b)'s thin-lens shape would change that far-side look.
+- **T1 to T3** stay open until Q0 counts the faces with glass.
+
+
 | | Decision | Options |
 |---|---|---|
 | **R-1** | How the shared cap treats a tile that costs more than the cap | (a) **Amortised cap**: the overrun becomes debt that the next frames pay, so the average is ≤ 0.35 ms; a 1 ms tile is drawn every third frame. (b) Today's rule: one over-cap tile every frame, fix only the cause found by R0 |
