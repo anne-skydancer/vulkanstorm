@@ -66,7 +66,11 @@ const float pi = 3.14159265;
 
 // http://callumhay.blogspot.com/2010/09/gaussian-blur-shader-glsl.html
 vec3 blurVariable(sampler2D source, vec2 tc, float kernelSize, vec2 direction, float strength) {
-  float numBlurPixelsPerSide = float(kernelSize / 2);
+  // Vulkanstorm: the kernel size comes from a script (@setsphere_param). A float loop
+  // counter never terminates above 2^24 or for inf, and NaN is not safe to clamp, so
+  // use an explicit NaN/non-positive guard, a cap of 64 samples per side (kernel 128)
+  // and an integer counter.
+  int numBlurPixelsPerSide = !(kernelSize > 0.0) ? 0 : int(min(kernelSize * 0.5, 64.0));
 
   // Incremental Gaussian Coefficent Calculation (See GPU Gems 3 pp. 877 - 889)
   vec3 incrementalGaussian;
@@ -83,7 +87,8 @@ vec3 blurVariable(sampler2D source, vec2 tc, float kernelSize, vec2 direction, f
   incrementalGaussian.xy *= incrementalGaussian.yz;
 
   // Go through the remaining 8 vertical samples (4 on each side of the center)
-  for (float i = 1.0; i <= numBlurPixelsPerSide; i++) {
+  for (int n = 1; n <= numBlurPixelsPerSide; n++) {
+    float i = float(n);
     avgValue += texture(source, tc - i * direction / screen_res) * incrementalGaussian.x;
     avgValue += texture(source, tc + i * direction / screen_res) * incrementalGaussian.x;
     coefficientSum += 2.0 * incrementalGaussian.x;

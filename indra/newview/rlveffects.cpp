@@ -16,6 +16,8 @@
 
 #include "llviewerprecompiledheaders.h"
 
+#include <cmath> // Vulkanstorm
+
 #include "llagent.h"
 #include "llfasttimer.h"
 #include "llviewershadermgr.h"
@@ -244,6 +246,22 @@ ERlvCmdRet RlvSphereEffect::onDistExtendChanged(const LLUUID& idRlvObj, const bo
     return RLV_RET_SUCCESS;
 }
 
+// Vulkanstorm: the effect params come from scripts (@setsphere_param). Replace non-finite
+// components with 0 and bound the rest so the shader (blur kernel size in x) cannot be driven
+// to a huge or NaN value. Applied once, at the uniform upload, which covers tweened values and
+// the colour setter.
+static LLVector4 sanitizeSphereParams(const LLVector4& params)
+{
+    constexpr float c_MaxParam = 10000.f;
+    LLVector4 result;
+    for (int idx = 0; idx < 4; idx++)
+    {
+        const float val = params.mV[idx];
+        result.mV[idx] = (std::isfinite(val)) ? llclamp(val, -c_MaxParam, c_MaxParam) : 0.f;
+    }
+    return result;
+}
+
 // static
 ERlvCmdRet RlvSphereEffect::onParamsChanged(const LLUUID& idRlvObj, const boost::optional<RlvBehaviourModifierValue> newValue)
 {
@@ -327,7 +345,7 @@ void RlvSphereEffect::setShaderUniforms(LLGLSLShader* pShader)
     pShader->uniform2f(LLShaderMgr::RLV_EFFECT_PARAM3, (GLfloat)(eDistExtend & (int)ESphereDistExtend::Min), (GLfloat)(eDistExtend & (int)ESphereDistExtend::Max));
 
     // Pass effect params
-    const glm::vec4 effectParams(glm::make_vec4(m_Params.get().mV));
+    const glm::vec4 effectParams(glm::make_vec4(sanitizeSphereParams(m_Params.get()).mV)); // Vulkanstorm
     pShader->uniform4fv(LLShaderMgr::RLV_EFFECT_PARAM4, 1, glm::value_ptr(effectParams));
 }
 
