@@ -41,7 +41,7 @@ The rules therefore rest on the confirmed classes and on published practice. The
 
 ### R2 Device loss is a normal path
 
-- **Rule.** Every GPU wait has a finite timeout. On loss: destroy the device and everything made from it, then create a new device from the same physical device. Automatic recovery is allowed once per 10 minutes. A second loss in that window comes back at the safe level with the running feature off. No thread is left behind at exit (our clean-shutdown premise).
+- **Rule.** Every GPU wait has a finite timeout. On loss: destroy the device and everything made from it, then create a new device from the same physical device. If that creation fails (the spec allows `VK_ERROR_DEVICE_LOST` there when the physical device is lost too), or a second loss comes within 10 minutes, show the warning and close cleanly, as the OpenGL viewer does. Automatic recovery is allowed once per 10 minutes. A recovered session runs at the safe level, with the feature that was running turned off, for the rest of that session only; saved user settings are never changed. No thread is left behind at exit (our clean-shutdown premise).
 - **Why.** Aurora shipped recovery late and off by default (A17). In 11 RX 9000 reports the recovered device was lost again 7 to 20 s later (A15). Windows bug-checks after 5 TDRs in one minute; the link to the "system restarted" reports is plausible, not proven. The Vulkan spec says a lost device cannot be reset, only replaced.
 - **Test.** Prototype check 1 below.
 
@@ -65,7 +65,7 @@ The rules therefore rest on the confirmed classes and on published practice. The
 
 ### R6 Validate GPU-visible counts at ingest; clamp dynamic indices
 
-- **Rule.** Decoders check vertex, index, joint and material counts and offsets against their buffers before upload. Shaders clamp bindless and palette indices (`min(i, n - 1)`). `robustBufferAccess2` is on in development builds.
+- **Rule.** Decoders check vertex, index, joint and material counts and offsets against their buffers before upload. Every bindless table and palette keeps a valid dummy entry at index 0, so `n` is never 0, and shaders clamp indices with `min(i, n - 1)`. `robustBufferAccess2` is on in development builds.
 - **Why.** Aurora's GPU-culling ranges and bindless page indices had no bound (A8): a confirmed bug, but only a plausible cause of losses. Our own OpenGL viewer has the same class of gap (glTF joints, particle blend factors, terrain patch size), fixed as hotfixes. The Aurora study did not audit its other decoders.
 - **Test.** A fuzz corpus of malformed meshes, glTF and network data through the decoders. A shader test with out-of-range indices under `robustBufferAccess2`.
 
@@ -105,7 +105,7 @@ The prototype (10 to 20k draws) runs these checks on the ash renderer. Each is a
 
 | # | Check | Pass condition |
 |---|---|---|
-| 1 | Recover from an injected GPU hang. A debug-only, bounded spin shader, plus injected `VK_ERROR_DEVICE_LOST`. | The session stays up. No panic, no leaked thread. The second loss inside 10 minutes comes back at the safe level. |
+| 1 | Recover from an injected GPU hang. A debug-only, bounded spin shader, plus injected `VK_ERROR_DEVICE_LOST`. | The session stays up. No panic, no leaked thread. The first loss recovers at the safe level for that session; a second loss inside 10 minutes, or a failed device re-creation, ends in the warning and a clean close. Saved settings are unchanged afterwards. |
 | 2 | Survive another process filling VRAM to the brim. | Textures lower, the frame keeps running, no device loss, no frozen world. |
 | 3 | Breadcrumbs name the hung pass. Run check 1 and read the report. | The report names the last completed and the first unfinished pass on NVIDIA, AMD and Intel: with the vendor extension where present, otherwise through the `vkCmdFillBuffer` pass id. The cost is at most 0.2 ms per frame, or the markers become a debug setting. |
 
