@@ -654,6 +654,14 @@ void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
         return;
     }
 
+    // <Vulkanstorm> the null-buffer guard pushBatch has
+    if (params.mVertexBuffer == nullptr)
+    {
+        LL_WARNS_ONCE() << "LLRenderPass::pushUntexturedBatch: params.mVertexBuffer is nullptr. drawRange skipped." << LL_ENDL;
+        return;
+    }
+    // </Vulkanstorm>
+
     applyModelMatrix(params);
 
     params.mVertexBuffer->setBuffer();
@@ -858,7 +866,15 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
 {
     auto& mat = params.mGLTFMaterial;
 
-    LLGLDisable cull_face(mat->mDoubleSided ? GL_CULL_FACE : 0);
+    // <Vulkanstorm> the null-buffer guard pushBatch has
+    if (params.mVertexBuffer == nullptr)
+    {
+        LL_WARNS_ONCE() << "LLRenderPass::pushUntexturedGLTFBatch: params.mVertexBuffer is nullptr. drawRange skipped." << LL_ENDL;
+        return;
+    }
+    // </Vulkanstorm>
+
+    LLGLDisable cull_face(mat.notNull() && mat->mDoubleSided ? GL_CULL_FACE : 0); // <Vulkanstorm/> material null check
 
     applyModelMatrix(params);
 
