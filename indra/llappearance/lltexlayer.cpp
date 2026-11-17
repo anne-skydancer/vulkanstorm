@@ -1478,10 +1478,11 @@ void LLTexLayer::renderMorphMasks(S32 x, S32 y, S32 width, S32 height, const LLC
                         // but seems to be fine without
                         if (!textureW || !textureH)
                         {
+                            // <Vulkanstorm> the enum itself (0) was passed as the GL target; use the GL target as the readback below does
                             LLGLint glTemp{};
-                            glGetTexLevelParameteriv(LLTexUnit::TT_TEXTURE, 0, GL_TEXTURE_WIDTH, (GLint*)&glTemp);
+                            glGetTexLevelParameteriv(LLTexUnit::getInternalType(LLTexUnit::TT_TEXTURE), 0, GL_TEXTURE_WIDTH, (GLint*)&glTemp);
                             textureW = glTemp;
-                            glGetTexLevelParameteriv(LLTexUnit::TT_TEXTURE, 0, GL_TEXTURE_HEIGHT, (GLint*)&glTemp);
+                            glGetTexLevelParameteriv(LLTexUnit::getInternalType(LLTexUnit::TT_TEXTURE), 0, GL_TEXTURE_HEIGHT, (GLint*)&glTemp);
                             textureH = glTemp;
                         }
                         // </FS>ND>
@@ -1512,6 +1513,7 @@ void LLTexLayer::renderMorphMasks(S32 x, S32 y, S32 width, S32 height, const LLC
                     if (error != GL_NO_ERROR)
                     {
                         LL_INFOS("Morph") << "GL Error while reading back morph texture. Error code: " << error << LL_ENDL;
+                        memset(alpha_data, 0, mem_size); // <Vulkanstorm/> a defined empty mask, not uninitialised memory
                     }
                     else
                     {
