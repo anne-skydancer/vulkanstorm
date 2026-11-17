@@ -1,0 +1,79 @@
+# upstream bd03bafe69195460df8023ae9f9487a9031ae010 skyF.glsl, srgbF.glsl; GL: 4.6.0 NVIDIA 621.14 NVIDIA GeForce RTX 5070 Ti/PCIe/SSE2; python 3.15.2
+# columns: sky, sample, light elevation, el, az, frag_data[0] (x2, clamp 5, sRGB-encoded)
+Default.xml	zenith	light_el 65.880	el 90.000	az 0.00	frag 0.302871 0.399226 0.659110
+Default.xml	horizon	light_el 65.880	el 2.000	az 90.00	frag 0.795274 0.922026 1.294526
+Default.xml	low	light_el 65.880	el 0.500	az 45.00	frag 0.791809 0.918225 1.289143
+Default.xml	mid	light_el 65.880	el 45.000	az 135.00	frag 0.337484 0.457340 0.773228
+Default.xml	near-light	light_el 65.880	el 65.880	az 14.75	frag 0.559549 0.659518 0.941948
+Default.xml	light+10	light_el 65.880	el 75.880	az 0.00	frag 0.415232 0.512873 0.781686
+Default.xml	light-core	light_el 65.880	el 66.280	az 0.00	frag 0.958770 1.054940 1.350093
+Sunset.xml	zenith	light_el 4.320	el 90.000	az 0.00	frag 0.209786 0.298561 0.433599
+Sunset.xml	horizon	light_el 4.320	el 2.000	az 90.00	frag 0.553114 0.475983 0.433055
+Sunset.xml	low	light_el 4.320	el 0.500	az 45.00	frag 0.568822 0.441781 0.397084
+Sunset.xml	mid	light_el 4.320	el 45.000	az 135.00	frag 0.256308 0.362463 0.511677
+Sunset.xml	near-light	light_el 4.320	el 4.320	az 14.75	frag 1.313815 0.911639 0.637273
+Sunset.xml	light+10	light_el 4.320	el 14.320	az 0.00	frag 1.551112 1.336552 1.106725
+Sunset.xml	light-core	light_el 4.320	el 4.720	az 0.00	frag 5.000000 2.911127 1.403990
+Foggy.xml	zenith	light_el 90.000	el 90.000	az 0.00	frag 5.000000 5.000000 5.000000
+Foggy.xml	horizon	light_el 90.000	el 2.000	az 90.00	frag 0.853069 0.881311 0.920901
+Foggy.xml	low	light_el 90.000	el 0.500	az 45.00	frag 0.849302 0.877423 0.916766
+Foggy.xml	mid	light_el 90.000	el 45.000	az 135.00	frag 0.867339 0.900352 0.948336
+Foggy.xml	near-light	light_el 90.000	el 90.000	az 14.75	frag 5.000000 5.000000 5.000000
+Foggy.xml	light+10	light_el 90.000	el 80.000	az 0.00	frag 1.891575 1.864009 1.825647
+Foggy.xml	light-core	light_el 90.000	el 90.400	az 0.00	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Salmon.xml	zenith	light_el 65.880	el 90.000	az 0.00	frag 2.355624 1.598809 1.395412
+[TOR] MIDDAY - Salmon.xml	horizon	light_el 65.880	el 2.000	az 90.00	frag 2.587926 0.727609 0.729323
+[TOR] MIDDAY - Salmon.xml	low	light_el 65.880	el 0.500	az 45.00	frag 2.594440 0.767830 0.760307
+[TOR] MIDDAY - Salmon.xml	mid	light_el 65.880	el 45.000	az 135.00	frag 1.816749 0.433910 0.441290
+[TOR] MIDDAY - Salmon.xml	near-light	light_el 65.880	el 65.880	az 14.75	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Salmon.xml	light+10	light_el 65.880	el 75.880	az 0.00	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Salmon.xml	light-core	light_el 65.880	el 66.280	az 0.00	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Pleasantrie.xml	zenith	light_el 58.057	el 90.000	az 0.00	frag 0.069693 0.182263 0.418543
+[TOR] MIDDAY - Pleasantrie.xml	horizon	light_el 58.057	el 2.000	az 90.00	frag 0.504210 0.672913 0.806203
+[TOR] MIDDAY - Pleasantrie.xml	low	light_el 58.057	el 0.500	az 45.00	frag 0.438706 0.526982 0.726409
+[TOR] MIDDAY - Pleasantrie.xml	mid	light_el 58.057	el 45.000	az 135.00	frag 0.077067 0.230262 0.524381
+[TOR] MIDDAY - Pleasantrie.xml	near-light	light_el 58.057	el 58.057	az 14.75	frag 0.275387 0.352023 0.587738
+[TOR] MIDDAY - Pleasantrie.xml	light+10	light_el 58.057	el 68.057	az 0.00	frag 0.186061 0.276752 0.510408
+[TOR] MIDDAY - Pleasantrie.xml	light-core	light_el 58.057	el 58.457	az 0.00	frag 1.332705 1.127282 1.219112
+Alchemy Immortalis - Fog Lifting.xml	zenith	light_el 7.560	el 90.000	az 0.00	frag 0.346042 0.349056 0.403919
+Alchemy Immortalis - Fog Lifting.xml	horizon	light_el 7.560	el 2.000	az 90.00	frag 0.931847 0.928335 1.045199
+Alchemy Immortalis - Fog Lifting.xml	low	light_el 7.560	el 0.500	az 45.00	frag 0.904624 0.900143 1.008036
+Alchemy Immortalis - Fog Lifting.xml	mid	light_el 7.560	el 45.000	az 135.00	frag 0.443902 0.447085 0.516708
+Alchemy Immortalis - Fog Lifting.xml	near-light	light_el 7.560	el 7.560	az 14.75	frag 1.083572 1.093331 1.249346
+Alchemy Immortalis - Fog Lifting.xml	light+10	light_el 7.560	el 17.560	az 0.00	frag 0.891682 0.904716 1.040622
+Alchemy Immortalis - Fog Lifting.xml	light-core	light_el 7.560	el 7.960	az 0.00	frag 1.277271 1.300164 1.488152
+(SS) Atmos 02:00 2.xml	zenith	light_el 60.000	el 90.000	az 0.00	frag 0.094723 0.086916 0.095291
+(SS) Atmos 02:00 2.xml	horizon	light_el 60.000	el 2.000	az 90.00	frag 0.140178 0.134394 0.140223
+(SS) Atmos 02:00 2.xml	low	light_el 60.000	el 0.500	az 45.00	frag 0.140052 0.134331 0.140087
+(SS) Atmos 02:00 2.xml	mid	light_el 60.000	el 45.000	az 135.00	frag 0.107962 0.099972 0.108483
+(SS) Atmos 02:00 2.xml	near-light	light_el 60.000	el 60.000	az 14.75	frag 0.100517 0.092583 0.101072
+(SS) Atmos 02:00 2.xml	light+10	light_el 60.000	el 70.000	az 0.00	frag 0.097273 0.089402 0.097836
+(SS) Atmos 02:00 2.xml	light-core	light_el 60.000	el 60.400	az 0.00	frag 0.100362 0.092430 0.100916
+A-12AM.xml	zenith	light_el 90.000	el 90.000	az 0.00	frag 0.015982 0.017508 0.026690
+A-12AM.xml	horizon	light_el 90.000	el 2.000	az 90.00	frag 0.021037 0.022768 0.031607
+A-12AM.xml	low	light_el 90.000	el 0.500	az 45.00	frag 0.020980 0.022710 0.031498
+A-12AM.xml	mid	light_el 90.000	el 45.000	az 135.00	frag 0.017956 0.019660 0.029673
+A-12AM.xml	near-light	light_el 90.000	el 90.000	az 14.75	frag 0.015982 0.017508 0.026690
+A-12AM.xml	light+10	light_el 90.000	el 80.000	az 0.00	frag 0.016080 0.017615 0.026843
+A-12AM.xml	light-core	light_el 90.000	el 90.400	az 0.00	frag 0.015983 0.017509 0.026691
+Phototools- rara Fall Home Light.xml	zenith	light_el 10.251	el 90.000	az 0.00	frag 0.146792 0.146792 0.146792
+Phototools- rara Fall Home Light.xml	horizon	light_el 10.251	el 2.000	az 90.00	frag 1.198243 1.198243 1.198243
+Phototools- rara Fall Home Light.xml	low	light_el 10.251	el 0.500	az 45.00	frag 1.047600 1.047600 1.047600
+Phototools- rara Fall Home Light.xml	mid	light_el 10.251	el 45.000	az 135.00	frag 0.215286 0.215286 0.215286
+Phototools- rara Fall Home Light.xml	near-light	light_el 10.251	el 10.251	az 14.75	frag 0.450936 0.450936 0.450936
+Phototools- rara Fall Home Light.xml	light+10	light_el 10.251	el 20.251	az 0.00	frag 0.267446 0.267446 0.267446
+Phototools- rara Fall Home Light.xml	light-core	light_el 10.251	el 10.651	az 0.00	frag 0.400625 0.400625 0.400625
+Phototools- Yellow Stars 01.xml	zenith	light_el 43.499	el 90.000	az 0.00	frag 0.229354 0.229354 0.015985
+Phototools- Yellow Stars 01.xml	horizon	light_el 43.499	el 2.000	az 90.00	frag 5.000000 5.000000 5.000000
+Phototools- Yellow Stars 01.xml	low	light_el 43.499	el 0.500	az 45.00	frag 0.183129 0.183129 0.005209
+Phototools- Yellow Stars 01.xml	mid	light_el 43.499	el 45.000	az 135.00	frag 5.000000 5.000000 5.000000
+Phototools- Yellow Stars 01.xml	near-light	light_el 43.499	el 43.499	az 14.75	frag 0.088044 0.088044 0.002360
+Phototools- Yellow Stars 01.xml	light+10	light_el 43.499	el 53.499	az 0.00	frag 0.110883 0.110883 0.003301
+Phototools- Yellow Stars 01.xml	light-core	light_el 43.499	el 43.899	az 0.00	frag 0.089007 0.089007 0.002397
+[TOR] SPECIAL - Puur.xml	zenith	light_el 8.280	el 90.000	az 0.00	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	horizon	light_el 8.280	el 2.000	az 90.00	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	low	light_el 8.280	el 0.500	az 45.00	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	mid	light_el 8.280	el 45.000	az 135.00	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	near-light	light_el 8.280	el 8.280	az 14.75	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	light+10	light_el 8.280	el 18.280	az 0.00	frag 0.000000 0.000000 0.000000
+[TOR] SPECIAL - Puur.xml	light-core	light_el 8.280	el 8.680	az 0.00	frag 0.000000 0.000000 0.000000
