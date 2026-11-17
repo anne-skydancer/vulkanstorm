@@ -110,7 +110,7 @@ nothing between 0.0011 and 0.36 degrees, so L3's band (0 to about 0.17 degrees) 
 
 Night is trivial (no glow). The day branch fails in six skies for variant c: Places Beach Cay 50.4, Anime - 6AM 27.1, [TOR] SCIFI - Rainbowtek 21.8, Bryn Oh's Rusted Gears 12.2 (gamma 0.2),
 [TOR] SCIFI - Grit & shame 8.6, [TOR] FOGGY - Das fog 6.3 (the glow core at the horizon rows, 1.3 to 1.5 degrees from the light at elevation 0.2 to 0.8). The headline counts above use the sign
-rule (the sun at -0.0003 is night); under it variant c passes 749 and fails these ten as listed.
+rule (the sun at -0.0003 is night, and Anime - 6AM, at -0.0000, is night too, so it passes); under it variant c passes 749 and fails ten: the five away from the horizon, and five of the day-branch failures above (Places Beach Cay, Rainbowtek, Bryn Oh's Rusted Gears, Grit & shame, Das fog).
 
 ### Day-cycle blending: rebuild the tables, do not blend them
 
