@@ -377,7 +377,7 @@ void LLSpatialPartition::rebuildGeom(LLSpatialGroup* group)
             group->mBuilt = 1.f;
             if (group->mVertexBuffer.isNull() ||
                 group->mVertexBuffer->getNumVerts() != vertex_count ||
-                group->mVertexBuffer->getNumVerts() != index_count)
+                group->mVertexBuffer->getNumIndices() != index_count) // <Vulkanstorm/> was getNumVerts() (a new buffer on every rebuild)
             {
                 group->mVertexBuffer = new LLVertexBuffer(mVertexDataMask);
                 if (!group->mVertexBuffer->allocateBuffer(vertex_count, index_count))
