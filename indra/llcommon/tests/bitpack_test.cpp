@@ -115,4 +115,23 @@ namespace tut
         bitunpack.bitUnpack((U8*) &res, sizeof(res)*8);
         ensure("U32->bitPack->bitUnpack->U32 should be equal", num == res);
     }
+
+    // Vulkanstorm: reading past the end feeds zeros, sets isOverrun() and never reads outside the buffer
+    template<> template<>
+    void bit_pack_object_t::test<4>()
+    {
+        U8 buffer[3] = { 0xFF, 0xFF, 0xFF };
+        LLBitPack bitunpack(buffer, 3);
+        U8 res[5] = { 1, 1, 1, 1, 1 };
+        bitunpack.bitUnpack(res, 24);
+        ensure("reading exactly the buffer is not an overrun", !bitunpack.isOverrun());
+        ensure_equals("first byte", res[0], 0xFF);
+        bitunpack.bitUnpack(res + 3, 16);
+        ensure("reading past the end sets isOverrun", bitunpack.isOverrun());
+        ensure_equals("overrun reads zeros (1)", res[3], 0);
+        ensure_equals("overrun reads zeros (2)", res[4], 0);
+        ensure_equals("read position stays inside the buffer", bitunpack.mBufferSize, (U32)3);
+        bitunpack.resetBitPacking();
+        ensure("reset clears the overrun flag", !bitunpack.isOverrun());
+    }
 }
