@@ -39,6 +39,7 @@
 #include "llgl.h"
 #include "patch_dct.h"
 #include "patch_code.h"
+#include "llbitpack.h" // Vulkanstorm: isOverrun()
 
 // viewer
 #include "noise.h"
@@ -109,6 +110,7 @@ void LLWind::decompress(LLBitPack &bitpack, LLGroupHeader *group_headerp)
     decode_patch_header(bitpack, &patch_header, false);
 // </FS:CR> Aurora Sim
     decode_patch(bitpack, buffer);
+    if (bitpack.isOverrun()) return; // Vulkanstorm: truncated packet
     decompress_patch(mVelX, buffer, &patch_header);
 
     // Y component
@@ -117,6 +119,7 @@ void LLWind::decompress(LLBitPack &bitpack, LLGroupHeader *group_headerp)
     decode_patch_header(bitpack, &patch_header, false);
 // </FS:CR> Aurora Sim
     decode_patch(bitpack, buffer);
+    if (bitpack.isOverrun()) return; // Vulkanstorm: truncated packet
     decompress_patch(mVelY, buffer, &patch_header);
 
     S32 i, j, k;

@@ -895,6 +895,16 @@ void LLSurface::decompressDCTPatch(LLBitPack &bitpack, LLGroupHeader *gopp, bool
         {
             break;
         }
+        // Vulkanstorm: a truncated packet reads as zeros, which would loop forever
+        if (bitpack.isOverrun())
+        {
+            static LLFrameTimer truncated_timer;
+            if (truncated_timer.checkExpirationAndReset(10.f))
+            {
+                LL_WARNS() << "Truncated terrain packet" << LL_ENDL;
+            }
+            return;
+        }
 
 // <FS:CR> Aurora Sim
         //i = ph.patchids >> 5;
@@ -929,6 +939,15 @@ void LLSurface::decompressDCTPatch(LLBitPack &bitpack, LLGroupHeader *gopp, bool
 
 
         decode_patch(bitpack, patch);
+        if (bitpack.isOverrun()) // Vulkanstorm: truncated packet, drop the partial patch
+        {
+            static LLFrameTimer truncated_timer;
+            if (truncated_timer.checkExpirationAndReset(10.f))
+            {
+                LL_WARNS() << "Truncated terrain packet" << LL_ENDL;
+            }
+            return;
+        }
         decompress_patch(patchp->getDataZ(), patch, &ph);
 
         // Update edges for neighbors.  Need to guarantee that this gets done before we generate vertical stats.
