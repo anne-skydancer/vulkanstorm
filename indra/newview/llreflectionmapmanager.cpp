@@ -1355,7 +1355,7 @@ void LLReflectionMapManager::setUniforms()
 }
 
 
-void renderReflectionProbe(LLReflectionMap* probe, std::map<LLSpatialGroup*, int> groupCount, std::map<LLViewerObject*, int> objCount, std::map<F32*, int> locCount)
+void renderReflectionProbe(LLReflectionMap* probe, std::map<LLSpatialGroup*, int> groupCount, std::map<LLViewerObject*, int> objCount, std::map<F32*, int> locCount, GLfloat prevPointSize)
 {
     if (probe->isRelevant())
     {
@@ -1423,11 +1423,14 @@ void renderReflectionProbe(LLReflectionMap* probe, std::map<LLSpatialGroup*, int
         float pointSize = (dupByGroup || dupByObject || dupByLoc)
                             ? bigSize
                             : normalSize;
+        // <Vulkanstorm> set back the point size the caller read before the probe loop, so later points are not drawn at 9 or 18
         glPointSize(pointSize);
         gGL.begin(gGL.POINTS);
         gGL.vertex3fv(po);
         gGL.end();
         gGL.flush();
+        glPointSize(prevPointSize);
+        // </Vulkanstorm>
     }
 
 #if 0
@@ -1493,9 +1496,11 @@ void LLReflectionMapManager::renderDebug()
         objCount[ probe->mViewerObject ]++;
         locCount[ probe->mOrigin.getF32ptr() ]++;
     }
+    GLfloat prevPointSize = 1.f; // Vulkanstorm: read once, not per probe
+    glGetFloatv(GL_POINT_SIZE, &prevPointSize);
     for (auto& probe : mProbes)
     {
-        renderReflectionProbe(probe, groupCount, objCount, locCount);
+        renderReflectionProbe(probe, groupCount, objCount, locCount, prevPointSize);
     }
 
     gDebugProgram.unbind();

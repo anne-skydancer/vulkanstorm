@@ -558,9 +558,11 @@ void LLHeroProbeManager::renderDebug()
         locCount[ probe->mOrigin.getF32ptr() ]++;
     }
     // </FS:Beq>
+    GLfloat prevPointSize = 1.f; // Vulkanstorm: read once, not per probe
+    glGetFloatv(GL_POINT_SIZE, &prevPointSize);
     for (auto& probe : mProbes)
     {
-        renderReflectionProbe(probe, groupCount, objCount, locCount);    // <FS:Beq/> Add a bit more metadata to the probe debug view
+        renderReflectionProbe(probe, groupCount, objCount, locCount, prevPointSize);    // <FS:Beq/> Add a bit more metadata to the probe debug view
     }
 
     gDebugProgram.unbind();
