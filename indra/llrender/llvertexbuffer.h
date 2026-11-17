@@ -119,6 +119,8 @@ public:
 
     // flush any pending mapped buffers
     static void flushBuffers();
+    // <Vulkanstorm> top up the calling thread's buffer-name pool; call on the main thread at a frame boundary
+    static void topUpNamePool();
 
     //WARNING -- when updating these enums you MUST
     // 1 - update LLVertexBuffer::sTypeSize
