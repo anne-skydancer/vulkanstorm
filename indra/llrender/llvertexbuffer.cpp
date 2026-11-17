@@ -259,38 +259,60 @@ static GLWorkQueue* sQueue = nullptr;
 // Pool of reusable VertexBuffer state
 
 // batch calls to glGenBuffers
-static GLuint gen_buffer()
+// <Vulkanstorm> The name pool is per thread. It is topped up at a frame boundary on the main thread
+// (LLVertexBuffer::topUpNamePool) so that a miss inside a frame rarely has to refill 4,096 names
+// (a 6-35 ms driver-thread wait). Worker threads keep the refill-on-miss behaviour.
+namespace
 {
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    constexpr U32 NAME_POOL_SIZE = 4096;
+    thread_local GLuint sNamePool[NAME_POOL_SIZE];
+    thread_local U32 sNamePoolCount = 0; // names available in sNamePool[0 .. count)
 
-    GLuint ret = 0;
-    constexpr U32 pool_size = 4096;
-
-    thread_local static GLuint sNamePool[pool_size];
-    thread_local static U32 sIndex = 0;
-
-    if (sIndex == 0)
+    // generate names into sNamePool[count, NAME_POOL_SIZE) and mark the pool full
+    void refill_name_pool()
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_VERTEX("gen buffer");
-        sIndex = pool_size;
+        const U32 first = sNamePoolCount;
+        const U32 count = NAME_POOL_SIZE - first;
 #if !LL_DARWIN
         if (!gGLManager.mIsAMD)
         {
-            glGenBuffers(pool_size, sNamePool);
+            glGenBuffers(count, sNamePool + first);
         }
         else
 #endif
         { // work around for AMD driver bug
-            for (U32 i = 0; i < pool_size; ++i)
+            for (U32 i = first; i < NAME_POOL_SIZE; ++i)
             {
                 glGenBuffers(1, sNamePool + i);
             }
         }
+        sNamePoolCount = NAME_POOL_SIZE;
+    }
+}
+
+static GLuint gen_buffer()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+
+    if (sNamePoolCount == 0)
+    {
+        refill_name_pool();
     }
 
-    ret = sNamePool[--sIndex];
-    return ret;
+    return sNamePool[--sNamePoolCount];
 }
+
+//static
+void LLVertexBuffer::topUpNamePool()
+{
+    // main thread, at a frame boundary (after the swap); fills only the calling thread's pool
+    if (sNamePoolCount < NAME_POOL_SIZE / 16)
+    {
+        refill_name_pool();
+    }
+}
+// </Vulkanstorm>
 
 static void delete_buffers(S32 count, GLuint* buffers)
 {
