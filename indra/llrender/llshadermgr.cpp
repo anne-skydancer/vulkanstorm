@@ -54,6 +54,24 @@ LLShaderMgr::~LLShaderMgr()
 {
 }
 
+// <Vulkanstorm> Objects a program no longer owns (a warm binary cache attaches nothing) were only forgotten
+// by clear(); a program that did attach one still holds it, and GL frees it when both let go.
+void LLShaderMgr::deleteShaderObjects()
+{
+    for (auto* objects : { &mVertexShaderObjects, &mFragmentShaderObjects })
+    {
+        for (const auto& entry : *objects)
+        {
+            if (entry.second && glIsShader(entry.second))
+            {
+                glDeleteShader(entry.second);
+            }
+        }
+        objects->clear();
+    }
+}
+// </Vulkanstorm>
+
 // static
 LLShaderMgr * LLShaderMgr::instance()
 {

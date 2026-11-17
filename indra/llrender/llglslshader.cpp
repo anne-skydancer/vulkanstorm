@@ -399,6 +399,12 @@ void LLGLSLShader::unloadInternal()
         mSamplesQuery = 0;
     }
 
+    if (mPrimitivesQuery) // <Vulkanstorm/> was generated but never deleted
+    {
+        glDeleteQueries(1, &mPrimitivesQuery);
+        mPrimitivesQuery = 0;
+    }
+
     //hack to make apple not complain
     glGetError();
 
@@ -578,6 +584,9 @@ void dumpAttachObject(const char* func_name, GLuint program_object, const std::s
 
 bool LLGLSLShader::attachVertexObject(std::string object_path)
 {
+    if (mUsingBinaryProgram) // <Vulkanstorm/> as attachFragmentObject: a binary program has its shaders built in
+        return true;
+
     if (LLShaderMgr::instance()->mVertexShaderObjects.count(object_path) > 0)
     {
         stop_glerror();
