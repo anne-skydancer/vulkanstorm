@@ -200,6 +200,9 @@ void main() {
 }"""
 GEN_CLOUDTEX = "#version 400 core\n" + CLOUD_TEX + """
 out vec4 o; void main() { vec2 uv = gl_FragCoord.xy / 256.0; float n = cloud_noise(uv); o = vec4(n, n, n, 1.0); }"""
+# the "next" noise texture of the EEP blend: a different pattern (the uv shifted), so the second fetch is not a copy of the first
+GEN_CLOUDTEX_NEXT = "#version 400 core\n" + CLOUD_TEX + """
+out vec4 o; void main() { vec2 uv = gl_FragCoord.xy / 256.0 + vec2(0.37, 0.21); float n = cloud_noise(uv); o = vec4(n, n, n, 1.0); }"""
 
 # --- the march (clouds.wgsl density, lighting, march) -----------------------------------
 MARCH = """
@@ -353,9 +356,14 @@ void main() {
 }"""
 # Flat EEP layer: alpha1 of cloudsF.glsl on a 512^2 world-locked map (the 6 noise taps).
 FSHADOW = """#version 400 core
-uniform sampler2D cloud_noise_texture; uniform vec3 cloud_pos_density1; uniform vec3 cloud_pos_density2;
+uniform sampler2D cloud_noise_texture; uniform sampler2D cloud_noise_texture_next; uniform float blend_factor;
+uniform vec3 cloud_pos_density1; uniform vec3 cloud_pos_density2;
 uniform float cloud_scale; uniform float cloud_variance; uniform float cloud_shadow; out vec4 o;
-vec4 cloudNoise(vec2 uv) { return texture(cloud_noise_texture, uv); }
+// as cloudsF.glsl:46-52: two fetches mixed by blend_factor, unconditionally
+vec4 cloudNoise(vec2 uv) {
+    vec4 a = texture(cloud_noise_texture, uv); vec4 b = texture(cloud_noise_texture_next, uv);
+    return mix(a, b, blend_factor);
+}
 void main() {
     vec2 uv1 = gl_FragCoord.xy / 512.0 * 2.0; vec2 uv2 = uv1; vec2 uv3 = uv1 * 16.0; vec2 uv4 = uv2 * 16.0;
     float cloudDensity = 2.0 * (cloud_shadow - 0.25);
@@ -394,7 +402,7 @@ PRESETS = [('fair', 0.27), ('broken', 0.38), ('stratocu', 0.45), ('overcast', 0.
 progs = {
     'base': program([(0x8B31, VERTEX), (0x8B30, GEN_BASE)]), 'detail': program([(0x8B31, VERTEX), (0x8B30, GEN_DETAIL)]),
     'curl': program([(0x8B31, VERTEX), (0x8B30, GEN_CURL)]), 'weather': program([(0x8B31, VERTEX), (0x8B30, GEN_WEATHER)]),
-    'cloudtex': program([(0x8B31, VERTEX), (0x8B30, GEN_CLOUDTEX)]),
+    'cloudtex': program([(0x8B31, VERTEX), (0x8B30, GEN_CLOUDTEX)]), 'cloudtex2': program([(0x8B31, VERTEX), (0x8B30, GEN_CLOUDTEX_NEXT)]),
     'trace': program([(0x8B31, VERTEX), (0x8B30, TRACE_FRAG)]), 'trace_c': program([(0x91B9, TRACE_COMP)]),
     'recon': program([(0x8B31, VERTEX), (0x8B30, RECON)]), 'composite': program([(0x8B31, VERTEX), (0x8B30, COMPOSITE)]),
     'vshadow': program([(0x8B31, VERTEX), (0x8B30, VSHADOW)]), 'fshadow': program([(0x8B31, VERTEX), (0x8B30, FSHADOW)]),
@@ -404,7 +412,7 @@ disable(0x0B71)  # depth test off
 
 # --- noise and weather textures ----------------------------------------------------------
 base = tex(TEX3D, RGBA8, 128, 128, 128); detail = tex(TEX3D, RGBA8, 32, 32, 32)
-curl = tex(TEX2D, RGBA8, 128, 128); weather = tex(TEX2D, RGBA8, 512, 512); cloudtex = tex(TEX2D, RGBA8, 256, 256)
+curl = tex(TEX2D, RGBA8, 128, 128); weather = tex(TEX2D, RGBA8, 512, 512); cloudtex = tex(TEX2D, RGBA8, 256, 256); cloudtex2 = tex(TEX2D, RGBA8, 256, 256)
 
 def gen3d(prog, t, n):
     useprog(prog); u1f(loc(prog, b'n'), float(n)); viewport(0, 0, n, n)
@@ -418,6 +426,7 @@ t_base = gen3d(progs['base'], base, 128); t_detail = gen3d(progs['detail'], deta
 useprog(progs['curl']); u1f(loc(progs['curl'], b'n'), 128.0); viewport(0, 0, 128, 128); bindfbo(FB, fbo(curl))
 t_curl = timed(lambda: draw(4, 0, 3))
 useprog(progs['cloudtex']); viewport(0, 0, 256, 256); bindfbo(FB, fbo(cloudtex)); timed(lambda: draw(4, 0, 3))
+useprog(progs['cloudtex2']); viewport(0, 0, 256, 256); bindfbo(FB, fbo(cloudtex2)); timed(lambda: draw(4, 0, 3))
 weather_fbo = fbo(weather)
 
 def make_weather(cs):
@@ -496,8 +505,8 @@ for name, cs in PRESETS:
         set_march_uniforms(progs['vshadow'], cs, 1920, 1080, 'zenith', i); bind_noise()
         u1f(loc(progs['vshadow'], b'map_km'), 4.0); bindfbo(FB, vmap_fbo); viewport(0, 0, 512, 512); draw(4, 0, 3)
     def fs(i):
-        p = progs['fshadow']; useprog(p); bindfbo(FB, fmap_fbo); viewport(0, 0, 512, 512); bind(0, TEX2D, cloudtex)
-        u1i(loc(p, b'cloud_noise_texture'), 0); u3f(loc(p, b'cloud_pos_density1'), 1.0, 0.526, 1.0)
+        p = progs['fshadow']; useprog(p); bindfbo(FB, fmap_fbo); viewport(0, 0, 512, 512); bind(0, TEX2D, cloudtex); bind(1, TEX2D, cloudtex2)
+        u1i(loc(p, b'cloud_noise_texture'), 0); u1i(loc(p, b'cloud_noise_texture_next'), 1); u1f(loc(p, b'blend_factor'), 0.3); u3f(loc(p, b'cloud_pos_density1'), 1.0, 0.526, 1.0)
         u3f(loc(p, b'cloud_pos_density2'), 1.0, 0.526, 1.0); u1f(loc(p, b'cloud_scale'), 0.42)
         u1f(loc(p, b'cloud_variance'), 0.0); u1f(loc(p, b'cloud_shadow'), cs); draw(4, 0, 3)
     tv = median(vs); tfl = median(fs)

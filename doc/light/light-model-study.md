@@ -6,6 +6,13 @@ Status: study and design. Nothing here changes the viewer. The branch `codex/lig
 - this document;
 - an offline GL bench, `scripts/light/bench_volumetric_clouds.py`. It holds a GLSL transcription of the owner's Aurora volumetric clouds, as fragment and compute shaders, and the ground cloud-shadow passes proposed here.
 
+Status (2026-11-17), from the owner's stage-status comment of 2026-11-16 on #429:
+
+- **Decided 2026-11-08:** all of §6 as recommended, plus the two corrections in the PR comments: decision 8 became a Preferences toggle, on by default, with the flat layer as the fallback; decision 9 became a noise asset generated offline and loaded as a file (`cloud_noise.vkcn`).
+- **Built (on devel, release, canary and rust):** L1 reference numbers (#430), L2 flat-layer cloud shadows (#438), L2b cloud thickness drives the dimming (#465, not in this study), L3 sun/moon handover and moonlight (#447, #452, #461), L7-0 the noise package and start-up verify (#454), AT0 (#441), AT1 (with L3), AT2-0 (#462).
+- **Open:** L4 overcast skylight, L5 sky-coloured shade and white balance, L6 exposure for real light; L7-1 extinction calibration, L7-2 the clouds drawing, L7-3 the volumetric shadow producer, L7-5 qualification; AT2-1 onward (the sky and aerial perspective drawn from the scattering core).
+- **Where the open parts live:** the refreshes #543 (atmosphere, AT2-1 onward) and #541 (local lights) carry them; this study stays as the record of the cloud-light design.
+
 The owner's direction (2026-11-08):
 
 > let's get SL light to behave like real world light first (this would include getting dimmed or blocked by clouds); then we get to work on shadows behave like shadows.
@@ -55,7 +62,7 @@ The shadow study (#330, `doc/shadows/shadow-model-rework.md` on `codex/indoor-sh
 
 | Item | Flat layer | Volumetric layer |
 |---|---|---|
-| Building the map | 0.016 ms | 0.023 ms |
+| Building the map | 0.033 ms | 0.023 ms |
 | Per-pixel lookup | below the timer's resolution (< 0.001 ms) | below the timer's resolution |
 
 It combines with the sun shadow map and PCSS by multiplication.
@@ -192,7 +199,7 @@ This keeps EEP authoritative:
 - **Probes and cube snapshots** (`cube_snapshot` / `gCubeSnapshot`) take the map's **mean**: the top mip, or a CPU reduction. A probe refreshed once in a while must not bake a passing shadow.
 - **Penumbra.** The LOD of the tap gives width ≈ `H_pen · 0.0093 · sun_scale` (0.53° × sun_scale), with H_pen = 1.5 km by default: 14 m at sun_scale 1. Today's cloud texture is coarser than that on the ground (12.6 km / 512 px ≈ 25 m a texel at the Aurora tile size), so the edge softness mostly comes from the cloud itself.
 - **Producers.**
-  - **Flat layer (L2).** A 512² pass evaluating cloudsF.glsl's `alpha1` taps (disturbance, both noise textures, the next-texture blend, `cloud_pos_density1/2`, `cloud_variance`) at the uv of §3.3, then `T = 1 − alpha1` (`altitude_blend_factor` is 1 overhead). Every frame: 0.016 ms [measured].
+  - **Flat layer (L2).** A 512² pass evaluating cloudsF.glsl's `alpha1` taps (disturbance, both noise textures, the next-texture blend, `cloud_pos_density1/2`, `cloud_variance`) at the uv of §3.3, then `T = 1 − alpha1` (`altitude_blend_factor` is 1 overhead). Every frame: 0.033 ms [measured; with the two noise fetches mixed by `blend_factor`, as cloudsF.glsl does, unconditionally. A first bench with one fetch gave 0.016 ms and understated it].
   - **Volumetric (L7).** 16 steps of Aurora's cheap density along the light through the layer: `T = exp(−σ ∫ density)`. Every frame: 0.022–0.026 ms [measured]. The sky and the ground then show the same clouds.
 - **Combination.** `visibility = shadow(p) × T(p)`, with T after PCSS and the blur. Clouds and buildings are independent occluders of one source, so the product is right, apart from correlation inside a partly covered disc, which is negligible. S6's transmittance multiplies the same way. The shadow-map passes are untouched: no extra caster or cascade cost.
 
@@ -245,11 +252,11 @@ That is physically right, but it changes how every cloudy EEP sky made so far lo
 
   | Item | 1080p | 1440p |
   |---|---|---|
-  | Map build, flat | 0.016 ms | – |
+  | Map build, flat | 0.033 ms | – |
   | Map build, volumetric | 0.023 ms | – |
   | Lookup tap, against an identical pass without it | < 0.001 ms | < 0.001 ms |
 
-  Mid-class [inferred ×3]: ≤ 0.07 ms in total.
+  Mid-class [inferred ×3]: ≤ 0.11 ms in total. The L2 gate (≤ 0.05 ms for map plus lookups, below) still holds on the 5070 Ti at 1080p: 0.033 ms plus a lookup below 0.001 ms. It would not hold at the ×3 mid-class estimate.
 - **Gate for L2:**
   - ≤ 0.05 ms GPU at 1080p, map + all lookups, Frame Profile on the reference scenes (shadow study §2.5);
   - 0 when no clouds are drawn;
