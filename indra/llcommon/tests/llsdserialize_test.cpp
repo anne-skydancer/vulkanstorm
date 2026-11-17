@@ -2599,4 +2599,112 @@ namespace tut
         LLSD out;
         ensure_equals("nested huge counts", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_PARSE_ERROR);
     }
+
+    // Node budget helpers: a binary / notation / XML parse with a small explicit budget
+    static void be32(std::string& s, U32 v)
+    {
+        for (int shift = 24; shift >= 0; shift -= 8) s.push_back((char)(v >> shift));
+    }
+
+    static S32 parseBinaryNodes(const std::string& raw, size_t max_nodes, LLSD& out)
+    {
+        std::istringstream in(raw);
+        LLPointer<LLSDBinaryParser> p = new LLSDBinaryParser;
+        p->setMaxNodes(max_nodes);
+        return p->parse(in, out, (llssize)raw.size());
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<12>()
+    {
+        set_test_name("node budget: binary flat undefs, just under and over");
+        // an array of n '!' is n + 1 nodes
+        auto flat = [](U32 n) { std::string raw("["); be32(raw, n); raw.append(n, '!'); raw.push_back(']'); return raw; };
+        LLSD out;
+        ensure("n+1 == budget passes", parseBinaryNodes(flat(99), 100, out) > 0);
+        ensure_equals("array size", out.size(), 99);
+        ensure_equals("one over fails", parseBinaryNodes(flat(100), 100, out), (S32)LLSDParser::PARSE_FAILURE);
+        ensure("unlimited passes", parseBinaryNodes(flat(100), LLSDParser::MAX_NODES_UNLIMITED, out) > 0);
+        ensure("default budget passes a realistic array", parseBinaryNodes(flat(200000), LLSDParser::MAX_NODES_DEFAULT, out) > 0);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<13>()
+    {
+        set_test_name("node budget: binary nested arrays and maps with many keys");
+        LLSD out;
+        // 60 nested one-element arrays around an undef: 61 nodes
+        std::string nested;
+        for (int i = 0; i < 60; ++i) { nested.push_back('['); be32(nested, 1); }
+        nested.push_back('!');
+        nested.append(60, ']');
+        ensure("nested at budget", parseBinaryNodes(nested, 61, out) > 0);
+        ensure_equals("nested over budget", parseBinaryNodes(nested, 60, out), (S32)LLSDParser::PARSE_FAILURE);
+        // a map of n entries, each key 'k' + len 1 + "a" and an undef value: n + 1 nodes (equal keys still cost a node)
+        const U32 n = 50;
+        std::string map("{");
+        be32(map, n);
+        for (U32 i = 0; i < n; ++i) { map.push_back('k'); be32(map, 1); map.push_back('a'); map.push_back('!'); }
+        map.push_back('}');
+        ensure("map at budget", parseBinaryNodes(map, n + 1, out) > 0);
+        ensure_equals("map over budget", parseBinaryNodes(map, n, out), (S32)LLSDParser::PARSE_FAILURE);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<14>()
+    {
+        set_test_name("node budget: notation and XML");
+        LLSD out;
+        {
+            std::string text("[");
+            for (int i = 0; i < 99; ++i) text += "!,";
+            text += "!]";   // 100 undefs, 101 nodes
+            for (size_t budget : { (size_t)101, (size_t)100 })
+            {
+                std::istringstream in(text);
+                LLPointer<LLSDNotationParser> p = new LLSDNotationParser;
+                p->setMaxNodes(budget);
+                S32 rc = p->parse(in, out, (llssize)text.size());
+                if (budget == 101) ensure("notation at budget", rc > 0);
+                else ensure_equals("notation over budget", rc, (S32)LLSDParser::PARSE_FAILURE);
+            }
+        }
+        for (bool lines : { false, true })
+        {
+            std::string text("<llsd><array>");
+            for (int i = 0; i < 100; ++i) text += "<undef/>";
+            text += "</array></llsd>\n";   // 101 nodes
+            for (size_t budget : { (size_t)101, (size_t)100 })
+            {
+                std::istringstream in(text);
+                LLPointer<LLSDXMLParser> p = new LLSDXMLParser(false);
+                p->setMaxNodes(budget);
+                S32 rc = lines ? p->parseLines(in, out) : p->parse(in, out, LLSDSerialize::SIZE_UNLIMITED);
+                if (budget == 101) { ensure("xml at budget", rc > 0); ensure_equals("xml size", out.size(), 100); }
+                else ensure_equals("xml over budget", rc, (S32)LLSDParser::PARSE_FAILURE);
+            }
+        }
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<15>()
+    {
+        set_test_name("node budget: a realistic large inflated payload parses, an uncapped one has no budget");
+        // 100000 inventory-like maps of 8 scalars each: about 900k nodes
+        LLSD items = LLSD::emptyArray();
+        for (int i = 0; i < 100000; ++i)
+        {
+            LLSD item;
+            item["name"] = "item";
+            item["id"] = LLUUID::null;
+            for (int k = 0; k < 6; ++k) item[std::string(1, (char)('a' + k))] = i + k;
+            items.append(item);
+        }
+        const std::string z = zip_llsd(items);
+        LLSD out;
+        ensure_equals("capped", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_OK);
+        ensure_equals("count", out.size(), 100000);
+        // unzip_llsd with UNZIP_NO_CAP passes MAX_NODES_UNLIMITED; the same payload parses
+        ensure_equals("uncapped", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_OK);
+    }
 }

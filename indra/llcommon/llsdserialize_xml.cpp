@@ -341,6 +341,8 @@ public:
     // unlimited (the default); otherwise a value nested max_depth containers
     // deep or more fails the parse, as in the binary and notation parsers.
     void setMaxDepth(S32 max_depth) { mMaxDepth = max_depth; }
+    // The node budget (LLSDParser::setMaxNodes()) for the next parse; 0 is unlimited.
+    void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; mNodesLeft = max_nodes; }
     // </Vulkanstorm>
 
     void parsePart(const char *buf, llssize len);
@@ -361,6 +363,7 @@ private:
 
     void startSkipping();
     bool depthLimitReached(); // <Vulkanstorm/>
+    bool nodeLimitReached();  // <Vulkanstorm/>
 
     enum Element {
         ELEMENT_LLSD,
@@ -405,6 +408,10 @@ private:
     // expat and fails the parse before the deep tree is built.
     S32 mMaxDepth;
     bool mDepthExceeded;
+    // The node budget: values left, 0 limit meaning unlimited; mNodesExceeded once spent, as mDepthExceeded.
+    size_t mMaxNodes;
+    size_t mNodesLeft;
+    bool mNodesExceeded;
     // </Vulkanstorm>
 
     std::string mCurrentKey;        // Current XML <tag>
@@ -490,13 +497,13 @@ S32 LLSDXMLParser::Impl::parse(std::istream& input, LLSD& data)
     // futhermore, it isn't clear that the expat buffer semantics are
     // preserved
 
-    // <Vulkanstorm> A value nested too deep: expat was stopped there, and
+    // <Vulkanstorm> A value nested too deep or too many values: expat was stopped there, and
     // the partial tree is discarded.
-    if (mDepthExceeded)
+    if (mDepthExceeded || mNodesExceeded)
     {
         if (mEmitErrors)
         {
-            LL_INFOS() << "LLSDXMLParser::Impl::parse: LLSD nested " << mMaxDepth << " levels deep or more" << LL_ENDL;
+            LL_INFOS() << "LLSDXMLParser::Impl::parse: LLSD nested " << mMaxDepth << " levels deep or more, or too many values" << LL_ENDL;
         }
         data = LLSD();
         return LLSDParser::PARSE_FAILURE;
@@ -589,12 +596,12 @@ S32 LLSDXMLParser::Impl::parseLines(std::istream& input, LLSD& data)
         }
     }
 
-    // <Vulkanstorm> A value nested too deep, as in parse().
-    if (mDepthExceeded)
+    // <Vulkanstorm> A value nested too deep or too many values, as in parse().
+    if (mDepthExceeded || mNodesExceeded)
     {
         if (mEmitErrors)
         {
-            LL_INFOS() << "LLSDXMLParser::Impl::parseLines: LLSD nested " << mMaxDepth << " levels deep or more" << LL_ENDL;
+            LL_INFOS() << "LLSDXMLParser::Impl::parseLines: LLSD nested " << mMaxDepth << " levels deep or more, or too many values" << LL_ENDL;
         }
         data = LLSD();
         return LLSDParser::PARSE_FAILURE;
@@ -633,6 +640,9 @@ void LLSDXMLParser::Impl::reset()
 
     mMaxDepth = -1; // <Vulkanstorm/>
     mDepthExceeded = false; // <Vulkanstorm/>
+    mMaxNodes = LLSDParser::MAX_NODES_DEFAULT; // <Vulkanstorm/>
+    mNodesLeft = mMaxNodes; // <Vulkanstorm/>
+    mNodesExceeded = false; // <Vulkanstorm/>
 
     mGracefullStop = false;
 
@@ -720,7 +730,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
     #endif // XML_PARSER_PERFORMANCE_TESTS
 
     ++mDepth;
-    if (mSkipping || mDepthExceeded) // <Vulkanstorm/> mDepthExceeded
+    if (mSkipping || mDepthExceeded || mNodesExceeded) // <Vulkanstorm/>
     {
         return;
     }
@@ -773,7 +783,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
 
     if (mStack.empty())
     {
-        if (depthLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
         mStack.push_back(&mResult);
     }
     else if (mStack.back()->isMap())
@@ -784,7 +794,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
             return startSkipping();
         }
 
-        if (depthLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
         LLSD& map = *mStack.back();
         LLSD& newElement = map[std::move(mCurrentKey)];
         mStack.push_back(&newElement);
@@ -793,7 +803,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
     }
     else if (mStack.back()->isArray())
     {
-        if (depthLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
         LLSD& array = *mStack.back();
         array.append(LLSD());
         LLSD& newElement = array[array.size()-1];
@@ -835,6 +845,27 @@ bool LLSDXMLParser::Impl::depthLimitReached()
     }
     mStackElements.pop();
     mDepthExceeded = true;
+    XML_StopParser(mParser, XML_FALSE);
+    startSkipping();
+    return true;
+}
+
+// <Vulkanstorm> Called with depthLimitReached(), before a value is added: once the node budget is spent, stop
+// expat and fail the parse, so a payload of many tiny values cannot build far more heap than its size.
+bool LLSDXMLParser::Impl::nodeLimitReached()
+{
+    if (mMaxNodes == LLSDParser::MAX_NODES_UNLIMITED)
+    {
+        return false;
+    }
+    if (mNodesLeft > 0)
+    {
+        --mNodesLeft;
+        return false;
+    }
+    LL_WARNS() << "LLSD XML parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
+    mStackElements.pop();
+    mNodesExceeded = true;
     XML_StopParser(mParser, XML_FALSE);
     startSkipping();
     return true;
@@ -1118,6 +1149,7 @@ S32 LLSDXMLParser::doParse(std::istream& input, LLSD& data, S32 max_depth) const
     XML_Timer timer( &parseTime );
     #endif  // XML_PARSER_PERFORMANCE_TESTS
 
+    impl.setMaxNodes(mMaxNodes);
     impl.setMaxDepth(max_depth); // <Vulkanstorm/> ignored before: -1 for every existing caller
 
     if (mParseLines)
