@@ -451,6 +451,10 @@ Unattended runs (persistent local profile and autologin; the scripts never read,
 - `-Profile` must be a folder under the gitignored `.captures` (other paths are refused); it replaces the fresh per-launch profile.
 - `-AutoLogin` passes the viewer's `--autologin` (log in as the last saved user) and needs `-Profile`. It refuses to start when the profile
   has no stored login (no `bin_conf.dat` in it): run `-SetupLogin` first. Only the file's presence is tested, never its content.
+- `-AutoLogin` also passes `perf_check.py --auto-handoff`, so nobody has to click: after login the plugin teleports to `-BusyRegion` itself with the
+  teleport series' own code (`teleport_once`, the scenario's `teleports` timeout; no teleport when you log in there already). A refused or
+  late teleport is retried once; then the run ends with the problem pop-up and a non-zero exit. It never waits for a human. `-BusyRegion` is
+  required. The manual flow (no `-AutoLogin`) is unchanged.
 - Be logged out of Second Life everywhere else before a run: a second login of the same account kicks the first.
 - `-DeleteProfile` starts nothing: it copies the profile's viewer logs (`*.log`, `*.old`; no chat or conversation logs) into
   `viewer-logs\` of the newest `.captures\mc1-sl-*` run folder, then deletes the profile folder, saved login included. Delete the profile

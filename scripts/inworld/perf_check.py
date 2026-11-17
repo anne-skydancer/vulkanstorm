@@ -1144,6 +1144,8 @@ class Run:
         log("logged in at %s %s (cell %s)" % (name, pos, cell_of(glob)))
         if not name and int((self.sc["teleports"] or {}).get("second", 0)) and not self.args.tp_region:
             raise LeapError("the login region is unknown (the viewer logs no region name at login): pass --start-region NAME (the launcher's -StartRegion NAME)")
+        if self.args.auto_handoff:
+            return self.auto_handoff(name, glob)
         self.notify(cfg["ready_message"])
         end = time.monotonic() + float(cfg["timeout_s"])
         stable, last = 0, None
@@ -1176,6 +1178,31 @@ class Run:
         self.busy_region = busy
         self.index["busy"] = {"region": busy, "pos": reg, "global": g}
         log("arrived in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
+        self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
+
+    def auto_handoff(self, login_region, glob):
+        """--auto-handoff (an autologin run, nobody to click): teleport to --busy-region with the teleport series' own code. Skipped when
+        the login region is the busy region; one retry when the teleport is refused or does not arrive; then the run ends (LeapError: the
+        problem pop-up and a non-zero exit), never a wait for a human."""
+        busy = self.args.busy_region
+        if not busy:
+            raise LeapError("--auto-handoff needs --busy-region NAME (the launcher's -BusyRegion NAME)")
+        cfg = {"timeout_s": 120.0, "settle_s": 3.0, "min_move_m": 5.0, **(self.sc["teleports"] or {})}
+        if login_region == busy:
+            log("auto hand-off: already in %s, no teleport" % busy)
+        else:
+            for attempt in (1, 2):
+                try:
+                    self.teleport_once("handoff", busy, (128.0, 128.0, 30.0), cfg)
+                    break
+                except LeapError as exc:
+                    log("auto hand-off: attempt %d to teleport to %s failed: %s" % (attempt, busy, exc))
+                    if attempt == 2:
+                        raise LeapError("auto hand-off failed twice (the region may refuse automated teleports): ending the run")
+        reg, g = self.agent_state()
+        self.busy_region = busy
+        self.index["busy"] = {"region": busy, "pos": reg, "global": g}
+        log("in %s %s (cell %s); settling %.0f s" % (busy, reg, cell_of(g), self.sc["settle"]["after_teleport_s"]))
         self.v.sleep(float(self.sc["settle"]["after_teleport_s"]))
 
     def request_teleport(self, region, x, y, z):
@@ -1387,6 +1414,8 @@ def parse_args(argv):
                     "'Entering region' line of the viewer log; URL-escaped like --tp-region)")
     ap.add_argument("--busy-region", default=None, metavar="NAME", help="the region you teleport to, when its name cannot be read from "
                     "the viewer log (URL-escaped like --tp-region)")
+    ap.add_argument("--auto-handoff", action="store_true", help="an unattended (autologin) run: teleport to --busy-region by LEAP instead of "
+                    "asking the owner to do it (skipped when already there; one retry; then the run ends with the problem pop-up)")
     args = ap.parse_args(argv)
     if args.gpu_window and not args.no_glstats:
         ap.error("--gpu-window belongs to the --no-glstats flow (without --no-glstats every preset already collects a window)")

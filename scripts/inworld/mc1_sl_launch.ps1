@@ -33,7 +33,9 @@ Unattended runs (a persistent local profile that logs in by itself; the credenti
   1. One-time setup:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -SetupLogin
      The viewer starts with that profile at the login screen and no scenario runs. Log in by hand with "remember me" ticked, then quit.
   2. Each run:        .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
-     -AutoLogin passes the viewer's --autologin (log in as the last saved user). It needs -Profile and refuses to start when the profile
+     -AutoLogin passes the viewer's --autologin (log in as the last saved user) and perf_check's --auto-handoff: nobody clicks, so the
+     script teleports to -BusyRegion itself (skipped when you log in there; one retry; then the run ends with the problem pop-up,
+     it never waits for a human). It needs -BusyRegion (when the scenario has the hand-off) and -Profile and refuses to start when the profile
      has no stored login yet (it only checks that the viewer's bin_conf.dat exists in the profile, never what is in it).
   Be logged out of Second Life everywhere else first: a second login of the same account kicks the first.
   3. When the series ends:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -DeleteProfile
@@ -103,6 +105,7 @@ if ($AutoLogin -and -not (Test-StoredLogin $profFull)) {
 $scFile = Join-Path $PSScriptRoot "scenarios\$Scenario.json"
 if (-not (Test-Path $scFile)) { throw "no such scenario: $scFile" }
 $scJson = Get-Content -Raw $scFile | ConvertFrom-Json
+if ($AutoLogin -and $scJson.owner_teleport -and -not $BusyRegion) { throw '-AutoLogin teleports to the busy region by itself (no human to click): give -BusyRegion NAME' }
 if (-not $DryRun -and -not $SetupLogin -and $scJson.teleports -and [int]$scJson.teleports.second -gt 0 -and -not $StartRegion -and -not $TpRegion) {
     throw "scenario $Scenario teleports between two regions: give -StartRegion NAME (the region you log in to) or -TpRegion NAME, the viewer does not log the login region"
 }
@@ -141,6 +144,7 @@ try {   # from here every path puts this window's folders back
     if ($StartRegion) { $plugin += ' --start-region ' + [uri]::EscapeDataString($StartRegion) }
     if ($BusyRegion)  { $plugin += ' --busy-region ' + [uri]::EscapeDataString($BusyRegion) }
     if ($GpuWindow) { $plugin += " --gpu-window --frames $GpuWindowFrames" }
+    if ($AutoLogin) { $plugin += ' --auto-handoff' }   # nobody clicks: perf_check teleports to the busy region itself
     if ($DryRun)   { $plugin += ' --dry-run --no-login-wait' }
     $noop = "$py $scripts/perf_check.py --noop"
 
