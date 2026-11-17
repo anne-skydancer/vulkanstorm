@@ -1299,7 +1299,7 @@ U8* LLVertexBuffer::mapVertexBuffer(LLVertexBuffer::AttributeType type, U32 inde
         count = mNumVerts - index;
     }
 
-    if (!gGLManager.mIsApple)
+    if (!gGLManager.mIsApple && count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
     {
         U32 start = mOffsets[type] + sTypeSize[type] * index;
         U32 end = start + sTypeSize[type] * count-1;
@@ -1336,7 +1336,7 @@ U8* LLVertexBuffer::mapIndexBuffer(U32 index, S32 count)
         count = mNumIndices-index;
     }
 
-    if (!gGLManager.mIsApple)
+    if (!gGLManager.mIsApple && count > 0) // <Vulkanstorm/> an empty range would wrap `end` to 0xFFFFFFFF
     {
         U32 start = sizeof(U16) * index;
         U32 end = start + sizeof(U16) * count-1;
@@ -1371,6 +1371,12 @@ U8* LLVertexBuffer::mapIndexBuffer(U32 index, S32 count)
 //  dst -- mMappedData or mMappedIndexData
 void LLVertexBuffer::flush_vbo(GLenum target, U32 start, U32 end, void* data, U8* dst)
 {
+    // <Vulkanstorm> an empty range (end == start - 1, which wraps to 0xFFFFFFFF for start 0) made the block loop below never end
+    if (end == start - 1)
+    {
+        return;
+    }
+    // </Vulkanstorm>
     if (gGLManager.mIsApple)
     {
         // on OS X, flush_vbo doesn't actually write to the GL buffer, so be sure to call
