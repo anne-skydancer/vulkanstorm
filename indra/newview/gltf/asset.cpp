@@ -446,6 +446,22 @@ const Image& Image::operator=(const Value& src)
     return *this;
 }
 
+// <Vulkanstorm>
+void Asset::releaseGL()
+{
+    if (mNodesUBO != 0)
+    {
+        glDeleteBuffers(1, &mNodesUBO);
+        mNodesUBO = 0;
+    }
+    if (mMaterialsUBO != 0)
+    {
+        glDeleteBuffers(1, &mMaterialsUBO);
+        mMaterialsUBO = 0;
+    }
+}
+// </Vulkanstorm>
+
 void Asset::update()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_GLTF;

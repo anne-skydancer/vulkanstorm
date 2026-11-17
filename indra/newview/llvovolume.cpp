@@ -94,6 +94,7 @@
 #include "llavatarappearancedefines.h"
 #include "llgltfmateriallist.h"
 #include "gltfscenemanager.h"
+#include "gltf/asset.h" // <Vulkanstorm/> Asset::releaseGL()
 // [RLVa:KB] - Checked: RLVa-2.0.0
 #include "rlvactions.h"
 #include "rlvlocks.h"
@@ -326,6 +327,13 @@ void LLVOVolume::markDead()
         {
             gPipeline.mHeroProbeManager.unregisterViewerObject(this);
         }
+
+        // <Vulkanstorm> free the glTF asset's UBOs on every death path (main thread, idempotent)
+        if (mGLTFAsset)
+        {
+            mGLTFAsset->releaseGL();
+        }
+        // </Vulkanstorm>
     }
 
     LLViewerObject::markDead();

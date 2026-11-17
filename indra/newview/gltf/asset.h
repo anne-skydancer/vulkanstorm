@@ -411,6 +411,11 @@ namespace LL
             // Upon return, all Node Matrix transforms should be up to date
             void update();
 
+            // <Vulkanstorm> delete the node and material UBOs (main thread, GL context current); they are made again on demand.
+            // Never called on a copy (copy-assignment copies the names).
+            void releaseGL();
+            // </Vulkanstorm>
+
             // update asset-to-node and node-to-asset transforms
             void updateTransforms();
 
