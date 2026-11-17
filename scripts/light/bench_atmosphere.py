@@ -278,6 +278,12 @@ def set_today_uniforms(prog, p):
     set_atmosphere_uniforms(prog, q)
     nl = math.sqrt(lx * lx + ly * ly + lz * lz)
     uniform(prog, 'lightnorm', lx / nl, ly / nl, lz / nl)
+    # the glow of each body at its own direction (set_atmosphere_uniforms puts both at the harness light): the light is the
+    # sun when it is up, else the moon, and the other body is opposite it
+    ln = (lx / nl, ly / nl, lz / nl)
+    opp = (-ln[0], -ln[1], -ln[2])
+    uniform(prog, 'sun_glow_norm', *(ln if p['sun_up'] else opp))
+    uniform(prog, 'moon_glow_norm', *(opp if p['sun_up'] else ln))
     uniform(prog, 'sun_up_factor', int(p['sun_up']))
     uniform(prog, 'moonlight_color', *p['sunlight_color'])   # LLSettingsSky::getMoonlightColor = sunlight
     glow_factor = 1.0 if p['sun_up'] else p['moon_brightness'] * 0.25  # getSunMoonGlowFactor (moon up)

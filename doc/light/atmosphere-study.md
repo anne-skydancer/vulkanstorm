@@ -44,7 +44,7 @@ with them yet.
 
 | # | Finding | Verdict on devel |
 |---|---|---|
-| R1 | The PBR sky is ~8× brighter than a physical sky lit by the same sun (the display gain that matches today's sky; per pixel 3.6× at the zenith, 10.7× at the horizon), and its horizon ~6× its zenith | **STILL TRUE**: re-measured on today's shaders, zenith 0.278 and horizon 1.676 against 0.078 and 0.157 physical |
+| R1 | The PBR sky is ~8× brighter than a physical sky lit by the same sun (the display gain that matches today's sky; per pixel 3.6× at the zenith, 10.9× at the horizon), and its horizon ~6× its zenith | **STILL TRUE**: re-measured on today's shaders, zenith 0.279 and horizon 1.711 against 0.078 and 0.157 physical |
 | R2 | **New.** The AT2-0 sky march (`sky_radiance`, `pa_sky_radiance`) uses uniform steps to the top of the atmosphere and skips the 0.25 km haze slab | **NEW, CONFIRMED** [measured]: up to 98 % low in Foggy and 88 % in Sunset at 32 steps; median 27-33 %. The slab-split march at 64 steps is within 1.2 %. AT2-0's "no whiteout" library check samples the uniform march |
 | R3 | Distance haze is grey in extinction, homogeneous and blind to altitude | **STILL TRUE** |
 | R4 | No twilight, and a hard switch at 0° | **CHANGED**: AT1 replaced the switch with a smooth ±0.3° band. There is still no twilight *sky*: the dome is repainted, not lit by a sun below the horizon |
@@ -109,9 +109,14 @@ Five new owner decisions are in §8; the decisions already taken are restated, n
 - **[code]** L3 touched the dome only where the sun hands over to the moon: `skyV.glsl:120`, `:157`, `skyF.glsl:413-424`. By day these
   reduce to today's formula (`sun_moon_blend` = 0, the sun's glow factor 1; the handover doc's tests).
 - **[measured]** #439's bench re-run on today's shaders (`bench_atmosphere.py --no-images --no-library --no-timing`):
-  - PBR Default zenith 0.278 and horizon 1.676 (in 2026-11 it was 0.279 and 1.711), against 0.078 and 0.157 physical. Per pixel that is
-    3.6× at the zenith and 10.7× at the horizon. The headline "~8×" is the display gain that matches today's sky to the physical one
+  - PBR Default zenith 0.279 and horizon 1.711 (the 2026-11 values), against 0.078 and 0.157 physical. Per pixel that is
+    3.6× at the zenith and 10.9× at the horizon. The headline "~8×" is the display gain that matches today's sky to the physical one
     (7.74×, 2.95 EV in the bench output);
+  - the first re-run of 2026-11-16 gave horizon 1.676 (10.7×): the bench's today-sky harness left `sun_glow_norm` and
+    `moon_glow_norm` at the harness light, not at each body's direction (`set_today_uniforms`). Fixed on 2026-11-17: the sun's glow
+    is at the sun and the moon's at the moon. Display gain unchanged (7.74×, 2.95 EV); Default sky dE 14.3 → 13.6 with the tint
+    (rms log error 0.652 → 0.611); Default study-sky dE 19.7 → 19.4, Sunset 40.9 → 40.5; Sunset horizon today 0.384 → 0.422;
+    zenith figures unchanged. The panoramas (`doc/light/atmosphere/*.png`) and the library check are #439's and were not regenerated;
   - capture irradiance 0.115 today, physical 0.0962;
   - AT2-0 states 0.0965 for its own translation (core doc, "Sun disc and sky irradiance").
 - **[code]** The sky target is still 8-bit: `deferredScreen` is `GL_RGBA` (`pipeline.cpp:1063`) unless `RenderEnableEmissiveBuffer`
