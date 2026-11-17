@@ -1738,6 +1738,11 @@ glm::mat4 LLGLTFLoader::computeGltfToViewerSkeletonTransform(const joints_data_m
 
 bool LLGLTFLoader::checkForXYrotation(const LL::GLTF::Skin& gltf_skin, S32 joint_idx, S32 bind_indx)
 {
+    // Vulkanstorm: bind_indx comes from the asset; the inverse bind matrices may be fewer than the joints
+    if (bind_indx < 0 || (size_t)bind_indx >= gltf_skin.mInverseBindMatricesData.size())
+    {
+        return false;
+    }
     glm::mat4 gltf_joint_rest = buildGltfRestMatrix(joint_idx, gltf_skin);
     glm::mat4 test_mat = glm::inverse(gltf_joint_rest) * gltf_skin.mInverseBindMatricesData[bind_indx];
     // Normally for shoulders it should be something close to
