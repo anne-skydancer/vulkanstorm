@@ -212,6 +212,7 @@ private:
         bool volumeValid = false;
         bool pending = false;              // a dirty box touched it since it was drawn
         llprojectorpool::Cause pendingCause = llprojectorpool::Cause::Other;
+        llprojectorpool::Cause verdictCause = llprojectorpool::Cause::Other; // this frame's classifyTile cause, for a tile in the work list
         U32 dirtyFrame = 0;                // the frame the first such box was applied
         F64 dirtyTime = 0.0;               // ... and its time (seconds)
         bool lowres = false;               // down-sized by a layout change: drawn again at the new size
