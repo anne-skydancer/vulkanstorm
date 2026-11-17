@@ -127,6 +127,14 @@ bool LLPartData::unpack(LLDataPacker &dp)
         dp.unpackU8(mBlendFuncSource,"pdblendsource");
         dp.unpackU8(mBlendFuncDest,"pdblenddest");
         size -= PS_PART_DATA_BLEND_SIZE;
+        // Vulkanstorm: the factors come from the wire and index a GL enum table;
+        // an out-of-range value falls back to the default pair (validBlendFunc()
+        // is not used: it rejects factors that render today)
+        if (mBlendFuncSource >= LL_PART_BF_COUNT || mBlendFuncDest >= LL_PART_BF_COUNT)
+        {
+            mBlendFuncSource = LLPartData::LL_PART_BF_SOURCE_ALPHA;
+            mBlendFuncDest = LLPartData::LL_PART_BF_ONE_MINUS_SOURCE_ALPHA;
+        }
     }
     else
     {
