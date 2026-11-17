@@ -7,7 +7,7 @@
 // source: indra/newview/llviewermessage.cpp
 // function: process_improved_im (U8[MTUBYTES] bucket read, size, sender host)
 // lines: 2499-2568
-// blob: d7c6222cdb750cf1aadac78508a935a7d456293f
+// blob: f55f4648a88448647816eab8363ba4c19e494abc
 void process_improved_im(LLMessageSystem *msg, void **user_data)
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -55,7 +55,7 @@ void process_improved_im(LLMessageSystem *msg, void **user_data)
 
         msg->getBinaryDataFast(_PREHASH_MetaData, _PREHASH_Data, &metadata_buffer[0], metadata_size, 0, metadata_size );
         std::stringstream metadata_stream(metadata_buffer);
-        if (LLSDSerialize::fromBinary(metadata, metadata_stream, metadata_size) == LLSDParser::PARSE_FAILURE)
+        if (LLSDSerialize::fromBinary(metadata, metadata_stream, metadata_size, LLSD_UNTRUSTED_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
             metadata.clear();
         }
