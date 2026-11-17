@@ -15,6 +15,43 @@ The branch adds:
 - `scripts/shadows/bench_sun_cascade_copy.py`: a GPU timing bench for the cache's per-frame depth copy. It holds
   `.fixture-tmp/gpu-bench.lock` while it times.
 
+## Decisions taken (owner, 2026-11-17)
+
+Decided on the decisions page, option by option. §9 keeps the options as they were offered.
+
+- **D1 = A.** All four levels are camera-position-centred and cached. If C0 measures a saving well below the
+  6-7 ms estimate, D1 goes back to the owner with B (levels 2-3 only) before anything is switched.
+- **D2 = C (new option, extends D2-A).** Fixed world sizes at the default view. Below a threshold field of view
+  (C0 measures the angle where fixed levels reach 1.0x today's texel size, between 60 and 30 degrees), levels
+  0-2 follow the zoom in steps, each step sized for the widest angle in it, so **no zoom is coarser than
+  today**. That takes 0.56x the level width at 30 degrees and 0.40x at 15 degrees. Level 3 keeps its full size,
+  so the shadow distance is unchanged. The owner's earlier limits (1.25x at 30 degrees, 1.5x at 15 degrees) are
+  superseded by this choice.
+  - Costs, traced: crossing a step rebuilds levels 0-2 (two frames at two refreshes per frame), so zoomed
+    shadows can lag a frame or two during a zoom gesture; holding the zoom keeps them cached. Walking zoomed to
+    15 degrees: 0.33 refreshes per frame, running 0.50; flying zoomed to 15 degrees (about 1.6 per frame)
+    exceeds the budget and falls back to drawing those levels live, at today's cost.
+  - C1 gates: zoom captures at 15 and 30 degrees, judged as photos against today's viewer, contact points
+    included; the level 2 to level 3 handover checked for a seam. Shrinking level 3 partway, if a seam shows,
+    goes back to the owner.
+  - Filtering is unchanged: the Stochastic method (8 rays, 8-frame accumulation, penumbra from the sun's disc)
+    already smooths edges; D2-C is about the resolution it cannot restore.
+  - "Hold still, sharpen once" (own idea, not from the literature: after about 0.5 s still, levels 0-2 redrawn
+    once at double resolution, allocated only while the hold lasts) is a separate option after C1, not part of
+    the plan.
+- **D3 = A.** Guard band g = 0.125.
+- **D4 = A.** Everything that moves today is drawn live every frame (avatars, attachments, animesh, active
+  movers and physical objects, flexi, client-spun parts; animated alpha if cheap to identify).
+- **D5 = A.** Terrain, grass and LOD rebuilds dirty the levels they touch; C3 adds a texel rule if C2 measures
+  them too often.
+- **D6 = A**, following D1: S maps for all four levels (+59 MB at 2560x1440).
+- **D7 = A.** Redraw when a caster at height R would move half a texel (0.03 degrees per level, staggered).
+- **D8**: done as hotfix H on every line (world-anchored alpha dither).
+
+#330's carried findings (comment on this PR): 5 (empty cascades cleared) and 9 (sun/moon switch pop) are
+FIXED under Stochastic, and 8 (objects instantiated only for the main camera) is STILL TRUE and transient; see
+§2, rows 3.5, 3.9 and 3.8.
+
 ## 1. Summary
 
 **What changed since #330.** Most of what #330 found wrong with the sun cascades is fixed under the Stochastic
@@ -520,6 +557,8 @@ top. The code estimates for C1, C2 and H look right. Each stage is a `codex/` fe
 against `vkstorm-devel` (C0's probes stay on devel). H is a hotfix applied to every line.
 
 ## 9. Decisions for the owner
+
+Taken on 2026-11-17; see "Decisions taken" at the top. The options below are kept as offered.
 
 The recommended option comes first in each.
 
