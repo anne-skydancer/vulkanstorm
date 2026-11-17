@@ -433,7 +433,7 @@ void LLSceneMonitor::calcDiffAggregate()
     LLGLDepthTest depth(true, false, GL_ALWAYS);
     if(!mDebugViewerVisible)
     {
-        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        gGL.setColorMask(false, false); // <Vulkanstorm/> through gGL so its cached mask matches GL
     }
 
     LLGLSLShader* cur_shader = NULL;
@@ -451,6 +451,7 @@ void LLSceneMonitor::calcDiffAggregate()
 
     if(mDiffState == EXECUTE_DIFF)
     {
+        gGL.flush(); // <Vulkanstorm/> gl_draw_scaled_target leaves its triangles pending; draw them inside the query
         glEndQuery(GL_SAMPLES_PASSED);
         mDiffState = WAIT_ON_RESULT;
     }
@@ -464,7 +465,7 @@ void LLSceneMonitor::calcDiffAggregate()
 
     if(!mDebugViewerVisible)
     {
-        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        gGL.setColorMask(true, true); // <Vulkanstorm/> keep gGL's cached mask in step with GL
     }
 #endif
 }
