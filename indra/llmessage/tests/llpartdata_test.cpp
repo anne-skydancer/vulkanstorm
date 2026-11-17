@@ -151,4 +151,28 @@ namespace tut
         //mBlendFuncDest    1 ''   unsigned char
         ensure("mPartData.mBlendFuncDest different after unpacking", data.mBlendFuncDest == (U8) 1);
     }
+
+    // Vulkanstorm: out-of-range blend factors fall back to the default pair, in-range ones are kept
+    template<> template<>
+    void partdata_test_object_t::test<2>()
+    {
+        const U8 cases[][2] = { { 6, 8 }, { 255, 1 }, { 1, 10 }, { 9, 9 }, { 200, 201 } };
+        const U8 expect[][2] = { { 6, 8 }, { 7, 9 }, { 7, 9 }, { 9, 9 }, { 7, 9 } };
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
+        {
+            // size S32 (legacy block 18 + blend 2), legacy block with the blend flag, blend source and dest
+            U8 buf[24] = {};
+            LLDataPackerBinaryBuffer pdp(buf, sizeof(buf));
+            ensure("pack size", pdp.packS32(20, "partsize"));
+            ensure("pack flags", pdp.packU32(LLPartData::LL_PART_DATA_BLEND, "pdflags"));
+            buf[22] = cases[i][0];
+            buf[23] = cases[i][1];
+            LLDataPackerBinaryBuffer udp(buf, sizeof(buf));
+            LLPartData in;
+            std::string where = "case " + std::to_string(i) + ": ";
+            ensure(where + "LLPartData::unpack failed", in.unpack(udp));
+            ensure_equals(where + "blend source", in.mBlendFuncSource, expect[i][0]);
+            ensure_equals(where + "blend dest", in.mBlendFuncDest, expect[i][1]);
+        }
+    }
 }
