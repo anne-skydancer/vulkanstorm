@@ -2,7 +2,15 @@
 # libdeflate vs zlib-ng for mesh LODs and LLSD blobs (bench)
 
 Status: **measured, 2026-11-16 and 2026-11-17**, offline on the owner's PC, no viewer build, no viewer run.
-**Decided:** D1 option 1 (zlib-ng single call, draft PR #547), D2 as recommended (caps hotfix 87379e897f); see section 8.
+**Decided and done:**
+
+- D1 option 1: the zlib-ng single call, implemented in #547 (merged to devel as 42ebf817a8). The audit harness measured it
+  1.3 to 6 times faster than the old chunk loop.
+- D2: per-call output caps of 64 MiB for assets and 256 MiB for navmesh, shipped as a hotfix on all four lines (87379e897f),
+  followed by the LLSD node-budget hotfix.
+- libdeflate is not adopted.
+
+See section 8.
 Harness: `scripts/bench/libdeflate/` (this branch). Owner request: prove that libdeflate does for LODs and mesh
 geometry what zlib-ng does, without tanking fps and without warped results, or disprove it.
 
@@ -13,7 +21,7 @@ not measured.
 Hardware: AMD Ryzen 9 9950X3D (Windows reports 8 cores / 8 logical processors to this session), 61.6 GB RAM, Windows 11
 Pro 10.0.26300, MSVC 14.51.36231 (VS 18). Other agents were building on the same PC during the session; every timing
 section waits until no `cl`, `link`, `MSBuild`, `cmake`, `ninja`, `rustc` or `cargo` runs, runs the strategies round-robin
-inside each repetition and reports the minimum (and median) of 7 to 9 repetitions. A `cpptools` and a `find` process
+(order rotated every repetition) inside each repetition and reports the minimum (and median) of 7 to 9 repetitions. A `cpptools` and a `find` process
 used about one core each throughout; they do not favour either library (interleaved).
 
 ## 1. Summary
@@ -35,9 +43,9 @@ used about one core each throughout; they do not favour either library (interlea
    libdeflate**. The main-thread inflate sites are small or rare (legacy materials responses, navmesh, Milky Way map once,
    inventory cache at login).
 4. **Speed [measured].** Whole corpus, one thread, clean run (2026-11-17): zlib-ng as the viewer calls it
-   **2,777 ms**; the decided zlib-ng single call (1 MiB kept per thread) **2,705 ms (−2.6 %)**; libdeflate with the same
-   bounded memory **2,581 ms (−7.1 %)**, or **2,442 ms (−12 %)** if it may keep up to 16 MiB per thread. Per block at the
-   median size: 4.1 µs today, 2.9 µs libdeflate; at the largest block (5.64 MB = 5,505 KiB out): 10.3 vs 6.9 ms.
+   **2,775 ms**; the decided zlib-ng single call (1 MiB kept per thread) **2,697 ms (−2.8 %)**; libdeflate with the same
+   bounded memory **2,566 ms (−7.5 %)**, or **2,436 ms (−12 %)** if it may keep up to 16 MiB per thread. Per block at the
+   median size: 4.0 µs today, 2.9 µs libdeflate; at the largest block (5.64 MB = 5,505 KiB out): 10.3 vs 6.9 ms.
    Inflate is only about **8 % of the LOD unpack** (parse, unpack and `cacheOptimize` are the rest): with the order
    alternated per block and bounded memory, libdeflate makes the whole `lodReceived` work **0.7 %** cheaper (34.5 s to
    34.3 s for 46,188 LOD blocks). **Settle time at Rooftops-scale loads: no measurable change [inferred]**: at most
@@ -47,7 +55,7 @@ used about one core each throughout; they do not favour either library (interlea
    switch would add latency is the inventory cache at login (79 MB: +15 ms with the file write): it stays on zlib-ng.
 6. **Recommendation (decided: D1 option 1, D2 as recommended): libdeflate is proven safe, but the speed does not
    justify it.** Both alternatives save little on worker threads: the zlib-ng single call about 0.2 % of the LOD unpack
-   [inferred: 2.6 % of an 8 % share], libdeflate 0.7 % [measured]. Option 1, hygiene with zlib-ng (one
+   [inferred: 2.8 % of an 8 % share], libdeflate 0.7 % [measured]. Option 1, hygiene with zlib-ng (one
    `inflate(Z_FINISH)` into a bounded per-thread scratch, plus a per-call output cap), was recommended for bounded
    memory and the cap rather than for speed. libdeflate cannot resume a decode, so it keeps its full lead only with a
    large kept buffer (up to 16 MiB per thread). Options in section 8; the libdeflate design is in section 7.
@@ -62,9 +70,9 @@ over to the viewer, where other threads compete for caches and memory bandwidth.
 
 | Site (thread) | Body | Today | Decided (zlib-ng single call) | libdeflate (bounded) | Label |
 |---|---|---|---|---|---|
-| Mesh LOD/skin/physics block (pool or repo thread) | median of corpus: 1.2 KB in, 1.9 KB out | 4.1 µs | 4.0 µs | 2.9 µs | [measured] |
+| Mesh LOD/skin/physics block (pool or repo thread) | median of corpus: 1.2 KB in, 1.9 KB out | 4.0 µs | 4.0 µs | 2.9 µs | [measured] |
 | | p99: 438 KB in, 767 KB out | 1.22 ms | 1.20 ms | 1.15 ms | [measured] |
-| | largest in corpus: 3.66 MB (3,573 KiB) in, 5.64 MB (5,505 KiB) out | 10.3 ms | 8.1 ms | 6.9 ms | [measured] |
+| | largest in corpus: 3.66 MB (3,573 KiB) in, 5.64 MB (5,505 KiB) out | 10.3 ms | 8.0 ms | 6.9 ms | [measured] |
 | | synthetic 4 / 8 / 16 MiB out (real mesh payload, zlib level 6) | 7.6 / 18.5 / 50.7 ms | 6.3 / 12.4 / 24.1 ms | 5.6 / 11.0 / 21.4 ms | [measured] |
 | LLSD skin/convex, whole `unzip_llsd` incl. parse (pool or repo) | 7,727 blocks | 295 to 298 ms in all (38.3 µs per block) | not timed with the parse | 285 to 287 ms (37.0 µs) | [measured] |
 | HTTP reply with Content-Encoding gzip (llcorehttp worker thread) | synthetic 4 / 8 / 16 MiB | 6.1 / 12.0 / 23.5 ms | unchanged (stays) | 5.8 / 11.4 / 22.2 ms (whole-body copy + gzip with the ISIZE size) | [measured] |
@@ -168,26 +176,28 @@ Strategies (the uncompressed size of a block is unknown; the mesh header only gi
   freed after the parse. At most 512 KiB is kept per thread, the same as today's chunk.
 - The zlib-ng rival keeps at most 1 MiB per thread (larger buffers are released after use), as the decided design.
 
-Whole corpus (53,915 blocks, 1,817 MB out), one thread, strategies interleaved, 7 repetitions, clean run of
-2026-11-17 (no build ran; the earlier runs agree within 2 %):
+Whole corpus (53,915 blocks, 1,817 MB out), one thread, strategies interleaved with the order **counterbalanced**
+(rotated by one position every repetition, so each strategy runs in every slot), 7 repetitions, clean run of 2026-11-17
+(no build ran). The earlier runs, with a fixed order, agree within 2 %; the counterbalanced run moved the decided
+single call's gain from 2.6 % to 2.8 %:
 
 | Strategy | Memory kept per thread | Per block median | p99 | max | Corpus (min / median) | MB/s out | Retries |
 |---|---|---|---|---|---|---|---|
-| zlib-ng viewer loop (today) | 512 KiB chunk | 2.5 µs | 1,122 µs | 10.3 ms | 2,777 / 2,784 ms | 654 | — |
-| libdeflate exact size (oracle) | — | 2.1 µs | 1,050 µs | 6.5 ms | 2,449 / 2,452 ms | 742 | — |
-| libdeflate ratio ×4, grow ×2 | none | 2.1 µs | 1,119 µs | 6.9 ms | 2,576 / 2,580 ms | 705 | 41,076 / 377,405 calls |
-| libdeflate ratio ×8, grow ×2 | none | 2.2 µs | 1,127 µs | 6.9 ms | 2,597 / 2,602 ms | 700 | 938 / 377,405 |
-| libdeflate thread scratch (retaining) | up to 16 MiB | 2.0 µs | 1,053 µs | 6.5 ms | 2,442 / 2,448 ms | 744 | 0 once warm |
-| **zlib-ng single call (rival; decided)** | **up to 1 MiB** | **2.4 µs** | **1,147 µs** | **8.0 ms** | **2,705 / 2,710 ms** | **672** | — |
-| libdeflate sized (bounded) | 512 KiB | 2.1 µs | 1,124 µs | 6.9 ms | 2,581 / 2,588 ms | 704 | 0 in the timed passes |
+| zlib-ng viewer loop (today) | 512 KiB chunk | 2.5 µs | 1,137 µs | 10.3 ms | 2,775 / 2,779 ms | 655 | — |
+| libdeflate exact size (oracle) | — | 2.1 µs | 1,052 µs | 6.6 ms | 2,442 / 2,446 ms | 744 | — |
+| libdeflate ratio ×4, grow ×2 | none | 2.1 µs | 1,113 µs | 6.9 ms | 2,556 / 2,565 ms | 711 | 41,076 / 377,405 calls |
+| libdeflate ratio ×8, grow ×2 | none | 2.2 µs | 1,118 µs | 6.9 ms | 2,574 / 2,579 ms | 706 | 938 / 377,405 |
+| libdeflate thread scratch (retaining) | up to 16 MiB | 2.0 µs | 1,053 µs | 6.5 ms | 2,436 / 2,441 ms | 746 | 0 once warm |
+| **zlib-ng single call (rival; decided)** | **up to 1 MiB** | **2.4 µs** | **1,141 µs** | **7.9 ms** | **2,697 / 2,698 ms** | **674** | — |
+| libdeflate sized (bounded) | 512 KiB | 2.1 µs | 1,118 µs | 6.9 ms | 2,566 / 2,576 ms | 708 | 0 in the timed passes |
 
 Threads (the mesh pool is 2, plus the repo thread), corpus wall time, minimum (median) of 7:
 
 | Threads | zlib-ng viewer loop | zlib-ng single call (decided) | libdeflate bounded | libdeflate retaining |
 |---|---|---|---|---|
-| 1 | 2,797 ms | 2,731 ms (−2.4 %) | 2,625 ms (−6.1 %) | 2,445 ms (−12.6 %) |
-| 2 | 1,446 ms | 1,409 ms (−2.6 %) | 1,344 ms (−7.1 %) | 1,274 ms (−11.9 %) |
-| 3 | 945 ms | 916 ms (−3.1 %) | 880 ms (−6.9 %) | 833 ms (−11.9 %) |
+| 1 | 2,760 ms | 2,694 ms (−2.4 %) | 2,564 ms (−7.1 %) | 2,442 ms (−11.5 %) |
+| 2 | 1,445 ms | 1,404 ms (−2.8 %) | 1,338 ms (−7.4 %) | 1,270 ms (−12.1 %) |
+| 3 | 944 ms | 917 ms (−2.9 %) | 880 ms (−6.8 %) | 831 ms (−12.0 %) |
 
 Scaling is linear for all four (2.9 to 3.0 times at 3 threads): no shared lock or allocator contention shows at the
 mesh path's thread count.
@@ -199,9 +209,9 @@ thread, plus its output buffer.
 **Retention matters for libdeflate, not for zlib-ng.** libdeflate cannot resume: on `INSUFFICIENT_SPACE` it starts
 again from the first byte. A scratch that grows and is released after use (keep limit 1 MiB) made every block above
 it retry on every call: **3,161 ms**, slower than today (5,866 retries in 7 passes; a section flagged DISTURBED, so
-indicative only). The two ways out are measured above: keep up to 16 MiB per thread (2,442 ms; 64 MiB over 4 threads),
-or size the buffer from the input up front (the bounded variant, 2,581 ms with 512 KiB kept). zlib-ng continues where
-it stopped, so a 1 MiB limit costs the decided single call little (2,705 ms; 2,658 ms with 16 MiB kept on 2026-11-16).
+indicative only). The two ways out are measured above: keep up to 16 MiB per thread (2,436 ms; 64 MiB over 4 threads),
+or size the buffer from the input up front (the bounded variant, 2,566 ms with 512 KiB kept). zlib-ng continues where
+it stopped, so a 1 MiB limit costs the decided single call little (2,697 ms; 2,658 ms with 16 MiB kept on 2026-11-16).
 
 The per-block microseconds in this section are hot-loop numbers (corpus in memory, nothing else on the thread); only
 the ratios carry over to the viewer.
@@ -219,7 +229,7 @@ path, **order alternated per block** (clean run, 2026-11-17):
 Three repetitions; the spread is the range of the three. The first run (2026-11-16, fixed order with libdeflate always
 second, and the 16 MiB retaining scratch) gave −13 % and −2.0 %; both the fixed order and the retained memory
 favoured libdeflate. The decided zlib-ng single call was not timed inside the whole unpack; from its inflate-only
-gain (2.6 %) and the 8 % share it is about −0.2 % [inferred].
+gain (2.8 %) and the 8 % share it is about −0.2 % [inferred].
 
 ## 6. What this means in the viewer
 
@@ -256,7 +266,7 @@ namespace LLInflate
 
 - `thread_local` libdeflate decompressor and output buffer. Two memory policies, measured in section 5: the retaining
   scratch (grow to the next power of two of max(2 × capacity, 4 × input), keep up to 16 MiB per thread: the fastest)
-  or the bounded "sized" policy (512 KiB kept, a one-off buffer for inputs above 128 KiB: 2,581 ms). A per-call
+  or the bounded "sized" policy (512 KiB kept, a one-off buffer for inputs above 128 KiB: 2,566 ms). A per-call
   output cap (D2) returns `SIZE_ERROR`. No shared state: each thread owns its two objects; they are freed by the thread's `thread_local`
   destructors (the pool is joined at `LLMeshRepoThread` shutdown, `llmeshrepository.cpp:1327`). No `shutdown()` path
   gains a free: the AGENTS.md caller check finds main, repo, the two pool threads, the model loader and the
@@ -292,7 +302,7 @@ draft PR #547, which depends on this study) and D2 **as recommended** (per-call 
 in review). libdeflate is not adopted. The options below are kept as the record of what was weighed.
 
 **D1. Change the whole-buffer inflate?** Both alternatives save little, on worker threads only: the zlib-ng fix
-saves about 0.2 % of the LOD unpack [inferred: 2.6 % of an 8 % share], bounded libdeflate 0.7 % [measured]. Neither changes fps or the
+saves about 0.2 % of the LOD unpack [inferred: 2.8 % of an 8 % share], bounded libdeflate 0.7 % [measured]. Neither changes fps or the
 settle time. Why the zlib-ng fix helps at all: today every block is inflated into the 512 KiB chunk and then copied
 into a `realloc`ed result; 99 % of blocks are below 512 KiB, so the cost is that extra copy and allocation per block,
 not the superlinear growth of B3, which only matters above about 16 MiB (no corpus block comes close: the largest is
@@ -302,10 +312,10 @@ not the superlinear growth of B3, which only matters above about 16 MiB (no corp
    worker-thread work.
 1. **Hygiene with zlib-ng (recommended):** one `inflate(Z_FINISH)` call into a per-thread scratch with bounded memory
    (512 KiB kept, larger buffers released after use; `avail_out` capped at `UINT_MAX`), plus the output cap of D2.
-   2,705 ms instead of 2,777 ms on the corpus with 1 MiB kept, and the 16 MiB synthetic body from 50.7 ms to 24.1 ms. No new package, no licence row, no change on corrupt data.
+   2,697 ms instead of 2,775 ms on the corpus with 1 MiB kept, and the 16 MiB synthetic body from 50.7 ms to 24.1 ms. No new package, no licence row, no change on corrupt data.
    About 0.25 d with review. Recommended over 0 for the bounded memory and the cap, not for speed.
-2. **Adopt libdeflate as designed in section 7.** 2,581 ms with memory bounded like option 1 (4.6 % below it, 28 % less
-   per median block), 2,442 ms if it may keep 16 MiB per thread. Identical results. Costs a new
+2. **Adopt libdeflate as designed in section 7.** 2,566 ms with memory bounded like option 1 (4.9 % below it, 28 % less
+   per median block), 2,436 ms if it may keep 16 MiB per thread. Identical results. Costs a new
    package on two platforms plus linux-lts, a licence entry and a dependency to keep current, for no measurable
    settle-time or fps change. About 1 to 1.5 d.
 3. **Adopt and also convert the streams.** Not recommended: section 10.
@@ -394,9 +404,9 @@ streams) makes chunk-parallel decoding possible, which applies to our own cache 
   (exit 139; no result was produced or used). The release now happens after the caller is done with the output. The
   speed passes never read the output, so their timings are not affected. **The same ordering applies to the decided
   implementation (PR #547): release or shrink the per-thread scratch only after `fromBinary` has finished reading it.**
-- `copy_mesh_corpus.py` flattens the cache's sub-folders by file name and skips a destination that already exists with
-  the same size without comparing bytes. Cache file names carry the full asset UUID, so a collision is not expected,
-  but the copier does not detect one.
+- `copy_mesh_corpus.py` flattens the cache's sub-folders by file name. A destination with the same name is compared
+  byte for byte: identical files are skipped, and a same-name file with different bytes is kept under a numeric prefix
+  and counted as a collision. Cache file names carry the full asset UUID, so a collision is not expected.
 - `Windows reports 8 cores`: the 9950X3D has 16; the session may be limited by affinity or a VM layer. Thread scaling
   was measured up to 3 threads only, the count the mesh path uses.
 

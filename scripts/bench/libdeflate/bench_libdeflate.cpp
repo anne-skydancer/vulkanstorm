@@ -812,7 +812,7 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
     // inside each repetition, so a drift in background load hits all of them;
     // per block the best of the repetitions is kept, per corpus pass the
     // minimum and the median.
-    printf("\n== whole corpus, single thread, strategies interleaved, %d reps ==\n", reps);
+    printf("\n== whole corpus, single thread, strategies interleaved (order rotated each rep), %d reps ==\n", reps);
     constexpr int NS = (int)(sizeof(strategies) / sizeof(strategies[0]));
     std::vector<uint8_t> exact_buf(max_ref + 64);
     std::vector<std::vector<double>> lat(NS, std::vector<double>(blocks.size(), 1e30));
@@ -822,8 +822,9 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
     for (int r = 0; r < reps; ++r)
     {
         while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
-        for (int k = 0; k < NS; ++k)
+        for (int j = 0; j < NS; ++j)
         {
+            const int k = (j + r) % NS;  // rotate the order each rep: counterbalanced
             auto t0 = clk::now();
             for (size_t i = 0; i < blocks.size(); ++i)
                 lat[k][i] = std::min(lat[k][i], run_one(strategies[k], blocks[i], ref[i], exact_buf, stats[k]));
@@ -842,7 +843,7 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
     fflush(stdout);
 
     // threads: the mesh pool is 2 (llmeshrepository.cpp:984) plus the repo thread
-    printf("\n== threads: wall time for the corpus, static interleave, strategies round-robin, %d reps ==\n", reps);
+    printf("\n== threads: wall time for the corpus, static interleave, strategies round-robin (order rotated each rep), %d reps ==\n", reps);
     const int tstrat[] = { 0, 4, 5, 6 };
     for (int t = 1; t <= max_threads; ++t)
     {
@@ -851,8 +852,9 @@ static int cmd_speed(const std::string& pack, int max_threads, int reps)
         for (int r = 0; r < reps; ++r)
         {
             while (machine_busy(&who)) { printf("waiting: %s running\n", who.c_str()); fflush(stdout); Sleep(30000); }
-            for (int k : tstrat)
+            for (int j = 0; j < 4; ++j)
             {
+                const int k = tstrat[(j + r) % 4];  // rotate the order each rep: counterbalanced
                 const Strategy& s = strategies[k];
                 std::atomic<int> ready{ 0 };
                 std::atomic<bool> go{ false };
