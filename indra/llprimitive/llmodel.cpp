@@ -1597,7 +1597,7 @@ bool LLModel::loadSkinInfo(LLSD& header, std::istream &is)
 
         LLSD skin_data;
 
-        if (LLUZipHelper::unzip_llsd(skin_data, is, size) == LLUZipHelper::ZR_OK)
+        if (LLUZipHelper::unzip_llsd(skin_data, is, size, UNZIP_MESH_MAX_OUT) == LLUZipHelper::ZR_OK)
         {
             mSkinInfo.fromLLSD(skin_data);
             return true;
@@ -1618,7 +1618,7 @@ bool LLModel::loadDecomposition(LLSD& header, std::istream& is)
 
         LLSD data;
 
-        if (LLUZipHelper::unzip_llsd(data, is, size) == LLUZipHelper::ZR_OK)
+        if (LLUZipHelper::unzip_llsd(data, is, size, UNZIP_MESH_MAX_OUT) == LLUZipHelper::ZR_OK)
         {
             mPhysics.fromLLSD(data);
             updateHullCenters();

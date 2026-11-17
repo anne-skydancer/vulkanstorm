@@ -848,6 +848,12 @@ public:
     }
 };
 
+// Output caps for the inflate helpers below, so a decompression bomb in region or server data
+// cannot exhaust memory or freeze the calling thread. 0 means no cap.
+constexpr size_t UNZIP_NO_CAP = 0;
+constexpr size_t UNZIP_MESH_MAX_OUT = 64u * 1024 * 1024;       // mesh blocks and materials
+constexpr size_t UNZIP_NAVMESH_MAX_OUT = 256u * 1024 * 1024;   // navmesh
+
 class LL_COMMON_API LLUZipHelper : public LLRefCount
 {
 public:
@@ -862,15 +868,15 @@ public:
         ZR_VERSION_ERROR
     } EZipRresult;
     // return OK or reason for failure
-    static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size);
-    static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size);
+    static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out = UNZIP_NO_CAP);
+    static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out = UNZIP_NO_CAP);
 };
 
 //dirty little zip functions -- yell at davep
 LL_COMMON_API std::string zip_llsd(LLSD& data);
 
 
-LL_COMMON_API U8* unzip_llsdNavMesh( bool& valid, size_t& outsize,std::istream& is, S32 size);
+LL_COMMON_API U8* unzip_llsdNavMesh( bool& valid, size_t& outsize,std::istream& is, S32 size, size_t max_out = UNZIP_NAVMESH_MAX_OUT);
 
 // returns a pointer to the array or past the array if the deprecated header exists
 LL_COMMON_API char* strip_deprecated_header(char* in, llssize& cur_size, llssize* header_size = nullptr);

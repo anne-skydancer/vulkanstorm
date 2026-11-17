@@ -2445,4 +2445,53 @@ namespace tut
         ensure("invalid", !valid);
         ensure("no result", res == NULL);
     }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<7>()
+    {
+        set_test_name("unzip_llsdNavMesh output cap: just under succeeds, over fails, bomb over the default cap fails");
+        const std::string body = gzipString(std::string(1000, 'a'));
+        bool valid = false;
+        size_t outsize = 0;
+        {
+            std::istringstream is(body);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 1000);
+            ensure("exactly at the cap succeeds", valid && res && outsize == 1000);
+            free(res);
+        }
+        {
+            std::istringstream is(body);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 999);
+            ensure("one over the cap fails", !valid && res == NULL);
+        }
+        {
+            const std::string bomb = gzipString(std::string(UNZIP_NAVMESH_MAX_OUT + 1, '\0'));
+            std::istringstream is(bomb);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)bomb.size());
+            ensure("bomb over the default cap fails", !valid && res == NULL);
+        }
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<8>()
+    {
+        set_test_name("unzip_llsd output cap: just under succeeds, over fails with ZR_SIZE_ERROR, bomb over the mesh cap fails");
+        LLSD src = LLSD::emptyMap();
+        src["s"] = std::string(5000, 'x');
+        const std::string z = zip_llsd(src);
+        const U8* in = reinterpret_cast<const U8*>(z.data());
+        LLSD out;
+        ensure_equals("uncapped", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size()), (S32)LLUZipHelper::ZR_OK);
+        ensure_equals("value", out["s"].asString().size(), (size_t)5000);
+        ensure_equals("large cap", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), 1u << 20), (S32)LLUZipHelper::ZR_OK);
+        ensure_equals("tiny cap", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), 100), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+
+        std::string raw(UNZIP_MESH_MAX_OUT + 1, '\0');
+        std::string bomb(compressBound((uLong)raw.size()), '\0');
+        uLongf blen = (uLongf)bomb.size();
+        ensure("compress", compress((Bytef*)&bomb[0], &blen, (const Bytef*)raw.data(), (uLong)raw.size()) == Z_OK);
+        bomb.resize(blen);
+        std::istringstream is(bomb);
+        ensure_equals("bomb over the mesh cap", (S32)LLUZipHelper::unzip_llsd(out, is, (S32)bomb.size(), UNZIP_MESH_MAX_OUT), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+    }
 }
