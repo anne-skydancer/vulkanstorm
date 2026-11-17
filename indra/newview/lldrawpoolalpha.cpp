@@ -401,7 +401,7 @@ void LLDrawPoolAlpha::drawGLTFScene(EAlphaOITPhase oit_phase)
     case ALPHA_ST_ALPHA: pass = LL::GLTFSceneManager::ST_ALPHA; break;
     case ALPHA_ST_DEPTH: pass = LL::GLTFSceneManager::ST_DEPTH; break;
     case ALPHA_ST_ACCUM: pass = LL::GLTFSceneManager::ST_ACCUM; break;
-    default: return;
+    default: return; // ALPHA_ST_RESTORE is no GLTF pass here: drawGLTFSceneDepth draws the scene's restore
     }
 
     LL::GLTFSceneManager& scene = LL::GLTFSceneManager::instance();
@@ -448,14 +448,17 @@ void LLDrawPoolAlpha::renderOITResidual()
     {
         LLGLDepthTest rigged_depth(GL_TRUE, GL_TRUE);
         gGL.setColorMask(false, false);
-        // the alpha-only variants in their depth-only mode 3 (the shaded programs would shade
-        // every fragment for a depth the colour mask discards): every sample, the shaded discards
-        // (minimum_alpha) kept, so st_min_alpha is 0 for every family
-        setStochasticUniforms(3);
-        renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX |
-                        LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 |
-                        LLVertexBuffer::MAP_TEXCOORD2,
-                    true, true, ALPHA_ST_RESTORE);
+        if (gPipeline.beginRiggedAlphaGroups() != gPipeline.endRiggedAlphaGroups())
+        {
+            // the rigged alpha-only variants in their depth-only mode 3 (the shaded programs would
+            // shade every fragment for a depth the colour mask discards): every sample, the shaded
+            // discards (minimum_alpha) kept. Custom-blend draws keep their full programs (renderAlpha).
+            setStochasticUniforms(3);
+            renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX |
+                            LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 |
+                            LLVertexBuffer::MAP_TEXCOORD2,
+                        true, true, ALPHA_ST_RESTORE);
+        }
         // <Vulkanstorm> and the GLTF scene's rigged blended assets, as the stock path draws them with
         // the rigged faces (same minimum alpha as the faces' shaders)
         drawGLTFSceneDepth(true, MINIMUM_ALPHA);
@@ -474,10 +477,14 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
     static const LLStaticHashedString sSamplesHW("st_samples_hw");
     static const LLStaticHashedString sSamples("st_samples");
     static const LLStaticHashedString sFrame("st_frame");
-    static const LLStaticHashedString sMinAlpha("st_min_alpha");
     const S32 frame = (S32)gPipeline.getAlphaStochasticFrame();
     const S32 samples_hw = (S32)gPipeline.getAlphaStochasticPassSamples();
     const S32 samples = (S32)gPipeline.getAlphaStochasticSamples();
+
+    // Mode 3 is the rigged depth restore: only the rigged variants and only st_mode (the sole
+    // uniform mode 3 reads besides st_min_alpha, whose GL default 0 is the value it needs: the
+    // shaded discards (minimum_alpha) already apply). The GLTF scene sets its own (drawGLTFSceneDepth).
+    const bool restore = mode == 3;
 
     auto apply = [&](LLGLSLShader* shader)
     {
@@ -485,17 +492,19 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
         {
             return;
         }
-        for (LLGLSLShader* program : { shader->mStochasticVariant,
+        for (LLGLSLShader* program : { restore ? nullptr : shader->mStochasticVariant,
                                        shader->mRiggedVariant ? shader->mRiggedVariant->mStochasticVariant : nullptr })
         {
             if (program && program->mProgramObject)
             {
                 program->bind();
                 program->uniform1i(sMode, mode);
-                program->uniform1i(sSamplesHW, samples_hw);
-                program->uniform1i(sSamples, samples);
-                program->uniform1i(sFrame, frame);
-                program->uniform1f(sMinAlpha, 0.f); // mode 3: the shaded discards (minimum_alpha) already apply
+                if (!restore)
+                {
+                    program->uniform1i(sSamplesHW, samples_hw);
+                    program->uniform1i(sSamples, samples);
+                    program->uniform1i(sFrame, frame);
+                }
             }
         }
     };
@@ -506,7 +515,7 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
     // the GLTF scene's blended variants (their base variants point at their alpha-only ones)
     for (LLGLSLShader& base : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
     {
-        LLGLSLShader* program = base.mStochasticVariant;
+        LLGLSLShader* program = restore ? nullptr : base.mStochasticVariant;
         if (program && program->mProgramObject)
         {
             program->bind();
@@ -1023,7 +1032,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 const bool stochastic_pass = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH ||
                                              oit_phase == ALPHA_ST_ACCUM; // <Vulkanstorm/>
                 const bool glare_pass = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH; // <Vulkanstorm/> alpha-only passes whose coverage needs the glare shading
-                const bool alpha_only_pass = glare_pass || oit_phase == ALPHA_ST_RESTORE; // <Vulkanstorm/> the depth restore uses the alpha-only variants too, never glare
+                const bool restore_alpha_only = oit_phase == ALPHA_ST_RESTORE && !custom_blend; // <Vulkanstorm/> the depth restore: custom-blend draws keep their full programs, so the same program writes and tests their depth later
+                const bool alpha_only_pass = glare_pass || restore_alpha_only; // <Vulkanstorm/> the restore uses the alpha-only variants too, never glare
                 if (stochastic_pass && residual_draw)
                 {
                     continue;
@@ -1217,7 +1227,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 }
 
                 mAlphaOnlyPass = alpha_only_pass; // <Vulkanstorm/>
-                mAlphaOnlyDepth = oit_phase == ALPHA_ST_RESTORE; // <Vulkanstorm/> mode 3 reads no material map
+                mAlphaOnlyDepth = restore_alpha_only; // <Vulkanstorm/> mode 3 reads no material map
                 bool tex_setup = TexSetup(&params, (mat != nullptr));
                 mAlphaOnlyPass = false;
                 mAlphaOnlyDepth = false;

@@ -60,7 +60,7 @@ public:
         ALPHA_ST_ALPHA,     // total alpha (alpha-only variants)
         ALPHA_ST_DEPTH,     // stochastic depth (alpha-only variants, coverage masks)
         ALPHA_ST_ACCUM,     // accumulation (the ordinary programs) and the faces' glow
-        ALPHA_ST_RESTORE,   // the rigged depth restore: alpha-only variants in mode 3, depth only (renderAlpha with depth_only)
+        ALPHA_ST_RESTORE,   // the rigged depth restore (renderAlpha, depth only): the faces' alpha-only variants in mode 3; custom-blend draws keep their full programs
     };
     // </FS>
 
