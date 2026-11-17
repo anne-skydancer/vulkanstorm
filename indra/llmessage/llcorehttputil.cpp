@@ -122,6 +122,7 @@ bool responseToLLSD(HttpResponse * response, bool log, LLSD & out_llsd, S32 max_
     LLSD body_llsd;
     // <Vulkanstorm> LLSDSerialize::fromXML(), with the caller's depth limit.
     LLPointer<LLSDXMLParser> parser = new LLSDXMLParser(log);
+    parser->setMaxNodes(LLSDParser::nodeBudgetForBytes(body->size()));
     S32 parse_status(parser->parse(bas, body_llsd, LLSDSerialize::SIZE_UNLIMITED, max_depth));
     // </Vulkanstorm>
     if (LLSDParser::PARSE_FAILURE == parse_status){
@@ -677,7 +678,7 @@ LLSD HttpCoroJSONHandler::handleSuccess(LLCore::HttpResponse * response, LLCore:
     }
 
     // Convert the JSON structure to LLSD
-    result = LlsdFromJson(jsonRoot);
+    result = LlsdFromJson(jsonRoot, LLSDParser::nodeBudgetForBytes(body->size()));
 
     return result;
 }
@@ -702,7 +703,7 @@ LLSD HttpCoroJSONHandler::parseBody(LLCore::HttpResponse *response, bool &succes
     }
 
     // Convert the JSON structure to LLSD
-    return LlsdFromJson(jsonRoot);
+    return LlsdFromJson(jsonRoot, LLSDParser::nodeBudgetForBytes(body->size()));
 }
 
 //========================================================================

@@ -32,15 +32,27 @@
 #include "llsdjson.h"
 
 #include "llsdutil.h"
+#include "llsdserialize.h"
 #include "llerror.h"
 #include "../llmath/llmath.h"
 
 #include <boost/json/src.hpp>
 
 //=========================================================================
-LLSD LlsdFromJson(const boost::json::value& val)
+namespace
 {
-    LLSD result;
+// nodes_left counts down from the budget; false once a value no longer fits.
+bool llsdFromJson(const boost::json::value& val, size_t& nodes_left, bool limited, LLSD& result)
+{
+    if (limited)
+    {
+        const size_t weight = val.is_object() ? LLSDParser::NODE_WEIGHT_MAP : 1;
+        if (nodes_left < weight)
+        {
+            return false;
+        }
+        nodes_left -= weight;
+    }
 
     switch (val.kind())
     {
@@ -72,7 +84,10 @@ LLSD LlsdFromJson(const boost::json::value& val)
         }
         for (size_t i = 0; i < size; i++)
         {
-            result[i] = (LlsdFromJson(array[i]));
+            if (!llsdFromJson(array[i], nodes_left, limited, result[i]))
+            {
+                return false;
+            }
         }
         break;
     }
@@ -80,11 +95,32 @@ LLSD LlsdFromJson(const boost::json::value& val)
         result = LLSD::emptyMap();
         for (const auto& element : val.as_object())
         {
-            result[std::string_view(element.key())] = LlsdFromJson(element.value());
+            if (!llsdFromJson(element.value(), nodes_left, limited, result[std::string_view(element.key())]))
+            {
+                return false;
+            }
         }
         break;
     }
+    return true;
+}
+}
+
+LLSD LlsdFromJson(const boost::json::value& val, size_t max_nodes)
+{
+    LLSD result;
+    size_t nodes_left = max_nodes;
+    if (!llsdFromJson(val, nodes_left, max_nodes != LLSDParser::MAX_NODES_UNLIMITED, result))
+    {
+        LL_WARNS() << "JSON conversion stopped: more than " << max_nodes << " values" << LL_ENDL;
+        return LLSD();
+    }
     return result;
+}
+
+LLSD LlsdFromJson(const boost::json::value& val)
+{
+    return LlsdFromJson(val, LLSDParser::MAX_NODES_DEFAULT);
 }
 
 //=========================================================================

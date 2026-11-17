@@ -48,6 +48,7 @@ typedef U32 uint32_t;
 
 #include "llsd.h"
 #include "llsdserialize.h"
+#include "llsdjson.h"
 #include "llsdutil.h"
 #include "llformat.h"
 #include "llmemorystream.h"
@@ -2323,5 +2324,29 @@ namespace tut
         U8* res = unzip_llsdNavMesh(valid, outsize, is, 0);
         ensure("invalid", !valid);
         ensure("no result", res == NULL);
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<7>()
+    {
+        set_test_name("node budget: HTTP body rule and JSON conversion");
+        ensure_equals("small body gets the default", LLSDParser::nodeBudgetForBytes(1000), LLSDParser::MAX_NODES_DEFAULT);
+        ensure_equals("at the crossover", LLSDParser::nodeBudgetForBytes(LLSDParser::MAX_NODES_DEFAULT * 16), LLSDParser::MAX_NODES_DEFAULT);
+        ensure_equals("large body scales", LLSDParser::nodeBudgetForBytes(LLSDParser::MAX_NODES_DEFAULT * 16 + 160), LLSDParser::MAX_NODES_DEFAULT + 10);
+
+        boost::json::array arr;
+        for (int i = 0; i < 99; ++i) arr.emplace_back(i);
+        boost::json::value doc(arr);     // 100 units
+        ensure_equals("json at budget", LlsdFromJson(doc, 100).size(), 99);
+        ensure("json over budget is undefined", LlsdFromJson(doc, 99).isUndefined());
+        ensure_equals("json unlimited", LlsdFromJson(doc, LLSDParser::MAX_NODES_UNLIMITED).size(), 99);
+        ensure_equals("json default", LlsdFromJson(doc).size(), 99);
+
+        boost::json::object obj;
+        obj["a"] = arr;
+        obj["b"] = arr;
+        boost::json::value nested(obj);  // a map weighs 4: 4 + 2 * 100 units
+        ensure_equals("nested json at budget", LlsdFromJson(nested, 204).size(), 2);
+        ensure("nested json over budget", LlsdFromJson(nested, 203).isUndefined());
     }
 }

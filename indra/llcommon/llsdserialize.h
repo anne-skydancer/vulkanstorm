@@ -124,6 +124,45 @@ protected:
      */
     virtual void doReset()  {};
 
+public:
+    /**
+     * Node budget, in units: the most LLSD a parse() or parseLines() may build before it fails with
+     * PARSE_FAILURE. A scalar or an array costs 1 unit, a map NODE_WEIGHT_MAP (4).
+     *
+     * A value can take one byte of input (binary or notation '!', an empty array is six) but costs heap:
+     * about 46 to 63 bytes on MSVC for a scalar or an array, and 146 to 282 for a map (std::map and its
+     * sentinel node), so a unit is at most about 70 bytes and the budget bounds memory, not just the count.
+     *
+     * MAX_NODES_DEFAULT (1 << 23 units, about 0.6 GiB at worst) is the ceiling for sources without a better
+     * measure; HTTP and JSON replies use nodeBudgetForBytes(body size); a trusted local file that may be
+     * large (the inventory cache) uses MAX_NODES_UNLIMITED.
+     *
+     * On this line the binary, notation and XML parses run in Rust: the budget is carried (setMaxNodes,
+     * getMaxNodes) and passed to vks_llsd_parse with the weights once core-rust takes it (ffi-v0.5.4);
+     * until then it is enforced for LlsdFromJson only.
+     */
+    static constexpr size_t MAX_NODES_DEFAULT = size_t(1) << 23;
+    static constexpr size_t MAX_NODES_UNLIMITED = 0;
+    static constexpr size_t NODE_WEIGHT_MAP = 4;
+    // The XML parse also counts each open element inside a skipped subtree (an unknown tag, a scalar's
+    // children): expat keeps a tag record (about 100 to 150 bytes) for every open element.
+    static constexpr size_t NODE_WEIGHT_SKIPPED_ELEMENT = 2;
+    /// The budget for a body of body_bytes from a server: at least the default, and one node per 16 bytes
+    /// above it. Real replies run at 50 bytes or more per node (AIS XML about 50), so they never reach it;
+    /// a flood of tiny values is held to a heap proportional to what was sent.
+    static constexpr size_t nodeBudgetForBytes(size_t body_bytes)
+    {
+        return body_bytes / 16 > MAX_NODES_DEFAULT ? body_bytes / 16 : MAX_NODES_DEFAULT;
+    }
+    void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; }
+    size_t getMaxNodes() const { return mMaxNodes; }
+
+protected:
+    /**
+     * @brief The node budget (see setMaxNodes()).
+     */
+    size_t mMaxNodes = MAX_NODES_DEFAULT;
+
     /**
      * @brief The byte budget of the current parse, or
      * LLSDSerialize::SIZE_UNLIMITED.
@@ -629,6 +668,10 @@ public:
         return sd;
     }
 };
+
+// Maximum nesting for LLSD from a remote or untrusted source: real mesh headers, metadata and assets nest
+// below ten levels, and the parser recursion and the LLSD destructor stay well inside the stack at 96.
+constexpr S32 LLSD_UNTRUSTED_MAX_DEPTH = 96;
 
 class LL_COMMON_API LLUZipHelper : public LLRefCount
 {

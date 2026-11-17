@@ -62,7 +62,6 @@
 
 // File constants
 static const size_t MAX_HDR_LEN = 20;
-static const S32 UNZIP_LLSD_MAX_DEPTH = 96;
 static const char LEGACY_NON_HEADER[] = "<llsd>";
 const std::string LLSD_BINARY_HEADER("LLSD/Binary");
 const std::string LLSD_XML_HEADER("LLSD/XML");
@@ -1223,7 +1222,7 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 
         boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
 
-        if (!LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH))
+        if (!LLSDSerialize::fromBinary(data, istrm, cur_size, LLSD_UNTRUSTED_MAX_DEPTH))
         {
             // free(result);
             if( result )

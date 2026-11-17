@@ -1355,7 +1355,7 @@ bool LLModel::loadModel(std::istream& is)
 
     LLSD header;
     {
-        if (!LLSDSerialize::fromBinary(header, is, 1024*1024*1024))
+        if (LLSDSerialize::fromBinary(header, is, 1024*1024*1024, LLSD_UNTRUSTED_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
             LL_WARNS("MESHSKININFO") << "Mesh header parse error.  Not a valid mesh asset!" << LL_ENDL;
             return false;

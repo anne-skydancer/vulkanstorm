@@ -138,7 +138,7 @@ void exoFlickrResponse( LLSD const &aData, exoFlickr::response_callback_t aCallb
     else
     {
         LL_INFOS("FlickrAPI") << "Got response string: " << result << LL_ENDL;
-        LLSD response = LlsdFromJson(root);
+        LLSD response = LlsdFromJson(root, LLSDParser::nodeBudgetForBytes(result.size()));
         if (aCallback)
         {
             aCallback((status.getType() >= 200 && status.getType() < 300), response);
