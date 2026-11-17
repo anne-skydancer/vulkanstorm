@@ -1964,6 +1964,31 @@ void* LLWindowWin32::createSharedContext()
 
     HGLRC rc = 0;
 
+    // <Vulkanstorm> a worker context (the main context already exists) gets one attempt with exactly the main context's
+    // version, so it shares with it; on failure it returns null and the caller turns the texture thread
+    // off. No step-down, no unshared legacy context, and the main window is never closed for a worker.
+    if (mhRC)
+    {
+        if (mContextMajor == 0)
+        {
+            return nullptr; // the main context is a legacy one: no attributes to share with
+        }
+        attribs[1] = mContextMajor;
+        attribs[3] = mContextMinor;
+        rc = wglCreateContextAttribsARB(mhDC, mhRC, attribs);
+        if (!rc)
+        {
+            LL_WARNS("Window") << "Could not create a shared OpenGL " << llformat("%d.%d", attribs[1], attribs[3])
+                << " worker context; background texture upload is disabled." << LL_ENDL;
+        }
+        return rc;
+    }
+
+    // main context: recorded below on success; reset so a recreated window never keeps stale values
+    mContextMajor = 0;
+    mContextMinor = 0;
+    // </Vulkanstorm>
+
     bool done = false;
     while (!done)
     {
@@ -1987,6 +2012,10 @@ void* LLWindowWin32::createSharedContext()
         }
         else
         {
+            // <Vulkanstorm>
+            mContextMajor = attribs[1];
+            mContextMinor = attribs[3];
+            // </Vulkanstorm>
             LL_INFOS() << "Created OpenGL " << llformat("%d.%d", attribs[1], attribs[3]) <<
                 (LLRender::sGLCoreProfile ? " core" : " compatibility") << " context." << LL_ENDL;
             done = true;

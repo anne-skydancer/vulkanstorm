@@ -289,8 +289,11 @@ void LLImageGL::initClass(LLWindow* window, S32 num_catagories, bool skip_analyz
     if (thread_texture_loads || thread_media_updates)
     {
         LLImageGLThread::createInstance(window);
-        LLImageGLThread::sEnabledTextures = thread_texture_loads;
-        LLImageGLThread::sEnabledMedia = thread_media_updates;
+        // <Vulkanstorm> without a worker context nothing drains the thread's queue: keep both off, whatever the settings say
+        const bool thread_ok = LLSimpleton<LLImageGLThread>::getInstance()->hasContext();
+        LLImageGLThread::sEnabledTextures = thread_ok && thread_texture_loads;
+        LLImageGLThread::sEnabledMedia = thread_ok && thread_media_updates;
+        // </Vulkanstorm>
     }
 }
 

@@ -380,6 +380,9 @@ public:
 
     void run() override;
 
+    // <Vulkanstorm/> false when the worker context could not be created (the thread never started)
+    bool hasContext() const { return mContext != nullptr; }
+
 private:
     LLWindow* mWindow;
     void* mContext = nullptr;
