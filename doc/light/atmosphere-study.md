@@ -516,6 +516,61 @@ Common gates for every stage:
 
 ## 8. Decisions for the owner (new ones only; the recommended option first)
 
+### Decided (owner, 2026-11-17)
+
+Decided on the decisions page, option by option. The options below are kept as they were offered.
+
+- **D1 = (a).** The slab-split march at 64 steps. AT2-1 fixes the march first, before anything draws with it.
+- **D2 = (a).** The new aureole list stands under the 2026-11-11 rule. Since the creator-look decision below, the white-card rule bounds
+  the physical sky and the light it casts; it no longer bounds the creator's visible sky.
+- **D3 = (a).** One quality for every GPU; the step counts stay debug settings. If AT2-3 times a weaker card well above the estimate, this
+  comes back to the owner before anything ships.
+- **D4 = (a).** The deeper shade under PBR skies is accepted as physical, with no compensation factor.
+- **D5 = (c), a new option.** The sky tables stay 16-bit float internally whatever the setting. With `RenderHDREnabled` off the sky
+  shader applies exposure and the tone curve before a dithered 8-bit write: one code path, the 8-bit buffers kept. If AT2-2 shows very
+  dark twilight too coarse against HDR on, this comes back to the owner.
+- **The bench fix in 55a948fe33** changes no finding and nothing needs re-measuring.
+
+#### The creator's look: each EEP sky is a filter on the physical sky (settled, owner, 2026-11-17)
+
+Replaces the restated "[decided]" item "the drawn sky physical, with L6 compensating". The principle is creator intent for every EEP.
+
+- **Controls unchanged.** People use the EEP settings, personal lighting and the rest of today's controls exactly as now. Those controls
+  drive a filter that applies them to the physical sky (AT2-0's `LLScatter`, with D1's march).
+- **The sky you see is the same as today.** The filter is fully determined by the EEP: per direction, it multiplies the physical sky by
+  today's Windlight sky over the physical sky, both computed from that EEP (today's formula, `skyV.glsl`, is kept as the reference that
+  produces the filter; it is never drawn). Where the physical sky has no light, or none in a channel, a multiplier cannot reproduce today,
+  so the filter also adds light there: multiply, plus add where physics has nothing, still computed from the EEP alone. It applies to the
+  drawn dome and to the haze on distant objects, including the sky's brightness relative to the sun. Creator intent wins over the
+  white-card rule here: the 33 of 618 measured day skies that outshine a white card in the same sun keep today's look.
+- **The light the sky casts** (reflection probes, shade) stays physical in level, so D4 stands, and takes the creator's tint and
+  gradient. Today's viewer already separates the two: its probes capture a desaturated sky with ambient removed (about 1.2x physical for
+  Default) while the drawn Default sky is about 5.8x; letting the probes capture the creator-bright sky would raise shade about 4.8x and
+  take sun to shade from about 3.8 : 1 to about 0.8 : 1. Where the physical sky casts no light (41 of 618 day skies: 21 with no sun,
+  7 with no atmosphere, 13 where the mapping leaves no scattering), the cast light is today's, from the creator's ambient.
+- **The 13 are by design.** `LLAtmosphere::fromLegacy` keeps each channel's column exactly as today's sunlight reaches the ground at
+  noon, then fits Earth's ozone and a grey aerosol inside it; when ozone fills a thin channel, a grey aerosol has no room in any channel.
+  The creator's sunlight wins over the sky's scattering, which agrees with the filter rule. No change.
+- **Photos: non-negotiable.** The filter must be present in every capture that shows the sky: the ordinary snapshot, high-resolution
+  and tiled snapshots, 360 snapshots, and saved and uploaded images. It is therefore part of how the sky is computed (the sky-view
+  table, the aerial perspective, the probes), not a pass over the finished image, and every AT2 stage that draws the sky checks each
+  capture path against the screen.
+- **Measured (AT2-F, `doc/light/at2f-creator-grade.md`).** Through the sky-view table the filtered sky is within dE 0.05 of today on
+  average (the physical sky's own table error is 0.03). Physics alone reaches dE 2 for 12 % of skies. The worst cells sit within a few
+  degrees of the sun, where skyV holds the glow flat inside 2.56 degrees; AT2-2 evaluates that near-sun glow analytically or gives the
+  sky view a finer band there. Not yet measured: the 150 night and twilight skies, and the haze on objects against today's object haze
+  (AT2-F second pass, before AT2-3).
+
+Effect on the staged plan (§7): **AT2-1** adds the filter tables (the Windlight reference and the physical sky on the sky-view grid,
+per preset load and per keyframe, the multiplier and the additive part) next to its other tables, with a C++ twin and vectors
+(`scripts/light/at2f_creator_grade.cpp` holds a CPU twin of skyV anchored to the GPU bench). **AT2-2** draws the dome and the probes from
+them (visible sky filtered in full, cast light physical in level with the creator's tint, today's cast light where physics has none) and
+adds the capture-path checks. **AT2-3** applies the filter to the aerial perspective with its additive part. **AT2-5** keeps the Windlight
+formula as the filter's reference instead of deleting it. L6 no longer compensates the drawn sky; it still handles night and exposure.
+
+### Options as offered
+
+
 1. **D1. How the sky view is marched (R2).**
    - (a) **Recommended:** the slab-split march at 64 steps. It is within 1.2 % on Default, Foggy and Sunset, and costs 0.024-0.051 ms,
      +0.014-0.030 over the uniform 32.
@@ -538,7 +593,8 @@ Common gates for every stage:
    - (a) **Recommended:** accept a clamped 8-bit sky there; no second code path.
    - (b) Refuse `RenderHDREnabled` off once AT2-2 lands (GL 4.6 no-fallback rule).
 
-Restated, not re-asked ([decided]): every sky physical, classic bounded, no fallback; the drawn sky physical, with L6 compensating;
+Restated, not re-asked ([decided]): every sky physical, classic bounded, no fallback; the drawn sky physical, with L6 compensating
+(superseded 2026-11-17 by the EEP filter above);
 slab 0.25 km; sky observer fixed, haze at the real height; the moon compensated plus scotopic desaturation; stars on physical timing;
 the sky in the lighting pass; the far table for the clouds; the L2 mean under the layer; the Density tab hidden; AT2 on devel, release
 after L6; `RenderAtmospherePhysicalLight` removed in AT2-5.
