@@ -2666,14 +2666,15 @@ namespace tut
         ensure("nested at budget", parseBinaryNodes(nested, 61, out) > 0);
         ensure_equals("nested over budget", parseBinaryNodes(nested, 60, out), (S32)LLSDParser::PARSE_FAILURE);
         ensure("nested failure leaves undefined", out.isUndefined());
-        // a map of n entries, each key 'k' + len 1 + "a" and an undef value: n + 1 nodes (equal keys still cost a node)
+        // a map of n entries, each key 'k' + len 1 + "a" and an undef value: n + 4 units, the map weighing 4
+        // (equal keys still cost a unit)
         const U32 n = 50;
         std::string map("{");
         be32(map, n);
         for (U32 i = 0; i < n; ++i) { map.push_back('k'); be32(map, 1); map.push_back('a'); map.push_back('!'); }
         map.push_back('}');
-        ensure("map at budget", parseBinaryNodes(map, n + 1, out) > 0);
-        ensure_equals("map over budget", parseBinaryNodes(map, n, out), (S32)LLSDParser::PARSE_FAILURE);
+        ensure("map at budget", parseBinaryNodes(map, n + 4, out) > 0);
+        ensure_equals("map over budget", parseBinaryNodes(map, n + 3, out), (S32)LLSDParser::PARSE_FAILURE);
         ensure("map failure leaves undefined", out.isUndefined());
     }
 
@@ -2697,6 +2698,54 @@ namespace tut
                 {
                     ensure_equals("notation over budget", rc, (S32)LLSDParser::PARSE_FAILURE);
                     ensure("notation failure leaves undefined", out.isUndefined());
+                }
+            }
+        }
+        {
+            // notation map: {k0:!, ...} of 20 entries is 24 units
+            std::string text("{");
+            for (int i = 0; i < 20; ++i) text += (i ? ",'k" : "'k") + std::to_string(i) + "':!";
+            text += "}";
+            for (size_t budget : { (size_t)24, (size_t)23 })
+            {
+                std::istringstream in(text);
+                LLPointer<LLSDNotationParser> p = new LLSDNotationParser;
+                p->setMaxNodes(budget);
+                S32 rc = p->parse(in, out, (llssize)text.size());
+                if (budget == 24) ensure("notation map at budget", rc > 0);
+                else
+                {
+                    ensure_equals("notation map over budget", rc, (S32)LLSDParser::PARSE_FAILURE);
+                    ensure("notation map failure leaves undefined", out.isUndefined());
+                }
+            }
+        }
+        for (bool lines : { false, true })
+        {
+            // XML map of 20 entries: 24 units; and 60 nested <a> under an <integer>, skipped but held by expat:
+            // the integer 1 plus 59 skipped descendants of 2 units each
+            std::string map("<llsd><map>");
+            for (int i = 0; i < 20; ++i) map += "<key>k" + std::to_string(i) + "</key><undef/>";
+            map += "</map></llsd>\n";
+            std::string skipped("<llsd><integer>");
+            for (int i = 0; i < 60; ++i) skipped += "<a>";
+            for (int i = 0; i < 60; ++i) skipped += "</a>";
+            skipped += "7</integer></llsd>\n";
+            for (const std::string* text : { &map, &skipped })
+            {
+                const size_t need = text == &map ? 24 : 1 + 59 * 2;
+                for (size_t budget : { need, need - 1 })
+                {
+                    std::istringstream in(*text);
+                    LLPointer<LLSDXMLParser> p = new LLSDXMLParser(false);
+                    p->setMaxNodes(budget);
+                    S32 rc = lines ? p->parseLines(in, out) : p->parse(in, out, LLSDSerialize::SIZE_UNLIMITED);
+                    if (budget == need) ensure("xml weighted at budget", rc > 0);
+                    else
+                    {
+                        ensure_equals("xml weighted over budget", rc, (S32)LLSDParser::PARSE_FAILURE);
+                        ensure("xml weighted failure leaves undefined", out.isUndefined());
+                    }
                 }
             }
         }
@@ -2820,7 +2869,8 @@ namespace tut
         obj["a"] = arr;
         obj["b"] = arr;                  // 1 + 2 * 100 nodes
         boost::json::value nested(obj);
-        ensure_equals("nested json at budget", LlsdFromJson(nested, 201).size(), 2);
-        ensure("nested json over budget", LlsdFromJson(nested, 200).isUndefined());
+        // a map weighs 4: 4 + 2 * 100 units
+        ensure_equals("nested json at budget", LlsdFromJson(nested, 204).size(), 2);
+        ensure("nested json over budget", LlsdFromJson(nested, 203).isUndefined());
     }
 }

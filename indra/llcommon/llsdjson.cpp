@@ -44,11 +44,12 @@ bool llsdFromJson(const boost::json::value& val, size_t& nodes_left, bool limite
 {
     if (limited)
     {
-        if (nodes_left == 0)
+        const size_t weight = val.is_object() ? LLSDParser::NODE_WEIGHT_MAP : 1;
+        if (nodes_left < weight)
         {
             return false;
         }
-        --nodes_left;
+        nodes_left -= weight;
     }
 
     switch (val.kind())

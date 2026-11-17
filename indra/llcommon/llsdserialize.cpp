@@ -531,7 +531,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
     {
         return 0;
     }
-    if (!chargeNode())
+    if (!chargeNode(c == '{' ? NODE_WEIGHT_MAP : 1))
     {
         return PARSE_FAILURE;
     }
@@ -1006,7 +1006,7 @@ S32 LLSDBinaryParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) con
     {
         return 0;
     }
-    if (max_depth == 0 || !chargeNode())
+    if (max_depth == 0 || !chargeNode(c == '{' ? NODE_WEIGHT_MAP : 1))
     {
         return PARSE_FAILURE;
     }
