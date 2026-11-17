@@ -440,25 +440,33 @@ One command for the session (scratch profile `.captures\mc1-profile-<stamp>`, ne
 
 Log in by hand (any region); when the pop-up asks, teleport to the busy region and leave the viewer alone.
 
-Unattended runs (persistent local profile and autologin; the scripts never read, type, copy or log the credentials):
+Unattended runs (a remembered login in one fixed local profile; the scripts never read, type, copy or log the credentials):
 
 ```powershell
-.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -SetupLogin    # once: log in by hand, tick "remember me", quit; no scenario runs
-.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
-.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -DeleteProfile  # when the series ends
+.\scripts\inworld\mc1_sl_launch.ps1 -SetupLogin     # once, by the owner
+.\scripts\inworld\mc1_sl_launch.ps1 -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
+.\scripts\inworld\mc1_sl_launch.ps1 -DeleteProfile  # when the series ends
 ```
 
-- `-Profile` must be a folder under the gitignored `.captures` (other paths are refused); it replaces the fresh per-launch profile.
-- `-AutoLogin` passes the viewer's `--autologin` (log in as the last saved user) and needs `-Profile`. It refuses to start when the profile
-  has no stored login (no `bin_conf.dat` in it): run `-SetupLogin` first. Only the file's presence is tested, never its content.
-- `-AutoLogin` also passes `perf_check.py --auto-handoff`, so nobody has to click: after login the plugin teleports to `-BusyRegion` itself with the
-  teleport series' own code (`teleport_once`, the scenario's `teleports` timeout; no teleport when you log in there already). A refused or
-  late teleport is retried once; then the run ends with the problem pop-up and a non-zero exit. It never waits for a human. `-BusyRegion` is
-  required. The manual flow (no `-AutoLogin`) is unchanged.
+- The profile is one folder outside the repo, `%LOCALAPPDATA%\Vulkanstorm-autologin` (local, not roaming). Its credential store
+  (`Roaming\Vulkanstorm_x64\user_settings\bin_conf.dat`) holds a password-equivalent. **Never copy, zip, sync or share that folder.**
+- `-SetupLogin` writes a marker file and starts the viewer with that profile at the login screen; no scenario runs. Log in by hand with
+  "remember me" ticked, go to the exact measuring spot in the busy region (for Rooftops the "TT Rooftops dark" spot) with World >
+  Environment on Shared Environment, and **quit there**: autologin logs in at the last location.
+- `-AutoLogin` passes the viewer's `--autologin`, `perf_check.py --auto-handoff` and `--max-wait-s 300`, and needs `-StartRegion` (the login
+  region) and `-BusyRegion`. It refuses a folder without the marker, a junction or symlink, and a profile whose credential store is missing
+  or empty (existence and size only; the content is never read, and a present file does not prove the login works: a login that does not
+  finish within 300 s ends the run cleanly with a log line and the problem pop-up).
+- The hand-off needs no click: logged in at the busy region (names compare case-insensitively), that position is the spot and nothing
+  teleports. Elsewhere it teleports to `-BusyPos X,Y,Z` with the teleport series' own code (`teleport_once`), accepts a first teleport that
+  only arrived late, fails on a landing more than 5 m off, and without `-BusyPos` ends the run with a message to redo `-SetupLogin` at the
+  spot. It never waits for a human. The manual flow (no `-AutoLogin`) is unchanged.
+- After `perf_check` ends (success or failure) the launcher quits the viewer with a window-close request, waits up to 120 s and, if it does
+  not exit, says so loudly and leaves it (nothing is killed). It copies the viewer's own `Vulkanstorm.log` (only that file) into the run folder.
 - Be logged out of Second Life everywhere else before a run: a second login of the same account kicks the first.
-- `-DeleteProfile` starts nothing: it copies the profile's viewer logs (`*.log`, `*.old`; no chat or conversation logs) into
-  `viewer-logs\` of the newest `.captures\mc1-sl-*` run folder, then deletes the profile folder, saved login included. Delete the profile
-  when the run series ends; it holds the remembered login.
+- `-DeleteProfile` refuses while the viewer runs and without the marker, deletes the credential files (`bin_conf.dat`, `password.dat`) first
+  and checks they are gone, then the folder. Anything left is listed in red and the exit code is 2. Run it when the series ends.
+- `VKS_AUTOLOGIN_PROFILE` and `VKS_AUTOLOGIN_PROCESS` (folder and process name) exist for `tests\test_launcher.py` only.
 
 Launcher parameters: `-StartRegion NAME` (the region you log in to: the viewer does not log it at login; `--start-region` in `perf_check.py`),
 `-BusyRegion NAME` (the region you teleport to, used when the viewer log does not give it; `--busy-region`), `-TpRegion NAME` (the second

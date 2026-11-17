@@ -29,19 +29,23 @@ and --tracy-capture, the throw-away noop plugin entry, and the run folder .captu
   -Scenario mc1_sl (the default) is the full session: still, moving, teleports, fps probe.
   .\mc1_sl_launch.ps1 -DryRun             (at the login screen: --dry-run --no-login-wait, do not log in)
 
-Unattended runs (a persistent local profile that logs in by itself; the credentials are never read, typed, copied or logged by these scripts):
-  1. One-time setup:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -SetupLogin
-     The viewer starts with that profile at the login screen and no scenario runs. Log in by hand with "remember me" ticked, then quit.
-  2. Each run:        .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
-     -AutoLogin passes the viewer's --autologin (log in as the last saved user) and perf_check's --auto-handoff: nobody clicks, so the
-     script teleports to -BusyRegion itself (skipped when you log in there; one retry; then the run ends with the problem pop-up,
-     it never waits for a human). It needs -BusyRegion (when the scenario has the hand-off) and -Profile and refuses to start when the profile
-     has no stored login yet (it only checks that the viewer's bin_conf.dat exists in the profile, never what is in it).
-  Be logged out of Second Life everywhere else first: a second login of the same account kicks the first.
-  3. When the series ends:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -DeleteProfile
-     It copies the profile's viewer logs (not chat or conversation logs) into the newest .captures\mc1-sl-* run folder (viewer-logs\),
-     then deletes the profile folder, saved login included. Nothing else is started.
-  -Profile must be a folder under the repo's .captures (gitignored); any other path is refused.
+Unattended runs (the viewer logs in by itself from a remembered login; these scripts never read, type, copy or log the credentials).
+The profile is ONE fixed folder outside the repo, $env:LOCALAPPDATA\Vulkanstorm-autologin (local, not roaming). Its credential store
+(bin_conf.dat) holds a password-equivalent: never copy, zip, sync or share that folder. Only the owner creates it (-SetupLogin).
+  1. One-time setup:  .\mc1_sl_launch.ps1 -SetupLogin
+     The viewer starts with the profile at the login screen; no scenario runs. Log in by hand with "remember me" ticked, go to the exact
+     measuring spot in the busy region (World > Environment on Shared Environment), and quit THERE: autologin logs in at the last location.
+  2. Each run:        .\mc1_sl_launch.ps1 -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
+     -AutoLogin passes the viewer's --autologin (log in as the last saved user), perf_check's --auto-handoff and --max-wait-s 300, and
+     needs -StartRegion (the login region) and -BusyRegion. Logged in at the busy region (case-insensitive): that position is the spot.
+     Elsewhere: it teleports to -BusyPos X,Y,Z when given, else the run ends with a message to redo the setup. It quits the viewer when
+     perf_check is done (CloseMainWindow, waits 120 s, never kills) and copies Vulkanstorm.log into the run folder. It refuses to start
+     when the profile has no marker or no credential store (bin_conf.dat present and not empty; its content is never read).
+  Be logged out of Second Life everywhere else first: a second login kicks the first.
+  3. When the series ends:  .\mc1_sl_launch.ps1 -DeleteProfile
+     Refuses while the viewer runs; deletes the credential files first and checks they are gone, then the folder. Leftovers are listed
+     and the exit code is 2. Nothing else is started.
+  VKS_AUTOLOGIN_PROFILE and VKS_AUTOLOGIN_PROCESS override the folder and the process name (tests only).
 
 Paths must contain no spaces (--leap is split at spaces); see README.md ("Launch").
 #>
@@ -53,59 +57,82 @@ param(
     [string]$Exe = 'C:\Users\annes\source\repos\vulkanstorm\work\mc-stage1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe',
     [switch]$GpuWindow,          # after each capture: a GPU-timed GLSubmitStats window (a -DVKS_GL_STATS=ON build)
     [ValidateRange(1, 100000)][int]$GpuWindowFrames = 600, # frames in that window (the viewer takes 1..100000)
-    [string]$Profile = '',       # a persistent profile folder under .captures, used instead of a fresh .captures\mc1-profile-<stamp>
-    [switch]$AutoLogin,          # pass --autologin (needs -Profile with a remembered login)
-    [switch]$SetupLogin,         # one-time: start the viewer with -Profile at the login screen, no scenario; log in by hand, "remember me", quit
-    [switch]$DeleteProfile,      # save the profile's logs (no chat) into the newest mc1-sl-* run folder, then delete the profile; starts nothing
+    [string]$BusyPos = '',       # -AutoLogin: X,Y,Z to teleport to in -BusyRegion when the login is not already there
+    [switch]$AutoLogin,          # unattended: --autologin from the fixed local profile; quits the viewer afterwards
+    [switch]$SetupLogin,         # one-time: the viewer with the fixed profile at the login screen, no scenario; log in, go to the spot, quit there
+    [switch]$DeleteProfile,      # delete the credential files, then the fixed profile folder; starts nothing
     [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
 
 $repo = 'C:\Users\annes\source\repos\vulkanstorm'
 
-# -Profile: only a folder under the repo's gitignored .captures (resolved to a full path first, so .. cannot escape)
-$capturesRoot = [IO.Path]::GetFullPath((Join-Path $repo '.captures')).TrimEnd('\') + '\'
-if ($Profile) {
-    $profFull = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Profile)) { $Profile } else { Join-Path $repo $Profile })).TrimEnd('\')
-    if (-not ($profFull + '\').StartsWith($capturesRoot, [StringComparison]::OrdinalIgnoreCase) -or ($profFull + '\') -eq $capturesRoot) {
-        throw "-Profile must be a folder under $capturesRoot (gitignored), got: $Profile"
-    }
-}
-if (($AutoLogin -or $SetupLogin -or $DeleteProfile) -and -not $Profile) { throw '-AutoLogin, -SetupLogin and -DeleteProfile need -Profile <folder under .captures>' }
-if ($Profile -and $DryRun) { throw '-Profile cannot be combined with -DryRun (the dry run always uses a fresh folder)' }
-if ($AutoLogin -and $SetupLogin) { throw '-AutoLogin and -SetupLogin exclude each other' }
-if ($DeleteProfile -and ($AutoLogin -or $SetupLogin)) { throw '-DeleteProfile runs alone' }
+if (($AutoLogin -or $SetupLogin) -and $DryRun) { throw '-AutoLogin and -SetupLogin cannot be combined with -DryRun' }
+if (($AutoLogin -and $SetupLogin) -or ($DeleteProfile -and ($AutoLogin -or $SetupLogin))) { throw '-AutoLogin, -SetupLogin and -DeleteProfile exclude each other' }
+if ($BusyPos -and $BusyPos -notmatch '^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$') { throw '-BusyPos takes X,Y,Z numbers without spaces, for example 128,128,30' }
 
-# the viewer's stored login is bin_conf.dat in its user_settings folder; only its presence is tested, never its content
-function Test-StoredLogin([string]$dir) {
-    if (-not (Test-Path -LiteralPath $dir)) { return $false }
-    return [bool](Get-ChildItem -LiteralPath $dir -Recurse -File -Filter 'bin_conf.dat' -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 0 } | Select-Object -First 1)
+# The user's real folders, read from Windows (not from $env:, which an earlier run in this window may have pointed at a
+# scratch profile); every change to $env: below is undone before this script returns.
+$realLocal   = [Environment]::GetFolderPath('LocalApplicationData')
+$realRoaming = [Environment]::GetFolderPath('ApplicationData')
+$saved = @{ APPDATA = $env:APPDATA; LOCALAPPDATA = $env:LOCALAPPDATA }
+
+# The one autologin profile: local (not roaming), outside the repo. Its bin_conf.dat is password-equivalent.
+$profFull   = if ($env:VKS_AUTOLOGIN_PROFILE) { [IO.Path]::GetFullPath($env:VKS_AUTOLOGIN_PROFILE).TrimEnd('\') } else { Join-Path $realLocal 'Vulkanstorm-autologin' }
+$marker     = Join-Path $profFull '.vulkanstorm-autologin-profile'
+$viewerProc = if ($env:VKS_AUTOLOGIN_PROCESS) { $env:VKS_AUTOLOGIN_PROCESS } else { 'vulkanstorm-bin' }
+$credFile   = Join-Path $profFull 'Roaming\Vulkanstorm_x64\user_settings\bin_conf.dat'   # the viewer's credential store (llsechandler_basic.cpp)
+$credNames  = @('bin_conf.dat', 'password.dat')                                           # and its legacy password file (llappviewer.cpp)
+
+function Test-ReparseTree([string]$dir) {   # the folder itself or anything in it is a junction or symlink
+    if ((Get-Item -LiteralPath $dir -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $true }
+    return [bool](Get-ChildItem -LiteralPath $dir -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue | Select-Object -First 1)
+}
+function Assert-OurProfile {
+    if (-not (Test-Path -LiteralPath $profFull)) { throw "no autologin profile at ${profFull}: run .\mc1_sl_launch.ps1 -SetupLogin first" }
+    if (-not (Test-Path -LiteralPath $marker)) { throw "$profFull has no .vulkanstorm-autologin-profile marker: it was not made by -SetupLogin, refusing to use or delete it" }
+    if (Test-ReparseTree $profFull) { throw "$profFull is or contains a junction or symlink: refusing" }
 }
 
 if ($DeleteProfile) {
-    if (-not (Test-Path -LiteralPath $profFull)) { throw "no such profile folder: $profFull" }
-    $run = Get-ChildItem -LiteralPath (Join-Path $repo '.captures') -Directory -Filter 'mc1-sl-*' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $run) { throw 'no .captures\mc1-sl-* run folder to save the logs into; nothing deleted' }
-    $dest = Join-Path $run.FullName 'viewer-logs'
-    New-Item -ItemType Directory -Force $dest | Out-Null
-    # viewer logs only: *.log / *.old files, never chat or conversation logs (chat.txt, conversation.log, anything with chat in its name)
-    $n = 0
-    foreach ($f in @(Get-ChildItem -LiteralPath $profFull -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.log', '.old' -and $_.Name -notmatch 'chat|conversation' })) {
-        Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dest $f.Name) -Force; $n++
+    Assert-OurProfile
+    if (Get-Process -Name $viewerProc -ErrorAction SilentlyContinue) { throw "$viewerProc is running: quit the viewer first, nothing deleted" }
+    # the credential files first, checked on their own, so a locked cache file cannot keep them
+    foreach ($f in @(Get-ChildItem -LiteralPath $profFull -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object { $credNames -contains $_.Name })) {
+        Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item -LiteralPath $profFull -Recurse -Force
-    Write-Host "Saved $n log file(s) into $dest; deleted the profile $profFull"
+    $creds = @(Get-ChildItem -LiteralPath $profFull -Recurse -Force -File -ErrorAction SilentlyContinue | Where-Object { $credNames -contains $_.Name })
+    Remove-Item -LiteralPath $profFull -Recurse -Force -ErrorAction SilentlyContinue
+    $left = @(if (Test-Path -LiteralPath $profFull) { Get-ChildItem -LiteralPath $profFull -Recurse -Force -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName } })
+    if ($creds.Count -or $left.Count -or (Test-Path -LiteralPath $profFull)) {
+        foreach ($c in $creds) { Write-Host "CREDENTIAL FILE STILL PRESENT: $($c.FullName)" -ForegroundColor Red }
+        foreach ($l in $left) { Write-Host "LEFTOVER: $l" -ForegroundColor Red }
+        Write-Host "Profile $profFull was NOT fully deleted: close what holds those files and run -DeleteProfile again." -ForegroundColor Red
+        exit 2
+    }
+    Write-Host "Deleted the autologin profile $profFull (credential files first, then the folder)."
     return
 }
-if ($AutoLogin -and -not (Test-StoredLogin $profFull)) {
-    throw "profile $profFull has no remembered login yet. One-time setup: .\mc1_sl_launch.ps1 -Profile $Profile -SetupLogin (log in by hand with 'remember me' ticked, then quit), then run again with -AutoLogin."
+if ($SetupLogin) {
+    if (Test-Path -LiteralPath $profFull) {
+        if (Test-ReparseTree $profFull) { throw "$profFull is or contains a junction or symlink: refusing" }
+        if (-not (Test-Path -LiteralPath $marker) -and (Get-ChildItem -LiteralPath $profFull -Force | Select-Object -First 1)) { throw "$profFull exists, is not empty and has no marker: not ours, refusing" }
+    }
+    New-Item -ItemType Directory -Force (Join-Path $profFull 'Roaming'), (Join-Path $profFull 'Local') | Out-Null
+    Set-Content -LiteralPath $marker -Value 'Vulkanstorm autologin profile (mc1_sl_launch.ps1 -SetupLogin). Holds a remembered login: never copy, zip or sync this folder. Delete with -DeleteProfile.'
+}
+if ($AutoLogin) {
+    Assert-OurProfile
+    if (-not (Test-Path -LiteralPath $credFile) -or (Get-Item -LiteralPath $credFile).Length -le 0) {
+        throw "the autologin profile has no credential store yet ($credFile missing or empty). One-time setup: .\mc1_sl_launch.ps1 -SetupLogin (log in by hand with 'remember me' ticked, go to the measuring spot, quit there), then run again with -AutoLogin."
+    }
 }
 
 # the scenario first: a wrong name or a teleport series that cannot know its home region must fail before anything starts
 $scFile = Join-Path $PSScriptRoot "scenarios\$Scenario.json"
 if (-not (Test-Path $scFile)) { throw "no such scenario: $scFile" }
 $scJson = Get-Content -Raw $scFile | ConvertFrom-Json
-if ($AutoLogin -and $scJson.owner_teleport -and -not $BusyRegion) { throw '-AutoLogin teleports to the busy region by itself (no human to click): give -BusyRegion NAME' }
+if ($AutoLogin -and $scJson.owner_teleport -and -not ($BusyRegion -and $StartRegion)) { throw '-AutoLogin needs -StartRegion NAME (the login region) and -BusyRegion NAME: nobody is there to click the hand-off' }
 if (-not $DryRun -and -not $SetupLogin -and $scJson.teleports -and [int]$scJson.teleports.second -gt 0 -and -not $StartRegion -and -not $TpRegion) {
     throw "scenario $Scenario teleports between two regions: give -StartRegion NAME (the region you log in to) or -TpRegion NAME, the viewer does not log the login region"
 }
@@ -113,12 +140,6 @@ if (-not $DryRun -and -not $SetupLogin -and $scJson.teleports -and [int]$scJson.
 $scripts = ($PSScriptRoot -replace '\\', '/')
 $tracy   = Join-Path (Split-Path $Exe | Split-Path | Split-Path) 'packages\bin\tracy-capture.exe'
 foreach ($f in $(if ($SetupLogin) { @($Exe) } else { @($Exe, $tracy) })) { if (-not (Test-Path $f)) { throw "missing: $f" } }
-
-# The user's real folders, read from Windows (not from $env:, which an earlier run in this window may have pointed at a
-# scratch profile); every change to $env: below is undone before this script returns.
-$realLocal   = [Environment]::GetFolderPath('LocalApplicationData')
-$realRoaming = [Environment]::GetFolderPath('ApplicationData')
-$saved = @{ APPDATA = $env:APPDATA; LOCALAPPDATA = $env:LOCALAPPDATA }
 
 # the real interpreter, not the Microsoft Store alias: the installed one first, then py with the real folders
 $py = Join-Path $realLocal 'Python\pythoncore-3.15-64\python.exe'
@@ -132,11 +153,12 @@ $py = ($py -replace '\\', '/')
 
 # scratch profile; the dry run gets a fresh one every time (it must never find saved credentials)
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$prof = if ($Profile) { $profFull } elseif ($DryRun) { Join-Path $repo ".fixture-tmp\mc1-dry-$stamp" } else { Join-Path $repo ".captures\mc1-profile-$stamp" }
+$prof = if ($AutoLogin -or $SetupLogin) { $profFull } elseif ($DryRun) { Join-Path $repo ".fixture-tmp\mc1-dry-$stamp" } else { Join-Path $repo ".captures\mc1-profile-$stamp" }
 New-Item -ItemType Directory -Force "$prof\Roaming", "$prof\Local" | Out-Null
 $env:APPDATA = "$prof\Roaming"
 $env:LOCALAPPDATA = "$prof\Local"
 $pushed = $false
+$rc = 0
 try {   # from here every path puts this window's folders back
     $out   = (Join-Path $repo ".captures\mc1-sl-$stamp") -replace '\\', '/'
     $plugin = "$py $scripts/perf_check.py --scenario $scripts/scenarios/$Scenario.json --out $out --no-glstats --tracy-capture " + ($tracy -replace '\\', '/')
@@ -144,7 +166,10 @@ try {   # from here every path puts this window's folders back
     if ($StartRegion) { $plugin += ' --start-region ' + [uri]::EscapeDataString($StartRegion) }
     if ($BusyRegion)  { $plugin += ' --busy-region ' + [uri]::EscapeDataString($BusyRegion) }
     if ($GpuWindow) { $plugin += " --gpu-window --frames $GpuWindowFrames" }
-    if ($AutoLogin) { $plugin += ' --auto-handoff' }   # nobody clicks: perf_check teleports to the busy region itself
+    if ($AutoLogin) {   # nobody clicks: the login is the measuring spot (or --busy-pos); a login that does not finish ends the run
+        $plugin += ' --auto-handoff --max-wait-s 300'
+        if ($BusyPos) { $plugin += ' --busy-pos ' + $BusyPos }
+    }
     if ($DryRun)   { $plugin += ' --dry-run --no-login-wait' }
     $noop = "$py $scripts/perf_check.py --noop"
 
@@ -159,10 +184,32 @@ try {   # from here every path puts this window's folders back
     }
     Push-Location (Split-Path $Exe); $pushed = $true
     if ($SetupLogin) {
-        Write-Host "Setup: log in by hand with 'remember me' ticked, then quit the viewer. No scenario runs. Profile: $prof"
+        Write-Host "Setup: log in by hand with 'remember me' ticked, go to the exact measuring spot in the busy region (World > Environment on Shared Environment) and quit THERE. No scenario runs. Profile: $prof"
         & $Exe
     } elseif ($AutoLogin) {
-        & $Exe --autologin --leap $plugin --leap $noop
+        $vp = Start-Process -FilePath $Exe -ArgumentList ('--autologin --leap "' + $plugin + '" --leap "' + $noop + '"') -WorkingDirectory (Split-Path $Exe) -PassThru
+        # wait for this run's perf_check (it ends on success, failure or a login timeout), then quit the viewer the polite way
+        $seen = $false; $t0 = Get-Date
+        while (-not $vp.HasExited) {
+            Start-Sleep -Seconds 2
+            $pc = Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*perf_check.py*' -and $_.CommandLine -like "*$out*" }
+            if ($pc) { $seen = $true } elseif ($seen) { break }
+            elseif (((Get-Date) - $t0).TotalSeconds -gt 240) { Write-Host 'perf_check never started (the viewer did not run its plugin); quitting the viewer.' -ForegroundColor Red; $rc = 1; break }
+        }
+        if (-not $vp.HasExited) {
+            $vp.Refresh()
+            [void]$vp.CloseMainWindow()
+            if (-not $vp.WaitForExit(120000)) {
+                Write-Host "THE VIEWER DID NOT EXIT within 120 s of the quit request (pid $($vp.Id)). It is left running: quit it by hand; nothing was killed." -ForegroundColor Red
+                $rc = 3
+            }
+        }
+        # only the viewer's own log is saved with the run (an allow-list; no chat or conversation logs)
+        $vlogFile = Join-Path $prof 'Roaming\Vulkanstorm_x64\logs\Vulkanstorm.log'
+        if (Test-Path -LiteralPath $vlogFile) {
+            New-Item -ItemType Directory -Force $out | Out-Null
+            Copy-Item -LiteralPath $vlogFile -Destination (Join-Path $out 'Vulkanstorm.log') -Force
+        }
     } else {
         & $Exe --leap $plugin --leap $noop
     }
@@ -171,3 +218,4 @@ try {   # from here every path puts this window's folders back
     $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
     if ($pushed) { Pop-Location }
 }
+if ($rc) { exit $rc }
