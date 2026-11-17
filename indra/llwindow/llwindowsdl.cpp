@@ -862,7 +862,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
         if (width == 0)
             width = 1024;
         if (height == 0)
-            width = 768;
+            height = 768; // <Vulkanstorm/> was `width = 768`
 
         LL_INFOS() << "createContext: creating window " << width << "x" << height << "x" << bits << LL_ENDL;
         mWindow = SDL_SetVideoMode(width, height, bits, sdlflags);
