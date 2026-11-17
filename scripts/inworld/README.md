@@ -440,6 +440,22 @@ One command for the session (scratch profile `.captures\mc1-profile-<stamp>`, ne
 
 Log in by hand (any region); when the pop-up asks, teleport to the busy region and leave the viewer alone.
 
+Unattended runs (persistent local profile and autologin; the scripts never read, type, copy or log the credentials):
+
+```powershell
+.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -SetupLogin    # once: log in by hand, tick "remember me", quit; no scenario runs
+.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
+.\scripts\inworld\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -DeleteProfile  # when the series ends
+```
+
+- `-Profile` must be a folder under the gitignored `.captures` (other paths are refused); it replaces the fresh per-launch profile.
+- `-AutoLogin` passes the viewer's `--autologin` (log in as the last saved user) and needs `-Profile`. It refuses to start when the profile
+  has no stored login (no `bin_conf.dat` in it): run `-SetupLogin` first. Only the file's presence is tested, never its content.
+- Be logged out of Second Life everywhere else before a run: a second login of the same account kicks the first.
+- `-DeleteProfile` starts nothing: it copies the profile's viewer logs (`*.log`, `*.old`; no chat or conversation logs) into
+  `viewer-logs\` of the newest `.captures\mc1-sl-*` run folder, then deletes the profile folder, saved login included. Delete the profile
+  when the run series ends; it holds the remembered login.
+
 Launcher parameters: `-StartRegion NAME` (the region you log in to: the viewer does not log it at login; `--start-region` in `perf_check.py`),
 `-BusyRegion NAME` (the region you teleport to, used when the viewer log does not give it; `--busy-region`), `-TpRegion NAME` (the second
 region of the teleports instead of the login region) and `-Scenario NAME` from `scripts\inworld\scenarios`:

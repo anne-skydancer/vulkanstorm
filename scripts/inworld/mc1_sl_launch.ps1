@@ -29,6 +29,18 @@ and --tracy-capture, the throw-away noop plugin entry, and the run folder .captu
   -Scenario mc1_sl (the default) is the full session: still, moving, teleports, fps probe.
   .\mc1_sl_launch.ps1 -DryRun             (at the login screen: --dry-run --no-login-wait, do not log in)
 
+Unattended runs (a persistent local profile that logs in by itself; the credentials are never read, typed, copied or logged by these scripts):
+  1. One-time setup:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -SetupLogin
+     The viewer starts with that profile at the login screen and no scenario runs. Log in by hand with "remember me" ticked, then quit.
+  2. Each run:        .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -AutoLogin -Scenario mc1b_rooftops -StartRegion "Home" -BusyRegion "Busy" -GpuWindow
+     -AutoLogin passes the viewer's --autologin (log in as the last saved user). It needs -Profile and refuses to start when the profile
+     has no stored login yet (it only checks that the viewer's bin_conf.dat exists in the profile, never what is in it).
+  Be logged out of Second Life everywhere else first: a second login of the same account kicks the first.
+  3. When the series ends:  .\mc1_sl_launch.ps1 -Profile .captures\mc1-autologin -DeleteProfile
+     It copies the profile's viewer logs (not chat or conversation logs) into the newest .captures\mc1-sl-* run folder (viewer-logs\),
+     then deletes the profile folder, saved login included. Nothing else is started.
+  -Profile must be a folder under the repo's .captures (gitignored); any other path is refused.
+
 Paths must contain no spaces (--leap is split at spaces); see README.md ("Launch").
 #>
 param(
@@ -39,22 +51,65 @@ param(
     [string]$Exe = 'C:\Users\annes\source\repos\vulkanstorm\work\mc-stage1\build-vc180-64\newview\RelWithDebInfo\vulkanstorm-bin.exe',
     [switch]$GpuWindow,          # after each capture: a GPU-timed GLSubmitStats window (a -DVKS_GL_STATS=ON build)
     [ValidateRange(1, 100000)][int]$GpuWindowFrames = 600, # frames in that window (the viewer takes 1..100000)
+    [string]$Profile = '',       # a persistent profile folder under .captures, used instead of a fresh .captures\mc1-profile-<stamp>
+    [switch]$AutoLogin,          # pass --autologin (needs -Profile with a remembered login)
+    [switch]$SetupLogin,         # one-time: start the viewer with -Profile at the login screen, no scenario; log in by hand, "remember me", quit
+    [switch]$DeleteProfile,      # save the profile's logs (no chat) into the newest mc1-sl-* run folder, then delete the profile; starts nothing
     [switch]$DryRun
 )
 $ErrorActionPreference = 'Stop'
+
+$repo = 'C:\Users\annes\source\repos\vulkanstorm'
+
+# -Profile: only a folder under the repo's gitignored .captures (resolved to a full path first, so .. cannot escape)
+$capturesRoot = [IO.Path]::GetFullPath((Join-Path $repo '.captures')).TrimEnd('\') + '\'
+if ($Profile) {
+    $profFull = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($Profile)) { $Profile } else { Join-Path $repo $Profile })).TrimEnd('\')
+    if (-not ($profFull + '\').StartsWith($capturesRoot, [StringComparison]::OrdinalIgnoreCase) -or ($profFull + '\') -eq $capturesRoot) {
+        throw "-Profile must be a folder under $capturesRoot (gitignored), got: $Profile"
+    }
+}
+if (($AutoLogin -or $SetupLogin -or $DeleteProfile) -and -not $Profile) { throw '-AutoLogin, -SetupLogin and -DeleteProfile need -Profile <folder under .captures>' }
+if ($Profile -and $DryRun) { throw '-Profile cannot be combined with -DryRun (the dry run always uses a fresh folder)' }
+if ($AutoLogin -and $SetupLogin) { throw '-AutoLogin and -SetupLogin exclude each other' }
+if ($DeleteProfile -and ($AutoLogin -or $SetupLogin)) { throw '-DeleteProfile runs alone' }
+
+# the viewer's stored login is bin_conf.dat in its user_settings folder; only its presence is tested, never its content
+function Test-StoredLogin([string]$dir) {
+    if (-not (Test-Path -LiteralPath $dir)) { return $false }
+    return [bool](Get-ChildItem -LiteralPath $dir -Recurse -File -Filter 'bin_conf.dat' -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 0 } | Select-Object -First 1)
+}
+
+if ($DeleteProfile) {
+    if (-not (Test-Path -LiteralPath $profFull)) { throw "no such profile folder: $profFull" }
+    $run = Get-ChildItem -LiteralPath (Join-Path $repo '.captures') -Directory -Filter 'mc1-sl-*' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $run) { throw 'no .captures\mc1-sl-* run folder to save the logs into; nothing deleted' }
+    $dest = Join-Path $run.FullName 'viewer-logs'
+    New-Item -ItemType Directory -Force $dest | Out-Null
+    # viewer logs only: *.log / *.old files, never chat or conversation logs (chat.txt, conversation.log, anything with chat in its name)
+    $n = 0
+    foreach ($f in @(Get-ChildItem -LiteralPath $profFull -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.log', '.old' -and $_.Name -notmatch 'chat|conversation' })) {
+        Copy-Item -LiteralPath $f.FullName -Destination (Join-Path $dest $f.Name) -Force; $n++
+    }
+    Remove-Item -LiteralPath $profFull -Recurse -Force
+    Write-Host "Saved $n log file(s) into $dest; deleted the profile $profFull"
+    return
+}
+if ($AutoLogin -and -not (Test-StoredLogin $profFull)) {
+    throw "profile $profFull has no remembered login yet. One-time setup: .\mc1_sl_launch.ps1 -Profile $Profile -SetupLogin (log in by hand with 'remember me' ticked, then quit), then run again with -AutoLogin."
+}
 
 # the scenario first: a wrong name or a teleport series that cannot know its home region must fail before anything starts
 $scFile = Join-Path $PSScriptRoot "scenarios\$Scenario.json"
 if (-not (Test-Path $scFile)) { throw "no such scenario: $scFile" }
 $scJson = Get-Content -Raw $scFile | ConvertFrom-Json
-if (-not $DryRun -and $scJson.teleports -and [int]$scJson.teleports.second -gt 0 -and -not $StartRegion -and -not $TpRegion) {
+if (-not $DryRun -and -not $SetupLogin -and $scJson.teleports -and [int]$scJson.teleports.second -gt 0 -and -not $StartRegion -and -not $TpRegion) {
     throw "scenario $Scenario teleports between two regions: give -StartRegion NAME (the region you log in to) or -TpRegion NAME, the viewer does not log the login region"
 }
 
-$repo    = 'C:\Users\annes\source\repos\vulkanstorm'
 $scripts = ($PSScriptRoot -replace '\\', '/')
 $tracy   = Join-Path (Split-Path $Exe | Split-Path | Split-Path) 'packages\bin\tracy-capture.exe'
-foreach ($f in @($Exe, $tracy)) { if (-not (Test-Path $f)) { throw "missing: $f" } }
+foreach ($f in $(if ($SetupLogin) { @($Exe) } else { @($Exe, $tracy) })) { if (-not (Test-Path $f)) { throw "missing: $f" } }
 
 # The user's real folders, read from Windows (not from $env:, which an earlier run in this window may have pointed at a
 # scratch profile); every change to $env: below is undone before this script returns.
@@ -74,7 +129,7 @@ $py = ($py -replace '\\', '/')
 
 # scratch profile; the dry run gets a fresh one every time (it must never find saved credentials)
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$prof = if ($DryRun) { Join-Path $repo ".fixture-tmp\mc1-dry-$stamp" } else { Join-Path $repo ".captures\mc1-profile-$stamp" }
+$prof = if ($Profile) { $profFull } elseif ($DryRun) { Join-Path $repo ".fixture-tmp\mc1-dry-$stamp" } else { Join-Path $repo ".captures\mc1-profile-$stamp" }
 New-Item -ItemType Directory -Force "$prof\Roaming", "$prof\Local" | Out-Null
 $env:APPDATA = "$prof\Roaming"
 $env:LOCALAPPDATA = "$prof\Local"
@@ -93,12 +148,20 @@ try {   # from here every path puts this window's folders back
     Write-Host "Scratch profile: $prof"
     $minutes = switch ($Scenario) { 'mc1_sl' { '15' } 'mc1_sl_teleports' { '10' } 'mc1_sl_teleports_manual' { '15' } 'mc1_rooftops' { '15' } 'mc1_rooftops_moving' { '6 (9 at most)' } 'mc1b_rooftops' { '30 with -GpuWindow, 25 without' } default { 'several' } }
     if ($GpuWindow -and $Scenario -ne 'mc1b_rooftops') { $minutes += ', plus up to half a minute per run for its GPU window' }
-    if (-not $DryRun) {
+    if ($AutoLogin) { Write-Host 'Autologin as the last saved user: be logged out of Second Life elsewhere (a second login kicks the first). Leave the viewer alone until "Session done: you can quit".' }
+    if (-not $DryRun -and -not $SetupLogin -and -not $AutoLogin) {
         Write-Host 'Log in by hand at home. A pop-up then asks you to teleport to the busy region; do that, then leave the viewer alone'
         Write-Host ('(no minimising, no UI use) until the pop-up "Session done: you can quit" appears (about ' + $minutes + ' minutes).')
     }
     Push-Location (Split-Path $Exe); $pushed = $true
-    & $Exe --leap $plugin --leap $noop
+    if ($SetupLogin) {
+        Write-Host "Setup: log in by hand with 'remember me' ticked, then quit the viewer. No scenario runs. Profile: $prof"
+        & $Exe
+    } elseif ($AutoLogin) {
+        & $Exe --autologin --leap $plugin --leap $noop
+    } else {
+        & $Exe --leap $plugin --leap $noop
+    }
 } finally {
     # the viewer keeps its scratch environment; this PowerShell window gets its own folders back
     $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
