@@ -1437,57 +1437,151 @@ namespace tut
     template<> template<>
     void object::test<25>()
     {
-        set_test_name("large stdin write reaches a busy reader exactly once");
+        set_test_name("large stdin write reaches a small-piece reader exactly once");
         // Regression: on Windows, apr_file_write() on the nonblocking pipe
         // issued an overlapped WriteFile() and, when the pipe was full, gave
         // up with EAGAIN and 0 bytes written, then cancelled the I/O. If the
-        // reader drained the pipe meanwhile, the chunk had been written after
-        // all, WritePipe resent it and the child saw it twice. So the child
-        // here lets the pipe fill, then reads as fast as it can in odd-sized
-        // pieces while the parent keeps writing into it, and compares the
-        // stream with the expected sequence of 32-bit counters at the end.
-        const unsigned count = 2 * 1024 * 1024;     // 8 MiB
+        // pipe took the chunk before the cancellation took effect, WritePipe
+        // resent it and the child saw it twice. So the child here lets the
+        // pipe fill, then reads it in random pieces of up to 1000 bytes with
+        // short random naps, so the pipe frees space in odd amounts while
+        // the parent keeps writing into it. The child compares the stream
+        // with the expected sequence of 32-bit counters at the end. On the
+        // old code the ten runs together failed in 3 of 5 test runs.
+        const unsigned count = 4 * 1024 * 1024;     // 16 MiB
+        // One run catches the old bug only now and then, so
+        // run it several times.
+        for (int trial = 0; trial < 10; ++trial)
+        {
+            PythonProcessLauncher py(get_test_name(),
+                                     "import array, os, random, sys, time\n"
+                                     "n = 4 * " + std::to_string(count) + "\n"
+                                     "time.sleep(0.3)\n"
+                                     "parts = []\n"
+                                     "seen = 0\n"
+                                     "while seen < n:\n"
+                                     "    data = os.read(0, random.randint(1, 1000))\n"
+                                     "    if not data:\n"
+                                     "        break\n"
+                                     "    parts.append(data)\n"
+                                     "    seen += len(data)\n"
+                                     "    if random.randint(0, 63) == 0:\n"
+                                     "        time.sleep(random.random() * 0.002)\n"
+                                     "got = b''.join(parts)\n"
+                                     "want = array.array('I', range(n // 4)).tobytes()\n"
+                                     "if got != want:\n"
+                                     "    k = next((i for i in range(min(len(got), len(want))) if got[i] != want[i]), min(len(got), len(want)))\n"
+                                     "    sys.exit('stream differs at offset %d (got %d bytes, expected %d)' % (k, len(got), len(want)))\n");
+            py.mParams.files.add(LLProcess::FileParam("pipe")); // stdin
+            py.launch();
+            std::string payload(count * 4, '\0');
+            for (unsigned v = 0; v < count; ++v)
+            {
+                payload[4*v    ] = char( v        & 0xff);
+                payload[4*v + 1] = char((v >>  8) & 0xff);
+                payload[4*v + 2] = char((v >> 16) & 0xff);
+                payload[4*v + 3] = char((v >> 24) & 0xff);
+            }
+            LLProcess::WritePipe& childin(py.mPy->getWritePipe(LLProcess::STDIN));
+            childin.get_ostream().write(payload.data(), payload.size());
+            childin.get_ostream().flush();
+            // Tick about once per frame: yield() waits a whole second, which
+            // is too slow. Do not spin: a parent that retries as fast as it can
+            // hits the full pipe constantly and hides the bug (in a harness
+            // the old code corrupted nearly every run at 15 ms per tick and
+            // none when spinning).
+            LLEventPump& mainloop(LLEventPumps::instance().obtain("mainloop"));
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+            while (py.mPy->isRunning() && std::chrono::steady_clock::now() < deadline)
+            {
+                mainloop.post(LLSD());
+                std::this_thread::sleep_for(std::chrono::milliseconds(15));
+            }
+            mainloop.post(LLSD());
+            ensure("child never finished", ! py.mPy->isRunning());
+            ensure_equals("bad child termination", py.mPy->getStatus().mState, LLProcess::EXITED);
+            ensure_equals("child saw a corrupt stdin stream", py.mPy->getStatus().mData, 0);
+        }
+    }
+
+    template<> template<>
+    void object::test<26>()
+    {
+        set_test_name("WritePipe never blocks on a child that doesn't read");
+        const std::size_t len = 1024 * 1024;
         PythonProcessLauncher py(get_test_name(),
-                                 "import os, random, struct, sys, time\n"
-                                 "n = 4 * " + std::to_string(count) + "\n"
-                                 "time.sleep(0.5)\n"
-                                 "parts = []\n"
+                                 "import os, sys, time\n"
+                                 "time.sleep(2)\n"
                                  "seen = 0\n"
-                                 "while seen < n:\n"
-                                 "    data = os.read(0, random.randint(1, 9000))\n"
-                                 "    if not data:\n"
-                                 "        break\n"
-                                 "    parts.append(data)\n"
-                                 "    seen += len(data)\n"
-                                 "got = b''.join(parts)\n"
-                                 "want = struct.pack('<%dI' % (n // 4), *range(n // 4))\n"
-                                 "if got != want:\n"
-                                 "    k = next((i for i in range(min(len(got), len(want))) if got[i] != want[i]), min(len(got), len(want)))\n"
-                                 "    sys.exit('stream differs at offset %d (got %d bytes, expected %d)' % (k, len(got), len(want)))\n");
+                                 "while seen < " + std::to_string(len) + ":\n"
+                                 "    d = os.read(0, 65536)\n"
+                                 "    if not d:\n"
+                                 "        sys.exit(3)\n"
+                                 "    seen += len(d)\n");
         py.mParams.files.add(LLProcess::FileParam("pipe")); // stdin
         py.launch();
-        std::string payload(count * 4, '\0');
-        for (unsigned v = 0; v < count; ++v)
-        {
-            payload[4*v    ] = char( v        & 0xff);
-            payload[4*v + 1] = char((v >>  8) & 0xff);
-            payload[4*v + 2] = char((v >> 16) & 0xff);
-            payload[4*v + 3] = char((v >> 24) & 0xff);
-        }
         LLProcess::WritePipe& childin(py.mPy->getWritePipe(LLProcess::STDIN));
-        childin.get_ostream().write(payload.data(), payload.size());
+        auto start = std::chrono::steady_clock::now();
+        childin.get_ostream() << std::string(len, 'x');
         childin.get_ostream().flush();
-        // Pump "mainloop" as fast as we can (yield() waits a whole second),
-        // so we keep hitting the full pipe at the instant the child reads.
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-        while (py.mPy->isRunning() && std::chrono::steady_clock::now() < deadline)
-        {
-            LLEventPumps::instance().obtain("mainloop").post(LLSD());
-            std::this_thread::yield();
-        }
         LLEventPumps::instance().obtain("mainloop").post(LLSD());
-        ensure("child never finished", ! py.mPy->isRunning());
-        ensure_equals("bad child termination", py.mPy->getStatus().mState, LLProcess::EXITED);
-        ensure_equals("child saw a corrupt stdin stream", py.mPy->getStatus().mData, 0);
+        auto elapsed = std::chrono::steady_clock::now() - start;
+        ensure("write plus one tick took 1 s or more", elapsed < std::chrono::seconds(1));
+        ensure("nothing left queued for a child that isn't reading", childin.size() > 0);
+        waitfor(*py.mPy);
+        ensure_equals("child didn't get all the data", py.mPy->getStatus().mData, 0);
+        ensure_equals("data left after the child read it all", childin.size(), 0u);
+    }
+
+    template<> template<>
+    void object::test<27>()
+    {
+        set_test_name("WritePipe drops its queue when the child exits");
+        PythonProcessLauncher py(get_test_name(),
+                                 "import os, time\n"
+                                 "time.sleep(0.3)\n"
+                                 "os.read(0, 1000)\n");
+        py.mParams.files.add(LLProcess::FileParam("pipe")); // stdin
+        py.launch();
+        LLProcess::WritePipe& childin(py.mPy->getWritePipe(LLProcess::STDIN));
+        childin.get_ostream() << std::string(1024 * 1024, 'x');
+        childin.get_ostream().flush();
+        LLEventPump& mainloop(LLEventPumps::instance().obtain("mainloop"));
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (childin.size() && std::chrono::steady_clock::now() < deadline)
+        {
+            mainloop.post(LLSD());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        ensure_equals("data still queued for an exited child", childin.size(), 0u);
+        waitfor(*py.mPy);
+    }
+
+    template<> template<>
+    void object::test<28>()
+    {
+        set_test_name("destroying a LLProcess with a write pending returns promptly");
+        PythonProcessLauncher py(get_test_name(),
+                                 "import time\n"
+                                 "time.sleep(30)\n");
+        py.mParams.files.add(LLProcess::FileParam("pipe")); // stdin
+        py.launch();
+        LLProcess::WritePipe& childin(py.mPy->getWritePipe(LLProcess::STDIN));
+        childin.get_ostream() << std::string(1024 * 1024, 'x');
+        childin.get_ostream().flush();
+        LLEventPump& mainloop(LLEventPumps::instance().obtain("mainloop"));
+        // let it fill the pipe and leave a write pending
+        for (int i = 0; i < 10; ++i)
+        {
+            mainloop.post(LLSD());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        ensure("write didn't stay pending", childin.size() > 0);
+        std::weak_ptr<LLProcess> weak(py.mPy);
+        auto start = std::chrono::steady_clock::now();
+        py.mPy.reset();
+        auto elapsed = std::chrono::steady_clock::now() - start;
+        ensure("LLProcess is still alive", weak.expired());
+        ensure("destruction took 1 s or more", elapsed < std::chrono::seconds(1));
     }
 } // namespace tut
