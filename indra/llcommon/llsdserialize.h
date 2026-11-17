@@ -90,6 +90,22 @@ public:
      */
     void reset()    { doReset();    };
 
+    /**
+     * Node budget: the most LLSD values (every scalar, map and array) one parse() or parseLines()
+     * may build before it fails with PARSE_FAILURE.
+     *
+     * An LLSD value costs tens of bytes of heap (the Impl, plus a slot or a map entry and key), while a
+     * value can take a single byte of input ('!' undefined, an empty array), so input of a few hundred
+     * MiB (an inflated payload within its cap) could otherwise build several GiB. 1 << 23 nodes bounds a
+     * parse to about 0.5 GiB. The largest real payloads are far below it: an AIS inventory reply or a
+     * capabilities reply is well under 2M nodes (about 30 nodes per item), mesh headers and materials are
+     * a few thousand, and a navmesh or an embedded asset is a handful of nodes around big binary leaves.
+     * Trusted local data that needs more passes MAX_NODES_UNLIMITED.
+     */
+    static constexpr size_t MAX_NODES_DEFAULT = size_t(1) << 23;
+    static constexpr size_t MAX_NODES_UNLIMITED = 0;
+    void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; }
+
 
 protected:
     /**
@@ -196,6 +212,12 @@ protected:
      */
     void account(llssize bytes) const;
 
+    /**
+     * @brief Count one more LLSD value about to be built.
+     * @return false, with a warning the first time, once the node budget is spent.
+     */
+    bool chargeNode() const;
+
 protected:
     /**
      * @brief boolean to set if byte counts should be checked during parsing.
@@ -206,6 +228,10 @@ protected:
      * @brief The maximum number of bytes left to be parsed.
      */
     mutable llssize mMaxBytesLeft;
+
+    /** @brief The node budget (see setMaxNodes()) and what is left of it in the current parse. */
+    size_t mMaxNodes;
+    mutable size_t mNodesLeft;
 
     /**
      * @brief Use line-based reading to get text
@@ -834,9 +860,11 @@ public:
         LLPointer<LLSDBinaryFormatter> f = new LLSDBinaryFormatter;
         return f->format(sd, str, LLSDFormatter::OPTIONS_NONE);
     }
-    static S32 fromBinary(LLSD& sd, std::istream& str, llssize max_bytes, S32 max_depth = -1)
+    static S32 fromBinary(LLSD& sd, std::istream& str, llssize max_bytes, S32 max_depth = -1,
+                          size_t max_nodes = LLSDParser::MAX_NODES_DEFAULT)
     {
         LLPointer<LLSDBinaryParser> p = new LLSDBinaryParser;
+        p->setMaxNodes(max_nodes);
         return p->parse(str, sd, max_bytes, max_depth);
     }
     static LLSD fromBinary(std::istream& str, llssize max_bytes, S32 max_depth = -1)

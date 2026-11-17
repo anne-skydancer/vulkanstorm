@@ -381,7 +381,7 @@ static const char BINARY_FALSE_SERIAL = '0';
  * LLSDParser
  */
 LLSDParser::LLSDParser()
-    : mCheckLimits(true), mMaxBytesLeft(0), mParseLines(false)
+    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mParseLines(false)
 {
 }
 
@@ -393,6 +393,7 @@ S32 LLSDParser::parse(std::istream& istr, LLSD& data, llssize max_bytes, S32 max
 {
     mCheckLimits = LLSDSerialize::SIZE_UNLIMITED != max_bytes;
     mMaxBytesLeft = max_bytes;
+    mNodesLeft = mMaxNodes;
     return doParse(istr, data, max_depth);
 }
 
@@ -402,6 +403,7 @@ S32 LLSDParser::parseLines(std::istream& istr, LLSD& data)
 {
     mCheckLimits = false;
     mParseLines = true;
+    mNodesLeft = mMaxNodes;
     return doParse(istr, data);
 }
 
@@ -462,6 +464,22 @@ void LLSDParser::account(llssize bytes) const
     if(mCheckLimits) mMaxBytesLeft -= bytes;
 }
 
+bool LLSDParser::chargeNode() const
+{
+    if (mMaxNodes == MAX_NODES_UNLIMITED)
+    {
+        return true;
+    }
+    if (mNodesLeft == 0)
+    {
+        // The parse unwinds on the failure, so this is logged once.
+        LL_WARNS() << "LLSD parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
+        return false;
+    }
+    --mNodesLeft;
+    return true;
+}
+
 
 /**
  * LLSDNotationParser
@@ -505,6 +523,10 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
     if(!istr.good())
     {
         return 0;
+    }
+    if (!chargeNode())
+    {
+        return PARSE_FAILURE;
     }
     S32 parse_count = 1;
     switch(c)
@@ -977,7 +999,7 @@ S32 LLSDBinaryParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) con
     {
         return 0;
     }
-    if (max_depth == 0)
+    if (max_depth == 0 || !chargeNode())
     {
         return PARSE_FAILURE;
     }
@@ -2359,7 +2381,9 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
 
         // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
-        if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
+        if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH,
+                                      // an uncapped (trusted local) inflate gets no node budget either
+                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : LLSDParser::MAX_NODES_DEFAULT) == LLSDParser::PARSE_FAILURE)
         {
             return ZR_PARSE_ERROR;
         }
