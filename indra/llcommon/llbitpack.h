@@ -35,7 +35,8 @@ const U32 MAX_DATA_BITS = 8;
 class LLBitPack
 {
 public:
-    LLBitPack(U8 *buffer, U32 max_size) : mBuffer(buffer), mBufferSize(0), mLoad(0), mLoadSize(0), mTotalBits(0), mMaxSize(max_size)
+    // max_size is the size of buffer in bytes
+    LLBitPack(U8 *buffer, U32 max_size) : mBuffer(buffer), mBufferSize(0), mLoad(0), mLoadSize(0), mTotalBits(0), mMaxSize(max_size), mOverrun(false)
     {
     }
 
@@ -49,6 +50,7 @@ public:
         mLoadSize = 0;
         mTotalBits = 0;
         mBufferSize = 0;
+        mOverrun = false; // Vulkanstorm
     }
 
     U32 bitPack(U8 *total_data, U32 total_dsize)
@@ -162,14 +164,18 @@ public:
             {
                 if (mLoadSize == 0)
                 {
-#ifdef _DEBUG
-                    if (mBufferSize > mMaxSize)
+                    // Vulkanstorm: bounds-checked in every build. Past the end the reader
+                    // feeds zeros and sets the overrun flag; callers that loop on the
+                    // data must check isOverrun() (zeros can decode as a valid header).
+                    if (mBufferSize >= mMaxSize)
                     {
-                        LL_ERRS() << "mBufferSize exceeding mMaxSize" << LL_ENDL;
-                        LL_ERRS() << mBufferSize << " > " << mMaxSize << LL_ENDL;
+                        mOverrun = true;
+                        mLoad = 0;
                     }
-#endif
-                    mLoad = *(mBuffer + mBufferSize++);
+                    else
+                    {
+                        mLoad = *(mBuffer + mBufferSize++);
+                    }
                     mLoadSize = MAX_DATA_BITS;
                 }
                 *retval <<= 1;
@@ -181,6 +187,9 @@ public:
         }
         return mBufferSize;
     }
+
+    // Vulkanstorm: true once bitUnpack() was asked for bits past the end of the buffer
+    bool isOverrun() const { return mOverrun; }
 
     U32 flushBitPack()
     {
@@ -203,6 +212,7 @@ public:
     U32     mLoadSize;
     U32     mTotalBits;
     U32     mMaxSize;
+    bool    mOverrun;
 };
 
 #endif
