@@ -121,6 +121,11 @@ void LLSDSerialize::serialize(const LLSD& sd, std::ostream& str, ELLSD_Serialize
 }
 
 // static
+bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
+{
+    return deserialize(sd, str, max_bytes, LLSDParser::MAX_NODES_DEFAULT);
+}
+
 bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes, size_t max_nodes)
 {
 	LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;

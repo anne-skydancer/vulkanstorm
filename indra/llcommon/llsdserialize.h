@@ -815,8 +815,9 @@ public:
      * @param max_bytes the maximum number of bytes to parse
      * @return Returns true if the stream appears to contain valid data
      */
-    static bool deserialize(LLSD& sd, std::istream& str, llssize max_bytes,
-                            size_t max_nodes = LLSDParser::MAX_NODES_DEFAULT);
+    static bool deserialize(LLSD& sd, std::istream& str, llssize max_bytes);
+    /// As above, with an explicit LLSDParser node budget (see LLSDParser::setMaxNodes()).
+    static bool deserialize(LLSD& sd, std::istream& str, llssize max_bytes, size_t max_nodes);
 
     /*
      * Notation Methods
