@@ -27,7 +27,7 @@ Ray-traced visibility changes the shape of that cost:
 
 1. **API and hardware.**
    - Ray queries need ray-tracing hardware: NVIDIA RTX 20 series or newer, AMD RX 6000 or newer, Intel Arc.
-   - They also need an API that exposes them. The new renderer's API is still undecided ([direction-2026-10-29.md](direction-2026-10-29.md); wgpu is favoured). Vulkan has ray queries; wgpu support has to be checked when the API is chosen.
+   - They also need an API that exposes them. The new renderer's API is raw Vulkan through ash ([decisions-2026-11-17.md](decisions-2026-11-17.md)), which exposes ray queries.
    - The project's rule is that methods never switch at runtime, so this would be one of two things:
      - a method that requires that hardware;
      - a separate shadow method next to the shadow-map one, chosen in Preferences, as Legacy and Stochastic are today.
