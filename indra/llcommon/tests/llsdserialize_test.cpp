@@ -2533,7 +2533,7 @@ namespace tut
     {
         set_test_name("unzip_llsd single-call scratch: inflated sizes at the capacity edges, caps, error codes");
         // inflated sizes of C-1, C and C+1 for the 512 KiB start, the first doubling and the 2 MiB release threshold,
-        // plus a size that needs several doublings; the payload is derived so the binary LLSD has exactly that size
+        // plus a size that needs several doublings; the payload is sized so the binary LLSD is that size (below the overhead, such as 1, it is the overhead)
         LLSD probe = LLSD::emptyMap();
         probe["s"] = std::string();
         const size_t overhead = binaryOf(probe).size();
