@@ -115,6 +115,28 @@ void LLVLManager::unpackData(const S32 num_packets)
         LLGroupHeader goph;
 
         decode_patch_group_header(bit_pack, &goph);
+        // Vulkanstorm: every layer's decoder (land, wind, and the OpenSim
+        // extended codes, which only widen the patch id) assumes 16x16 patches.
+        // The size comes from the wire; anything else would overflow the
+        // decoders' fixed buffers and the surface patches.
+        if (bit_pack.isOverrun() || goph.patch_size != 16)
+        {
+            static LLFrameTimer bad_patch_timer;
+            if (bad_patch_timer.checkExpirationAndReset(10.f))
+            {
+                if (bit_pack.isOverrun())
+                {
+                    LL_WARNS() << "Ignoring layer data with a truncated layer header (layer type "
+                        << (S32)datap->mType << ")" << LL_ENDL;
+                }
+                else
+                {
+                    LL_WARNS() << "Ignoring layer data with patch size " << (S32)goph.patch_size
+                        << " (layer type " << (S32)datap->mType << "), expected 16" << LL_ENDL;
+                }
+            }
+            continue;
+        }
         if (LAND_LAYER_CODE == datap->mType)
         {
             datap->mRegionp->getLand().decompressDCTPatch(bit_pack, &goph, false);
