@@ -5,31 +5,33 @@ Eleven rules for the new renderer, taken from a study of Aurora Viewer's GPU han
 
 ## What the evidence shows, and what it does not
 
-- Aurora filed about 207 "GPU device lost" reports in three weeks. Its causes are mixed.
-- Confirmed causes: a driver hang on AMD RDNA 4, photo passes longer than the 2 s Windows TDR, video memory oversubscription, the BAR window running out, and a wgpu bug on Intel.
+- About 207 "GPU device lost" reports were filed against Aurora in three weeks. Its causes are mixed.
+- Confirmed causes: a driver hang on AMD RDNA 4, photo passes longer than the 2 s Windows TDR, video memory oversubscription, the BAR window running out, and a wgpu library bug on Intel (A11, fixed in a fork).
 - The largest cluster (Aurora #2239, a hang with free VRAM) is **unexplained**. Nobody could name the pass, because the breadcrumb PR was closed unmerged.
-- **No hang was traced to wgpu itself.** wgpu changed how a loss surfaces (panics, opaque out-of-memory errors) and what it does not expose (budget, breadcrumbs). It did not cause the hangs.
-- The RDNA 4 hang (A1) is **one reporter group's matched on/off test**. The exact shader construct the driver mishandles is unknown. Any API would meet it.
+- **No hang was traced to wgpu's design or to the ash seam.** The one wgpu defect found (A11, Intel descriptor pool) was a library bug, fixed in a fork; wgpu changed how a loss surfaces (panics, opaque out-of-memory errors) and what it hides (budget, breadcrumbs).
+- The RDNA 4 hang (A1) is **one reporter's matched on/off test**. The exact shader construct the driver mishandles is unknown. Any API would meet it.
 - The panics and the issue counts came from a subagent reading wgpu 30.0.1 and the tracker. They were not re-run.
 - Cost figures are Aurora's measurements or estimates until our prototype measures them.
+
+In this page the "slowest supported GPU" is the floor GPU of decision V1 in [decisions-2026-11-17.md](decisions-2026-11-17.md), and the "safe level" is the lowest preset with the failing feature off. The evidence codes (A1 and so on) are listed in the [Evidence](#evidence) table at the end.
 
 The rules therefore rest on the confirmed classes and on published practice. They do not claim that a different API would have avoided Aurora's hangs.
 
 ## Rules
 
-| Rule | Statement |
-|---|---|
-| R1 | Time-bounded submissions |
-| R2 | Device loss is a normal path |
-| R3 | Crash diagnostics from day one |
-| R4 | Enforced VRAM budget |
-| R5 | Staging in host memory |
-| R6 | Validate GPU-visible counts at ingest; clamp dynamic indices |
-| R7 | Bounded shader loops |
-| R8 | Bounded indirect draws |
-| R9 | No CPU waits on the GPU inside the frame |
-| R10 | Vendor qualification of new compute passes |
-| R11 | No silent CPU renderer; overlay layers off by default |
+| Rule | Title | Statement |
+|---|---|---|
+| R1 | Time-bounded submissions | No submission exceeds 250 ms of GPU time; long jobs are split. |
+| R2 | Device loss is a normal path | Every GPU wait times out; a lost device is replaced, with a retry cap. |
+| R3 | Crash diagnostics from day one | Markers and a fault report name the hung pass. |
+| R4 | Enforced VRAM budget | Usage stays at or below 90 % of the polled VRAM budget. |
+| R5 | Staging in host memory | Staging buffers live in host memory unless Resizable BAR is present. |
+| R6 | Validate GPU-visible counts at ingest; clamp dynamic indices | Decoders check counts and offsets; shaders clamp dynamic indices. |
+| R7 | Bounded shader loops | Shader loop bounds are constants or clamped, with integer counters. |
+| R8 | Bounded indirect draws | Indirect draw counts are clamped to the buffer capacity. |
+| R9 | No CPU waits on the GPU inside the frame | Readbacks use polled fence rings, never in-frame waits. |
+| R10 | Vendor qualification of new compute passes | New workgroup or subgroup compute passes need a three-vendor run and a kill switch. |
+| R11 | No silent CPU renderer; overlay layers off by default | No llvmpipe or lavapipe; overlay layers off by default. |
 
 ### R1 Time-bounded submissions
 
@@ -40,12 +42,12 @@ The rules therefore rest on the confirmed classes and on published practice. The
 ### R2 Device loss is a normal path
 
 - **Rule.** Every GPU wait has a finite timeout. On loss: destroy the device and everything made from it, then create a new device from the same physical device. Automatic recovery is allowed once per 10 minutes. A second loss in that window comes back at the safe level with the running feature off. No thread is left behind at exit (our clean-shutdown premise).
-- **Why.** Aurora shipped recovery late and off by default (A17). In 11 reports the recovered device was lost again 7 to 20 s later (A15). Windows bug-checks after 5 TDRs in one minute; the link to the "system restarted" reports is plausible, not proven. The Vulkan spec says a lost device cannot be reset, only replaced.
+- **Why.** Aurora shipped recovery late and off by default (A17). In 11 RX 9000 reports the recovered device was lost again 7 to 20 s later (A15). Windows bug-checks after 5 TDRs in one minute; the link to the "system restarted" reports is plausible, not proven. The Vulkan spec says a lost device cannot be reset, only replaced.
 - **Test.** Prototype check 1 below.
 
 ### R3 Crash diagnostics from day one
 
-- **Rule.** Read `VK_EXT_device_fault` on loss. Put markers at pass boundaries (`VK_AMD_buffer_marker` or `VK_NV_device_diagnostic_checkpoints`), on by default if they cost 0.2 ms or less, otherwise a debug setting. The crash report names the last pass that completed and the first that did not.
+- **Rule.** Read `VK_EXT_device_fault` on loss where present. Put markers at pass boundaries (`VK_AMD_buffer_marker` or `VK_NV_device_diagnostic_checkpoints` where present). Where neither exists, write the pass id into a host-visible buffer with `vkCmdFillBuffer` between passes; this works on every GPU, Intel included. Markers are on by default if they cost 0.2 ms or less, otherwise a debug setting. The crash report names the last pass that completed and the first that did not. The fallback is an engineering default, not an Aurora finding.
 - **Why.** The #2239 cluster has no root cause after about 40 analysed reports, because no breadcrumbs shipped (A2, confirmed absence). Aurora measured 0.18 ms per frame on an RX 9070 XT.
 - **Test.** Prototype check 3 below.
 
@@ -70,7 +72,7 @@ The rules therefore rest on the confirmed classes and on published practice. The
 ### R7 Bounded shader loops
 
 - **Rule.** A loop count is a constant, or `min(count, CONST)` inside the shader, not only on the CPU. Counters are integers (a float counter stalls at 2^24 or on NaN).
-- **Why.** Our RLVa variable blur takes an unbounded loop count from a script command, with a float counter (a confirmed code path, not run). Aurora's own audit found its loops bounded, so this is a rule from our code, not from their hangs.
+- **Why.** Our RLVa variable blur took an unbounded loop count from a script command, with a float counter (a confirmed code path, not run), fixed by hotfix 103391fd90. Aurora's own audit found its loops bounded, so this is a rule from our code, not from their hangs.
 - **Test.** A lint in CI flags any non-constant `for` or `while` bound without `min(` or `clamp(`.
 
 ### R8 Bounded indirect draws
@@ -88,7 +90,7 @@ The rules therefore rest on the confirmed classes and on published practice. The
 ### R10 Vendor qualification of new compute passes
 
 - **Rule.** A pass that uses workgroup memory or subgroup operations is default-on only after a run on NVIDIA, AMD (at least one of RDNA 2, 3 or 4) and Intel. A kill switch exists as a debug setting.
-- **Why.** The RDNA 4 hang (A1) was a workgroup-memory plus barrier shader made default without a vendor matrix. The matched test is one reporter group's, and the exact construct is unknown.
+- **Why.** The RDNA 4 hang (A1) was a workgroup-memory plus barrier shader made default without a vendor matrix. The matched test is one reporter's, and the exact construct is unknown.
 - **Test.** The qualification checklist in the PR. The kill switch is covered by a settings test.
 
 ### R11 No silent CPU renderer; overlay layers off by default
@@ -105,6 +107,25 @@ The prototype (10 to 20k draws) runs these checks on the ash renderer. Each is a
 |---|---|---|
 | 1 | Recover from an injected GPU hang. A debug-only, bounded spin shader, plus injected `VK_ERROR_DEVICE_LOST`. | The session stays up. No panic, no leaked thread. The second loss inside 10 minutes comes back at the safe level. |
 | 2 | Survive another process filling VRAM to the brim. | Textures lower, the frame keeps running, no device loss, no frozen world. |
-| 3 | Breadcrumbs name the hung pass. Run check 1 and read the report. | The report names the last completed and the first unfinished pass. The cost is at most 0.2 ms per frame, or the markers become a debug setting. |
+| 3 | Breadcrumbs name the hung pass. Run check 1 and read the report. | The report names the last completed and the first unfinished pass on NVIDIA, AMD and Intel: with the vendor extension where present, otherwise through the `vkCmdFillBuffer` pass id. The cost is at most 0.2 ms per frame, or the markers become a debug setting. |
 
 Also count the lines and `unsafe` blocks each check needs. The count goes into the prototype report.
+
+## Evidence
+
+The study these codes come from lives in the untracked `reports/` folder, so the cited items are listed here. Numbers are issues or PRs on Aurora's tracker. Confidence is the audit's.
+
+| Code | Aurora issues / PRs | Cause in one line | Confidence |
+|---|---|---|---|
+| A1 | #881, #2082, #2238, fix #3228 | RDNA 4 driver hang in the contact-shadow compute pass (workgroup memory plus barrier); the fix avoids shared memory on RX 9xxx. | Confirmed (one reporter's matched on/off test); exact construct unknown |
+| A2 | #2239 epic, #1558, #2020; breadcrumb PR #2649 closed unmerged | Hang with free VRAM, one frame never finishes; the pass is unknown because no breadcrumbs shipped. | Cause unknown; missing diagnostics confirmed |
+| A3 | #2235 epic, #1561, #1917, #1713 | VRAM over the budget; WDDM pages to system RAM, frames take about 1 s, then the device is lost. | Confirmed as a mechanism; single sessions plausible |
+| A4 | #1374, #1649, #2242 epic; fixes #1766, #2041, #2058 | Photo drawn in one pass sized by memory only; 2.5 s on a Radeon 610M exceeded the TDR. | Confirmed (reproduced) |
+| A5 | #2965, #2887, #3015; fixes #2966, #2888, #3016 | Lazily created render targets stayed invalid after one refused allocation. | Confirmed (fix and demo) |
+| A7 | #2171; fix #3609 | NVIDIA without Resizable BAR: staging in the 256 MB BAR window filled it and lost the GPU. | Confirmed by the fix; no reporter confirmation |
+| A8 | #2657 | GPU-culling ranges and bindless page indices had no bound. | Bug confirmed in code; as a cause of losses plausible |
+| A11 | #1302 | wgpu 30.0.1 built a descriptor pool with zero sizes, and the Intel driver read past it; the fork carries gfx-rs/wgpu#10124. | Confirmed (upstream fix) |
+| A12 | #3740 | Silent fallback to llvmpipe; a heavy frame tripped the watchdog. | Confirmed (log) |
+| A14 | #1558, #2996, #3919 | Third-party overlay and capture layers (OBS, RTSS, Wallpaper Engine) in the process. | Plausible as a contributor only |
+| A15 | #3012 comment (11 RX 9000 reports), #3457, #3838 | The recovered device was lost again 7 to 20 s later; Windows bug-checks after 5 TDRs in a minute. | Re-loss confirmed; link to restarts plausible |
+| A17 | #1018, #2107, #1275, #1660, #1912; recovery on by default in #2710 | Device loss closed the viewer; recovery came late and off by default. | Confirmed (history) |

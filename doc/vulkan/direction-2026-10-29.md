@@ -3,6 +3,7 @@
 > **Note (2026-11-17).** The graphics API, formerly "wgpu favoured", is now raw
 > Vulkan through ash. See [decisions-2026-11-17.md](decisions-2026-11-17.md).
 > The text below is kept as written on 2026-10-29.
+> Licence: see AGENTS.md (GPL-3.0-or-later); any LGPL line below is superseded.
 
 Owner decisions of 2026-10-29 on OpenGL, Mesa/Zink and Vulkan. Where they
 conflict with the design study in this folder (see [README.md](README.md)),

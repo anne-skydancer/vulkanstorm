@@ -5,7 +5,8 @@
 > - Mesa/Zink is withdrawn.
 > - The DiligentCore line is archived.
 > - The new renderer comes after the Rust port, follows lessons from Aurora
->   Viewer, and has no graphics API chosen yet (wgpu is favoured).
+>   Viewer, and uses raw Vulkan through ash
+>   ([decisions-2026-11-17.md](decisions-2026-11-17.md)).
 > - OpenGL or Vulkan is chosen when the viewer is built.
 > - PPLL, the order-independent transparency these documents describe, was
 >   replaced by stochastic transparency on 2026-11-05
