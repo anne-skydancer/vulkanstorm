@@ -313,13 +313,13 @@ bool LLTexUnit::bind(LLImageGL* texture, bool for_rendering, bool forceBind, S32
     stop_glerror();
     if (mIndex < 0) return false;
 
-    U32 texname = usename ? usename : texture->getTexName();
-
     if(!texture)
     {
         LL_DEBUGS() << "NULL LLTexUnit::bind texture" << LL_ENDL;
         return false;
     }
+
+    U32 texname = usename ? usename : texture->getTexName(); // <Vulkanstorm/> after the null check
 
     if(!texname)
     {
