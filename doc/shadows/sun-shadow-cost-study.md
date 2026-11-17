@@ -13,7 +13,7 @@ Status: study. Documents and an offline model only; no viewer code changes. Code
 
 This study builds on four inputs and does not redo them:
 
-- the Rooftops split (`reports/rooftops-ultra-shadow-split-2026-11-16.md`, untracked in the main checkout);
+- the Rooftops split (`doc/shadows/rooftops-ultra-shadow-split-2026-11-16.md`);
 - the multicore baseline and study (`doc/perf/multicore-baseline-2026-11.md`, `doc/perf/multicore-simd-study.md`);
 - #542 (`doc/shadows/sun-cascades-refresh.md` on `codex/sun-cascades-refresh-2026-11-16`), the leading candidate;
 - the OpenGL modernisation study of 2026-11-11 (G0-G7; G0 merged as #466, `doc/gl/instrumentation.md`).

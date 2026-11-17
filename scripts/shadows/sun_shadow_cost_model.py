@@ -31,7 +31,7 @@ import math
 import sys
 
 # ------------------------------------------------------------------ measured inputs (Rooftops Ultra, still, sun)
-# reports/rooftops-ultra-shadow-split-2026-11-16.md section 2 (per cascade, ms per frame, Tracy attached)
+# doc/shadows/rooftops-ultra-shadow-split-2026-11-16.md section 2 (per cascade, ms per frame, Tracy attached)
 CASCADE = [  # total, cull, sort, draw, avatar pool, rigged batches, skin palettes (nested in rigged)
     dict(total=2.71, cull=0.07, sort=1.72, draw=0.93, pool=0.46, rigged=0.32, palettes=0.20),
     dict(total=2.04, cull=0.38, sort=0.79, draw=0.86, pool=0.05, rigged=0.26, palettes=0.10),
