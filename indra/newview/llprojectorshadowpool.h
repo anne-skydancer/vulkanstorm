@@ -33,6 +33,7 @@
 #include "llshadowmethod.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -41,6 +42,10 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
+
+#ifndef llassert // the viewer's macro; the standalone test has none
+#define llassert(x) assert(x)
+#endif
 
 namespace llprojectorpool
 {
@@ -984,6 +989,59 @@ private:
     bool mUseUnion = false;
 };
 
+// The avatar boxes that can touch one lamp's tiles: those that overlap the union of the tiles' bounds, in their order. intersects()
+// starts with the bounds test, so a box outside the union meets no tile of the lamp and the pairing loop can skip it; the loop's
+// result is the same, over fewer boxes. A non-finite bound (which overlaps() never rejects) turns the filter off, so every box still
+// gets the full test (the guard of ChangeIndex::mUseUnion).
+class BoxFilter
+{
+public:
+    void add(const Aabb& bounds)
+    {
+        if (!mUse)
+        {
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            if (!std::isfinite(bounds.lo[k]) || !std::isfinite(bounds.hi[k]))
+            {
+                mUse = false;
+                return;
+            }
+        }
+        if (!mAny)
+        {
+            mUnion = bounds;
+            mAny = true;
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            mUnion.lo[k] = std::min(mUnion.lo[k], bounds.lo[k]);
+            mUnion.hi[k] = std::max(mUnion.hi[k], bounds.hi[k]);
+        }
+    }
+
+    void select(const std::vector<Aabb>& boxes, std::vector<Aabb>& out) const
+    {
+        out.clear();
+        const bool use = mUse && mAny;
+        for (const Aabb& b : boxes)
+        {
+            if (!use || overlaps(mUnion, b))
+            {
+                out.push_back(b);
+            }
+        }
+    }
+
+private:
+    Aabb mUnion;
+    bool mAny = false;
+    bool mUse = true;
+};
+
 // ---------------------------------------------------------------------------------------------
 // The mover classifier and the rules built on it (section 4.4, D9). The viewer reads its objects and fills these structs.
 // ---------------------------------------------------------------------------------------------
@@ -1314,8 +1372,15 @@ struct StaticItem
 // any is pending (progress), even when its predicted cost alone exceeds the cap.
 // `a_left` is what the dynamic picks left of A_max: a static item whose avatar draws do not fit waits (the order is kept), except the
 // first one, which runs for progress (selectFrame makes room for it).
-inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
-                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+// The same selection as indices into `items` (the order of service); selectStatic maps them to keys. Only the items that can be
+// picked are ordered: every pick adds itemCost >= kDefaultItemMs to the spent time, so at most floor(t_s_ms / kDefaultItemMs) + 1 fit
+// the cap and the rest of the (possibly thousands of) pending items needs no order; K = floor(t_s_ms / kDefaultItemMs) + 2 are
+// ordered (all of them for a cap that is not a finite, non-negative number). Preconditions: the keys are unique within `items` (the
+// key breaks every tie, so the order is strict and total and a partial sort gives the same prefix as a full sort), and every cost is
+// floored at kDefaultItemMs (itemCost floors them all, NaN and inf included). The walk below therefore never passes the ordered
+// prefix: the float rounding of at most about 22 additions is far below the 0.05 ms slack of the extra item.
+inline std::vector<size_t> selectStaticIdx(const std::vector<StaticItem>& items, float t_s_ms,
+                                           uint32_t a_left = std::numeric_limits<uint32_t>::max())
 {
     std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
@@ -1336,25 +1401,69 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
     auto byAgeThenDist = [&byDist](const StaticItem* a, const StaticItem* b) {
         return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : byDist(a, b);
     };
-    std::sort(never.begin(), never.end(), byDist);
-    std::sort(rest.begin(), rest.end(), byAgeThenDist);
-
-    std::vector<uint32_t> out;
+    // how many picks at most: all of them for a cap that is not a finite, non-negative number
+    const size_t n = never.size() + rest.size();
+    size_t k = n;
+    if (std::isfinite(t_s_ms) && t_s_ms >= 0.f)
+    {
+        const double fit = std::floor(double(t_s_ms) / double(kDefaultItemMs)) + 2.0;
+        if (fit < double(n))
+        {
+            k = size_t(fit);
+        }
+    }
+    const StaticItem* const first = items.empty() ? nullptr : items.data();
+    const size_t kn = std::min(never.size(), k);
+    const size_t kr = std::min(rest.size(), k - kn);
+    if (kn == never.size())
+    {
+        std::sort(never.begin(), never.end(), byDist);
+    }
+    else if (kn > 0)
+    {
+        std::partial_sort(never.begin(), never.begin() + std::ptrdiff_t(kn), never.end(), byDist);
+    }
+    if (kr == rest.size())
+    {
+        std::sort(rest.begin(), rest.end(), byAgeThenDist);
+    }
+    else if (kr > 0)
+    {
+        std::partial_sort(rest.begin(), rest.begin() + std::ptrdiff_t(kr), rest.end(), byAgeThenDist);
+    }
+    std::vector<size_t> out;
     float spent = 0.f;
     uint32_t avatars = 0;
-    for (const auto* list : { &never, &rest })
+    for (int l = 0; l < 2; ++l)
     {
-        for (const StaticItem* it : *list)
+        const std::vector<const StaticItem*>& list = l == 0 ? never : rest;
+        for (size_t i = 0; i < list.size(); ++i)
         {
+            llassert(i < (l == 0 ? kn : kr)); // the walk never passes the ordered prefix (proof above)
+            const StaticItem* it = list[i];
             const float cost = itemCost(it->last_cpu_ms);
             if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
             {
                 return out; // over the cap or A_max: the order is kept, the rest waits
             }
-            out.push_back(it->key);
+            out.push_back(size_t(it - first));
             spent += cost;
             avatars += it->avatar_draws;
         }
+    }
+    return out;
+}
+
+// The keys of selectStaticIdx's picks, in the same order.
+inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+{
+    const std::vector<size_t> idx = selectStaticIdx(items, t_s_ms, a_left);
+    std::vector<uint32_t> out;
+    out.reserve(idx.size());
+    for (size_t i : idx)
+    {
+        out.push_back(items[i].key);
     }
     return out;
 }
@@ -1675,8 +1784,8 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
                               uint32_t a_max, bool progress_ok)
 {
     FramePicks out;
-    std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
-    std::map<uint32_t, uint32_t> dyn_draws, st_draws;
+    std::map<uint32_t, float> dyn_cost; // the dynamic list's key space
+    std::map<uint32_t, uint32_t> dyn_draws;
     std::vector<DynamicItem> d = dynamics;
     for (DynamicItem& it : d)
     {
@@ -1689,8 +1798,6 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     {
         it.key = packKey(it.pool, it.key);
         it.avatar_draws = std::min(it.avatar_draws, a_max);
-        st_cost[it.key] = itemCost(it.last_cpu_ms);
-        st_draws[it.key] = it.avatar_draws;
     }
     // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
     constexpr float kEps = 1e-4f;
@@ -1746,11 +1853,12 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     }
     // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
     // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
+    // the head: the first static candidate (the same whatever the cap), an index into st
+    const std::vector<size_t> head = st.empty() ? std::vector<size_t>() : selectStaticIdx(st, 0.f);
     if (!st.empty())
     {
-        const std::vector<uint32_t> head = selectStatic(st, 0.f);
-        const float head_ms = head.empty() ? 0.f : st_cost[head[0]];
-        const uint32_t head_draws = head.empty() ? 0u : st_draws[head[0]];
+        const float head_ms = head.empty() ? 0.f : itemCost(st[head[0]].last_cpu_ms);
+        const uint32_t head_draws = head.empty() ? 0u : st[head[0]].avatar_draws;
         if (head_ms <= cap_ms + kEps)
         {
             while (head_ms > left + kEps && !out.dynamic.empty())
@@ -1773,24 +1881,21 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
         else if (progress_ok && !head.empty())
         {
             // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
-            for (const StaticItem& it : st)
+            const StaticItem& h = st[head[0]];
+            if (h.never_drawn || h.age_frames >= kDynamicDeadlineFrames)
             {
-                if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
+                // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
+                // of that one item, so neither guarantee starves the other)
+                while (dropLastOther(out.dynamic))
                 {
-                    // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
-                    // of that one item, so neither guarantee starves the other)
-                    while (dropLastOther(out.dynamic))
-                    {
-                    }
-                    dyn_ms = sumCost(out.dynamic);
-                    dyn_avatars = 0;
-                    for (uint32_t k : out.dynamic)
-                    {
-                        dyn_avatars += dyn_draws[k];
-                    }
-                    left = out.dynamic.empty() ? cap_ms : 0.f;
-                    break;
                 }
+                dyn_ms = sumCost(out.dynamic);
+                dyn_avatars = 0;
+                for (uint32_t k : out.dynamic)
+                {
+                    dyn_avatars += dyn_draws[k];
+                }
+                left = out.dynamic.empty() ? cap_ms : 0.f;
             }
         }
         // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
@@ -1821,27 +1926,26 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     bool head_beside_own = false;
     if (progress_ok && !st.empty() && !out.dynamic.empty())
     {
-        const std::vector<uint32_t> head = selectStatic(st, 0.f);
-        if (!head.empty() && st_cost[head[0]] > left + kEps)
+        if (!head.empty() && itemCost(st[head[0]].last_cpu_ms) > left + kEps)
         {
-            for (const StaticItem& it : st)
-            {
-                head_beside_own = head_beside_own || (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames));
-            }
+            const StaticItem& h = st[head[0]];
+            head_beside_own = h.never_drawn || h.age_frames >= kDynamicDeadlineFrames;
         }
     }
-    out.fixed = selectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
+    std::vector<size_t> fixed_pick = selectStaticIdx(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars); // trimmed below with out.fixed
     float st_ms = 0.f;
-    for (uint32_t k : out.fixed)
+    for (size_t i : fixed_pick)
     {
-        st_ms += st_cost[k];
+        st_ms += itemCost(st[i].last_cpu_ms);
+        out.fixed.push_back(st[i].key);
     }
     if (st_ms > left + kEps && !(progress_ok && (out.dynamic.empty() || head_beside_own) && out.fixed.size() == 1))
     {
         // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
         while (!out.fixed.empty() && st_ms > left + kEps)
         {
-            st_ms -= st_cost[out.fixed.back()];
+            st_ms -= itemCost(st[fixed_pick.back()].last_cpu_ms);
+            fixed_pick.pop_back();
             out.fixed.pop_back();
         }
     }

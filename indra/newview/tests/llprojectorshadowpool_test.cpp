@@ -17,6 +17,9 @@
 //       controller at 8192, and the P2b size rules (the radius cap and the emitter extent in the shader's and C++ side's twin)
 //   P3  the change causes, the dirty list's bound, the change index against brute force, the mover rules, the LOD pin's books,
 //       the tile verdict, and a static scene that draws nothing
+//   T7Differential  the partial-sort selection against the full sort of the former one (about 18,000 comparisons)
+//   P3IndexSubset   the change index over a subset (the pending tiles left out) gives the full set's hits minus those keys
+//   BoxFilter       the per-lamp box filter keeps every box that touches a tile of the lamp, in order, whatever the bounds
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -25,6 +28,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <map>
 #include <random>
@@ -2554,6 +2558,436 @@ void testP4(bool print_table)
     testP4Owners();
 }
 
+// ---- T7 differential: selectStatic / selectFrame against the code before the hotfix (the full sort, the key maps) ----
+// The oracle below is a copy of the previous implementation; the new one must pick the same keys in the same order and predict
+// the same milliseconds bit for bit.
+static std::vector<uint32_t> oracleSelectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+{
+    std::vector<const StaticItem*> never, rest;
+    for (const StaticItem& it : items)
+    {
+        if (it.never_drawn)
+        {
+            never.push_back(&it);
+        }
+        else if (it.pending)
+        {
+            rest.push_back(&it);
+        }
+    }
+    auto byDist = [](const StaticItem* a, const StaticItem* b) {
+        const float da = sortDist(a->cam_dist), db = sortDist(b->cam_dist);
+        return da != db ? da < db : a->key < b->key;
+    };
+    auto byAgeThenDist = [&byDist](const StaticItem* a, const StaticItem* b) {
+        return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : byDist(a, b);
+    };
+    std::sort(never.begin(), never.end(), byDist);
+    std::sort(rest.begin(), rest.end(), byAgeThenDist);
+
+    std::vector<uint32_t> out;
+    float spent = 0.f;
+    uint32_t avatars = 0;
+    for (const auto* list : { &never, &rest })
+    {
+        for (const StaticItem* it : *list)
+        {
+            const float cost = itemCost(it->last_cpu_ms);
+            if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
+            {
+                return out; // over the cap or A_max: the order is kept, the rest waits
+            }
+            out.push_back(it->key);
+            spent += cost;
+            avatars += it->avatar_draws;
+        }
+    }
+    return out;
+}
+
+static FramePicks oracleSelectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
+                              uint32_t a_max, bool progress_ok)
+{
+    FramePicks out;
+    std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
+    std::map<uint32_t, uint32_t> dyn_draws, st_draws;
+    std::vector<DynamicItem> d = dynamics;
+    for (DynamicItem& it : d)
+    {
+        it.key = packKey(it.pool, it.key);
+        dyn_cost[it.key] = itemCost(it.last_cpu_ms);
+        dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
+    }
+    std::vector<StaticItem> st = statics;
+    for (StaticItem& it : st)
+    {
+        it.key = packKey(it.pool, it.key);
+        it.avatar_draws = std::min(it.avatar_draws, a_max);
+        st_cost[it.key] = itemCost(it.last_cpu_ms);
+        st_draws[it.key] = it.avatar_draws;
+    }
+    // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
+    constexpr float kEps = 1e-4f;
+    float left = cap_ms;
+    std::set<uint32_t> own_keys; // the own avatar's faces: never dropped (every frame, whatever the cap says)
+    for (const DynamicItem& it : d)
+    {
+        if (it.own)
+        {
+            own_keys.insert(it.key);
+        }
+    }
+    auto dropLastOther = [&](std::vector<uint32_t>& list) { // drops the last pick that is not an own face; false when only own faces remain
+        for (size_t i = list.size(); i > 0; --i)
+        {
+            if (!own_keys.count(list[i - 1]))
+            {
+                list.erase(list.begin() + (i - 1));
+                return true;
+            }
+        }
+        return false;
+    };
+    auto sumCost = [&](const std::vector<uint32_t>& list) {
+        float ms = 0.f;
+        for (uint32_t k : list)
+        {
+            ms += dyn_cost[k];
+        }
+        return ms;
+    };
+    if (left <= 0.f && !progress_ok)
+    {
+        out.dynamic = selectDynamic(d, 0.f, a_max, false); // only the own avatar's faces run past an exhausted cap
+        out.predicted_ms = sumCost(out.dynamic);
+        return out;
+    }
+    out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
+    float dyn_ms = sumCost(out.dynamic);
+    if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
+    {
+        // an over-cap item may only run alone, as the progress pick; the own avatar's faces stay (they are exempt)
+        while (dyn_ms > left + kEps && dropLastOther(out.dynamic))
+        {
+            dyn_ms = sumCost(out.dynamic);
+        }
+    }
+    left -= dyn_ms;
+    uint32_t dyn_avatars = 0;
+    for (uint32_t k : out.dynamic)
+    {
+        dyn_avatars += dyn_draws[k];
+    }
+    // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
+    // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
+    if (!st.empty())
+    {
+        const std::vector<uint32_t> head = oracleSelectStatic(st, 0.f);
+        const float head_ms = head.empty() ? 0.f : st_cost[head[0]];
+        const uint32_t head_draws = head.empty() ? 0u : st_draws[head[0]];
+        if (head_ms <= cap_ms + kEps)
+        {
+            while (head_ms > left + kEps && !out.dynamic.empty())
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && own_keys.count(out.dynamic[i - 1]))
+                {
+                    --i; // an own face is never given up
+                }
+                if (i == 0)
+                {
+                    break; // only own faces remain: the head waits for a frame with room
+                }
+                dyn_ms -= dyn_cost[out.dynamic[i - 1]];
+                dyn_avatars -= dyn_draws[out.dynamic[i - 1]];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
+        else if (progress_ok && !head.empty())
+        {
+            // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
+            for (const StaticItem& it : st)
+            {
+                if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
+                {
+                    // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
+                    // of that one item, so neither guarantee starves the other)
+                    while (dropLastOther(out.dynamic))
+                    {
+                    }
+                    dyn_ms = sumCost(out.dynamic);
+                    dyn_avatars = 0;
+                    for (uint32_t k : out.dynamic)
+                    {
+                        dyn_avatars += dyn_draws[k];
+                    }
+                    left = out.dynamic.empty() ? cap_ms : 0.f;
+                    break;
+                }
+            }
+        }
+        // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
+        // progress pick above): the dynamic layer gives up its last avatar faces for it (head_draws <= a_max); faces without avatar draws
+        // free nothing and stay
+        if (head_ms <= cap_ms + kEps || out.dynamic.empty())
+        {
+            while (head_draws + dyn_avatars > a_max && dyn_avatars > 0)
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && (dyn_draws[out.dynamic[i - 1]] == 0 || own_keys.count(out.dynamic[i - 1])))
+                {
+                    --i;
+                }
+                if (i == 0)
+                {
+                    break; // only own faces hold the avatar draws: the head waits
+                }
+                const uint32_t k = out.dynamic[i - 1];
+                dyn_ms -= dyn_cost[k];
+                dyn_avatars -= dyn_draws[k];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
+    }
+    // an overdue head that has no room beside the own avatar's faces runs beside them as the progress pick (one bounded overrun)
+    bool head_beside_own = false;
+    if (progress_ok && !st.empty() && !out.dynamic.empty())
+    {
+        const std::vector<uint32_t> head = oracleSelectStatic(st, 0.f);
+        if (!head.empty() && st_cost[head[0]] > left + kEps)
+        {
+            for (const StaticItem& it : st)
+            {
+                head_beside_own = head_beside_own || (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames));
+            }
+        }
+    }
+    out.fixed = oracleSelectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
+    float st_ms = 0.f;
+    for (uint32_t k : out.fixed)
+    {
+        st_ms += st_cost[k];
+    }
+    if (st_ms > left + kEps && !(progress_ok && (out.dynamic.empty() || head_beside_own) && out.fixed.size() == 1))
+    {
+        // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
+        while (!out.fixed.empty() && st_ms > left + kEps)
+        {
+            st_ms -= st_cost[out.fixed.back()];
+            out.fixed.pop_back();
+        }
+    }
+    out.predicted_ms = dyn_ms + st_ms;
+    return out;
+}
+
+
+
+std::vector<StaticItem> randomStatics(std::mt19937& rng, size_t n, int style)
+{
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    const float costs[] = { 0.f, nan, inf, -inf, -1.f, 1e30f, 0.01f, 0.05f, 0.06f, 0.2f, 1.f, 5.f };
+    std::vector<StaticItem> v(n);
+    std::vector<uint32_t> keys(n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        keys[i] = uint32_t(i * 7 + 3);
+    }
+    std::shuffle(keys.begin(), keys.end(), rng);
+    for (size_t i = 0; i < n; ++i)
+    {
+        StaticItem& it = v[i];
+        it.key = keys[i];
+        it.pool = style % 3 == 0 ? 0u : uint32_t(rng() % 3);
+        it.never_drawn = rng() % (style % 2 ? 3 : 20) == 0;
+        it.pending = rng() % 4 != 0;
+        it.cam_dist = rng() % 9 == 0 ? nan : (rng() % 5 == 0 ? 0.f : float(rng() % 40)); // many ties
+        it.last_cpu_ms = rng() % 3 == 0 ? costs[rng() % (sizeof(costs) / sizeof(costs[0]))] : float(rng() % 100) * 0.01f;
+        it.age_frames = style % 4 == 0 ? 0u : uint32_t(rng() % 6); // ties on age
+        it.avatar_draws = rng() % 3 == 0 ? uint32_t(rng() % 30) : 0u;
+    }
+    return v;
+}
+
+std::vector<DynamicItem> randomDynamics(std::mt19937& rng, size_t n)
+{
+    std::vector<DynamicItem> v(n);
+    for (size_t i = 0; i < n; ++i)
+    {
+        DynamicItem& it = v[i];
+        it.key = uint32_t(i * 5 + 1);
+        it.pool = uint32_t(rng() % 3);
+        it.avatar = rng() % 2 == 0;
+        it.age_frames = uint32_t(rng() % 8);
+        it.cam_dist = float(rng() % 30);
+        it.last_cpu_ms = float(rng() % 60) * 0.01f;
+        it.avatar_draws = uint32_t(rng() % 5);
+        it.layer = rng() % 2 == 0;
+        it.own = rng() % 12 == 0;
+    }
+    return v;
+}
+
+void testT7Differential()
+{
+    std::mt19937 rng(20261117);
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    const float caps[] = { 0.f, 0.001f, 0.05f, 0.1f, 0.16f, 0.2f, 0.25f, 0.35f, 1.f, 1e-9f, -1.f, nan, inf, 1e9f };
+    int mismatches = 0, iterations = 0, nonempty = 0;
+    const size_t sizes[] = { 0, 1, 2, 3, 7, 40, 300, 2466, 5000 };
+    for (int it = 0; it < 6000; ++it)
+    {
+        const size_t n = sizes[size_t(it) % (sizeof(sizes) / sizeof(sizes[0]))];
+        const std::vector<StaticItem> statics = randomStatics(rng, n, it);
+        // selectStatic: the caps, a_left of every kind
+        const float t = caps[rng() % (sizeof(caps) / sizeof(caps[0]))];
+        const uint32_t a_left = rng() % 3 == 0 ? std::numeric_limits<uint32_t>::max() : uint32_t(rng() % 60);
+        const std::vector<uint32_t> want = oracleSelectStatic(statics, t, a_left);
+        if (selectStatic(statics, t, a_left) != want)
+        {
+            ++mismatches;
+        }
+        ++iterations;
+        nonempty += want.empty() ? 0 : 1;
+        // selectFrame: the dynamic list, the cap left, own faces, progress both ways
+        const std::vector<DynamicItem> dynamics = randomDynamics(rng, rng() % 4 == 0 ? 0 : rng() % 60);
+        const float cap = caps[rng() % 8] + (rng() % 4 == 0 ? 0.f : float(rng() % 4) * 0.01f);
+        for (int progress = 0; progress < 2; ++progress)
+        {
+            const uint32_t a_max = rng() % 2 ? 24u : uint32_t(rng() % 10);
+            const FramePicks a = selectFrame(statics, dynamics, cap, a_max, progress != 0);
+            const FramePicks b = oracleSelectFrame(statics, dynamics, cap, a_max, progress != 0);
+            if (a.fixed != b.fixed || a.dynamic != b.dynamic || std::memcmp(&a.predicted_ms, &b.predicted_ms, sizeof(float)) != 0)
+            {
+                ++mismatches;
+            }
+            ++iterations;
+        }
+    }
+    check(mismatches == 0, "T7 selectStatic and selectFrame equal the previous implementation (random sets to 5000 items)", mismatches, iterations);
+    check(nonempty > 1000, "T7 the differential sets pick something", nonempty);
+    std::printf("T7 differential: %d comparisons, %d mismatches\n", iterations, mismatches);
+}
+
+// P3: the index over a subset (the pending tiles left out, F1) gives the full set's hits minus the left-out keys, with the same causes.
+void testP3IndexSubset()
+{
+    std::mt19937 rng(20261117);
+    std::vector<Hit> full, part;
+    int bad = 0, scenes = 0;
+    for (int scene = 0; scene < 100; ++scene)
+    {
+        std::vector<TileVolume> all, sub;
+        std::set<uint32_t> left_out;
+        const size_t n = rng() % 400;
+        for (size_t k = 0; k < n; ++k)
+        {
+            all.push_back({ uint32_t(100 + k * 3), randomPyramid(rng, 80.f, 0.3f, 2.9f, 1.f, 20.f) });
+            if (rng() % 3 == 0)
+            {
+                left_out.insert(all.back().key);
+            }
+            else
+            {
+                sub.push_back(all.back());
+            }
+        }
+        const std::vector<DirtyBox> boxes = randomBoxes(rng, rng() % 300, 90.f);
+        ChangeIndex a, b;
+        a.rebuild(all);
+        b.rebuild(sub);
+        for (int every = 0; every < 2; ++every)
+        {
+            a.apply(boxes, every != 0, full);
+            b.apply(boxes, every != 0, part);
+            std::vector<Hit> want;
+            for (const Hit& h : full)
+            {
+                if (!left_out.count(h.key))
+                {
+                    want.push_back(h);
+                }
+            }
+            ++scenes;
+            bad += sameHits(part, want) ? 0 : 1;
+        }
+    }
+    check(bad == 0, "F1 the index over the tiles that are not pending gives the full hits minus the pending keys, same causes", bad, scenes);
+}
+
+// F3: the per-lamp box filter keeps every box that touches a tile of the lamp, in order, whatever the bounds (NaN, inf, default pyramids).
+void testBoxFilter()
+{
+    std::mt19937 rng(20261117);
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    int bad = 0, runs = 0;
+    for (int scene = 0; scene < 400; ++scene)
+    {
+        std::vector<Pyramid> tiles;
+        const size_t nt = 1 + rng() % 6;
+        for (size_t k = 0; k < nt; ++k)
+        {
+            tiles.push_back(scene % 7 == 0 ? Pyramid() : randomPyramid(rng, 80.f, 0.3f, 2.9f, 1.f, 20.f)); // default pyramids too
+        }
+        if (scene % 5 == 1)
+        {
+            Aabb& b = tiles[rng() % nt].bounds;
+            for (int k = 0; k < 3; ++k) { b.lo[k] = scene % 2 ? nan : -inf; b.hi[k] = inf; }
+        }
+        std::vector<Aabb> boxes;
+        for (const DirtyBox& d : randomBoxes(rng, 40, 90.f))
+        {
+            boxes.push_back(d.box);
+        }
+        Aabb odd;
+        for (int k = 0; k < 3; ++k) { odd.lo[k] = nan; odd.hi[k] = 1.f; }
+        boxes.push_back(odd);
+        for (int k = 0; k < 3; ++k) { odd.lo[k] = 0.f; odd.hi[k] = inf; }
+        boxes.push_back(odd);
+        BoxFilter f;
+        for (const Pyramid& p : tiles)
+        {
+            f.add(p.bounds);
+        }
+        std::vector<Aabb> kept;
+        f.select(boxes, kept);
+        // per tile: the boxes that intersect it, as indices into `boxes` (brute force), against the same test over the kept list
+        bool same = kept.size() <= boxes.size();
+        for (const Pyramid& p : tiles)
+        {
+            std::vector<size_t> brute, filtered;
+            for (size_t i = 0; i < boxes.size(); ++i)
+            {
+                if (intersects(p, boxes[i]))
+                {
+                    brute.push_back(i);
+                }
+            }
+            // map each kept box back to its index in order
+            size_t pos = 0;
+            for (const Aabb& x : kept)
+            {
+                while (pos < boxes.size() && std::memcmp(&boxes[pos], &x, sizeof(Aabb)) != 0)
+                {
+                    ++pos;
+                }
+                if (pos < boxes.size() && intersects(p, x))
+                {
+                    filtered.push_back(pos);
+                }
+                ++pos;
+            }
+            same = same && brute == filtered;
+        }
+        ++runs;
+        bad += same ? 0 : 1;
+    }
+    check(bad == 0, "F3 the lamp box filter keeps every box that touches a tile (NaN, inf and default pyramids included)", bad, runs);
+}
+
 void testP3()
 {
     testP3Causes();
@@ -2826,6 +3260,9 @@ int main(int argc, char** argv)
     testT5();
     testT6();
     testT7();
+    testT7Differential();
+    testP3IndexSubset();
+    testBoxFilter();
     testT8();
     testBadInput();
     testP3();
