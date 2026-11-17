@@ -2235,7 +2235,7 @@ std::string zip_llsd(LLSD& data)
 //decompress a block of LLSD from provided istream
 // not very efficient -- creats a copy of decompressed LLSD block in memory
 // and deserializes from that copy using LLSDSerialize
-LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is, S32 size)
+LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out)
 {
     std::unique_ptr<U8[]> in = std::unique_ptr<U8[]>(new(std::nothrow) U8[size]);
     if (!in)
@@ -2244,10 +2244,10 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is,
     }
     is.read((char*) in.get(), size);
 
-    return unzip_llsd(data, in.get(), size);
+    return unzip_llsd(data, in.get(), size, max_out);
 }
 
-LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32 size)
+LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out)
 {
     U8* result = NULL;
     llssize cur_size = 0;
@@ -2305,6 +2305,15 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 
         U32 have = CHUNK-strm.avail_out;
 
+        if (max_out != UNZIP_NO_CAP && (size_t)cur_size + have > max_out)
+        {
+            LL_WARNS() << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
+                << " bytes; input size: " << size << " bytes." << LL_ENDL;
+            inflateEnd(&strm);
+            free(result);
+            return ZR_SIZE_ERROR;
+        }
+
         U8* new_result = (U8*)realloc(result, cur_size + have);
         if (new_result == NULL)
         {
@@ -2354,7 +2363,7 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 //This unzip function will only work with a gzip header and trailer - while the contents
 //of the actual compressed data is the same for either format (gzip vs zlib ), the headers
 //and trailers are different for the formats.
-U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size )
+U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size, size_t max_out )
 {
     if (size == 0)
     {
@@ -2415,6 +2424,17 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
         const size_t have = CHUNK - strm.avail_out;
         const size_t needed = cur_size + have;
 
+        if (max_out != UNZIP_NO_CAP && needed > max_out)
+        {
+            LL_WARNS() << "Failed to unzip LLSD NavMesh block: output exceeds the cap of " << max_out
+                << " bytes; total size: " << size << " bytes." << LL_ENDL;
+            inflateEnd(&strm);
+            free(result);
+            delete[] in;
+            valid = false;
+            return NULL;
+        }
+
         if (needed < cur_size)
         {
             // size_t overflow (32 bit builds only)
@@ -2433,6 +2453,10 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size 
             if (capacity <= SIZE_MAX / 2 && capacity * 2 > new_capacity)
             {
                 new_capacity = capacity * 2;
+            }
+            if (max_out != UNZIP_NO_CAP && new_capacity > max_out)
+            {
+                new_capacity = max_out;   // needed <= max_out here
             }
             if (new_capacity < CHUNK)
             {
