@@ -1407,75 +1407,81 @@ void LLProjectorShadows::update(LLCamera& camera)
     bool lamp_ok = false;
     SpotGeom lamp_g;
     Pose lamp_pose;
-    for (auto& entry : mRecords)
     {
-        Record& rec = entry.second;
-        // the lamp's geometry and pose are read once for its tiles (they are consecutive: the key is lamp << 4 | cell)
-        if (lamp_read != rec.lamp)
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector sweep"); // <Vulkanstorm> hotfix: where the per-frame update spends its time
+        for (auto& entry : mRecords)
         {
-            lamp_read = rec.lamp;
-            if (LLViewerObject* lamp = rec.drawable.notNull() ? rec.drawable->getVObj().get() : nullptr)
+            Record& rec = entry.second;
+            // the lamp's geometry and pose are read once for its tiles (they are consecutive: the key is lamp << 4 | cell)
+            if (lamp_read != rec.lamp)
             {
-                LLViewerObject* lamp_root = lamp->getRootEdit();
-                lamp_roots.push_back(lamp_root ? lamp_root : lamp);
+                lamp_read = rec.lamp;
+                if (LLViewerObject* lamp = rec.drawable.notNull() ? rec.drawable->getVObj().get() : nullptr)
+                {
+                    LLViewerObject* lamp_root = lamp->getRootEdit();
+                    lamp_roots.push_back(lamp_root ? lamp_root : lamp);
+                }
+                lamp_ok = read_spot(rec.drawable, lamp_g);
+                if (lamp_ok)
+                {
+                    lamp_pose = light_pose(lamp_g, rec.drawable);
+                }
             }
-            lamp_ok = read_spot(rec.drawable, lamp_g);
-            if (lamp_ok)
+            const SpotGeom& g = lamp_g;
+            if (!lamp_ok)
             {
-                lamp_pose = light_pose(lamp_g, rec.drawable);
+                rec.prevPoseValid = false;
+                rec.volumeValid = false;
+                continue;
             }
-        }
-        const SpotGeom& g = lamp_g;
-        if (!lamp_ok)
-        {
-            rec.prevPoseValid = false;
-            rec.volumeValid = false;
-            continue;
-        }
-        rec.curPose = lamp_pose;
-        rec.lampMoving = rec.prevPoseValid && poseChanged(rec.prevPose, rec.curPose);
-        rec.prevPose = rec.curPose;
-        rec.prevPoseValid = true;
-        rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
-        const F32 far_clip = g.dist + g.radius * 1.5f; // spot_matrices' far plane
-        if (shifted || !rec.volumeValid || poseChanged(rec.volumePose, rec.curPose))
-        {
-            rec.core = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, 0, false);
-            rec.volumeNc = 0; // the tile's own volume (with its guard) is built below, at the tile's size
-            rec.volumePose = rec.curPose;
-            rec.volumeValid = true;
-        }
-        // the tile's size from the camera position: its distance to the tile's interior volume, and the lamp's axial depth of the camera
-        LLVector3 fwd(0.f, 0.f, -1.f);
-        fwd *= g.rot;
-        const float lamp_origin[3] = { g.origin.mV[VX], g.origin.mV[VY], g.origin.mV[VZ] };
-        const float lamp_fwd[3] = { fwd.mV[VX], fwd.mV[VY], fwd.mV[VZ] };
-        const double ty = std::tan(0.5 * double(g.fov));
-        const double tx = ty * double(g.scale.mV[VX] / g.scale.mV[VY]);
-        const double tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the cell's wider axis: the tile is square
-        rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
-        rec.base = rec.hyst.size();
-        if (rec.grid.cells())
-        {
-            rec.camDist = rec.cellDist; // the order of service: the nearest cells first (a single tile keeps the lamp sphere's distance, set in updateLightSet)
+            rec.curPose = lamp_pose;
+            rec.lampMoving = rec.prevPoseValid && poseChanged(rec.prevPose, rec.curPose);
+            rec.prevPose = rec.curPose;
+            rec.prevPoseValid = true;
+            rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
+            const F32 far_clip = g.dist + g.radius * 1.5f; // spot_matrices' far plane
+            if (shifted || !rec.volumeValid || poseChanged(rec.volumePose, rec.curPose))
+            {
+                rec.core = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, 0, false);
+                rec.volumeNc = 0; // the tile's own volume (with its guard) is built below, at the tile's size
+                rec.volumePose = rec.curPose;
+                rec.volumeValid = true;
+            }
+            // the tile's size from the camera position: its distance to the tile's interior volume, and the lamp's axial depth of the camera
+            LLVector3 fwd(0.f, 0.f, -1.f);
+            fwd *= g.rot;
+            const float lamp_origin[3] = { g.origin.mV[VX], g.origin.mV[VY], g.origin.mV[VZ] };
+            const float lamp_fwd[3] = { fwd.mV[VX], fwd.mV[VY], fwd.mV[VZ] };
+            const double ty = std::tan(0.5 * double(g.fov));
+            const double tx = ty * double(g.scale.mV[VX] / g.scale.mV[VY]);
+            const double tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the cell's wider axis: the tile is square
+            rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
+            rec.base = rec.hyst.size();
+            if (rec.grid.cells())
+            {
+                rec.camDist = rec.cellDist; // the order of service: the nearest cells first (a single tile keeps the lamp sphere's distance, set in updateLightSet)
+            }
         }
     }
     LLShadowDirtyFeed::setLampRoots(LLShadowDirtyFeed::Owner::Projectors, lamp_roots);
 
-    layoutChanged();
-    // the volume of each tile as it is drawn (a cell's frustum is widened by its guard in texels, so its world width follows its size)
-    for (auto& entry : mRecords)
     {
-        Record& rec = entry.second;
-        const U32 nc = rec.placed ? rec.rect.size : desiredSize(rec);
-        if (rec.volumeValid && rec.volumeNc != nc)
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector layout"); // <Vulkanstorm> hotfix
+        layoutChanged();
+        // the volume of each tile as it is drawn (a cell's frustum is widened by its guard in texels, so its world width follows its size)
+        for (auto& entry : mRecords)
         {
-            SpotGeom g;
-            if (read_spot(rec.drawable, g))
+            Record& rec = entry.second;
+            const U32 nc = rec.placed ? rec.rect.size : desiredSize(rec);
+            if (rec.volumeValid && rec.volumeNc != nc)
             {
-                F32 far_clip = g.dist + g.radius * 1.5f;
-                rec.volume = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, nc, true);
-                rec.volumeNc = nc;
+                SpotGeom g;
+                if (read_spot(rec.drawable, g))
+                {
+                    F32 far_clip = g.dist + g.radius * 1.5f;
+                    rec.volume = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, nc, true);
+                    rec.volumeNc = nc;
+                }
             }
         }
     }
@@ -1484,6 +1490,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     // built only when boxes arrived or the list says "everything"
     if (!boxes.empty() || everything)
     {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector index"); // <Vulkanstorm> hotfix
         std::vector<TileVolume> volumes;
         volumes.reserve(mRecords.size());
         for (auto& entry : mRecords)
@@ -1535,122 +1542,129 @@ void LLProjectorShadows::update(LLCamera& camera)
     mLightsWithoutTile = 0;
     mPendingTiles = 0;
     mAvatarTiles = 0;
-    for (auto& entry : mRecords)
     {
-        Record& rec = entry.second;
-        if (rec.drawnFrame == 0)
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector classify"); // <Vulkanstorm> hotfix: where the per-frame update spends its time
+        for (auto& entry : mRecords)
         {
-            ++mLightsWithoutTile;
-        }
-        if (!rec.placed)
-        {
-            continue;
-        }
-        rec.avatarCount = 0;
-        rec.avatarDist = std::numeric_limits<F32>::infinity();
-        bool holds_own = false;
-        for (const Aabb& b : own_boxes)
-        {
-            if (intersects(rec.volume, b))
+            Record& rec = entry.second;
+            if (rec.drawnFrame == 0)
             {
-                ++rec.avatarCount;
-                if (!rec.grid.cells() || cellHoldsOwn(rec.core, b))
+                ++mLightsWithoutTile;
+            }
+            if (!rec.placed)
+            {
+                continue;
+            }
+            rec.avatarCount = 0;
+            rec.avatarDist = std::numeric_limits<F32>::infinity();
+            bool holds_own = false;
+            for (const Aabb& b : own_boxes)
+            {
+                if (intersects(rec.volume, b))
                 {
-                    holds_own = true; // the own avatar's face is drawn every frame (not ordered by distance): of a wide lamp's cells, the one holding the box's centre
+                    ++rec.avatarCount;
+                    if (!rec.grid.cells() || cellHoldsOwn(rec.core, b))
+                    {
+                        holds_own = true; // the own avatar's face is drawn every frame (not ordered by distance): of a wide lamp's cells, the one holding the box's centre
+                    }
+                    else
+                    {
+                        // a cell the avatar's box overlaps but whose interior does not hold the box's centre: by deadline like the others, so the
+                        // faces that run every frame past the cap are one per lamp for the own avatar, not every cell its width crosses
+                        rec.avatarDist = std::min(rec.avatarDist, pointBoxDistance(camera_pos, b));
+                    }
                 }
-                else
+            }
+            for (const Aabb& b : avatar_boxes)
+            {
+                if (intersects(rec.volume, b))
                 {
-                    // a cell the avatar's box overlaps but whose interior does not hold the box's centre: by deadline like the others, so the
-                    // faces that run every frame past the cap are one per lamp for the own avatar, not every cell its width crosses
+                    ++rec.avatarCount; // also for a tile about to be drawn the first time: its picture holds the avatar
+                    // the order of the face's service: the camera POSITION's distance to its nearest other avatar (never the view direction)
                     rec.avatarDist = std::min(rec.avatarDist, pointBoxDistance(camera_pos, b));
                 }
             }
-        }
-        for (const Aabb& b : avatar_boxes)
-        {
-            if (intersects(rec.volume, b))
+            if (rec.avatarCount == 0)
             {
-                ++rec.avatarCount; // also for a tile about to be drawn the first time: its picture holds the avatar
-                // the order of the face's service: the camera POSITION's distance to its nearest other avatar (never the view direction)
-                rec.avatarDist = std::min(rec.avatarDist, pointBoxDistance(camera_pos, b));
+                rec.avatarDist = 0.f; // the avatar left: this face only restores L from S, which is cheap and first
             }
-        }
-        if (rec.avatarCount == 0)
-        {
-            rec.avatarDist = 0.f; // the avatar left: this face only restores L from S, which is cheap and first
-        }
-        rec.holdsAvatar = rec.avatarCount > 0;
-        mAvatarTiles += rec.holdsAvatar ? 1 : 0;
-        mPendingTiles += rec.pending ? 1 : 0;
+            rec.holdsAvatar = rec.avatarCount > 0;
+            mAvatarTiles += rec.holdsAvatar ? 1 : 0;
+            mPendingTiles += rec.pending ? 1 : 0;
 
-        TileFacts facts;
-        facts.never_drawn = rec.drawnFrame == 0;
-        facts.pending = rec.pending;
-        facts.pending_cause = rec.pendingCause;
-        facts.pose_stale = rec.poseStale;
-        facts.lamp_moving = rec.lampMoving;
-        facts.lowres = rec.lowres;
-        facts.holds_avatar = rec.holdsAvatar;
-        facts.avatar_in_layer = rec.avatarInLayer;
-        const TileVerdict verdict = classifyTile(facts);
-        if (!verdict.needs_render && !verdict.needs_layer)
-        {
-            continue;
-        }
-        causes[rec.key] = verdict.cause;
-        // the prediction of a full render: the fixed layer, plus the avatar layer when an avatar is in the light
-        const F32 full_ms = rec.lastCpuMs + (rec.holdsAvatar ? rec.lastAvatarMs : 0.f);
-        if (verdict.needs_layer)
-        {
-            DynamicItem item;
-            item.key = rec.key;
-            item.avatar = true;
-            item.age_frames = frame - rec.layerFrame; // the lag of the avatar in this tile: frames since its layer was last drawn
-            item.cam_dist = rec.avatarDist;
-            item.last_cpu_ms = rec.holdsAvatar ? rec.lastAvatarMs : 0.f; // a face that only restores L from S costs the floor
-            item.avatar_draws = rec.avatarCount;
-            item.layer = true;
-            item.own = holds_own;
-            if (holds_own)
+            TileFacts facts;
+            facts.never_drawn = rec.drawnFrame == 0;
+            facts.pending = rec.pending;
+            facts.pending_cause = rec.pendingCause;
+            facts.pose_stale = rec.poseStale;
+            facts.lamp_moving = rec.lampMoving;
+            facts.lowres = rec.lowres;
+            facts.holds_avatar = rec.holdsAvatar;
+            facts.avatar_in_layer = rec.avatarInLayer;
+            const TileVerdict verdict = classifyTile(facts);
+            if (!verdict.needs_render && !verdict.needs_layer)
             {
-                own_faces.insert(rec.key);
+                continue;
             }
-            dynamic_items.push_back(item);
-            layer_only.insert(rec.key);
-        }
-        else if (verdict.dynamic)
-        {
-            DynamicItem item;
-            item.key = rec.key;
-            item.avatar = rec.holdsAvatar;
-            item.age_frames = frame - rec.drawnFrame;
-            item.cam_dist = rec.camDist;
-            item.last_cpu_ms = full_ms;
-            item.avatar_draws = rec.avatarCount;
-            dynamic_items.push_back(item);
-        }
-        else
-        {
-            StaticItem item;
-            item.key = rec.key;
-            item.never_drawn = rec.drawnFrame == 0;
-            item.pending = true;
-            item.cam_dist = rec.camDist;
-            item.last_cpu_ms = full_ms;
-            item.avatar_draws = rec.holdsAvatar ? std::min<U32>(rec.avatarCount, kAvatarDrawsMax) : 0u;
-            // the order of service: how long the tile has been waiting: frames since the first change that touched it, or, for a
-            // tile whose only cause is its lamp's pose or a resize (no box), frames since it was drawn, so it cannot starve
-            // behind tiles with dirty boxes
-            item.age_frames = rec.dirtyFrame && frame >= rec.dirtyFrame ? frame - rec.dirtyFrame
-                              : (rec.drawnFrame && frame >= rec.drawnFrame ? frame - rec.drawnFrame : 0u);
-            static_items.push_back(item);
+            causes[rec.key] = verdict.cause;
+            // the prediction of a full render: the fixed layer, plus the avatar layer when an avatar is in the light
+            const F32 full_ms = rec.lastCpuMs + (rec.holdsAvatar ? rec.lastAvatarMs : 0.f);
+            if (verdict.needs_layer)
+            {
+                DynamicItem item;
+                item.key = rec.key;
+                item.avatar = true;
+                item.age_frames = frame - rec.layerFrame; // the lag of the avatar in this tile: frames since its layer was last drawn
+                item.cam_dist = rec.avatarDist;
+                item.last_cpu_ms = rec.holdsAvatar ? rec.lastAvatarMs : 0.f; // a face that only restores L from S costs the floor
+                item.avatar_draws = rec.avatarCount;
+                item.layer = true;
+                item.own = holds_own;
+                if (holds_own)
+                {
+                    own_faces.insert(rec.key);
+                }
+                dynamic_items.push_back(item);
+                layer_only.insert(rec.key);
+            }
+            else if (verdict.dynamic)
+            {
+                DynamicItem item;
+                item.key = rec.key;
+                item.avatar = rec.holdsAvatar;
+                item.age_frames = frame - rec.drawnFrame;
+                item.cam_dist = rec.camDist;
+                item.last_cpu_ms = full_ms;
+                item.avatar_draws = rec.avatarCount;
+                dynamic_items.push_back(item);
+            }
+            else
+            {
+                StaticItem item;
+                item.key = rec.key;
+                item.never_drawn = rec.drawnFrame == 0;
+                item.pending = true;
+                item.cam_dist = rec.camDist;
+                item.last_cpu_ms = full_ms;
+                item.avatar_draws = rec.holdsAvatar ? std::min<U32>(rec.avatarCount, kAvatarDrawsMax) : 0u;
+                // the order of service: how long the tile has been waiting: frames since the first change that touched it, or, for a
+                // tile whose only cause is its lamp's pose or a resize (no box), frames since it was drawn, so it cannot starve
+                // behind tiles with dirty boxes
+                item.age_frames = rec.dirtyFrame && frame >= rec.dirtyFrame ? frame - rec.dirtyFrame
+                                  : (rec.drawnFrame && frame >= rec.drawnFrame ? frame - rec.drawnFrame : 0u);
+                static_items.push_back(item);
+            }
         }
     }
     // The budget: one CPU cap for the frame's tile work of every cache together (llprojectorpool::kFrameCapMs, split by
     // selectFrame: the dynamic layer first, up to kDynamicCapMs, the static tiles in what is left). The measured cost of a tile only
     // predicts how many fit; it does not set the budget. What an earlier cache spent in this frame is already off the cap.
     const FrameLedger& ledger = frameLedger();
-    const FramePicks picks = selectFrame(static_items, dynamic_items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
+    FramePicks picks;
+    {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector select"); // <Vulkanstorm> hotfix
+        picks = selectFrame(static_items, dynamic_items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
+    }
     if (picks.fixed.empty() && picks.dynamic.empty())
     {
         return;
