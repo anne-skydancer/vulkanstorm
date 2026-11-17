@@ -2691,7 +2691,7 @@ void* LLWindowSDL::createSharedContext()
     sc->mContext = SDL_GL_CreateContext(mWindow);
     if (sc->mContext)
     {
-        SDL_GL_SetSwapInterval(0);
+        // <Vulkanstorm> removed SDL_GL_SetSwapInterval(0) here: the new context was current on the window, so it switched the window's vsync off
         SDL_GL_MakeCurrent(mWindow, mContext);
 
         LLCoordScreen size;
