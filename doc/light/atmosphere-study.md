@@ -606,7 +606,7 @@ formula as the filter's reference instead of deleting it. L6 no longer compensat
    - (c) Keep the uniform march: up to 98 % low in fog. Not viable.
 2. **D2. The library's aureole list with the corrected sky.** "Phototools- Hospital Light 01" (a light rig) enters at 1.25× of the
    white card, 10-20° from the light. "[TOR] SCIFI - Arrakissed 2" leaves.
-   - (a) **Recommended:** accept the new list under the 2026-11-11 aureole rule. There are no whiteouts.
+   - (a) **Recommended:** accept the new list under the 2026-11-11 aureole rule, which now applies to the physical sky (and the light it casts) only; the visible sky keeps the creator's look (filter decision below). The physical sky has no whiteouts.
    - (b) Tighten a bound until Hospital Light 01 is under the card.
 3. **D3. Quality tiers.**
    - (a) **Recommended:** one quality for every GPU, and no `RenderAtmosphereTier`. The cost is ≤ 0.17 ms (measured passes) on the 5070 Ti,
