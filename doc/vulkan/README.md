@@ -16,6 +16,12 @@
 > Newer design notes for the new renderer:
 > - [ray-traced-shadows-option.md](ray-traced-shadows-option.md)
 >   (2026-11-16): ray-traced shadows as an option.
+>
+> Newer decisions and rules (2026-11-17):
+> - [decisions-2026-11-17.md](decisions-2026-11-17.md): the API (ash), shaders
+>   (Slang), anti-aliasing and FSR 3.1, and the V1-V7 choices.
+> - [robustness-rules.md](robustness-rules.md): rules R1-R11 and the three
+>   prototype checks, from the Aurora GPU-hang study.
 
 Audited source baseline: **`1a490c3cb7ed60124169bf4bf6ad61a6ae1eeec5`**. Target: **Windows and Linux**. User mandate: compare all suitable architectures, including native Vulkan and general graphics abstractions. This report changes no viewer code and includes no runtime measurements, GPU captures, native implementation or build qualification.
 
