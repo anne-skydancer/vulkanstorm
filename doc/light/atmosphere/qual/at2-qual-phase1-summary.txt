@@ -1,0 +1,83 @@
+library skies read 768, unreadable 0, without sun_angle 0
+library skies measured 759 (day 612, night 147); undefined (max_y 0) 9; built-ins 3
+  draw path classic: 759
+                                      median     p90     max  mean<=2  mean<=5  worst<=2  worst<=5
+all   table only       mean      0.043   0.097   0.284     759     759
+all   table only       worst     1.392  10.299  74.141                     425      559   (of 759)
+all   near-sun 5 deg   mean      0.041   0.095   0.284     759     759
+all   near-sun 5 deg   worst     0.984   5.477  74.141                     582      676   (of 759)
+all   near-sun 10 deg  mean      0.037   0.086   0.284     759     759
+all   near-sun 10 deg  worst     0.887   2.083  51.103                     679      730   (of 759)
+all   near-sun 20 deg  mean      0.032   0.075   0.284     759     759
+all   near-sun 20 deg  worst     0.860   1.345  41.264                     725      751   (of 759)
+day   table only       mean      0.047   0.102   0.284     612     612
+day   table only       worst     2.498  11.622  74.141                     281      412   (of 612)
+day   near-sun 5 deg   mean      0.045   0.099   0.284     612     612
+day   near-sun 5 deg   worst     1.153   6.459  74.141                     438      529   (of 612)
+day   near-sun 10 deg  mean      0.040   0.087   0.284     612     612
+day   near-sun 10 deg  worst     0.911   2.449  51.103                     535      583   (of 612)
+day   near-sun 20 deg  mean      0.036   0.076   0.284     612     612
+day   near-sun 20 deg  worst     0.874   1.440  41.264                     581      604   (of 612)
+night table only       mean      0.014   0.063   0.108     147     147
+night table only       worst     0.791   0.986   3.387                     144      147   (of 147)
+night near-sun 5 deg   mean      0.014   0.063   0.107     147     147
+night near-sun 5 deg   worst     0.791   0.986   3.387                     144      147   (of 147)
+night near-sun 10 deg  mean      0.014   0.062   0.106     147     147
+night near-sun 10 deg  worst     0.791   0.986   3.387                     144      147   (of 147)
+night near-sun 20 deg  mean      0.014   0.061   0.103     147     147
+night near-sun 20 deg  worst     0.791   0.986   3.387                     144      147   (of 147)
+
+failing at mean 2 or worst 5, table only: 200
+   117  near sun
+    27  near sun, horizon
+    22  near sun, starved channel (P)
+    20  mid sky
+     5  starved channel (P)
+     4  near sun, horizon, starved channel (P)
+     1  clamped at 5 over 53% of the sky
+     1  horizon
+     1  clamped at 5 over 35% of the sky
+     1  near sun, horizon, clamped at 5 over 74% of the sky
+     1  starved channel (P), clamped at 5 over 62% of the sky
+    Places Beach Cay: mean 0.11, worst 74.1 at 8.8 deg from the light, el 0.8; near sun, horizon, starved channel (P)
+    [TOR] BIG SUN - Raylanta: mean 0.20, worst 51.1 at 24.3 deg from the light, el 40.2; mid sky
+    [TOR] SCIFI - Rezzable Hallucinogen: mean 0.06, worst 32.5 at 4.0 deg from the light, el 29.8; near sun, starved channel (P)
+    [TOR] MIDDAY - Nostalgika: mean 0.09, worst 28.3 at 4.1 deg from the light, el 54.2; near sun
+    [TOR] SUNSET - Brouhatta charme: mean 0.10, worst 27.0 at 6.7 deg from the light, el 38.2; near sun
+
+failing at mean 2 or worst 5, near-sun 10 deg: 29
+    14  mid sky
+     5  starved channel (P)
+     3  horizon
+     2  near sun, horizon
+     1  near sun, horizon, starved channel (P)
+     1  clamped at 5 over 53% of the sky
+     1  clamped at 5 over 35% of the sky
+     1  near sun, horizon, clamped at 5 over 74% of the sky
+     1  starved channel (P), clamped at 5 over 62% of the sky
+    [TOR] BIG SUN - Raylanta: mean 0.20, worst 51.1 at 24.3 deg from the light, el 40.2; mid sky
+    Places Beach Cay: mean 0.10, worst 41.3 at 8.8 deg from the light, el 0.8; near sun, horizon, starved channel (P)
+    Phototools- Yellow Stars 01: mean 0.28, worst 25.3 at 58.7 deg from the light, el 77.8; clamped at 5 over 53% of the sky
+    [TOR] SCIFI - Rainbowtek: mean 0.07, worst 17.0 at 1.5 deg from the light, el 0.8; near sun, horizon
+    [TOR] SUNSET - Buccaneers of the coast: mean 0.12, worst 12.1 at 16.2 deg from the light, el 1.2; horizon
+
+known differences (our current shaders, L3 band, against upstream):
+  skies where our current sky differs from upstream by more than dE 0.5 in some cell: 51 of 759; with band weight above 0: 197
+    [TOR] SUNSET - Verdancy: sun -0.00 band 0.168 mean 46.58 worst 75.6 at 4.0 deg el 1.2
+    [NB]-MistyDay-6am: sun -0.00 band 0.168 mean 7.31 worst 75.4 at 2.6 deg el 2.2
+    Anime - 6AM: sun -0.00 band 0.168 mean 8.96 worst 67.0 at 1.8 deg el 1.2
+    Orac - Drawing underground comic: sun -0.00 band 0.168 mean 33.00 worst 63.4 at 86.8 deg el 86.8
+    [TOR] SUNRISE - We're so vane: sun 0.00 band 0.168 mean 10.22 worst 29.5 at 13.3 deg el 13.2
+    [TOR] SCIFI - Grit & shame: sun 0.00 band 0.168 mean 13.70 worst 29.5 at 45.9 deg el 44.2
+    Places Beach Cay: sun 0.00 band 0.168 mean 3.93 worst 29.3 at 38.5 deg el 23.8
+    [EUPHORIA] sunset 1: sun 0.00 band 0.168 mean 2.29 worst 29.3 at 6.4 deg el 6.2
+    [TOR] SCIFI - Rainbowtek: sun 0.00 band 0.168 mean 3.37 worst 28.5 at 22.8 deg el 22.8
+    [TOR] SPECIAL - Blacklight: sun 0.00 band 0.168 mean 2.12 worst 27.3 at 1.3 deg el 0.2
+    Places Eugene BL: sun 0.00 band 0.168 mean 2.57 worst 26.2 at 4.4 deg el 4.2
+    [TOR] SUNRISE - Asiatix: sun 0.00 band 0.168 mean 5.58 worst 24.9 at 17.9 deg el 16.8
+
+built-ins:
+  BUILT-IN: code default (LLSettingsSky::defaults): sun 80.00, PBR, ambiance 0; table only mean 0.07 worst 6.2 (2.8 deg, el 80); near-sun 5 deg mean 0.06 worst 2.4 (9.8 deg, el 90); near-sun 10 deg mean 0.05 worst 1.0 (11.5 deg, el 71); near-sun 20 deg mean 0.05 worst 1.0 (11.3 deg, el 72); our current vs upstream worst 0.0
+  BUILT-IN: Midday (Legacy) (cache 6c83e853): sun 90.00, classic; table only mean 0.08 worst 7.9 (2.8 deg, el 87); near-sun 5 deg mean 0.07 worst 1.6 (6.8 deg, el 83); near-sun 10 deg mean 0.06 worst 0.8 (24.2 deg, el 66); near-sun 20 deg mean 0.05 worst 0.8 (24.2 deg, el 66); our current vs upstream worst 0.0
+  BUILT-IN: Midnight (cache 8a01b97a): sun -90.00, classic; table only mean 0.00 worst 0.0 (0.0 deg, el 0); near-sun 5 deg mean 0.00 worst 0.0 (0.0 deg, el 0); near-sun 10 deg mean 0.00 worst 0.0 (0.0 deg, el 0); near-sun 20 deg mean 0.00 worst 0.0 (0.0 deg, el 0); our current vs upstream worst 0.0
+24 panoramas written to C:\Users\annes\source\repos\vulkanstorm\work\at2-qual\doc\light\atmosphere\qual

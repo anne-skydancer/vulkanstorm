@@ -1,0 +1,35 @@
+Default.xml	zenith	light_el 65.880	el 90.000	az 0.00	frag 0.302871 0.399226 0.659110
+Default.xml	horizon	light_el 65.880	el 2.000	az 90.00	frag 0.795274 0.922026 1.294526
+Default.xml	mid	light_el 65.880	el 45.000	az 135.00	frag 0.337484 0.457340 0.773228
+Default.xml	near-light	light_el 65.880	el 65.880	az 14.75	frag 0.559549 0.659518 0.941948
+Default.xml	light-core	light_el 65.880	el 66.280	az 0.00	frag 0.958770 1.054940 1.350093
+Sunset.xml	zenith	light_el 4.320	el 90.000	az 0.00	frag 0.209786 0.298561 0.433599
+Sunset.xml	horizon	light_el 4.320	el 2.000	az 90.00	frag 0.553114 0.475983 0.433055
+Sunset.xml	mid	light_el 4.320	el 45.000	az 135.00	frag 0.256308 0.362463 0.511677
+Sunset.xml	near-light	light_el 4.320	el 4.320	az 14.75	frag 1.313815 0.911639 0.637273
+Sunset.xml	light-core	light_el 4.320	el 4.720	az 0.00	frag 5.000000 2.911127 1.403990
+Foggy.xml	zenith	light_el 90.000	el 90.000	az 0.00	frag 5.000000 5.000000 5.000000
+Foggy.xml	horizon	light_el 90.000	el 2.000	az 90.00	frag 0.853069 0.881311 0.920901
+Foggy.xml	mid	light_el 90.000	el 45.000	az 135.00	frag 0.867339 0.900352 0.948336
+Foggy.xml	near-light	light_el 90.000	el 90.000	az 14.75	frag 5.000000 5.000000 5.000000
+Foggy.xml	light-core	light_el 90.000	el 90.400	az 0.00	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Salmon.xml	zenith	light_el 65.880	el 90.000	az 0.00	frag 2.355624 1.598809 1.395412
+[TOR] MIDDAY - Salmon.xml	horizon	light_el 65.880	el 2.000	az 90.00	frag 2.587926 0.727609 0.729323
+[TOR] MIDDAY - Salmon.xml	mid	light_el 65.880	el 45.000	az 135.00	frag 1.816749 0.433910 0.441290
+[TOR] MIDDAY - Salmon.xml	near-light	light_el 65.880	el 65.880	az 14.75	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Salmon.xml	light-core	light_el 65.880	el 66.280	az 0.00	frag 5.000000 5.000000 5.000000
+[TOR] MIDDAY - Pleasantrie.xml	zenith	light_el 58.057	el 90.000	az 0.00	frag 0.069693 0.182263 0.418543
+[TOR] MIDDAY - Pleasantrie.xml	horizon	light_el 58.057	el 2.000	az 90.00	frag 0.504210 0.672913 0.806203
+[TOR] MIDDAY - Pleasantrie.xml	mid	light_el 58.057	el 45.000	az 135.00	frag 0.077067 0.230262 0.524381
+[TOR] MIDDAY - Pleasantrie.xml	near-light	light_el 58.057	el 58.057	az 14.75	frag 0.275387 0.352023 0.587738
+[TOR] MIDDAY - Pleasantrie.xml	light-core	light_el 58.057	el 58.457	az 0.00	frag 1.332705 1.127282 1.219112
+Alchemy Immortalis - Fog Lifting.xml	zenith	light_el 7.560	el 90.000	az 0.00	frag 0.346042 0.349056 0.403919
+Alchemy Immortalis - Fog Lifting.xml	horizon	light_el 7.560	el 2.000	az 90.00	frag 0.931847 0.928335 1.045199
+Alchemy Immortalis - Fog Lifting.xml	mid	light_el 7.560	el 45.000	az 135.00	frag 0.443902 0.447085 0.516708
+Alchemy Immortalis - Fog Lifting.xml	near-light	light_el 7.560	el 7.560	az 14.75	frag 1.083572 1.093331 1.249346
+Alchemy Immortalis - Fog Lifting.xml	light-core	light_el 7.560	el 7.960	az 0.00	frag 1.277271 1.300164 1.488152
+[TOR] NIGHT - That spells moon 1.xml	zenith	light_el 34.200	el 90.000	az 0.00	frag 0.006138 0.010271 0.018699
+[TOR] NIGHT - That spells moon 1.xml	horizon	light_el 34.200	el 2.000	az 90.00	frag 0.079509 0.157135 0.319900
+[TOR] NIGHT - That spells moon 1.xml	mid	light_el 34.200	el 45.000	az 135.00	frag 0.004756 0.009884 0.020450
+[TOR] NIGHT - That spells moon 1.xml	near-light	light_el 34.200	el 34.200	az 14.75	frag 0.999823 1.177730 1.516793
+[TOR] NIGHT - That spells moon 1.xml	light-core	light_el 34.200	el 34.600	az 0.00	frag 5.000000 5.000000 5.000000
