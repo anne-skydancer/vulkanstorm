@@ -1717,6 +1717,7 @@ void swap()
     if (gDisplaySwapBuffers)
     {
         gViewerWindow->getWindow()->swapBuffers();
+        LLVertexBuffer::topUpNamePool(); // <Vulkanstorm/> refill buffer names between frames, not inside one
     }
     gDisplaySwapBuffers = true;
 }
