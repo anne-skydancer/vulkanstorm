@@ -417,6 +417,9 @@ public:
     LLVector3 getUIScale();
 
     void flush();
+    // <Vulkanstorm> draw the complete primitives still pending, so a uniform colour set now does not recolour them
+    void flushPendingForUniform();
+    // </Vulkanstorm>
 
     // if list is set, will store buffers in list for later use, if list isn't set, will use cache
     void beginList(std::list<LLVertexBufferData> *list);
