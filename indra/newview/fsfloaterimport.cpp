@@ -240,7 +240,8 @@ void FSFloaterImport::loadFile()
         filestream.seekg(0, std::ios::end);
         S32 file_size = (S32)filestream.tellg();
         filestream.seekg(0, std::ios::beg);
-        if (LLUZipHelper::unzip_llsd(mManifest, filestream, file_size) == LLUZipHelper::ZR_OK)
+        // local file; no cap by owner decision (embeds whole assets)
+        if (LLUZipHelper::unzip_llsd(mManifest, filestream, file_size, UNZIP_NO_CAP) == LLUZipHelper::ZR_OK)
         {
             file_loaded = true;
         }

@@ -870,6 +870,7 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
         // We probably have a valid raw binary stream. determine
         // the size, and read it.
         auto len = strtol(buf + 2, NULL, 0);
+        if(len < 0) return false;
         if(mCheckLimits && (len > mMaxBytesLeft)) return false;
         std::vector<U8> value;
         if(len)
@@ -1245,8 +1246,16 @@ S32 LLSDBinaryParser::parseArray(std::istream& istr, LLSD& array, S32 max_depth)
     read(istr, (char*)&value_nbo, sizeof(U32));      /*Flawfinder: ignore*/
     S32 size = (S32)ntohl(value_nbo);
 
-    // Preallocate array to avoid incremental allocation
-    array = LLSD::emptyReservedArray(size);
+    // The count is attacker-controlled. Every element takes at least one byte, so a negative count, or one larger
+    // than the bytes left, cannot be valid; reserving it would throw length_error or bad_alloc.
+    if (size < 0 || (mCheckLimits && size > mMaxBytesLeft))
+    {
+        return PARSE_FAILURE;
+    }
+
+    // Preallocate array to avoid incremental allocation (bounded when the input size is not known)
+    constexpr S32 MAX_UNCHECKED_RESERVE = 1 << 16;
+    array = LLSD::emptyReservedArray(mCheckLimits || size <= MAX_UNCHECKED_RESERVE ? size : MAX_UNCHECKED_RESERVE);
 
     S32 parse_count = 0;
     S32 count = 0;
@@ -1806,6 +1815,7 @@ llssize deserialize_string_raw(
         // We probably have a valid raw string. determine
         // the size, and read it.
         auto len = strtol(buf + 1, nullptr, 0);
+        if(len < 0) return LLSDParser::PARSE_FAILURE;
         if((max_bytes>0)&&(len>max_bytes)) return LLSDParser::PARSE_FAILURE;
         if(len)
         {
@@ -2307,7 +2317,7 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 
         if (max_out != UNZIP_NO_CAP && (size_t)cur_size + have > max_out)
         {
-            LL_WARNS() << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
+            LL_WARNS("LLSD") << "Failed to unzip LLSD block: output exceeds the cap of " << max_out
                 << " bytes; input size: " << size << " bytes." << LL_ENDL;
             inflateEnd(&strm);
             free(result);
@@ -2346,7 +2356,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
 
         boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
 
-        if (!LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH))
+        // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
+        if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
             // free(result);
             if( result )
@@ -2426,7 +2437,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
 
         if (max_out != UNZIP_NO_CAP && needed > max_out)
         {
-            LL_WARNS() << "Failed to unzip LLSD NavMesh block: output exceeds the cap of " << max_out
+            LL_WARNS("LLSD") << "Failed to unzip LLSD NavMesh block: output exceeds the cap of " << max_out
                 << " bytes; total size: " << size << " bytes." << LL_ENDL;
             inflateEnd(&strm);
             free(result);
@@ -2454,13 +2465,13 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             {
                 new_capacity = capacity * 2;
             }
-            if (max_out != UNZIP_NO_CAP && new_capacity > max_out)
-            {
-                new_capacity = max_out;   // needed <= max_out here
-            }
             if (new_capacity < CHUNK)
             {
                 new_capacity = CHUNK;
+            }
+            if (max_out != UNZIP_NO_CAP && new_capacity > max_out)
+            {
+                new_capacity = max_out;   // needed <= max_out here, so the buffer never exceeds the cap
             }
             U8* new_result = (U8*) realloc(result, new_capacity);
             if (new_result == NULL)
