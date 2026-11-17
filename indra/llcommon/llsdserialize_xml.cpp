@@ -831,6 +831,7 @@ bool LLSDXMLParser::Impl::depthLimitReached()
     startSkipping();
     return true;
 }
+// </Vulkanstorm>
 
 void LLSDXMLParser::Impl::endElementHandler(const XML_Char* name)
 {
