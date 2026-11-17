@@ -136,9 +136,10 @@ ReplyCoding reply_coding(const char * value)
 //
 // The decoded size is limited to HTTP_REPLY_MAX_DECODED, so a small Content-Encoded
 // reply (a decompression bomb) cannot exhaust memory. Over the limit the reply is
-// refused like corrupt data. The limit is far above any legitimate LLSD reply; the asset
-// CDN's mesh and texture bodies are not gzip or deflate encoded (see the Content-Encoding
-// note above: its value is "binary/octet-stream", which reply_coding() leaves alone).
+// refused like corrupt data. It applies to every body that arrives with a gzip or deflate
+// Content-Encoding. The limit is far above any legitimate LLSD reply. Mesh and texture bodies
+// are not decoded here today only because the asset CDN answers "binary/octet-stream"
+// (which reply_coding() leaves alone), not by design.
 constexpr size_t HTTP_REPLY_MAX_DECODED = 256u * 1024 * 1024;
 
 LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits, bool & not_a_stream)

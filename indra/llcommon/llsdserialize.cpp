@@ -1253,9 +1253,10 @@ S32 LLSDBinaryParser::parseArray(std::istream& istr, LLSD& array, S32 max_depth)
         return PARSE_FAILURE;
     }
 
-    // Preallocate array to avoid incremental allocation (bounded when the input size is not known)
-    constexpr S32 MAX_UNCHECKED_RESERVE = 1 << 16;
-    array = LLSD::emptyReservedArray(mCheckLimits || size <= MAX_UNCHECKED_RESERVE ? size : MAX_UNCHECKED_RESERVE);
+    // Preallocate array to avoid incremental allocation. The count is not trusted for the size of the
+    // reservation: nested arrays with huge counts would reserve gigabytes from a small block.
+    constexpr S32 MAX_RESERVE = 1 << 16;
+    array = LLSD::emptyReservedArray(std::min(size, MAX_RESERVE));
 
     S32 parse_count = 0;
     S32 count = 0;
@@ -2350,7 +2351,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         return ZR_DATA_ERROR;
     }
 
-    //result now points to the decompressed LLSD block
+    //result now points to the decompressed LLSD block; freed on every path, a throw out of the parser included
+    std::unique_ptr<U8, decltype(&free)> result_guard(result, &free);
     {
         char* result_ptr = strip_deprecated_header((char*)result, cur_size);
 
@@ -2359,16 +2361,10 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
         if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
-            // free(result);
-            if( result )
-                free(result);
             return ZR_PARSE_ERROR;
         }
     }
 
-    // free(result);
-    if( result )
-        free(result);
     return ZR_OK;
 }
 //This unzip function will only work with a gzip header and trailer - while the contents
