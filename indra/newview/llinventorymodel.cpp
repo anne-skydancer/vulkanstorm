@@ -3857,6 +3857,8 @@ bool LLInventoryModel::loadFromFile(const std::string& filename,
     {
         LL_PROFILE_ZONE_NAMED("inventory load from file - llsd parse");
         LLPointer<LLSDParser> parser = new LLSDBinaryParser();
+        // A local cache this viewer wrote (about 24 nodes per item): it may legitimately exceed the default budget.
+        parser->setMaxNodes(LLSDParser::MAX_NODES_UNLIMITED);
 
         if (parser->parse(file, inventory, LLSDSerialize::SIZE_UNLIMITED) == LLSDParser::PARSE_FAILURE)
         {

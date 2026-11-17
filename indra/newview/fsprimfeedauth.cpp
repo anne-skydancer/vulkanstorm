@@ -100,7 +100,7 @@ void FSPrimfeedAuthResponse(LLSD const &aData, Callback callback)
     LLSD resultLLSD;
     if(!result.empty())
     {
-        resultLLSD = LlsdFromJson(boost::json::parse(result));
+        resultLLSD = LlsdFromJson(boost::json::parse(result), LLSDParser::nodeBudgetForBytes(result.size()));
     }
     callback((status.getType() == HTTP_OK ||
             status.getType() == HTTP_NO_CONTENT), resultLLSD);

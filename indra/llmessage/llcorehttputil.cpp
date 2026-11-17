@@ -121,18 +121,21 @@ bool responseToLLSD(HttpResponse * response, bool log, LLSD & out_llsd, S32 max_
 
     LLCore::BufferArrayStream bas(body);
     LLSD body_llsd;
+    // The node budget follows the body size: a flood of tiny values is held to a heap proportional to what was sent.
+    const size_t max_nodes = LLSDParser::nodeBudgetForBytes(body_size);
     if (max_depth >= 0)
     {
         // <Vulkanstorm> A depth-limited body (AIS replies): the XML parser with
         // the caller's depth limit; LLSDSerialize::deserialize() has none.
         LLPointer<LLSDXMLParser> parser = new LLSDXMLParser(log);
+        parser->setMaxNodes(max_nodes);
         S32 parse_status(parser->parse(bas, body_llsd, LLSDSerialize::SIZE_UNLIMITED, max_depth));
         if (LLSDParser::PARSE_FAILURE == parse_status)
         {
             return false;
         }
     }
-    else if (!LLSDSerialize::deserialize(body_llsd, bas, body_size))
+    else if (!LLSDSerialize::deserialize(body_llsd, bas, body_size, max_nodes))
     {
         return false;
     }
@@ -657,7 +660,7 @@ LLSD HttpCoroJSONHandler::handleSuccess(LLCore::HttpResponse * response, LLCore:
     }
 
     // Convert the JSON structure to LLSD
-    result = LlsdFromJson(jsonRoot);
+    result = LlsdFromJson(jsonRoot, LLSDParser::nodeBudgetForBytes(body->size()));
 
     return result;
 }
@@ -682,7 +685,7 @@ LLSD HttpCoroJSONHandler::parseBody(LLCore::HttpResponse *response, bool &succes
     }
 
     // Convert the JSON structure to LLSD
-    return LlsdFromJson(jsonRoot);
+    return LlsdFromJson(jsonRoot, LLSDParser::nodeBudgetForBytes(body->size()));
 }
 
 //========================================================================

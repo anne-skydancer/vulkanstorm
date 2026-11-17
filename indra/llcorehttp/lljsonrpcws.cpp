@@ -93,7 +93,7 @@ void LLJSONRPCConnection::onMessage(const std::string& message)
         }
 
         // Convert to LLSD
-        LLSD message_obj = LlsdFromJson(json_value);
+        LLSD message_obj = LlsdFromJson(json_value, LLSDParser::nodeBudgetForBytes(message.size()));
 
         // Handle batch vs single message
         if (message_obj.isArray())

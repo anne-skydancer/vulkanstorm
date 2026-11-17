@@ -2323,7 +2323,7 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
 
         boost::iostreams::stream<boost::iostreams::array_source> stream(result_ptr, data_size);
 
-        if (!LLSDSerialize::fromBinary(header_data, stream, data_size))
+        if (LLSDSerialize::fromBinary(header_data, stream, data_size, LLSD_UNTRUSTED_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
             LL_WARNS(LOG_MESH) << "Mesh header parse error.  Not a valid mesh asset!  ID:  " << mesh_id
                                << LL_ENDL;

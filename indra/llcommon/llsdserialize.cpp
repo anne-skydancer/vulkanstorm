@@ -56,7 +56,7 @@
 
 // File constants
 static const size_t MAX_HDR_LEN = 20;
-static const S32 UNZIP_LLSD_MAX_DEPTH = 96;
+
 static const char LEGACY_NON_HEADER[] = "<llsd>";
 const std::string LLSD_BINARY_HEADER("LLSD/Binary");
 const std::string LLSD_XML_HEADER("LLSD/XML");
@@ -77,9 +77,10 @@ void format_using(const LLSD& data, std::ostream& ostr,
 }
 
 template <class Parser>
-S32 parse_using(std::istream& istr, LLSD& data, size_t max_bytes, S32 max_depth=-1)
+S32 parse_using(std::istream& istr, LLSD& data, size_t max_bytes, size_t max_nodes, S32 max_depth=-1)
 {
     LLPointer<Parser> p{ new Parser };
+    p->setMaxNodes(max_nodes);
     return p->parse(istr, data, max_bytes, max_depth);
 }
 
@@ -121,7 +122,7 @@ void LLSDSerialize::serialize(const LLSD& sd, std::ostream& str, ELLSD_Serialize
 }
 
 // static
-bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
+bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes, size_t max_nodes)
 {
 	LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
     char hdr_buf[MAX_HDR_LEN + 1] = ""; /* Flawfinder: ignore */
@@ -164,6 +165,7 @@ bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
     if (!strncasecmp(LEGACY_NON_HEADER, hdr_buf, strlen(LEGACY_NON_HEADER))) /* Flawfinder: ignore */
     {   // Create a LLSD XML parser, and parse the first chunk read above.
         LLSDXMLParser x;
+        x.setMaxNodes(max_nodes);
         x.parsePart(hdr_buf, inbuf);    // Parse the first part that was already read
         auto parsed = x.parse(str, sd, max_bytes - inbuf); // Parse the rest of it
         // Formally we should probably check (parsed != PARSE_FAILURE &&
@@ -206,15 +208,15 @@ bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
      */
     if (0 == LLStringUtil::compareInsensitive(header, LLSD_BINARY_HEADER))
     {
-        return (parse_using<LLSDBinaryParser>(str, sd, max_bytes-inbuf) > 0);
+        return (parse_using<LLSDBinaryParser>(str, sd, max_bytes-inbuf, max_nodes) > 0);
     }
     else if (0 == LLStringUtil::compareInsensitive(header, LLSD_XML_HEADER))
     {
-        return (parse_using<LLSDXMLParser>(str, sd, max_bytes-inbuf) > 0);
+        return (parse_using<LLSDXMLParser>(str, sd, max_bytes-inbuf, max_nodes) > 0);
     }
     else if (0 == LLStringUtil::compareInsensitive(header, LLSD_NOTATION_HEADER))
     {
-        return (parse_using<LLSDNotationParser>(str, sd, max_bytes-inbuf) > 0);
+        return (parse_using<LLSDNotationParser>(str, sd, max_bytes-inbuf, max_nodes) > 0);
     }
     else // no header we recognize
     {
@@ -231,6 +233,7 @@ bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
             LL_DEBUGS() << "deserialize request with no header, assuming notation" << LL_ENDL;
             p = new LLSDNotationParser;
         }
+        p->setMaxNodes(max_nodes);
         // Since we've already read 'inbuf' bytes into 'hdr_buf', prepend that
         // data to whatever remains in 'str'.
         LLMemoryStreamBuf already(reinterpret_cast<const U8*>(hdr_buf), (S32)inbuf);
@@ -381,7 +384,7 @@ static const char BINARY_FALSE_SERIAL = '0';
  * LLSDParser
  */
 LLSDParser::LLSDParser()
-    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mParseLines(false)
+    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mNodesSpent(false), mParseLines(false)
 {
 }
 
@@ -393,8 +396,7 @@ S32 LLSDParser::parse(std::istream& istr, LLSD& data, llssize max_bytes, S32 max
 {
     mCheckLimits = LLSDSerialize::SIZE_UNLIMITED != max_bytes;
     mMaxBytesLeft = max_bytes;
-    mNodesLeft = mMaxNodes;
-    return doParse(istr, data, max_depth);
+    return parseWithBudget(istr, data, max_depth);
 }
 
 
@@ -403,8 +405,7 @@ S32 LLSDParser::parseLines(std::istream& istr, LLSD& data)
 {
     mCheckLimits = false;
     mParseLines = true;
-    mNodesLeft = mMaxNodes;
-    return doParse(istr, data);
+    return parseWithBudget(istr, data, -1);
 }
 
 
@@ -464,20 +465,26 @@ void LLSDParser::account(llssize bytes) const
     if(mCheckLimits) mMaxBytesLeft -= bytes;
 }
 
-bool LLSDParser::chargeNode() const
+// Run doParse() with a fresh node budget; a parse that stopped on the budget leaves no partial tree.
+S32 LLSDParser::parseWithBudget(std::istream& istr, LLSD& data, S32 max_depth)
 {
-    if (mMaxNodes == MAX_NODES_UNLIMITED)
+    mNodesLeft = mMaxNodes;
+    mNodesSpent = false;
+    S32 result = doParse(istr, data, max_depth);
+    if (mNodesSpent)
     {
-        return true;
+        data.clear();
+        result = PARSE_FAILURE;
     }
-    if (mNodesLeft == 0)
-    {
-        // The parse unwinds on the failure, so this is logged once.
-        LL_WARNS() << "LLSD parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
-        return false;
-    }
-    --mNodesLeft;
-    return true;
+    return result;
+}
+
+bool LLSDParser::nodeBudgetSpent() const
+{
+    mNodesSpent = true;
+    // The parse unwinds on the failure, so this is logged once.
+    LL_WARNS() << "LLSD parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
+    return false;
 }
 
 
@@ -2377,9 +2384,9 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         boost::iostreams::stream<boost::iostreams::array_source> istrm(result_ptr, cur_size);
 
         // fromBinary returns PARSE_FAILURE (-1) on a parse error, which "!" would read as success
-        if (LLSDSerialize::fromBinary(data, istrm, cur_size, UNZIP_LLSD_MAX_DEPTH,
-                                      // an uncapped (trusted local) inflate gets no node budget either
-                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : LLSDParser::MAX_NODES_DEFAULT) == LLSDParser::PARSE_FAILURE)
+        if (LLSDSerialize::fromBinary(data, istrm, cur_size, LLSD_UNTRUSTED_MAX_DEPTH,
+                                      // UNZIP_NO_CAP means a trusted local file (see UNZIP_NO_CAP): no node budget either
+                                      max_out == UNZIP_NO_CAP ? LLSDParser::MAX_NODES_UNLIMITED : UNZIP_ASSET_MAX_NODES) == LLSDParser::PARSE_FAILURE)
         {
             return ZR_PARSE_ERROR;
         }

@@ -2563,7 +2563,7 @@ void process_improved_im(LLMessageSystem *msg, void **user_data)
 
         msg->getBinaryDataFast(_PREHASH_MetaData, _PREHASH_Data, &metadata_buffer[0], metadata_size, 0, metadata_size );
         std::stringstream metadata_stream(metadata_buffer);
-        if (LLSDSerialize::fromBinary(metadata, metadata_stream, metadata_size) == LLSDParser::PARSE_FAILURE)
+        if (LLSDSerialize::fromBinary(metadata, metadata_stream, metadata_size, LLSD_UNTRUSTED_MAX_DEPTH) == LLSDParser::PARSE_FAILURE)
         {
             metadata.clear();
         }
