@@ -2,30 +2,34 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Stage AT2-F of the atmosphere redesign R (decided 2026-11-17, doc/light/atmosphere-study.md and doc/light/at2f-creator-grade.md):
-// "physics sets the light, the creator sets the look". For every shipped Windlight sky this measures, offline and on the CPU:
+// "physics sets the light, the creator sets the look": each Windlight sky is a filter on the physical sky. The visible sky (the dome and
+// the haze on distant objects) is exactly today's look W; the light the sky casts (probes, shade) is physical in level, k x W, with the
+// creator's tint. For every sky this measures, offline and on the CPU:
 //
-//   1. the creator's look: today's drawn sky, a C++ twin of class1/deferred/skyV.glsl with skyF.glsl's x2 and clamp 5 and the PBR
-//      path's decode x sky_hdr_scale (2 sqrt(gamma)), with the uniforms exactly as scripts/light/bench_atmosphere.py sets them
-//      (set_today_uniforms): the twin is anchored to that GPU bench's Default figures (zenith 0.279, horizon 1.711);
-//   2. the physical sky: LLScatter::fromLegacy (llatmosphericlight.h, the viewer's AT2-0 model) with the slab-split march of
-//      decision D1 (atmosphere_ap to the end of the ray, 64 steps, plus sky_radiance's ground term);
-//   3. the energy factor k: the scalar that brings the creator's sky to the physical sky's irradiance on a horizontal surface
-//      (luminance of the cosine-weighted upper hemisphere). The graded sky is k x the creator's look on the grade grid;
-//   4. how far physics alone gets (pure rebasing, no grade): the mean CIE76 dE between the creator's sky and the physical sky after the
-//      best luminance gain, and after the best gain and per-channel tint, on the display transform of the GPU bench
-//      (ACES Hill, sRGB, 8 bit);
-//   5. the grade grid's interpolation error: the grade sampled on its nodes and bilinearly interpolated at the cell centres, against
-//      the creator's sky there (dE, same display);
-//   6. the grade's size (the range of k x creator / physical in luminance, and its largest per-channel tint);
-//   7. the white-card rule (2026-11-11) on the graded sky: outside 10 degrees of the sun no radiance above lum(E_sun) / pi, within 10 to
-//      20 degrees at most 2x;
-//   8. what the grade does to vertical surfaces (study decision D4's trace): a wall facing the sun and one facing away, graded / physical.
+//   1. W, today's look: a C++ twin of class1/deferred/skyV.glsl with skyF.glsl's x2 and clamp 5, then the lighting pass of the sky's own
+//      DRAW PATH (a sky draws classic, PBR, or PBR with a zero probe ambiance; see Path), with the uniforms as scripts/light/
+//      bench_atmosphere.py sets them (set_today_uniforms) and the sun/moon band weight of llatmosphericlight.h (sun_moon_blend). The twin
+//      is anchored to the GPU bench (--anchor; scripts/light/at2f_anchor_gpu.py makes the reference values);
+//   2. the physical sky P: LLScatter::fromLegacy (llatmosphericlight.h, the viewer's AT2-0 model) with the slab-split march of
+//      decision D1 (atmosphere_ap to the end of the ray, 64 steps);
+//   3. the energy factor k: the scalar that brings W to P's irradiance on a horizontal surface (luminance of the cosine-weighted upper
+//      hemisphere). The cast light is k x W; the visible sky is W;
+//   4. how far physics alone gets (pure rebasing, no filter): the mean CIE76 dE between W and P after the best luminance gain, and after
+//      the best gain and per-channel tint, on the display of the sky's own path;
+//   5. the filter table's error, three structures, against W at the cell centres (dE, same display):
+//        product: the table stores P x G = W per texel, then bilinear (what the sky-view table holds);
+//        ratio, linear and ratio, log: the table stores G = W / P, interpolated, then multiplied by P at the sample;
+//   6. the filter's size (the range of G = W / P in luminance, and its largest per-channel tint over the channels that carry light);
+//   7. the white-card rule (2026-11-11), on W (the visible sky, "creator intent wins") and on k x W (the cast light): outside 20 degrees
+//      of the sun at most 1x lum(E_sun) / pi; from 10 to 20 degrees at most 2x; inside 10 degrees excluded;
+//   8. what the cast light does to vertical surfaces (study decision D4's trace): a wall facing the sun and one facing away, k x W / P.
 //
 // Sun below the horizon (night and twilight files) is out of scope here: skyV's moon branch and AT1's moon gain need their own pass.
+// A sky with max_y 0 is undefined (the dome collapses to a point; W has no direction) and is reported, not measured.
 //
 //   g++ -std=c++20 -O2 -I indra/newview scripts/light/at2f_creator_grade.cpp -o at2f_creator_grade
 //   at2f_creator_grade skies.txt            (one line per sky, written by scripts/light/at2f_creator_grade.py)
-//   at2f_creator_grade --anchor skies.txt   (prints the twin's Default zenith and horizon, for the GPU anchor)
+//   at2f_creator_grade --anchor skies.txt   (prints the twin's zenith, horizon and near-sun W and P, and P's irradiance, for the GPU anchor)
 
 #include "llatmosphericlight.h"
 
@@ -36,17 +40,29 @@
 #include <string>
 #include <vector>
 
+
 using namespace LLAtmosphericLight;
 
 namespace
 {
 constexpr double PI = 3.14159265358979323846;
 constexpr double DEG = PI / 180.0;
-constexpr double kCamKm = 0.020;      // the GPU bench's eye height (CAM_H 20 m)
-constexpr int kMarch = 64;            // decision D1: slab-split march, 64 steps
-constexpr double kExcludeDeg = 10.0;  // the white-card rule's exclusion around the light
-constexpr double kAureoleDeg = 20.0;
-constexpr double kAureoleMax = 2.0;
+constexpr double kCamKm = 0.020;       // the GPU bench's eye height (CAM_H 20 m); the viewer's camera is at its own height
+constexpr int kMarch = 64;             // decision D1: slab-split march, 64 steps
+constexpr double kExcludeDeg = 10.0;   // the white-card rule: inside 10 degrees of the light, excluded
+constexpr double kAureoleDeg = 20.0;   // from 10 to 20 degrees at most 2x the card; outside 20 degrees at most 1x
+constexpr double kSwingDeg = 0.3;      // the viewer's default sun/moon swing (PrimaryLightParams::swing)
+constexpr double kFloor = 1e-6;        // linear luminance below which a value counts as "no light"
+constexpr double kChannelFloor = 1e-3; // a channel below this share of its sample's luminance carries no light (starved)
+
+// The draw path of a sky in the viewer (llsettingsvo.cpp:845-865, softenLightF.glsl, tonemapUtilF.glsl). The path can flip mid-blend of
+// two skies (llsettingssky.cpp:609 copies mCanAutoAdjust at the blend's half-way), so a filter must use each frame's own path.
+enum Path
+{
+    kClassic = 0,  // no reflection_probe_ambiance key (the library; cached Midday (Legacy), Midnight): sky_hdr_scale 1, final_scale 1.1, tonemap mix 0
+    kPbr = 1,      // reflection_probe_ambiance != 0: sky_hdr_scale 2 sqrt(gamma), tonemap on (the GPU bench's path)
+    kPbrZero = 2,  // the key is present and 0 (the code default): sky_hdr_scale 1, not classic (final_scale 1), tonemap on
+};
 
 struct V3
 {
@@ -64,18 +80,32 @@ struct SkyRow
     double hd, hh, cs, dm, dist, my;
     double glow[3];
     double gamma, sun_angle;
+    int path;
 };
 
-// ---- 1. the creator's look: skyV.glsl (Vulkanstorm L3 version), by day, with the bench's uniforms --------------------------------
-// y up; the sun's azimuth is 0 (along +x). sun_moon_blend is 0 (the bench leaves it unset, so 0): the day branch.
-V3 windlight_sky(const SkyRow& s, double sun_el_deg, double el_deg, double az_deg)
+double smoothstep3(double e0, double e1, double x)
+{
+    const double t = std::min(std::max((x - e0) / (e1 - e0), 0.0), 1.0);
+    return t * t * (3.0 - 2.0 * t);
+}
+
+// the viewer's sun_moon_blend: band_weight of primary_light (llatmosphericlight.h) = smoothstep(swing, -swing, elevation + dip)
+double band_weight(double sun_el_deg)
+{
+    return smoothstep3(kSwingDeg, -kSwingDeg, sun_el_deg + horizon_dip_degrees(6360.0e3, kCamKm * 1e3));
+}
+
+// ---- 1. the creator's look: skyV.glsl (Vulkanstorm L3 version), with the bench's uniforms ------------------------------------------
+// y up; the sun's azimuth is 0 (along +x). The moon's light is the sun's colour (the bench: moonlight_color = sunlight_color); the
+// handover to it is sun_moon_blend (the band weight), which is 0 for sun elevations above about 0.16 degrees.
+V3 windlight_sky(const SkyRow& s, double sun_el_deg, double el_deg, double az_deg, int path, double blend)
 {
     // lightnorm: light_vec of the bench (y clamped at -0.1), normalised
     const double se = sun_el_deg * DEG;
     double lx = std::cos(se), ly = std::max(std::sin(se), -0.1), lz = 0.0;
     const double nl = std::sqrt(lx * lx + ly * ly + lz * lz);
     lx /= nl; ly /= nl; lz /= nl;
-    // position on the 15000 m dome, camPosLocal 0
+    // position on the 15000 m dome, camPosLocal 0 (max_y > 0 here: the caller reports max_y 0 as undefined)
     const double e = el_deg * DEG, a = az_deg * DEG;
     const double R = 15000.0;
     double px = std::cos(e) * std::cos(a) * R, py = std::sin(e) * R + 50.0, pz = std::cos(e) * std::sin(a) * R;
@@ -93,7 +123,6 @@ V3 windlight_sky(const SkyRow& s, double sun_el_deg, double el_deg, double az_de
     const double nx = px / rlen, ny = py / rlen, nz = pz / rlen;
     const double dot_l = nx * lx + ny * ly + nz * lz; // sun_glow_norm = lightnorm by day (the bench)
 
-    const double sl[3] = { s.sun[0], s.sun[1], s.sun[2] }; // mix(sunlight_color, moonlight * 0.7, 0)
     double light_atten[3], combined[3], blue_w[3], haze_w[3], sunlight[3];
     const double off_axis = 1.0 / std::max(1e-6, std::max(0.0, ny) + ly);
     for (int c = 0; c < 3; ++c)
@@ -102,13 +131,14 @@ V3 windlight_sky(const SkyRow& s, double sun_el_deg, double el_deg, double az_de
         combined[c] = std::max(std::fabs(s.bd[c]) + std::fabs(s.hd), 1e-6);
         blue_w[c] = s.bd[c] / combined[c];
         haze_w[c] = s.hd / combined[c];
-        sunlight[c] = sl[c] * std::exp(-light_atten[c] * off_axis);
+        const double sl = s.sun[c] * (1.0 - blend) + s.sun[c] * 0.7 * blend; // mix(sunlight_color, moonlight_color * 0.7, sun_moon_blend)
+        sunlight[c] = sl * std::exp(-light_atten[c] * off_axis);
     }
     const double density_dist = rlen * s.dm;
     double haze_glow = std::max(1.0 - dot_l, 0.001);
     haze_glow *= s.glow[0];
     haze_glow = std::pow(haze_glow, s.glow[2]);
-    haze_glow = 1.0 * (haze_glow + 0.25); // (1 - sun_moon_blend)
+    haze_glow = (1.0 - blend) * (haze_glow + 0.25);
 
     double out[3];
     for (int c = 0; c < 3; ++c)
@@ -123,8 +153,16 @@ V3 windlight_sky(const SkyRow& s, double sun_el_deg, double el_deg, double az_de
         color += (below - color) * (1.0 - std::sqrt(ch2));
         out[c] = color;
     }
-    // skyF.glsl: x2, clamp [0, 5]; the lighting pass: srgb_to_linear x sky_hdr_scale (2 sqrt(gamma), the PBR path)
-    const double hdr = 2.0 * std::sqrt(std::max(s.gamma, 0.0));
+    // skyF.glsl: x2, clamp [0, 5]; the lighting pass of the sky's path: srgb_to_linear x sky_hdr_scale (x final_scale on the classic path)
+    double hdr = 1.0;
+    if (path == kPbr)
+    {
+        hdr = 2.0 * std::sqrt(std::max(s.gamma, 0.0));
+    }
+    else if (path == kClassic)
+    {
+        hdr = 1.1; // sky_hdr_scale 1 (2 only with RenderSkyAutoAdjustLegacy, default off) x final_scale 1.1 (classic_mode)
+    }
     V3 r;
     double* o[3] = { &r.r, &r.g, &r.b };
     for (int c = 0; c < 3; ++c)
@@ -183,26 +221,20 @@ void build_physical(Physical& ph, const SkyRow& s, double sun_el_deg)
     ph.sc.e_lut = &ph.el;
 }
 
-// decision D1: the slab-split march (atmosphere_ap to the end of the ray) plus sky_radiance's ground term (as check_skyview_steps.cpp)
+// decision D1: the slab-split march (atmosphere_ap to the end of the ray). Every direction here is above the horizon and the camera is
+// above the ground, so the ray never meets the ground and sky_radiance's ground term does not apply.
 V3 physical_sky(const Physical& ph, double el_deg, double az_deg)
 {
     const Vec3 d = dir_of(el_deg, az_deg);
     const double h0 = kCamKm;
-    const double tg = ph.sc.ground_distance(h0, d);
     const double tmax = ph.sc.ray_length(h0, d);
     Vec3 Lin, T;
     ph.sc.atmosphere_ap(d, tmax, h0, kMarch, Lin, T);
-    if (tg >= 0.0)
-    {
-        const Vec3 full = ph.sc.sky_radiance(d, h0, 1024);
-        Vec3 Lu, Tu;
-        ph.sc.atmosphere_ap(d, tmax, h0, 1024, Lu, Tu);
-        Lin += full - Lu;
-    }
     return { Lin.x, Lin.y, Lin.z };
 }
 
 // ---- display: the GPU bench's DISPLAY_FS (toneMapACES_Hill, linear_to_srgb, 8 bit) and to_lab -----------------------------------
+// The classic path has tonemap_mix 0 (llsettingssky.cpp:2066): no tone curve, only the clamp. Exposure is 1 on both.
 // GLSL mat3 is column-major: out_r = m[0] x + m[3] y + m[6] z
 const double kAcesIn[9] = { 0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777 };
 const double kAcesOut[9] = { 1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602 };
@@ -218,11 +250,15 @@ struct Lab
     double L, a, b;
 };
 
-Lab display_lab(V3 lin)
+Lab display_lab(V3 lin, int path)
 {
-    V3 c = mat3_mul(kAcesIn, lin);
-    c = { rrt(c.r), rrt(c.g), rrt(c.b) };
-    c = mat3_mul(kAcesOut, c);
+    V3 c = lin;
+    if (path != kClassic)
+    {
+        c = mat3_mul(kAcesIn, lin);
+        c = { rrt(c.r), rrt(c.g), rrt(c.b) };
+        c = mat3_mul(kAcesOut, c);
+    }
     double ch[3] = { c.r, c.g, c.b };
     double q[3];
     for (int i = 0; i < 3; ++i)
@@ -239,16 +275,16 @@ Lab display_lab(V3 lin)
     return { 116.0 * f(Y) - 16.0, 500.0 * (f(X) - f(Y)), 200.0 * (f(Y) - f(Z)) };
 }
 
-double de76(V3 a, V3 b)
+double de76(const Lab& x, const Lab& y)
 {
-    const Lab x = display_lab(a), y = display_lab(b);
     return std::sqrt((x.L - y.L) * (x.L - y.L) + (x.a - y.a) * (x.a - y.a) + (x.b - y.b) * (x.b - y.b));
 }
 
 // ---- the grids -----------------------------------------------------------------------------------------------------------------
-// the grade's nodes: the sky-view table's own grid (Hillaire 2020, 192 x 108, latitude mapped as v = 0.5 + 0.5 sign(l) sqrt(|l| / (pi/2)),
+// the filter's nodes: the sky-view table's own grid (Hillaire 2020, 192 x 108, latitude mapped as v = 0.5 + 0.5 sign(l) sqrt(|l| / (pi/2)),
 // so the rows crowd at the horizon), its upper half (54 rows) and azimuth from the sun 0..180 in its 360 / 192 degree columns (both
-// skies are symmetric about the sun's vertical plane). The grade is a table of that size, multiplied into the sky view.
+// skies are symmetric about the sun's vertical plane). Rows are 90 t^2 spaced (about 2.7 degrees at 60 degrees, 3.3 near the zenith);
+// the 1.875 degrees is the azimuth step only.
 constexpr int kNEl = 54;
 constexpr int kNAz = 97; // 0 .. 180 in 1.875 degree steps
 double grade_el(int i) { const double t = (i + 0.5) / kNEl; return 90.0 * t * t; }
@@ -261,6 +297,7 @@ struct Sample
 {
     double el, az, w_horiz; // solid angle x cos(zenith) weight (both halves of the azimuth: x 2)
     V3 W, P;
+    Lab labW;               // today's look through the display, once
 };
 
 double sep_deg(double sun_el, double el, double az)
@@ -269,23 +306,32 @@ double sep_deg(double sun_el, double el, double az)
     return std::acos(std::min(1.0, std::max(-1.0, s.x * d.x + s.y * d.y + s.z * d.z))) / DEG;
 }
 
+struct TableErr
+{
+    double mean = 0.0, max = 0.0, el = 0.0, az = 0.0; // dE against W: the solid-angle weighted mean; the worst cell and where it is
+};
+
 struct GradeResult
 {
-    double k = 0.0;          // energy factor (graded = k x creator)
-    double de_gain = 0.0;    // physics alone, best luminance gain
-    double de_tint = 0.0;    // physics alone, best gain and per-channel tint
-    double de_lut = 0.0, de_lut_max = 0.0;   // the dome and probes: the graded sky-view table (k W per texel), bilinear, against W
-    double lut_el = 0.0, lut_az = 0.0;         // where its worst cell is
-    double de_lut_phys = 0.0, de_lut_phys_max = 0.0; // the same table error for the physical sky alone (the sky view's own baseline)
-    double starved = 0.0;    // fraction of the sky (solid angle) where the physical sky's weakest channel is below 1e-3 of its strongest
-    double ap_remainder = 0.0; // haze on objects: the share of the graded sky's ground light a ratio bounded at 32x the median grade
-                               // cannot carry (it needs an additive term)
-    double grade_lo = 0.0, grade_hi = 0.0; // range of lum(k W / P) over the measuring grid
-    double tint_max = 0.0;   // largest per-channel deviation of (k W / P) from its luminance, as a factor
-    double card = 0.0;       // largest graded radiance / white card outside the exclusion, outside the aureole
-    double card_aureole = 0.0;
-    double wall_sun = 0.0, wall_away = 0.0; // graded / physical irradiance on a vertical wall facing the sun / away
-    double gain = 0.0;       // the best luminance gain physical -> creator (log-mean)
+    double sun_el = 0.0, blend = 0.0;
+    int path = 0;
+    double EW = 0.0, EP = 0.0;   // horizontal irradiance of W and of P, in luminance
+    double k = 0.0;              // energy factor (cast light = k x W); 0 when either irradiance is 0
+    double gain = 0.0;           // the best luminance gain physical -> creator (log-mean)
+    double de_gain = 0.0;        // physics alone, best luminance gain
+    double de_tint = 0.0;        // physics alone, best gain and per-channel tint
+    TableErr prod, rlin, rlog;   // the filter table: product, ratio interpolated linearly, ratio interpolated in log
+    TableErr phys;               // the sky view's own table error (P through the same bilinear filter, at the creator's exposure)
+    double starved = 0.0;        // share of the sky (solid angle) where P's weakest channel is below 1e-3 of its strongest (P not all 0)
+    double starved_zero = 0.0;   // share where P is exactly 0 in all channels
+    double ap_remainder[3] = {}; // haze on objects: the share of W's ground light that a ratio bounded at 8x, 32x, 128x the median W / P
+                                 // cannot carry (W / P without k: the bound is relative, and k scales W and the median alike)
+    double grade_lo = 0.0, grade_hi = 0.0; // range of lum(W / P) over the samples where both are above kFloor
+    double grade_undef = 0.0;    // share of the sky where W is above kFloor and P is not (no ratio exists)
+    double tint_max = 0.0;       // largest per-channel deviation of W / P from its luminance, over channels that carry light in both
+    double cardW = 0.0, cardW_aur = 0.0; // the white card on W (the visible sky): outside the aureole; from 10 to 20 degrees
+    double cardC = 0.0, cardC_aur = 0.0; // the white card on k x W (the cast light)
+    double wall_sun = 0.0, wall_away = 0.0; // k x W / P irradiance on a vertical wall facing the sun / away
 };
 
 V3 bilinear(const std::vector<V3>& G, double el, double az, bool in_log)
@@ -298,7 +344,6 @@ V3 bilinear(const std::vector<V3>& G, double el, double az, bool in_log)
     const int j = std::min(std::max(static_cast<int>(std::floor(ua)), 0), kNAz - 2);
     const double ta = std::min(std::max(ua - j, 0.0), 1.0);
     auto at = [&](int a, int b) { return G[a * kNAz + b]; };
-    // a ratio is interpolated in log space, a radiance linearly
     auto lg = [in_log](V3 v) {
         return in_log ? V3 { std::log(std::max(v.r, 1e-12)), std::log(std::max(v.g, 1e-12)), std::log(std::max(v.b, 1e-12)) } : v;
     };
@@ -312,6 +357,11 @@ GradeResult measure(const SkyRow& s, double sun_el)
     Physical ph;
     build_physical(ph, s, sun_el);
     GradeResult r;
+    r.sun_el = sun_el;
+    r.path = s.path;
+    r.blend = band_weight(sun_el);
+    const int path = s.path;
+    const double blend = r.blend;
 
     // the measuring grid
     std::vector<Sample> smp;
@@ -327,20 +377,20 @@ GradeResult measure(const SkyRow& s, double sun_el)
             q.el = el;
             q.az = az;
             q.w_horiz = 2.0 * std::cos(el * DEG) * std::sin(el * DEG) * dth * dph; // dw = cos(el) del daz; x sin(el); both halves
-            q.W = windlight_sky(s, sun_el, el, az);
+            q.W = windlight_sky(s, sun_el, el, az, path, blend);
             q.P = physical_sky(ph, el, az);
+            q.labW = display_lab(q.W, path);
             smp.push_back(q);
         }
     }
 
     // 3. energy: horizontal irradiance in luminance
-    double EW = 0.0, EP = 0.0;
     for (const Sample& q : smp)
     {
-        EW += lumv(q.W) * q.w_horiz;
-        EP += lumv(q.P) * q.w_horiz;
+        r.EW += lumv(q.W) * q.w_horiz;
+        r.EP += lumv(q.P) * q.w_horiz;
     }
-    r.k = EW > 0.0 ? EP / EW : 0.0;
+    r.k = (r.EW > 0.0 && r.EP > 0.0) ? r.EP / r.EW : 0.0;
 
     // 4. physics alone: the best gain (log-mean of luminance) and the best gain + per-channel tint, from P to the creator's W
     double lg = 0.0, lc[3] = {};
@@ -360,100 +410,154 @@ GradeResult measure(const SkyRow& s, double sun_el)
     for (const Sample& q : smp)
     {
         const double w = std::cos(q.el * DEG); // solid-angle weight (the bench's dE is per panorama pixel; this is per solid angle)
-        sg += w * de76(q.W, q.P * gain);
-        st += w * de76(q.W, mul(q.P, tint));
+        sg += w * de76(q.labW, display_lab(q.P * gain, path));
+        st += w * de76(q.labW, display_lab(mul(q.P, tint), path));
         sw += w;
     }
     r.de_gain = sg / sw;
     r.de_tint = st / sw;
 
-    // 5. the grade in the sky view (the drawn dome and the probes' capture): the table holds P x G = W (x k) at each texel, so what is
-    //    drawn is the creator's sky through the table's bilinear filter. Measured against W at the cell centres, with the physical
-    //    sky's own table error (P through the same filter) as the baseline. The haze on objects reads the grade as a ratio instead
-    //    (it multiplies the aerial perspective's in-scatter); where the physical sky has almost no light in a channel the ratio
-    //    explodes, so the share that a ratio bounded at 32x the sky's median grade cannot carry is reported (ap_remainder).
-    std::vector<V3> Wn(kNEl * kNAz), Pn(kNEl * kNAz);
+    // 5. the filter table at the nodes: W, P and the ratio G = W / P. Three structures are measured against W at the cell centres:
+    //    product    the table holds P x G = W per texel; bilinear in linear (what the sky-view table stores);
+    //    ratio, lin the table holds G; interpolated linearly, then multiplied by P at the sample;
+    //    ratio, log the same, interpolated in log.
+    //    The physical sky's own table error (P through the same filter, at the creator's exposure) is the baseline.
+    std::vector<V3> Wn(kNEl * kNAz), Pn(kNEl * kNAz), Gn(kNEl * kNAz);
     std::vector<double> lgrades;
     for (int i = 0; i < kNEl; ++i)
     {
         for (int j = 0; j < kNAz; ++j)
         {
-            Wn[i * kNAz + j] = windlight_sky(s, sun_el, grade_el(i), grade_az(j));
-            Pn[i * kNAz + j] = physical_sky(ph, grade_el(i), grade_az(j));
-            lgrades.push_back(lumv(Wn[i * kNAz + j]) / std::max(lumv(Pn[i * kNAz + j]), 1e-12));
-        }
-    }
-    {
-        double sl = 0.0, sp = 0.0, sw = 0.0;
-        for (const Sample& q : smp)
-        {
-            const double e = de76(q.W, bilinear(Wn, q.el, q.az, false));
-            const double gp = r.gain; // show the physical sky at the creator's exposure, so its dE is on the same scale
-            const double ep = de76(q.P * gp, bilinear(Pn, q.el, q.az, false) * gp);
-            const double w = std::cos(q.el * DEG);
-            sl += w * e;
-            sp += w * ep;
-            sw += w;
-            if (e > r.de_lut_max)
+            const int x = i * kNAz + j;
+            Wn[x] = windlight_sky(s, sun_el, grade_el(i), grade_az(j), path, blend);
+            Pn[x] = physical_sky(ph, grade_el(i), grade_az(j));
+            Gn[x] = { std::max(Wn[x].r, 1e-12) / std::max(Pn[x].r, 1e-12), std::max(Wn[x].g, 1e-12) / std::max(Pn[x].g, 1e-12),
+                      std::max(Wn[x].b, 1e-12) / std::max(Pn[x].b, 1e-12) };
+            const double lw = lumv(Wn[x]), lp = lumv(Pn[x]);
+            if (lw > kFloor && lp > kFloor)
             {
-                r.de_lut_max = e;
-                r.lut_el = q.el;
-                r.lut_az = q.az;
+                lgrades.push_back(lw / lp);
             }
-            r.de_lut_phys_max = std::max(r.de_lut_phys_max, ep);
         }
-        r.de_lut = sl / sw;
-        r.de_lut_phys = sp / sw;
     }
     {
-        std::nth_element(lgrades.begin(), lgrades.begin() + lgrades.size() / 2, lgrades.end());
-        const double ghi = lgrades[lgrades.size() / 2] * 32.0;
-        double add_e = 0.0, tot_e = 0.0;
+        double s_prod = 0.0, s_rlin = 0.0, s_rlog = 0.0, s_phys = 0.0, s_w = 0.0;
         for (const Sample& q : smp)
         {
-            // per channel: what P x min(W / P, ghi) leaves of W
-            const double rem[3] = { q.W.r - q.P.r * std::min(q.W.r / std::max(q.P.r, 1e-12), ghi),
-                                    q.W.g - q.P.g * std::min(q.W.g / std::max(q.P.g, 1e-12), ghi),
-                                    q.W.b - q.P.b * std::min(q.W.b / std::max(q.P.b, 1e-12), ghi) };
-            add_e += lumv({ rem[0], rem[1], rem[2] }) * q.w_horiz;
-            tot_e += lumv(q.W) * q.w_horiz;
+            const double w = std::cos(q.el * DEG);
+            const double e_prod = de76(q.labW, display_lab(bilinear(Wn, q.el, q.az, false), path));
+            const double e_rlin = de76(q.labW, display_lab(mul(q.P, bilinear(Gn, q.el, q.az, false)), path));
+            const double e_rlog = de76(q.labW, display_lab(mul(q.P, bilinear(Gn, q.el, q.az, true)), path));
+            const double e_phys = de76(display_lab(q.P * gain, path), display_lab(bilinear(Pn, q.el, q.az, false) * gain, path));
+            auto upd = [&](TableErr& t, double e) {
+                if (e > t.max)
+                {
+                    t.max = e;
+                    t.el = q.el;
+                    t.az = q.az;
+                }
+            };
+            upd(r.prod, e_prod);
+            upd(r.rlin, e_rlin);
+            upd(r.rlog, e_rlog);
+            upd(r.phys, e_phys);
+            s_prod += w * e_prod;
+            s_rlin += w * e_rlin;
+            s_rlog += w * e_rlog;
+            s_phys += w * e_phys;
+            s_w += w;
         }
-        r.ap_remainder = tot_e > 0.0 ? add_e / tot_e : 0.0;
+        r.prod.mean = s_prod / s_w;
+        r.rlin.mean = s_rlin / s_w;
+        r.rlog.mean = s_rlog / s_w;
+        r.phys.mean = s_phys / s_w;
+    }
+    {
+        // haze on objects reads the filter as a ratio (it multiplies the aerial perspective's in-scatter). What a ratio bounded at B times
+        // the sky's median lum(W / P) cannot carry of W's ground light is the share that needs an additive term.
+        double med = 0.0;
+        if (!lgrades.empty())
+        {
+            std::nth_element(lgrades.begin(), lgrades.begin() + lgrades.size() / 2, lgrades.end());
+            med = lgrades[lgrades.size() / 2];
+        }
+        const double bounds[3] = { 8.0, 32.0, 128.0 };
+        for (int b = 0; b < 3; ++b)
+        {
+            const double ghi = med * bounds[b];
+            double add_e = 0.0, tot_e = 0.0;
+            for (const Sample& q : smp)
+            {
+                // per channel: what P x min(W / P, ghi) leaves of W; a sky with no usable ratio at all carries nothing
+                auto rem = [&](double w, double p) { return med > 0.0 ? w - p * std::min(w / std::max(p, 1e-12), ghi) : w; };
+                add_e += lumv({ rem(q.W.r, q.P.r), rem(q.W.g, q.P.g), rem(q.W.b, q.P.b) }) * q.w_horiz;
+                tot_e += lumv(q.W) * q.w_horiz;
+            }
+            r.ap_remainder[b] = tot_e > 0.0 ? add_e / tot_e : 0.0;
+        }
     }
 
-    // colour starvation: where the physical sky has (almost) nothing in a channel, a multiplicative grade cannot make that colour
+    // colour starvation: where the physical sky has (almost) nothing in a channel, a multiplicative filter cannot make that colour
     {
-        double st = 0.0, sa = 0.0;
+        double st2 = 0.0, sz = 0.0, sa = 0.0;
         for (const Sample& q : smp)
         {
             const double lo = std::min({ q.P.r, q.P.g, q.P.b }), hi = std::max({ q.P.r, q.P.g, q.P.b });
             const double w = std::cos(q.el * DEG);
             sa += w;
-            if (lo < 1e-3 * hi)
+            if (hi <= 0.0)
             {
-                st += w;
+                sz += w;
+            }
+            else if (lo < 1e-3 * hi)
+            {
+                st2 += w;
             }
         }
-        r.starved = sa > 0.0 ? st / sa : 0.0;
+        r.starved = sa > 0.0 ? st2 / sa : 0.0;
+        r.starved_zero = sa > 0.0 ? sz / sa : 0.0;
     }
 
-    // 6. the grade's size: k W / P
+    // 6. the filter's size: G = W / P, over the samples where both W and P carry light (above kFloor); a channel below 1e-3 of its
+    //    sample's luminance in W or in P is a starved one (counted above) and is left out of the tint
     r.grade_lo = 1e30;
     r.grade_hi = 0.0;
+    double undef = 0.0, tot = 0.0;
     for (const Sample& q : smp)
     {
-        const double gl = r.k * lumv(q.W) / std::max(lumv(q.P), 1e-12);
+        const double w = std::cos(q.el * DEG);
+        const double lw = lumv(q.W), lp = lumv(q.P);
+        tot += w;
+        if (lw <= kFloor)
+        {
+            continue;
+        }
+        if (lp <= kFloor)
+        {
+            undef += w;
+            continue;
+        }
+        const double gl = lw / lp;
         r.grade_lo = std::min(r.grade_lo, gl);
         r.grade_hi = std::max(r.grade_hi, gl);
-        const double ch[3] = { r.k * q.W.r / std::max(q.P.r, 1e-12), r.k * q.W.g / std::max(q.P.g, 1e-12), r.k * q.W.b / std::max(q.P.b, 1e-12) };
-        for (double c : ch)
+        const double wc[3] = { q.W.r, q.W.g, q.W.b }, pc[3] = { q.P.r, q.P.g, q.P.b };
+        for (int c = 0; c < 3; ++c)
         {
-            const double t = c / std::max(gl, 1e-12);
-            r.tint_max = std::max(r.tint_max, std::max(t, 1.0 / std::max(t, 1e-12)));
+            if (pc[c] < kChannelFloor * lp || wc[c] < kChannelFloor * lw)
+            {
+                continue;
+            }
+            const double t = (wc[c] / pc[c]) / gl;
+            r.tint_max = std::max(r.tint_max, std::max(t, 1.0 / t));
         }
     }
+    if (r.grade_hi == 0.0)
+    {
+        r.grade_lo = 0.0;
+    }
+    r.grade_undef = tot > 0.0 ? undef / tot : 0.0;
 
-    // 7. the white card on the graded sky
+    // 7. the white card, on W (the visible sky) and on k x W (the cast light)
     const Vec3 E = ph.sc.lights.E[0];
     const double card = luminance(E) / PI;
     for (const Sample& q : smp)
@@ -463,33 +567,36 @@ GradeResult measure(const SkyRow& s, double sun_el)
         {
             continue;
         }
-        const double ratio = r.k * lumv(q.W) / card;
+        const double rw = lumv(q.W) / card, rc = r.k * lumv(q.W) / card;
         if (sep < kAureoleDeg)
         {
-            r.card_aureole = std::max(r.card_aureole, ratio);
+            r.cardW_aur = std::max(r.cardW_aur, rw);
+            r.cardC_aur = std::max(r.cardC_aur, rc);
         }
         else
         {
-            r.card = std::max(r.card, ratio);
+            r.cardW = std::max(r.cardW, rw);
+            r.cardC = std::max(r.cardC, rc);
         }
     }
 
-    // 8. vertical walls: normal along +x (facing the sun's azimuth) and -x
+    // 8. vertical walls: normal along +x (facing the sun's azimuth) and -x. The samples cover azimuth 0..180 (the sky is symmetric about
+    //    the sun's plane), so each cell weighs its solid angle twice
     double ws_g = 0.0, ws_p = 0.0, wa_g = 0.0, wa_p = 0.0;
     for (const Sample& q : smp)
     {
-        const double dw = 2.0 * std::cos(q.el * DEG) * dth * dph * 0.5; // per half (the wall is not symmetric in az; use one half x 2)
+        const double dw = 2.0 * std::cos(q.el * DEG) * dth * dph;
         const double cx = std::cos(q.el * DEG) * std::cos(q.az * DEG);
         const double gW = r.k * lumv(q.W), gP = lumv(q.P);
         if (cx > 0.0)
         {
-            ws_g += gW * cx * dw * 2.0;
-            ws_p += gP * cx * dw * 2.0;
+            ws_g += gW * cx * dw;
+            ws_p += gP * cx * dw;
         }
         else
         {
-            wa_g += gW * -cx * dw * 2.0;
-            wa_p += gP * -cx * dw * 2.0;
+            wa_g += gW * -cx * dw;
+            wa_p += gP * -cx * dw;
         }
     }
     r.wall_sun = ws_p > 0.0 ? ws_g / ws_p : 0.0;
@@ -533,8 +640,9 @@ bool parse(char* line, SkyRow& r)
     r.dist = v[16];
     r.my = v[17];
     r.gamma = v[21];
-    r.sun_angle = v[22];
-    // v[23], v[24]: reserved (east_angle, star brightness), unused
+    r.sun_angle = v[22]; // the sun's elevation, radians
+    // v[23]: east_angle (unused)
+    r.path = static_cast<int>(v[24]);
     return true;
 }
 } // namespace
@@ -579,39 +687,65 @@ int main(int argc, char** argv)
 
     if (anchor)
     {
-        // the GPU bench's anchor (bench-2026-11-16.txt): its 720 x 220 panorama (elevation -12 .. 90) read at the pixel centres it
-        // prints as "zenith" (top row, column W/2) and "horizon (2 deg, 90 deg from the light)" (row int(14/102 x 220) = 30, column W/4)
+        // the GPU bench's anchor (bench-2026-11-16.txt and scripts/light/at2f_anchor_gpu.py): its 720 x 220 panorama (elevation -12 .. 90)
+        // read at the pixel centres: "zenith" (top row, column W/2), "horizon (2 deg, 90 deg from the light)" (row int(14/102 x 220) = 30,
+        // column W/4) and near the sun (column 389 = 14.75 degrees of azimuth, the row nearest the sun's elevation). The bench draws the
+        // PBR path whatever the sky, so the twin is read on it too. Camera: the twin's Windlight dome is at 0, the physical sky at 20 m.
         constexpr double W = 720.0, H = 220.0;
-        const double zen_el = -12.0 + 102.0 * (H - 0.5) / H, zen_az = ((W / 2 + 0.5) / W * 2.0 - 1.0) * 180.0;
-        const double hor_el = -12.0 + 102.0 * (30 + 0.5) / H, hor_az = ((W / 4 + 0.5) / W * 2.0 - 1.0) * 180.0;
+        auto el_of = [&](int j) { return -12.0 + 102.0 * (j + 0.5) / H; };
+        auto az_of = [&](int i) { return ((i + 0.5) / W * 2.0 - 1.0) * 180.0; };
         for (const SkyRow& s : skies)
         {
             const double sun_el = std::asin(std::sin(s.sun_angle)) / DEG;
-            const V3 z = windlight_sky(s, sun_el, zen_el, zen_az);
-            const V3 h = windlight_sky(s, sun_el, hor_el, hor_az);
-            std::printf("ANCHOR\t%s\tsun %.2f\tzenith %.4f\thorizon %.4f\n", s.name.c_str(), sun_el, lumv(z), lumv(h));
+            const int j_sun = std::min(std::max(static_cast<int>((sun_el + 12.0) / 102.0 * H), 0), static_cast<int>(H) - 1);
+            const int js[3] = { static_cast<int>(H) - 1, 30, j_sun }, is[3] = { static_cast<int>(W) / 2, static_cast<int>(W) / 4, 389 };
+            Physical ph;
+            build_physical(ph, s, sun_el);
+            std::printf("ANCHOR\t%s\tsun %.3f", s.name.c_str(), sun_el);
+            for (int a = 0; a < 3; ++a)
+            {
+                const double el = el_of(js[a]), az = az_of(is[a]);
+                std::printf("\t%.4f %.4f", lumv(windlight_sky(s, sun_el, el, az, kPbr, 0.0)), lumv(physical_sky(ph, el, az)));
+            }
+            double EP = 0.0; // the bench's irradiance: the integral of L cos(zenith) over the upper hemisphere (both halves of the azimuth)
+            for (int i = 0; i < kMEl; ++i)
+            {
+                for (int j = 0; j < kMAz; ++j)
+                {
+                    const double el = i + 0.5;
+                    EP += lumv(physical_sky(ph, el, 5.0 * j + 2.5)) * 2.0 * std::cos(el * DEG) * std::sin(el * DEG) * DEG * 5.0 * DEG;
+                }
+            }
+            std::printf("\t%.4f\n", EP);
         }
         return 0;
     }
 
-    std::printf("ROW\tname\tsun_el\tk\tgain\tdE_gain\tdE_tint\tdE_lut\tdE_lut_max\tlut_el\tlut_az\tlut_sep\tdE_lut_phys\tdE_lut_phys_max\tstarved\tap_remainder\tgrade_lo\tgrade_hi\ttint_max\tcard\tcard_aureole\twall_sun\twall_away\n");
-    int skipped_night = 0;
+    std::printf("ROW\tname\tsun_el\tpath\tblend\tEW\tEP\tk\tgain\tdE_gain\tdE_tint\tdE_prod\tdE_prod_max\tprod_el\tprod_az\tprod_sep\t"
+                "dE_rlin\tdE_rlin_max\trlin_sep\tdE_rlog\tdE_rlog_max\trlog_sep\tdE_phys\tdE_phys_max\tstarved\tstarved_zero\tap8\tap32\t"
+                "ap128\tgrade_lo\tgrade_hi\tgrade_undef\ttint_max\tcardW\tcardW_aur\tcardC\tcardC_aur\twall_sun\twall_away\n");
     for (const SkyRow& s : skies)
     {
         const double sun_el = std::asin(std::sin(s.sun_angle)) / DEG;
         if (sun_el < 0.0)
         {
-            ++skipped_night;
             std::printf("NIGHT\t%s\t%.2f\n", s.name.c_str(), sun_el);
             continue;
         }
+        if (!(s.my > 0.0))
+        {
+            std::printf("UNDEF\t%s\t%.2f\tmax_y %g\n", s.name.c_str(), sun_el, s.my);
+            continue;
+        }
         const GradeResult r = measure(s, sun_el);
-        std::printf("ROW\t%s\t%.2f\t%.5g\t%.5g\t%.2f\t%.2f\t%.3f\t%.2f\t%.1f\t%.1f\t%.1f\t%.3f\t%.2f\t%.4f\t%.4f\t%.4g\t%.4g\t%.3g\t%.3f\t%.3f\t%.3f\t%.3f\n",
-                    s.name.c_str(), sun_el, r.k, r.gain, r.de_gain, r.de_tint, r.de_lut, r.de_lut_max, r.lut_el, r.lut_az,
-                    sep_deg(sun_el, r.lut_el, r.lut_az), r.de_lut_phys, r.de_lut_phys_max, r.starved, r.ap_remainder, r.grade_lo, r.grade_hi,
-                    r.tint_max, r.card, r.card_aureole, r.wall_sun, r.wall_away);
+        auto sep = [&](const TableErr& t) { return sep_deg(sun_el, t.el, t.az); };
+        std::printf("ROW\t%s\t%.2f\t%d\t%.4f\t%.5g\t%.5g\t%.5g\t%.5g\t%.2f\t%.2f\t%.3f\t%.2f\t%.1f\t%.1f\t%.1f\t%.3f\t%.2f\t%.1f\t%.3f\t%.2f\t%.1f\t"
+                    "%.3f\t%.2f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4f\t%.4g\t%.4g\t%.4f\t%.3g\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n",
+                    s.name.c_str(), sun_el, r.path, r.blend, r.EW, r.EP, r.k, r.gain, r.de_gain, r.de_tint, r.prod.mean, r.prod.max,
+                    r.prod.el, r.prod.az, sep(r.prod), r.rlin.mean, r.rlin.max, sep(r.rlin), r.rlog.mean, r.rlog.max, sep(r.rlog),
+                    r.phys.mean, r.phys.max, r.starved, r.starved_zero, r.ap_remainder[0], r.ap_remainder[1], r.ap_remainder[2],
+                    r.grade_lo, r.grade_hi, r.grade_undef, r.tint_max, r.cardW, r.cardW_aur, r.cardC, r.cardC_aur, r.wall_sun, r.wall_away);
         std::fflush(stdout);
     }
-    std::printf("NIGHT_COUNT\t%d\n", skipped_night);
     return 0;
 }

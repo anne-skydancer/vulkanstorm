@@ -14,6 +14,9 @@ unchanged, so they survive when #439 is closed.
 | Accuracy check of the sky-view march (new finding R2) | `scripts/light/check_skyview_steps.cpp` |
 | #439's bench and renders, carried unchanged (a note in its docstring says what no longer models the viewer) | `scripts/light/bench_atmosphere.py`, `doc/light/atmosphere/*.png` |
 | Raw output of every run in this refresh | `doc/light/atmosphere/bench-2026-11-16.txt` |
+| AT2-F, the creator's filter measured over the library and the built-in skies: report, CPU tool with its Windlight twin, driver | `doc/light/at2f-creator-grade.md`, `scripts/light/at2f_creator_grade.cpp`, `scripts/light/at2f_creator_grade.py` |
+| AT2-F's GPU anchor (today's and the bench's physical luminance at three directions of six skies) | `scripts/light/at2f_anchor_gpu.py` |
+| AT2-F's raw rows and run summary | `doc/light/atmosphere/at2f-2026-11-17.tsv`, `doc/light/atmosphere/at2f-2026-11-17.txt` |
 
 Related documents on devel: `doc/light/atmosphere-scattering-core.md` (AT2-0, "the core doc"), `doc/light/handover-l3-at1.md`
 (L3 + AT1), `doc/light/cloud-shadows.md` (L2, L2b), `doc/light/volumetric-clouds.md` (L7-0), `doc/light/light-reference-numbers.md`
@@ -83,17 +86,20 @@ light directions change, §4.1):
   and about 9× a GTX 1660. The measured passes then cost 0.25-0.6 ms (3060-class) and 0.6-1.5 ms (GTX 16xx-class). That is 60 → 57.9-59.1
   and 55.0-57.8 fps when GPU-bound, and 25 → 24.6-24.8 and 24.1-24.6 moving. The unmeasured forward and view costs come on top.
 
-**Effort, calibrated on this repo's history:** about **3.5-5.5 days of agent time** for AT2-1 to AT2-5, with review rounds. It excludes
-owner turnaround and the one-build-at-a-time queue; the owner checks in-world once, on the installed viewer after release. For comparison, AT0 took about 4 h, L3 + AT1 about a day with two fix rounds, and AT2-0 about 8 h. The AT2 survey's 12-16
+**Effort, calibrated on this repo's history:** about **5-7.5 days of agent time** for AT2-1 to AT2-5 and AT2-F pass 2, with review
+rounds (the decisions of 2026-11-17 add about 1.5-2 days: the filter tables in AT2-1, the near-sun glow and the capture-path checks in
+AT2-2, and the offline pass 2). It excludes owner turnaround and the one-build-at-a-time queue; the owner checks in-world once, on the installed viewer after release. For comparison, AT0 took about 4 h, L3 + AT1 about a day with two fix rounds, and AT2-0 about 8 h. The AT2 survey's 12-16
 agent-days was inflated about 3×.
 
 **Recommendation:**
 
-- Run AT2-1 next on devel. It has no visible change, and it fixes R2 and R10 first.
-- Then AT2-2 to AT2-5, one build at a time, queued behind the open shadow work.
+- Run AT2-1 next on devel. It has no visible change, and it fixes R2 and R10 first, and adds the filter tables.
+- Then AT2-2, AT2-F pass 2 (offline: night, the built-in skies, the haze on objects), AT2-3, AT2-4 and AT2-5, one build at a time, queued
+  behind the open shadow work.
 - Release waits for L6 ([decided]).
 
-Five new owner decisions are in §8; the decisions already taken are restated, not re-asked.
+The owner decided D1 to D5 and the creator's-look rule on 2026-11-17 (§8); nothing is open except what the pass 2 and the stages' gates
+bring back.
 
 ---
 
@@ -119,6 +125,8 @@ Five new owner decisions are in §8; the decisions already taken are restated, n
     zenith figures unchanged. The panoramas (`doc/light/atmosphere/*.png`) and the library check are #439's and were not regenerated;
   - capture irradiance 0.115 today, physical 0.0962;
   - AT2-0 states 0.0965 for its own translation (core doc, "Sun disc and sky irradiance").
+- **Kept by design.** Since the decision of 2026-11-17 (§8) the ~8× is not removed: the visible sky keeps today's look, including its
+  brightness relative to the sun. It is only the light the sky casts that is physical in level.
 - **[code]** The sky target is still 8-bit: `deferredScreen` is `GL_RGBA` (`pipeline.cpp:1063`) unless `RenderEnableEmissiveBuffer`
   is set. Physical twilight cannot live there. This is why the sky moves into the lighting pass ([decided], AT2 survey decision 5).
 
@@ -364,10 +372,15 @@ As the AT2 survey, all [decided]:
 - the moonlit sky gets the compensated gain plus a scotopic desaturation;
 - under the cloud layer, the sun's in-scatter is multiplied by the L2 map's mean.
 
-**New: HDR off (D5).** `RenderHDREnabled` (`settings.xml:24178`, read at `pipeline.cpp:451`; default true) is still a persisted setting.
-With it off, `addDeferredAttachments` (`pipeline.cpp:998`) falls to 8-bit `norm` and `emissive`. The float sky and the dual-source RGBA16F
-apply assume HDR. Proposal for AT2-2, under the GL 4.6 no-fallback rule: with HDR off the sky is accepted clamped to 8 bits (a visibly
-poorer twilight, no second code path), and the AT2-2 gate checks that it draws without GL errors. The alternative is to refuse HDR off.
+**The probes** capture the physical sky with the creator's tint (the cast light of the filter, §8): physical in level (k x the creator's
+sky), with today's cast light where physics casts none.
+
+**HDR off (D5 = (c), decided 2026-11-17).** `RenderHDREnabled` (`settings.xml:24178`, read at `pipeline.cpp:451`; default true) is still a
+persisted setting. With it off, `addDeferredAttachments` (`pipeline.cpp:998`) falls to 8-bit `norm` and `emissive`. The sky tables stay
+16-bit float internally whatever the setting; with HDR off the sky shader applies exposure and the tone curve before a dithered 8-bit
+write. One code path, the 8-bit buffers kept, no clamped twilight. AT2-2's gate checks that this draws without GL errors and that the
+dithered 8-bit twilight stays within the HDR-on picture's tolerance. If very dark twilight comes out too coarse, this comes back to the
+owner.
 
 ---
 
@@ -497,18 +510,19 @@ Common gates for every stage:
 
 | Stage | Scope | Gate | Check (LEAP / scratch profile) | Risk | Effort, agent time (calibrated) |
 |---|---|---|---|---|---|
-| **AT2-1** Tables, no visible change | **R2:** `sky_radiance` and `pa_sky_radiance` use the slab-split march (64 steps) and E for the ground; vectors, SHA, library aureole list (D2). **R10:** the `Atmosphere` uniform block. The cut-altitude upload; T, Ψ (split), E (split) and sky-view passes; rebuild cadence; `llatmosphereluts.{h,cpp}`; `updateAtmosphere()` hook; release and restore | GPU texels against C++ (T 1e-3, Ψ and E 1 %, sky view 1 %); library check OK; no GL errors in a 1 h soak; GPU timer queries within ±50 % of §6.1; `check_atmosphere_library.py --acc` over the froxel domain up to the draw distance, errors reported, and the froxel step count chosen from it (core doc: 130 skies exceed 1 % at 12 steps, worst 12 / 80 / 36 % at 2 / 10 / 40 km); `ensureTables()` reached from a mirror on frame 1 | LEAP or scratch-profile check | low | 0.5-1 d |
-| **AT2-2** Physical sky, probes, stars | sky in the lighting pass with the coverage alpha; separate alpha blend for clouds, sun and moon; sun disc through T; stars' extinction and glare; probe captures; below-horizon ground | sky ≤ 0.05 ms at 1080p; the disc's colour = AT1's within 1 % above 2°; no pop in a sped-up day cycle (light_check scenario); classic and PBR; HDR off draws without GL errors (§4.4, D5) | LEAP or scratch-profile checks: noon, sunset into −6°, moonlit night, skybox at 3000 m, a classic and a PBR sky | medium: blend states, the moon's depth write (SL-14113), a darker sky until L6 | 1-1.5 d |
+| **AT2-1** Tables, no visible change | **R2:** `sky_radiance` and `pa_sky_radiance` use the slab-split march (64 steps) and E for the ground; vectors, SHA, library aureole list (D2). **R10:** the `Atmosphere` uniform block. **The filter tables (AT2-F, §8):** the sky-view table stores the product, today's look per texel (P x G = W), built per preset load and per keyframe with the C++ twin of skyV (`at2f_creator_grade.cpp`) and its vectors, for each sky's own draw path; the cast-light level k is computed with them (their cost is per preset load and keyframe, not in §6's per-frame figures). The cut-altitude upload; T, Ψ (split), E (split) and sky-view passes; rebuild cadence; `llatmosphereluts.{h,cpp}`; `updateAtmosphere()` hook; release and restore | GPU texels against C++ (T 1e-3, Ψ and E 1 %, sky view 1 %); library check OK; no GL errors in a 1 h soak; GPU timer queries within ±50 % of §6.1; `check_atmosphere_library.py --acc` over the froxel domain up to the draw distance, errors reported, and the froxel step count chosen from it (core doc: 130 skies exceed 1 % at 12 steps, worst 12 / 80 / 36 % at 2 / 10 / 40 km); `ensureTables()` reached from a mirror on frame 1 | LEAP or scratch-profile check | low | 1-1.5 d |
+| **AT2-2** Physical sky, probes, stars | sky in the lighting pass with the coverage alpha; separate alpha blend for clouds, sun and moon; sun disc through T; stars' extinction and glare; probe captures; below-horizon ground; **the near-sun glow of the filter evaluated analytically** | sky ≤ 0.05 ms at 1080p; the disc's colour = AT1's within 1 % above 2°; no pop in a sped-up day cycle (light_check scenario); classic and PBR, and the filter on each frame's own draw path (the path can flip mid-blend); every capture path (snapshot, high-resolution and tiled, 360, saved and uploaded) checked against the screen; HDR off: exposure and tone curve before a dithered 8-bit write, no GL errors, within tolerance of HDR on (§4.4, D5 = (c)) | LEAP or scratch-profile checks: noon, sunset into −6°, moonlit night, skybox at 3000 m, a classic and a PBR sky | medium: blend states, the moon's depth write (SL-14113); the deeper shade (D4) | 1.5-2 d |
+| **AT2-F pass 2** Night, built-ins and haze on objects (between AT2-2 and AT2-3; offline, no viewer change) | the 150 night and twilight skies and the moon branch; the built-in skies Sunrise, Midday and Sunset (a one-off fetch in an owner session) and Midnight; the graded haze on objects against today's object haze (`calcAtmosphericVarsLinear`), and how the additive term is carried (F5); day cycles (blending of the filter) | the report of `doc/light/at2f-creator-grade.md` extended; no over-bound ratio in the haze on objects | offline checks | low | 0.5-1 d |
 | **AT2-3** Aerial perspective | froxel pass per view; `atmosphereApplyF` replaces hazeF; `atmosphereApply` in the forward callers of `applySkyAndWaterFog`, `atmosFragLighting` and `atmosLighting`; real camera height; L2 mean under the layer | net ≤ +0.04 ms at 1080p for the opaque apply; **plus the apply on a 4×-overdraw blended pass and the per-view cost (mirror, hero, water, cube faces), measured and reported before the stage is called done**; froxel accuracy out to the draw distance (as AT2-1); no swimming in a 360° turn; stochastic transparency's composite order unchanged | LEAP or scratch-profile checks: hazy valley from a skybox; alpha and particles over haze; water edge | medium-high: 68 programs, forward paths, wider than L3 + AT1 | 1-1.5 d, likely the upper end |
 | **AT2-4** Flat clouds through AT2; far AP | cloudsV/F from E, `cloud_T` and the far AP; far-AP pass on request; `check_atmosphere_far.py` | far table ≤ 1 % on the clouds' domain; the flat layer's mean luminance within ±10 % of a physically lit reference on 4 skies | clouds at noon, at sunset, overcast | low-medium | 0.5-1 d |
-| **AT2-5** Removal and cleanup | remove the `RenderAtmospherePhysicalLight` old branch ([decided]); delete the dead dome and haze formulas (keep `legacy_transmittance` as the test oracle); beacon fog colour; doc `doc/light/atmosphere.md` | whole-stage cost against the floor | 10 popular skies before and after | low | 0.5 d |
+| **AT2-5** Removal and cleanup | remove the `RenderAtmospherePhysicalLight` old branch ([decided]); delete the dead dome and haze formulas **except the Windlight formula, which stays as the filter's reference** (and `legacy_transmittance` as the test oracle); beacon fog colour; doc `doc/light/atmosphere.md` | whole-stage cost against the floor | 10 popular skies before and after | low | 0.5 d |
 
-- **Total:** about 3.5-5.5 days of **agent time**, including the review rounds. It excludes owner turnaround and the one-build-at-a-time
+- **Total:** about 5-7.5 days of **agent time**, including the review rounds. It excludes owner turnaround and the one-build-at-a-time
   queue. The owner's in-world check happens once, on the installed viewer after release (the recorded rule); the stage checks above are
   LEAP or scratch-profile checks. History supports about a day per renderer stage as agent time (AT0 4 h, L3 + AT1 23 h, AT2-0 7.5 h).
 - The status document's "size per #439" line (`reports/light-l-stages-status-2026-11-16.md`, not on this branch) needs updating when #439
   is closed.
-- **Order:** AT2-1 → 2 → 3 → 4 → 5. Then L4-L6. L7 after AT2 ([decided]).
+- **Order:** AT2-1 → AT2-2 → AT2-F pass 2 → AT2-3 → AT2-4 → AT2-5 ([decided], 2026-11-17). Then L4-L6. L7 after AT2 ([decided]).
 - AT2-1 can run now. It touches no shader that renders today, and no shadow file.
 - **Release integration waits for L6** ([decided]). L6 is not started.
 
@@ -542,27 +556,41 @@ Replaces the restated "[decided]" item "the drawn sky physical, with L6 compensa
   produces the filter; it is never drawn). Where the physical sky has no light, or none in a channel, a multiplier cannot reproduce today,
   so the filter also adds light there: multiply, plus add where physics has nothing, still computed from the EEP alone. It applies to the
   drawn dome and to the haze on distant objects, including the sky's brightness relative to the sun. Creator intent wins over the
-  white-card rule here: the 33 of 618 measured day skies that outshine a white card in the same sun keep today's look.
+  white-card rule here: on today's look 364 of the 577 measured day skies with a physical sky (k > 0) outshine a white card in the same
+  sun (outside the aureole, or beyond 2x inside it), and they keep today's look. The 33 that exceed the rule on the cast light are the
+  reach of the rule on the physical sky and its light.
 - **The light the sky casts** (reflection probes, shade) stays physical in level, so D4 stands, and takes the creator's tint and
   gradient. Today's viewer already separates the two: its probes capture a desaturated sky with ambient removed (about 1.2x physical for
   Default) while the drawn Default sky is about 5.8x; letting the probes capture the creator-bright sky would raise shade about 4.8x and
-  take sun to shade from about 3.8 : 1 to about 0.8 : 1. Where the physical sky casts no light (41 of 618 day skies: 21 with no sun,
-  7 with no atmosphere, 13 where the mapping leaves no scattering), the cast light is today's, from the creator's ambient.
-- **The 13 are by design.** `LLAtmosphere::fromLegacy` keeps each channel's column exactly as today's sunlight reaches the ground at
-  noon, then fits Earth's ozone and a grey aerosol inside it; when ozone fills a thin channel, a grey aerosol has no room in any channel.
-  The creator's sunlight wins over the sky's scattering, which agrees with the filter rule. No change.
+  take sun to shade from about 3.8 : 1 to about 0.8 : 1. Where the physical sky casts no light (41 of 618 day skies, k = 0 or undefined:
+  6 with `max_y` 0, 20 where today's sky is black too, and 15 where today's sky is lit and the physical sky is black: 10 with no sunlight
+  and 5 where the mapping leaves no scattering; the flags overlap, 21 have sunlight 0 and 10 have `density_multiplier` 0), the cast
+  light is today's, from the creator's ambient.
+- **The 15 where W is lit and P is black.** `LLAtmosphere::fromLegacy` keeps each channel's column exactly as today's sunlight reaches
+  the ground at noon, then fits Earth's ozone and a grey aerosol inside it; when ozone fills a thin channel, a grey aerosol has no room
+  in any channel, and a sky with `blue_horizon` 0 has no Rayleigh albedo. The creator's sunlight wins over the sky's scattering, which
+  agrees with the filter rule. The data shows the 15 and the cause where it is a zero input (`doc/light/at2f-creator-grade.md`, F3); it
+  does not show that every such case is intended by the creator.
 - **Photos: non-negotiable.** The filter must be present in every capture that shows the sky: the ordinary snapshot, high-resolution
   and tiled snapshots, 360 snapshots, and saved and uploaded images. It is therefore part of how the sky is computed (the sky-view
   table, the aerial perspective, the probes), not a pass over the finished image, and every AT2 stage that draws the sky checks each
   capture path against the screen.
-- **Measured (AT2-F, `doc/light/at2f-creator-grade.md`).** Through the sky-view table the filtered sky is within dE 0.05 of today on
-  average (the physical sky's own table error is 0.03). Physics alone reaches dE 2 for 12 % of skies. The worst cells sit within a few
-  degrees of the sun, where skyV holds the glow flat inside 2.56 degrees; AT2-2 evaluates that near-sun glow analytically or gives the
-  sky view a finer band there. Not yet measured: the 150 night and twilight skies, and the haze on objects against today's object haze
-  (AT2-F second pass, before AT2-3).
+- **The built-in skies are filters too.** The code default sky (`LLSettingsSky::defaults()`, `llsettingssky.cpp:883`, which is the
+  `ENV_DEFAULT` sky and the default day cycle) and the five menu skies of World > Environment (`LLEnvironment::KNOWN_SKY_*`,
+  `llenvironment.cpp:824-828`): **Sunrise, Midday, Midday (Legacy), Sunset and Midnight**. AT2-F measures them as named rows outside the
+  library figures; the library's "Default" is the Midday (Legacy) look, not the code default. Sunrise, Midday and Sunset are not in the
+  local cache and need a one-off fetch in a later owner session; nothing was fetched for this study.
+- **Measured (AT2-F, `doc/light/at2f-creator-grade.md`; 612 library day skies, each on its own draw path).** The sky-view table must
+  store the product (today's look per texel, P x G = W): the filtered sky is then within dE 0.05 of today on average (the physical sky's
+  own table error is 0.03). Storing the ratio W / P and multiplying by P fails in the tails (worst cell above dE 10 in 82 skies against
+  65 for the product, up to dE 157), so the filter is not stored as a ratio. Physics alone reaches dE 2 for 9 % of skies. The worst
+  cells of the product are near the sun: 273 of the 327 skies whose worst cell is above dE 2 have it within 10 degrees, and 183 of
+  those between 2.56 and 10 degrees, beyond skyV's 2.56 degree flat zone; AT2-2 evaluates the near-sun glow analytically or gives the
+  sky view a finer band there. Not yet measured: the 150 night and twilight skies, Sunrise, Midday and Sunset of the menu, and the
+  haze on objects against today's object haze (AT2-F pass 2, before AT2-3).
 
-Effect on the staged plan (§7): **AT2-1** adds the filter tables (the Windlight reference and the physical sky on the sky-view grid,
-per preset load and per keyframe, the multiplier and the additive part) next to its other tables, with a C++ twin and vectors
+Effect on the staged plan (§7): **AT2-1** adds the filter tables (the sky-view table stores today's look, the product, per texel and per
+keyframe; the physical sky and the additive part for the haze on objects) next to its other tables, with a C++ twin and vectors
 (`scripts/light/at2f_creator_grade.cpp` holds a CPU twin of skyV anchored to the GPU bench). **AT2-2** draws the dome and the probes from
 them (visible sky filtered in full, cast light physical in level with the creator's tint, today's cast light where physics has none) and
 adds the capture-path checks. **AT2-3** applies the filter to the aerial perspective with its additive part. **AT2-5** keeps the Windlight
@@ -593,8 +621,9 @@ formula as the filter's reference instead of deleting it. L6 no longer compensat
    - (a) **Recommended:** accept a clamped 8-bit sky there; no second code path.
    - (b) Refuse `RenderHDREnabled` off once AT2-2 lands (GL 4.6 no-fallback rule).
 
-Restated, not re-asked ([decided]): every sky physical, classic bounded, no fallback; the drawn sky physical, with L6 compensating
-(superseded 2026-11-17 by the EEP filter above);
+Restated, not re-asked ([decided]): every sky physical, no fallback; the white-card rule bounds the physical sky and the light it
+casts, not the creator's visible sky, which keeps today's look (creator intent wins, 2026-11-17); the drawn sky physical, with L6
+compensating (superseded 2026-11-17 by the EEP filter above);
 slab 0.25 km; sky observer fixed, haze at the real height; the moon compensated plus scotopic desaturation; stars on physical timing;
 the sky in the lighting pass; the far table for the clouds; the L2 mean under the layer; the Density tab hidden; AT2 on devel, release
 after L6; `RenderAtmospherePhysicalLight` removed in AT2-5.
@@ -642,7 +671,10 @@ after L6; `RenderAtmospherePhysicalLight` removed in AT2-5.
 **Risks:**
 
 - R2's fix changes the AT2-0 vectors and the aureole list, so the library check and its expected set must change in the same PR.
-- The darker drawn sky waits for L6, which is not started, so devel shows it before release does.
+- The shade under PBR skies is deeper (D4, accepted): the probes capture the physical sky, so devel shows it before release does.
+- The filter has to be in every capture path (snapshot, high-resolution and tiled, 360, saved and uploaded); it is part of the sky tables,
+  so a path that bypasses the tables would show the physical sky instead. Each stage that draws the sky checks capture against screen.
+- A sky's draw path (classic, PBR, PBR with ambiance 0) can flip mid-blend (`llsettingssky.cpp:609`); the filter must use each frame's own path.
 - The coverage alpha touches the sun, moon and cloud blend states (AT2-2).
 - Thick fog: Hillaire's multiple scattering is weak there. With f_ms ≤ 0.6 a fog can come out grey rather than white (core doc).
 - The 130 library skies that miss 1 % at 12 steps on the clouds' domain (core doc) matter for the far table (16 → 48 steps:
