@@ -322,13 +322,16 @@ static int zng_scratch(const uint8_t* in, size_t n, const uint8_t*& out, size_t&
     inflateEnd(&strm);
     out = tls_zng.p.get();
     out_n = used;
+    return ZR_OK;
+}
+// After the caller is done with the output (the view dangles after this).
+static void zng_scratch_release_if_big()
+{
     if (tls_zng.cap > ZNG_KEEP)
     {
-        // the caller would parse first; the bench only needs the timing
         tls_zng.p.reset(new (std::nothrow) uint8_t[TLS_START]);
         tls_zng.cap = tls_zng.p ? TLS_START : 0;
     }
-    return ZR_OK;
 }
 
 // S0 "exact": the output size is known (oracle; also the Milky Way map case).
@@ -559,6 +562,7 @@ static int cmd_verify(const std::string& pack, size_t limit)
             const uint8_t* so = nullptr; size_t sn = 0;
             bool rival_ok = zng_scratch(b.z.data(), b.z.size(), so, sn) == ZR_OK && sn == zn && memcmp(so, zr, zn) == 0;
             if (!rival_ok) printf("zlib-ng scratch rival differs on block %zu\n", bi);
+            zng_scratch_release_if_big();
             {
                 const uint8_t* zo = nullptr; size_t zn2 = 0; std::unique_ptr<uint8_t[]> owned;
                 if (!(ld_sized(b.z.data(), b.z.size(), zo, zn2, owned, st) == ZR_OK && zn2 == zn && memcmp(zo, zr, zn) == 0))
@@ -753,7 +757,7 @@ static double run_one(const Strategy& s, const Block& b, size_t ref_n, std::vect
     case 1: { size_t n = 0; ld_exact(b.z.data(), b.z.size(), exact_buf.data(), ref_n, n); break; }
     case 2: { size_t n = 0; ld_ratio(b.z.data(), b.z.size(), s.k, nullptr, n, st); break; }
     case 3: { const uint8_t* o = nullptr; size_t n = 0; ld_tls(b.z.data(), b.z.size(), o, n, st); ld_tls_release_if_big(); break; }
-    case 4: { const uint8_t* o = nullptr; size_t n = 0; zng_scratch(b.z.data(), b.z.size(), o, n); break; }
+    case 4: { const uint8_t* o = nullptr; size_t n = 0; zng_scratch(b.z.data(), b.z.size(), o, n); zng_scratch_release_if_big(); break; }
     case 5: { const uint8_t* o = nullptr; size_t n = 0; std::unique_ptr<uint8_t[]> owned; ld_sized(b.z.data(), b.z.size(), o, n, owned, st); break; }
     }
     return std::chrono::duration<double, std::micro>(clk::now() - t0).count();
