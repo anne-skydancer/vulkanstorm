@@ -1,0 +1,65 @@
+skies read 768, skipped (unreadable) 0, night or twilight (not measured) 150, measured 618
+physics alone, best gain                       median   9.01  p90  37.83  max 127.38  <= 2: 66 of 618
+physics alone, best gain + tint                median   7.54  p90  15.18  max  80.28  <= 2: 76 of 618
+graded sky view (mean over the sky)            median   0.05  p90   0.06  max   0.25  <= 2: 613 of 618
+graded sky view (worst 1x5 deg cell)           median   1.15  p90   5.60  max  36.15  <= 2: 406 of 618
+physical sky view, its own table error (mean)  median   0.03  p90   0.07  max   0.57  <= 2: 613 of 618
+physical sky view, its own table error (worst) median   1.11  p90   3.91  max  15.01  <= 2: 428 of 618
+skies whose worst sky-view cell is above dE 2: 212; of them within 10 degrees of the sun: 178, within 1 degree of the horizon: 9
+colour-starved physical skies (a channel below 1e-3 of the strongest over most of the sky): 68 of 618
+haze on objects, share a 32x-bounded ratio cannot carry: median 0.0000, p90 0.5323, max 1.000; skies above 1 %: 148
+energy factor k (graded = k x creator): median 0.0328 (1/30.49), p10 0.0004, p90 0.2111
+grade range hi/lo in luminance: median 10.37, p90 272.91, max 4.05e+07
+grade's largest per-channel tint: median 4.03, p90 5960000000.00, max 1e+12
+white card on the graded sky: 33 over the rule, 29 aureole exceedances within 2x; largest outside the aureole 4.176, inside 3.622
+vertical wall, graded / physical: facing the sun median 1.33 (p10 0.73, p90 2.68); facing away median 0.98 (p10 0.08, p90 1.98)
+  Default: sun 65.9, k 0.1726, dE gain 12.8, tint 8.9, sky view 0.05 (worst 2.6 at 5.7 deg from the sun), card 0.592/0.190
+  Foggy: sun 90.0, k 0.0156, dE gain 3.1, tint 3.0, sky view 0.06 (worst 0.7 at 45.5 deg from the sun), card 0.188/0.502
+  Sunset: sun 4.3, k 0.0284, dE gain 37.6, tint 7.8, sky view 0.06 (worst 0.9 at 98.6 deg from the sun), card 0.051/0.126
+furthest from physics (dE after gain + tint):
+  Phototools- Horizon Building Light 01: 80.3 (gain only 80.3), grade range 0
+  Phototools- B/W Light 10: 79.5 (gain only 79.5), grade range 2.88e-48
+  Phototools- B/W Light 13: 72.4 (gain only 72.4), grade range 1.42e+07
+  Phototools- Yellow Stars 01: 62.8 (gain only 69.0), grade range 2.28e+05
+  [TOR] SCIFI - Blue sun warmed: 61.2 (gain only 127.4), grade range 627
+  Phototools- B/W Light 07: 43.6 (gain only 43.6), grade range 4.08e+06
+  Phototools- Charolotte Light: 40.2 (gain only 43.4), grade range 1.16e+05
+  [TOR] BIG SUN - Slips through walls 6: 38.8 (gain only 82.4), grade range 1.35e+03
+  Nacon's Natural Sunrise: -A: 33.5 (gain only 53.9), grade range 8.15
+  Nacon's Natural Sunset: D: 33.5 (gain only 53.9), grade range 8.15
+  Nacon's Natural Sunrise: B: 31.8 (gain only 57.5), grade range 22.6
+  [EUPHORIA] sunset 2: 31.0 (gain only 34.3), grade range 647
+over the white-card rule on the graded sky:
+  [TOR] SCIFI - Big pink: outside the aureole 4.176, aureole 0.014
+  Phototools- B/W Light 03: outside the aureole 2.473, aureole 0.008
+  [EUPHORIA] natural high: outside the aureole 2.348, aureole 0.009
+  Phototools- Queen Light 01: outside the aureole 2.189, aureole 0.007
+  Places Cromac: outside the aureole 2.065, aureole 0.018
+  Phototools- Me Mine Light: outside the aureole 2.018, aureole 0.111
+  Phototools- Absinthe Light : outside the aureole 1.847, aureole 0.061
+  Places Las Legunas: outside the aureole 0.103, aureole 3.622
+  [TOR] SCIFI - Cragelica: outside the aureole 1.730, aureole 0.005
+  [TOR] SCIFI - This alien life: outside the aureole 0.235, aureole 3.059
+  [TOR] SUNRISE - Frenlite: outside the aureole 0.182, aureole 3.016
+  [TOR] SCIFI - Lunar kuwang: outside the aureole 0.237, aureole 2.964
+  [TOR] BIG SUN - Raylanta: outside the aureole 1.461, aureole 1.461
+  [TOR] SCIFI - Awesome atmo 2: outside the aureole 0.658, aureole 2.782
+  Places Astryls Wild: outside the aureole 0.104, aureole 2.720
+  [TOR] SCIFI - Evocrads'lime: outside the aureole 0.158, aureole 2.718
+  [TOR] BIG SUN - Good for warm sailing: outside the aureole 1.336, aureole 1.708
+  Sailor's Delight: outside the aureole 1.336, aureole 1.708
+  [TOR] SCIFI - Whirld spinnin: outside the aureole 1.323, aureole 0.105
+  Places Beach Cay Surreal: outside the aureole 1.297, aureole 1.304
+  [TOR] FOGGY - Chouchou rockets: outside the aureole 0.083, aureole 2.574
+  [TOR] SCIFI - Alien planet: outside the aureole 1.279, aureole 0.053
+  [TOR] SUNRISE - Breaking firmament: outside the aureole 1.082, aureole 2.505
+  Places Cornfield: outside the aureole 0.080, aureole 2.504
+  [TOR] MIDDAY - Beachin': outside the aureole 1.235, aureole 0.052
+  [TOR] SCIFI - Teak weak: outside the aureole 1.206, aureole 0.002
+  [TOR] MIDDAY - Why so blue? 1: outside the aureole 1.152, aureole 0.033
+  Places Imagine: outside the aureole 0.126, aureole 2.283
+  Surreal - Brazil (Paulina): outside the aureole 1.129, aureole 1.130
+  [TOR] SUNSET - Red city: outside the aureole 0.051, aureole 2.214
+  [TOR] SUNRISE - Canyon dreams red: outside the aureole 1.087, aureole 2.193
+  Phototools- B/W Light 05: outside the aureole 1.091, aureole 0.031
+  [TOR] SCIFI - Stay stonkin': outside the aureole 1.080, aureole 0.024
