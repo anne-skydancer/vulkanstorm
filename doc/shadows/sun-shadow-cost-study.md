@@ -33,6 +33,21 @@ extract read for this study puts the cascade and efficiency paragraphs under §7
 are cited as §7.4) and ch. 19 (§19.6 detail culling, §19.8 culling systems, §19.9 level of detail); GPU Gems 1-3; and the talks
 and papers those cite. These are references only. No NVIDIA or Epic sample code was read or copied.
 
+Decisions taken (owner, 2026-11-16):
+
+- **D1:** all as recommended. Order: 1b session, Q, #542 C1, C2, 5c, G3. Probe-face reuse comes after C1; G4-G6 go on
+  their own track.
+- **D2:** the small-caster cull at one texel of the level, as a fixed size per level, never on avatar bodies, behind
+  the debug setting `RenderShadowSmallCasterTexels`. It waits on the 1b size histogram.
+- **D3:** Ultra keeps 4 levels and 192 m.
+- **D4:** moon nights use the day cascades until the moon gets its own.
+- **D5:** probes read the main levels after C1.
+- **D6:** impostored avatars cast after C2 and G3.
+- **D7:** G3 now, G6 when it comes.
+- **D8:** the GPU levers are decided after 1b.
+- **Moon brightness** follows the standard approach: physical moonlight plus night adaptation (L6 exposure and AT2's
+  scotopic look). `RenderMoonlightCompensation` (-3 EV) is an interim stand-in.
+
 ## 1. Summary
 
 **What the sun/moon passes cost.** At Rooftops (Ultra, still, about 50 avatars) the four cascades cost 9.35 ms of
@@ -224,8 +239,8 @@ How to read it:
      neither do their attachments (:388-399; pipeline.cpp:3256). At Ultra only 16 avatars are not impostors
      (`featuretable.txt:366`).
    - Rigged attachments draw through `pushRiggedBatches`, which uploads each palette per pass (`lldrawpool.cpp:424-547`).
-7. Maps: four `GL_DEPTH_COMPONENT24` maps, square `sqrt(w*h)` (`allocateShadowBuffer`, pipeline.cpp:1187-1215; 1920² at
-   2560x1440). There is no colour attachment (`llrendertarget.cpp`, `addColorAttachment(0)` returns at once). The
+7. Maps: four `GL_DEPTH_COMPONENT24` maps, square `sqrt(w*h)` (`allocateShadowBuffer`, pipeline.cpp:1187-1215; 1936² at
+   2560×1440 (BlurHappySize; the model uses 1920²)). There is no colour attachment (`llrendertarget.cpp`, `addColorAttachment(0)` returns at once). The
    maps are released in `cleanup` (pipeline.cpp:850, `releaseShadowBuffers` :1544).
 
 Every thread: all of the above runs on the main thread, with one GL context. No worker calls `generateSunShadow`,
@@ -814,7 +829,8 @@ The 1b measuring build (8c4814273c, `work/mc1b-gpu-timing`) already has:
 
 ## 10. Decisions for the owner
 
-The recommended option is first in each.
+Status: decided by the owner on 2026-11-16, all as recommended (see the note at the top). The text below is the
+decision record; the recommended option is first in each.
 
 1. **D1, order.**
    - **A:** 1b → Q → C1 → C2 → 5c (target on C2's numbers) → G3 → optional items; G-series on its own track.

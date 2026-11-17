@@ -15,6 +15,10 @@ Values are per frame (`FTM_FRAME` count), as calls/ms.
 A zone may be given as `child@parent`, for example `LLRenderPass::pushBatch@shadow alpha blend`. Then only the child's
 events that lie inside an event of the parent zone are counted (the draws of one pass).
 
+**Valid only when the main view has at least 3 passes** (the main/probe split counts the passes of a generateSunShadow
+call), so not Legacy with RenderShadowSplits below 2. The tool prints a warning when no call in the capture has 3 or
+more passes.
+
 **Valid for captures without projector shadows only** (shadow setting "sun" or "none"). In an `all` capture the
 projector pool's tiles call renderShadowImpl inside generateSunShadow, after the cascades; their passes are reported as
 `main4+`, but the main call's pass count then no longer separates main from probe calls reliably.
@@ -89,6 +93,9 @@ def main(argv):
         i = inside(gen, gs, s)
         if i >= 0:
             per_gen[i].append(k)
+    if not any(len(ks) >= 3 for ks in per_gen.values()):
+        print('WARNING: no generateSunShadow call in this capture has 3 or more passes; the main/probe split is not '
+              'valid (Legacy with RenderShadowSplits below 2?)', file=sys.stderr)
     label = {}
     for i, ks in per_gen.items():
         kind = 'main' if len(ks) >= 3 else 'probe'
