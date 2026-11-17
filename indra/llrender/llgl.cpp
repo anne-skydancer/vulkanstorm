@@ -1249,8 +1249,8 @@ bool LLGLManager::initGL()
         GLuint gl_gpus_count = wglGetGPUIDsAMD(0, 0);
         if (gl_gpus_count > 0)
         {
-            GLuint* ids = new GLuint[gl_gpus_count];
-            wglGetGPUIDsAMD(gl_gpus_count, ids);
+            std::vector<GLuint> ids(gl_gpus_count); // <Vulkanstorm/> was new[] and never freed
+            wglGetGPUIDsAMD(gl_gpus_count, ids.data());
 
             GLuint mem_mb = 0;
             for (U32 i = 0; i < gl_gpus_count; i++)
