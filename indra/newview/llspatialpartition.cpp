@@ -377,7 +377,7 @@ void LLSpatialPartition::rebuildGeom(LLSpatialGroup* group)
             group->mBuilt = 1.f;
             if (group->mVertexBuffer.isNull() ||
                 group->mVertexBuffer->getNumVerts() != vertex_count ||
-                group->mVertexBuffer->getNumVerts() != index_count)
+                group->mVertexBuffer->getNumIndices() != index_count) // <Vulkanstorm/> was getNumVerts() (a new buffer on every rebuild)
             {
                 group->mVertexBuffer = new LLVertexBuffer(mVertexDataMask);
                 if (!group->mVertexBuffer->allocateBuffer(vertex_count, index_count))
@@ -2601,17 +2601,17 @@ void renderPhysicsShape(LLDrawable* drawable, LLVOVolume* volume, bool wireframe
 
         LLVolume* phys_volume = LLPrimitive::sVolumeManager->refVolume(volume_params, detail);
 
-        if (phys_volume->mHullPoints && phys_volume->mHullIndices)
+        if (phys_volume->mHullPoints && phys_volume->mHullIndices && phys_volume->mNumHullPoints > 0 && phys_volume->mNumHullIndices > 0) // <Vulkanstorm/>
         {
 
+            // <Vulkanstorm> debug display: glVertexPointer client arrays raise GL errors and draw nothing on a core context; same call as the hull above
             llassert(LLGLSLShader::sCurBoundShader != 0);
             LLVertexBuffer::unbind();
-            glVertexPointer(3, GL_FLOAT, 16, phys_volume->mHullPoints);
 
             gGL.diffuseColor4fv(color.mV);
 
-            gGL.syncMatrices();
-            glDrawElements(GL_TRIANGLES, phys_volume->mNumHullIndices, GL_UNSIGNED_SHORT, phys_volume->mHullIndices);
+            LLVertexBuffer::drawElements(LLRender::TRIANGLES, phys_volume->mHullPoints, NULL, phys_volume->mNumHullIndices, phys_volume->mHullIndices);
+            // </Vulkanstorm>
         }
         else
         {
