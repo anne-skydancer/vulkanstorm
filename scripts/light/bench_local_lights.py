@@ -103,6 +103,7 @@ uniform vec3 apex;            // projector: projection origin (setupSpotLight's 
 uniform float l_falloff;      // the prim's falloff (0..2), not yet x 0.5
 uniform float s_phys;         // the light's own size (m)
 uniform float e_cap;          // U
+uniform float l_intensity;    // the light's intensity (colour already carries it; only the size floor needs it)
 uniform float r_reach;        // proposed reach (m), 1.5 x radius, capped for worn lights
 uniform float tan_half_fov;   // projector, vertical
 uniform float aspect;         // projector, width / height
@@ -202,7 +203,7 @@ float prop_kappa(float f)
 // E at distance d (windowed inverse square, disk-source near field, cap as a size floor)
 float prop_E(float d, float I, out float s_eff)
 {
-    float se2 = max(s_phys * s_phys, I / e_cap);
+    float se2 = max(s_phys * s_phys, I * l_intensity / e_cap);
     s_eff = sqrt(se2);
     float x = d / r_reach;
     if (x >= 1.0) return 0.0;
@@ -243,7 +244,7 @@ vec3 prop_projector(vec3 pos, vec3 n, vec3 v, vec3 dC, vec3 sC, float rough, flo
     float I = prop_kappa(l_falloff) * r_reach * r_reach * g;
     float s_eff;
     float d_a = length(pos - apex);
-    float se2 = max(s_phys * s_phys, I / (e_cap * g));
+    float se2 = max(s_phys * s_phys, I * l_intensity / (e_cap * g));
     s_eff = sqrt(se2);
     float x = d_c / r_reach;
     if (x >= 1.0) return vec3(0);
@@ -502,6 +503,7 @@ class Bench:
         uniform(p, 'lp', *ex['pos'])
         uniform(p, 's_phys', EMITTER_M)                  # every lamp is a 1 cm light (the prim's size is not used)
         uniform(p, 'e_cap', E_CAP_ATT if worn else E_CAP_PRIM)
+        uniform(p, 'l_intensity', float(ex['intensity']))
         uniform(p, 'r_reach', min(r * 1.5, R_CAP_ATT) if worn else r * 1.5)
         uniform(p, 'classic_mode', 0)
         uniform(p, 'is_proj', 1 if ex.get('proj') else 0)
@@ -805,6 +807,7 @@ def busy_now():
 
 
 def take_lock(max_wait_s=3600):
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     while True:
         try:
@@ -899,7 +902,11 @@ def run_timing():
                 break
             print('waiting for', b, flush=True)
             time.sleep(60)
-        print('busy at start:', busy_now() or 'none', time.strftime('%Y-%m-%d %H:%M:%S'), flush=True)
+        b = busy_now()
+        if b:
+            print('still busy:', b, '... no timing', flush=True)
+            return
+        print('busy at start: none', time.strftime('%Y-%m-%d %H:%M:%S'), flush=True)
         rows = timing()
         print('busy at end:', busy_now() or 'none', time.strftime('%Y-%m-%d %H:%M:%S'), flush=True)
     finally:
