@@ -795,7 +795,6 @@ class MC1Test(unittest.TestCase):
     def test_auto_handoff_accepts_a_late_first_arrival_on_the_retry_check(self):
         with tempfile.TemporaryDirectory() as tmp:
             fv = FakeViewer(projector=PoolModel())
-            real = pc.Run.teleport_once
 
             def late(run, kind, region, xyz, cfg):
                 fv.agent_region, fv.agent_pos = region, list(xyz)       # it arrives, but after the wait gave up
