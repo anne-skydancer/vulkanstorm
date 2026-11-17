@@ -355,6 +355,18 @@ void LLVOVolume::cleanupClass()
     sObjectMediaNavigateClient = NULL;
 }
 
+// <Vulkanstorm> projector shadow pool: push the extents the shape had before a real shape change (a server shrink would leave
+// the old caster). Called right after a successful setVolume, while the drawable still has its old extents (before any
+// shrinkWrap or rebuild). Not in markForUpdate: that also runs on selection and LOD unload, which must not dirty tiles.
+static void noteOldShapeForProjectorShadows(LLDrawable* drawable)
+{
+    if (drawable)
+    {
+        LLShadowDirtyFeed::noteDrawable(drawable, llprojectorpool::Cause::Edit);
+    }
+}
+// </Vulkanstorm>
+
 U32 LLVOVolume::processUpdateMessage(LLMessageSystem *mesgsys,
                                           void **user_data,
                                           U32 block_num, EObjectUpdateType update_type,
@@ -480,6 +492,7 @@ U32 LLVOVolume::processUpdateMessage(LLMessageSystem *mesgsys,
 
             if (setVolume(volume_params, 0))
             {
+                noteOldShapeForProjectorShadows(mDrawable.get()); // <Vulkanstorm/>
                 markForUpdate();
             }
         }
@@ -562,6 +575,7 @@ U32 LLVOVolume::processUpdateMessage(LLMessageSystem *mesgsys,
 
             if (setVolume(volume_params, 0))
             {
+                noteOldShapeForProjectorShadows(mDrawable.get()); // <Vulkanstorm/>
                 markForUpdate();
             }
             S32 res2 = unpackTEMessage(*dp);
@@ -3988,6 +4002,7 @@ bool LLVOVolume::setIsFlexible(bool is_flexible)
         res = setVolume(volume_params, 1);
         if (res)
         {
+            noteOldShapeForProjectorShadows(mDrawable.get()); // <Vulkanstorm/>
             markForUpdate();
         }
     }
