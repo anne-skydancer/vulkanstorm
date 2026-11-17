@@ -1655,6 +1655,14 @@ void LLRender::flush()
 
         mCount = 0;
 
+        // <Vulkanstorm> only an incomplete primitive was pending: nothing to draw (an empty buffer upload never returned)
+        if (count == 0)
+        {
+            resetStriders(0);
+            return;
+        }
+        // </Vulkanstorm>
+
         if (mBuffer)
         {
 
