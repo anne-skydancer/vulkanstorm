@@ -56,7 +56,6 @@
 
 // File constants
 static const size_t MAX_HDR_LEN = 20;
-
 static const char LEGACY_NON_HEADER[] = "<llsd>";
 const std::string LLSD_BINARY_HEADER("LLSD/Binary");
 const std::string LLSD_XML_HEADER("LLSD/XML");

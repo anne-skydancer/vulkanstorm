@@ -120,10 +120,9 @@ public:
         return body_bytes / 16 > MAX_NODES_DEFAULT ? body_bytes / 16 : MAX_NODES_DEFAULT;
     }
     void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; }
-    /// The budget set for the next parse (MAX_NODES_UNLIMITED if none); a parser that hands the parse to another
+    /// The budget set for the next parse (MAX_NODES_DEFAULT if none); a parser that hands the parse to another
     /// implementation passes this and the weights to it.
     size_t getMaxNodes() const { return mMaxNodes; }
-
 
 protected:
     /**
