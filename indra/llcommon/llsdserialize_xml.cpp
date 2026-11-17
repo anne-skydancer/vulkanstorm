@@ -300,19 +300,23 @@ private:
     bool depthLimitReached(); // <Vulkanstorm/>
     // <Vulkanstorm> Called with depthLimitReached(), before a value is added: once the node budget is spent, stop
     // expat and fail the parse, so a payload of many tiny values cannot build far more heap than its size.
-    bool nodeLimitReached()
+    // weight: LLSDParser::NODE_WEIGHT_MAP for a map, 1 otherwise; pop_element is false for an element not on mStackElements.
+    bool nodeLimitReached(size_t weight, bool pop_element = true)
     {
         if (mMaxNodes == LLSDParser::MAX_NODES_UNLIMITED)
         {
             return false;
         }
-        if (mNodesLeft > 0)
+        if (mNodesLeft >= weight)
         {
-            --mNodesLeft;
+            mNodesLeft -= weight;
             return false;
         }
         LL_WARNS() << "LLSD XML parse stopped: more than " << mMaxNodes << " values" << LL_ENDL;
-        mStackElements.pop();
+        if (pop_element)
+        {
+            mStackElements.pop();
+        }
         mNodesExceeded = true;
         XML_StopParser(mParser, XML_FALSE);
         startSkipping();
@@ -699,9 +703,17 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
     #endif // XML_PARSER_PERFORMANCE_TESTS
 
     ++mDepth;
-    if (mSkipping || mDepthExceeded || mNodesExceeded) // <Vulkanstorm/>
+    if (mDepthExceeded || mNodesExceeded) // <Vulkanstorm/>
     {
         return;
+    }
+    if (mSkipping)
+    {
+        // <Vulkanstorm> Only mDepth grows here in the viewer, but expat keeps a tag record for every open element:
+        // 16M nested <a> inside a scalar would cost about 800 MiB. Count them against the budget.
+        nodeLimitReached(LLSDParser::NODE_WEIGHT_SKIPPED_ELEMENT, false);
+        return;
+        // </Vulkanstorm>
     }
 
     Element element = readElement(name);
@@ -750,9 +762,10 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
         return startSkipping();
     }
 
+    const size_t weight = element == ELEMENT_MAP ? LLSDParser::NODE_WEIGHT_MAP : 1; // <Vulkanstorm/>
     if (mStack.empty())
     {
-        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached(weight)) { return; } // <Vulkanstorm/>
         mStack.push_back(&mResult);
     }
     else if (mStack.back()->isMap())
@@ -763,7 +776,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
             return startSkipping();
         }
 
-        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached(weight)) { return; } // <Vulkanstorm/>
         LLSD& map = *mStack.back();
         LLSD& newElement = map[std::move(mCurrentKey)];
         mStack.push_back(&newElement);
@@ -772,7 +785,7 @@ void LLSDXMLParser::Impl::startElementHandler(const XML_Char* name, const XML_Ch
     }
     else if (mStack.back()->isArray())
     {
-        if (depthLimitReached() || nodeLimitReached()) { return; } // <Vulkanstorm/>
+        if (depthLimitReached() || nodeLimitReached(weight)) { return; } // <Vulkanstorm/>
         LLSD& array = *mStack.back();
         array.append(LLSD());
         LLSD& newElement = array[array.size()-1];

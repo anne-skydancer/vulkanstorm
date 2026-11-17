@@ -91,15 +91,16 @@ public:
     void reset()    { doReset();    };
 
     /**
-     * Node budget: the most LLSD values (every scalar, map and array) one parse() or parseLines()
-     * may build before it fails with PARSE_FAILURE and an undefined result.
+     * Node budget, in units: the most LLSD a parse() or parseLines() may build before it fails with
+     * PARSE_FAILURE and an undefined result. A scalar or an array costs 1 unit, a map NODE_WEIGHT_MAP (4).
      *
-     * A value can take one byte of input (binary or notation '!', an empty array is six) but costs
-     * heap: about 100 to 300 bytes on MSVC depending on the shape (a scalar in an array about 100, an empty
-     * map or array element about 150 to 280). The input is the only bound otherwise, so a payload within
-     * its inflate cap (64 MiB for assets) or a long HTTP body could build gigabytes.
+     * A value can take one byte of input (binary or notation '!', an empty array is six) but costs heap:
+     * about 46 to 63 bytes on MSVC for a scalar or an array, and 146 to 282 for a map (std::map and its
+     * sentinel node), so a unit is at most about 70 bytes whatever the shape and the budget bounds memory,
+     * not just the count. The input is the only bound otherwise, so a payload within its inflate cap
+     * (64 MiB for assets) or a long HTTP body could build gigabytes.
      *
-     * MAX_NODES_DEFAULT (1 << 23, 1 to 2 GiB at worst) is the ceiling for sources without a better
+     * MAX_NODES_DEFAULT (1 << 23 units, about 0.6 GiB at worst) is the ceiling for sources without a better
      * measure. Sources that know their size use less or scale with it:
      *  - unzip_llsd with a byte cap: UNZIP_ASSET_MAX_NODES (see there);
      *  - HTTP and JSON replies: nodeBudgetForBytes(body size), which ties the heap to what the server sent;
@@ -107,6 +108,10 @@ public:
      */
     static constexpr size_t MAX_NODES_DEFAULT = size_t(1) << 23;
     static constexpr size_t MAX_NODES_UNLIMITED = 0;
+    static constexpr size_t NODE_WEIGHT_MAP = 4;
+    // The XML parser also counts each open element inside a skipped subtree (an unknown tag, a scalar's
+    // children): expat keeps a tag record (about 100 to 150 bytes) for every open element.
+    static constexpr size_t NODE_WEIGHT_SKIPPED_ELEMENT = 2;
     /// The budget for a body of body_bytes from a server: at least the default, and one node per 16 bytes
     /// above it. Real replies run at 50 bytes or more per node (AIS XML about 50), so they never reach it;
     /// a flood of tiny values is held to a heap proportional to what was sent.
@@ -115,6 +120,9 @@ public:
         return body_bytes / 16 > MAX_NODES_DEFAULT ? body_bytes / 16 : MAX_NODES_DEFAULT;
     }
     void setMaxNodes(size_t max_nodes) { mMaxNodes = max_nodes; }
+    /// The budget set for the next parse (MAX_NODES_UNLIMITED if none); a parser that hands the parse to another
+    /// implementation passes this and the weights to it.
+    size_t getMaxNodes() const { return mMaxNodes; }
 
 
 protected:
@@ -226,17 +234,17 @@ protected:
      * @brief Count one more LLSD value about to be built.
      * @return false, with a warning, once the node budget is spent; the parse then unwinds.
      */
-    bool chargeNode() const
+    bool chargeNode(size_t weight = 1) const
     {
         if (mMaxNodes == MAX_NODES_UNLIMITED)
         {
             return true;
         }
-        if (mNodesLeft == 0)
+        if (mNodesLeft < weight)
         {
             return nodeBudgetSpent();
         }
-        --mNodesLeft;
+        mNodesLeft -= weight;
         return true;
     }
     bool nodeBudgetSpent() const;
@@ -910,8 +918,9 @@ constexpr size_t UNZIP_NO_CAP = 0;
 // The node budget of unzip_llsd with a byte cap. The largest real blocks are a few thousand nodes: a rigged
 // mesh skin block (joint names and 4x4 bind matrices for up to about 110 joints) is about 2000, a decomposition
 // block and a materials reply a few hundred (hulls and vertex data are binary leaves), a mesh LOD block about
-// 12 per face. 1 << 20 leaves a margin of two orders of magnitude and, at about 100 to 300 bytes per node,
-// bounds a parse of a 64 MiB inflated block (UNZIP_ASSET_MAX_OUT) to about 100 to 300 MiB.
+// 12 per face, with a handful of maps (4 units each) in each. 1 << 20 units leave a margin of two orders of
+// magnitude and, at up to about 70 bytes per unit, bound a parse of a 64 MiB inflated block
+// (UNZIP_ASSET_MAX_OUT) to about 70 MiB.
 constexpr size_t UNZIP_ASSET_MAX_NODES = size_t(1) << 20;
 // Maximum nesting for LLSD from a remote or untrusted source: real mesh headers, metadata and assets nest
 // below ten levels, and the parser recursion and the LLSD destructor stay well inside the stack at 96.
