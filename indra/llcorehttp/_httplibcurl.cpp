@@ -133,6 +133,14 @@ ReplyCoding reply_coding(const char * value)
 // chunks. Returns NULL if the data does not decode or the output cannot be
 // stored; `not_a_stream` is then true if the data failed as a format error
 // at its start, before any output (the raw-deflate fallback's case).
+//
+// The decoded size is limited to HTTP_REPLY_MAX_DECODED, so a small Content-Encoded
+// reply (a decompression bomb) cannot exhaust memory. Over the limit the reply is
+// refused like corrupt data. The limit is far above any legitimate LLSD reply; the asset
+// CDN's mesh and texture bodies are not gzip or deflate encoded (see the Content-Encoding
+// note above: its value is "binary/octet-stream", which reply_coding() leaves alone).
+constexpr size_t HTTP_REPLY_MAX_DECODED = 256u * 1024 * 1024;
+
 LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits, bool & not_a_stream)
 {
     not_a_stream = false;
@@ -147,6 +155,7 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits, b
     char inbuf[16384];
     char outbuf[16384];
     bool ok(true), ended(false), next_member(false), input_done(false), full(false), first_call(true);
+    size_t total(0);
     while (ok)
     {
         if (z.avail_in == 0 && !input_done)
@@ -208,6 +217,14 @@ LLCore::BufferArray * inflate_reply(LLCore::BufferArray * in, int window_bits, b
         {
             next_member = false;
         }
+        if (produced && produced > HTTP_REPLY_MAX_DECODED - total)
+        {
+            LL_WARNS(LOG_CORE) << "Content-Encoded reply refused: it decodes to more than " << HTTP_REPLY_MAX_DECODED
+                               << " bytes." << LL_ENDL;
+            ok = false;
+            break;
+        }
+        total += produced;
         if (produced && out->append(outbuf, produced) != produced)
         {
             ok = false;         // BufferArray could not allocate

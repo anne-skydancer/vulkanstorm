@@ -2446,52 +2446,130 @@ namespace tut
         ensure("no result", res == NULL);
     }
 
+    // A zlib or gzip stream of n zero bytes, fed to deflate in 1 MiB pieces so the test never holds the whole input
+    static std::string zeroStream(size_t n, int window_bits)
+    {
+        z_stream strm = {};
+        deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, window_bits, 8, Z_DEFAULT_STRATEGY);
+        const std::string piece(1024 * 1024, '\0');
+        std::string out;
+        U8 buf[16384];
+        size_t left = n;
+        int ret = Z_OK;
+        do
+        {
+            const size_t take = left < piece.size() ? left : piece.size();
+            left -= take;
+            strm.next_in = (Bytef*)piece.data();
+            strm.avail_in = (uInt)take;
+            const int flush = left ? Z_NO_FLUSH : Z_FINISH;
+            do
+            {
+                strm.next_out = buf;
+                strm.avail_out = sizeof(buf);
+                ret = deflate(&strm, flush);
+                out.append((char*)buf, sizeof(buf) - strm.avail_out);
+            } while (strm.avail_out == 0);
+        } while (left);
+        deflateEnd(&strm);
+        return out;
+    }
+
+    // The binary LLSD of a map holding a string of n bytes; its size is what the unzip cap compares
+    static std::string binaryOf(const LLSD& src)
+    {
+        std::stringstream ss;
+        LLSDSerialize::toBinary(src, ss);
+        return std::move(ss).str();
+    }
+
+    static std::string zlibOf(const std::string& raw)
+    {
+        std::string z(compressBound((uLong)raw.size()), '\0');
+        uLongf len = (uLongf)z.size();
+        compress((Bytef*)&z[0], &len, (const Bytef*)raw.data(), (uLong)raw.size());
+        z.resize(len);
+        return z;
+    }
+
+    static_assert(UNZIP_ASSET_MAX_OUT == 64u * 1024 * 1024, "asset cap");
+    static_assert(UNZIP_NAVMESH_MAX_OUT == 256u * 1024 * 1024, "navmesh cap");
+
     template<> template<>
     void TestNavMeshUnzipObject::test<7>()
     {
-        set_test_name("unzip_llsdNavMesh output cap: just under succeeds, over fails, bomb over the default cap fails");
-        const std::string body = gzipString(std::string(1000, 'a'));
+        set_test_name("unzip_llsdNavMesh output cap: exact boundary over three chunks, bomb over the cap");
+        // 40000 bytes = three 16 KiB chunks; the buffer must never exceed the cap
+        const std::string body = gzipString(std::string(40000, 'a'));
         bool valid = false;
         size_t outsize = 0;
         {
             std::istringstream is(body);
-            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 1000);
-            ensure("exactly at the cap succeeds", valid && res && outsize == 1000);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 40000);
+            ensure("cap == size succeeds", valid && res && outsize == 40000);
             free(res);
         }
         {
             std::istringstream is(body);
-            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 999);
-            ensure("one over the cap fails", !valid && res == NULL);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)body.size(), 39999);
+            ensure("cap == size - 1 fails", !valid && res == NULL);
         }
         {
-            const std::string bomb = gzipString(std::string(UNZIP_NAVMESH_MAX_OUT + 1, '\0'));
+            const size_t cap = 4u * 1024 * 1024;
+            const std::string bomb = zeroStream(cap + 1, 15 | 16);
             std::istringstream is(bomb);
-            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)bomb.size());
-            ensure("bomb over the default cap fails", !valid && res == NULL);
+            U8* res = unzip_llsdNavMesh(valid, outsize, is, (S32)bomb.size(), cap);
+            ensure("bomb over the cap fails", !valid && res == NULL);
         }
     }
 
     template<> template<>
     void TestNavMeshUnzipObject::test<8>()
     {
-        set_test_name("unzip_llsd output cap: just under succeeds, over fails with ZR_SIZE_ERROR, bomb over the mesh cap fails");
-        LLSD src = LLSD::emptyMap();
-        src["s"] = std::string(5000, 'x');
-        const std::string z = zip_llsd(src);
-        const U8* in = reinterpret_cast<const U8*>(z.data());
+        set_test_name("unzip_llsd output cap: exact boundary (single and multi chunk), bomb over the asset cap");
+        for (size_t n : { (size_t)5000, (size_t)1200 * 1024 })
+        {
+            LLSD src = LLSD::emptyMap();
+            std::string payload(n, 'x');
+            U32 seed = 7;
+            for (size_t i = 0; i < n; i += 5)
+            {
+                seed = seed * 1664525u + 1013904223u;
+                payload[i] = (char)(seed >> 24);
+            }
+            src["s"] = payload;
+            const size_t size = binaryOf(src).size();
+            const std::string z = zip_llsd(src);
+            const U8* in = reinterpret_cast<const U8*>(z.data());
+            LLSD out;
+            ensure_equals("cap == size", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), size), (S32)LLUZipHelper::ZR_OK);
+            ensure("value", out["s"].asString() == payload);
+            ensure_equals("cap == size - 1", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), size - 1), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+            ensure_equals("no cap", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), UNZIP_NO_CAP), (S32)LLUZipHelper::ZR_OK);
+        }
+        // a bomb over the real asset cap: 64 MiB + 1 of zeros, streamed into deflate
+        const std::string bomb = zeroStream(UNZIP_ASSET_MAX_OUT + 1, 15);
         LLSD out;
-        ensure_equals("uncapped", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size()), (S32)LLUZipHelper::ZR_OK);
-        ensure_equals("value", out["s"].asString().size(), (size_t)5000);
-        ensure_equals("large cap", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), 1u << 20), (S32)LLUZipHelper::ZR_OK);
-        ensure_equals("tiny cap", (S32)LLUZipHelper::unzip_llsd(out, in, (S32)z.size(), 100), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+        ensure_equals("bomb over the asset cap", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(bomb.data()), (S32)bomb.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+    }
 
-        std::string raw(UNZIP_MESH_MAX_OUT + 1, '\0');
-        std::string bomb(compressBound((uLong)raw.size()), '\0');
-        uLongf blen = (uLongf)bomb.size();
-        ensure("compress", compress((Bytef*)&bomb[0], &blen, (const Bytef*)raw.data(), (uLong)raw.size()) == Z_OK);
-        bomb.resize(blen);
-        std::istringstream is(bomb);
-        ensure_equals("bomb over the mesh cap", (S32)LLUZipHelper::unzip_llsd(out, is, (S32)bomb.size(), UNZIP_MESH_MAX_OUT), (S32)LLUZipHelper::ZR_SIZE_ERROR);
+    template<> template<>
+    void TestNavMeshUnzipObject::test<9>()
+    {
+        set_test_name("unzip_llsd: a tiny block with a huge array count fails cleanly");
+        // 'a' with a count of 0xFFFFFFFF, 0x7FFFFFFF and 0x80000000: each used to throw from the reserve
+        for (U32 count : { 0xFFFFFFFFu, 0x7FFFFFFFu, 0x80000000u })
+        {
+            std::string raw;
+            raw.push_back('[');
+            for (int shift = 24; shift >= 0; shift -= 8)
+            {
+                raw.push_back((char)(count >> shift));
+            }
+            raw.push_back(']');
+            const std::string z = zlibOf(raw);
+            LLSD out;
+            ensure_equals("huge array count", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_PARSE_ERROR);
+        }
     }
 }
