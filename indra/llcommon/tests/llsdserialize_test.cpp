@@ -2395,11 +2395,13 @@ namespace tut
     }
 
     // A zlib or gzip stream of n zero bytes, fed to deflate in 1 MiB pieces so the test never holds the whole input
-    static std::string zeroStream(size_t n, int window_bits)
+    // (prefix, if any, replaces the first bytes of the zeros)
+    static std::string zeroStream(size_t n, int window_bits, const std::string& prefix = std::string())
     {
         z_stream strm = {};
         deflateInit2(&strm, Z_BEST_COMPRESSION, Z_DEFLATED, window_bits, 8, Z_DEFAULT_STRATEGY);
-        const std::string piece(1024 * 1024, '\0');
+        std::string piece(1024 * 1024, '\0');
+        piece.replace(0, prefix.size(), prefix);
         std::string out;
         U8 buf[16384];
         size_t left = n;
@@ -2408,6 +2410,10 @@ namespace tut
         {
             const size_t take = left < piece.size() ? left : piece.size();
             left -= take;
+            if (left + take != n)
+            {
+                piece.assign(piece.size(), '\0');   // only the first piece carries the prefix
+            }
             strm.next_in = (Bytef*)piece.data();
             strm.avail_in = (uInt)take;
             const int flush = left ? Z_NO_FLUSH : Z_FINISH;
@@ -2505,7 +2511,7 @@ namespace tut
     void TestNavMeshUnzipObject::test<9>()
     {
         set_test_name("unzip_llsd: a tiny block with a huge array count fails cleanly");
-        // 'a' with a count of 0xFFFFFFFF, 0x7FFFFFFF and 0x80000000: each used to throw from the reserve
+        // '[' with a count of 0xFFFFFFFF, 0x7FFFFFFF and 0x80000000: each used to throw from the reserve
         for (U32 count : { 0xFFFFFFFFu, 0x7FFFFFFFu, 0x80000000u })
         {
             std::string raw;
@@ -2519,5 +2525,26 @@ namespace tut
             LLSD out;
             ensure_equals("huge array count", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_PARSE_ERROR);
         }
+    }
+
+    template<> template<>
+    void TestNavMeshUnzipObject::test<11>()
+    {
+        set_test_name("unzip_llsd: nested arrays with huge counts over a zero-padded block fail without a large allocation");
+        // 95 nested '[' each claiming 0x03FFFFF0 elements, then zeros up to 64 MiB: every count fits the bytes left,
+        // so only the reservation limit stands between this block and tens of GB of reserved memory
+        std::string prefix;
+        for (int depth = 0; depth < 95; ++depth)
+        {
+            prefix.push_back('[');
+            const U32 count = 0x03FFFFF0u;
+            for (int shift = 24; shift >= 0; shift -= 8)
+            {
+                prefix.push_back((char)(count >> shift));
+            }
+        }
+        const std::string z = zeroStream(UNZIP_ASSET_MAX_OUT, 15, prefix);
+        LLSD out;
+        ensure_equals("nested huge counts", (S32)LLUZipHelper::unzip_llsd(out, reinterpret_cast<const U8*>(z.data()), (S32)z.size(), UNZIP_ASSET_MAX_OUT), (S32)LLUZipHelper::ZR_PARSE_ERROR);
     }
 }
