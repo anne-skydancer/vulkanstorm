@@ -1413,6 +1413,11 @@ void LLProjectorShadows::update(LLCamera& camera)
     bool lamp_ok = false;
     SpotGeom lamp_g;
     Pose lamp_pose;
+    // the lamp's sizing inputs, read once per lamp with its geometry (every cell of a lamp shares them: the grid is the lamp's)
+    F32 lamp_far_clip = 0.f;
+    float lamp_origin[3] = {};
+    float lamp_fwd[3] = {};
+    double lamp_tan_w = 0.0;
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector sweep"); // <Vulkanstorm> hotfix: where the per-frame update spends its time
         for (auto& entry : mRecords)
@@ -1431,6 +1436,15 @@ void LLProjectorShadows::update(LLCamera& camera)
                 if (lamp_ok)
                 {
                     lamp_pose = light_pose(lamp_g, rec.drawable);
+                    lamp_far_clip = lamp_g.dist + lamp_g.radius * 1.5f; // spot_matrices' far plane
+                    // the lamp's axial direction and the cell's wider axis: the camera's sizing input below
+                    LLVector3 fwd(0.f, 0.f, -1.f);
+                    fwd *= lamp_g.rot;
+                    lamp_origin[0] = lamp_g.origin.mV[VX]; lamp_origin[1] = lamp_g.origin.mV[VY]; lamp_origin[2] = lamp_g.origin.mV[VZ];
+                    lamp_fwd[0] = fwd.mV[VX]; lamp_fwd[1] = fwd.mV[VY]; lamp_fwd[2] = fwd.mV[VZ];
+                    const double ty = std::tan(0.5 * double(lamp_g.fov));
+                    const double tx = ty * double(lamp_g.scale.mV[VX] / lamp_g.scale.mV[VY]);
+                    lamp_tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the tile is square
                 }
             }
             const SpotGeom& g = lamp_g;
@@ -1445,7 +1459,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             rec.prevPose = rec.curPose;
             rec.prevPoseValid = true;
             rec.poseStale = rec.drawn.valid && poseChanged(rec.drawnPose, rec.curPose);
-            const F32 far_clip = g.dist + g.radius * 1.5f; // spot_matrices' far plane
+            const F32 far_clip = lamp_far_clip;
             if (shifted || !rec.volumeValid || poseChanged(rec.volumePose, rec.curPose))
             {
                 rec.core = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, 0, false);
@@ -1454,14 +1468,7 @@ void LLProjectorShadows::update(LLCamera& camera)
                 rec.volumeValid = true;
             }
             // the tile's size from the camera position: its distance to the tile's interior volume, and the lamp's axial depth of the camera
-            LLVector3 fwd(0.f, 0.f, -1.f);
-            fwd *= g.rot;
-            const float lamp_origin[3] = { g.origin.mV[VX], g.origin.mV[VY], g.origin.mV[VZ] };
-            const float lamp_fwd[3] = { fwd.mV[VX], fwd.mV[VY], fwd.mV[VZ] };
-            const double ty = std::tan(0.5 * double(g.fov));
-            const double tx = ty * double(g.scale.mV[VX] / g.scale.mV[VY]);
-            const double tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the cell's wider axis: the tile is square
-            rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
+            rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, lamp_tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
             rec.base = rec.hyst.size();
             if (rec.grid.cells())
             {
@@ -1502,7 +1509,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         for (auto& entry : mRecords)
         {
             const Record& rec = entry.second;
-            if (rec.placed && rec.drawnFrame != 0 && rec.volumeValid)
+            if (rec.placed && rec.drawnFrame != 0 && rec.volumeValid && !rec.pending) // a pending tile's hit is discarded below
             {
                 TileVolume tv;
                 tv.key = rec.key;
@@ -1542,7 +1549,6 @@ void LLProjectorShadows::update(LLCamera& camera)
     // the work list: the verdict of every placed tile (llprojectorpool::classifyTile). A static scene has none.
     std::vector<StaticItem> static_items;
     std::vector<DynamicItem> dynamic_items;
-    std::map<U32, Cause> causes;
     std::set<U32> own_faces;  // the layer faces that hold the own avatar: they run every frame, past the cap
     std::set<U32> layer_only; // the dynamic items that are an avatar layer alone (the others redraw the whole tile)
     mLightsWithoutTile = 0;
@@ -1550,9 +1556,28 @@ void LLProjectorShadows::update(LLCamera& camera)
     mAvatarTiles = 0;
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector classify"); // <Vulkanstorm> hotfix: where the per-frame update spends its time
-        for (auto& entry : mRecords)
+        // the avatar boxes that can touch the current lamp's tiles (its records are consecutive): the pairing below tests only these
+        std::vector<Aabb> run_own, run_avatars;
+        U32 run_lamp = 0;
+        bool run_open = false;
+        for (auto entry = mRecords.begin(); entry != mRecords.end(); ++entry)
         {
-            Record& rec = entry.second;
+            Record& rec = entry->second;
+            if (!run_open || rec.lamp != run_lamp)
+            {
+                run_open = true;
+                run_lamp = rec.lamp;
+                BoxFilter filter;
+                for (auto next = entry; next != mRecords.end() && next->second.lamp == run_lamp; ++next)
+                {
+                    if (next->second.placed)
+                    {
+                        filter.add(next->second.volume.bounds);
+                    }
+                }
+                filter.select(own_boxes, run_own);
+                filter.select(avatar_boxes, run_avatars);
+            }
             if (rec.drawnFrame == 0)
             {
                 ++mLightsWithoutTile;
@@ -1564,7 +1589,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             rec.avatarCount = 0;
             rec.avatarDist = std::numeric_limits<F32>::infinity();
             bool holds_own = false;
-            for (const Aabb& b : own_boxes)
+            for (const Aabb& b : run_own)
             {
                 if (intersects(rec.volume, b))
                 {
@@ -1581,7 +1606,7 @@ void LLProjectorShadows::update(LLCamera& camera)
                     }
                 }
             }
-            for (const Aabb& b : avatar_boxes)
+            for (const Aabb& b : run_avatars)
             {
                 if (intersects(rec.volume, b))
                 {
@@ -1612,7 +1637,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             {
                 continue;
             }
-            causes[rec.key] = verdict.cause;
+            rec.verdictCause = verdict.cause; // read by this frame's pick (renderTile) only
             // the prediction of a full render: the fixed layer, plus the avatar layer when an avatar is in the light
             const F32 full_ms = rec.lastCpuMs + (rec.holdsAvatar ? rec.lastAvatarMs : 0.f);
             if (verdict.needs_layer)
@@ -1720,7 +1745,7 @@ void LLProjectorShadows::update(LLCamera& camera)
                 }
                 else
                 {
-                    renderTile(it->second, causes[key], dynamic);
+                    renderTile(it->second, it->second.verdictCause, dynamic);
                 }
                 own_ms += mLastFrameRenderMs - before;
                 first_pick = false;
