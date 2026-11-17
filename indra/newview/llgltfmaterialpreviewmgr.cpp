@@ -432,7 +432,7 @@ bool LLGLTFPreviewTexture::render()
     glClearColor(0, 0, 0, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    LLGLDepthTest(GL_FALSE);
+    LLGLDepthTest depth(GL_FALSE); // <Vulkanstorm/> named, as upstream does: the unnamed temporary was a no-op
     LLGLDisable stencil(GL_STENCIL_TEST);
     LLGLDisable scissor(GL_SCISSOR_TEST);
     SetTemporarily<bool> no_dof(&LLPipeline::RenderDepthOfField, false);
