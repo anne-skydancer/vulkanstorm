@@ -893,10 +893,11 @@ bool LLMessageSystem::isHighPriorityMessage(const LLPacketBuffer& pkt) const
     // WORKAROUND: All middle- and low-frequency messages are high-priority except AvatarAppearance
     //
     // <Vulkanstorm> fix of LL #6017: the upstream test (header[1] != 255 && header[2] != 0 &&
-    // header[3] != 158) made every low-frequency message with a non-zero high or low id byte
-    // low priority, and the first fix could not match a zero-coded AvatarAppearance (it is
-    // Zerocoded in message_template.msg), which arrives as FF FF 00 01 9E. The classification
-    // lives in llmessagepriority.h, with its own test.
+    // header[3] != 158) was false for every Low and Fixed message (header[1] == 255, among them
+    // PacketAck) and for Medium messages whose first body byte is 0, so those were deferred
+    // to the low priority queue, not just AvatarAppearance. The first fix could not match a
+    // zero-coded AvatarAppearance (it is Zerocoded in message_template.msg), which arrives as
+    // FF FF 00 01 9E. The classification lives in llmessagepriority.h, with its own test.
     return LLMessagePriority::isHighPriority((const U8*)pkt.getData(), pkt.getSize());
     // </Vulkanstorm>
 }
@@ -919,10 +920,29 @@ S32 LLMessageSystem::receivePacketOrDrop(char* datap, bool& packet_id_already_ch
     {
         LLHost invalid_host;
         LLPacketBuffer pkt(invalid_host, nullptr, 0);
-        if (!mHighPriorityInbound.popPacket(pkt))
+        // <Vulkanstorm> Fairness: after INBOUND_HIGH_PER_LOW high priority packets in a row,
+        // take one low priority packet so a flood of high priority ones cannot starve
+        // ObjectUpdate, terse updates and LayerData.
+        constexpr S32 INBOUND_HIGH_PER_LOW = 8;
+        bool popped = false;
+        if (mHighPopsSinceLow >= INBOUND_HIGH_PER_LOW)
         {
-            mLowPriorityInbound.popPacket(pkt);
+            mHighPopsSinceLow = 0;
+            popped = mLowPriorityInbound.popPacket(pkt);
         }
+        if (!popped)
+        {
+            if (mHighPriorityInbound.popPacket(pkt))
+            {
+                ++mHighPopsSinceLow;
+            }
+            else
+            {
+                mLowPriorityInbound.popPacket(pkt);
+                mHighPopsSinceLow = 0;
+            }
+        }
+        // </Vulkanstorm>
 
         S32 packet_size = pkt.getSize();
         mLastSender      = pkt.getHost();
@@ -1080,7 +1100,9 @@ S32 LLMessageSystem::bufferInboundPacket()
             }
         }
 
-        if (isHighPriorityMessage(pkt))
+        // <Vulkanstorm> Only packets from a known circuit may queue as high priority: the
+        // message number is read before any authentication, so any UDP source could set it.
+        if (cdp && isHighPriorityMessage(pkt))
         {
             mHighPriorityInbound.pushPacket(pkt);
         }
@@ -1123,12 +1145,12 @@ void LLMessageSystem::dumpPacketRingStats()
 {
     mNumDroppedPacketsTotal += mNumDroppedPackets;
     LL_INFOS("Messaging") << "buffered_packets=" << getNumBufferedPackets()
-                          << "buffered_bytes=" << (mHighPriorityInbound.getNumBufferedBytes() + mLowPriorityInbound.getNumBufferedBytes())
-                          << "recently_dropped=" << mNumDroppedPackets
-                          << "total_dropped=" << mNumDroppedPacketsTotal
-                          << "dropped_percentage=" << mDropPercentage << "%"
-                          << "bytes_IN=" << mActualBytesIn
-                          << "bytes_OUT=" << mActualBytesOut << LL_ENDL;
+                          << " buffered_bytes=" << (mHighPriorityInbound.getNumBufferedBytes() + mLowPriorityInbound.getNumBufferedBytes())
+                          << " recently_dropped=" << mNumDroppedPackets
+                          << " total_dropped=" << mNumDroppedPacketsTotal
+                          << " dropped_percentage=" << mDropPercentage << "%"
+                          << " bytes_IN=" << mActualBytesIn
+                          << " bytes_OUT=" << mActualBytesOut << LL_ENDL;
     mNumDroppedPackets = 0;
 }
 
