@@ -42,8 +42,9 @@ class LLVector4a;
 // Threads: every hook runs on the main thread (the render thread is the main thread in this viewer). A hook that runs elsewhere
 // changes nothing and flags the next frame "everything is stale", which is safe and costs one redraw of every tile. The
 // hooks are no-ops until a cache switches the feed on (setTracking, per owner); the classifier (noteServerUpdate) is the exception and
-// always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list;
-// nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
+// always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list and
+// its two main-thread scope markers (TextureEntryRebuild, OwnRebuild: a drawable pointer each, only compared); nothing here is reached
+// from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
 class LLShadowDirtyFeed
 {
 public:
@@ -93,8 +94,46 @@ public:
     static void pushExtents(LLDrawable* drawable, Cause cause); // the drawable's extents, no skip test, no flag refresh
 
     // LLPipeline::markRebuild: only a rebuild that can change the picture counts (llprojectorpool::rebuildDirties: volume, rigged,
-    // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set).
+    // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set). Inside a TextureEntryRebuild it pushes nothing (below).
     static void noteRebuild(LLDrawable* drawable, U32 rebuild_flag);
+
+    // Around a texture-entry setter's own rebuild request (LLVOVolume::setTEColor's dirtyMesh; setTEMaterialID, setTEMaterialParams and
+    // setTEGLTFMaterialOverride with their markTextured): REBUILD_ALL, because the renderer rebuilds the whole prim for a tint or a material,
+    // not because its shape moved (lamp shadows S2: a script's tint, emissive or PBR colour toggled with its light). The setter's
+    // markTextured applies the silhouette rule; the request itself pushes nothing, and it marks the object (POOL_TE_REBUILD,
+    // llprojectorpool::textureEntryMarkAfterRequest) so that the rebuild's own pushes apply the rule again (OwnRebuild). Main thread
+    // (off it, or while nothing tracks, it does nothing and the request is counted as before).
+    class TextureEntryRebuild
+    {
+    public:
+        explicit TextureEntryRebuild(LLDrawable* drawable);
+        ~TextureEntryRebuild();
+        TextureEntryRebuild(const TextureEntryRebuild&) = delete;
+        TextureEntryRebuild& operator=(const TextureEntryRebuild&) = delete;
+    private:
+        bool mActive = false;
+        const LLDrawable* mPrevDrawable = nullptr;
+        bool mPrevQueuedShape = false;
+        bool mPrevKeyChanged = false;
+    };
+
+    // LLPipeline::updateGeom, around one drawable's own rebuild (updateDrawableGeom): the pushes the rebuild makes for this drawable (its
+    // octree move in LLVOVolume::genBBoxes, and completed()) follow what asked for it. With the texture-entry mark only a silhouette change
+    // pushes (llprojectorpool::ownRebuildPushes); otherwise they push as before. completed(): a rebuild that waited (a volume or rigged
+    // rebuild, or a mesh that loaded) changes the picture when it is done, so it pushes then; the mark ends. Main thread (updateGeom).
+    class OwnRebuild
+    {
+    public:
+        explicit OwnRebuild(LLDrawable* drawable);
+        ~OwnRebuild();
+        void completed();
+        OwnRebuild(const OwnRebuild&) = delete;
+        OwnRebuild& operator=(const OwnRebuild&) = delete;
+    private:
+        LLDrawable* mDrawable = nullptr;
+        LLDrawable* mPrev = nullptr;
+        bool mPush = false;
+    };
 
     // LLVOVolume::notifyMeshLoaded: a mesh arrived (it raises REBUILD_GEOMETRY, which markRebuild does not count): the extents are
     // pushed now and again when the rebuild it waits for completes (LLPipeline::updateGeom asks meshLoaded and clears it).
@@ -103,11 +142,13 @@ public:
     static void clearMeshLoaded(const LLDrawable* drawable);
 
     // LLPipeline::markTextured: a texture, material, bump, glow or colour change of a prim. It pushes only when the prim's silhouette key
-    // changed (llprojectorpool::texturedDirties: its blended, alpha-masked or alpha-textured faces and what shapes their holes); an opaque
-    // prim's texture changes, animated textures, fullbright, glow, shine, bump, RGB tints and the light's own colour never push (blinker
-    // scripts toggle them with the light). A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any
-    // component count; its REBUILD_VOLUME for 4-component textures reaches noteRebuild as well). A prim the feed has not seen since
-    // tracking started (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like now.
+    // changed (llprojectorpool::texturedDirties: its blended, alpha-masked or alpha-textured faces and what shapes their holes, and its
+    // double-sided glTF faces); an opaque prim's texture changes, animated textures, fullbright, glow, shine, bump, RGB tints, emissive, the
+    // PBR colour and the light's own colour never push (blinker scripts toggle them with the light). A key change also ends the
+    // texture-entry mark: the faces move to their new passes when the rebuild completes, which pushes again. A texture that finishes loading
+    // reaches this hook through LLFace::dirtyTexture's markTextured (any component count; its REBUILD_VOLUME for 4-component textures reaches
+    // noteRebuild as well). A prim the feed has not seen since tracking started (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like
+    // now.
     static void noteTextured(LLDrawable* drawable);
 
     // LLPipeline::shiftObjects moved agent space by `offset`: pending boxes move with it.
@@ -137,7 +178,9 @@ public:
 
 private:
     static void push(const llprojectorpool::Aabb& box, Cause cause);
-    static bool skipped(LLDrawable* drawable, LLViewerObject* object);
+    // true when the hooks skip the drawable; `edge` (optional) says it was not skipped because it just became active or static again,
+    // which must push whatever else the hook's rule says
+    static bool skipped(LLDrawable* drawable, LLViewerObject* object, bool* edge = nullptr);
 
     static std::atomic<U32> sTracking; // the owners tracking, a mask of Owner
 };

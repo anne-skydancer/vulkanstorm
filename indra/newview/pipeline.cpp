@@ -3177,18 +3177,13 @@ void LLPipeline::updateGeom(F32 max_dtime)
                 drawablep->clearState(LLDrawable::FOR_UNLOAD);
             }
 
-            // <Vulkanstorm> the projector shadow pool: a rebuild that waited (a mesh not yet loaded) changes the picture when it completes
-            const bool pool_rebuild = LLShadowDirtyFeed::tracking() &&
-                                      (drawablep->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_RIGGED) ||
-                                       LLShadowDirtyFeed::meshLoaded(drawablep));
+            // <Vulkanstorm> the projector shadow pool: this drawable's own rebuild. A rebuild that waited (a mesh not yet loaded) changes the
+            // picture when it completes; one that only texture-entry setters asked for (a tint, a material) pushes only a silhouette change
+            LLShadowDirtyFeed::OwnRebuild pool_rebuild(drawablep);
             // </Vulkanstorm>
             if (updateDrawableGeom(drawablep))
             {
-                if (pool_rebuild)
-                {
-                    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit); // <Vulkanstorm/>
-                    LLShadowDirtyFeed::clearMeshLoaded(drawablep);
-                }
+                pool_rebuild.completed(); // <Vulkanstorm/>
                 drawablep->clearState(LLDrawable::IN_REBUILD_Q);
                 mBuildQ1.erase(curiter);
             }
