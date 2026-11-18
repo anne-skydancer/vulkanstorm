@@ -67,7 +67,8 @@ namespace LLTextureFetchPolicy
     // thread, updateRequestPriority's task on the fetch thread): a data race, and a comparison that can
     // contradict itself during the sort (std::partial_sort, std::set), which then breaks its ordering.
     // Greater priority first; equal priorities are equivalent, so a std::set keeps the first one inserted,
-    // as the set of requests ordered by the live value did.
+    // as the set of requests ordered by the live value did (upstream behaviour, kept: the UDP list sends one
+    // request per priority and round; a tie-break would change which requests are sent).
     template <typename Request>
     struct PrioritySnapshot
     {
