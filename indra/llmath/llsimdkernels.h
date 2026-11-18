@@ -208,7 +208,10 @@ namespace LLSimdKernels
     }
 
     // --- K5: eight boxes against a frustum and a sphere ------------------------------------------------------------------
-    // One box per lane, structure of arrays. Lanes without a box may hold any value; their results are not meaningful.
+    // One box per lane, structure of arrays. A caller with fewer than eight boxes fills the other lanes with zeros and
+    // ignores their results: never leave them uninitialised (memory checkers flag the read) or holding stale values,
+    // which may be denormals (the viewer runs without denormals-are-zero, so every operation on one costs a microcode
+    // assist).
 
     // Boxes as centre and half size per axis (LLCamera's 'center' and 'radius').
     struct alignas(32) CenterRadius8
@@ -245,8 +248,13 @@ namespace LLSimdKernels
 #if defined(__AVX2__)
     namespace detail
     {
-        // LLCamera's sFrustumScaler: per plane octant mask, the sign of the box corner along each axis.
-        alignas(16) inline constexpr F32 kFrustumScaler[8][4] =
+        // A plane's octant mask holds one sign bit per axis of its normal (LLPlane::calcPlaneMask), so it lies below
+        // kOctants. LLCamera marks an ignored plane with a mask above (PLANE_MASK_NONE) and skips the masks of
+        // PLANE_MASK_NUM and above; llcamera.cpp asserts that PLANE_MASK_NUM equals kOctants.
+        inline constexpr U32 kOctants = 8;
+
+        // LLCamera's sFrustumScaler: per octant mask, the sign of the box corner along each axis.
+        alignas(16) inline constexpr F32 kFrustumScaler[kOctants][4] =
         {
             { -1.f, -1.f, -1.f, 0.f }, { 1.f, -1.f, -1.f, 0.f }, { -1.f, 1.f, -1.f, 0.f }, { 1.f, 1.f, -1.f, 0.f },
             { -1.f, -1.f,  1.f, 0.f }, { 1.f, -1.f,  1.f, 0.f }, { -1.f, 1.f,  1.f, 0.f }, { 1.f, 1.f,  1.f, 0.f },
@@ -254,11 +262,12 @@ namespace LLSimdKernels
     }
 
     // K5: out[k] = what LLCamera::AABBInFrustum returns for box k (0 outside, 1 partly in, 2 fully in), tested against
-    // planes [0, plane_count) whose octant mask is below 8, except skip_plane (LLCamera::AGENT_PLANE_FAR for
-    // AABBInFrustumNoFarClip; an index of plane_count or more for none). Callers use LLCamera::AABBInFrustum8 and
-    // AABBInFrustumNoFarClip8, which pass the camera's planes and fall back to the one-box functions without AVX2. The SSE
-    // loop leaves at the first plane the box lies outside of; here every plane is tested and the decisions are ORed, which
-    // gives the same answer: 0 when any plane has the box outside, else 1 when any plane cuts it, else 2.
+    // planes [0, plane_count) whose mask is an octant (below detail::kOctants), except skip_plane
+    // (LLCamera::AGENT_PLANE_FAR for AABBInFrustumNoFarClip; an index of plane_count or more for none). Callers use
+    // LLCamera::AABBInFrustum8 and AABBInFrustumNoFarClip8, which pass the camera's planes and masks and fall back to the
+    // one-box functions without AVX2. The SSE loop leaves at the first plane the box lies outside of; here every plane is
+    // tested and the decisions are ORed, which gives the same answer: 0 when any plane has the box outside, else 1 when
+    // any plane cuts it, else 2.
     inline void aabbInFrustum8(const LLPlane* planes, const U8* masks, U32 plane_count, U32 skip_plane,
                                const CenterRadius8& boxes, S32* out)
     {
@@ -272,8 +281,8 @@ namespace LLSimdKernels
         __m256 partial = _mm256_setzero_ps();
         for (U32 i = 0; i < plane_count; i++)
         {
-            const U8 mask = masks[i];
-            if (i == skip_plane || mask >= 8)
+            const U32 mask = masks[i];
+            if (i == skip_plane || mask >= detail::kOctants)
             {
                 continue;
             }

@@ -208,8 +208,9 @@ public:
     S32 AABBInRegionFrustum(const LLVector4a& center, const LLVector4a& radius);
     S32 AABBInFrustumNoFarClip(const LLVector4a& center, const LLVector4a& radius, const LLPlane* planes = NULL);
     S32 AABBInRegionFrustumNoFarClip(const LLVector4a& center, const LLVector4a& radius);
-    // <Vulkanstorm> multi-core stage 3 (K5): out[k] is what AABBInFrustum / AABBInFrustumNoFarClip return for box k of
-    // eight, bit for bit (AVX2 kernel, eight boxes per register; the one-box functions without AVX2).
+    // <Vulkanstorm> multi-core stage 3 (K5): out[k] is the decision AABBInFrustum / AABBInFrustumNoFarClip return for box
+    // k of eight (AVX2 kernel, eight boxes per register; the one-box functions without AVX2). Lanes without a box hold
+    // zeros (llsimdkernels.h).
     void AABBInFrustum8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes = NULL);
     void AABBInFrustumNoFarClip8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes = NULL);
     // </Vulkanstorm>
@@ -230,6 +231,11 @@ protected:
     void calculateFrustumPlanes();
     void calculateFrustumPlanes(F32 left, F32 right, F32 top, F32 bottom);
     void calculateFrustumPlanesFromWindow(F32 x1, F32 y1, F32 x2, F32 y2);
+
+    // <Vulkanstorm> multi-core stage 3 (K5): AABBInFrustum8 (far_clip) and AABBInFrustumNoFarClip8, defined in llcamera.cpp
+private:
+    inline void AABBInFrustum8Impl(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes, bool far_clip);
+    // </Vulkanstorm>
 } LL_ALIGN_POSTFIX(16);
 
 

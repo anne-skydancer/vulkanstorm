@@ -2191,7 +2191,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             //mask.clear();
             //mask.setElement<3>();
             //
-            LLVector4a* src = vf.mTangents;
+            //LLVector4a* src = vf.mTangents;
             //LLVector4a* end = vf.mTangents +num_vertices;
             //
             //while (src < end)
@@ -2204,6 +2204,7 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             //    src++;
             //    tangents += 4;
             //}
+            LLVector4a* src = vf.mTangents;
             LLSimdKernels::rotateTangents(mat_normal, src, tangents, num_vertices);
             // </Vulkanstorm>
         }

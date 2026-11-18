@@ -90,7 +90,10 @@ namespace
         return buf;
     }
 
-    // xorshift64*: deterministic, so every run and every platform tests the same data.
+    // xorshift64*: deterministic, so every run and every platform tests the same data. C++ leaves the order in which a
+    // call's arguments are evaluated open, so no argument list holds two draws: they go into locals first, last argument
+    // first (the order MSVC and GCC both used when these lists held the draws, which keeps the data and the printed
+    // counts as they were).
     struct Rng
     {
         uint64_t mState;
@@ -148,11 +151,19 @@ namespace
         LLVector4a v;
         if (rng.below(4) != 0)
         {
-            v.set(rng.uniform(-range, range), rng.uniform(-range, range), rng.uniform(-range, range), rng.uniform(-1.f, 1.f));
+            const F32 w = rng.uniform(-1.f, 1.f); // last argument first (see Rng)
+            const F32 z = rng.uniform(-range, range);
+            const F32 y = rng.uniform(-range, range);
+            const F32 x = rng.uniform(-range, range);
+            v.set(x, y, z, w);
         }
         else
         {
-            v.set(edgeValue(rng, range), edgeValue(rng, range), edgeValue(rng, range), edgeValue(rng, 1.f));
+            const F32 w = edgeValue(rng, 1.f);
+            const F32 z = edgeValue(rng, range);
+            const F32 y = edgeValue(rng, range);
+            const F32 x = edgeValue(rng, range);
+            v.set(x, y, z, w);
         }
         return v;
     }
@@ -616,16 +627,24 @@ namespace
             {
                 const F32 d = rng.uniform(-0.1f * cam.mFar, 1.2f * cam.mFar);
                 const F32 spread = 1.4f * t * llmax(d, 1.f);
-                p = o + a * d + l * rng.uniform(-spread * cam.mAspect, spread * cam.mAspect) + u * rng.uniform(-spread, spread);
+                const F32 up = rng.uniform(-spread, spread); // last operand first (see Rng)
+                const F32 left = rng.uniform(-spread * cam.mAspect, spread * cam.mAspect);
+                p = o + a * d + l * left + u * up;
                 size = rng.uniform(0.01f, 0.25f * spread + 2.f);
             }
             else
             {
-                p.setVec(rng.uniform(-1000.f, 1000.f), rng.uniform(-1000.f, 1000.f), rng.uniform(-200.f, 600.f));
+                const F32 z = rng.uniform(-200.f, 600.f);
+                const F32 y = rng.uniform(-1000.f, 1000.f);
+                const F32 x = rng.uniform(-1000.f, 1000.f);
+                p.setVec(x, y, z);
                 size = rng.uniform(0.f, 120.f);
             }
             centers[i].set(p.mV[0], p.mV[1], p.mV[2], 0.f);
-            radii[i].set(size * rng.uniform(0.2f, 1.f), size * rng.uniform(0.2f, 1.f), size * rng.uniform(0.2f, 1.f), 0.f);
+            const F32 rz = rng.uniform(0.2f, 1.f);
+            const F32 ry = rng.uniform(0.2f, 1.f);
+            const F32 rx = rng.uniform(0.2f, 1.f);
+            radii[i].set(size * rx, size * ry, size * rz, 0.f);
             if (rng.below(5) == 0)
             {
                 const S32 edges = 1 + rng.below(2);
@@ -1059,9 +1078,15 @@ namespace tut
         std::vector<LLVector4a> mins(kBoxes), maxs(kBoxes);
         for (size_t i = 0; i < kBoxes; ++i)
         {
-            const LLVector4a c(rng.uniform(-300.f, 300.f), rng.uniform(-300.f, 300.f), rng.uniform(-50.f, 300.f));
+            const F32 cz = rng.uniform(-50.f, 300.f); // last argument first (see Rng)
+            const F32 cy = rng.uniform(-300.f, 300.f);
+            const F32 cx = rng.uniform(-300.f, 300.f);
+            const LLVector4a c(cx, cy, cz);
             const F32 s = rng.uniform(0.f, 60.f);
-            LLVector4a r(s * rng.uniform(0.1f, 1.f), s * rng.uniform(0.1f, 1.f), s * rng.uniform(0.1f, 1.f));
+            const F32 rz = rng.uniform(0.1f, 1.f);
+            const F32 ry = rng.uniform(0.1f, 1.f);
+            const F32 rx = rng.uniform(0.1f, 1.f);
+            LLVector4a r(s * rx, s * ry, s * rz);
             if (rng.below(10) == 0)
             {
                 r.mul(-1.f); // inverted: min above max
@@ -1081,7 +1106,10 @@ namespace tut
             ScopedFpCase env(fp);
             for (S32 o = 0; o < 6; ++o)
             {
-                LLVector3 origin(rng.uniform(-300.f, 300.f), rng.uniform(-300.f, 300.f), rng.uniform(-50.f, 300.f));
+                const F32 oz = rng.uniform(-50.f, 300.f); // last argument first (see Rng)
+                const F32 oy = rng.uniform(-300.f, 300.f);
+                const F32 ox = rng.uniform(-300.f, 300.f);
+                LLVector3 origin(ox, oy, oz);
                 if (o == 5)
                 {
                     origin.mV[rng.below(3)] = special(rng);
@@ -1133,8 +1161,10 @@ namespace tut
                 LLVector4a mid;
                 mid.setAdd(mins[b], maxs[b]);
                 mid.mul(0.5f);
-                const LLVector3 origin(mid[0] + probe_rng.uniform(-40.f, 40.f), mid[1] + probe_rng.uniform(-40.f, 40.f),
-                                       mid[2] + probe_rng.uniform(-40.f, 40.f));
+                const F32 dz = probe_rng.uniform(-40.f, 40.f); // last argument first (see Rng)
+                const F32 dy = probe_rng.uniform(-40.f, 40.f);
+                const F32 dx = probe_rng.uniform(-40.f, 40.f);
+                const LLVector3 origin(mid[0] + dx, mid[1] + dy, mid[2] + dz);
                 for (S32 k = 0; k < 8; ++k)
                 {
                     F32 sums[5];
@@ -1244,7 +1274,11 @@ namespace tut
             Vertices src(n, 0);
             for (S32 i = 0; i < n; ++i)
             {
-                src.mData[i].set(rng.uniform(-64.f, 64.f), rng.uniform(-64.f, 64.f), rng.uniform(-64.f, 64.f), rng.uniform(-1.f, 1.f));
+                const F32 w = rng.uniform(-1.f, 1.f); // last argument first (see Rng)
+                const F32 z = rng.uniform(-64.f, 64.f);
+                const F32 y = rng.uniform(-64.f, 64.f);
+                const F32 x = rng.uniform(-64.f, 64.f);
+                src.mData[i].set(x, y, z, w);
             }
             for (size_t phase : { size_t(0), size_t(4) })
             {
