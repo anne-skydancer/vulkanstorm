@@ -252,14 +252,39 @@ How a semi-transparent texel casts depends on the method.
   nothing, and blend faces are cut below 0.598 (`ALPHA_BLEND_CUTOFF`) first. The shader text with
   `STOCHASTIC_SHADOW_ALPHA` undefined is the stock text (`scripts/tests/test_shadow_alpha_permutation.py`).
 - Stochastic: alpha-mask faces follow the creator's cutoff and nothing else: a hard cut, solid above it, no dither
-  (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws). Blend faces, whatever the material type: a texel at
-  0.98 alpha or more is solid, from 0.05 up to 0.98 it lets light through in proportion (a hashed per-texel dither,
-  anchored to the shadow map's texel), and below 0.05 it casts nothing (`shadow_solid_alpha` is 0.98 for the blend draws
-  in `renderAlphaObjects`). Classic (non-glTF) blend faces use a minimum alpha of 0.05 under Stochastic instead of
-  Legacy's 0.598, so a sheer at 0.3 to 0.5 casts its proportional shadow like a glTF blend face (a behaviour change from
-  Legacy: such texels used to cast nothing).
-- The avatar alpha shadow shaders (`avatarAlphaShadowF`, `avatarAlphaMaskShadowF`) carry the same branch, which is inert:
-  the avatar shadow pass never sets `minimum_alpha`.
+  (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws; the stock 0.05 floor stays on them, so a map without
+  blended casters is the one it was).
+- Stochastic, blended faces (classic, glTF, rigged, and the avatar's own blended parts: skirt, eyelashes, hair), since
+  2026-11-18: the Aurora Viewer's caster rule (stage C1 of the Aurora port; `shadowStochasticCasterF.glsl` after its
+  `shadow_alpha.wgsl`, Anne Skydancer, GPL-3.0-or-later). A blended face casts R = floor(4 alpha + xi) of the 4 texels of
+  each 2 x 2 block of the map, a random R-subset, so the map holds its opacity as a coverage that the receivers' filter
+  averages back (Enderton et al., "Stochastic Transparency", I3D 2010, section 3.1). Independent layers multiply their
+  transmittance, as light through two sheers does: two layers of 0.5 pass 0.25 of the light (the former hashed per-texel
+  dither was one field shared by every layer, so stacked layers cast max(alpha): two layers of 0.5 passed 0.5). No cut (owner decision D4): a 3 %
+  sheer casts 3 % and a 98 % pane lets 2 % through (`shadow_solid_alpha` is 1 for the blend draws, the classic blend faces'
+  minimum alpha 0; the glTF and avatar shaders test `alpha < 1.0`).
+  - xi is the stochastic engine's dither at the block (`stoch_xi24`: the Aurora Viewer's blue-noise tile from the engine's
+    table, the layer's own offset, the frame's golden-ratio step; owner decision D3). The method holds a reference to the
+    table while it draws the casters (`LLPipeline::holdShadowCasterMasks`), and the draws bind it on their program's unit.
+  - The layer's seed: the draw's identity (`st_seed`: `LLDrawInfo::mStochasticSeed`, or the avatar's id for the avatar
+    passes), the triangle (a hash of its provoking vertex's position, `shadowStochasticCasterV.glsl`, stable when a batch
+    is sorted again) and the side. Identical meshes of different objects (rigged clothing, attachments, repeats) are
+    independent layers; two coincident triangles of one draw that share their last vertex are one layer.
+  - The blocks are anchored where the map's texels are: a sun cascade's wrapped world-grid index (`alphaDitherOrigin`, an
+    even modulus, so the blocks keep their parity), a projector tile's corner in the atlas.
+  - The pattern rotates every frame in the main view's sun cascades while the Stochastic shadow history accumulates
+    (`shadow_caster_frame` 1 to 8, the Aurora Viewer's period; `LLPipeline::shadowCasterFrame`), and the history's resolve
+    averages it, as Enderton et al. render the transparent shadow map again with new seeds. Projector tiles, probes,
+    snapshots and frames without the history keep a fixed pattern (0). Over the 8 frames a block's R sums to 8 x 4 alpha
+    within 1 for alpha on a 1/64 grid and within 1.4 for any alpha.
+  - Lamps (projector tiles) use the same rule; their light-let-through layer (lamp study L3) comes later.
+  - The avatar's two alpha passes draw the same meshes; under Stochastic both take the same alpha (texture x mesh colour)
+    and the same seed, so they keep the same texels and the avatar casts one layer. (In Legacy the avatar branch is inert:
+    the avatar shadow pass never sets `minimum_alpha`, so a texel from 0.05 up is solid.)
+  - Checked by `indra/newview/tests/llstochastichistory_test.cpp` (a C++ twin with the Aurora Viewer's golden values and
+    properties: coverage 1 - alpha within 0.002 for one layer, products for two and three layers) and
+    `scripts/tests/test_shadow_alpha_permutation.py` (the GLSL lines the twin follows, the Legacy text, the plumbing).
+    Tinted glass still casts a grey shadow: alpha is taken as transmittance.
 
 ## Dark gate (Stochastic only)
 

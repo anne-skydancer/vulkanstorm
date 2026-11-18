@@ -458,6 +458,10 @@ public:
     void releaseShadowStochasticHistory();
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
     void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
+    // the blended casters' rule (shadowStochasticCasterF.glsl): the engine's table, whose spare rows hold the blue-noise tile, held while
+    // the method is Stochastic (wanted false, or the screen buffers' release, lets it go); and the frame of a sun cascade's pattern
+    void holdShadowCasterMasks(bool wanted);
+    S32  shadowCasterFrame() const;
     // </Vulkanstorm>
 
     // </FS>
@@ -850,6 +854,8 @@ public:
     mutable U32 mShadowLightSizeFrame = 0xffffffffu;
     U32 mShadowSTFailedWidth = 0;       // the size whose allocation failed (logged once; tried again at another size)
     U32 mShadowSTFailedHeight = 0;
+    bool mShadowSTMasksHeld = false;    // holdShadowCasterMasks: this pipeline holds one of the engine's table references
+    bool mShadowSTMasksFailed = false;  // the table could not be made (logged once; tried again every frame)
     bool mShadowSTLightKnown = false;
     LLVector3 mShadowSTLightDir;        // the primary light's direction, world frame
     const LLDrawable* mShadowSTSpot[2] = { nullptr, nullptr };   // identity only, never dereferenced

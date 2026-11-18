@@ -20,8 +20,9 @@
 /*[EXTRA_CODE_HERE]*/
 
 // One fragment shader object, compiled once (LLViewerShaderMgr::loadBasicShaders) and attached to
-// every program of a stochastic producer: the alpha programs' ALPHA_STOCHASTIC variants today,
-// the shadow programs of the Stochastic shadow method later (LLShaderMgr::attachShaderFeatures).
+// every program of a stochastic producer (LLShaderMgr::attachShaderFeatures): the alpha programs'
+// ALPHA_STOCHASTIC variants and the Stochastic shadow method's blended casters (STOCHASTIC_SHADOW_ALPHA,
+// whose rule, shadowStochasticCasterF.glsl, takes stoch_xi24 at a 2 x 2 block of the shadow map).
 // Producers keep their own identities (the face and triangle of a blended face) and their own
 // frame counters; the engine gives the hash, the per-frame seed, the dither and the stratified mask from the
 // transparency's table (S = LLStochasticEngine::TRANSPARENCY_SAMPLES = 8), dithered by a blue-noise tile.

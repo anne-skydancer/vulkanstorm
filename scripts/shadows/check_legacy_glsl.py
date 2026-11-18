@@ -4,7 +4,8 @@
 """G4 of the projector shadow pool: the GLSL a Legacy shadow program compiles is the same as release's.
 
 The pool adds code to shaders that the Legacy method also loads, each under a permutation that only the Stochastic method
-defines (PROJECTOR_SHADOW_POOL in spotLightF.glsl, STOCHASTIC_SHADOW_ALPHA in the four caster alpha shaders). This checks that
+defines (PROJECTOR_SHADOW_POOL in spotLightF.glsl, STOCHASTIC_SHADOW_ALPHA in the four caster alpha shaders and their three
+vertex shaders). This checks that
 with those permutations undefined, the text that remains is exactly the text of a reference ref (default
 origin/vkstorm-release), apart from blank lines and indentation, and that the shaders Legacy shares without a permutation
 (the sun passes, shadowUtil.glsl) are not touched at all.
@@ -28,6 +29,10 @@ PERMUTED = [
     'class1/deferred/avatarAlphaShadowF.glsl',
     'class1/deferred/avatarAlphaMaskShadowF.glsl',
     'class1/deferred/pbrShadowAlphaBlendF.glsl',
+    # the casters' vertex shaders pass the triangle's seed of the Stochastic caster rule under STOCHASTIC_SHADOW_ALPHA
+    'class1/deferred/shadowAlphaMaskV.glsl',
+    'class1/deferred/pbrShadowAlphaMaskV.glsl',
+    'class1/deferred/avatarAlphaShadowV.glsl',
 ]
 # shaders the Legacy method loads and the pool must not touch
 UNTOUCHED = [

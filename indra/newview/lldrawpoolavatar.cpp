@@ -52,6 +52,8 @@
 #include "llviewerpartsim.h"
 #include "llviewercontrol.h" // for gSavedSettings
 #include "llviewertexturelist.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> the Stochastic casters' seed and tile
+#include "llstochastichistory.h"
 
 // <FS:Zi> Add avatar hitbox debug
 #include "llviewercontrol.h"
@@ -400,6 +402,18 @@ void LLDrawPoolAvatar::renderShadow(S32 pass)
     }
 
     LLDrawPoolAvatar::sShadowPass = pass;
+
+    // <Vulkanstorm> Stochastic shadows: the blended parts' caster rule (shadowStochasticCasterF.glsl) takes the avatar's identity
+    // in its seed, so two avatars with the same mesh are independent layers, and reads its blue-noise tile from the engine's
+    // table. Both alpha passes draw the same meshes with the same seed, so they keep the same texels.
+    if (LLPipeline::RenderShadowMethod == LLShadowMethod::STOCHASTIC &&
+        (pass == SHADOW_PASS_AVATAR_ALPHA_BLEND || pass == SHADOW_PASS_AVATAR_ALPHA_MASK) &&
+        sVertexProgram && LLGLSLShader::sCurBoundShaderPtr == sVertexProgram)
+    {
+        sVertexProgram->uniform1i(LLShaderMgr::ALPHA_ST_SEED, (S32)LLStochasticEngine::faceSeed(avatarp->getID().mData, 0, 0));
+        LLStochasticEngine::bindMasks(*sVertexProgram);
+    }
+    // </Vulkanstorm>
 
     if (pass == SHADOW_PASS_AVATAR_OPAQUE)
     {

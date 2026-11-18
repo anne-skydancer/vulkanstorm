@@ -1018,6 +1018,13 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     shaders.push_back( make_pair( "deferred/textureUtilV.glsl",             1 ) );
     shaders.push_back( make_pair( "objects/indexedTextureV.glsl",           1 ) );
     shaders.push_back( make_pair( "objects/nonindexedTextureV.glsl",        1 ) );
+    // <Vulkanstorm> the Stochastic shadow method's blended casters: the triangle's seed (STOCHASTIC_SHADOW_ALPHA programs;
+    // a failed build is a failed basic shader, as the method's shadow util below)
+    if (use_stochastic_shadows())
+    {
+        shaders.push_back( make_pair( STOCHASTIC_CASTER_VERTEX_OBJECT,     1 ) );
+    }
+    // </Vulkanstorm>
 
     std::map<std::string, std::string> attribs;
     attribs["MAX_JOINTS_PER_MESH_OBJECT"] =
@@ -1149,13 +1156,15 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     // faces are not drawn until a shader reload builds them (a broken shader set, never another
     // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: it is
     // attached to the transparency's temporal resolve and composite programs and to the Stochastic shadows' fragment resolve (whose compute resolve, A/B only,
-    // VKSTORM_STOCH_COMPUTE_RESOLVE=1, compiles its own objects).
+    // VKSTORM_STOCH_COMPUTE_RESOLVE=1, compiles its own objects). The sampling also serves the Stochastic shadows' blended
+    // casters (STOCHASTIC_SHADOW_ALPHA), which need it (checked with the method's objects below).
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
     {
         mFragmentShaderObjects.erase(*helper);
         // the fragment resolve (the default) attaches the engine's resolve object; the compute resolve compiles it as a compute object
         const bool shadow_fragment_resolve = stochastic_shadow_resolve_shaders() && !LLStochasticEngine::computeResolve();
         const bool needed = helper == &STOCH_RESOLVE_HELPER ? stochastic_transparency_shaders() || shadow_fragment_resolve
+                          : helper == &STOCH_SAMPLE_HELPER  ? stochastic_transparency_shaders() || use_stochastic_shadows()
                                                             : stochastic_transparency_shaders();
         if (needed)
         {
@@ -1179,6 +1188,7 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_UTIL);
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_KEY);
     mFragmentShaderObjects.erase(STOCHASTIC_SHADOW_COMMON_DEPTH_KEY);
+    mFragmentShaderObjects.erase(STOCHASTIC_CASTER_FRAGMENT_OBJECT);
     if (use_stochastic_shadows())
     {
         std::map<std::string, std::string> common_attribs = attribs;
@@ -1207,6 +1217,18 @@ std::string LLViewerShaderMgr::loadBasicShaders()
         {
             LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_SHADOW_UTIL << LL_ENDL;
             return STOCHASTIC_SHADOW_UTIL;
+        }
+        // the blended casters' rule (the STOCHASTIC_SHADOW_ALPHA programs), with the engine's sampling it calls
+        if (!mFragmentShaderObjects.count(STOCH_SAMPLE_HELPER))
+        {
+            LL_WARNS("Shader") << "Failed to load fragment shader " << STOCH_SAMPLE_HELPER << " for the Stochastic shadows' casters" << LL_ENDL;
+            return STOCH_SAMPLE_HELPER;
+        }
+        level = 1;
+        if (loadShaderFile(STOCHASTIC_CASTER_FRAGMENT_OBJECT, level, GL_FRAGMENT_SHADER, &attribs, -1) == 0)
+        {
+            LL_WARNS("Shader") << "Failed to load fragment shader " << STOCHASTIC_CASTER_FRAGMENT_OBJECT << LL_ENDL;
+            return STOCHASTIC_CASTER_FRAGMENT_OBJECT;
         }
     }
     // </Vulkanstorm>

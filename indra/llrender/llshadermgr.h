@@ -41,6 +41,10 @@
 // <Vulkanstorm> the stochastic engine's shared fragment objects (LLStochasticEngine)
 #define STOCH_SAMPLE_OBJECT "deferred/stochasticSampleF.glsl"
 #define STOCH_RESOLVE_OBJECT "deferred/stochasticResolveUtilF.glsl"   // the fragment resolve path (the default on every device)
+// the Stochastic shadow method's rule for blended casters (the programs with STOCHASTIC_SHADOW_ALPHA): the triangle's seed and
+// the coverage rule, built with the method's shader set and attached with the engine's sampling
+#define STOCHASTIC_CASTER_VERTEX_OBJECT "deferred/shadowStochasticCasterV.glsl"
+#define STOCHASTIC_CASTER_FRAGMENT_OBJECT "deferred/shadowStochasticCasterF.glsl"
 // </Vulkanstorm>
 
 class LLShaderMgr

@@ -41,9 +41,11 @@ public:
         bool mActive;
     };
 
-    // The programs that dither the semi-transparent casters by a texel origin: a projector tile's (not of the atlas), or a sun
-    // cascade's wrapped world-grid index (LLShadowCascadeFit::alphaDitherOrigin). (0, 0) puts it back.
-    static void setTileOrigin(F32 x, F32 y);
+    // The programs of the semi-transparent casters' rule (Stochastic, shadowStochasticCasterF.glsl): the texel origin of its
+    // blocks, a projector tile's (not of the atlas) or a sun cascade's wrapped world-grid index
+    // (LLShadowCascadeFit::alphaDitherOrigin), and the frame of the pattern (0: fixed; the sun cascades of the main view
+    // rotate it while the Stochastic shadows' history accumulates, LLPipeline::shadowCasterFrame). (0, 0, 0) puts it back.
+    static void setTileOrigin(F32 x, F32 y, S32 frame = 0);
 };
 
 #endif // LL_LLLOCALSHADOWS_H

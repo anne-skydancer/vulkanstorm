@@ -34,10 +34,8 @@ in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-// <Vulkanstorm/> dither origin: the origin of the projector tile being rendered in the atlas, so the dither does not
-// depend on where the tile sits; in a sun cascade pass (Stochastic) -(k mod 2^16), k the map corner's index on the world
-// grid, so the dither follows the world texel while the camera walks; 0 for every other pass
-uniform vec2 shadow_tile_origin;
+flat in uint shadow_caster_tri;   // <Vulkanstorm/> the triangle's seed (shadowStochasticCasterV.glsl)
+bool shadow_caster_keeps(float alpha, uint tri);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
 void main()
@@ -46,33 +44,27 @@ void main()
 
     alpha *= vertex_color.a;
 
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+    // <Vulkanstorm/> Stochastic shadows: in proportion to the opacity with no cut, solid at full opacity (the caster rule,
+    // see shadowAlphaMaskF.glsl). Legacy keeps the stock floor and the 0.88 stipple.
+    if (alpha < 1.0 && !shadow_caster_keeps(alpha, shadow_caster_tri))
+    {
+        discard;
+    }
+#else
     if (alpha < 0.05) // treat as totally transparent
     {
         discard;
     }
 
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-    // <Vulkanstorm/> Stochastic shadows: a texel is solid from 0.98 up; below that it lets light through in
-    // proportion to its transparency (Legacy keeps the stock 0.88 below).
-    if (alpha < 0.98)
-#else
     if (alpha < 0.88) // treat as semi-transparent
-#endif
     {
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-        // <Vulkanstorm/> Stochastic shadows: hashed per-texel dither instead of the column stipple (see shadowAlphaMaskF.glsl)
-        float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + 0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));
-        if (ign >= alpha)
-        {
-            discard;
-        }
-#else
         if (fract(0.5*floor(target_pos_x / post_pos.w )) < 0.25)
         {
             discard;
         }
-#endif
     }
+#endif
 
     frag_color = vec4(1,1,1,1);
 }

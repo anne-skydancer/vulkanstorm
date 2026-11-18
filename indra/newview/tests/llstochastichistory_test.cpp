@@ -124,8 +124,10 @@ namespace
     }
 }
 
-// The engine's GLSL in C++, operation for operation (stochasticSampleF.glsl), as the Aurora Viewer's tests mirror its
-// shaders. The transparency's coverage is checked on the GPU against its own Python model by scripts/perf/test_alpha_stochastic.py.
+// The engine's GLSL in C++, operation for operation (stochasticSampleF.glsl; shadowStochasticCasterF.glsl and
+// shadowStochasticCasterV.glsl for the Stochastic shadows' blended casters), as the Aurora Viewer's tests mirror its shaders.
+// The transparency's coverage is checked on the GPU against its own Python model by scripts/perf/test_alpha_stochastic.py;
+// scripts/tests/test_shadow_alpha_permutation.py pins the caster's GLSL text to the lines these twins follow.
 namespace mirror
 {
     using namespace LLStochasticEngine;
@@ -190,6 +192,100 @@ namespace mirror
         const uint32_t r = rOf(std::clamp(a, 0.f, 1.f), s, xi24At(px, py, face_seed, frame));
         const uint32_t column = std::min((uint32_t)(pick(frameSeed(face_seed, frame), px, py) * (float)SEEDS), SEEDS - 1u);
         return table[r * SEEDS + column];
+    }
+
+    // The 16 subsets of a 2 x 2 block's 4 texels by size R: the entries in popcount order, the first entry of each R and the
+    // number of entries (shadowStochasticCasterF.glsl packs them in SHADOW_CASTER_LO, _HI, _OFF and _CNT)
+    struct Subsets
+    {
+        uint32_t entries[16] = {};
+        uint32_t off[5] = {};
+        uint32_t cnt[5] = {};
+    };
+    const Subsets& subsets()
+    {
+        static const Subsets s = []()
+        {
+            Subsets out;
+            uint32_t i = 0;
+            for (uint32_t r = 0; r <= 4; ++r)
+            {
+                out.off[r] = i;
+                for (uint32_t m = 0; m < 16; ++m)
+                {
+                    if ((uint32_t)std::popcount(m) == r)
+                    {
+                        out.entries[i++] = m;
+                        ++out.cnt[r];
+                    }
+                }
+            }
+            return out;
+        }();
+        return s;
+    }
+
+    uint32_t pack(const uint32_t* v, uint32_t n)   // nibbles, the first value lowest
+    {
+        uint32_t out = 0;
+        for (uint32_t i = 0; i < n; ++i)
+        {
+            out |= v[i] << (4 * i);
+        }
+        return out;
+    }
+
+    // shadowStochasticCasterV.glsl: a vertex's seed, the PCG hash chained over its coordinates' bits
+    uint32_t vertexSeed(float x, float y, float z)
+    {
+        return hash(hash(hash(std::bit_cast<uint32_t>(x)) ^ std::bit_cast<uint32_t>(y)) ^ std::bit_cast<uint32_t>(z));
+    }
+
+    // a caster layer's seed: the draw's identity (st_seed), the triangle's seed (its provoking vertex's) and the side
+    uint32_t casterLayer(uint32_t draw_seed, uint32_t tri, bool front)
+    {
+        return layerSeed(draw_seed, tri * 2u + (front ? 0u : 1u));
+    }
+
+    // shadow_caster_keeps: does the blended face of opacity a, layer seed `layer`, cast the texel `cell` of the map's anchored
+    // grid at frame `frame` (0: a fixed pattern)? R = floor(4 a + xi) of the block's 4 texels, xi the engine's dither at the
+    // block, a random R-subset picked per block and layer.
+    bool casterKeeps(int32_t cx, int32_t cy, uint32_t layer, uint32_t frame, float a)
+    {
+        const uint32_t bx = (uint32_t)(cx >> 1) & 0xffffu, by = (uint32_t)(cy >> 1) & 0xffffu;
+        const uint32_t seed = frameSeed(layer, frame);
+        const uint32_t r = rOf(std::clamp(a, 0.f, 1.f), 4, xi24At(bx, by, layer, frame));
+        const Subsets& s = subsets();
+        const uint32_t n = s.cnt[r];
+        const uint32_t i = s.off[r] + std::min((uint32_t)(pick(seed, bx, by) * (float)n), n - 1u);
+        const uint32_t bit = (uint32_t)(cx & 1) | ((uint32_t)(cy & 1) << 1);
+        return (s.entries[i] >> bit) & 1u;
+    }
+
+    // the share of the texels of a size x size region at the origin that no layer (seed, frame, alpha) casts: what a
+    // receiver behind them sees of the light once its filter has averaged the map
+    struct Layer
+    {
+        uint32_t seed;
+        uint32_t frame;
+        float alpha;
+    };
+    double lit(const std::vector<Layer>& layers, int32_t size = 128)
+    {
+        uint32_t n = 0;
+        for (int32_t y = 0; y < size; ++y)
+        {
+            for (int32_t x = 0; x < size; ++x)
+            {
+                bool hit = false;
+                for (const Layer& l : layers)
+                {
+                    hit = hit || casterKeeps(x, y, l.seed, l.frame, l.alpha);
+                }
+                n += !hit;
+            }
+        }
+        return (double)n / (size * size);
     }
 }
 
@@ -465,6 +561,162 @@ namespace
         }
     }
 
+    // The Stochastic shadows' blended casters (shadowStochasticCasterF.glsl): the Aurora Viewer's rule (shadow_alpha.wgsl
+    // sst_keep, its tests in shadow_alpha.rs) with the engine's dither at the block (owner decision D3), no cut (D4), the seed
+    // of the draw, the triangle and the side, and a pattern that rotates with the frame where the history averages it
+    void test_caster()
+    {
+        using namespace mirror;
+        // the packed subsets are the generated ones, and are the Aurora Viewer's SST_LO, SST_HI, SST_OFF, SST_CNT
+        const Subsets& s = subsets();
+        bool sizes = true;
+        for (uint32_t r = 0; r <= 4; ++r)
+        {
+            for (uint32_t k = 0; k < s.cnt[r]; ++k)
+            {
+                sizes = sizes && (uint32_t)std::popcount(s.entries[s.off[r] + k]) == r;
+            }
+        }
+        check(sizes && s.cnt[0] + s.cnt[1] + s.cnt[2] + s.cnt[3] + s.cnt[4] == 16, "the subsets of 4 texels by size");
+        check(pack(s.entries, 8) == 0x65384210u && pack(s.entries + 8, 8) == 0xFEDB7CA9u && pack(s.off, 5) == 0xFB510u &&
+              pack(s.cnt, 5) == 0x14641u, "the packed subset tables (SHADOW_CASTER_LO, _HI, _OFF, _CNT)");
+
+        // golden values of the Aurora Viewer's shadow_alpha tests that the rule keeps (the seed of tie 5, primitive 3; the
+        // hash and the picks are pinned in test_dither); its dither and rotated seed are replaced by D3's dither
+        const uint32_t s53 = layerSeed(5, 3);
+        check(s53 == 0xb56d4236u && layerSeed(123456, 0) == 0x416ef572u && casterLayer(5, 1, false) == s53, "golden caster seeds (3: triangle 1, back)");
+        // golden texels: Aurora's rule with the tile's dither, computed apart from this file on Aurora's own tile
+        {
+            const uint16_t fixed[16] = { 0x1239, 0x5949, 0x9266, 0x2448, 0x2600, 0xaabd, 0x9328, 0x8841,
+                                         0x2c0f, 0x6270, 0x98c2, 0x4625, 0x1a16, 0x8150, 0x52aa, 0xaa86 };
+            const uint16_t frame3[16] = { 0x9368, 0x182a, 0x0480, 0x726d, 0xcd50, 0x104f, 0x8186, 0x5a10,
+                                          0x1421, 0x46dc, 0xb0e1, 0x8d0a, 0x0424, 0xa2d9, 0x0e44, 0xe163 };
+            bool same = true;
+            for (int32_t y = 0; y < 16; ++y)
+            {
+                uint32_t row0 = 0, row3 = 0;
+                for (int32_t x = 0; x < 16; ++x)
+                {
+                    row0 |= (uint32_t)casterKeeps(x, y, s53, 0, 0.37f) << x;
+                    row3 |= (uint32_t)casterKeeps(x, y, s53, 3, 0.37f) << x;
+                }
+                same = same && row0 == fixed[y] && row3 == frame3[y];
+            }
+            check(same, "golden caster texels (alpha 0.37, fixed and frame 3)");
+            const uint32_t layer = casterLayer(5, vertexSeed(1.5f, -2.25f, 3.f), true);
+            const uint8_t rows[8] = { 0x9e, 0xba, 0xe6, 0xae, 0xfd, 0x09, 0xa9, 0x59 };
+            for (int32_t y = 0; y < 8; ++y)
+            {
+                uint32_t row = 0;
+                for (int32_t x = 0; x < 8; ++x)
+                {
+                    row |= (uint32_t)casterKeeps(x, y, layer, 5, 0.6f) << x;
+                }
+                same = same && row == rows[y];
+            }
+            check(vertexSeed(0.f, 0.f, 0.f) == 0x7fddb461u && vertexSeed(1.5f, -2.25f, 3.f) == 0x4304d0c3u &&
+                  vertexSeed(128.f, 64.5f, 22.125f) == 0xca4ba365u, "golden vertex seeds");
+            check(layer == 0x945e5190u && casterLayer(5, vertexSeed(1.5f, -2.25f, 3.f), false) == 0x4360b45cu && same,
+                  "golden caster layer and texels (a triangle's seed, alpha 0.6, frame 5)");
+        }
+
+        // the coverage follows the opacity, with no cut (D4): a 3 % sheer casts 3 %, a 98 % pane lets 2 % through. Over
+        // 128 x 128 texels (64 x 64 blocks, one period of the tile) the mean of R is 4 a within one stratum.
+        bool proportional = true;
+        for (float a : { 0.03f, 0.1f, 0.3f, 0.5f, 0.8f, 0.98f })
+        {
+            const double l = lit({ { s53, 0, a } });
+            proportional = proportional && std::fabs(l - (1.0 - a)) < 0.002;
+            std::printf("caster alpha %.2f: %.4f of the light passes\n", a, l);
+        }
+        check(proportional, "one layer lets 1 - alpha of the light through, with no cut");
+        check(lit({ { s53, 0, 0.f } }) == 1.0 && lit({ { s53, 0, 1.f } }) == 0.0, "alpha 0 casts nothing, alpha 1 everything");
+
+        // independent layers multiply their transmittance (Enderton et al. 3.1); VS's former shared dither passed max(alpha)
+        {
+            const uint32_t a = casterLayer(11, 7, true);
+            const uint32_t other_draw = casterLayer(12, 7, true);   // an identical mesh of another object (same triangle seed)
+            const uint32_t other_tri = casterLayer(11, 8, true);    // another triangle of the same draw
+            const uint32_t back = casterLayer(11, 7, false);        // the back of the same triangle
+            const double two_draws = lit({ { a, 0, 0.5f }, { other_draw, 0, 0.5f } });
+            const double two_tris = lit({ { a, 0, 0.5f }, { other_tri, 0, 0.5f } });
+            const double sides = lit({ { a, 0, 0.5f }, { back, 0, 0.5f } });
+            const double three = lit({ { a, 0, 0.3f }, { other_draw, 0, 0.3f }, { other_tri, 0, 0.3f } });
+            std::printf("caster layers: 0.5 + 0.5 pass %.4f (two draws), %.4f (two triangles), %.4f (two sides); 3 x 0.3 pass %.4f (0.343)\n",
+                        two_draws, two_tris, sides, three);
+            check(std::fabs(two_draws - 0.25) < 0.01 && std::fabs(two_tris - 0.25) < 0.01 && std::fabs(sides - 0.25) < 0.01,
+                  "two layers of 0.5 pass 0.25 of the light: two draws, two triangles, two sides");
+            check(std::fabs(three - 0.343) < 0.01, "three layers of 0.3 pass 0.343 of the light");
+            // the limit: the same draw, triangle seed and side is one layer (two coincident triangles of one draw that share
+            // their provoking vertex)
+            check(lit({ { a, 0, 0.5f }, { a, 0, 0.5f } }) == 0.5, "the same layer twice is one layer");
+        }
+
+        // the cells: a negative one is not another pattern (the block's 16-bit fields keep x and y apart), the pattern repeats
+        // every 2^17 texels, and a 2 x 2 block keeps its parity when the origin moves by an even number of texels
+        {
+            uint32_t hits = 0;
+            for (int32_t y = -32; y < 32; ++y)
+            {
+                for (int32_t x = -32; x < 32; ++x)
+                {
+                    hits += casterKeeps(x, y, s53, 0, 0.5f);
+                }
+            }
+            check(hits == 64 * 64 / 2, "a region across the negative cells is covered in proportion");
+            check(casterKeeps(5, 7, s53, 0, 0.4f) == casterKeeps(5 + (1 << 17), 7 + (1 << 17), s53, 0, 0.4f), "the pattern repeats every 2^17 texels");
+            check(!casterKeeps(-1, -1, s53, 0, 0.5f) && casterKeeps(-2, 5, s53, 0, 0.5f) && casterKeeps(-65536, 3, s53, 0, 0.5f) &&
+                  !casterKeeps(70000, -9, s53, 0, 0.5f), "golden texels at negative and far cells");
+        }
+
+        // the frames: 1 .. 8 rotate the pattern, and over those 8 frames every block's R sums to 8 x 4 a within 1 for alpha on
+        // the 1/64 grid (the Aurora Viewer's test set) and within 1.4 for any alpha (the local discrepancy of 8 golden-ratio
+        // points; a fresh hash every frame reaches 4), so the history's average of the frames converges on the opacity
+        // (frame 0 is the fixed pattern)
+        {
+            bool within = true, rotates = false;
+            double grid_max = 0, any_max = 0;
+            for (uint32_t by = 0; by < 64; ++by)
+            {
+                for (uint32_t bx = 0; bx < 64; ++bx)
+                {
+                    for (uint32_t k = 1; k < 64; ++k)
+                    {
+                        uint32_t sum = 0;
+                        for (uint32_t f = 1; f <= 8; ++f)
+                        {
+                            sum += rOf((float)k / 64.f, 4, xi24At(bx, by, s53, f));
+                        }
+                        grid_max = std::max(grid_max, std::fabs((double)sum - 32.0 * k / 64.0));
+                    }
+                    if ((bx + by) % 8 == 0)
+                    {
+                        for (uint32_t k = 1; k < 1024; ++k)
+                        {
+                            const float a = (float)k / 1024.f;
+                            uint32_t sum = 0;
+                            for (uint32_t f = 1; f <= 8; ++f)
+                            {
+                                sum += rOf(a, 4, xi24At(bx, by, s53, f));
+                            }
+                            any_max = std::max(any_max, std::fabs((double)sum - 32.0 * a));
+                        }
+                    }
+                }
+            }
+            within = grid_max <= 1.0 + 1e-6 && any_max < 1.4;
+            for (int32_t c = 0; c < 64 && !rotates; ++c)
+            {
+                rotates = casterKeeps(c, c / 2, s53, 1, 0.5f) != casterKeeps(c, c / 2, s53, 2, 0.5f);
+            }
+            std::printf("caster frames 1 .. 8: the sum of R is off 8 x 4 a by at most %.3f (alpha on the 1/64 grid), %.3f (any alpha)\n", grid_max, any_max);
+            check(within, "eight rotating frames of a block sum to 8 x 4 a within 1 (alpha k/64), within 1.4 (any alpha)");
+            check(rotates, "the pattern changes from frame to frame");
+            const double mean_rotating = (lit({ { s53, 1, 0.37f } }) + lit({ { s53, 4, 0.37f } }) + lit({ { s53, 8, 0.37f } })) / 3.0;
+            check(std::fabs(mean_rotating - 0.63) < 0.002, "every rotated frame keeps the mean");
+        }
+    }
+
     void test_state()
     {
         LLStochasticFrameState s;
@@ -616,6 +868,7 @@ int main()
     test_masks();
     test_transparency_table();
     test_dither();
+    test_caster();
     test_state();
     test_seeds();
     test_light_change();

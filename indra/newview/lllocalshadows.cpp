@@ -94,10 +94,11 @@ LLLocalShadowGL::Scope::~Scope()
 }
 
 // static
-void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
+void LLLocalShadowGL::setTileOrigin(F32 x, F32 y, S32 frame)
 {
-    // the programs that dither the semi-transparent casters by a texel origin: the tile's (not the atlas'), or the sun
-    // cascade's wrapped world-grid index (generateSunCascadesStable)
+    // the programs of the semi-transparent casters' rule: the texel origin of its blocks, the tile's (not the atlas') or the
+    // sun cascade's wrapped world-grid index (generateSunCascadesStable), and the frame of its pattern
+    static const LLStaticHashedString sCasterFrame("shadow_caster_frame");
     LLGLSLShader* programs[] = {
         &gDeferredShadowAlphaMaskProgram, &gDeferredShadowFullbrightAlphaMaskProgram, &gDeferredShadowGLTFAlphaBlendProgram,
         &gDeferredAvatarAlphaShadowProgram, &gDeferredAvatarAlphaMaskShadowProgram
@@ -110,6 +111,7 @@ void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
             {
                 variant->bind();
                 variant->uniform2f(LLShaderMgr::SHADOW_TILE_ORIGIN, x, y);
+                variant->uniform1i(sCasterFrame, frame);
             }
         }
     }
