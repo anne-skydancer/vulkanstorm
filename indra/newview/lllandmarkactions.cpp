@@ -236,6 +236,7 @@ bool LLLandmarkActions::hasParcelLandmark()
 {
     static LLUUID sLastItemID;
     static S32    sLastFrame = -1;
+    static U32    sLastGeneration = 0; // <Vulkanstorm> landmarks loaded since the last scan
     if (sLastItemID.notNull())
     {
         LLInventoryItem* item = gInventory.getItem(sLastItemID);
@@ -259,7 +260,8 @@ bool LLLandmarkActions::hasParcelLandmark()
         sLastFrame = -1;
     }
 
-    if (sLastFrame == LLFrameTimer::getFrameCount())
+    if (sLastFrame == LLFrameTimer::getFrameCount()
+        && sLastGeneration == gLandmarkList.getLoadedGeneration())
     {
         // Ideally this should also check parcel change and landmark additions,
         // not just frame change.
@@ -268,6 +270,7 @@ bool LLLandmarkActions::hasParcelLandmark()
         return false;
     }
     sLastFrame = LLFrameTimer::getFrameCount();
+    sLastGeneration = gLandmarkList.getLoadedGeneration();
 
     LLFirstAgentParcelLandmark get_first_agent_landmark;
     LLInventoryModel::cat_array_t cats;

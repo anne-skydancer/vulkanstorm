@@ -32,6 +32,7 @@
 #include "llassetstorage.h"
 
 #include "llappviewer.h"
+#include "llcallbacklist.h"
 #include "llagent.h"
 #include "llfilesystem.h"
 #include "llviewerstats.h"
@@ -89,40 +90,28 @@ LLLandmark* LLLandmarkList::getAsset(const LLUUID& asset_uuid, loaded_callback_t
             }
         }
 
-        // <Vulkanstorm> bulk scans: read the cache file on the General thread
+        // <Vulkanstorm> bulk scans: read the cache file on the General thread, in batches
         if (async)
         {
-            if (mAsyncPending.count(asset_uuid) || mRequestedList.count(asset_uuid))
+            if (mAsyncPending.count(asset_uuid))
             {
-                // already on its way; a scan never re-posts, or the loaded signal could loop
+                // already on its way; the expired-request gate above handles the retries
                 return NULL;
             }
-            LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
-            LL::WorkQueue::ptr_t general_queue = LL::WorkQueue::getInstance("General");
-            if (main_queue && general_queue)
+            if (LL::WorkQueue::getInstance("mainloop") && LL::WorkQueue::getInstance("General"))
             {
                 mAsyncPending.insert(asset_uuid);
-                main_queue->postTo(
-                    general_queue,
-                    [asset_uuid]() // General thread: only the uuid is captured
-                    {
-                        std::string data;
-                        LLFileSystem file(asset_uuid, LLAssetType::AT_LANDMARK, LLFileSystem::READ);
-                        S32 size = file.getSize();
-                        if (size > 0)
-                        {
-                            data.resize(size);
-                            if (!file.read((U8*)&data[0], size))
-                            {
-                                data.clear();
-                            }
-                        }
-                        return data;
-                    },
-                    [asset_uuid](std::string data) // main thread
-                    {
-                        gLandmarkList.onCacheRead(asset_uuid, data);
-                    });
+                mAsyncBatch.push_back(asset_uuid);
+                if (mAsyncBatch.size() >= ASYNC_BATCH_SIZE)
+                {
+                    flushAsyncBatch();
+                }
+                else if (!mFlushScheduled)
+                {
+                    // post the partial batch once per frame (idle callbacks run on the main thread)
+                    mFlushScheduled = true;
+                    doOnIdleOneTime([]() { gLandmarkList.flushAsyncBatch(); });
+                }
                 return NULL;
             }
             // no queues: fall through to the synchronous path
@@ -186,20 +175,127 @@ void LLLandmarkList::onLandmarkData(const LLUUID& uuid, const std::string& data)
     }
 }
 
-// Main thread: a cache read posted by getAsset(..., async = true) is done.
-void LLLandmarkList::onCacheRead(const LLUUID& uuid, const std::string& data)
+// Main thread: posts the pending async cache reads as one job on the General thread.
+void LLLandmarkList::flushAsyncBatch()
 {
-    mAsyncPending.erase(uuid);
-
-    if (mList.count(uuid) == 0 && mBadList.count(uuid) == 0)
+    mFlushScheduled = false;
+    if (mAsyncBatch.empty())
     {
+        return;
+    }
+
+    std::vector<LLUUID> batch;
+    batch.swap(mAsyncBatch);
+
+    LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
+    LL::WorkQueue::ptr_t general_queue = LL::WorkQueue::getInstance("General");
+    bool posted = false;
+    if (main_queue && general_queue)
+    {
+        posted = main_queue->postTo(
+            general_queue,
+            [batch]() // General thread: only the uuids are captured
+            {
+                std::vector<std::pair<LLUUID, std::string>> results;
+                results.reserve(batch.size());
+                for (const LLUUID& uuid : batch)
+                {
+                    std::string data;
+                    LLFileSystem file(uuid, LLAssetType::AT_LANDMARK, LLFileSystem::READ);
+                    S32 size = file.getSize();
+                    if (size > 0)
+                    {
+                        data.resize(size);
+                        if (!file.read((U8*)&data[0], size))
+                        {
+                            data.clear();
+                        }
+                    }
+                    results.emplace_back(uuid, std::move(data));
+                }
+                return results;
+            },
+            [](std::vector<std::pair<LLUUID, std::string>> results) // main thread
+            {
+                gLandmarkList.onCacheRead(results);
+            });
+    }
+    if (!posted)
+    {
+        // could not post: nothing may stay pending, load them the synchronous way
+        for (const LLUUID& uuid : batch)
+        {
+            mAsyncPending.erase(uuid);
+        }
+        for (const LLUUID& uuid : batch)
+        {
+            getAsset(uuid);
+        }
+        scheduleLandmarksLoaded();
+    }
+}
+
+void LLLandmarkList::fireLandmarksLoaded()
+{
+    ++mLoadedGeneration;
+    mLandmarksLoadedSignal();
+}
+
+// Fires the signal on the next idle pass, never from inside a caller's scan (getAssetData can
+// call processGetAssetReply back immediately) or from the middle of a callback.
+void LLLandmarkList::scheduleLandmarksLoaded()
+{
+    if (mSignalScheduled)
+    {
+        return;
+    }
+    mSignalScheduled = true;
+    doOnIdleOneTime([]()
+    {
+        gLandmarkList.mSignalScheduled = false;
+        if (gLandmarkList.mAsyncPending.empty())
+        {
+            gLandmarkList.fireLandmarksLoaded();
+        }
+    });
+}
+
+// Main thread: a batch of cache reads posted by flushAsyncBatch() is done.
+void LLLandmarkList::onCacheRead(const std::vector<std::pair<LLUUID, std::string>>& results)
+{
+    const F32 rerequest_time = 30.f; // same gate as getAsset()
+    for (const auto& result : results)
+    {
+        const LLUUID& uuid = result.first;
+        const std::string& data = result.second;
+        mAsyncPending.erase(uuid);
+
+        if (mList.count(uuid) != 0 || mBadList.count(uuid) != 0)
+        {
+            continue;
+        }
+
+        // A request entry that is still fresh was made after our post (getAsset() does not
+        // post while one is), so a synchronous or network request for this uuid is in flight:
+        // leave it to that request, a partial read must not erase its callbacks.
+        landmark_requested_list_t::iterator req = mRequestedList.find(uuid);
+        if (req != mRequestedList.end() && gFrameTimeSeconds - req->second < rerequest_time)
+        {
+            continue;
+        }
+
         if (!data.empty())
         {
             onLandmarkData(uuid, data);
+            if (mList.count(uuid) == 0)
+            {
+                // unparsable: back off like a failed request, or the scan would re-post it every frame
+                mRequestedList[uuid] = gFrameTimeSeconds;
+            }
         }
-        else if (mRequestedList.count(uuid) == 0)
+        else
         {
-            // not in the cache: today's network path
+            // Missing file and failed read both end here: fall back to the network path
             mRequestedList[uuid] = gFrameTimeSeconds;
             gAssetStorage->getAssetData(uuid,
                                         LLAssetType::AT_LANDMARK,
@@ -210,7 +306,7 @@ void LLLandmarkList::onCacheRead(const LLUUID& uuid, const std::string& data)
 
     if (mAsyncPending.empty())
     {
-        mLandmarksLoadedSignal();
+        fireLandmarksLoaded();
     }
 }
 // </Vulkanstorm>
@@ -239,6 +335,8 @@ void LLLandmarkList::processGetAssetReply(
         // We got this asset, remove it from retry and bad lists.
         gLandmarkList.mRetryList.erase(uuid);
         gLandmarkList.mBadList.erase(uuid);
+        // <Vulkanstorm> the network path finished: refresh what depends on it
+        gLandmarkList.scheduleLandmarksLoaded();
     }
     else
     {
@@ -323,6 +421,8 @@ void LLLandmarkList::onRegionHandle(const LLUUID& landmark_id)
 
     // Call this even if no landmark exists to clean mLoadedCallbackMap
     makeCallbacks(landmark_id);
+    // <Vulkanstorm> the position is known now: refresh what depends on it
+    scheduleLandmarksLoaded();
 }
 
 void LLLandmarkList::eraseCallbacks(const LLUUID& landmark_id)
