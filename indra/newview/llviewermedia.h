@@ -449,7 +449,7 @@ private:
 private:
     // a single media url with some data and an impl.
     std::shared_ptr<LLPluginClassMedia> mMediaSource;
-    LLCoros::Mutex mLock;
+    std::shared_ptr<LLPluginClassMedia> mUploadSource; // Vulkanstorm: main thread only; source of the pending texture upload
     F64     mZoomFactor;
     LLUUID mTextureId;
     bool  mMovieImageHasMips;

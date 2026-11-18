@@ -1776,13 +1776,12 @@ void LLViewerMediaImpl::destroyMediaSource()
 
     cancelMimeTypeProbe();
 
+    // Vulkanstorm: mLock removed; an upload in flight is protected by mUploadSource
+    // (keeps the source alive) and mSharedMemoryInUse (keeps its shared memory mapped).
+    if(mMediaSource)
     {
-        LLCoros::LockType lock(mLock); // Delay tear-down while bg thread is updating
-        if(mMediaSource)
-        {
-            mMediaSource->setDeleteOK(true) ;
-            mMediaSource = NULL; // shared pointer
-        }
+        mMediaSource->setDeleteOK(true) ;
+        mMediaSource = NULL; // shared pointer
     }
 }
 
@@ -3046,9 +3045,14 @@ void LLViewerMediaImpl::update()
         if (main_queue)
         {
             mTextureUpdatePending = true;
+            // Vulkanstorm: keep the plugin's shared memory mapped (and the source alive, on
+            // the main thread only) until the worker upload has finished reading it.
+            mUploadSource = mMediaSource;
+            mUploadSource->setSharedMemoryInUse(true);
             ref();  // protect texture from deletion while active on bg queue
             media_tex->ref();
-            main_queue->postTo(
+            // Vulkanstorm: if the worker throws, the exception is rethrown on the main thread and the callback does not run.
+            const bool posted = main_queue->postTo(
                 mTexUpdateQueue, // Worker thread queue
                 [=, this]() // work done on update worker thread
                 {
@@ -3063,9 +3067,23 @@ void LLViewerMediaImpl::update()
                     media_tex->getGLTexture()->mActiveThread = LLThread::currentID();
 #endif
                     mTextureUpdatePending = false;
+                    if (mUploadSource)
+                    {
+                        mUploadSource->setSharedMemoryInUse(false);
+                        mUploadSource.reset();
+                    }
                     media_tex->unref();
                     unref();
                 });
+            if (!posted)
+            {
+                // Queue expired or closed: nothing will run the callback, so undo the setup above.
+                mTextureUpdatePending = false;
+                mUploadSource->setSharedMemoryInUse(false);
+                mUploadSource.reset();
+                media_tex->unref();
+                unref();
+            }
         }
         else
         {
@@ -3127,7 +3145,6 @@ bool LLViewerMediaImpl::preMediaTexUpdate(LLViewerMediaTexture*& media_tex, U8*&
 void LLViewerMediaImpl::doMediaTexUpdate(LLViewerMediaTexture* media_tex, U8* data, S32 data_width, S32 data_height, S32 x_pos, S32 y_pos, S32 width, S32 height, bool sync)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_MEDIA;
-    LLCoros::LockType lock(mLock); // don't allow media source tear-down during update
 
     // wrap "data" in an LLImageRaw but do NOT make a copy
     LLPointer<LLImageRaw> raw = new LLImageRaw(data, media_tex->getWidth(), media_tex->getHeight(), media_tex->getComponents(), true);

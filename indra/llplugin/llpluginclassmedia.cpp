@@ -174,7 +174,8 @@ void LLPluginClassMedia::idle(void)
         mPlugin->idle();
     }
 
-    if((mMediaWidth == -1) || (!mTextureParamsReceived) || (mPlugin == NULL) || (mPlugin->isBlocked()) || (mOwner == NULL))
+    // Vulkanstorm: no shared memory change while an upload reads it
+    if((mMediaWidth == -1) || (!mTextureParamsReceived) || (mPlugin == NULL) || (mPlugin->isBlocked()) || (mOwner == NULL) || mSharedMemoryInUse)
     {
         // Can't process a size change at this time
     }
