@@ -1009,7 +1009,10 @@ public:
     // AvatarAppearance message arrives for an avatar we never rez) are a
     // small resource leak. Teleporting to another region invalidates the
     // whole list, since it was only ever relevant to avatars in the region
-    // we're leaving, so clear it out at that point to bound the leak.
+    // we're leaving, so clear it out when a teleport starts (LLAgent::teleportCore;
+    // <Vulkanstorm> not at login and not when it finishes, where it would wipe entries
+    // registered during the arrival flood). A region crossing leaves a bounded set of
+    // stale entries that only cost one extra AvatarTexturesRequest.
     static void resetEarlyAppearanceList()
     {
         sEarlyAppearanceList.clear();

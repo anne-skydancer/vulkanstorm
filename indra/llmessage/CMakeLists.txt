@@ -135,6 +135,7 @@ set(llmessage_HEADER_FILES
     llpacketack.h
     llpacketbuffer.h
     llpacketring.h
+    llmessagepriority.h
     llpartdata.h
     llpumpio.h
     llproxy.h

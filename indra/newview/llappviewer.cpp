@@ -6769,6 +6769,7 @@ void LLAppViewer::idleNetwork()
         LLTimer check_message_timer;
         const S64 frame_count = gFrameCount;  // U32->S64
         S32 total_decoded = 0;
+        bool left_loop_early = false; // <Vulkanstorm> time box or per-frame cap hit
 
         // Process packets from network
         LockMessageChecker lmc(gMessageSystem);
@@ -6788,13 +6789,16 @@ void LLAppViewer::idleNetwork()
                     // the bandwidth settings are too high.  There is a mechanism for providing backpressure
                     // to network bandwidth but it may be inadequate for the task
                     // (see LLViewerThrottle::updateDynamicThrottle() for more details).
-                    CheckMessagesMaxTime *= 1.035f; // 3.5% ~= 2x in 20 frames, ~8x in 60 frames
+                    // <Vulkanstorm> clamped to the (previously unused) limit
+                    CheckMessagesMaxTime = llmin(CheckMessagesMaxTime * 1.035f, CHECK_MESSAGES_MAX_TIME_LIMIT); // 3.5% ~= 2x in 20 frames, ~8x in 60 frames
+                    // </Vulkanstorm>
                 }
                 else if (num_buffered_packets == 0)
                 {
                     // Reset CheckMessagesMaxTime to default value
                     CheckMessagesMaxTime = CHECK_MESSAGES_DEFAULT_MAX_TIME;
                 }
+                left_loop_early = true;
                 break;
             }
 
@@ -6803,6 +6807,7 @@ void LLAppViewer::idleNetwork()
                 // MESSAGE_MAX_PER_FRAME is very high (400)
                 // We expect to run out of time before reaching here, but just in case...
                 gMessageSystem->drainUdpSocket();
+                left_loop_early = true;
                 break;
             }
 
@@ -6812,6 +6817,15 @@ void LLAppViewer::idleNetwork()
                 break;
             }
         }
+
+        // <Vulkanstorm> The loop ended because it ran dry (not on the time box or the per-frame
+        // cap): if nothing is buffered either, return to the default time box, as release's
+        // old loop did. Without this the grown limit would stay for the rest of the session.
+        if (!left_loop_early && gMessageSystem->getNumBufferedPackets() == 0)
+        {
+            CheckMessagesMaxTime = CHECK_MESSAGES_DEFAULT_MAX_TIME;
+        }
+        // </Vulkanstorm>
 
         // Handle per-frame message system processing.
 

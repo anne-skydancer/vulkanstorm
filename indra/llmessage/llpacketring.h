@@ -47,6 +47,11 @@ public:
     LLPacketRing();
     ~LLPacketRing();
 
+    // <Vulkanstorm> owns raw LLPacketBuffer pointers
+    LLPacketRing(const LLPacketRing&) = delete;
+    LLPacketRing& operator=(const LLPacketRing&) = delete;
+    // </Vulkanstorm>
+
     // Copy 'packet' onto the tail of the ring, growing the ring or
     // overwriting the oldest entry when the ring is at capacity.
     void pushPacket(const LLPacketBuffer& packet);
