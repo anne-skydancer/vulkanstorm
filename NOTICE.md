@@ -13,7 +13,7 @@ withdrawn: the LGPL-2.1 option is dropped.
 |---|---|---|
 | Original Vulkanstorm code, written for this project | `GPL-3.0-or-later` | Files carrying `SPDX-License-Identifier: GPL-3.0-or-later`; see [Original Vulkanstorm files](#original-vulkanstorm-files) |
 | Code from Linden Lab and the Phoenix Firestorm Project, and Vulkanstorm changes to that code | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | Every file carrying a Linden Research or Phoenix Firestorm copyright and `$LicenseInfo` header (`license=viewerlgpl`, `fsviewerlgpl`, and the other LL/FS headers). Their headers are kept unchanged |
-| Rust ports of Linden Lab and Firestorm code ([vkstorm-core-rust](https://github.com/anne-skydancer/vkstorm-core-rust)) | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | The crates of that repository; its own `NOTICE.md` lists each crate |
+| Rust ports of Linden Lab and Firestorm code, archived ([vkstorm-core-rust](https://github.com/anne-skydancer/vkstorm-core-rust)) | LGPL-2.1, headers unchanged; part of a GPL-3.0-or-later whole | The crates of that repository; its own `NOTICE.md` lists each crate |
 | Third-party components | Their own licences, all compatible with GPL-3.0 | Fonts, dictionaries, the Tycho-2 star data (`indra/newview/app_settings/stars/LICENSE-TYCHO2.md`, BSD-2-Clause), the GL registry symbol list (`doc/vulkan/gl-api-symbols.LICENSE.txt`, Apache-2.0), the Linden Lab artwork and logos (`doc/LICENSE-logos.txt`, CC BY-SA 3.0, trademarks excluded), and the prebuilt libraries listed in `autobuild.xml` (their texts ship in `licenses/` and `licenses.txt`) |
 
 ## Linden Lab and Firestorm code

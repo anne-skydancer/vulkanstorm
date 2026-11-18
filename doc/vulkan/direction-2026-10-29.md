@@ -3,6 +3,9 @@
 > **Note (2026-11-17).** The graphics API, formerly "wgpu favoured", is now raw
 > Vulkan through ash. See [decisions-2026-11-17.md](decisions-2026-11-17.md).
 > The text below is kept as written on 2026-10-29.
+> Update 2026-11-18: `vkstorm-rust` was archived (tag
+> `archive/vkstorm-rust/2026-11-18`); the Rust port restarts on a fresh line
+> from `vkstorm-release`'s tip once the C++ and OpenGL modernisation are done.
 > Licence: see AGENTS.md (GPL-3.0-or-later); any LGPL line below is superseded.
 
 Owner decisions of 2026-10-29 on OpenGL, Mesa/Zink and Vulkan. Where they

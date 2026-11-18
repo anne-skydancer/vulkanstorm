@@ -226,7 +226,7 @@ if (LINUX)
   # <Vulkanstorm> AVX/AVX2 code generation, as /arch:AVX and /arch:AVX2 do on
   # Windows. USE_AVX2_OPTIMIZATION alone only adds a define; without these
   # flags the C++ was built for the x86-64 baseline (SSE2) while the
-  # vkstorm-ffi package is x86-64-v3.
+  # x86-64-v3 floor (AVX2) is the stated minimum.
   if (ADDRESS_SIZE EQUAL 64)
     if (USE_AVX_OPTIMIZATION)
       add_compile_options(-mavx)
