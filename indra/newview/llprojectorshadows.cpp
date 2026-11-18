@@ -293,16 +293,6 @@ bool LLProjectorShadows::ensureAllocated()
         {
             mAllocFailed = false;
             LLShadowDirtyFeed::setTracking(LLShadowDirtyFeed::Owner::Projectors, true); // the scene's change hooks record from now on
-            // a lamp's retiring cells (N3) are never drawn again: in a new atlas they would serve nothing
-            std::vector<std::pair<U32, const LLDrawable*>> retiring;
-            for (const auto& entry : mRetiringOf)
-            {
-                retiring.emplace_back(entry.second, entry.first);
-            }
-            for (const auto& lamp : retiring)
-            {
-                dropLamp(lamp.first, lamp.second);
-            }
             // every record starts again: a tile has to be drawn into the new atlas
             for (auto& entry : mRecords)
             {
@@ -313,6 +303,17 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.pending = false;
                 rec.avatarInLayer = false;
                 rec.layerRectValid = false;
+            }
+            // a lamp's retiring cells (N3) are never drawn again: in a new atlas they would serve nothing. Dropped after the reset above, so
+            // dropRecord frees no rect of the old atlas into the new allocator
+            std::vector<std::pair<U32, const LLDrawable*>> retiring;
+            for (const auto& entry : mRetiringOf)
+            {
+                retiring.emplace_back(entry.second, entry.first);
+            }
+            for (const auto& lamp : retiring)
+            {
+                dropLamp(lamp.first, lamp.second);
             }
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
