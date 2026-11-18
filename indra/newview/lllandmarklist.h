@@ -31,6 +31,8 @@
 #include <map>
 #include <set>
 #include <string>
+#include <utility>
+#include <vector>
 #include <boost/signals2.hpp>
 #include "lllandmark.h"
 #include "lluuid.h"
@@ -55,9 +57,16 @@ public:
     bool assetExists(const LLUUID& asset_uuid);
     // <Vulkanstorm> async: for a landmark that is not loaded yet, read the disk cache on the
     // General thread instead of on the caller's thread (the first call still returns NULL);
-    // the landmarks-loaded signal fires on the main thread when the last such read is done.
+    // the reads are batched (one General job per ASYNC_BATCH_SIZE landmarks, a partial batch is
+    // posted on the next idle pass).
     LLLandmark* getAsset(const LLUUID& asset_uuid, loaded_callback_t cb = nullptr, bool async = false);
+    // The landmarks-loaded signal fires on the main thread whenever no async read is pending
+    // after one finished (every empty transition), and after a region handle or a network load
+    // completed (on the next idle pass) while none is pending. Handlers may rescan, which only re-posts uuids that are
+    // neither loaded, bad nor backed off.
     typedef boost::signals2::signal<void()> landmarks_loaded_signal_t;
+    // Bumped each time the signal fires: lets a once-per-frame scan guard know that new data arrived.
+    U32 getLoadedGeneration() const { return mLoadedGeneration; }
     boost::signals2::connection setLandmarksLoadedCallback(const landmarks_loaded_signal_t::slot_type& cb)
     {
         return mLandmarksLoadedSignal.connect(cb);
@@ -80,7 +89,10 @@ protected:
     void makeCallbacks(const LLUUID& landmark_id);
     // <Vulkanstorm>
     void onLandmarkData(const LLUUID& uuid, const std::string& data);
-    void onCacheRead(const LLUUID& uuid, const std::string& data);
+    void onCacheRead(const std::vector<std::pair<LLUUID, std::string>>& results);
+    void flushAsyncBatch();
+    void fireLandmarksLoaded();
+    void scheduleLandmarksLoaded();
     // </Vulkanstorm>
 
     typedef std::map<LLUUID, LLLandmark*> landmark_list_t;
@@ -100,6 +112,11 @@ protected:
 
     // <Vulkanstorm> cache reads in flight on the General thread
     landmark_uuid_list_t mAsyncPending;
+    static constexpr size_t ASYNC_BATCH_SIZE = 64;
+    std::vector<LLUUID> mAsyncBatch; // accumulated, not posted yet (also in mAsyncPending)
+    bool mFlushScheduled = false;
+    bool mSignalScheduled = false;
+    U32 mLoadedGeneration = 0;
     landmarks_loaded_signal_t mLandmarksLoadedSignal;
 };
 
