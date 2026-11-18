@@ -5,8 +5,11 @@
 - H1 (b-5 F3): a texture-animation matrix is shared between its face and the draw batches that point at it
   (upstream ae465f3fb6 and 9e965d5288), so removing the animation or destroying the face cannot free it under a batch
   that a mirror's hero-probe faces or a freeze frame still draw.
-- H2 (audit A1): LLMeshSkinInfo::updateHash takes no element of an empty inverse-bind list and converts no
-  out-of-range float to an integer (upstream 8a55a86b81); the hashes of well-formed skins are unchanged.
+- H2 (b-9 F8, audit A1): a skin whose joint bindings were dropped has empty joint and inverse-bind lists. The matrix
+  palette (LLVOAvatar::updateSkinInfoMatrixPalette, LLSkinningUtil::initSkinningMatrixPalette) takes the lists' data
+  with data(), which is valid when empty, instead of &v[0]; LLMeshSkinInfo::updateHash takes no element of an empty
+  inverse-bind list and converts no out-of-range float to an integer (upstream 8a55a86b81). Outputs and hashes of
+  well-formed skins are unchanged.
 
     python3 scripts/tests/test_render_path_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_render_path_fixes.py   (another source tree)"""
@@ -39,6 +42,8 @@ FACE = code(read('indra/newview/llface.cpp'))
 SPATIAL_H = code(read('indra/newview/llspatialpartition.h'))
 VOVOLUME = code(read('indra/newview/llvovolume.cpp'))
 MODEL = code(read('indra/llprimitive/llmodel.cpp'))
+VOAVATAR = code(read('indra/newview/llvoavatar.cpp'))
+SKINNING = code(read('indra/newview/llskinningutil.cpp'))
 
 
 class TextureMatrixOwnership(unittest.TestCase):
@@ -78,6 +83,20 @@ class SkinHash(unittest.TestCase):
         self.assertIn('F64 scaled = src[i] * 10000.f + 0.5f;', self.update)
         self.assertIn('S32 t = (scaled >= S32_MIN && scaled <= S32_MAX) ? (S32)floor(scaled) : S32_MIN;', self.update)
         self.assertNotIn('ll_round(', self.update)
+
+
+class SkinPalettes(unittest.TestCase):
+    def test_the_avatar_palette_takes_data_pointers(self):
+        palette = body(VOAVATAR, 'const LLVOAvatar::MatrixPaletteCache& LLVOAvatar::updateSkinInfoMatrixPalette(')
+        self.assertIn('LLSkinningUtil::initSkinningMatrixPalette(entry.mMatrixPalette.data(), count, skin, this);', palette)
+        self.assertIn('const LLMatrix4a* mat = entry.mMatrixPalette.data();', palette)
+        self.assertIn('F32* mp = entry.mGLMp.data();', palette)
+        self.assertNotRegex(palette, r'&\s*\(?\s*entry\.m(?:MatrixPalette|GLMp)\s*\[')
+
+    def test_the_inverse_binds_are_taken_with_data(self):
+        init = body(SKINNING, 'void LLSkinningUtil::initSkinningMatrixPalette(')
+        self.assertIn('const LLMatrix4a* invBind = skin->mInvBindMatrix.data();', init)
+        self.assertNotIn('mInvBindMatrix[', init)
 
 
 if __name__ == '__main__':
