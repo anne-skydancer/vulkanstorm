@@ -8809,8 +8809,8 @@ void LLPipeline::holdShadowCasterMasks(bool wanted)
 // The frame of the casters' pattern in the sun cascades (shadowStochasticCasterF.glsl shadow_caster_frame). While the main
 // view's Stochastic shadow history accumulates the pattern takes a new seed every frame, 1 to 8 (the Aurora Viewer's period),
 // and the history's resolve averages it out, as Enderton et al. (I3D 2010, section 3.4) render the transparent shadow map
-// again with new seeds. 0, a fixed pattern, everywhere else: probes, snapshots, no history (or not yet: the history is
-// made in the lighting pass, after the maps).
+// again with new seeds. 0, a fixed pattern, everywhere else: probes, no history (or not yet: the history is made in the
+// lighting pass, after the maps). (A snapshot renders no shadow map: it reads the last frame's.)
 S32 LLPipeline::shadowCasterFrame() const
 {
     if (RenderShadowMethod != LLShadowMethod::STOCHASTIC || mRT != &mMainRT || gCubeSnapshot || gSnapshot ||

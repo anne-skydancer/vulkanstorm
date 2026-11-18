@@ -274,8 +274,9 @@ How a semi-transparent texel casts depends on the method.
     even modulus, so the blocks keep their parity), a projector tile's corner in the atlas.
   - The pattern rotates every frame in the main view's sun cascades while the Stochastic shadow history accumulates
     (`shadow_caster_frame` 1 to 8, the Aurora Viewer's period; `LLPipeline::shadowCasterFrame`), and the history's resolve
-    averages it, as Enderton et al. render the transparent shadow map again with new seeds. Projector tiles, probes,
-    snapshots and frames without the history keep a fixed pattern (0). Over the 8 frames a block's R sums to 8 x 4 alpha
+    averages it, as Enderton et al. render the transparent shadow map again with new seeds. Projector tiles, probes and
+    frames without the history keep a fixed pattern (0); a snapshot renders no shadow map and reads the last frame's (one
+    pattern, which its 8 summed sun passes do not average). Over the 8 frames a block's R sums to 8 x 4 alpha
     within 1 for alpha on a 1/64 grid and within 1.4 for any alpha (measured 1.375: the local discrepancy of eight
     golden-ratio points).
   - Lamps (projector tiles) use the same rule; their light-let-through layer (lamp study L3) comes later.
