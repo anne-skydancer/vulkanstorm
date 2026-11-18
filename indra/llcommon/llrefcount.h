@@ -28,7 +28,7 @@
 
 #include <boost/intrusive_ptr.hpp>
 #include "llatomic.h"
-#include "llframejobs.h" // <Vulkanstorm/> LL_FRAMEJOBS_ASSERT_NOT_IN_JOB
+#include "llframejobsguard.h" // <Vulkanstorm/> LL_FRAMEJOBS_ASSERT_NOT_IN_JOB
 
 class LLMutex;
 

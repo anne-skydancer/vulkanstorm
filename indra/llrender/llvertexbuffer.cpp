@@ -27,7 +27,7 @@
 #include "linden_common.h"
 
 #include "llfasttimer.h"
-#include "llframejobs.h" // <Vulkanstorm/>
+#include "llframejobsguard.h" // <Vulkanstorm/>
 #include "llsys.h"
 #include "llvertexbuffer.h"
 // #include "llrender.h"

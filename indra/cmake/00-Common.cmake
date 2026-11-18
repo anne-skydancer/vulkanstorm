@@ -39,8 +39,8 @@ option(VKS_GL_STATS "OpenGL submission instrumentation (development builds only)
 if (VKS_GL_STATS)
   add_compile_definitions(VKS_GL_STATS=1)
 endif()
-# Development only (never on in CI or release): asserts that no LL::FrameJobs job body reaches a GL call or a plain
-# reference count, and that the owner's floating-point state is the one the helpers were given. See llframejobs.h.
+# Development only (never on in CI or release): asserts that no LL::FrameJobs job body reaches a plain reference count or
+# one of the guarded GL entry points. See llframejobsguard.h.
 option(VKS_FRAMEJOBS_GUARDS "LL::FrameJobs job-body guards (development builds only)" OFF)
 if (VKS_FRAMEJOBS_GUARDS)
   add_compile_definitions(VKS_FRAMEJOBS_GUARDS=1)

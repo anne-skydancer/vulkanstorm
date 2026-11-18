@@ -2,7 +2,8 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Tests for LL::FrameJobs (multi-core stage 2): the fixed partition, serial == parallel bit for bit on a model of the
-// pipeline's render-map build, exceptions, nested and foreign calls, and a dispatch stress run.
+// pipeline's render-map build, the floating-point state per batch, exceptions, nested and foreign calls, a dispatch stress
+// run, and the pure parts of the core count.
 
 // Precompiled header
 #include "linden_common.h"
@@ -235,16 +236,23 @@ namespace tut
     void object::test<1>()
     {
         set_test_name("width rule");
-        // clamp(cores - 3, 2, 7): 5 helpers on 8 cores, 3 on 6, 2 on 4.
-        const size_t expected[] = { 2, 2, 2, 2, 2, 2, 3, 4, 5, 6, 7, 7, 7 };
+        // No helpers below 4 cores, then clamp(cores - 3, 2, 7): 2 helpers on 4 cores, 3 on 6, 5 on 8.
+        const size_t expected[] = { 0, 0, 0, 0, 2, 2, 3, 4, 5, 6, 7, 7, 7 };
         for (size_t cores = 0; cores < std::size(expected); ++cores)
         {
             ensure_equals("width for " + std::to_string(cores) + " cores", FrameJobs::widthForCores(cores), expected[cores]);
         }
         ensure_equals("width for 64 cores", FrameJobs::widthForCores(64), size_t(7));
-        ensure("the machine has a core", FrameJobs::fastPhysicalCores() >= 1);
+        for (size_t cores = 4; cores < 100; ++cores)
+        {
+            ensure("a core is left for the main thread", FrameJobs::widthForCores(cores) < cores);
+        }
+        const char* source = nullptr;
+        const size_t fast_cores = FrameJobs::fastPhysicalCores(&source);
+        ensure("the machine has a core", fast_cores >= 1);
         ensure("the fast domain is not larger than the machine",
-               FrameJobs::fastPhysicalCores() <= std::max(1u, std::thread::hardware_concurrency()));
+               fast_cores <= std::max(1u, std::thread::hardware_concurrency()));
+        ensure("the source of the core count is named", source && *source);
     }
 
     template<> template<>
@@ -252,7 +260,7 @@ namespace tut
     {
         set_test_name("fixed partition, every index once");
         const size_t counts[] = { 0, 1, 2, 63, 64, 65, 1000, 4099 };
-        const size_t grains[] = { 0, 1, 7, 64, 5000 };
+        const size_t grains[] = { 0, 1, 7, 64, 5000, ~size_t(0) };
         for (size_t helpers : { 0, 1, 2, 5, 7 })
         {
             Started started(helpers);
@@ -266,7 +274,7 @@ namespace tut
                     {
                         const size_t step = grain ? grain : 1;
                         const size_t chunks = FrameJobs::chunkCount(count, grain);
-                        ensure_equals("chunk count", chunks, (count + step - 1) / step);
+                        ensure_equals("chunk count", chunks, count / step + (count % step != 0));
                         std::vector<std::atomic<int>> visits(count);
                         std::vector<std::pair<size_t, size_t>> ranges(chunks, { ~size_t(0), ~size_t(0) });
                         std::atomic<int> bad_chunk{ 0 };
@@ -288,7 +296,7 @@ namespace tut
                         for (size_t chunk = 0; chunk < chunks; ++chunk)
                         {
                             ensure_equals("chunk begin", ranges[chunk].first, chunk * step);
-                            ensure_equals("chunk end", ranges[chunk].second, std::min(count, (chunk + 1) * step));
+                            ensure_equals("chunk end", ranges[chunk].second, count - chunk * step > step ? (chunk + 1) * step : count);
                         }
                         for (size_t i = 0; i < count; ++i)
                         {
@@ -407,20 +415,40 @@ namespace tut
         for (bool serial : { false, true })
         {
             FrameJobs::setSerial(serial);
-            for (int repeat = 0; repeat < 200; ++repeat)
+            for (int repeat = 0; repeat < 50; ++repeat)
             {
                 std::vector<std::atomic<int>> ran(100);
+                std::atomic<bool> threw_37{ false };
+                std::atomic<bool> timed_out{ false };
                 std::string what;
                 try
                 {
                     FrameJobs::parallelFor(100, 1,
                         [&](size_t begin, size_t, size_t chunk)
                         {
+                            ++ran[begin];
+                            if (chunk == 10 && !serial)
+                            {
+                                // Throw only after chunk 37 has: the lower chunk must then replace the recorded one.
+                                const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+                                while (!threw_37)
+                                {
+                                    if (std::chrono::steady_clock::now() > deadline)
+                                    {
+                                        timed_out = true;
+                                        break;
+                                    }
+                                    std::this_thread::yield();
+                                }
+                            }
+                            if (chunk == 37)
+                            {
+                                threw_37 = true;
+                            }
                             if (chunk == 10 || chunk == 37 || chunk == 80)
                             {
                                 throw std::runtime_error(std::to_string(chunk));
                             }
-                            ++ran[begin];
                         });
                 }
                 catch (const std::runtime_error& e)
@@ -428,14 +456,20 @@ namespace tut
                     what = e.what();
                 }
                 ensure_equals("exception of the lowest throwing chunk", what, std::string("10"));
-                for (size_t i = 0; i < 10; ++i)
+                ensure("chunk 37 threw before chunk 10 in the parallel pass", !timed_out);
+                for (size_t i = 0; i <= 10; ++i)
                 {
-                    ensure_equals("chunk below the throwing one ran", ran[i].load(), 1);
+                    ensure_equals("chunk up to the throwing one ran", ran[i].load(), 1);
                 }
                 for (size_t i = 0; i < ran.size(); ++i)
                 {
                     ensure("no chunk ran twice", ran[i].load() <= 1);
+                    if (serial)
+                    {
+                        ensure("a serial loop stops at the throwing chunk", i <= 10 || ran[i].load() == 0);
+                    }
                 }
+                ensure_equals("chunk 37 threw in the parallel pass only", threw_37.load(), !serial);
                 ensure("not in a job after an exception", !FrameJobs::inJob());
             }
             // The system still works.
@@ -497,6 +531,21 @@ namespace tut
         ensure_equals("foreign chunks on the foreign thread, in order", foreign_wrong, 0);
         ensure_equals("foreign chunks all ran", foreign_chunks, size_t(10));
         ensure_equals("a foreign stop() does nothing", FrameJobs::helperCount(), size_t(3));
+
+        // stop() from inside a job, on the owner or on a helper, does nothing either.
+        std::vector<int> slots(256, 0);
+        FrameJobs::parallelFor(slots.size(), 1,
+            [&](size_t begin, size_t, size_t)
+            {
+                FrameJobs::stop();
+                slots[begin] = 1;
+            });
+        ensure_equals("a stop() inside a job does nothing", FrameJobs::helperCount(), size_t(3));
+        FrameJobs::parallelFor(slots.size(), 4, [&](size_t begin, size_t end, size_t) { for (size_t i = begin; i < end; ++i) ++slots[i]; });
+        for (int slot : slots)
+        {
+            ensure_equals("slot after a stop() inside a job", slot, 2);
+        }
 
         // Serial mode.
         FrameJobs::setSerial(true);
@@ -578,5 +627,106 @@ namespace tut
         size_t chunks = 0;
         FrameJobs::parallelFor(10, 1, [&](size_t, size_t, size_t) { ++chunks; });
         ensure_equals("a stopped system runs the chunks itself", chunks, size_t(10));
+    }
+
+    template<> template<>
+    void object::test<8>()
+    {
+        set_test_name("helpers take over the owner's floating-point state at every batch");
+#if TEST_HAS_MXCSR
+        struct RestoreCsr
+        {
+            unsigned int mCsr = _mm_getcsr();
+            ~RestoreCsr() { _mm_setcsr(mCsr); }
+        } restore_csr;
+        // Results that depend on the rounding mode (x / 3, odd indices) and on flush-to-zero (x * 1e-30f * 1e-12f, even ones).
+        std::vector<float> in(1 << 14);
+        Lcg rng(7);
+        for (float& x : in)
+        {
+            x = 1.f + float(rng.next() % 100000) * 0.013f;
+        }
+        auto compute = [&in](size_t i) { return (i & 1) ? in[i] / 3.f : in[i] * 1e-30f * 1e-12f; };
+
+        Started started(3); // the helpers start under the state the test began with
+        const unsigned int base = _mm_getcsr();
+        const unsigned int states[] = {
+            base,
+            (base & ~_MM_ROUND_MASK) | _MM_ROUND_TOWARD_ZERO,
+            (base & ~_MM_ROUND_MASK) | _MM_ROUND_UP | _MM_FLUSH_ZERO_ON,
+            (base & ~(_MM_ROUND_MASK | _MM_FLUSH_ZERO_MASK)) | _MM_ROUND_DOWN,
+            base | _MM_FLUSH_ZERO_ON,
+            base,
+        };
+        std::vector<float> first;
+        size_t distinct = 0;
+        for (unsigned int state : states)
+        {
+            _mm_setcsr(state); // the owner changes its state after start()
+            std::vector<float> reference(in.size());
+            for (size_t i = 0; i < in.size(); ++i)
+            {
+                reference[i] = compute(i);
+            }
+            if (first.empty())
+            {
+                first = reference;
+            }
+            distinct += !sameBits(reference, first);
+            for (int repeat = 0; repeat < 25; ++repeat)
+            {
+                std::vector<float> result(in.size());
+                FrameJobs::parallelFor(in.size(), 64,
+                    [&](size_t begin, size_t end, size_t)
+                    {
+                        for (size_t i = begin; i < end; ++i)
+                        {
+                            result[i] = compute(i);
+                        }
+                    });
+                ensure("helpers computed with the owner's rounding and flush-to-zero state", sameBits(result, reference));
+            }
+        }
+        ensure("the states give different results", distinct >= 4);
+#else
+        skip("no MXCSR on this platform");
+#endif
+    }
+
+    template<> template<>
+    void object::test<9>()
+    {
+        set_test_name("CPU lists and physical core counts");
+        using cpus_t = std::vector<int>;
+        ensure("two ranges", FrameJobs::parseCpuList("0-7,16-23") == cpus_t({ 0, 1, 2, 3, 4, 5, 6, 7, 16, 17, 18, 19, 20, 21, 22, 23 }));
+        ensure("one cpu", FrameJobs::parseCpuList("3") == cpus_t({ 3 }));
+        ensure("empty", FrameJobs::parseCpuList("").empty());
+        ensure("mixed", FrameJobs::parseCpuList("0,2-3") == cpus_t({ 0, 2, 3 }));
+        ensure("line end", FrameJobs::parseCpuList("0-3\n") == cpus_t({ 0, 1, 2, 3 }));
+        ensure("sorted, no duplicates", FrameJobs::parseCpuList("4-5,1,4") == cpus_t({ 1, 4, 5 }));
+        ensure("junk", FrameJobs::parseCpuList("x").empty());
+        ensure("junk after a part", FrameJobs::parseCpuList("0-1,8-9,x") == cpus_t({ 0, 1, 8, 9 }));
+        ensure("open range", FrameJobs::parseCpuList("1-").empty());
+        ensure("reversed range", FrameJobs::parseCpuList("2,7-3") == cpus_t({ 2 }));
+        ensure("trailing comma", FrameJobs::parseCpuList("5,") == cpus_t({ 5 }));
+        ensure("negative", FrameJobs::parseCpuList("-1").empty());
+        ensure("number out of range", FrameJobs::parseCpuList("99999999999999999999").empty());
+        ensure("range out of range", FrameJobs::parseCpuList("0-99999999").empty());
+
+        // 8 cores with two threads each, numbered as Linux does on AMD: siblings are n and n + 8.
+        cpus_t cpus;
+        std::vector<std::string> siblings;
+        for (int cpu = 0; cpu < 16; ++cpu)
+        {
+            cpus.push_back(cpu);
+            siblings.push_back(std::to_string(cpu % 8) + "," + std::to_string(cpu % 8 + 8));
+        }
+        ensure_equals("16 threads, 8 cores", FrameJobs::countPhysicalCores(cpus, {}, siblings), size_t(8));
+        ensure_equals("cut down to one L3 domain", FrameJobs::countPhysicalCores(cpus, { 0, 1, 2, 3, 8, 9, 10, 11 }, siblings), size_t(4));
+        ensure_equals("a domain outside the allowed cpus", FrameJobs::countPhysicalCores(cpus, { 40, 41 }, siblings), size_t(0));
+        ensure_equals("affinity of four threads on two cores", FrameJobs::countPhysicalCores({ 0, 1, 8, 9 }, {}, { "0,8", "1,9", "0,8", "1,9" }), size_t(2));
+        ensure_equals("no sibling lists: a core a cpu", FrameJobs::countPhysicalCores({ 0, 1, 2 }, {}, {}), size_t(3));
+        ensure_equals("empty sibling entries: a core a cpu", FrameJobs::countPhysicalCores({ 0, 1, 2 }, { 1, 2 }, { "", "", "" }), size_t(2));
+        ensure_equals("no cpus", FrameJobs::countPhysicalCores({}, {}, {}), size_t(0));
     }
 } // namespace tut

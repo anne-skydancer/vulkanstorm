@@ -169,6 +169,7 @@ set(llcommon_HEADER_FILES
     llfixedbuffer.h
     llformat.h
     llframejobs.h
+    llframejobsguard.h
     llframetimer.h
     llhandle.h
     llhash.h

@@ -2373,7 +2373,7 @@
     <key>FrameJobsHelpers</key>
     <map>
       <key>Comment</key>
-      <string>Number of frame job helper threads (multi-core). 0 chooses it from the processor: physical cores sharing the main thread's L3 cache minus 3, between 2 and 7. Requires restart.</string>
+      <string>Number of frame job helper threads (multi-core), at most 15. 0 chooses it from the processor: none below 4 fast physical cores (those sharing the main thread's L3 cache), otherwise that number minus 3, between 2 and 7. Requires restart.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

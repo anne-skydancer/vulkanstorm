@@ -2642,9 +2642,11 @@ bool LLAppViewer::initThreads()
     // <Vulkanstorm> multi-core stage 2: the frame job helpers (doc/perf/multicore-simd-study.md, section 6.2). The main
     // thread owns them; LLVector4a::initClass() has run, so they take over its flush-to-zero and rounding state.
     {
-        size_t fast_cores = LL::FrameJobs::fastPhysicalCores();
+        const char* core_source = "";
+        size_t fast_cores = LL::FrameJobs::fastPhysicalCores(&core_source);
         if (max_cores != 0)
         {
+            // EmulateCoreCount counts logical processors; it is taken as an upper bound for the physical cores too.
             fast_cores = llmin(fast_cores, (size_t)max_cores);
         }
         size_t helpers = LL::FrameJobs::widthForCores(fast_cores);
@@ -2654,7 +2656,7 @@ bool LLAppViewer::initThreads()
         }
         LL::FrameJobs::start(helpers);
         LL_INFOS("FrameJobs") << "Frame job helpers: " << LL::FrameJobs::helperCount() << " (" << fast_cores
-                              << " physical cores share the main thread's L3 cache)" << LL_ENDL;
+                              << " fast physical cores, from " << core_source << ")" << LL_ENDL;
     }
     // </Vulkanstorm>
 

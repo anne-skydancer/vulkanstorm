@@ -37,7 +37,7 @@
 #include "llshadermgr.h"
 #include "hbxxh.h"
 #include "llglsubmitstats.h"
-#include "llframejobs.h" // <Vulkanstorm/>
+#include "llframejobsguard.h" // <Vulkanstorm/>
 #include "llthread.h" // <Vulkanstorm/> on_main_thread()
 #include "glm/gtc/type_ptr.hpp"
 

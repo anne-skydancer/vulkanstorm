@@ -496,6 +496,11 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
     LLViewerCamera& camera = LLViewerCamera::instance(); // <FS:Ansariel> Factor out calls to getInstance
 
+    // <Vulkanstorm> multi-core stage 2: FrameJobsSerial runs every frame job batch on this thread.
+    static LLCachedControl<bool> frame_jobs_serial(gSavedSettings, "FrameJobsSerial", false);
+    LL::FrameJobs::setSerial(frame_jobs_serial);
+    // </Vulkanstorm>
+
     if (gWindowResized)
     { //skip render on frames where window has been resized
         LL_DEBUGS("Window") << "Resizing window" << LL_ENDL;
@@ -917,9 +922,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         LLGLState::checkStates();
 
         // <Vulkanstorm> multi-core stage 2: the frame-work window (culls, shadow passes, texture list, state sort), in
-        // which idle frame job helpers spin instead of parking. FrameJobsSerial runs every batch on this thread.
-        static LLCachedControl<bool> frame_jobs_serial(gSavedSettings, "FrameJobsSerial", false);
-        LL::FrameJobs::setSerial(frame_jobs_serial);
+        // which frame job helpers spin briefly between batches before they park.
         LL::FrameJobs::FrameWorkScope frame_work;
         // </Vulkanstorm>
 
