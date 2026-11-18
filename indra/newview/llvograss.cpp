@@ -541,7 +541,7 @@ void LLVOGrass::getGeometry(S32 idx,
         (*verticesp++).load3(v2.mV);
 
         position.mV[0]  = mPosition.mV[VX] + x - xf;
-        position.mV[1]  = mPosition.mV[VY] + y - xf;
+        position.mV[1]  = mPosition.mV[VY] + y - yf; // <Vulkanstorm/> the mirror of the first base vertex (was - xf)
         position.mV[2]  = mRegionp->getLand().resolveHeightRegion(position);
         v3 = position + mRegionp->getOriginAgent();
         (*verticesp++).load3(v3.mV);
@@ -851,7 +851,7 @@ bool LLVOGrass::lineSegmentIntersect(const LLVector4a& start, const LLVector4a& 
         v[1]    = v2 = position + mRegionp->getOriginAgent();
 
         position.mV[0]  = mPosition.mV[VX] + x - xf;
-        position.mV[1]  = mPosition.mV[VY] + y - xf;
+        position.mV[1]  = mPosition.mV[VY] + y - yf; // <Vulkanstorm/> the mirror of the first base vertex (was - xf)
         position.mV[2]  = mRegionp->getLand().resolveHeightRegion(position);
         v[2]    = v3 = position + mRegionp->getOriginAgent();
 
