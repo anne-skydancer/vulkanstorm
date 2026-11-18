@@ -5433,7 +5433,15 @@ void process_avatar_appearance(LLMessageSystem *mesgsys, void **user_data)
     LLUUID uuid;
     mesgsys->getUUIDFast(_PREHASH_Sender, _PREHASH_ID, uuid);
 
-    LLVOAvatar* avatarp = (LLVOAvatar *)gObjectList.findObject(uuid);
+    LLViewerObject* objp = gObjectList.findObject(uuid);
+    // <Vulkanstorm> the id comes from the network: do not cast an object that is not an avatar
+    if (objp && !objp->isAvatar())
+    {
+        LL_WARNS("Messaging") << "AvatarAppearance received for non-avatar object " << uuid << LL_ENDL;
+        return;
+    }
+    // </Vulkanstorm>
+    LLVOAvatar* avatarp = static_cast<LLVOAvatar*>(objp);
     if (avatarp)
     {
         avatarp->processAvatarAppearance( mesgsys );

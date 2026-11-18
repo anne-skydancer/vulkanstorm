@@ -1003,10 +1003,8 @@ protected:
 public:
     // Used when an AvatarAppearance UDP message is received before the
     // corresponding avatar could be created.
-    static void registerEarlyAppearance(const LLUUID& av_id)
-    {
-        sEarlyAppearanceList.emplace(av_id);
-    }
+    // <Vulkanstorm> bounded (MAX_EARLY_APPEARANCES): a hostile region could send random ids.
+    static void registerEarlyAppearance(const LLUUID& av_id);
 
     // Entries left behind by agents who never get instantiated (e.g. an
     // AvatarAppearance message arrives for an avatar we never rez) are a
@@ -1021,7 +1019,10 @@ public:
         sEarlyAppearanceList.clear();
     }
 
+protected:
     LLPointer<LLAppearanceMessageContents>  mLastProcessedAppearance;
+
+public:
 
     void            parseAppearanceMessage(LLMessageSystem* mesgsys, LLAppearanceMessageContents& msg);
     void            processAvatarAppearance(LLMessageSystem* mesgsys);
