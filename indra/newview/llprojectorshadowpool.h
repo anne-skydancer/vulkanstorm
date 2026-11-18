@@ -51,17 +51,17 @@ namespace llprojectorpool
 {
 
 // ---------------------------------------------------------------------------------------------
-// Tile size (section 4.2, D4) and atlas level (D3)
+// Tile size (section 4.2, D4; lamp shadows L2) and the atlas's budget (D3: the pressure valve, below)
 // ---------------------------------------------------------------------------------------------
 
 constexpr uint32_t kMinTile = 64;      // the floor: a tile never goes below it
 constexpr uint32_t kMinBase = 128;     // clamp of the light's base size
 constexpr uint32_t kMaxBase = 2048;
-constexpr int      kMaxLevel = 5;      // 2048 >> 5 = 64: below this nothing changes
+constexpr int      kMaxLevel = 5;      // 2048 >> 5 = 64: a tile shrinks by at most this many octaves
 
-constexpr float kShrinkAbove = 0.60f;  // demand above this: down by as many levels as it takes to get at or below it (one repack)
-constexpr float kGrowAtMost = 0.45f;   // demand of the next level up at or below this ...
-constexpr float kGrowHoldSeconds = 3.0f; // ... for this long: one level up
+constexpr float kShrinkAbove = 0.60f;  // demand above this: the pressure rises by as many steps as it takes to get at or below it
+constexpr float kGrowAtMost = 0.45f;   // demand one step down at or below this ...
+constexpr float kGrowHoldSeconds = 3.0f; // ... for this long: one step down
 
 inline uint32_t pow2Round(double v)
 {
@@ -74,17 +74,28 @@ inline uint32_t pow2Round(double v)
     return uint32_t(1) << uint32_t(l);
 }
 
-// Test-only: the pool sizes a wide lamp's cells by the camera position (cell sizing, below) and does not call this.
-// d_ref  = min(1.5 * radius, 4 m)
-// N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
+// A tile's size comes from its lamp alone (lamp shadows L2): its texels are about 4 mm at the lamp's reference depth
+// d_ref = min(1.5 * radius, 4 m). No camera input: the camera's position enters only when the atlas is over its budget (the
+// pressure valve, LevelController below), never while the atlas has room.
+constexpr double kLampTexelM = 0.004;   // metres: the texel a tile aims for at d_ref
+constexpr double kRefMaxM = 4.0;        // the largest reference depth
+
+// N_base of one tile: its interior spans tan_w * d_ref metres at d_ref and wants kLampTexelM texels there, plus `guard` texels on
+// each side (a wide lamp's cell); a power of two in [kMinBase, kMaxBase]. tan_w: the tile's wider axis as a span of tangents (a lamp of
+// one tile: 2 tan(fov / 2) on its wider axis; a cell: its share of that).
+inline uint32_t tileBaseSize(double tan_w, double radius, uint32_t guard)
+{
+    const double d_ref = std::min(1.5 * std::max(radius, 0.0), kRefMaxM);
+    const double texels = tan_w * d_ref / kLampTexelM + 2.0 * double(guard); // NaN and anything up to one texel round to 1: the floor
+    return std::min(std::max(pow2Round(texels), kMinBase), kMaxBase);
+}
+
+// the square lamp of one tile: N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
 inline uint32_t baseSize(float radius, float fov_radians)
 {
-    const double d_ref = std::min(1.5 * double(radius), 4.0);
     // tan() is non-monotone past pi: clamp the half angle to [0, 1.55] rad, far beyond any real fov
     const double half = std::min(std::max(0.5 * double(fov_radians), 0.0), 1.55);
-    const double texels = 2.0 * std::tan(half) * d_ref / 0.004;
-    const uint32_t n = pow2Round(texels);
-    return std::min(std::max(n, kMinBase), kMaxBase);
+    return tileBaseSize(2.0 * std::tan(half), double(radius), 0);
 }
 
 // Atlas edge by video memory (spec 4.2, D20). vram_mb is gGLManager.mVRAM (MB, 0 = unknown), max_texture the driver's
@@ -183,39 +194,153 @@ inline double demand(const std::vector<uint32_t>& bases, int level, uint32_t atl
     return sum / (a * a);
 }
 
-// The global level with its hysteresis. One instance per atlas.
+// ---------------------------------------------------------------------------------------------
+// The pressure valve (lamp shadows L2): which tiles shrink when the atlas is over its budget
+// ---------------------------------------------------------------------------------------------
+//
+// While the lamps' tiles fit (demand at most kShrinkAbove), every tile has its lamp's size and nothing depends on the camera. Over the
+// budget the tiles shrink farthest first: each tile is in a distance band (octaves of the camera POSITION's distance to the tile's
+// volume: under 2 m, 2 to 4 m, 4 to 8 m, ... 64 m and beyond; never the view direction), and a pressure P shifts the tiles of band b
+// down by P - (kMaxBand - b) octaves (none below that, at most kMaxLevel, never below kMinTile). One step of P halves the farthest
+// shrinking band once more and starts the next nearer one, so a tile one band farther ends one octave coarser: its texel grows with
+// its distance, as the screen's does. P rises at once (as many steps as it takes to be at or below kShrinkAbove, one more when an
+// arriving tile found no room) and falls one step after kGrowHoldSeconds at or below kGrowAtMost: the hysteresis of the global level it
+// replaces, which is the special case of every tile in the farthest band. A band changes only a quarter octave past its bound
+// (kBandHysteresis), so a camera standing at a bound changes nothing. A size change is drawn by the tile's own render (draw-then-swap).
+constexpr int kMaxBand = 6;                    // 64 m and beyond (the reach is at most 128 m)
+constexpr float kBandNearM = 2.0f;             // band 0: within 2 m of the camera position; band b in 1 .. 5: [2^b, 2^(b+1)) m
+constexpr float kBandHysteresis = 1.18920712f; // 2^0.25
+constexpr int kMaxPressure = kMaxBand + kMaxLevel;
+
+// the band that holds a distance, without hysteresis (NaN, infinite or huge: the farthest)
+inline int bandOf(float distance_m)
+{
+    if (!(distance_m < 1.0e6f))
+    {
+        return kMaxBand;
+    }
+    if (!(distance_m >= kBandNearM))
+    {
+        return 0;
+    }
+    return std::min(int(std::floor(std::log2(distance_m / kBandNearM))) + 1, kMaxBand);
+}
+
+// a tile's band after a frame at `distance_m`: it moves only past a bound by kBandHysteresis
+inline int nextBand(int band, float distance_m)
+{
+    const int up = bandOf(distance_m / kBandHysteresis), down = bandOf(distance_m * kBandHysteresis);
+    if (up > band)
+    {
+        return up;
+    }
+    return down < band ? down : std::min(std::max(band, 0), kMaxBand);
+}
+
+// the octaves a tile of `band` is shifted down by at pressure P
+inline int valveShift(int pressure, int band)
+{
+    const int b = std::min(std::max(band, 0), kMaxBand);
+    return std::min(std::max(pressure - (kMaxBand - b), 0), kMaxLevel);
+}
+
+// One tile as the valve sees it.
+struct ValveTile
+{
+    uint32_t base = 0;   // the tile's size from its lamp (tileBaseSize)
+    int band = kMaxBand; // its distance band (nextBand): the farthest shrink first
+    uint32_t fixed = 0;  // nonzero: a tile the valve does not size (its lamp is switched off, or a lamp's old cells that serve until its
+                         // new ones are drawn); it counts at this size
+};
+
+inline uint32_t valveSize(const ValveTile& t, int pressure)
+{
+    return t.fixed ? t.fixed : levelSize(t.base, valveShift(pressure, t.band));
+}
+
+// U(P) = sum N_i(P)^2 / A^2
+inline double demand(const std::vector<ValveTile>& tiles, int pressure, uint32_t atlas)
+{
+    double sum = 0.0;
+    for (const ValveTile& t : tiles)
+    {
+        const double n = double(valveSize(t, pressure));
+        sum += n * n;
+    }
+    const double a = double(atlas);
+    return sum / (a * a);
+}
+
+// The lowest pressure at which every tile the valve sizes is at its floor: no step past it changes a size. A tile of band b reaches
+// its floor (kMinTile, or kMaxLevel octaves down) at P = octaves + kMaxBand - b.
+inline int pressureCeiling(const std::vector<ValveTile>& tiles)
+{
+    int ceiling = 0;
+    for (const ValveTile& t : tiles)
+    {
+        if (t.fixed)
+        {
+            continue;
+        }
+        int octaves = 0;
+        while (octaves < kMaxLevel && levelSize(t.base, octaves) > kMinTile)
+        {
+            ++octaves;
+        }
+        if (octaves > 0)
+        {
+            ceiling = std::max(ceiling, octaves + kMaxBand - std::min(std::max(t.band, 0), kMaxBand));
+        }
+    }
+    return ceiling;
+}
+
+// The valve's pressure with its hysteresis (the global level of P2 when every tile is in the farthest band). One instance per atlas.
 class LevelController
 {
 public:
     int level() const { return mLevel; }
-    void reset() { mLevel = 0; mHold = 0.0f; }
+    int ceiling() const { return mCeiling; } // the last update's pressureCeiling: at it, every tile the valve sizes is at its floor
+    void reset() { mLevel = 0; mHold = 0.0f; mCeiling = 0; }
 
-    // Call once per frame. dt_seconds is the frame time; placement_failed asks for one more step
-    // down (a repack that did not fit after compaction). Returns true when the level changed.
-    bool update(const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds, bool placement_failed)
+    // Call once per frame. dt_seconds is the frame time; placement_failed asks for one more step (an arriving tile found no room, even
+    // after a compaction). Returns true when the pressure changed.
+    bool update(const std::vector<ValveTile>& tiles, uint32_t atlas, float dt_seconds, bool placement_failed)
     {
         // a timer glitch (NaN, negative) counts as no time; a long stall (teleport, alt-tab) as one short frame, so the
         // 3 s hold is 3 s of stable frames
         dt_seconds = std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
+        // a step past the ceiling changes no size (the near tiles left, or are all at their floor): it is dropped at once, no hold to
+        // wait out
+        const int ceiling = pressureCeiling(tiles);
+        mCeiling = ceiling;
+        mLevel = std::min(mLevel, ceiling);
         const int before = mLevel;
-        while (mLevel < kMaxLevel && demand(bases, mLevel, atlas) > kShrinkAbove)
+        while (mLevel < ceiling && demand(tiles, mLevel, atlas) > kShrinkAbove)
         {
             ++mLevel;
             mHold = 0.0f;
         }
-        if (placement_failed && mLevel < kMaxLevel && mLevel == before)
+        if (placement_failed && mLevel < ceiling && mLevel == before)
         {
             ++mLevel;
             mHold = 0.0f;
         }
         if (mLevel == before && mLevel > 0)
         {
-            if (demand(bases, mLevel - 1, atlas) <= kGrowAtMost)
+            // one step down, past the steps that change nothing (a band that holds no tile)
+            int down = mLevel - 1;
+            const double at = demand(tiles, down, atlas);
+            while (down > 0 && demand(tiles, down - 1, atlas) == at)
+            {
+                --down;
+            }
+            if (at <= kGrowAtMost)
             {
                 mHold += dt_seconds;
                 if (mHold >= kGrowHoldSeconds)
                 {
-                    --mLevel;
+                    mLevel = down;
                     mHold = 0.0f;
                 }
             }
@@ -231,9 +356,21 @@ public:
         return mLevel != before;
     }
 
+    // The global level of P2: every tile in the farthest band, so the pressure shifts every tile alike.
+    bool update(const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds, bool placement_failed)
+    {
+        std::vector<ValveTile> tiles(bases.size());
+        for (size_t i = 0; i < bases.size(); ++i)
+        {
+            tiles[i].base = bases[i];
+        }
+        return update(tiles, atlas, dt_seconds, placement_failed);
+    }
+
 private:
     int   mLevel = 0;
     float mHold = 0.0f;
+    int   mCeiling = 0;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -420,6 +557,43 @@ public:
             }
         }
         return 0;
+    }
+
+    // The largest block an allocation gets once `held` (a block alloc returned, still allocated) is freed: it merges with its free
+    // buddies first. A tile's resize frees its rect and allocates the new size in the same render (draw-then-swap), so this is the
+    // largest size it can take.
+    uint32_t largestAfterFree(const Rect& held) const
+    {
+        if (!validSize(held.size))
+        {
+            return largestFree();
+        }
+        int o = order(held.size);
+        uint32_t x = held.x, y = held.y;
+        while (o < mOrders)
+        {
+            const uint32_t s = blockSize(o);
+            const uint32_t px = x & ~s, py = y & ~s;
+            const uint64_t k[4] = { key(px, py), key(px + s, py), key(px, py + s), key(px + s, py + s) };
+            const uint64_t self = key(x, y);
+            bool all = true;
+            for (uint64_t c : k)
+            {
+                if (c != self && mFree[o].find(c) == mFree[o].end())
+                {
+                    all = false;
+                    break;
+                }
+            }
+            if (!all)
+            {
+                break;
+            }
+            x = px;
+            y = py;
+            ++o;
+        }
+        return std::max(largestFree(), blockSize(o));
     }
 
 private:
@@ -705,7 +879,7 @@ enum class Cause : uint8_t
     Mover,      // an object turned into (or out of) a mover or a physical object
     Lamp,       // the lamp's own reach, angle, size or position changed
     Avatar,     // the tile holds an avatar (drawn into L over S, P4), or the avatar just left
-    Lowres,     // the tile was down-sized by a layout change and is drawn again at its new size
+    Lowres,     // a resize: the tile's size changed (the valve, its lamp's cone or reach) and its render draws it at the new size (draw-then-swap)
     Other,      // anything else: a dirty list that overflowed, a hook off the main thread
     Count
 };
@@ -1294,7 +1468,7 @@ struct TileFacts
     Cause pending_cause = Cause::Other;
     bool pose_stale = false;      // the lamp's pose differs from the pose the tile was drawn with
     bool lamp_moving = false;     // the lamp's pose changed since last frame (a moving lamp is a dynamic item, D10)
-    bool lowres = false;          // down-sized by a layout change, not yet drawn at the new size
+    bool lowres = false;          // a resize is due: the tile's wanted size is not its drawn one (and the atlas has the block for it)
     bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame (position only, never the view)
     bool avatar_in_layer = false; // the live atlas L holds an avatar of this tile (drawn over S): it is redrawn, or cleaned once it left
 };
@@ -2109,28 +2283,22 @@ inline float coldItemMs(float cost_ema_ms)
 
 
 // ---------------------------------------------------------------------------------------------
-// Cells of a wide lamp and the camera position's sizing (projector tile resolution)
+// Cells of a wide lamp (projector tile resolution)
 // ---------------------------------------------------------------------------------------------
 //
 // A lamp wider than about 93 degrees (tan of the half-angle above 1.05) is split over its own image plane into g x g cells (per axis), each a tile of its own with a
 // sub-frustum off the same projection centre, near and far planes (so a cell's depth is the lamp's, and the lookup keeps the lamp's
 // matrix). Every cell carries a guard of kCellGuard texels on each side (its frustum widened by them), so the filter's taps at a
-// seam read the neighbour's content; a lamp with one cell keeps one tile and no guard. A cell's size follows the camera's POSITION
-// (its distance to the cell's volume: the way a game sizes a light's shadow), never the view direction, with hysteresis. The image of a
-// cell depends on the lamp, the scene and the cell's size only. Spec: reports/projector-edges-2026-11-16/design.md section 5 (kept on
-// the owner's machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
+// seam read the neighbour's content; a lamp with one cell keeps one tile and no guard. A cell's size comes from its lamp alone
+// (tileBaseSize, with the guard), like a one-tile lamp's; the camera's position only picks which tiles shrink when the atlas is over its
+// budget (the pressure valve). The image of a cell depends on the lamp, the scene and the cell's size only. Spec:
+// reports/projector-edges-2026-11-16/design.md section 5 and reports/lamp-shadow-method-2026-11-18 section 4.2 (kept on the owner's
+// machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
 
 constexpr uint32_t kCellGuard = 16;       // texels on each side of a cell's interior (wide lamps only)
 static_assert(kCellGuard >= uint32_t(kProjectorLamp.kernel_max) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
 constexpr int      kMaxGrid = 4;          // cells per axis
 constexpr uint32_t kMaxCells = kMaxGrid * kMaxGrid;
-constexpr double   kTargetMinM = 0.003;   // metres: the floor texel the camera's near field is given (about 2.5 pixels at 1440p up close)
-constexpr double   kTargetPerM = 0.002;   // plus this much per metre of the camera position's distance to the cell
-constexpr double   kRefMaxM = 4.0;        // the largest axial reference depth (the old baseSize reference)
-constexpr double   kSlackM = 2.0;         // the receivers this far beyond the camera along the lamp's axis count as near
-constexpr double   kHystOctaves = 0.75;   // a size changes only when the request leaves this many octaves around it ...
-constexpr double   kHoldSeconds = 0.5;    // ... and the new size has been asked for this long
-constexpr uint32_t kMaxResizesPerFrame = 3; // in-place resizes of one frame (the rest wait: a burst is spread over frames)
 
 // Cells per axis for a half-angle tangent: 1 up to tan = 1.05 (a lamp up to about 93 degrees: ceil(tan - 0.05) is 1 there), then
 // ceil(tan - 0.05), at most kMaxGrid. (The early return keeps a NaN or a tiny tangent at 1.)
@@ -2195,7 +2363,7 @@ inline CellTan cellTanRect(const CellGrid& grid, double tan_x, double tan_y, int
 constexpr uint32_t cellInterior(uint32_t nc, uint32_t guard) { return nc > 2 * guard ? nc - 2 * guard : 1u; }
 
 // A lower bound of the distance from p to the pyramid (0 inside): the largest distance outside one plane. Exact outside a face,
-// never more than the true distance elsewhere, so a cell is sized for the camera at least as finely as it needs.
+// never more than the true distance elsewhere, so the valve never puts a tile in a farther band than its true distance gives.
 inline float pyramidDistance(const Pyramid& py, const float p[3])
 {
     float d = 0.f;
@@ -2213,99 +2381,6 @@ inline bool cellHoldsOwn(const Pyramid& core, const Aabb& box)
     const float c[3] = { 0.5f * (box.lo[0] + box.hi[0]), 0.5f * (box.lo[1] + box.hi[1]), 0.5f * (box.lo[2] + box.hi[2]) };
     return pyramidDistance(core, c) <= 0.f;
 }
-
-// T(D): the texel the camera position wants at distance D (m): about 2.5 pixels of a 1440p, 60 degree view
-inline double cellTargetM(double distance_m)
-{
-    return std::max(kTargetMinM, kTargetPerM * std::max(distance_m, 0.0));
-}
-
-// The axial reference depth at which a cell's texel is judged: the lamp's own 4 m (1.5 radius) at most, and at most kSlackM beyond the
-// camera's axial depth w_cam (clamped into the lamp's near .. far), so that the floor under a standing camera gets the target and
-// the floor a long way off does not.
-inline double cellRefDepth(double radius, double w_cam, double near_d, double far_d)
-{
-    const double w_c = std::min(std::max(w_cam, near_d), far_d);
-    return std::min(std::min(1.5 * radius, kRefMaxM), w_c + kSlackM);
-}
-
-// The continuous tile size (texels) a cell asks for: its interior spans tan_w * w_ref metres at the reference depth and wants texels of
-// cellTargetM(distance); plus the guard. Not yet a power of two or clamped (clampTile).
-inline double cellWanted(double tan_w, double w_ref, double distance_m, uint32_t guard)
-{
-    return tan_w * w_ref / cellTargetM(distance_m) + 2.0 * double(guard);
-}
-
-// The whole request of one cell, from the lamp and the camera's POSITION only (no view direction is an input, so the camera's
-// orientation cannot matter by the signature): the lamp's origin and forward axis (unit), its radius, near and far depths, the cell's
-// wider-axis tangent, the cell's interior volume and guard, and the camera's position. `distance_m` receives the camera's distance to the
-// cell's volume.
-inline double cellSizeRequest(const float lamp_origin[3], const float lamp_fwd[3], double radius, double near_d, double far_d, double tan_w,
-                              const Pyramid& core, uint32_t guard, const float cam_pos[3], float* distance_m = nullptr)
-{
-    const double w_cam = double(cam_pos[0] - lamp_origin[0]) * lamp_fwd[0] + double(cam_pos[1] - lamp_origin[1]) * lamp_fwd[1] +
-                         double(cam_pos[2] - lamp_origin[2]) * lamp_fwd[2];
-    const double w_ref = cellRefDepth(radius, w_cam, near_d, far_d);
-    const float dist = pyramidDistance(core, cam_pos);
-    if (distance_m)
-    {
-        *distance_m = dist;
-    }
-    return cellWanted(tan_w, w_ref, dist, guard);
-}
-
-// the size a request becomes: a power of two within [kMinTile, kMaxBase]
-inline uint32_t clampTile(double wanted)
-{
-    return std::min(std::max(pow2Round(wanted), kMinTile), kMaxBase);
-}
-
-// A cell's size with its hysteresis (spec 5.3): the size changes only when the continuous request leaves
-// [N / 2^kHystOctaves, N * 2^kHystOctaves] and the new size has been asked for kHoldSeconds in a row, in both directions. The first
-// request sets the size at once. update() returns true when the size changed (never on the first request).
-class SizeHysteresis
-{
-public:
-    uint32_t size() const { return mCur; }
-    void reset() { mCur = 0; mCand = 0; mSince = 0.0; }
-    bool update(double wanted, double now_s)
-    {
-        if (!std::isfinite(wanted))
-        {
-            return false;
-        }
-        const uint32_t cand = clampTile(wanted);
-        if (mCur == 0)
-        {
-            mCur = cand;
-            return false;
-        }
-        const double octaves = std::fabs(std::log2(std::max(wanted, 1.0) / double(mCur)));
-        if (octaves <= kHystOctaves || cand == mCur)
-        {
-            mCand = 0;
-            return false;
-        }
-        if (cand != mCand)
-        {
-            mCand = cand;
-            mSince = now_s;
-            return false;
-        }
-        if (now_s - mSince >= kHoldSeconds)
-        {
-            mCur = cand;
-            mCand = 0;
-            return true;
-        }
-        return false;
-    }
-
-private:
-    uint32_t mCur = 0;
-    uint32_t mCand = 0;
-    double mSince = 0.0;
-};
 
 } // namespace llprojectorpool
 

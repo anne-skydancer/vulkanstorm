@@ -43,16 +43,17 @@ class LLVOVolume;
 // Replaces the two re-rendered shadow slots of the Legacy method for the Stochastic method (RenderShadowMethod 2,
 // RenderShadowDetail 2): every projector (spotlight) within the shadows' reach of the camera's position has a tile of its
 // own in a shared depth atlas S (the tiles as drawn), copied into the live atlas L, the only texture the lighting programs
-// read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light's pose, never from the
-// camera's orientation (the casters are held at full detail by the LOD pin); a wide lamp's cells (and every tile's size) follow the camera's position, in place and with hysteresis. Since P4 the avatars are a dynamic layer: S holds the
+// read (spotLightF.glsl, sampleProjectorShadow). The tile's size and its view come from the light alone (its pose, cone and reach;
+// the casters are held at full detail by the LOD pin); the camera's position only picks which tiles shrink first when the atlas is
+// over its budget (the pressure valve, L2), and a size change is drawn before it is shown (draw-then-swap). Since P4 the avatars are a dynamic layer: S holds the
 // fixed layer, L is S plus the avatars in the light, paired by position alone (no visibility, no impostor test). The rules (sizes, level, placement, order of work) are llprojectorshadowpool.h's; this class is the GL half. Spec: reports/projector-pool-2026-11-13/design-final.md; doc/shadows/projector-shadow-pool.md.
 //
 // Stage P3 (cache and camera-proof): a tile is drawn again only when something that shows in it changed (the scene's change
 // hooks, llshadowdirtyfeed.h, tested against the tile's volume by a flat scan of the tile volumes), when its lamp's pose changed, or while an
 // avatar is in its light (P4: only the avatar layer of that tile, over a fresh copy of S). A static scene costs no tile render. The
-// casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes no tile's content (its position can change a tile's size: a redraw). Movers and physical
-// objects are not in the fixed layer. The tile work of a frame runs under one shared CPU cap (llprojectorpool::kFrameCapMs 0.35 ms:
-// the dynamic layer first, up to 0.20 ms, the static tiles in the rest).
+// casters a tile draws are held at full detail (the LOD pin), so a camera that moves changes no tile's content (its position changes a
+// tile's size only while the atlas is over its budget: a redraw). Movers and physical objects are not in the fixed layer. The tile work
+// of a frame runs under one shared CPU cap (llprojectorpool::kFrameCapMs: the dynamic layer first, the static tiles in the rest).
 //
 // Interfaces a second cache (the point lights' faces) reuses, all keyed by a tile or face key and never by "the projector":
 // llshadowdirtyfeed.h (the hooks and the per-frame boxes), llprojectorpool::ChangeIndex (boxes against volumes),
@@ -121,9 +122,9 @@ public:
         U32 lights = 0;            // the lamps in range
         U32 cells = 0;             // their tiles (records): one per lamp, or the cells of a wide lamp
         U32 lightsWithoutTile = 0; // of the tiles, with no drawn tile (the O-4 gate: 0 after the first fill)
-        U64 resizes = 0;           // tile size changes made in place (a new rect, a blit of the old content, a redraw), since the atlases were made
-        U64 resizeRepacks = 0;     // size changes that found no room and fell back to a whole repack
-        U64 resizeDeferred = 0;    // size changes held back by the per-frame limit (kMaxResizesPerFrame), retried the next frame
+        U64 resizes = 0;           // tile size changes since the atlases were made (drawn at the new size into a new rect, then swapped in)
+        U64 resizeRepacks = 0;     // compactions: an arriving tile found no block although the free texels held it (a whole repack at the tiles' sizes)
+        U64 resizeDeferred = 0;    // frames a tile waited to grow because no block of its new size was free
         U64 tileRenders = 0;       // tile renders since the atlases were made
         U64 repacks = 0;
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
@@ -188,9 +189,10 @@ private:
         int ci = 0, cj = 0;        // the cell's column and row on the lamp's image plane
         llprojectorpool::CellGrid grid; // the lamp's cells (1 x 1: one tile, no guard)
         LLPointer<LLDrawable> drawable;
-        U32 base = 128;            // this tile's size from the camera position's distance to it (SizeHysteresis; the level shifts it down)
-        llprojectorpool::SizeHysteresis hyst;
-        F32 cellDist = 0.f;        // the camera position's distance to the tile's own volume (m), the sizing's input
+        U32 base = 128;            // this tile's size from its lamp alone (llprojectorpool::tileBaseSize: cone, aspect, reach and the cell's guard)
+        int band = llprojectorpool::kMaxBand; // the valve's distance band (nextBand): which tiles shrink first when the atlas is over its budget
+        U32 want = 0;              // this frame's size: base, shifted down by the valve's pressure for the band (a render that finds it differs resizes)
+        F32 cellDist = 0.f;        // the camera position's distance to the tile's own volume (m): the valve's band, and a cell's order of service
         llprojectorpool::Pyramid core;   // the cell's interior volume, agent space (sizing, the own avatar's cadence); the lamp's for one tile
         U32 volumeNc = 0;                // the tile size `volume` (with its guard) was built for
         llprojectorpool::Rect rect;
@@ -215,7 +217,6 @@ private:
         llprojectorpool::Cause verdictCause = llprojectorpool::Cause::Other; // this frame's classifyTile cause, for a tile in the work list
         U32 dirtyFrame = 0;                // the frame the first such box was applied
         F64 dirtyTime = 0.0;               // ... and its time (seconds)
-        bool lowres = false;               // down-sized by a layout change: drawn again at the new size
         bool holdsAvatar = false;          // an avatar is in its light this frame
         U32 avatarCount = 0;
         bool avatarInLayer = false;        // L holds an avatar of this tile over S (the dynamic layer, P4): redrawn while served, restored from S after
@@ -230,14 +231,14 @@ private:
     bool allocateAtlases(U32 size);
     void freeAtlases();
     void updateLightSet(LLCamera& camera);
-    bool layoutChanged();
-    bool relayout();
+    void layout(F32 dt_seconds);
+    bool compact();
+    bool resizeDue(const Record& rec) const;
     void applyPlan(const std::vector<llprojectorpool::LayoutRequest>& requests, const llprojectorpool::RepackPlan& plan);
     void copyTile(U32 from_tex, const llprojectorpool::Rect& src, U32 to_tex, const llprojectorpool::Rect& dst);
     // S -> L over a rectangle of the tile (tile texels), the same texels of both atlases
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
     void copyAtlas(U32 from_tex, U32 to_tex);
-    void blitTile(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst, U32 guard = 0);
     void blitRect(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
     // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
@@ -257,8 +258,6 @@ private:
     void pinDrawable(LLDrawable* drawable);
     void dropRecord(std::map<U32, Record>::iterator it);
     void dropLamp(U32 lamp, const LLDrawable* drawable);
-    bool resizeInPlace(Record& rec, U32 want);
-    U32 desiredSize(const Record& rec) const;
 
     U32 mAtlasS = 0;   // the tiles as drawn: the fixed layer only (the avatars are not drawn into it since P4)
     U32 mAtlasL = 0;   // the live atlas: S plus the avatars drawn over it (P4); the only texture the lookups read
@@ -267,7 +266,10 @@ private:
     U32 mAtlasSize = 0;
 
     llprojectorpool::BuddyAtlas mBuddy;
-    llprojectorpool::LevelController mLevel;
+    llprojectorpool::LevelController mLevel;  // the pressure valve (L2)
+    std::vector<llprojectorpool::ValveTile> mValveTiles; // layout()'s scratch, filled and read within one call (the capacity is kept)
+    std::vector<Record*> mValveRecs;                     // ... the record of each valve tile; cleared before layout() returns
+    bool mPlacementFailed = false; // an arriving tile found no room last frame: the valve steps up once more
     std::map<U32, Record> mRecords;
     std::unordered_map<const LLDrawable*, U32> mKeyOf;
     U32 mNextKey = 1;

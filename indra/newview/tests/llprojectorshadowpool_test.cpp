@@ -21,6 +21,9 @@
 //   T7Differential  the partial-sort selection against the full sort of the former one (about 18,000 comparisons)
 //   P3IndexSubset   the change index over a subset (the pending tiles left out) gives the full set's hits minus those keys
 //   BoxFilter       the per-lamp box filter keeps every box that touches a tile of the lamp, in order, whatever the bounds
+//   Cells (L2)      the size from the lamp alone (guard included), the distance bands and their hysteresis, the pressure valve (no
+//                   size change while the atlas has room; farthest first over the budget; the ceiling; no hold for empty steps), and
+//                   the block a draw-then-swap resize gets (BuddyAtlas::largestAfterFree)
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -3019,7 +3022,7 @@ void testP3()
 }
 
 // ---------------------------------------------------------------------------------------------
-// Cells of a wide lamp and the camera position's sizing (projector tile resolution)
+// Cells of a wide lamp, the tile's size from its lamp and the pressure valve (projector tile resolution, L2)
 // ---------------------------------------------------------------------------------------------
 
 bool pointInPyramid(const Pyramid& py, const float p[3])
@@ -3136,89 +3139,167 @@ void testCellPyramids()
     check(std::fabs(pyramidDistance(sym, far_pt) - 4.f) < 1e-3f, "beyond the far plane: its distance", pyramidDistance(sym, far_pt));
 }
 
+// L2: a tile's size from its lamp alone, the distance bands and the pressure valve
 void testCellSizing()
 {
-    // the request falls as the camera position moves away
-    const double w_ref = 2.5, tan_w = 2.0 * std::tan(1.25) / 3.0;
-    double last = 1e30;
-    for (double dist : { 0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 })
-    {
-        const double want = cellWanted(tan_w, w_ref, dist, kCellGuard);
-        check(want <= last + 1e-9, "the request never rises with the distance", dist, want);
-        last = want;
-    }
-    check(clampTile(cellWanted(tan_w, w_ref, 0.0, kCellGuard)) == 2048, "a cell next to the camera: the largest tile");
-    check(clampTile(cellWanted(tan_w, w_ref, 100.0, kCellGuard)) == kMinTile, "far from the camera: the smallest");
-    check(cellTargetM(0.0) == kTargetMinM && std::fabs(cellTargetM(10.0) - 0.02) < 1e-12 && cellTargetM(-3.0) == kTargetMinM, "the target texel");
-    // w_ref: the lamp 4 m at most; at most 2 m beyond the camera along the axis, inside the lamp depth range
-    check(cellRefDepth(8.0, 9.0, 0.1, 12.0) == 4.0, "w_ref is capped at 4 m");
-    check(std::fabs(cellRefDepth(8.0, 0.9, 0.1, 12.0) - 2.9) < 1e-12, "w_ref: 2 m beyond the camera depth");
-    check(std::fabs(cellRefDepth(8.0, -5.0, 0.1, 12.0) - 2.1) < 1e-12, "w_ref: a camera behind the lamp counts at its near plane");
-    check(cellRefDepth(1.0, 0.9, 0.1, 12.0) == 1.5, "w_ref: 1.5 radius for a small lamp");
+    // the lamp's size: 4 mm texels at d_ref = min(1.5 r, 4 m) over the tile's wider axis, plus the guard of a cell; no camera input
+    check(tileBaseSize(2.0, 2.7, 0) == 2048 && tileBaseSize(2.0, 1.0, 0) == 1024, "the size of a 90 degree tile (baseSize's rule)");
+    check(baseSize(1.0f, kPi / 2) == tileBaseSize(2.0 * std::tan(0.5 * double(kPi / 2)), 1.0, 0) && baseSize(8.0f, 2.0f) == tileBaseSize(2.0 * std::tan(1.0), 8.0, 0),
+          "baseSize is the one-tile square case");
+    const double tan_w = 2.0 * std::tan(1.25) / 3.0; // a 3 x 3 cell of a 2.5 rad lamp
+    check(tileBaseSize(tan_w, 8.0, kCellGuard) == 2048, "a wide lamp's cell at 4 m reference depth: 2048", tileBaseSize(tan_w, 8.0, kCellGuard));
+    // the guard term: a cell's interior is its size less 2 guards, so the guard is added before the rounding
+    check(tileBaseSize(0.16, 4.0, kCellGuard) == 256 && tileBaseSize(0.16, 4.0, 0) == 128, "the guard enters the size (interior 160 + 32 rounds to 256, without it 128)",
+          tileBaseSize(0.16, 4.0, kCellGuard), tileBaseSize(0.16, 4.0, 0));
+    check(tileBaseSize(std::nan(""), 4.0, 0) == kMinBase && tileBaseSize(1.0, std::nan(""), 0) == kMinBase && tileBaseSize(-1.0, 4.0, 0) == kMinBase &&
+              tileBaseSize(1e30, 4.0, 0) == kMaxBase && tileBaseSize(1.0, 1e30, kCellGuard) <= kMaxBase,
+          "bad input stays in [kMinBase, kMaxBase]");
 
-    // hysteresis: the first request sets the size; +-0.7 octave around it changes nothing; a larger request must hold for kHoldSeconds
-    SizeHysteresis h;
-    check(h.size() == 0, "no size yet");
-    check(!h.update(500.0, 0.0) && h.size() == 512, "the first request sets the size at once");
-    for (int n = 0; n < 600; ++n)
+    // the bands: octaves of the camera position's distance, from 2 m; a band moves only a quarter octave past its bound
+    check(bandOf(0.f) == 0 && bandOf(1.99f) == 0 && bandOf(2.f) == 1 && bandOf(3.99f) == 1 && bandOf(4.f) == 2 && bandOf(63.f) == 5 && bandOf(64.f) == kMaxBand &&
+              bandOf(1e9f) == kMaxBand,
+          "the bands");
+    check(bandOf(std::numeric_limits<float>::quiet_NaN()) == kMaxBand && bandOf(std::numeric_limits<float>::infinity()) == kMaxBand && bandOf(-3.f) == 0,
+          "a bad distance: NaN and infinity are the farthest band, a negative one the nearest");
+    check(nextBand(1, 4.5f) == 1 && nextBand(1, 4.8f) == 2 && nextBand(2, 3.5f) == 2 && nextBand(2, 3.3f) == 1, "a band moves a quarter octave past its bound");
+    check(nextBand(kMaxBand, 1.f) == 0 && nextBand(0, 100.f) == kMaxBand, "a jump moves straight to the band");
     {
-        const double t = n / 60.0;
-        const double w = 512.0 * std::pow(2.0, 0.7 * std::sin(t * 6.0)); // an oscillation of +-0.7 octave
-        check(!h.update(w, t) && h.size() == 512, "an oscillation of +-0.7 octave changes nothing", t, w);
-    }
-    // a request two octaves away: the size changes after the hold, not before
-    const double t = 100.0;
-    check(!h.update(2048.0, t) && h.size() == 512, "a new request starts the hold");
-    check(!h.update(2048.0, t + 0.4) && h.size() == 512, "before the hold: unchanged");
-    check(h.update(2048.0, t + 0.5) && h.size() == 2048, "after the hold: the new size");
-    // a request that does not last is dropped
-    check(!h.update(256.0, t + 1.0) && !h.update(2048.0, t + 1.2) && !h.update(256.0, t + 1.4) && h.size() == 2048, "a request that comes and goes changes nothing");
-    // a walk back and forth across a threshold at 1 Hz (updated at 60 Hz): at most one change per hold, one per crossing
-    SizeHysteresis w;
-    w.update(1000.0, 0.0);
-    int changes = 0;
-    for (int n = 0; n < 60 * 20; ++n)
-    {
-        const double tt = n / 60.0;
-        const double want = (int(tt) % 2 == 0) ? 1000.0 : 250.0; // two octaves apart, every second
-        changes += w.update(want, tt);
-    }
-    check(changes <= 20 && changes >= 18, "one change per crossing, never more than one per hold", changes);
-    // bad input
-    SizeHysteresis b;
-    check(!b.update(std::nan(""), 0.0) && b.size() == 0 && !b.update(std::numeric_limits<double>::infinity(), 0.0) && b.size() == 0, "a bad request sets nothing");
-
-    // the sizing is a function of the camera POSITION alone: cellSizeRequest is the one composition update() uses, and its inputs are
-    // the lamp (origin, forward axis, radius, depths, tangent, cell volume) and the camera's position; no view direction is passed, so
-    // the camera's orientation cannot enter, by the signature
-    const float origin[3] = { 0.f, 0.f, 2.5f }, fwd[3] = { 0.f, 0.f, -1.f }, right[3] = { 1.f, 0.f, 0.f }, up[3] = { 0.f, 1.f, 0.f };
-    const double tx = std::tan(1.25);
-    const CellGrid grid = gridOf(tx, tx);
-    std::vector<uint32_t> first;
-    std::vector<SizeHysteresis> hs(size_t(grid.count()));
-    for (int step = 0; step < 300; ++step)
-    {
-        const float cam[3] = { -4.f + 8.f * float(step) / 300.f, 0.5f, 1.6f };
-        for (int j = 0; j < grid.gv; ++j)
+        // a camera that stands at a bound and sways by +-10 % never changes the band
+        int b = nextBand(kMaxBand, 4.f), changes = 0;
+        for (int n = 0; n < 600; ++n)
         {
-            for (int i = 0; i < grid.gu; ++i)
+            const int nb = nextBand(b, 4.f * (1.f + 0.1f * std::sin(float(n) * 0.3f)));
+            changes += nb != b;
+            b = nb;
+        }
+        check(changes == 0, "swaying +-10 % at a bound changes no band", changes);
+    }
+
+    // the shift: farthest first, one octave per band per step of pressure
+    check(valveShift(0, kMaxBand) == 0 && valveShift(1, kMaxBand) == 1 && valveShift(1, kMaxBand - 1) == 0 && valveShift(2, kMaxBand - 1) == 1, "the farthest band shrinks first");
+    check(valveShift(kMaxPressure, 0) == kMaxLevel && valveShift(99, 3) == kMaxLevel && valveShift(-4, kMaxBand) == 0, "the shift stays in [0, kMaxLevel]");
+    check(valveShift(kMaxBand + 1, 0) == 1 && valveShift(kMaxBand + 1, 1) == 2, "a tile one band farther is one octave smaller");
+
+    // while the atlas has room the valve does nothing: the sizes are the lamps', whatever the camera does
+    {
+        std::vector<ValveTile> tiles;
+        for (int i = 0; i < 6; ++i)
+        {
+            tiles.push_back({ 1024u, i, 0u }); // 6 x 1024^2 on 8192: 0.09 of the atlas
+        }
+        LevelController v;
+        int changes = 0;
+        std::mt19937 rng(11);
+        for (int f = 0; f < 3600; ++f) // a minute at 60 fps, the camera walking: every tile's band jumps around
+        {
+            for (ValveTile& t : tiles)
             {
-                const CellTan c = cellTanRect(grid, tx, tx, i, j, 480, 0);
-                const Pyramid core = makeFrustumPyramid(origin, fwd, right, up, float(c.x0), float(c.x1), float(c.y0), float(c.y1), 0.3f, 12.f);
-                const double tan_w = std::max(c.x1 - c.x0, c.y1 - c.y0);
-                float dist = -1.f;
-                const double want = cellSizeRequest(origin, fwd, 8.0, 0.3, 12.0, tan_w, core, kCellGuard, cam, &dist);
-                // the composition written out: w_cam along the axis, the reference depth, the distance to the volume
-                const double w_cam = double(origin[2] - cam[2]);
-                check(dist == pyramidDistance(core, cam) &&
-                          want == cellWanted(tan_w, cellRefDepth(8.0, w_cam, 0.3, 12.0), double(dist), kCellGuard),
-                      "cellSizeRequest is the composition of the three rules");
-                hs[size_t(j * grid.gu + i)].update(want, step / 60.0);
-                first.push_back(hs[size_t(j * grid.gu + i)].size());
+                t.band = int(rng() % (kMaxBand + 1));
+            }
+            changes += v.update(tiles, 8192, 1.f / 60.f, false);
+            for (const ValveTile& t : tiles)
+            {
+                changes += valveSize(t, v.level()) != t.base;
             }
         }
+        check(changes == 0 && v.level() == 0, "with room in the atlas no size ever changes, whatever the bands", changes);
     }
-    check(*std::max_element(first.begin(), first.end()) > *std::min_element(first.begin(), first.end()), "the walk changes sizes (the test is not vacuous)");
+    // over the budget the far tiles shrink first and the near ones keep their size
+    {
+        std::vector<ValveTile> tiles;
+        for (int i = 0; i < 12; ++i)
+        {
+            tiles.push_back({ 2048u, i < 4 ? 0 : (i < 8 ? 3 : kMaxBand), 0u }); // 12 x 2048^2 on 8192: demand 0.75
+        }
+        LevelController v;
+        check(v.update(tiles, 8192, 1.f / 60.f, false) && v.level() > 0, "over the budget the pressure rises at once", v.level());
+        check(demand(tiles, v.level(), 8192) <= kShrinkAbove, "and stops at or below the budget", demand(tiles, v.level(), 8192));
+        check(valveSize(tiles[0], v.level()) == 2048 && valveSize(tiles[11], v.level()) < 2048, "the near tiles keep their size, the far ones shrink",
+              valveSize(tiles[0], v.level()), valveSize(tiles[11], v.level()));
+        check(valveSize(tiles[11], v.level()) <= valveSize(tiles[5], v.level()) && valveSize(tiles[5], v.level()) <= valveSize(tiles[0], v.level()),
+              "never a far tile larger than a near one");
+        // the near and middle tiles leave the light set: the pressure falls back after the hold (8 tiles would stay at 0.5 > kGrowAtMost)
+        tiles.erase(tiles.begin(), tiles.begin() + 8); // the four far tiles: 4 x 2048^2 = 0.25 at P 0
+        int steps = 0;
+        const int was = v.level();
+        for (int f = 0; f < 60 * 60 && v.level() > 0; ++f)
+        {
+            steps += v.update(tiles, 8192, 1.f / 60.f, false);
+        }
+        check(was > 0 && steps > 0 && v.level() == 0, "the pressure falls once the demand allows it", was, v.level());
+        check(demand(tiles, v.level(), 8192) <= kShrinkAbove, "at a pressure that fits", demand(tiles, v.level(), 8192));
+    }
+    // the ceiling: no pressure past the point where every tile is at its floor (a step that changes nothing is never held)
+    {
+        std::vector<ValveTile> tiles(5000, ValveTile{ 2048u, kMaxBand, 0u }); // 5000 floor tiles do not fit a 4096 atlas at all (1.22)
+        LevelController v;
+        v.update(tiles, 4096, 1.f / 60.f, false);
+        check(v.level() == v.ceiling() && v.ceiling() == kMaxLevel, "all far tiles: the ceiling is the old floor level", v.level(), v.ceiling());
+        std::vector<ValveTile> near(5000, ValveTile{ 2048u, 0, 0u });
+        LevelController w;
+        w.update(near, 4096, 1.f / 60.f, false);
+        check(w.level() == kMaxPressure && w.ceiling() == kMaxPressure, "all near tiles: the ceiling is the full pressure", w.level());
+        // the near tiles move far: the pressure that changes nothing is dropped at once (no 3 s holds through the empty steps)
+        w.update(tiles, 4096, 1.f / 60.f, false);
+        check(w.level() == kMaxLevel, "a pressure past the new ceiling is dropped at once", w.level());
+        check(pressureCeiling(std::vector<ValveTile>(3, ValveTile{ 128u, kMaxBand, 0u })) == 1 && pressureCeiling(std::vector<ValveTile>(3, ValveTile{ 64u, 0, 0u })) == 0,
+              "small tiles reach their floor sooner; 64 never shrinks");
+        check(pressureCeiling(std::vector<ValveTile>(3, ValveTile{ 2048u, 0, 512u })) == 0, "fixed tiles are not the valve's");
+    }
+    // a step down skips the steps that change nothing (a band with no tile)
+    {
+        std::vector<ValveTile> tiles(40, ValveTile{ 2048u, 0, 0u }); // only near tiles: the steps up to kMaxBand change nothing
+        LevelController v;
+        v.update(tiles, 8192, 1.f / 60.f, false);
+        const int high = v.level();
+        check(high > kMaxBand, "near tiles only: the pressure passes the empty steps at once", high);
+        tiles.resize(4);
+        float t = 0.f;
+        while (v.level() > 0 && t < 60.f)
+        {
+            v.update(tiles, 8192, 1.f / 60.f, false);
+            t += 1.f / 60.f;
+        }
+        check(v.level() == 0, "the pressure falls back to 0", v.level());
+        check(t < kGrowHoldSeconds * float(high - kMaxBand) + 1.f, "one hold per step that changes a size, none for the empty ones", t, high);
+    }
+    // fixed tiles (a lamp switched off, a lamp's retiring cells) count at their size and are never resized
+    {
+        std::vector<ValveTile> tiles(10, ValveTile{ 2048u, kMaxBand, 0u });
+        tiles[0].fixed = 2048u;
+        LevelController v;
+        v.update(tiles, 8192, 1.f / 60.f, false);
+        check(valveSize(tiles[0], v.level()) == 2048u && valveSize(tiles[1], v.level()) < 2048u, "a fixed tile keeps its size, the others shrink for it");
+    }
+    // the old global level is the valve with every tile in the farthest band
+    {
+        const std::vector<uint32_t> bases = { 2048u, 1024u, 2048u, 512u, 2048u };
+        std::vector<ValveTile> far;
+        for (uint32_t b : bases)
+        {
+            far.push_back({ b, kMaxBand, 0u });
+        }
+        for (int level = 0; level <= kMaxLevel; ++level)
+        {
+            check(demand(far, level, 4096) == demand(bases, level, 4096), "all far: the valve's demand is the level's", level);
+        }
+    }
+
+    // draw-then-swap needs the block a tile gets once its own rect is freed
+    {
+        BuddyAtlas b(4096);
+        Rect r1, r2, r3, r4;
+        check(b.alloc(1024, r1) && b.alloc(1024, r2) && b.alloc(1024, r3) && b.alloc(1024, r4), "four 1024 tiles in a quarter");
+        check(b.largestFree() == 2048 && b.largestAfterFree(r1) == 2048, "three quarters free: a 2048 block, whatever is freed");
+        Rect big;
+        check(b.alloc(2048, big) && b.alloc(2048, big) && b.alloc(2048, big), "the rest filled with three 2048 tiles");
+        check(b.largestFree() == 0 && b.largestAfterFree(r1) == 1024, "a full atlas: a tile can only get its own block back");
+        b.free(r2);
+        b.free(r3);
+        b.free(r4);
+        check(b.largestFree() == 1024 && b.largestAfterFree(r1) == 2048, "its three buddies free: freeing it merges a 2048 block");
+        check(b.largestAfterFree(Rect{ 0, 0, 100 }) == b.largestFree(), "not a block size: the free blocks only");
+    }
 }
 
 // The own avatar's every-frame rule: one cell per box (the one holding its centre), however many the box's width crosses

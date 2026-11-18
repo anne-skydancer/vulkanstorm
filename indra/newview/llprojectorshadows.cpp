@@ -163,6 +163,8 @@ namespace
     {
         return llmax(0.f, (drawable->getPositionAgent() - cam_pos).length() - radius);
     }
+
+    Pyramid cell_volume(const SpotGeom& g, F32 far_clip, const CellGrid& grid, int ci, int cj, U32 nc, bool guard); // below
 }
 
 LLProjectorShadows::LLProjectorShadows()
@@ -290,7 +292,6 @@ bool LLProjectorShadows::ensureAllocated()
                 rec.drawnFrame = 0;
                 rec.drawn.valid = false;
                 rec.pending = false;
-                rec.lowres = false;
                 rec.avatarInLayer = false;
                 rec.layerRectValid = false;
             }
@@ -402,47 +403,12 @@ void LLProjectorShadows::dropLamp(U32 lamp, const LLDrawable* drawable)
     mKeyOf.erase(drawable);
 }
 
-// A tile's size changes (the camera position moved relative to it, or the level shifted): a new rect is taken beside the old one, the old
-// content is blitted over (nearest: the tile is blocky until it is drawn again at its size, the lookup never loses it; a wide lamp's
-// cell is blitted by its interior, so the content sits where the lookup reads it, and its guard strips hold the stretched edge until
-// the redraw), then the old rect is freed. Growth takes this same path as shrinking (design 5.4 asked for draw-then-free for growth:
-// not built; the redraw is the first static pick of the frame, so the blocky content is bounded by the scheduler). No whole-atlas repack:
-// that is relayout's fallback, counted, when the buddy has no room for the new rect.
-bool LLProjectorShadows::resizeInPlace(Record& rec, U32 want)
+// A resize is due when the tile's wanted size is not its drawn one and the atlas can give it the new size once its own rect is freed
+// (a shrink always can; a growth waits for a free block). Its render then draws the new size into the new rect before the lookup reads
+// it (draw-then-swap, renderTile): the lookup never shows a stretched tile.
+bool LLProjectorShadows::resizeDue(const Record& rec) const
 {
-    Rect nr;
-    if (!mBuddy.alloc(want, nr))
-    {
-        return false;
-    }
-    if (rec.drawnFrame != 0)
-    {
-        const U32 saved_fbo = LLRenderTarget::sCurFBO;
-        for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
-        {
-            LLTexUnit* tex_unit = gGL.getTexUnit(unit);
-            if (tex_unit && tex_unit->getCurrTexture() == mAtlasL)
-            {
-                tex_unit->unbind(tex_unit->getCurrType());
-            }
-        }
-        const U32 guard = rec.grid.guard();
-        blitTile(mFboS, rec.rect, mFboS, nr, guard); // S: the fixed layer (the rects are disjoint: the new one was allocated while the old is held)
-        // L: its own old content, so an avatar layer stays (blocky) until the redraw; a tile with none holds S's content
-        blitTile(rec.avatarInLayer ? mFboL : mFboS, rec.rect, mFboL, nr, guard);
-        glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
-        rec.lowres = true;
-        rec.layerRectValid = false; // the old footprint is in the old rect's texels
-    }
-    mBuddy.free(rec.rect);
-    rec.rect = nr;
-    ++mResizes;
-    return true;
-}
-
-U32 LLProjectorShadows::desiredSize(const Record& rec) const
-{
-    return levelSize(rec.base, mLevel.level());
+    return rec.placed && rec.want >= kMinTile && rec.want != rec.rect.size && (rec.want < rec.rect.size || mBuddy.largestAfterFree(rec.rect) >= rec.want);
 }
 
 // The light set (spec 4.1): the position-based nearby lights plus every light that already has a record, in range of the
@@ -577,7 +543,7 @@ void LLProjectorShadows::copyTile(U32 from_tex, const Rect& src, U32 to_tex, con
     else
     {
         // below GL 4.3: a blit between same-size rectangles with NEAREST gives the same bits
-        blitTile(from_tex == mAtlasS ? mFboS : mFboL, src, to_tex == mAtlasS ? mFboS : mFboL, dst);
+        blitRect(from_tex == mAtlasS ? mFboS : mFboL, src, to_tex == mAtlasS ? mFboS : mFboL, dst);
     }
 }
 
@@ -610,25 +576,6 @@ void LLProjectorShadows::copyAtlas(U32 from_tex, U32 to_tex)
     copyTile(from_tex, all, to_tex, all);
 }
 
-// A tile into a tile of another size. For a cell (guard > 0) the whole tile goes first (the guard strips then hold the stretched edge,
-// not stale data), then the interior over the interior: the lookup reads a cell at (guard + f * interior) / size, so the interiors are
-// what must register across sizes.
-void LLProjectorShadows::blitTile(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst, U32 guard)
-{
-    blitRect(from_fbo, src, to_fbo, dst);
-    if (guard > 0 && src.size > 2 * guard && dst.size > 2 * guard)
-    {
-        Rect si = src, di = dst;
-        si.x += guard;
-        si.y += guard;
-        si.size -= 2 * guard;
-        di.x += guard;
-        di.y += guard;
-        di.size -= 2 * guard;
-        blitRect(from_fbo, si, to_fbo, di);
-    }
-}
-
 void LLProjectorShadows::blitRect(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst)
 {
     LLGLDisable scissor(GL_SCISSOR_TEST); // a blit is clipped by the scissor test
@@ -638,9 +585,9 @@ void LLProjectorShadows::blitRect(U32 from_fbo, const Rect& src, U32 to_fbo, con
                       (GLint)(dst.x + dst.size), (GLint)(dst.y + dst.size), GL_DEPTH_BUFFER_BIT, GL_NEAREST);
 }
 
-// Applies a repack (spec 4.3), in one frame and with no name swap: every drawn tile S[old] -> L[new] (a copy at the same
-// size, bit exact; a blit at another, by the cell's interior for a wide lamp, the tile is then low resolution until it is drawn again), then L -> S in full, so both
-// atlases hold the new layout with the old content.
+// Applies a compaction (spec 4.3), in one frame and with no name swap: every drawn tile S[old] -> L[new] at its own size (bit exact),
+// then L -> S in full, so both atlases hold the new layout with the old content. A compaction never changes a size (a tile changes its
+// size only in its own render, draw-then-swap), so no tile is ever shown stretched.
 void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, const RepackPlan& plan)
 {
     const U32 saved_fbo = LLRenderTarget::sCurFBO;
@@ -674,14 +621,15 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         {
             continue;
         }
+        llassert(move.copy); // compact() keeps every size
         if (move.copy)
         {
             copyTile(mAtlasS, move.src, mAtlasL, move.dst);
         }
         else
         {
-            blitTile(mFboS, move.src, mFboL, move.dst, it->second.grid.guard());
-            it->second.lowres = true; // drawn again at its new size
+            it->second.drawnFrame = 0; // never: a size change here would have no content at its new size, so it would be drawn first
+            it->second.drawn.valid = false;
         }
     }
     if (!plan.moves.empty())
@@ -711,109 +659,124 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
     ++mRepacks;
 }
 
-// Places every record at the current level's sizes in a fresh layout (a level change, a tile that changed size, or a
-// compaction when an arrival found no room). A layout that does not fit steps the level down once more.
-bool LLProjectorShadows::relayout()
+// A compaction: every placed tile at its own size in a fresh layout (sizes in descending order pack a buddy atlas without a gap, so
+// what fitted fits again), the drawn ones moved by bit-exact copies. Runs when an arriving tile finds no block although the free texels
+// would hold it (fragmentation: tiles of mixed sizes came, went and were resized). True when a layout was applied.
+bool LLProjectorShadows::compact()
 {
-    std::vector<U32> bases;
+    std::vector<LayoutRequest> requests;
+    requests.reserve(mRecords.size());
     for (const auto& entry : mRecords)
     {
-        bases.push_back(entry.second.base);
+        const Record& rec = entry.second;
+        if (!rec.placed)
+        {
+            continue;
+        }
+        LayoutRequest q;
+        q.key = rec.key;
+        q.size = rec.rect.size;
+        q.has_old = true;
+        q.old_rect = rec.rect;
+        q.drawn = rec.drawnFrame != 0;
+        requests.push_back(q);
     }
-    for (int attempt = 0; attempt <= kMaxLevel + 1; ++attempt)
+    const RepackPlan plan = planRepack(requests, mAtlasSize);
+    if (!plan.ok)
     {
-        std::vector<LayoutRequest> requests;
-        requests.reserve(mRecords.size());
-        for (const auto& entry : mRecords)
-        {
-            const Record& rec = entry.second;
-            LayoutRequest q;
-            q.key = rec.key;
-            q.size = desiredSize(rec);
-            q.has_old = rec.placed;
-            q.old_rect = rec.rect;
-            q.drawn = rec.drawnFrame != 0;
-            requests.push_back(q);
-        }
-        const RepackPlan plan = planRepack(requests, mAtlasSize);
-        if (plan.ok)
-        {
-            applyPlan(requests, plan);
-            return true;
-        }
-        if (!mLevel.update(bases, mAtlasSize, 0.f, true))
-        {
-            break; // already at the smallest tiles
-        }
+        llassert(false); // they fitted before, and descending sizes leave no gap
+        return false;
     }
-    LL_WARNS_ONCE("ProjectorShadows") << "projector shadow tiles do not fit the atlas even at the smallest size; some projectors have no shadow" << LL_ENDL;
-    return false;
+    applyPlan(requests, plan);
+    ++mResizeRepacks;
+    return true;
 }
 
-// the level and the placement of this frame's light set (spec 4.2); true when a layout was applied
-bool LLProjectorShadows::layoutChanged()
+// The sizes and the placement of this frame's tiles (spec 4.2, lamp shadows L2): the valve's pressure from the tiles' lamp sizes and
+// distance bands, each tile's wanted size, and the arriving tiles placed at theirs (a compaction first when the free texels hold them
+// but no block does; the valve steps up the next frame when one is still left out, and the shrinking tiles' renders make the room).
+// A placed tile is never resized here: its own render draws the new size before it is swapped in (renderTile).
+void LLProjectorShadows::layout(F32 dt_seconds)
 {
-    std::vector<U32> bases;
-    bases.reserve(mRecords.size());
-    for (const auto& entry : mRecords)
-    {
-        bases.push_back(entry.second.base);
-    }
-    bool need_relayout = mLevel.update(bases, mAtlasSize, gFrameIntervalSeconds.value(), false);
-    U32 resizes_now = 0;
+    mValveTiles.clear();
+    mValveRecs.clear();
     for (auto& entry : mRecords)
     {
         Record& rec = entry.second;
-        const U32 want = desiredSize(rec);
-        if (rec.placed && rec.rect.size != want)
+        ValveTile tile;
+        tile.base = rec.base;
+        tile.band = rec.band;
+        mValveTiles.push_back(tile);
+        mValveRecs.push_back(&rec);
+    }
+    mLevel.update(mValveTiles, mAtlasSize, dt_seconds, mPlacementFailed);
+    mPlacementFailed = false;
+    for (size_t i = 0; i < mValveTiles.size(); ++i)
+    {
+        mValveRecs[i]->want = valveSize(mValveTiles[i], mLevel.level());
+    }
+    mValveRecs.clear(); // no pointer outlives the call
+
+    // the arrivals, the largest first (descending sizes pack the buddy best)
+    std::vector<Record*> waiting;
+    for (auto& entry : mRecords)
+    {
+        if (!entry.second.placed)
         {
-            // the tile's size changed (the camera position moved, or the lamp was edited): in place when the buddy has room for the new
-            // rect; a level change (need_relayout) or no room repacks the whole layout, which places this tile at its size too
-            if (!need_relayout)
-            {
-                if (resizes_now >= kMaxResizesPerFrame)
-                {
-                    ++mResizeDeferred; // a burst (many tiles crossing their band together) is spread over frames: this one keeps its size
-                    continue;
-                }
-                if (resizeInPlace(rec, want))
-                {
-                    ++resizes_now;
-                }
-                else
-                {
-                    need_relayout = true;
-                    ++mResizeRepacks;
-                }
-            }
+            waiting.push_back(&entry.second);
         }
-        else if (!rec.placed && !need_relayout)
+    }
+    if (waiting.empty())
+    {
+        return;
+    }
+    std::sort(waiting.begin(), waiting.end(), [](const Record* a, const Record* b) { return a->want != b->want ? a->want > b->want : a->key < b->key; });
+    auto place = [this](std::vector<Record*>& list) {
+        std::vector<Record*> left;
+        for (Record* rec : list)
         {
             Rect r;
-            if (mBuddy.alloc(want, r))
+            if (mBuddy.alloc(rec->want, r))
             {
-                rec.rect = r;
-                rec.placed = true;
+                rec->rect = r;
+                rec->placed = true;
             }
             else
             {
-                need_relayout = true; // no room: compact, and step the level down if that does not make room
+                left.push_back(rec);
             }
         }
-    }
-    if (!need_relayout)
+        list.swap(left);
+    };
+    place(waiting);
+    if (waiting.empty())
     {
-        return false;
+        return;
     }
-    // a level change or a resize moves tiles: the unplaced records are placed by the repack too
-    return relayout();
+    uint64_t need = 0;
+    for (const Record* rec : waiting)
+    {
+        need += uint64_t(rec->want) * rec->want;
+    }
+    if (mBuddy.freeTexels() >= need && compact())
+    {
+        place(waiting); // after a compaction the free blocks hold every arrival the free texels do
+    }
+    if (!waiting.empty())
+    {
+        mPlacementFailed = true;
+        if (mLevel.level() >= mLevel.ceiling())
+        {
+            LL_WARNS_ONCE("ProjectorShadows") << "projector shadow tiles do not fit the atlas even at the smallest sizes; some projectors have no shadow" << LL_ENDL;
+        }
+    }
 }
 
 // One tile: the light's view (its pose now), the fixed objects into S (the static layer), then S -> L for the tile, then the avatars
 // in the light over it in L (the dynamic layer, drawAvatars). The cull frustum comes from the light's matrices. The tile's size and
 // view come from the light and the casters are held at full detail by the LOD pin (pinCasters, called from
-// LLPipeline::renderShadow), so what the picture holds does not depend on the camera; only the tile's size follows the camera's
-// position (a size change redraws it); the avatars are chosen by position alone.
+// LLPipeline::renderShadow), so what the picture holds does not depend on the camera (its position only picks which tiles shrink while
+// the atlas is over its budget); the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
     SpotGeom g;
@@ -824,9 +787,42 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     glm::mat4 view, proj;
     F32 far_clip = 0.f;
     spot_matrices(g, view, proj, far_clip);
+    // Draw-then-swap (L2): a tile whose wanted size differs is drawn at the new size into a new rect by this render, and the lookup
+    // reads that rect only afterwards (the lighting pass runs after the frame's tile work), so it never shows a stretched or half-drawn
+    // tile. The old rect is freed and the new size allocated right before the draw, inside this render: nothing else can take the block
+    // in between, and the old texels are never read again. A growth that finds no block keeps its size (resizeDue tests for one).
+    if (resizeDue(rec))
+    {
+        const Rect old = rec.rect;
+        mBuddy.free(old);
+        Rect nr;
+        if (mBuddy.alloc(rec.want, nr))
+        {
+            ++mResizes;
+        }
+        else if (mBuddy.alloc(old.size, nr))
+        {
+            ++mResizeDeferred; // no block after all: drawn at its old size, the growth waits
+        }
+        else
+        {
+            llassert(false); // the block just freed holds it
+            rec.placed = false;
+            rec.drawnFrame = 0;
+            rec.drawn.valid = false;
+            return;
+        }
+        rec.rect = nr;
+        rec.layerRectValid = false; // the footprint was in the old rect's texels
+    }
     if (rec.grid.cells())
     {
         proj = tile_proj(g, rec.grid, rec.ci, rec.cj, rec.rect.size); // this cell's sub-frustum, guard included
+        if (rec.volumeNc != rec.rect.size)
+        {
+            rec.volume = cell_volume(g, far_clip, rec.grid, rec.ci, rec.cj, rec.rect.size, true); // the guard's width follows the size: the LOD pin's test
+            rec.volumeNc = rec.rect.size;
+        }
     }
 
     const F64 cpu_start = LLTimer::getTotalSeconds();
@@ -928,7 +924,6 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     r.pending = false;
     r.dirtyFrame = 0;
     r.dirtyTime = 0.0;
-    r.lowres = false;
     r.avatarInLayer = r.holdsAvatar;
     r.layerFrame = r.drawnFrame;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
@@ -1398,25 +1393,23 @@ void LLProjectorShadows::update(LLCamera& camera)
     updateLightSet(camera);
 
     // The lamps' poses, this frame's: from the lamp alone (never the camera). This is what a static scene still costs per frame:
-    // one read of every lamp's spot parameters and pose (the pose-change detection). A tile's interior volume is built only when its
-    // lamp's pose changed (or agent space was shifted, which moves every volume), and the change index is rebuilt only on a frame
-    // with dirty boxes, below. The camera's POSITION enters here and nowhere else: it picks each tile's size (cellWanted: its distance
-    // to the tile's volume), never what the tile holds.
+    // one read of every lamp's spot parameters and pose (the pose-change detection). A tile's interior volume and its size from the lamp
+    // are built only when its lamp's pose changed (or agent space was shifted, which moves every volume), and the change index is
+    // rebuilt only on a frame with dirty boxes, below. The camera's POSITION enters here and nowhere else: its distance to each tile's
+    // volume is the valve's band (which tiles shrink first while the atlas is over its budget) and a cell's order of service, never
+    // what a tile holds nor, while the atlas has room, its size.
     const U32 shifts = LLShadowDirtyFeed::shifts();
     const bool shifted = shifts != mShiftsSeen;
     mShiftsSeen = shifts;
     const LLVector3 cam_origin = camera.getOrigin();
     const F32 cam_point[3] = { cam_origin.mV[VX], cam_origin.mV[VY], cam_origin.mV[VZ] };
-    const F64 now_s = LLTimer::getTotalSeconds();
     std::vector<const LLViewerObject*> lamp_roots; // the lamps' own linksets: fixtures, their changes always push (llshadowdirtyfeed)
     U32 lamp_read = 0;
     bool lamp_ok = false;
     SpotGeom lamp_g;
     Pose lamp_pose;
-    // the lamp's sizing inputs, read once per lamp with its geometry (every cell of a lamp shares them: the grid is the lamp's)
+    // the lamp's inputs, read once per lamp with its geometry (every cell of a lamp shares them: the grid is the lamp's)
     F32 lamp_far_clip = 0.f;
-    float lamp_origin[3] = {};
-    float lamp_fwd[3] = {};
     double lamp_tan_w = 0.0;
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector sweep"); // <Vulkanstorm> hotfix: where the per-frame update spends its time
@@ -1437,11 +1430,7 @@ void LLProjectorShadows::update(LLCamera& camera)
                 {
                     lamp_pose = light_pose(lamp_g, rec.drawable);
                     lamp_far_clip = lamp_g.dist + lamp_g.radius * 1.5f; // spot_matrices' far plane
-                    // the lamp's axial direction and the cell's wider axis: the camera's sizing input below
-                    LLVector3 fwd(0.f, 0.f, -1.f);
-                    fwd *= lamp_g.rot;
-                    lamp_origin[0] = lamp_g.origin.mV[VX]; lamp_origin[1] = lamp_g.origin.mV[VY]; lamp_origin[2] = lamp_g.origin.mV[VZ];
-                    lamp_fwd[0] = fwd.mV[VX]; lamp_fwd[1] = fwd.mV[VY]; lamp_fwd[2] = fwd.mV[VZ];
+                    // the tile's wider axis as a span of tangents: the size from the lamp below
                     const double ty = std::tan(0.5 * double(lamp_g.fov));
                     const double tx = ty * double(lamp_g.scale.mV[VX] / lamp_g.scale.mV[VY]);
                     lamp_tan_w = std::max(2.0 * tx / rec.grid.gu, 2.0 * ty / rec.grid.gv); // the tile is square
@@ -1466,10 +1455,13 @@ void LLProjectorShadows::update(LLCamera& camera)
                 rec.volumeNc = 0; // the tile's own volume (with its guard) is built below, at the tile's size
                 rec.volumePose = rec.curPose;
                 rec.volumeValid = true;
+                // the tile's size from its lamp alone (4 mm texels at the lamp's reference depth): only the lamp's cone, aspect and reach
+                // change it, so it is computed with the volume
+                rec.base = tileBaseSize(lamp_tan_w, g.radius, rec.grid.guard());
             }
-            // the tile's size from the camera position: its distance to the tile's interior volume, and the lamp's axial depth of the camera
-            rec.hyst.update(cellSizeRequest(lamp_origin, lamp_fwd, g.radius, g.dist, far_clip, lamp_tan_w, rec.core, rec.grid.guard(), cam_point, &rec.cellDist), now_s);
-            rec.base = rec.hyst.size();
+            // the valve's input: the camera POSITION's distance to the tile's interior volume, as an octave band with its hysteresis
+            rec.cellDist = pyramidDistance(rec.core, cam_point);
+            rec.band = nextBand(rec.band, rec.cellDist);
             if (rec.grid.cells())
             {
                 rec.camDist = rec.cellDist; // the order of service: the nearest cells first (a single tile keeps the lamp sphere's distance, set in updateLightSet)
@@ -1480,12 +1472,12 @@ void LLProjectorShadows::update(LLCamera& camera)
 
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector layout"); // <Vulkanstorm> hotfix
-        layoutChanged();
+        layout(gFrameIntervalSeconds.value());
         // the volume of each tile as it is drawn (a cell's frustum is widened by its guard in texels, so its world width follows its size)
         for (auto& entry : mRecords)
         {
             Record& rec = entry.second;
-            const U32 nc = rec.placed ? rec.rect.size : desiredSize(rec);
+            const U32 nc = rec.placed ? rec.rect.size : rec.want;
             if (rec.volumeValid && rec.volumeNc != nc)
             {
                 SpotGeom g;
@@ -1629,7 +1621,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             facts.pending_cause = rec.pendingCause;
             facts.pose_stale = rec.poseStale;
             facts.lamp_moving = rec.lampMoving;
-            facts.lowres = rec.lowres;
+            facts.lowres = resizeDue(rec); // draw-then-swap: the render draws the new size before the lookup reads it
             facts.holds_avatar = rec.holdsAvatar;
             facts.avatar_in_layer = rec.avatarInLayer;
             const TileVerdict verdict = classifyTile(facts);
