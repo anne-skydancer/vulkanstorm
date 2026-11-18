@@ -26,6 +26,7 @@
 #define LL_LLTEXTUREFETCHPOLICY_H
 
 #include <algorithm>
+#include <functional>
 
 namespace LLTextureFetchPolicy
 {
@@ -85,9 +86,12 @@ namespace LLTextureFetchPolicy
     // to compare the live priorities, which other threads change meanwhile (createRequest on the main
     // thread, updateRequestPriority's task on the fetch thread): a data race, and a comparison that can
     // contradict itself during the sort (std::partial_sort, std::set), which then breaks its ordering.
-    // Greater priority first; equal priorities are equivalent, so a std::set keeps the first one inserted,
-    // as the set of requests ordered by the live value did (upstream behaviour, kept: the UDP list sends one
-    // request per priority and round; a tie-break would change which requests are sent).
+    // Greater priority first, and equal priorities by request (its address), as LL's comparator did until
+    // SL-17219 (2022) dropped the tie-break: a std::set of snapshots keeps every request, so the UDP list sends
+    // every request due in a round. Without it the set kept one request per priority and the others waited
+    // for later rounds, one a round (0.1 s), which held back whole groups of worn textures that share their
+    // avatar's rank (fetchPriority). The HTTP release takes the same priorities; among equal ones the order by
+    // request replaces an arbitrary one.
     template <typename Request>
     struct PrioritySnapshot
     {
@@ -96,7 +100,8 @@ namespace LLTextureFetchPolicy
 
         bool operator<(const PrioritySnapshot& rhs) const
         {
-            return mPriority > rhs.mPriority;
+            return mPriority > rhs.mPriority
+                || (mPriority == rhs.mPriority && std::less<Request*>()(mRequest, rhs.mRequest));
         }
     };
 
@@ -137,8 +142,8 @@ namespace LLTextureFetchPolicy
     // `decode_priority`. A texture on no worn face (a worn size of 0) keeps `decode_priority` exactly, and a raised
     // request stays under every boosted one (and, at the default RenderMaxTextureResolution of 2048, under every texture
     // whose own size reaches the cap). Only the order of the waiting requests changes: the HTTP release, and on OpenSim
-    // the UDP list and the priority it sends. That list keeps one request per priority in each round
-    // (PrioritySnapshot), so the worn requests that share their avatar's rank leave it one per round (0.1 s) there.
+    // the UDP list and the priority it sends, where worn requests that share their avatar's rank are all sent in their
+    // round (PrioritySnapshot orders equal priorities by request).
     inline float fetchPriority(float decode_priority, float worn_size, float abort_below)
     {
         return decode_priority < abort_below ? decode_priority
