@@ -2052,7 +2052,7 @@ void* LLWindowWin32::createSharedContext()
                 (mContextResetNotification ? " with GPU reset notification." : ".") << LL_ENDL; // <Vulkanstorm/>
             if (want_reset_notification && !mContextResetNotification)
             {
-                LL_WARNS("Window") << "The driver lists WGL_ARB_create_context_robustness but refused LOSE_CONTEXT_ON_RESET;"
+                LL_WARNS("GPUReset") << "The driver lists WGL_ARB_create_context_robustness but refused LOSE_CONTEXT_ON_RESET;"
                     " a GPU reset will not be reported." << LL_ENDL; // <Vulkanstorm/>
             }
             done = true;

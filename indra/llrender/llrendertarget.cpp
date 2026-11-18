@@ -38,6 +38,10 @@ void check_framebuffer_status()
     if (gDebugGL)
     {
         GLenum status = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE && gl_context_lost()) // <Vulkanstorm/> a GPU reset leaves nothing to check (doc/gl/gpu_reset.md)
+        {
+            return;
+        }
         switch (status)
         {
         case GL_FRAMEBUFFER_COMPLETE:

@@ -1568,10 +1568,10 @@ If you continue to receive this message, contact the [SUPPORT_SITE].
 	<string name="MBGPUResetTitle">Graphics Reset</string>
 	<string name="MBGPUResetOverloaded">The graphics card was overloaded and has been reset.
 
-[APP_NAME] can no longer draw, so it will now log out and close. Your settings have not been changed.</string>
+[APP_NAME] can no longer draw, so it will now close. Your settings have not been changed.</string>
 	<string name="MBGPUResetDriver">The graphics driver was reset.
 
-[APP_NAME] can no longer draw, so it will now log out and close. Your settings have not been changed.</string>
+[APP_NAME] can no longer draw, so it will now close. Your settings have not been changed.</string>
     <string name="MBOutOfMemoryTitle">Out Of Memory</string>
     <string name="MBOutOfMemoryErr">
         [APP_NAME]'s request for memory failed. Application can't proceed and will be closed.

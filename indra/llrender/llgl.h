@@ -148,10 +148,11 @@ public:
 
     // <Vulkanstorm> GPU reset detection (doc/gl/gpu_reset.md)
     // WGL_ARB_create_context_robustness: a context can be created with a reset notification strategy. Windows only,
-    // read by initWGL (on Linux SDL checks GLX_ARB_create_context_robustness itself).
+    // set by initWGL and read by the window when it creates the context (on Linux SDL checks
+    // GLX_ARB_create_context_robustness itself).
     bool mHasWGLContextRobustness = false;
 
-    // The main context reports GPU resets: it was created with the LOSE_CONTEXT_ON_RESET strategy. Read by initGL.
+    // The main context reports GPU resets: it was created with the LOSE_CONTEXT_ON_RESET strategy. Set by initGL.
     // Without it the GL never reports a reset, and glGetGraphicsResetStatus is not called.
     bool mHasResetNotification = false;
 
@@ -195,6 +196,12 @@ void log_glerror();
 void assert_glerror();
 
 void clear_glerror();
+
+// <Vulkanstorm> For the GL debug checks (gDebugGL), just before they halt or log: true when the context is lost to a
+// GPU reset, so the failed check means nothing (a lost context answers no query). Either the per-frame reset check has
+// seen the reset, or, in the frame of the reset before that check runs, glGetError on this thread's context reports
+// CONTEXT_LOST. The reset status itself is left to the per-frame check. Any thread with a GL context. doc/gl/gpu_reset.md
+bool gl_context_lost();
 
 
 # define stop_glerror() assert_glerror()

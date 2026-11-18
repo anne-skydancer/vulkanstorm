@@ -1721,7 +1721,7 @@ bool LLAppViewer::doFrame()
         }
 
         // <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md): one glGetGraphicsResetStatus a frame, before the frame's GL
-        // work. After a reset nothing more is drawn; the viewer logs out and closes.
+        // work. After a reset nothing more is drawn; the viewer closes (logging out first if logged in).
         if (!LLApp::isExiting() && gViewerWindow)
         {
             checkGPUReset();
@@ -1894,6 +1894,15 @@ bool LLAppViewer::doFrame()
                     LLAppViewer::getTextureCache()->pause();
                 }
             }
+
+            // <Vulkanstorm> after a GPU reset nothing is drawn, so no buffer swap paces the loop, and the frame limiter
+            // stops once the logout is sent: sleep a little each frame instead of spinning a core until the viewer has
+            // closed (doc/gl/gpu_reset.md)
+            if (gGLManager.isContextLost())
+            {
+                ms_sleep(10);
+            }
+            // </Vulkanstorm>
 
             if (mRandomizeFramerate)
             {
@@ -5243,6 +5252,14 @@ static LLNotificationFunctorRegistration finish_quit_reg("ConfirmQuit", finish_q
 void LLAppViewer::userQuit()
 {
     LL_INFOS() << "User requested quit" << LL_ENDL;
+    // <Vulkanstorm> after a GPU reset the quit is already under way and nothing can be shown: no "ConfirmQuit" no one
+    // can see, and no second request, which would restart the logout timeout at every click on the window's close
+    // button (doc/gl/gpu_reset.md)
+    if (gGLManager.isContextLost())
+    {
+        return;
+    }
+    // </Vulkanstorm>
     if (gDisconnected
         || !gViewerWindow
         || !gViewerWindow->getProgressView()
@@ -5279,6 +5296,15 @@ void LLAppViewer::earlyExitNoNotify()
 
 void LLAppViewer::abortQuit()
 {
+    // <Vulkanstorm> after a GPU reset nothing is drawn: the quit cannot be cancelled, or a "save changes?" dialog no one
+    // can see (Escape, a click where its Cancel would be) would keep the viewer open with nothing on screen
+    // (doc/gl/gpu_reset.md)
+    if (gGLManager.isContextLost())
+    {
+        LL_INFOS("GPUReset") << "abortQuit() ignored: the GPU was reset and the viewer is closing" << LL_ENDL;
+        return;
+    }
+    // </Vulkanstorm>
     LL_INFOS() << "abortQuit()" << LL_ENDL;
     mQuitRequested = false;
     mClosingFloaters = false;
@@ -5302,9 +5328,9 @@ void LLAppViewer::handleGPUReset()
     const LLGLReset::Kind kind = gGLManager.getResetKind();
 
     // The log first, so the reason is written before anything else runs on the lost context (the log flushes every line).
-    LL_WARNS("Window") << "GPU reset: the driver reports a " << LLGLReset::name(kind) << " context reset (status 0x"
+    LL_WARNS("GPUReset") << "GPU reset: the driver reports a " << LLGLReset::name(kind) << " context reset (status 0x"
         << std::hex << gGLManager.getResetStatus() << std::dec << "): " << LLGLReset::cause(kind)
-        << ". The OpenGL context is lost: nothing more is drawn, and the viewer logs out and closes."
+        << ". The OpenGL context is lost: nothing more is drawn, and the viewer closes (logging out first if logged in)."
         << " GL_RENDERER " << gGLManager.mGLRenderer << ", GL_VERSION " << gGLManager.mGLVersionString << LL_ENDL;
 
     // GL is dead, so no XUI: an OS message box, which waits for the user (the watchdog is paused meanwhile). The text
@@ -5318,8 +5344,13 @@ void LLAppViewer::handleGPUReset()
     }
 
     // The normal quit: the logout, then cleanup() saves the settings and closes everything cleanly. Nothing is
-    // written for the next start: no marker, no settings change, no reduced graphics.
-    requestQuit();
+    // written for the next start: no marker, no settings change, no reduced graphics. A quit already under way (a reset
+    // during the logout) is not requested again, which would send the stats twice and restart the logout timeout;
+    // doFrame() carries it on.
+    if (!mQuitRequested)
+    {
+        requestQuit();
+    }
 }
 // </Vulkanstorm>
 

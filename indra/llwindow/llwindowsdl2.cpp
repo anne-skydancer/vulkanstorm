@@ -775,7 +775,7 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
         // <Vulkanstorm>
         if (mContext == 0 && want_reset_notification)
         {
-            LL_WARNS() << "Cannot create a GL context with GPU reset notification (" << SDL_GetError()
+            LL_WARNS("GPUReset") << "Cannot create a GL context with GPU reset notification (" << SDL_GetError()
                 << "); creating one without it" << LL_ENDL;
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_RESET_NOTIFICATION, SDL_GL_CONTEXT_RESET_NO_NOTIFICATION);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);

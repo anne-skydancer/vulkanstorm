@@ -39,12 +39,14 @@ namespace
         return shader;
     }
 
-    // One full-screen triangle into an 8 x 8 viewport with a fragment shader that runs 2^31 dependent steps per pixel.
-    // Each pixel is one thread, so the draw takes about as long as one thread's loop, some 10 to 30 s on any GPU: far
-    // past the 2 s Windows timeout (TDR) and the usual Linux job timeouts (amdgpu 10 s). A draw that long is not
-    // preempted either (graphics preemption waits for the pixels in flight). The loop count is a uniform, so the
-    // compiler cannot fold the loop, and the result is written, so it cannot drop it. The loop is finite: where the
-    // driver has no timeout (Linux NVIDIA) the screen stalls until the draw ends and nothing is reset.
+    // One full-screen triangle into an 8 x 8 viewport with a fragment shader that runs 2^32 - 1 dependent steps per
+    // pixel. Each pixel is one thread, so the draw takes about as long as one thread's loop: measured 42 s on an RTX
+    // 5070 Ti (27 cycles a step; AMD RDNA2 takes 29), and an estimated 20 s or more at 3 GHz even on a GPU that needs
+    // half those cycles. That is far past the 2 s Windows timeout (TDR) and the Linux job timeouts (amdgpu 10 s); half
+    // the steps would leave a fast AMD GPU near 10 s (doc/gl/gpu_reset.md, "Testing"). A draw that long is not preempted
+    // either (graphics preemption waits for the pixels in flight). The loop count is a uniform, so the compiler cannot
+    // fold the loop, and the result is written, so it cannot drop it. The loop is finite: where the driver has no
+    // timeout (Linux NVIDIA) the screen stalls until the draw ends and nothing is reset.
     // The GL state touched is read first and put back, so the viewer's own state caches stay right when no reset
     // follows.
     void hang_gpu()
@@ -118,12 +120,12 @@ namespace
         glViewport(0, 0, 8, 8);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glUseProgram(program);
-        glUniform1ui(glGetUniformLocation(program, "steps"), 0x80000000u);
+        glUniform1ui(glGetUniformLocation(program, "steps"), 0xFFFFFFFFu);
         glBindVertexArray(test_vao);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         glFlush(); // submit it now
 
-        LL_WARNS("GPUResetTest") << "RenderGPUResetTest 1: a draw of 10 to 30 s was submitted. With GPU reset notification "
+        LL_WARNS("GPUResetTest") << "RenderGPUResetTest 1: a draw of 20 s or more was submitted. With GPU reset notification "
             << (gGLManager.mHasResetNotification ? "on" : "OFF (nothing will be reported)")
             << ", the driver's reset is expected within a few seconds (Windows: about 2 s)." << LL_ENDL;
 

@@ -107,8 +107,12 @@ void APIENTRY gl_debug_callback(GLenum source,
     }*/
 
     // <Vulkanstorm> after a GPU reset every call on the lost context raises CONTEXT_LOST. The reset is logged once by
-    // the viewer, which then closes; nothing here may log per call or halt that close (doc/gl/gpu_reset.md).
-    if (gGLManager.isContextLost())
+    // the viewer, which then closes; nothing here may log per call or halt that close (doc/gl/gpu_reset.md). In the
+    // frame of the reset the per-frame check has not seen it yet, so the message itself is recognised too: by its id
+    // (NVIDIA uses the error enum, as the GL_INVALID_VALUE filter below assumes) or by its text. No GL call is made here.
+    if (gGLManager.isContextLost() ||
+        (type == GL_DEBUG_TYPE_ERROR_ARB &&
+         (id == GL_CONTEXT_LOST || (message && strstr(message, "CONTEXT_LOST")))))
     {
         return;
     }
@@ -1329,7 +1333,7 @@ bool LLGLManager::initGL()
         mHasResetNotification = mHasResetNotification && glGetGraphicsResetStatus != nullptr; // a 4.5 entry point
 #endif
     }
-    LL_INFOS("RenderInit") << "GPU reset notification: "
+    LL_INFOS("GPUReset") << "GPU reset notification: "
         << (mHasResetNotification ? "on (a GPU reset is reported and the viewer closes cleanly)"
                                   : "off (the driver does not report GPU resets to this context)") << LL_ENDL;
     // </Vulkanstorm>
@@ -2437,6 +2441,13 @@ void do_assert_glerror()
     //  Create or update texture to be used with this data
     GLenum error;
     error = glGetError();
+    // <Vulkanstorm> a GPU reset, in the frame of the reset before the per-frame check has seen it: every call on the
+    // lost context raises CONTEXT_LOST. Not a bug to halt on; that check logs the reset and closes (doc/gl/gpu_reset.md)
+    if (error == GL_CONTEXT_LOST)
+    {
+        return;
+    }
+    // </Vulkanstorm>
     bool quit = false;
     if (LL_UNLIKELY(error))
     {
@@ -2508,6 +2519,23 @@ void clear_glerror()
     glGetError();
 }
 
+// <Vulkanstorm> doc/gl/gpu_reset.md
+bool gl_context_lost()
+{
+    if (gGLManager.isContextLost())
+    {
+        return true;
+    }
+    const GLenum error = glGetError();
+    if (error != GL_NO_ERROR && error != GL_CONTEXT_LOST)
+    {
+        // a real error, read here before the check that called this halts or logs: keep it in the log
+        LL_WARNS("RenderState") << "GL Error: 0x" << std::hex << error << std::dec << LL_ENDL;
+    }
+    return error == GL_CONTEXT_LOST;
+}
+// </Vulkanstorm>
+
 ///////////////////////////////////////////////////////////////
 //
 // LLGLState
@@ -2571,11 +2599,18 @@ void LLGLState::checkStates(GLboolean writeAlpha)
         return;
     }
 
-    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    GLint srcRGB = 0, dstRGB = 0, srcAlpha = 0, dstAlpha = 0; // <Vulkanstorm/> a lost context writes nothing
     glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB);
     glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
     glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
     glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    // <Vulkanstorm> nothing to check on a context lost to a GPU reset (doc/gl/gpu_reset.md)
+    if ((srcRGB != GL_SRC_ALPHA || srcAlpha != GL_SRC_ALPHA || dstRGB != GL_ONE_MINUS_SRC_ALPHA ||
+         dstAlpha != GL_ONE_MINUS_SRC_ALPHA) && gl_context_lost())
+    {
+        return;
+    }
+    // </Vulkanstorm>
     llassert_always(srcRGB == GL_SRC_ALPHA);
     llassert_always(srcAlpha == GL_SRC_ALPHA);
     llassert_always(dstRGB == GL_ONE_MINUS_SRC_ALPHA);
@@ -2597,6 +2632,10 @@ void LLGLState::checkStates(GLboolean writeAlpha)
         LLGLboolean gl_state = glIsEnabled(state);
         if(cur_state != gl_state)
         {
+            if (gl_context_lost()) // <Vulkanstorm/> a GPU reset: nothing to check (doc/gl/gpu_reset.md)
+            {
+                return;
+            }
             dumpStates();
             LL_GL_ERRS << llformat("LLGLState error. State: 0x%04x",state) << LL_ENDL;
         }
@@ -2653,13 +2692,14 @@ LLGLState::~LLGLState()
     {
         if (gDebugGL)
         {
+            // <Vulkanstorm/> gl_context_lost(): a GPU reset leaves nothing to check (doc/gl/gpu_reset.md)
             if (!gDebugSession)
             {
-                llassert_always(sStateMap[mState] == glIsEnabled(mState));
+                llassert_always(sStateMap[mState] == glIsEnabled(mState) || gl_context_lost());
             }
             else
             {
-                if (sStateMap[mState] != glIsEnabled(mState))
+                if (sStateMap[mState] != glIsEnabled(mState) && !gl_context_lost())
                 {
                     ll_fail("GL enabled state does not match expected");
                 }
@@ -2951,9 +2991,10 @@ void LLGLDepthTest::checkState()
         glGetIntegerv(GL_DEPTH_FUNC, &func);
         glGetBooleanv(GL_DEPTH_WRITEMASK, &mask);
 
-        if (glIsEnabled(GL_DEPTH_TEST) != sDepthEnabled ||
+        if ((glIsEnabled(GL_DEPTH_TEST) != sDepthEnabled ||
             sWriteEnabled != mask ||
             sDepthFunc != func)
+            && !gl_context_lost()) // <Vulkanstorm/> a GPU reset leaves nothing to check (doc/gl/gpu_reset.md)
         {
             if (gDebugSession)
             {

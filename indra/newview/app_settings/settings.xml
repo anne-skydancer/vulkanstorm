@@ -12096,7 +12096,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderGPUResetTest</key>
   <map>
     <key>Comment</key>
-    <string>Debug only, development builds with VKS_GPU_RESET_TEST: one GPU reset test at the next frame (the setting returns to 0); the viewer then shows the GPU reset message and closes (doc/gl/gpu_reset.md). 1 hangs the GPU with one long draw so the driver resets it and the reset is the viewer's (guilty): after about 2 s on Windows, on Linux only where the driver has a GPU timeout (amdgpu, i915; without one the screen stalls for up to about a minute and nothing is reset). 2, 3 and 4 simulate a guilty, an innocent and an unknown reset without touching the GPU.</string>
+    <string>Debug only, development builds with VKS_GPU_RESET_TEST: one GPU reset test at the next frame (the setting returns to 0); the viewer then shows the GPU reset message and closes (doc/gl/gpu_reset.md). 1 hangs the GPU with one long draw (42 s on an RTX 5070 Ti) so the driver resets it and the reset is the viewer's (guilty): after about 2 s on Windows, on Linux only where the driver has a GPU timeout (amdgpu 10 s, i915; without one the screen stalls for the whole draw and nothing is reset). 2, 3 and 4 simulate a guilty, an innocent and an unknown reset without touching the GPU.</string>
     <key>Persist</key>
     <integer>0</integer>
     <key>Type</key>

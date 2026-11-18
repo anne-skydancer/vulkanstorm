@@ -1767,7 +1767,8 @@ GLint LLGLSLShader::getUniformLocation(const LLStaticHashedString& uniform)
             if (gDebugGL)
             {
                 stop_glerror();
-                if (iter->second != glGetUniformLocation(mProgramObject, uniform.String().c_str()))
+                if (iter->second != glGetUniformLocation(mProgramObject, uniform.String().c_str())
+                    && !gl_context_lost()) // <Vulkanstorm/> a GPU reset leaves nothing to check (doc/gl/gpu_reset.md)
                 {
                     LL_ERRS() << "Uniform does not match." << LL_ENDL;
                 }

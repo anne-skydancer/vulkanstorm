@@ -19,11 +19,14 @@ namespace LLGLReset
     constexpr uint32_t UNKNOWN_STATUS = 0x8255;  // GL_UNKNOWN_CONTEXT_RESET
 
     // NoReset, not None: X11's X.h defines None as a macro, and the Linux GL headers include it.
+    // Guilt is per context. The viewer asks its main context, so a reset caused by its texture thread's context reports
+    // Innocent there.
     enum class Kind : uint8_t
     {
         NoReset,  // no reset
-        Guilty,   // the reset is attributable to this context: its own GPU work ran past the driver's timeout
-        Innocent, // the reset is not attributable to this context: another context's work, or the driver itself
+        Guilty,   // the reset is attributable to this context: its own GPU work (a timeout or a GPU fault)
+        Innocent, // the reset is not attributable to this context: work outside it (another program, another context
+                  // of the viewer, or the driver itself)
         Unknown,  // a reset whose cause is unknown
     };
 
@@ -65,9 +68,10 @@ namespace LLGLReset
     {
         switch (kind)
         {
-            case Kind::Guilty:   return "the viewer's own GPU work ran past the driver's timeout";
-            case Kind::Innocent: return "the driver reset the GPU for work that was not the viewer's";
-            case Kind::Unknown:  return "the driver reset the GPU for a reason it does not report";
+            case Kind::Guilty:   return "the main context's own GPU work caused it (a timeout or a GPU fault)";
+            case Kind::Innocent: return "work outside the main context caused it (another program, the viewer's texture "
+                                        "thread, or the driver)";
+            case Kind::Unknown:  return "the driver does not report the cause";
             case Kind::NoReset:  break;
         }
         return "no reset";
