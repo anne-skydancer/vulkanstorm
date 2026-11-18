@@ -63,6 +63,8 @@
 #include "lltexturecache.h"
 #include "llviewerwindow.h"
 #include "llwindow.h"
+#include "fsassetblacklist.h"   // <Vulkanstorm> a blacklisted texture is missing at once (processFetchResults)
+#include "llhttpconstants.h"    // <Vulkanstorm> HTTP_NOT_FOUND
 ///////////////////////////////////////////////////////////////////////////////
 
 // statics
@@ -2110,18 +2112,47 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
             // We finished but received no data
             if (getDiscardLevel() < 0)
             {
-                if (getFTType() != FTT_MAP_TILE)
+                // <Vulkanstorm> No data yet. The asset is missing at once when the server says so (404) or when the
+                // failure is not the network's: the data arrived and did not decode (the fetcher has retried that
+                // once), or it cannot arrive (a blacklisted asset, a local file). Server bakes keep the fetcher's own
+                // retries, and map tiles their old rule (an empty region has no tile, and says so with an HTTP error).
+                // Any other failure (an HTTP error such as 403 or 503, a time-out, an empty or broken reply, an
+                // aborted request) is retried after 1, 2 and 4 s first; it used to mark the asset missing for good.
+                static const LLCore::HttpStatus http_not_found(HTTP_NOT_FOUND);
+                bool missing = mLastHttpGetStatus == http_not_found
+                               || getFTType() == FTT_LOCAL_FILE
+                               || getFTType() == FTT_SERVER_BAKE
+                               || getFTType() == FTT_MAP_TILE
+                               || FSAssetBlacklist::getInstance()->isBlacklisted(getID(), LLAssetType::AT_TEXTURE);
+                if (!missing)
                 {
-                    LL_WARNS() << mID
-                        << " Fetch failure, setting as missing, decode_priority " << decode_priority
-                        << " mRawDiscardLevel " << mRawDiscardLevel
-                        << " current_discard " << current_discard
-                        << " stats " << mLastHttpGetStatus.toHex()
-                        << " worker state " << mFetchState
-                        << LL_ENDL;
+                    S32 requested_discard = -1;
+                    S32 decoded_discard = -1;
+                    bool decoded = false;
+                    LLAppViewer::getTextureFetch()->getLastFetchState(getID(), requested_discard, decoded_discard, decoded);
+                    missing = decoded && decoded_discard < 0;
                 }
-                setIsMissingAsset();
-                desired_discard = -1;
+                if (!missing && mFetchRetry.onFailure(sCurrentTime))
+                {
+                    LL_DEBUGS("Texture") << mID << " fetch without data, retry " << mFetchRetry.mFailures
+                                         << " at " << mFetchRetry.mRetryTime << ", stats " << mLastHttpGetStatus.toHex()
+                                         << " worker state " << mFetchState << LL_ENDL;
+                }
+                else
+                {
+                    if (getFTType() != FTT_MAP_TILE)
+                    {
+                        LL_WARNS() << mID
+                            << " Fetch failure, setting as missing, decode_priority " << decode_priority
+                            << " mRawDiscardLevel " << mRawDiscardLevel
+                            << " current_discard " << current_discard
+                            << " stats " << mLastHttpGetStatus.toHex()
+                            << " worker state " << mFetchState
+                            << LL_ENDL;
+                    }
+                    setIsMissingAsset();
+                    desired_discard = -1;
+                }
             }
             // <Vulkanstorm> A refinement ended without data: retry it after 1, 2 and 4 s (lltexturefetchpolicy.h).
             // Only when the third retry fails too does the texture stop at its level (mMinDiscardLevel, BAD in the
