@@ -2105,34 +2105,37 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
 
     if (!mIsFetching)
     {
-        if ((decode_priority > 0)
-            && (mRawDiscardLevel < 0 || mRawDiscardLevel == INVALID_DISCARD_LEVEL)
-            && mFetchState > 1) // 1 - initial, make sure fetcher did at least something
+        // <Vulkanstorm> the fetch has just finished without data
+        const bool no_data = (mRawDiscardLevel < 0 || mRawDiscardLevel == INVALID_DISCARD_LEVEL)
+                             && mFetchState > 1; // 1 - initial, make sure fetcher did at least something
+        if ((decode_priority > 0) && no_data)
         {
             // We finished but received no data
+            // <Vulkanstorm> A retry cannot help when the server says the asset is not there (404) or when the failure
+            // is not the network's: the data arrived and did not decode (the fetcher retries a failed decode of cached
+            // data once), or it cannot arrive (a blacklisted asset, a local file). Server bakes keep the fetcher's own
+            // retries, and map tiles their old rule (an empty region has no tile, and says so with an HTTP error).
+            // Any other failure (an HTTP error such as 403 or 503, a time-out, an empty or broken reply, an aborted
+            // request) is retried after 1, 2 and 4 s (lltexturefetchpolicy.h).
+            static const LLCore::HttpStatus http_not_found(HTTP_NOT_FOUND);
+            bool final_failure = mLastHttpGetStatus == http_not_found
+                                 || getFTType() == FTT_LOCAL_FILE
+                                 || getFTType() == FTT_SERVER_BAKE
+                                 || getFTType() == FTT_MAP_TILE
+                                 || FSAssetBlacklist::getInstance()->isBlacklisted(getID(), LLAssetType::AT_TEXTURE);
+            if (!final_failure)
+            {
+                S32 requested_discard = -1;
+                S32 decoded_discard = -1;
+                bool decoded = false;
+                LLAppViewer::getTextureFetch()->getLastFetchState(getID(), requested_discard, decoded_discard, decoded);
+                final_failure = decoded && decoded_discard < 0;
+            }
             if (getDiscardLevel() < 0)
             {
-                // <Vulkanstorm> No data yet. The asset is missing at once when the server says so (404) or when the
-                // failure is not the network's: the data arrived and did not decode (the fetcher has retried that
-                // once), or it cannot arrive (a blacklisted asset, a local file). Server bakes keep the fetcher's own
-                // retries, and map tiles their old rule (an empty region has no tile, and says so with an HTTP error).
-                // Any other failure (an HTTP error such as 403 or 503, a time-out, an empty or broken reply, an
-                // aborted request) is retried after 1, 2 and 4 s first; it used to mark the asset missing for good.
-                static const LLCore::HttpStatus http_not_found(HTTP_NOT_FOUND);
-                bool missing = mLastHttpGetStatus == http_not_found
-                               || getFTType() == FTT_LOCAL_FILE
-                               || getFTType() == FTT_SERVER_BAKE
-                               || getFTType() == FTT_MAP_TILE
-                               || FSAssetBlacklist::getInstance()->isBlacklisted(getID(), LLAssetType::AT_TEXTURE);
-                if (!missing)
-                {
-                    S32 requested_discard = -1;
-                    S32 decoded_discard = -1;
-                    bool decoded = false;
-                    LLAppViewer::getTextureFetch()->getLastFetchState(getID(), requested_discard, decoded_discard, decoded);
-                    missing = decoded && decoded_discard < 0;
-                }
-                if (!missing && mFetchRetry.onFailure(sCurrentTime))
+                // <Vulkanstorm> No data yet: the asset is missing at once for a final failure and when the retries are
+                // spent; any failure used to mark it missing for good.
+                if (!final_failure && mFetchRetry.onFailure(sCurrentTime))
                 {
                     LL_DEBUGS("Texture") << mID << " fetch without data, retry " << mFetchRetry.mFailures
                                          << " at " << mFetchRetry.mRetryTime << ", stats " << mLastHttpGetStatus.toHex()
@@ -2154,10 +2157,11 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
                     desired_discard = -1;
                 }
             }
-            // <Vulkanstorm> A refinement ended without data: retry it after 1, 2 and 4 s (lltexturefetchpolicy.h).
-            // Only when the third retry fails too does the texture stop at its level (mMinDiscardLevel, BAD in the
-            // texture console) until good data or Refresh Textures; that used to happen at the first failure, for good.
-            else if (!mFetchRetry.onFailure(sCurrentTime))
+            // <Vulkanstorm> A refinement ended without data: the texture stops at its level (mMinDiscardLevel, logged at
+            // INFO below; the texture console cannot show it, since the worker is deleted below) at once for a final
+            // failure, otherwise when the third retry fails too, until good data or Refresh Textures. Any failure used
+            // to stop it at the first, for good.
+            else if (final_failure || !mFetchRetry.onFailure(sCurrentTime))
             {
                 //LL_WARNS() << mID << ": Setting min discard to " << current_discard << LL_ENDL;
                 if (current_discard >= 0)
@@ -2171,20 +2175,20 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
                     mMinDiscardLevel = dis_level;
                     //desired_discard = dis_level;
                 }
-                LL_INFOS("Texture") << mID << " held at discard level " << mMinDiscardLevel << " after "
-                                    << LLTextureFetchPolicy::FetchRetry::MAX_RETRIES << " retries without data, stats "
-                                    << mLastHttpGetStatus.toHex() << " worker state " << mFetchState << LL_ENDL;
+                if (final_failure)
+                {
+                    LL_INFOS("Texture") << mID << " held at discard level " << mMinDiscardLevel
+                                        << " at once, the fetch failed for good, stats " << mLastHttpGetStatus.toHex()
+                                        << " worker state " << mFetchState << LL_ENDL;
+                }
+                else
+                {
+                    LL_INFOS("Texture") << mID << " held at discard level " << mMinDiscardLevel << " after "
+                                        << LLTextureFetchPolicy::FetchRetry::MAX_RETRIES << " retries without data, stats "
+                                        << mLastHttpGetStatus.toHex() << " worker state " << mFetchState << LL_ENDL;
+                }
             }
             destroyRawImage();
-
-            // <Vulkanstorm> The worker has finished: delete it now. The idle deletion in updateFetch runs only while
-            // no request is wanted; once the retry is due, createRequest would find the finished worker and refuse
-            // the same request (CREATE_REQUEST_ERROR_TRANSITION) on every visit, and the retry would never be made.
-            if (mHasFetcher)
-            {
-                LLAppViewer::getTextureFetch()->deleteRequest(getID(), true);
-                mHasFetcher = false;
-            }
         }
         else if (mRawImage.notNull())
         {
@@ -2194,6 +2198,17 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
             // get requested for the same texture id at the same time
             // (two textures, one fetcher)
             destroyRawImage();
+        }
+
+        // <Vulkanstorm> The worker has finished without data: delete it now, whatever the priority was. The idle
+        // deletion in updateFetch runs only on a visit that wants no request; on a visit that does (a retry that is
+        // due, or a texture back on screen after its fetch ended at priority 0), createRequest would find the
+        // finished worker and refuse the same request (CREATE_REQUEST_ERROR_TRANSITION) on every visit, and the
+        // texture would stay as it is while it stays on screen.
+        if (no_data && mHasFetcher)
+        {
+            LLAppViewer::getTextureFetch()->deleteRequest(getID(), true);
+            mHasFetcher = false;
         }
     }
 
