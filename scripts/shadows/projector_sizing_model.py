@@ -20,7 +20,14 @@ ceiling lamps (fov 2.5 rad, 3 x 3 cells, radius 8 m) and four wall spots (fov 1.
 whose lamps fit the atlas (four ceiling lamps of fov 1.2, the four wall spots). The camera walks a loop at 1.4 m/s, eye 1.7 m, 60 s at
 60 fps, on the 4096 (default) and 8192 (from 11 GB) atlases.
 
-Gate (exit code 1): no tile changes its size on a frame at pressure 0 (the atlas has room), in every scene and tier.
+Gates (exit code 1), in every scene and tier:
+  churn     the tile size changes a second stay within the scene's limit (MAX_CHANGES_PER_S: today's 0.23 in the room and 7.5 in the club
+            with a margin, 0 in the room whose lamps fit); bands from 2 m, the design L2 replaced, changed 7.9 and 28 a second
+  order     a tile more than twice as far from the camera as another of the same lamp size is never larger (the band's half octave of
+            hysteresis either side allows no more); counted over every pair and frame
+The model has no allocator: an arriving tile that waits for room, and the pressure it must then end at, is the unit test's
+(llprojectorshadowpool_test, testPlacement, with the C++ BuddyAtlas). A tile changes no size on a frame at pressure 0 by construction (the
+valve shifts no band there), so that count is reported, not gated.
 
     python scripts/shadows/projector_sizing_model.py [--seconds 60]
 Needs numpy. Deterministic.
@@ -40,6 +47,8 @@ SHRINK_ABOVE, GROW_AT_MOST, GROW_HOLD = 0.60, 0.45, 3.0
 LAMP_TEXEL_M, REF_MAX_M, GUARD = 0.004, 4.0, 16
 MAX_BAND, BAND_NEAR_M, BAND_HYST = 4, 8.0, 2.0 ** 0.5
 FPS = 60
+# the churn gate: size changes a second, per scene (measured 2026-11-18: 0.23 in the room, 7.50 / 7.55 in the club, 0 in the room that fits)
+MAX_CHANGES_PER_S = {'room, 4 wide lamps': 0.5, 'room, lamps that fit': 0.0, 'club, 20 lamps': 10.0}
 
 
 def pow2_round(v):
@@ -190,21 +199,44 @@ def walk(path, speed=1.4):
     return out
 
 
+def order_violations(bases, dists, sizes):
+    """pairs of tiles of the same lamp size where one is more than twice as far from the camera and still larger"""
+    groups = {}
+    for b, d, s in zip(bases, dists, sizes):
+        groups.setdefault(b, []).append((d, s))
+    bad = 0
+    for group in groups.values():
+        group.sort()
+        far_max = [0] * (len(group) + 1)  # the largest size among group[i:]
+        for i in range(len(group) - 1, -1, -1):
+            far_max[i] = max(far_max[i + 1], group[i][1])
+        j = 0
+        for d, s in group:
+            while j < len(group) and group[j][0] <= 2.0 * d:
+                j += 1
+            if far_max[j] > s:
+                bad += sum(1 for dd, ss in group[j:] if ss > s)
+    return bad
+
+
 def run(name, lamps, path, atlas):
     cams = walk(path)
     tiles = [(li, ci) for li, l in enumerate(lamps) for ci in range(len(l.cells))]
     bases = [lamps[li].base for li, _ in tiles]
     bands = [MAX_BAND] * len(tiles)
+    dists = [0.0] * len(tiles)
     valve = Valve()
     sizes = None
-    changes = changes_at_room = 0
+    changes = changes_at_room = order_bad = 0
     pressures, demands, texels = [], [], []
     for cam in cams:
         for k, (li, ci) in enumerate(tiles):
             d = float(np.min(np.linalg.norm(lamps[li].cells[ci] - cam, axis=1)))
+            dists[k] = d
             bands[k] = next_band(bands[k], d)
         valve.update(bases, bands, atlas, 1.0 / FPS)
         want = [level_size(b, valve_shift(valve.level, d)) for b, d in zip(bases, bands)]
+        order_bad += order_violations(bases, dists, want)
         if sizes is not None:
             n = sum(1 for a, b in zip(sizes, want) if a != b)
             changes += n
@@ -230,25 +262,28 @@ def run(name, lamps, path, atlas):
     seconds = len(cams) / FPS
     at_zero = 100.0 * pressures.count(0) / len(pressures)
     return dict(scene=name, atlas=atlas, tiles=len(tiles), demand_at_lamp_sizes=demand(bases, [MAX_BAND] * len(tiles), 0, atlas),
-                changes_per_s=changes / seconds, changes_at_room=changes_at_room, pressure_min=min(pressures), pressure_max=max(pressures),
-                share_at_zero=at_zero, demand_max=max(demands),
+                changes_per_s=changes / seconds, changes_at_room=changes_at_room, order_bad=order_bad, pressure_min=min(pressures),
+                pressure_max=max(pressures), share_at_zero=at_zero, demand_max=max(demands),
                 texel_median=float(np.median(texels)) if texels else None, texel_p90=float(np.percentile(texels, 90)) if texels else None)
 
 
 def main():
     failures = 0
     print('tile sizes from the lamp alone (4 mm texels at d_ref = min(1.5 r, 4 m), guard 16 for cells), the valve over the budget')
-    print('| scene | atlas | tiles | demand at the lamps\' sizes | pressure (min-max, % of frames at 0) | demand max | size changes /s | '
-          'of them at pressure 0 | floor texel under the camera, median / p90 (mm) |')
-    print('|---|---|---|---|---|---|---|---|---|')
+    print('| scene | atlas | tiles | demand at the lamps\' sizes | pressure (min-max, % of frames at 0) | demand max | size changes /s (limit) | '
+          'of them at pressure 0 | farther-and-larger pairs | floor texel under the camera, median / p90 (mm) |')
+    print('|---|---|---|---|---|---|---|---|---|---|')
     for scene in (room(), room_fits(), club()):
         for atlas in (4096, 8192):
             r = run(*scene, atlas)
-            failures += r['changes_at_room'] > 0
+            limit = MAX_CHANGES_PER_S[r['scene']]
+            churn_fail = r['changes_per_s'] > limit
+            failures += churn_fail + (r['order_bad'] > 0)
             tex = '%.1f / %.1f' % (r['texel_median'], r['texel_p90']) if r['texel_median'] is not None else 'n/a'
-            print('| %s | %d | %d | %.2f | %d-%d (%.0f %%) | %.2f | %.2f | %d%s | %s |' % (
+            print('| %s | %d | %d | %.2f | %d-%d (%.0f %%) | %.2f | %.2f (%.2f)%s | %d | %d%s | %s |' % (
                 r['scene'], atlas, r['tiles'], r['demand_at_lamp_sizes'], r['pressure_min'], r['pressure_max'], r['share_at_zero'],
-                r['demand_max'], r['changes_per_s'], r['changes_at_room'], '  FAIL' if r['changes_at_room'] else '', tex))
+                r['demand_max'], r['changes_per_s'], limit, '  FAIL' if churn_fail else '', r['changes_at_room'], r['order_bad'],
+                '  FAIL' if r['order_bad'] else '', tex))
             sys.stdout.flush()
     print('\nsizing model', 'PASS' if failures == 0 else 'FAIL (%d)' % failures)
     return 0 if failures == 0 else 1

@@ -11,7 +11,7 @@ The shader sources of the baselines come from git (--repo and the refs below), t
   L1       the checkout's shadowStochasticUtil.glsl as the viewer compiles it (its G1 block and sampleProjectorShadow): lamp shadows L1,
            the search with the receiver's own texels, the filter at the physical radius between 1.5 and 12 texels, no edge
            reconstruction, no 4 cm cap.
-Every method but today and release is run with the same lamp, --lamp-base (4.5 cm) times --softness (0.23): the lookups are compared
+Every method but today and release is run with the same lamp, --lamp-base (default: the header's kProjectorLamp, 4.5 cm) times --softness (0.23): the lookups are compared
 on one physical lamp; release keeps the 1 cm x softness it ships with (--release-emitter-base), today its prim emitter.
 
 Scene for the staircase (--stairs): a projector at H = 2.5 m looking straight down (fov --fovs), a zero-thickness plate at height
@@ -58,7 +58,9 @@ ap.add_argument('--repo', default=str(HERE.parents[1]), help='the checkout: L1 c
 ap.add_argument('--ref', default='8372d57f66', help='git ref of the devel util of #527 (P2); pinned so P2 stays P2')
 ap.add_argument('--baseline-ref', default='5a091b9559')
 ap.add_argument('--release-ref', default='4f077cdb73', help='git ref of the lookup L1 replaces (devel before L1: the util of release with #552, the edge reconstruction)')
-ap.add_argument('--lamp-base', type=float, default=0.045, help='m: the lamp base L1 ships (llprojectorpool::kProjectorLamp), for every method but today and release')
+ap.add_argument('--lamp-base', type=float, default=None,
+                help='m: the lamp base for every method but today and release (default: the one L1 ships, llprojectorpool::kProjectorLamp, '
+                     'read from the llprojectorshadowpool.h of --repo)')
 ap.add_argument('--release-emitter-base', type=float, default=0.01, help='m: the lamp base the release lookup ships with')
 ap.add_argument('--stairs', action='store_true')
 ap.add_argument('--gates', action='store_true')
@@ -76,6 +78,9 @@ ap.add_argument('--methods', default='today,P2,release,L1')
 ap.add_argument('--out', default=None)
 opts = ap.parse_args()
 REPO = Path(opts.repo)
+if opts.lamp_base is None:  # the header's value, as lamp_filter_twin.py reads it: the bench cannot drift from what ships
+    opts.lamp_base = float(re.search(r'constexpr LampFilter kProjectorLamp\{\s*([0-9.]+)f',
+                                     (REPO / 'indra/newview/llprojectorshadowpool.h').read_text(encoding='utf-8')).group(1))
 
 
 def git_show(ref, path):
