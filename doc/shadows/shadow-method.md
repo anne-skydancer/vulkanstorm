@@ -99,7 +99,8 @@ gathers on a disc plus one at the receiver's own texels, then a percentage-close
 penumbra radius from the nearest blocker, for an emitter of 4.5 cm times `RenderShadowLightSize`, whatever the prim, at least 1.5 and at
 most 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's texel bias and per-texel receiver plane. No edge is
 reconstructed and no radius is capped in metres: a coarser tile gives a softer edge, never a blockier one (`doc/shadows/projector-shadow-pool.md`,
-"The filter"). The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's width on the bench (within one map texel
+"The filter"). At the default softness this widens a head's edge on fine tiles from about 0.4 texel (the release's reconstruction) to the
+1.5-texel floor's 1.8 texels: see "The default edge against the release" there. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's width on the bench (within one map texel
 plus one pixel); the projector's straight edges are 0.82 to 0.90 of a disc light's where the radius lies between the floor and the cap
 (the CPU twin and the GL bench). The projector lookup costs 9 search gathers, plus 32 filter gathers on penumbra pixels. See the Cost table
 in `projector-shadow-pool.md`. Under Stochastic with

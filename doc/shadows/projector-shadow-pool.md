@@ -203,6 +203,24 @@ at the default softness the outline is set by the 1.5-texel floor on 2.5 and 5 m
 slider's top (4.5 cm) the head's and shoulder's edges are 0.6 to 0.85 of physics, because the 12-texel cap binds on a 1 mm tile and the
 nearest blocker and the weights narrow a curved silhouette.
 
+### The default edge against the release (for the owner's in-world check)
+
+Removing the edge reconstruction changes the default look, and the in-world check should expect it (the light-size audit's correction 3,
+its finding A2):
+
+- **The release** draws the default lamp, 1 cm times 0.23 = 2.3 mm, at its physical width wherever the reconstruction holds
+  (`stRvVisibility`, for any physical radius under 2.5 texels). On a 2.5 mm tile under a lamp at 2.5 m the head's physical penumbra is
+  about 0.3 texel in radius, so its edge is almost hard: **about 0.4 texel** from 10 to 90 %.
+- **This branch** draws the default lamp, 4.5 cm times 0.23 = 1.035 cm, through the filter alone. Its physical penumbra at the head,
+  about 1.4 texels in radius on that tile, is under the 1.5-texel floor, so the floor sets the edge: **about 1.8 texels** from 10 to 90 %
+  (the twin's straight edges at the floor: 1.88 to 1.98 texels).
+- **So on fine tiles the default head edge widens from about 0.4 to about 1.8 texels**: about 1 mm to 4.5 mm on a 2.5 mm tile, visibly
+  softer than today's release. On a coarser tile the same 1.8 texels are wider in millimetres (about 9 mm at the model room's 5.1 mm
+  texel on the 8192 atlas). It comes from the floor that replaces the reconstruction (a penumbra narrower than the texels is drawn soft,
+  never as their squares), not from the 4.5 cm base. Against the #527/#528 build (no reconstruction, a 1-texel floor) the step is from a
+  1-texel to a 1.5-texel floor.
+- The slider's 0 does not bring the release's edge back: at 0 a lamp's edge is the 1.5-texel floor as well.
+
 ### Cost (`proj_edges_bench.py --time`: 2560 x 1440 floor, every pixel inside the lamp, 24 plate edges plus the avatar, softness 0.23)
 
 | lamp, tile | release (the reconstruction, 1 cm lamp) ms | L1 ms | difference |
