@@ -4842,6 +4842,15 @@ bool LLAgent::teleportCore(bool is_local)
     // Don't change the camera until we know teleport succeeded. JC
     gAgentCamera.resetView(false);
 
+    // <Vulkanstorm> Forget avatars whose AvatarAppearance arrived before the avatar existed
+    // at the START of a teleport, not when it finishes: the finish handler also runs for the
+    // login pseudo-teleport (mTeleportInProgress starts true) on the first ParcelProperties,
+    // by which time the arrival flood has already registered entries that must survive.
+    // A region crossing does not come through here and leaves a bounded set of stale entries,
+    // which only cost one extra AvatarTexturesRequest.
+    LLVOAvatar::resetEarlyAppearanceList();
+    // </Vulkanstorm>
+
     // local logic
     add(LLStatViewer::TELEPORT, 1);
     if (is_local)
@@ -4971,7 +4980,6 @@ void LLAgent::handleTeleportFinished()
     }
     clearTeleportRequest();
     mTeleportCanceled.reset();
-    LLVOAvatar::resetEarlyAppearanceList();
     if (mIsMaturityRatingChangingDuringTeleport)
     {
         // notify user that the maturity preference has been changed
