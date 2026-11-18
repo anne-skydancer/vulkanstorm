@@ -14,9 +14,9 @@
   is zeroed through LLVertexBuffer::zeroFill, which marks both whole buffers, so the zeros reach GL (a pooled buffer
   kept its previous owner's bytes there); if the dummy cannot be allocated either, the face gets no buffer and a
   warning once, instead of a write through a null copy. LLViewerJointMesh::drawShape draws nothing outside its face's
-  buffer (the joint meshes keep the full mesh's ranges), after the first pass's joint matrix upload. The vertex-buffer
-  pool releases a buffer whose CPU copy could not be allocated instead of pooling it, so the next allocation of its
-  size class (the avatar's retry among them) does not fail with it once memory is back.
+  buffer (the joint meshes keep the full mesh's ranges) and uploads no joint matrices for it (every joint mesh uploads
+  its own). The vertex-buffer pool releases a buffer whose CPU copy could not be allocated instead of pooling it, so
+  the next allocation of its size class (the avatar's retry among them) does not fail with it once memory is back.
 - Impostors (owner decision Q1; b-28 F1/F2 = H28, X2 F3 = FG3c): generateImpostor sets sShadowRender for its other
   rules, but an impostor is a picture: LLFetchedGLTFMaterial::bind gives each item its full material (normal,
   roughness/metal, emissive, factors, transforms, its own cut-off; a blended item keeps its pool's impostor cut-off),
@@ -67,6 +67,7 @@ VERTEXBUFFER_H = code(read('indra/llrender/llvertexbuffer.h'))
 VERTEXBUFFER = code(read('indra/llrender/llvertexbuffer.cpp'))
 VOTREE = code(read('indra/newview/llvotree.cpp'))
 JOINTMESH = code(read('indra/newview/llviewerjointmesh.cpp'))
+JOINT = code(read('indra/newview/llviewerjoint.cpp'))
 GLTF_MATERIAL = code(read('indra/newview/llfetchedgltfmaterial.cpp'))
 PIPELINE = code(read('indra/newview/pipeline.cpp'))
 SPATIAL = code(read('indra/newview/llspatialpartition.cpp'))
@@ -175,10 +176,14 @@ class AllocationFallbacks(unittest.TestCase):
     def test_joint_meshes_draw_only_inside_their_buffer(self):
         draw = body(JOINTMESH, 'U32 LLViewerJointMesh::drawShape(')
         guard = draw.index('if (end >= buff->getNumVerts() || offset + count > buff->getNumIndices())')
+        self.assertLess(guard, draw.index('uploadJointMatrices();'))
         self.assertLess(guard, draw.index('buff->setBuffer();'))
-        block = draw[guard:draw.index('return 0;', guard)]
-        self.assertIn('if (first_pass && mMesh->hasWeights())', block)
-        self.assertIn('uploadJointMatrices();', block)
+        # nothing is drawn, so nothing is uploaded: every joint mesh uploads its own matrices on its first pass
+        self.assertRegex(draw[guard:], r'^if \(end >= buff->getNumVerts\(\) \|\| offset \+ count > '
+                                       r'buff->getNumIndices\(\)\)\s*\{\s*return 0;\s*\}')
+        self.assertEqual(draw.count('uploadJointMatrices();'), 1)
+        # LLViewerJoint::render draws each child mesh with first_pass set
+        self.assertIn('joint->render( pixelArea, true, is_dummy );', JOINT)
 
     def test_the_pool_does_not_keep_a_buffer_without_a_cpu_copy(self):
         pool = VERTEXBUFFER[VERTEXBUFFER.index('class LLDefaultVBOPool'):]
