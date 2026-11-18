@@ -543,8 +543,8 @@ void LLDrawPoolAlpha::bindStochasticMasks(LLGLSLShader* shader)
 static const F32 ALPHA_ST_OFFSET_FACTOR = -1.f / 256.f;
 
 // The units are those of the passes' DEPTH_COMPONENT24 depth; a face of layer rank r (llstochasticlayerrank.h:
-// a face on the same triangles as r earlier faces of its object) is pulled 2 r units nearer in every pass,
-// so the later of two coincident faces wins the samples both cover, as it covers the earlier in sorted alpha.
+// a face on the same triangles as r earlier faces of its object) is pulled UNITS_PER_RANK r units nearer in
+// every pass, so that the later of two coincident faces (texture entry order) wins the samples both cover.
 void LLDrawPoolAlpha::setStochasticOffset(F32 base_units, U32 rank)
 {
     if (rank != mStochasticOffsetRank)
@@ -580,11 +580,12 @@ bool LLDrawPoolAlpha::renderStochastic()
         // behind an opaque surface show through it, where sorted alpha hides it. The accumulation takes one depth unit more than the stochastic depth,
         // and the glow (other vertex shaders) one more again, so that a face always passes at the
         // samples it won whatever the last bit of its depth. A face on the same triangles as earlier
-        // faces of its object (mesh eyes, stacked decals) is pulled 2 units nearer per earlier face
-        // (renderAlpha), so that the creator's later face covers the earlier, not averages with it.
+        // faces of its object (mesh eyes, stacked decals) is pulled 5 units nearer per earlier
+        // coincident face (renderAlpha, llstochasticlayerrank.h), so that the creator's later face
+        // covers the earlier, not averages with it.
         LLGLEnable multisample(GL_MULTISAMPLE);
         LLGLEnable offset(GL_POLYGON_OFFSET_FILL);
-        resetStochasticOffset(LLStochasticLayerRank::UNITS_TOTAL_ALPHA);
+        resetStochasticOffset(LLStochasticLayerRank::UNITS_DEPTH); // the total alpha takes the depth's offset
 
         {
             LL_PROFILE_GPU_ZONE("alpha stochastic total alpha");
@@ -966,7 +967,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
     LLCullResult::sg_iterator begin = rigged ? gPipeline.beginRiggedAlphaGroups() : gPipeline.beginAlphaGroups();
     LLCullResult::sg_iterator end = rigged ? gPipeline.endRiggedAlphaGroups() : gPipeline.endAlphaGroups();
 
-    // <Vulkanstorm> the stochastic passes' base polygon offset, which a draw's layer rank moves
+    // <Vulkanstorm> the stochastic passes' base polygon offset, which a draw's layer rank moves (the
+    // total alpha and the stochastic depth share one)
     const bool st_phase = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH || oit_phase == ALPHA_ST_ACCUM;
     const F32 st_units = oit_phase == ALPHA_ST_ACCUM ? LLStochasticLayerRank::UNITS_ACCUM : LLStochasticLayerRank::UNITS_DEPTH;
     // </Vulkanstorm>
