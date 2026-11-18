@@ -839,6 +839,7 @@ LLViewerTexture::~LLViewerTexture()
 void LLViewerTexture::init(bool firstinit)
 {
     mMaxVirtualSize = 0.f;
+    mFetchVirtualSize = 0.f; // <Vulkanstorm>
     mMaxVirtualSizeResetInterval = 1;
     mMaxVirtualSizeResetCounter = mMaxVirtualSizeResetInterval;
     mParcelMedia = NULL;
@@ -992,6 +993,7 @@ void LLViewerTexture::addTextureStats(F32 virtual_size, bool needs_gltexture) co
 void LLViewerTexture::resetTextureStats()
 {
     mMaxVirtualSize = 0.0f;
+    mFetchVirtualSize = 0.f; // <Vulkanstorm>
     mMaxVirtualSizeResetCounter = 0;
 }
 
@@ -1902,6 +1904,7 @@ void LLViewerFetchedTexture::processTextureStats()
             // sanity clamp debug setting to avoid settings hack shenanigans
             max_tex_res = (U32)llclamp((U32)max_texture_resolution, 512, MAX_IMAGE_SIZE_DEFAULT);
             mMaxVirtualSize = llmin(mMaxVirtualSize, (F32)(max_tex_res * max_tex_res));
+            mFetchVirtualSize = llmin(mFetchVirtualSize, (F32)(max_tex_res * max_tex_res)); // <Vulkanstorm> the same cap
         }
 
         if (textures_fullres)
@@ -2269,6 +2272,9 @@ bool LLViewerFetchedTexture::updateFetch()
     S32 current_discard = getCurrentDiscardLevelForFetching();
     S32 desired_discard = getDesiredDiscardLevel();
     F32 decode_priority = mMaxVirtualSize;
+    // <Vulkanstorm> The priority the request carries: a worn texture's is raised to its avatar's size (mFetchVirtualSize,
+    // lltexturefetchpolicy.h). It only orders the waiting requests; every decision here keeps decode_priority.
+    const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mFetchVirtualSize, F_ALMOST_ZERO);
 
     if (mIsFetching)
     {
@@ -2310,7 +2316,7 @@ bool LLViewerFetchedTexture::updateFetch()
             if (decode_priority > 0.0f || mStopFetchingTimer.getElapsedTimeF32() > MAX_HOLD_TIME)
             {
                 mStopFetchingTimer.reset();
-                LLAppViewer::getTextureFetch()->updateRequestPriority(mID, decode_priority);
+                LLAppViewer::getTextureFetch()->updateRequestPriority(mID, fetch_priority);
             }
         }
     }
@@ -2391,7 +2397,7 @@ bool LLViewerFetchedTexture::updateFetch()
         // bypass texturefetch directly by pulling from LLTextureCache
         S32 fetch_request_response = -1;
         S32 worker_discard = -1;
-        fetch_request_response = LLAppViewer::getTextureFetch()->createRequest(mFTType, mUrl, getID(), getTargetHost(), decode_priority,
+        fetch_request_response = LLAppViewer::getTextureFetch()->createRequest(mFTType, mUrl, getID(), getTargetHost(), fetch_priority,
             w, h, c, desired_discard, needsAux(), mCanUseHTTP);
 
         if (fetch_request_response >= 0) // positive values and 0 are discard values
@@ -3273,6 +3279,7 @@ void LLViewerLODTexture::processTextureStats()
         // sanity clamp debug setting to avoid settings hack shenanigans
         max_tex_res = (F32)llclamp((S32)max_texture_resolution, 512, MAX_IMAGE_SIZE_DEFAULT);
         mMaxVirtualSize = llmin(mMaxVirtualSize, max_tex_res * max_tex_res);
+        mFetchVirtualSize = llmin(mFetchVirtualSize, max_tex_res * max_tex_res); // <Vulkanstorm> the same cap
     }
 
     if (textures_fullres)
