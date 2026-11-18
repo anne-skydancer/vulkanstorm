@@ -4,6 +4,7 @@
 // <FS:Beq> Keep asynchronous stdin data valid when subsequent output grows the stream buffer.
 #include "llprocess.h"
 #include "llstring.h"
+#include "llevents.h"
 #include "../test/lltut.h"
 #include "../test/namedtempfile.h"
 
@@ -50,8 +51,8 @@ namespace tut
         LLProcess::Params params;
         params.desc = get_test_name();
         params.executable = python;
-        params.args.add(script.getPath().string());
-        params.args.add(release_reader.getPath().string());
+        params.args.add(script.getName());
+        params.args.add(release_reader.getName());
         params.args.add(std::to_string(first_size));
         params.args.add(std::to_string(appended_size));
         params.files.add(LLProcess::FileParam("pipe")); // stdin
@@ -66,7 +67,7 @@ namespace tut
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
             while (!done() && std::chrono::steady_clock::now() < deadline)
             {
-                process->pump();
+                LLEventPumps::instance().obtain("mainloop").post(LLSD());
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
             ensure(message, done());
@@ -76,20 +77,24 @@ namespace tut
         ensure_equals("child is waiting before reading stdin", childout.getline(), "ready");
 
         childin.get_ostream() << std::string(first_size, 'A') << std::flush;
-        process->pump();
+        LLEventPumps::instance().obtain("mainloop").post(LLSD());
         // The gated reader cannot drain the pipe. Verify the first write has
         // not completed before appending enough data to relocate its storage.
-        ensure_equals("first write must still be pending", childin.size(), first_size);
+        // <Vulkanstorm> Our WritePipe hands the OS pipe at most its capacity
+        // per tick, so part of the first payload may already be accepted.
+        const std::size_t pending = childin.size();
+        ensure("first write must still be pending", pending > 0 && pending <= first_size);
         childin.get_ostream() << std::string(appended_size, 'B') << std::flush;
-        ensure_equals("both payloads remain queued", childin.size(), first_size + appended_size);
+        ensure_equals("pending and appended payloads remain queued", childin.size(), pending + appended_size);
+        // </Vulkanstorm>
 
         {
-            std::ofstream release(release_reader.getPath(), std::ios::binary);
+            std::ofstream release(release_reader.getName(), std::ios::binary);
             release << '1';
             release.close();
             ensure("release the child reader", bool(release));
         }
-        wait_until([&] { return !process->isRunning() && childout.atEOF(); },
+        wait_until([&] { return !process->isRunning() && childout.contains('\n'); },
                    "stdin transfer did not finish");
         ensure_equals("pending and appended bytes arrive intact and in order", childout.getline(), "ok");
         ensure_equals("child exited normally", process->getStatus().mState, LLProcess::EXITED);
