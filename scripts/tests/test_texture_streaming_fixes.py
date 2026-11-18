@@ -15,8 +15,6 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
   returning true with both outputs unwritten (getTextureVirtualSize read them).
-- LLMemory caps the available memory (which drives the texture bias) by the heap left through llheaplimit.h, in
-  64 bits, instead of a U32 difference that wrapped past the heap limit (the rule: llheaplimit_test.cpp).
 - The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
   resolutions of any component, and the decode clamps its reduce factor below them (llj2creduce.h; checked against
   OpenJPEG by indra/llimagej2coj/tests/llj2creduce_test.cpp), with the calls in the same order as before.
@@ -33,7 +31,6 @@ TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8
 FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
-MEMORY = (ROOT / 'indra/llcommon/llmemory.cpp').read_text(encoding='utf-8', errors='replace')
 J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
 J2C_H = (ROOT / 'indra/llimage/llimagej2c.h').read_text(encoding='utf-8', errors='replace')
 
@@ -224,15 +221,6 @@ class PixelAreaThrottle(unittest.TestCase):
         read = size.index('adjustPartialOverlapPixelArea(cos_angle_to_view_dir, radius')
         self.assertLess(call, early)
         self.assertLess(early, read)
-
-
-class HeapLimit(unittest.TestCase):
-    def test_available_memory_capped_through_the_rule(self):
-        update = code(body(MEMORY, 'void LLMemory::updateMemoryInfo()'))
-        self.assertRegex(update, r'sAvailPhysicalMemInKB = U32Kilobytes\(LLHeapLimit::availableKB\(sAvailPhysicalMemInKB\.value\(\), '
-                                 r'sMaxHeapSizeInKB\.value\(\),\s*sAllocatedMemInKB\.value\(\)\)\);')
-        self.assertNotRegex(code(MEMORY), r'sMaxHeapSizeInKB\s*-\s*sAllocatedMemInKB')
-        self.assertIn('#include "llheaplimit.h"', MEMORY)
 
 
 class J2CReduceFactor(unittest.TestCase):

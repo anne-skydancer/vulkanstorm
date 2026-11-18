@@ -170,7 +170,6 @@ set(llcommon_HEADER_FILES
     llframetimer.h
     llhandle.h
     llhash.h
-    llheaplimit.h
     llheartbeat.h
     llheteromap.h
     llindexedvector.h

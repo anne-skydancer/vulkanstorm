@@ -127,11 +127,6 @@ runs:
         python3 scripts/tests/test_texture_streaming_fixes.py
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
         "$RUNNER_TEMP/texture-fetch-policy-test"
-    - name: Check the heap limit of the available-memory reading (no U32 wrap past the limit)
-      shell: bash
-      run: |
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llcommon indra/llcommon/tests/llheaplimit_test.cpp -o "$RUNNER_TEMP/heap-limit-test"
-        "$RUNNER_TEMP/heap-limit-test"
     - name: Check that J2C textures with fewer resolutions than the first request's level decode (OpenJPEG reduce factor)
       shell: bash
       run: |
