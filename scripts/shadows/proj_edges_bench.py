@@ -1,50 +1,44 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Projector shadow edges (PR A, revectorized edges): the bench and the oracle of the lookup's edge reconstruction.
+"""Projector shadow edges: the bench of the lamp lookup's edges, acne and cost (offline GL, no viewer).
 
-Offline bench, no viewer. The shader sources of the baselines come from git (--repo, --ref, --baseline-ref), the checkout's own
-shader from its working tree:
-  today   the release lookup (--baseline-ref, default 5a091b9559: mean-blocker PCSS, 4 cm normal offset, prim emitter)
-  P2      the devel lookup before this PR (--ref, default 8372d57f66: #527, nearest blocker, 1-texel normal offset, 1 cm x softness)
-  RV      the ORACLE (bench only): P2 with the filter replaced by stSpotFilterTileRV below; the same blocker search; where the
-          physical filter radius is under RV_HI texels the visibility is the weighted-disc coverage of a straight edge line
-          reconstructed from the shadow map's binary silhouette (MLAA/RBSM-style run traversal), else P2's PCF.
-  RVreal  the checkout's shadowStochasticUtil.glsl as the viewer compiles it (its G1 block and sampleProjectorShadow). It must equal
-          RV: every scan prints "real against the oracle" and the run fails above a max abs of 1e-5.
-  RVINV   a cheaper alternative (bench only, rejected: the step stays at shallow angles; name it in --methods to run it)
+The shader sources of the baselines come from git (--repo and the refs below), the checkout's own shader from its working tree:
+  today    the release lookup before P2 (--baseline-ref, default 5a091b9559: mean-blocker PCSS, 4 cm normal offset, prim emitter)
+  P2       the devel lookup of #527 (--ref, default 8372d57f66: nearest blocker, 1-texel normal offset and floor, 4 cm cap)
+  release  the lookup L1 replaces (--release-ref, default 4f077cdb73: devel before L1, the util of release's #552: P2 plus the
+           edge reconstruction, a 1 cm x softness lamp)
+  L1       the checkout's shadowStochasticUtil.glsl as the viewer compiles it (its G1 block and sampleProjectorShadow): lamp shadows L1,
+           the search with the receiver's own texels, the filter at the physical radius between 1.5 and 12 texels, no edge
+           reconstruction, no 4 cm cap.
+Every method but today and release is run with the same lamp, --lamp-base (4.5 cm) times --softness (0.23): the lookups are compared
+on one physical lamp; release keeps the 1 cm x softness it ships with (--release-emitter-base), today its prim emitter.
 
-Scene for the staircase (--stairs): a projector at H = 2.5 m looking straight down (fov --fovs), a zero-thickness plate at
-height --plate-h whose straight edge makes an angle with the tile's u axis (--angles); the receiver is the floor. The true
-50 % contour is the point projection of the edge (exact for a disc emitter centred on the projection centre). The reference
-of the whole profile is the disc emitter's coverage, analytic. Per scan: the 50 % contour of the lookup across the edge at
-512 positions along it; its deviation from the true line (mean = bias, RMS and max about the true line, peak-to-peak =
-step amplitude, all in mm), and the 10-90 % width (mm), mean over the positions. Gates (tiles of 256 and up): the worst step 0.25
-texel for 2 to 45 degrees and 0.50 texel under 2 degrees (--angles 0.5,1,1.5,2,5,10,20,30,45, --sizes 64,128,...), the width (2 degrees and up) within 5 % of the
-analytic one where wider than 0.35 texel (--softness 1 --plate-h 1.2).
+Scene for the staircase (--stairs): a projector at H = 2.5 m looking straight down (fov --fovs), a zero-thickness plate at height
+--plate-h whose straight edge makes an angle with the tile's u axis (--angles); the receiver is the floor. The true 50 % contour is the
+point projection of the edge (exact for a disc emitter centred on the projection centre); the reference of the whole profile is the
+disc emitter's coverage, analytic. Per scan: the 50 % contour of the lookup across the edge at 512 positions along it; its deviation
+from the true line (mean = bias, RMS and max about the true line, peak-to-peak = step amplitude, all in mm), and the 10-90 % width (mm),
+mean over the positions. Gate (L1, tiles of 256 and up, 2 degrees and up): the 10-90 % width within 20 % of the analytic one wherever
+the physical radius lies between the filter's floor and its cap (--softness 1 --plate-h 1.2 puts most scans there); the steps are
+reported, not gated (a soft edge of at least 1.5 texels hides them).
 
 Scene for the avatar gates (--gates): the avatar boxes of scripts/shadows/proj_march_bench.py (toe and shoulder edges) under a
-1.5 rad lamp, tiles 2048/1024/512, emitter 1 cm x 0.23. Gates: toe and shoulder x50 within 2 mm of the reference or no worse
-than P2's + 0.1 mm, the value under the toe at most 0.02, the toe RMS at most P2's + 0.005.
+1.5 rad lamp, tiles 2048/1024/512, the lamp above. Gates for L1 (the lamp-shadow study's L1 row), on tiles whose texel is at most 5 mm:
+toe and shoulder x50 within 2 mm of the reference or no worse than P2's + 0.1 mm, the value under the toe at most 0.02, the shoulder's
+10-90 % width within 20 % of the reference. The toe's RMS is reported: a contact is narrower than the 1.5-texel floor, which draws it
+wider than P2's 1-texel floor did.
 
---time: GPU ms of a 2560x1440 view of a floor under a wide lamp with 24 plates at various angles and heights (the edge
-pixels a real room has more of than one avatar), plus the avatar (timer queries, median of 9 x 20); the run says which builds
-were running.
-
+--time: GPU ms of a 2560x1440 view of a floor under a wide lamp with 24 plates at various angles and heights (the edge pixels a real
+room has more of than one avatar), plus the avatar (timer queries, median of 9 x 20); the run says which builds were running.
 --circle: round plates (a head, 0.09 m; a table, 0.3 m): the 50 % contour against the true circle, and its staircase part (the
-deviation less its harmonics 0..3); reported, not gated (RV makes the same facets sharper: see doc/shadows/projector-shadow-pool.md).
+deviation less its harmonics 0..3); reported, not gated.
 --grazing: a tilted lit plane, the acne check (at 85 degrees this plane faces away from the lamp: dark is right).
 
-The oracle's constants are #defines (--defs NAME=VALUE,... overrides them): RV_S 24, RV_K 4, RV_D 8, RV_MIN 0.25, RV_LO 1.5,
-RV_HI 2.5 (the shader's ST_RV_*), RV_RETRY 1, RV_GATHER 0 (1: a gather-based traversal, measured slower), RV_STOP (ablation).
-
     python scripts/shadows/proj_edges_bench.py --stairs --gates --circle --grazing --time --out results.jsonl
-    python scripts/shadows/proj_edges_bench.py --stairs --sizes 64,128,256,512,1024,2048    (the small tiles, reported)
     python scripts/shadows/proj_edges_bench.py --stairs --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048    (the width gate)
-    python scripts/shadows/proj_edges_bench.py --stairs --p2-regime --softness 1 --plate-h 1.8 --fovs 2.0 --sizes 2048    (RVreal = P2 to 1e-6)
 Needs numpy and an OpenGL 4.x driver on Windows (the repo's scripts/perf/gl_test_context.py, read from --ref). Exit code 1 when a
-stair or avatar gate or the oracle check fails; --time and --grazing are reported, not gated (the cost target of
-doc/shadows/projector-shadow-pool.md is read from their output; GPU timing spreads about 7 % run to run).
+gate fails; --time, --circle and --grazing are reported, not gated (GPU timing spreads about 7 % run to run, more while a build runs).
 """
 import argparse
 import json
@@ -60,26 +54,26 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent  # scripts/shadows
 ap = argparse.ArgumentParser()
-ap.add_argument('--repo', default=str(HERE.parents[1]), help='the checkout: RVreal compiles its working-tree shaders; git refs are read from it')
-ap.add_argument('--ref', default='8372d57f66', help='git ref of the devel util before PR A (P2 and the prototype RV build on it); pinned so P2 stays P2 after the merge')
+ap.add_argument('--repo', default=str(HERE.parents[1]), help='the checkout: L1 compiles its working-tree shaders; git refs are read from it')
+ap.add_argument('--ref', default='8372d57f66', help='git ref of the devel util of #527 (P2); pinned so P2 stays P2')
 ap.add_argument('--baseline-ref', default='5a091b9559')
+ap.add_argument('--release-ref', default='4f077cdb73', help='git ref of the lookup L1 replaces (devel before L1: the util of release with #552, the edge reconstruction)')
+ap.add_argument('--lamp-base', type=float, default=0.045, help='m: the lamp base L1 ships (llprojectorpool::kProjectorLamp), for every method but today and release')
+ap.add_argument('--release-emitter-base', type=float, default=0.01, help='m: the lamp base the release lookup ships with')
 ap.add_argument('--stairs', action='store_true')
 ap.add_argument('--gates', action='store_true')
-ap.add_argument('--grazing', action='store_true', help='acne check: a tilted lit plane (P2 and RV)')
+ap.add_argument('--grazing', action='store_true', help='acne check: a tilted lit plane (P2, release and L1)')
 ap.add_argument('--circle', action='store_true', help='a round plate (radius --radii): the 50 %% contour against the true circle')
 ap.add_argument('--radii', default='0.09,0.3')
 ap.add_argument('--time', action='store_true')
-ap.add_argument('--p2-regime', action='store_true', help='with --stairs: the scene must be in the P2 regime (try --softness 1 --plate-h 1.8 --fovs 2.0 --sizes 2048: at fov 2.5 and wider the texel is too coarse for that): RVreal must equal P2 to 1e-6')
 ap.add_argument('--fovs', default='2.0,2.5,3.0')
 ap.add_argument('--sizes', default='256,512,1024,2048')
 ap.add_argument('--angles', default='0.5,1,1.5,2,5,10,20,30,45')
 ap.add_argument('--plate-h', type=float, default=0.75)
 ap.add_argument('--softness', type=float, default=0.23)
 ap.add_argument('--today-emitter', type=float, default=0.02, help="today's prim emitter (m): 2 cm, the clamp's sharpest")
-ap.add_argument('--methods', default='today,P2,RV,RVreal')
+ap.add_argument('--methods', default='today,P2,release,L1')
 ap.add_argument('--out', default=None)
-ap.add_argument('--rv-off', type=int, default=0, help='--time: set the rv_off uniform (ablation)')
-ap.add_argument('--defs', default='', help='extra #defines for the RV prototypes, e.g. RV_MODE=0,RV_K=2')
 opts = ap.parse_args()
 REPO = Path(opts.repo)
 
@@ -101,36 +95,6 @@ def emit(row):
     if OUT:
         OUT.write(json.dumps(row, default=float) + '\n')
         OUT.flush()
-
-
-P2DIFF = []   # (case, max abs difference between RVreal and P2): under --p2-regime, every scan is in P2's regime and must agree
-ORACLE = []   # (case, max abs difference between the checkout's shader (RVreal) and the prototype (RV))
-
-
-def oracle_check(case, imgs):
-    if 'RV' in imgs and 'RVreal' in imgs:
-        ORACLE.append((case, float(np.max(np.abs(imgs['RV'] - imgs['RVreal'])))))
-    if 'P2' in imgs and 'RVreal' in imgs:
-        P2DIFF.append((case, float(np.max(np.abs(imgs['P2'] - imgs['RVreal'])))))
-
-
-def oracle_report():
-    if ORACLE:
-        worst = max(d for _, d in ORACLE)
-        print('\nRVreal against the prototype oracle: %d scans, max abs %.3g (gate 1e-5): %s' % (len(ORACLE), worst, 'PASS' if worst <= 1e-5 else 'FAIL'))
-        emit(dict(kind='oracle', scans=len(ORACLE), max_abs=worst))
-        ok = worst <= 1e-5
-    else:
-        ok = True
-    if P2DIFF:
-        w2 = max(d for _, d in P2DIFF)
-        if opts.p2_regime:
-            print('RVreal against P2 where the penumbra is wider than RV_HI (--p2-regime): %d scans, max abs %.3g (gate 1e-6): %s' % (len(P2DIFF), w2, 'PASS' if w2 <= 1e-6 else 'FAIL'))
-            emit(dict(kind='p2_regime', scans=len(P2DIFF), max_abs=w2))
-            ok &= w2 <= 1e-6
-        else:
-            print('RVreal against P2 (informational): max abs %.3g over %d scans' % (w2, len(P2DIFF)))
-    return ok
 
 
 def builds_running():
@@ -167,7 +131,7 @@ def sources(ref):
 
 
 def sources_checkout():
-    """the working tree's own shaders, as sources() reads them from git (RVreal: the code the viewer compiles)"""
+    """the working tree's own shaders, as sources() reads them from git (L1: the code the viewer compiles)"""
     util = (REPO / UTIL_P).read_text(encoding='utf-8')
     common = (REPO / COMMON_P).read_text(encoding='utf-8')
     defines = '\n'.join(l for l in util.splitlines() if re.match(r'#define (ST_)', l))
@@ -180,6 +144,7 @@ def sources_checkout():
 
 BASE = sources(opts.baseline_ref)
 DEV = sources(opts.ref)
+RELEASE = sources(opts.release_ref)
 REAL = sources_checkout()
 
 PREAMBLE = '''#version 400
@@ -190,413 +155,6 @@ PREAMBLE = '''#version 400
 #define SHADOW_GRAD_MAX 10000.0
 uniform float spot_shadow_offset;
 uniform float spot_shadow_reach;
-'''
-
-# ------------------------------------------------------------------------------------------------ the prototypes (bench only)
-RV = r'''
-#ifndef RV_S
-#define RV_S 24            // texels: the run traversal's reach on each side of the receiver's texel
-#endif
-#ifndef RV_K
-#define RV_K 4             // risers a side
-#endif
-#if defined(RV_PRAGMA)
-#pragma optionNV(unroll none)
-#endif
-#ifndef RV_GATHER
-#define RV_GATHER 0        // 1: the traversal reads two columns a step with gathers (measured slower: code size; kept for the record)
-#endif
-#ifndef RV_STOP
-#define RV_STOP 0          // bench ablation: 1 return after the window, 2 after the first line, 3 skip RV (P2 inside the RV shader)
-#endif
-#ifndef RV_RETRY
-#define RV_RETRY 1         // try the other frame where the first has no line or turns steeper than 45 degrees
-#endif
-#ifndef RV_D
-#define RV_D 8             // columns a side within which risers count
-#endif
-#define RV_MIN 0.25        // texels: the narrowest filter radius of the reconstructed edge (sharp, not a step)
-#define RV_LO 1.5          // texels: physical radius from which the result blends towards P2's PCF ...
-#define RV_HI 2.5          // ... which it is from here on (the staircase is under the penumbra's blur)
-#define RVI_R 2.5          // RVINV: the PCF radius the distance is read from
-#define RV_PI 3.14159265
-
-// the blocking test of one texel of the tile for receiver c: the depth at the texel clamped into the tile (CLAMP_TO_EDGE, as
-// stSpotQuadTile), the reference at the texel's own (unclamped) centre, lowered by the receiver plane (stSpotQuadTile's rule)
-bool rvBlk(ivec2 q, vec3 c, vec2 g, float z_bias, float rp_max)
-{
-    int n = int(proj_shadow_tile.z);
-    ivec2 qc = clamp(q, ivec2(0), ivec2(n - 1));
-    float zs = texelFetch(proj_shadow_atlas, ivec2(proj_shadow_tile.xy) + qc, 0).r;
-    vec2 d = (vec2(q) + 0.5) / float(n) - c.xy;
-    return zs < c.z - z_bias + clamp(dot(g, d), -rp_max, 0.0);
-}
-
-// the share of a uniform disc (the emitter's own shape: for a straight edge this is the exact penumbra of a disc light) on the
-// side x > t of the line x = t, t in units of the disc's radius
-float rvSegment(float t)
-{
-    t = clamp(t, -1.0, 1.0);
-    return (acos(t) - t * sqrt(max(1.0 - t * t, 0.0))) / RV_PI;
-}
-
-// the inverse of rvSegment (bisection; RVINV only)
-float rvSegmentInv(float v)
-{
-    float lo = -1.0, hi = 1.0;
-    for (int i = 0; i < 14; ++i)
-    {
-        float m = 0.5 * (lo + hi);
-        if (rvSegment(m) > v) lo = m; else hi = m;
-    }
-    return 0.5 * (lo + hi);
-}
-
-// one texel of the edge frame (a along the edge, b across) around texel p
-bool rvB(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float rp_max)
-{
-    return rvBlk(p + (sw ? ivec2(b, a) : ivec2(a, b)), c, g, z_bias, rp_max);
-}
-
-// RV_GATHER: the blocking bits of the 2 x 2 frame texels (a, b) .. (a + 1, b + 1), bit da + 2 db, from one gather (four texel
-// reads where the block leaves the tile: CLAMP_TO_EDGE as rvBlk)
-uint rvQuad(ivec2 p, bool sw, int a, int b, vec3 c, vec2 g, float z_bias, float rp_max)
-{
-    ivec2 q = p + (sw ? ivec2(b, a) : ivec2(a, b));      // the block's lower left texel in the tile
-    int n = int(g_tile.z);
-    if (any(lessThan(q, ivec2(0))) || any(greaterThan(q, ivec2(n - 2))))
-    {
-        uint r = 0u;
-        if (rvB(p, sw, a, b, c, g, z_bias, rp_max)) r |= 1u;
-        if (rvB(p, sw, a + 1, b, c, g, z_bias, rp_max)) r |= 2u;
-        if (rvB(p, sw, a, b + 1, c, g, z_bias, rp_max)) r |= 4u;
-        if (rvB(p, sw, a + 1, b + 1, c, g, z_bias, rp_max)) r |= 8u;
-        return r;
-    }
-    float nf = float(n);
-    vec4 z = textureGather(proj_shadow_atlas, (g_tile.xy + vec2(q) + 1.0) * g_tile.w);   // (0,1) (1,1) (1,0) (0,0) of the tile
-    vec2 d0 = (vec2(q) + 0.5) / nf - c.xy;
-    vec4 dx = d0.x + vec4(0.0, 1.0, 1.0, 0.0) / nf;
-    vec4 dy = d0.y + vec4(1.0, 1.0, 0.0, 0.0) / nf;
-    bvec4 bk = lessThan(z, c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0));
-    // frame (da, db) = tile (da, db), or tile (db, da) when transposed
-    uint r = 0u;
-    if (bk.w) r |= 1u;
-    if (sw ? bk.x : bk.z) r |= 2u;
-    if (sw ? bk.z : bk.x) r |= 4u;
-    if (bk.y) r |= 8u;
-    return r;
-}
-
-// The edge line of the silhouette near texel p in one frame (sw: a along v, b along u; else a along u, b along v), in that
-// frame's texel coordinates relative to p. The boundary of column 0 nearest the receiver (fb), between rows j0 and j0 + 1; then
-// both ways along the edge while the boundary stays a monotone staircase of one- or two-row steps (the necessary condition of a digital
-// straight segment), up to RV_S columns a side, keeping the risers within RV_D columns (at most RV_K a side). A riser is where the
-// boundary moves by one row between two columns; its midpoint (the column boundary; the old and new boundary's mean height) is
-// where a straight edge crosses a row-centre height, to +- half a texel along the edge.
-//   risers on both sides: the least-squares line through the same number from each side (the receiver's column lies inside the
-//     span they cover: an interpolation, never an extrapolation; a curve is cut by a short chord);
-//   else MLAA's line over the receiver's own run (the RBSM papers' discontinuity shapes): between the run's ends at half a step
-//     (Z and L; an end that is no step stays at the boundary), or two half-lines meeting at its middle (U).
-// Returns 0: no single boundary in column 0 (no line here); 1: a line; 2: a line, but a side ended in a jump of three or more rows
-// (or a non-monotone column) within two columns (the edge is steeper than 45 degrees in this frame there: the caller tries the other frame first).
-int rvLine(ivec2 p, bool sw, float fb, float fa, vec3 c, vec2 g, float z_bias, float rp_max, out bool bh, out vec2 e0, out vec2 e1)
-{
-    bh = false;
-    e0 = vec2(0.0);
-    e1 = vec2(1.0, 0.0);
-    int j0 = 99;
-    int nb = 0;
-    float best = 1.0e9;
-    for (int j = -2; j <= 1; ++j)
-    {
-        bool lo = rvB(p, sw, 0, j, c, g, z_bias, rp_max);
-        bool hi = rvB(p, sw, 0, j + 1, c, g, z_bias, rp_max);
-        if (lo != hi)
-        {
-            ++nb;
-            float dd = abs(fb - float(j + 1));
-            if (dd < best) { best = dd; j0 = j; }
-        }
-    }
-    if (nb != 1) return 0;
-    bool bl = rvB(p, sw, 0, j0, c, g, z_bias, rp_max);
-    bh = !bl;
-    float b0 = float(j0 + 1);
-    int dirc = 0;
-    float ra_r[RV_K], rh_r[RV_K], ra_l[RV_K], rh_l[RV_K];
-    int n_r = 0, n_l = 0;
-    float kr = float(RV_S + 1), kl = -float(RV_S + 1), sr = 0.0, sl = 0.0;
-    bool steep = false;
-    for (int side = 0; side < 2; ++side)
-    {
-        int stp = side == 0 ? 1 : -1;
-        int cur = j0;               // the boundary lies between rows cur and cur + 1 in the column last visited
-        int nr = 0;
-        bool first = true;
-#if RV_GATHER
-        // two columns a step: the strip of rows cur - 2 .. cur + 3 of both, three gathers issued together (independent reads,
-        // one latency), then both columns from registers; a row the strip lacks (after a move in the first column) is read alone
-        uint strip = 0u;
-        int s_lo = 0, s_b = 0;          // the strip's first column (frame a) and first row
-        for (int i = 1; i <= RV_S; ++i)
-        {
-            int k = stp * i;
-            if (((i - 1) & 1) == 0)
-            {
-                s_lo = stp > 0 ? k : k - 1;
-                s_b = cur - 2;
-                strip = rvQuad(p, sw, s_lo, s_b, c, g, z_bias, rp_max) | (rvQuad(p, sw, s_lo, s_b + 2, c, g, z_bias, rp_max) << 4u)
-                      | (rvQuad(p, sw, s_lo, s_b + 4, c, g, z_bias, rp_max) << 8u);
-            }
-            int da = k - s_lo;
-            #define RVS(row) ((row) >= s_b && (row) < s_b + 6 ? (((strip >> uint(((row) - s_b) * 2 + da)) & 1u) != 0u) : rvB(p, sw, k, (row), c, g, z_bias, rp_max))
-            bool a0 = RVS(cur);
-            bool a1 = RVS(cur + 1);
-            if (a0 == bl && a1 == bh) continue;
-            int mv = 0;
-            bool up2 = RVS(cur + 2);
-            bool dn1 = RVS(cur - 1);
-            if (a0 == bl && a1 == bl)
-            {
-                if (up2 == bh) mv = 1;
-                else if (RVS(cur + 3) == bh) mv = 2;
-            }
-            else if (a0 == bh && a1 == bh)
-            {
-                if (dn1 == bl) mv = -1;
-                else if (RVS(cur - 2) == bl) mv = -2;
-            }
-            #undef RVS
-#else
-        for (int i = 1; i <= RV_S; ++i)
-        {
-            int k = stp * i;
-            bool a0 = rvB(p, sw, k, cur, c, g, z_bias, rp_max);
-            bool a1 = rvB(p, sw, k, cur + 1, c, g, z_bias, rp_max);
-            if (a0 == bl && a1 == bh) continue;
-            // the boundary's move in this column: +-1 or +-2 rows (a slope up to 2 in this frame: near 45 degrees a curve turns
-            // steeper than 1 on one side, and a move of two rows is two risers at the same column boundary)
-            int mv = 0;
-            bool up2 = rvB(p, sw, k, cur + 2, c, g, z_bias, rp_max);
-            bool dn1 = rvB(p, sw, k, cur - 1, c, g, z_bias, rp_max);
-            if (a0 == bl && a1 == bl)
-            {
-                if (up2 == bh) mv = 1;
-                else if (rvB(p, sw, k, cur + 3, c, g, z_bias, rp_max) == bh) mv = 2;
-            }
-            else if (a0 == bh && a1 == bh)
-            {
-                if (dn1 == bl) mv = -1;
-                else if (rvB(p, sw, k, cur - 2, c, g, z_bias, rp_max) == bl) mv = -2;
-            }
-#endif
-            if (mv == 0 && i <= 2 && ((a0 == bl && a1 == bl) || (a0 == bh && a1 == bh))) steep = true;
-            int sg = mv > 0 ? 1 : (mv < 0 ? -1 : 0);
-            if (first)
-            {
-                first = false;
-                if (side == 0) { kr = float(k); sr = float(sg); } else { kl = float(k); sl = float(sg); }
-            }
-            int d = sg * stp;       // left to right
-            if (mv == 0 || (dirc != 0 && d != dirc)) break;
-            dirc = d;
-            if (i > RV_D || nr >= RV_K) break;
-            float ra = side == 0 ? float(k) : float(k + 1);
-            for (int m = 0; m < 2; ++m)
-            {
-                if (m >= abs(mv) || nr >= RV_K) break;
-                float rh = float(cur + 1 + sg * m) + 0.5 * float(sg);
-                if (side == 0) { ra_r[nr] = ra; rh_r[nr] = rh; } else { ra_l[nr] = ra; rh_l[nr] = rh; }
-                ++nr;
-            }
-            cur += mv;
-        }
-        if (side == 0) n_r = nr; else n_l = nr;
-    }
-    int nu = min(n_r, n_l);
-    if (nu >= 1)
-    {
-        float sa = 0.0, sh = 0.0, saa = 0.0, sah = 0.0;
-        for (int i = 0; i < RV_K; ++i)
-        {
-            if (i >= nu) break;
-            sa += ra_r[i] + ra_l[i];
-            sh += rh_r[i] + rh_l[i];
-            saa += ra_r[i] * ra_r[i] + ra_l[i] * ra_l[i];
-            sah += ra_r[i] * rh_r[i] + ra_l[i] * rh_l[i];
-        }
-        float fn = float(2 * nu);
-        float den = fn * saa - sa * sa;
-        float beta = den > 1.0e-6 ? (fn * sah - sa * sh) / den : 0.0;
-        float alpha = (sh - beta * sa) / fn;
-        e0 = vec2(-1.0, alpha - beta);
-        e1 = vec2(1.0, alpha + beta);
-        return 1;
-    }
-    float al = kl + 1.0, ar = kr;
-    e0 = vec2(al, b0 + 0.5 * sl);
-    e1 = vec2(ar, b0 + 0.5 * sr);
-    if (sl == sr && sl != 0.0)
-    {
-        float mid = 0.5 * (al + ar);
-        if (fa < mid) e1 = vec2(mid, b0); else e0 = vec2(mid, b0);
-    }
-    return steep ? 2 : 1;
-}
-
-// The revectorized visibility of receiver c: the share of a disc of radius rw (texels per axis) on the lit side of the edge line
-// (rvLine) through the receiver's neighbourhood. The frame tried first is the one whose rows the 4 x 4 texels around p flip
-// between more often (an edge nearer u than v runs along u). ok = false where no single edge line holds (a feature thinner than
-// the window, an end or a corner next to p): the caller uses P2's PCF there.
-float rvVisibility(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rw, out bool ok)
-{
-    ok = true;
-    float n = proj_shadow_tile.z;
-    vec2 t = c.xy * n;
-    ivec2 p = ivec2(floor(t));
-    vec2 f = t - vec2(p);
-    // the 4 x 4 texels p + [-1, 2]^2: four gathers (texel reads where the window leaves the tile, CLAMP_TO_EDGE as rvBlk)
-    uint bits = 0u;
-    int ni = int(n);
-    if (all(greaterThanEqual(p, ivec2(1))) && all(lessThanEqual(p, ivec2(ni - 3))))
-    {
-        for (int q = 0; q < 4; ++q)
-        {
-            ivec2 o = ivec2((q & 1) * 2 - 1, (q >> 1) * 2 - 1);      // the quad's lower left texel, relative to p
-            vec4 z = textureGather(proj_shadow_atlas, (proj_shadow_tile.xy + vec2(p + o) + 1.0) * proj_shadow_tile.w);
-            vec2 d0 = (vec2(p + o) + 0.5) / n - c.xy;
-            vec4 dx = d0.x + vec4(0.0, 1.0, 1.0, 0.0) / n;
-            vec4 dy = d0.y + vec4(1.0, 1.0, 0.0, 0.0) / n;
-            vec4 ref = c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0);
-            bvec4 b = lessThan(z, ref);                              // gather order (0,1) (1,1) (1,0) (0,0)
-            int bx = o.x + 1, by = o.y + 1;                          // window coordinates of the quad's lower left texel
-            if (b.w) bits |= 1u << uint(by * 4 + bx);
-            if (b.z) bits |= 1u << uint(by * 4 + bx + 1);
-            if (b.x) bits |= 1u << uint((by + 1) * 4 + bx);
-            if (b.y) bits |= 1u << uint((by + 1) * 4 + bx + 1);
-        }
-    }
-    else
-    {
-        for (int j = -1; j <= 2; ++j)
-            for (int i = -1; i <= 2; ++i)
-                if (rvBlk(p + ivec2(i, j), c, g, z_bias, rp_max)) bits |= 1u << uint((j + 1) * 4 + (i + 1));
-    }
-    if (bits == 0u || bits == 0xFFFFu)
-    {
-        // a clean window: the disc stays inside it (at least one texel to its edge) or P2's filter, which sees past it, decides
-        if (max(rw.x, rw.y) > 1.0) ok = false;
-        return bits == 0u ? 1.0 : 0.0;
-    }
-#if RV_STOP == 1
-    return 0.5;
-#endif
-    int hx = 0, vy = 0;
-    for (int j = 0; j < 4; ++j)
-        for (int i = 0; i < 3; ++i)
-        {
-            hx += int(((bits >> uint(j * 4 + i)) ^ (bits >> uint(j * 4 + i + 1))) & 1u);
-            vy += int(((bits >> uint(i * 4 + j)) ^ (bits >> uint(i * 4 + j + 4))) & 1u);
-        }
-    bool sw = hx > vy;
-    bool bh = false, bh2 = false;
-    vec2 e0, e1, e0b, e1b;
-    int r = rvLine(p, sw, sw ? f.x : f.y, sw ? f.y : f.x, c, g, z_bias, rp_max, bh, e0, e1);
-#if RV_STOP == 2
-    return 0.5;
-#endif
-    if (RV_RETRY != 0 && r != 1)
-    {
-        int r2 = rvLine(p, !sw, sw ? f.y : f.x, sw ? f.x : f.y, c, g, z_bias, rp_max, bh2, e0b, e1b);
-        if (r2 == 1 || (r2 == 2 && r == 0))
-        {
-            sw = !sw;
-            bh = bh2;
-            e0 = e0b;
-            e1 = e1b;
-            r = 1;
-        }
-    }
-    if (r == 0)
-    {
-        ok = false;
-        return 1.0;
-    }
-    // to tile texels, then to units of the filter radius per axis (the disc is an ellipse in texels when k.x != k.y)
-    vec2 q0 = (sw ? e0.yx : e0) / rw;
-    vec2 q1 = (sw ? e1.yx : e1) / rw;
-    vec2 fq = f / rw;
-    vec2 dir = normalize(q1 - q0);
-    vec2 nrm = vec2(-dir.y, dir.x);
-    vec2 up = sw ? vec2(1.0 / rw.x, 0.0) : vec2(0.0, 1.0 / rw.y);   // +b, the high row's side
-    float side = dot(nrm, up) >= 0.0 ? 1.0 : -1.0;
-    float dist = dot(fq - q0, nrm) * side;                           // > 0: on the high row's side
-    float lit = bh ? -dist : dist;                                   // > 0: on the lit side
-    return rvSegment(-lit);
-}
-
-// P2's percentage-closer filter at radius rf (texels per axis), the taps of stSpotFilterTile's second loop
-float rvPCF(vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
-{
-    vec2 res = vec2(proj_shadow_tile.z);
-    float lit = 0.0;
-    for (int k = 0; k < ST_SPOT_TAPS; ++k)
-    {
-        vec4 ref;
-        vec2 f;
-        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
-        vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
-        lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
-    }
-    return lit / (0.55 * float(ST_SPOT_TAPS));
-}
-
-// stSpotFilterTile (P2) with the revectorized edge where the physical radius is small. VARIANT_RV 1: RV, 2: RVINV
-uniform int rv_off;   // bench ablation: 1 = never take the RV branch at run time (its code still compiled: the cost of carrying it)
-float stSpotFilterTileRV(vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2 kmax)
-{
-    vec2 res = vec2(proj_shadow_tile.z);
-    vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), kmax);
-    // P2's own cap and tile-edge flag for the search and the PCF (those pixels stay P2's, bit for bit); RV's texel reads have their
-    // own cap rp_rv (the plane's lowering over max(rs, RVI_R) + 1 texels), RVINV's wider PCF its own edge flag
-    float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
-    float rp_rv = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(max(rs.x, rs.y), RVI_R) + 1.0));
-    vec2 tc = c.xy * res - 0.5;
-    float r = max(rs.x, rs.y);
-    bool edge = any(lessThan(tc - r, vec2(1.0))) || any(greaterThan(tc + r, res - 2.0));
-    float r2 = max(r, RVI_R);
-    bool edge2 = any(lessThan(tc - r2, vec2(1.0))) || any(greaterThan(tc + r2, res - 2.0));
-    float z_near = 0.0;
-    float n_blk = 0.0;
-    for (int k = 0; k < ST_SPOT_SEARCH; ++k)
-    {
-        vec4 ref;
-        vec2 f;
-        vec4 z = stSpotQuadTile(c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, c, g, z_bias, rp_max, edge, ref, f);
-        vec4 blk = vec4(lessThan(z, ref));
-        n_blk += blk.x + blk.y + blk.z + blk.w;
-        vec4 bz = blk * z;
-        z_near = max(z_near, max(max(bz.x, bz.y), max(bz.z, bz.w)));
-    }
-    if (n_blk == 0.0) return 1.0;
-    if (n_blk == float(4 * ST_SPOT_SEARCH)) return 0.0;
-    vec2 rphys = pen * (c.z - z_near);                         // the physical radius, unclamped
-    float rmax = max(rphys.x, rphys.y);
-    vec2 rf = clamp(rphys, vec2(ST_SPOT_KERNEL_MIN), kmax);    // P2's
-    if (rmax >= RV_HI || rv_off != 0) return rvPCF(c, g, z_bias, rp_max, rf, edge);
-#if VARIANT_RV == 1
-    bool ok;
-    float v = rvVisibility(c, g, z_bias, rp_rv, max(min(rphys, kmax), vec2(RV_MIN)), ok);
-    if (!ok) return rvPCF(c, g, z_bias, rp_max, rf, edge);
-#else
-    float vw = rvPCF(c, g, z_bias, rp_rv, max(rf, vec2(RVI_R)), edge2);
-    float dist = -rvSegmentInv(vw);                            // > 0: into the lit side, in units of the wide radius
-    float v = rvSegment(-dist * RVI_R / max(rmax, RV_MIN));
-#endif
-    if (rmax > RV_LO) v = mix(v, rvPCF(c, g, z_bias, rp_max, rf, edge), smoothstep(RV_LO, RV_HI, rmax));
-    return v;
-}
 '''
 
 RECEIVER = r'''
@@ -625,23 +183,8 @@ VS = '#version 400\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4 - 1, (gl_Ve
 
 
 def build(method, timing=False):
-    if method == 'today':
-        d, body, sample = BASE
-        src = PREAMBLE + d + '\n#define TIMING %d\n#define LOOKUP sampleProjectorShadow\n' % int(timing) + body + sample
-    else:
-        d, body, sample = DEV
-        src = PREAMBLE + d + '\n#define TIMING %d\n' % int(timing)
-        if method == 'RVreal':
-            d, body, sample = REAL
-            src = PREAMBLE + d + '\n#define TIMING %d\n#define LOOKUP sampleProjectorShadow\n' % int(timing) + body + sample
-        elif method == 'P2':
-            src += '#define LOOKUP sampleProjectorShadow\n' + body + sample
-        else:
-            rv = sample.replace('float sampleProjectorShadow(', 'float sampleProjectorRV(', 1)
-            assert 'stSpotFilterTile(c, grad' in rv
-            rv = rv.replace('stSpotFilterTile(c, grad', 'stSpotFilterTileRV(c, grad', 1)
-            extra = ''.join('#define %s %s\n' % tuple(d.split('=')) for d in opts.defs.split(',') if d)
-            src += extra + '#define g_tile proj_shadow_tile\n#define VARIANT_RV %d\n#define LOOKUP sampleProjectorRV\n' % (1 if method == 'RV' else 2) + body + RV + rv
+    d, body, sample = {'today': BASE, 'P2': DEV, 'release': RELEASE, 'L1': REAL}[method]
+    src = PREAMBLE + d + '\n#define TIMING %d\n#define LOOKUP sampleProjectorShadow\n' % int(timing) + body + sample
     return program([(0x8B31, VS), (0x8B30, src + RECEIVER)])
 
 
@@ -779,7 +322,9 @@ def set_lookup(prog, tex, m, n, L):
 
 
 def emitter(method):
-    return opts.today_emitter if method == 'today' else 0.01 * opts.softness
+    if method == 'today':
+        return opts.today_emitter
+    return (opts.release_emitter_base if method == 'release' else opts.lamp_base) * opts.softness
 
 
 def run_grid(prog, tgt, tex, m, n, L, p0, ax, ay):
@@ -871,7 +416,6 @@ def stairs():
                                ref_w10_90_mm=float(abs(ref_w)), valid=float(ok.mean()))
                     rows.append(row)
                     emit(row)
-                oracle_check('stairs fov %g N %d angle %g' % (fov, n, ang), imgs)
                 free(tex)
             print('fov %.1f N %d done' % (fov, n), flush=True)
     print('\n| fov | N | texel mm | angle | method | bias mm | RMS mm | max mm | step p-p mm (texels) | 10-90 mm (texels) | reference 10-90 mm |')
@@ -884,34 +428,22 @@ def stairs():
 
 
 def stair_gates(rows):
-    '''PR A's staircase gates on the checkout's shader (RVreal, else the prototype), over the tiles of 256 and up: the worst step is at most
-    0.25 texel for 2 to 45 degrees and 0.50 texel below 2 degrees (the traversal's reach RV_S = 24 texels is shorter than a run of a
-    shallow edge: the design's audit measured 0.41 at 1.5 degrees, the full matrix 0.49 at fov 3.0, 512, 1.5 degrees; P2: 0.9); where the
-    physical width is wider than 0.35 texel the 10-90 %% width is within 5 %% of the reference at 2 degrees and up (under 2 degrees the
-    short traversal widens it by about 5 %%: reported, not gated) (the width gate needs --softness 1
-    --plate-h 1.2). Tiles under 256 are reported, not gated: their texel is 30 to 140 mm and the normal offset's drift across the
-    scan (one texel times sin(theta), the same for P2) is part of the peak to peak.'''
-    ok = True
-    for mth in ('RVreal', 'RV'):
-        rs = [r for r in rows if r['method'] == mth]
-        if not rs:
-            continue
-        g = [r for r in rs if r['N'] >= 256]
-        hi = max((r['p2p_texels'] for r in g if r['angle'] >= 2), default=0.0)
-        lo = max((r['p2p_texels'] for r in g if r['angle'] < 2), default=0.0)
-        small = max((r['p2p_texels'] for r in rs if r['N'] < 256), default=None)
-        wid = [abs(r['w10_90_mm'] / r['ref_w10_90_mm'] - 1) for r in g if r['angle'] >= 2 and r['ref_w10_90_mm'] > 0.35 * r['texel_mm']]
-        w_ok = (max(wid) <= 0.05) if wid else True
-        s_ok = hi <= 0.25 and lo <= 0.50
-        ok &= s_ok and w_ok
-        if not any(r['angle'] < 2 for r in g):
-            print('%s: the under-2-degree gate is NOT EXERCISED (no --angles below 2, or no tile of 256 and up)' % mth)
-        if not wid:
-            print('%s: the width gate is NOT EXERCISED (no scan wider than 0.35 texel: --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048)' % mth)
-        print('%s staircase (tiles >= 256): worst step %.3f texel (2-45 deg, gate 0.25), %.3f texel (< 2 deg, gate 0.50): %s; width within 5 %% of the reference where wider than 0.35 texel: %s (worst %s); tiles < 256 (not gated): worst step %s' % (
-            mth, hi, lo, 'PASS' if s_ok else 'FAIL', 'PASS' if w_ok else 'FAIL', '%.1f %%' % (100 * max(wid)) if wid else 'n/a',
-            '%.3f texel' % small if small is not None else 'n/a'))
-    return ok
+    '''L1's staircase gate on the checkout's shader, over the tiles of 256 and up at 2 degrees and more: the 10-90 % width within 20 % of
+    the analytic one wherever the physical radius lies between the filter's floor (1.5 texels: a 10-90 % width of about 2 texels) and its
+    cap (12 texels). The filter's weights draw an edge about 16 % narrower than a uniform disc of the same radius. The steps (peak to peak
+    of the 50 % contour) are reported, not gated: L1 draws no edge narrower than its floor, which hides them.'''
+    rs = [r for r in rows if r['method'] == 'L1']
+    if not rs:
+        return True
+    g = [r for r in rs if r['N'] >= 256 and r['angle'] >= 2]
+    wid = [abs(r['w10_90_mm'] / r['ref_w10_90_mm'] - 1) for r in g if 2.2 * r['texel_mm'] < r['ref_w10_90_mm'] < 16.0 * r['texel_mm']]
+    w_ok = (max(wid) <= 0.20) if wid else True
+    if not wid:
+        print('L1: the width gate is NOT EXERCISED (no scan with a physical width between the floor and the cap: --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048)')
+    steps = [r['p2p_texels'] for r in g]
+    print('L1 staircase (tiles >= 256, 2 degrees and up): width within 20 %% of the reference between the floor and the cap: %s (worst %s, %d scans); steps (reported) up to %s texel' % (
+        'PASS' if w_ok else 'FAIL', '%.1f %%' % (100 * max(wid)) if wid else 'n/a', len(wid), '%.2f' % max(steps) if steps else 'n/a'))
+    return w_ok
 
 
 # ------------------------------------------------------------------------------------------------ the P2 gates on the avatar
@@ -942,8 +474,8 @@ def reference(points, L, boxes):
 
 
 def gates():
-    """The P2 gates (proj_march_bench.py --edges) applied to RV: toe x50 within 2 mm of the reference, under the toe <= 0.02, toe
-    RMS at most P2's + 0.005, shoulder x50 within 2 mm; on a 1.5 rad lamp, tiles 2048/1024/512."""
+    """L1's gates: toe and shoulder x50 within 2 mm of the reference (or no worse than P2's + 0.1 mm), under the toe <= 0.02, the
+    shoulder's 10-90 % width within 20 % of the reference; on a 1.5 rad lamp, tiles 2048/1024/512; every method on the same lamp."""
     methods = [m_ for m_ in opts.methods.split(',') if m_ != 'today']
     progs = {mth: build(mth) for mth in methods}
     W = 512
@@ -951,7 +483,7 @@ def gates():
     boxes = avatar()
     fov = 1.5
     m = lamp_matrix(fov, radius=10.0)
-    L = 0.01 * opts.softness
+    L = opts.lamp_base * opts.softness
     scans = {'toe': (np.array([0.20, 0.0, 0.0]), np.array([0.45, 0.0, 0.0]), 0.285, 0.45, 0),
              'shoulder': (np.array([0.0, 0.30, 0.0]), np.array([0.0, 0.85, 0.0]), 0.30, 0.85, 1)}
     print('\n| tile | scan | method | x50 - ref mm | under toe | RMS vs ref | 10-90 mm |')
@@ -988,22 +520,21 @@ def gates():
                 rms = float(np.sqrt(np.mean((vv - rr) ** 2)))
                 rd = rr[:8].mean()
                 wref = 1000 * (x_at(rr, rd + 0.9 * (lit - rd)) - x_at(rr, rd + 0.1 * (lit - rd)))
-                res[(name, mth)] = dict(dx=dx, dark=dark, rms=rms, w=w)
+                res[(name, mth)] = dict(dx=dx, dark=dark, rms=rms, w=w, wref=wref)
                 row = dict(kind='gate', method=mth, N=n, texel_mm=texel_mm, scan=name, dx_mm=dx, under=dark, rms=rms, w10_90_mm=w, ref_w10_90_mm=wref)
                 emit(row)
                 print('| %d | %s | %s | %+.1f | %s | %.3f | %.1f (ref %.1f) |' % (n, name, mth, dx, '%.3f' % dark if name == 'toe' else '', rms, w, wref))
-            oracle_check('gates tile %d %s' % (n, name), gimgs)
         free(tex)
-        for rvm in ('RV', 'RVreal'):
-            if rvm in methods and 'P2' in methods and texel_mm <= 5.0:
-                t, sh, p2, p2s = res[('toe', rvm)], res[('shoulder', rvm)], res[('toe', 'P2')], res[('shoulder', 'P2')]
-                # PR A's gates (audit 2): the avatar's toe and shoulder x50 within 2 mm of the reference, or no worse than P2's plus 0.1 mm
-                # (the 512 shoulder is +3.4 mm for P2 itself); under the toe at most 0.02; the toe RMS at most P2's + 0.005
-                ok = (abs(t['dx']) <= max(2.0, abs(p2['dx']) + 0.1) and t['dark'] <= 0.02 and t['rms'] <= p2['rms'] + 0.005
-                      and abs(sh['dx']) <= max(2.0, abs(p2s['dx']) + 0.1))
-                allok &= ok
-                print('%s gates %d: %s' % (rvm, n, 'PASS' if ok else 'FAIL'))
-    print('RV GATES (texel <= 5 mm):', 'PASS' if allok else 'FAIL')
+        if 'L1' in methods and 'P2' in methods and texel_mm <= 5.0:
+            t, sh, p2, p2s = res[('toe', 'L1')], res[('shoulder', 'L1')], res[('toe', 'P2')], res[('shoulder', 'P2')]
+            # the avatar's toe and shoulder x50 within 2 mm of the reference, or no worse than P2's plus 0.1 mm (the 512 shoulder is
+            # +3.4 mm for P2 itself); under the toe at most 0.02; the shoulder's width within 20 % of physics
+            ok = (abs(t['dx']) <= max(2.0, abs(p2['dx']) + 0.1) and t['dark'] <= 0.02 and abs(sh['dx']) <= max(2.0, abs(p2s['dx']) + 0.1)
+                  and abs(sh['w'] / sh['wref'] - 1.0) <= 0.20)
+            allok &= ok
+            print('L1 gates %d: %s (shoulder width %.0f %% of the reference; toe RMS %.3f, P2 %.3f, reported)' % (
+                n, 'PASS' if ok else 'FAIL', 100 * sh['w'] / sh['wref'], t['rms'], p2['rms']))
+    print('L1 GATES (texel <= 5 mm):', 'PASS' if allok else 'FAIL')
     return allok
 
 
@@ -1060,6 +591,7 @@ def timing():
         plates.append((rng.uniform(0.3, 1.8), nx, ny, nx * cx + ny * cy, 0.25 + 0.5 * rng.uniform()))
     # 24 plates, each a square with one straight edge at a random angle, offset and height (see plate_tile_boxes)
     methods = [m_ for m_ in opts.methods.split(',') if m_ != 'today']
+    methods.sort(key=lambda m_: m_ != 'release')  # the release lookup first: the others are timed against it
     progs = {mth: build(mth, timing=True) for mth in methods}
     for fov in (1.5, 2.5):
         m = lamp_matrix(fov)
@@ -1078,19 +610,18 @@ def timing():
                     glUniform2f(glGetUniformLocation(prog, b'grid'), float(W), float(Hh))
                     glUniformMatrix4fv(glGetUniformLocation(prog, b'cam_inv'), 1, 0, inv_f.ctypes.data)
                     glUniform3f(glGetUniformLocation(prog, b'cam_pos'), *[float(v) for v in eye])
-                    glUniform1i(glGetUniformLocation(prog, b'rv_off'), opts.rv_off)
                 setup()
                 glDrawArrays(4, 0, 3)
                 glFinish()
                 img = tgt.read()
                 pen = float(np.mean((img > 0.0) & (img < 1.0)))
                 ms, spread = gpu_ms(setup)
-                base = ms if mth == 'P2' else base
+                base = ms if mth == 'release' else base
                 row = dict(kind='time', method=mth, fov=fov, N=n, ms=ms, spread=spread, partial_frac=pen,
-                           shadow_frac=float(np.mean(img < 1.0)), vs_p2=(ms / base - 1) if base else None, builds=builds_running())
+                           shadow_frac=float(np.mean(img < 1.0)), vs_release=(ms / base - 1) if base else None, builds=builds_running())
                 emit(row)
-                print('fov %.1f N %d %-6s %.4f ms (spread %.0f %%) %s partial %.2f %% shadowed %.1f %% builds %s' % (
-                    fov, n, mth, ms, 100 * spread, ('%+.1f %% vs P2' % (100 * row['vs_p2'])) if row['vs_p2'] is not None else '',
+                print('fov %.1f N %d %-7s %.4f ms (spread %.0f %%) %s partial %.2f %% shadowed %.1f %% builds %s' % (
+                    fov, n, mth, ms, 100 * spread, ('%+.1f %% vs release' % (100 * row['vs_release'])) if row['vs_release'] is not None else '',
                     100 * pen, 100 * row['shadow_frac'], row['builds'] or 'none'), flush=True)
             free(tex)
     print('GL:', get_string(0x1F01).decode(), get_string(0x1F00).decode())
@@ -1124,7 +655,7 @@ def plate_tile_boxes(n, m, fov, plates):
 def circle():
     """A round zero-thickness plate (radius R at --plate-h) whose shadow is centred on the floor point (1.0, 0.6): the radial 50 %
     crossing at 720 angles against the true circle (the point projection): mean, RMS and max deviation and the peak-to-peak.
-    Tests what the edge reconstruction does to a curved silhouette (a head is about 0.09 m, a table 0.3 m)."""
+    How the lookups draw a curved silhouette (a head is about 0.09 m, a table 0.3 m)."""
     methods = opts.methods.split(',')
     progs = {mth: build(mth) for mth in methods}
     G = 1024
@@ -1189,15 +720,14 @@ def circle():
                     print('| %.1f | %d | %.1f | %.0f | %s | %+.2f | %.2f | %.2f | %.2f (%.2f) | %.2f | %.2f (%.2f) |' % (fov, n, row['texel_mm'], row['Rs_mm'], mth,
                           row['bias_mm'], row['rms_mm'], row['max_mm'], row['p2p_mm'], row['p2p_texels'], row['stair_rms_mm'], row['stair_p2p_mm'],
                           row['stair_p2p_texels']), flush=True)
-                oracle_check('circle fov %g N %d R %g' % (fov, n, R), imgs)
                 free(tex)
 
 
 def grazing():
     """Acne check (proj_march_bench.py --grazing's case): a plane through the floor point (0.6, 0, 0) tilted by phi about the y axis
     is the only surface; every receiver on it is lit, so a correct lookup reads 1. Mean and worst darkening and the share of receivers
-    under 0.98, for P2 and RV, fov 1.5 lamp overhead, tiles 2048/1024/512."""
-    methods = [m_ for m_ in opts.methods.split(',') if m_ in ('P2', 'RV', 'RVreal')]
+    under 0.98, for P2, release and L1, fov 1.5 lamp overhead, tiles 2048/1024/512."""
+    methods = [m_ for m_ in opts.methods.split(',') if m_ in ('P2', 'release', 'L1')]
     progs = {mth: build(mth) for mth in methods}
     W, Hh = 512, 8
     tgt = Target(W, Hh)
@@ -1240,12 +770,9 @@ if opts.circle:
     circle()
 RESULT = []
 if opts.stairs:
-    rows_ = stairs()
-    if not opts.p2_regime:
-        RESULT.append(stair_gates(rows_))
+    RESULT.append(stair_gates(stairs()))
 if opts.gates:
     RESULT.append(gates())
 if opts.time:
     timing()
-RESULT.append(oracle_report())
 sys.exit(0 if all(RESULT) else 1)
