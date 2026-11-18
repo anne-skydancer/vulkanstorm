@@ -214,7 +214,10 @@ and the unit test holds the Aurora Viewer's properties for it: the mean of R ove
 frames sum to 8 alpha S within 1 for alpha on a 1/64 grid, the Aurora Viewer's test set (max error 1.00, rms 0.38, against 4.00 and 1.14 for a fresh hash every frame),
 and within 1.4 for any alpha (measured 1.375 over a 1/1024 sweep: the local discrepancy of eight golden-ratio points; the Aurora Viewer's "within 1" holds on its grid), two layers share a subset at 3 of 4096 pixels
 (chance: 2), and every 8 x 8 block of the tile is balanced (sd of the block means 0.0105, white noise 0.037). The grain pattern changes; its statistics do not
-(the A/B below was measured with the previous tile).
+(the A/B below was measured with the previous tile). The harness's sub-pixel pans, the previous dither against this one (`test_alpha_stochastic.py`, NVIDIA 621.14,
+frame 40): the history's rmse moves by -1.6 to +2.4 % at 64 x 32 and by -0.9 to +1.7 % at 128 x 128, the plain 8 samples' by -1.6 to +0.3 %; on the hair strips at
+0.5 px per frame the history's low-pass error is 1.02 times the plain samples' at 64 x 32 (0.97 before) and 0.97 at 128 x 128 (0.94 before), so the harness's
+bound for hair is 1.04 (it was 0.98).
 
 NaN guard (PR 3663's set, with a bit test of the exponent, not `isnan`): a fragment with a non-finite alpha is discarded in the alpha-only passes; the measuring pass and the
 composite zero NaN samples and clamp infinities; the Catmull-Rom taps skip non-finite texels, the 3 x 3 box skips non-finite values, and a blend that is
