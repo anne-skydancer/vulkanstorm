@@ -330,7 +330,7 @@ function getopt()
 
 
 getArgs $*
-# AVX2 is the Linux default (x86-64-v3, the vkstorm-ffi package baseline)
+# AVX2 is the Linux default (the x86-64-v3 floor)
 # unless --avx, --avx2 or --no-avx2 was given.
 if [ -z "$WANTS_AVX2" ] ; then
     if [ "$TARGET_PLATFORM" == "linux" ] && [ $WANTS_AVX -ne $TRUE ] ; then

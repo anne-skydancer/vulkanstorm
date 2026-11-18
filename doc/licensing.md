@@ -133,14 +133,17 @@ The About box's credits list (`floater_about.xml`) still names some of
 these (Havok, FMOD, Kakadu) from the upstream text; they are not in our
 binaries.
 
-### Rust core (`vkstorm-core-rust`, the `vkstorm-ffi` static library)
+### Rust core (archived)
 
-Linked into the viewer on the former `vkstorm-rust` line only (archived
-2026-11-18, tag `archive/vkstorm-rust/2026-11-18`; never on `vkstorm-devel`). Its crates are `GPL-3.0-or-later` (original code) or ports
-of Linden Lab code (LGPL-2.1, part of the GPL-3.0 whole); the vendored ports keep their own
-licences (`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part of
-`vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib). The
-crates.io dependencies reachable from `vkstorm-ffi` with all features
+Not part of any current build. It was linked only on the former
+`vkstorm-rust` line (archived 2026-11-18, tag
+`archive/vkstorm-rust/2026-11-18`), never on `vkstorm-devel`. This audit of
+`vkstorm-core-rust` (the `vkstorm-ffi` static library) is kept for the
+restarted port. Its crates are `GPL-3.0-or-later` (original code) or ports of
+Linden Lab code (LGPL-2.1, part of the GPL-3.0 whole); the vendored ports keep
+their own licences (`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part
+of `vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib).
+The crates.io dependencies reachable from `vkstorm-ffi` with all features
 (`cargo metadata --all-features`) are under MIT, Apache-2.0, Zlib, ISC, BSD,
 Unlicense, Unicode-3.0, IJG and MPL-2.0 (Symphonia); MPL-2.0 is
 GPL-compatible through its section 3.3 (Secondary Licenses), and none of them
