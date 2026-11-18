@@ -964,17 +964,28 @@ void LLVOTree::updateMesh()
 
     LLFace* facep = mDrawable->getFace(0);
     if (!facep) return;
-    LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK);
+    LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK); // <Vulkanstorm/> released if no face takes it
     if (!buff->allocateBuffer(vert_count, index_count))
     {
         LL_WARNS() << "Failed to allocate Vertex Buffer on mesh update to "
             << vert_count << " vertices and "
             << index_count << " indices" << LL_ENDL;
-        buff->allocateBuffer(1, 3);
-        memset((U8*)buff->getMappedData(), 0, buff->getSize());
-        memset((U8*)buff->getMappedIndices(), 0, buff->getIndicesSize());
+        // <Vulkanstorm> the dummy's zeros go to GL too (LLDrawPoolTree draws the face's whole buffer, and a pooled
+        // buffer keeps its previous owner's indices there). If its allocation fails as well, the face gets no buffer
+        // (the tree pool skips it, and the next geometry update rebuilds the tree) instead of a write through a null
+        // copy.
         facep->setSize(1, 3);
-        facep->setVertexBuffer(buff);
+        if (buff->allocateBuffer(1, 3))
+        {
+            buff->zeroFill();
+            facep->setVertexBuffer(buff);
+        }
+        else
+        {
+            LL_WARNS_ONCE("Tree") << "Failed to allocate a dummy vertex buffer for a tree; the face is left without one" << LL_ENDL;
+            facep->setVertexBuffer(nullptr);
+        }
+        // </Vulkanstorm>
         mReferenceBuffer->unmapBuffer();
         buff->unmapBuffer();
         return;

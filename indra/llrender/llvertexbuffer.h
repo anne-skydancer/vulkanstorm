@@ -193,6 +193,10 @@ public:
     U8*     mapVertexBuffer(AttributeType type, U32 index, S32 count = -1);
     U8*     mapIndexBuffer(U32 index, S32 count = -1);
 
+    // <Vulkanstorm> zero every vertex and index byte and mark both whole buffers for the next unmapBuffer(), which
+    // uploads the zeros: a buffer taken from the pool otherwise keeps its previous owner's bytes in GL
+    void    zeroFill();
+
     // synonym for flushBuffers
     void    unmapBuffer();
 

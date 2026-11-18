@@ -284,6 +284,19 @@ U32 LLViewerJointMesh::drawShape( F32 pixelArea, bool first_pass, bool is_dummy)
 
     LLVertexBuffer* buff = mFace->getVertexBuffer();
 
+    // <Vulkanstorm> After a failed allocation the face holds a 1-vertex, 3-index dummy while the joint meshes keep the
+    // ranges of the full mesh (LLVOAvatar::updateMeshData): draw nothing outside the buffer. The first pass still
+    // uploads the joint matrices, which the following meshes of the pass draw with.
+    if (end >= buff->getNumVerts() || offset + count > buff->getNumIndices())
+    {
+        if (first_pass && mMesh->hasWeights())
+        {
+            uploadJointMatrices();
+        }
+        return 0;
+    }
+    // </Vulkanstorm>
+
     if (mMesh->hasWeights())
     {
         if (first_pass)

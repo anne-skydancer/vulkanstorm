@@ -2964,22 +2964,34 @@ void LLVOAvatar::updateMeshData()
             facep->setGeomIndex(0);
             facep->setIndicesIndex(0);
 
-            LLVertexBuffer* buff = facep->getVertexBuffer();
+            LLPointer<LLVertexBuffer> buff = facep->getVertexBuffer(); // <Vulkanstorm/> a reference: a buffer no face takes is released with it
             if(!facep->getVertexBuffer())
             {
                 buff = new LLVertexBuffer(LLDrawPoolAvatar::VERTEX_DATA_MASK);
+                bool attach = true; // <Vulkanstorm/>
                 if (!buff->allocateBuffer(num_vertices, num_indices))
                 {
-                    LL_WARNS() << "Failed to allocate Vertex Buffer for Mesh to "
+                    // <Vulkanstorm/> once: a face 0 left without a buffer (below) has renderSkinned retry every frame
+                    LL_WARNS_ONCE("Avatar") << "Failed to allocate Vertex Buffer for Mesh to "
                         << num_vertices << " vertices and "
                         << num_indices << " indices" << LL_ENDL;
                     // Attempt to create a dummy triangle (one vertex, 3 indices, all 0)
                     facep->setSize(1, 3);
-                    buff->allocateBuffer(1, 3);
-                    memset((U8*) buff->getMappedData(), 0, buff->getSize());
-                    memset((U8*) buff->getMappedIndices(), 0, buff->getIndicesSize());
+                    // <Vulkanstorm> the zeros go to GL too (the CPU copy alone never reached it). If this allocation
+                    // fails as well, the face gets no buffer (no write through a null copy): its joint meshes draw
+                    // nothing, and the next mesh update allocates again (renderSkinned, for face 0 every frame).
+                    attach = buff->allocateBuffer(1, 3);
+                    if (attach)
+                    {
+                        buff->zeroFill();
+                    }
+                    else
+                    {
+                        LL_WARNS_ONCE("Avatar") << "Failed to allocate a dummy vertex buffer for Mesh; the face is left without one" << LL_ENDL;
+                    }
+                    // </Vulkanstorm>
                 }
-                facep->setVertexBuffer(buff);
+                facep->setVertexBuffer(attach ? buff.get() : nullptr); // <Vulkanstorm/>
             }
             else
             {
@@ -2996,9 +3008,16 @@ void LLVOAvatar::updateMeshData()
                         LL_WARNS() << "Failed to allocate vertex buffer for Mesh, Substituting" << LL_ENDL;
                         // Attempt to create a dummy triangle (one vertex, 3 indices, all 0)
                         facep->setSize(1, 3);
-                        buff->allocateBuffer(1, 3);
-                        memset((U8*) buff->getMappedData(), 0, buff->getSize());
-                        memset((U8*) buff->getMappedIndices(), 0, buff->getIndicesSize());
+                        // <Vulkanstorm> as above (no write through a null copy; the zeros go to GL)
+                        if (buff->allocateBuffer(1, 3))
+                        {
+                            buff->zeroFill();
+                        }
+                        else
+                        {
+                            LL_WARNS_ONCE("Avatar") << "Failed to allocate a dummy vertex buffer for Mesh" << LL_ENDL;
+                        }
+                        // </Vulkanstorm>
                     }
                 }
             }
