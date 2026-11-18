@@ -621,7 +621,8 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   `d_ref = min(1.5 r, 4 m)` and wants 4 mm texels there, plus the cell's two guards; a power of two in `[128, 2048]`. `tan_w` is the
   tile's wider axis as a span of tangents (`2 tan(fov / 2)` times the aspect on the wider axis for one tile, its share of that for a
   cell). It is computed with the tile's volume, only when the lamp's pose changes (cone, aspect, reach, grid). `baseSize` is its one-tile,
-  square case. There is no per-tile sizing in the frame loop any more (`SizeHysteresis`, `cellSizeRequest` and their constants are gone).
+  square case. The per-tile size request and its hysteresis are gone from the frame loop (`SizeHysteresis`, `cellSizeRequest` and their
+  constants); what each tile still does every frame is one distance to its volume and one band test (comparisons, no logarithm).
 - **While the atlas has room** (the tiles' demand at most 0.60 of the atlas) every tile keeps its lamp's size, whatever the camera does:
   walking and orbiting change no size.
 

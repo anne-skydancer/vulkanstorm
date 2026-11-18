@@ -3185,6 +3185,34 @@ void testCellSizing()
     check(nextBand(1, 22.f) == 1 && nextBand(1, 23.f) == 2 && nextBand(2, 11.5f) == 2 && nextBand(2, 11.f) == 1, "a band moves half an octave past its bound");
     check(nextBand(kMaxBand, 1.f) == 0 && nextBand(0, 200.f) == kMaxBand, "a jump moves straight to the band");
     {
+        // the fast path (no logarithm inside the widened bounds) is the same rule as the logarithms alone
+        auto reference = [](int band, float d) {
+            const int up = bandOf(d / kBandHysteresis), down = bandOf(d * kBandHysteresis);
+            const int b = std::min(std::max(band, 0), kMaxBand);
+            return up > b ? up : (down < b ? down : b);
+        };
+        std::mt19937 rng(5);
+        std::uniform_real_distribution<float> dist(0.f, 200.f);
+        int differ = 0;
+        for (int n = 0; n < 200000; ++n)
+        {
+            const int b = int(rng() % (kMaxBand + 3)) - 1;
+            const float d = n % 97 == 0 ? std::numeric_limits<float>::quiet_NaN() : (n % 89 == 0 ? std::numeric_limits<float>::infinity() : dist(rng));
+            differ += nextBand(b, d) != reference(b, d);
+        }
+        for (int b = 0; b <= kMaxBand; ++b) // the bounds themselves, and a hair either side
+        {
+            for (const float edge : { bandLow(b) / kBandHysteresis, bandHigh(b) * kBandHysteresis })
+            {
+                for (const float d : { std::nextafter(edge, 0.f), edge, std::nextafter(edge, 1e9f) })
+                {
+                    differ += std::isfinite(d) && nextBand(b, d) != reference(b, d);
+                }
+            }
+        }
+        check(differ == 0, "nextBand's fast path equals the rule", differ);
+    }
+    {
         // a camera that stands at a bound and sways by +-25 % never changes the band
         int b = nextBand(kMaxBand, 16.f), changes = 0;
         for (int n = 0; n < 600; ++n)

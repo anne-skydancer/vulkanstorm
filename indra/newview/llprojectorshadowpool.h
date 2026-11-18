@@ -215,29 +215,42 @@ constexpr float kBandNearM = 8.0f;             // band 0: within 8 m of the came
 constexpr float kBandHysteresis = 1.41421356f; // 2^0.5
 constexpr int kMaxPressure = kMaxBand + kMaxLevel;
 
-// the band that holds a distance, without hysteresis (NaN, infinite or huge: the farthest)
+// the bounds of band b: [bandLow, bandHigh), powers of two times kBandNearM (exact in float)
+inline float bandLow(int band) { return band <= 0 ? 0.f : kBandNearM * float(1u << unsigned(band - 1)); }
+inline float bandHigh(int band) { return band >= kMaxBand ? std::numeric_limits<float>::infinity() : kBandNearM * float(1u << unsigned(band)); }
+
+// the band that holds a distance, without hysteresis (NaN, infinite or huge: the farthest; negative: the nearest). Comparisons against
+// the bounds, no logarithm: every tile runs this every frame
 inline int bandOf(float distance_m)
 {
     if (!(distance_m < 1.0e6f))
     {
         return kMaxBand;
     }
-    if (!(distance_m >= kBandNearM))
+    int band = 0;
+    while (band < kMaxBand && distance_m >= bandHigh(band))
     {
-        return 0;
+        ++band;
     }
-    return std::min(int(std::floor(std::log2(distance_m / kBandNearM))) + 1, kMaxBand);
+    return band;
 }
 
-// a tile's band after a frame at `distance_m`: it moves only past a bound by kBandHysteresis
+// a tile's band after a frame at `distance_m`: it moves only past a bound by kBandHysteresis. The common case (still inside its bounds
+// widened by the hysteresis) is the same two comparisons bandOf would make
 inline int nextBand(int band, float distance_m)
 {
-    const int up = bandOf(distance_m / kBandHysteresis), down = bandOf(distance_m * kBandHysteresis);
+    band = std::min(std::max(band, 0), kMaxBand);
+    const float nearer = distance_m / kBandHysteresis, farther = distance_m * kBandHysteresis;
+    if (nearer < bandHigh(band) && farther >= bandLow(band))
+    {
+        return band; // bandOf(nearer) <= band <= bandOf(farther)
+    }
+    const int up = bandOf(nearer), down = bandOf(farther);
     if (up > band)
     {
         return up;
     }
-    return down < band ? down : std::min(std::max(band, 0), kMaxBand);
+    return down < band ? down : band;
 }
 
 // the octaves a tile of `band` is shifted down by at pressure P
