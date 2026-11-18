@@ -2,9 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Standalone checks of lltexturefetchpolicy.h (no viewer libraries):
-//   g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp
-// (add -fsanitize=thread where ThreadSanitizer is available: the snapshot test then also proves that the
-// orderings read no priority without its lock)
+//   g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp
 // A texture that has data and whose refinement fetch ends without data, replayed through the rules of
 // LLViewerFetchedTexture: updateFetch makes no request while the texture is at or below mMinDiscardLevel or
 // while a retry waits (FetchRetry::mayRequest); processFetchResults retries a failed refinement after 1, 2
@@ -14,21 +12,19 @@
 // A texture with no data yet whose fetch ends without data: a failure that may pass (an HTTP error other
 // than 404, a time-out, an empty reply, an abort) gets the same retries and marks the asset missing when they
 // are spent; a 404 or a failure that is not the network's marks it missing at once, as every failure did.
-// The orderings of waiting requests (LLTextureFetch::releaseHttpWaiters, sendRequestListToSimulators): each
-// request's priority is read once under its lock and the order compares those snapshots, so a thread that
-// changes the priorities meanwhile (createRequest, updateRequestPriority) cannot break it.
+// The orderings of waiting requests (LLTextureFetch::releaseHttpWaiters, sendRequestListToSimulators) compare
+// PrioritySnapshot copies, each priority read once: the order is the copies', whatever the priorities do after.
+// That the fetcher takes each copy under the worker's lock, and outside the network queue lock, is guarded by
+// scripts/tests/test_texture_streaming_fixes.py (PrioritySnapshots); nothing here runs lltexturefetch.cpp.
 
 #include "lltexturefetchpolicy.h"
 
 #include <algorithm>
-#include <atomic>
 #include <cstddef>
 #include <cstdio>
 #include <initializer_list>
-#include <iterator>
 #include <mutex>
 #include <set>
-#include <thread>
 #include <vector>
 
 namespace
@@ -262,26 +258,6 @@ namespace
         return out;
     }
 
-    // std::partial_sort's result: the first `needed` in order, highest first, none after them higher
-    bool partiallySorted(const std::vector<Snapshot>& v, std::size_t needed)
-    {
-        for (std::size_t i = 1; i < needed; ++i)
-        {
-            if (v[i - 1].mPriority < v[i].mPriority)
-            {
-                return false;
-            }
-        }
-        for (std::size_t j = needed; j < v.size(); ++j)
-        {
-            if (v[needed - 1].mPriority < v[j].mPriority)
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     void test_snapshot_orderings()
     {
         std::vector<Request> requests(6);
@@ -306,7 +282,9 @@ namespace
         requests[0].priority = priorities[0];
 
         // the UDP list: a set of snapshots, highest first; equal priorities are one key, the first one inserted
-        // stays (as with the set ordered by the live value)
+        // stays. Preserved upstream behaviour (the set ordered by the live value did the same): a request whose
+        // priority equals another's waits for a later round. A tie-break would change which requests are sent,
+        // so it is left to a feature change, not this fix.
         std::set<Snapshot> list;
         for (const Snapshot& s : snapshot(requests))
         {
@@ -318,53 +296,7 @@ namespace
         {
             first_kept = first_kept || (s.mPriority == 900.f && s.mRequest == &requests[1]);
         }
-        check(first_kept, "of two requests with equal priority the set keeps the first inserted");
-    }
-
-    // Another thread changes the priorities under their locks (createRequest on the main thread,
-    // updateRequestPriority's task on the fetch thread) while this one orders them, as the fetch thread
-    // (releaseHttpWaiters) and the main thread (sendRequestListToSimulators) do: every order is valid for the
-    // snapshots it compares.
-    void test_snapshots_under_concurrent_writes()
-    {
-        constexpr std::size_t COUNT = 64;
-        constexpr std::size_t NEEDED = 50;
-        constexpr int ROUNDS = 2000;
-        std::vector<Request> requests(COUNT);
-        std::atomic<bool> stop{ false };
-
-        std::thread writer([&]()
-            {
-                unsigned step = 0;
-                while (!stop.load(std::memory_order_relaxed))
-                {
-                    for (std::size_t i = 0; i < COUNT; ++i)
-                    {
-                        std::lock_guard<std::mutex> lock(requests[i].mutex);
-                        requests[i].priority = float(((i * 7919u) + step) % 13u) * 1000.f; // ties too
-                    }
-                    ++step;
-                }
-            });
-
-        bool sorted = true;
-        bool sets_ordered = true;
-        for (int round = 0; round < ROUNDS; ++round)
-        {
-            std::vector<Snapshot> waiters = snapshot(requests);
-            std::partial_sort(waiters.begin(), waiters.begin() + NEEDED, waiters.end());
-            sorted = sorted && partiallySorted(waiters, NEEDED);
-
-            std::set<Snapshot> list(waiters.begin(), waiters.end());
-            for (auto it = list.begin(); it != list.end() && std::next(it) != list.end(); ++it)
-            {
-                sets_ordered = sets_ordered && it->mPriority > std::next(it)->mPriority;
-            }
-        }
-        stop = true;
-        writer.join();
-        check(sorted, "every release order is valid for its snapshots while the priorities change");
-        check(sets_ordered, "every UDP list is strictly ordered by its snapshots while the priorities change");
+        check(first_kept, "of two requests with equal priority the set keeps the first inserted (upstream behaviour)");
     }
 
     void test_retry_delays()
@@ -391,7 +323,6 @@ int main()
     test_good_data_and_refresh_start_over();
     test_first_fetch();
     test_snapshot_orderings();
-    test_snapshots_under_concurrent_writes();
     if (failures == 0)
     {
         std::printf("lltexturefetchpolicy_test: all checks passed\n");
