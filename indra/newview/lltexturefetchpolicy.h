@@ -13,8 +13,9 @@
  * decode, a request aborted while its texture was off screen) set mMinDiscardLevel to the texture's
  * level at once, and no request was made again while the texture stayed at that level: it stayed
  * blurry for the life of the texture object, zooming in did not help, and Refresh Textures did not
- * clear it either. And the waiting requests were sorted by their live priorities, which other threads
- * change during the sort.
+ * clear it either. A first fetch that ended without data marked the asset missing for the session,
+ * whatever the cause. And the waiting requests were sorted by their live priorities, which other
+ * threads change during the sort.
  */
 
 #ifndef LL_LLTEXTUREFETCHPOLICY_H
@@ -23,8 +24,11 @@
 namespace LLTextureFetchPolicy
 {
     // Fetches in a row that end without data are retried after 1, 2 and 4 s. When the third retry
-    // fails too, the texture stops where it is, as it used to at the first failure (the caller sets
-    // mMinDiscardLevel). Good data and Refresh Textures start over (reset).
+    // fails too, or at once for a failure a retry cannot fix (a 404, data that did not decode, data
+    // that cannot arrive; the caller stops then without calling onFailure), a texture with data stops
+    // where it is (the caller sets mMinDiscardLevel) and a texture with no data yet is marked missing
+    // (setIsMissingAsset), as both used to at the first failure. Good data and Refresh Textures start
+    // over (reset).
     struct FetchRetry
     {
         static constexpr unsigned MAX_RETRIES = 3;

@@ -8,7 +8,8 @@
 // A texture that has data and whose refinement fetch ends without data, replayed through the rules of
 // LLViewerFetchedTexture: updateFetch makes no request while the texture is at or below mMinDiscardLevel or
 // while a retry waits (FetchRetry::mayRequest); processFetchResults retries a failed refinement after 1, 2
-// and 4 s and holds the texture at its level (mMinDiscardLevel) only when the third retry fails too; good
+// and 4 s and holds the texture at its level (mMinDiscardLevel) only when the third retry fails too, or at
+// once for a failure a retry cannot fix (a 404, data that did not decode, data that cannot arrive); good
 // data and Refresh Textures (clearFetchedResults) start over.
 // A texture with no data yet whose fetch ends without data: a failure that may pass (an HTTP error other
 // than 404, a time-out, an empty reply, an abort) gets the same retries and marks the asset missing when they
@@ -62,10 +63,11 @@ namespace
             return retry.mayRequest(now);
         }
 
-        // processFetchResults: the refinement ended without data
-        void failed(float now)
+        // processFetchResults: the refinement ended without data; a final failure (a 404, data that did not
+        // decode, data that cannot arrive) holds the texture at once
+        void failed(float now, bool final_failure = false)
         {
-            if (!retry.onFailure(now))
+            if (final_failure || !retry.onFailure(now))
             {
                 min_discard = level;
             }
@@ -116,6 +118,24 @@ namespace
         check(t.requests(10000.f), "a held texture scaled down to a coarser level requests again");
         t.failed(10000.f);
         check(t.min_discard == 5 && !t.requests(20000.f), "with the retries spent, a new failure holds it again at once");
+    }
+
+    void test_final_refinement_failure_holds_at_once()
+    {
+        // a 404 or data that did not decode: retrying would download the same range again for nothing
+        Texture t;
+        t.failed(100.f, true);
+        check(t.min_discard == 4 && t.retry.mFailures == 0, "a final failure holds the texture at once, without a retry");
+        check(!t.requests(100.f) && !t.requests(10000.f), "a texture held by a final failure makes no request");
+        t.refreshed();
+        check(t.requests(100.f), "Refresh Textures lifts a hold from a final failure too");
+
+        // a failure that may pass first, then a final one: held at once, the wait no longer matters
+        Texture mixed;
+        mixed.failed(100.f);
+        check(mixed.min_discard == 0, "a failure that may pass is retried");
+        mixed.failed(101.f, true);
+        check(mixed.min_discard == 4 && !mixed.requests(10000.f), "a final failure on the retry holds it at once");
     }
 
     void test_good_data_and_refresh_start_over()
@@ -367,6 +387,7 @@ int main()
 {
     test_retry_delays();
     test_retries_then_holds();
+    test_final_refinement_failure_holds_at_once();
     test_good_data_and_refresh_start_over();
     test_first_fetch();
     test_snapshot_orderings();
