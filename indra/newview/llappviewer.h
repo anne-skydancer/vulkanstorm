@@ -335,6 +335,13 @@ private:
     void idleNameCache();
     void idleNetwork();
 
+    // <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md): checkGPUReset runs once a frame on the main thread before the
+    // frame's GL work; handleGPUReset runs once, for the first reset seen
+    void checkGPUReset();
+    void handleGPUReset();
+    bool mGPUResetHandled = false;
+    // </Vulkanstorm>
+
     void sendLogoutRequest();
     void disconnectViewer();
 

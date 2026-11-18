@@ -1717,6 +1717,14 @@ bool LLAppViewer::doFrame()
             }
         }
 
+        // <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md): one glGetGraphicsResetStatus a frame, before the frame's GL
+        // work. After a reset nothing more is drawn; the viewer logs out and closes.
+        if (!LLApp::isExiting() && gViewerWindow)
+        {
+            checkGPUReset();
+        }
+        // </Vulkanstorm>
+
         if (!LLApp::isExiting())
         {
             {
@@ -1771,6 +1779,22 @@ bool LLAppViewer::doFrame()
                 }
             }
 
+            // <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md): with nothing drawn, idle() would stop short of
+            // idleShutdown() for good during a teleport (display() drives its progress) and once disconnected (the
+            // user would answer the notice). Run the logout here instead; disconnected, quit as that notice's Quit does.
+            if (mQuitRequested && gGLManager.isContextLost())
+            {
+                if (gDisconnected)
+                {
+                    forceQuit();
+                }
+                else
+                {
+                    idleShutdown();
+                }
+            }
+            // </Vulkanstorm>
+
             if (gDoDisconnect && (LLStartUp::getStartupState() == STATE_STARTED))
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_APP("Shutdown:SaveSnapshot");
@@ -1788,7 +1812,8 @@ bool LLAppViewer::doFrame()
 
             // Render scene.
             // *TODO: Should we run display() even during gHeadlessClient?  DK 2011-02-18
-            if (!LLApp::isExiting() && !gHeadlessClient && gViewerWindow)
+            if (!LLApp::isExiting() && !gHeadlessClient && gViewerWindow
+                && !gGLManager.isContextLost()) // <Vulkanstorm/> after a GPU reset nothing can be drawn (doc/gl/gpu_reset.md)
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df Display");
                 pingMainloopTimeout("Main:Display");
@@ -5256,6 +5281,42 @@ void LLAppViewer::abortQuit()
     mClosingFloaters = false;
 }
 
+// <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md)
+void LLAppViewer::checkGPUReset()
+{
+    if (!mGPUResetHandled && gGLManager.pollGraphicsReset() != LLGLReset::Kind::NoReset)
+    {
+        mGPUResetHandled = true;
+        handleGPUReset();
+    }
+}
+
+void LLAppViewer::handleGPUReset()
+{
+    const LLGLReset::Kind kind = gGLManager.getResetKind();
+
+    // The log first, so the reason is written before anything else runs on the lost context (the log flushes every line).
+    LL_WARNS("Window") << "GPU reset: the driver reports a " << LLGLReset::name(kind) << " context reset (status 0x"
+        << std::hex << gGLManager.getResetStatus() << std::dec << "): " << LLGLReset::cause(kind)
+        << ". The OpenGL context is lost: nothing more is drawn, and the viewer logs out and closes."
+        << " GL_RENDERER " << gGLManager.mGLRenderer << ", GL_VERSION " << gGLManager.mGLVersionString << LL_ENDL;
+
+    // GL is dead, so no XUI: an OS message box, which waits for the user (the watchdog is paused meanwhile). The text
+    // differs only in the cause. A non-interactive run has no one to answer it, so it only logs.
+    if (!gNonInteractive)
+    {
+        const std::string text = LLTrans::getString(kind == LLGLReset::Kind::Guilty ? "MBGPUResetOverloaded" : "MBGPUResetDriver");
+        pauseMainloopTimeout();
+        OSMessageBox(text, LLTrans::getString("MBGPUResetTitle"), OSMB_OK);
+        resumeMainloopTimeout("Main:GPUReset");
+    }
+
+    // The normal quit: the logout, then cleanup() saves the settings and closes everything cleanly. Nothing is
+    // written for the next start: no marker, no settings change, no reduced graphics.
+    requestQuit();
+}
+// </Vulkanstorm>
+
 void LLAppViewer::migrateCacheDirectory()
 {
 #if LL_WINDOWS || LL_DARWIN
@@ -5823,6 +5884,14 @@ void LLAppViewer::saveFinalSnapshot()
     {
         gSavedSettings.setVector3d("FocusPosOnLogout", gAgentCamera.calcFocusPositionTargetGlobal());
         gSavedSettings.setVector3d("CameraPosOnLogout", gAgentCamera.calcCameraPositionTargetGlobal());
+        // <Vulkanstorm> after a GPU reset the snapshot would draw nothing and read nothing back, and the next login
+        // screen would show that blank picture: keep the last good one (doc/gl/gpu_reset.md)
+        if (gGLManager.isContextLost())
+        {
+            mSavedFinalSnapshot = true;
+            return;
+        }
+        // </Vulkanstorm>
         gViewerWindow->setCursor(UI_CURSOR_WAIT);
         gAgentCamera.changeCameraToThirdPerson( false );    // don't animate, need immediate switch
         gSavedSettings.setBOOL("ShowParcelOwners", false);
@@ -6441,7 +6510,7 @@ void LLAppViewer::idle()
     // Handle shutdown process, for example,
     // wait for floaters to close, send quit message,
     // forcibly quit if it has taken too long
-    if (mQuitRequested)
+    if (mQuitRequested && !gGLManager.isContextLost()) // <Vulkanstorm/> after a GPU reset doFrame() runs it (doc/gl/gpu_reset.md)
     {
         gGLActive = true;
         idleShutdown();
@@ -6450,8 +6519,13 @@ void LLAppViewer::idle()
 
 void LLAppViewer::idleShutdown()
 {
+    // <Vulkanstorm> after a GPU reset nothing is drawn, so no one can see or answer a dialog: no waiting for modal
+    // dialogs or for floaters that ask to save first (each floater is still asked to close, below). doc/gl/gpu_reset.md
+    const bool gpu_lost = gGLManager.isContextLost();
+    // </Vulkanstorm>
+
     // Wait for all modal alerts to get resolved
-    if (LLModalDialog::activeCount() > 0)
+    if (LLModalDialog::activeCount() > 0 && !gpu_lost) // <Vulkanstorm/>
     {
         return;
     }
@@ -6472,7 +6546,7 @@ void LLAppViewer::idleShutdown()
             mClosingFloaters = true;
             return;
         }
-        if (!gFloaterView->allChildrenClosed())
+        if (!gFloaterView->allChildrenClosed() && !gpu_lost) // <Vulkanstorm/>
         {
             return;
         }
