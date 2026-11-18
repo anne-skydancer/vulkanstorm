@@ -28,6 +28,7 @@
 
 #include "llmath.h"
 #include "llcamera.h"
+#include "llsimdkernels.h" // <Vulkanstorm> multi-core stage 3 (K5)
 
 // ---------------- Constructors and destructors ----------------
 
@@ -295,6 +296,48 @@ S32 LLCamera::AABBInRegionFrustumNoFarClip(const LLVector4a& center, const LLVec
 {
     return AABBInFrustumNoFarClip(center, radius, mRegionPlanes);
 }
+
+// <Vulkanstorm> multi-core stage 3 (K5): the two tests above for eight boxes at once, the same planes and decisions.
+void LLCamera::AABBInFrustum8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes)
+{
+    if (!planes)
+    {
+        planes = mAgentPlanes;
+    }
+    U32 max_planes = llmin(mPlaneCount, (U32) AGENT_PLANE_USER_CLIP_NUM);
+#if defined(__AVX2__)
+    LLSimdKernels::aabbInFrustum8(planes, mPlaneMask, max_planes, AGENT_PLANE_USER_CLIP_NUM, boxes, out);
+#else
+    (void) max_planes;
+    for (S32 k = 0; k < 8; ++k)
+    {
+        const LLVector4a center(boxes.mCenter[0][k], boxes.mCenter[1][k], boxes.mCenter[2][k]);
+        const LLVector4a radius(boxes.mRadius[0][k], boxes.mRadius[1][k], boxes.mRadius[2][k]);
+        out[k] = AABBInFrustum(center, radius, planes);
+    }
+#endif
+}
+
+void LLCamera::AABBInFrustumNoFarClip8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes)
+{
+    if (!planes)
+    {
+        planes = mAgentPlanes;
+    }
+    U32 max_planes = llmin(mPlaneCount, (U32) AGENT_PLANE_USER_CLIP_NUM);
+#if defined(__AVX2__)
+    LLSimdKernels::aabbInFrustum8(planes, mPlaneMask, max_planes, AGENT_PLANE_FAR, boxes, out);
+#else
+    (void) max_planes;
+    for (S32 k = 0; k < 8; ++k)
+    {
+        const LLVector4a center(boxes.mCenter[0][k], boxes.mCenter[1][k], boxes.mCenter[2][k]);
+        const LLVector4a radius(boxes.mRadius[0][k], boxes.mRadius[1][k], boxes.mRadius[2][k]);
+        out[k] = AABBInFrustumNoFarClip(center, radius, planes);
+    }
+#endif
+}
+// </Vulkanstorm>
 
 int LLCamera::sphereInFrustumQuick(const LLVector3 &sphere_center, const F32 radius)
 {

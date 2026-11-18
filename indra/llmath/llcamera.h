@@ -33,6 +33,13 @@
 #include "llplane.h"
 #include "llvector4a.h"
 
+// <Vulkanstorm> multi-core stage 3 (K5): eight boxes per call, llsimdkernels.h
+namespace LLSimdKernels
+{
+    struct CenterRadius8;
+}
+// </Vulkanstorm>
+
 constexpr F32 DEFAULT_FIELD_OF_VIEW = 60.f * DEG_TO_RAD;
 constexpr F32 DEFAULT_ASPECT_RATIO  = 640.f / 480.f;
 constexpr F32 DEFAULT_NEAR_PLANE    = 0.25f;
@@ -201,6 +208,11 @@ public:
     S32 AABBInRegionFrustum(const LLVector4a& center, const LLVector4a& radius);
     S32 AABBInFrustumNoFarClip(const LLVector4a& center, const LLVector4a& radius, const LLPlane* planes = NULL);
     S32 AABBInRegionFrustumNoFarClip(const LLVector4a& center, const LLVector4a& radius);
+    // <Vulkanstorm> multi-core stage 3 (K5): out[k] is what AABBInFrustum / AABBInFrustumNoFarClip return for box k of
+    // eight, bit for bit (AVX2 kernel, eight boxes per register; the one-box functions without AVX2).
+    void AABBInFrustum8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes = NULL);
+    void AABBInFrustumNoFarClip8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes = NULL);
+    // </Vulkanstorm>
 
     //does a quick 'n dirty sphere-sphere check
     S32 sphereInFrustumQuick(const LLVector3 &sphere_center, const F32 radius);

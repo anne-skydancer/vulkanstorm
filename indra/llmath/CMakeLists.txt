@@ -71,6 +71,7 @@ set(llmath_HEADER_FILES
     llquaternion2.inl
     llrect.h
     llrigginginfo.h
+    llsimdkernels.h
     llsimdmath.h
     llsimdtypes.h
     llsimdtypes.inl
@@ -132,6 +133,8 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(llvolume "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(mathmisc "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(m3math "" "${test_libs}")
+  # <Vulkanstorm> multi-core stage 3: the AVX2 kernels against the SSE code they replace, bit for bit
+  LL_ADD_INTEGRATION_TEST(llsimdkernels "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(v3dmath v3dmath.cpp "${test_libs}")
   LL_ADD_INTEGRATION_TEST(v3math v3math.cpp "${test_libs}")
   LL_ADD_INTEGRATION_TEST(v4math v4math.cpp "${test_libs}")
