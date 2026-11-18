@@ -18,6 +18,7 @@
 // again at once for as long as its texture stays on screen.
 // The orderings of waiting requests (LLTextureFetch::releaseHttpWaiters, sendRequestListToSimulators) compare
 // PrioritySnapshot copies, each priority read once: the order is the copies', whatever the priorities do after.
+// Equal priorities are ordered by request, so the UDP list keeps every request, however many share a priority.
 // That the fetcher takes each copy under the worker's lock, and outside the network queue lock, is guarded by
 // scripts/tests/test_texture_streaming_fixes.py (PrioritySnapshots); nothing here runs lltexturefetch.cpp.
 // A worn texture's request is queued by its avatar's area (wornFetchArea, fetchPriority): a face with no area, or with
@@ -325,11 +326,12 @@ namespace
             requests[i].priority = priorities[i];
         }
 
-        // the HTTP release: the `needed` highest first
+        // the HTTP release: the `needed` highest first, and of equal priorities the request first in address order
         std::vector<Snapshot> waiters = snapshot(requests);
         std::partial_sort(waiters.begin(), waiters.begin() + 3, waiters.end());
         check(waiters[0].mRequest == &requests[4] && waiters[1].mRequest == &requests[2] && waiters[2].mPriority == 900.f,
               "the HTTP release takes the highest priorities first");
+        check(waiters[2].mRequest == &requests[1], "of equal priorities the HTTP release takes them in the order of their requests");
 
         // a priority changed after the snapshot does not reorder it
         std::vector<Snapshot> taken = snapshot(requests);
@@ -339,22 +341,39 @@ namespace
               "the order is the snapshots', whatever the priorities do afterwards");
         requests[0].priority = priorities[0];
 
-        // the UDP list: a set of snapshots, highest first; equal priorities are one key, the first one inserted
-        // stays. Preserved upstream behaviour (the set ordered by the live value did the same): a request whose
-        // priority equals another's waits for a later round. A tie-break would change which requests are sent,
-        // so it is left to a feature change, not this fix.
+        // the UDP list: a set of snapshots, highest first, equal priorities ordered by request, so every request due is
+        // kept and sent in its round. It used to keep one request per priority (equal priorities were one key): the
+        // others waited for later rounds, one a round.
         std::set<Snapshot> list;
         for (const Snapshot& s : snapshot(requests))
         {
             list.insert(s);
         }
-        check(list.size() == 5 && list.begin()->mRequest == &requests[4], "the UDP list holds one request per priority, highest first");
-        bool first_kept = false;
+        check(list.size() == requests.size() && list.begin()->mRequest == &requests[4],
+              "the UDP list holds every request, highest priority first");
+        std::vector<Request*> tied;
         for (const Snapshot& s : list)
         {
-            first_kept = first_kept || (s.mPriority == 900.f && s.mRequest == &requests[1]);
+            if (s.mPriority == 900.f)
+            {
+                tied.push_back(s.mRequest);
+            }
         }
-        check(first_kept, "of two requests with equal priority the set keeps the first inserted (upstream behaviour)");
+        check(tied.size() == 2 && tied[0] == &requests[1] && tied[1] == &requests[3],
+              "the UDP list keeps both requests of equal priority, in the order of their requests");
+
+        // the worn textures of a near avatar, all at the top of the worn rank: the list holds them all for one round
+        std::vector<Request> crowd(600);
+        for (Request& r : crowd)
+        {
+            r.priority = LLTextureFetchPolicy::WORN_PRIORITY_MAX;
+        }
+        std::set<Snapshot> crowd_list;
+        for (const Snapshot& s : snapshot(crowd))
+        {
+            crowd_list.insert(s);
+        }
+        check(crowd_list.size() == crowd.size(), "600 requests of one priority are all in the UDP list, sent in one round");
     }
 
     // The rank of worn textures. The eye follows the trace's harness A: a 24 mm eyeball 1 m from the camera, a 1440-px
@@ -492,8 +511,7 @@ namespace
     // its eye (5,000 on its own) among them; those of its textures larger on their own keep their own size. A third avatar
     // stands behind the camera, so it is not drawn: the caller hands no area, and its 60 keep their own sizes. Then 598
     // textures of scenery, two more at the cap on their own, and a boosted texture (the map, a thumbnail). No two own sizes
-    // tie except the three at the top; the rank makes ties, which std::partial_sort leaves in any order, so every check
-    // holds for every order of the ties.
+    // tie except the three at the top; the rank makes ties, and every check holds whatever order the ties leave in.
     void test_crowd_release_order()
     {
         using LLTextureFetchPolicy::fetchPriority;
