@@ -26,6 +26,8 @@
 //                   the block a draw-then-swap resize gets (BuddyAtlas::largestAfterFree)
 //   ScriptLamps (S2) the hold of a lamp switched off, black or at radius 0 (holdOffFrame: blinkers keep their tiles, a day and night
 //                   switch gives them back once); the silhouette key's inputs (silhouetteFaceMix: each moves the key, nothing else is one)
+//   TextureEntryRebuilds (S2) a tint, emissive or material that leaves the silhouette alone pushes nothing at its rebuild either
+//                   (the texture-entry mark); a silhouette change, a new LOD, a scale, markForUpdate or a move around it still push
 //   Placement (L2)  a GL-free replay of layout() and renderTile()'s resize: an arrival that finds no room waits for the shrinks and the
 //                   pressure ends at the rule's (review B1); a shortfall only at the ceiling; after a compaction the free texels hold
 //                   every arrival set and growth they cover; a growth blocked by fragmentation gets one compaction after its hold (Q1)
@@ -1451,13 +1453,29 @@ void testP3MoverRules()
         moved[14].gltf_scale[0] = 3.f;
         moved[15].gltf = true;
         moved[15].gltf_cutoff = 0.25f;
+        moved.push_back(lace_face);
+        moved[16].double_sided = true;
         std::set<uint32_t> keys{ lace };
         for (const SilhouetteFace& f : moved)
         {
             keys.insert(silhouetteFaceMix(opaque, f));
         }
-        check(keys.size() == moved.size() + 1, "S2 each silhouette input (alpha, face, texture, channels, mapping, legacy and glTF alpha) changes the key",
+        check(keys.size() == moved.size() + 1,
+              "S2 each silhouette input (alpha, face, texture, channels, mapping, legacy and glTF alpha, double-sided) changes the key",
               double(keys.size()));
+        // an opaque face is an input only when its glTF material is double-sided (the shadow pass then draws its back faces too): the flag
+        // moves the key, its texture and tint do not
+        SilhouetteFace two_sided;
+        two_sided.cutout = false;
+        two_sided.double_sided = true;
+        SilhouetteFace two_sided_other = two_sided;
+        two_sided_other.alpha = 0.5f;
+        two_sided_other.texture[0] = 0x77;
+        two_sided_other.gltf = true;
+        two_sided_other.gltf_texture[1] = 3;
+        check(silhouetteFaceMix(opaque, two_sided) != opaque, "S2 an opaque face turned double-sided changes the key");
+        check(silhouetteFaceMix(opaque, two_sided_other) == silhouetteFaceMix(opaque, two_sided),
+              "S2 an opaque double-sided face's texture, tint and base colour are no input");
         check(silhouetteFaceMix(silhouetteFaceMix(opaque, lace_face), moved[1]) != silhouetteFaceMix(opaque, lace_face),
               "S2 a second alpha face changes the key");
         const uint32_t lace_other_alpha = silhouetteFaceMix(opaque, moved[0]);
@@ -3504,6 +3522,140 @@ void testScriptLamps()
     }
 }
 
+// S2, texture-entry rebuilds. LLVOVolume::setTEColor (dirtyMesh) and the material setters ask for REBUILD_ALL, which counts as a shape
+// change; the feed marks such a request (textureEntryMarkAfterRequest), keeps or ends the mark with the next requests
+// (textureEntryMarkAfterRebuild) and lets the rebuild's own pushes follow it (ownRebuildPushes). This replays those rules in the order the
+// feed's hooks run them, over what scripts and the viewer do to a prim: one frame's setters, the next frame's REBUILD_MATERIAL from
+// LLDrawable::updateTexture, then the rebuild (its octree move when it carries a shape flag, its completion when it waited). The wiring of
+// the hooks to these rules (TextureEntryRebuild, OwnRebuild, noteRebuild, noteTextured, noteDrawable) is the viewer's and not reached here.
+namespace
+{
+    struct FeedModel
+    {
+        bool marked = false;
+        uint32_t queued = 0;                // the queued rebuild's flags (0: none queued)
+        uint32_t stored = kSilhouetteKeySeed; // the key the feed last saw
+        bool known = true;
+        int pushes = 0;
+
+        bool textured(uint32_t now) // markTextured: a key change pushes and ends the mark
+        {
+            const bool changed = texturedDirties(stored, now, known);
+            stored = now;
+            known = true;
+            if (changed)
+            {
+                marked = false;
+                ++pushes;
+            }
+            return changed;
+        }
+        void request(uint32_t flags) // markRebuild from anything but a texture-entry setter
+        {
+            marked = textureEntryMarkAfterRebuild(marked, flags);
+            queued |= flags;
+            if (rebuildDirties(flags))
+            {
+                marked = false; // noteDrawable outside the own rebuild
+                ++pushes;
+            }
+        }
+        void setter(uint32_t now, bool calls_textured = true) // a texture-entry setter: markTextured, then REBUILD_ALL in its scope
+        {
+            const bool queued_shape = (queued & kRebuildShape) != 0;
+            const bool changed = calls_textured && textured(now);
+            marked = textureEntryMarkAfterRequest(marked, queued_shape, changed);
+            queued |= kRebuildAll;
+        }
+        void moved() // markMoved, a put or a remove: a push outside the own rebuild
+        {
+            marked = false;
+            ++pushes;
+        }
+        int rebuild(uint32_t now) // the next frame: updateTexture's REBUILD_MATERIAL, then updateGeom's own rebuild of the prim
+        {
+            if (queued == 0)
+            {
+                return 0;
+            }
+            request(kRebuildTcoord | kRebuildColor);
+            const int before = pushes;
+            const int own_pushes = ((queued & kRebuildShape) ? 1 : 0) + ((queued & (kRebuildVolume | kRebuildRigged)) ? 1 : 0);
+            for (int i = 0; i < own_pushes; ++i) // genBBoxes' octree move, then the completion
+            {
+                const bool push = ownRebuildPushes(marked, stored, now, known);
+                stored = now;
+                known = true;
+                pushes += push ? 1 : 0;
+            }
+            marked = false; // the rebuild is done
+            queued = 0;
+            return pushes - before;
+        }
+    };
+}
+
+void testTextureEntryRebuilds()
+{
+    check((kRebuildShape & kRebuildAll) == (kRebuildVolume | kRebuildPosition) && (kRebuildShape & kRebuildGeometry) == kRebuildPosition &&
+              (kRebuildShape & (kRebuildTcoord | kRebuildColor)) == 0 && (kRebuildShape & kRebuildRigged) != 0,
+          "S2 shape flags: REBUILD_ALL carries volume and position, REBUILD_GEOMETRY the position, REBUILD_MATERIAL none; rigging is one");
+    const uint32_t lace = 0x1234u, opened = 0x5678u; // two silhouette keys
+    {
+        // a blinker that toggles an RGB tint (dirtyMesh alone), an emissive or PBR colour override, or a legacy material, every 0.1 s for a
+        // minute: no push at all (each was three before: the request, the octree move, the completion)
+        FeedModel tint, emissive, material;
+        tint.stored = emissive.stored = material.stored = lace;
+        for (int t = 0; t < 600; ++t)
+        {
+            tint.setter(lace, false);
+            emissive.setter(lace);
+            material.setter(lace);
+            material.setter(lace); // its parameters arrive the same frame
+            tint.rebuild(lace);
+            emissive.rebuild(lace);
+            material.rebuild(lace);
+        }
+        check(tint.pushes == 0 && emissive.pushes == 0 && material.pushes == 0, "S2 a tint, emissive or material blinker pushes nothing",
+              double(tint.pushes + emissive.pushes), double(material.pushes));
+    }
+    {
+        FeedModel m;
+        m.stored = lace;
+        m.setter(opened);
+        check(m.pushes == 1 && !m.marked, "S2 a material that changes the silhouette pushes at once and ends the mark");
+        check(m.rebuild(opened) == 2, "S2 ... and its rebuild pushes again once the faces are in their new passes");
+    }
+    {
+        FeedModel m;
+        m.stored = lace;
+        m.request(kRebuildVolume); // a new LOD
+        m.setter(lace, false);     // then a tint
+        check(m.rebuild(lace) == 2, "S2 a tint after a new LOD: the LOD's rebuild still pushes");
+        m.setter(lace, false);
+        m.request(kRebuildVolume);
+        check(m.rebuild(lace) == 2, "S2 a new LOD after a tint: its rebuild pushes");
+        m.setter(lace, false);
+        m.request(kRebuildPosition); // a scale change
+        check(m.rebuild(lace) == 2, "S2 a scale after a tint: its rebuild pushes (the octree move and the completion)");
+        m.setter(lace, false);
+        m.request(kRebuildGeometry); // markForUpdate (selection, a new volume)
+        check(m.rebuild(lace) == 2, "S2 markForUpdate after a tint: its rebuild pushes");
+        m.setter(lace, false);
+        m.moved();
+        check(m.rebuild(lace) == 2, "S2 a move after a tint: the rebuild pushes where the prim ended up");
+    }
+    {
+        FeedModel m;
+        m.stored = lace;
+        m.known = false; // the prim predates tracking
+        m.setter(lace, false);
+        check(m.rebuild(lace) == 1, "S2 a prim the feed has not seen pushes once, mark or not");
+        m.setter(lace, false);
+        check(m.rebuild(lace) == 0, "S2 ... and then follows the mark");
+    }
+}
+
 // L2 placement. A GL-free replay of LLProjectorShadows::layout() (the valve, each tile's want, the arrivals placed the largest first, a
 // compaction when the free texels hold them, arrivalShortfall, the growth hold) and of renderTile()'s resize (the rect freed, the new
 // size allocated), built from the llprojectorpool rules those call, in layout()'s order. The renders: up to `per_frame` a frame, first
@@ -4014,6 +4166,7 @@ int main(int argc, char** argv)
     testP4(print_table);
     testCells();
     testScriptLamps();
+    testTextureEntryRebuilds();
     testPlacement();
     if (failures)
     {

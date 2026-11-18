@@ -2613,7 +2613,12 @@ S32 LLVOVolume::setTEColor(const U8 te, const LLColor4& color)
             mColorChanged = true;
             mDrawable->setState(LLDrawable::REBUILD_COLOR);
             shrinkWrap();
-            dirtyMesh();
+            // <Vulkanstorm> the projector shadow pool: a tint rebuilds the whole prim (REBUILD_ALL), not because its shape moved
+            {
+                LLShadowDirtyFeed::TextureEntryRebuild pool_te(mDrawable.get());
+                dirtyMesh();
+            }
+            // </Vulkanstorm>
             if (color.mV[3] != old_alpha)
             {
                 gPipeline.markTextured(mDrawable); // <Vulkanstorm/> required: the first call saw the old colour, whose silhouette key the projector pool already holds; this one stores the new colour's and pushes when it changed
@@ -2748,6 +2753,7 @@ S32 LLVOVolume::setTEMaterialID(const U8 te, const LLMaterialID& pMaterialID)
         setChanged(ALL_CHANGED);
         if (!mDrawable.isNull())
         {
+            LLShadowDirtyFeed::TextureEntryRebuild pool_te(mDrawable.get()); // <Vulkanstorm/> shadow pool: a material, not a shape change
             gPipeline.markTextured(mDrawable);
             gPipeline.markRebuild(mDrawable,LLDrawable::REBUILD_ALL);
         }
@@ -2767,6 +2773,7 @@ S32 LLVOVolume::setTEMaterialParams(const U8 te, const LLMaterialPtr pMaterialPa
     setChanged(ALL_CHANGED);
     if (!mDrawable.isNull())
     {
+        LLShadowDirtyFeed::TextureEntryRebuild pool_te(mDrawable.get()); // <Vulkanstorm/> shadow pool: a material, not a shape change
         gPipeline.markTextured(mDrawable);
         gPipeline.markRebuild(mDrawable,LLDrawable::REBUILD_ALL);
     }
@@ -2782,6 +2789,7 @@ S32 LLVOVolume::setTEGLTFMaterialOverride(U8 te, LLGLTFMaterial* mat)
     {
         if (!mDrawable.isNull())
         {
+            LLShadowDirtyFeed::TextureEntryRebuild pool_te(mDrawable.get()); // <Vulkanstorm/> shadow pool: an override, not a shape change
             gPipeline.markTextured(mDrawable);
             gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_ALL);
         }

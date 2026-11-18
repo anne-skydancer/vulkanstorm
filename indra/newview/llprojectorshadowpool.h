@@ -1391,19 +1391,51 @@ inline bool rebuildDirties(uint32_t flags)
 
 // A texture, material, bump, glow or colour change dirties a prim's tiles only when it changes what the prim's faces cut out of a depth
 // tile: its silhouette key (llshadowdirtyfeed.cpp: which faces are blended, alpha-masked or alpha-textured and, for each of them, its
-// alpha, texture, texture mapping and alpha mode). A face turned opaque closes a hole the cached tile still has and an opaque face
-// turned alpha cuts one: both change the key. Opaque-to-opaque texture swaps, animated textures, fullbright, glow, shine, bump, an
-// RGB-only tint and the light's own colour do not (lamp shadows S2: a blinker script that toggles fullbright and glow with its light
-// every 0.1 s redraws no tile). `was_key` is what the feed last saw; the caller stores `now_key` after. `known` says the feed saw this
-// prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch from Legacy) has an unknown key (one
-// conservative push, after which it is known).
+// alpha, texture, texture mapping and alpha mode; and which glTF faces are drawn from both sides). A face turned opaque closes a hole the
+// cached tile still has and an opaque face turned alpha cuts one: both change the key. Opaque-to-opaque texture swaps, animated textures,
+// fullbright, glow, shine, bump, an RGB-only tint, emissive, the PBR colour and the light's own colour do not (lamp shadows S2: a blinker
+// script that toggles them with its light every 0.1 s redraws no tile). `was_key` is what the feed last saw; the caller stores `now_key`
+// after. `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
+// from Legacy) has an unknown key (one conservative push, after which it is known).
 inline bool texturedDirties(uint32_t was_key, uint32_t now_key, bool known)
 {
     return !known || was_key != now_key;
 }
 
+// The flags of a rebuild that can move or reshape a prim: a new volume, a position, rigging (REBUILD_GEOMETRY and REBUILD_ALL carry some).
+constexpr uint32_t kRebuildShape = kRebuildVolume | kRebuildPosition | kRebuildRigged;
+
+// Lamp shadows S2, texture-entry rebuilds. LLVOVolume::setTEColor (its dirtyMesh) and the material setters (a legacy material, its
+// parameters arriving, a glTF override) ask for REBUILD_ALL because the renderer rebuilds the whole prim for a tint or a material, not
+// because its shape moved. Counted as a shape change, a script's tint, emissive or PBR colour toggled with its light every 0.1 s pushed
+// the prim's extents at the request, at the rebuild's octree move (LLVOVolume::genBBoxes) and at its completion, so every tile that sees
+// the prim was redrawn at the blink rate. So the feed marks an object whose queued rebuild only such setters asked for (POOL_TE_REBUILD),
+// and the pushes of that rebuild apply the silhouette rule instead. The mark after a texture-entry setter's request: set, unless the
+// setter changed the silhouette key (its markTextured pushed, and the completion must push again once the faces are rebuilt into their
+// new passes) or a rebuild that carries a shape flag was already queued without the mark (that one pushes as it did).
+inline bool textureEntryMarkAfterRequest(bool marked, bool queued_shape, bool key_changed)
+{
+    return (marked || !queued_shape) && !key_changed;
+}
+
+// The mark after any other rebuild request: one with a shape flag (a new LOD, a move, a scale, rigging, makeActive or makeStatic,
+// markForUpdate's REBUILD_GEOMETRY) clears it; a texture-coordinate or colour rebuild (LLDrawable::updateTexture's REBUILD_MATERIAL, which
+// every setter's markTextured brings the next frame) keeps it.
+inline bool textureEntryMarkAfterRebuild(bool marked, uint32_t flags)
+{
+    return marked && (flags & kRebuildShape) == 0;
+}
+
+// A push of the prim's own rebuild (its octree move, its completion in LLPipeline::updateGeom): with the mark only a silhouette change
+// pushes; without it the push goes out as it always did. Every other push (a move, a put or a remove, a counted rebuild, a mesh arriving)
+// clears the mark, and so do a silhouette change that markTextured sees and the end of the rebuild.
+inline bool ownRebuildPushes(bool marked, uint32_t was_key, uint32_t now_key, bool known)
+{
+    return !marked || texturedDirties(was_key, now_key, known);
+}
+
 // The key's hash (FNV-1a, 32 bits): the feed folds the silhouette inputs of a prim's alpha faces into it, byte by byte.
-constexpr uint32_t kSilhouetteKeySeed = 2166136261u; // a prim with no alpha face
+constexpr uint32_t kSilhouetteKeySeed = 2166136261u; // a prim with no alpha face and no double-sided glTF face
 inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
 {
     const unsigned char* b = static_cast<const unsigned char*>(bytes);
@@ -1414,13 +1446,17 @@ inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
     return key;
 }
 
-// The silhouette inputs of one blended, alpha-masked or alpha-textured face (llshadowdirtyfeed.cpp fills them from the face's texture
-// entry, its texture and its materials): what shapes the holes the face cuts out of a depth tile. Nothing else of a face is an input, so
-// fullbright, glow, shine, bump, an RGB-only tint and the light's own colour cannot change the key. An opaque face is no input either:
-// its texture never shows in a depth tile.
+// The silhouette inputs of one face (llshadowdirtyfeed.cpp fills them from the face's texture entry, its texture and its materials): for
+// a blended, alpha-masked or alpha-textured face (`cutout`) what shapes the holes it cuts out of a depth tile, and for any face whether its
+// glTF material is drawn from both sides (the shadow pass culls back faces except for a double-sided material: lldrawpool.cpp, so the
+// flag decides which side casts). Nothing else of a face is an input, so fullbright, glow, shine, bump, an RGB-only tint, emissive, the
+// PBR colour and the light's own colour cannot change the key. An opaque single-sided face is no input at all, and an opaque double-sided
+// one only by that flag: its texture never shows in a depth tile.
 struct SilhouetteFace
 {
     uint8_t index = 0;                // the face (texture entry) index
+    bool cutout = true;               // blended, alpha-masked or alpha-textured: the fields below `double_sided` are inputs
+    bool double_sided = false;        // a glTF material drawn from both sides
     float alpha = 1.f;                // the tint's alpha
     uint8_t texture[16] = {};         // the diffuse texture's id
     float scale[2] = { 1.f, 1.f };    // its mapping: repeats, offset, rotation, default or planar
@@ -1445,7 +1481,11 @@ struct SilhouetteFace
 inline uint32_t silhouetteFaceMix(uint32_t key, const SilhouetteFace& f)
 {
     auto mix = [](uint32_t k, const auto& value) { return silhouetteKeyMix(k, &value, sizeof(value)); };
-    key = mix(key, f.index);
+    key = mix(mix(key, f.index), f.double_sided);
+    if (!f.cutout)
+    {
+        return key; // an opaque face: only which sides cast
+    }
     key = mix(key, f.alpha);
     key = silhouetteKeyMix(key, f.texture, sizeof(f.texture));
     key = mix(mix(key, f.scale[0]), f.scale[1]);

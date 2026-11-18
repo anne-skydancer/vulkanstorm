@@ -58,6 +58,12 @@ namespace
     // the roots of the lamps each pool holds tiles for (compared, never dereferenced): one list per owner and their sorted union,
     // which is what the hooks test
     llprojectorpool::OwnerLists<const LLViewerObject*> sLampRoots;
+    // the open TextureEntryRebuild (its drawable, compared only; whether a shape rebuild was queued for it before the request; whether the
+    // setter's markTextured changed the key) and the drawable whose own rebuild runs (OwnRebuild): main-thread scope markers
+    const LLDrawable* sTEDrawable = nullptr;
+    bool sTEQueuedShape = false;
+    bool sTEKeyChanged = false;
+    LLDrawable* sOwnRebuild = nullptr;
 
     inline U32 owner_index(LLShadowDirtyFeed::Owner owner)
     {
@@ -126,10 +132,11 @@ namespace
     }
 
     // The prim's silhouette key (llprojectorpool::texturedDirties): what its faces cut out of a depth tile. An opaque face counts only as
-    // opaque (its texture never shows in a depth tile); each blended, alpha-masked or alpha-textured face adds its silhouette inputs
-    // (llprojectorpool::SilhouetteFace: its index, alpha, texture and the texture's channel count, mapping, and the legacy or glTF
-    // material's alpha mode and cutoff, with the glTF base colour texture and transform). Fullbright, glow, shine, bump, an RGB-only tint
-    // and the light's own colour are not inputs (lamp shadows S2: blinker scripts toggle them with the light).
+    // opaque (its texture never shows in a depth tile), and a double-sided glTF one by that flag (the shadow pass draws it from both
+    // sides); each blended, alpha-masked or alpha-textured face adds its silhouette inputs (llprojectorpool::SilhouetteFace: its index,
+    // alpha, texture and the texture's channel count, mapping, and the legacy or glTF material's alpha mode and cutoff, with the glTF base
+    // colour texture and transform). Fullbright, glow, shine, bump, an RGB-only tint, emissive, the PBR colour and the light's own colour
+    // are not inputs (lamp shadows S2: blinker scripts toggle them with the light).
     U32 silhouette_key(LLVOVolume* volume)
     {
         static_assert(sizeof(llprojectorpool::SilhouetteFace::texture) == size_t(UUID_BYTES), "a texture id is 16 bytes");
@@ -137,13 +144,24 @@ namespace
         const U8 faces = volume->getNumTEs();
         for (U8 i = 0; i < faces; ++i)
         {
-            if (!alpha_face(volume, i))
+            const LLTextureEntry* te = volume->getTE(i);
+            if (!te)
             {
                 continue;
             }
-            const LLTextureEntry* te = volume->getTE(i); // alpha_face checked it
+            const LLGLTFMaterial* render_gltf = te->getGLTFRenderMaterial();
             llprojectorpool::SilhouetteFace f;
             f.index = i;
+            f.cutout = alpha_face(volume, i);
+            f.double_sided = render_gltf && render_gltf->mDoubleSided;
+            if (!f.cutout)
+            {
+                if (f.double_sided)
+                {
+                    key = llprojectorpool::silhouetteFaceMix(key, f);
+                }
+                continue;
+            }
             f.alpha = te->getColor().mV[VALPHA];
             memcpy(f.texture, te->getID().mData, UUID_BYTES);
             te->getScale(&f.scale[0], &f.scale[1]);
@@ -159,14 +177,14 @@ namespace
                 f.alpha_mode = material->getDiffuseAlphaMode();
                 f.alpha_cutoff = material->getAlphaMaskCutoff();
             }
-            if (const LLGLTFMaterial* gltf = te->getGLTFRenderMaterial())
+            if (render_gltf)
             {
-                const LLGLTFMaterial::TextureTransform& tt = gltf->mTextureTransform[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR];
+                const LLGLTFMaterial::TextureTransform& tt = render_gltf->mTextureTransform[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR];
                 f.gltf = true;
-                f.gltf_alpha_mode = U32(gltf->mAlphaMode);
-                f.gltf_cutoff = gltf->mAlphaCutoff;
-                f.gltf_alpha = gltf->mBaseColor.mV[VALPHA];
-                memcpy(f.gltf_texture, gltf->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR].mData, UUID_BYTES);
+                f.gltf_alpha_mode = U32(render_gltf->mAlphaMode);
+                f.gltf_cutoff = render_gltf->mAlphaCutoff;
+                f.gltf_alpha = render_gltf->mBaseColor.mV[VALPHA];
+                memcpy(f.gltf_texture, render_gltf->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR].mData, UUID_BYTES);
                 f.gltf_offset[0] = tt.mOffset.mV[VX];
                 f.gltf_offset[1] = tt.mOffset.mV[VY];
                 f.gltf_scale[0] = tt.mScale.mV[VX];
@@ -228,14 +246,15 @@ void LLShadowDirtyFeed::setTracking(Owner owner, bool on)
     else if (edge == llprojectorpool::OwnerEdge::First)
     {
         // the silhouette keys are only kept while tracking: forget them all (POOL_ALPHA_KNOWN), so the first change of each object
-        // after this pushes once (conservatively) and then knows. A walk over the object list, once per switch-on of the first owner (a
-        // second owner joins keys that were written for the first, which hold for any reader).
+        // after this pushes once (conservatively) and then knows; and so is the texture-entry mark (POOL_TE_REBUILD), which a rebuild
+        // queued before the switch never earned. A walk over the object list, once per switch-on of the first owner (a second owner
+        // joins keys that were written for the first, which hold for any reader).
         const S32 count = gObjectList.getNumObjects();
         for (S32 i = 0; i < count; ++i)
         {
             if (LLViewerObject* object = gObjectList.getObject(i))
             {
-                object->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN;
+                object->mPoolFlags &= (U8)~(LLViewerObject::POOL_ALPHA_KNOWN | LLViewerObject::POOL_TE_REBUILD);
             }
         }
     }
@@ -334,8 +353,12 @@ bool LLShadowDirtyFeed::extentsOf(LLDrawable* drawable, Aabb& out)
 }
 
 // static
-bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object)
+bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object, bool* edge)
 {
+    if (edge)
+    {
+        *edge = false;
+    }
     if (!object || !casting_type(drawable))
     {
         return true;
@@ -374,6 +397,10 @@ bool LLShadowDirtyFeed::skipped(LLDrawable* drawable, LLViewerObject* object)
             else
             {
                 object->mPoolFlags &= ~LLViewerObject::POOL_ACTIVE;
+            }
+            if (edge)
+            {
+                *edge = true;
             }
             return false;
         }
@@ -417,7 +444,8 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
     }
     LLViewerObject* object = drawable->getVObj();
     LLVOVolume* volume = drawable->getVOVolume();
-    if (skipped(drawable, object))
+    bool edge = false;
+    if (skipped(drawable, object, &edge))
     {
         if (volume)
         {
@@ -425,10 +453,23 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         }
         return;
     }
+    // a push of the drawable's own rebuild (OwnRebuild: its octree move, its completion) keeps the texture-entry mark and follows it; any
+    // other push (a move, a put or a remove, a counted rebuild, a mesh arriving) means the queued rebuild is no longer a texture-entry one
+    const bool own = drawable == sOwnRebuild && !edge;
+    const bool marked = own && object && (object->mPoolFlags & LLViewerObject::POOL_TE_REBUILD) != 0;
+    if (object && !own)
+    {
+        object->mPoolFlags &= (U8)~LLViewerObject::POOL_TE_REBUILD;
+    }
     if (volume)
     {
         bool known;
-        swapAlphaKey(volume, silhouette_key(volume), known); // keep the silhouette key current at every rebuild, put and edit
+        const U32 now = silhouette_key(volume);
+        const U32 was = swapAlphaKey(volume, now, known); // keep the silhouette key current at every rebuild, put and edit
+        if (!ownRebuildPushes(marked, was, now, known))
+        {
+            return; // the rebuild of a tint, an emissive or a material that left the silhouette alone: nothing a tile shows changed
+        }
     }
     pushExtents(drawable, cause);
 }
@@ -446,13 +487,38 @@ void LLShadowDirtyFeed::pushExtents(LLDrawable* drawable, Cause cause)
 // static
 void LLShadowDirtyFeed::noteRebuild(LLDrawable* drawable, U32 rebuild_flag)
 {
-    if (!tracking())
+    if (!tracking() || !drawable)
     {
         return;
     }
+    if (on_main_thread())
+    {
+        LLViewerObject* object = drawable->getVObj();
+        const bool marked = object && (object->mPoolFlags & LLViewerObject::POOL_TE_REBUILD) != 0;
+        bool mark;
+        if (drawable == sTEDrawable)
+        {
+            // a texture-entry setter's own request (TextureEntryRebuild): its markTextured applied the silhouette rule, so the request
+            // pushes nothing; the rebuild's own pushes apply the rule again unless the key changed or a shape rebuild was queued
+            mark = textureEntryMarkAfterRequest(marked, sTEQueuedShape, sTEKeyChanged);
+        }
+        else
+        {
+            mark = textureEntryMarkAfterRebuild(marked, rebuild_flag);
+        }
+        if (object && mark != marked)
+        {
+            object->mPoolFlags = mark ? (U8)(object->mPoolFlags | LLViewerObject::POOL_TE_REBUILD)
+                                      : (U8)(object->mPoolFlags & ~LLViewerObject::POOL_TE_REBUILD);
+        }
+        if (drawable == sTEDrawable)
+        {
+            return;
+        }
+    }
     if (rebuildDirties(rebuild_flag))
     {
-        noteDrawable(drawable, Cause::Edit);
+        noteDrawable(drawable, Cause::Edit); // off the main thread it flags the next frame "everything is stale"
     }
 }
 
@@ -502,8 +568,10 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     // Callers differ: some run before the change is applied (LLVOVolume::setTEColor, which calls again after an alpha change), most
     // after. So the prim's state at this call may be the old one or the new one; the stored key is what the feed last saw. The tile is
     // stale when the key changed (a face turned opaque closes a hole the cached tile still has, an alpha face's texture or mapping moved
-    // its holes); a change that leaves the key alone (fullbright, glow, shine, bump, an RGB tint, the light's colour) dirties nothing.
-    if (skipped(drawable, volume))
+    // its holes); a change that leaves the key alone (fullbright, glow, shine, bump, an RGB tint, emissive, the PBR colour, the light's
+    // colour) dirties nothing. An object that just became active or static again pushes at that edge, whatever its key.
+    bool edge = false;
+    if (skipped(drawable, volume, &edge))
     {
         volume->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN;
         return;
@@ -511,9 +579,84 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     const U32 now = silhouette_key(volume);
     bool known;
     const U32 was = swapAlphaKey(volume, now, known);
-    if (texturedDirties(was, now, known))
+    const bool dirties = texturedDirties(was, now, known);
+    if (dirties)
+    {
+        // the faces move to their new passes when the queued rebuild completes: that completion pushes again (no texture-entry mark)
+        volume->mPoolFlags &= (U8)~LLViewerObject::POOL_TE_REBUILD;
+        if (drawable == sTEDrawable)
+        {
+            sTEKeyChanged = true;
+        }
+    }
+    if (dirties || edge)
     {
         pushExtents(drawable, Cause::Edit);
+    }
+}
+
+LLShadowDirtyFeed::TextureEntryRebuild::TextureEntryRebuild(LLDrawable* drawable)
+{
+    if (!drawable || !tracking() || !on_main_thread())
+    {
+        return; // the request is counted as any other
+    }
+    mActive = true;
+    mPrevDrawable = sTEDrawable;
+    mPrevQueuedShape = sTEQueuedShape;
+    mPrevKeyChanged = sTEKeyChanged;
+    sTEDrawable = drawable;
+    // a rebuild with a shape flag already in the queue for this drawable (read before the setter's markRebuild adds its own flags)
+    sTEQueuedShape = drawable->isState(LLDrawable::IN_REBUILD_Q) &&
+                     drawable->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED);
+    sTEKeyChanged = false;
+}
+
+LLShadowDirtyFeed::TextureEntryRebuild::~TextureEntryRebuild()
+{
+    if (mActive)
+    {
+        sTEDrawable = mPrevDrawable;
+        sTEQueuedShape = mPrevQueuedShape;
+        sTEKeyChanged = mPrevKeyChanged;
+    }
+}
+
+LLShadowDirtyFeed::OwnRebuild::OwnRebuild(LLDrawable* drawable)
+{
+    if (!drawable || !tracking() || !on_main_thread())
+    {
+        return;
+    }
+    mDrawable = drawable;
+    mPrev = sOwnRebuild;
+    // a rebuild that waited (a volume or rigged rebuild, or a mesh that loaded) changes the picture when it completes
+    mPush = drawable->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_RIGGED) || meshLoaded(drawable);
+    sOwnRebuild = drawable;
+}
+
+LLShadowDirtyFeed::OwnRebuild::~OwnRebuild()
+{
+    if (mDrawable)
+    {
+        sOwnRebuild = mPrev;
+    }
+}
+
+void LLShadowDirtyFeed::OwnRebuild::completed()
+{
+    if (!mDrawable)
+    {
+        return;
+    }
+    if (mPush)
+    {
+        noteDrawable(mDrawable, Cause::Edit);
+        clearMeshLoaded(mDrawable);
+    }
+    if (LLViewerObject* object = mDrawable->getVObj())
+    {
+        object->mPoolFlags &= (U8)~LLViewerObject::POOL_TE_REBUILD; // the rebuild is done; the next one earns its own mark
     }
 }
 
