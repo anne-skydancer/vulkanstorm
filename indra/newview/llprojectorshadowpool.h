@@ -140,8 +140,8 @@ struct LampFilter
 };
 // projectors: ST_SPOT_KERNEL_MIN 1.5 and ST_SPOT_KERNEL_TEXELS_MAX 12 (scripts/tests/test_projector_lamp_filter.py checks the shader's)
 constexpr LampFilter kProjectorLamp{ 0.045f, 1.5f, 12.0f };
-// point lights (stage L4, six faces with a guard of 16 texels: the cap is the guard less the bilinear footprint): prepared, not used
-// yet. The same base: the same physical lamp built either way casts the same shadow.
+// point lights (stage L4, six faces with a guard of 16 texels: the cap is the guard less the bilinear footprint; ST_POINT_KERNEL_TEXELS_MAX
+// in the shader, llpointshadowpool.h kGuard). The same base: the same physical lamp built either way casts the same shadow.
 constexpr LampFilter kPointLamp{ 0.045f, 1.5f, 14.0f };
 constexpr float kSoftnessDefault = LLShadowMethod::SOFTNESS_CENTRE; // RenderShadowLightSize's default (one constant: llshadowmethod.h)
 
@@ -167,11 +167,12 @@ inline float filterRadiusTexels(const LampFilter& lamp, float physical_texels)
     return std::isnan(physical_texels) ? lamp.kernel_min : std::min(std::max(physical_texels, lamp.kernel_min), lamp.kernel_max);
 }
 
-// N_i(s) = max(64, N_base >> s)
-inline uint32_t levelSize(uint32_t base, int level)
+// N_i(s) = max(floor, N_base >> s): the floor is kMinTile (64) for a projector's tile, a point light's face has its own (128,
+// llpointshadowpool.h kFaceMin: its 16-texel guard on each side)
+inline uint32_t levelSize(uint32_t base, int level, uint32_t floor = kMinTile)
 {
     const int s = std::min(std::max(level, 0), 31);
-    return std::max(kMinTile, base >> s);
+    return std::max(floor, base >> s);
 }
 
 // The frame time a hold counts (the valve's 3 s, the blocked growth's): a timer glitch (NaN, negative) counts as no time, a long stall
@@ -254,11 +255,12 @@ struct ValveTile
     int band = kMaxBand; // its distance band (nextBand): the farthest shrink first
     uint32_t fixed = 0;  // nonzero: a tile the valve does not size (its lamp is switched off, or a lamp's old cells that serve until its
                          // new ones are drawn); it counts at this size
+    uint32_t floor = kMinTile; // the smallest size the valve gives it (a point light's face: 128, its guard; a projector's tile: 64)
 };
 
 inline uint32_t valveSize(const ValveTile& t, int pressure)
 {
-    return t.fixed ? t.fixed : levelSize(t.base, valveShift(pressure, t.band));
+    return t.fixed ? t.fixed : levelSize(t.base, valveShift(pressure, t.band), t.floor);
 }
 
 // U(P) = sum N_i(P)^2 / A^2
@@ -275,7 +277,7 @@ inline double demand(const std::vector<ValveTile>& tiles, int pressure, uint32_t
 }
 
 // The lowest pressure at which every tile the valve sizes is at its floor: no step past it changes a size. A tile of band b reaches
-// its floor (kMinTile, or kMaxLevel octaves down) at P = octaves + kMaxBand - b.
+// its floor (its ValveTile::floor, or kMaxLevel octaves down) at P = octaves + kMaxBand - b.
 inline int pressureCeiling(const std::vector<ValveTile>& tiles)
 {
     int ceiling = 0;
@@ -286,7 +288,7 @@ inline int pressureCeiling(const std::vector<ValveTile>& tiles)
             continue;
         }
         int octaves = 0;
-        while (octaves < kMaxLevel && levelSize(t.base, octaves) > kMinTile)
+        while (octaves < kMaxLevel && levelSize(t.base, octaves, t.floor) > t.floor)
         {
             ++octaves;
         }
@@ -2179,6 +2181,8 @@ inline float dynamicShareMs(bool statics_pending, float left_ms)
 // Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
 // functions, and a pick is unpacked afterwards. Keys stay below 2^28: a projector record key is lamp << 4 | cell, so the lamp counter stays below 2^24.
 constexpr uint32_t kPoolKeyBits = 28;
+constexpr uint32_t kPoolProjectors = 0; // StaticItem::pool and DynamicItem::pool of the projector pool (llprojectorshadows)
+constexpr uint32_t kPoolPoints = 1;     // ... of the point lights' faces (llpointshadows; a face key is lamp << 3 | face)
 inline uint32_t packKey(uint32_t pool, uint32_t key) { return (pool << kPoolKeyBits) | (key & ((1u << kPoolKeyBits) - 1u)); }
 inline uint32_t unpackPool(uint32_t packed) { return packed >> kPoolKeyBits; }
 inline uint32_t unpackKey(uint32_t packed) { return packed & ((1u << kPoolKeyBits) - 1u); }
@@ -2428,7 +2432,7 @@ inline uint32_t layerLagFrames(uint32_t faces, uint32_t per_frame)
 }
 
 // The change feed's owners (llshadowdirtyfeed.h): which caches track, and the lamp roots each keeps, merged for the lookup. GL-free
-// and viewer-free so the unit test checks the rules. Each owner is one bit; owner indices 0 and 1 today.
+// and viewer-free so the unit test checks the rules. Each owner is one bit; owner indices 0 (projectors) and 1 (point lights).
 constexpr uint32_t kOwnerBits = 2;
 
 enum class OwnerEdge { Neither, First, Last };

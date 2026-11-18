@@ -1637,6 +1637,7 @@ set(viewer_HEADER_FILES
     llprojectorshadows.h
     llshadowdirtyfeed.h
     llprojectorshadowpool.h
+    llpointshadowpool.h
     llstochasticbluenoise.h
     llstochasticlayerrank.h
     llstochasticstate.h

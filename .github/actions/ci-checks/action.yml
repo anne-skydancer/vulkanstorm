@@ -83,6 +83,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllightthrough_test.cpp -o "$RUNNER_TEMP/light-through-test"
         "$RUNNER_TEMP/light-through-test"
+    - name: Check the point lights' shadow faces core (face pick, seams, sizes, packing, emitter skip, merged selection)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview -I indra/llrender indra/newview/tests/llpointshadowpool_test.cpp -o "$RUNNER_TEMP/point-pool-test"
+        "$RUNNER_TEMP/point-pool-test"
     - name: Check the shadow method migration
       shell: bash
       run: |
