@@ -3210,6 +3210,10 @@ void LLPipeline::updateGeom(F32 max_dtime)
         }
     }
 
+    // <Vulkanstorm> the projector shadow pool: the bridge pass. A bridge that only quiet own rebuilds marked moved (a tint or a material
+    // inside an active linkset) moves without a push
+    LLShadowDirtyFeed::BridgeMoves pool_bridges;
+    // </Vulkanstorm>
     updateMovedList(mMovedBridge);
 }
 
@@ -3290,8 +3294,9 @@ void LLPipeline::markMoved(LLDrawable *drawablep, bool damped_motion)
 
     assertInitialized();
 
-    // <Vulkanstorm> the projector shadow pool: the extents it moves from (the move's end is pushed by the partition's move)
-    LLShadowDirtyFeed::noteDrawable(drawablep, llprojectorpool::Cause::Edit);
+    // <Vulkanstorm> the projector shadow pool: the extents it moves from (the move's end is pushed by the partition's move); a bridge marked
+    // moved by a prim's own rebuild inside it follows that rebuild's rule (read before the moved list below takes it)
+    LLShadowDirtyFeed::noteMoved(drawablep);
 
     if (!drawablep->isState(LLDrawable::ON_MOVE_LIST))
     {

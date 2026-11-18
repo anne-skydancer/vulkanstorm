@@ -27,7 +27,9 @@
 //   ScriptLamps (S2) the hold of a lamp switched off, black or at radius 0 (holdOffFrame: blinkers keep their tiles, a day and night
 //                   switch gives them back once); the silhouette key's inputs (silhouetteFaceMix: each moves the key, nothing else is one)
 //   TextureEntryRebuilds (S2) a tint, emissive or material that leaves the silhouette alone pushes nothing at its rebuild either
-//                   (the texture-entry mark); a silhouette change, a new LOD, a scale, markForUpdate or a move around it still push
+//                   (the texture-entry mark), in a static or an active linkset (the bridge's markMoved and its move, the follow-up
+//                   review's B1); a silhouette change pushes once, wherever the setter's markTextured runs; a new LOD, a scale,
+//                   markForUpdate, a move around a tint and the linkset's own move still push
 //   Placement (L2)  a GL-free replay of layout() and renderTile()'s resize: an arrival that finds no room waits for the shrinks and the
 //                   pressure ends at the rule's (review B1); a shortfall only at the ceiling; after a compaction the free texels hold
 //                   every arrival set and growth they cover; a growth blocked by fragmentation gets one compaction after its hold (Q1)
@@ -3533,31 +3535,37 @@ void testScriptLamps()
 
 // S2, texture-entry rebuilds. LLVOVolume::setTEColor (dirtyMesh) and the material setters ask for REBUILD_ALL, which counts as a shape
 // change; the feed marks such a request (textureEntryMarkAfterRequest), keeps or ends the mark with the next requests
-// (textureEntryMarkAfterRebuild) and lets the rebuild's own pushes follow it (ownRebuildPushes). This replays those rules in the order the
-// feed's hooks run them, over what scripts and the viewer do to a prim: one frame's setters, the next frame's REBUILD_MATERIAL from
-// LLDrawable::updateTexture, then the rebuild (its octree move when it carries a shape flag, its completion when it waited). The wiring of
-// the hooks to these rules (TextureEntryRebuild, OwnRebuild, noteRebuild, noteTextured, noteDrawable) is the viewer's and not reached here.
+// (textureEntryMarkAfterRebuild) and lets the rebuild's own pushes follow it (ownRebuildPushes). In an active linkset the prim's octree move
+// marks its bridge moved, which is one of those pushes, and the bridge's move after the rebuilds follows the quiet record
+// (quietBridgeAfterMove). This replays those rules in the order the feed's hooks run them, over what scripts and the viewer do to a prim:
+// the setters in idle, LLDrawable::updateTexture's REBUILD_MATERIAL later in the same idle (LLPipeline::updateMove), then display's
+// LLPipeline::updateGeom: the prim's rebuild (its octree move when it carries a shape flag, with the bridge's markMoved in an active
+// linkset; its completion when it waited), then the bridge pass. The wiring of the hooks to these rules (TextureEntryRebuild, OwnRebuild,
+// BridgeMoves, noteRebuild, noteTextured, noteMoved, noteDrawable) is the viewer's and not reached here.
 namespace
 {
+    // where a texture-entry setter's markTextured runs: none (a tint's dirtyMesh), before its scope opens (LLViewerObject::setTEMaterialParams'
+    // normal and specular maps; a cached material's synchronous callback in setTEMaterialID) or inside it
+    enum class Textured { None, Before, Inside };
+
     struct FeedModel
     {
         bool marked = false;
-        uint32_t queued = 0;                // the queued rebuild's flags (0: none queued)
+        uint32_t queued = 0;                  // the queued rebuild's flags (0: none queued)
         uint32_t stored = kSilhouetteKeySeed; // the key the feed last saw
         bool known = true;
+        bool bridged = false;                 // an active linkset: the prim lives in its bridge's octree
+        bool root = false;                    // the prim is the linkset's root: the bridge's object is the prim's
+        bool old_wiring = false;              // before the follow-up review's B1: the bridge's markMoved was counted as any push
+        bool recorded = false;                // the bridge is on the quiet record
+        bool pending = false;                 // the bridge waits on the moved list
         int pushes = 0;
 
-        bool textured(uint32_t now) // markTextured: a key change pushes and ends the mark
+        void textured(uint32_t now) // markTextured: a key change pushes once and stores the key
         {
-            const bool changed = texturedDirties(stored, now, known);
+            pushes += texturedDirties(stored, now, known) ? 1 : 0;
             stored = now;
             known = true;
-            if (changed)
-            {
-                marked = false;
-                ++pushes;
-            }
-            return changed;
         }
         void request(uint32_t flags) // markRebuild from anything but a texture-entry setter
         {
@@ -3569,39 +3577,117 @@ namespace
                 ++pushes;
             }
         }
-        void setter(uint32_t now, bool calls_textured = true) // a texture-entry setter: markTextured, then REBUILD_ALL in its scope
+        void setter(uint32_t now, Textured where = Textured::Inside) // a texture-entry setter, its REBUILD_ALL in its scope
         {
-            const bool queued_shape = (queued & kRebuildShape) != 0;
-            const bool changed = calls_textured && textured(now);
-            marked = textureEntryMarkAfterRequest(marked, queued_shape, changed);
+            if (where == Textured::Before)
+            {
+                textured(now);
+            }
+            const bool queued_shape = (queued & kRebuildShape) != 0; // read when the scope opens
+            if (where == Textured::Inside)
+            {
+                textured(now);
+            }
+            marked = textureEntryMarkAfterRequest(marked, queued_shape);
             queued |= kRebuildAll;
         }
-        void moved() // markMoved, a put or a remove: a push outside the own rebuild
+        void moved() // markMoved, a put or a remove of the prim: a push outside the own rebuild
         {
             marked = false;
             ++pushes;
         }
-        int rebuild(uint32_t now) // the next frame: updateTexture's REBUILD_MATERIAL, then updateGeom's own rebuild of the prim
+        void bridgeMoved() // a markMoved of the bridge that is not the prim's own rebuild: the linkset's own move, another prim's
+        {
+            ++pushes; // the box it leaves
+            if (root)
+            {
+                marked = false; // a push of the root's object outside the own rebuild
+            }
+            recorded = quietBridgeAfterMove(recorded, pending, false);
+            pending = true;
+        }
+        bool ownPush(uint32_t now) // a push of the prim's own rebuild
+        {
+            const bool push = ownRebuildPushes(marked, stored, now, known);
+            stored = now;
+            known = true;
+            pushes += push ? 1 : 0;
+            return push;
+        }
+        void rebuildOwn(uint32_t now) // updateGeom: the prim's own rebuild
         {
             if (queued == 0)
             {
-                return 0;
+                return;
             }
-            request(kRebuildTcoord | kRebuildColor);
-            const int before = pushes;
-            const int own_pushes = ((queued & kRebuildShape) ? 1 : 0) + ((queued & (kRebuildVolume | kRebuildRigged)) ? 1 : 0);
-            for (int i = 0; i < own_pushes; ++i) // genBBoxes' octree move, then the completion
+            if (queued & kRebuildShape)
             {
-                const bool push = ownRebuildPushes(marked, stored, now, known);
-                stored = now;
-                known = true;
-                pushes += push ? 1 : 0;
+                ownPush(now); // genBBoxes' octree move (in the bridge's octree when active)
+                if (bridged && old_wiring)
+                {
+                    bridgeMoved(); // the move's markMoved of the bridge, counted
+                }
+                else if (bridged)
+                {
+                    const bool push = ownPush(now); // the move's markMoved of the bridge: the prim's rule
+                    recorded = quietBridgeAfterMove(recorded, pending, !push);
+                    pending = true;
+                }
+            }
+            if (queued & (kRebuildVolume | kRebuildRigged))
+            {
+                ownPush(now); // the completion
             }
             marked = false; // the rebuild is done
             queued = 0;
+        }
+        void bridgePass() // updateGeom's bridge pass: a bridge off the quiet record pushes where it ended up
+        {
+            pushes += (pending && !recorded) ? 1 : 0;
+            pending = recorded = false;
+        }
+        int rebuild(uint32_t now) // updateTexture's REBUILD_MATERIAL (still in idle), then display's updateGeom
+        {
+            const int before = pushes;
+            if (queued != 0)
+            {
+                request(kRebuildTcoord | kRebuildColor);
+            }
+            rebuildOwn(now);
+            bridgePass();
             return pushes - before;
         }
     };
+
+    // a blinker toggled every 0.1 s for a minute: its pushes (tint: dirtyMesh alone; emissive: a glTF override; material: a legacy material
+    // whose parameters arrive in the same frame)
+    int blinkerPushes(bool bridged, bool root, bool old_wiring, const char* kind)
+    {
+        const uint32_t lace = 0x1234u;
+        FeedModel m;
+        m.stored = lace;
+        m.bridged = bridged;
+        m.root = root;
+        m.old_wiring = old_wiring;
+        for (int t = 0; t < 600; ++t)
+        {
+            if (kind[0] == 't')
+            {
+                m.setter(lace, Textured::None);
+            }
+            else if (kind[0] == 'e')
+            {
+                m.setter(lace);
+            }
+            else
+            {
+                m.setter(lace, Textured::Before);
+                m.setter(lace);
+            }
+            m.rebuild(lace);
+        }
+        return m.pushes;
+    }
 }
 
 void testTextureEntryRebuilds()
@@ -3610,58 +3696,103 @@ void testTextureEntryRebuilds()
               (kRebuildShape & (kRebuildTcoord | kRebuildColor)) == 0 && (kRebuildShape & kRebuildRigged) != 0,
           "S2 shape flags: REBUILD_ALL carries volume and position, REBUILD_GEOMETRY the position, REBUILD_MATERIAL none; rigging is one");
     const uint32_t lace = 0x1234u, opened = 0x5678u; // two silhouette keys
+    // a tint, emissive or material blinker, every 0.1 s for a minute: no push at all, in a static linkset, as a child or as the root of an
+    // active one (each was three a toggle before S2: the request, the octree move, the completion)
+    for (const char* kind : { "tint", "emissive", "material" })
     {
-        // a blinker that toggles an RGB tint (dirtyMesh alone), an emissive or PBR colour override, or a legacy material, every 0.1 s for a
-        // minute: no push at all (each was three before: the request, the octree move, the completion)
-        FeedModel tint, emissive, material;
-        tint.stored = emissive.stored = material.stored = lace;
-        for (int t = 0; t < 600; ++t)
+        const int still = blinkerPushes(false, false, false, kind);
+        const int child = blinkerPushes(true, false, false, kind);
+        const int root = blinkerPushes(true, true, false, kind);
+        check(still == 0 && child == 0 && root == 0, "S2 a blinker pushes nothing, static or in an active linkset (child, root)", double(still),
+              double(child + root));
+        // with the bridge's markMoved counted as any push (before the follow-up review's B1) the active linkset pushed twice a toggle (that
+        // markMoved, the bridge pass) and three times for a root lamp (that markMoved ended the root's own mark, so its completion pushed)
+        check(blinkerPushes(true, false, true, kind) == 1200 && blinkerPushes(true, true, true, kind) == 1800,
+              "S2 B1: the old wiring pushes an active child blinker twice a toggle, a root three times", double(blinkerPushes(true, false, true, kind)),
+              double(blinkerPushes(true, true, true, kind)));
+    }
+    // a silhouette change through a setter pushes once, at its markTextured, wherever that runs; the rebuild's own pushes (and the bridge's)
+    // find the key stored
+    for (const Textured where : { Textured::Before, Textured::Inside })
+    {
+        for (const bool bridged : { false, true })
         {
-            tint.setter(lace, false);
-            emissive.setter(lace);
-            material.setter(lace);
-            material.setter(lace); // its parameters arrive the same frame
-            tint.rebuild(lace);
-            emissive.rebuild(lace);
-            material.rebuild(lace);
+            FeedModel m;
+            m.stored = lace;
+            m.bridged = bridged;
+            m.setter(opened, where);
+            check(m.pushes == 1, "S2 a silhouette change pushes once at the setter, its markTextured before or inside the scope", double(where == Textured::Before),
+                  double(bridged));
+            check(m.rebuild(opened) == 0, "S2 ... and its rebuild pushes nothing more (the tile drawn for the push comes after it)",
+                  double(where == Textured::Before), double(bridged));
         }
-        check(tint.pushes == 0 && emissive.pushes == 0 && material.pushes == 0, "S2 a tint, emissive or material blinker pushes nothing",
-              double(tint.pushes + emissive.pushes), double(material.pushes));
     }
+    for (const bool bridged : { false, true })
     {
+        // what changes a shape still pushes around a tint: in an active linkset, the bridge's markMoved and the bridge pass as well
+        const int extra = bridged ? 2 : 0;
         FeedModel m;
         m.stored = lace;
-        m.setter(opened);
-        check(m.pushes == 1 && !m.marked, "S2 a material that changes the silhouette pushes at once and ends the mark");
-        check(m.rebuild(opened) == 2, "S2 ... and its rebuild pushes again once the faces are in their new passes");
-    }
-    {
-        FeedModel m;
-        m.stored = lace;
+        m.bridged = bridged;
         m.request(kRebuildVolume); // a new LOD
-        m.setter(lace, false);     // then a tint
-        check(m.rebuild(lace) == 2, "S2 a tint after a new LOD: the LOD's rebuild still pushes");
-        m.setter(lace, false);
+        m.setter(lace, Textured::None);
+        check(m.rebuild(lace) == 2 + extra, "S2 a tint after a new LOD: the LOD's rebuild still pushes", double(bridged));
+        m.setter(lace, Textured::None);
         m.request(kRebuildVolume);
-        check(m.rebuild(lace) == 2, "S2 a new LOD after a tint: its rebuild pushes");
-        m.setter(lace, false);
+        check(m.rebuild(lace) == 2 + extra, "S2 a new LOD after a tint: its rebuild pushes", double(bridged));
+        m.setter(lace, Textured::None);
         m.request(kRebuildPosition); // a scale change
-        check(m.rebuild(lace) == 2, "S2 a scale after a tint: its rebuild pushes (the octree move and the completion)");
-        m.setter(lace, false);
+        check(m.rebuild(lace) == 2 + extra, "S2 a scale after a tint: its rebuild pushes (the octree move and the completion)", double(bridged));
+        m.setter(lace, Textured::None);
         m.request(kRebuildGeometry); // markForUpdate (selection, a new volume)
-        check(m.rebuild(lace) == 2, "S2 markForUpdate after a tint: its rebuild pushes");
-        m.setter(lace, false);
+        check(m.rebuild(lace) == 2 + extra, "S2 markForUpdate after a tint: its rebuild pushes", double(bridged));
+        m.setter(lace, Textured::None);
         m.moved();
-        check(m.rebuild(lace) == 2, "S2 a move after a tint: the rebuild pushes where the prim ended up");
+        check(m.rebuild(lace) == 2 + extra, "S2 a move after a tint: the rebuild pushes where the prim ended up", double(bridged));
     }
+    for (const bool root : { false, true })
+    {
+        // the linkset's own move (LLDrawable::updateXform's markMoved of the bridge, in idle before the rebuilds) with a tint: the bridge
+        // pass still pushes where the linkset ended up. That move is a push of the root's object outside its own rebuild, so a root's tint
+        // loses its mark and its rebuild pushes as well (conservative: the linkset's two boxes already cover it)
+        FeedModel m;
+        m.stored = lace;
+        m.bridged = true;
+        m.root = root;
+        m.setter(lace, Textured::None);
+        m.bridgeMoved();
+        check(m.pushes == 1 && m.rebuild(lace) == (root ? 4 : 1),
+              "S2 the linkset moved before a tint: the box it leaves and the one it ends in push (and a root's rebuild)", double(root),
+              double(m.pushes));
+        // another prim's counted move of the same bridge after the quiet rebuild, in the same updateGeom: the bridge pass pushes
+        FeedModel n;
+        n.stored = lace;
+        n.bridged = true;
+        n.root = root;
+        n.setter(lace, Textured::None);
+        n.request(kRebuildTcoord | kRebuildColor);
+        n.rebuildOwn(lace);
+        check(n.recorded && n.pushes == 0, "S2 the quiet rebuild puts the bridge on the record", double(root));
+        n.bridgeMoved();
+        n.bridgePass();
+        check(n.pushes == 2 && !n.recorded && !n.pending, "S2 another prim's move after it: the bridge leaves the record and its pass pushes",
+              double(root), double(n.pushes));
+    }
+    // the record over two prims of one linkset in one frame: two quiet rebuilds keep it, a counted move before or after either ends it
+    check(quietBridgeAfterMove(quietBridgeAfterMove(false, false, true), true, true), "S2 two quiet rebuilds in one linkset keep the record");
+    check(!quietBridgeAfterMove(quietBridgeAfterMove(false, false, false), true, true), "S2 a counted move first: a quiet one does not record");
+    check(!quietBridgeAfterMove(true, true, false), "S2 a counted move after a quiet one ends the record");
+    check(!quietBridgeAfterMove(false, true, true), "S2 a bridge already waiting for a counted move stays off the record");
+    for (const bool bridged : { false, true })
     {
         FeedModel m;
         m.stored = lace;
+        m.bridged = bridged;
         m.known = false; // the prim predates tracking
-        m.setter(lace, false);
-        check(m.rebuild(lace) == 1, "S2 a prim the feed has not seen pushes once, mark or not");
-        m.setter(lace, false);
-        check(m.rebuild(lace) == 0, "S2 ... and then follows the mark");
+        m.setter(lace, Textured::None);
+        check(m.rebuild(lace) == 1, "S2 a prim the feed has not seen pushes once, mark or not", double(bridged));
+        m.setter(lace, Textured::None);
+        check(m.rebuild(lace) == 0, "S2 ... and then follows the mark", double(bridged));
     }
 }
 

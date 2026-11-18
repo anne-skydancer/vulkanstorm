@@ -58,12 +58,43 @@ namespace
     // the roots of the lamps each pool holds tiles for (compared, never dereferenced): one list per owner and their sorted union,
     // which is what the hooks test
     llprojectorpool::OwnerLists<const LLViewerObject*> sLampRoots;
-    // the open TextureEntryRebuild (its drawable, compared only; whether a shape rebuild was queued for it before the request; whether the
-    // setter's markTextured changed the key) and the drawable whose own rebuild runs (OwnRebuild): main-thread scope markers
+    // the open TextureEntryRebuild (its drawable, compared only; whether a shape rebuild was queued for it before the request) and the
+    // drawable whose own rebuild runs (OwnRebuild): main-thread scope markers
     const LLDrawable* sTEDrawable = nullptr;
     bool sTEQueuedShape = false;
-    bool sTEKeyChanged = false;
     LLDrawable* sOwnRebuild = nullptr;
+    // The quiet record (noteMoved): bridges whose pending move only quiet own rebuilds asked for. Compared only, never dereferenced: each is
+    // on LLPipeline's moved list (which holds it) from the markMoved that records it until the bridge pass, which ends the record
+    // (BridgeMoves). A handful at most a frame, so a vector. sBridgeMoves: the bridge pass runs. Main thread.
+    std::vector<const LLDrawable*> sQuietBridges;
+    bool sBridgeMoves = false;
+
+    bool quiet_bridge(const LLDrawable* bridge)
+    {
+        return std::find(sQuietBridges.begin(), sQuietBridges.end(), bridge) != sQuietBridges.end();
+    }
+
+    void set_quiet_bridge(const LLDrawable* bridge, bool quiet)
+    {
+        const auto it = std::find(sQuietBridges.begin(), sQuietBridges.end(), bridge);
+        if (quiet && it == sQuietBridges.end())
+        {
+            sQuietBridges.push_back(bridge);
+        }
+        else if (!quiet && it != sQuietBridges.end())
+        {
+            sQuietBridges.erase(it);
+        }
+    }
+
+    // the bridge whose octree holds the drawable (an active linkset's prim), found through the drawable's group, not through
+    // LLDrawable::getSpatialPartition, which creates and kills bridges; null for a drawable in a region's octree
+    LLSpatialBridge* bridge_of(LLDrawable* drawable)
+    {
+        LLSpatialGroup* group = drawable->getSpatialGroup();
+        LLSpatialPartition* part = group ? group->getSpatialPartition() : nullptr;
+        return part ? part->asBridge() : nullptr;
+    }
 
     inline U32 owner_index(LLShadowDirtyFeed::Owner owner)
     {
@@ -292,6 +323,7 @@ void LLShadowDirtyFeed::reset()
     sHaveFrame = false;
     sOffThread.store(false);
     sLampRoots.clearAll();
+    sQuietBridges.clear();
 }
 
 // static
@@ -322,10 +354,7 @@ bool LLShadowDirtyFeed::extentsOf(LLDrawable* drawable, Aabb& out)
     // inside a bridge (an active linkset) the drawable's own extents are in the bridge's space: the bridge's are agent space
     if (!drawable->isSpatialBridge())
     {
-        LLSpatialGroup* group = drawable->getSpatialGroup();
-        LLSpatialPartition* part = group ? group->getSpatialPartition() : nullptr;
-        LLSpatialBridge* bridge = part ? part->asBridge() : nullptr;
-        if (bridge)
+        if (LLSpatialBridge* bridge = bridge_of(drawable))
         {
             drawable = bridge;
         }
@@ -439,6 +468,17 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         sOffThread.store(true);
         return;
     }
+    // the bridge pass: a live bridge that only quiet own rebuilds marked moved keeps its box, and nothing in it changed what a tile shows
+    if (sBridgeMoves && drawable->isSpatialBridge() && !drawable->isDead() && quiet_bridge(drawable))
+    {
+        return;
+    }
+    note(drawable, cause);
+}
+
+// static
+LLShadowDirtyFeed::Note LLShadowDirtyFeed::note(LLDrawable* drawable, Cause cause)
+{
     LLViewerObject* object = drawable->getVObj();
     LLVOVolume* volume = drawable->getVOVolume();
     bool edge = false;
@@ -448,10 +488,11 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         {
             volume->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN; // not kept for objects out of the fixed layer
         }
-        return;
+        return Note::Skipped;
     }
-    // a push of the drawable's own rebuild (OwnRebuild: its octree move, its completion) keeps the texture-entry mark and follows it; any
-    // other push (a move, a put or a remove, a counted rebuild, a mesh arriving) means the queued rebuild is no longer a texture-entry one
+    // a push of the drawable's own rebuild (OwnRebuild: its octree move, its bridge's markMoved, its completion) keeps the texture-entry
+    // mark and follows it; any other push (a move, a put or a remove, a counted rebuild, a mesh arriving) means the queued rebuild is no
+    // longer a texture-entry one
     const bool own = drawable == sOwnRebuild && !edge;
     const bool marked = own && object && (object->mPoolFlags & LLViewerObject::POOL_TE_REBUILD) != 0;
     if (object && !own)
@@ -465,10 +506,38 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
         const U32 was = swapAlphaKey(volume, now, known); // keep the silhouette key current at every rebuild, put and edit
         if (!ownRebuildPushes(marked, was, now, known))
         {
-            return; // the rebuild of a tint, an emissive or a material that left the silhouette alone: nothing a tile shows changed
+            return Note::Quiet; // the rebuild of a tint, an emissive or a material that left the silhouette alone: nothing a tile shows changed
         }
     }
     pushExtents(drawable, cause);
+    return Note::Pushed;
+}
+
+// static
+void LLShadowDirtyFeed::noteMoved(LLDrawable* drawable)
+{
+    if (!tracking() || !drawable)
+    {
+        return;
+    }
+    if (!on_main_thread())
+    {
+        sOffThread.store(true);
+        return;
+    }
+    if (!drawable->isSpatialBridge())
+    {
+        note(drawable, Cause::Edit);
+        return;
+    }
+    // A bridge (an active linkset). During the own rebuild of a prim inside it, this markMoved comes from the prim's octree move
+    // (LLVOVolume::updateGeometry moves only its own drawable: genBBoxes -> movePartition -> LLSpatialBridge::move), so it is that rebuild's
+    // push under the prim's rule; the prim's extents are the bridge's box, and the root's mark and key are left alone. Otherwise it is the
+    // linkset's own move or another prim's, and it pushes the bridge as any move does.
+    LLDrawable* own = (sOwnRebuild && sOwnRebuild != drawable && bridge_of(sOwnRebuild) == drawable) ? sOwnRebuild : nullptr;
+    const bool pending = drawable->isState(LLDrawable::ON_MOVE_LIST); // read before LLPipeline::markMoved puts it on the moved list
+    const Note outcome = note(own ? own : drawable, Cause::Edit);
+    set_quiet_bridge(drawable, quietBridgeAfterMove(quiet_bridge(drawable), pending, own && outcome == Note::Quiet));
 }
 
 // static
@@ -495,9 +564,10 @@ void LLShadowDirtyFeed::noteRebuild(LLDrawable* drawable, U32 rebuild_flag)
         bool mark;
         if (drawable == sTEDrawable)
         {
-            // a texture-entry setter's own request (TextureEntryRebuild): its markTextured applied the silhouette rule, so the request
-            // pushes nothing; the rebuild's own pushes apply the rule again unless the key changed or a shape rebuild was queued
-            mark = textureEntryMarkAfterRequest(marked, sTEQueuedShape, sTEKeyChanged);
+            // a texture-entry setter's own request (TextureEntryRebuild): its markTextured applied the silhouette rule (a change pushed
+            // once and stored the key), so the request pushes nothing; the rebuild's own pushes apply the rule again unless a shape
+            // rebuild was queued
+            mark = textureEntryMarkAfterRequest(marked, sTEQueuedShape);
         }
         else
         {
@@ -566,7 +636,9 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     // after. So the prim's state at this call may be the old one or the new one; the stored key is what the feed last saw. The tile is
     // stale when the key changed (a face turned opaque closes a hole the cached tile still has, an alpha face's texture or mapping moved
     // its holes); a change that leaves the key alone (fullbright, glow, shine, bump, an RGB tint, emissive, the PBR colour, the light's
-    // colour) dirties nothing. An object that just became active or static again pushes at that edge, whatever its key.
+    // colour) dirties nothing. A change pushes once: a queued texture-entry rebuild's own pushes find the key stored, and its completion
+    // comes before any tile render takes this push (llprojectorpool::textureEntryMarkAfterRequest). An object that just became active or
+    // static again pushes at that edge, whatever its key.
     bool edge = false;
     if (skipped(drawable, volume, &edge))
     {
@@ -576,17 +648,7 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     const U32 now = silhouette_key(volume);
     bool known;
     const U32 was = swapAlphaKey(volume, now, known);
-    const bool dirties = texturedDirties(was, now, known);
-    if (dirties)
-    {
-        // the faces move to their new passes when the queued rebuild completes: that completion pushes again (no texture-entry mark)
-        volume->mPoolFlags &= (U8)~LLViewerObject::POOL_TE_REBUILD;
-        if (drawable == sTEDrawable)
-        {
-            sTEKeyChanged = true;
-        }
-    }
-    if (dirties || edge)
+    if (texturedDirties(was, now, known) || edge)
     {
         pushExtents(drawable, Cause::Edit);
     }
@@ -601,12 +663,10 @@ LLShadowDirtyFeed::TextureEntryRebuild::TextureEntryRebuild(LLDrawable* drawable
     mActive = true;
     mPrevDrawable = sTEDrawable;
     mPrevQueuedShape = sTEQueuedShape;
-    mPrevKeyChanged = sTEKeyChanged;
     sTEDrawable = drawable;
     // a rebuild with a shape flag already in the queue for this drawable (read before the setter's markRebuild adds its own flags)
     sTEQueuedShape = drawable->isState(LLDrawable::IN_REBUILD_Q) &&
                      drawable->isState(LLDrawable::REBUILD_VOLUME | LLDrawable::REBUILD_POSITION | LLDrawable::REBUILD_RIGGED);
-    sTEKeyChanged = false;
 }
 
 LLShadowDirtyFeed::TextureEntryRebuild::~TextureEntryRebuild()
@@ -615,7 +675,6 @@ LLShadowDirtyFeed::TextureEntryRebuild::~TextureEntryRebuild()
     {
         sTEDrawable = mPrevDrawable;
         sTEQueuedShape = mPrevQueuedShape;
-        sTEKeyChanged = mPrevKeyChanged;
     }
 }
 
@@ -654,6 +713,25 @@ void LLShadowDirtyFeed::OwnRebuild::completed()
     if (LLViewerObject* object = mDrawable->getVObj())
     {
         object->mPoolFlags &= (U8)~LLViewerObject::POOL_TE_REBUILD; // the rebuild is done; the next one earns its own mark
+    }
+}
+
+LLShadowDirtyFeed::BridgeMoves::BridgeMoves()
+{
+    if (!on_main_thread() || sBridgeMoves)
+    {
+        return; // one bridge pass at a time (LLPipeline::updateGeom)
+    }
+    mActive = true;
+    sBridgeMoves = true;
+}
+
+LLShadowDirtyFeed::BridgeMoves::~BridgeMoves()
+{
+    if (mActive)
+    {
+        sBridgeMoves = false;
+        sQuietBridges.clear(); // every bridge on the moved list has moved (or died): the record ends
     }
 }
 

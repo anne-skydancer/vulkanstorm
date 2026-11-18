@@ -1410,28 +1410,49 @@ constexpr uint32_t kRebuildShape = kRebuildVolume | kRebuildPosition | kRebuildR
 // because its shape moved. Counted as a shape change, a script's tint, emissive or PBR colour toggled with its light every 0.1 s pushed
 // the prim's extents at the request, at the rebuild's octree move (LLVOVolume::genBBoxes) and at its completion, so every tile that sees
 // the prim was redrawn at the blink rate. So the feed marks an object whose queued rebuild only such setters asked for (POOL_TE_REBUILD),
-// and the pushes of that rebuild apply the silhouette rule instead. The mark after a texture-entry setter's request: set, unless the
-// setter changed the silhouette key (its markTextured pushed, and the completion must push again once the faces are rebuilt into their
-// new passes) or a rebuild that carries a shape flag was already queued without the mark (that one pushes as it did).
-inline bool textureEntryMarkAfterRequest(bool marked, bool queued_shape, bool key_changed)
+// and the pushes of that rebuild apply the silhouette rule instead. The mark after a texture-entry setter's request: set, unless a rebuild
+// that carries a shape flag was already queued without the mark (that one pushes as it did).
+//
+// A silhouette change is pushed once, by the setter's markTextured, which also stores the new key, wherever that call runs: before the
+// setter's scope opens (LLViewerObject::setTEMaterialParams' normal and specular maps, a cached material's synchronous callback in
+// setTEMaterialID) or inside it. The rebuild's own pushes then find the key stored. One push is enough because of the frame's order: the
+// setters run in idle (the network, the idle callbacks, the main loop's work queue) or in the UI's events, before display's
+// LLPipeline::updateGeom, which completes every queued prim's rebuild (LLVOVolume::updateGeometry is complete at once for every prim but a
+// flexible one, which the feed skips); the pool takes the frame's boxes in generateSunShadow, after updateGeom, and a tile's render
+// rebuilds the groups it draws in its own stateSort and postSort. So a tile drawn for the push draws the faces in their new passes.
+inline bool textureEntryMarkAfterRequest(bool marked, bool queued_shape)
 {
-    return (marked || !queued_shape) && !key_changed;
+    return marked || !queued_shape;
 }
 
 // The mark after any other rebuild request: one with a shape flag (a new LOD, a move, a scale, rigging, makeActive or makeStatic,
 // markForUpdate's REBUILD_GEOMETRY) clears it; a texture-coordinate or colour rebuild (LLDrawable::updateTexture's REBUILD_MATERIAL, which
-// every setter's markTextured brings the next frame) keeps it.
+// LLPipeline::updateMove raises later in the same idle for every markTextured of the setters) keeps it.
 inline bool textureEntryMarkAfterRebuild(bool marked, uint32_t flags)
 {
     return marked && (flags & kRebuildShape) == 0;
 }
 
-// A push of the prim's own rebuild (its octree move, its completion in LLPipeline::updateGeom): with the mark only a silhouette change
-// pushes; without it the push goes out as it always did. Every other push (a move, a put or a remove, a counted rebuild, a mesh arriving)
-// clears the mark, and so do a silhouette change that markTextured sees and the end of the rebuild.
+// A push of the prim's own rebuild (its octree move, its completion in LLPipeline::updateGeom, and in an active linkset the markMoved of
+// its bridge that the move causes): with the mark only a silhouette change pushes; without it the push goes out as it always did. Every
+// other push (a move, a put or a remove, a counted rebuild, a mesh arriving) clears the mark, and so does the end of the rebuild.
 inline bool ownRebuildPushes(bool marked, uint32_t was_key, uint32_t now_key, bool known)
 {
     return !marked || texturedDirties(was_key, now_key, known);
+}
+
+// Lamp shadows S2 in an active linkset. A blinker becomes active after its ninth colour or material update from the server
+// (LLVOVolume::onDrawableUpdateFromServer) and stays so; its prims then live in the octree of the linkset's bridge (LLSpatialBridge). A
+// prim's own octree move there marks the bridge moved (LLSpatialBridge::move -> LLPipeline::markMoved), and LLPipeline::updateGeom moves the
+// bridge in the region's octree after the rebuilds (its bridge pass, updateMovedList(mMovedBridge)): two more pushes of the linkset's box
+// per toggle. So the feed takes that markMoved as the own rebuild's push (the prim's mark and key; the box is the bridge's either way) and
+// keeps a record of the bridges whose pending move only such quiet pushes asked for: a bridge on it moves without a push. The record after
+// a markMoved of the bridge: `recorded`, the bridge was on it; `pending`, the bridge already waits to move (an earlier markMoved: the
+// linkset's own move in idle, LLDrawable::updateXform, or another prim's); `quiet`, this markMoved was an own rebuild's push the mark kept
+// quiet. Any other markMoved takes the bridge off, and the record ends with the bridge pass.
+inline bool quietBridgeAfterMove(bool recorded, bool pending, bool quiet)
+{
+    return quiet && (recorded || !pending);
 }
 
 // The key's hash (FNV-1a, 32 bits): the feed folds the silhouette inputs of a prim's alpha faces into it, byte by byte.
