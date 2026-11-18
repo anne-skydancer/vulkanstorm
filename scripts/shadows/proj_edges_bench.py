@@ -5,8 +5,8 @@
 
 Offline bench, no viewer. The shader sources of the baselines come from git (--repo, --ref, --baseline-ref), the checkout's own
 shader from its working tree:
-  today   the release lookup (--baseline-ref, default 5a091b9559: mean-blocker PCSS, 4 cm normal offset, prim emitter)
-  P2      the devel lookup before this PR (--ref, default 8372d57f66: #527, nearest blocker, 1-texel normal offset, 1 cm x softness)
+  today   the release lookup (--baseline-ref, default 0991e142f4: mean-blocker PCSS, 4 cm normal offset, prim emitter)
+  P2      the devel lookup before this PR (--ref, default 475124a620: #527, nearest blocker, 1-texel normal offset, 1 cm x softness)
   RV      the ORACLE (bench only): P2 with the filter replaced by stSpotFilterTileRV below; the same blocker search; where the
           physical filter radius is under RV_HI texels the visibility is the weighted-disc coverage of a straight edge line
           reconstructed from the shadow map's binary silhouette (MLAA/RBSM-style run traversal), else P2's PCF.
@@ -61,8 +61,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent  # scripts/shadows
 ap = argparse.ArgumentParser()
 ap.add_argument('--repo', default=str(HERE.parents[1]), help='the checkout: RVreal compiles its working-tree shaders; git refs are read from it')
-ap.add_argument('--ref', default='8372d57f66', help='git ref of the devel util before PR A (P2 and the prototype RV build on it); pinned so P2 stays P2 after the merge')
-ap.add_argument('--baseline-ref', default='5a091b9559')
+ap.add_argument('--ref', default='475124a620', help='git ref of the devel util before PR A (P2 and the prototype RV build on it); pinned so P2 stays P2 after the merge')
+ap.add_argument('--baseline-ref', default='0991e142f4')
 ap.add_argument('--stairs', action='store_true')
 ap.add_argument('--gates', action='store_true')
 ap.add_argument('--grazing', action='store_true', help='acne check: a tilted lit plane (P2 and RV)')
