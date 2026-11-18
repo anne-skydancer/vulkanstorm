@@ -317,8 +317,9 @@ runs:
       run: python scripts/tests/check_cpucheck_obj.py "${{ inputs.directory }}"
 
     # Bit-exact by decision (doc/perf/multicore-simd-study.md section 9): multiply and add round separately, so the
-    # viewer may not hold more fused multiply-adds than its platform's baseline. The baselines are for the
-    # RelWithDebInfo test builds, so the check runs where the regression tests run.
+    # viewer must hold exactly its platform's baseline count of fused multiply-adds (more: something new fuses; fewer:
+    # the baseline would leave room for new ones). The baselines are for the RelWithDebInfo test builds, so the check
+    # runs where the regression tests run.
     - name: Check the fused multiply-add count
       if: env.VIEWER_BUILD_TYPE != 'Release' && inputs.tracy != 'true'
       shell: bash
