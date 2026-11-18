@@ -769,6 +769,7 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
             LLDrawInfo* info = new LLDrawInfo(start,end,count,offset,facep->getTexture(),
                 //facep->getTexture(),
                 buffer, fullbright);
+            // </Vulkanstorm>
 
             draw_vec.push_back(info);
             //for alpha sorting

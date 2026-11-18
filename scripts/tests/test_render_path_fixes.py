@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Text guards for the render-path hotfixes of 2026-11-18 (phase-2b research, reports/gl-modernisation-2026-11-17).
+"""Text guards for the render-path hotfixes of 2026-11-18 (the phase-2b research of the OpenGL modernisation; each
+fix's commit message gives its finding, callers and evidence).
 
 - H1 (b-5 F3): a texture-animation matrix is shared between its face and the draw batches that point at it
   (upstream ae465f3fb6 and 9e965d5288), so removing the animation or destroying the face cannot free it under a batch
