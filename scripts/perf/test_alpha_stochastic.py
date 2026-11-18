@@ -130,17 +130,16 @@ def h32(v):
     x=(((x>>((x>>28)+4))^x)*277803737)&0xffffffff
     return ((x>>22)^x)&0xffffffff
 def model_mask(px,py,seed,prim,a,s,table,frame=0):
-    """stoch_mask / st_mask, float32 at every step: the dither is the blue-noise tile's value of the pixel, the face's offset and the
-    golden-ratio step of the frame; the subset is hashed from the face's seed (with the frame), the pixel and a constant."""
+    """stoch_mask / st_mask, float32 at every step: the dither is xi24 / 2^24, xi24 in 24-bit fixed point the blue-noise tile's
+    stratum (2 rank + 1) 2048 of the pixel, the face's offset (its seed's top 24 bits) and the golden-ratio step of the frame
+    (stoch_xi24, the Aurora Viewer's st_mask); the subset is hashed from the face's seed (with the frame), the pixel and a constant."""
     sd=h32((seed*0x9e3779b9+0x7f4a7c15)&0xffffffff)
     sd=h32(sd^h32((prim+0x632be5ab)&0xffffffff))
     fseed=h32((sd+frame*0x9e3779b9)&0xffffffff) if frame else sd
     h=h32(px|(py<<16))
     at=(py&63)*64+(px&63)
-    blue=f32(f32(BLUE[at]+0.5)/4096.0)
-    face=f32((h32(sd^0x2545f491)>>8)/16777216.0)
-    step=f32((((frame*0x9e3779b9)&0xffffffff)>>8)/16777216.0) if frame else 0.0
-    t=f32(f32(blue+face)+step);xi=f32(t-math.floor(t))
+    step=(((frame*0x9e3779b9)&0xffffffff)>>8) if frame else 0
+    xi=f32(((((2*BLUE[at]+1)*2048+(sd>>8)+step)&0xffffff))/16777216.0)
     col=f32((h32(fseed^h^0x5bd1e995)>>8)/16777216.0)
     r=min(int(math.floor(f32(f32(min(max(a,0.),1.)*s)+xi))),s)
     c=min(int(f32(col*SEEDS)),SEEDS-1)

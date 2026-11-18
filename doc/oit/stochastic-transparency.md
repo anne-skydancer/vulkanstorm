@@ -32,9 +32,12 @@ stochastic transparency, which replaced PPLL. The viewer has two alpha methods,
   merged 2026-11-14; `oit_stochastic.wgsl` `cs_resolve`, `cs_temporal`, `cs_smooth`, `st_nan`, `st_sample`, `st_through`), mapped
   onto this renderer's fragment passes (`alphaStochasticCurrentF.glsl`, `alphaStochasticResolveF.glsl`,
   `stochasticResolveUtilF.glsl`, `alphaStochasticCompositeF.glsl`, which holds the smooth); the notices of the ported functions and constants stay in those
-  files. The blue-noise tile is generated here (void and cluster, R. Ulichney, "The void-and-cluster method for dither array
-  generation", SPIE 1993: `scripts/perf/gen_stochastic_blue_noise.py`, `llstochasticbluenoise.h`) and the golden-ratio step is a Kronecker
-  sequence (one integer multiply). Where this renderer differs from the PR: the history keeps the four-vector (alpha x colour, alpha)
+  files. The blue-noise tile (void and cluster, R. Ulichney, "The void-and-cluster method for dither array
+  generation", SPIE 1993) and the dither are the Aurora Viewer's since 2026-11-18 (stage T1 of the Aurora port: PR 3789,
+  `object.wgsl` `st_mask` and `oit_stochastic.rs` `void_and_cluster`, Anne Skydancer, GPL-3.0-or-later): the tile bit for bit
+  (`scripts/perf/gen_stochastic_blue_noise.py` is a port of its integer generator, `llstochasticbluenoise.h`, SHA-256 pinned in the
+  unit test) and xi in 24-bit fixed point, with the golden-ratio step of the frame as a Kronecker sequence (one integer
+  multiply). Where this renderer differs from the PR: the history keeps the four-vector (alpha x colour, alpha)
   with the alpha correction made after the blend, not the corrected colour (offline the corrected colour made the low-frequency error
   twice as large, measured offline at S = 4); the total alpha is taken at every stochastic sample, not at one; the history is read with a Catmull-Rom
   filter, not bilinear; and the smooth's reach is 0.5 grains, not 2 (below).
@@ -205,6 +208,12 @@ The total alpha is still taken at every stochastic sample (not at one sample, as
 Dither: the pixel's xi of R = floor(alpha S + xi) is a 64 x 64 blue-noise tile (void and cluster; its ranks are in two spare rows of the mask table, one more `texelFetch`, no new binding),
 plus a per-face offset, plus the frame's golden-ratio step (frame x 2^32 / phi mod 2^32, one multiply); the subset of the covered samples is drawn afresh per face, triangle, pixel and
 frame from the table. Never a subset fixed over the frames, nor one rotation stride for all layers (measured 1.8 to 1.9 times worse).
+Since 2026-11-18 (stage T1) the tile is the Aurora Viewer's and xi is its integer form, `stoch_xi24`: `((2 rank + 1) 2048 + (seed >> 8) + (frame x 0x9e3779b9 >> 8)) mod 2^24`, over 2^24.
+The whole sum is integer modulo 2^24, so every stratum stays exact at any frame number (the float form it replaces rounded the sum of three values in [0, 1) before `fract`), the face's offset is the top 24 bits of its seed (no extra hash),
+and the unit test holds the Aurora Viewer's properties for it: the mean of R over the tile is alpha S within one stratum for any rotation, eight consecutive
+frames sum to 8 alpha S within 1 (max error 1.00, rms 0.38, against 4.00 and 1.14 for a fresh hash every frame), two layers share a subset at 3 of 4096 pixels
+(chance: 2), and every 8 x 8 block of the tile is balanced (sd of the block means 0.0105, white noise 0.037). The grain pattern changes; its statistics do not
+(the A/B below was measured with the previous tile).
 
 NaN guard (PR 3663's set, with a bit test of the exponent, not `isnan`): a fragment with a non-finite alpha is discarded in the alpha-only passes; the measuring pass and the
 composite zero NaN samples and clamp infinities; the Catmull-Rom taps skip non-finite texels, the 3 x 3 box skips non-finite values, and a blend that is
@@ -402,7 +411,7 @@ anti-aliased form (3.4, 3.5), kept.
 | Recommendation | Here |
 |---|---|
 | 3.1 stratified masks: R = floor(alpha S + xi) samples, one S-choose-R subset | done (a table of 2048 random R-subsets per R) |
-| 3.1 dither R across a tile for further stratification | done since 2026-11-14: a 64 x 64 void-and-cluster blue-noise tile (two spare rows of the mask table), a per-face offset and the golden-ratio step of the frame; the 2026-11-06 measurement of a tile without the step found no gain (below), the temporal sequence is what the upgrade adds |
+| 3.1 dither R across a tile for further stratification | done since 2026-11-14: a 64 x 64 void-and-cluster blue-noise tile (two spare rows of the mask table), a per-face offset and the golden-ratio step of the frame; the 2026-11-06 measurement of a tile without the step found no gain (below), the temporal sequence is what the upgrade adds; since 2026-11-18 the Aurora Viewer's tile and its 24-bit integer xi |
 | 3.3 alpha correction, total alpha over accumulated alpha | done (composite); a single layer is exact (test) |
 | 3.4 steps 1-5: opaque depth, total alpha, stochastic depth only, accumulation by the stochastic depth, composite | done; deviations: the opaque depth is spread over the samples (the scene is single-sampled), and the composite dims the scene by the pixel's mean transparency, not per sample (differs only on background edges inside a pixel) |
 | 3.5, footnotes 3 and 4: more than 8 samples by iterating, one stratified mask split across the passes | S = 16 two-pass reference, dropped 2026-11-15 with the multi-pass path (the shader's iteration shift and the harness cases are gone); the viewer runs S = 8 in one pass and needs a device that takes 8 (the GL 4.6 base) |
@@ -524,7 +533,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 ## Tests and measurements
 
 - `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`), of the upgrade before the mask (`STOCH_REF_REF`, `c121dc100c`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
-- `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue).
+- `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue, the Aurora Viewer's by SHA-256), and C++ twins of the dither and the mask lookup with the Aurora Viewer's properties and golden values (computed from its formulas on its own tile file).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (8 and 4, each in
   one pass), the total alpha, visibility and composite, an opaque occluder, the glow,

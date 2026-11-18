@@ -23,18 +23,20 @@
 // every program of a stochastic producer: the alpha programs' ALPHA_STOCHASTIC variants today,
 // the shadow programs of the Stochastic shadow method later (LLShaderMgr::attachShaderFeatures).
 // Producers keep their own identities (the face and triangle of a blended face) and their own
-// frame counters; the engine gives the hash, the per-frame seed and the stratified mask from the
+// frame counters; the engine gives the hash, the per-frame seed, the dither and the stratified mask from the
 // transparency's table (S = LLStochasticEngine::TRANSPARENCY_SAMPLES = 8), dithered by a blue-noise tile.
 //
 // Monte Carlo against grain (stochastic transparency's coverage R = floor(a S + xi) of S samples is a
 // stratified estimate; its error is the grain the resolve measures and averages):
-//  - the pixel's dither xi is a 64 x 64 blue-noise tile (void and cluster, Ulichney 1993,
+//  - the pixel's dither xi is a 64 x 64 blue-noise tile (void and cluster, Ulichney 1993; the Aurora Viewer's tile,
 //    scripts/perf/gen_stochastic_blue_noise.py) plus a face offset plus the golden-ratio step of the frame
-//    (a Kronecker sequence, one multiply): the dither of neighbouring pixels is stratified in screen
-//    space, and a pixel's dither over the frames equidistributed, where a hash's is white in both;
+//    (a Kronecker sequence, one multiply), in 24-bit fixed point: the dither of neighbouring pixels is stratified
+//    in screen space, and a pixel's dither over the frames equidistributed, where a hash's is white in both;
 //  - the subset of the covered samples is still drawn afresh from the table, per face, triangle, pixel and
 //    frame (a subset fixed over the frames, or one rotation stride for all layers, measured 1.8 to 1.9
 //    times worse).
+// The dither is the Aurora Viewer's st_mask (crates/aurora-render/src/shaders/object.wgsl, PR 3789, Anne Skydancer,
+// GPL-3.0-or-later) bit for bit; tests/llstochastichistory_test.cpp holds its properties and golden values.
 
 uniform usampler2D stoch_masks;   // [r][column]: a random r-subset of the S sample bits (2048 x (S + 1)), then the blue-noise tile's ranks in two more rows
 
@@ -66,18 +68,18 @@ bool stoch_finite(float x)
     return (floatBitsToUint(x) & 0x7f800000u) != 0x7f800000u;
 }
 
-// The pixel's dither xi in [0, 1): the blue-noise tile's value (rank + 0.5) / 4096 of the pixel (tiled), the face's
-// offset (its seed), and the frame's golden-ratio step: frame * 2^32 / phi mod 2^32 (a Kronecker sequence, exact in
-// integers; frame 0, the fixed field, takes no step). The sum is a rotation of the tile modulo 1: every pixel's
-// values are uniform, and the tile's neighbours are spread.
+// The dither of px in 24-bit fixed point, xi = xi24 / 2^24 in [0, 1): the blue-noise tile's stratum (2 rank + 1) / 8192 of
+// the pixel (tiled), rotated by the face's own offset (the top 24 bits of its seed: Cranley-Patterson, so that layers stay
+// decorrelated) and stepped by the frame's golden-ratio fraction (frame * 0x9e3779b9 >> 8, the conjugate's share of 2^24;
+// frame 0, the fixed field, takes no step), all modulo 2^24. Integer arithmetic, so it is exact at any frame number: over the
+// tile the mean of R is a S within one stratum for any rotation, and eight consecutive frames of a pixel sum to 8 a S within 1.
 // (The table must be the one LLStochasticEngine::transparencyTable(S) builds: S + 1 mask rows, then the tile's NOISE_ROWS rows.)
-float stoch_dither(uvec2 px, uint face_seed, int frame, uint s)
+uint stoch_xi24(uvec2 px, uint face_seed, int frame, uint s)
 {
     uint at = (px.y & (STOCH_NOISE_SIZE - 1u)) * STOCH_NOISE_SIZE + (px.x & (STOCH_NOISE_SIZE - 1u));
-    float blue = (float(texelFetch(stoch_masks, ivec2(int(at & (STOCH_SEEDS - 1u)), int(s + 1u + (at >> 11u))), 0).r) + 0.5) / 4096.0;
-    float face = float(stoch_hash(face_seed ^ 0x2545f491u) >> 8u) / 16777216.0;
-    float step_of_frame = frame != 0 ? float((uint(frame) * 0x9e3779b9u) >> 8u) / 16777216.0 : 0.0;
-    return fract(blue + face + step_of_frame);
+    uint rank = texelFetch(stoch_masks, ivec2(int(at & (STOCH_SEEDS - 1u)), int(s + 1u + (at >> 11u))), 0).r;
+    uint step_of_frame = frame != 0 ? (uint(frame) * 0x9e3779b9u) >> 8u : 0u;
+    return ((2u * rank + 1u) * 2048u + (face_seed >> 8u) + step_of_frame) & 0xffffffu;
 }
 
 // The S-bit mask (s = S) of a fragment of coverage a at pixel px: R = floor(a S + xi) bits, xi the dither above.
@@ -89,7 +91,7 @@ uint stoch_mask(float a, uint face_seed, int frame, uvec2 px, uint s)
 {
     uint seed = stoch_frame_seed(face_seed, frame);
     uint h = stoch_hash(px.x | (px.y << 16u));
-    float xi = stoch_dither(px, face_seed, frame, s);
+    float xi = float(stoch_xi24(px, face_seed, frame, s)) / 16777216.0;
     float col = float(stoch_hash(seed ^ h ^ 0x5bd1e995u) >> 8u) / 16777216.0;
     uint r = min(uint(floor(clamp(a, 0.0, 1.0) * float(s) + xi)), s);
     uint column = min(uint(col * float(STOCH_SEEDS)), STOCH_SEEDS - 1u);
