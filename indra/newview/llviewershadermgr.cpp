@@ -419,6 +419,13 @@ static bool use_projector_shadow_pool()
 {
     return use_stochastic_shadows() && gSavedSettings.getS32("RenderShadowDetail") > 1;
 }
+
+// the point lights' shadow faces shade the point lights in their own programs (pointLightF.glsl, multiPointLightF.glsl,
+// POINT_SHADOW_POOL); the same test as LLPointShadows::wanted() (lamp shadows L4)
+static bool use_point_shadow_pool()
+{
+    return use_projector_shadow_pool() && gSavedSettings.getBOOL("RenderShadowPointLights");
+}
 // </Vulkanstorm>
 
 static void add_common_permutations(LLGLSLShader* shader)
@@ -2016,6 +2023,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredLightProgram.clearPermutations();
 
         add_common_permutations(&gDeferredLightProgram);
+        if (use_point_shadow_pool()) // <Vulkanstorm/>
+        {
+            gDeferredLightProgram.addPermutation("POINT_SHADOW_POOL", "1");
+        }
 
         success = gDeferredLightProgram.createShader();
         llassert(success);
@@ -2039,6 +2050,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             gDeferredMultiLightProgram[i].addPermutation("LIGHT_COUNT", llformat("%d", i+1));
 
             add_common_permutations(&gDeferredMultiLightProgram[i]);
+            if (use_point_shadow_pool()) // <Vulkanstorm/>
+            {
+                gDeferredMultiLightProgram[i].addPermutation("POINT_SHADOW_POOL", "1");
+            }
 
             success = gDeferredMultiLightProgram[i].createShader();
             llassert(success);

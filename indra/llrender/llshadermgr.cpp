@@ -292,8 +292,9 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         // and the method-neutral block built next to it; Legacy takes the stock shadowUtil.glsl
         if (mFragmentShaderObjects.count(STOCHASTIC_SHADOW_UTIL))
         {
-            // the projector shadow pool reads the depth buffer too (shadowReceiverGeometry)
-            const char* common = (shader->mDefines.count("STOCHASTIC_SHADOW_SUN") || shader->mDefines.count("PROJECTOR_SHADOW_POOL")) ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
+            // the projector shadow pool and the point lights' faces read the depth buffer too (shadowReceiverGeometry)
+            const char* common = (shader->mDefines.count("STOCHASTIC_SHADOW_SUN") || shader->mDefines.count("PROJECTOR_SHADOW_POOL") ||
+                                   shader->mDefines.count("POINT_SHADOW_POOL")) ? STOCHASTIC_SHADOW_COMMON_DEPTH_KEY : STOCHASTIC_SHADOW_COMMON_KEY;
             if (!shader->attachFragmentObject(common) || !shader->attachFragmentObject(STOCHASTIC_SHADOW_UTIL))
             {
                 return false;
@@ -1563,6 +1564,12 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("proj_through_atlas");
     mReservedUniforms.push_back("proj_through_depth");
     mReservedUniforms.push_back("proj_through");
+    // the point lights' shadow faces (lamp shadows L4)
+    mReservedUniforms.push_back("point_shadow_atlas");
+    mReservedUniforms.push_back("point_view_to_agent");
+    mReservedUniforms.push_back("point_shadow_params");
+    mReservedUniforms.push_back("point_shadow_lamp");
+    mReservedUniforms.push_back("point_shadow_faces");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the volumetric clouds' textures (stage L7)
@@ -1584,7 +1591,12 @@ void LLShaderMgr::initAttribsAndUniforms()
         const std::pair<U32, const char*> placed[] = { { CLOUD_VOL_BASE, "cloud_vol_base" },       { CLOUD_VOL_EROSION, "cloud_vol_erosion" },
                                                        { CLOUD_VOL_CURL, "cloud_vol_curl" },       { CLOUD_VOL_WEATHER, "cloud_vol_weather" },
                                                        { CLOUD_VOL_TRACE, "cloud_vol_trace" },     { CLOUD_VOL_TDEPTH, "cloud_vol_tdepth" },
-                                                       { CLOUD_VOL_HISTORY, "cloud_vol_history" } };
+                                                       { CLOUD_VOL_HISTORY, "cloud_vol_history" },
+                                                       { POINT_SHADOW_ATLAS, "point_shadow_atlas" },
+                                                       { POINT_SHADOW_VIEW_TO_AGENT, "point_view_to_agent" },
+                                                       { POINT_SHADOW_PARAMS, "point_shadow_params" },
+                                                       { POINT_SHADOW_LAMP, "point_shadow_lamp" },
+                                                       { POINT_SHADOW_FACES, "point_shadow_faces" } };
         for (const auto& [index, name] : placed)
         {
             llassert(index < mReservedUniforms.size() && mReservedUniforms[index] == name);

@@ -210,6 +210,7 @@ F32 LLPipeline::RenderShadowNoise;
 F32 LLPipeline::RenderShadowBlurSize;
 U32 LLPipeline::RenderShadowMethod;          // <Vulkanstorm/> shadow method: 0 Legacy, 2 Stochastic
 F32 LLPipeline::RenderShadowLightSize;      // <Vulkanstorm/> light size (Stochastic)
+bool LLPipeline::RenderShadowPointLights = true; // <Vulkanstorm/> the point lights' shadow faces (lamp shadows L4)
 F32 LLPipeline::RenderSSAOScale;
 U32 LLPipeline::RenderSSAOMaxScale;
 F32 LLPipeline::RenderSSAOFactor;
@@ -224,6 +225,7 @@ LLDrawable* LLPipeline::RenderSpotLight = nullptr;
 LLPipeline::ELocalShadowPass LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE; // <Vulkanstorm/>
 // <Vulkanstorm>
 const std::vector<const LLVOAvatar*>* LLPipeline::sLocalShadowAvatars = nullptr;
+bool LLPipeline::sLocalShadowTwoSided = false;
 bool LLPipeline::localShadowAvatarAllowed(const LLVOAvatar* avatar)
 {
     return !sLocalShadowAvatars || std::find(sLocalShadowAvatars->begin(), sLocalShadowAvatars->end(), avatar) != sLocalShadowAvatars->end();
@@ -687,6 +689,7 @@ void LLPipeline::init()
     connectRefreshCachedSettingsSafe("RenderShadowBlurSize");
     connectRefreshCachedSettingsSafe("RenderShadowMethod");        // <Vulkanstorm/> shadow method
     connectRefreshCachedSettingsSafe("RenderShadowLightSize"); // <Vulkanstorm/> light size (Stochastic)
+    connectRefreshCachedSettingsSafe("RenderShadowPointLights"); // <Vulkanstorm/> the point lights' shadow faces
     connectRefreshCachedSettingsSafe("RenderSSAOScale");
     connectRefreshCachedSettingsSafe("RenderSSAOMaxScale");
     connectRefreshCachedSettingsSafe("RenderSSAOFactor");
@@ -875,6 +878,7 @@ void LLPipeline::destroyGL()
     stop_glerror();
     unloadShaders();
     mProjectorShadows.release(); // <Vulkanstorm/> the projector shadow atlases, while the context lives (main thread: stopGL)
+    mPointShadows.release(); // <Vulkanstorm/> the point lights' face atlases, likewise
     mHighlightFaces.clear();
 
     resetDrawOrders();
@@ -1228,6 +1232,18 @@ bool LLPipeline::allocateShadowBuffer(U32 resX, U32 resY)
     // <Vulkanstorm> the Stochastic method with projector shadows has a pool of tiles in two atlases (llprojectorshadows.cpp) in
     // place of the two spot maps: made here (idempotent), where the spot maps are, and freed when the method or the detail leaves it
     const bool projector_pool = RenderShadowMethod == LLShadowMethod::STOCHASTIC && shadow_detail > 1;
+    // the point lights' faces (lamp shadows L4) the same way, beside the projector pool, while RenderShadowPointLights is on
+    if (!gCubeSnapshot)
+    {
+        if (projector_pool && RenderShadowPointLights)
+        {
+            mPointShadows.ensureAllocated(); // a failed allocation is logged and tried again from the frame's update
+        }
+        else
+        {
+            mPointShadows.release();
+        }
+    }
     // </Vulkanstorm>
     if (!gCubeSnapshot) // hack to not allocate spot shadow maps during ReflectionMapManager init
     {
@@ -1410,6 +1426,7 @@ void LLPipeline::refreshCachedSettings()
     RenderShadowBlurSize = gSavedSettings.getF32("RenderShadowBlurSize");
     RenderShadowMethod = LLShadowMethod::sanitize(gSavedSettings.getU32("RenderShadowMethod")); // <Vulkanstorm/> shadow method, one clamp for every gate
     RenderShadowLightSize = gSavedSettings.getF32("RenderShadowLightSize");  // <Vulkanstorm/> light size (Stochastic)
+    RenderShadowPointLights = gSavedSettings.getBOOL("RenderShadowPointLights"); // <Vulkanstorm/> the point lights' shadow faces
     RenderSSAOScale = gSavedSettings.getF32("RenderSSAOScale");
     RenderSSAOMaxScale = gSavedSettings.getU32("RenderSSAOMaxScale");
     RenderSSAOFactor = gSavedSettings.getF32("RenderSSAOFactor");
@@ -1558,8 +1575,9 @@ void LLPipeline::releaseShadowBuffers()
     }
     releaseSpotShadowTargets();
     // <Vulkanstorm/> the projector shadow pool: its atlases while the context lives (cleanup, main thread) and its records,
-    // which hold drawables, before mInitialized goes false
+    // which hold drawables, before mInitialized goes false; the point lights' faces likewise
     mProjectorShadows.release();
+    mPointShadows.release();
 }
 
 void LLPipeline::releaseScreenBuffers()
@@ -2210,6 +2228,7 @@ void LLPipeline::unlinkDrawable(LLDrawable *drawable)
     }
 
     mProjectorShadows.forget(drawablep); // <Vulkanstorm/> its record and tile, if it had one
+    mPointShadows.forget(drawablep); // <Vulkanstorm/> its lamp and faces, if it had them
 
     for (U32 i = 0; i < 2; ++i)
     {
@@ -10288,7 +10307,12 @@ void LLPipeline::bindShadowMaps(LLGLSLShader& shader)
         }
     }
 
-    // <Vulkanstorm> the Stochastic method reads the projector shadows from the pool's atlas, in the spot programs only
+    // <Vulkanstorm> the Stochastic method reads the projector shadows from the pool's atlas, in the spot programs only, and the point
+    // lights' shadows from their faces' atlas, in the point light programs only
+    if (LLPointShadows::wanted())
+    {
+        mPointShadows.bindAtlas(shader);
+    }
     if (LLProjectorShadows::wanted())
     {
         mProjectorShadows.bindAtlas(shader);
@@ -10869,6 +10893,8 @@ void LLPipeline::renderDeferredLighting()
         {
             gGL.setSceneBlendType(LLRender::BT_ADD);
             std::list<LLVector4>        fullscreen_lights;
+            std::list<LLDrawable*>      fullscreen_light_drawables; // <Vulkanstorm/> L4: the point lights' faces, by the batch's lights
+            const bool                  point_shadows = LLPointShadows::wanted(); // <Vulkanstorm/>
             LLDrawable::drawable_list_t spot_lights;
             LLDrawable::drawable_list_t fullscreen_spot_lights;
             LLSettingsSky::ptr_t        psky        = LLEnvironment::instance().getCurrentSky();
@@ -10974,6 +11000,10 @@ void LLPipeline::renderDeferredLighting()
                         gDeferredLightProgram.uniform3fv(LLShaderMgr::DIFFUSE_COLOR, 1, col.mV);
                         gDeferredLightProgram.uniform1f(LLShaderMgr::LIGHT_FALLOFF, volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF));
                         gDeferredLightProgram.uniform1i(LLShaderMgr::CLASSIC_MODE, (psky->canAutoAdjust()) ? 1 : 0);
+                        if (point_shadows)
+                        {
+                            mPointShadows.setupLight(gDeferredLightProgram, drawablep); // <Vulkanstorm/> L4: this light's faces
+                        }
 
                         gGL.syncMatrices();
 
@@ -10993,6 +11023,7 @@ void LLPipeline::renderDeferredLighting()
 
                         fullscreen_lights.push_back(LLVector4(tc.x, tc.y, tc.z, s));
                         light_colors.push_back(LLVector4(col.mV[0], col.mV[1], col.mV[2], volume->getLightFalloff(DEFERRED_LIGHT_FALLOFF)));
+                        fullscreen_light_drawables.push_back(drawablep); // <Vulkanstorm/> L4
                     }
                 }
 
@@ -11057,6 +11088,7 @@ void LLPipeline::renderDeferredLighting()
                 const U32 max_count = LL_DEFERRED_MULTI_LIGHT_COUNT;
                 LLVector4 light[max_count];
                 LLVector4 col[max_count];
+                std::vector<LLDrawable*> batch_drawables; // <Vulkanstorm/> L4: the batch's lights, in the order of light[]
 
                 F32 far_z = 0.f;
 
@@ -11066,6 +11098,8 @@ void LLPipeline::renderDeferredLighting()
                     fullscreen_lights.pop_front();
                     col[count] = light_colors.front();
                     light_colors.pop_front();
+                    batch_drawables.push_back(fullscreen_light_drawables.front()); // <Vulkanstorm/>
+                    fullscreen_light_drawables.pop_front();
 
                     far_z = llmin(light[count].mV[2] - light[count].mV[3], far_z);
                     count++;
@@ -11078,6 +11112,11 @@ void LLPipeline::renderDeferredLighting()
                         gDeferredMultiLightProgram[idx].uniform4fv(LLShaderMgr::MULTI_LIGHT_COL, count, (GLfloat*)col);
                         gDeferredMultiLightProgram[idx].uniform1f(LLShaderMgr::MULTI_LIGHT_FAR_Z, far_z);
                         gDeferredMultiLightProgram[idx].uniform1i(LLShaderMgr::CLASSIC_MODE, (psky->canAutoAdjust()) ? 1 : 0);
+                        if (point_shadows)
+                        {
+                            mPointShadows.setupBatch(gDeferredMultiLightProgram[idx], batch_drawables); // <Vulkanstorm/> L4: the lights' faces
+                        }
+                        batch_drawables.clear(); // <Vulkanstorm/>
                         far_z = 0.f;
                         count = 0;
                         mScreenTriangleVB->setBuffer();
@@ -11779,7 +11818,10 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         LLRenderPass::PASS_NORMSPEC_EMISSIVE
     };
 
-    LLGLEnable cull(GL_CULL_FACE);
+    // <Vulkanstorm> a point light's face draws both sides of its casters (sLocalShadowTwoSided); every other shadow render culls back faces
+    LLGLEnable cull(sLocalShadowTwoSided ? 0 : GL_CULL_FACE);
+    LLGLDisable two_sided(sLocalShadowTwoSided ? GL_CULL_FACE : 0);
+    // </Vulkanstorm>
 
     //enable depth clamping if available
     LLGLEnable clamp_depth(depth_clamp ? GL_DEPTH_CLAMP : 0);
@@ -11794,10 +11836,13 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
 
         stateSort(shadow_cam, result);
 
-        // <Vulkanstorm> a projector tile: hold the casters it draws at full detail (the LOD pin, spec 4.4)
+        // <Vulkanstorm> a projector tile or a point light's face: hold the casters it draws at full detail (the LOD pin, spec 4.4; each
+        // pool returns at once unless it is drawing), and a point light's face leaves out the prim that emits the light (D4)
         if (sLocalShadowPass == LOCAL_SHADOW_STATIC)
         {
             mProjectorShadows.pinCasters(result);
+            mPointShadows.pinCasters(result);
+            mPointShadows.skipEmitter();
         }
         // </Vulkanstorm>
     }
@@ -13183,7 +13228,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 // <Vulkanstorm/> multicore stage 1b: the pool update is its own view in the submission statistics
                 // (-DVKS_GL_STATS=ON); its draws were counted into the enclosing view before
                 VKS_GLSTAT_VIEW("projector tiles");
-                LLLocalShadows::updateFrame(camera); // the projectors' tiles under the local shadows' one selection
+                LLLocalShadows::updateFrame(camera); // the projectors' tiles and the point lights' faces, one selection under one cap
             }
         }
         else

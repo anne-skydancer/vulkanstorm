@@ -25,6 +25,7 @@
 #include "llcharacter.h"
 #include "llframetimer.h"
 #include "llglslshader.h"
+#include "llpointshadows.h"
 #include "llprojectorshadows.h"
 #include "llrendertarget.h"
 #include "llshadermgr.h"
@@ -205,30 +206,36 @@ void LLLocalShadows::updateFrame(LLCamera& camera)
         return;
     }
     LLProjectorShadows& projectors = gPipeline.mProjectorShadows;
+    LLPointShadows& points = gPipeline.mPointShadows;
 
-    // the frame's casting avatars, once for every pool (their pairing and every face's draw list read the same list); no pointer outlives
+    // the frame's casting avatars, once for both pools (their pairing and every face's draw list read the same list); no pointer outlives
     // this call: the pools let go of it in endFrame
     static std::vector<LLLocalShadowCaster> casters;
     struct EndOfFrame
     {
         LLProjectorShadows& projectors;
+        LLPointShadows& points;
         ~EndOfFrame()
         {
             projectors.endFrame();
+            points.endFrame();
             casters.clear();
         }
-    } end_of_frame{ projectors };
-    if (!LLProjectorShadows::wanted())
+    } end_of_frame{ projectors, points };
+    const bool want_projectors = LLProjectorShadows::wanted();
+    const bool want_points = LLPointShadows::wanted();
+    if (!want_projectors && !want_points)
     {
         return;
     }
     frameLedger().begin(LLFrameTimer::getFrameCount()); // the frame's spending starts at zero (idempotent within a frame)
     collectCasters(casters);
 
-    // each pool's work, packed with its pool id (kPoolProjectors)
+    // each pool's work, packed with its pool id (kPoolProjectors, kPoolPoints)
     std::vector<StaticItem> static_items;
     std::vector<DynamicItem> dynamic_items;
     projectors.prepare(camera, casters, static_items, dynamic_items);
+    points.prepare(camera, casters, static_items, dynamic_items);
 
     // The budget: one CPU cap for the frame's tile work of every cache together (llprojectorpool::kFrameCapMs, split by selectFrame: the
     // dynamic layer first, up to kDynamicCapMs, the static tiles in what is left). The measured cost of a tile only predicts how many fit;
@@ -248,6 +255,7 @@ void LLLocalShadows::updateFrame(LLCamera& camera)
     LLLocalShadowGL::Scope gl_scope;
     // the live atlases are lighting units' textures until the next lookup binds them again: not while they are written
     projectors.beginRenders();
+    points.beginRenders();
 
     // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap and, for the dynamic list,
     // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
@@ -279,7 +287,7 @@ void LLLocalShadows::updateFrame(LLCamera& camera)
             }
             F32 ms = 0.f;
             const U32 key = unpackKey(pk);
-            const bool rendered = unpackPool(pk) == kPoolProjectors && projectors.renderPick(key, dynamic, ms);
+            const bool rendered = unpackPool(pk) == kPoolPoints ? points.renderPick(key, dynamic, ms) : projectors.renderPick(key, dynamic, ms);
             if (rendered)
             {
                 spent_ms += ms;

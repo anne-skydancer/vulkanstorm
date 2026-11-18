@@ -65,6 +65,14 @@ void pbrPunctual(vec3 diffuseColor, vec3 specularColor,
 
 GBufferInfo getGBuffer(vec2 screenpos);
 
+#if defined(POINT_SHADOW_POOL)
+// <Vulkanstorm> the point lights' shadow faces (shadowStochasticUtil.glsl, lamp shadows L4): per light of the batch, in the order of light[]
+uniform vec4 point_shadow_lamp[LIGHT_COUNT];      // the light's centre (view space) of its faces' pose; w: their far plane (0: no lookup)
+uniform vec4 point_shadow_faces[2 * LIGHT_COUNT]; // its six packed face rects, two vec4 per light
+float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 norm, vec2 pos_screen);
+// </Vulkanstorm>
+#endif
+
 void main()
 {
     vec3 final_color = vec3(0, 0, 0);
@@ -116,6 +124,15 @@ void main()
                 float dist_atten = calcLegacyDistanceAttenuation(dist, falloff);
 
                 vec3 intensity = dist_atten * lightColor * 3.25;
+#if defined(POINT_SHADOW_POOL)
+                // <Vulkanstorm> this light's shadow where its light reaches the surface: each light by its own visibility
+                if (dot(n, lv) > 0.0)
+                {
+                    intensity *= samplePointShadow(point_shadow_lamp[light_idx], point_shadow_faces[2 * light_idx],
+                                                   point_shadow_faces[2 * light_idx + 1], pos, n, tc);
+                }
+                // </Vulkanstorm>
+#endif
                 float nl = 0;
                 vec3 diff = vec3(0);
                 vec3 specPunc = vec3(0);
@@ -165,6 +182,9 @@ void main()
                         }
                     }
 
+#if defined(POINT_SHADOW_POOL)
+                    col *= samplePointShadow(point_shadow_lamp[i], point_shadow_faces[2 * i], point_shadow_faces[2 * i + 1], pos, n, tc); // <Vulkanstorm/> nl > 0 here
+#endif
                     final_color += col;
                 }
             }
@@ -183,5 +203,11 @@ void main()
     vec4 dummy2 = light_col[0];
     vec4 dummy3 = light[LIGHT_COUNT - 1];
     vec4 dummy4 = light_col[LIGHT_COUNT - 1];
+#if defined(POINT_SHADOW_POOL)
+    vec4 dummy5 = point_shadow_lamp[0];       // <Vulkanstorm> the point lights' arrays too
+    vec4 dummy6 = point_shadow_faces[0];
+    vec4 dummy7 = point_shadow_lamp[LIGHT_COUNT - 1];
+    vec4 dummy8 = point_shadow_faces[2 * LIGHT_COUNT - 1]; // </Vulkanstorm>
+#endif
 #endif
 }
