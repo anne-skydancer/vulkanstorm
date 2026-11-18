@@ -32,6 +32,7 @@
 #include <atomic>
 
 #include "lltexturefetch.h"
+#include "lltexturefetchpolicy.h" // <Vulkanstorm>
 
 #include "lldir.h"
 #include "llhttpconstants.h"
@@ -368,15 +369,9 @@ private:
         LLUUID mID;
     };
 
-    struct Compare
-    {
-        // lhs < rhs
-        bool operator()(const LLTextureFetchWorker* lhs, const LLTextureFetchWorker* rhs) const
-        {
-            // greater priority is "less"
-            return lhs->mImagePriority > rhs->mImagePriority;
-        }
-    };
+    // <Vulkanstorm> The orderings of waiting requests compare priorities read once under each worker's lock
+    // (LLTextureFetchPolicy::PrioritySnapshot), not the live mImagePriority as Compare did.
+    typedef LLTextureFetchPolicy::PrioritySnapshot<LLTextureFetchWorker> PrioritySnapshot;
 
 public:
 
@@ -3414,11 +3409,17 @@ void LLTextureFetch::sendRequestListToSimulators()
     timer.reset();
 
     // Send requests
-    typedef std::set<LLTextureFetchWorker*,LLTextureFetchWorker::Compare> request_list_t;
+    // <Vulkanstorm> Ordered by each request's priority as read once, under its own lock (Mw), after the
+    // queue lock (Mfnq) is released: doWork takes Mw before Mfnq, so Mw is never taken under Mfnq. The fetch
+    // thread changes mImagePriority meanwhile (updateRequestPriority), and a set ordered by the live value
+    // raced with it and could see its order change while it was built and read.
+    typedef std::set<LLTextureFetchWorker::PrioritySnapshot> request_list_t;
     typedef std::map< LLHost, request_list_t > work_request_map_t;
     work_request_map_t requests;
+    std::vector<LLTextureFetchWorker*> queued;
     {
         LLMutexLock lock2(&mNetworkQueueMutex);                         // +Mfnq
+        queued.reserve(mNetworkQueue.size());
         for (queue_t::iterator iter = mNetworkQueue.begin(); iter != mNetworkQueue.end(); )
         {
             queue_t::iterator curiter = iter++;
@@ -3447,18 +3448,27 @@ void LLTextureFetch::sendRequestListToSimulators()
                 // We have all the packets... make sure this is high priority
                 continue;
             }
-            F32 elapsed = req->mRequestedDeltaTimer.getElapsedTimeF32();
-            {
-                F32 delta_priority = llabs(req->mRequestedPriority - req->mImagePriority);
-                if ((req->mSimRequestedDiscard != req->mDesiredDiscard) ||
-                    (delta_priority > MIN_DELTA_PRIORITY && elapsed >= MIN_REQUEST_TIME) ||
-                    (elapsed >= SIM_LAZY_FLUSH_TIMEOUT))
-                {
-                    requests[req->mHost].insert(req);
-                }
-            }
+            queued.push_back(req);
         }
     }                                                                   // -Mfnq
+
+    // Workers are deleted on this thread only (LLWorkerThread::update, before this call), so the pointers
+    // stay valid after the queue lock is released.
+    for (LLTextureFetchWorker* req : queued)
+    {
+        req->lockWorkMutex();                                           // +Mw
+        const F32 priority = req->mImagePriority;
+        F32 elapsed = req->mRequestedDeltaTimer.getElapsedTimeF32();
+        F32 delta_priority = llabs(req->mRequestedPriority - priority);
+        const bool send = (req->mSimRequestedDiscard != req->mDesiredDiscard) ||
+                          (delta_priority > MIN_DELTA_PRIORITY && elapsed >= MIN_REQUEST_TIME) ||
+                          (elapsed >= SIM_LAZY_FLUSH_TIMEOUT);
+        req->unlockWorkMutex();                                         // -Mw
+        if (send)
+        {
+            requests[req->mHost].insert({ priority, req });
+        }
+    }
 
     for (work_request_map_t::iterator iter1 = requests.begin();
          iter1 != requests.end(); ++iter1)
@@ -3475,7 +3485,7 @@ void LLTextureFetch::sendRequestListToSimulators()
         for (request_list_t::iterator iter2 = iter1->second.begin();
              iter2 != iter1->second.end(); ++iter2)
         {
-            LLTextureFetchWorker* req = *iter2;
+            LLTextureFetchWorker* req = iter2->mRequest;
             if (gMessageSystem)
             {
                 if (req->mSentRequest != LLTextureFetchWorker::SENT_SIM)
@@ -3497,7 +3507,7 @@ void LLTextureFetch::sendRequestListToSimulators()
                 gMessageSystem->nextBlockFast(_PREHASH_RequestImage);
                 gMessageSystem->addUUIDFast(_PREHASH_Image, req->mID);
                 gMessageSystem->addS8Fast(_PREHASH_DiscardLevel, (S8)req->mDesiredDiscard);
-                gMessageSystem->addF32Fast(_PREHASH_DownloadPriority, req->mImagePriority);
+                gMessageSystem->addF32Fast(_PREHASH_DownloadPriority, iter2->mPriority); // <Vulkanstorm> the snapshot the set is ordered by
                 gMessageSystem->addU32Fast(_PREHASH_Packet, packet);
                 gMessageSystem->addU8Fast(_PREHASH_Type, req->mType);
 //              LL_INFOS(LOG_TXT) << "IMAGE REQUEST: " << req->mID << " Discard: " << req->mDesiredDiscard
@@ -3516,7 +3526,7 @@ void LLTextureFetch::sendRequestListToSimulators()
                 req->lockWorkMutex();                                   // +Mw
                 req->mSentRequest = LLTextureFetchWorker::SENT_SIM;
                 req->mSimRequestedDiscard = req->mDesiredDiscard;
-                req->mRequestedPriority = req->mImagePriority;
+                req->mRequestedPriority = iter2->mPriority; // <Vulkanstorm> what was sent
                 req->mRequestedDeltaTimer.reset();
                 req->unlockWorkMutex();                                 // -Mw
                 sim_request_count++;
@@ -4024,7 +4034,12 @@ void LLTextureFetch::releaseHttpWaiters()
     // ordering assumption of std::set, std::map, etc. so we
     // don't use those containers.  We use a vector and an explicit
     // sort to keep the containers valid later.
-    typedef std::vector<LLTextureFetchWorker *> worker_list_t;
+    // <Vulkanstorm> The sort compares each worker's priority as read once
+    // here, under its lock (Mw, taken alone: no other lock is held). The
+    // main thread (createRequest) changes mImagePriority meanwhile, so a sort
+    // over the live values raced with it and could see the order contradict
+    // itself mid-sort.
+    typedef std::vector<LLTextureFetchWorker::PrioritySnapshot> worker_list_t;
     worker_list_t tids2;
 
     tids2.reserve(tids.size());
@@ -4035,7 +4050,10 @@ void LLTextureFetch::releaseHttpWaiters()
         LLTextureFetchWorker * worker(getWorker(* iter));
         if (worker)
         {
-            tids2.push_back(worker);
+            worker->lockWorkMutex();                                    // +Mw
+            const F32 priority = worker->mImagePriority;
+            worker->unlockWorkMutex();                                  // -Mw
+            tids2.push_back({ priority, worker });
         }
         else
         {
@@ -4052,8 +4070,7 @@ void LLTextureFetch::releaseHttpWaiters()
     // Sort into priority order, if necessary and only as much as needed
     if (tids2.size() > needed)
     {
-        LLTextureFetchWorker::Compare compare;
-        std::partial_sort(tids2.begin(), tids2.begin() + needed, tids2.end(), compare);
+        std::partial_sort(tids2.begin(), tids2.begin() + needed, tids2.end()); // highest snapshot first
     }
 
     // Release workers up to the high water mark.  Since we aren't
@@ -4063,7 +4080,7 @@ void LLTextureFetch::releaseHttpWaiters()
     // has moved any worker state around....
     for (worker_list_t::iterator iter2(tids2.begin()); tids2.end() != iter2; ++iter2)
     {
-        LLTextureFetchWorker * worker(* iter2);
+        LLTextureFetchWorker * worker(iter2->mRequest);
 
         worker->lockWorkMutex();                                        // +Mw
         if (LLTextureFetchWorker::WAIT_HTTP_RESOURCE2 != worker->mState)
