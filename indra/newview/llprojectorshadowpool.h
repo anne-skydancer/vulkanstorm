@@ -1749,7 +1749,7 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
 // drawn a layer yet; itemCost floors it at kDefaultItemMs) is seeded by the first real sample. A non-finite or negative sample leaves
 // the prediction as it was.
 constexpr float kCostSmoothing = 0.25f;
-constexpr float kCostSampleMaxMs = 0.70f;
+constexpr float kCostSampleMaxMs = 1.0f;
 inline float smoothedCostMs(float previous, float sample)
 {
     if (!std::isfinite(sample) || sample < 0.f)
@@ -1919,29 +1919,40 @@ inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const Tex
 
 // The per-frame CPU budget of ALL the shadow caches' tile work together (P4), in milliseconds, and its split. One number, shared by
 // every pool through the frame ledger (below): the dynamic layer (a moving lamp's tile, the avatar layers) and the static tiles
-// (a dirty or first-fill tile) are spent from it, never from two caps that add up (before P4: 0.35 + 0.30 ms).
-//   - kFrameCapMs 0.35 ms is 4.4 % of an 8 ms frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one). The +5 %
-//     light and shadow allowance is about 0.4 ms of that frame, so 0.05 ms stays free for the rest of the pool's CPU work.
+// (a dirty, first-fill or resized tile) are spent from it, never from two caps that add up (before P4: 0.35 + 0.30 ms).
+//   - The basis is the owner's frame-rate floor (AGENTS.md, since 2026-11-16): about 60 fps standing in a crowded room (about 60
+//     avatars) and never below 25 fps moving, at the default tier. It replaced the +5 % allowance on an assumed 8 ms frame (125 fps,
+//     never measured), which gave the former 0.35 ms (lamp shadows L2).
+//   - kFrameCapMs is kFloorShare of the standing floor's frame: 0.03 x 1000 / 60 = 0.5 ms. Spent in full by a frame that is CPU-bound
+//     right at the floor it costs 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving (40 -> 40.5 ms); a static
+//     scene spends nothing, and a GPU-bound frame hides it. It fits seven measured tiles of 0.07 ms (owner session 2026-11-14), so a
+//     room of four lamps redraws every tile and its avatar layer every frame, and a cold start (login, teleport, a lamp-sized
+//     atlas) fills about 40 % faster than at 0.35 ms.
 //   - Priority: the dynamic layer first. An avatar or a moving lamp is seen to lag at once; a dirty static tile only shows a stale
 //     shadow of something that changed, and its wait is bounded by the age order of selectStatic. Two regimes (dynamicShareMs): while a
-//     static tile waits, the dynamic layer gets kDynamicCapMs 0.20 ms; while none waits it gets the whole remaining cap (up to 7 faces
-//     at the 0.05 ms floor), since the other 0.15 ms would go unused.
-//   - The static tiles get what the dynamic layer left: at least kStaticCapMs = kFrameCapMs - kDynamicCapMs = 0.15 ms (two measured
-//     tiles of 0.07 ms) while the dynamic layer takes its 0.20 ms, all 0.35 ms in a frame without dynamic work.
+//     static tile waits, the dynamic layer gets kDynamicCapMs 0.30 ms (6 faces at the 0.05 ms floor); while none waits it gets the whole
+//     remaining cap (up to 10 faces), since the other 0.20 ms would go unused.
+//   - The static tiles get what the dynamic layer left: at least kStaticCapMs = kFrameCapMs - kDynamicCapMs = 0.20 ms (two measured
+//     tiles of 0.07 ms and a cold one) while the dynamic layer takes its 0.30 ms, all 0.5 ms in a frame without dynamic work.
 //   - The sum of the predicted costs of a frame's picks never exceeds kFrameCapMs, except for one single item whose own prediction is
 //     above what is left, which runs alone when nothing else was spent in the frame (progress; selectFrame).
 // The measured cost only predicts what fits; it does not set the budget.
-constexpr float kFrameCapMs = 0.35f;
-constexpr float kDynamicCapMs = 0.20f;
+constexpr float kFloorStandingFps = 60.f; // the owner's floor standing in a crowded room
+constexpr float kFloorMovingFps = 25.f;   // ... and moving
+constexpr float kFloorShare = 0.03f;      // the share of the standing floor's frame the shadow caches' tile work may take
+constexpr float kFrameCapMs = 0.5f;
+static_assert(kFrameCapMs > kFloorShare * 1000.f / kFloorStandingFps - 1e-3f && kFrameCapMs < kFloorShare * 1000.f / kFloorStandingFps + 1e-3f,
+              "the cap is the floor's share of the standing floor's frame");
+constexpr float kDynamicCapMs = 0.30f;
 constexpr float kStaticCapMs = kFrameCapMs - kDynamicCapMs;
 static_assert(kCostSampleMaxMs == 2.f * kFrameCapMs, "a cost sample is clamped to twice the frame cap");
 // A_max: the avatar draws of a frame (one per avatar in a lamp's volume, at least one per avatar layer). The CPU share binds first
-// (0.20 ms / the 0.05 ms scheduler floor = 4 faces a frame while a static tile waits, 0.35 / 0.05 = 7 when none does); 24 is the
+// (0.30 ms / the 0.05 ms scheduler floor = 6 faces a frame while a static tile waits, 0.5 / 0.05 = 10 when none does); 24 is the
 // ceiling a cheaper face could reach.
 constexpr uint32_t kAvatarDrawsMax = 24;
 
 // The dynamic layer's share of the cap `left_ms`: kDynamicCapMs while a static tile waits (the static schedule keeps the rest), the
-// whole of what is left when none does (the unused 0.15 ms is no use to anyone else).
+// whole of what is left when none does (the unused 0.20 ms is no use to anyone else).
 inline float dynamicShareMs(bool statics_pending, float left_ms)
 {
     const float left = std::max(left_ms, 0.f);
