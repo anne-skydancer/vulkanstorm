@@ -82,14 +82,23 @@ void LLDrawPoolGLTFPBR::renderPostDeferred(S32 pass)
     }
     else if (mRenderType == LLPipeline::RENDER_TYPE_PASS_GLTF_PBR) // HACK -- don't render glow except for the non-alpha masked implementation
     {
-        gGL.setColorMask(false, true);
+        // <Vulkanstorm> an impostor's second render keeps colour off: depth only (LLPipeline::generateImpostor)
+        const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;
+        if (own_mask)
+        {
+            gGL.setColorMask(false, true);
+        }
+        // </Vulkanstorm>
         gPBRGlowProgram.bind();
         pushGLTFBatches(LLRenderPass::PASS_GLTF_GLOW);
 
         gPBRGlowProgram.bind(true);
         pushRiggedGLTFBatches(LLRenderPass::PASS_GLTF_GLOW_RIGGED);
 
-        gGL.setColorMask(true, false);
+        if (own_mask) // <Vulkanstorm/>
+        {
+            gGL.setColorMask(true, false);
+        }
     }
 }
 

@@ -642,6 +642,31 @@ void LLSpatialGroup::updateDistance(LLCamera &camera)
     }
 }
 
+// <Vulkanstorm> the alpha sort key calcDistance computed in place, unchanged, for any camera
+//static
+F32 LLSpatialPartition::calcAlphaDepth(const LLSpatialGroup* group, const LLCamera& camera)
+{
+    LLVector4a origin;
+    origin.load3(camera.getOrigin().mV);
+
+    LLVector4a v;
+    v.setSub(group->mObjectBounds[0], origin);
+
+    LLVector3 at = camera.getAtAxis();
+
+    LLVector4a ata;
+    ata.load3(at.mV);
+
+    LLVector4a t = ata;
+    //front of bounding box
+    t.mul(0.25f);
+    t.mul(group->mObjectBounds[1]);
+    v.sub(t);
+
+    return v.dot3(ata).getF32();
+}
+// </Vulkanstorm>
+
 F32 LLSpatialPartition::calcDistance(LLSpatialGroup* group, LLCamera& camera)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SPATIAL;
@@ -656,8 +681,6 @@ F32 LLSpatialPartition::calcDistance(LLSpatialGroup* group, LLCamera& camera)
 
     if (group->mDrawMap.find(LLRenderPass::PASS_ALPHA) != group->mDrawMap.end())
     {
-        LLVector4a v = eye;
-
         dist = eye.getLength3().getF32();
         eye.normalize3fast();
 
@@ -684,19 +707,7 @@ F32 LLSpatialPartition::calcDistance(LLSpatialGroup* group, LLCamera& camera)
         }
 
         //calculate depth of node for alpha sorting
-
-        LLVector3 at = camera.getAtAxis();
-
-        LLVector4a ata;
-        ata.load3(at.mV);
-
-        LLVector4a t = ata;
-        //front of bounding box
-        t.mul(0.25f);
-        t.mul(group->mObjectBounds[1]);
-        v.sub(t);
-
-        group->mDepth = v.dot3(ata).getF32();
+        group->mDepth = calcAlphaDepth(group, camera); // <Vulkanstorm/> the same key, shared with the impostors' sort
     }
     else
     {
