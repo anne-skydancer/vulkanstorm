@@ -52,6 +52,8 @@
 #include "llviewerpartsim.h"
 #include "llviewercontrol.h" // for gSavedSettings
 #include "llviewertexturelist.h"
+#include "llshadowmethod.h" // <Vulkanstorm/> the Stochastic casters' seed and tile
+#include "llstochastichistory.h"
 
 // <FS:Zi> Add avatar hitbox debug
 #include "llviewercontrol.h"
@@ -281,7 +283,12 @@ void LLDrawPoolAvatar::renderPostDeferred(S32 pass)
 S32 LLDrawPoolAvatar::getNumShadowPasses()
 {
     // avatars opaque, avatar alpha, avatar alpha mask, alpha attachments, alpha mask attachments, opaque attachments...
-    return NUM_SHADOW_PASSES;
+    // <Vulkanstorm> Stochastic shadows: the alpha blend pass casts the transparent parts (skirt, eyelashes, hair) by the
+    // caster rule (shadowStochasticCasterF.glsl). The alpha mask pass would draw the same meshes into the same map again,
+    // so it is left out; it is the last pass. Legacy keeps all three.
+    static_assert(SHADOW_PASS_AVATAR_ALPHA_MASK == NUM_SHADOW_PASSES - 1, "the avatar's alpha mask shadow pass must be the last");
+    return LLPipeline::RenderShadowMethod == LLShadowMethod::STOCHASTIC ? (S32)SHADOW_PASS_AVATAR_ALPHA_MASK : (S32)NUM_SHADOW_PASSES;
+    // </Vulkanstorm>
 }
 
 void LLDrawPoolAvatar::beginShadowPass(S32 pass)
@@ -400,6 +407,18 @@ void LLDrawPoolAvatar::renderShadow(S32 pass)
     }
 
     LLDrawPoolAvatar::sShadowPass = pass;
+
+    // <Vulkanstorm> Stochastic shadows: the blended parts' caster rule (shadowStochasticCasterF.glsl) takes the avatar's identity
+    // in its seed, so two avatars with the same mesh are independent layers, and reads its blue-noise tile from the engine's
+    // table. Each mesh (skirt, eyelashes, hair) is its own draw, its triangles counted from 0 (gl_PrimitiveID). This method
+    // has no alpha mask pass (getNumShadowPasses).
+    if (LLPipeline::RenderShadowMethod == LLShadowMethod::STOCHASTIC && pass == SHADOW_PASS_AVATAR_ALPHA_BLEND &&
+        sVertexProgram && LLGLSLShader::sCurBoundShaderPtr == sVertexProgram)
+    {
+        sVertexProgram->uniform1i(LLShaderMgr::ALPHA_ST_SEED, (S32)LLStochasticEngine::faceSeed(avatarp->getID().mData, 0, 0));
+        LLStochasticEngine::bindMasks(*sVertexProgram);
+    }
+    // </Vulkanstorm>
 
     if (pass == SHADOW_PASS_AVATAR_OPAQUE)
     {

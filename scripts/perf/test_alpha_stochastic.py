@@ -33,7 +33,8 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     history, the neighbours or the image.
 ;
   * sub-pixel camera pans (horizontal, vertical, diagonal): the transparency history is read with a Catmull-Rom filter at the exact
-    reprojected position; frame 40 beats the nearest read and plain 8 samples, whole-pixel pans and the static view are unchanged;
+    reprojected position; frame 40 beats the nearest read and plain 8 samples (the hair strips' low-pass error: within 4 % of the plain
+    samples'), whole-pixel pans and the static view are unchanged;
   * blended legacy materials that can glare (materialF.glsl itself, plain and as its variant, with
     stand-ins for the lighting it links): the composite equals sorted alpha, an alpha 0 layer with
     matte maps leaves the opaque surface untouched, and shiny glass keeps its reflections (#328);
@@ -130,17 +131,16 @@ def h32(v):
     x=(((x>>((x>>28)+4))^x)*277803737)&0xffffffff
     return ((x>>22)^x)&0xffffffff
 def model_mask(px,py,seed,prim,a,s,table,frame=0):
-    """stoch_mask / st_mask, float32 at every step: the dither is the blue-noise tile's value of the pixel, the face's offset and the
-    golden-ratio step of the frame; the subset is hashed from the face's seed (with the frame), the pixel and a constant."""
+    """stoch_mask / st_mask, float32 at every step: the dither is xi24 / 2^24, xi24 in 24-bit fixed point the blue-noise tile's
+    stratum (2 rank + 1) 2048 of the pixel, the face's offset (its seed's top 24 bits) and the golden-ratio step of the frame
+    (stoch_xi24, the Aurora Viewer's st_mask); the subset is hashed from the face's seed (with the frame), the pixel and a constant."""
     sd=h32((seed*0x9e3779b9+0x7f4a7c15)&0xffffffff)
     sd=h32(sd^h32((prim+0x632be5ab)&0xffffffff))
     fseed=h32((sd+frame*0x9e3779b9)&0xffffffff) if frame else sd
     h=h32(px|(py<<16))
     at=(py&63)*64+(px&63)
-    blue=f32(f32(BLUE[at]+0.5)/4096.0)
-    face=f32((h32(sd^0x2545f491)>>8)/16777216.0)
-    step=f32((((frame*0x9e3779b9)&0xffffffff)>>8)/16777216.0) if frame else 0.0
-    t=f32(f32(blue+face)+step);xi=f32(t-math.floor(t))
+    step=(((frame*0x9e3779b9)&0xffffffff)>>8) if frame else 0
+    xi=f32(((((2*BLUE[at]+1)*2048+(sd>>8)+step)&0xffffff))/16777216.0)
     col=f32((h32(fseed^h^0x5bd1e995)>>8)/16777216.0)
     r=min(int(math.floor(f32(f32(min(max(a,0.),1.)*s)+xi))),s)
     c=min(int(f32(col*SEEDS)),SEEDS-1)
@@ -1451,9 +1451,12 @@ if True:
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
                 else:
-                    # at S = 8 the hair strips on a pan are a little better than the plain samples' smear share (the viewer before the upgrade is worse: 'before' against 'plain_before')
-                    # (hair: the measured frame-40 / plain low-pass ratio is 0.89 to 0.96 over these pans; the bound sits just above the worst, 0.98)
-                    assert r['new'][1]<(r['plain'][1]*0.98 if name=='S10' else r['plain'][1]),('the history beats plain 8 samples in low-pass error (hair: measured ratio at most 0.96, bound 0.98)',name,d,r['new'][1]/r['plain'][1],r)
+                    # textured layers: the history beats plain 8 samples in low-pass error. Hair (S10) at S = 8: the history stays within 4 % of them (the viewer
+                    # before the upgrade is worse: 'before' against 'plain_before'), and no longer beats them on every pan. The frame-40 / plain low-pass ratio is
+                    # 0.87 to 1.02 over these pans at 64 x 32 with the Aurora Viewer's dither (stoch_xi24, stage T1, 2026-11-18; the 0.5 px pan 1.02, 0.97 before
+                    # it) and 0.87 to 0.97 at 128 x 128 (0.5 px: 0.97, 0.94 before); the dither before T1 measured 0.89 to 0.97 here under a bound of 0.98. The
+                    # 0.5 px loss is a measured cost of that dither (owner decision D3). 64 x 32 measures the hair on 1152 pixels; the bound sits just above the worst
+                    assert r['new'][1]<(r['plain'][1]*1.04 if name=='S10' else r['plain'][1]),(('hair: the history stays within 4 % of plain 8 samples in low-pass error (measured ratio at most 1.02, bound 1.04)' if name=='S10' else 'the history beats plain 8 samples in low-pass error'),name,d,r['new'][1]/r['plain'][1],r)
                     if name=='S10': assert r['new'][0]<r['before'][0],('hair: the upgrade beats the viewer before it in rmse',name,d,r)
                     if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 8 samples in rmse on textured layers',name,d,r)
                     # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the resolve; the bound was 0.6 and 0.5 before the upgrade)

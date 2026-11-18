@@ -35,16 +35,22 @@ in vec2 vary_texcoord0;
 uniform vec4 color;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-// <Vulkanstorm/> dither origin: the origin of the projector tile being rendered in the atlas, so the dither does not
-// depend on where the tile sits; in a sun cascade pass (Stochastic) -(k mod 2^16), k the map corner's index on the world
-// grid, so the dither follows the world texel while the camera walks; 0 for every other pass
-uniform vec2 shadow_tile_origin;
+bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
 void main()
 {
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a * color.a;
 
+#if defined(STOCHASTIC_SHADOW_ALPHA)
+    // <Vulkanstorm/> Stochastic shadows: the avatar's blended parts (skirt, eyelashes, hair) cast in proportion to their opacity
+    // with no cut, solid at full opacity (the caster rule, see shadowAlphaMaskF.glsl). The stock branch below depends on
+    // minimum_alpha, which the avatar shadow pass never sets (0): in Legacy a texel from 0.05 up is solid.
+    if (alpha < 1.0 && !shadow_caster_keeps(alpha))
+    {
+        discard;
+    }
+#else
     if (alpha < 0.05) // treat as totally transparent
     {
         discard;
@@ -52,20 +58,12 @@ void main()
 
     if (alpha < minimum_alpha) // treat as semi-transparent
     {
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-      // <Vulkanstorm/> Stochastic shadows: hashed per-texel dither instead of the column stipple (see shadowAlphaMaskF.glsl)
-      float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + 0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));
-      if (ign >= alpha)
-      {
-        discard;
-      }
-#else
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)
       {
         discard;
       }
-#endif
     }
+#endif
 
     frag_color = vec4(1,1,1,1);
 }

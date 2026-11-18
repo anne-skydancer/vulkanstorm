@@ -32,13 +32,6 @@ in float target_pos_x;
 in float pos_w;
 in vec2 vary_texcoord0;
 
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-// <Vulkanstorm/> dither origin: the origin of the projector tile being rendered in the atlas, so the dither does not
-// depend on where the tile sits; in a sun cascade pass (Stochastic) -(k mod 2^16), k the map corner's index on the world
-// grid, so the dither follows the world texel while the camera walks; 0 for every other pass
-uniform vec2 shadow_tile_origin;
-#endif
-
 void main()
 {
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a;
@@ -50,19 +43,10 @@ void main()
 
     if (alpha < minimum_alpha)
     {
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-      // <Vulkanstorm/> Stochastic shadows: hashed per-texel dither instead of the column stipple (see shadowAlphaMaskF.glsl)
-      float ign = fract(52.9829189 * fract(0.06711056 * (gl_FragCoord.x - shadow_tile_origin.x) + 0.00583715 * (gl_FragCoord.y - shadow_tile_origin.y)));
-      if (ign >= alpha)
-      {
-        discard;
-      }
-#else
       if (fract(0.5*floor(target_pos_x / pos_w )) < 0.25)
       {
         discard;
       }
-#endif
     }
 
     frag_color = vec4(1,1,1,1);

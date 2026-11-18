@@ -1,109 +1,116 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Generates indra/newview/llstochasticbluenoise.h: the 64 x 64 blue-noise tile of the stochastic
-transparency's dither, by void-and-cluster (R. Ulichney, "The void-and-cluster method for dither
-array generation", SPIE 1993) on the torus with a Gaussian of sigma 1.5.
+"""Generates indra/newview/llstochasticbluenoise.h: the 64 x 64 blue-noise tile of the stochastic engine's dither, by
+void-and-cluster (R. Ulichney, "The void-and-cluster method for dither array generation", SPIE 1993) on the torus with a
+Gaussian of sigma 1.5.
 
-The tile holds the ranks 0 .. 4095 (each once). The depth pass reads rank (x & 63, y & 63) from two rows of
-the engine's mask table and uses (rank + 0.5) / 4096 as the pixel's part of the dither xi, so that the
-pixels of a frame are stratified in screen space (stochasticSampleF.glsl).
+After Aurora Viewer crates/aurora-render/src/oit_stochastic.rs (`void_and_cluster`, the tests' generator of
+oit_stochastic_tile.bin), Anne Skydancer, GPL-3.0-or-later: the same tile bit for bit. The energies are integers (the
+kernel in 16.16, cut at 4 sigma), the initial pattern a partial Fisher-Yates shuffle of N / 10 cells by splitmix64, and a
+tie goes to the first cell in index order, so the result is the same on every platform. The SHA-256 of the tile as 16-bit
+little-endian ranks (Aurora's file) is pinned in indra/newview/tests/llstochastichistory_test.cpp.
+
+The tile holds the ranks 0 .. 4095 (each once). The engine's dither reads rank (x & 63, y & 63) from the two spare rows of
+its mask table: the stratum (2 rank + 1) / 8192 of the dither xi, in 24-bit fixed point (stochasticSampleF.glsl stoch_xi24).
 
     python scripts/perf/gen_stochastic_blue_noise.py            # writes the header
     python scripts/perf/gen_stochastic_blue_noise.py --check    # exits 1 if the header differs from the generator's output
 
-The generator is deterministic (a fixed seed, NumPy's PCG64 generator is not used: splitmix64 below).
+Pure Python (no NumPy), deterministic, well under a second.
 """
+import hashlib
+import math
 import sys
 from pathlib import Path
-import numpy as np
 
 N = 64
 SIGMA = 1.5
+RADIUS = 6   # the kernel is cut at 4 sigma
+TILE_SHA256 = '8c547004839c1d151a35efb2528733d5e8eed0387ca39cafce969fa932e9c0ad'   # Aurora's oit_stochastic_tile.bin
 HEADER = Path(__file__).resolve().parents[2] / 'indra/newview/llstochasticbluenoise.h'
-
-
-def splitmix64(state):
-    M = (1 << 64) - 1
-    while True:
-        state = (state + 0x9e3779b97f4a7c15) & M
-        z = state
-        z = ((z ^ (z >> 30)) * 0xbf58476d1ce4e5b9) & M
-        z = ((z ^ (z >> 27)) * 0x94d049bb133111eb) & M
-        yield z ^ (z >> 31)
-
-
-def kernel():
-    d = np.minimum(np.arange(N), N - np.arange(N)).astype(np.float64)
-    g = np.exp(-(d[:, None] ** 2 + d[None, :] ** 2) / (2.0 * SIGMA * SIGMA))
-    return g
+M64 = (1 << 64) - 1
 
 
 def generate():
-    g = kernel()
     area = N * N
-    rng = splitmix64(0x564b53544f524d)   # "VKSTORM"
-    # the initial pattern: about a tenth of the pixels, then the tightest cluster is moved to the largest void until stable
-    binary = np.zeros((N, N), dtype=bool)
-    count = area // 10
-    while binary.sum() < count:
-        i = next(rng) % area
-        binary[i // N, i % N] = True
+    # the toroidal Gaussian in 16.16 (Rust's f64::round: half away from zero; every weight is positive)
+    kernel = []
+    for dy in range(-RADIUS, RADIUS + 1):
+        for dx in range(-RADIUS, RADIUS + 1):
+            w = math.exp(-float(dx * dx + dy * dy) / (2.0 * SIGMA * SIGMA))
+            kernel.append((dx, dy, int(math.floor(w * 65536.0 + 0.5))))
+    touch = [[(((i // N + dy) % N) * N + (i % N + dx) % N, w) for dx, dy, w in kernel] for i in range(area)]
 
-    def energy_of(b):
-        # circular convolution of the pattern with the Gaussian (FFT, the kernel is symmetric)
-        return np.real(np.fft.ifft2(np.fft.fft2(b.astype(np.float64)) * np.fft.fft2(g)))
+    def splat(energy, i, sign):
+        for j, w in touch[i]:
+            energy[j] += sign * w
 
-    def tightest(b, e):
-        return np.unravel_index(np.argmax(np.where(b, e, -np.inf)), b.shape)
+    def pick(energy, pattern, ones, highest):
+        # the first cell with the highest (tightest cluster) or lowest (largest void) energy
+        cells = [i for i in range(area) if pattern[i] == ones]
+        if not cells:
+            return 0
+        return max(cells, key=energy.__getitem__) if highest else min(cells, key=energy.__getitem__)
 
-    def largest_void(b, e):
-        return np.unravel_index(np.argmin(np.where(~b, e, np.inf)), b.shape)
+    state = 0x1234_5678_9abc_def0
 
-    for _ in range(100000):
-        e = energy_of(binary)
-        c = tightest(binary, e)
-        binary[c] = False
-        e = energy_of(binary)
-        v = largest_void(binary, e)
-        binary[v] = True
-        if v == c:
+    def splitmix64():
+        nonlocal state
+        state = (state + 0x9e37_79b9_7f4a_7c15) & M64
+        z = state
+        z = ((z ^ (z >> 30)) * 0xbf58_476d_1ce4_e5b9) & M64
+        z = ((z ^ (z >> 27)) * 0x94d0_49bb_1331_11eb) & M64
+        return z ^ (z >> 31)
+
+    # an initial pattern of N^2 / 10 pseudo-random ones
+    cells = list(range(area))
+    ones = area // 10
+    pattern = [False] * area
+    energy = [0] * area
+    for i in range(ones):
+        j = i + splitmix64() % (area - i)
+        cells[i], cells[j] = cells[j], cells[i]
+        pattern[cells[i]] = True
+        splat(energy, cells[i], 1)
+    # swap the tightest cluster to the largest void until they agree
+    while True:
+        tight = pick(energy, pattern, True, True)
+        pattern[tight] = False
+        splat(energy, tight, -1)
+        void = pick(energy, pattern, False, False)
+        pattern[void] = True
+        splat(energy, void, 1)
+        if void == tight:
             break
-    prototype = binary.copy()
-    ranks = np.zeros((N, N), dtype=np.int64)
-    # phase 1: remove ones, tightest cluster first; the rank is the count left
-    b = prototype.copy()
-    for r in range(int(b.sum()) - 1, -1, -1):
-        e = energy_of(b)
-        c = tightest(b, e)
-        b[c] = False
-        ranks[c] = r
-    # phase 2: from the prototype, put ones in the largest void until half of the pixels are set
-    b = prototype.copy()
-    ones = int(b.sum())
-    for r in range(ones, area // 2):
-        e = energy_of(b)
-        v = largest_void(b, e)
-        b[v] = True
-        ranks[v] = r
-    # phase 3: the rest, the tightest cluster of the zeros (a one in the inverted pattern) first
-    for r in range(area // 2, area):
-        e = energy_of(b)
-        # the tightest cluster of the zeros is the zero in the largest void of the ones
-        v = largest_void(b, e)
-        b[v] = True
-        ranks[v] = r
-    assert sorted(ranks.flatten().tolist()) == list(range(area))
-    return ranks
+    rank = [0] * area
+    # ranks ones - 1 .. 0: remove the tightest cluster each time
+    p, e = list(pattern), list(energy)
+    for r in range(ones - 1, -1, -1):
+        t = pick(e, p, True, True)
+        rank[t] = r
+        p[t] = False
+        splat(e, t, -1)
+    # ranks ones .. N^2 - 1: fill the largest void each time
+    for r in range(ones, area):
+        v = pick(energy, pattern, False, False)
+        rank[v] = r
+        pattern[v] = True
+        splat(energy, v, 1)
+    assert sorted(rank) == list(range(area))
+    return rank
+
+
+def tile_sha256(ranks):
+    return hashlib.sha256(b''.join(r.to_bytes(2, 'little') for r in ranks)).hexdigest()
 
 
 def header(ranks):
-    flat = ranks.flatten().tolist()
     rows = []
-    for i in range(0, len(flat), 16):
-        rows.append('        ' + ', '.join(f'{v}' for v in flat[i:i + 16]) + ',')
+    for i in range(0, len(ranks), 16):
+        rows.append('        ' + ', '.join(f'{v}' for v in ranks[i:i + 16]) + ',')
     return f'''/**
  * @file llstochasticbluenoise.h
- * @brief The stochastic transparency's 64 x 64 blue-noise tile (data; generated)
+ * @brief The stochastic engine's 64 x 64 blue-noise tile (data; generated)
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -120,8 +127,10 @@ def header(ranks):
  * NOTICE.md in the source tree.
  */
 
-// Generated by scripts/perf/gen_stochastic_blue_noise.py (void-and-cluster, Ulichney 1993, on the torus,
-// Gaussian sigma {SIGMA}): do not edit. The ranks 0 .. 4095, each once, row by row (y * 64 + x).
+// Generated by scripts/perf/gen_stochastic_blue_noise.py (void-and-cluster, Ulichney 1993, on the torus, Gaussian sigma
+// {SIGMA}): do not edit. The ranks 0 .. 4095, each once, row by row (y * 64 + x). The Aurora Viewer's tile
+// (oit_stochastic_tile.bin, Anne Skydancer, GPL-3.0-or-later) bit for bit: SHA-256 {TILE_SHA256[:8]}... of the ranks as
+// 16-bit little-endian words, pinned in tests/llstochastichistory_test.cpp.
 
 #ifndef LL_LLSTOCHASTICBLUENOISE_H
 #define LL_LLSTOCHASTICBLUENOISE_H
@@ -141,8 +150,12 @@ namespace LLStochasticEngine
 
 
 if __name__ == '__main__':
-    text = header(generate())
+    ranks = generate()
+    digest = tile_sha256(ranks)
+    if digest != TILE_SHA256:
+        sys.exit('the generator no longer makes the Aurora tile: SHA-256 ' + digest)
+    text = header(ranks)
     if '--check' in sys.argv:
-        sys.exit(0 if HEADER.read_text() == text else 1)
-    HEADER.write_text(text, newline='\n')
-    print('wrote', HEADER)
+        sys.exit(0 if HEADER.read_text(encoding='utf-8') == text else 1)
+    HEADER.write_text(text, encoding='utf-8', newline='\n')
+    print('wrote', HEADER, 'SHA-256', digest)

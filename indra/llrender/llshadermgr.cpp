@@ -212,15 +212,21 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     // (llviewershadermgr.cpp make_stochastic_variant) take its sampling and the transparency's
     // coverage mask; the fragment resolve program (STOCH_RESOLVE, the default path on every device) takes the
     // engine's resolve. (The compute resolve lists stochasticResolveUtilF.glsl among its own shader files.)
-    // STOCH_SAMPLE: any producer's program that uses the engine's sampling (ALPHA_STOCHASTIC implies it).
-    // The shadows' rays have their own noise (shadowStochasticUtil.glsl) and do not.
+    // STOCH_SAMPLE: any producer's program that uses the engine's sampling (ALPHA_STOCHASTIC implies it, and so does
+    // STOCHASTIC_SHADOW_ALPHA: the blended casters' rule takes the engine's dither). The shadows' rays have their own noise
+    // (shadowStochasticUtil.glsl) and do not.
     const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
-    if ((alpha_stochastic || shader->mDefines.count("STOCH_SAMPLE")) &&
+    const bool stochastic_caster = shader->mDefines.count("STOCHASTIC_SHADOW_ALPHA") > 0;   // the blended casters' rule, attached below
+    if ((alpha_stochastic || stochastic_caster || shader->mDefines.count("STOCH_SAMPLE")) &&
         !shader->attachFragmentObject(STOCH_SAMPLE_OBJECT))
     {
         return false;
     }
     if (alpha_stochastic && !shader->attachFragmentObject("deferred/alphaStochasticF.glsl"))
+    {
+        return false;
+    }
+    if (stochastic_caster && !shader->attachFragmentObject(STOCHASTIC_CASTER_FRAGMENT_OBJECT))
     {
         return false;
     }

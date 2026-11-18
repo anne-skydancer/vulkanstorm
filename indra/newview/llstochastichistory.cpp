@@ -26,6 +26,7 @@
 #include "llimagegl.h"
 #include "llrender.h"
 #include "llrendertarget.h"
+#include "llshadermgr.h"
 #include "llstaticstringtable.h"
 
 #include "glm/gtc/type_ptr.hpp"
@@ -194,6 +195,19 @@ void releaseMasks()
 U32 getMasks()
 {
     return sMasks;
+}
+
+void bindMasks(LLGLSLShader& shader)
+{
+    if (!sMasks || shader.mTexture.size() <= LLShaderMgr::STOCH_MASKS || shader.mTexture[LLShaderMgr::STOCH_MASKS] < 0)
+    {
+        return;
+    }
+    const S32 channel = shader.enableTexture(LLShaderMgr::STOCH_MASKS);
+    if (channel > -1)
+    {
+        gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, sMasks);
+    }
 }
 
 } // namespace LLStochasticEngine

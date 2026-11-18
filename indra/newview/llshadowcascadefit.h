@@ -104,7 +104,7 @@ namespace LLShadowCascadeFit
     // and spans exactly res texels of size t = 2r / (res - 1) per axis, its corner moved to a
     // whole number of texels from the anchor (the light-view position of the world origin), so
     // the texel grid stays fixed in the world while the camera moves. It also returns the corner's world-grid
-    // index k (Rect::k_x, k_y), which the Stochastic alpha dither uses (alphaDitherOrigin) to key its hash to the
+    // index k (Rect::k_x, k_y), which the Stochastic caster rule uses (alphaDitherOrigin) to key its cells to the
     // world texel instead of the map texel.
     inline Rect snappedSquare(float cx, float cy, float r, float res_x, float res_y, float anchor_x, float anchor_y)
     {
@@ -123,12 +123,13 @@ namespace LLShadowCascadeFit
         return out;
     }
 
-    // The origin the Stochastic alpha dither subtracts from gl_FragCoord (shadow_tile_origin) in a sun cascade pass:
+    // The origin the Stochastic caster rule subtracts from gl_FragCoord (shadow_tile_origin) in a sun cascade pass
+    // (shadowStochasticCasterF.glsl: cell = floor(gl_FragCoord - origin), its 2 x 2 block cell >> 1):
     // origin = -(k mod 2^16), with the modulo non-negative. A map column m of a world point has world column m + k,
-    // so the hash argument m - origin = m + (k mod 2^16) follows the world texel, and it stays small (the float hash in
-    // shadowAlphaMaskF.glsl loses precision for large arguments). The grain therefore re-rolls only when k crosses a
-    // multiple of 2^16 (about 460 m of walking at the finest texel, 0.7 cm), and once when a region crossing re-anchors
-    // the world grid.
+    // so the cell m - origin = m + (k mod 2^16) follows the world texel, keeps its parity (2^16 is even, so the blocks
+    // stay on the world grid), and stays small (exact in float, and the block's 16-bit fields hold it). The pattern
+    // therefore re-rolls only when k crosses a multiple of 2^16 (about 460 m of walking at the finest texel, 0.7 cm),
+    // and once when a region crossing re-anchors the world grid.
     struct DitherOrigin
     {
         float x, y;

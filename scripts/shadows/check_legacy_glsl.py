@@ -4,7 +4,8 @@
 """G4 of the projector shadow pool: the GLSL a Legacy shadow program compiles is the same as release's.
 
 The pool adds code to shaders that the Legacy method also loads, each under a permutation that only the Stochastic method
-defines (PROJECTOR_SHADOW_POOL in spotLightF.glsl, STOCHASTIC_SHADOW_ALPHA in the four caster alpha shaders). This checks that
+defines (PROJECTOR_SHADOW_POOL in spotLightF.glsl, STOCHASTIC_SHADOW_ALPHA in the caster alpha shaders; avatarAlphaMaskShadowF.glsl
+has none since the Stochastic method skips the avatar's alpha mask pass, and is still compared). This checks that
 with those permutations undefined, the text that remains is exactly the text of a reference ref (default
 origin/vkstorm-release), apart from blank lines and indentation, and that the shaders Legacy shares without a permutation
 (the sun passes, shadowUtil.glsl) are not touched at all.
@@ -21,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SHADERS = 'indra/newview/app_settings/shaders'
-# shaders the Legacy method loads that carry a Stochastic-only permutation
+# shaders the Legacy method loads that carry a Stochastic-only permutation (or did: avatarAlphaMaskShadowF.glsl)
 PERMUTED = [
     'class3/deferred/spotLightF.glsl',
     'class1/deferred/shadowAlphaMaskF.glsl',

@@ -69,6 +69,9 @@ namespace LLStochasticEngine
     bool acquireMasks();
     void releaseMasks();
     U32  getMasks();                // the texture name, 0 when none is held
+    // The table on the unit the bound program gives stoch_masks, if it has one and a table is held (the Stochastic shadows'
+    // blended casters read the blue-noise tile from it). Texture units are global state: call it on every program change.
+    void bindMasks(LLGLSLShader& shader);
 
     // Textures made and freed here are counted in the viewer's texture memory at their real size
     // (LLImageGLMemory::alloc_tex_image_exact / free_tex_image, which read the texture bound on
