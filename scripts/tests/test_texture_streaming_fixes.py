@@ -19,6 +19,11 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
   returning true with both outputs unwritten (getTextureVirtualSize read them).
+- A worn texture's request is queued by its avatar's area (LLTextureFetchPolicy::wornFetchArea, fetchPriority):
+  LLViewerTextureList::updateImageDecodePriority scales a worn face's area by the factors of the face's own size and
+  keeps the largest (mFetchVirtualSize), clamped and capped where mMaxVirtualSize is; LLViewerFetchedTexture::updateFetch
+  hands the raised priority to the fetcher (createRequest, updateRequestPriority) and decides everything else on
+  mMaxVirtualSize, as before.
 - The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
   resolutions of any component (for a size that fits the image's 16-bit sides), and the decode clamps its reduce
   factor below them when the coarsest level is no larger than the requested level of a MAX_IMAGE_SIZE image
@@ -34,7 +39,9 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get('VKSTORM_TEST_ROOT') or Path(__file__).resolve().parents[2])
 TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8', errors='replace')
-FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
+TEXTURE_H = (ROOT / 'indra/newview/llviewertexture.h').read_text(encoding='utf-8', errors='replace')
+TEXTURE_LIST = (ROOT / 'indra/newview/llviewertexturelist.cpp').read_text(encoding='utf-8', errors='replace')
+FETCH =(ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
 J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
@@ -249,6 +256,74 @@ class PixelAreaThrottle(unittest.TestCase):
         read = size.index('adjustPartialOverlapPixelArea(cos_angle_to_view_dir, radius')
         self.assertLess(call, early)
         self.assertLess(early, read)
+
+
+class WornFetchRank(unittest.TestCase):
+    FETCH_PRIORITY = 'const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mFetchVirtualSize, F_ALMOST_ZERO);'
+    WEARER = 'const LLVOAvatar* wearer = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;'
+    WORN_AREA = 'F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, wearer ? wearer->getPixelArea() : 0.f);'
+    STORE = 'imagep->mFetchVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);'
+
+    def decode_priority(self):
+        return code(body(TEXTURE_LIST, 'void LLViewerTextureList::updateImageDecodePriority('))
+
+    def test_only_the_requests_carry_the_worn_rank(self):
+        fetch = code(body(TEXTURE, 'bool LLViewerFetchedTexture::updateFetch()'))
+        self.assertLess(fetch.index('F32 decode_priority = mMaxVirtualSize;'), fetch.index(self.FETCH_PRIORITY))
+        # the two calls that hand a priority to the fetcher, and nothing else
+        self.assertEqual(fetch.count('fetch_priority'), 3)
+        self.assertIn('LLAppViewer::getTextureFetch()->updateRequestPriority(mID, fetch_priority);', fetch)
+        self.assertRegex(fetch, r'createRequest\(mFTType, mUrl, getID\(\), getTargetHost\(\), fetch_priority,')
+        # every decision keeps the size the texture is fetched for: the 5 s hold, the request, the results
+        self.assertIn('if (decode_priority > 0.0f || mStopFetchingTimer.getElapsedTimeF32() > MAX_HOLD_TIME)', fetch)
+        self.assertIn('if (decode_priority <= 0)', fetch)
+        self.assertIn('processFetchResults(desired_discard, current_discard, fetch_discard, decode_priority)', fetch)
+        self.assertIn('processFetchResults(desired_discard, current_discard, decoded_discard, decode_priority);', fetch)
+        self.assertEqual(code(TEXTURE).count('fetchPriority('), 1)
+
+    def test_worn_area_scaled_as_the_face_area(self):
+        decode = self.decode_priority()
+        boosted = decode.index('if (imagep->getBoostLevel() < LLViewerFetchedTexture::BOOST_HIGH)')
+        self.assertLess(decode.index('F32 max_worn_vsize = 0.f;'), boosted)
+        loop = decode[boosted:decode.index('imagep->addTextureStats(max_vsize);')]
+        area = loop.index('F32 vsize = face->getPixelArea();')
+        self.assertLess(area, loop.index(self.WEARER))
+        self.assertLess(loop.index(self.WEARER), loop.index(self.WORN_AREA))
+        # each factor of the face's own size, in its order, and the same factor of its worn size right after it
+        own = re.findall(r'(?<![\w.])vsize ([*/]=) (\w+);', loop)
+        self.assertEqual(own, [('/=', 'min_scale'), ('/=', 'bias'), ('*=', 'camera_boost')])
+        self.assertEqual(re.findall(r'\bworn_vsize ([*/]=) (\w+);', loop), own)
+        for operator, factor in own:
+            self.assertRegex(loop, r'(?<![\w.])vsize %s %s;\s*worn_vsize %s %s;'
+                             % (re.escape(operator), factor, re.escape(operator), factor))
+        self.assertIn('const F32 camera_boost = llmax(face->mImportanceToCamera*texture_camera_boost, 1.f);', loop)
+        self.assertIn('max_worn_vsize = llmax(max_worn_vsize, worn_vsize);', loop)
+
+    def test_stored_for_every_texture(self):
+        decode = self.decode_priority()
+        stats = decode.index('imagep->addTextureStats(max_vsize);')
+        store = decode.index(self.STORE)
+        # after the block of unboosted textures, so a boosted texture, which skips its faces, stores 0
+        self.assertLess(decode.index('\n    }\n', stats), store)
+        self.assertLess(store, decode.index('imagep->processTextureStats();'))
+        self.assertEqual(decode.count('mFetchVirtualSize'), 1)
+
+    def test_capped_as_mMaxVirtualSize(self):
+        for signature, cap in (('void LLViewerFetchedTexture::processTextureStats()', '(F32)(max_tex_res * max_tex_res)'),
+                               ('void LLViewerLODTexture::processTextureStats()', 'max_tex_res * max_tex_res')):
+            stats = code(body(TEXTURE, signature))
+            self.assertRegex(stats, r'mMaxVirtualSize = llmin\(mMaxVirtualSize, %s\);\s*mFetchVirtualSize = llmin\(mFetchVirtualSize, %s\);'
+                             % (re.escape(cap), re.escape(cap)))
+
+    def test_zeroed_with_mMaxVirtualSize(self):
+        for signature in ('void LLViewerTexture::init(bool firstinit)', 'void LLViewerTexture::resetTextureStats()'):
+            self.assertRegex(code(body(TEXTURE, signature)), r'mMaxVirtualSize = 0\.0?f;\s*mFetchVirtualSize = 0\.f;')
+
+    def test_written_nowhere_else(self):
+        # init, resetTextureStats and the two caps, and the store in updateImageDecodePriority
+        self.assertEqual(len(re.findall(r'\bmFetchVirtualSize = ', code(TEXTURE))), 4)
+        self.assertEqual(len(re.findall(r'\bmFetchVirtualSize = ', code(TEXTURE_LIST))), 1)
+        self.assertEqual(len(re.findall(r'\bF32 mFetchVirtualSize = 0\.f;', TEXTURE_H)), 1)
 
 
 class J2CReduceFactor(unittest.TestCase):

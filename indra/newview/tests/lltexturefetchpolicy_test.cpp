@@ -20,6 +20,13 @@
 // PrioritySnapshot copies, each priority read once: the order is the copies', whatever the priorities do after.
 // That the fetcher takes each copy under the worker's lock, and outside the network queue lock, is guarded by
 // scripts/tests/test_texture_streaming_fixes.py (PrioritySnapshots); nothing here runs lltexturefetch.cpp.
+// A worn texture's request is queued by its avatar's area (wornFetchArea, fetchPriority): a face with no area or no
+// avatar counts nothing, a worn face the larger of its own area and its avatar's; the request's priority is raised to
+// that worn size, except under the abort threshold, so the same fetches abort and every other request keeps its
+// priority exactly. Replayed through the HTTP release, a rigged eye in a busy place leaves with its avatar's textures
+// instead of last, and the other requests leave in the same order as before. That LLViewerTextureList scales the worn
+// size as the face's own and caps it as mMaxVirtualSize is capped, and that updateFetch decides everything else on
+// mMaxVirtualSize, is guarded by test_texture_streaming_fixes.py (WornFetchRank).
 
 #include "lltexturefetchpolicy.h"
 
@@ -27,6 +34,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <initializer_list>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <vector>
@@ -343,6 +351,119 @@ namespace
         check(first_kept, "of two requests with equal priority the set keeps the first inserted (upstream behaviour)");
     }
 
+    // The rank of worn textures. The eye follows the trace's harness A: a 24 mm eyeball 1 m from the camera, a 1440-px
+    // window and a 60 degree field of view give its face about 2,675 px², 21,404 with the camera boost of 8.
+    constexpr float ABORT_BELOW = 0.0001f;     // F_ALMOST_ZERO (llmath.h): a fetch worker whose priority is under it aborts
+    constexpr float CAP = 2048.f * 2048.f;     // mMaxVirtualSize's cap at the default RenderMaxTextureResolution
+
+    void test_worn_fetch_area()
+    {
+        using LLTextureFetchPolicy::wornFetchArea;
+        const float eye = 2675.5f;
+        const float avatar = 524288.f;
+        check(wornFetchArea(eye, avatar) == avatar, "a worn face counts its avatar's area when that is larger");
+        check(wornFetchArea(600000.f, avatar) == 600000.f, "a worn face larger than its avatar counts its own area");
+        check(wornFetchArea(eye, 0.f) == 0.f, "a face that is not worn counts nothing");
+        check(wornFetchArea(0.f, avatar) == 0.f && wornFetchArea(-1.f, avatar) == 0.f,
+              "a worn face with no area on screen counts nothing (an attachment that is not drawn)");
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        check(wornFetchArea(nan, avatar) == 0.f && wornFetchArea(eye, nan) == 0.f, "an undefined area counts nothing");
+    }
+
+    void test_fetch_priority()
+    {
+        using LLTextureFetchPolicy::fetchPriority;
+        check(fetchPriority(21404.f, CAP, ABORT_BELOW) == CAP, "a worn texture's request is raised to its worn size");
+        check(fetchPriority(2.9e6f, 0.f, ABORT_BELOW) == 2.9e6f, "a texture on no worn face keeps its priority");
+        check(fetchPriority(2.9e6f, 1.0e6f, ABORT_BELOW) == 2.9e6f, "a worn size under the texture's own size changes nothing");
+        check(fetchPriority(0.f, CAP, ABORT_BELOW) == 0.f, "a request at priority 0 stays at 0, so it still aborts");
+        check(fetchPriority(-1.f, CAP, ABORT_BELOW) == -1.f, "a negative priority is left as it is");
+        check(fetchPriority(0.00005f, CAP, ABORT_BELOW) == 0.00005f, "a priority under the abort threshold is left as it is");
+        check(fetchPriority(ABORT_BELOW, CAP, ABORT_BELOW) == CAP, "from the abort threshold on, the worn size counts");
+
+        // Over a grid: a request is never ranked under its texture's own size, aborts exactly when that size would abort
+        // it, and is that size exactly when no worn face counts
+        const float sizes[] = { -1.f, 0.f, 1e-7f, 0.00005f, 0.0001f, 0.0002f, 1.f, 10.f, 574.f, 21404.f, 2.9e5f, 2.9e6f, CAP, 6.7e7f };
+        bool never_lower = true;
+        bool same_aborts = true;
+        bool unworn_exact = true;
+        for (float decode : sizes)
+        {
+            unworn_exact = unworn_exact && fetchPriority(decode, 0.f, ABORT_BELOW) == decode;
+            for (float worn : sizes)
+            {
+                if (worn < 0.f)
+                {
+                    continue; // a worn size is never negative
+                }
+                const float priority = fetchPriority(decode, worn, ABORT_BELOW);
+                never_lower = never_lower && priority >= decode;
+                same_aborts = same_aborts && ((priority < ABORT_BELOW) == (decode < ABORT_BELOW));
+            }
+        }
+        check(never_lower, "a request is never ranked under its texture's own size");
+        check(same_aborts, "a request aborts exactly when its texture's own size would abort it");
+        check(unworn_exact, "a texture on no worn face keeps its priority exactly");
+    }
+
+    // Replays LLTextureFetch::releaseHttpWaiters on requests that all wait: `per_round` leave in each round, highest
+    // priority first. Returns the requests' indices in the order they leave.
+    std::vector<std::size_t> releaseOrder(const std::vector<float>& priorities, std::size_t per_round)
+    {
+        std::vector<Request> requests(priorities.size());
+        for (std::size_t i = 0; i < priorities.size(); ++i)
+        {
+            requests[i].priority = priorities[i];
+        }
+        std::vector<Snapshot> waiting = snapshot(requests);
+        std::vector<std::size_t> order;
+        while (!waiting.empty())
+        {
+            const std::size_t needed = std::min(per_round, waiting.size());
+            std::partial_sort(waiting.begin(), waiting.begin() + needed, waiting.end());
+            for (std::size_t i = 0; i < needed; ++i)
+            {
+                order.push_back(std::size_t(waiting[i].mRequest - requests.data()));
+            }
+            waiting.erase(waiting.begin(), waiting.begin() + needed);
+        }
+        return order;
+    }
+
+    void test_worn_release_order()
+    {
+        using LLTextureFetchPolicy::fetchPriority;
+        using LLTextureFetchPolicy::wornFetchArea;
+        // A busy place: 600 waiting requests of scenery, bodies and clothes, all larger on screen than the eye (10^5 to
+        // 4 x 10^6, distinct), and the rigged eye of an avatar 1 m away: 21,404 on its own, and its avatar's area with
+        // the face's camera boost, at the cap. 50 leave per round, as releaseHttpWaiters releases them.
+        std::vector<float> own;  // each texture's own size (mMaxVirtualSize, the decode priority)
+        std::vector<float> worn; // its worn size (mFetchVirtualSize)
+        for (int i = 0; i < 600; ++i)
+        {
+            own.push_back(1.0e5f + 6500.f * float(i));
+            worn.push_back(0.f);
+        }
+        const std::size_t eye = own.size();
+        own.push_back(21404.f);
+        worn.push_back(std::min(wornFetchArea(2675.5f, 524288.f) * 8.f, CAP));
+
+        std::vector<float> rank(own.size());
+        for (std::size_t i = 0; i < own.size(); ++i)
+        {
+            rank[i] = fetchPriority(own[i], worn[i], ABORT_BELOW);
+        }
+        std::vector<std::size_t> before = releaseOrder(own, 50); // ranked by their own sizes, as before
+        std::vector<std::size_t> after = releaseOrder(rank, 50);
+        check(before.back() == eye, "ranked by its own size, the eye leaves last, in the thirteenth round");
+        check(after.front() == eye, "ranked by its avatar's area, the eye leaves first, in the first round");
+
+        // the other requests leave in the same order as before
+        before.erase(std::find(before.begin(), before.end(), eye));
+        after.erase(std::find(after.begin(), after.end(), eye));
+        check(before == after, "every other request leaves in the same order as before");
+    }
+
     void test_retry_delays()
     {
         FetchRetry retry;
@@ -368,6 +489,9 @@ int main()
     test_first_fetch();
     test_failed_request();
     test_snapshot_orderings();
+    test_worn_fetch_area();
+    test_fetch_priority();
+    test_worn_release_order();
     if (failures == 0)
     {
         std::printf("lltexturefetchpolicy_test: all checks passed\n");
