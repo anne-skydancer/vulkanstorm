@@ -92,6 +92,7 @@ protected:
     U32 mAreaUsedForDataSizeCalcs;              // Height * width used to calculate mDataSizes
 
     S8  mRawDiscardLevel;
+    S32 mNumResolutions = 0;   // <Vulkanstorm> resolutions of the codestream's component with the fewest, from the last header read (getMetadata); 0 = not known
     F32 mRate;
     bool mReversible;
     std::unique_ptr<LLImageJ2CImpl> mImpl;

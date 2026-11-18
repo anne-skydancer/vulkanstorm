@@ -15,6 +15,9 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   returning true with both outputs unwritten (getTextureVirtualSize read them).
 - LLMemory caps the available memory (which drives the texture bias) by the heap left through llheaplimit.h, in
   64 bits, instead of a U32 difference that wrapped past the heap limit (the rule: llheaplimit_test.cpp).
+- The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
+  resolutions of any component, and the decode clamps its reduce factor below them (llj2creduce.h; checked against
+  OpenJPEG by indra/llimagej2coj/tests/llj2creduce_test.cpp), with the calls in the same order as before.
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -29,12 +32,22 @@ FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', 
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
 MEMORY = (ROOT / 'indra/llcommon/llmemory.cpp').read_text(encoding='utf-8', errors='replace')
+J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
+J2C_H = (ROOT / 'indra/llimage/llimagej2c.h').read_text(encoding='utf-8', errors='replace')
 
 
 def body(text, signature):
     """The text of the function whose definition starts with `signature`, to its closing brace at column 0."""
     start = text.index(signature)
     end = text.index('\n}\n', start)
+    return text[start:end]
+
+
+def member(text, signature):
+    """The text of the member function defined in its class whose definition starts with `signature`, to its closing
+    brace at column 4."""
+    start = text.index(signature)
+    end = text.index('\n    }\n', start)
     return text[start:end]
 
 
@@ -195,6 +208,35 @@ class HeapLimit(unittest.TestCase):
                                  r'sMaxHeapSizeInKB\.value\(\),\s*sAllocatedMemInKB\.value\(\)\)\);')
         self.assertNotRegex(code(MEMORY), r'sMaxHeapSizeInKB\s*-\s*sAllocatedMemInKB')
         self.assertIn('#include "llheaplimit.h"', MEMORY)
+
+
+class J2CReduceFactor(unittest.TestCase):
+    def test_header_read_keeps_the_fewest_resolutions(self):
+        header = code(member(J2COJ, '    bool readHeader('))
+        self.assertIn('S32& resolutions)', header)
+        info = header.index('codestream_info = opj_get_cstr_info(decoder);')
+        kept = header.index('codestream_info->m_default_tile_info.tccp_info[comp].numresolutions')
+        self.assertLess(info, kept)
+        self.assertIn('resolutions = (comp == 0) ? comp_resolutions : llmin(resolutions, comp_resolutions);', header)
+        metadata = code(body(J2COJ, 'bool LLImageJ2COJ::getMetadata('))
+        self.assertIn('discard_level, resolutions);', metadata)
+        self.assertIn('base.mNumResolutions = resolutions;', metadata)
+        self.assertRegex(J2C_H, r'S32 mNumResolutions = 0;')
+
+    def test_decode_clamps_its_reduce_factor(self):
+        decode_impl = code(body(J2COJ, 'bool LLImageJ2COJ::decodeImpl('))
+        self.assertIn('const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions);', decode_impl)
+        self.assertIn('decoder.decode(base.getData(), max_bytes, &image_channels, reduce);', decode_impl)
+        self.assertNotIn('&image_channels, base.mDiscardLevel)', decode_impl)
+        # the level reported is the factor OpenJPEG decoded at
+        self.assertIn('base.setDiscardLevel(f);', decode_impl)
+
+    def test_decode_calls_in_the_same_order(self):
+        # the factor is still set before the header is read: a request the codestream can meet goes through the
+        # same calls as before the fix
+        decode = code(member(J2COJ, '    bool decode(U8* data, U32 dataSize, U32* channels, U8 discard_level)'))
+        factor = decode.index('opj_set_decoded_resolution_factor(decoder, discard_level);')
+        self.assertLess(factor, decode.index('opj_read_header(stream, decoder, &image)'))
 
 
 if __name__ == '__main__':
