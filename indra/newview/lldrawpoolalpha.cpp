@@ -309,7 +309,14 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
     LLGLSPipelineAlpha gls_pipeline_alpha;
 
     //enable writing to alpha for emissive effects
-    gGL.setColorMask(true, true);
+    // <Vulkanstorm> except in an impostor's second render, which keeps colour off: it writes the blended faces' depth
+    // for the impostor's alpha mask only (LLPipeline::generateImpostor), so they are blended into the impostor once
+    const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;
+    if (own_mask)
+    {
+        gGL.setColorMask(true, true);
+    }
+    // </Vulkanstorm>
 
     // <Vulkanstorm> write_depth = rigged || ... on the stock paths; the stochastic transparency
     // passes never write the main depth buffer, only their own in their depth pass
@@ -377,7 +384,10 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
     // We don't want the nearly invisible objects to cause of DoF effects
     renderAlpha(getVertexDataMask() | LLVertexBuffer::MAP_TEXTURE_INDEX | LLVertexBuffer::MAP_TANGENT | LLVertexBuffer::MAP_TEXCOORD1 | LLVertexBuffer::MAP_TEXCOORD2, false, rigged, oit_phase);
 
-    gGL.setColorMask(true, false);
+    if (own_mask) // <Vulkanstorm/>
+    {
+        gGL.setColorMask(true, false);
+    }
 
     // <FS> if (!rigged && (LLPipeline::sRenderingHUDs || getType() == LLDrawPoolAlpha::POOL_ALPHA_POST_WATER))
     if (!rigged &&
