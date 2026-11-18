@@ -173,6 +173,12 @@ const U8 LL_RESENT_FLAG = 0x20;
 const U8 LL_ACK_FLAG = 0x10;
 
 // 1 byte flags, 4 bytes sequence, 1 byte offset + 1 byte message name (high)
+// <Vulkanstorm> llmessagepriority.h repeats these two values to stay free of viewer headers
+#include "llmessagepriority.h"
+static_assert(LLMessagePriority::ZERO_CODE_FLAG == LL_ZERO_CODE_FLAG, "llmessagepriority.h out of sync");
+static_assert(LLMessagePriority::PACKET_ID_SIZE == LL_PACKET_ID_SIZE, "llmessagepriority.h out of sync");
+// </Vulkanstorm>
+
 const S32 LL_MINIMUM_VALID_PACKET_SIZE = LL_PACKET_ID_SIZE + 1;
 enum EPacketHeaderLayout
 {

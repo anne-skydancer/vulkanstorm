@@ -31,6 +31,8 @@
 #include "net.h"        // for NET_BUFFER_SIZE
 #include "llhost.h"
 
+#include <cstring>
+
 class LLPacketBuffer
 {
 public:
@@ -38,8 +40,21 @@ public:
     LLPacketBuffer(S32 hSocket);    // receive a packet
     ~LLPacketBuffer();
 
-    LLPacketBuffer(const LLPacketBuffer&) = default;
-    LLPacketBuffer& operator=(const LLPacketBuffer&) = default;
+    // <Vulkanstorm> The buffer is NET_BUFFER_SIZE (8 KB) but packets are mostly well under
+    // 1 KB: copy only the mSize bytes in use (the ring copies one per push and per pop).
+    LLPacketBuffer(const LLPacketBuffer& other)
+    {
+        copyFrom(other);
+    }
+    LLPacketBuffer& operator=(const LLPacketBuffer& other)
+    {
+        if (this != &other)
+        {
+            copyFrom(other);
+        }
+        return *this;
+    }
+    // </Vulkanstorm>
 
     S32         getSize() const                 { return mSize; }
     const char  *getData() const                { return mData; }
@@ -56,6 +71,26 @@ public:
     void    setPacketIDChecked(bool checked)    { mPacketIDChecked = checked; }
 
 protected:
+    // <Vulkanstorm>
+    void copyFrom(const LLPacketBuffer& other)
+    {
+        // mSize is 0 or <= NET_BUFFER_SIZE (init() rejects larger packets); a failed socket
+        // receive can leave it negative.
+        if (other.mSize > 0)
+        {
+            memcpy(mData, other.mData, other.mSize);
+        }
+        else
+        {
+            mData[0] = other.mData[0];
+        }
+        mSize = other.mSize;
+        mHost = other.mHost;
+        mReceivingIF = other.mReceivingIF;
+        mPacketIDChecked = other.mPacketIDChecked;
+    }
+    // </Vulkanstorm>
+
     char    mData[NET_BUFFER_SIZE]; // packet data       /* Flawfinder : ignore */
     S32     mSize;                  // size of buffer in bytes
     LLHost  mHost;                  // source/dest IP and port
