@@ -470,7 +470,7 @@ protected:
     F32 mDownloadProgress;
     F32 mFetchDeltaTime;
     F32 mRequestDeltaTime;
-    S32 mMinDiscardLevel;               // No request while the texture is at or below this level (set when the retries of failed fetches are spent)
+    S32 mMinDiscardLevel;               // <Vulkanstorm> no request while the texture is at or below this level (set when a failed fetch is final or its retries are spent)
     LLTextureFetchPolicy::FetchRetry mFetchRetry; // <Vulkanstorm> fetches in a row that ended without data, and when the next may be made
     S8  mDesiredDiscardLevel;           // The discard level we'd LIKE to have - if we have it and there's space
     S8  mMinDesiredDiscardLevel;    // The minimum discard level we'd like to have

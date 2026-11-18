@@ -4,11 +4,13 @@
 indra/newview/tests/lltexturefetchpolicy_test.cpp).
 
 - A refinement fetch that ends without data no longer holds its texture at its level at once: it is retried
-  after 1, 2 and 4 s, and only then held (mMinDiscardLevel). The finished worker is deleted at once, so that the
-  retry is not refused on it; good data and Refresh Textures (clearFetchedResults) lift the hold and the wait.
-- A texture's first fetch that ends without data marks the asset missing at once only for a 404 or a failure that
-  is not the network's (a failed decode, a blacklisted asset, a local file), and for server bakes and map tiles,
-  which keep their own rules; any other failure gets the same retries first.
+  after 1, 2 and 4 s, and only then held (mMinDiscardLevel). Good data and Refresh Textures (clearFetchedResults)
+  lift the hold and the wait.
+- Every fetch that ends without data has its finished worker deleted at once, whatever the priority, so that a
+  later request (a retry, a texture back on screen) is not refused on it.
+- A failure a retry cannot fix (a 404 or a failure that is not the network's: a failed decode, a blacklisted
+  asset, a local file; server bakes and map tiles keep their own rules) marks a texture's first fetch missing and
+  holds a refinement at once; any other failure gets the retries first.
 - The waiting requests are ordered by priorities read once under each worker's lock (the HTTP release and the
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
@@ -53,19 +55,37 @@ def code(text):
     return re.sub(r'//[^\n]*', '', text)
 
 
+def no_data_block():
+    """processFetchResults from the test of a fetch that has just finished without data to its end."""
+    results = body(TEXTURE, 'bool LLViewerFetchedTexture::processFetchResults(')
+    return results[results.index('const bool no_data = '):]
+
+
+HOLD = 'else if (final_failure || !mFetchRetry.onFailure(sCurrentTime))'
+
+
 class FetchRetry(unittest.TestCase):
     def test_failed_refinement_retries_before_the_hold(self):
-        results = body(TEXTURE, 'bool LLViewerFetchedTexture::processFetchResults(')
-        branch = results[results.index('// We finished but received no data'):]
-        branch = branch[:branch.index('else if (mRawImage.notNull())')]
-        # the hold is set only once the retries are spent
-        retry = branch.index('else if (!mFetchRetry.onFailure(sCurrentTime))')
-        self.assertLess(retry, branch.index('mMinDiscardLevel = current_discard;'))
-        self.assertLess(retry, branch.index('mMinDiscardLevel = dis_level;'))
-        # the finished worker is deleted at once, after the raw image
-        delete = branch.index('LLAppViewer::getTextureFetch()->deleteRequest(getID(), true);')
-        self.assertLess(branch.index('destroyRawImage();'), delete)
-        self.assertIn('mHasFetcher = false;', branch[delete:])
+        block = no_data_block()
+        branch = block[block.index('// We finished but received no data'):block.index('else if (mRawImage.notNull())')]
+        # the hold is set only for a final failure or once the retries are spent
+        hold = branch.index(HOLD)
+        self.assertLess(hold, branch.index('mMinDiscardLevel = current_discard;'))
+        self.assertLess(hold, branch.index('mMinDiscardLevel = dis_level;'))
+
+    def test_every_finished_worker_without_data_is_deleted(self):
+        block = no_data_block()
+        self.assertRegex(block, r'^const bool no_data = \(mRawDiscardLevel < 0 \|\| mRawDiscardLevel == INVALID_DISCARD_LEVEL\)'
+                                r'\s*&& mFetchState > 1;')
+        self.assertIn('if ((decode_priority > 0) && no_data)', block)
+        # after the priority test and its branches, so whatever the priority was
+        branches_end = block.index('else if (mRawImage.notNull())')
+        delete = block.index('LLAppViewer::getTextureFetch()->deleteRequest(getID(), true);')
+        self.assertLess(branches_end, delete)
+        guard = code(block[branches_end:delete])
+        self.assertRegex(guard, r'if \(no_data && mHasFetcher\)\s*\{\s*$')
+        self.assertIn('mHasFetcher = false;', block[delete:])
+        self.assertEqual(block.count('deleteRequest('), 1)
 
     def test_good_data_lifts_the_hold(self):
         results = body(TEXTURE, 'bool LLViewerFetchedTexture::processFetchResults(')
@@ -89,32 +109,37 @@ class FetchRetry(unittest.TestCase):
         self.assertEqual(sorted(assignments), ['0', '0', '0', 'current_discard', 'dis_level'])
 
 
-class FirstFetch(unittest.TestCase):
-    def first_fetch_branch(self):
-        results = body(TEXTURE, 'bool LLViewerFetchedTexture::processFetchResults(')
-        branch = results[results.index('// We finished but received no data'):]
-        return branch[:branch.index('else if (!mFetchRetry.onFailure(sCurrentTime))')]
+class FinalFailures(unittest.TestCase):
+    FIRST_FETCH_RETRY = 'if (!final_failure && mFetchRetry.onFailure(sCurrentTime))'
 
-    def test_missing_at_once_only_for_final_failures(self):
-        branch = self.first_fetch_branch()
-        decision = branch[:branch.index('if (!missing && mFetchRetry.onFailure(sCurrentTime))')]
+    def test_the_causes_a_retry_cannot_fix(self):
+        block = no_data_block()
+        start = block.index('// We finished but received no data')
+        decision = block[start:block.index('if (getDiscardLevel() < 0)', start)]
         for cause in ('mLastHttpGetStatus == http_not_found',
                       'getFTType() == FTT_LOCAL_FILE',
                       'getFTType() == FTT_SERVER_BAKE',
                       'getFTType() == FTT_MAP_TILE',
                       'FSAssetBlacklist::getInstance()->isBlacklisted(getID(), LLAssetType::AT_TEXTURE)',
-                      'missing = decoded && decoded_discard < 0;'):
+                      'final_failure = decoded && decoded_discard < 0;'):
             self.assertIn(cause, decision)
         self.assertIn('static const LLCore::HttpStatus http_not_found(HTTP_NOT_FOUND);', decision)
         self.assertIn('getLastFetchState(getID(), requested_discard, decoded_discard, decoded);', decision)
 
-    def test_other_failures_retry_first(self):
-        branch = self.first_fetch_branch()
-        retry = branch.index('if (!missing && mFetchRetry.onFailure(sCurrentTime))')
-        missing = branch.index('setIsMissingAsset();')
+    def test_first_fetch_missing_at_once_only_for_final_failures(self):
+        block = no_data_block()
+        first = block[block.index('if (getDiscardLevel() < 0)'):block.index(HOLD)]
+        retry = first.index(self.FIRST_FETCH_RETRY)
+        missing = first.index('setIsMissingAsset();')
         self.assertLess(retry, missing)
-        self.assertEqual(branch.count('setIsMissingAsset();'), 1)
-        self.assertRegex(branch[retry:missing], r'\}\n\s*else\n\s*\{')
+        self.assertEqual(first.count('setIsMissingAsset();'), 1)
+        self.assertRegex(first[retry:missing], r'\}\n\s*else\n\s*\{')
+
+    def test_refinement_held_at_once_for_final_failures(self):
+        block = no_data_block()
+        # the refinement branch follows the first fetch's, and a final failure holds without a retry
+        self.assertLess(block.index(self.FIRST_FETCH_RETRY), block.index(HOLD))
+        self.assertEqual(block.count('mFetchRetry.onFailure('), 2)
 
 
 class PrioritySnapshots(unittest.TestCase):
