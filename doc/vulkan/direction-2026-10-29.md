@@ -38,7 +38,7 @@ which never qualified. The branches were renamed, so their history is kept:
 
 ## Order of work
 
-1. **Finish the Rust port** (`vkstorm-rust`).
+1. **Finish the Rust port** (`vkstorm-rust`; archived 2026-11-18, the port restarts later on a fresh line from `vkstorm-release`'s tip once the C++ and OpenGL modernisation are done).
 2. **Then** create a new `vkstorm-vulkan` from the tip of `vkstorm-release`.
 3. **On it, write a new renderer.**
 
