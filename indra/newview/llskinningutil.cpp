@@ -175,7 +175,7 @@ void LLSkinningUtil::initSkinningMatrixPalette(
     }
 
     //NOTE: pointer striders used here as a micro-optimization over vector/array lookups
-    const LLMatrix4a* invBind = &(skin->mInvBindMatrix[0]);
+    const LLMatrix4a* invBind = skin->mInvBindMatrix.data(); // <Vulkanstorm/> empty for a skin without joints (count 0)
     const LLMatrix4a* w = world;
     LLMatrix4a* m = mat;
     LLMatrix4a* end = m + count;

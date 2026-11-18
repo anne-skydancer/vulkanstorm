@@ -11379,13 +11379,16 @@ const LLVOAvatar::MatrixPaletteCache& LLVOAvatar::updateSkinInfoMatrixPalette(co
         //build matrix palette
         U32 count = LLSkinningUtil::getMeshJointCount(skin);
         entry.mMatrixPalette.resize(count);
-        LLSkinningUtil::initSkinningMatrixPalette(&(entry.mMatrixPalette[0]), count, skin, this);
+        // <Vulkanstorm> data(), not &v[0]: a skin whose joint bindings fromLLSD dropped has no joints, and indexing
+        // an empty vector is undefined (the loops below then run zero times)
+        LLSkinningUtil::initSkinningMatrixPalette(entry.mMatrixPalette.data(), count, skin, this);
 
-        const LLMatrix4a* mat = &(entry.mMatrixPalette[0]);
+        const LLMatrix4a* mat = entry.mMatrixPalette.data();
 
         entry.mGLMp.resize(count * 12);
 
-        F32* mp = &(entry.mGLMp[0]);
+        F32* mp = entry.mGLMp.data();
+        // </Vulkanstorm>
 
         for (U32 i = 0; i < count; ++i)
         {
