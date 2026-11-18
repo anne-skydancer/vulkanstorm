@@ -102,9 +102,10 @@ public:
     static bool meshLoaded(const LLDrawable* drawable);
     static void clearMeshLoaded(const LLDrawable* drawable);
 
-    // LLPipeline::markTextured: a texture, material, bump or glow change of a prim. Only a prim with a blended, alpha-masked or
-    // alpha-textured face counts (the silhouette of its shadow follows the texture); an opaque prim's texture changes and
-    // animated textures never push. A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any
+    // LLPipeline::markTextured: a texture, material, bump, glow or colour change of a prim. It pushes only when the prim's silhouette key
+    // changed (llprojectorpool::texturedDirties: its blended, alpha-masked or alpha-textured faces and what shapes their holes); an opaque
+    // prim's texture changes, animated textures, fullbright, glow, shine, bump, RGB tints and the light's own colour never push (blinker
+    // scripts toggle them with the light). A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any
     // component count; its REBUILD_VOLUME for 4-component textures reaches noteRebuild as well). A prim the feed has not seen since
     // tracking started (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like now.
     static void noteTextured(LLDrawable* drawable);

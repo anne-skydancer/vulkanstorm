@@ -124,32 +124,65 @@ namespace
         return image && (image->getComponents() == 4 || image->getComponents() == 2); // not yet loaded: unknown, counted when it finishes (LLFace::dirtyTexture)
     }
 
-    bool anyAlphaFace(LLVOVolume* volume)
+    template <class T>
+    U32 mix(U32 key, const T& value)
     {
+        return llprojectorpool::silhouetteKeyMix(key, &value, sizeof(value));
+    }
+
+    // The prim's silhouette key (llprojectorpool::texturedDirties): what its faces cut out of a depth tile. An opaque face counts only as
+    // opaque (its texture never shows in a depth tile); each blended, alpha-masked or alpha-textured face adds its index, its alpha, its
+    // texture and the texture's channel count, its mapping (repeats, offset, rotation, planar or default) and its alpha mode and cutoff
+    // (the legacy material's, or the glTF material's with its base colour texture and transform). Fullbright, glow, shine, bump, an
+    // RGB-only tint and the light's own colour are not in it (lamp shadows S2: blinker scripts toggle them with the light).
+    U32 silhouette_key(LLVOVolume* volume)
+    {
+        U32 key = llprojectorpool::kSilhouetteKeySeed;
         const U8 faces = volume->getNumTEs();
         for (U8 i = 0; i < faces; ++i)
         {
-            if (alpha_face(volume, i))
+            if (!alpha_face(volume, i))
             {
-                return true;
+                continue;
+            }
+            const LLTextureEntry* te = volume->getTE(i); // alpha_face checked it
+            key = mix(key, i);
+            key = mix(key, te->getColor().mV[VALPHA]);
+            key = llprojectorpool::silhouetteKeyMix(key, te->getID().mData, UUID_BYTES);
+            F32 s = 0.f, t = 0.f;
+            te->getScale(&s, &t);
+            key = mix(mix(key, s), t);
+            te->getOffset(&s, &t);
+            key = mix(mix(key, s), t);
+            key = mix(key, te->getRotation());
+            key = mix(key, U8(te->getTexGen()));
+            const LLViewerTexture* image = volume->getTEImage(i);
+            key = mix(key, S8(image ? image->getComponents() : -1));
+            const LLMaterialPtr material = te->getMaterialParams();
+            if (material.notNull())
+            {
+                key = mix(mix(key, material->getDiffuseAlphaMode()), material->getAlphaMaskCutoff());
+            }
+            if (const LLGLTFMaterial* gltf = te->getGLTFRenderMaterial())
+            {
+                const LLGLTFMaterial::TextureTransform& tt = gltf->mTextureTransform[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR];
+                key = mix(mix(mix(key, U32(gltf->mAlphaMode)), gltf->mAlphaCutoff), gltf->mBaseColor.mV[VALPHA]);
+                key = llprojectorpool::silhouetteKeyMix(key, gltf->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR].mData, UUID_BYTES);
+                key = mix(mix(mix(mix(mix(key, tt.mOffset.mV[VX]), tt.mOffset.mV[VY]), tt.mScale.mV[VX]), tt.mScale.mV[VY]), tt.mRotation);
             }
         }
-        return false;
+        return key;
     }
 
-    // Stores `now` in the object's POOL_ALPHA_FACE bit and returns what it held. `known` says whether the bit had been written
-    // since tracking last started (POOL_ALPHA_KNOWN; setTracking clears it on every object when tracking switches on): an object
-    // that predates tracking has an unknown "was", which texturedDirties treats as possibly alpha. Main thread only.
-    bool swapAlphaBit(LLVOVolume* volume, bool now, bool& known)
+    // Stores `now` as the object's silhouette key and returns the one it held. `known` says whether the key had been written since
+    // tracking last started (POOL_ALPHA_KNOWN; setTracking clears it on every object when tracking switches on): an object that predates
+    // tracking has an unknown key, which texturedDirties treats as changed. Main thread only.
+    U32 swapAlphaKey(LLVOVolume* volume, U32 now, bool& known)
     {
-        const U8 flags = volume->mPoolFlags;
-        known = (flags & LLViewerObject::POOL_ALPHA_KNOWN) != 0;
-        const bool was = (flags & LLViewerObject::POOL_ALPHA_FACE) != 0;
-        volume->mPoolFlags = (U8)((flags | LLViewerObject::POOL_ALPHA_KNOWN) & ~LLViewerObject::POOL_ALPHA_FACE);
-        if (now)
-        {
-            volume->mPoolFlags |= LLViewerObject::POOL_ALPHA_FACE;
-        }
+        known = (volume->mPoolFlags & LLViewerObject::POOL_ALPHA_KNOWN) != 0;
+        const U32 was = volume->mPoolAlphaKey;
+        volume->mPoolFlags |= LLViewerObject::POOL_ALPHA_KNOWN;
+        volume->mPoolAlphaKey = now;
         return was;
     }
 }
@@ -391,7 +424,7 @@ void LLShadowDirtyFeed::noteDrawable(LLDrawable* drawable, Cause cause)
     if (volume)
     {
         bool known;
-        swapAlphaBit(volume, anyAlphaFace(volume), known); // keep the "had an alpha face" bit current at every rebuild, put and edit
+        swapAlphaKey(volume, silhouette_key(volume), known); // keep the silhouette key current at every rebuild, put and edit
     }
     pushExtents(drawable, cause);
 }
@@ -462,17 +495,18 @@ void LLShadowDirtyFeed::noteTextured(LLDrawable* drawable)
     {
         return;
     }
-    // Callers differ: some run before the change is applied (LLVOVolume::setTEColor), most after. So the prim's state at this
-    // call may be the old one or the new one; the stored bit is what the feed last saw. The tile is stale if either had an
-    // alpha face (a face turned opaque closes a hole the cached tile still has).
+    // Callers differ: some run before the change is applied (LLVOVolume::setTEColor, which calls again after an alpha change), most
+    // after. So the prim's state at this call may be the old one or the new one; the stored key is what the feed last saw. The tile is
+    // stale when the key changed (a face turned opaque closes a hole the cached tile still has, an alpha face's texture or mapping moved
+    // its holes); a change that leaves the key alone (fullbright, glow, shine, bump, an RGB tint, the light's colour) dirties nothing.
     if (skipped(drawable, volume))
     {
         volume->mPoolFlags &= (U8)~LLViewerObject::POOL_ALPHA_KNOWN;
         return;
     }
-    const bool now = anyAlphaFace(volume);
+    const U32 now = silhouette_key(volume);
     bool known;
-    const bool was = swapAlphaBit(volume, now, known);
+    const U32 was = swapAlphaKey(volume, now, known);
     if (texturedDirties(was, now, known))
     {
         pushExtents(drawable, Cause::Edit);

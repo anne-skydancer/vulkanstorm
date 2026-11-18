@@ -202,6 +202,8 @@ private:
         F32 camDist = 0.f;         // distance of the lamp's edge to the camera's position
         F32 lastCpuMs = 0.f;       // the cost of its last render (the scheduler's prediction)
         bool seen = false;         // in this frame's light set
+        bool off = false;          // S2: the lamp is switched off, black or at radius 0: its tiles are held (not drawn, not resized) ...
+        F64 offSince = 0.0;        // ... since this time (seconds), for llprojectorpool::kOffHoldSeconds
         // P3: what the lamp and the scene did since the tile was drawn
         llprojectorpool::Pose drawnPose;   // the pose the tile holds (the comparison of the lamp's changes)
         llprojectorpool::Pose curPose;     // this frame's
@@ -267,6 +269,7 @@ private:
     void pinDrawable(LLDrawable* drawable);
     void dropRecord(std::map<U32, Record>::iterator it);
     void dropLamp(U32 lamp, const LLDrawable* drawable);
+    void holdOff(U32 lamp, LLDrawable* drawable, const LLVector3& cam_pos, F32 reach, F64 now);
 
     U32 mAtlasS = 0;   // the tiles as drawn: the fixed layer only (the avatars are not drawn into it since P4)
     U32 mAtlasL = 0;   // the live atlas: S plus the avatars drawn over it (P4); the only texture the lookups read

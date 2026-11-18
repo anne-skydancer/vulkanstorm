@@ -134,29 +134,38 @@ namespace
         return gridOf(ty * double(g.scale.mV[VX] / g.scale.mV[VY]), ty);
     }
 
-    // a projector the pool shadows: a spotlight with a radius and a colour, on a prim that is not worn (D11)
-    bool eligible(LLDrawable* drawable)
+    // What the pool makes of a light. On: a projector it shadows (a spotlight with a radius and a colour, on a prim that is not worn,
+    // D11, with the geometry renderTile needs). Off: such a projector switched off (its light parameters are not in use, so the radius
+    // reads 0), turned black or given a radius of 0, which the draw loop skips: its tiles are held for a while (S2). Gone: not a
+    // projector the pool shadows (no light image, worn, dead, or a geometry read_spot rejects, which would stay never drawn for good).
+    enum class LampState
+    {
+        On,
+        Off,
+        Gone
+    };
+
+    LampState lamp_state(LLDrawable* drawable)
     {
         if (!drawable || drawable->isDead())
         {
-            return false;
+            return LampState::Gone;
         }
         LLVOVolume* volume = drawable->getVOVolume();
         if (!volume || volume->isDead() || !volume->isLightSpotlight())
         {
-            return false;
-        }
-        if (!(volume->getLightRadius() > 0.f) || volume->getLightLinearColor().magVecSquared() < 0.001f)
-        {
-            return false; // the draw loop skips a black light
+            return LampState::Gone;
         }
         if (volume->isAttachment() || volume->isHUDAttachment() || volume->getAvatar() != nullptr)
         {
-            return false;
+            return LampState::Gone;
         }
-        // the geometry renderTile needs: a light read_spot rejects would stay never drawn for good
+        if (!(volume->getLightRadius() > 0.f) || volume->getLightLinearColor().magVecSquared() < 0.001f)
+        {
+            return LampState::Off;
+        }
         SpotGeom g;
-        return read_spot(drawable, g);
+        return read_spot(drawable, g) ? LampState::On : LampState::Gone;
     }
 
     F32 camera_distance(LLDrawable* drawable, const LLVector3& cam_pos, F32 radius)
@@ -411,13 +420,35 @@ bool LLProjectorShadows::resizeDue(const Record& rec) const
     return rec.placed && rec.want >= kMinTile && rec.want != rec.rect.size && (rec.want < rec.rect.size || mBuddy.largestAfterFree(rec.rect) >= rec.want);
 }
 
+// S2: the records of a lamp that is off (switched off, black or at radius 0) stay while the hold lasts (llprojectorpool::offHeld) and the
+// lamp is in range by the reach it had when it was last on; then they go like a lamp out of range. The hold starts the first frame the
+// lamp is seen off. Main thread, from updateLightSet only.
+void LLProjectorShadows::holdOff(U32 lamp, LLDrawable* drawable, const LLVector3& cam_pos, F32 reach, F64 now)
+{
+    for (auto it = mRecords.lower_bound(lamp << 4); it != mRecords.end() && (it->first >> 4) == lamp; ++it)
+    {
+        Record& rec = it->second;
+        if (!rec.off)
+        {
+            rec.off = true;
+            rec.offSince = now;
+        }
+        if (offHeld(rec.offSince, now) && inRange(true, camera_distance(drawable, cam_pos, rec.curPose.radius), reach))
+        {
+            rec.seen = true;
+        }
+    }
+}
+
 // The light set (spec 4.1): the position-based nearby lights plus every light that already has a record, in range of the
 // camera's position (add at the reach, drop beyond reach + max(2 m, 10 %)). No view test, no screen area, no count cap
-// (calcNearbyLights uses RenderLocalLightCount only as an on/off, >= 1; its six-light cap is the non-deferred path's).
+// (calcNearbyLights uses RenderLocalLightCount only as an on/off, >= 1; its six-light cap is the non-deferred path's). A lamp
+// that goes off keeps its tiles for a while (holdOff, S2).
 void LLProjectorShadows::updateLightSet(LLCamera& camera)
 {
     const LLVector3 cam_pos = camera.getOrigin();
     const F32 reach = spotReach(LLPipeline::RenderFarClip);
+    const F64 now = LLTimer::getTotalSeconds();
 
     for (auto& entry : mRecords)
     {
@@ -425,14 +456,23 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
     }
 
     auto consider = [&](LLDrawable* drawable) {
-        if (!eligible(drawable))
+        const LampState state = lamp_state(drawable);
+        if (state == LampState::Gone)
         {
+            return;
+        }
+        auto known = mKeyOf.find(drawable);
+        const bool was_in = known != mKeyOf.end();
+        if (state == LampState::Off)
+        {
+            if (was_in)
+            {
+                holdOff(known->second, drawable, cam_pos, reach, now); // a lamp never seen on gets no tile
+            }
             return;
         }
         LLVOVolume* volume = drawable->getVOVolume();
         const F32 dist = camera_distance(drawable, cam_pos, volume->getLightRadius());
-        auto known = mKeyOf.find(drawable);
-        const bool was_in = known != mKeyOf.end();
         if (!inRange(was_in, dist, reach))
         {
             return;
@@ -493,6 +533,7 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
                     rec = &(mRecords[fresh.key] = fresh);
                 }
                 rec->seen = true;
+                rec->off = false; // on again: its tiles serve at once (S2)
                 rec->camDist = dist;
             }
         }
@@ -704,6 +745,17 @@ void LLProjectorShadows::layout(F32 dt_seconds)
     {
         Record& rec = entry.second;
         ValveTile tile;
+        if (rec.off)
+        {
+            // S2: a lamp that is off keeps its tiles at their sizes (they count; the valve does not size them) and gets no new one
+            if (rec.placed)
+            {
+                tile.base = tile.fixed = rec.rect.size;
+                mValveTiles.push_back(tile);
+                mValveRecs.push_back(nullptr);
+            }
+            continue;
+        }
         tile.base = rec.base;
         tile.band = rec.band;
         mValveTiles.push_back(tile);
@@ -713,7 +765,10 @@ void LLProjectorShadows::layout(F32 dt_seconds)
     mPlacementFailed = false;
     for (size_t i = 0; i < mValveTiles.size(); ++i)
     {
-        mValveRecs[i]->want = valveSize(mValveTiles[i], mLevel.level());
+        if (mValveRecs[i])
+        {
+            mValveRecs[i]->want = valveSize(mValveTiles[i], mLevel.level());
+        }
     }
     mValveRecs.clear(); // no pointer outlives the call
 
@@ -721,7 +776,7 @@ void LLProjectorShadows::layout(F32 dt_seconds)
     std::vector<Record*> waiting;
     for (auto& entry : mRecords)
     {
-        if (!entry.second.placed)
+        if (!entry.second.placed && !entry.second.off)
         {
             waiting.push_back(&entry.second);
         }
@@ -1429,8 +1484,11 @@ void LLProjectorShadows::update(LLCamera& camera)
             const SpotGeom& g = lamp_g;
             if (!lamp_ok)
             {
-                rec.prevPoseValid = false;
-                rec.volumeValid = false;
+                if (!rec.off) // S2: a lamp that is off (radius 0) keeps the pose and volume it had: its tiles still collect the scene's changes
+                {
+                    rec.prevPoseValid = false;
+                    rec.volumeValid = false;
+                }
                 continue;
             }
             rec.curPose = lamp_pose;
@@ -1552,6 +1610,10 @@ void LLProjectorShadows::update(LLCamera& camera)
         for (auto entry = mRecords.begin(); entry != mRecords.end(); ++entry)
         {
             Record& rec = entry->second;
+            if (rec.off)
+            {
+                continue; // S2: a lamp that is off is not drawn, nor are its tiles: their changes wait until it is on again
+            }
             if (!run_open || rec.lamp != run_lamp)
             {
                 run_open = true;
