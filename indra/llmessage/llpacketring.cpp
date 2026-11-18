@@ -108,6 +108,20 @@ bool LLPacketRing::popPacket(LLPacketBuffer& packet)
     --mNumBufferedPackets;
     mNumBufferedBytes -= packet_size;
 
+    // <Vulkanstorm> A flood can grow the ring to 8192 slots of 8 KB. Once it has drained,
+    // give the extra slots back (an empty ring holds no live data, so any slots can go).
+    if (mNumBufferedPackets == 0 && mRing.size() > (size_t)DEFAULT_BUFFER_RING_SIZE)
+    {
+        for (size_t i = DEFAULT_BUFFER_RING_SIZE; i < mRing.size(); ++i)
+        {
+            delete mRing[i];
+        }
+        mRing.resize(DEFAULT_BUFFER_RING_SIZE);
+        mRing.shrink_to_fit();
+        mHeadIndex = 0;
+    }
+    // </Vulkanstorm>
+
     llassert(mNumBufferedPackets > 0 || mNumBufferedBytes == 0);
 
     return true;
