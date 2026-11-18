@@ -1,5 +1,9 @@
 # Renderer direction (decisions of 2026-10-29)
 
+> Update 2026-11-18: `vkstorm-rust` was archived (tag
+> `archive/vkstorm-rust/2026-11-18`); the Rust port restarts on a fresh line
+> from `vkstorm-release`'s tip once the C++ and OpenGL modernisation are done.
+
 Owner decisions of 2026-10-29 on OpenGL, Mesa/Zink and Vulkan. Where they
 conflict with the design study in this folder (see [README.md](README.md)),
 these decisions apply.
