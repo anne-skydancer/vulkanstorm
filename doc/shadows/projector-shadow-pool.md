@@ -33,11 +33,11 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   log line of a successful allocation. An allocation that fails tries the
   smaller size; if that fails, the projectors have no tile (lit without a shadow), the failure is logged and the allocation is
   tried again with a back-off (5 s, doubling up to 60 s). The method never changes.
-- **Tile size** (P2: from the light only, `baseSize`: radius and field of view; the tile-resolution PR sized every tile by the camera
+- **Tile size** (P2: from the light only, radius and field of view; the tile-resolution PR sized every tile by the camera
   position's distance to it; since lamp shadows L2 again from the lamp alone, `tileBaseSize`, with the pressure valve over the budget:
   see "Tile resolution" at the end). Placement by a buddy allocator; arrivals and departures are incremental; a size change is drawn by
   the tile's own render (draw-then-swap), and a repack is only a compaction at the tiles' sizes (bit-exact copies, then L to S in full)
-  when an arriving tile finds no block although the free texels hold it.
+  when an arriving tile finds no block although the free texels hold it, or a growth has found none for 3 s although they would.
 - **What a frame does** (`LLProjectorShadows::update`, from `generateSunShadow`, not for probes): the light set, the level and
   placement, then the tile renders the budget allows. P2 has no change tracking, so every tile is a full render (the fixed
   objects and, until P4, the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
@@ -210,7 +210,9 @@ nearest blocker and the weights narrow a curved silhouette.
 The fov 2.5 lamp on a 512 tile is dearer: the 1.5-texel floor on a coarse tile puts 5.6 % of the pixels in the penumbra (the release
 lookup 0.9 %), and each runs the 32 filter gathers. The receiver's gather costs about 8 % of the lookup (P2 against L1 at fov 1.5, 2048:
 0.1015 against 0.1095 ms, the same penumbra share). Against the owner's floor: four lamps each covering 60 % of a 1440p screen cost
-about 0.26 to 0.58 ms on this card (the release lookup 0.34 to 0.51 ms). AMD and Intel are not measured.
+about 0.26 to 0.58 ms on this card (the release lookup 0.34 to 0.51 ms). On a frame that is GPU-bound exactly at the floor that is
+60 -> 59.1 to 58.0 fps standing and 25 -> 24.8 to 24.6 fps moving (the release lookup 58.8 to 58.2 and 24.8 to 24.7); against the
+release lookup L1 costs -0.08 to +0.07 ms, +0.3 to -0.25 fps at 60. AMD and Intel are not measured.
 
 ### Limits
 
@@ -252,7 +254,7 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `lowres` | a resize (L2): the valve or the lamp's cone or reach changed the tile's size; its render draws the new size into a new rect and swaps it in (draw-then-swap; the name is kept for the stats) |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
-Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection, bump changes: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A texture, material, bump or glow change dirties tiles when the prim had a blended, alpha-masked or alpha-textured face before the change or has one after it (`llprojectorpool::texturedDirties(was, now)`): a face turned opaque closes a hole the cached tile still has, so it must push too. `was` is the object's `POOL_ALPHA_FACE` bit, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The bit is only kept while the feed tracks, so a second bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown `was` makes `texturedDirties(was, now, known)` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint, and so calls it again after an alpha change) or the new one (the `setTE*` and material setters, `changeTEImage`); the rule needs neither. An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the alpha bit (the face counts as alpha only once its texture's components are known) and pushes if it now has an alpha face. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
+Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection, bump changes: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A texture, material, bump, glow or colour change dirties tiles only when it changes the prim's silhouette key (`llprojectorpool::texturedDirties(was_key, now_key, known)`; what goes into the key is under "Lamps that scripts switch" below): a face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one, so both change the key and push. `was_key` is the object's `mPoolAlphaKey`, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The key is only kept while the feed tracks, so a bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown key makes `texturedDirties` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint) or the new one (the `setTE*` and material setters, `changeTEImage`). A call that sees the old state finds the key it stored and pushes nothing, so the call after the change is the one that counts: `setTEColor` calls `markTextured` again after an alpha change, and that second call is required (its `REBUILD_VOLUME` pushes as well). An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the key (the face counts as alpha only once its texture's components are known, and the channel count is in the key) and pushes when the key changed. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
 
 ### The hooks, and the thread each runs on
 
@@ -457,14 +459,16 @@ estimate.
 ### The combined cap
 
 P3 had two caps that could both be spent in one frame: static 0.35 ms and dynamic 0.30 ms, 0.65 ms, against about 0.4 ms of
-the former +5 % allowance (an assumed 8 ms frame, never measured). P4 has one (`llprojectorpool.h`, `selectFrame`). Lamp shadows L2 set it
-from the owner's frame-rate floor (AGENTS.md, since 2026-11-16: about 60 fps standing in a crowded room, never below 25 fps moving),
-which replaced the +5 % rule: the shadow caches' tile work may take 3 % of the standing floor's frame (`kFloorShare`,
-`kFloorStandingFps`).
+the former +5 % allowance (an assumed 8 ms frame, never measured). P4 has one (`llprojectorpool.h`, `selectFrame`). Lamp shadows L2
+expresses it against the owner's frame-rate floor (AGENTS.md, since 2026-11-16: about 60 fps standing in a crowded room, never below
+25 fps moving), which replaced the +5 % rule: the shadow caches' tile work may take 3 % of the standing floor's frame (`kFloorShare`,
+`kFloorStandingFps`). **The 3 % is an engineering choice, not derived:** the lamp-shadow study planned to set the budget from stage L0
+(the owner's rooms measured), which has not run. It is 43 % more CPU a frame than the 0.35 ms before, unmeasured in-world; whether it
+stays 0.5 ms or goes back to 0.35 ms until L0 is the owner's call.
 
 | | ms of CPU a frame | meaning |
 |---|---|---|
-| `kFrameCapMs` | **0.5** (was 0.35) | everything the shadow caches' tile work spends in a frame, all caches together: 0.03 x 1000 / 60 fps. Spent in full by a frame that is CPU-bound right at the floor it costs 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving; a static scene spends nothing, and a GPU-bound frame hides it |
+| `kFrameCapMs` | **0.5** (was 0.35) | everything the shadow caches' tile work spends in a frame, all caches together: 0.03 x 1000 / 60 fps. Spent in full by a frame that is CPU-bound exactly at the floor it takes that frame below the floor, 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving: the floor holds only with that much headroom elsewhere. A static scene spends nothing, and a GPU-bound frame hides it |
 | `kDynamicCapMs` | **0.30** (was 0.20) | the dynamic layer's share while a static tile waits, spent first (a moving lamp's tile, the avatar layers). When no static tile waits, the share is the whole remaining cap (`dynamicShareMs`; hotfix C1) |
 | `kStaticCapMs` | **0.20** (was 0.15) | what the static tiles keep when the dynamic layer takes its 0.30 ms (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.5 |
 
@@ -606,15 +610,19 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   grid is drawn; then they go (draw-then-swap; before L2 they were dropped and the lamp was lit without a shadow until the new cells were
   drawn). A retiring tile is not drawn, resized or tested against the scene's changes, and counts at its size in the valve. A second grid
   change while the new set is incomplete drops that set and keeps the complete old one; a lamp switched off drops its retiring tiles.
+  When the tiles do not fit the atlas even at the valve's ceiling (a shortfall no render frees, below), every lamp's retiring tiles go at
+  once: their space is what the new cells need, so without that a new cell that never finds room would keep them for as long as the lamp
+  is in range (audit finding 3).
 
 ### Sizes from the lamp
 
 - Every tile's size comes from its lamp alone (`tileBaseSize`): its interior spans `tan_w * d_ref` metres at the reference depth
   `d_ref = min(1.5 r, 4 m)` and wants 4 mm texels there, plus the cell's two guards; a power of two in `[128, 2048]`. `tan_w` is the
   tile's wider axis as a span of tangents (`2 tan(fov / 2)` times the aspect on the wider axis for one tile, its share of that for a
-  cell). It is computed with the tile's volume, only when the lamp's pose changes (cone, aspect, reach, grid). `baseSize` is its one-tile,
-  square case. The per-tile size request and its hysteresis are gone from the frame loop (`SizeHysteresis`, `cellSizeRequest` and their
-  constants); what each tile still does every frame is one distance to its volume and one band test (comparisons, no logarithm).
+  cell). It is computed with the tile's volume, only when the lamp's pose changes (cone, aspect, reach, grid). P2's `baseSize` was its
+  one-tile, square case (now a twin in the unit test). The per-tile size request and its hysteresis are gone from the frame loop
+  (`SizeHysteresis`, `cellSizeRequest` and their constants); what each tile still does every frame is one distance to its volume and one
+  band test (comparisons, no logarithm).
 - **While the atlas has room** (the tiles' demand at most 0.60 of the atlas) every tile keeps its lamp's size, whatever the camera does:
   walking and orbiting change no size.
 
@@ -625,11 +633,18 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   its bound (`nextBand`), so a camera standing at a bound changes nothing.
 - A **pressure** P shifts the tiles of band b down by `clamp(P - (4 - b), 0, 5)` octaves, never below 64 (`valveShift`): one step of P
   halves the farthest shrinking band once more and starts the next nearer one, so a tile one band farther ends one octave coarser, its
-  texel growing with its distance as the screen's does. P rises at once (as many steps as it takes to be at or below 0.60, one more when
-  an arriving tile found no room even after a compaction) and falls one step after 3 s at or below 0.45: the hysteresis of the old global
-  level, which is the case of every tile in the farthest band (`LevelController`, the same class). P never passes the point where every
-  tile is at its floor (`pressureCeiling`), and a step down skips the steps that change nothing (a band with no tile), so no hold is
-  spent on them.
+  texel growing with its distance as the screen's does. P rises at once (as many steps as it takes to be at or below 0.60) and falls one
+  step after 3 s at or below 0.45: the hysteresis of the old global level, which is the case of every tile in the farthest band
+  (`LevelController`, the same class). P never passes the point where every tile is at its floor (`pressureCeiling`), and a step down
+  skips the steps that change nothing (a band with no tile), so no hold is spent on them.
+- **P follows the demand alone.** An arriving tile that finds no room, even after a compaction, waits for the shrinks being drawn and
+  moves no pressure. Until its render a shrinking tile holds its old rect, so a lamp switched on near the camera while farther tiles fill
+  the atlas finds the room only once their shrinks are drawn. The room is always there once they are: the free texels plus what the
+  pending shrinks give back exceed the waiting tiles by A² (1 - U) plus the growths not drawn yet, at least 0.4 of the atlas below the
+  ceiling (`arrivalShortfall`). Before this fix a waiting arrival stepped the pressure up the next frame, and the 0.45 rule then kept it
+  there: the review's replay (38 far tiles, a near lamp of a 2048 and three 1024 tiles) ended at P 5 for good where the rule gives 4, the
+  near tiles an octave coarser; now it ends at 4 after the arrivals waited 1 to 2 frames (`testPlacement`). A shortfall that no render
+  frees exists only at the ceiling (U > 1: the tiles do not fit even at their floors); then the lamps' retiring tiles go (N3, above).
 - **Why the near band starts at 8 m:** within 8 m a lamp's 4 mm texel is about half a pixel of a 1440p, 60 degree view (0.8 mm a metre)
   or coarser, so every near tile matters alike: a room is one band and shrinks evenly, with no size changes as the camera walks in it.
   Measured with the sizing model (below): bands from 2 m changed 7.9 tile sizes a second in the model room and 28 in the club, from 8 m
@@ -644,9 +659,21 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   it never shows a stretched or half-drawn tile. Nothing else can take the block in between, and the old texels are never read again.
 - A shrink always finds a block (its own); a growth waits until `BuddyAtlas::largestAfterFree` (the block it would get once its own rect
   is freed and merged) holds the new size (`resizeDue`). A resize is a static item (cause `lowres`), under the frame budget like any.
+  The frame's picks are classified before any render, so several growths can be picked for one free block: the first takes it, and a
+  pick whose only cause was its growth and whose block is gone is not drawn (its avatar layer still is), instead of a full render of an
+  unchanged tile (audit finding 4).
 - A repack is now only a **compaction** (`compact`): every placed tile at its own size in a fresh layout (descending sizes pack a buddy
-  atlas without a gap, so what fitted fits again), the drawn ones moved by bit-exact copies, then L to S in full. It runs when an
-  arriving tile finds no block although the free texels would hold it (fragmentation); when even that leaves one out, the valve steps up.
+  atlas without a gap, so what fitted fits again), the drawn ones moved by bit-exact copies, then L to S in full. After one, the free
+  texels are held in at most three blocks of each size, so any arrival set or growth the free texels hold has its blocks
+  (`growthBlocked`; property-tested on fragmented atlases). It runs when an arriving tile finds no block although the free texels would
+  hold it, and when a growth has found no block for `kGrowHoldSeconds` (3 s, `GrowthHold`) although the free texels alone would hold its
+  new size: fragmentation that tiles of mixed sizes leave as they come, go and are resized. Without that a growth could wait for good in a
+  static scene (audit finding 2, review Q1): a replay that leaves one tile in each quadrant of a 4096 atlas kept a 2048 lamp at 512 for
+  the whole minute with 97 % of the atlas free; with it the lamp grows after 3 s and one compaction (`testPlacement`). The case is rare:
+  in a scratch replay with the same rules, random walks past 400 lamps, 600 random burst-and-leave sessions, 6,000 bursts into a nearly
+  full atlas and a dense scene of 2,466 tiles left behind never left a growth blocked (the allocator's smallest-fit, lowest-address
+  choice keeps the tiles together; the constructed case keeps one tile in every quadrant). A compaction copies the whole atlas (its GPU
+  cost is not measured, see "Not verified"), hence the hold: one at most every 3 s, and only while a growth is blocked.
 
 ### Lamps that scripts switch (lamp shadows S2)
 
@@ -667,17 +694,18 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
 
 ### Stats
 
-`Stats` keeps its fields; `resizes` counts size changes (draw-then-swap), `resizeRepacks` the compactions, `resizeDeferred` the renders
-of a growth that found no block after all (drawn at its old size), and `level` is the valve's pressure. The owner's walk reads: tile sizes
-against the camera distance (nothing should change while the atlas has room), resizes per second, compactions per second, the CPU per tile
-render, and the fps standing (60) and moving (25).
+`Stats` keeps its fields and names (the stats API's keys); `resizes` counts size changes (draw-then-swap), `resizeRepacks` the
+compactions (arrivals and blocked growths), `resizeDeferred` the tile-frames a growth waited for a block (once a frame per waiting tile,
+whether the atlas was tight or fragmented), and `level` is the valve's pressure. The owner's walk reads: tile sizes against the camera
+distance (nothing should change while the atlas has room), resizes per second, compactions per second, the CPU per tile render, and the
+fps standing (60) and moving (25).
 
 ### Gates
 
 | gate | how |
 |---|---|
-| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (blinkers keep their tiles, a long switch gives them back once); the silhouette key |
-| sizing model | `scripts/shadows/projector_sizing_model.py` (CPU): the rules written out, a 60 s walk in the model room (four wide lamps), a room whose lamps fit and the club, on the 4096 and 8192 atlases; gate: no size change at pressure 0 |
+| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`, `testPlacement`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (`holdOffFrame`: blinkers keep their tiles, a long switch gives them back once); the silhouette key's inputs (`silhouetteFaceMix`: each moves the key); placement, by a GL-free replay of `layout()` and the resize built from the same rules: a lamp switched on near the camera while far tiles hold the atlas waits for their shrinks and the pressure ends at the rule's (review B1), a shortfall only at the ceiling, after a compaction every arrival set and growth the free texels hold fits (random fragmented atlases), a growth blocked by fragmentation grows after the hold with one compaction (Q1). The light set's bookkeeping around the hold and the retiring cells (records marked seen, skipped by the scheduler, counted as fixed) is the GL class's and has no unit test |
+| sizing model | `scripts/shadows/projector_sizing_model.py` (CPU): the rules written out, a 60 s walk in the model room (four wide lamps), a room whose lamps fit and the club, on the 4096 and 8192 atlases; gates: the size changes a second within the scene's limit (room 0.5, club 10, the room that fits 0; bands from 2 m fail it, 8.8 a second in the room and 21 and 31 in the club on a 20 s walk), and no tile more than twice as far as another of the same lamp size is larger (an inverted band order fails it). No allocator: placement is the unit test's |
 | G1 | `projector_pool_g1.py` (tile in the atlas against the standalone map, max abs 0) |
 | cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick |
 | Legacy, sun | `check_legacy_glsl.py`, `check_legacy_shadows.py` and their tests; `stSpotFilterTile` is reached only through `sampleProjectorShadow`, the sun programs call `sampleSpotShadow` |
@@ -685,13 +713,16 @@ render, and the fps standing (60) and moving (25).
 Sizing model (2026-11-18, 60 s walk at 1.4 m/s; the floor texel under the camera from the tile's interior, which the earlier model took as
 the whole tile):
 
-| scene | atlas | tiles | demand at the lamps' sizes | pressure | size changes a second | floor texel under the camera, median / p90 |
-|---|---|---|---|---|---|---|
-| room, four wide lamps (fov 2.5, 3 x 3 cells) and four wall spots | 4096 | 40 | 9.25 | 6 | 0.23 | 10.4 / 10.4 mm |
-| same | 8192 | 40 | 2.31 | 5 | 0.23 | 5.1 / 5.1 mm |
-| room whose lamps fit | 4096 / 8192 | 8 | 0.50 / 0.12 | 0 | 0 | 3.3 / 3.3 mm |
-| club, 20 lamps (fov 1.2 to 3.0) | 4096 | 193 | 43.4 | 7 | 7.5 | 40.2 / 72.4 mm |
-| same | 8192 | 193 | 10.8 | 6 | 7.6 | 18.7 / 33.8 mm |
+| scene | atlas | tiles | demand at the lamps' sizes | pressure | size changes a second (gate) | farther-and-larger pairs | floor texel under the camera, median / p90 |
+|---|---|---|---|---|---|---|---|
+| room, four wide lamps (fov 2.5, 3 x 3 cells) and four wall spots | 4096 | 40 | 9.25 | 6 | 0.23 (0.5) | 0 | 10.4 / 10.4 mm |
+| same | 8192 | 40 | 2.31 | 5 | 0.23 (0.5) | 0 | 5.1 / 5.1 mm |
+| room whose lamps fit | 4096 / 8192 | 8 | 0.50 / 0.12 | 0 | 0 (0) | 0 | 3.3 / 3.3 mm |
+| club, 20 lamps (fov 1.2 to 3.0) | 4096 | 193 | 43.4 | 7 | 7.5 (10) | 0 | 40.2 / 72.4 mm |
+| same | 8192 | 193 | 10.8 | 6 | 7.6 (10) | 0 | 18.7 / 33.8 mm |
+
+The model room is over the budget all the time (pressure 6 on 4096, 5 on 8192): its 0.23 changes a second are under pressure, as the
+camera crosses a band bound, so the owner's walk at home should expect an occasional size change, not none.
 
 The camera-sized tiles before L2 (the earlier model, without the guard correction, so optimistic): room 6.67 changes a second and 4.9 mm
 (8192) / 9.8 mm (4096); club 24.5 a second and 17.6 mm (8192) / 35.1 mm (4096). With lamp-sized tiles a room of wide lamps is over the
@@ -704,5 +735,9 @@ L0 of the study measures); AMD and Intel; the seam between two cells of differen
 the coarser in the offline model, not measured on this implementation); a wide lamp that moves (its cells are drawn over several frames:
 a cell from the older pose is lit without a shadow until redrawn, only for lamps wider than about 93 degrees that move, rotate or are
 edited); the own avatar's guard-only neighbour cell lagging by about 2 frames at a seam; the retiring cells of a lamp whose cone crosses
-the split (no unit test: the logic is in the GL class); a growth waiting long for a free block in a fragmented atlas (a compaction runs
-only for an arrival).
+the split and the off-hold's bookkeeping in the light set (no unit test: the logic is in the GL class; their rules are tested); the GPU
+cost of a compaction (a whole-atlas copy: one at most every 3 s for a blocked growth, and one for an arrival that finds no block); the
+CPU of the per-frame valve work in the viewer's "projector sweep" and "projector layout" zones (offline, on contiguous arrays with the
+same rules: the band test, the valve's ceiling and demand passes, the growth check and `resizeDue` cost about 0.02 ms a frame for 2,466
+tiles and 0.002 ms for 193; the viewer walks a map of large records, so expect more), and the silhouette key's hashing on every rebuild
+of a prim (offline about 18 ns per alpha face).
