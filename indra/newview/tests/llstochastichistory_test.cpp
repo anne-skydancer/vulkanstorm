@@ -479,8 +479,29 @@ namespace
             }
             const double weyl_rms = std::sqrt(weyl_ss / n), hash_rms = std::sqrt(hash_ss / n);
             std::printf("eight frames: golden step max %.2f rms %.3f, hashed max %.2f rms %.3f\n", weyl_max, weyl_rms, hash_max, hash_rms);
-            check(weyl_max <= 1.0 && weyl_rms < 0.5, "eight frames of the golden step sum to 8 a S within 1");
+            check(weyl_max <= 1.0 && weyl_rms < 0.5, "eight frames of the golden step sum to 8 a S within 1 (a on the 1/64 grid)");
             check(weyl_rms < hash_rms * 0.5 && weyl_max < hash_max, "the golden step beats a fresh hash every frame");
+            // off the grid the bound is the local discrepancy of eight golden-ratio points: 1.375 at worst (a 1/1024 sweep)
+            double any_max = 0;
+            for (uint32_t ai = 1; ai < 1024; ++ai)
+            {
+                const float a = (float)ai / 1024.f;
+                for (uint32_t k = 0; k < tile.size(); k += 97)
+                {
+                    const uint32_t rot = hash(k * 77 + 1) >> 8;
+                    for (uint32_t f0 : { 1u, 123456u })
+                    {
+                        uint32_t sum = 0;
+                        for (uint32_t f = 0; f < 8; ++f)
+                        {
+                            sum += rOf(a, 8, xi24(tile[k], rot, frameFraction(f0 + f)));
+                        }
+                        any_max = std::max(any_max, std::fabs(sum - (double)a * 64.0));
+                    }
+                }
+            }
+            std::printf("eight frames, any alpha: max %.3f\n", any_max);
+            check(any_max < 1.4, "eight frames of the golden step sum to 8 a S within 1.4 for any a");
         }
 
         // the frame fraction is exact at any frame number, and one frame later is always the conjugate further

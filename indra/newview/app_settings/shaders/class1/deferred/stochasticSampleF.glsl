@@ -73,7 +73,8 @@ bool stoch_finite(float x)
 // the pixel (tiled), rotated by the face's own offset (the top 24 bits of its seed: Cranley-Patterson, so that layers stay
 // decorrelated) and stepped by the frame's golden-ratio fraction (frame * 0x9e3779b9 >> 8, the conjugate's share of 2^24;
 // frame 0, the fixed field, takes no step), all modulo 2^24. Integer arithmetic, so it is exact at any frame number: over the
-// tile the mean of R is a S within one stratum for any rotation, and eight consecutive frames of a pixel sum to 8 a S within 1.
+// tile the mean of R is a S within one stratum for any rotation, and eight consecutive frames of a pixel sum to 8 a S within 1
+// for a on a 1/64 grid, within 1.4 for any a (the local discrepancy of eight golden-ratio points; a fresh hash reaches 4).
 // (The table must be the one LLStochasticEngine::transparencyTable(S) builds: S + 1 mask rows, then the tile's NOISE_ROWS rows.)
 uint stoch_xi24(uvec2 px, uint face_seed, int frame, uint s)
 {

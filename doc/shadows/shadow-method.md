@@ -276,7 +276,8 @@ How a semi-transparent texel casts depends on the method.
     (`shadow_caster_frame` 1 to 8, the Aurora Viewer's period; `LLPipeline::shadowCasterFrame`), and the history's resolve
     averages it, as Enderton et al. render the transparent shadow map again with new seeds. Projector tiles, probes,
     snapshots and frames without the history keep a fixed pattern (0). Over the 8 frames a block's R sums to 8 x 4 alpha
-    within 1 for alpha on a 1/64 grid and within 1.4 for any alpha.
+    within 1 for alpha on a 1/64 grid and within 1.4 for any alpha (measured 1.375: the local discrepancy of eight
+    golden-ratio points).
   - Lamps (projector tiles) use the same rule; their light-let-through layer (lamp study L3) comes later.
   - The avatar's two alpha passes draw the same meshes; under Stochastic both take the same alpha (texture x mesh colour)
     and the same seed, so they keep the same texels and the avatar casts one layer. (In Legacy the avatar branch is inert:

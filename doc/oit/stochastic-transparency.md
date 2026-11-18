@@ -211,7 +211,8 @@ frame from the table. Never a subset fixed over the frames, nor one rotation str
 Since 2026-11-18 (stage T1) the tile is the Aurora Viewer's and xi is its integer form, `stoch_xi24`: `((2 rank + 1) 2048 + (seed >> 8) + (frame x 0x9e3779b9 >> 8)) mod 2^24`, over 2^24.
 The whole sum is integer modulo 2^24, so every stratum stays exact at any frame number (the float form it replaces rounded the sum of three values in [0, 1) before `fract`), the face's offset is the top 24 bits of its seed (no extra hash),
 and the unit test holds the Aurora Viewer's properties for it: the mean of R over the tile is alpha S within one stratum for any rotation, eight consecutive
-frames sum to 8 alpha S within 1 (max error 1.00, rms 0.38, against 4.00 and 1.14 for a fresh hash every frame), two layers share a subset at 3 of 4096 pixels
+frames sum to 8 alpha S within 1 for alpha on a 1/64 grid, the Aurora Viewer's test set (max error 1.00, rms 0.38, against 4.00 and 1.14 for a fresh hash every frame),
+and within 1.4 for any alpha (measured 1.375 over a 1/1024 sweep: the local discrepancy of eight golden-ratio points; the Aurora Viewer's "within 1" holds on its grid), two layers share a subset at 3 of 4096 pixels
 (chance: 2), and every 8 x 8 block of the tile is balanced (sd of the block means 0.0105, white noise 0.037). The grain pattern changes; its statistics do not
 (the A/B below was measured with the previous tile).
 
