@@ -16,8 +16,9 @@ shadowUtil.glsl (SHADOW_COMMON_NO_DEPTH: the shading normal is the receiver plan
       and no receiver reads past its face's tile (the other tiles of the atlas hold blockers everywhere);
   (d) camera: the same receivers from four camera poses (view-space positions, point_view_to_agent and the lamp's centre transformed)
       give the same visibility to within the float rounding of the view transform: no screen, frame or view term;
-  --time: the lookup's GPU cost, ms per 2560 x 1440 pass with every pixel a receiver in a lamp's light (half of them in the wall's
-      penumbra and umbra), per face size: the cost per lit megapixel per lamp.
+  --time: the lookup's GPU cost, ms per 2560 x 1440 pass with every pixel a receiver in a lamp's light (a third of them behind the
+      wall, in its umbra and penumbra; neighbouring pixels on neighbouring points, as a frame reads the faces), per face size: the cost
+      per lit megapixel per lamp.
 
     python scripts/shadows/point_faces_g1.py [--sizes 128,256,512,1024] [--grid 512] [--time]
 
@@ -442,13 +443,40 @@ def check_wall(failures, timing):
     return failures
 
 
+def coherent_receivers(W, H):
+    """receivers as a view would see them: neighbouring pixels on neighbouring points of three planes (behind the wall, the wall's
+    front, the open side), so the faces' texels are read the way a frame reads them"""
+    pos = np.zeros((H, W, 4), np.float32)
+    nrm = np.zeros((H, W, 4), np.float32)
+    u = (np.arange(W) + 0.5) / W
+    v = (np.arange(H) + 0.5) / H
+    uu, vv = np.meshgrid(u, v)
+    third = H // 3
+    # behind the wall (x = 2): its shadow (|y|, |z| <= 1) and around it
+    pos[:third, :, 0] = 2.0
+    pos[:third, :, 1] = (uu[:third] - 0.5) * 2.8
+    pos[:third, :, 2] = (vv[:third] * 3 - 0.5) * 2.8
+    nrm[:third, :, 0] = -1.0
+    # in front of it (x = 0.6)
+    pos[third:2 * third, :, 0] = 0.6
+    pos[third:2 * third, :, 1] = (uu[third:2 * third] - 0.5) * 1.2
+    pos[third:2 * third, :, 2] = (vv[third:2 * third] * 3 - 1.5) * 1.2
+    nrm[third:2 * third, :, 0] = -1.0
+    # the open side (x = -2)
+    pos[2 * third:, :, 0] = -2.0
+    pos[2 * third:, :, 1] = (uu[2 * third:] - 0.5) * 4.0
+    pos[2 * third:, :, 2] = (vv[2 * third:] * 3 - 2.5) * 4.0
+    nrm[2 * third:, :, 0] = 1.0
+    pos[..., 3] = 1.0
+    return pos, nrm
+
+
 def time_lookup(prog, atlas_tex, uniforms, n):
-    """GPU ms of one full 2560 x 1440 pass of the lookup, every pixel a receiver in the light (a third behind the wall)"""
+    """GPU ms of one full 2560 x 1440 pass of the lookup, every pixel a receiver in the light (a third behind the wall), the receivers
+    coherent across the screen as in a frame"""
     import statistics
     W, H = 2560, 1440
-    pos, nrm, _ = receivers(512)
-    big_pos = np.tile(pos, (3, 5, 1))[:H, :W].copy()
-    big_nrm = np.tile(nrm, (3, 5, 1))[:H, :W].copy()
+    big_pos, big_nrm = coherent_receivers(W, H)
     pt = texture(GL_RGBA32F, W, H, big_pos, GL_RGBA)
     nt = texture(GL_RGBA32F, W, H, big_nrm, GL_RGBA)
     out, fb = target(W, H)

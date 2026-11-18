@@ -58,6 +58,12 @@ allocation backoff, the next shader reload). A device below OpenGL 4.6 does not 
 
 M0 to M2 shipped as one PR.
 
+With shadow detail 2 the Stochastic method also shadows the local lights: the projectors from their tiles in the projector pool
+(`projector-shadow-pool.md`), and the point lights (lamp shadows L4) from six faces per light in their own atlas
+(`point-light-shadows.md`, debug setting `RenderShadowPointLights`, on by default). Both use one soft filter (`stSpotFilterTile`) with
+per-type limits and the Shadow softness, and one selection of their tile work under one CPU cap a frame (`LLLocalShadows::updateFrame`).
+Legacy shadows neither: with Legacy the point lights stay unshadowed and the projectors keep their two slots.
+
 ### M0: the plumbing
 
 - `LLShadowMethod::STOCHASTIC = 2`. `usesStableCascades` is true for every method but Legacy. The gates

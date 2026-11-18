@@ -88,7 +88,7 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   (the lamp's anchor point; the uniform `proj_shadow_origin`, which the normal offset's direction to the lamp also uses). The
   penumbra's light size is the uniform `proj_shadow_light_size` = `emitterExtent(kProjectorLamp, RenderShadowLightSize)`, on both axes
   of the map (`llprojectorshadowpool.h`: one function, a `LampFilter` per lamp type with its base, floor and cap; `kProjectorLamp` is
-  used, `kPointLamp` is prepared for the point-light stage). No script or build parameter carries a light size, so the base is a
+  used, `kPointLamp` by the point lights since L4: `point-light-shadows.md`). No script or build parameter carries a light size, so the base is a
   constant (P2b took the prim's face, clamped 2 to 15 cm; P2 a fixed 1 cm). The base comes from the light-size study
   (`reports/lamp-light-size-2026-11-18`, kept on the owner's machine): the largest size whose avatar shadows keep every body feature of
   2.5 cm or more readable, so the default softness 0.23 gives 1.035 cm and the slider's top 4.5 cm, short of the 6 cm blobs.
@@ -422,6 +422,12 @@ Nothing in these is about projectors; they are keyed by a tile or face key and a
 - `llprojectorpool::castsFixed`, `hookSkips`, `becomesMover`: the mover rules.
 
 What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, the lookup matrix and the atlas.
+
+Since L4 (`point-light-shadows.md`) the point lights' faces are that second cache. `LLProjectorShadows::update` became four steps,
+`prepare` (everything up to the frame's work lists, appended to the lists of both pools), `beginRenders`, `renderPick` (one pick) and
+`endFrame`, which `LLLocalShadows::updateFrame` runs for both pools around one `selectFrame` and one `LLLocalShadowGL::Scope`; the casting
+avatars are collected once for both (`LLLocalShadows::collectCasters`), and the LOD pin's helpers are shared. The selection, the caps and
+the order of service are the same code: with no point item a frame's projector picks are those of the projector pool alone.
 
 ### Known limits of P3
 
