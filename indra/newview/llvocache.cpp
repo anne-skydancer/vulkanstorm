@@ -485,21 +485,21 @@ void LLVOCacheEntry::updateDebugSettings()
     // <FS:Beq> FIRE-32688 Area search and other visibility issues
     // If this machine has limited RAM, then restore the LL defaults.
     // So long as we have at least 8GB of RAM, then we will use our values.
-    if( LLMemory::getAvailableMemKB() * KB_to_MB < 8096 )
+    // <Vulkanstorm> The RAM the machine has decides, and the LL bounds apply to this update only. This tested the
+    // available memory instead (under the 64-bit heap cap, any working set above about 8 GB, whatever the RAM) and
+    // wrote the LL bounds into the user's settings, where they stayed after the memory came back.
+    U32 low_bound_MB = low_mem_bound_MB;
+    U32 high_bound_MB = high_mem_bound_MB;
+    if( LLMemory::getMaxMemKB() * KB_to_MB < 8096 )
     {
-        if( (U32)low_mem_bound_MB > 768 )
-        {
-            gSavedSettings.setU32("SceneLoadLowMemoryBound", 768);
-        }
-        if( (U32)high_mem_bound_MB > 2048 )
-        {
-            gSavedSettings.setU32("SceneLoadHighMemoryBound", 2048);
-        }
+        low_bound_MB = llmin(low_bound_MB, 768U);
+        high_bound_MB = llmin(high_bound_MB, 2048U);
     }
+    // </Vulkanstorm>
     // </FS:Beq>
-    U32 clamped_memory = (U32)llclamp(allocated_mem * KB_to_MB, (F32) low_mem_bound_MB, (F32) high_mem_bound_MB);
-    const F32 adjust_range = (F32)(high_mem_bound_MB - low_mem_bound_MB);
-    const F32 adjust_factor = (high_mem_bound_MB - clamped_memory) / adjust_range; // [0, 1]
+    U32 clamped_memory = (U32)llclamp(allocated_mem * KB_to_MB, (F32) low_bound_MB, (F32) high_bound_MB);
+    const F32 adjust_range = (F32)(high_bound_MB - low_bound_MB);
+    const F32 adjust_factor = (high_bound_MB - clamped_memory) / adjust_range; // [0, 1]
 
     //min radius: all objects within this radius remain loaded in memory
     static LLCachedControl<F32> min_radius(gSavedSettings,"SceneLoadMinRadius");
