@@ -90,14 +90,6 @@ inline uint32_t tileBaseSize(double tan_w, double radius, uint32_t guard)
     return std::min(std::max(pow2Round(texels), kMinBase), kMaxBase);
 }
 
-// the square lamp of one tile: N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
-inline uint32_t baseSize(float radius, float fov_radians)
-{
-    // tan() is non-monotone past pi: clamp the half angle to [0, 1.55] rad, far beyond any real fov
-    const double half = std::min(std::max(0.5 * double(fov_radians), 0.0), 1.55);
-    return tileBaseSize(2.0 * std::tan(half), double(radius), 0);
-}
-
 // Atlas edge by video memory (spec 4.2, D20). vram_mb is gGLManager.mVRAM (MB, 0 = unknown), max_texture the driver's
 // GL_MAX_TEXTURE_SIZE (0 = unknown, not limiting), dedicated whether vram_mb is the card's own memory (the driver's memory
 // info) and not a budget of shared system memory. Two D32F atlases: 32 MiB at 2048, 128 MiB at 4096, 512 MiB at 8192.
@@ -161,14 +153,15 @@ inline float emitterExtent(const LampFilter& lamp, float softness)
     return lamp.emitter_m * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
 }
 
-// texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N
+// texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N (a test twin: the viewer's
+// lookup is the shader's; the unit test checks the shader's numbers through it)
 inline float penumbraTexelsPerDepth(float light, float k, uint32_t n, float c1)
 {
     return (0.5f / c1) * light * k * (float)n;
 }
 
 // the radius the search and the filter run at, from the physical one (texels): clamp(physical, kernel_min, kernel_max), as the
-// shader's clamp(pen * depth, vec2(ST_SPOT_KERNEL_MIN), kmax); a NaN reads as the floor
+// shader's clamp(pen * depth, vec2(ST_SPOT_KERNEL_MIN), kmax); a NaN reads as the floor (a test twin, like penumbraTexelsPerDepth)
 inline float filterRadiusTexels(const LampFilter& lamp, float physical_texels)
 {
     return std::isnan(physical_texels) ? lamp.kernel_min : std::min(std::max(physical_texels, lamp.kernel_min), lamp.kernel_max);
@@ -181,17 +174,11 @@ inline uint32_t levelSize(uint32_t base, int level)
     return std::max(kMinTile, base >> s);
 }
 
-// U(s) = sum N_i(s)^2 / A^2
-inline double demand(const std::vector<uint32_t>& bases, int level, uint32_t atlas)
+// The frame time a hold counts (the valve's 3 s, the blocked growth's): a timer glitch (NaN, negative) counts as no time, a long stall
+// (teleport, alt-tab) as one short frame, so a hold is that long of stable frames.
+inline float holdSeconds(float dt_seconds)
 {
-    double sum = 0.0;
-    for (uint32_t b : bases)
-    {
-        const double n = double(levelSize(b, level));
-        sum += n * n;
-    }
-    const double a = double(atlas);
-    return sum / (a * a);
+    return std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -207,13 +194,13 @@ inline double demand(const std::vector<uint32_t>& bases, int level, uint32_t atl
 // a metre): every tile nearer than that matters alike, so a room is one band and shrinks evenly, with no size changes as the camera walks
 // in it (measured, scripts/shadows/projector_sizing_model.py: bands from 2 m changed 7.9 tile sizes a second in the model room and 28 in
 // the club, from 8 m 0.23 and 7.6, with the same floor texel in the room and a finer one in the club). P rises at once (as many steps as
-// it takes to be at or below kShrinkAbove, one more when an arriving tile found no room) and falls one step after kGrowHoldSeconds at or
-// below kGrowAtMost: the hysteresis of the global level it replaces, which is the special case of every tile in the farthest band. A band
-// changes only half an octave past its bound (kBandHysteresis). A size change is drawn by the tile's own render (draw-then-swap).
+// it takes to be at or below kShrinkAbove) and falls one step after kGrowHoldSeconds at or below kGrowAtMost: the hysteresis of the
+// global level it replaces, which is the special case of every tile in the farthest band. P follows the demand alone: an arriving tile
+// that finds no room waits for the shrinks being drawn and moves no pressure (placement, below). A band changes only half an octave past
+// its bound (kBandHysteresis). A size change is drawn by the tile's own render (draw-then-swap).
 constexpr int kMaxBand = 4;                    // 64 m and beyond (the reach is at most 128 m)
 constexpr float kBandNearM = 8.0f;             // band 0: within 8 m of the camera position; band b in 1 .. 3: [8 * 2^(b-1), 8 * 2^b) m
 constexpr float kBandHysteresis = 1.41421356f; // 2^0.5
-constexpr int kMaxPressure = kMaxBand + kMaxLevel;
 
 // the bounds of band b: [bandLow, bandHigh), powers of two times kBandNearM (exact in float)
 inline float bandLow(int band) { return band <= 0 ? 0.f : kBandNearM * float(1u << unsigned(band - 1)); }
@@ -319,13 +306,12 @@ public:
     int ceiling() const { return mCeiling; } // the last update's pressureCeiling: at it, every tile the valve sizes is at its floor
     void reset() { mLevel = 0; mHold = 0.0f; mCeiling = 0; }
 
-    // Call once per frame. dt_seconds is the frame time; placement_failed asks for one more step (an arriving tile found no room, even
-    // after a compaction). Returns true when the pressure changed.
-    bool update(const std::vector<ValveTile>& tiles, uint32_t atlas, float dt_seconds, bool placement_failed)
+    // Call once per frame. dt_seconds is the frame time (holdSeconds: the 3 s hold is 3 s of stable frames). Returns true when the pressure
+    // changed. The pressure follows the tiles' demand alone: a tile that finds no room in the atlas waits for the shrinks being drawn
+    // (arrivalShortfall below), so placement is no input.
+    bool update(const std::vector<ValveTile>& tiles, uint32_t atlas, float dt_seconds)
     {
-        // a timer glitch (NaN, negative) counts as no time; a long stall (teleport, alt-tab) as one short frame, so the
-        // 3 s hold is 3 s of stable frames
-        dt_seconds = std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
+        dt_seconds = holdSeconds(dt_seconds);
         // a step past the ceiling changes no size (the near tiles left, or are all at their floor): it is dropped at once, no hold to
         // wait out
         const int ceiling = pressureCeiling(tiles);
@@ -333,11 +319,6 @@ public:
         mLevel = std::min(mLevel, ceiling);
         const int before = mLevel;
         while (mLevel < ceiling && demand(tiles, mLevel, atlas) > kShrinkAbove)
-        {
-            ++mLevel;
-            mHold = 0.0f;
-        }
-        if (placement_failed && mLevel < ceiling && mLevel == before)
         {
             ++mLevel;
             mHold = 0.0f;
@@ -370,17 +351,6 @@ public:
             mHold = 0.0f;
         }
         return mLevel != before;
-    }
-
-    // The global level of P2: every tile in the farthest band, so the pressure shifts every tile alike.
-    bool update(const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds, bool placement_failed)
-    {
-        std::vector<ValveTile> tiles(bases.size());
-        for (size_t i = 0; i < bases.size(); ++i)
-        {
-            tiles[i].base = bases[i];
-        }
-        return update(tiles, atlas, dt_seconds, placement_failed);
     }
 
 private:
@@ -416,6 +386,20 @@ constexpr double kOffHoldSeconds = 5.0;
 inline bool offHeld(double off_since, double now)
 {
     return now - off_since <= kOffHoldSeconds;
+}
+
+// One frame of a tile whose lamp is seen off (LLProjectorShadows::holdOff, once per tile and frame): `off` and `off_since` are the tile's
+// own; the first such frame starts the hold. Returns whether the tile stays in the light set: the hold lasts and the lamp is in range by
+// the reach it had when it was last on. A tile that does not stay is dropped with its lamp's other tiles; a frame the lamp is on again
+// ends the hold (`off` = false) and its tiles serve at once.
+inline bool holdOffFrame(bool& off, double& off_since, double now, bool in_range)
+{
+    if (!off)
+    {
+        off = true;
+        off_since = now;
+    }
+    return offHeld(off_since, now) && in_range;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -647,6 +631,69 @@ private:
     uint32_t mAtlas = 0;
     int mOrders = 0;
     std::vector<std::set<uint64_t>> mFree; // per order, ordered by (y, x): deterministic
+};
+
+// ---------------------------------------------------------------------------------------------
+// Room for arriving and growing tiles (lamp shadows L2, draw-then-swap)
+// ---------------------------------------------------------------------------------------------
+//
+// A tile changes its size only in its own render, so until then it holds its old rect: a shrinking tile holds more than the valve wants
+// of it. An arriving tile that finds no block (not even after a compaction) waits for those renders and changes no pressure. Below the
+// valve's ceiling there is always room once they are drawn: the pressure keeps the demand U at or below kShrinkAbove, and the free
+// texels plus what the pending shrinks give back exceed the waiting tiles by A^2 (1 - U) plus the growths not drawn yet, at least 0.4 of
+// the atlas (the tiles of a lamp switched off and a lamp's retiring cells count in U at the size they hold). A shortfall that no render
+// frees exists only when U > 1, which the pressure allows only at its ceiling (every tile at its floor): the atlas cannot hold them all.
+
+// texels a placed tile gives back once its shrink is drawn (0 for a tile that keeps or grows its size)
+inline uint64_t shrinkTexels(uint32_t rect_size, uint32_t want)
+{
+    return want < rect_size ? uint64_t(rect_size) * rect_size - uint64_t(want) * want : 0;
+}
+
+// true when the waiting tiles (`need` texels at their wanted sizes) do not fit even once every pending shrink is drawn: `shrinking` is
+// shrinkTexels summed over the placed tiles the valve sizes (not the tiles of a lamp switched off, nor a lamp's retiring cells: those
+// are freed only after the hold, or after the new cells are drawn, which may be what waits)
+inline bool arrivalShortfall(uint64_t free_texels, uint64_t shrinking, uint64_t need)
+{
+    return free_texels + shrinking < need;
+}
+
+// A growth that finds no block once its own rect is freed although the free texels alone hold its new size: fragmentation (tiles of
+// mixed sizes came, went and were resized). A compaction ends it: it allocates every tile afresh, the largest first, and an allocation
+// splits the smallest free block that holds it, so afterwards at most three free blocks of each size are left (the free texels written
+// in base 4) and a free block of size want exists whenever want^2 <= the free texels. Allocations keep that; only frees break it. Checked
+// first by size, so a tile that keeps its size costs one comparison.
+inline bool growthBlocked(const BuddyAtlas& buddy, const Rect& rect, uint32_t want)
+{
+    return want > rect.size && uint64_t(want) * want <= buddy.freeTexels() && buddy.largestAfterFree(rect) < want;
+}
+
+// The hold before a compaction for a blocked growth: a growth is never urgent (the tile keeps its last size, which the valve wanted a
+// moment ago, and the valve itself waits kGrowHoldSeconds before it lets tiles grow), and a compaction copies the whole atlas, so one
+// runs only after a growth has been blocked for kGrowHoldSeconds of stable frames, at most one per hold. update() once a frame; true
+// when the compaction is due (the hold then starts again).
+class GrowthHold
+{
+public:
+    void reset() { mHeld = 0.0f; }
+    bool update(bool blocked, float dt_seconds)
+    {
+        if (!blocked)
+        {
+            mHeld = 0.0f;
+            return false;
+        }
+        mHeld += holdSeconds(dt_seconds);
+        if (mHeld < kGrowHoldSeconds)
+        {
+            return false;
+        }
+        mHeld = 0.0f;
+        return true;
+    }
+
+private:
+    float mHeld = 0.0f;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -1367,6 +1414,57 @@ inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
     return key;
 }
 
+// The silhouette inputs of one blended, alpha-masked or alpha-textured face (llshadowdirtyfeed.cpp fills them from the face's texture
+// entry, its texture and its materials): what shapes the holes the face cuts out of a depth tile. Nothing else of a face is an input, so
+// fullbright, glow, shine, bump, an RGB-only tint and the light's own colour cannot change the key. An opaque face is no input either:
+// its texture never shows in a depth tile.
+struct SilhouetteFace
+{
+    uint8_t index = 0;                // the face (texture entry) index
+    float alpha = 1.f;                // the tint's alpha
+    uint8_t texture[16] = {};         // the diffuse texture's id
+    float scale[2] = { 1.f, 1.f };    // its mapping: repeats, offset, rotation, default or planar
+    float offset[2] = { 0.f, 0.f };
+    float rotation = 0.f;
+    uint8_t texgen = 0;
+    int8_t components = -1;           // the texture's channel count (-1: not loaded yet)
+    bool material = false;            // a legacy material: its diffuse alpha mode and mask cutoff
+    uint8_t alpha_mode = 0;
+    uint8_t alpha_cutoff = 0;
+    bool gltf = false;                // a glTF material: its alpha mode, cutoff, base colour alpha, base colour texture and transform
+    uint32_t gltf_alpha_mode = 0;
+    float gltf_cutoff = 0.f;
+    float gltf_alpha = 1.f;
+    uint8_t gltf_texture[16] = {};
+    float gltf_offset[2] = { 0.f, 0.f };
+    float gltf_scale[2] = { 1.f, 1.f };
+    float gltf_rotation = 0.f;
+};
+
+// folds one face into a prim's key, field by field (no padding bytes are read)
+inline uint32_t silhouetteFaceMix(uint32_t key, const SilhouetteFace& f)
+{
+    auto mix = [](uint32_t k, const auto& value) { return silhouetteKeyMix(k, &value, sizeof(value)); };
+    key = mix(key, f.index);
+    key = mix(key, f.alpha);
+    key = silhouetteKeyMix(key, f.texture, sizeof(f.texture));
+    key = mix(mix(key, f.scale[0]), f.scale[1]);
+    key = mix(mix(key, f.offset[0]), f.offset[1]);
+    key = mix(mix(key, f.rotation), f.texgen);
+    key = mix(key, f.components);
+    if (f.material)
+    {
+        key = mix(mix(key, f.alpha_mode), f.alpha_cutoff);
+    }
+    if (f.gltf)
+    {
+        key = mix(mix(mix(key, f.gltf_alpha_mode), f.gltf_cutoff), f.gltf_alpha);
+        key = silhouetteKeyMix(key, f.gltf_texture, sizeof(f.gltf_texture));
+        key = mix(mix(mix(mix(mix(key, f.gltf_offset[0]), f.gltf_offset[1]), f.gltf_scale[0]), f.gltf_scale[1]), f.gltf_rotation);
+    }
+    return key;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The LOD pin's books (section 4.4, D6). A tile pins the objects it draws at full detail (the viewer raises a counter on each
 // object); the books say, per render, which objects the tile now holds and which it lets go of. Keyed by tile and object id.
@@ -1966,11 +2064,13 @@ inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const Tex
 //   - The basis is the owner's frame-rate floor (AGENTS.md, since 2026-11-16): about 60 fps standing in a crowded room (about 60
 //     avatars) and never below 25 fps moving, at the default tier. It replaced the +5 % allowance on an assumed 8 ms frame (125 fps,
 //     never measured), which gave the former 0.35 ms (lamp shadows L2).
-//   - kFrameCapMs is kFloorShare of the standing floor's frame: 0.03 x 1000 / 60 = 0.5 ms. Spent in full by a frame that is CPU-bound
-//     right at the floor it costs 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving (40 -> 40.5 ms); a static
-//     scene spends nothing, and a GPU-bound frame hides it. It fits seven measured tiles of 0.07 ms (owner session 2026-11-14), so a
-//     room of four lamps redraws every tile and its avatar layer every frame, and a cold start (login, teleport, a lamp-sized
-//     atlas) fills about 40 % faster than at 0.35 ms.
+//   - kFrameCapMs is kFloorShare of the standing floor's frame: 0.03 x 1000 / 60 = 0.5 ms. The 3 % is an engineering choice, not
+//     derived from a measurement: stage L0 of the lamp-shadow study (the owner's rooms measured) is to set it, and has not run. It is
+//     43 % more CPU a frame than 0.35 ms, unmeasured in-world. Spent in full by a frame that is CPU-bound exactly at the floor it takes
+//     that frame below the floor, 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving (40 -> 40.5 ms): the floor
+//     holds only with that much headroom elsewhere. A static scene spends nothing, and a GPU-bound frame hides it. It fits seven
+//     measured tiles of 0.07 ms (owner session 2026-11-14), so a room of four lamps redraws every tile and its avatar layer every
+//     frame, and a cold start (login, teleport, a lamp-sized atlas) fills about 40 % faster than at 0.35 ms.
 //   - Priority: the dynamic layer first. An avatar or a moving lamp is seen to lag at once; a dirty static tile only shows a stale
 //     shadow of something that changed, and its wait is bounded by the age order of selectStatic. Two regimes (dynamicShareMs): while a
 //     static tile waits, the dynamic layer gets kDynamicCapMs 0.30 ms (6 faces at the 0.05 ms floor); while none waits it gets the whole
@@ -1980,9 +2080,8 @@ inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const Tex
 //   - The sum of the predicted costs of a frame's picks never exceeds kFrameCapMs, except for one single item whose own prediction is
 //     above what is left, which runs alone when nothing else was spent in the frame (progress; selectFrame).
 // The measured cost only predicts what fits; it does not set the budget.
-constexpr float kFloorStandingFps = 60.f; // the owner's floor standing in a crowded room
-constexpr float kFloorMovingFps = 25.f;   // ... and moving
-constexpr float kFloorShare = 0.03f;      // the share of the standing floor's frame the shadow caches' tile work may take
+constexpr float kFloorStandingFps = 60.f; // the owner's floor standing in a crowded room (25 fps moving)
+constexpr float kFloorShare = 0.03f;      // the share of the standing floor's frame the shadow caches' tile work may take (a choice, pending L0)
 constexpr float kFrameCapMs = 0.5f;
 static_assert(kFrameCapMs > kFloorShare * 1000.f / kFloorStandingFps - 1e-3f && kFrameCapMs < kFloorShare * 1000.f / kFloorStandingFps + 1e-3f,
               "the cap is the floor's share of the standing floor's frame");

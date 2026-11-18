@@ -22,6 +22,7 @@
 #include "llshadowdirtyfeed.h"
 
 #include <algorithm>
+#include <cstring>
 
 #include "lldrawable.h"
 #include "llgltfmaterial.h"
@@ -124,19 +125,14 @@ namespace
         return image && (image->getComponents() == 4 || image->getComponents() == 2); // not yet loaded: unknown, counted when it finishes (LLFace::dirtyTexture)
     }
 
-    template <class T>
-    U32 mix(U32 key, const T& value)
-    {
-        return llprojectorpool::silhouetteKeyMix(key, &value, sizeof(value));
-    }
-
     // The prim's silhouette key (llprojectorpool::texturedDirties): what its faces cut out of a depth tile. An opaque face counts only as
-    // opaque (its texture never shows in a depth tile); each blended, alpha-masked or alpha-textured face adds its index, its alpha, its
-    // texture and the texture's channel count, its mapping (repeats, offset, rotation, planar or default) and its alpha mode and cutoff
-    // (the legacy material's, or the glTF material's with its base colour texture and transform). Fullbright, glow, shine, bump, an
-    // RGB-only tint and the light's own colour are not in it (lamp shadows S2: blinker scripts toggle them with the light).
+    // opaque (its texture never shows in a depth tile); each blended, alpha-masked or alpha-textured face adds its silhouette inputs
+    // (llprojectorpool::SilhouetteFace: its index, alpha, texture and the texture's channel count, mapping, and the legacy or glTF
+    // material's alpha mode and cutoff, with the glTF base colour texture and transform). Fullbright, glow, shine, bump, an RGB-only tint
+    // and the light's own colour are not inputs (lamp shadows S2: blinker scripts toggle them with the light).
     U32 silhouette_key(LLVOVolume* volume)
     {
+        static_assert(sizeof(llprojectorpool::SilhouetteFace::texture) == size_t(UUID_BYTES), "a texture id is 16 bytes");
         U32 key = llprojectorpool::kSilhouetteKeySeed;
         const U8 faces = volume->getNumTEs();
         for (U8 i = 0; i < faces; ++i)
@@ -146,30 +142,38 @@ namespace
                 continue;
             }
             const LLTextureEntry* te = volume->getTE(i); // alpha_face checked it
-            key = mix(key, i);
-            key = mix(key, te->getColor().mV[VALPHA]);
-            key = llprojectorpool::silhouetteKeyMix(key, te->getID().mData, UUID_BYTES);
-            F32 s = 0.f, t = 0.f;
-            te->getScale(&s, &t);
-            key = mix(mix(key, s), t);
-            te->getOffset(&s, &t);
-            key = mix(mix(key, s), t);
-            key = mix(key, te->getRotation());
-            key = mix(key, U8(te->getTexGen()));
+            llprojectorpool::SilhouetteFace f;
+            f.index = i;
+            f.alpha = te->getColor().mV[VALPHA];
+            memcpy(f.texture, te->getID().mData, UUID_BYTES);
+            te->getScale(&f.scale[0], &f.scale[1]);
+            te->getOffset(&f.offset[0], &f.offset[1]);
+            f.rotation = te->getRotation();
+            f.texgen = U8(te->getTexGen());
             const LLViewerTexture* image = volume->getTEImage(i);
-            key = mix(key, S8(image ? image->getComponents() : -1));
+            f.components = S8(image ? image->getComponents() : -1);
             const LLMaterialPtr material = te->getMaterialParams();
             if (material.notNull())
             {
-                key = mix(mix(key, material->getDiffuseAlphaMode()), material->getAlphaMaskCutoff());
+                f.material = true;
+                f.alpha_mode = material->getDiffuseAlphaMode();
+                f.alpha_cutoff = material->getAlphaMaskCutoff();
             }
             if (const LLGLTFMaterial* gltf = te->getGLTFRenderMaterial())
             {
                 const LLGLTFMaterial::TextureTransform& tt = gltf->mTextureTransform[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR];
-                key = mix(mix(mix(key, U32(gltf->mAlphaMode)), gltf->mAlphaCutoff), gltf->mBaseColor.mV[VALPHA]);
-                key = llprojectorpool::silhouetteKeyMix(key, gltf->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR].mData, UUID_BYTES);
-                key = mix(mix(mix(mix(mix(key, tt.mOffset.mV[VX]), tt.mOffset.mV[VY]), tt.mScale.mV[VX]), tt.mScale.mV[VY]), tt.mRotation);
+                f.gltf = true;
+                f.gltf_alpha_mode = U32(gltf->mAlphaMode);
+                f.gltf_cutoff = gltf->mAlphaCutoff;
+                f.gltf_alpha = gltf->mBaseColor.mV[VALPHA];
+                memcpy(f.gltf_texture, gltf->mTextureId[LLGLTFMaterial::GLTF_TEXTURE_INFO_BASE_COLOR].mData, UUID_BYTES);
+                f.gltf_offset[0] = tt.mOffset.mV[VX];
+                f.gltf_offset[1] = tt.mOffset.mV[VY];
+                f.gltf_scale[0] = tt.mScale.mV[VX];
+                f.gltf_scale[1] = tt.mScale.mV[VY];
+                f.gltf_rotation = tt.mRotation;
             }
+            key = llprojectorpool::silhouetteFaceMix(key, f);
         }
         return key;
     }
@@ -223,9 +227,9 @@ void LLShadowDirtyFeed::setTracking(Owner owner, bool on)
     }
     else if (edge == llprojectorpool::OwnerEdge::First)
     {
-        // the alpha bits are only kept while tracking: forget them all, so the first change of each object after this pushes
-        // once (conservatively) and then knows. A walk over the object list, once per switch-on of the first owner (a second
-        // owner joins bits that were written for the first, which hold for any reader).
+        // the silhouette keys are only kept while tracking: forget them all (POOL_ALPHA_KNOWN), so the first change of each object
+        // after this pushes once (conservatively) and then knows. A walk over the object list, once per switch-on of the first owner (a
+        // second owner joins keys that were written for the first, which hold for any reader).
         const S32 count = gObjectList.getNumObjects();
         for (S32 i = 0; i < count; ++i)
         {

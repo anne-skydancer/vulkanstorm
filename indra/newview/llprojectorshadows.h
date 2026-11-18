@@ -123,8 +123,8 @@ public:
         U32 cells = 0;             // their tiles (records): one per lamp, or the cells of a wide lamp
         U32 lightsWithoutTile = 0; // of the tiles, with no drawn tile (the O-4 gate: 0 after the first fill)
         U64 resizes = 0;           // tile size changes since the atlases were made (drawn at the new size into a new rect, then swapped in)
-        U64 resizeRepacks = 0;     // compactions: an arriving tile found no block although the free texels held it (a whole repack at the tiles' sizes)
-        U64 resizeDeferred = 0;    // frames a tile waited to grow because no block of its new size was free
+        U64 resizeRepacks = 0;     // compactions (the name is the stats API's): an arriving tile, or a growth after its hold, found no block although the free texels held it (a whole repack at the tiles' sizes)
+        U64 resizeDeferred = 0;    // tile-frames a growth waited: no block of its new size, even with its own rect freed (counted once a frame per waiting tile)
         U64 tileRenders = 0;       // tile renders since the atlases were made
         U64 repacks = 0;
         F32 costEmaMs = 0.f;       // CPU ms of one tile render (running average)
@@ -282,9 +282,9 @@ private:
 
     llprojectorpool::BuddyAtlas mBuddy;
     llprojectorpool::LevelController mLevel;  // the pressure valve (L2)
+    llprojectorpool::GrowthHold mGrowthHold;  // the hold before a compaction for a growth that fragmentation blocks
     std::vector<llprojectorpool::ValveTile> mValveTiles; // layout()'s scratch, filled and read within one call (the capacity is kept)
     std::vector<Record*> mValveRecs;                     // ... the record of each valve tile; cleared before layout() returns
-    bool mPlacementFailed = false; // an arriving tile found no room last frame: the valve steps up once more
     std::map<U32, Record> mRecords;
     std::unordered_map<const LLDrawable*, U32> mKeyOf;
     std::unordered_map<const LLDrawable*, U32> mRetiringOf; // N3: a lamp's old id whose cells serve until its new grid is drawn

@@ -2616,7 +2616,7 @@ S32 LLVOVolume::setTEColor(const U8 te, const LLColor4& color)
             dirtyMesh();
             if (color.mV[3] != old_alpha)
             {
-                gPipeline.markTextured(mDrawable); // <Vulkanstorm/> the first call saw the old colour; the projector pool's alpha bit needs the new one
+                gPipeline.markTextured(mDrawable); // <Vulkanstorm/> required: the first call saw the old colour, whose silhouette key the projector pool already holds; this one stores the new colour's and pushes when it changed
             }
         }
     }
