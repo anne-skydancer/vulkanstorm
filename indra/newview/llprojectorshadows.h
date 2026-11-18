@@ -21,6 +21,7 @@
 #define LL_LLPROJECTORSHADOWS_H
 
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +32,7 @@
 #include "lldrawable.h"
 #include "lllightthroughgl.h"
 #include "llprojectorshadowpool.h"
+#include "lllocalshadows.h"
 #include "llglheaders.h"
 #include "llrender.h"
 
@@ -97,10 +99,19 @@ public:
     // Drops every record (and the tiles they hold). Does not touch the atlases.
     void clear();
 
-    // Once a frame, from LLPipeline::generateSunShadow's Stochastic branch (not for probe renders): the light set, the
-    // sizes and the placement, then the tile renders the budget allows, nearest first. The viewer's render state (the
-    // framebuffer, viewport, matrices, camera id) is put back.
-    void update(LLCamera& camera);
+    // The frame's work, in four steps that LLLocalShadows::updateFrame runs once a frame (from LLPipeline::generateSunShadow's
+    // Stochastic branch, not for probe renders) for every pool, so that one selection covers the tile work of both pools:
+    //  - prepare: the light set, the sizes and the placement, the changes and the avatar pairing (casters: the frame's casting avatars,
+    //    valid until endFrame); appends this pool's work (kPoolProjectors) to the frame's lists;
+    //  - beginRenders: before the first render of the frame (the live atlas is not a lighting unit's texture while it is written);
+    //  - renderPick: one pick of the selection (a tile, or its avatar layer); false when the key has no placed tile; ms: its CPU time;
+    //  - endFrame: lets go of the frame's lists (no avatar pointer outlives the frame).
+    // The viewer's render state (the framebuffer, viewport, matrices, camera id) is put back by the frame's LLLocalShadowGL::Scope.
+    void prepare(LLCamera& camera, const std::vector<LLLocalShadowCaster>& casters, std::vector<llprojectorpool::StaticItem>& statics,
+                 std::vector<llprojectorpool::DynamicItem>& dynamics);
+    void beginRenders();
+    bool renderPick(U32 key, bool dynamic, F32& ms);
+    void endFrame();
 
     // From LLPipeline::setupSpotLight for each drawn projector: this light's lookup uniforms. A light without a drawn tile
     // gets proj_shadow_idx -1 (no lookup).
@@ -252,15 +263,6 @@ private:
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
     void copyAtlas(U32 from_tex, U32 to_tex);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
-    // The avatars that cast this frame (collectCasters, once per update): the pairing with the lamps and every face's draw list read it.
-    // The pointers are valid only inside update(), which empties the list before it returns.
-    struct Caster
-    {
-        LLVOAvatar* avatar = nullptr;
-        llprojectorpool::Aabb box;
-        bool own = false; // the user's own avatar (gAgentAvatarp): its faces are drawn every frame
-    };
-    void collectCasters();
     // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
     struct FaceAvatars
     {
@@ -335,7 +337,8 @@ private:
     U32 mDirtyBoxes = 0;
     F32 mDirtyAgeMsMax = 0.f;
     U64 mDirtyRenders = 0;
-    std::vector<Caster> mCasters;  // this frame's casting avatars (update() only; empty between frames, the capacity is kept)
+    const std::vector<LLLocalShadowCaster>* mCasters = nullptr; // the frame's casting avatars (from prepare to endFrame; null between frames)
+    std::set<U32> mLayerOnly; // the frame's dynamic items that are an avatar layer alone (the others redraw the whole tile)
 };
 
 #endif // LL_LLPROJECTORSHADOWS_H

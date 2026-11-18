@@ -13183,7 +13183,7 @@ void LLPipeline::generateSunShadow(LLCamera& camera)
                 // <Vulkanstorm/> multicore stage 1b: the pool update is its own view in the submission statistics
                 // (-DVKS_GL_STATS=ON); its draws were counted into the enclosing view before
                 VKS_GLSTAT_VIEW("projector tiles");
-                mProjectorShadows.update(camera);
+                LLLocalShadows::updateFrame(camera); // the projectors' tiles under the local shadows' one selection
             }
         }
         else
