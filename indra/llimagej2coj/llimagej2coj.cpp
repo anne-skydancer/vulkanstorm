@@ -377,9 +377,13 @@ public:
             tilesH >>= 1;
         }
 
-        // <Vulkanstorm> The resolutions of the component with the fewest: decode stays below them (llj2creduce.h)
+        // <Vulkanstorm> The resolutions of the component with the fewest: decode stays below them (llj2creduce.h).
+        // The rule also bounds the decode by the size, which LLImageBase keeps in 16 bits: for a codestream larger
+        // than that, the resolutions stay unknown (0) and its requests are passed on unchanged.
         resolutions = 0;
-        if (codestream_info->m_default_tile_info.tccp_info)
+        const U64 grid_width = (U64)codestream_info->tw * codestream_info->tdx;
+        const U64 grid_height = (U64)codestream_info->th * codestream_info->tdy;
+        if (codestream_info->m_default_tile_info.tccp_info && grid_width <= 0xffff && grid_height <= 0xffff)
         {
             for (OPJ_UINT32 comp = 0; comp < codestream_info->nbcomps; ++comp)
             {
@@ -897,8 +901,10 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     // <Vulkanstorm> Never ask for a coarser level than the codestream has (llj2creduce.h): OpenJPEG refuses a reduce
     // factor at or above its resolutions while it reads the header, so a 16 px texture (5 resolutions) failed its
     // first decode (discard 5) and was marked missing. It decodes at its coarsest level now, which setDiscardLevel(f)
-    // below reports; every other request is passed on unchanged.
-    const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions);
+    // below reports, when that level is no larger than the requested level of a MAX_IMAGE_SIZE image; every other
+    // request (a crafted large codestream with few resolutions among them) is passed on unchanged.
+    const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions, base.getWidth(),
+                                                    base.getHeight(), MAX_IMAGE_SIZE);
     bool decoded = decoder.decode(base.getData(), max_bytes, &image_channels, reduce);
 
     // set correct channel count early so failed decodes don't miss it...
