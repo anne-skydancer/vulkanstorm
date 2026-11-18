@@ -25,6 +25,7 @@ on the measured NVIDIA driver they differ in the last bit of about 1 receiver in
 
     python scripts/shadows/projector_pool_g1.py [--sizes 32,64,256,1024,2048] [--atlas 4096] [--grid 512] [--seed 1]
     python scripts/shadows/projector_pool_g1.py --atlas 8192       # the 8192 tier (D20); N = 2048 is among the default sizes
+    python scripts/shadows/projector_pool_g1.py --base b62d0fca18  # (c) the lookup equals that revision's, bit for bit
 
 G1 proves the ATLAS HANDLING only: the reference carries the same nearest-blocker filter rule as the code under test (it was
 updated with it), so G1 (b) no longer checks the filter's design independently. The independent oracle for the filter is the
@@ -52,6 +53,8 @@ ap.add_argument('--grid', type=int, default=512, help='receivers per side (grid 
 ap.add_argument('--seed', type=int, default=1)
 ap.add_argument('--time', action='store_true', help='also time the lookup (GPU ms per 2560x1440 full-screen pass, median of 9 x 20)')
 ap.add_argument('--ref-tol', type=float, default=2.5e-7, help='allowed difference to the reference source (2 ulp of 1.0)')
+ap.add_argument('--base', default='', help='also run the tile lookup of this git revision on the same atlases and require max abs 0 '
+                'against it (a refactor of the filter: L4 gave it its atlas as a parameter)')
 opts = ap.parse_args()
 sys.argv = [sys.argv[0]]  # the GL context helper parses the command line itself
 exec(compile(CONTEXT.read_text(), str(CONTEXT), 'exec'))  # window, context, fn(), program()
@@ -95,7 +98,7 @@ void main()
 }
 '''
 REF_BODY = '    oc = vec4(stSpotFilter(map, vec2(n_tile), c, g, z_bias, z_tex, pen));'
-TILE_BODY = '    oc = vec4(stSpotFilterTile(proj_shadow_tile, c, g, z_bias, z_tex, pen, proj_shadow_kernel_max));'
+TILE_BODY = '    oc = vec4(stSpotFilterTile(proj_shadow_atlas, proj_shadow_tile, c, g, z_bias, z_tex, pen, proj_shadow_kernel_max));'
 VS = '#version 400\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4 - 1, (gl_VertexID >> 1) * 4 - 1); gl_Position = vec4(p, 0.0, 1.0); }'
 
 # the helpers the reference shares with the code under test (StSpot, stSpotDisc, stSpotGradient are not needed here)
@@ -113,6 +116,15 @@ ref_src = (PREAMBLE + 'uniform sampler2D map;\nuniform sampler2D proj_shadow_atl
 # the largest radius (texels, per axis) is an argument of the lookup (the lamp type's cap: sampleProjectorShadow passes
 # ST_SPOT_KERNEL_TEXELS_MAX on both axes); the test feeds it as a uniform
 tile_src = PREAMBLE + 'uniform vec2 proj_shadow_kernel_max;\n' + under_test + RECEIVER % TILE_BODY
+base_src = None
+if opts.base:
+    import subprocess
+    base_util = subprocess.check_output(['git', 'show', '%s:%s' % (opts.base, UTIL.relative_to(ROOT).as_posix())], cwd=ROOT).decode('utf-8')
+    base_defines = '\n'.join(l for l in base_util.splitlines() if re.match(r'#define (ST_|SHADOW_)', l))
+    base_g1 = section(base_util, '// <G1-BEGIN>', '// <G1-END>')
+    # before L4 the filter read proj_shadow_atlas itself; since, the atlas is its first parameter
+    base_call = TILE_BODY if 'stSpotFilterTile(sampler2D atlas' in base_g1 else TILE_BODY.replace('stSpotFilterTile(proj_shadow_atlas, ', 'stSpotFilterTile(')
+    base_src = PREAMBLE.replace(defines, base_defines) + 'uniform vec2 proj_shadow_kernel_max;\n' + base_g1 + RECEIVER % base_call
 
 glGenTextures = fn('glGenTextures', None, I, C.POINTER(U))
 glBindTexture = fn('glBindTexture', None, U, U)
@@ -225,6 +237,7 @@ def main():
     glBindVertexArray(vao.value)
     ref_prog = program([(0x8B31, VS), (0x8B30, ref_src)])
     tile_prog = program([(0x8B31, VS), (0x8B30, tile_src)])
+    base_prog = program([(0x8B31, VS), (0x8B30, base_src)]) if base_src else None
     out_tex = texture(GL_R32F, opts.grid, opts.grid, None, GL_RED)
     out_fb = U()
     glGenFramebuffers(1, C.byref(out_fb))
@@ -264,13 +277,24 @@ def main():
             glDrawArrays(4, 0, 3)
             glFinish()
             actual = read_output(out_tex, opts.grid)
+            base_ok = True
+            if base_prog:
+                bprog = run(base_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', atlas_tex)], n)
+                glUniform4f(glGetUniformLocation(bprog, b'proj_shadow_tile'), float(ox), float(oy), float(n), 1.0 / A)
+                glUniform2f(glGetUniformLocation(bprog, b'proj_shadow_kernel_max'), 10.0, 10.0)
+                glDrawArrays(4, 0, 3)
+                glFinish()
+                d_base = np.abs(read_output(out_tex, opts.grid) - actual)
+                base_ok = bool(d_base.max() == 0.0)
+                print('  N=%-4d %-16s vs %s: max abs diff %.9g, %d differing  %s' % (n, label, opts.base, d_base.max(),
+                                                                                  np.count_nonzero(d_base), 'PASS' if base_ok else 'FAIL'))
             diff = np.abs(actual - expected)
             d_same = np.abs(actual - same_code)
             print('  N=%-4d %-16s vs the same code on the standalone map: max abs diff %.9g, %d differing' % (n, label, d_same.max(), np.count_nonzero(d_same)))
             partial = np.count_nonzero((expected > 0.0) & (expected < 1.0))
             # the tile in the atlas must equal the same code on a standalone map exactly; the 261253bd43 source is a different
             # compilation of the same arithmetic, which the NVIDIA compiler rounds differently in the last bit of a few receivers
-            ok = bool(d_same.max() == 0.0) and bool(diff.max() <= opts.ref_tol) and glGetError() == 0
+            ok = bool(d_same.max() == 0.0) and bool(diff.max() <= opts.ref_tol) and base_ok and glGetError() == 0
             failures += 0 if ok else 1
             print('  N=%-4d %-16s max abs diff %.9g, %d differing of %d receivers (%.0f %% lit, %.0f %% in penumbra)  %s' % (
                 n, label, diff.max(), np.count_nonzero(diff), diff.size, 100 * float(np.mean(expected == 1.0)),

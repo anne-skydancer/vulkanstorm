@@ -22,6 +22,8 @@
  * shadow pool, PROJECTOR_SHADOW_POOL): a filtered lookup in the light's own tile of the pool's atlas (a blocker search, then a
  * percentage-closer filter on bilinear gathers, at a fixed disc in the tile's uv, so the value depends on the tile alone), times the
  * light its see-through casters let through, per colour channel (lamp shadows L3, stThroughFilter), so it returns a vec3.
+ * A point light is looked up the same way in its own six faces (pointLightF.glsl and multiPointLightF.glsl call samplePointShadow,
+ * POINT_SHADOW_POOL): the face its direction falls in, then the same filter in that face's tile of the point pool's atlas.
  * sampleSpotShadow, which the sun programs still call for their b and a channels, returns 1.
  */
 
@@ -36,6 +38,11 @@
 #define ST_SPOT_KERNEL_MIN 1.5     // map texels: the floor of the search and filter radius (a narrower penumbra would draw the tile's texels as squares)
 #define ST_SPOT_PLANE_SLOPE 8.0    // texels of depth per texel of offset the receiver plane may lower a tap's reference by
 #define ST_THROUGH_TAPS 16         // lamp shadows L3: taps of the light-through filter (stThroughFilter): 16 draw its edge as wide as the depth filter's at any angle (8 left gaps)
+// the point lights' faces (samplePointShadow): the limits of llprojectorpool::kPointLamp and the faces of llpointshadowpool.h (the
+// same floor ST_SPOT_KERNEL_MIN; scripts/tests/test_projector_lamp_filter.py checks the numbers)
+#define ST_POINT_KERNEL_TEXELS_MAX 14.0 // texels: the cap of the search and filter radius, the face's guard less the bilinear footprint
+#define ST_POINT_GUARD 16.0             // texels on each side of a face's interior (llpointpool::kGuard)
+#define ST_POINT_NEAR 0.02              // m: the faces' near plane (llpointpool::kNearM)
 
 uniform sampler2D shadowMap0; // plain depth: the method sets the maps' compare mode off
 uniform sampler2D shadowMap1;
@@ -268,6 +275,8 @@ float sampleDirectionalShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 // ---- projectors: a filtered lookup. A blocker search, then a percentage-closer filter whose radius follows the
 // blockers' distance (PCSS, RTR4 7.6), on bilinear gathers of the light's tile at a fixed disc of offsets in the
 // tile's own uv (no screen, frame or pixel term: the value of a receiver depends on its one tile, or its one cell of a wide lamp, alone).
+// The filter (stSpotQuadTile, stSpotPCF, stSpotFilterTile) takes its atlas as a parameter: the projectors pass proj_shadow_atlas,
+// the point lights point_shadow_atlas (the lamps' one filter, lamp shadows L4).
 
 uniform sampler2D proj_shadow_atlas;  // the pool's live atlas (D32F, depth as is: no compare, NEAREST, CLAMP_TO_EDGE)
 uniform mat4 proj_shadow_matrix;      // view space -> this light's tile, [0,1]^3 (of the pose the tile was drawn with)
@@ -341,7 +350,7 @@ vec2 stSpotDisc(int k, int n)
 // components are selected again so that every texel index is clamped to the tile, as CLAMP_TO_EDGE does on a standalone
 // map of the tile (bit for bit). The tile is taken as stored: a one-tile lamp has no guard texels; a cell's tile includes its guard, and a
 // tap reaches the clamped edge only if the kernel plus one texel exceeds the guard.
-vec4 stSpotQuadTile(vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
+vec4 stSpotQuadTile(sampler2D atlas, vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_max, bool edge, out vec4 ref, out vec2 f)
 {
     float n = tile.z;
     vec2 res = vec2(n);
@@ -354,7 +363,7 @@ vec4 stSpotQuadTile(vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_m
     vec4 dy = o.y + vec4(e.y, e.y, 0.0, 0.0);
     ref = c.z - z_bias + clamp(g.x * dx + g.y * dy, -rp_max, 0.0);
     vec2 q = edge ? clamp(b, vec2(0.0), vec2(n - 2.0)) : b;
-    vec4 z = textureGather(proj_shadow_atlas, (tile.xy + q + 1.0) * tile.w);
+    vec4 z = textureGather(atlas, (tile.xy + q + 1.0) * tile.w);
     if (edge)
     {
         z = b.x >= n - 1.0 ? z.yyzz : (b.x < 0.0 ? z.xxww : z); // the left column read past the right edge / the right one past the left
@@ -365,7 +374,7 @@ vec4 stSpotQuadTile(vec4 tile, vec2 uv, vec3 c, vec2 g, float z_bias, float rp_m
 
 // The percentage-closer filter at radius rf (texels per axis): ST_SPOT_TAPS bilinear gathers on the Vogel disc, weighted
 // 1 - 0.9 r^2 (the second loop of stSpotFilterTile; rp_max and edge as the search's).
-float stSpotPCF(vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
+float stSpotPCF(sampler2D atlas, vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, bool edge)
 {
     vec2 res = vec2(tile.z);
     float lit = 0.0;
@@ -373,7 +382,7 @@ float stSpotPCF(vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, 
     {
         vec4 ref;
         vec2 f;
-        vec4 z = stSpotQuadTile(tile, c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 z = stSpotQuadTile(atlas, tile, c.xy + stSpotDisc(k, ST_SPOT_TAPS) * rf / res, c, g, z_bias, rp_max, edge, ref, f);
         vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
         lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_SPOT_TAPS)) * dot(vec4(greaterThanEqual(z, ref)), bw);
     }
@@ -383,8 +392,8 @@ float stSpotPCF(vec4 tile, vec3 c, vec2 g, float z_bias, float rp_max, vec2 rf, 
 // The visibility of receiver c (tile uv and depth) through the light's tile. pen: the filter's radius in texels per
 // unit of map depth between the receiver and its nearest blocker (x and y: the map's axes may differ in metres). kmax: the
 // largest radius in texels, per axis, at least ST_SPOT_KERNEL_MIN (the lamp type's cap: sampleProjectorShadow passes
-// ST_SPOT_KERNEL_TEXELS_MAX on both axes).
-float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2 kmax)
+// ST_SPOT_KERNEL_TEXELS_MAX on both axes, samplePointShadow ST_POINT_KERNEL_TEXELS_MAX). atlas: the lamp type's atlas.
+float stSpotFilterTile(sampler2D atlas, vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec2 pen, vec2 kmax)
 {
     vec2 res = vec2(tile.z);
     // the search: any blocker between the near plane (z = 0) and the receiver, in the disc its farthest one needs
@@ -405,7 +414,7 @@ float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec
         vec4 ref;
         vec2 f;
         vec2 o = k < ST_SPOT_SEARCH ? stSpotDisc(k, ST_SPOT_SEARCH) * rs / res : vec2(0.0);
-        vec4 z = stSpotQuadTile(tile, c.xy + o, c, g, z_bias, rp_max, edge, ref, f);
+        vec4 z = stSpotQuadTile(atlas, tile, c.xy + o, c, g, z_bias, rp_max, edge, ref, f);
         vec4 blk = vec4(lessThan(z, ref));
         n_blk += blk.x + blk.y + blk.z + blk.w;
         vec4 bz = blk * z;
@@ -424,7 +433,7 @@ float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec
     // linear in 1 / distance, which is what the penumbra's width follows), at least ST_SPOT_KERNEL_MIN texels, so a penumbra
     // narrower than the tile's texels is drawn soft rather than as their squares, and at most kmax; weighted 1 - 0.9 r^2 over the disc
     vec2 rf = clamp(pen * (c.z - z_near), vec2(ST_SPOT_KERNEL_MIN), kmax);
-    return stSpotPCF(tile, c, g, z_bias, rp_max, rf, edge);
+    return stSpotPCF(atlas, tile, c, g, z_bias, rp_max, rf, edge);
 }
 
 // ---- lamp shadows L3: the light the see-through casters let through. The light-through layer beside the depth tile holds, per
@@ -604,7 +613,7 @@ vec3 sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     vec2 grad = stSpotGradient(m, pos, ng, c) / tscale;
     // the radius is the physical one between the floor and the cap, both in texels of this tile (the cap bounds the fixed taps'
     // spacing; a coarser tile draws a softer edge, never a blockier one)
-    float shadow = stSpotFilterTile(tile, c_tile, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, vec2(ST_SPOT_KERNEL_TEXELS_MAX));
+    float shadow = stSpotFilterTile(proj_shadow_atlas, tile, c_tile, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, vec2(ST_SPOT_KERNEL_TEXELS_MAX));
     vec3 vis = vec3(shadow);
     // L3: the light the tile's see-through casters let through, with the same tile, receiver, receiver plane, bias, penumbra rule and cap,
     // over the part of its disc the atlas does not block. Not read in the umbra, nor for a lamp whose tiles hold no see-through caster
@@ -615,6 +624,145 @@ vec3 sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
                                vec2(ST_SPOT_KERNEL_TEXELS_MAX));
     }
     return mix(vec3(1.0), vis, fade);
+}
+
+// <P1-BEGIN> (scripts/shadows/point_faces_g1.py compiles everything from here to P1-END, with the G1 block and stubs for the rest)
+// ---- point lights (lamp shadows L4): six 90-degree faces per lamp around its centre, aligned to the agent axes, each a tile of the
+// point pool's atlas behind a guard of ST_POINT_GUARD texels (llpointshadowpool.h). The face is the one the receiver's direction from
+// the lamp falls in; then the lamps' one filter (stSpotFilterTile) in that face's tile, with the point lights' cap. As the projectors'
+// lookup, nothing depends on the screen, the frame or the camera's view: the value of a receiver depends on its lamp's faces alone.
+
+uniform sampler2D point_shadow_atlas; // the point pool's live atlas (D32F, depth as is: no compare, NEAREST, CLAMP_TO_EDGE)
+uniform mat3 point_view_to_agent;     // view-space directions to agent axes (the faces' axes): this frame's view, transposed
+uniform vec2 point_shadow_params;     // x: the emitter (m): 4.5 cm times RenderShadowLightSize (llprojectorpool::kPointLamp); y: 1 / atlas size
+
+// The face coordinates (right . d, up . d, fwd . d) of an agent-axis direction d in face f (llpointpool::kFaceAxes: +X -X +Y -Y +Z -Z).
+vec3 stPointFace(vec3 d, int f)
+{
+    if (f == 0) return vec3(-d.y, d.z, d.x);
+    if (f == 1) return vec3(d.y, d.z, -d.x);
+    if (f == 2) return vec3(d.x, d.z, d.y);
+    if (f == 3) return vec3(-d.x, d.z, -d.y);
+    if (f == 4) return vec3(-d.x, d.y, d.z);
+    return vec3(d.x, d.y, -d.z);
+}
+
+// The face d falls in: its major axis, ties to x, then y, a zero component to the positive face (llpointpool::pickFace, the same
+// comparisons in the same order).
+int stPointPick(vec3 d)
+{
+    vec3 a = abs(d);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        return d.x >= 0.0 ? 0 : 1;
+    }
+    if (a.y >= a.z)
+    {
+        return d.y >= 0.0 ? 2 : 3;
+    }
+    return d.z >= 0.0 ? 4 : 5;
+}
+
+// Face f's tile: x, y, N (texels; 0: not drawn), 1 / atlas size. The lamp's six rects are packed one per float
+// (llpointpool::packFaceRect: x / 64 + 64 (y / 64) + 4096 log2(N / 64), exact small integers).
+vec4 stPointFaceTile(vec4 faces_a, vec4 faces_b, int f)
+{
+    float p = f < 4 ? faces_a[f] : faces_b[f - 4];
+    float code = floor(p / 4096.0);
+    float rest = p - 4096.0 * code;
+    float row = floor(rest / 64.0);
+    float col = rest - 64.0 * row;
+    return vec4(col * 64.0, row * 64.0, code >= 1.0 ? exp2(code) * 64.0 : 0.0, point_shadow_params.y);
+}
+
+// The tangent of a face's half angle at size n: the interior spans 90 degrees, the guards widen it (llpointpool::faceTanHalf)
+float stPointTanHalf(float n)
+{
+    return (0.5 * n) / (0.5 * n - ST_POINT_GUARD);
+}
+
+// The tile coordinates (u, v over the whole tile, guard included) and the stored depth z = c0 - c1 / w of face coordinates xyw
+vec3 stPointCoord(vec3 xyw, float t, float c0, float c1)
+{
+    return vec3(0.5 + 0.5 * xyw.xy / (xyw.z * t), c0 - c1 / xyw.z);
+}
+// <P1-END>
+
+// d(depth)/d(uv) of the receiver's plane in face f (stSpotGradient's two tangent steps through the face's mapping). A plane maps to a plane
+// under the perspective, so the steps may be short: a quarter of the axial distance at most, which keeps them in front of the face.
+vec2 stPointGradient(vec3 pos, vec3 norm, vec3 centre, int f, float t, float c0, float c1, vec3 c, float w)
+{
+    if (dot(norm, norm) < 1.0e-8)
+    {
+        return vec2(0.0);
+    }
+    vec3 n = normalize(norm);
+    vec3 t1 = normalize(cross(n, abs(n.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(n, t1);
+    float s = min(0.05, 0.25 * w);
+    vec3 d1 = stPointCoord(stPointFace(point_view_to_agent * (pos + t1 * s - centre), f), t, c0, c1) - c;
+    vec3 d2 = stPointCoord(stPointFace(point_view_to_agent * (pos + t2 * s - centre), f), t, c0, c1) - c;
+    float det = d1.x * d2.y - d1.y * d2.x;
+    if (abs(det) < 1.0e-14)
+    {
+        return vec2(1.0e4);
+    }
+    return clamp(vec2(d1.z * d2.y - d1.y * d2.z, d1.x * d2.z - d1.z * d2.x) / det, vec2(-1.0e4), vec2(1.0e4));
+}
+
+// The visibility of one point light at the pixel (pointLightF.glsl, multiPointLightF.glsl: POINT_SHADOW_POOL). lamp: xyz the light's
+// centre in view space, of the pose its faces were drawn with; w the faces' far plane (m), 0 for a lamp without a complete set of drawn
+// faces (lit, no lookup). faces_a, faces_b: its six packed face rects (stPointFaceTile). pos: view space; norm: the G-buffer normal;
+// pos_screen: the pixel's screen uv. 1 beyond the shadows' reach of the camera (the projectors' fade, sampleProjectorShadow).
+float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 norm, vec2 pos_screen)
+{
+    if (lamp.w <= 0.0)
+    {
+        return 1.0;
+    }
+    float reach = spot_shadow_reach > 1.0 ? spot_shadow_reach : 128.0;
+    float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
+    if (fade <= 0.0)
+    {
+        return 1.0;
+    }
+    // the receiver plane: the geometric normal from the depth buffer (S2), and the sine of its angle to the light's centre
+    float sin_theta;
+    vec3 ng = shadowReceiverGeometry(pos_screen, pos, norm, normalize(lamp.xyz - pos), sin_theta);
+    // one texel of the receiver's face at the receiver (2 w t / N metres), the normal offset's unit, as the projectors' lookup
+    vec3 d0 = point_view_to_agent * (pos - lamp.xyz);
+    int f0 = stPointPick(d0);
+    vec3 xyw0 = stPointFace(d0, f0);
+    vec4 tile0 = stPointFaceTile(faces_a, faces_b, f0);
+    if (tile0.z <= 0.0 || !(xyw0.z > ST_POINT_NEAR))
+    {
+        return 1.0;
+    }
+    float texel_m = 2.0 * xyw0.z * stPointTanHalf(tile0.z) / tile0.z;
+    vec3 p = shadowNormalOffsetPos(pos, ng, sin_theta, texel_m);
+    // the face is picked from the offset receiver, whose taps it then holds (every tap inside the face's tile: llpointshadowpool_test P-2)
+    vec3 d = point_view_to_agent * (p - lamp.xyz);
+    int f = stPointPick(d);
+    vec3 xyw = stPointFace(d, f);
+    vec4 tile = stPointFaceTile(faces_a, faces_b, f);
+    if (tile.z <= 0.0 || !(xyw.z > ST_POINT_NEAR) || xyw.z >= lamp.w)
+    {
+        return 1.0; // a face not drawn, inside the near plane, or beyond the lit size (where the lamp gives no light)
+    }
+    float n = tile.z;
+    float t = stPointTanHalf(n);
+    float c0 = lamp.w / (lamp.w - ST_POINT_NEAR);
+    float c1 = c0 * ST_POINT_NEAR;
+    vec3 c = stPointCoord(xyw, t, c0, c1);
+    // the face's StSpot: k = 1 / (2 t) uv per metre across at unit axial distance, the same on both axes
+    float kn = (0.5 / t) * n;
+    float z_tex = c1 / (kn * xyw.z);
+    // the emitter: a disc of point_shadow_params.x metres at the light's centre (the point lamp's base, 4.5 cm, times RenderShadowLightSize),
+    // whatever the prim; the penumbra's radius in texels per unit of map depth, as the projectors'
+    vec2 pen = vec2((0.5 / c1) * point_shadow_params.x * kn);
+    vec2 grad = stPointGradient(p, ng, lamp.xyz, f, t, c0, c1, c, xyw.z);
+    float shadow = stSpotFilterTile(point_shadow_atlas, tile, c, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, vec2(ST_POINT_KERNEL_TEXELS_MAX));
+    return mix(1.0, shadow, fade);
 }
 
 // The sun pass's b and a channels: unlit by the projectors (they shade themselves in spotLightF.glsl), so 1 exactly.
