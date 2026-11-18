@@ -294,6 +294,16 @@ bool LLProjectorShadows::ensureAllocated()
         {
             mAllocFailed = false;
             LLShadowDirtyFeed::setTracking(LLShadowDirtyFeed::Owner::Projectors, true); // the scene's change hooks record from now on
+            // a lamp's retiring cells (N3) are never drawn again: in a new atlas they would serve nothing
+            std::vector<std::pair<U32, const LLDrawable*>> retiring;
+            for (const auto& entry : mRetiringOf)
+            {
+                retiring.emplace_back(entry.second, entry.first);
+            }
+            for (const auto& lamp : retiring)
+            {
+                dropLamp(lamp.first, lamp.second);
+            }
             // every record starts again: a tile has to be drawn into the new atlas
             for (auto& entry : mRecords)
             {
@@ -369,6 +379,7 @@ void LLProjectorShadows::clear()
     }
     mRecords.clear();
     mKeyOf.clear();
+    mRetiringOf.clear();
     mLightsWithoutTile = 0;
 }
 
@@ -380,11 +391,15 @@ void LLProjectorShadows::forget(const LLDrawable* drawable)
     }
     forgetPinned(drawable);
     auto key = mKeyOf.find(drawable);
-    if (key == mKeyOf.end())
+    if (key != mKeyOf.end())
     {
-        return;
+        dropLamp(key->second, drawable);
     }
-    dropLamp(key->second, drawable);
+    auto old = mRetiringOf.find(drawable);
+    if (old != mRetiringOf.end())
+    {
+        dropLamp(old->second, drawable);
+    }
 }
 
 // one tile goes (its rect is freed, its LOD pins are given back); the lamp's entry in mKeyOf is dropLamp's
@@ -399,7 +414,8 @@ void LLProjectorShadows::dropRecord(std::map<U32, Record>::iterator it)
     mRecords.erase(it);
 }
 
-// every tile of a lamp (its one tile, or its cells) and its entry in mKeyOf
+// every tile of a lamp id (its one tile, or its cells) and the drawable's entry for that id (in mKeyOf, or in mRetiringOf for its
+// retiring cells); the drawable's other id, if it has one, stays
 void LLProjectorShadows::dropLamp(U32 lamp, const LLDrawable* drawable)
 {
     for (U32 cell = 0; cell < kMaxCells; ++cell)
@@ -410,6 +426,49 @@ void LLProjectorShadows::dropLamp(U32 lamp, const LLDrawable* drawable)
             dropRecord(it);
         }
     }
+    auto key = mKeyOf.find(drawable);
+    if (key != mKeyOf.end() && key->second == lamp)
+    {
+        mKeyOf.erase(key);
+    }
+    auto old = mRetiringOf.find(drawable);
+    if (old != mRetiringOf.end() && old->second == lamp)
+    {
+        mRetiringOf.erase(old);
+    }
+}
+
+// every tile of the lamp id is placed and drawn: the set the lookup can read
+bool LLProjectorShadows::lampDrawn(U32 lamp) const
+{
+    bool any = false;
+    for (auto it = mRecords.lower_bound(lamp << 4); it != mRecords.end() && (it->first >> 4) == lamp; ++it)
+    {
+        if (!it->second.placed || it->second.drawnFrame == 0)
+        {
+            return false;
+        }
+        any = true;
+    }
+    return any;
+}
+
+// N3: a lamp's cells change (its cone crossed the split near 93 degrees, or its aspect moved a cell boundary). Its tiles keep serving
+// the lookup, as a lamp's pose-stale tiles always do, until every tile of the new grid is drawn (draw-then-swap): they retire under the
+// lamp's old id and the lamp gets a new id. When an older set already retires, the current one never got complete (a complete one
+// retires the older set first, updateLightSet): the current, incomplete set goes and the complete older one keeps serving.
+void LLProjectorShadows::retireLamp(U32 lamp, LLDrawable* drawable)
+{
+    if (mRetiringOf.count(drawable))
+    {
+        dropLamp(lamp, drawable);
+        return;
+    }
+    for (auto it = mRecords.lower_bound(lamp << 4); it != mRecords.end() && (it->first >> 4) == lamp; ++it)
+    {
+        it->second.retiring = true;
+    }
+    mRetiringOf[drawable] = lamp;
     mKeyOf.erase(drawable);
 }
 
@@ -452,6 +511,24 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
     const F32 reach = spotReach(LLPipeline::RenderFarClip);
     const F64 now = LLTimer::getTotalSeconds();
 
+    // N3: a lamp whose new cells are all drawn no longer needs its retiring ones (nor does one that has no current set any more)
+    if (!mRetiringOf.empty())
+    {
+        std::vector<std::pair<U32, const LLDrawable*>> done;
+        for (const auto& entry : mRetiringOf)
+        {
+            auto key = mKeyOf.find(entry.first);
+            if (key == mKeyOf.end() || lampDrawn(key->second))
+            {
+                done.emplace_back(entry.second, entry.first);
+            }
+        }
+        for (const auto& lamp : done)
+        {
+            dropLamp(lamp.first, lamp.second);
+        }
+    }
+
     for (auto& entry : mRecords)
     {
         entry.second.seen = false;
@@ -471,7 +548,7 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
             {
                 holdOff(known->second, drawable, cam_pos, reach, now); // a lamp never seen on gets no tile
             }
-            return;
+            return; // its retiring cells (N3), if any, are not seen: they go
         }
         LLVOVolume* volume = drawable->getVOVolume();
         const F32 dist = camera_distance(drawable, cam_pos, volume->getLightRadius());
@@ -484,15 +561,21 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
         {
             return;
         }
-        // the lamp's cells (one tile for a lamp up to about 93 degrees); a lamp edited to another grid starts again with the new cells
+        // the lamp's cells (one tile for a lamp up to about 93 degrees); a lamp edited to another grid gets new cells, and its old ones
+        // serve until the new ones are drawn (N3)
         const CellGrid grid = spot_grid(geom);
         U32 lamp = was_in ? known->second : 0u;
         if (was_in)
         {
             auto first = mRecords.find(lamp << 4);
-            if (first == mRecords.end() || first->second.grid != grid)
+            if (first == mRecords.end())
             {
                 dropLamp(lamp, drawable); // `known` is gone with it
+                lamp = 0;
+            }
+            else if (first->second.grid != grid)
+            {
+                retireLamp(lamp, drawable); // `known` is gone with it
                 lamp = 0;
             }
         }
@@ -537,6 +620,14 @@ void LLProjectorShadows::updateLightSet(LLCamera& camera)
                 rec->seen = true;
                 rec->off = false; // on again: its tiles serve at once (S2)
                 rec->camDist = dist;
+            }
+        }
+        auto old = mRetiringOf.find(drawable);
+        if (old != mRetiringOf.end())
+        {
+            for (auto it = mRecords.lower_bound(old->second << 4); it != mRecords.end() && (it->first >> 4) == old->second; ++it)
+            {
+                it->second.seen = true; // N3: the old cells serve until the new ones are drawn
             }
         }
     };
@@ -729,9 +820,10 @@ void LLProjectorShadows::layout(F32 dt_seconds)
     {
         Record& rec = entry.second;
         ValveTile tile;
-        if (rec.off)
+        if (rec.off || rec.retiring)
         {
-            // S2: a lamp that is off keeps its tiles at their sizes (they count; the valve does not size them) and gets no new one
+            // S2: a lamp that is off keeps its tiles at their sizes (they count; the valve does not size them) and gets no new one; N3:
+            // so do a lamp's old cells while its new ones are drawn
             if (rec.placed)
             {
                 tile.base = tile.fixed = rec.rect.size;
@@ -760,7 +852,7 @@ void LLProjectorShadows::layout(F32 dt_seconds)
     std::vector<Record*> waiting;
     for (auto& entry : mRecords)
     {
-        if (!entry.second.placed && !entry.second.off)
+        if (!entry.second.placed && !entry.second.off && !entry.second.retiring)
         {
             waiting.push_back(&entry.second);
         }
@@ -1455,6 +1547,10 @@ void LLProjectorShadows::update(LLCamera& camera)
         for (auto& entry : mRecords)
         {
             Record& rec = entry.second;
+            if (rec.retiring)
+            {
+                continue; // N3: an old cell keeps the pose and volume it was drawn with until the lamp's new cells are drawn
+            }
             // the lamp's geometry and pose are read once for its tiles (they are consecutive: the key is lamp << 4 | cell)
             if (lamp_read != rec.lamp)
             {
@@ -1520,7 +1616,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         {
             Record& rec = entry.second;
             const U32 nc = rec.placed ? rec.rect.size : rec.want;
-            if (rec.volumeValid && rec.volumeNc != nc)
+            if (rec.volumeValid && rec.volumeNc != nc && !rec.retiring)
             {
                 SpotGeom g;
                 if (read_spot(rec.drawable, g))
@@ -1543,7 +1639,7 @@ void LLProjectorShadows::update(LLCamera& camera)
         for (auto& entry : mRecords)
         {
             const Record& rec = entry.second;
-            if (rec.placed && rec.drawnFrame != 0 && rec.volumeValid && !rec.pending) // a pending tile's hit is discarded below
+            if (rec.placed && rec.drawnFrame != 0 && rec.volumeValid && !rec.pending && !rec.retiring) // a pending tile's hit is discarded below
             {
                 TileVolume tv;
                 tv.key = rec.key;
@@ -1604,9 +1700,9 @@ void LLProjectorShadows::update(LLCamera& camera)
         for (auto entry = mRecords.begin(); entry != mRecords.end(); ++entry)
         {
             Record& rec = entry->second;
-            if (rec.off)
+            if (rec.off || rec.retiring)
             {
-                continue; // S2: a lamp that is off is not drawn, nor are its tiles: their changes wait until it is on again
+                continue; // S2: a lamp that is off is not drawn, nor are its tiles: their changes wait until it is on again; N3: old cells serve as they are
             }
             if (!run_open || rec.lamp != run_lamp)
             {
@@ -1811,8 +1907,18 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     auto key = mKeyOf.find(light);
     if (key != mKeyOf.end())
     {
+        // N3: while a lamp's new cells are not all drawn, its retiring old ones serve (one grid per lookup)
+        U32 lamp = key->second;
+        if (!lampDrawn(lamp))
+        {
+            auto old = mRetiringOf.find(light);
+            if (old != mRetiringOf.end())
+            {
+                lamp = old->second;
+            }
+        }
         // the lamp's records are consecutive in the map (key = lamp << 4 | cell): the one tile's lamp has one, a wide lamp's has its cells
-        for (auto it = mRecords.lower_bound(key->second << 4); it != mRecords.end() && (it->first >> 4) == key->second; ++it)
+        for (auto it = mRecords.lower_bound(lamp << 4); it != mRecords.end() && (it->first >> 4) == lamp; ++it)
         {
             const U32 cell = it->first & 15u;
             const Record& r = it->second;

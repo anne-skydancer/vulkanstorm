@@ -204,6 +204,7 @@ private:
         bool seen = false;         // in this frame's light set
         bool off = false;          // S2: the lamp is switched off, black or at radius 0: its tiles are held (not drawn, not resized) ...
         F64 offSince = 0.0;        // ... since this time (seconds), for llprojectorpool::kOffHoldSeconds
+        bool retiring = false;     // N3: a cell of the lamp's old grid, serving the lookup until every cell of its new grid is drawn
         // P3: what the lamp and the scene did since the tile was drawn
         llprojectorpool::Pose drawnPose;   // the pose the tile holds (the comparison of the lamp's changes)
         llprojectorpool::Pose curPose;     // this frame's
@@ -269,6 +270,8 @@ private:
     void pinDrawable(LLDrawable* drawable);
     void dropRecord(std::map<U32, Record>::iterator it);
     void dropLamp(U32 lamp, const LLDrawable* drawable);
+    void retireLamp(U32 lamp, LLDrawable* drawable);
+    bool lampDrawn(U32 lamp) const;
     void holdOff(U32 lamp, LLDrawable* drawable, const LLVector3& cam_pos, F32 reach, F64 now);
 
     U32 mAtlasS = 0;   // the tiles as drawn: the fixed layer only (the avatars are not drawn into it since P4)
@@ -284,6 +287,7 @@ private:
     bool mPlacementFailed = false; // an arriving tile found no room last frame: the valve steps up once more
     std::map<U32, Record> mRecords;
     std::unordered_map<const LLDrawable*, U32> mKeyOf;
+    std::unordered_map<const LLDrawable*, U32> mRetiringOf; // N3: a lamp's old id whose cells serve until its new grid is drawn
     U32 mNextKey = 1;
     U32 mFrame = 0;                // the frame count update() last ran in
     U32 mShiftsSeen = 0;           // LLShadowDirtyFeed::shifts() at the last update: agent space moved since, every volume is rebuilt
