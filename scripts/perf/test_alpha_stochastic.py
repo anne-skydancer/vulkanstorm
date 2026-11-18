@@ -22,6 +22,13 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     first two cover every sample, the third leaves the scene untouched, as sorted alpha draws
     them; the depth spread of 1.0.1.81943 (the centre's depth on every sample, with a
     slope-scaled offset in the passes) is shown to let the face behind through.
+  * coincident faces of one object (the layer rank, llstochasticlayerrank.h): four faces on the same triangles,
+    ranks 0 to 3, in any draw order, flat, sloped and as decals on sloped planes, give face order (the last face
+    over the others, no glow from the covered ones), where without the rank they average; the margins against
+    depth noise, in polygon-offset units, are the C++ model's; one offset unit is measured in steps of the 24-bit depth;
+  * the viewer's alpha and glow vertex programs (alphaV, fullbrightV, materialV, pbralphaV, emissiveV, pbrglowV),
+    static and skinned, give one surface the same depth within the passes' margins (transform feedback of gl_Position),
+    and a control that associates the matrix products the other way shows that the comparison sees a difference.
 ;
   * sub-pixel camera pans (horizontal, vertical, diagonal): the transparency history is read with a Catmull-Rom filter at the exact
     reprojected position; frame 40 beats the nearest read and plain 8 samples, whole-pixel pans and the static view are unchanged;
@@ -168,6 +175,16 @@ expand_before=program([(0x8B31,screen_vertex),(0x8B30,'#version 420\n'+subproces
 # stochastic depth, of the accumulation, of the glow
 VIEWER_OFFSET=(-1/256,-1.,-2.,-3.)
 BEFORE_OFFSET=(-1.,-1.,-2.,-3.)
+# the layer rank (llstochasticlayerrank.h): a face on the same triangles as r earlier faces of its object is pulled
+# UNITS_PER_RANK r units nearer in every pass. RANK_OF_SEED gives a layer's rank by its seed (none: 0).
+_rank_header=(root/'indra/newview/llstochasticlayerrank.h').read_text()
+UNITS_PER_RANK=float(re.search(r'constexpr float UNITS_PER_RANK\s*=\s*([0-9.]+)f;',_rank_header).group(1))
+for _name,_units in (('UNITS_DEPTH',VIEWER_OFFSET[1]),('UNITS_ACCUM',VIEWER_OFFSET[2]),('UNITS_GLOW',VIEWER_OFFSET[3])):
+    assert float(re.search(r'constexpr float %s\s*=\s*(-?[0-9.]+)f;'%_name,_rank_header).group(1))==_units,(_name,'differs from the passes here')
+RANK_OF_SEED={}
+# depth noise injected into the accumulation and the glow, in polygon-offset units: the depth of a face in those passes
+# minus its depth in the stochastic depth (the viewer draws them with other programs); 0 = the same depth
+PASS_NOISE={2:0,3:0}
 composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCompositeF.glsl'))])
 # the temporal accumulation: the transparency's compute resolve (this frame's samples averaged into a
 # shared tile) with the engine's resolve object compiled as a second compute object, as the viewer
@@ -254,20 +271,20 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
     spread(n,spread_prog)
     use(variant);uniform1i(loc(variant,b'st_samples_hw'),n);uniform1i(loc(variant,b'st_samples'),total)
     bind_unit(1,TEX2D,mask_tex[total]);uniform1i(loc(variant,b'stoch_masks'),1)
-    def poly(i):
-        if use_offset: enable(POLY_OFFSET);offset(offsets[0],offsets[i])
+    def poly(i,seed=None):
+        if use_offset: enable(POLY_OFFSET);offset(offsets[0],offsets[i]-UNITS_PER_RANK*RANK_OF_SEED.get(seed,0)+PASS_NOISE.get(i,0))
         else: disable(POLY_OFFSET)
     # 1. total alpha
     bindfbo(FB,f);drawbuffer(COLOR1);enable(BLEND);blendsep(ZERO,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
     depthmask(0);poly(1);use(variant);uniform1i(loc(variant,b'st_mode'),1)
-    for z,a,rgb,seed,glow,slope in layers: layer(variant,z,a,seed=seed,slope=slope)
+    for z,a,rgb,seed,glow,slope in layers: poly(1,seed);layer(variant,z,a,seed=seed,slope=slope)
     bits=[]
     for it in range(iterations):
         if it: spread(n,spread_prog)
         # 2. stochastic depth
         bindfbo(FB,f);drawbuffer(NONE);depthmask(1);poly(1)
         use(variant);uniform1i(loc(variant,b'st_mode'),2);uniform1i(loc(variant,b'st_iteration'),it)
-        for z,a,rgb,seed,glow,slope in layers: layer(variant,z,a,seed=seed,slope=slope)
+        for z,a,rgb,seed,glow,slope in layers: poly(1,seed);layer(variant,z,a,seed=seed,slope=slope)
         if read_bits:
             bindfbo(FB,bits_fbo);disable(BLEND);disable(DEPTH_TEST);disable(POLY_OFFSET);disable(MULTISAMPLE)
             use(readmask);bind_unit(2,TEXMS,depth);bind_unit(3,TEX2D,opaque_depth)
@@ -276,10 +293,10 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
             enable(DEPTH_TEST);enable(MULTISAMPLE);bindfbo(FB,f)
         # 3. accumulation, then the glow of the glowing faces
         drawbuffer(COLOR0);depthmask(0);enable(BLEND);blendsep(SRC_ALPHA,ONE,ONE,ONE);poly(2)
-        for z,a,rgb,seed,glow,slope in layers: layer(shade,z,a,rgb,slope=slope)
+        for z,a,rgb,seed,glow,slope in layers: poly(2,seed);layer(shade,z,a,rgb,slope=slope)
         drawbuffer(COLOR1);blendsep(ONE,ONE,ONE,ONE);poly(3)
         for z,a,rgb,seed,glow,slope in layers:
-            if glow>0: layer(glowprog,z,glow=glow,slope=slope)
+            if glow>0: poly(3,seed);layer(glowprog,z,glow=glow,slope=slope)
     disable(POLY_OFFSET);disable(MULTISAMPLE)
     # 3b. the temporal accumulation: this frame's colour blended with the history
     if temporal is not None and FRAGMENT_RESOLVE:
@@ -640,6 +657,266 @@ assert lost>0,'without the offset the centre-depth spread should lose samples of
 checks+=1
 print(f'before ({BEFORE_REF}: the centre depth on every sample, offset factor -1): the face behind the plane shows '
       f'on {", ".join(str(k) for k in leaks)} of {W*H} pixels; without the offset a decal loses samples on {lost} pixels')
+
+# ---- coincident layers of one object (mesh eyes, stacked decals: the layer rank, llstochasticlayerrank.h, bug V1). Four
+# faces on the same triangles, ranks 0 to 3 in the creator's order, drawn in any order, over a far scene (flat and sloped)
+# and as a stack of decals on sloped opaque planes: the composite is face order (the last face over the others) and a
+# covered face's glow is gone, as the C++ model (indra/newview/tests/llstochasticlayerrank_test.cpp) says, on the real
+# 24-bit depth and polygon offset; without the rank they average (the bug). Then depth noise injected into the
+# accumulation and the glow, in polygon-offset units: the margins are the model's.
+EYE=((1.,0.,0.),(0.,1.,0.),(0.,0.,1.),(1.,1.,1.))   # face order 0 to 3: an iris, a pupil, a decal, a highlight
+EYE_SEEDS=tuple(70+i for i in range(4))
+def eye_stack(z,alphas,glows,sl,order,faces=4):
+    return [L(z,alphas[i],EYE[i],seed=EYE_SEEDS[i],glow=glows[i],slope=sl) for i in order if i<faces]
+def ranked(on=True):
+    RANK_OF_SEED.clear()
+    if on: RANK_OF_SEED.update({s:i for i,s in enumerate(EYE_SEEDS)})
+def worst_to(pix,want,channels=(0,1,2)): return max(abs(p[c]-want[c]) for p in pix for c in channels)
+SCENE_GLOW=(0.,0.,1.,0.5)   # a blue scene with a glow of 0.5
+ORDERS=((0,1,2,3),(3,2,1,0),(2,0,3,1),(1,3,0,2))
+PLACES=(((0.,0.),False),((0.05,-0.03),False),((-0.2,0.1),False),((0.05,-0.03),True),((0.3,0.15),True),((-0.35,0.05),True))
+rank_cases=0
+for sl,on_plane in PLACES:
+    if on_plane: set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+    else: set_opaque(1.0)
+    for order in ORDERS:
+        # alpha 1, a glow of 0.8 on the three faces below: without the rank the four average; with it the last face's
+        # colour, the scene's glow covered (total alpha 1) and no glow from the faces below
+        ranked(False)
+        bug=stochastic(eye_stack(0.5,(1.,)*4,(0.8,0.8,0.8,0.),sl,order),8,8,scene_rgba=SCENE_GLOW)
+        assert worst_to(bug,(0.5,0.5,0.5))<2e-3,('without the rank four coincident faces average (the bug)',sl,on_plane,order,bug[0])
+        ranked()
+        pix=stochastic(eye_stack(0.5,(1.,)*4,(0.8,0.8,0.8,0.),sl,order),8,8,scene_rgba=SCENE_GLOW)
+        assert worst_to(pix,(1.,1.,1.,0.),(0,1,2,3))<2e-3,('four coincident faces in face order',sl,on_plane,order,pix[0])
+        # two faces of alpha 0.5 (exact at S = 8): the later over the earlier over the scene, the earlier's glow where the
+        # later leaves it visible, in both orders
+        if order in ((0,1,2,3),(3,2,1,0)):
+            pix=stochastic(eye_stack(0.5,(0.5,0.5,0.,0.),(0.8,0.,0.,0.),sl,order,faces=2),8,8,scene_rgba=SCENE_GLOW)
+            want=(0.25,0.5,0.25,0.5*0.25+0.8*0.5)
+            assert worst_to(pix,want,(0,1,2,3))<3e-3,('two coincident faces of alpha 0.5 in face order',sl,on_plane,order,pix[0],want)
+        rank_cases+=1
+# four faces of alpha 0.5 (noisy at S = 8): the mean over the pixels converges to face order, not to their average
+set_opaque(1.0)
+exact=[0.,0.,0.];vis=1.0;glow_exact=0.0
+for i in (3,2,1,0):
+    for c in range(3): exact[c]+=0.5*EYE[i][c]*vis
+    glow_exact+=(0.8 if i<3 else 0.)*vis;vis*=0.5
+for c in range(3): exact[c]+=SCENE_GLOW[c]*vis
+glow_exact+=SCENE_GLOW[3]*vis
+ranked()
+pix=stochastic(eye_stack(0.5,(0.5,)*4,(0.8,0.8,0.8,0.),(0.05,-0.03),(2,0,3,1)),8,8,scene_rgba=SCENE_GLOW)
+mean=[sum(p[c] for p in pix)/len(pix) for c in range(4)]
+assert all(abs(mean[c]-exact[c])<0.015 for c in range(3)) and abs(mean[3]-glow_exact)<0.015,('four faces of alpha 0.5, mean',mean,exact,glow_exact)
+ranked(False)
+flat=stochastic(eye_stack(0.5,(0.5,)*4,(0.8,0.8,0.8,0.),(0.05,-0.03),(2,0,3,1)),8,8,scene_rgba=SCENE_GLOW)
+flat_mean=[sum(p[c] for p in flat)/len(flat) for c in range(3)]
+assert max(abs(flat_mean[c]-exact[c]) for c in range(3))>0.1,('without the rank the mean is the average, far from face order',flat_mean,exact)
+rank_cases+=1
+# the margins, in polygon-offset units (alpha 1, a glow of 0.8 on the three faces below and of 0.3 on the last): from -3 to
+# +1 units of noise in the accumulation and from -2 to +2 in the glow the image is face order; the face just below shows at
+# -4 in the accumulation and at -3 in the glow; the last face fails its accumulation at +2 and its glow at +3 (as without
+# the rank)
+GLOWS=(0.8,0.8,0.8,0.3)
+for sl,on_plane in (((0.,0.),False),((0.05,-0.03),True)):
+    if on_plane: set_opaque(0.5,slope=sl[0],slope_y=sl[1])
+    else: set_opaque(1.0)
+    ranked()
+    for noise in range(-4,2):
+        PASS_NOISE[2]=noise
+        pix=stochastic(eye_stack(0.5,(1.,)*4,GLOWS,sl,(3,1,0,2)),8,8,scene_rgba=SCENE_GLOW)
+        if noise>=-3: assert worst_to(pix,(1.,1.,1.))<2e-3,('accumulation noise inside the margin',noise,sl,pix[0])
+        else: assert worst_to(pix,(0.5,0.5,1.))<2e-3,('the face just below shows at -4 units',sl,pix[0])
+    PASS_NOISE[2]=0
+    for noise in range(-3,4):
+        PASS_NOISE[3]=noise
+        pix=stochastic(eye_stack(0.5,(1.,)*4,GLOWS,sl,(3,1,0,2)),8,8,scene_rgba=SCENE_GLOW)
+        want=0.3 if -2<=noise<=2 else (1.1 if noise==-3 else 0.)   # the last face's glow; and the one below's; none
+        assert worst_to(pix,(0.,0.,0.,want),(3,))<3e-3,('glow noise',noise,sl,pix[0][3],want)
+    PASS_NOISE[3]=0
+RANK_OF_SEED.clear()
+rank_cases+=1
+checks+=rank_cases
+print(f'coincident faces of one object (the layer rank, {UNITS_PER_RANK:g} units per rank): four faces of alpha 1 in {len(ORDERS)} draw orders, '
+      f'over a far scene (flat and sloped) and as decals on sloped planes, give exactly the last face, with no glow from the faces below '
+      f'(without the rank: their average); two of alpha 0.5 exactly face order with the visible glow; four of alpha 0.5 converge to face '
+      f'order (mean {mean[0]:.3f}, {mean[1]:.3f}, {mean[2]:.3f}, glow {mean[3]:.3f} for {exact[0]:.3f}, {exact[1]:.3f}, {exact[2]:.3f}, '
+      f'{glow_exact:.3f}; without the rank {flat_mean[0]:.3f}, {flat_mean[1]:.3f}, {flat_mean[2]:.3f}); noise in offset units: face order '
+      f'from -3 to +1 in the accumulation and -2 to +2 in the glow, the face just below shows at -4 and -3')
+
+# ---- what one polygon-offset unit is in steps of the 24-bit depth (GL 4.6 section 14.6.5: an implementation constant, one or
+# two steps), which sets the world size of the passes' offsets and of the rank
+unit_tex=tex2d(D24,DEPTH_COMP,FLOAT);unit_fbo=fbo((DEPTH_ATT,TEX2D,unit_tex))
+def depth_steps(z,units):
+    bindfbo(FB,unit_fbo);drawbuffer(NONE);depthmask(1);enable(DEPTH_TEST);depthfunc(ALWAYS);cleardepth(1.0);clear(0x100)
+    if units: enable(POLY_OFFSET);offset(0.,units)
+    use(shade);uniform1f(loc(shade,b'z'),z);uniform1f(loc(shade,b'slope'),0.);uniform1f(loc(shade,b'slope_y'),0.);draw(4,0,3)
+    disable(POLY_OFFSET);depthfunc(LEQUAL)
+    out=(U*(W*H))();readpixels(0,0,W,H,DEPTH_COMP,UINT,out)
+    return {v>>8 for v in out}
+STEPS_PER_UNIT=set()
+for z in (-0.5,0.,0.5,0.9,0.999):
+    base=depth_steps(z,0.);assert len(base)==1
+    for u in (1.,2.,5.,16.):
+        d=depth_steps(z,-u);assert len(d)==1
+        STEPS_PER_UNIT.add((next(iter(base))-next(iter(d)))/u)
+assert len(STEPS_PER_UNIT)==1 and next(iter(STEPS_PER_UNIT)) in (1.,2.),('one offset unit is one or two steps of the 24-bit depth',STEPS_PER_UNIT)
+STEPS_PER_UNIT=next(iter(STEPS_PER_UNIT))
+checks+=1
+print(f'one polygon-offset unit = {STEPS_PER_UNIT:g} step(s) of the 24-bit depth here: a rank-1 face sits {(1+UNITS_PER_RANK)*STEPS_PER_UNIT:g} steps '
+      f'in front of its surface ({(1+UNITS_PER_RANK)*STEPS_PER_UNIT*100/(0.1*2**24)*1000:.2f} mm at 10 m, '
+      f'{(1+UNITS_PER_RANK)*STEPS_PER_UNIT*1e4/(0.1*2**24)*100:.1f} cm at 100 m, 0.1 m near plane)')
+
+# ---- the depth of one surface through the viewer's alpha vertex programs: what the stochastic passes compare. The
+# programs that draw a blended face (alphaV, fullbrightV, materialV and its maps, pbralphaV) and its glow (emissiveV,
+# pbrglowV), static and skinned (objectSkinV.glsl), each with gl_Position alone and with every output alive (an alpha-only
+# variant reads few, the full program most), by transform feedback: their clip positions are compared in steps of the 24-bit
+# depth for vertices 0.3 to 200 m from the eye, with the matrices of a region (an object or an avatar at 128 m, a camera
+# near it). The passes allow 1 unit between a face's depth and its accumulation (one vertex shader file) and 2 between
+# programs of different files (its glow, a coincident face drawn by another program); a control program that associates
+# the products the other way shows what a compiler that reassociated them would do.
+import numpy as np
+SHADERS1=root/'indra/newview/app_settings/shaders/class1'
+genbuf=fn('glGenBuffers',None,I,C.POINTER(U));bindbuf=fn('glBindBuffer',None,U,U);delbuf=fn('glDeleteBuffers',None,I,C.POINTER(U))
+bufdata=fn('glBufferData',None,U,C.c_ssize_t,P,U);bindbase=fn('glBindBufferBase',None,U,U,U)
+getbufsub=fn('glGetBufferSubData',None,U,C.c_ssize_t,C.c_ssize_t,P)
+tfvary=fn('glTransformFeedbackVaryings',None,U,I,C.POINTER(C.c_char_p),U)
+begintf=fn('glBeginTransformFeedback',None,U);endtf=fn('glEndTransformFeedback',None)
+attrib_ptr=fn('glVertexAttribPointer',None,U,I,U,C.c_ubyte,I,P)
+attrib_on=fn('glEnableVertexAttribArray',None,U);attrib_off=fn('glDisableVertexAttribArray',None,U)
+bind_attrib=fn('glBindAttribLocation',None,U,U,C.c_char_p)
+um4=fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
+um34=fn('glUniformMatrix3x4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))
+getpiv=fn('glGetProgramInterfaceiv',None,U,U,U,C.POINTER(I))
+getresname=fn('glGetProgramResourceName',None,U,U,U,I,C.POINTER(I),C.c_char_p)
+getvary=fn('glGetTransformFeedbackVarying',None,U,U,I,C.POINTER(I),C.POINTER(I),C.POINTER(U),C.c_char_p)
+TF_SIZES={0x1406:1,0x8B50:2,0x8B51:3,0x8B52:4,0x1404:1}   # float, vec2, vec3, vec4, int
+def vs_text(rel,defines):
+    head='#version 420\n#define VERTEX_SHADER 1\n#define MAX_JOINTS_PER_MESH_OBJECT 110\n'
+    return head+''.join('#define %s\n'%(d if ' ' in d else d+' 1') for d in defines)+(SHADERS1/rel).read_text()
+def vs_stages(rel,defines):
+    out=[(0x8B31,vs_text(rel,defines)),(0x8B31,'#version 420\nvoid calcAtmospherics(vec3 p) {}\n'),
+         (0x8B31,vs_text('objects/indexedTextureV.glsl',[])),(0x8B31,vs_text('deferred/textureUtilV.glsl',[]))]
+    if 'HAS_SKIN' in defines: out.append((0x8B31,vs_text('avatar/objectSkinV.glsl',[])))
+    return out
+def tf_program(st,varyings=None):
+    prog=create_program()
+    for kind,text in st:
+        s=create_shader(kind);src=C.c_char_p(text.encode());source_shader(s,1,C.byref(src),None);compile_shader(s)
+        ok=I();shader_iv(s,0x8B81,C.byref(ok));log=C.create_string_buffer(16384);shader_log(s,len(log),None,log)
+        assert ok.value,log.value.decode()[:3000]
+        attach(prog,s);fn('glDeleteShader',None,U)(s)
+    bind_attrib(prog,0,b'position');bind_attrib(prog,1,b'weight4')
+    if varyings: tfvary(prog,len(varyings),(C.c_char_p*len(varyings))(*[v.encode() for v in varyings]),0x8C8C)   # interleaved
+    link(prog);ok=I();program_iv(prog,0x8B82,C.byref(ok));log=C.create_string_buffer(16384);program_log(prog,len(log),None,log)
+    assert ok.value,log.value.decode()[:3000]
+    return prog
+def live_outputs(rel,defines):
+    prog=tf_program(vs_stages(rel,defines));n=I();getpiv(prog,0x92E4,0x92F5,C.byref(n));names=[]   # PROGRAM_OUTPUT, ACTIVE_RESOURCES
+    for i in range(n.value):
+        buf=C.create_string_buffer(256);ln=I();getresname(prog,0x92E4,i,256,C.byref(ln),buf);names.append(buf.value.decode())
+    fn('glDeleteProgram',None,U)(prog)
+    return ['gl_Position']+[v for v in names if v!='gl_Position']
+def tf_stride(prog,count):
+    total=0
+    for i in range(count):
+        ln=I();sz=I();ty=U();nm=C.create_string_buffer(256);getvary(prog,i,256,C.byref(ln),C.byref(sz),C.byref(ty),nm)
+        total+=TF_SIZES[ty.value]*sz.value
+    return total
+def lookat(eye,target):
+    f=target-eye;f/=np.linalg.norm(f);s=np.cross(f,(0.,0.,1.));s/=np.linalg.norm(s);u=np.cross(s,f)
+    m=np.identity(4);m[0,:3]=s;m[1,:3]=u;m[2,:3]=-f;m[:3,3]=-m[:3,:3]@eye;return m
+def perspective(fovy,aspect,near,far):
+    t=1/math.tan(fovy/2);m=np.zeros((4,4));m[0,0]=t/aspect;m[1,1]=t;m[2,2]=(far+near)/(near-far);m[2,3]=2*far*near/(near-far);m[3,2]=-1
+    return m
+def mul32(a,b):
+    """a @ b with a float32 running sum per element, as the viewer's matrix products"""
+    a=a.astype(np.float32);b=b.astype(np.float32);out=np.zeros((4,4),np.float32)
+    for i in range(4):
+        for j in range(4):
+            acc=np.float32(0)
+            for k in range(4): acc=np.float32(acc+np.float32(a[i,k]*b[k,j]))
+            out[i,j]=acc
+    return out
+def colmajor(m): return (C.c_float*16)(*np.asarray(m,np.float32).T.reshape(-1))
+VP_N=20000;VP_JOINTS=110
+VP_PROGRAMS=(('alpha','deferred/alphaV.glsl',['USE_VERTEX_COLOR','HAS_ALPHA_MASK','USE_INDEXED_TEX','HAS_SUN_SHADOW']),
+             ('fullbright','deferred/fullbrightV.glsl',['HAS_ALPHA_MASK','IS_ALPHA']),
+             ('material','deferred/materialV.glsl',['DIFFUSE_ALPHA_MODE 1']),
+             ('material+normal','deferred/materialV.glsl',['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP']),
+             ('material+specular','deferred/materialV.glsl',['DIFFUSE_ALPHA_MODE 1','HAS_SPECULAR_MAP']),
+             ('material+both','deferred/materialV.glsl',['DIFFUSE_ALPHA_MODE 1','HAS_NORMAL_MAP','HAS_SPECULAR_MAP']),
+             ('pbralpha','deferred/pbralphaV.glsl',[]),('emissive','deferred/emissiveV.glsl',[]),('pbrglow','deferred/pbrglowV.glsl',[]))
+VP_CONTROL={False:'''#version 420
+uniform mat4 modelview_matrix; uniform mat4 projection_matrix; in vec3 position;
+void main() { gl_Position = projection_matrix * (modelview_matrix * vec4(position, 1.0)); }''',
+            True:'''#version 420
+uniform mat4 modelview_matrix; uniform mat4 projection_matrix; in vec3 position; mat4 getObjectSkinnedTransform();
+void main() { gl_Position = projection_matrix * (modelview_matrix * (getObjectSkinnedTransform() * vec4(position, 1.0))); }'''}
+vp_rng=np.random.default_rng(7)
+def vp_scene(distance,skinned):
+    obj=np.array([128.37,127.61,26.43])   # an object, or an avatar, in a region (agent frame)
+    d=vp_rng.normal(size=3);d[2]=abs(d[2])*0.3;d/=np.linalg.norm(d)
+    MV=mul32(lookat(obj+d*distance,obj),np.identity(4));Pm=perspective(math.radians(60),16/9,0.1,512.)
+    if not skinned:   # static: region coordinates (the region's render matrix)
+        return (obj+vp_rng.uniform(-0.15,0.15,size=(VP_N,3))).astype(np.float32),None,MV,Pm,None
+    pos=vp_rng.uniform(-0.15,0.15,size=(VP_N,3)).astype(np.float32)   # mesh space
+    w=vp_rng.uniform(0.05,0.95,size=(VP_N,4));w[:,2:]*=(vp_rng.random((VP_N,2))<0.4)
+    one=vp_rng.random(VP_N)<0.5;w[one]=0;w[one,0]=0.999                 # half the vertices on one joint (an eye bone)
+    weight4=(vp_rng.integers(0,12,size=(VP_N,4))+w).astype(np.float32)
+    pal=[]
+    for j in range(VP_JOINTS):
+        a=vp_rng.normal(size=3)*0.3;cx,sx,cy,sy,cz,sz=math.cos(a[0]),math.sin(a[0]),math.cos(a[1]),math.sin(a[1]),math.cos(a[2]),math.sin(a[2])
+        R=np.array([[1,0,0],[0,cx,-sx],[0,sx,cx]])@np.array([[cy,0,sy],[0,1,0],[-sy,0,cy]])@np.array([[cz,-sz,0],[sz,cz,0],[0,0,1]])
+        t=obj+vp_rng.normal(size=3)*0.2                                   # the joints of an avatar standing at obj
+        for c in range(3): pal+=[R[0,c],R[1,c],R[2,c],t[c]]
+    return pos,weight4,MV,Pm,np.array(pal,np.float32)
+def vp_capture(prog,stride,pos,weight4,MV,Pm,pal):
+    use(prog)
+    for name,m in ((b'modelview_matrix',MV),(b'projection_matrix',Pm),(b'modelview_projection_matrix',mul32(Pm,MV)),(b'texture_matrix0',np.identity(4))):
+        l=loc(prog,name)
+        if l>=0: um4(l,1,0,colmajor(m))
+    if pal is not None: um34(loc(prog,b'matrixPalette'),VP_JOINTS,0,(C.c_float*len(pal))(*pal))
+    bufs=[]
+    for index,data,size in ((0,pos,3),(1,weight4,4)):
+        if data is None: attrib_off(index);continue
+        b=U();genbuf(1,C.byref(b));bindbuf(0x8892,b);d=np.ascontiguousarray(data,np.float32);bufdata(0x8892,d.nbytes,d.ctypes.data,0x88E4)
+        attrib_ptr(index,size,FLOAT,0,0,None);attrib_on(index);bufs.append(b)
+    tb=U();genbuf(1,C.byref(tb));bindbuf(0x8C8E,tb);nbytes=VP_N*stride*4;bufdata(0x8C8E,nbytes,None,0x88E1);bindbase(0x8C8E,0,tb);bufs.append(tb)
+    enable(0x8C89);begintf(0);draw(0,0,VP_N);endtf();disable(0x8C89)   # rasterizer discard, points
+    out=np.zeros(VP_N*stride,np.float32);bindbuf(0x8C8E,tb);getbufsub(0x8C8E,0,nbytes,out.ctypes.data)
+    for b in bufs: delbuf(1,C.byref(b))
+    attrib_off(0);attrib_off(1);assert geterror()==0
+    clip=out.reshape(VP_N,stride)[:,:4]
+    return clip,(clip[:,2].astype(np.float64)/clip[:,3]*0.5+0.5)*(2**24-1)   # the clip positions; the depth in steps
+vp_report=[]
+for skinned in (False,True):
+    progs={}
+    for name,rel,defines in VP_PROGRAMS:
+        defs=defines+(['HAS_SKIN'] if skinned else [])
+        for mode,vary in (('position',['gl_Position']),('outputs',live_outputs(rel,defs))):
+            prog=tf_program(vs_stages(rel,defs),vary);progs[(name,mode)]=(prog,tf_stride(prog,len(vary)))
+    cst=[(0x8B31,VP_CONTROL[skinned])]+([(0x8B31,vs_text('avatar/objectSkinV.glsl',[]))] if skinned else [])
+    control=tf_program(cst,['gl_Position'])
+    for distance in (0.3,1.,3.,10.,50.,200.):
+        scene_data=vp_scene(distance,skinned)
+        clips={k:vp_capture(p,s,*scene_data) for k,(p,s) in progs.items()}
+        keys=list(clips);ref=clips[keys[0]]
+        same_file=max(float(np.max(np.abs(clips[(n,'position')][1]-clips[(n,'outputs')][1]))) for n,_,_ in VP_PROGRAMS)
+        across=max(float(np.max(np.abs(c[1]-ref[1]))) for c in clips.values())
+        identical=all(np.array_equal(c[0].view(np.uint32),ref[0].view(np.uint32)) for c in clips.values())
+        ctrl=float(np.max(np.abs(vp_capture(control,4,*scene_data)[1]-ref[1])))
+        assert same_file<=1. and across<=2.,('the alpha vertex programs disagree on the depth beyond the passes\' margins',skinned,distance,same_file,across)
+        if distance<=3.: assert ctrl>=1.,('the control should move the depth by a step or more near the eye',skinned,distance,ctrl)
+        vp_report.append((skinned,distance,identical,across,ctrl))
+    for p,_ in progs.values(): fn('glDeleteProgram',None,U)(p)
+    fn('glDeleteProgram',None,U)(control)
+checks+=1
+print(f'{len(VP_PROGRAMS)} alpha and glow vertex programs, static and skinned, gl_Position alone and every output alive, '
+      f'{VP_N} vertices 0.3 to 200 m from the eye: '
+      + ('clip positions bit-identical across all of them' if all(r[2] for r in vp_report)
+         else 'depths within %.2f steps across them' % max(r[3] for r in vp_report))
+      + '; the control (the products associated the other way) moves the depth by up to '
+      + ', '.join(f'{r[4]:.0f}' for r in vp_report if r[1] in (1.,10.)) + ' steps at 1 and 10 m (static, skinned)')
 
 # ---- a blended legacy material that can glare (materialF.glsl, class3, DIFFUSE_ALPHA_MODE_BLEND with
 # normal and specular maps), the viewer's own shader, plain and as its alpha-only variant, over an
