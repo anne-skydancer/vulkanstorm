@@ -1784,15 +1784,16 @@ bool LLTextureFetchWorker::doWork(S32 param)
                 {
                     mUrl.clear();
                 }
-                if (cur_size > 0)
+                // <Vulkanstorm> Decode the data at hand only when it reaches the requested level
+                // (LLTextureFetchPolicy::decodeAfterFailedRequest). Otherwise it is data this worker decoded in an
+                // earlier round, coarser than requested: decoding it again ended at that level, DONE sent the worker
+                // back to INIT, and INIT sent the failed request again at once, for as long as the texture stayed on
+                // screen. Data never decoded (-1) ended the fetch without data already. The fetch now ends without
+                // data below, and the texture's bounded retry takes over (LLViewerFetchedTexture::processFetchResults).
+                if (cur_size > 0 && LLTextureFetchPolicy::decodeAfterFailedRequest(mFormattedImage->getDiscardLevel(), mDesiredDiscard))
                 {
                     // Use available data
                     mLoadedDiscard = mFormattedImage->getDiscardLevel();
-                    if (mLoadedDiscard < 0)
-                    {
-                        LL_WARNS(LOG_TXT) << mID << " mLoadedDiscard is " << mLoadedDiscard
-                                          << ", should be >=0" << LL_ENDL;
-                    }
                     setState(DECODE_IMAGE);
                     releaseHttpSemaphore();
                     //return false;

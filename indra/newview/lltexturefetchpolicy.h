@@ -2,8 +2,8 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 /**
  * @file lltexturefetchpolicy.h
- * @brief Texture fetch rules: the bounded retry of fetches that end without data, and the priority
- *        snapshots that order waiting requests.
+ * @brief Texture fetch rules: the bounded retry of fetches that end without data, the end of a fetch
+ *        whose request failed, and the priority snapshots that order waiting requests.
  *
  * Free of GL and viewer types: LLViewerFetchedTexture (llviewertexture.cpp) and LLTextureFetch
  * (lltexturefetch.cpp) apply the rules, and indra/newview/tests/lltexturefetchpolicy_test.cpp checks
@@ -14,8 +14,10 @@
  * level at once, and no request was made again while the texture stayed at that level: it stayed
  * blurry for the life of the texture object, zooming in did not help, and Refresh Textures did not
  * clear it either. A first fetch that ended without data marked the asset missing for the session,
- * whatever the cause. And the waiting requests were sorted by their live priorities, which other
- * threads change during the sort.
+ * whatever the cause. A refinement whose request failed while its worker held data it had decoded
+ * before did not end at all: the worker decoded that data again and sent the same request again at
+ * once, for as long as the texture stayed on screen. And the waiting requests were sorted by their
+ * live priorities, which other threads change during the sort.
  */
 
 #ifndef LL_LLTEXTUREFETCHPOLICY_H
@@ -60,6 +62,19 @@ namespace LLTextureFetchPolicy
             mRetryTime = 0.f;
         }
     };
+
+    // Whether a fetch worker whose request for more data failed decodes the data it already holds
+    // (LLTextureFetchWorker::doWork): only when that data reaches the requested level. `available_discard`
+    // is the level that data was last decoded at, -1 when it never was; `desired_discard` is the level
+    // requested. Otherwise the fetch ends without data and FetchRetry takes over. The worker used to decode
+    // it whatever its level: data decoded in an earlier round, coarser than requested, decoded at that
+    // level again, so the worker went back to INIT and sent the failed request again at once, with no
+    // bound while the texture stayed on screen; data never decoded already ended the fetch without data
+    // (an invalid level).
+    inline bool decodeAfterFailedRequest(int available_discard, int desired_discard)
+    {
+        return available_discard >= 0 && available_discard <= desired_discard;
+    }
 
     // A request's priority, read once under the request's lock, for one ordering of the waiting requests
     // (LLTextureFetch::releaseHttpWaiters, and sendRequestListToSimulators on OpenSim). The orderings used
