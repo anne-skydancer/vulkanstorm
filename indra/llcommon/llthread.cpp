@@ -327,18 +327,17 @@ void LLThread::shutdown()
             }
 
             //LL_INFOS() << "LLThread::~LLThread() Killing thread " << mName << " Status: " << mStatus << LL_ENDL;
-            S32 counter = 0;
-            const S32 MAX_WAIT = 6000; // 60 s in 10 ms steps
-            while (counter < MAX_WAIT)
+            // 60 s bound measured on a timer: ms_sleep() granularity can be 15.6 ms on Windows
+            LLTimer deadline;
+            const F64 MAX_WAIT_SECONDS = 60.0;
+            while (deadline.getElapsedTimeF64() < MAX_WAIT_SECONDS)
             {
                 if (isStopped())
                 {
                     break;
                 }
-                // Sleep for 10ms, 60 seconds total (unchanged bound), then give up and kill the thread
                 // Warning: This can be called from the main thread
                 ms_sleep(10);
-                counter++;
             }
         }
 

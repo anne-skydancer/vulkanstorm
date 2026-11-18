@@ -195,7 +195,17 @@ fromllsd_group fromllsd_tests("LLInventoryItem fromLLSD vs reference loop");
 
 template<> template<> void fromllsd_test::test<1>()
 {
-    check("all keys", full_item());
+    LLSD sd = full_item();
+    check("all keys", sd);
+
+    // Absolute values, so the test cannot pass with both sides decoding nothing.
+    LLPointer<LLInventoryItem> item = new LLInventoryItem;
+    ensure("decode ok", item->fromLLSD(sd));
+    ensure_equals("abs name", item->getName(), std::string("A name here"));
+    ensure_equals("abs asset", item->getAssetUUID(), LLUUID("66666666-6666-6666-6666-666666666666"));
+    ensure_equals("abs flags", item->getFlags(), (U32)1);
+    ensure("abs favorite", item->getIsFavorite());
+    ensure_equals("abs runtime", item->getRuntime(), std::string("luau"));
 }
 
 template<> template<> void fromllsd_test::test<2>()
@@ -262,9 +272,15 @@ template<> template<> void fromllsd_test::test<4>()
 
 template<> template<> void fromllsd_test::test<5>()
 {
-    // A bad sale_info fails the whole decode in both.
+    // An unknown sale_type string does not fail the decode (LLSaleInfo::fromLLSD
+    // always succeeds) and decodes to FS_NOT, in both.
     LLSD sd = full_item();
     sd["sale_info"]["sale_type"] = "bogus";
-    check("bad sale_info", sd);
+    check("unknown sale_type", sd);
+
+    LLPointer<LLInventoryItem> item = new LLInventoryItem;
+    ensure("decode ok", item->fromLLSD(sd));
+    ensure_equals("sale type", (S32)item->getSaleInfo().getSaleType(), (S32)LLSaleInfo::FS_NOT);
+    ensure_equals("sale price", item->getSaleInfo().getSalePrice(), (S32)10);
 }
 }

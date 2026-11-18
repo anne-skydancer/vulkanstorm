@@ -669,6 +669,7 @@ void LLViewerInventoryCategory::copyViewerCategory(const LLViewerInventoryCatego
     setVersion(other->getVersion());
     mDescendentCount = other->mDescendentCount;
     mDescendentsRequested = other->mDescendentsRequested;
+    invalidateDisplayName();
 }
 
 

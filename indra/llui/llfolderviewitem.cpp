@@ -657,15 +657,17 @@ const std::string& LLFolderViewItem::getName( void ) const
 
 const std::string LLFolderViewItem::getToolTip() const
 {
-    // Return the item name as tooltip without storing it
-    if (!LLView::sDebugUnicode)
+    // An explicitly set tooltip (the truncated label set in handleToolTip) wins;
+    // otherwise return the item name without storing a copy per item
+    std::string tip = LLView::getToolTip();
+    if (tip.empty() && !LLView::sDebugUnicode)
     {
         if (const LLFolderViewModelItem* vmi = getViewModelItem())
         {
             return vmi->getName();
         }
     }
-    return LLView::getToolTip();
+    return tip;
 }
 
 // LLView functionality

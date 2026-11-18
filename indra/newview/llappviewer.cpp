@@ -2078,14 +2078,14 @@ bool LLAppViewer::cleanup()
     // Give any remaining SLPlugin instances a chance to exit cleanly.
     LLPluginProcessParent::shutdown();
 
+    disconnectViewer();
+
     if (LLWatchdog::instanceExists())
     {
         // Signal a stop early, so that it will be out
         // of 1s sleep loop by the time we get to clean it.
         LLWatchdog::getInstance()->shutdown();
     }
-
-    disconnectViewer();
 
     LLViewerCamera::deleteSingleton();
 
@@ -2367,6 +2367,8 @@ bool LLAppViewer::cleanup()
     if (mPurgeCacheOnExit)
     {
         LL_INFOS() << "Purging all cache files on exit" << LL_ENDL;
+        // Cache writers may still be running; purge only after they finish
+        LLInventoryModel::waitForPendingCacheWrites();
         gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE,""), "*.*");
         // <FS:Ansariel> Sound cache
         gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_FS_SOUND_CACHE, ""), "*.*");
