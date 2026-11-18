@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "lldrawpoolalpha.h"
+#include "llstochasticlayerrank.h" // <Vulkanstorm/>
 
 #include "llglheaders.h"
 #include "llviewercontrol.h"
@@ -541,6 +542,24 @@ void LLDrawPoolAlpha::bindStochasticMasks(LLGLSLShader* shader)
 // <Vulkanstorm/> the stochastic passes' slope-scaled polygon offset (see renderStochastic)
 static const F32 ALPHA_ST_OFFSET_FACTOR = -1.f / 256.f;
 
+// The units are those of the passes' DEPTH_COMPONENT24 depth; a face of layer rank r (llstochasticlayerrank.h:
+// a face on the same triangles as r earlier faces of its object) is pulled 2 r units nearer in every pass,
+// so the later of two coincident faces wins the samples both cover, as it covers the earlier in sorted alpha.
+void LLDrawPoolAlpha::setStochasticOffset(F32 base_units, U32 rank)
+{
+    if (rank != mStochasticOffsetRank)
+    {
+        mStochasticOffsetRank = rank;
+        glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, LLStochasticLayerRank::units(base_units, rank));
+    }
+}
+
+void LLDrawPoolAlpha::resetStochasticOffset(F32 base_units)
+{
+    mStochasticOffsetRank = 0;
+    glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, base_units);
+}
+
 bool LLDrawPoolAlpha::renderStochastic()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
@@ -560,10 +579,12 @@ bool LLDrawPoolAlpha::renderStochastic()
         // every sample; no more, since a whole slope unit let a face up to a pixel's depth step
         // behind an opaque surface show through it, where sorted alpha hides it. The accumulation takes one depth unit more than the stochastic depth,
         // and the glow (other vertex shaders) one more again, so that a face always passes at the
-        // samples it won whatever the last bit of its depth.
+        // samples it won whatever the last bit of its depth. A face on the same triangles as earlier
+        // faces of its object (mesh eyes, stacked decals) is pulled 2 units nearer per earlier face
+        // (renderAlpha), so that the creator's later face covers the earlier, not averages with it.
         LLGLEnable multisample(GL_MULTISAMPLE);
         LLGLEnable offset(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
+        resetStochasticOffset(LLStochasticLayerRank::UNITS_TOTAL_ALPHA);
 
         {
             LL_PROFILE_GPU_ZONE("alpha stochastic total alpha");
@@ -582,7 +603,7 @@ bool LLDrawPoolAlpha::renderStochastic()
             }
             {
                 LL_PROFILE_GPU_ZONE("alpha stochastic depth");
-                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -1.f);
+                resetStochasticOffset(LLStochasticLayerRank::UNITS_DEPTH);
                 setStochasticUniforms(2, iteration);
                 gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_NONE);
                 forwardRender(true, ALPHA_ST_DEPTH);
@@ -590,7 +611,7 @@ bool LLDrawPoolAlpha::renderStochastic()
             }
             {
                 LL_PROFILE_GPU_ZONE("alpha stochastic accumulation");
-                glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
+                resetStochasticOffset(LLStochasticLayerRank::UNITS_ACCUM);
                 gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM);
                 forwardRender(true, ALPHA_ST_ACCUM);
                 forwardRender(false, ALPHA_ST_ACCUM);
@@ -833,6 +854,10 @@ void LLDrawPoolAlpha::RestoreTexSetup(bool tex_setup)
 void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
 {
     LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::EMISSIVE_BRIGHTNESS, 1.f);
+    if (mRankedGlow) // <Vulkanstorm/>
+    {
+        setStochasticOffset(LLStochasticLayerRank::UNITS_GLOW, draw->mStochasticRank);
+    }
     draw->mVertexBuffer->setBuffer();
     // OIT residual replay can queue this face without drawing its normal batch.
     // Establish its transform here instead of inheriting the previous batch's.
@@ -863,6 +888,10 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
         llassert(draw->mGLTFMaterial);
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
+        if (mRankedGlow) // <Vulkanstorm/>
+        {
+            setStochasticOffset(LLStochasticLayerRank::UNITS_GLOW, draw->mStochasticRank);
+        }
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
@@ -911,6 +940,10 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
 
         LLGLDisable cull_face(draw->mGLTFMaterial->mDoubleSided ? GL_CULL_FACE : 0);
         draw->mGLTFMaterial->bind(draw->mTexture);
+        if (mRankedGlow) // <Vulkanstorm/>
+        {
+            setStochasticOffset(LLStochasticLayerRank::UNITS_GLOW, draw->mStochasticRank);
+        }
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
@@ -932,6 +965,11 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
 
     LLCullResult::sg_iterator begin = rigged ? gPipeline.beginRiggedAlphaGroups() : gPipeline.beginAlphaGroups();
     LLCullResult::sg_iterator end = rigged ? gPipeline.endRiggedAlphaGroups() : gPipeline.endAlphaGroups();
+
+    // <Vulkanstorm> the stochastic passes' base polygon offset, which a draw's layer rank moves
+    const bool st_phase = oit_phase == ALPHA_ST_ALPHA || oit_phase == ALPHA_ST_DEPTH || oit_phase == ALPHA_ST_ACCUM;
+    const F32 st_units = oit_phase == ALPHA_ST_ACCUM ? LLStochasticLayerRank::UNITS_ACCUM : LLStochasticLayerRank::UNITS_DEPTH;
+    // </Vulkanstorm>
 
     LLEnvironment& env = LLEnvironment::instance();
     F32 water_height = env.getWaterHeight();
@@ -1230,6 +1268,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     if (stochastic_pass)
                     {
                         gGL.blendFunc(mColorSFactor, mColorDFactor, mAlphaSFactor, mAlphaDFactor);
+                        setStochasticOffset(st_units, params.mStochasticRank);
                         if (oit_phase == ALPHA_ST_DEPTH && current_shader)
                         {
                             current_shader->uniform1i(LLShaderMgr::ALPHA_ST_SEED, (S32)params.mStochasticSeed);
@@ -1316,7 +1355,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 {
                     gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_TRANS);
                     gGL.blendFunc(LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE, LLRender::BF_ONE);
-                    glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -3.f);
+                    resetStochasticOffset(LLStochasticLayerRank::UNITS_GLOW);
+                    mRankedGlow = true;
                     mStochasticGlow = true;
                 }
                 // </Vulkanstorm>
@@ -1356,7 +1396,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                 if (st_glow)
                 {
                     gPipeline.setAlphaStochasticBuffer(LLPipeline::ALPHA_ST_BUFFER_ACCUM); // <Vulkanstorm/>
-                    glPolygonOffset(ALPHA_ST_OFFSET_FACTOR, -2.f);
+                    mRankedGlow = false;
+                    resetStochasticOffset(LLStochasticLayerRank::UNITS_ACCUM);
                 }
 
                 if (lastShader && rebind)
@@ -1366,6 +1407,13 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
             }
         }
     }
+
+    // <Vulkanstorm> the pass's own offset again after a ranked draw, for what is drawn next
+    if (st_phase && mStochasticOffsetRank != 0)
+    {
+        resetStochasticOffset(st_units);
+    }
+    // </Vulkanstorm>
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 

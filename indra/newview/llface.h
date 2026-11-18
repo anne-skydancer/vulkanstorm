@@ -241,6 +241,13 @@ public:
     void setDrawOrderIndex(U32 index) { mDrawOrderIndex = index; }
     U32 getDrawOrderIndex() const { return mDrawOrderIndex; }
 
+    // <Vulkanstorm> stochastic transparency: the layer rank among the blended faces of the object that
+    // lie on the same triangles (llstochasticlayerrank.h). Set by LLVolumeGeometryManager::genDrawInfo
+    // before it registers the face, read by registerFace in the same call (the main thread's rebuild).
+    void setStochasticRank(U8 rank) { mStochasticRank = rank; }
+    U8 getStochasticRank() const { return mStochasticRank; }
+    // </Vulkanstorm>
+
     // return true if this face is in an alpha draw pool
     bool isInAlphaPool() const;
 public: //aligned members
@@ -339,6 +346,7 @@ private:
     bool        mIsMediaAllowed;
 
     U32 mDrawOrderIndex = 0; // see setDrawOrderIndex
+    U8  mStochasticRank = 0; // <Vulkanstorm/> see setStochasticRank
 
 // [SL:KB] - Patch: Render-TextureToggle (Catznip-4.0)
     mutable bool                       mShowDiffTexture;

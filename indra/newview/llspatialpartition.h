@@ -152,6 +152,10 @@ public:
     // id and its texture entry hashed, the same on every frame and every launch), which seeds the
     // fragments' coverage masks with the triangle (alphaStochasticF.glsl)
     U32 mStochasticSeed = 0;
+    // the batch's layer rank (llstochasticlayerrank.h): a face lying on the same triangles as an
+    // earlier face of its object is nearer by 2 depth units per rank in the stochastic passes. A
+    // ranked face is a draw of its own (registerFace); every other draw has rank 0.
+    U8 mStochasticRank = 0;
 
     struct CompareTexture
     {
