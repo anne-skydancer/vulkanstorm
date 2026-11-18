@@ -36,6 +36,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_cloud_noise_package.py
       shell: bash
+    - run: python3 scripts/tests/test_scene_load_bounds.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
