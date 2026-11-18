@@ -87,6 +87,9 @@ runs:
     - name: Check the semi-transparent shadow casters (stock stipple in Legacy, one dither under Stochastic)
       shell: bash
       run: python3 scripts/tests/test_shadow_alpha_permutation.py
+    - name: Check the blended passes' sun-shadow gate (CPU twin, shader text)
+      shell: bash
+      run: python3 scripts/tests/test_alpha_sun_gate.py
     - name: Check the shadow methods' plumbing (feature tables, combo, PCSS removed)
       shell: bash
       run: python3 scripts/tests/test_shadow_method_tables.py

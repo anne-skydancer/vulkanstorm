@@ -60,6 +60,7 @@ public:
         ALPHA_ST_ALPHA,     // total alpha (alpha-only variants)
         ALPHA_ST_DEPTH,     // stochastic depth (alpha-only variants, coverage masks)
         ALPHA_ST_ACCUM,     // accumulation (the ordinary programs) and the faces' glow
+        ALPHA_ST_RESTORE,   // the rigged depth restore (renderAlpha, depth only): the faces' alpha-only variants in mode 3; custom-blend draws keep their full programs
     };
     // </FS>
 
@@ -107,6 +108,7 @@ private:
     U32  mStochasticMasks = 0;
     bool mStochasticGlow = false;
     bool mAlphaOnlyPass = false;   // TexSetup: an alpha-only variant that cannot glare needs no material maps
+    bool mAlphaOnlyDepth = false;  // TexSetup: the depth restore (mode 3) reads no material map at all
     bool mAlphaOnlyLightBound = false; // the current alpha-only variant has its light function, shadow maps and probes
     // </Vulkanstorm>
 
