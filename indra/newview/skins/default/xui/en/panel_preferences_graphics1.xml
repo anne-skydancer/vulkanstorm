@@ -2063,8 +2063,9 @@ If you do not understand the distinction then leave this control alone."
       </combo_box>
       <!-- </Vulkanstorm> -->
 
-      <!-- <Vulkanstorm> shadow softness: RenderShadowLightSize, 0.05 to 1.0 on a logarithmic slider whose centre is the
-           default 0.23 (the slider is its position, 0 to 1; LLPanelPreferenceGraphics maps it); the number box is the real value -->
+      <!-- <Vulkanstorm> shadow softness, how sharp shadow edges are: RenderShadowLightSize, 0 to 1.0, on a slider whose centre is
+           the default 0.23 (the slider is its position, 0 to 1, on an offset logarithmic scale: LLShadowMethod::softnessFromPosition,
+           mapped by LLPanelPreferenceGraphics); the number box is the real value -->
       <slider
        can_edit_text="false"
        decimal_digits="2"
@@ -2080,7 +2081,7 @@ If you do not understand the distinction then leave this control alone."
        min_val="0"
        name="ShadowSoftness"
        show_text="false"
-       tool_tip="How soft shadows are: the size of the sun, the moon and every lamp as a light. Smaller is sharper. The centre is the default. Only used with the Stochastic shadow method."
+       tool_tip="How sharp the edges of shadows are, from 0 (the sharpest) to 1 (the softest). The centre is the default. Only used with the Stochastic shadow method."
        top_pad="8"
        width="330"/>
       <spinner
@@ -2092,9 +2093,9 @@ If you do not understand the distinction then leave this control alone."
        layout="topleft"
        left_pad="8"
        max_val="1"
-       min_val="0.05"
+       min_val="0"
        name="ShadowSoftnessValue"
-       tool_tip="The shadow softness as a number (0.05 to 1). Type a value to move the slider."
+       tool_tip="The shadow softness as a number, from 0 (the sharpest edges) to 1 (the softest). Type a value to move the slider."
        top_delta="-2"
        width="70"/>
       <!-- </Vulkanstorm> -->

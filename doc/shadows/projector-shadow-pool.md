@@ -92,11 +92,14 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   constant (P2b took the prim's face, clamped 2 to 15 cm; P2 a fixed 1 cm). The base comes from the light-size study
   (`reports/lamp-light-size-2026-11-18`, kept on the owner's machine): the largest size whose avatar shadows keep every body feature of
   2.5 cm or more readable, so the default softness 0.23 gives 1.035 cm and the slider's top 4.5 cm, short of the 6 cm blobs.
-  `RenderShadowLightSize` is the one softness factor of every light: the sun and moon keep their formula (0.53 degrees times the EEP sun
-  or moon scale times the setting). Its default is 0.23. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider next to the
-  Shadow method (Stochastic only): 0.05 to 1.0, logarithmic in two halves meeting at 0.23, in 0.01 steps of its position, with an
-  editable number box that shows and accepts the real value (`LLShadowMethod::softnessFromPosition` and `softnessToPosition`). Graphic
-  presets save and load it. Nothing depends on the camera.
+  `RenderShadowLightSize` sets how sharp the edge of every shadow is: it scales only the penumbra's emitter (for the sun and moon their
+  formula, 0.53 degrees times the EEP sun or moon scale times the setting; for a lamp the 4.5 cm base), never the visible sun, moon or
+  light. Its default is 0.23. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider next to the Shadow method (Stochastic
+  only): 0 (the sharpest) to 1.0 with 0.23 at its centre, on one offset-logarithmic curve over its position p, v = 0.23 (r^2p - 1) /
+  (r - 1) with r = 1 / 0.23 - 1 (about linear below 0.1, where a narrower penumbra no longer shows; from the centre up a 0.01 step of
+  the position changes the value by 2.7 to 3.4 %), with an editable number box that shows and accepts the real value
+  (`LLShadowMethod::softnessFromPosition` and `softnessToPosition`). At 0 the 8 sun rays share one direction and a lamp's edge is the
+  filter's 1.5-texel floor: as sharp as each map's texels draw. Graphic presets save and load it. Nothing depends on the camera.
 - **Contact hardening and a texel normal offset (P2).** The filter's radius follows the blocker nearest the receiver (the largest
   map depth among the blocking texels of the search), not the blockers' mean: an edge is as sharp as its closest contact allows, and
   a contact (a foot on a floor) is no longer blurred by the farther blockers (head, shoulders). The receiver is offset along its

@@ -7,7 +7,8 @@
 // Stochastic, PCSS being removed), a fresh install is left to the feature table, the flag always ends up
 // set, and an old preset file maps its checkbox to the method unless it already carries the method. A
 // stored method 1 (the removed PCSS) and any unknown value read as Stochastic, never Legacy. The old light
-// size setting moves to the new name once, at startup.
+// size setting moves to the new name once, at startup. The Shadow softness slider maps its position onto 0 to
+// 1.0 with the default 0.23 at its centre.
 
 #include "llshadowmethod.h"
 
@@ -21,11 +22,11 @@ namespace
 {
     int failures = 0;
 
-    void check(bool cond, const char* what)
+    void check(bool cond, const char* what, double value = 0.0)
     {
         if (!cond)
         {
-            std::printf("FAIL %s\n", what);
+            std::printf("FAIL %s (%g)\n", what, value);
             ++failures;
         }
     }
@@ -143,21 +144,31 @@ namespace
 
     bool near(float a, float b, float tol) { return std::fabs(a - b) <= tol; }
 
-    // the softness slider: ends, centre at exactly 0.23, monotone, value -> position -> value, position -> value -> position
+    // the softness slider: the range 0 to 1.0 (0 is a choice), the default 0.23 exactly at the centre, one offset-logarithmic curve,
+    // monotone, value -> position -> value, position -> value -> position, fine steps everywhere
     void test_softness()
     {
         using namespace LLShadowMethod;
-        check(softnessFromPosition(0.0f) == SOFTNESS_MIN, "softness position 0 is 0.05");
+        check(SOFTNESS_MIN == 0.0f && SOFTNESS_MAX == 1.0f && SOFTNESS_CENTRE == 0.23f, "softness runs 0 to 1.0 with the default 0.23");
+        check(softnessFromPosition(0.0f) == 0.0f, "softness position 0 is exactly 0 (the sharpest)");
         check(near(softnessFromPosition(1.0f), SOFTNESS_MAX, 1.0e-6f), "softness position 1 is 1.0");
         check(softnessFromPosition(0.5f) == SOFTNESS_CENTRE, "softness position 0.5 is exactly 0.23");
         check(softnessToPosition(SOFTNESS_CENTRE) == 0.5f, "softness 0.23 is exactly position 0.5");
-        check(softnessToPosition(SOFTNESS_MIN) == 0.0f && near(softnessToPosition(SOFTNESS_MAX), 1.0f, 1.0e-6f), "softness ends map to positions 0 and 1");
-        check(softnessFromPosition(-1.0f) == SOFTNESS_MIN && near(softnessFromPosition(2.0f), SOFTNESS_MAX, 1.0e-6f), "positions outside are clamped");
-        check(softnessToPosition(0.0f) == 0.0f && near(softnessToPosition(5.0f), 1.0f, 1.0e-6f), "values outside are clamped");
-        // each half is logarithmic: the quarter positions are the geometric means of the half's ends
-        check(near(softnessFromPosition(0.25f), std::sqrt(SOFTNESS_MIN * SOFTNESS_CENTRE), 1.0e-6f), "the left half is logarithmic");
-        check(near(softnessFromPosition(0.75f), std::sqrt(SOFTNESS_CENTRE * SOFTNESS_MAX), 1.0e-6f), "the right half is logarithmic");
-        float prev = 0.0f;
+        check(softnessToPosition(0.0f) == 0.0f && near(softnessToPosition(SOFTNESS_MAX), 1.0f, 1.0e-6f), "softness ends map to positions 0 and 1");
+        check(softnessFromPosition(-1.0f) == 0.0f && near(softnessFromPosition(2.0f), SOFTNESS_MAX, 1.0e-6f), "positions outside are clamped");
+        check(softnessToPosition(-1.0f) == 0.0f && near(softnessToPosition(5.0f), 1.0f, 1.0e-6f), "values outside are clamped");
+        // the curve is logarithmic with an offset: equal position steps multiply v + a by the same factor r^(2 dp), a = c / (r - 1)
+        // (the old two log halves gave 0.05 at the left end and could not reach 0)
+        const double a = (double)SOFTNESS_CENTRE / ((double)SOFTNESS_BASE - 1.0);
+        bool offset_log = true;
+        for (int i = 0; i < 10; ++i)
+        {
+            const double lo = softnessFromPosition((float)i / 10.0f) + a, hi = softnessFromPosition((float)(i + 1) / 10.0f) + a;
+            offset_log = offset_log && std::fabs(hi / lo / std::pow((double)SOFTNESS_BASE, 0.2) - 1.0) < 1.0e-5;
+        }
+        check(offset_log, "equal slider steps multiply softness + a by the same factor (an offset logarithm)");
+        check(near(softnessFromPosition(0.25f), SOFTNESS_CENTRE / (std::sqrt(SOFTNESS_BASE) + 1.0f), 1.0e-6f), "the quarter position is c / (sqrt(r) + 1)");
+        float prev = -1.0f;
         bool monotone = true, round_trip = true, round_trip_pos = true;
         for (int i = 0; i <= 1000; ++i)
         {
@@ -167,18 +178,28 @@ namespace
             prev = v;
             round_trip_pos = round_trip_pos && near(softnessToPosition(v), pos, 1.0e-5f);
             const float value = SOFTNESS_MIN + (SOFTNESS_MAX - SOFTNESS_MIN) * pos;
-            round_trip = round_trip && near(softnessFromPosition(softnessToPosition(value)) / value, 1.0f, 1.0e-5f);
+            const float back = softnessFromPosition(softnessToPosition(value));
+            round_trip = round_trip && (value == 0.0f ? back == 0.0f : near(back / value, 1.0f, 1.0e-5f));
         }
         check(monotone, "softness is strictly increasing with the position");
-        check(round_trip, "value -> position -> value round-trips");
+        check(round_trip, "value -> position -> value round-trips (0 exactly)");
         check(round_trip_pos, "position -> value -> position round-trips");
-        // 0.01 steps of the slider are fine steps of the value (about 3.1 %: the check allows under 4 %), with no coarse jump
-        float worst = 0.0f;
+        // 0.01 steps of the slider are fine steps of the value: under 0.03 anywhere (the largest, 0.027, is at the top), under 4 % from the
+        // centre up (as fine as the old logarithmic half), and about 0.0024 out of 0, so nearly-sharp values are reachable too
+        float worst_abs = 0.0f, worst_rel_upper = 0.0f;
         for (int i = 0; i < 100; ++i)
         {
-            worst = std::fmax(worst, softnessFromPosition((float)(i + 1) / 100.0f) / softnessFromPosition((float)i / 100.0f) - 1.0f);
+            const float v0 = softnessFromPosition((float)i / 100.0f), v1 = softnessFromPosition((float)(i + 1) / 100.0f);
+            worst_abs = std::fmax(worst_abs, v1 - v0);
+            if (i >= 50)
+            {
+                worst_rel_upper = std::fmax(worst_rel_upper, v1 / v0 - 1.0f);
+            }
         }
-        check(worst < 0.04f, "a 0.01 slider step changes the value by under 4 %");
+        check(worst_abs < 0.03f, "a 0.01 slider step changes the value by under 0.03 anywhere", worst_abs);
+        check(worst_rel_upper < 0.04f, "from the centre up a 0.01 slider step changes the value by under 4 %", worst_rel_upper);
+        check(softnessFromPosition(0.01f) > 0.0f && softnessFromPosition(0.01f) < 0.003f, "the first step out of 0 is under 0.003",
+              softnessFromPosition(0.01f));
     }
 
     void test_rewrite()

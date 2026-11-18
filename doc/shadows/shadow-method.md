@@ -234,9 +234,10 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
   Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
   the quality slider and the recommended-settings re-applies like every graphics setting, and the
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the light size slider (Sky tab) and the Shadow softness slider (Rendering 2, below the
-  combo) are enabled with Stochastic. `RenderShadowLightSize` defaults to 0.23 and scales the sun, the moon and every
-  projector lamp (a 4.5 cm light, so 1.035 cm at the default); see `projector-shadow-pool.md`.
+  feature are unavailable, and the Shadow softness slider (Rendering 2, below the
+  combo) is enabled with Stochastic. `RenderShadowLightSize` (0 to 1.0, 0 the sharpest) defaults to 0.23, the slider's
+  centre, and sets how sharp the edges of the sun's, the moon's and every projector lamp's shadows are (it scales only their
+  penumbra: a lamp's is that of a 4.5 cm emitter times it, so 1.035 cm at the default); see `projector-shadow-pool.md`.
 - Graphic presets carry `RenderShadowMethod` and `RenderShadowLightSize` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
   becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).

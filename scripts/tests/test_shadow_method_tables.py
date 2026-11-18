@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """The shadow methods (RenderShadowMethod 0 Legacy, 2 Stochastic; 1 was PCSS and is unused): the feature-table
-lists recommend 0 or 2 and never 1, the combo offers the two methods, and the Stochastic shader stays free of
-removed PCSS code and of the groundwork defines."""
+lists recommend 0 or 2 and never 1, the combo offers the two methods, the Shadow softness controls span
+llshadowmethod.h's range (0 to 1.0), and the Stochastic shader stays free of removed PCSS code and of the groundwork
+defines."""
 from pathlib import Path
 import re
 import unittest
@@ -41,6 +42,26 @@ class ShadowMethodTables(unittest.TestCase):
         combo = combo[:combo.index('</combo_box>')]
         self.assertEqual([('Legacy', '0'), ('Stochastic', '2')],
                          re.findall(r'label="([^"]+)"\s+name="\d"\s+value="(\d)"', combo))
+
+    def test_softness_controls_span_the_header_range(self):
+        """The Shadow softness slider is a position, 0 to 1, starting at the centre (the default); the number box beside it is the
+        real value and accepts LLShadowMethod's whole range, 0 (the sharpest) to 1.0."""
+        header = (NEWVIEW / 'llshadowmethod.h').read_text()
+        lo, hi = (float(re.search(r'%s\s*=\s*([0-9.]+)f' % name, header).group(1)) for name in ('SOFTNESS_MIN', 'SOFTNESS_MAX'))
+        self.assertEqual((0.0, 1.0), (lo, hi))
+        xml = (NEWVIEW / 'skins/default/xui/en/panel_preferences_graphics1.xml').read_text()
+
+        def control(name):
+            start = xml.index('name="%s"' % name)
+            return xml[xml.rindex('<', 0, start):xml.index('/>', start)]
+
+        def attr(block, key):
+            return float(re.search(r'\b%s="([^"]+)"' % key, block).group(1))
+
+        slider, spinner = control('ShadowSoftness'), control('ShadowSoftnessValue')
+        self.assertEqual((0.0, 1.0, 0.5), (attr(slider, 'min_val'), attr(slider, 'max_val'), attr(slider, 'initial_value')))
+        self.assertEqual((lo, hi), (attr(spinner, 'min_val'), attr(spinner, 'max_val')))
+        self.assertIn('control_name="RenderShadowLightSize"', spinner)
 
 
 class PcssIsRemoved(unittest.TestCase):

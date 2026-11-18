@@ -12576,7 +12576,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowLightSize</key>
   <map>
     <key>Comment</key>
-    <string>Stochastic shadow method only: the softness of every shadow, Shadow softness in Preferences (Graphics, Rendering 2; 0.05 to 1.0). The sun's and moon's angular size is the physical 0.53 degrees times the sky's sun or moon scale times this; a projector lamp is a 4.5 cm light, 0.045 m times this, whatever its prim (point lights will take their own built-in base, llprojectorpool::kPointLamp). Was RenderShadowPCSSLightSize.</string>
+    <string>Stochastic shadow method only: how sharp the edges of every shadow are, Shadow softness in Preferences (Graphics, Rendering 2; 0 to 1.0, 0 the sharpest, the default 0.23 at the slider's centre). It scales only the penumbra: a sun or moon shadow's edge is that of the physical 0.53 degrees times the sky's sun or moon scale times this, a projector lamp's that of a 4.5 cm emitter, 0.045 m times this, whatever its prim (point lights will take their own built-in base, llprojectorpool::kPointLamp); the visible sun, moon and lights do not change. Was RenderShadowPCSSLightSize.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
