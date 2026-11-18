@@ -60,7 +60,7 @@ void unpackMaterial()
 {
     if (gltf_material_id > -1)
     {
-        int idx = gltf_material_id*12;
+        int idx = min(gltf_material_id, MAX_UBO_VEC4S/12 - 1)*12; // Vulkanstorm: stay inside the declared block
         emissiveColor = gltf_material_data[idx+10].rgb;
         roughnessFactor = gltf_material_data[idx+11].g;
         metallicFactor = gltf_material_data[idx+11].b;
