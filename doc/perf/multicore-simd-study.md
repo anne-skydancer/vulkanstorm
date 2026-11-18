@@ -767,7 +767,7 @@ As in #448, with two updates (the width rule, and the spin window's risks).
     of the 3.97 M (K1), 3.16 M (normals) and 3.95 M (tangents) compared was identical on all three CI platforms and in both
     local builds, and no box decision depends on a payload.
   - **Two registers per iteration.** With one, the normal loop ran 0.28–0.30 ns a vertex during development; with two it runs
-    0.20–0.25 (table below).
+    0.19–0.26 (table below).
   - **Compile-time selection, no dispatch.** `__AVX2__` (the `USE_AVX2_OPTIMIZATION` builds: CI and the releases) compiles the AVX2
     loops; any other build compiles today's SSE loops. The test does not compile when `USE_AVX2_OPTIMIZATION` is set without AVX2
     code generation, so CI always tests the AVX2 path.
