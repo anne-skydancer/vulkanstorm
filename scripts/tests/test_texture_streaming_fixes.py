@@ -16,8 +16,10 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
   returning true with both outputs unwritten (getTextureVirtualSize read them).
 - The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
-  resolutions of any component, and the decode clamps its reduce factor below them (llj2creduce.h; checked against
-  OpenJPEG by indra/llimagej2coj/tests/llj2creduce_test.cpp), with the calls in the same order as before.
+  resolutions of any component (for a size that fits the image's 16-bit sides), and the decode clamps its reduce
+  factor below them when the coarsest level is no larger than the requested level of a MAX_IMAGE_SIZE image
+  (llj2creduce.h; the rule is checked by indra/llimagej2coj/tests/llj2creduce_test.cpp, and against OpenJPEG by
+  llj2creduce_openjpeg_test.cpp), with the calls in the same order as before.
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -231,6 +233,12 @@ class J2CReduceFactor(unittest.TestCase):
         kept = header.index('codestream_info->m_default_tile_info.tccp_info[comp].numresolutions')
         self.assertLess(info, kept)
         self.assertIn('resolutions = (comp == 0) ? comp_resolutions : llmin(resolutions, comp_resolutions);', header)
+        # only for a size the image's 16-bit sides hold, computed in 64 bits: the rule bounds the decode by that size
+        self.assertIn('const U64 grid_width = (U64)codestream_info->tw * codestream_info->tdx;', header)
+        self.assertIn('const U64 grid_height = (U64)codestream_info->th * codestream_info->tdy;', header)
+        self.assertIn('if (codestream_info->m_default_tile_info.tccp_info && grid_width <= 0xffff && grid_height <= 0xffff)',
+                      header)
+        self.assertLess(header.index('resolutions = 0;'), header.index('grid_width <= 0xffff'))
         metadata = code(body(J2COJ, 'bool LLImageJ2COJ::getMetadata('))
         self.assertIn('discard_level, resolutions);', metadata)
         self.assertIn('base.mNumResolutions = resolutions;', metadata)
@@ -238,7 +246,8 @@ class J2CReduceFactor(unittest.TestCase):
 
     def test_decode_clamps_its_reduce_factor(self):
         decode_impl = code(body(J2COJ, 'bool LLImageJ2COJ::decodeImpl('))
-        self.assertIn('const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions);', decode_impl)
+        self.assertRegex(decode_impl, r'const S8 reduce = \(S8\)LLJ2CReduce::reduceFactor\(base\.mDiscardLevel, base\.mNumResolutions, '
+                                      r'base\.getWidth\(\),\s*base\.getHeight\(\), MAX_IMAGE_SIZE\);')
         self.assertIn('decoder.decode(base.getData(), max_bytes, &image_channels, reduce);', decode_impl)
         self.assertNotIn('&image_channels, base.mDiscardLevel)', decode_impl)
         # the level reported is the factor OpenJPEG decoded at
