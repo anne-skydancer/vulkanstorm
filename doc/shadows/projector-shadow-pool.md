@@ -97,7 +97,8 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   light. Its default is 0.23. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider next to the Shadow method (Stochastic
   only): 0 (the sharpest) to 1.0 with 0.23 at its centre, on one offset-logarithmic curve over its position p, v = 0.23 (r^2p - 1) /
   (r - 1) with r = 1 / 0.23 - 1 (about linear below 0.1, where a narrower penumbra no longer shows; from the centre up a 0.01 step of
-  the position changes the value by 2.7 to 3.4 %), with an editable number box that shows and accepts the real value
+  the position changes the value by 3.5 % at the centre down to 2.7 % at the top, the largest step 0.026; the old logarithmic right half
+  took 3.0 % everywhere, so the new curve is finer only above about 0.45), with an editable number box that shows and accepts the real value
   (`LLShadowMethod::softnessFromPosition` and `softnessToPosition`). At 0 the 8 sun rays share one direction and a lamp's edge is the
   filter's 1.5-texel floor: as sharp as each map's texels draw. Graphic presets save and load it. Nothing depends on the camera.
 - **Contact hardening and a texel normal offset (P2).** The filter's radius follows the blocker nearest the receiver (the largest
@@ -206,20 +207,24 @@ nearest blocker and the weights narrow a curved silhouette.
 ### The default edge against the release (for the owner's in-world check)
 
 Removing the edge reconstruction changes the default look, and the in-world check should expect it (the light-size audit's correction 3,
-its finding A2):
+its finding A2). The figures are for a head's shadow on the floor in a 2.5 mm tile, the lamp 2.5 m above the head and the head 1.7 m
+above the floor, measured from 10 to 90 %:
 
-- **The release** draws the default lamp, 1 cm times 0.23 = 2.3 mm, at its physical width wherever the reconstruction holds
-  (`stRvVisibility`, for any physical radius under 2.5 texels). On a 2.5 mm tile under a lamp at 2.5 m the head's physical penumbra is
-  about 0.3 texel in radius, so its edge is almost hard: **about 0.4 texel** from 10 to 90 %.
-- **This branch** draws the default lamp, 4.5 cm times 0.23 = 1.035 cm, through the filter alone. Its physical penumbra at the head,
-  about 1.4 texels in radius on that tile, is under the 1.5-texel floor, so the floor sets the edge: **about 1.8 texels** from 10 to 90 %
-  (the twin's straight edges at the floor: 1.88 to 1.98 texels).
+- **The release** draws the default edge at its physical width where the reconstruction is complete (`stRvVisibility`: below a physical
+  radius of 1.5 texels, fading out by 2.5, `ST_RV_LO` and `ST_RV_HI`). There the head's physical penumbra is about 0.3 texel in radius,
+  so the edge is almost hard: **about 0.4 texel**.
+- **This branch** draws the head edge at **about 1.8 to 1.9 texels**, and each of its two changes alone would. The default edge's physical
+  width there is now about 1.9 texels (a 1.4-texel radius; a disc emitter's 10 to 90 % width is 0.687 of the full width), which the
+  release's reconstruction would also draw, being under 1.5 texels; and the filter's 1.5-texel floor draws about 1.8 texels (the twin's
+  straight edges at the floor: 1.88 to 1.98). The edge-width number of the shadow code behind these is 2.3 mm on the release (1 cm times
+  0.23) and 1.035 cm on this branch (4.5 cm times 0.23).
 - **So on fine tiles the default head edge widens from about 0.4 to about 1.8 texels**: about 1 mm to 4.5 mm on a 2.5 mm tile, visibly
   softer than today's release. On a coarser tile the same 1.8 texels are wider in millimetres (about 9 mm at the model room's 5.1 mm
-  texel on the 8192 atlas). It comes from the floor that replaces the reconstruction (a penumbra narrower than the texels is drawn soft,
-  never as their squares), not from the 4.5 cm base. Against the #527/#528 build (no reconstruction, a 1-texel floor) the step is from a
-  1-texel to a 1.5-texel floor.
-- The slider's 0 does not bring the release's edge back: at 0 a lamp's edge is the 1.5-texel floor as well.
+  texel on the 8192 atlas). Against the #527/#528 build (no reconstruction, a 1-texel floor) the step is from a 1-texel to a 1.5-texel
+  floor.
+- The floor is why the slider cannot bring the release's 0.4 texel back: at 0 a lamp's edge is the 1.5-texel floor as well. Where the
+  default edge is already under the floor, as at this head on 2.5 mm and coarser tiles, the slider's left half (0 to 0.23) draws the same
+  lamp edge; it still sharpens sun and moon shadows.
 
 ### Cost (`proj_edges_bench.py --time`: 2560 x 1440 floor, every pixel inside the lamp, 24 plate edges plus the avatar, softness 0.23)
 
@@ -275,7 +280,7 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `lowres` | a resize (L2): the valve or the lamp's cone or reach changed the tile's size; its render draws the new size into a new rect and swaps it in (draw-then-swap; the name is kept for the stats) |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
-Texture-coordinate and colour rebuilds (texture animation) never make a tile stale, nor does a request for the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. `markForUpdate` also sets `mVolumeChanged`, so the prim's rebuild moves it in the octree once and that move pushes (selecting or deselecting a prim redraws the tiles that see it once). The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A tint and the material setters ask for `REBUILD_ALL`, which the rule counts; they are handled as texture-entry rebuilds (under "Lamps that scripts switch" below), so a tint, an emissive, a PBR colour or a material that leaves the silhouette alone pushes nothing at its request or at its rebuild. A texture, material, bump, glow or colour change dirties tiles only when it changes the prim's silhouette key (`llprojectorpool::texturedDirties(was_key, now_key, known)`; what goes into the key is under "Lamps that scripts switch" below): a face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one, so both change the key and push. `was_key` is the object's `mPoolAlphaKey`, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The key is only kept while the feed tracks, so a bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown key makes `texturedDirties` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint) or the new one (the `setTE*` and material setters, `changeTEImage`). A call that sees the old state finds the key it stored and pushes nothing, so the call after the change is the one that counts: `setTEColor` calls `markTextured` again after an alpha change, and that second call is required (its `REBUILD_VOLUME` pushes as well). An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the key (the face counts as alpha only once its texture's components are known, and the channel count is in the key) and pushes when the key changed. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
+Texture-coordinate and colour rebuilds (texture animation) never make a tile stale, nor does a request for the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. `markForUpdate` also sets `mVolumeChanged`, so the prim's rebuild moves it in the octree once and that move pushes (selecting or deselecting a prim redraws the tiles that see it once). The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A tint and the material setters ask for `REBUILD_ALL`, which the rule counts; they are handled as texture-entry rebuilds (under "Lamps that scripts switch" below), so a tint, an emissive, a PBR colour or a material that leaves the silhouette alone pushes nothing at its request or at its rebuild, in a static linkset or an active one. A texture, material, bump, glow or colour change dirties tiles only when it changes the prim's silhouette key (`llprojectorpool::texturedDirties(was_key, now_key, known)`; what goes into the key is under "Lamps that scripts switch" below): a face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one, so both change the key and push. `was_key` is the object's `mPoolAlphaKey`, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The key is only kept while the feed tracks, so a bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown key makes `texturedDirties` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint) or the new one (the `setTE*` and material setters, `changeTEImage`). A call that sees the old state finds the key it stored and pushes nothing, so the call after the change is the one that counts: `setTEColor` calls `markTextured` again after an alpha change, and that second call is required (its `REBUILD_VOLUME` pushes as well). An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the key (the face counts as alpha only once its texture's components are known, and the channel count is in the key) and pushes when the key changed. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
 
 ### The hooks, and the thread each runs on
 
@@ -288,14 +293,15 @@ the next frame "everything is stale".
 
 | Hook | File | Runs on | Pushes | Skipped |
 |---|---|---|---|---|
-| `LLSpatialPartition::put` (after the octree insert) | `llspatialpartition.cpp` | main (`LLDrawable::movePartition`, `LLPipeline::addObject`) | extents, cause `add_remove` | not fixed casters |
-| `LLSpatialPartition::remove` (before the removal) | `llspatialpartition.cpp` | main (`LLPipeline::unlinkDrawable`, `move`) | extents, `add_remove` | not fixed casters |
-| `LLSpatialPartition::move`, in-group branch | `llspatialpartition.cpp` | main | extents after the update, `edit` | not fixed casters; inside the prim's own rebuild with the texture-entry mark, unless the silhouette key changed |
+| `LLSpatialPartition::put` (after the octree insert) | `llspatialpartition.cpp` | main (`LLDrawable::movePartition`, `LLPipeline::addObject`) | extents, cause `add_remove` | not fixed casters; inside the prim's own rebuild with the texture-entry mark (a move to another group), unless the silhouette key changed; in the bridge pass, a bridge on the quiet record |
+| `LLSpatialPartition::remove` (before the removal) | `llspatialpartition.cpp` | main (`LLPipeline::unlinkDrawable`, `move`) | extents, `add_remove` | as `put` |
+| `LLSpatialPartition::move`, in-group branch | `llspatialpartition.cpp` | main | extents after the update, `edit` | not fixed casters; inside the prim's own rebuild with the texture-entry mark, unless the silhouette key changed; in the bridge pass, a bridge on the quiet record |
 | `LLPipeline::markRebuild(drawable, flag)` | `pipeline.cpp` | main (object updates, LOD, the pin) | extents when `rebuildDirties(flag)` (volume, rigged, position alone), `edit` | `TCOORD`, `COLOR`, `REBUILD_GEOMETRY`; a texture-entry setter's `REBUILD_ALL` (`TextureEntryRebuild`: it marks the object instead) |
 | `LLPipeline::markTextured` | `pipeline.cpp` | main (the `setTE*` family, `markForUpdate`) | extents when the silhouette key changed (`texturedDirties`), or at the edge where a mover becomes active or static again, `edit` | not fixed casters; a change that leaves the key alone |
 | `LLVOVolume::notifyMeshLoaded` | `llvovolume.cpp` | main (the mesh repository's callback, run from the main loop) | extents now, and again when the rebuild it waits for completes, `edit` | not fixed casters |
-| `LLPipeline::markMoved` | `pipeline.cpp` | main | the extents it moves from, `edit` | not fixed casters |
+| `LLPipeline::markMoved` (`LLShadowDirtyFeed::noteMoved`) | `pipeline.cpp` | main | the extents it moves from, `edit`; a bridge marked moved by the own rebuild of a prim inside it (`LLSpatialBridge::move`) under that prim's rule, and on the quiet record when that keeps it quiet | not fixed casters; that own rebuild's push with the texture-entry mark, unless the prim's silhouette key changed |
 | `LLPipeline::updateGeom` (a delayed volume or rigged rebuild, or a mesh that loaded, completes; `LLShadowDirtyFeed::OwnRebuild`) | `pipeline.cpp` | main (`display`) | extents, `edit`; the texture-entry mark ends | not fixed casters; with the texture-entry mark, unless the silhouette key changed |
+| `LLPipeline::updateGeom`'s bridge pass (`updateMovedList(mMovedBridge)`, after the rebuilds; `LLShadowDirtyFeed::BridgeMoves`) | `pipeline.cpp` | main (`display`) | the bridges' moves reach the partition hooks above; the quiet record ends | a live bridge on the quiet record |
 | `LLPipeline::shiftObjects` | `pipeline.cpp` | main (`LLWorld::updateAgentOffset`) | translates the pending boxes | |
 | `LLViewerObject::processUpdateMessage` (the classifier) | `llviewerobject.cpp` | main (the message handlers) | extents of the object (or its bridge) when it turns into a mover or its physics flag flips, `mover` | avatars |
 | `LLPipeline::unlinkDrawable` | `pipeline.cpp` | main (`LLDrawable::markDead`) | none: `remove` has pushed; calls `forget` (record, tile and pins) | |
@@ -717,17 +723,39 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   renderer rebuilds the whole prim, not because its shape moved. `rebuildDirties` counts that, so a blinker that toggles a colour or an
   emissive with its light pushed three times per toggle: at the request, at the rebuild's octree move (`LLVOVolume::genBBoxes` ->
   `movePartition`) and at the rebuild's completion. Now each of those setters wraps its request in `LLShadowDirtyFeed::TextureEntryRebuild`:
-  the request pushes nothing (the material setters' `markTextured` applied the key; a tint's RGB is no input of it) and marks the object
-  (`POOL_TE_REBUILD`); the rebuild's own
-  pushes, inside `LLShadowDirtyFeed::OwnRebuild` in `LLPipeline::updateGeom`, then go out only when the key changed. The mark is not set
-  when the setter changed the key (its faces change pass at the rebuild, which must push again) or when a rebuild with a shape flag was
-  already queued; it ends at any other push (a move, a put or a remove, a counted rebuild, a mesh arriving), at any request with a shape
-  flag (a new LOD, a scale, rigging, `markForUpdate`), at a key change and when the rebuild completes
-  (`llprojectorpool::textureEntryMarkAfterRequest`, `textureEntryMarkAfterRebuild`, `ownRebuildPushes`). `REBUILD_MATERIAL` from
-  `LLDrawable::updateTexture`, which every `markTextured` brings the next frame, keeps it. Threads: the setters and `updateGeom` run on the
-  main thread; the scopes do nothing off it (the request is then counted as before), and they only compare a drawable pointer. Two
-  pushes remain once per prim, not per toggle: its first texture or colour change re-bins it in the octree (`shrinkWrap`), and its
-  ninth update from the server makes it active (`LLVOVolume::onDrawableUpdateFromServer`), which rebuilds it.
+  the request pushes nothing and marks the object (`POOL_TE_REBUILD`); the rebuild's own pushes, inside `LLShadowDirtyFeed::OwnRebuild`
+  in `LLPipeline::updateGeom`, then go out only when the silhouette key changed. A silhouette change pushes once, at the setter's
+  `markTextured`, which stores the new key, whether that call runs before the setter's scope opens (`LLViewerObject::setTEMaterialParams`'
+  normal and specular maps, a cached material's synchronous callback in `setTEMaterialID`) or inside it; the rebuild's own pushes find
+  the key stored. One push is enough: the setters run in idle (or in the UI's events), before the same frame's `updateGeom`, which
+  completes every prim's rebuild, and the pool takes the frame's boxes after it, in `generateSunShadow`, so a tile drawn for the push
+  draws the faces in their new passes. The mark is not set when a rebuild with a shape flag was already queued; it ends at any other
+  push (a move, a put or a remove, a counted rebuild, a mesh arriving), at any request with a shape flag (a new LOD, a scale, rigging,
+  `markForUpdate`) and when the rebuild completes (`llprojectorpool::textureEntryMarkAfterRequest`, `textureEntryMarkAfterRebuild`,
+  `ownRebuildPushes`). `REBUILD_MATERIAL` from `LLDrawable::updateTexture`, which `LLPipeline::updateMove` raises later in the same idle
+  for every `markTextured` of the setters, keeps it.
+- **Blinkers in an active linkset.** A blinker becomes active after its ninth colour or material update from the server
+  (`LLVOVolume::onDrawableUpdateFromServer`) and stays so; its prims then live in the octree of the linkset's bridge (`LLSpatialBridge`).
+  A prim's octree move there marks the bridge moved (`LLSpatialBridge::move` -> `LLPipeline::markMoved`), and `updateGeom` moves the
+  bridge in the region's octree after the rebuilds (its bridge pass, `updateMovedList(mMovedBridge)`): two more pushes of the linkset's
+  box per toggle, and the first ended the root's own mark, so a root lamp's completion pushed as well (the follow-up review's B1:
+  two pushes a toggle for a child lamp, three for a root). The `markMoved` hook, `LLShadowDirtyFeed::noteMoved`, now takes a
+  bridge's `markMoved` during the own rebuild of a prim inside it as that rebuild's push, under the prim's mark and key (the box is the
+  bridge's either way; the root's mark is left alone), and puts the bridge on a quiet record when that push stays quiet; in the bridge
+  pass (`LLShadowDirtyFeed::BridgeMoves`) a live bridge on the record moves without a push. The record holds only while every
+  `markMoved` of the bridge since its last move was such a quiet push: the linkset's own move (`LLDrawable::updateXform`, in idle before
+  the rebuilds), `updatePartition` or another prim's move takes the bridge off (`llprojectorpool::quietBridgeAfterMove`), and the record
+  ends with the pass. Only the prim's own drawable moves in its rebuild (`LLVOVolume::updateGeometry`), so a bridge's `markMoved` inside
+  that rebuild is the prim's.
+- Threads: the setters, the hooks and `updateGeom` run on the main thread; the scopes do nothing off it (the request is then counted as
+  before), and they and the record only compare drawable pointers (a recorded bridge is held by the pipeline's moved list until the pass).
+- What remains is once per prim or per camera crossing, not per toggle: a prim's first texture or colour change re-bins it in the octree
+  (`shrinkWrap`), and its ninth update from the server makes it active, which rebuilds it; each pushes once. After `shrinkWrap` the
+  prim's octree bin also follows the camera's distance (`LLVOVolume::getBinRadius` shrink-wraps only within 64 m,
+  `OctreeAlphaDistanceFactor`), so `LLVOVolume::updateLOD` re-bins it, and the partition's move pushes once, when the camera has crossed
+  64 m from it (at its next distance update, while it is in view); so does any prim with a blended face that cannot be drawn as a mask.
+  Those pushes come from the P3 partition hooks, predate S2 and redraw tiles in which nothing changed (a known limit; the in-world `edit`
+  causes while walking show them).
 - Light colour and intensity changes from the server reach no tile (`LLVOVolume::parameterChanged` calls no hook); the reach (radius)
   changes the tile's frustum, so a change of more than 1 cm redraws it, but a radius of 0 is "off" and holds the tiles.
 
@@ -743,7 +771,7 @@ fps standing (60) and moving (25).
 
 | gate | how |
 |---|---|
-| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`, `testTextureEntryRebuilds`, `testPlacement`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (`holdOffFrame`: blinkers keep their tiles, a long switch gives them back once); the silhouette key's inputs (`silhouetteFaceMix`: each moves the key, an opaque face only by being double-sided); the texture-entry mark over the hooks' order (a tint, emissive or material blinker pushes nothing in a minute of 0.1 s toggles, against 1,200 each, two a toggle, when the mark's rules are broken; a silhouette change, a new LOD, a scale, `markForUpdate` or a move around a tint still push); placement, by a GL-free replay of `layout()` and the resize built from the same rules: a lamp switched on near the camera while far tiles hold the atlas waits for their shrinks and the pressure ends at the rule's (review B1), a shortfall only at the ceiling, after a compaction every arrival set and growth the free texels hold fits (random fragmented atlases), a growth blocked by fragmentation grows after the hold with one compaction (Q1). The light set's bookkeeping around the hold and the retiring cells (records marked seen, skipped by the scheduler, counted as fixed) is the GL class's and has no unit test |
+| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`, `testTextureEntryRebuilds`, `testPlacement`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (`holdOffFrame`: blinkers keep their tiles, a long switch gives them back once); the silhouette key's inputs (`silhouetteFaceMix`: each moves the key, an opaque face only by being double-sided, an opaque single-sided one not at all); the texture-entry mark and the quiet record over the hooks' order (a tint, emissive or material blinker pushes nothing in a minute of 0.1 s toggles, static or as the child or the root of an active linkset, where the wiring before the follow-up review's B1 pushed 1,200 and 1,800 times; a silhouette change pushes once, wherever the setter's `markTextured` runs; a new LOD, a scale, `markForUpdate`, a move around a tint and the linkset's own move still push; two quiet prims of one linkset keep the record, a counted move before or after ends it; each of six mutations of these rules fails a check); placement, by a GL-free replay of `layout()` and the resize built from the same rules: a lamp switched on near the camera while far tiles hold the atlas waits for their shrinks and the pressure ends at the rule's (review B1), a shortfall only at the ceiling, after a compaction every arrival set and growth the free texels hold fits (random fragmented atlases), a growth blocked by fragmentation grows after the hold with one compaction (Q1). The light set's bookkeeping around the hold and the retiring cells (records marked seen, skipped by the scheduler, counted as fixed) is the GL class's and has no unit test |
 | sizing model | `scripts/shadows/projector_sizing_model.py` (CPU): the rules written out, a 60 s walk in the model room (four wide lamps), a room whose lamps fit and the club, on the 4096 and 8192 atlases; gates: the size changes a second within the scene's limit (room 0.5, club 10, the room that fits 0; bands from 2 m fail it, 8.8 a second in the room and 21 and 31 in the club on a 20 s walk), and no tile more than twice as far as another of the same lamp size is larger (an inverted band order fails it). No allocator: placement is the unit test's |
 | G1 | `projector_pool_g1.py` (tile in the atlas against the standalone map, max abs 0) |
 | cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick |
@@ -775,8 +803,10 @@ the coarser in the offline model, not measured on this implementation); a wide l
 a cell from the older pose is lit without a shadow until redrawn, only for lamps wider than about 93 degrees that move, rotate or are
 edited); the own avatar's guard-only neighbour cell lagging by about 2 frames at a seam; the retiring cells of a lamp whose cone crosses
 the split and the off-hold's bookkeeping in the light set (no unit test: the logic is in the GL class; their rules are tested); the
-wiring of the texture-entry mark to the feed's hooks (`TextureEntryRebuild`, `OwnRebuild`; the rules are tested in the hooks' order,
-the hooks themselves need the viewer: in-world, a colour or emissive blinker should add no `edit` cause to `pool.rerender_causes`); the GPU
+wiring of the texture-entry mark and the quiet record to the feed's hooks (`TextureEntryRebuild`, `OwnRebuild`, `noteMoved`,
+`BridgeMoves`; the rules are tested in the hooks' order, the hooks themselves need the viewer: in-world, a `PRIM_COLOR` or emissive
+blinker should add no `edit` cause to `pool.rerender_causes`, also after more than 9 toggles, when its linkset is active, both as a
+single-prim lamp, the root, and as a child prim); the GPU
 cost of a compaction (a whole-atlas copy: one at most every 3 s for a blocked growth, and one for an arrival that finds no block); the
 CPU of the per-frame valve work in the viewer's "projector sweep" and "projector layout" zones (offline, on contiguous arrays with the
 same rules: the band test, the valve's ceiling and demand passes, the growth check and `resizeDue` cost about 0.02 ms a frame for 2,466
