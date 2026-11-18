@@ -33,16 +33,20 @@
 //
 // A face has the rank r = the number of faces of its object with a lower texture entry index whose
 // extents equal its own (0 for every other face). In the stochastic passes (total alpha, depth,
-// accumulation, glow) its polygon offset is pulled forward by UNITS_PER_RANK r depth units. The units
-// are those of the passes' depth buffer, DEPTH_COMPONENT24 (LLPipeline::allocateAlphaStochastic, and the
-// scene's targets, llrendertarget.cpp): one unit is 1 / 2^24 of the depth range, about 0.06 mm at 10 m
+// accumulation, glow) its polygon offset is pulled forward by UNITS_PER_RANK r units. A unit is the
+// polygon offset's r of the passes' depth buffer, DEPTH_COMPONENT24 (LLPipeline::allocateAlphaStochastic,
+// and the scene's targets, llrendertarget.cpp): one or two steps of the 24-bit depth, as the
+// implementation chooses (GL 4.6 section 14.6.5); NVIDIA 621 takes two (measured by
+// scripts/perf/test_alpha_stochastic.py). A step is 1 / 2^24 of the depth range, about 0.06 mm at 10 m
 // and 6 mm at 100 m with the 0.1 m near plane.
 //
-// The step k = UNITS_PER_RANK. The winner (the face of rank r that covers a sample) stores z - 1 - k r in
-// the stochastic depth. Let n be the difference between a face's depth in another pass and the depth
-// pass's at the same sample: the programs differ (the alpha-only variant, the full program, the glow
-// program), and two coincident faces may be drawn by different vertex shader files. A face passes where
-// its depth is at or in front of the stored one (LEQUAL):
+// The pull per rank, k = UNITS_PER_RANK. The winner (the face of rank r that covers a sample) stores z - 1 - k r in
+// the stochastic depth. Let n be the difference, in units, between a face's depth in another pass and the
+// depth pass's at the same sample: the programs differ (the alpha-only variant, the full program, the glow
+// program), and two coincident faces may be drawn by different vertex shader files. (The harness measures
+// n = 0 on NVIDIA 621 for every alpha and glow vertex program, static and skinned; a driver that rounds
+// otherwise is what the margins are for.) A face passes where its depth is at or in front of the stored
+// one (LEQUAL):
 //   the winner's accumulation          z - 2 - k r + n       <= z - 1 - k r   while n <= +1
 //   the winner's glow                  z - 3 - k r + n       <= z - 1 - k r   while n <= +2
 //   the accumulation of the face below z - 2 - k (r - 1) + n <= z - 1 - k r   while n <= 1 - k
@@ -52,8 +56,8 @@
 // another program in both of its tests, so it gets 2 units in both: 1 - k < -2 and 2 - k < -2, k >= 5.
 // (With k = 2 the glow of the face one below equalled the stored depth and passed with no noise at all.)
 // The cost: a face of rank r lies 1 + k r units in front of the surface it is on, which is how far it can
-// show through opaque geometry just in front of it: rank 1 (6 units) 0.4 mm at 10 m, 9 mm at 50 m and
-// 3.6 cm at 100 m, where an eye is a pixel or less.
+// show through opaque geometry just in front of it: rank 1 (6 units, 6 or 12 steps) 0.4 or 0.7 mm at
+// 10 m, 0.9 or 1.8 cm at 50 m, 3.6 or 7.2 cm at 100 m, where an eye is a pixel or less.
 
 #include <cstddef>
 #include <cstdint>
@@ -67,7 +71,7 @@ namespace LLStochasticLayerRank
     constexpr float UNITS_GLOW = -3.f;          // one more again (other vertex shaders)
     constexpr float UNITS_PER_RANK = 5.f;       // see above
     // A mesh has at most 8 faces (LL_SCULPT_MESH_MAX_FACES), so ranks 0 to 7; the clamp bounds the pull
-    // at 1 + 5 x 7 = 36 units (2 mm at 10 m) for anything else.
+    // at 1 + 5 x 7 = 36 units (2 or 4 mm at 10 m) for anything else.
     constexpr uint8_t MAX_RANK = 7;
 
     struct Box

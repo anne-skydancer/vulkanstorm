@@ -167,6 +167,32 @@ sixteenth of a pixel behind sloped planes, and that the old passes show them on 
 per sample (it reads `gl_SamplePosition`): 0.26 ms instead of 0.03 ms per spread at 2560x1440 with
 8 samples on an RTX 5070 Ti (NVIDIA 621.01), run once at S = 8 and twice at S = 16.
 
+Coincident layers of one object (the layer rank, `llstochasticlayerrank.h`; bug V1, fixed
+2026-11-18). Blended faces of one object that lie on the same triangles, such as the iris and the
+pupil of a mesh eye made as duplicated layers, or stacked decals of one size, have equal depth
+everywhere: the passes had no order for them, so they shared the samples and the pixel was their
+average. The reference is the creator's order, the texture entry order (sorted alpha draws rigged
+faces in it, and sorts static ones by distance with no tie-break). A blended face, static or rigged,
+whose object-space extents equal those of r earlier faces of its object gets the rank r
+(`LLVolumeGeometryManager::genDrawInfo`, before the sort; HUDs never take the passes). A batch breaks
+where the rank changes (`LLDrawInfo::mStochasticRank`), and the draw's offset units are pulled 5 r
+nearer in the total alpha and the depth (-1 - 5r), the accumulation (-2 - 5r) and the glow
+(-3 - 5r). Five, so that the face just below the winner fails its accumulation and its glow with up
+to 2 units of depth noise between programs of different vertex shader files (two units per rank let
+its glow through with none); the winner keeps its margins (+1, +2). A polygon-offset unit is one or
+two steps of the 24-bit depth, as the implementation chooses (GL 4.6 section 14.6.5); NVIDIA 621
+takes two, so a rank-1 face sits 12 steps in front of its surface: 0.7 mm at 10 m, 7.2 cm at 100 m.
+`scripts/perf/test_alpha_stochastic.py` checks four coincident faces in every draw order, flat,
+sloped and as decals on sloped planes, against face order (without the rank they average), the
+margins against injected noise, the size of a unit, and that the viewer's alpha and glow vertex
+programs (alphaV, fullbrightV, materialV, pbralphaV, emissiveV, pbrglowV), static and skinned, give
+one surface bit-identical clip positions on NVIDIA 621 (transform feedback, 0.3 to 200 m from the
+eye). Not covered: a layer of another size (a larger shell is ordered by its own depth, which
+separates it once the gap exceeds the passes' 1-unit slack), a layer covering part of another on the
+same triangles (still averaged where they overlap), coincident triangles inside one face (one draw),
+layers split across separate objects and the blended primitives of a glTF scene asset (no creator
+order between them).
+
 ## Temporal accumulation (`RenderAlphaStochasticTemporal`, always on)
 
 The accumulation is part of the method, not a user choice: it is not in Preferences. The debug setting
@@ -539,12 +565,15 @@ if the large buffer cannot have the targets, and fails with a message if the win
 
 - `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`), of the upgrade before the mask (`STOCH_REF_REF`, `c121dc100c`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
 - `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue, the Aurora Viewer's by SHA-256), and C++ twins of the dither and the mask lookup with the Aurora Viewer's properties and golden values (computed from its formulas on its own tile file by `scripts/tests/gen_stochastic_goldens.py`, whose `--check` in ci-checks finds each of them in the test).
+- `indra/newview/tests/llstochasticlayerrank_test.cpp` and `scripts/tests/test_stochastic_layer_rank.py` (ci-checks): the layer rank's rules and margins on a model of the passes, and text guards that the rank reaches the stochastic passes only (sorted alpha only sees its draws split).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (8 and 4, each in
   one pass), the total alpha, visibility and composite, an opaque occluder, the glow,
-  a decal on a sloped plane with and without the offset, the edge pixels of quads with UV islands
-  (sorted alpha, then the passes without and with `centroid`). NVIDIA 621.01 and Mesa Zink
-  (`GALLIUM_DRIVER=zink`, `--opengl <Mesa opengl32.dll>`).
+  a decal on a sloped plane with and without the offset, the edge
+  pixels of quads with UV islands (sorted alpha, then the passes without and with `centroid`). NVIDIA 621.01 and Mesa Zink
+  (`GALLIUM_DRIVER=zink`, `--opengl <Mesa opengl32.dll>`). Since 2026-11-18 also coincident layers of one object
+  against face order (the layer rank), the size of a polygon-offset unit and the depth agreement of the alpha and
+  glow vertex programs, static and skinned (run on NVIDIA 621.14 only).
 - `scripts/perf/bench_alpha_oit.py`, implementation `st`: the viewer's shaders and passes on the
   bench's synthetic layers, beside the round-2 study's variants (`stoch+...`, `stoch1`, `hybrid`),
   against `direct` (sorted alpha) and `slots` (PPLL, from git ref `a5290e8c81`), GPU time only;
