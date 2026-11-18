@@ -4,8 +4,8 @@
 // the blocker nearest the receiver (the largest blocking depth) instead of the blockers' mean (projector shadow sharpness P2). G1 checks that the pool's tile lookup
 // (shadowStochasticUtil.glsl, stSpotFilterTile) gives the same value (2 ulp against this reference; exactly the same against the same code on a standalone map). The helpers stSpotDisc and the ST_SPOT_*
 // defines come from the util under test; ST_SPOT_KERNEL_MAX is the 10.0 the reference had.
-// Lamp shadows L1: the filter runs at the physical radius between the util's ST_SPOT_KERNEL_MIN (1.5 texels) and the cap; the edge
-// reconstruction of PR A is gone from both sources.
+// Lamp shadows L1: the filter runs at the physical radius between the util's ST_SPOT_KERNEL_MIN (1.5 texels) and the cap, the search
+// gathers the receiver's own 2 x 2 texels too, and the edge reconstruction of PR A is gone from both sources.
 #define ST_SPOT_KERNEL_MAX 10.0
 
 // The 2 x 2 texels whose bilinear footprint holds uv, read with one gather at their shared corner (so the hardware
@@ -50,11 +50,12 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     float rp_max = z_tex * max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs.x, rs.y) + 1.0));
     float z_near = 0.0;
     float n_blk = 0.0;
-    for (int k = 0; k < ST_SPOT_SEARCH; ++k)
+    for (int k = 0; k <= ST_SPOT_SEARCH; ++k) // the disc's gathers, then the receiver's own 2 x 2 texels (L1)
     {
         vec4 ref;
         vec2 f;
-        vec4 z = stSpotQuad(map, c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, res, c, g, z_bias, rp_max, ref, f);
+        vec2 o = k < ST_SPOT_SEARCH ? stSpotDisc(k, ST_SPOT_SEARCH) * rs / res : vec2(0.0);
+        vec4 z = stSpotQuad(map, c.xy + o, res, c, g, z_bias, rp_max, ref, f);
         vec4 blk = vec4(lessThan(z, ref));
         n_blk += blk.x + blk.y + blk.z + blk.w;
         vec4 bz = blk * z;
@@ -64,7 +65,7 @@ float stSpotFilter(sampler2D map, vec2 res, vec3 c, vec2 g, float z_bias, float 
     {
         return 1.0; // nothing between the receiver and the light
     }
-    if (n_blk == float(4 * ST_SPOT_SEARCH))
+    if (n_blk == float(4 * (ST_SPOT_SEARCH + 1)))
     {
         return 0.0; // the umbra: the filter's disc lies inside the search's
     }
