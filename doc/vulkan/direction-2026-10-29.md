@@ -1,5 +1,9 @@
 # Renderer direction (decisions of 2026-10-29)
 
+> Update 2026-11-18: `vkstorm-rust` was archived (tag
+> `archive/vkstorm-rust/2026-11-18`); the Rust port restarts on a fresh line
+> from `vkstorm-release`'s tip once the C++ and OpenGL modernisation are done.
+
 Owner decisions of 2026-10-29 on OpenGL, Mesa/Zink and Vulkan. Where they
 conflict with the design study in this folder (see [README.md](README.md)),
 these decisions apply.
@@ -38,7 +42,7 @@ which never qualified. The branches were renamed, so their history is kept:
 
 ## Order of work
 
-1. **Finish the Rust port** (`vkstorm-rust`; archived 2026-11-18, the port restarts later on a fresh line from `vkstorm-release`'s tip once the C++ and OpenGL modernisation are done).
+1. **Finish the Rust port** (`vkstorm-rust`).
 2. **Then** create a new `vkstorm-vulkan` from the tip of `vkstorm-release`.
 3. **On it, write a new renderer.**
 
