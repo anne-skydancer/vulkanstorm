@@ -24,9 +24,12 @@
 //   Cells (L2)      the size from the lamp alone (guard included), the distance bands and their hysteresis, the pressure valve (no
 //                   size change while the atlas has room; farthest first over the budget; the ceiling; no hold for empty steps), and
 //                   the block a draw-then-swap resize gets (BuddyAtlas::largestAfterFree)
-//   ScriptLamps (S2) a lamp switched off, black or at radius 0 keeps its tiles for kOffHoldSeconds (blinkers never lose them, a day and
-//                   night switch gives them back once); the silhouette key (P3 texturedDirties) ignores fullbright, glow and tints
-// plus the size rule and the level controller (the C++ twin of the spec's rules).
+//   ScriptLamps (S2) the hold of a lamp switched off, black or at radius 0 (holdOffFrame: blinkers keep their tiles, a day and night
+//                   switch gives them back once); the silhouette key's inputs (silhouetteFaceMix: each moves the key, nothing else is one)
+//   Placement (L2)  a GL-free replay of layout() and renderTile()'s resize: an arrival that finds no room waits for the shrinks and the
+//                   pressure ends at the rule's (review B1); a shortfall only at the ceiling; after a compaction the free texels hold
+//                   every arrival set and growth they cover; a growth blocked by fragmentation gets one compaction after its hold (Q1)
+// plus the size rule and the level controller (the C++ twin of the spec's rules; P2's one-tile size and global level are twins here).
 
 #include "llprojectorshadowpool.h"
 
@@ -66,6 +69,39 @@ namespace
     {
         return a.x < b.x + b.size && b.x < a.x + a.size && a.y < b.y + b.size && b.y < a.y + a.size;
     }
+
+    // Twins of P2's rules, which the viewer no longer calls (L2 sizes every tile with the valve): the square lamp of one tile, the demand
+    // of tiles that all shrink alike, and the global level, which is the valve with every tile in the farthest band.
+    // N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
+    uint32_t baseSize(float radius, float fov_radians)
+    {
+        // tan() is non-monotone past pi: clamp the half angle to [0, 1.55] rad, far beyond any real fov
+        const double half = std::min(std::max(0.5 * double(fov_radians), 0.0), 1.55);
+        return tileBaseSize(2.0 * std::tan(half), double(radius), 0);
+    }
+    // U(s) = sum N_i(s)^2 / A^2
+    double demand(const std::vector<uint32_t>& bases, int level, uint32_t atlas)
+    {
+        double sum = 0.0;
+        for (uint32_t b : bases)
+        {
+            const double n = double(levelSize(b, level));
+            sum += n * n;
+        }
+        const double a = double(atlas);
+        return sum / (a * a);
+    }
+    bool updateLevel(LevelController& lc, const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds)
+    {
+        std::vector<ValveTile> tiles(bases.size());
+        for (size_t i = 0; i < bases.size(); ++i)
+        {
+            tiles[i].base = bases[i];
+        }
+        return lc.update(tiles, atlas, dt_seconds);
+    }
+    constexpr int kMaxPressure = kMaxBand + kMaxLevel; // every band at kMaxLevel octaves
+    constexpr float kFloorMovingFps = 25.f;           // the owner's floor moving (the cap's effect on it, testP4Caps)
 
     std::vector<LayoutRequest> requestsFor(const std::vector<uint32_t>& bases, int level)
     {
@@ -109,7 +145,7 @@ namespace
         const std::vector<uint32_t> bases(256, 2048u);
         const uint32_t atlas = 4096;
         LevelController lc;
-        lc.update(bases, atlas, 0.016f, false);
+        updateLevel(lc, bases, atlas, 0.016f);
         check(lc.level() > 0, "T1 level shrinks for 256 big lamps", lc.level());
         check(demand(bases, lc.level(), atlas) <= kShrinkAbove, "T1 demand under threshold", demand(bases, lc.level(), atlas));
         // and every lamp is actually placed at that level, and also at the floor
@@ -172,18 +208,18 @@ namespace
 
         // the level: nine 2048 lamps (U = 0.5625) stay at level 0, the tenth shrinks; at 4096 the third already does
         LevelController lc;
-        lc.update(std::vector<uint32_t>(9, 2048u), atlas, 0.016f, false);
+        updateLevel(lc, std::vector<uint32_t>(9, 2048u), atlas, 0.016f);
         check(lc.level() == 0, "T8 nine 2048 lamps stay at level 0 on 8192", lc.level());
-        lc.update(std::vector<uint32_t>(10, 2048u), atlas, 0.016f, false);
+        updateLevel(lc, std::vector<uint32_t>(10, 2048u), atlas, 0.016f);
         check(lc.level() == 1, "T8 the tenth shrinks", lc.level());
         LevelController l4;
-        l4.update(std::vector<uint32_t>(3, 2048u), 4096, 0.016f, false);
+        updateLevel(l4, std::vector<uint32_t>(3, 2048u), 4096, 0.016f);
         check(l4.level() == 1, "T8 the same on 4096: the third lamp shrinks", l4.level());
         for (uint32_t n : { 5u, 12u, 40u, 100u })
         {
             LevelController c;
             const std::vector<uint32_t> bases(n, 2048u);
-            c.update(bases, atlas, 0.016f, false);
+            updateLevel(c, bases, atlas, 0.016f);
             check(demand(bases, c.level(), atlas) <= kShrinkAbove, "T8 demand under threshold", n, demand(bases, c.level(), atlas));
             check(planRepack(requestsFor(bases, c.level()), atlas).ok, "T8 placed at the chosen level", n);
         }
@@ -262,8 +298,8 @@ namespace
         // two 2048^2 lamps: U = 0.5, level 0. A third: U = 0.75 > 0.60 -> level 1.
         std::vector<uint32_t> two(2, 2048u), three(3, 2048u);
         LevelController lc;
-        check(!lc.update(two, atlas, 0.016f, false) && lc.level() == 0, "T2 two lamps level 0");
-        check(lc.update(three, atlas, 0.016f, false) && lc.level() == 1, "T2 third lamp shrinks", lc.level());
+        check(!updateLevel(lc, two, atlas, 0.016f) && lc.level() == 0, "T2 two lamps level 0");
+        check(updateLevel(lc, three, atlas, 0.016f) && lc.level() == 1, "T2 third lamp shrinks", lc.level());
 
         // the third lamp flickers across the range boundary (jittering camera distance); the
         // reach hysteresis plus the level hysteresis keep the level at 1: no oscillation
@@ -283,7 +319,7 @@ namespace
                 ++flips;
             }
             in = now;
-            if (lc.update(in ? three : two, atlas, 0.016f, false))
+            if (updateLevel(lc, in ? three : two, atlas, 0.016f))
             {
                 ++changes;
             }
@@ -298,7 +334,7 @@ namespace
             int ch = 0;
             for (int f = 0; f < 600; ++f)
             {
-                ch += tg.update((f & 1) ? three : two, atlas, 0.016f, false) ? 1 : 0;
+                ch += updateLevel(tg, (f & 1) ? three : two, atlas, 0.016f) ? 1 : 0;
             }
             check(ch <= 1, "T2 per-frame toggling changes the level at most once", ch);
         }
@@ -313,49 +349,47 @@ namespace
         std::vector<uint32_t> exact60(1, 2048u);
         exact60.insert(exact60.end(), 8, 1024u);           // 0.25 + 8 * 0.0625 = 0.75
         LevelController a;
-        a.update(exact60, atlas, 0.016f, false);
+        updateLevel(a, exact60, atlas, 0.016f);
         check(a.level() == 1, "T2 0.75 shrinks", a.level());
         std::vector<uint32_t> u38(38, 512u);
         LevelController b;
-        b.update(u38, atlas, 0.016f, false);
+        updateLevel(b, u38, atlas, 0.016f);
         check(demand(u38, 0, atlas) < kShrinkAbove && b.level() == 0, "T2 0.59 holds", demand(u38, 0, atlas));
         std::vector<uint32_t> u40(40, 512u);               // 0.625
         LevelController c;
-        c.update(u40, atlas, 0.016f, false);
+        updateLevel(c, u40, atlas, 0.016f);
         check(demand(u40, 0, atlas) > kShrinkAbove && c.level() == 1, "T2 0.625 shrinks", c.level());
 
         // grow: from level 1, U(0) must be <= 0.45 for 3 s
         std::vector<uint32_t> low(28, 512u);                // 28/64 = 0.4375 <= 0.45 at level 0
         LevelController g;
-        g.update(u40, atlas, 0.016f, false);
+        updateLevel(g, u40, atlas, 0.016f);
         check(g.level() == 1, "T2 start at 1");
         float t = 0.f;
         bool grew = false;
         while (t < 2.95f)
         {
-            grew = g.update(low, atlas, 0.05f, false) || grew;
+            grew = updateLevel(g, low, atlas, 0.05f) || grew;
             t += 0.05f;
         }
         check(!grew && g.level() == 1, "T2 no grow before 3 s", t);
         for (int i = 0; i < 4; ++i)
         {
-            g.update(low, atlas, 0.05f, false);
+            updateLevel(g, low, atlas, 0.05f);
         }
         check(g.level() == 0, "T2 grows after 3 s", g.level());
         // a spike above 0.45 resets the hold
         std::vector<uint32_t> mid(30, 512u);                // 30/64 = 0.469 > 0.45: no grow
         LevelController r2;
-        r2.update(u40, atlas, 0.016f, false);
-        for (int i = 0; i < 50; ++i) r2.update(low, atlas, 0.05f, false);  // 2.5 s
-        r2.update(mid, atlas, 0.05f, false);                                // reset
-        for (int i = 0; i < 50; ++i) r2.update(low, atlas, 0.05f, false);  // 2.5 s again
+        updateLevel(r2, u40, atlas, 0.016f);
+        for (int i = 0; i < 50; ++i) updateLevel(r2, low, atlas, 0.05f);  // 2.5 s
+        updateLevel(r2, mid, atlas, 0.05f);                                // reset
+        for (int i = 0; i < 50; ++i) updateLevel(r2, low, atlas, 0.05f);  // 2.5 s again
         check(r2.level() == 1, "T2 interrupted hold does not grow", r2.level());
-        // placement failure asks for one more step
-        LevelController p;
-        check(p.update(two, atlas, 0.016f, true) && p.level() == 1, "T2 placement failure steps down", p.level());
+        // (a tile that finds no room is no input since L2: it waits for the shrinks being drawn, testPlacement)
         // never past the max level
         LevelController m;
-        m.update(std::vector<uint32_t>(10000, 2048u), atlas, 0.016f, false);
+        updateLevel(m, std::vector<uint32_t>(10000, 2048u), atlas, 0.016f);
         check(m.level() == kMaxLevel, "T2 level capped", m.level());
     }
 
@@ -837,11 +871,11 @@ namespace
                 const std::vector<uint32_t> one{ 2048 };
                 auto fresh = [&]() {
                     LevelController lc;
-                    lc.update(std::vector<uint32_t>(3, 2048), 4096, 0.016f, false);   // level 1
+                    updateLevel(lc, std::vector<uint32_t>(3, 2048), 4096, 0.016f);   // level 1
                     return lc;
                 };
                 auto stable = [&](LevelController& lc, int frames, float dt) {
-                    for (int i = 0; i < frames; ++i) lc.update(one, 4096, dt, false);
+                    for (int i = 0; i < frames; ++i) updateLevel(lc, one, 4096, dt);
                 };
                 LevelController ref = fresh();
                 const int shrunk = ref.level();
@@ -1384,19 +1418,56 @@ void testP3MoverRules()
     check(!rebuildDirties(kRebuildGeometry) && !rebuildDirties(0), "P3 REBUILD_GEOMETRY (markForUpdate, selection, bump) does not");
     check(rebuildDirties(kRebuildPosition | kRebuildTcoord), "P3 a position rebuild with one texcoord flag still passes (not the whole set)");
     {
-        // the silhouette key (S2): what a prim's alpha faces cut out of a depth tile; the feed hashes their inputs with silhouetteKeyMix
+        // the silhouette key (S2): what a prim's alpha faces cut out of a depth tile. llshadowdirtyfeed.cpp's silhouette_key folds one
+        // SilhouetteFace per blended, masked or alpha-textured face with silhouetteFaceMix; an opaque face adds nothing
         const uint32_t opaque = kSilhouetteKeySeed; // no alpha face
-        const float half = 0.5f, quarter = 0.25f;
-        const uint8_t face0 = 0, face1 = 1;
-        const uint32_t lace = silhouetteKeyMix(silhouetteKeyMix(opaque, &face0, 1), &half, sizeof(half));
-        const uint32_t lace_other_alpha = silhouetteKeyMix(silhouetteKeyMix(opaque, &face0, 1), &quarter, sizeof(quarter));
-        const uint32_t lace_other_face = silhouetteKeyMix(silhouetteKeyMix(opaque, &face1, 1), &half, sizeof(half));
-        check(lace != opaque && lace != lace_other_alpha && lace != lace_other_face, "S2 the key tells the faces and their inputs apart");
-        check(texturedDirties(lace, lace_other_alpha, true), "P3 a retexture (or a new alpha) of an alpha face dirties");
+        SilhouetteFace lace_face;
+        lace_face.alpha = 0.5f;
+        lace_face.texture[0] = 0x5a;
+        lace_face.components = 4;
+        const uint32_t lace = silhouetteFaceMix(opaque, lace_face);
+        check(lace != opaque && silhouetteFaceMix(opaque, lace_face) == lace, "S2 an alpha face changes the key, the same inputs give the same key");
+        // every input moves the key: the tint's alpha, the face, the texture and its channels, the mapping, the materials' alpha
+        std::vector<SilhouetteFace> moved(16, lace_face);
+        moved[0].alpha = 0.25f;
+        moved[1].index = 1;
+        moved[2].texture[15] = 1;
+        moved[3].components = 2;
+        moved[4].scale[1] = 2.f;
+        moved[5].offset[0] = 0.5f;
+        moved[6].rotation = 1.f;
+        moved[7].texgen = 1;
+        moved[8].material = true;
+        moved[9].material = true;
+        moved[9].alpha_mode = 2;
+        moved[10].material = true;
+        moved[10].alpha_cutoff = 128;
+        moved[11].gltf = true;
+        moved[12].gltf = true;
+        moved[12].gltf_alpha_mode = 1;
+        moved[13].gltf = true;
+        moved[13].gltf_texture[3] = 9;
+        moved[14].gltf = true;
+        moved[14].gltf_scale[0] = 3.f;
+        moved[15].gltf = true;
+        moved[15].gltf_cutoff = 0.25f;
+        std::set<uint32_t> keys{ lace };
+        for (const SilhouetteFace& f : moved)
+        {
+            keys.insert(silhouetteFaceMix(opaque, f));
+        }
+        check(keys.size() == moved.size() + 1, "S2 each silhouette input (alpha, face, texture, channels, mapping, legacy and glTF alpha) changes the key",
+              double(keys.size()));
+        check(silhouetteFaceMix(silhouetteFaceMix(opaque, lace_face), moved[1]) != silhouetteFaceMix(opaque, lace_face),
+              "S2 a second alpha face changes the key");
+        const uint32_t lace_other_alpha = silhouetteFaceMix(opaque, moved[0]);
+        check(texturedDirties(lace, lace_other_alpha, true), "P3 a new alpha of an alpha face dirties");
         check(texturedDirties(lace, opaque, true), "P3 a face turned opaque (alpha texture replaced by an RGB one) dirties: the hole closes");
         check(texturedDirties(opaque, lace, true), "P3 an opaque face turned alpha dirties: a hole opens");
         check(!texturedDirties(opaque, opaque, true), "P3 opaque to opaque (a plain texture swap, an animated texture) does not dirty");
-        check(!texturedDirties(lace, lace, true), "S2 fullbright, glow, shine, bump or an RGB tint on an alpha prim (the same key) does not dirty: a blinker redraws nothing");
+        // fullbright, glow, shine, bump and an RGB-only tint are no field of SilhouetteFace: a blinker that toggles them gives the feed the
+        // same inputs, hence the same key, and redraws nothing
+        check(!texturedDirties(lace, silhouetteFaceMix(opaque, lace_face), true), "S2 the same silhouette inputs (a blinker's fullbright, glow or RGB tint) do not dirty");
         check(texturedDirties(opaque, opaque, false) && texturedDirties(lace, lace, false), "P3 an unknown past (the prim predates tracking) pushes once, whatever it looks like now");
     }
 }
@@ -3245,7 +3316,7 @@ void testCellSizing()
             {
                 t.band = int(rng() % (kMaxBand + 1));
             }
-            changes += v.update(tiles, 8192, 1.f / 60.f, false);
+            changes += v.update(tiles, 8192, 1.f / 60.f);
             for (const ValveTile& t : tiles)
             {
                 changes += valveSize(t, v.level()) != t.base;
@@ -3261,7 +3332,7 @@ void testCellSizing()
             tiles.push_back({ 2048u, i < 4 ? 0 : (i < 8 ? 2 : kMaxBand), 0u }); // 12 x 2048^2 on 8192: demand 0.75
         }
         LevelController v;
-        check(v.update(tiles, 8192, 1.f / 60.f, false) && v.level() > 0, "over the budget the pressure rises at once", v.level());
+        check(v.update(tiles, 8192, 1.f / 60.f) && v.level() > 0, "over the budget the pressure rises at once", v.level());
         check(demand(tiles, v.level(), 8192) <= kShrinkAbove, "and stops at or below the budget", demand(tiles, v.level(), 8192));
         check(valveSize(tiles[0], v.level()) == 2048 && valveSize(tiles[11], v.level()) < 2048, "the near tiles keep their size, the far ones shrink",
               valveSize(tiles[0], v.level()), valveSize(tiles[11], v.level()));
@@ -3273,7 +3344,7 @@ void testCellSizing()
         const int was = v.level();
         for (int f = 0; f < 60 * 60 && v.level() > 0; ++f)
         {
-            steps += v.update(tiles, 8192, 1.f / 60.f, false);
+            steps += v.update(tiles, 8192, 1.f / 60.f);
         }
         check(was > 0 && steps > 0 && v.level() == 0, "the pressure falls once the demand allows it", was, v.level());
         check(demand(tiles, v.level(), 8192) <= kShrinkAbove, "at a pressure that fits", demand(tiles, v.level(), 8192));
@@ -3282,14 +3353,14 @@ void testCellSizing()
     {
         std::vector<ValveTile> tiles(5000, ValveTile{ 2048u, kMaxBand, 0u }); // 5000 floor tiles do not fit a 4096 atlas at all (1.22)
         LevelController v;
-        v.update(tiles, 4096, 1.f / 60.f, false);
+        v.update(tiles, 4096, 1.f / 60.f);
         check(v.level() == v.ceiling() && v.ceiling() == kMaxLevel, "all far tiles: the ceiling is the old floor level", v.level(), v.ceiling());
         std::vector<ValveTile> near(5000, ValveTile{ 2048u, 0, 0u });
         LevelController w;
-        w.update(near, 4096, 1.f / 60.f, false);
+        w.update(near, 4096, 1.f / 60.f);
         check(w.level() == kMaxPressure && w.ceiling() == kMaxPressure, "all near tiles: the ceiling is the full pressure", w.level());
         // the near tiles move far: the pressure that changes nothing is dropped at once (no 3 s holds through the empty steps)
-        w.update(tiles, 4096, 1.f / 60.f, false);
+        w.update(tiles, 4096, 1.f / 60.f);
         check(w.level() == kMaxLevel, "a pressure past the new ceiling is dropped at once", w.level());
         check(pressureCeiling(std::vector<ValveTile>(3, ValveTile{ 128u, kMaxBand, 0u })) == 1 && pressureCeiling(std::vector<ValveTile>(3, ValveTile{ 64u, 0, 0u })) == 0,
               "small tiles reach their floor sooner; 64 never shrinks");
@@ -3299,14 +3370,14 @@ void testCellSizing()
     {
         std::vector<ValveTile> tiles(40, ValveTile{ 2048u, 0, 0u }); // only near tiles: the steps up to kMaxBand change nothing
         LevelController v;
-        v.update(tiles, 8192, 1.f / 60.f, false);
+        v.update(tiles, 8192, 1.f / 60.f);
         const int high = v.level();
         check(high > kMaxBand, "near tiles only: the pressure passes the empty steps at once", high);
         tiles.resize(4);
         float t = 0.f;
         while (v.level() > 0 && t < 60.f)
         {
-            v.update(tiles, 8192, 1.f / 60.f, false);
+            v.update(tiles, 8192, 1.f / 60.f);
             t += 1.f / 60.f;
         }
         check(v.level() == 0, "the pressure falls back to 0", v.level());
@@ -3317,7 +3388,7 @@ void testCellSizing()
         std::vector<ValveTile> tiles(10, ValveTile{ 2048u, kMaxBand, 0u });
         tiles[0].fixed = 2048u;
         LevelController v;
-        v.update(tiles, 8192, 1.f / 60.f, false);
+        v.update(tiles, 8192, 1.f / 60.f);
         check(valveSize(tiles[0], v.level()) == 2048u && valveSize(tiles[1], v.level()) < 2048u, "a fixed tile keeps its size, the others shrink for it");
     }
     // the old global level is the valve with every tile in the farthest band
@@ -3381,13 +3452,24 @@ void testCellOwn()
     check(holding == 1, "exactly one cell holds the own avatar's centre", holding);
 }
 
-// S2: script-driven lamps. A lamp that goes off keeps its tiles for kOffHoldSeconds (the pool's holdOff runs this rule every frame the
-// lamp is off; the hold starts the first frame it is seen off and ends when it is on again).
+// S2: script-driven lamps. A lamp that goes off keeps its tiles for kOffHoldSeconds: LLProjectorShadows::holdOff calls holdOffFrame for
+// each of its tiles every frame the lamp is seen off; the frame it is seen on clears the tile's `off`. What this checks is that rule
+// over blink patterns; the light set's bookkeeping around it (the tiles marked seen, skipped by the scheduler, counted as fixed by the
+// valve) is the GL class's and is not reached here.
 void testScriptLamps()
 {
     check(offHeld(10.0, 10.0) && offHeld(10.0, 10.0 + kOffHoldSeconds) && !offHeld(10.0, 10.0 + kOffHoldSeconds + 0.01), "S2 the hold lasts kOffHoldSeconds");
     check(!offHeld(std::nan(""), 1.0) && !offHeld(1.0, std::nan("")), "S2 a bad time ends the hold");
-    // blinkers (0.03 s strobe, 0.1 s flasher, 1 s blinker, a broken tube's 2 s sleep) never lose their tiles; a day and night switch does
+    {
+        bool off = false;
+        double since = 0.0;
+        check(holdOffFrame(off, since, 7.0, true) && off && since == 7.0, "S2 the first frame seen off starts the hold");
+        check(holdOffFrame(off, since, 9.0, true) && since == 7.0, "S2 later frames keep its start");
+        check(!holdOffFrame(off, since, 9.0, false), "S2 a held tile out of range (by the reach it had when on) goes");
+        check(!holdOffFrame(off, since, 7.0 + kOffHoldSeconds + 0.01, true), "S2 after the hold the tile goes");
+    }
+    // blinkers (0.03 s strobe, 0.1 s flasher, 1 s blinker, a broken tube's 2 s sleep) keep their tiles through every off phase; a day
+    // and night switch gives them back once
     for (const double period : { 0.03, 0.1, 0.5, 1.0, 2.0, 60.0 })
     {
         bool off = false, have_tiles = true;
@@ -3399,12 +3481,7 @@ void testScriptLamps()
             const bool lamp_on = (int(now / period) % 2) == 0;
             if (!lamp_on)
             {
-                if (!off)
-                {
-                    off = true;
-                    since = now;
-                }
-                if (have_tiles && !offHeld(since, now))
+                if (have_tiles && !holdOffFrame(off, since, now, true))
                 {
                     have_tiles = false; // dropped like a lamp out of range
                     ++drops;
@@ -3412,18 +3489,492 @@ void testScriptLamps()
             }
             else
             {
-                off = false;
-                have_tiles = true; // on again: held tiles serve at once; dropped ones are drawn again
+                off = false;       // the light set sees it on: its held tiles serve at once
+                have_tiles = true; // (dropped ones are made again, with a fresh hold)
             }
         }
         if (period <= 2.0)
         {
-            check(drops == 0, "S2 a blinking lamp keeps its tiles (no redraw, no frame without its shadow)", period, drops);
+            check(drops == 0, "S2 a blinking lamp keeps its tiles through every off phase", period, drops);
         }
         else
         {
             check(drops == 1, "S2 a lamp off for minutes gives its tiles back once", period, drops);
         }
+    }
+}
+
+// L2 placement. A GL-free replay of LLProjectorShadows::layout() (the valve, each tile's want, the arrivals placed the largest first, a
+// compaction when the free texels hold them, arrivalShortfall, the growth hold) and of renderTile()'s resize (the rect freed, the new
+// size allocated), built from the llprojectorpool rules those call, in layout()'s order. The renders: up to `per_frame` a frame, first
+// fills first, then the resizes that are due, the longest-drawn first (the static schedule's order); a growth whose block an earlier
+// resize of the frame took is not drawn (renderTile). Only the rects are modelled, not the GL copies of a compaction.
+struct ReplayTile
+{
+    uint32_t key = 0, base = 0;
+    int band = 0;
+    bool placed = false, drawn = false;
+    Rect rect;
+    uint32_t want = 0;
+    uint32_t drawn_frame = 0;
+};
+
+struct ReplayPool
+{
+    uint32_t atlas;
+    BuddyAtlas buddy;
+    LevelController valve;
+    GrowthHold hold;
+    std::map<uint32_t, ReplayTile> tiles;
+    uint32_t frame = 1;
+    int shortfall_frames = 0, compactions = 0, resizes = 0, renders = 0;
+    explicit ReplayPool(uint32_t a) : atlas(a), buddy(a) {}
+
+    bool due(const ReplayTile& t) const // LLProjectorShadows::resizeDue
+    {
+        return t.placed && t.want >= kMinTile && t.want != t.rect.size && (t.want < t.rect.size || buddy.largestAfterFree(t.rect) >= t.want);
+    }
+    void compact() // LLProjectorShadows::compact: every placed tile at its own size
+    {
+        std::vector<LayoutRequest> requests;
+        std::vector<ReplayTile*> who;
+        for (auto& e : tiles)
+        {
+            if (e.second.placed)
+            {
+                LayoutRequest q;
+                q.key = e.first;
+                q.size = e.second.rect.size;
+                requests.push_back(q);
+                who.push_back(&e.second);
+            }
+        }
+        const RepackPlan plan = planRepack(requests, atlas);
+        check(plan.ok, "L2 replay: a compaction always fits (the tiles fitted before)");
+        buddy = plan.buddy;
+        for (size_t i = 0; i < who.size(); ++i)
+        {
+            who[i]->rect = plan.placed[i];
+        }
+        ++compactions;
+    }
+    void layout(float dt)
+    {
+        std::vector<ValveTile> valve_tiles;
+        std::vector<ReplayTile*> recs;
+        for (auto& e : tiles)
+        {
+            valve_tiles.push_back({ e.second.base, e.second.band, 0u });
+            recs.push_back(&e.second);
+        }
+        valve.update(valve_tiles, atlas, dt);
+        for (size_t i = 0; i < recs.size(); ++i)
+        {
+            recs[i]->want = valveSize(valve_tiles[i], valve.level());
+        }
+        std::vector<ReplayTile*> waiting;
+        for (auto& e : tiles)
+        {
+            if (!e.second.placed)
+            {
+                waiting.push_back(&e.second);
+            }
+        }
+        std::sort(waiting.begin(), waiting.end(), [](const ReplayTile* a, const ReplayTile* b) { return a->want != b->want ? a->want > b->want : a->key < b->key; });
+        auto place = [this](std::vector<ReplayTile*>& list) {
+            std::vector<ReplayTile*> left;
+            for (ReplayTile* t : list)
+            {
+                Rect r;
+                if (buddy.alloc(t->want, r))
+                {
+                    t->rect = r;
+                    t->placed = true;
+                }
+                else
+                {
+                    left.push_back(t);
+                }
+            }
+            list.swap(left);
+        };
+        auto texels = [](const std::vector<ReplayTile*>& list) {
+            uint64_t sum = 0;
+            for (const ReplayTile* t : list)
+            {
+                sum += uint64_t(t->want) * t->want;
+            }
+            return sum;
+        };
+        place(waiting);
+        if (!waiting.empty() && buddy.freeTexels() >= texels(waiting))
+        {
+            compact();
+            place(waiting);
+            check(waiting.empty(), "L2 replay: after a compaction the free blocks hold every arrival the free texels do");
+        }
+        if (!waiting.empty())
+        {
+            uint64_t shrinking = 0;
+            for (const auto& e : tiles)
+            {
+                if (e.second.placed)
+                {
+                    shrinking += shrinkTexels(e.second.rect.size, e.second.want);
+                }
+            }
+            if (arrivalShortfall(buddy.freeTexels(), shrinking, texels(waiting)))
+            {
+                ++shortfall_frames;
+            }
+        }
+        bool blocked = false;
+        for (const auto& e : tiles)
+        {
+            blocked = blocked || (e.second.placed && growthBlocked(buddy, e.second.rect, e.second.want));
+        }
+        if (hold.update(blocked, dt))
+        {
+            compact();
+        }
+    }
+    void render(int per_frame)
+    {
+        std::vector<ReplayTile*> picks;
+        for (auto& e : tiles)
+        {
+            if (e.second.placed && !e.second.drawn)
+            {
+                picks.push_back(&e.second);
+            }
+        }
+        std::vector<ReplayTile*> resizing;
+        for (auto& e : tiles)
+        {
+            if (e.second.drawn && due(e.second))
+            {
+                resizing.push_back(&e.second);
+            }
+        }
+        std::stable_sort(resizing.begin(), resizing.end(), [](const ReplayTile* a, const ReplayTile* b) { return a->drawn_frame < b->drawn_frame; });
+        picks.insert(picks.end(), resizing.begin(), resizing.end());
+        int n = 0;
+        for (ReplayTile* t : picks)
+        {
+            if (n >= per_frame)
+            {
+                break;
+            }
+            if (t->drawn && !due(*t))
+            {
+                continue; // its block went to an earlier growth of the frame: not drawn (renderTile)
+            }
+            if (due(*t))
+            {
+                buddy.free(t->rect);
+                Rect r;
+                check(buddy.alloc(t->want, r), "L2 replay: a due resize gets its block");
+                t->rect = r;
+                ++resizes;
+            }
+            t->drawn = true;
+            t->drawn_frame = frame;
+            ++n;
+            ++renders;
+        }
+    }
+    void step(int per_frame)
+    {
+        layout(1.f / 60.f);
+        render(per_frame);
+        ++frame;
+    }
+    void add(uint32_t key, uint32_t base, int band)
+    {
+        ReplayTile t;
+        t.key = key;
+        t.base = base;
+        t.band = band;
+        tiles[key] = t;
+    }
+    void drop(uint32_t key)
+    {
+        auto it = tiles.find(key);
+        if (it != tiles.end())
+        {
+            if (it->second.placed)
+            {
+                buddy.free(it->second.rect);
+            }
+            tiles.erase(it);
+        }
+    }
+    int unplaced() const
+    {
+        int n = 0;
+        for (const auto& e : tiles)
+        {
+            n += e.second.placed ? 0 : 1;
+        }
+        return n;
+    }
+    int offWant() const
+    {
+        int n = 0;
+        for (const auto& e : tiles)
+        {
+            n += e.second.placed && e.second.rect.size != e.second.want ? 1 : 0;
+        }
+        return n;
+    }
+    int ruleLevel() const // the valve's rule alone on the same tiles (a fresh controller: the shrink loop from 0)
+    {
+        std::vector<ValveTile> valve_tiles;
+        for (const auto& e : tiles)
+        {
+            valve_tiles.push_back({ e.second.base, e.second.band, 0u });
+        }
+        LevelController fresh;
+        fresh.update(valve_tiles, atlas, 1.f / 60.f);
+        return fresh.level();
+    }
+};
+
+void testPlacement()
+{
+    // the hold before a growth's compaction: kGrowHoldSeconds of stable frames, once per hold, reset by a frame without a blocked growth
+    {
+        GrowthHold h;
+        int first = -1, count = 0;
+        for (int f = 1; f <= 240; ++f)
+        {
+            if (h.update(true, 1.f / 60.f))
+            {
+                first = first < 0 ? f : first;
+                ++count;
+            }
+        }
+        check(first >= 180 && first <= 181, "L2 a blocked growth waits kGrowHoldSeconds (180 frames at 60 fps, float sums)", first);
+        check(count == 1, "L2 ... then its compaction is due once: the hold starts again", count);
+        GrowthHold r;
+        for (int f = 0; f < 170; ++f)
+        {
+            r.update(true, 1.f / 60.f);
+        }
+        r.update(false, 1.f / 60.f);
+        int late = 0;
+        for (int f = 0; f < 170; ++f)
+        {
+            late += r.update(true, 1.f / 60.f);
+        }
+        check(late == 0, "L2 a frame without a blocked growth resets the hold");
+        GrowthHold s;
+        check(!s.update(true, 100.f) && !s.update(true, std::numeric_limits<float>::quiet_NaN()), "L2 a stall or a bad frame time is not 3 s of waiting");
+    }
+    check(shrinkTexels(1024, 512) == 1024u * 1024u - 512u * 512u && shrinkTexels(512, 1024) == 0 && shrinkTexels(512, 512) == 0, "L2 the texels a shrink gives back");
+    check(!arrivalShortfall(10, 5, 15) && arrivalShortfall(10, 4, 15), "L2 a shortfall: the arrivals do not fit even once the shrinks are drawn");
+
+    // after a compaction the free texels say what fits: every arrival set (the largest first) they hold is placed, and no growth whose
+    // new size they hold is blocked (fragmented atlases from random allocations and frees)
+    {
+        std::mt19937 rng(77);
+        int cases = 0, misplaced = 0, still_blocked = 0, fragmented = 0;
+        for (int trial = 0; trial < 300; ++trial)
+        {
+            const uint32_t atlas = trial % 2 ? 4096u : 2048u;
+            BuddyAtlas b(atlas);
+            std::vector<Rect> live;
+            for (int i = 0; i < 400; ++i)
+            {
+                Rect r;
+                if (live.empty() || rng() % 3 != 0)
+                {
+                    if (b.alloc(64u << (rng() % 5), r))
+                    {
+                        live.push_back(r);
+                    }
+                }
+                else
+                {
+                    const size_t k = rng() % live.size();
+                    b.free(live[k]);
+                    live.erase(live.begin() + long(k));
+                }
+            }
+            for (const Rect& r : live) // a growth of each tile to twice its size: blocked before the compaction?
+            {
+                fragmented += growthBlocked(b, r, r.size * 2) ? 1 : 0;
+            }
+            std::vector<LayoutRequest> requests;
+            for (size_t i = 0; i < live.size(); ++i)
+            {
+                LayoutRequest q;
+                q.key = uint32_t(i + 1);
+                q.size = live[i].size;
+                requests.push_back(q);
+            }
+            const RepackPlan plan = planRepack(requests, atlas);
+            if (!plan.ok)
+            {
+                check(false, "L2 a compaction of what fitted fits", trial);
+                continue;
+            }
+            for (size_t i = 0; i < live.size(); ++i)
+            {
+                for (uint32_t want = plan.placed[i].size * 2; want <= atlas; want *= 2)
+                {
+                    if (uint64_t(want) * want <= plan.buddy.freeTexels())
+                    {
+                        ++cases;
+                        still_blocked += growthBlocked(plan.buddy, plan.placed[i], want) ? 1 : 0;
+                    }
+                }
+            }
+            BuddyAtlas after = plan.buddy;
+            uint64_t left = after.freeTexels();
+            std::vector<uint32_t> arrivals;
+            while (true)
+            {
+                const uint32_t s = 64u << (rng() % 6);
+                if (uint64_t(s) * s > left)
+                {
+                    break;
+                }
+                arrivals.push_back(s);
+                left -= uint64_t(s) * s;
+            }
+            std::sort(arrivals.rbegin(), arrivals.rend());
+            for (uint32_t s : arrivals)
+            {
+                Rect r;
+                misplaced += after.alloc(s, r) ? 0 : 1;
+            }
+        }
+        check(fragmented > 0, "L2 the random atlases do fragment (growths blocked although the texels would hold them)", fragmented);
+        check(cases > 1000 && still_blocked == 0, "L2 after a compaction no growth the free texels hold is blocked", cases, still_blocked);
+        check(misplaced == 0, "L2 after a compaction every arrival set the free texels hold is placed", misplaced);
+    }
+
+    // B1 (review): a lamp switched on near the camera while far tiles hold the atlas. Its tiles wait for the far tiles' shrinks and the
+    // pressure ends where the rule puts it (a step for the waiting arrival left the near tiles an octave coarser for good)
+    for (const int per_frame : { 4, 1000 })
+    {
+        ReplayPool p(4096);
+        uint32_t key = 1;
+        for (int i = 0; i < 38; ++i)
+        {
+            p.add(key++, 1024, 2);
+        }
+        for (int f = 0; f < 600; ++f)
+        {
+            p.step(per_frame);
+        }
+        check(p.valve.level() == 3 && p.offWant() == 0, "L2 B1: 38 far tiles settle at pressure 3", p.valve.level());
+        const uint32_t first_near = key;
+        for (const uint32_t base : { 2048u, 1024u, 1024u, 1024u })
+        {
+            p.add(key++, base, 0);
+        }
+        int waited = -1;
+        for (int f = 0; f < 60 * 30; ++f)
+        {
+            p.step(per_frame);
+            if (waited < 0 && p.unplaced() == 0)
+            {
+                waited = f;
+            }
+        }
+        check(p.valve.level() == p.ruleLevel() && p.valve.level() == 4, "L2 B1: the pressure is the rule's, not one step above", p.valve.level(), p.ruleLevel());
+        check(p.tiles[first_near].rect.size == 2048 && p.tiles[first_near + 1].rect.size == 1024, "L2 B1: the near tiles keep their lamp's size",
+              p.tiles[first_near].rect.size, p.tiles[first_near + 1].rect.size);
+        check(waited >= 0 && waited <= 3 && p.offWant() == 0, "L2 B1: the arrivals wait a few frames for the shrinks, then every tile has its size", waited);
+        check(p.shortfall_frames == 0, "L2 B1: no shortfall below the ceiling", p.shortfall_frames);
+    }
+
+    // over the budget even at the ceiling: a shortfall no render frees (5000 tiles do not fit a 4096 atlas at their floor)
+    {
+        ReplayPool p(4096);
+        for (uint32_t i = 1; i <= 5000; ++i)
+        {
+            p.add(i, 2048, 0);
+        }
+        for (int f = 0; f < 120; ++f)
+        {
+            p.step(1000);
+        }
+        check(p.valve.level() == p.valve.ceiling() && p.unplaced() > 0 && p.shortfall_frames > 0, "L2 a shortfall exists only at the ceiling, with tiles left out",
+              p.unplaced(), p.shortfall_frames);
+    }
+
+    // Q1 (audit): fragmentation that blocks a growth. A 2048 lamp and three far 1024 ones at pressure 0; a burst of near lamps fills the
+    // atlas while the old tiles still hold their rects; a second burst; then the scene leaves but for one tile in each quadrant. The 2048
+    // lamp comes near: the free texels hold its 2048 four times over, no quadrant is free. It gets a compaction after the hold.
+    {
+        ReplayPool p(4096);
+        uint32_t key = 1;
+        const uint32_t g = key;
+        p.add(key++, 2048, kMaxBand);
+        for (int i = 0; i < 3; ++i)
+        {
+            p.add(key++, 1024, kMaxBand);
+        }
+        for (int f = 0; f < 120; ++f)
+        {
+            p.step(6);
+        }
+        for (int i = 0; i < 64; ++i)
+        {
+            p.add(key++, 128, 0);
+        }
+        for (int f = 0; f < 600; ++f)
+        {
+            p.step(6);
+        }
+        for (int i = 0; i < 128; ++i)
+        {
+            p.add(key++, 256, 0);
+        }
+        for (int f = 0; f < 600; ++f)
+        {
+            p.step(6);
+        }
+        bool kept[4] = { false, false, false, false };
+        std::vector<uint32_t> leave;
+        for (const auto& e : p.tiles)
+        {
+            const int q = int(e.second.rect.x / 2048) + 2 * int(e.second.rect.y / 2048);
+            if (e.first == g)
+            {
+                continue;
+            }
+            if (e.second.placed && !kept[q])
+            {
+                kept[q] = true; // the first tile found in each quadrant stays (in the 2048 lamp's quadrant, one besides it)
+                continue;
+            }
+            leave.push_back(e.first);
+        }
+        for (uint32_t k : leave)
+        {
+            p.drop(k);
+        }
+        p.tiles[g].band = 0;
+        const int compactions = p.compactions;
+        int blocked_frames = 0, grown_at = -1;
+        for (int f = 0; f < 60 * 10; ++f)
+        {
+            p.step(6);
+            const ReplayTile& t = p.tiles[g];
+            blocked_frames += growthBlocked(p.buddy, t.rect, t.want) ? 1 : 0;
+            if (grown_at < 0 && t.rect.size == 2048)
+            {
+                grown_at = f;
+            }
+        }
+        check(kept[0] && kept[1] && kept[2] && kept[3], "L2 Q1: every quadrant holds a tile");
+        check(blocked_frames >= 170, "L2 Q1: the growth is blocked by fragmentation alone (the case exists)", blocked_frames);
+        check(grown_at >= 170 && grown_at <= 200 && p.compactions == compactions + 1, "L2 Q1: after the hold one compaction lets it grow", grown_at,
+              p.compactions - compactions);
     }
 }
 
@@ -3463,6 +4014,7 @@ int main(int argc, char** argv)
     testP4(print_table);
     testCells();
     testScriptLamps();
+    testPlacement();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);

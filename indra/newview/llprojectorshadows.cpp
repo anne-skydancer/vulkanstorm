@@ -240,6 +240,7 @@ bool LLProjectorShadows::allocateAtlases(U32 size)
     mAtlasSize = size;
     mBuddy.reset(size);
     mLevel.reset();
+    mGrowthHold.reset();
     return true;
 }
 
@@ -293,28 +294,9 @@ bool LLProjectorShadows::ensureAllocated()
         {
             mAllocFailed = false;
             LLShadowDirtyFeed::setTracking(LLShadowDirtyFeed::Owner::Projectors, true); // the scene's change hooks record from now on
-            // every record starts again: a tile has to be drawn into the new atlas
-            for (auto& entry : mRecords)
-            {
-                Record& rec = entry.second;
-                rec.placed = false;
-                rec.drawnFrame = 0;
-                rec.drawn.valid = false;
-                rec.pending = false;
-                rec.avatarInLayer = false;
-                rec.layerRectValid = false;
-            }
-            // a lamp's retiring cells (N3) are never drawn again: in a new atlas they would serve nothing. Dropped after the reset above, so
-            // dropRecord frees no rect of the old atlas into the new allocator
-            std::vector<std::pair<U32, const LLDrawable*>> retiring;
-            for (const auto& entry : mRetiringOf)
-            {
-                retiring.emplace_back(entry.second, entry.first);
-            }
-            for (const auto& lamp : retiring)
-            {
-                dropLamp(lamp.first, lamp.second);
-            }
+            // records exist only while the atlases do: they are made by update() after this succeeded, and release() (the only caller of
+            // freeAtlases besides a failing allocateAtlases) drops them with the atlases. A new atlas starts from the light set.
+            llassert(mRecords.empty() && mKeyOf.empty() && mRetiringOf.empty());
             LL_INFOS("ProjectorShadows") << "projector shadow pool: two " << size << "x" << size << " depth atlases ("
                                          << (atlasBytes(size) >> 20) << " MiB), tier " << chosen << " chosen for " << gGLManager.mVRAM
                                          << " MB of video memory (" << (dedicated_vram ? "dedicated" : "not known to be dedicated")
@@ -351,6 +333,7 @@ void LLProjectorShadows::release()
     clear(); // the records hold drawables: dropped with the tiles (a later allocation starts from the light set)
     mBuddy.reset(kTierSmall);
     mLevel.reset();
+    mGrowthHold.reset();
     mAllocFailed = false;
     mTileRenders = 0;
     mRepacks = 0;
@@ -488,12 +471,7 @@ void LLProjectorShadows::holdOff(U32 lamp, LLDrawable* drawable, const LLVector3
     for (auto it = mRecords.lower_bound(lamp << 4); it != mRecords.end() && (it->first >> 4) == lamp; ++it)
     {
         Record& rec = it->second;
-        if (!rec.off)
-        {
-            rec.off = true;
-            rec.offSince = now;
-        }
-        if (offHeld(rec.offSince, now) && inRange(true, camera_distance(drawable, cam_pos, rec.curPose.radius), reach))
+        if (holdOffFrame(rec.off, rec.offSince, now, inRange(true, camera_distance(drawable, cam_pos, rec.curPose.radius), reach)))
         {
             rec.seen = true;
         }
@@ -794,7 +772,8 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
 
 // A compaction: every placed tile at its own size in a fresh layout (sizes in descending order pack a buddy atlas without a gap, so
 // what fitted fits again), the drawn ones moved by bit-exact copies. Runs when an arriving tile finds no block although the free texels
-// would hold it (fragmentation: tiles of mixed sizes came, went and were resized). True when a layout was applied.
+// would hold it, or when a growth has found none for a while although they would (fragmentation: tiles of mixed sizes came, went and were
+// resized); afterwards a block of any size the free texels hold is free (llprojectorpool::growthBlocked). True when a layout was applied.
 bool LLProjectorShadows::compact()
 {
     std::vector<LayoutRequest> requests;
@@ -827,8 +806,11 @@ bool LLProjectorShadows::compact()
 
 // The sizes and the placement of this frame's tiles (spec 4.2, lamp shadows L2): the valve's pressure from the tiles' lamp sizes and
 // distance bands, each tile's wanted size, and the arriving tiles placed at theirs (a compaction first when the free texels hold them
-// but no block does; the valve steps up the next frame when one is still left out, and the shrinking tiles' renders make the room).
-// A placed tile is never resized here: its own render draws the new size before it is swapped in (renderTile).
+// but no block does). An arrival still left out waits for the shrinks the renders draw, which give back the room (the valve keeps the
+// demand within its budget: llprojectorpool::arrivalShortfall); it never moves the pressure. Only a shortfall no render frees (the tiles
+// do not fit even at the valve's ceiling) makes the lamps' retiring cells (N3) give their space. A growth that fragmentation blocks gets
+// a compaction after a hold (llprojectorpool::GrowthHold). A placed tile is never resized here: its own render draws the new size before
+// it is swapped in (renderTile).
 void LLProjectorShadows::layout(F32 dt_seconds)
 {
     mValveTiles.clear();
@@ -854,8 +836,7 @@ void LLProjectorShadows::layout(F32 dt_seconds)
         mValveTiles.push_back(tile);
         mValveRecs.push_back(&rec);
     }
-    mLevel.update(mValveTiles, mAtlasSize, dt_seconds, mPlacementFailed);
-    mPlacementFailed = false;
+    mLevel.update(mValveTiles, mAtlasSize, dt_seconds);
     for (size_t i = 0; i < mValveTiles.size(); ++i)
     {
         if (mValveRecs[i])
@@ -874,49 +855,90 @@ void LLProjectorShadows::layout(F32 dt_seconds)
             waiting.push_back(&entry.second);
         }
     }
-    if (waiting.empty())
-    {
-        return;
-    }
-    std::sort(waiting.begin(), waiting.end(), [](const Record* a, const Record* b) { return a->want != b->want ? a->want > b->want : a->key < b->key; });
-    auto place = [this](std::vector<Record*>& list) {
-        std::vector<Record*> left;
-        for (Record* rec : list)
-        {
-            Rect r;
-            if (mBuddy.alloc(rec->want, r))
-            {
-                rec->rect = r;
-                rec->placed = true;
-            }
-            else
-            {
-                left.push_back(rec);
-            }
-        }
-        list.swap(left);
-    };
-    place(waiting);
-    if (waiting.empty())
-    {
-        return;
-    }
-    uint64_t need = 0;
-    for (const Record* rec : waiting)
-    {
-        need += uint64_t(rec->want) * rec->want;
-    }
-    if (mBuddy.freeTexels() >= need && compact())
-    {
-        place(waiting); // after a compaction the free blocks hold every arrival the free texels do
-    }
     if (!waiting.empty())
     {
-        mPlacementFailed = true;
-        if (mLevel.level() >= mLevel.ceiling())
+        std::sort(waiting.begin(), waiting.end(), [](const Record* a, const Record* b) { return a->want != b->want ? a->want > b->want : a->key < b->key; });
+        auto place = [this](std::vector<Record*>& list) {
+            std::vector<Record*> left;
+            for (Record* rec : list)
+            {
+                Rect r;
+                if (mBuddy.alloc(rec->want, r))
+                {
+                    rec->rect = r;
+                    rec->placed = true;
+                }
+                else
+                {
+                    left.push_back(rec);
+                }
+            }
+            list.swap(left);
+        };
+        auto texels = [](const std::vector<Record*>& list) {
+            uint64_t sum = 0;
+            for (const Record* rec : list)
+            {
+                sum += uint64_t(rec->want) * rec->want;
+            }
+            return sum;
+        };
+        place(waiting);
+        if (!waiting.empty() && mBuddy.freeTexels() >= texels(waiting) && compact())
         {
-            LL_WARNS_ONCE("ProjectorShadows") << "projector shadow tiles do not fit the atlas even at the smallest sizes; some projectors have no shadow" << LL_ENDL;
+            place(waiting); // after a compaction the free blocks hold every arrival the free texels do
         }
+        if (!waiting.empty())
+        {
+            // the rest waits for the shrinks the renders draw (draw-then-swap: a shrinking tile holds its old rect until then)
+            uint64_t shrinking = 0;
+            for (const auto& entry : mRecords)
+            {
+                const Record& rec = entry.second;
+                if (rec.placed && !rec.off && !rec.retiring)
+                {
+                    shrinking += shrinkTexels(rec.rect.size, rec.want);
+                }
+            }
+            if (arrivalShortfall(mBuddy.freeTexels(), shrinking, texels(waiting)))
+            {
+                // the tiles do not fit even at the valve's ceiling. The space a lamp's retiring cells hold is what new cells need, and N3
+                // drops them only once the new cells are drawn: they go now (those lamps are lit without a shadow until then)
+                if (!mRetiringOf.empty())
+                {
+                    std::vector<std::pair<U32, const LLDrawable*>> retiring;
+                    for (const auto& entry : mRetiringOf)
+                    {
+                        retiring.emplace_back(entry.second, entry.first);
+                    }
+                    for (const auto& lamp : retiring)
+                    {
+                        dropLamp(lamp.first, lamp.second);
+                    }
+                }
+                else
+                {
+                    LL_WARNS_ONCE("ProjectorShadows") << "projector shadow tiles do not fit the atlas even at the smallest sizes; some projectors have no shadow" << LL_ENDL;
+                }
+            }
+        }
+    }
+
+    // a growth that fragmentation alone blocks (the free texels hold its new size, no block does) gets a compaction once it has waited a
+    // hold; a tile that keeps its size costs one comparison here
+    bool blocked = false;
+    for (const auto& entry : mRecords)
+    {
+        const Record& rec = entry.second;
+        if (rec.placed && !rec.off && !rec.retiring && growthBlocked(mBuddy, rec.rect, rec.want))
+        {
+            blocked = true;
+            break;
+        }
+    }
+    if (mGrowthHold.update(blocked, dt_seconds))
+    {
+        compact();
     }
 }
 
@@ -927,6 +949,17 @@ void LLProjectorShadows::layout(F32 dt_seconds)
 // the atlas is over its budget); the avatars are chosen by position alone.
 void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 {
+    // A pick whose only cause is a growth whose block an earlier resize of this frame took (the frame's picks are classified before any
+    // render, so several growths can be picked for one free block): nothing in the tile changed, so it is not drawn again; it grows once a
+    // block is free. An avatar in its light still gets its layer.
+    if (cause == Cause::Lowres && !resizeDue(rec))
+    {
+        if (rec.holdsAvatar || rec.avatarInLayer)
+        {
+            renderLayer(rec);
+        }
+        return;
+    }
     SpotGeom g;
     if (!read_spot(rec.drawable, g))
     {
@@ -944,21 +977,20 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         const Rect old = rec.rect;
         mBuddy.free(old);
         Rect nr;
-        if (mBuddy.alloc(rec.want, nr))
+        if (mBuddy.alloc(rec.want, nr)) // resizeDue found the block (largestAfterFree mirrors free()'s merge): this cannot fail
         {
             ++mResizes;
         }
-        else if (mBuddy.alloc(old.size, nr))
-        {
-            ++mResizeDeferred; // no block after all: drawn at its old size, the growth waits
-        }
         else
         {
-            llassert(false); // the block just freed holds it
-            rec.placed = false;
-            rec.drawnFrame = 0;
-            rec.drawn.valid = false;
-            return;
+            llassert(false);
+            if (!mBuddy.alloc(old.size, nr)) // the block just freed holds its old size
+            {
+                rec.placed = false;
+                rec.drawnFrame = 0;
+                rec.drawn.valid = false;
+                return;
+            }
         }
         rec.rect = nr;
         rec.layerRectValid = false; // the footprint was in the old rect's texels
@@ -1098,10 +1130,6 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     }
 }
 
-// The dynamic layer of one tile (P4): the avatars in the light, drawn into L over the tile's copy of S. The tile's cull comes from
-// the light's pose the tile holds (view, proj, origin), the avatar partitions and the worn objects are the only things it draws
-// (LLPipeline::LOCAL_SHADOW_DYNAMIC), and no camera test enters: an avatar behind the camera, or an impostor, casts like any other.
-// Depth is not cleared (S's copy is in L); the depth test composes the two layers. Leaves L's framebuffer bound.
 // The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow,
 // a normal appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only
 // a friend, the agent or a control avatar. Nothing here reads the camera. Built once a frame by update(), before its first use (the
@@ -1177,6 +1205,10 @@ LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& re
     return face;
 }
 
+// The dynamic layer of one tile (P4): the avatars in the light, drawn into L over the tile's copy of S. The tile's cull comes from
+// the light's pose the tile holds (view, proj, origin), the avatar partitions and the worn objects are the only things it draws
+// (LLPipeline::LOCAL_SHADOW_DYNAMIC), and no camera test enters: an avatar behind the camera, or an impostor, casts like any other.
+// Depth is not cleared (S's copy is in L); the depth test composes the two layers. Leaves L's framebuffer bound.
 F32 LLProjectorShadows::drawAvatars(Record& rec, const FaceAvatars& face, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip)
 {
     const F64 cpu_start = LLTimer::getTotalSeconds();
@@ -1778,6 +1810,10 @@ void LLProjectorShadows::update(LLCamera& camera)
             facts.pose_stale = rec.poseStale;
             facts.lamp_moving = rec.lampMoving;
             facts.lowres = resizeDue(rec); // draw-then-swap: the render draws the new size before the lookup reads it
+            if (!facts.lowres && rec.want > rec.rect.size)
+            {
+                ++mResizeDeferred; // a growth waits: no block of its new size, even with its own rect freed
+            }
             facts.holds_avatar = rec.holdsAvatar;
             facts.avatar_in_layer = rec.avatarInLayer;
             const TileVerdict verdict = classifyTile(facts);
