@@ -11,6 +11,10 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
 - A failure a retry cannot fix (a 404 or a failure that is not the network's: a failed decode, a blacklisted
   asset, a local file; server bakes and map tiles keep their own rules) marks a texture's first fetch missing and
   holds a refinement at once; any other failure gets the retries first.
+- A fetch worker whose request for more data failed decodes the data it holds only when that data reaches the
+  requested level (LLTextureFetchPolicy::decodeAfterFailedRequest); otherwise the fetch ends without data
+  ("fail harder"), so the texture's bounded retry applies, instead of the worker decoding that data again and
+  sending the failed request again at once.
 - The waiting requests are ordered by priorities read once under each worker's lock (the HTTP release and the
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
@@ -142,6 +146,28 @@ class FinalFailures(unittest.TestCase):
         # the refinement branch follows the first fetch's, and a final failure holds without a retry
         self.assertLess(block.index(self.FIRST_FETCH_RETRY), block.index(HOLD))
         self.assertEqual(block.count('mFetchRetry.onFailure('), 2)
+
+
+class FailedRequest(unittest.TestCase):
+    def test_data_at_hand_is_decoded_only_when_it_serves_the_request(self):
+        work = FETCH[FETCH.index('bool LLTextureFetchWorker::doWork(S32 param)'):]
+        use = work.index('// Use available data')
+        guard = work.rindex('if (', 0, use)
+        self.assertEqual(code(work[guard:use]).split(),
+                         'if (cur_size > 0 && LLTextureFetchPolicy::decodeAfterFailedRequest(mFormattedImage->getDiscardLevel(), '
+                         'mDesiredDiscard)) {'.split())
+        self.assertEqual(FETCH.count('decodeAfterFailedRequest('), 1)
+        self.assertEqual(FETCH.count('// Use available data'), 1)
+        # the decode of the data at hand, and otherwise the end of the fetch without data
+        decode = work[use:work.index('// Fail harder', use)]
+        self.assertIn('mLoadedDiscard = mFormattedImage->getDiscardLevel();', decode)
+        self.assertIn('setState(DECODE_IMAGE);', decode)
+        self.assertRegex(decode, r'return doWork\(param\);\s*\}\s*$')
+        fail = work[work.index('// Fail harder', use):]
+        fail = fail[:fail.index('return true; // failed')]
+        self.assertIn('resetFormattedData();', fail)
+        self.assertIn('setState(DONE);', fail)
+        self.assertIn('releaseHttpSemaphore();', fail)
 
 
 class PrioritySnapshots(unittest.TestCase):

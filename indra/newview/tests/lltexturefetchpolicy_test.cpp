@@ -12,6 +12,10 @@
 // A texture with no data yet whose fetch ends without data: a failure that may pass (an HTTP error other
 // than 404, a time-out, an empty reply, an abort) gets the same retries and marks the asset missing when they
 // are spent; a 404 or a failure that is not the network's marks it missing at once, as every failure did.
+// A fetch worker whose request for more data fails decodes the data it holds only when that data reaches the
+// requested level (decodeAfterFailedRequest); otherwise the fetch ends without data, so a refinement whose
+// request keeps failing sends four requests in about 7 s and is then held, instead of sending its request
+// again at once for as long as its texture stays on screen.
 // The orderings of waiting requests (LLTextureFetch::releaseHttpWaiters, sendRequestListToSimulators) compare
 // PrioritySnapshot copies, each priority read once: the order is the copies', whatever the priorities do after.
 // That the fetcher takes each copy under the worker's lock, and outside the network queue lock, is guarded by
@@ -237,6 +241,46 @@ namespace
         check(transient.retry.mFailures == 0 && transient.requests(1.f), "good data after a retry starts over");
     }
 
+    // A fetch worker whose request for more data fails (LLTextureFetchWorker::doWork, the HTTP error path) decodes
+    // the data it holds only when that data reaches the requested level; otherwise the fetch ends without data
+    void test_failed_request()
+    {
+        using LLTextureFetchPolicy::decodeAfterFailedRequest;
+        // data the worker decoded in an earlier round, coarser than requested: decoding it again ended at that level,
+        // which sent the worker back to INIT and the failed request out again at once
+        check(!decodeAfterFailedRequest(5, 2) && !decodeAfterFailedRequest(3, 2), "data coarser than requested is not decoded again");
+        // data never decoded (a new worker that read it from the cache): the fetch ended without data before too
+        check(!decodeAfterFailedRequest(-1, 2) && !decodeAfterFailedRequest(-1, 5), "data never decoded ends the fetch without data");
+        // data that reaches the requested level (the request was made coarser meanwhile) is decoded, as before
+        check(decodeAfterFailedRequest(2, 2) && decodeAfterFailedRequest(3, 4) && decodeAfterFailedRequest(0, 0),
+              "data that reaches the requested level is decoded, as before");
+
+        // A refinement whose request keeps failing: the texture is at level 4 and wants 2. The first request is sent by
+        // the worker that decoded level 4 (the data it holds), each retry by a new worker (processFetchResults deletes
+        // a worker that ended without data), which holds data never decoded. Each fetch sends its request once and ends
+        // without data; the texture retries after 1, 2 and 4 s, then holds its level.
+        Texture t;
+        const int desired = 2;
+        int requests = 0;
+        float held_at = -1.f;
+        for (float now = 0.f; now <= 3600.f; now += 0.25f)
+        {
+            if (t.requests(now))
+            {
+                ++requests; // the request for more data, which fails
+                const int at_hand = (requests == 1) ? t.level : -1;
+                check(!decodeAfterFailedRequest(at_hand, desired), "the data at hand does not serve the request");
+                t.failed(now); // the fetch ended without data
+                if (held_at < 0.f && t.min_discard == t.level)
+                {
+                    held_at = now;
+                }
+            }
+        }
+        check(requests == 4, "a refinement whose request keeps failing sends four requests in all");
+        check(held_at >= 7.f && held_at < 7.5f, "and is held at its level about 7 s after the first");
+    }
+
     // A fetch worker as the orderings see it: its priority (mImagePriority) and its lock (mWorkMutex)
     struct Request
     {
@@ -322,6 +366,7 @@ int main()
     test_final_refinement_failure_holds_at_once();
     test_good_data_and_refresh_start_over();
     test_first_fetch();
+    test_failed_request();
     test_snapshot_orderings();
     if (failures == 0)
     {
