@@ -389,6 +389,19 @@ inline bool inRange(bool was_in, float cam_dist, float reach)
     return cam_dist <= reach;
 }
 
+// A lamp that a script switches off, turns black or gives a radius of 0 (lamp shadows S2: blinkers and strobes toggle every 0.03 to 1 s,
+// a broken tube sleeps up to 2 s) keeps its tiles for kOffHoldSeconds: switched on again in that time it is shadowed at once and nothing
+// is drawn again, since a tile depends on neither the light's colour nor its intensity. While it is off nothing of it is drawn (the
+// lighting pass skips it, so no tile render is spent on it either), but its tiles keep collecting the scene's changes. A lamp that stays
+// off longer (a day and night switch) gives its tiles and their LOD pins back like a lamp out of range.
+constexpr double kOffHoldSeconds = 5.0;
+
+// true when a lamp switched off at `off_since` (seconds) is still held at `now` (a bad time ends the hold)
+inline bool offHeld(double off_since, double now)
+{
+    return now - off_since <= kOffHoldSeconds;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Pose change thresholds (section 4.4, light pose row)
 // ---------------------------------------------------------------------------------------------
@@ -1313,15 +1326,29 @@ inline bool rebuildDirties(uint32_t flags)
     return (flags & kRebuildPosition) != 0 && !((flags & kRebuildTcoord) && (flags & kRebuildColor));
 }
 
-// A texture, material, bump or glow change dirties a prim's tiles when the prim had a silhouette-affecting face (blended,
-// alpha-masked, alpha-textured) before the change or has one after it: turning such a face opaque removes a hole from the
-// shadow, and an opaque face turning alpha cuts one. Opaque to opaque never does (the texture does not show in a depth tile),
-// so plain texture swaps and animated textures do not churn. `was` is what the feed last saw; the caller stores `now` after.
-// `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
-// from Legacy) has an unknown `was`, taken as possibly alpha (one conservative push, after which it is known).
-inline bool texturedDirties(bool was, bool now, bool known)
+// A texture, material, bump, glow or colour change dirties a prim's tiles only when it changes what the prim's faces cut out of a depth
+// tile: its silhouette key (llshadowdirtyfeed.cpp: which faces are blended, alpha-masked or alpha-textured and, for each of them, its
+// alpha, texture, texture mapping and alpha mode). A face turned opaque closes a hole the cached tile still has and an opaque face
+// turned alpha cuts one: both change the key. Opaque-to-opaque texture swaps, animated textures, fullbright, glow, shine, bump, an
+// RGB-only tint and the light's own colour do not (lamp shadows S2: a blinker script that toggles fullbright and glow with its light
+// every 0.1 s redraws no tile). `was_key` is what the feed last saw; the caller stores `now_key` after. `known` says the feed saw this
+// prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch from Legacy) has an unknown key (one
+// conservative push, after which it is known).
+inline bool texturedDirties(uint32_t was_key, uint32_t now_key, bool known)
 {
-    return !known || was || now;
+    return !known || was_key != now_key;
+}
+
+// The key's hash (FNV-1a, 32 bits): the feed folds the silhouette inputs of a prim's alpha faces into it, byte by byte.
+constexpr uint32_t kSilhouetteKeySeed = 2166136261u; // a prim with no alpha face
+inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
+{
+    const unsigned char* b = static_cast<const unsigned char*>(bytes);
+    for (size_t i = 0; i < n; ++i)
+    {
+        key = (key ^ b[i]) * 16777619u;
+    }
+    return key;
 }
 
 // ---------------------------------------------------------------------------------------------

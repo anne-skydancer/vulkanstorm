@@ -24,6 +24,8 @@
 //   Cells (L2)      the size from the lamp alone (guard included), the distance bands and their hysteresis, the pressure valve (no
 //                   size change while the atlas has room; farthest first over the budget; the ceiling; no hold for empty steps), and
 //                   the block a draw-then-swap resize gets (BuddyAtlas::largestAfterFree)
+//   ScriptLamps (S2) a lamp switched off, black or at radius 0 keeps its tiles for kOffHoldSeconds (blinkers never lose them, a day and
+//                   night switch gives them back once); the silhouette key (P3 texturedDirties) ignores fullbright, glow and tints
 // plus the size rule and the level controller (the C++ twin of the spec's rules).
 
 #include "llprojectorshadowpool.h"
@@ -1381,12 +1383,22 @@ void testP3MoverRules()
           "P3 texture coordinates and colour (and REBUILD_MATERIAL) do not");
     check(!rebuildDirties(kRebuildGeometry) && !rebuildDirties(0), "P3 REBUILD_GEOMETRY (markForUpdate, selection, bump) does not");
     check(rebuildDirties(kRebuildPosition | kRebuildTcoord), "P3 a position rebuild with one texcoord flag still passes (not the whole set)");
-    check(texturedDirties(true, true, true), "P3 a retexture of a prim with an alpha face before and after dirties");
-    check(texturedDirties(true, false, true), "P3 a face turned opaque (alpha texture replaced by an RGB one) dirties: the hole closes");
-    check(texturedDirties(false, true, true), "P3 an opaque face turned alpha dirties: a hole opens");
-    check(!texturedDirties(false, false, true), "P3 opaque to opaque (a plain texture swap, an animated texture) does not dirty");
-    check(texturedDirties(false, false, false), "P3 an unknown past (the prim predates tracking) pushes once, even if it looks opaque now");
-    check(texturedDirties(false, true, false) && texturedDirties(true, false, false), "P3 an unknown past with an alpha face now or before pushes");
+    {
+        // the silhouette key (S2): what a prim's alpha faces cut out of a depth tile; the feed hashes their inputs with silhouetteKeyMix
+        const uint32_t opaque = kSilhouetteKeySeed; // no alpha face
+        const float half = 0.5f, quarter = 0.25f;
+        const uint8_t face0 = 0, face1 = 1;
+        const uint32_t lace = silhouetteKeyMix(silhouetteKeyMix(opaque, &face0, 1), &half, sizeof(half));
+        const uint32_t lace_other_alpha = silhouetteKeyMix(silhouetteKeyMix(opaque, &face0, 1), &quarter, sizeof(quarter));
+        const uint32_t lace_other_face = silhouetteKeyMix(silhouetteKeyMix(opaque, &face1, 1), &half, sizeof(half));
+        check(lace != opaque && lace != lace_other_alpha && lace != lace_other_face, "S2 the key tells the faces and their inputs apart");
+        check(texturedDirties(lace, lace_other_alpha, true), "P3 a retexture (or a new alpha) of an alpha face dirties");
+        check(texturedDirties(lace, opaque, true), "P3 a face turned opaque (alpha texture replaced by an RGB one) dirties: the hole closes");
+        check(texturedDirties(opaque, lace, true), "P3 an opaque face turned alpha dirties: a hole opens");
+        check(!texturedDirties(opaque, opaque, true), "P3 opaque to opaque (a plain texture swap, an animated texture) does not dirty");
+        check(!texturedDirties(lace, lace, true), "S2 fullbright, glow, shine, bump or an RGB tint on an alpha prim (the same key) does not dirty: a blinker redraws nothing");
+        check(texturedDirties(opaque, opaque, false) && texturedDirties(lace, lace, false), "P3 an unknown past (the prim predates tracking) pushes once, whatever it looks like now");
+    }
 }
 
 void testP3PinBook()
@@ -3341,6 +3353,52 @@ void testCellOwn()
     check(holding == 1, "exactly one cell holds the own avatar's centre", holding);
 }
 
+// S2: script-driven lamps. A lamp that goes off keeps its tiles for kOffHoldSeconds (the pool's holdOff runs this rule every frame the
+// lamp is off; the hold starts the first frame it is seen off and ends when it is on again).
+void testScriptLamps()
+{
+    check(offHeld(10.0, 10.0) && offHeld(10.0, 10.0 + kOffHoldSeconds) && !offHeld(10.0, 10.0 + kOffHoldSeconds + 0.01), "S2 the hold lasts kOffHoldSeconds");
+    check(!offHeld(std::nan(""), 1.0) && !offHeld(1.0, std::nan("")), "S2 a bad time ends the hold");
+    // blinkers (0.03 s strobe, 0.1 s flasher, 1 s blinker, a broken tube's 2 s sleep) never lose their tiles; a day and night switch does
+    for (const double period : { 0.03, 0.1, 0.5, 1.0, 2.0, 60.0 })
+    {
+        bool off = false, have_tiles = true;
+        double since = 0.0;
+        int drops = 0;
+        for (int f = 0; f < 60 * 120; ++f) // two minutes at 60 fps, on for one period, off for the next (60 s: on one minute, off the next)
+        {
+            const double now = f / 60.0;
+            const bool lamp_on = (int(now / period) % 2) == 0;
+            if (!lamp_on)
+            {
+                if (!off)
+                {
+                    off = true;
+                    since = now;
+                }
+                if (have_tiles && !offHeld(since, now))
+                {
+                    have_tiles = false; // dropped like a lamp out of range
+                    ++drops;
+                }
+            }
+            else
+            {
+                off = false;
+                have_tiles = true; // on again: held tiles serve at once; dropped ones are drawn again
+            }
+        }
+        if (period <= 2.0)
+        {
+            check(drops == 0, "S2 a blinking lamp keeps its tiles (no redraw, no frame without its shadow)", period, drops);
+        }
+        else
+        {
+            check(drops == 1, "S2 a lamp off for minutes gives its tiles back once", period, drops);
+        }
+    }
+}
+
 void testCells()
 {
     testCellGrid();
@@ -3376,6 +3434,7 @@ int main(int argc, char** argv)
     testP3();
     testP4(print_table);
     testCells();
+    testScriptLamps();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);

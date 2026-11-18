@@ -883,11 +883,12 @@ public:
     bool mCreateSelected;
 
     // <Vulkanstorm> The projector shadow pool's classifier (llshadowdirtyfeed.h): what the simulator told about this object's
-    // movement. Sticky for the object's life (POOL_ACTIVE, the drawable's last seen active state, and POOL_ALPHA_FACE, whether the
-    // feed last saw a silhouette-affecting face on this prim, and POOL_ALPHA_KNOWN, whether that bit was written since tracking
-    // last started, are not). Main thread only.
-    enum EPoolFlags : U8 { POOL_CREATED_SEEN = 1, POOL_MOVER = 2, POOL_PHYSICAL = 4, POOL_ACTIVE = 8, POOL_MESH_LOADED = 16, POOL_ALPHA_FACE = 32, POOL_ALPHA_KNOWN = 64 };
+    // movement. Sticky for the object's life (POOL_ACTIVE, the drawable's last seen active state, and POOL_ALPHA_KNOWN, whether
+    // mPoolAlphaKey was written since tracking last started, are not). mPoolAlphaKey: the prim's silhouette key the feed last saw
+    // (what its alpha faces cut out of a depth tile; llshadowdirtyfeed.cpp). Main thread only.
+    enum EPoolFlags : U8 { POOL_CREATED_SEEN = 1, POOL_MOVER = 2, POOL_PHYSICAL = 4, POOL_ACTIVE = 8, POOL_MESH_LOADED = 16, POOL_ALPHA_KNOWN = 64 };
     U8 mPoolFlags = 0;
+    U32 mPoolAlphaKey = 0;
     // </Vulkanstorm>
 
     // Replace textures with web pages on this object while drawing
