@@ -49,6 +49,7 @@ set(llrender_HEADER_FILES
     llfontregistry.h
     llgl.h
     llglheaders.h
+    llglreset.h
     llglslshader.h
     llglstates.h
     llglsubmitstats.h

@@ -129,6 +129,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochastichistory_test.cpp -o "$RUNNER_TEMP/stochastic-history-test"
         "$RUNNER_TEMP/stochastic-history-test"
+    - name: Check the GPU reset classification
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llrender indra/llrender/tests/llglreset_test.cpp -o "$RUNNER_TEMP/gl-reset-test"
+        "$RUNNER_TEMP/gl-reset-test"
     - name: Check the image comparison of the identical-image check
       shell: bash
       # a development test: release and the other lines do not have it
