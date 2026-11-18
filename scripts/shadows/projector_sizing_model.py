@@ -51,12 +51,17 @@ def tile_base_size(tan_w, radius, guard):
     return min(max(pow2_round(tan_w * d_ref / LAMP_TEXEL_M + 2.0 * guard), MIN_BASE), MAX_BASE)
 
 
+def band_high(band):
+    return math.inf if band >= MAX_BAND else BAND_NEAR_M * 2 ** band
+
+
 def band_of(d):
     if not d < 1e6:
         return MAX_BAND
-    if not d >= BAND_NEAR_M:
-        return 0
-    return min(int(math.floor(math.log2(d / BAND_NEAR_M))) + 1, MAX_BAND)
+    band = 0
+    while band < MAX_BAND and d >= band_high(band):
+        band += 1
+    return band
 
 
 def next_band(band, d):
