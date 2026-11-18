@@ -80,6 +80,7 @@
 #include "lldatapacker.h"
 #include "llviewershadermgr.h"
 #include "llstochasticstate.h" // <Vulkanstorm/>
+#include "llstochasticlayerrank.h" // <Vulkanstorm/>
 #include "llvoavatar.h"
 #include "llcontrolavatar.h"
 #include "llvoavatarself.h"
@@ -5817,6 +5818,11 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         }
     }
 
+    // <Vulkanstorm> a face on the same triangles as an earlier face of its object is a draw of its
+    // own per rank (genDrawInfo assigns the rank; only the blended pass of a static object has one)
+    const U8 stochastic_rank = (type == LLRenderPass::PASS_ALPHA && !rigged) ? facep->getStochasticRank() : 0;
+    // </Vulkanstorm>
+
     if (index < FACE_DO_NOT_BATCH_TEXTURES && idx >= 0)
     {
         if (mat || gltf_mat || draw_vec[idx]->mMaterial)
@@ -5859,7 +5865,8 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         info->mModelMatrix == model_mat &&
         info->mShaderMask == shader_mask &&
         info->mAvatar == facep->mAvatar &&
-        info->getSkinHash() == facep->getSkinHash())
+        info->getSkinHash() == facep->getSkinHash() &&
+        info->mStochasticRank == stochastic_rank) // <Vulkanstorm/>
     {
         info->mCount += facep->getIndicesCount();
         info->mEnd += facep->getGeomCount();
@@ -5910,6 +5917,7 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         if (type == LLRenderPass::PASS_ALPHA || type == LLRenderPass::PASS_ALPHA_RIGGED)
         {
             draw_info->mStochasticSeed = stochastic_face_seed(facep);
+            draw_info->mStochasticRank = stochastic_rank;
         }
         // </Vulkanstorm>
 
@@ -6708,11 +6716,96 @@ struct CompareBatchBreakerRigged
     }
 };
 
+// <Vulkanstorm> stochastic transparency: the layer rank of each blended face of a static object (see
+// llstochasticlayerrank.h). The extents are the volume faces' own (object space, valid whatever
+// order the faces are processed in); the reference is the creator's order, the texture entry index.
+static void assign_stochastic_layer_ranks(LLFace** faces, U32 face_count)
+{
+    struct Entry
+    {
+        const LLViewerObject* mObject;
+        U32 mTE;
+        LLFace* mFace;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(face_count);
+    for (U32 k = 0; k < face_count; ++k)
+    {
+        LLFace* facep = faces[k];
+        const LLViewerObject* object = facep->getViewerObject();
+        if (object && object->getVolume() && !facep->isState(LLFace::RIGGED))
+        {
+            entries.push_back({ object, (U32)facep->getTEOffset(), facep });
+        }
+    }
+    if (entries.size() < 2)
+    {
+        return;
+    }
+    std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b)
+    {
+        return std::less<const LLViewerObject*>()(a.mObject, b.mObject) ||
+               (a.mObject == b.mObject && a.mTE < b.mTE);
+    });
+
+    std::vector<LLStochasticLayerRank::Box> boxes;
+    std::vector<U8> ranks;
+    for (size_t first = 0; first < entries.size();)
+    {
+        size_t last = first + 1;
+        while (last < entries.size() && entries[last].mObject == entries[first].mObject)
+        {
+            ++last;
+        }
+        if (last - first > 1)
+        {
+            const LLVolume* volume = entries[first].mObject->getVolume();
+            const float nan = std::numeric_limits<float>::quiet_NaN(); // a face without a volume face: coincides with nothing
+            boxes.clear();
+            for (size_t e = first; e < last; ++e)
+            {
+                LLStochasticLayerRank::Box box = { { nan, nan, nan }, { nan, nan, nan } };
+                if (entries[e].mTE < (U32)volume->getNumVolumeFaces())
+                {
+                    const LLVolumeFace& vf = volume->getVolumeFace((S32)entries[e].mTE);
+                    if (vf.mExtents)
+                    {
+                        const F32* lo = vf.mExtents[0].getF32ptr();
+                        const F32* hi = vf.mExtents[1].getF32ptr();
+                        box = { { lo[0], lo[1], lo[2] }, { hi[0], hi[1], hi[2] } };
+                    }
+                }
+                boxes.push_back(box);
+            }
+            ranks.assign(last - first, 0);
+            LLStochasticLayerRank::assign(boxes.data(), boxes.size(), ranks.data());
+            for (size_t e = first; e < last; ++e)
+            {
+                entries[e].mFace->setStochasticRank(ranks[e - first]);
+            }
+        }
+        first = last;
+    }
+}
+// </Vulkanstorm>
+
 U32 LLVolumeGeometryManager::genDrawInfo(LLSpatialGroup* group, U32 mask, LLFace** faces, U32 face_count, bool distance_sort, bool batch_textures, bool rigged)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
     U32 geometryBytes = 0;
+
+    // <Vulkanstorm> the blended faces of a static, non-HUD object get their layer rank (the others
+    // none; a rank left from an earlier rebuild is cleared)
+    for (U32 k = 0; k < face_count; ++k)
+    {
+        faces[k]->setStochasticRank(0);
+    }
+    if (distance_sort && !rigged && !group->isHUDGroup() && face_count > 1)
+    {
+        assign_stochastic_layer_ranks(faces, face_count);
+    }
+    // </Vulkanstorm>
 
     //calculate maximum number of vertices to store in a single buffer
     static LLCachedControl<S32> max_vbo_size(gSavedSettings, "RenderMaxVBOSize", 512);

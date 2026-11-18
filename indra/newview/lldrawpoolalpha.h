@@ -106,6 +106,8 @@ private:
     // and a glowing blended face accumulated this frame
     U32  mStochasticMasks = 0;
     bool mStochasticGlow = false;
+    U32  mStochasticOffsetRank = 0; // the layer rank the polygon offset of the current stochastic pass is set for
+    bool mRankedGlow = false;       // the emissive draws of a stochastic accumulation take their rank's offset
     bool mAlphaOnlyPass = false;   // TexSetup: an alpha-only variant that cannot glare needs no material maps
     bool mAlphaOnlyLightBound = false; // the current alpha-only variant has its light function, shadow maps and probes
     // </Vulkanstorm>
@@ -117,6 +119,8 @@ private:
     LLGLSLShader* pbr_emissive_shader = nullptr;
     LLGLSLShader* pbr_shader = nullptr;
 
+    void setStochasticOffset(F32 base_units, U32 rank);      // <Vulkanstorm/> the pass's polygon offset for a layer rank
+    void resetStochasticOffset(F32 base_units);              // <Vulkanstorm/> the pass's own offset, rank 0
     void drawEmissive(LLDrawInfo* draw);
     void renderEmissives(std::vector<LLDrawInfo*>& emissives);
     void renderRiggedEmissives(std::vector<LLDrawInfo*>& emissives);
