@@ -94,7 +94,15 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     LLViewerTexture* baseColorTex = media_tex ? media_tex : mBaseColorTexture;
     LLViewerTexture* emissiveTex = media_tex ? media_tex : mEmissiveTexture;
 
-    if (!LLPipeline::sShadowRender || (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK))
+    // <Vulkanstorm> A shadow pass binds only what its depth needs. An impostor, which sets sShadowRender for its other
+    // rules, is a picture of the avatar: each item gets its full material, its own cut-off and its current values. A
+    // blended item keeps the cut-off of its pool (LLDrawPoolAlpha's MINIMUM_IMPOSTOR_ALPHA), which keeps nearly
+    // invisible fragments out of the impostor's depth and so out of its alpha mask.
+    const bool shadow_pass = LLPipeline::sShadowRender && !LLPipeline::sImpostorRender;
+    const bool pool_cutoff = LLPipeline::sImpostorRender && mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;
+
+    if ((!shadow_pass || (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)) && !pool_cutoff)
+    // </Vulkanstorm>
     {
         if (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)
         {
@@ -116,7 +124,7 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     mTextureTransform[GLTF_TEXTURE_INFO_BASE_COLOR].getPacked(base_color_packed);
     shader->uniform4fv(LLShaderMgr::TEXTURE_BASE_COLOR_TRANSFORM, 2, (F32*)base_color_packed);
 
-    if (!LLPipeline::sShadowRender)
+    if (!shadow_pass) // <Vulkanstorm/>
     {
         if (mNormalTexture.notNull() && mNormalTexture->getDiscardLevel() <= 4)
         {

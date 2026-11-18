@@ -15,6 +15,13 @@
   kept its previous owner's bytes there); if the dummy cannot be allocated either, the face gets no buffer and a
   warning once, instead of a write through a null copy. LLViewerJointMesh::drawShape draws nothing outside its face's
   buffer (the joint meshes keep the full mesh's ranges), after the first pass's joint matrix upload.
+- Impostors (owner decision Q1; b-28 F1/F2 = H28, X2 F3 = FG3c): generateImpostor sets sShadowRender for its other
+  rules, but an impostor is a picture: LLFetchedGLTFMaterial::bind gives each item its full material (normal,
+  roughness/metal, emissive, factors, transforms, its own cut-off; a blended item keeps its pool's impostor cut-off),
+  real shadow passes are unchanged; the impostor's blended groups are sorted back to front for the impostor's own
+  camera (with calcDistance's key, LLSpatialPartition::calcAlphaDepth) and its rigged ones in attachment order; and
+  the "depth-only" second render keeps the caller's colour mask in renderGeomPostDeferred, the glow pools and
+  LLDrawPoolAlpha::forwardRender, so blended faces are blended once.
 
     python3 scripts/tests/test_render_path_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_render_path_fixes.py   (another source tree)"""
@@ -53,6 +60,18 @@ VERTEXBUFFER_H = code(read('indra/llrender/llvertexbuffer.h'))
 VERTEXBUFFER = code(read('indra/llrender/llvertexbuffer.cpp'))
 VOTREE = code(read('indra/newview/llvotree.cpp'))
 JOINTMESH = code(read('indra/newview/llviewerjointmesh.cpp'))
+GLTF_MATERIAL = code(read('indra/newview/llfetchedgltfmaterial.cpp'))
+PIPELINE = code(read('indra/newview/pipeline.cpp'))
+SPATIAL = code(read('indra/newview/llspatialpartition.cpp'))
+POOL_ALPHA = code(read('indra/newview/lldrawpoolalpha.cpp'))
+POOL_SIMPLE = code(read('indra/newview/lldrawpoolsimple.cpp'))
+POOL_PBR = code(read('indra/newview/lldrawpoolpbropaque.cpp'))
+
+
+def guarded_colour_masks(text):
+    """Each gGL.setColorMask( call in `text` with the 3 lines before it."""
+    lines = text.split('\n')
+    return [(i, '\n'.join(lines[max(0, i - 3):i + 1])) for i, line in enumerate(lines) if 'gGL.setColorMask(' in line]
 
 
 class TextureMatrixOwnership(unittest.TestCase):
@@ -148,6 +167,69 @@ class AllocationFallbacks(unittest.TestCase):
         block = draw[guard:draw.index('return 0;', guard)]
         self.assertIn('if (first_pass && mMesh->hasWeights())', block)
         self.assertIn('uploadJointMatrices();', block)
+
+
+class Impostors(unittest.TestCase):
+    def test_impostor_items_bind_their_full_material(self):
+        bind = body(GLTF_MATERIAL, 'void LLFetchedGLTFMaterial::bind(')
+        self.assertIn('const bool shadow_pass = LLPipeline::sShadowRender && !LLPipeline::sImpostorRender;', bind)
+        self.assertIn('const bool pool_cutoff = LLPipeline::sImpostorRender && '
+                      'mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;', bind)
+        self.assertRegex(bind, r'if \(\(!shadow_pass \|\| \(mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK\)\) '
+                               r'&& !pool_cutoff\)\s*\{\s*if \(mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK\)')
+        full = bind[bind.index('if (!shadow_pass)'):]
+        for name in ('BUMP_MAP', 'SPECULAR_MAP', 'EMISSIVE_MAP', 'ROUGHNESS_FACTOR', 'METALLIC_FACTOR', 'EMISSIVE_COLOR',
+                     'TEXTURE_NORMAL_TRANSFORM', 'TEXTURE_METALLIC_ROUGHNESS_TRANSFORM', 'TEXTURE_EMISSIVE_TRANSFORM'):
+            self.assertIn('LLShaderMgr::' + name, full)
+        # the shadow flag is read once, into shadow_pass; devel's GL statistics block (VKS_GL_STATS, diagnostics only)
+        # reads it for its own counters and binds nothing
+        binding = re.sub(r'#if VKS_GL_STATS\b.*?#endif', '', bind, flags=re.S)
+        self.assertEqual(binding.count('LLPipeline::sShadowRender'), 1)
+
+    def test_the_depth_key_is_one_formula(self):
+        depth = body(SPATIAL, 'F32 LLSpatialPartition::calcAlphaDepth(')
+        self.assertIn('t.mul(0.25f);', depth)
+        self.assertIn('return v.dot3(ata).getF32();', depth)
+        distance = body(SPATIAL, 'F32 LLSpatialPartition::calcDistance(')
+        self.assertIn('group->mDepth = calcAlphaDepth(group, camera);', distance)
+        self.assertNotIn('dot3(', distance)
+
+    def test_impostors_sort_their_blended_groups_for_their_own_camera(self):
+        generate = body(PIPELINE, 'void LLPipeline::generateImpostor(')
+        sort = generate.index('LLSpatialPartition::calcAlphaDepth(group, bridge ? bridge->transformCamera(camera) : camera)')
+        self.assertLess(generate.index('camera.lookAt(viewer_camera->getOrigin(), pos, viewer_camera->getUpAxis());'), sort)
+        self.assertLess(sort, generate.index('renderGeomDeferred(camera);'))
+        block = generate[sort:generate.index('renderGeomDeferred(camera);')]
+        self.assertIn('return lhs.first > rhs.first;', block)
+        self.assertIn('*out++ = entry.second;', block)
+        self.assertIn('std::sort(result.beginRiggedAlphaGroups(), result.endRiggedAlphaGroups(), '
+                      'LLSpatialGroup::CompareRenderOrder());', block)
+        # real shadow passes keep their blended groups in cull order, as before
+        post_sort = body(PIPELINE, 'void LLPipeline::postSort(LLCamera &camera)')
+        self.assertIsNotNone(re.search(r'if \(!sShadowRender\)\s*\{\s*'
+                                       r'std::sort\(sCull->beginAlphaGroups\(\), sCull->endAlphaGroups\(\), '
+                                       r'LLSpatialGroup::CompareDepthGreater\(\)\);', post_sort))
+
+    def test_the_second_render_writes_depth_only(self):
+        post = body(PIPELINE, 'void LLPipeline::renderGeomPostDeferred(LLCamera& camera)')
+        masks = guarded_colour_masks(post)
+        self.assertEqual(len(masks), 1)
+        self.assertIn('if (!sImpostorRenderAlphaDepthPass)', masks[0][1])
+        functions = ((POOL_SIMPLE, 'void LLDrawPoolGlow::renderPostDeferred(S32 pass)', 2),
+                     (POOL_PBR, 'void LLDrawPoolGLTFPBR::renderPostDeferred(S32 pass)', 2),
+                     (POOL_ALPHA, 'void LLDrawPoolAlpha::forwardRender(', 2))
+        for text, signature, count in functions:
+            function = body(text, signature)
+            self.assertIn('const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;', function, signature)
+            masks = guarded_colour_masks(function)
+            self.assertEqual(len(masks), count, signature)
+            for _, context in masks:
+                self.assertIn('if (own_mask)', context, signature)
+        # generateImpostor's second render still masks colour itself and writes the blended faces' depth
+        generate = body(PIPELINE, 'void LLPipeline::generateImpostor(')
+        second = generate[generate.index('sImpostorRenderAlphaDepthPass = true;'):generate.index('sImpostorRenderAlphaDepthPass = false;')]
+        self.assertIn('gGL.setColorMask(false,false);', second)
+        self.assertIn('|| LLPipeline::sImpostorRenderAlphaDepthPass', body(POOL_ALPHA, 'void LLDrawPoolAlpha::forwardRender('))
 
 
 if __name__ == '__main__':

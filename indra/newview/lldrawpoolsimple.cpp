@@ -55,7 +55,13 @@ void LLDrawPoolGlow::renderPostDeferred(S32 pass)
     gGL.setSceneBlendType(LLRender::BT_ADD);
 
     LLGLDepthTest depth(GL_TRUE, GL_FALSE);
-    gGL.setColorMask(false, true);
+    // <Vulkanstorm> an impostor's second render keeps colour off: depth only (LLPipeline::generateImpostor)
+    const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;
+    if (own_mask)
+    {
+        gGL.setColorMask(false, true);
+    }
+    // </Vulkanstorm>
 
     //first pass -- static objects
     shader->bind();
@@ -66,7 +72,10 @@ void LLDrawPoolGlow::renderPostDeferred(S32 pass)
     shader->bind();
     pushRiggedBatches(LLRenderPass::PASS_GLOW_RIGGED, true, true);
 
-    gGL.setColorMask(true, false);
+    if (own_mask) // <Vulkanstorm/>
+    {
+        gGL.setColorMask(true, false);
+    }
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
 }
 

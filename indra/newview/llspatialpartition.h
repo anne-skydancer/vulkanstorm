@@ -423,6 +423,9 @@ public:
 
     virtual F32 calcDistance(LLSpatialGroup* group, LLCamera& camera);
     virtual F32 calcPixelArea(LLSpatialGroup* group, LLCamera& camera);
+    // <Vulkanstorm> a blended group's back-to-front key for `camera` (in the group's own frame): the depth of the
+    // front of its box along the view axis. calcDistance stores it in mDepth; impostors sort with their own camera.
+    static F32 calcAlphaDepth(const LLSpatialGroup* group, const LLCamera& camera);
 
     virtual void rebuildGeom(LLSpatialGroup* group);
     virtual void rebuildMesh(LLSpatialGroup* group);

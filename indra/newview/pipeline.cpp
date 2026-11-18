@@ -4597,7 +4597,10 @@ void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
     setupHWLights();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
-    gGL.setColorMask(true, false);
+    if (!sImpostorRenderAlphaDepthPass) // <Vulkanstorm/> an impostor's second render keeps colour off: depth only (generateImpostor)
+    {
+        gGL.setColorMask(true, false);
+    }
 
     pool_set_t::iterator iter1 = mPools.begin();
 
@@ -13604,6 +13607,34 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
         }
     }
 
+    // <Vulkanstorm> Blend the impostor's semi-transparent groups back to front for its own camera, and its rigged ones
+    // in attachment order, as the main view does for its camera. postSort sorts neither under sShadowRender (which an
+    // impostor sets for its other shadow-pass rules), and its depth keys are the viewer camera's. The impostor's keys
+    // stay local, so no group's state changes.
+    {
+        std::vector<std::pair<F32, LLSpatialGroup*>> keyed;
+        keyed.reserve(result.getAlphaGroupsSize());
+        for (LLCullResult::sg_iterator i = result.beginAlphaGroups(); i != result.endAlphaGroups(); ++i)
+        {
+            LLSpatialGroup* group = *i;
+            LLSpatialBridge* bridge = group->getSpatialPartition()->asBridge();
+            keyed.emplace_back(LLSpatialPartition::calcAlphaDepth(group, bridge ? bridge->transformCamera(camera) : camera), group);
+        }
+        // far to near, as LLSpatialGroup::CompareDepthGreater orders the main view's groups by their keys
+        std::sort(keyed.begin(), keyed.end(), [](const std::pair<F32, LLSpatialGroup*>& lhs, const std::pair<F32, LLSpatialGroup*>& rhs)
+            {
+                return lhs.first > rhs.first;
+            });
+        LLCullResult::sg_iterator out = result.beginAlphaGroups();
+        for (const auto& entry : keyed)
+        {
+            *out++ = entry.second;
+        }
+
+        std::sort(result.beginRiggedAlphaGroups(), result.endRiggedAlphaGroups(), LLSpatialGroup::CompareRenderOrder());
+    }
+    // </Vulkanstorm>
+
     F32 old_alpha = LLDrawPoolAvatar::sMinimumAlpha;
 
     if (visually_muted || too_complex)
@@ -13633,6 +13664,8 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
         sImpostorRenderAlphaDepthPass = true;
         // depth-only here...
         //
+        // <Vulkanstorm/> renderGeomPostDeferred, the glow pools and LLDrawPoolAlpha::forwardRender keep this mask while
+        // the flag is set (they turned colour writes back on, so blended faces were blended into the impostor twice)
         gGL.setColorMask(false,false);
         renderGeomPostDeferred(camera);
 
