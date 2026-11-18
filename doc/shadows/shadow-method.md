@@ -98,12 +98,15 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
-weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (a blocker
-search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the nearest blocker's distance for an
-emitter of 1 cm times `RenderShadowLightSize`, whatever the prim, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
-texel bias and per-texel receiver plane. Where the penumbra is narrower than 2.5 texels the filter is replaced by a straight edge fitted to the map's silhouette (edge reconstruction, `doc/shadows/projector-shadow-pool.md`). The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
-width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
-within a map texel. The projector lookup costs 8 search gathers plus 32 filter gathers where the penumbra is 2.5 texels or wider. Narrower, it costs the 8 plus the edge fit (4 window gathers and a few texel fetches), and the blend band from 1.5 to 2.5 texels and any fallback also pay the 32; the work is bounded by the silhouette pixels. See the Cost table in `projector-shadow-pool.md`. Under Stochastic with
+weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (lamp shadows L1: a blocker search of 8
+gathers on a disc plus one at the receiver's own texels, then a percentage-closer filter of 32 bilinear gathers at the physical
+penumbra radius from the nearest blocker, for an emitter of 4.5 cm times `RenderShadowLightSize`, whatever the prim, at least 1.5 and at
+most 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's texel bias and per-texel receiver plane. No edge is
+reconstructed and no radius is capped in metres: a coarser tile gives a softer edge, never a blockier one (`doc/shadows/projector-shadow-pool.md`,
+"The filter"). The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's width on the bench (within one map texel
+plus one pixel); the projector's straight edges are 0.82 to 0.90 of a disc light's where the radius lies between the floor and the cap
+(the CPU twin and the GL bench). The projector lookup costs 9 search gathers, plus 32 filter gathers on penumbra pixels. See the Cost table
+in `projector-shadow-pool.md`. Under Stochastic with
 detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
 `doc/shadows/projector-shadow-pool.md`), not the two slots through the sun pass.
 
@@ -235,7 +238,7 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
   feature are unavailable, and the Shadow softness slider (Rendering 2, below the
   combo) is enabled with Stochastic. `RenderShadowLightSize` defaults to 0.23 and scales the sun, the moon and every
-  projector lamp (a fixed 1 cm light); see `projector-shadow-pool.md`.
+  projector lamp (a 4.5 cm light, so 1.035 cm at the default); see `projector-shadow-pool.md`.
 - Graphic presets carry `RenderShadowMethod` and `RenderShadowLightSize` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
   becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).
