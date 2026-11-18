@@ -912,7 +912,11 @@ bool LLMessageSystem::isHighPriorityMessage(const LLPacketBuffer& pkt) const
     //
     // AvatarAppearance is "Low 158" which means it is stored in four bytes: 0xff 0xff 0x00 0x9E
     // the last two bytes represent 158 in a BigEndian U16
-    return header[1] != 255 && header[2] != 0 && header[3] != 158;
+    // <Vulkanstorm> fix of LL #6017: the upstream test (header[1] != 255 && header[2] != 0 &&
+    // header[3] != 158) made every low-frequency message with a non-zero high or low id byte
+    // low priority, and so deferred nearly all low-frequency messages, not just AvatarAppearance.
+    return !(header[1] == 255 && header[2] == 0 && header[3] == 158);
+    // </Vulkanstorm>
 }
 
 void LLMessageSystem::dropPackets(U32 num_to_drop)
