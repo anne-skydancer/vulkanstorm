@@ -467,8 +467,8 @@ estimate.
 ### The combined cap
 
 P3 had two caps that could both be spent in one frame: static 0.35 ms and dynamic 0.30 ms, 0.65 ms, against about 0.4 ms of
-the former +5 % allowance (an assumed 8 ms frame, never measured). P4 has one (`llprojectorpool.h`, `selectFrame`). Lamp shadows L2
-expresses it against the owner's frame-rate floor (AGENTS.md, since 2026-11-16: about 60 fps standing in a crowded room, never below
+the former +5 % allowance (an assumed 8 ms frame, never measured). P4 has one (`llprojectorshadowpool.h`, `selectFrame`). Lamp shadows
+L2 expresses it against the owner's frame-rate floor (AGENTS.md, since 2026-11-16: about 60 fps standing in a crowded room, never below
 25 fps moving), which replaced the +5 % rule: the shadow caches' tile work may take 3 % of the standing floor's frame (`kFloorShare`,
 `kFloorStandingFps`). **The 3 % is an engineering choice, not derived:** the lamp-shadow study planned to set the budget from stage L0
 (the owner's rooms measured), which has not run. It is 43 % more CPU a frame than the 0.35 ms before, unmeasured in-world; whether it
