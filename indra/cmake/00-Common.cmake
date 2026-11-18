@@ -39,6 +39,12 @@ option(VKS_GL_STATS "OpenGL submission instrumentation (development builds only)
 if (VKS_GL_STATS)
   add_compile_definitions(VKS_GL_STATS=1)
 endif()
+# Development only (never on in CI or release): asserts that no LL::FrameJobs job body reaches a GL call or a plain
+# reference count, and that the owner's floating-point state is the one the helpers were given. See llframejobs.h.
+option(VKS_FRAMEJOBS_GUARDS "LL::FrameJobs job-body guards (development builds only)" OFF)
+if (VKS_FRAMEJOBS_GUARDS)
+  add_compile_definitions(VKS_FRAMEJOBS_GUARDS=1)
+endif()
 # Because older versions of Boost.Bind dumped placeholders _1, _2 et al. into
 # the global namespace, Boost now requires either BOOST_BIND_NO_PLACEHOLDERS
 # to avoid that or BOOST_BIND_GLOBAL_PLACEHOLDERS to state that we require it

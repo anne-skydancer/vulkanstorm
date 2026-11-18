@@ -50,6 +50,7 @@ set(llcommon_SOURCE_FILES
     llfindlocale.cpp
     llfixedbuffer.cpp
     llformat.cpp
+    llframejobs.cpp
     llframetimer.cpp
     llheartbeat.cpp
     llheteromap.cpp
@@ -167,6 +168,7 @@ set(llcommon_HEADER_FILES
     llfindlocale.h
     llfixedbuffer.h
     llformat.h
+    llframejobs.h
     llframetimer.h
     llhandle.h
     llhash.h
@@ -354,6 +356,7 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(lleventcoro "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lleventdispatcher "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lleventfilter "" "${test_libs}")
+  LL_ADD_INTEGRATION_TEST(llframejobs "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llframetimer "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llheteromap "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llinstancetracker "" "${test_libs}")

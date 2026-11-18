@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llfasttimer.h"
+#include "llframejobs.h" // <Vulkanstorm/>
 #include "llsys.h"
 #include "llvertexbuffer.h"
 // #include "llrender.h"
@@ -1067,6 +1068,7 @@ static std::vector<LLVertexBuffer*> sMappedBuffers;
 void LLVertexBuffer::flushBuffers()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    LL_FRAMEJOBS_ASSERT_NOT_IN_JOB(); // <Vulkanstorm/> GL calls stay on the main thread, outside jobs
     VKS_GLSTAT_INC(flushBuffers);
     // must only be called from main thread
     for (auto& buffer : sMappedBuffers)
@@ -1145,6 +1147,7 @@ LLVertexBuffer::~LLVertexBuffer()
 void LLVertexBuffer::genBuffer(U32 size)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    LL_FRAMEJOBS_ASSERT_NOT_IN_JOB(); // <Vulkanstorm/>
     llassert(sVBOPool);
 
     if (sVBOPool)

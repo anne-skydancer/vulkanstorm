@@ -2370,6 +2370,28 @@
       <key>Value</key>
       <integer>0</integer>
     </map>
+    <key>FrameJobsHelpers</key>
+    <map>
+      <key>Comment</key>
+      <string>Number of frame job helper threads (multi-core). 0 chooses it from the processor: physical cores sharing the main thread's L3 cache minus 3, between 2 and 7. Requires restart.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>FrameJobsSerial</key>
+    <map>
+      <key>Comment</key>
+      <string>Run every frame job batch on the main thread, chunk by chunk in order (multi-core debugging: the results must equal the parallel ones).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>FramePerSecondLimit</key>
     <map>
       <key>Comment</key>

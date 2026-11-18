@@ -37,6 +37,7 @@
 #include "llshadermgr.h"
 #include "hbxxh.h"
 #include "llglsubmitstats.h"
+#include "llframejobs.h" // <Vulkanstorm/>
 #include "llthread.h" // <Vulkanstorm/> on_main_thread()
 #include "glm/gtc/type_ptr.hpp"
 
@@ -1660,6 +1661,7 @@ void LLRender::end()
 void LLRender::flush()
 {
     STOP_GLERROR;
+    LL_FRAMEJOBS_ASSERT_NOT_IN_JOB(); // <Vulkanstorm/> gGL draws on the main thread, outside jobs
     if (mCount > 0)
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;

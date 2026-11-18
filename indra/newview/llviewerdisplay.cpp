@@ -45,6 +45,7 @@
 #include "llfasttimer.h"
 #include "llfeaturemanager.h"
 #include "llfloatertools.h"
+#include "llframejobs.h"
 #include "llfocusmgr.h"
 #include "llgl.h"
 #include "llglheaders.h"
@@ -915,6 +916,13 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
 
         LLGLState::checkStates();
 
+        // <Vulkanstorm> multi-core stage 2: the frame-work window (culls, shadow passes, texture list, state sort), in
+        // which idle frame job helpers spin instead of parking. FrameJobsSerial runs every batch on this thread.
+        static LLCachedControl<bool> frame_jobs_serial(gSavedSettings, "FrameJobsSerial", false);
+        LL::FrameJobs::setSerial(frame_jobs_serial);
+        LL::FrameJobs::FrameWorkScope frame_work;
+        // </Vulkanstorm>
+
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
         LLPipeline::sUnderWaterRender = LLViewerCamera::getInstance()->cameraUnderWater();
@@ -1044,6 +1052,7 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
                 stop_glerror();
             }
         }
+        frame_work.end(); // <Vulkanstorm/> the helpers park until the next frame
 
         LLSceneMonitor::getInstance()->fetchQueryResult();
 

@@ -64,6 +64,7 @@
 #include "llstartup.h"
 #include "llfocusmgr.h"
 #include "llframecounters.h"
+#include "llframejobs.h"
 #include "llurlfloaterdispatchhandler.h"
 #include "llviewerjoystick.h"
 #include "llcalc.h"
@@ -2417,6 +2418,7 @@ bool LLAppViewer::cleanup()
     {
         mGeneralThreadPool->close();
     }
+    LL::FrameJobs::stop(); // <Vulkanstorm/> joins the frame job helpers
 
     sTextureFetch->shutDownTextureCacheThread() ;
     LLLFSThread::sLocal->shutdown();
@@ -2636,6 +2638,25 @@ bool LLAppViewer::initThreads()
 
     // general task background thread (LLPerfStats, etc)
     LLAppViewer::instance()->initGeneralThread();
+
+    // <Vulkanstorm> multi-core stage 2: the frame job helpers (doc/perf/multicore-simd-study.md, section 6.2). The main
+    // thread owns them; LLVector4a::initClass() has run, so they take over its flush-to-zero and rounding state.
+    {
+        size_t fast_cores = LL::FrameJobs::fastPhysicalCores();
+        if (max_cores != 0)
+        {
+            fast_cores = llmin(fast_cores, (size_t)max_cores);
+        }
+        size_t helpers = LL::FrameJobs::widthForCores(fast_cores);
+        if (S32 forced = gSavedSettings.getS32("FrameJobsHelpers"); forced > 0)
+        {
+            helpers = (size_t)llmin(forced, 15);
+        }
+        LL::FrameJobs::start(helpers);
+        LL_INFOS("FrameJobs") << "Frame job helpers: " << LL::FrameJobs::helperCount() << " (" << fast_cores
+                              << " physical cores share the main thread's L3 cache)" << LL_ENDL;
+    }
+    // </Vulkanstorm>
 
     LLAppViewer::sPurgeDiskCacheThread = new LLPurgeDiskCacheThread();
 
