@@ -2043,6 +2043,10 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
                 return false;
             }
 
+            // <Vulkanstorm> Good data: failed fetches count from zero again, and the texture is no longer held at a level
+            mFetchRetry.reset();
+            mMinDiscardLevel = 0;
+
             mIsRawImageValid = true;
 
             if (mBoostLevel == LLGLTexture::BOOST_ICON)
@@ -2119,7 +2123,10 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
                 setIsMissingAsset();
                 desired_discard = -1;
             }
-            else
+            // <Vulkanstorm> A refinement ended without data: retry it after 1, 2 and 4 s (lltexturefetchpolicy.h).
+            // Only when the third retry fails too does the texture stop at its level (mMinDiscardLevel, BAD in the
+            // texture console) until good data or Refresh Textures; that used to happen at the first failure, for good.
+            else if (!mFetchRetry.onFailure(sCurrentTime))
             {
                 //LL_WARNS() << mID << ": Setting min discard to " << current_discard << LL_ENDL;
                 if (current_discard >= 0)
@@ -2133,8 +2140,20 @@ bool LLViewerFetchedTexture::processFetchResults(S32& desired_discard, S32 curre
                     mMinDiscardLevel = dis_level;
                     //desired_discard = dis_level;
                 }
+                LL_INFOS("Texture") << mID << " held at discard level " << mMinDiscardLevel << " after "
+                                    << LLTextureFetchPolicy::FetchRetry::MAX_RETRIES << " retries without data, stats "
+                                    << mLastHttpGetStatus.toHex() << " worker state " << mFetchState << LL_ENDL;
             }
             destroyRawImage();
+
+            // <Vulkanstorm> The worker has finished: delete it now. The idle deletion in updateFetch runs only while
+            // no request is wanted; once the retry is due, createRequest would find the finished worker and refuse
+            // the same request (CREATE_REQUEST_ERROR_TRANSITION) on every visit, and the retry would never be made.
+            if (mHasFetcher)
+            {
+                LLAppViewer::getTextureFetch()->deleteRequest(getID(), true);
+                mHasFetcher = false;
+            }
         }
         else if (mRawImage.notNull())
         {
@@ -2273,6 +2292,12 @@ bool LLViewerFetchedTexture::updateFetch()
         LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("vftuf - current < min");
         make_request = false;
     }
+    else if (!mFetchRetry.mayRequest(sCurrentTime))
+    {
+        // <Vulkanstorm> waiting to retry a fetch that ended without data (processFetchResults)
+        LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("vftuf - retry wait");
+        make_request = false;
+    }
 
     if (make_request)
     {
@@ -2390,6 +2415,9 @@ void LLViewerFetchedTexture::clearFetchedResults()
 {
     // <FS:Ansariel> For texture refresh
     mIsMissingAsset = false;
+    // <Vulkanstorm> and the level a texture was held at after failed fetches, with their retry wait
+    mMinDiscardLevel = 0;
+    mFetchRetry.reset();
 
     if(mNeedsCreateTexture || mIsFetching)
     {
