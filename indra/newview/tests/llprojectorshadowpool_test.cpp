@@ -1421,8 +1421,17 @@ void testP3MoverRules()
     check(rebuildDirties(kRebuildPosition | kRebuildTcoord), "P3 a position rebuild with one texcoord flag still passes (not the whole set)");
     {
         // the silhouette key (S2): what a prim's alpha faces cut out of a depth tile. llshadowdirtyfeed.cpp's silhouette_key folds one
-        // SilhouetteFace per blended, masked or alpha-textured face with silhouetteFaceMix; an opaque face adds nothing
+        // SilhouetteFace per face with silhouetteFaceMix; an opaque single-sided face adds nothing
         const uint32_t opaque = kSilhouetteKeySeed; // no alpha face
+        SilhouetteFace single;
+        single.cutout = false;
+        single.index = 3;
+        single.alpha = 0.5f;
+        single.texture[0] = 0x77;
+        single.gltf = true;
+        single.gltf_alpha_mode = 1;
+        check(silhouetteFaceMix(opaque, single) == opaque,
+              "S2 an opaque single-sided face is no input at all (silhouetteFaceMix itself: its index, texture, tint and material neither)");
         SilhouetteFace lace_face;
         lace_face.alpha = 0.5f;
         lace_face.texture[0] = 0x5a;

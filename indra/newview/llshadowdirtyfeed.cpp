@@ -156,10 +156,7 @@ namespace
             f.double_sided = render_gltf && render_gltf->mDoubleSided;
             if (!f.cutout)
             {
-                if (f.double_sided)
-                {
-                    key = llprojectorpool::silhouetteFaceMix(key, f);
-                }
+                key = llprojectorpool::silhouetteFaceMix(key, f); // an opaque face: which sides cast, nothing for a single-sided one
                 continue;
             }
             f.alpha = te->getColor().mV[VALPHA];
