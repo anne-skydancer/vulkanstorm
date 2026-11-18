@@ -13,6 +13,9 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
   returning true with both outputs unwritten (getTextureVirtualSize read them).
+- The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
+  resolutions of any component, and the decode clamps its reduce factor below them (llj2creduce.h; checked against
+  OpenJPEG by indra/llimagej2coj/tests/llj2creduce_test.cpp), with the calls in the same order as before.
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -26,12 +29,22 @@ TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8
 FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
+J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
+J2C_H = (ROOT / 'indra/llimage/llimagej2c.h').read_text(encoding='utf-8', errors='replace')
 
 
 def body(text, signature):
     """The text of the function whose definition starts with `signature`, to its closing brace at column 0."""
     start = text.index(signature)
     end = text.index('\n}\n', start)
+    return text[start:end]
+
+
+def member(text, signature):
+    """The text of the member function defined in its class whose definition starts with `signature`, to its closing
+    brace at column 4."""
+    start = text.index(signature)
+    end = text.index('\n    }\n', start)
     return text[start:end]
 
 
@@ -183,6 +196,35 @@ class PixelAreaThrottle(unittest.TestCase):
         read = size.index('adjustPartialOverlapPixelArea(cos_angle_to_view_dir, radius')
         self.assertLess(call, early)
         self.assertLess(early, read)
+
+
+class J2CReduceFactor(unittest.TestCase):
+    def test_header_read_keeps_the_fewest_resolutions(self):
+        header = code(member(J2COJ, '    bool readHeader('))
+        self.assertIn('S32& resolutions)', header)
+        info = header.index('codestream_info = opj_get_cstr_info(decoder);')
+        kept = header.index('codestream_info->m_default_tile_info.tccp_info[comp].numresolutions')
+        self.assertLess(info, kept)
+        self.assertIn('resolutions = (comp == 0) ? comp_resolutions : llmin(resolutions, comp_resolutions);', header)
+        metadata = code(body(J2COJ, 'bool LLImageJ2COJ::getMetadata('))
+        self.assertIn('discard_level, resolutions);', metadata)
+        self.assertIn('base.mNumResolutions = resolutions;', metadata)
+        self.assertRegex(J2C_H, r'S32 mNumResolutions = 0;')
+
+    def test_decode_clamps_its_reduce_factor(self):
+        decode_impl = code(body(J2COJ, 'bool LLImageJ2COJ::decodeImpl('))
+        self.assertIn('const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions);', decode_impl)
+        self.assertIn('decoder.decode(base.getData(), max_bytes, &image_channels, reduce);', decode_impl)
+        self.assertNotIn('&image_channels, base.mDiscardLevel)', decode_impl)
+        # the level reported is the factor OpenJPEG decoded at
+        self.assertIn('base.setDiscardLevel(f);', decode_impl)
+
+    def test_decode_calls_in_the_same_order(self):
+        # the factor is still set before the header is read: a request the codestream can meet goes through the
+        # same calls as before the fix
+        decode = code(member(J2COJ, '    bool decode(U8* data, U32 dataSize, U32* channels, U8 discard_level)'))
+        factor = decode.index('opj_set_decoded_resolution_factor(decoder, discard_level);')
+        self.assertLess(factor, decode.index('opj_read_header(stream, decoder, &image)'))
 
 
 if __name__ == '__main__':
