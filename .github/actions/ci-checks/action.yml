@@ -36,7 +36,7 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_cloud_noise_package.py
       shell: bash
-    - run: python3 scripts/tests/test_projector_edge_lookup.py
+    - run: python3 scripts/tests/test_projector_lamp_filter.py
       shell: bash
     - run: python3 scripts/tests/test_scene_load_bounds.py
       shell: bash
