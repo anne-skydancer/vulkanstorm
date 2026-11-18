@@ -11,6 +11,8 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   which keep their own rules; any other failure gets the same retries first.
 - The waiting requests are ordered by priorities read once under each worker's lock (the HTTP release and the
   OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
+- LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
+  returning true with both outputs unwritten (getTextureVirtualSize read them).
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -22,6 +24,8 @@ from pathlib import Path
 ROOT = Path(os.environ.get('VKSTORM_TEST_ROOT') or Path(__file__).resolve().parents[2])
 TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8', errors='replace')
 FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
+FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
+FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
 
 
 def body(text, signature):
@@ -129,6 +133,56 @@ class PrioritySnapshots(unittest.TestCase):
         self.assertIn('addF32Fast(_PREHASH_DownloadPriority, iter2->mPriority);', send)
         self.assertIn('req->mRequestedPriority = iter2->mPriority;', send)
         self.assertEqual(code(send).count('mImagePriority'), 1)
+
+
+class PixelAreaThrottle(unittest.TestCase):
+    RETURN = re.compile(r'\breturn\s+(\w+)\s*;')
+
+    def setUp(self):
+        self.calc = code(body(FACE, 'bool LLFace::calcPixelArea('))
+        self.throttle_start = self.calc.index('if (gFrameTimeSeconds - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD)')
+        self.throttle_end = self.calc.index('\n    }\n', self.throttle_start)
+        self.arm = self.calc.index('mLastPixelAreaUpdate = gFrameTimeSeconds')
+
+    def test_throttled_call_returns_the_last_update(self):
+        throttled = self.calc[self.throttle_start:self.throttle_end]
+        self.assertIn('cos_angle_to_view_dir = mLastCosAngleToViewDir;', throttled)
+        self.assertIn('radius = mLastPixelRadius;', throttled)
+        self.assertEqual(self.RETURN.findall(throttled), ['mLastInFrustum'])
+
+    def test_every_update_that_arms_the_throttle_keeps_its_outputs(self):
+        # before the throttle is armed, only a rigged face without extents returns, with false: the next call
+        # updates again, and neither caller reads the outputs of a false return
+        self.assertEqual(self.RETURN.findall(self.calc[self.throttle_end:self.arm]), ['false'])
+        self.assertLess(self.calc.index('if (!hasRiggedExtents)'), self.calc.index('return false', self.throttle_end))
+        # after it, every return keeps the outputs it hands back and its result, as they are at the return
+        after = self.calc[self.arm:]
+        returns = list(self.RETURN.finditer(after))
+        self.assertEqual([r.group(1) for r in returns], ['false', 'true'])  # a media face out of the frustum, the rest
+        last = 0
+        for r in returns:
+            segment = after[last:r.start()]
+            store = segment.rfind('mLastCosAngleToViewDir = cos_angle_to_view_dir;')
+            self.assertGreaterEqual(store, 0, 'the return of %s keeps no outputs' % r.group(1))
+            kept = segment[store:]
+            self.assertIn('mLastPixelRadius = radius;', kept)
+            self.assertIn('mLastInFrustum = %s;' % r.group(1), kept)
+            self.assertNotRegex(kept, r'\b(cos_angle_to_view_dir|radius)\s*=[^=]', 'an output changes after it is kept')
+            last = r.end()
+
+    def test_before_the_first_update(self):
+        # no partial-overlap scaling (adjustPartialOverlapPixelArea gives 1 for cos 1, radius 0), in the frustum as before
+        self.assertRegex(FACE_H, r'F32\s+mLastCosAngleToViewDir = 1\.f;')
+        self.assertRegex(FACE_H, r'F32\s+mLastPixelRadius = 0\.f;')
+        self.assertRegex(FACE_H, r'bool\s+mLastInFrustum = true;')
+
+    def test_outputs_read_only_after_a_true_return(self):
+        size = code(body(FACE, 'F32 LLFace::getTextureVirtualSize()'))
+        call = size.index('bool in_frustum = calcPixelArea(cos_angle_to_view_dir, radius);')
+        early = size.index('if (mPixelArea < F_ALMOST_ZERO || !in_frustum)')
+        read = size.index('adjustPartialOverlapPixelArea(cos_angle_to_view_dir, radius')
+        self.assertLess(call, early)
+        self.assertLess(early, read)
 
 
 if __name__ == '__main__':

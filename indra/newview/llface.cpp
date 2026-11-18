@@ -2406,7 +2406,12 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
     // don't update every frame
     if (gFrameTimeSeconds - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD)
     {
-        return true;
+        // <Vulkanstorm> the last update's outputs and result: this returned true and left both outputs unwritten,
+        // which getTextureVirtualSize then read (adjustPartialOverlapPixelArea), and a media face out of the frustum
+        // read as in it
+        cos_angle_to_view_dir = mLastCosAngleToViewDir;
+        radius = mLastPixelRadius;
+        return mLastInFrustum;
     }
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_FACE;
@@ -2530,6 +2535,10 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
         if(!camera->AABBInFrustum(center, size))
         {
             mImportanceToCamera = 0.f ;
+            // <Vulkanstorm> kept for the throttled calls until the next update
+            mLastCosAngleToViewDir = cos_angle_to_view_dir;
+            mLastPixelRadius = radius;
+            mLastInFrustum = false;
             return false ;
         }
         if(cos_angle_to_view_dir > camera->getCosHalfFov()) //the center is within the view frustum
@@ -2558,6 +2567,10 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
         mImportanceToCamera = LLFace::calcImportanceToCamera(cos_angle_to_view_dir, dist) ;
     }
 
+    // <Vulkanstorm> kept for the throttled calls until the next update
+    mLastCosAngleToViewDir = cos_angle_to_view_dir;
+    mLastPixelRadius = radius;
+    mLastInFrustum = true;
     return true ;
 }
 
