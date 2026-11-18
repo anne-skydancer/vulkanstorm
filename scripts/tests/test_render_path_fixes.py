@@ -24,6 +24,9 @@
   LLDrawPoolAlpha::forwardRender, so blended faces are blended once.
 - Grass (owner decision Q8; X1 F11): a blade's second base vertex is the mirror of the first about the blade's root,
   (x - xf, y - yf), in LLVOGrass::getGeometry and in its picking twin lineSegmentIntersect; the y offset was -xf.
+- Grass draw infos (b-5 F2, audit N3): LLGrassPartition::getGeometry passes the face's fullbright flag as LLDrawInfo's
+  fullbright, as the batch merge test compares it, instead of the object's selection as fullbright and fullbright as
+  bump.
 
     python3 scripts/tests/test_render_path_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_render_path_fixes.py   (another source tree)"""
@@ -244,6 +247,14 @@ class GrassBlades(unittest.TestCase):
             self.assertRegex(blade, r'position\.mV\[0\]\s*=\s*mPosition\.mV\[VX\] \+ x - xf;\s*'
                                     r'position\.mV\[1\]\s*=\s*mPosition\.mV\[VY\] \+ y - yf;', signature)
             self.assertNotIn('y - xf', blade, signature)
+
+
+class GrassDrawInfo(unittest.TestCase):
+    def test_the_batch_takes_the_fullbright_flag_it_is_merged_by(self):
+        geometry = body(GRASS, 'void LLGrassPartition::getGeometry(LLSpatialGroup* group)')
+        self.assertIn('draw_vec[idx]->mFullbright == fullbright)', geometry)
+        self.assertRegex(geometry, r'new LLDrawInfo\(start,end,count,offset,facep->getTexture\(\),\s*buffer, fullbright\);')
+        self.assertNotIn('isSelected()', geometry)
 
 
 if __name__ == '__main__':

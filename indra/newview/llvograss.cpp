@@ -764,9 +764,11 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
             U32 end = start + facep->getGeomCount()-1;
             U32 offset = facep->getIndicesStart();
             U32 count = facep->getIndicesCount();
+            // <Vulkanstorm> the arguments LLDrawInfo takes, in its order (fullbright, then bump): the selection flag was
+            // passed as fullbright and fullbright as bump, so the merge test above compared isSelected() with fullbright
             LLDrawInfo* info = new LLDrawInfo(start,end,count,offset,facep->getTexture(),
                 //facep->getTexture(),
-                buffer, object->isSelected(), fullbright);
+                buffer, fullbright);
 
             draw_vec.push_back(info);
             //for alpha sorting
