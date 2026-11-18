@@ -197,6 +197,7 @@ private:
     boost::signals2::connection mParcelPropertiesControlConnection;
     boost::signals2::connection mParcelMgrConnection;
     boost::signals2::connection mLocationHistoryConnection;
+    boost::signals2::connection mLandmarksLoadedConnection; // <Vulkanstorm>
     boost::signals2::connection mRegionCrossingSlot;
     LLPathfindingNavMesh::navmesh_slot_t mNavMeshSlot;
     bool mIsNavMeshDirty = false;

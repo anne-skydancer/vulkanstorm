@@ -35,6 +35,7 @@
 #include "llagent.h"
 #include "llfilesystem.h"
 #include "llviewerstats.h"
+#include "workqueue.h"
 
 // Globals
 LLLandmarkList gLandmarkList;
@@ -48,7 +49,7 @@ LLLandmarkList::~LLLandmarkList()
     mList.clear();
 }
 
-LLLandmark* LLLandmarkList::getAsset(const LLUUID& asset_uuid, loaded_callback_t cb)
+LLLandmark* LLLandmarkList::getAsset(const LLUUID& asset_uuid, loaded_callback_t cb, bool async)
 {
     LLLandmark* landmark = get_ptr_in_map(mList, asset_uuid);
     if(landmark)
@@ -88,6 +89,46 @@ LLLandmark* LLLandmarkList::getAsset(const LLUUID& asset_uuid, loaded_callback_t
             }
         }
 
+        // <Vulkanstorm> bulk scans: read the cache file on the General thread
+        if (async)
+        {
+            if (mAsyncPending.count(asset_uuid) || mRequestedList.count(asset_uuid))
+            {
+                // already on its way; a scan never re-posts, or the loaded signal could loop
+                return NULL;
+            }
+            LL::WorkQueue::ptr_t main_queue = LL::WorkQueue::getInstance("mainloop");
+            LL::WorkQueue::ptr_t general_queue = LL::WorkQueue::getInstance("General");
+            if (main_queue && general_queue)
+            {
+                mAsyncPending.insert(asset_uuid);
+                main_queue->postTo(
+                    general_queue,
+                    [asset_uuid]() // General thread: only the uuid is captured
+                    {
+                        std::string data;
+                        LLFileSystem file(asset_uuid, LLAssetType::AT_LANDMARK, LLFileSystem::READ);
+                        S32 size = file.getSize();
+                        if (size > 0)
+                        {
+                            data.resize(size);
+                            if (!file.read((U8*)&data[0], size))
+                            {
+                                data.clear();
+                            }
+                        }
+                        return data;
+                    },
+                    [asset_uuid](std::string data) // main thread
+                    {
+                        gLandmarkList.onCacheRead(asset_uuid, data);
+                    });
+                return NULL;
+            }
+            // no queues: fall through to the synchronous path
+        }
+        // </Vulkanstorm>
+
         mRequestedList[asset_uuid] = gFrameTimeSeconds;
 
         // Note that getAssetData can callback immediately and cleans mRequestedList
@@ -98,6 +139,81 @@ LLLandmark* LLLandmarkList::getAsset(const LLUUID& asset_uuid, loaded_callback_t
     }
     return NULL;
 }
+
+// <Vulkanstorm> Factored out of processGetAssetReply: builds the landmark from its text.
+void LLLandmarkList::onLandmarkData(const LLUUID& uuid, const std::string& data)
+{
+    if (!data.empty())
+    {
+        LLLandmark* landmark = LLLandmark::constructFromString(data.c_str(), static_cast<S32>(data.size() + 1));
+        if (landmark)
+        {
+            mList[uuid] = landmark;
+            mRequestedList.erase(uuid);
+
+            LLVector3d pos;
+            if (!landmark->getGlobalPos(pos))
+            {
+                LLUUID region_id;
+                if (landmark->getRegionID(region_id))
+                {
+                    LLLandmark::requestRegionHandle(
+                        gMessageSystem,
+                        gAgent.getRegionHost(),
+                        region_id,
+                        boost::bind(&LLLandmarkList::onRegionHandle, this, uuid));
+                }
+
+                // the callback will be called when we get the region handle.
+            }
+            else
+            {
+                makeCallbacks(uuid);
+            }
+        }
+        else
+        {
+            // failed to parse, shouldn't happen
+            LL_WARNS("Landmarks") << "Failed to parse landmark " << uuid << LL_ENDL;
+            eraseCallbacks(uuid);
+        }
+    }
+    else
+    {
+        // got a good status, but no file, shouldn't happen
+        LL_WARNS("Landmarks") << "Empty buffer for landmark " << uuid << LL_ENDL;
+        eraseCallbacks(uuid);
+    }
+}
+
+// Main thread: a cache read posted by getAsset(..., async = true) is done.
+void LLLandmarkList::onCacheRead(const LLUUID& uuid, const std::string& data)
+{
+    mAsyncPending.erase(uuid);
+
+    if (mList.count(uuid) == 0 && mBadList.count(uuid) == 0)
+    {
+        if (!data.empty())
+        {
+            onLandmarkData(uuid, data);
+        }
+        else if (mRequestedList.count(uuid) == 0)
+        {
+            // not in the cache: today's network path
+            mRequestedList[uuid] = gFrameTimeSeconds;
+            gAssetStorage->getAssetData(uuid,
+                                        LLAssetType::AT_LANDMARK,
+                                        LLLandmarkList::processGetAssetReply,
+                                        NULL);
+        }
+    }
+
+    if (mAsyncPending.empty())
+    {
+        mLandmarksLoadedSignal();
+    }
+}
+// </Vulkanstorm>
 
 // static
 void LLLandmarkList::processGetAssetReply(
@@ -112,51 +228,13 @@ void LLLandmarkList::processGetAssetReply(
         LLFileSystem file(uuid, type);
         S32 file_length = file.getSize();
 
+        std::string data;
         if (file_length > 0)
         {
-            std::vector<char> buffer(file_length + 1);
-            file.read((U8*)&buffer[0], file_length);
-            buffer[file_length] = 0;
-
-            LLLandmark* landmark = LLLandmark::constructFromString(&buffer[0], static_cast<S32>(buffer.size()));
-            if (landmark)
-            {
-                gLandmarkList.mList[uuid] = landmark;
-                gLandmarkList.mRequestedList.erase(uuid);
-
-                LLVector3d pos;
-                if (!landmark->getGlobalPos(pos))
-                {
-                    LLUUID region_id;
-                    if (landmark->getRegionID(region_id))
-                    {
-                        LLLandmark::requestRegionHandle(
-                            gMessageSystem,
-                            gAgent.getRegionHost(),
-                            region_id,
-                            boost::bind(&LLLandmarkList::onRegionHandle, &gLandmarkList, uuid));
-                    }
-
-                    // the callback will be called when we get the region handle.
-                }
-                else
-                {
-                    gLandmarkList.makeCallbacks(uuid);
-                }
-            }
-            else
-            {
-                // failed to parse, shouldn't happen
-                LL_WARNS("Landmarks") << "Failed to parse landmark " << uuid << LL_ENDL;
-                gLandmarkList.eraseCallbacks(uuid);
-            }
+            data.resize(file_length);
+            file.read((U8*)&data[0], file_length);
         }
-        else
-        {
-            // got a good status, but no file, shouldn't happen
-            LL_WARNS("Landmarks") << "Empty buffer for landmark " << uuid << LL_ENDL;
-            gLandmarkList.eraseCallbacks(uuid);
-        }
+        gLandmarkList.onLandmarkData(uuid, data); // <Vulkanstorm> factored out
 
         // We got this asset, remove it from retry and bad lists.
         gLandmarkList.mRetryList.erase(uuid);
