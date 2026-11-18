@@ -76,10 +76,10 @@ def expect(name, got, want, output):
 def setup(tmp):
     r = Repo(tmp)
     r.commit("trunk", "root")
-    r.branch("vkstorm-rust", "trunk")
+    r.branch("vkstorm-vulkan", "trunk")
     r.branch("vkstorm-devel", "trunk")
-    r.commit("vkstorm-rust")
-    r.publish("vkstorm-rust")
+    r.commit("vkstorm-vulkan")
+    r.publish("vkstorm-vulkan")
     r.publish("vkstorm-devel")
     return r
 
@@ -90,48 +90,48 @@ def scenario(fn):
 
 
 def base_merged_into_feature(r):
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
-    r.commit("vkstorm-rust")
-    r.publish("vkstorm-rust")
-    r.merge("codex/a", "vkstorm-rust", "Merge vkstorm-rust into codex/a")
-    code, out = r.check("origin/vkstorm-rust", "codex/a")
+    r.commit("vkstorm-vulkan")
+    r.publish("vkstorm-vulkan")
+    r.merge("codex/a", "vkstorm-vulkan", "Merge vkstorm-vulkan into codex/a")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/a")
     expect("CI: base line merged into the feature is rejected", code, 1, out)
 
 
 def stacked_feature_then_landed(r):
     # A and B both from the base; B merges A; A then lands on the base through its PR.
-    r.branch("codex/a", "vkstorm-rust")
-    r.branch("codex/b", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
+    r.branch("codex/b", "vkstorm-vulkan")
     r.commit("codex/a")
     r.commit("codex/b")
     r.merge("codex/b", "codex/a", "Merge codex/a into codex/b")
-    r.merge("vkstorm-rust", "codex/a", "Merge pull request #1 from codex/a")
-    r.publish("vkstorm-rust")
-    code, out = r.check("origin/vkstorm-rust", "codex/b")
+    r.merge("vkstorm-vulkan", "codex/a", "Merge pull request #1 from codex/a")
+    r.publish("vkstorm-vulkan")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/b")
     expect("CI: stacked feature merge stays allowed after it lands", code, 0, out)
 
 
 def stacked_feature_landed_first(r):
     # A lands first, then B merges A's (now landed) tip: still a feature merge.
-    r.branch("codex/a", "vkstorm-rust")
-    r.branch("codex/b", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
+    r.branch("codex/b", "vkstorm-vulkan")
     r.commit("codex/a")
-    r.merge("vkstorm-rust", "codex/a", "Merge pull request #1 from codex/a")
-    r.publish("vkstorm-rust")
+    r.merge("vkstorm-vulkan", "codex/a", "Merge pull request #1 from codex/a")
+    r.publish("vkstorm-vulkan")
     r.commit("codex/b")
     r.merge("codex/b", "codex/a", "Merge codex/a into codex/b")
-    code, out = r.check("origin/vkstorm-rust", "codex/b")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/b")
     expect("CI: merging a landed feature's tip is not a base merge", code, 0, out)
 
 
 def other_line_merged(r):
     r.commit("vkstorm-devel")
     r.publish("vkstorm-devel")
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
     r.merge("codex/a", "vkstorm-devel", "Merge vkstorm-devel into codex/a")
-    code, out = r.check("origin/vkstorm-rust", "codex/a")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/a")
     expect("CI: another base line's tip merged into the feature is rejected", code, 1, out)
 
 
@@ -142,9 +142,9 @@ def upstream_mirror_integration(r):
     r.git("update-ref", "refs/remotes/upstream/master", upstream)
     r.git("branch", "vkstorm-canary", upstream)
     r.publish("vkstorm-canary")
-    r.branch("codex/canary-upstream", "vkstorm-rust")
+    r.branch("codex/canary-upstream", "vkstorm-vulkan")
     r.merge("codex/canary-upstream", upstream, "Merge upstream master into canary")
-    code, out = r.check("origin/vkstorm-rust", "codex/canary-upstream")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/canary-upstream")
     expect("CI: merging upstream that a mirror line tracks is allowed", code, 0, out)
     r.git("checkout", "-q", "codex/canary-upstream")
     code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-canary"})
@@ -162,22 +162,22 @@ def upstream_line_own_commits(r):
     r.publish("vkstorm-canary")
     newer = r.commit("trunk", "newer upstream work")
     r.git("update-ref", "refs/remotes/upstream/master", newer)
-    r.branch("codex/canary-upstream", "vkstorm-rust")
+    r.branch("codex/canary-upstream", "vkstorm-vulkan")
     r.merge("codex/canary-upstream", newer, "Merge upstream master into canary")
-    code, out = r.check("origin/vkstorm-rust", "codex/canary-upstream")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/canary-upstream")
     expect("CI: a newer upstream tip stays mergeable past the line's own commits", code, 0, out)
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.merge("codex/a", own, "Merge vkstorm-canary into codex/a")
-    code, out = r.check("origin/vkstorm-rust", "codex/a")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/a")
     expect("CI: the upstream line's own commit merged into a feature is rejected", code, 1, out)
     r.git("checkout", "-q", "codex/canary-upstream")
     code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge origin/vkstorm-canary"})
     expect("hook: merging the upstream line's own commits is refused", code, 1, out)
     # Without the upstream ref the whole line is protected (fail closed).
     r.git("update-ref", "-d", "refs/remotes/upstream/master")
-    r.branch("codex/b", "vkstorm-rust")
+    r.branch("codex/b", "vkstorm-vulkan")
     r.merge("codex/b", upstream, "Merge upstream master into codex/b")
-    code, out = r.check("origin/vkstorm-rust", "codex/b")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/b")
     expect("CI: without upstream/master the line's whole chain is protected", code, 1, out)
 
 
@@ -213,49 +213,49 @@ def upstream_internal_merges(r):
 
 
 def local_base_ahead_of_origin(r):
-    # Local vkstorm-rust has moved past origin/vkstorm-rust (pulled from
+    # Local vkstorm-vulkan has moved past origin/vkstorm-vulkan (pulled from
     # elsewhere); merging the local tip into a feature branch is still a base merge.
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
-    r.commit("vkstorm-rust", "local line ahead of origin")
+    r.commit("vkstorm-vulkan", "local line ahead of origin")
     r.git("checkout", "-q", "codex/a")
-    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge vkstorm-rust"})
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge vkstorm-vulkan"})
     expect("hook: a local base line ahead of origin is refused", code, 1, out)
     expect("hook: the refusal advises rebasing", int("Rebase" in out), 1, out)
 
 
 def update_branch_style(r):
     # GitHub's "Update branch": the base tip merged into the PR branch.
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
-    r.merge("vkstorm-rust", r.commit("trunk"), "Merge pull request #2 from elsewhere")
-    r.publish("vkstorm-rust")
-    r.merge("codex/a", "origin/vkstorm-rust", "Merge branch 'vkstorm-rust' into codex/a")
-    code, out = r.check("origin/vkstorm-rust", "codex/a")
+    r.merge("vkstorm-vulkan", r.commit("trunk"), "Merge pull request #2 from elsewhere")
+    r.publish("vkstorm-vulkan")
+    r.merge("codex/a", "origin/vkstorm-vulkan", "Merge branch 'vkstorm-vulkan' into codex/a")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/a")
     expect("CI: an 'Update branch' merge is rejected", code, 1, out)
     expect("CI: the rejection advises rebasing", int("rebas" in out), 1, out)
 
 
 def clean_feature(r):
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
     r.commit("codex/a")
-    code, out = r.check("origin/vkstorm-rust", "codex/a")
+    code, out = r.check("origin/vkstorm-vulkan", "codex/a")
     expect("CI: a feature without merges passes", code, 0, out)
 
 
 def hook_refuses_and_override(r):
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
-    r.commit("vkstorm-rust")
-    r.publish("vkstorm-rust")
+    r.commit("vkstorm-vulkan")
+    r.publish("vkstorm-vulkan")
     r.git("checkout", "-q", "codex/a")
-    action = {"GIT_REFLOG_ACTION": "merge origin/vkstorm-rust"}
+    action = {"GIT_REFLOG_ACTION": "merge origin/vkstorm-vulkan"}
     code, out = r.check("--pending", env_extra=action)
     expect("hook: automatic merge of a base line is refused", code, 1, out)
     code, out = r.check("--pending", env_extra=dict(action, VKS_ALLOW_BASE_MERGE="1"))
     expect("hook: VKS_ALLOW_BASE_MERGE=1 lets it through", code, 0, out)
-    r.branch("codex/b", "vkstorm-rust")
+    r.branch("codex/b", "vkstorm-vulkan")
     r.commit("codex/b")
     r.git("checkout", "-q", "codex/a")
     code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "merge codex/b"})
@@ -263,20 +263,20 @@ def hook_refuses_and_override(r):
 
 
 def hook_pull_fetch_head(r):
-    r.branch("codex/a", "vkstorm-rust")
+    r.branch("codex/a", "vkstorm-vulkan")
     r.commit("codex/a")
-    tip = r.commit("vkstorm-rust")
-    r.publish("vkstorm-rust")
+    tip = r.commit("vkstorm-vulkan")
+    r.publish("vkstorm-vulkan")
     r.git("checkout", "-q", "codex/a")
     fetch_head = os.path.join(r.root, ".git", "FETCH_HEAD")
     with open(fetch_head, "w") as fh:
         # A remote URL that contains "not-for-merge": only the status field counts.
-        fh.write("%s\t\tbranch 'vkstorm-rust' of https://example.invalid/not-for-merge/repo\n" % tip)
-    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "pull origin vkstorm-rust"})
+        fh.write("%s\t\tbranch 'vkstorm-vulkan' of https://example.invalid/not-for-merge/repo\n" % tip)
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "pull origin vkstorm-vulkan"})
     expect("hook: git pull of a base line is refused (FETCH_HEAD field)", code, 1, out)
     with open(fetch_head, "w") as fh:
-        fh.write("%s\tnot-for-merge\tbranch 'vkstorm-rust' of https://example.invalid/repo\n" % tip)
-    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "pull origin vkstorm-rust"})
+        fh.write("%s\tnot-for-merge\tbranch 'vkstorm-vulkan' of https://example.invalid/repo\n" % tip)
+    code, out = r.check("--pending", env_extra={"GIT_REFLOG_ACTION": "pull origin vkstorm-vulkan"})
     expect("hook: FETCH_HEAD entries marked not-for-merge are ignored", code, 0, out)
 
 
