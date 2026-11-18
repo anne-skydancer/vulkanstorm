@@ -4,6 +4,9 @@
 > `scripts/inworld/projector_orbit_check.py` and `doc/shadows/projector-pool-budget.md`, which this page names, exist on `vkstorm-devel` only,
 > not on release, canary or rust. Read those mentions as a description of devel. The pool's counters (`LLProjectorShadows::Stats`) are collected
 > in the pool code, but only the devel stats API reads them.
+> The `reports/` design files this page cites (`reports/projector-pool-2026-11-13/design-final.md` and `design.md`,
+> `reports/projector-edges-2026-11-16/design.md`) are devel-only too: `reports/` is untracked and kept on the owner's machine. The
+> `ProjectorShadows.stats` mentions below (about lines 62, 389 and 638) describe the devel-only stats API.
 
 Spec: `reports/projector-pool-2026-11-13/design-final.md` (sections 3 to 9). This page says what is built, stage by stage. The
 pool is the Stochastic method's (`RenderShadowMethod` 2) projector shadow when `RenderShadowDetail` is 2 (sun and projectors).
