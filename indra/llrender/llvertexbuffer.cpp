@@ -518,7 +518,6 @@ public:
         llassert(type == GL_ARRAY_BUFFER || type == GL_ELEMENT_ARRAY_BUFFER);
         llassert(size >= 2);
         llassert(name != 0);
-        llassert(data != nullptr);
 
         clean();
 
@@ -527,6 +526,22 @@ public:
         adjustSize(size);
         llassert(mAllocated >= size);
         mAllocated -= size;
+
+        // <Vulkanstorm> A buffer whose CPU copy could not be allocated (a miss in allocate() where
+        // ll_aligned_malloc_16 failed) has a GL name and no data. Pooled, it would be handed to the next allocation of
+        // its size class, which would then fail too, even once memory is back, and an owner that retries every frame
+        // (LLVOAvatar::renderSkinned for a face left without a buffer) would pool it again each time, so that it never
+        // ages out. Release its name instead.
+        if (!data)
+        {
+            if (name)
+            {
+                delete_buffers(1, &name);
+            }
+            return;
+        }
+        // </Vulkanstorm>
+
         mReserved += size;
 
         auto& pool = type == GL_ELEMENT_ARRAY_BUFFER ? mIBOPool : mVBOPool;
