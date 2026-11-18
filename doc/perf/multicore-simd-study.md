@@ -71,7 +71,8 @@ the installer's `MinVersion=10.0` and AVX2 check, and the Linux wrapper check, w
    found, is **largely solved by the change-index hotfix** (§2).
 2. A **GPU-time capture before any FJ fps gate** (Rooftops waits in `Swap`; the exports hold no GPU zones).
 3. `LL::FrameJobs`, our own fork-join job system (main thread takes part), and a width rule: `clamp(cores − 3, 2, 7)`, that is 5
-   helpers on 8 cores, chosen to leave cores for the GL driver, decode and window threads (§6.2). The bench does **not** pick
+   helpers on 8 cores, chosen to leave cores for the GL driver, decode and window threads (§6.2). **Built in stage 2 (#553), with
+   no user yet; what was built differs in a few points, listed in §6.2 "Stage 2 as built".** The bench does **not** pick
    the width (§4.5); the stage-2 gate does. **Its first users: the cascade cull + sort, and the decode-priority /
    `calcPixelArea` pass**; then avatar animation (`updateCharacter`). The projector tiles wait.
 4. Bit-exact AVX2 kernels: positions, normals and tangents, and an 8-boxes-per-register frustum test. K4 (palette SIMD) stays low:
@@ -637,6 +638,34 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   - dev-build guards (`#ifdef`, off release): `FrameJobs::inJob()` asserts in `LLVertexBuffer::genBuffer` / `flushBuffers`, `gGL`,
     and an owner-thread assert in `LLRefCount::ref` / `unref`. **These guards are part of stage 2** (files `llrefcount.h`,
     `llvertexbuffer.cpp`, `gGL`; §7.1), since stage 2's own stress tests need them; 5a then adds the compare mode on top.
+- **Stage 2 as built (#553, 2026-11-18).** `indra/llcommon/llframejobs.h/.cpp`, `llframejobsguard.h` and
+  `tests/llframejobs_test.cpp`; no cull, sort or fill uses it yet, so the stage has no fps gain of its own. Where it differs
+  from the text of this section:
+  - **Lazy wake.** The helpers are woken at the start of the frame-work window only when the previous window dispatched a
+    batch, and otherwise at the first batch: a frame without parallel work costs nothing.
+  - **Bounded spin.** A helper that was just woken or just finished a batch spins for about 50 µs inside the window and then
+    parks; the next dispatch arms it again. Spinning through the whole window kept the pool at 1.7–3.3 cores for one trivial
+    batch a window (review of #553); bounded, the same pattern cost 0.01–0.06 core in a scratch bench (taken on a loaded machine). Batches more than about 50 µs apart pay
+    the wake of a parked helper, about 9–34 µs median (§4.4). The spin time is the tuning point of the gate below.
+  - **Floating-point state per batch.** The helpers do not call `LLVector4a::initClass()` (llcommon cannot include llmath)
+    and do not keep a start-up copy: every dispatch carries the owner's MXCSR (without the sticky flags) and a helper writes
+    its own only when it differs. A change of rounding or flush-to-zero on the main thread after start-up therefore cannot
+    make helpers compute other bits.
+  - **Width floor.** No helpers below 4 fast cores (every batch then runs serially on the main thread), otherwise
+    `clamp(fastPhysicalCores − 3, 2, 7)`, which never exceeds cores − 1: 2 helpers on 4 cores, 3 on 6, 5 on 8. With the former
+    floor of 2 helpers a batch window stalled for up to 98 ms on one CPU and 55 ms on two (review of #553). On hybrid
+    processors (Windows) only the cores of the highest efficiency class count. Helpers are **not pinned** (future work, with
+    the dual-CCD case). `EmulateCoreCount` counts logical processors and is applied as an upper bound to the core count.
+  - **Guards as a CMake option.** `llassert` is off in RelWithDebInfo, so the dev guards are `-DVKS_FRAMEJOBS_GUARDS=ON`
+    (off by default, like `VKS_GL_STATS`): `LL_FRAMEJOBS_ASSERT_NOT_IN_JOB()` in `LLRefCount::ref` / `unref`,
+    `LLVertexBuffer::genBuffer` / `flushBuffers` and `LLRender::flush`. The reference-count guard is "not inside a job", not
+    a per-object owner-thread check.
+  - **Pool widths deferred.** The background pool widths and priorities below are **not** changed yet: with no FrameJobs
+    user they would only slow texture loading (4 → 2 decode threads on 8 cores). They land with the first user.
+  - **Debug settings:** `FrameJobsSerial` (every batch on the main thread, same partition) and `FrameJobsHelpers` (helper
+    count for the width sweep; 0 = the rule).
+  - **Exceptions:** the exception of the lowest throwing chunk is rethrown, and every chunk below it has run, as in a serial
+    loop.
 - **Not built on `LL::WorkQueue`:** the 2 ms wake floor (§4.4), `std::function` per item, and a joining main thread could run
   arbitrary `mainloop` work.
 - **Job-body rule:** no `LLPointer` copies, no GL, no `markDead` / `killObject`, no `LLCachedControl` first use, no floating-point
@@ -645,7 +674,8 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   - fast domain = the cores sharing the main thread's L3 (one CCD on AMD parts, the V-cache CCD on X3D; on Intel hybrid parts the
     P-cores and E-cores share one L3, so the domain is the whole package there and the helpers should prefer P-cores), from
     `GetLogicalProcessorInformationEx` on Windows and `/sys/devices/system/cpu` on Linux;
-  - **frame helpers = `clamp(fastPhysicalCores − 3, 2, 7)`**: 5 on 8 cores, 3 on 6, 2 on 4 (#448 had `− 2`, i.e. 6 on 8). The
+  - **frame helpers = `clamp(fastPhysicalCores − 3, 2, 7)`**: 5 on 8 cores, 3 on 6, 2 on 4 (#448 had `− 2`, i.e. 6 on 8); **as
+    built, none below 4 cores** ("Stage 2 as built" above). The
     `− 3` is a reservation, not a bench result: the **main thread** is the sixth worker, and the cores left over are for the **GL
     driver thread** (threaded optimisation of the vendor driver), the **decode pools** (`ImageDecode`, `MeshLodProcessing`, §3.1)
     and the **window thread**. The scaling table (§4.5) rises to 7 helpers on an otherwise empty machine, so it argues for more
@@ -758,7 +788,7 @@ estimate. Order: 0 ✓, 1 ✓, 1a ✓ (hotfix), 1b, 2, 3, 4 ✓, 5a, 5c, 5b.
 | 1 | Tracy measuring build, zones and counters, the Second Life session, baseline report | `llprojectorshadows.cpp` (ours), `llframecounters.h`, zones in `llvoavatar.cpp` and others | none | **met**: ranked zones and the §3.2 table measured; noise under 3 % for the frame mean and blocks above 3 ms, not for small blocks or the 1 % low (§4.8) | the session, done | **done** (#529, #538) | — |
 | 1a | projector pool per-frame cost (the stage-1 finding: 1.8 ms Risk, 6.4 ms Rooftops, 5.4 of it unzoned self time) | `llprojectorshadowpool.h` and the change index (ours) | none | the pool's own time about 0.3 ms [Rooftops split] | — | **largely solved** by hotfixes `13b7d28981` and `e74e5c85be`. What is left is a tile rendered nearly every frame (about 1.0 ms, 1 tile in 97 % of Rooftops frames, cause not captured: `projector_stats` was null) and `pinCasters` 0.4 ms inside every tile | — |
 | 1b | **GPU-time capture** (GPU zones or a GL timer-query capture) at Rooftops and Isle of Repose | Tracy GPU context / `llglsubmitstats.h` (G0) | none | GPU ms of the shadow passes and the frame; settles whether Rooftops is CPU- or GPU-limited | — | small [inferred] | low. **Comes before FJ's fps gates** (§6.7) |
-| 2 | `LL::FrameJobs`, width rule, pool widths, dev guards, unit and stress tests | new `llcommon/llframejobs.*`; `llappviewer.cpp` `initThreads` (179) a few lines; `threadpool.cpp` (0); `llviewerdisplay.cpp` (32) the `beginFrameWork` / `endFrameWork` hooks; dev guards in `llrefcount.h` (1), `llvertexbuffer.cpp` (6), `gGL` | low–medium (small hunks in two busy files, `llappviewer.cpp` and `llviewerdisplay.cpp`) | no fps loss on S1; settle not slower; width sweep; spin-window power and driver-thread check; 4-core affinity run. **FJ's first users: the cascade cull + sort and the decode-priority / `calcPixelArea` pass; then `updateCharacter`** | sanity run | **1–1.5 d** | **low–medium**: thread start and shutdown order, hooks in `display()`, spin window |
+| 2 | `LL::FrameJobs`, width rule, pool widths, dev guards, unit and stress tests. **Built (#553), without the pool widths and with no user: see §6.2 "Stage 2 as built"; the gates wait for the first user** | new `llcommon/llframejobs.*`; `llappviewer.cpp` `initThreads` (179) a few lines; `threadpool.cpp` (0); `llviewerdisplay.cpp` (32) the `beginFrameWork` / `endFrameWork` hooks; dev guards in `llrefcount.h` (1), `llvertexbuffer.cpp` (6), `gGL` | low–medium (small hunks in two busy files, `llappviewer.cpp` and `llviewerdisplay.cpp`) | no fps loss on S1; settle not slower; width sweep; spin-window power and driver-thread check; 4-core affinity run. **FJ's first users: the cascade cull + sort and the decode-priority / `calcPixelArea` pass; then `updateCharacter`** | sanity run | **1–1.5 d** | **low–medium**: thread start and shutdown order, hooks in `display()`, spin window |
 | 3 | K1, K2, K5 + bit-for-bit tests + FMA-count CI gate (K4 stays low: at most 0.27 ms) | new `llmath` kernel file; `llface.cpp` (18) two loops; `llcamera.cpp` (0) | low–medium | bit-for-bit tests on Windows and Linux; kernel zones faster; FMA count unchanged | — | **0.5–1 d** | low |
 | 4 | FMA memo | this document §9 | none | — | accepted with this study | **done** | — |
 | 5a | trio audit of C1–C4 (**C1 and the decode-priority pass first**), compare mode, `getMaterialParams` and tangent fixes (the dev guards landed with stage 2) | `lltextureentry.h` (0), `llface.cpp` (18), `llvolume.cpp` (18) | medium | compare mode clean on S1–S3; Release login test | — | **1–2 d** (0.8–1.2 M tokens; the main session asks first) | medium: races found become hotfixes |

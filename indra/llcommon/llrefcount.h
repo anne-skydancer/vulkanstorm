@@ -28,6 +28,7 @@
 
 #include <boost/intrusive_ptr.hpp>
 #include "llatomic.h"
+#include "llframejobsguard.h" // <Vulkanstorm/> LL_FRAMEJOBS_ASSERT_NOT_IN_JOB
 
 class LLMutex;
 
@@ -52,6 +53,7 @@ public:
 
     inline void ref() const
     {
+        LL_FRAMEJOBS_ASSERT_NOT_IN_JOB(); // <Vulkanstorm/> this count is not atomic: job bodies copy no LLPointer
         llassert(mRef != LL_REFCOUNT_FREE); // object is deleted
         mRef++;
         llassert(mRef < gMaxRefCount); // ref count excessive, likely memory leak
@@ -59,6 +61,7 @@ public:
 
     inline S32 unref() const
     {
+        LL_FRAMEJOBS_ASSERT_NOT_IN_JOB(); // <Vulkanstorm/>
         llassert(mRef != LL_REFCOUNT_FREE); // object is deleted
         llassert(mRef > 0); // ref count below 1, likely corrupted
         if (0 == --mRef)
