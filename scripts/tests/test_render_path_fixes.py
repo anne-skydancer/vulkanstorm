@@ -22,6 +22,8 @@
   camera (with calcDistance's key, LLSpatialPartition::calcAlphaDepth) and its rigged ones in attachment order; and
   the "depth-only" second render keeps the caller's colour mask in renderGeomPostDeferred, the glow pools and
   LLDrawPoolAlpha::forwardRender, so blended faces are blended once.
+- Grass (owner decision Q8; X1 F11): a blade's second base vertex is the mirror of the first about the blade's root,
+  (x - xf, y - yf), in LLVOGrass::getGeometry and in its picking twin lineSegmentIntersect; the y offset was -xf.
 
     python3 scripts/tests/test_render_path_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_render_path_fixes.py   (another source tree)"""
@@ -66,6 +68,7 @@ SPATIAL = code(read('indra/newview/llspatialpartition.cpp'))
 POOL_ALPHA = code(read('indra/newview/lldrawpoolalpha.cpp'))
 POOL_SIMPLE = code(read('indra/newview/lldrawpoolsimple.cpp'))
 POOL_PBR = code(read('indra/newview/lldrawpoolpbropaque.cpp'))
+GRASS = code(read('indra/newview/llvograss.cpp'))
 
 
 def guarded_colour_masks(text):
@@ -230,6 +233,17 @@ class Impostors(unittest.TestCase):
         second = generate[generate.index('sImpostorRenderAlphaDepthPass = true;'):generate.index('sImpostorRenderAlphaDepthPass = false;')]
         self.assertIn('gGL.setColorMask(false,false);', second)
         self.assertIn('|| LLPipeline::sImpostorRenderAlphaDepthPass', body(POOL_ALPHA, 'void LLDrawPoolAlpha::forwardRender('))
+
+
+class GrassBlades(unittest.TestCase):
+    def test_the_second_base_vertex_mirrors_the_first(self):
+        for signature in ('void LLVOGrass::getGeometry(', 'bool LLVOGrass::lineSegmentIntersect('):
+            blade = body(GRASS, signature)
+            self.assertRegex(blade, r'position\.mV\[0\]\s*=\s*mPosition\.mV\[VX\] \+ x \+ xf;\s*'
+                                    r'position\.mV\[1\]\s*=\s*mPosition\.mV\[VY\] \+ y \+ yf;', signature)
+            self.assertRegex(blade, r'position\.mV\[0\]\s*=\s*mPosition\.mV\[VX\] \+ x - xf;\s*'
+                                    r'position\.mV\[1\]\s*=\s*mPosition\.mV\[VY\] \+ y - yf;', signature)
+            self.assertNotIn('y - xf', blade, signature)
 
 
 if __name__ == '__main__':
