@@ -1672,6 +1672,7 @@ void LLViewerObjectList::killObjects(LLViewerRegion *regionp)
 
 void LLViewerObjectList::killAllObjects()
 {
+    LL_PROFILE_ZONE_SCOPED;
     // Used only on global destruction.
 
     // Mass cleanup to not clear lists one item at a time
@@ -1694,13 +1695,10 @@ void LLViewerObjectList::killAllObjects()
 
     gMeshRepo.unregisterAllMeshes();
 
-    cleanDeadObjects(false);
-
-    if(!mObjects.empty())
-    {
-        LL_WARNS() << "LLViewerObjectList::killAllObjects still has entries in mObjects: " << mObjects.size() << LL_ENDL;
-        mObjects.clear();
-    }
+    // Direct clear instead of cleanDeadObjects - all objects are already dead
+    mObjects.clear();
+    mDeadObjects.clear();
+    mNumDeadObjects = 0;
 }
 
 void LLViewerObjectList::cleanDeadObjects(bool use_timer)

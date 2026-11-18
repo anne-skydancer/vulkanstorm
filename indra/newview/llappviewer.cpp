@@ -2080,6 +2080,14 @@ bool LLAppViewer::cleanup()
     LLPluginProcessParent::shutdown();
 
     disconnectViewer();
+
+    if (LLWatchdog::instanceExists())
+    {
+        // Signal a stop early, so that it will be out
+        // of 1s sleep loop by the time we get to clean it.
+        LLWatchdog::getInstance()->shutdown();
+    }
+
     LLViewerCamera::deleteSingleton();
 
     LL_INFOS() << "Viewer disconnected" << LL_ENDL;
@@ -2360,6 +2368,8 @@ bool LLAppViewer::cleanup()
     if (mPurgeCacheOnExit)
     {
         LL_INFOS() << "Purging all cache files on exit" << LL_ENDL;
+        // Cache writers may still be running; purge only after they finish
+        LLInventoryModel::waitForPendingCacheWrites();
         gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_CACHE,""), "*.*");
         // <FS:Ansariel> Sound cache
         gDirUtilp->deleteFilesInDir(gDirUtilp->getExpandedFilename(LL_PATH_FS_SOUND_CACHE, ""), "*.*");
@@ -2439,7 +2449,7 @@ bool LLAppViewer::cleanup()
     }
 
     LLSplashScreen::show();
-    LLSplashScreen::update(LLTrans::getString("ShuttingDown"));
+    LLSplashScreen::update(LLTrans::getString("ShutdownCleanup"));
 
     LL_INFOS() << "Cleaning up Keyboard & Joystick" << LL_ENDL;
 
@@ -2517,7 +2527,10 @@ bool LLAppViewer::cleanup()
     gSavedSettings.cleanup();
     LLUIColorTable::instance().clear();
 
-    LLWatchdog::getInstance()->cleanup();
+    if (LLWatchdog::instanceExists())
+    {
+        LLWatchdog::getInstance()->cleanup();
+    }
 
     LLViewerAssetStatsFF::cleanup();
 
@@ -2541,6 +2554,10 @@ bool LLAppViewer::cleanup()
     LL_INFOS() << "Cleaning up LLProxy." << LL_ENDL;
     SUBSYSTEM_CLEANUP(LLProxy);
     LLCore::LLHttp::cleanup();
+
+    LLSplashScreen::update(LLTrans::getString("CompressingInventoryCache"));
+    LLInventoryModel::waitForPendingCacheWrites();
+    LLSplashScreen::update(LLTrans::getString("ShuttingDown"));
 
     ll_close_fail_log();
 
