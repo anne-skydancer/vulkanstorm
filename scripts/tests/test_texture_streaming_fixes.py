@@ -9,6 +9,8 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
 - A texture's first fetch that ends without data marks the asset missing at once only for a 404 or a failure that
   is not the network's (a failed decode, a blacklisted asset, a local file), and for server bakes and map tiles,
   which keep their own rules; any other failure gets the same retries first.
+- The waiting requests are ordered by priorities read once under each worker's lock (the HTTP release and the
+  OpenSim UDP list), never by the live mImagePriority; the UDP list reads them after releasing the queue lock.
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -19,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(os.environ.get('VKSTORM_TEST_ROOT') or Path(__file__).resolve().parents[2])
 TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8', errors='replace')
+FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 
 
 def body(text, signature):
@@ -26,6 +29,11 @@ def body(text, signature):
     start = text.index(signature)
     end = text.index('\n}\n', start)
     return text[start:end]
+
+
+def code(text):
+    """`text` without its // comments."""
+    return re.sub(r'//[^\n]*', '', text)
 
 
 class FetchRetry(unittest.TestCase):
@@ -90,6 +98,37 @@ class FirstFetch(unittest.TestCase):
         self.assertLess(retry, missing)
         self.assertEqual(branch.count('setIsMissingAsset();'), 1)
         self.assertRegex(branch[retry:missing], r'\}\n\s*else\n\s*\{')
+
+
+class PrioritySnapshots(unittest.TestCase):
+    SNAPSHOT = re.compile(r'(\w+)->lockWorkMutex\(\);[^\n]*\n\s*const F32 priority = \1->mImagePriority;')
+
+    def test_no_ordering_reads_the_live_priority(self):
+        self.assertNotIn('struct Compare', FETCH)
+        self.assertNotIn('LLTextureFetchWorker::Compare', FETCH)
+        self.assertIn('typedef LLTextureFetchPolicy::PrioritySnapshot<LLTextureFetchWorker> PrioritySnapshot;', FETCH)
+
+    def test_http_release_sorts_snapshots(self):
+        release = body(FETCH, 'void LLTextureFetch::releaseHttpWaiters()')
+        self.assertIn('typedef std::vector<LLTextureFetchWorker::PrioritySnapshot> worker_list_t;', release)
+        self.assertEqual(len(self.SNAPSHOT.findall(release)), 1)
+        self.assertLess(self.SNAPSHOT.search(release).start(), release.index('std::partial_sort('))
+        self.assertIn('std::partial_sort(tids2.begin(), tids2.begin() + needed, tids2.end());', release)
+        self.assertEqual(code(release).count('mImagePriority'), 1)
+
+    def test_udp_list_snapshots_outside_the_queue_lock(self):
+        send = body(FETCH, 'void LLTextureFetch::sendRequestListToSimulators()')
+        self.assertIn('typedef std::set<LLTextureFetchWorker::PrioritySnapshot> request_list_t;', send)
+        queue_lock = send.index('LLMutexLock lock2(&mNetworkQueueMutex);')
+        queue_unlock = send.index('}                                                                   // -Mfnq', queue_lock)
+        snapshot = self.SNAPSHOT.search(send)
+        self.assertIsNotNone(snapshot)
+        self.assertLess(queue_unlock, snapshot.start(), 'the worker lock is taken under the queue lock (Mw < Mfnq)')
+        self.assertNotIn('mImagePriority', code(send[queue_lock:queue_unlock]))
+        # the request sent and the one remembered are the snapshot the list is ordered by
+        self.assertIn('addF32Fast(_PREHASH_DownloadPriority, iter2->mPriority);', send)
+        self.assertIn('req->mRequestedPriority = iter2->mPriority;', send)
+        self.assertEqual(code(send).count('mImagePriority'), 1)
 
 
 if __name__ == '__main__':
