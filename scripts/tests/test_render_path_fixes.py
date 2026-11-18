@@ -14,7 +14,9 @@
   is zeroed through LLVertexBuffer::zeroFill, which marks both whole buffers, so the zeros reach GL (a pooled buffer
   kept its previous owner's bytes there); if the dummy cannot be allocated either, the face gets no buffer and a
   warning once, instead of a write through a null copy. LLViewerJointMesh::drawShape draws nothing outside its face's
-  buffer (the joint meshes keep the full mesh's ranges), after the first pass's joint matrix upload.
+  buffer (the joint meshes keep the full mesh's ranges), after the first pass's joint matrix upload. The vertex-buffer
+  pool releases a buffer whose CPU copy could not be allocated instead of pooling it, so the next allocation of its
+  size class (the avatar's retry among them) does not fail with it once memory is back.
 - Impostors (owner decision Q1; b-28 F1/F2 = H28, X2 F3 = FG3c): generateImpostor sets sShadowRender for its other
   rules, but an impostor is a picture: LLFetchedGLTFMaterial::bind gives each item its full material (normal,
   roughness/metal, emissive, factors, transforms, its own cut-off; a blended item keeps its pool's impostor cut-off),
@@ -173,6 +175,17 @@ class AllocationFallbacks(unittest.TestCase):
         block = draw[guard:draw.index('return 0;', guard)]
         self.assertIn('if (first_pass && mMesh->hasWeights())', block)
         self.assertIn('uploadJointMatrices();', block)
+
+    def test_the_pool_does_not_keep_a_buffer_without_a_cpu_copy(self):
+        pool = VERTEXBUFFER[VERTEXBUFFER.index('class LLDefaultVBOPool'):]
+        start = pool.index('void free(GLenum type, U32 size, GLuint name, U8* data) override')
+        free = pool[start:pool.index('\n    }\n', start)]
+        self.assertNotIn('llassert(data != nullptr);', free)
+        release = free.index('if (!data)')
+        self.assertLess(free.index('mAllocated -= size;'), release)
+        self.assertLess(release, free.index('mReserved += size;'))
+        self.assertRegex(free[release:], r'^if \(!data\)\s*\{\s*if \(name\)\s*\{\s*delete_buffers\(1, &name\);\s*\}\s*'
+                                         r'return;\s*\}')
 
 
 class Impostors(unittest.TestCase):
