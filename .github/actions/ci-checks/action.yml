@@ -38,6 +38,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_scene_load_bounds.py
       shell: bash
+    - run: python3 scripts/tests/test_render_path_fixes.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
