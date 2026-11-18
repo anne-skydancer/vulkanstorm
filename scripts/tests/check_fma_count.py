@@ -48,8 +48,8 @@ DUMPBIN_LABEL = re.compile(r"^(\S.*):$")
 OBJDUMP_INSN = re.compile(r"^\s+[0-9a-f]+:\t(\S+)")
 OBJDUMP_LABEL = re.compile(r"^[0-9a-f]+ <(.*)>:$")
 
-# A disassembled viewer has tens of millions of instructions; far fewer means the output format changed and the scan
-# saw nothing, which must not pass as "no FMA".
+# A disassembled viewer has millions of instructions (8.9 M in the Windows CI executable); far fewer means the output
+# format changed and the scan saw nothing, which must not pass as "no FMA".
 MIN_INSTRUCTIONS = 100000
 
 
