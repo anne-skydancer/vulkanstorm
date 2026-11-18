@@ -3176,24 +3176,24 @@ void testCellSizing()
               tileBaseSize(1e30, 4.0, 0) == kMaxBase && tileBaseSize(1.0, 1e30, kCellGuard) <= kMaxBase,
           "bad input stays in [kMinBase, kMaxBase]");
 
-    // the bands: octaves of the camera position's distance, from 2 m; a band moves only a quarter octave past its bound
-    check(bandOf(0.f) == 0 && bandOf(1.99f) == 0 && bandOf(2.f) == 1 && bandOf(3.99f) == 1 && bandOf(4.f) == 2 && bandOf(63.f) == 5 && bandOf(64.f) == kMaxBand &&
+    // the bands: octaves of the camera position's distance, from 8 m; a band moves only half an octave past its bound
+    check(bandOf(0.f) == 0 && bandOf(7.99f) == 0 && bandOf(8.f) == 1 && bandOf(15.99f) == 1 && bandOf(16.f) == 2 && bandOf(63.f) == 3 && bandOf(64.f) == kMaxBand &&
               bandOf(1e9f) == kMaxBand,
           "the bands");
     check(bandOf(std::numeric_limits<float>::quiet_NaN()) == kMaxBand && bandOf(std::numeric_limits<float>::infinity()) == kMaxBand && bandOf(-3.f) == 0,
           "a bad distance: NaN and infinity are the farthest band, a negative one the nearest");
-    check(nextBand(1, 4.5f) == 1 && nextBand(1, 4.8f) == 2 && nextBand(2, 3.5f) == 2 && nextBand(2, 3.3f) == 1, "a band moves a quarter octave past its bound");
-    check(nextBand(kMaxBand, 1.f) == 0 && nextBand(0, 100.f) == kMaxBand, "a jump moves straight to the band");
+    check(nextBand(1, 22.f) == 1 && nextBand(1, 23.f) == 2 && nextBand(2, 11.5f) == 2 && nextBand(2, 11.f) == 1, "a band moves half an octave past its bound");
+    check(nextBand(kMaxBand, 1.f) == 0 && nextBand(0, 200.f) == kMaxBand, "a jump moves straight to the band");
     {
-        // a camera that stands at a bound and sways by +-10 % never changes the band
-        int b = nextBand(kMaxBand, 4.f), changes = 0;
+        // a camera that stands at a bound and sways by +-25 % never changes the band
+        int b = nextBand(kMaxBand, 16.f), changes = 0;
         for (int n = 0; n < 600; ++n)
         {
-            const int nb = nextBand(b, 4.f * (1.f + 0.1f * std::sin(float(n) * 0.3f)));
+            const int nb = nextBand(b, 16.f * (1.f + 0.25f * std::sin(float(n) * 0.3f)));
             changes += nb != b;
             b = nb;
         }
-        check(changes == 0, "swaying +-10 % at a bound changes no band", changes);
+        check(changes == 0, "swaying +-25 % at a bound changes no band", changes);
     }
 
     // the shift: farthest first, one octave per band per step of pressure
@@ -3230,7 +3230,7 @@ void testCellSizing()
         std::vector<ValveTile> tiles;
         for (int i = 0; i < 12; ++i)
         {
-            tiles.push_back({ 2048u, i < 4 ? 0 : (i < 8 ? 3 : kMaxBand), 0u }); // 12 x 2048^2 on 8192: demand 0.75
+            tiles.push_back({ 2048u, i < 4 ? 0 : (i < 8 ? 2 : kMaxBand), 0u }); // 12 x 2048^2 on 8192: demand 0.75
         }
         LevelController v;
         check(v.update(tiles, 8192, 1.f / 60.f, false) && v.level() > 0, "over the budget the pressure rises at once", v.level());

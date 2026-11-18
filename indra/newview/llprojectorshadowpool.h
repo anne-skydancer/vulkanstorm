@@ -199,17 +199,20 @@ inline double demand(const std::vector<uint32_t>& bases, int level, uint32_t atl
 // ---------------------------------------------------------------------------------------------
 //
 // While the lamps' tiles fit (demand at most kShrinkAbove), every tile has its lamp's size and nothing depends on the camera. Over the
-// budget the tiles shrink farthest first: each tile is in a distance band (octaves of the camera POSITION's distance to the tile's
-// volume: under 2 m, 2 to 4 m, 4 to 8 m, ... 64 m and beyond; never the view direction), and a pressure P shifts the tiles of band b
-// down by P - (kMaxBand - b) octaves (none below that, at most kMaxLevel, never below kMinTile). One step of P halves the farthest
-// shrinking band once more and starts the next nearer one, so a tile one band farther ends one octave coarser: its texel grows with
-// its distance, as the screen's does. P rises at once (as many steps as it takes to be at or below kShrinkAbove, one more when an
-// arriving tile found no room) and falls one step after kGrowHoldSeconds at or below kGrowAtMost: the hysteresis of the global level it
-// replaces, which is the special case of every tile in the farthest band. A band changes only a quarter octave past its bound
-// (kBandHysteresis), so a camera standing at a bound changes nothing. A size change is drawn by the tile's own render (draw-then-swap).
-constexpr int kMaxBand = 6;                    // 64 m and beyond (the reach is at most 128 m)
-constexpr float kBandNearM = 2.0f;             // band 0: within 2 m of the camera position; band b in 1 .. 5: [2^b, 2^(b+1)) m
-constexpr float kBandHysteresis = 1.18920712f; // 2^0.25
+// budget the tiles shrink farthest first: each tile is in a distance band (the camera POSITION's distance to the tile's volume, never the
+// view direction: under 8 m, 8 to 16 m, 16 to 32 m, 32 to 64 m, 64 m and beyond), and a pressure P shifts the tiles of band b down by
+// P - (kMaxBand - b) octaves (none below that, at most kMaxLevel, never below kMinTile). One step of P halves the farthest shrinking band
+// once more and starts the next nearer one, so a tile one band farther ends one octave coarser: its texel grows with its distance, as
+// the screen's does. The near band starts at 8 m, where a lamp's 4 mm texel is still about half a pixel of a 1440p, 60 degree view (0.8 mm
+// a metre): every tile nearer than that matters alike, so a room is one band and shrinks evenly, with no size changes as the camera walks
+// in it (measured, scripts/shadows/projector_sizing_model.py: bands from 2 m changed 7.9 tile sizes a second in the model room and 28 in
+// the club, from 8 m 0.23 and 7.6, with the same floor texel in the room and a finer one in the club). P rises at once (as many steps as
+// it takes to be at or below kShrinkAbove, one more when an arriving tile found no room) and falls one step after kGrowHoldSeconds at or
+// below kGrowAtMost: the hysteresis of the global level it replaces, which is the special case of every tile in the farthest band. A band
+// changes only half an octave past its bound (kBandHysteresis). A size change is drawn by the tile's own render (draw-then-swap).
+constexpr int kMaxBand = 4;                    // 64 m and beyond (the reach is at most 128 m)
+constexpr float kBandNearM = 8.0f;             // band 0: within 8 m of the camera position; band b in 1 .. 3: [8 * 2^(b-1), 8 * 2^b) m
+constexpr float kBandHysteresis = 1.41421356f; // 2^0.5
 constexpr int kMaxPressure = kMaxBand + kMaxLevel;
 
 // the band that holds a distance, without hysteresis (NaN, infinite or huge: the farthest)
