@@ -152,7 +152,8 @@ void Asset::uploadTransforms()
 
     std::vector<F32> glmp;
 
-    glmp.resize(node_count * 12);
+    // Vulkanstorm: upload the whole declared block (max_nodes * 48 bytes); the tail stays zero
+    glmp.resize((size_t)max_nodes * 12);
 
     F32* mp = glmp.data();
 
@@ -200,7 +201,8 @@ void Asset::uploadMaterials()
     U32 mat_count = (U32)mMaterials.size();
     mat_count = llmin(mat_count, max_materials);
 
-    md.resize(mat_count * 12);
+    // Vulkanstorm: upload the whole declared block (MAX_UBO_VEC4S vec4); the tail stays zero
+    md.resize(gGLManager.mMaxUniformBlockSize / sizeof(vec4));
 
     for (U32 i = 0; i < mat_count*12; i += 12)
     {
