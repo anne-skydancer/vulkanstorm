@@ -14,8 +14,9 @@ a lattice, per-texel noise, open areas) is put into
 
 at the atlas origin, an interior offset and the far corner, and every receiver's visibility is compared. The receivers cover the whole
 tile including its edges (the edge band is most of a small tile), with random depths, receiver-plane gradients and
-penumbra scales that make the search radius run from its 1 texel floor to its 12 texel cap (ST_SPOT_KERNEL_TEXELS_MAX; the cap
-sampleProjectorShadow derives in metres is fed as a per-axis uniform: 10 in the main cases, 1 .. 12 in the radius-cap cases).
+penumbra scales that make the search radius run from its 1.5 texel floor (ST_SPOT_KERNEL_MIN) to its cap (the lamp type's cap is an
+argument of the lookup, fed here as a per-axis uniform: 10 in the main cases, 1.5 .. 12 in the radius-cap cases; a projector passes
+ST_SPOT_KERNEL_TEXELS_MAX, 12, on both axes).
 
 Pass: (a) the tile in the atlas equals the same code run on the standalone map, max abs difference 0 (this is the atlas
 handling: gather corner, edge clamp, no read past the tile); (b) the tile lookup is within 2 ulp of the reference source
@@ -109,8 +110,8 @@ vec2 stSpotDisc(int k, int n)
 # the code under test carries its own stSpotDisc: take the reference's from there, not twice
 ref_src = (PREAMBLE + 'uniform sampler2D map;\nuniform sampler2D proj_shadow_atlas;\nuniform mat4 proj_shadow_matrix;\n'
            'uniform vec4 proj_shadow_tile;\nuniform float proj_shadow_kernel_max;\n' + HELPERS + reference + RECEIVER % REF_BODY)
-# the largest radius (texels, per axis) is an argument of the lookup: sampleProjectorShadow derives it in metres (ST_SPOT_RADIUS_MAX_M);
-# the test feeds it as a uniform
+# the largest radius (texels, per axis) is an argument of the lookup (the lamp type's cap: sampleProjectorShadow passes
+# ST_SPOT_KERNEL_TEXELS_MAX on both axes); the test feeds it as a uniform
 tile_src = PREAMBLE + 'uniform vec2 proj_shadow_kernel_max;\n' + under_test + RECEIVER % TILE_BODY
 
 glGenTextures = fn('glGenTextures', None, I, C.POINTER(U))
@@ -276,9 +277,9 @@ def main():
                 100 * partial / diff.size, 'PASS' if ok else 'FAIL'))
             glBindTexture(TEX, 0)
             fn('glDeleteTextures', None, I, C.POINTER(U))(1, C.byref(U(atlas_tex)))
-        # the radius cap sampleProjectorShadow derives in metres (clamp(0.04 m k N / w, 1, 12) texels per axis): any value in
-        # [1, 12], the axes different, atlas against standalone, with the same code
-        for km in ((5.0, 5.0), (1.0, 1.0), (12.0, 1.0), (2.5, 7.0)):
+        # the cap is the lamp type's (a projector passes 12 on both axes; a point-light face its own): any value in [1.5, 12] (never
+        # below the ST_SPOT_KERNEL_MIN floor), the axes different, atlas against standalone, with the same code
+        for km in ((5.0, 5.0), (1.5, 1.5), (12.0, 1.5), (2.5, 7.0)):
             run(tile_prog, opts.grid, out_tex, out_fb.value, [(0, 'proj_shadow_atlas', standalone)], n)
             glUniform4f(glGetUniformLocation(tile_prog, b'proj_shadow_tile'), 0.0, 0.0, float(n), 1.0 / n)
             glUniform2f(glGetUniformLocation(tile_prog, b'proj_shadow_kernel_max'), km[0], km[1])

@@ -14,7 +14,8 @@
 //   T7  scheduler: never-drawn first, then oldest first by frames (distance only breaks a tie), a fixed per-frame cap,
 //       every cheap tile every frame, staleness bounded by ceil(N / tiles per frame), avatar items never exceed A_max
 //   T8  the 8192 atlas tier: tier choice by VRAM, dedicated memory and GL_MAX_TEXTURE_SIZE, the buddy allocator, repack and level
-//       controller at 8192, and the P2b size rules (the radius cap and the emitter extent in the shader's and C++ side's twin)
+//       controller at 8192, and the L1 filter rules (the radius between the 1.5-texel floor and the 12-texel cap, the 4.5 cm
+//       emitter base times the softness, the point lights' prepared set: the C++ twins of the shader's numbers)
 //   P3  the change causes, the dirty list's bound, the change index against brute force, the mover rules, the LOD pin's books,
 //       the tile verdict, and a static scene that draws nothing
 //   T7Differential  the partial-sort selection against the full sort of the former one (about 18,000 comparisons)
@@ -213,20 +214,37 @@ namespace
         BuddyAtlas big(atlas);
         check(!big.alloc(16384, r), "T8 a tile larger than the atlas is refused");
 
-        // P2b: the radius cap in metres: 0.04 m * k * N / w texels, clamped to 1 .. 12, per axis (x and y not swapped)
-        check(std::fabs(radiusCapTexels(2.0f, 1024, 10.0f) - 8.192f) < 1e-4f, "T8 cap k 2, N 1024, w 10 m = 8.192 texels", radiusCapTexels(2.0f, 1024, 10.0f));
-        check(std::fabs(radiusCapTexels(0.5f, 1024, 10.0f) - 2.048f) < 1e-4f, "T8 cap k 0.5, N 1024, w 10 m = 2.048 texels", radiusCapTexels(0.5f, 1024, 10.0f));
-        check(radiusCapTexels(2.0f, 1024, 10.0f) > radiusCapTexels(0.5f, 1024, 10.0f), "T8 the wider axis (larger k) gets the larger cap");
-        check(radiusCapTexels(2.0f, 64, 100.0f) == 1.0f, "T8 a small far tile: at least one texel");
-        check(radiusCapTexels(2.0f, 2048, 1.0f) == 12.0f, "T8 a large near tile: at most 12 texels");
-        // a level step halves the texels per metre and so the cap, above the one texel floor
-        check(std::fabs(radiusCapTexels(1.0f, 512, 4.0f) * 2.0f - radiusCapTexels(1.0f, 1024, 4.0f)) < 1e-5f, "T8 a level step halves the cap", radiusCapTexels(1.0f, 512, 4.0f));
-        // the emitter's extent: a fixed 1 cm light times the softness (RenderShadowLightSize), whatever the prim
-        check(emitterExtent(1.0f) == 0.01f && emitterExtent(0.0f) == 0.0f, "T8 emitter extent is 1 cm at softness 1");
-        check(std::fabs(emitterExtent(kSoftnessDefault) - 0.0023f) < 1e-7f, "T8 emitter extent at the default softness 0.23 is 2.3 mm", emitterExtent(kSoftnessDefault));
-        check(std::fabs(emitterExtent(0.5f) - 0.005f) < 1e-8f, "T8 emitter extent scales with the softness");
-        check(emitterExtent(std::numeric_limits<float>::quiet_NaN()) == emitterExtent(kSoftnessDefault) && emitterExtent(std::numeric_limits<float>::infinity()) == emitterExtent(kSoftnessDefault)
-              && emitterExtent(-1.0f) == emitterExtent(kSoftnessDefault), "T8 a negative or non-finite softness gets the default");
+        // L1: the filter runs at the physical radius between the floor (1.5 texels) and the cap (12), per axis; no cap in metres, so
+        // a coarser tile (a level step) only changes how many texels the same physical radius is
+        check(kProjectorLamp.kernel_min == 1.5f && kProjectorLamp.kernel_max == 12.0f, "L1 projector filter: floor 1.5 texels, cap 12 (the shader's)");
+        check(filterRadiusTexels(kProjectorLamp, 0.2f) == 1.5f && filterRadiusTexels(kProjectorLamp, 0.0f) == 1.5f, "L1 a penumbra under 1.5 texels is filtered at the floor");
+        check(filterRadiusTexels(kProjectorLamp, 4.25f) == 4.25f, "L1 between floor and cap: the physical radius itself");
+        check(filterRadiusTexels(kProjectorLamp, 40.0f) == 12.0f, "L1 the cap: 12 texels");
+        check(filterRadiusTexels(kProjectorLamp, std::numeric_limits<float>::quiet_NaN()) == 1.5f &&
+                  filterRadiusTexels(kProjectorLamp, std::numeric_limits<float>::infinity()) == 12.0f && filterRadiusTexels(kProjectorLamp, -3.0f) == 1.5f,
+              "L1 bad radii stay in [floor, cap]");
+        {
+            // a level step halves the texels per metre: the same physical radius is half as many texels (no metric cap holds it)
+            const float c1 = 0.25f, k = 1.0f, depth = 0.05f, light = emitterExtent(kProjectorLamp, 1.0f); // 4.6 and 2.3 texels
+            const float r1024 = penumbraTexelsPerDepth(light, k, 1024, c1) * depth, r512 = penumbraTexelsPerDepth(light, k, 512, c1) * depth;
+            check(std::fabs(r1024 - 2.f * r512) < 1e-4f && filterRadiusTexels(kProjectorLamp, r1024) == r1024 && filterRadiusTexels(kProjectorLamp, r512) == r512,
+                  "L1 a level step halves the radius in texels, the radius in metres stays", r1024, r512);
+        }
+        // the emitter's extent: the projector lamp's 4.5 cm base times the softness (RenderShadowLightSize), whatever the prim
+        check(emitterExtent(kProjectorLamp, 1.0f) == 0.045f, "L1 emitter extent is 4.5 cm at softness 1 (the slider's top)");
+        check(emitterExtent(kProjectorLamp, 0.0f) == 0.0f, "L1 a softness of 0 is a zero-size emitter (hard shadows; the filter keeps its 1.5 texel floor)");
+        check(std::fabs(emitterExtent(kProjectorLamp, kSoftnessDefault) - 0.01035f) < 1e-7f, "L1 emitter extent at the default softness 0.23 is 1.035 cm",
+              emitterExtent(kProjectorLamp, kSoftnessDefault));
+        check(std::fabs(emitterExtent(kProjectorLamp, 0.5f) - 0.0225f) < 1e-8f, "L1 emitter extent scales with the softness");
+        check(emitterExtent(kProjectorLamp, std::numeric_limits<float>::quiet_NaN()) == emitterExtent(kProjectorLamp, kSoftnessDefault) &&
+                  emitterExtent(kProjectorLamp, std::numeric_limits<float>::infinity()) == emitterExtent(kProjectorLamp, kSoftnessDefault) &&
+                  emitterExtent(kProjectorLamp, -1.0f) == emitterExtent(kProjectorLamp, kSoftnessDefault),
+              "L1 a negative or non-finite softness gets the default");
+        // the point lights' set (stage L4): the same lamp base and floor, the cap its 16-texel face guard less the bilinear footprint
+        check(kPointLamp.emitter_m == kProjectorLamp.emitter_m && kPointLamp.kernel_min == kProjectorLamp.kernel_min && kPointLamp.kernel_max + 2.0f <= 16.0f &&
+                  kPointLamp.kernel_max >= kProjectorLamp.kernel_max,
+              "L1 point-light set: same base and floor, cap within a 16-texel guard");
+        check(float(kCellGuard) >= kProjectorLamp.kernel_max + 2.0f, "L1 a cell's guard covers the projector cap plus the bilinear footprint");
         // the penumbra scale per axis: (0.5 / c1) * light * k * N, the x axis from light.x and k.x
         check(std::fabs(penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f) - 204.8f) < 1e-3f, "T8 penumbra scale x", penumbraTexelsPerDepth(0.1f, 2.0f, 1024, 0.5f));
         check(std::fabs(penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f) - 10.24f) < 1e-3f, "T8 penumbra scale y (axes not swapped)", penumbraTexelsPerDepth(0.02f, 0.5f, 1024, 0.5f));

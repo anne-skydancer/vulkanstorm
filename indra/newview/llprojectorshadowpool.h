@@ -118,32 +118,49 @@ inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture, bool dedicated
 // the memory of the two atlases of one tier (D32F, 4 bytes a texel), in bytes
 constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull; }
 
-// The penumbra's size rules (P2b: the radius cap; the emitter is a fixed 1 cm light), the C++ twins of sampleProjectorShadow's (shadowStochasticUtil.glsl), per axis of the map
-// (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; w: the receiver's axial distance from the
-// projector's centre (m); n: the tile size (texels); c1: the depth term of the projector's matrix (z = c0 - c1 / w).
-constexpr float kRadiusMaxM = 0.04f;        // ST_SPOT_RADIUS_MAX_M: the largest radius of the search and filter, metres at the receiver
-constexpr float kKernelTexelsMin = 1.0f;    // ST_SPOT_KERNEL_MIN
-constexpr float kKernelTexelsMax = 12.0f;   // ST_SPOT_KERNEL_TEXELS_MAX
-constexpr float kEmitterM = 0.01f;          // metres: every lamp is a 1 cm light (SL's minimum prim size), whatever its prim
+// The lamps' soft-shadow filter (lamp shadows L1): one filter for every lamp type (shadowStochasticUtil.glsl, stSpotFilterTile), with
+// built-in limits per type. The emitter is a disc of `emitter_m` metres times the Shadow softness (RenderShadowLightSize) at the
+// light's projection centre, whatever the prim: no script or build parameter carries a light size, so the lamp's own parameters
+// (pose, cone, reach) shape its shadow and the base is a constant. The light-size study (2026-11-18) puts it at 4.5 cm, the largest
+// size whose avatar shadows keep every body feature of 2.5 cm or more readable (1.0 cm at the default softness 0.23, 4.5 cm at the
+// slider's top, short of the 6 cm blobs). The blocker search and the filter run at the physical penumbra's radius, at least
+// `kernel_min` texels (a narrower penumbra would draw the tile's texels as squares) and at most `kernel_max` (the fixed 8 + 32
+// gathers cover the disc up to there; a wide lamp's cell guard is built for it). No edge reconstruction and no cap in metres: a
+// coarser tile gives a softer edge, never a blockier one. These are the C++ twins of the shader's numbers, per axis of the map
+// (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; n: the tile size (texels); c1: the depth term
+// of the projector's matrix (z = c0 - c1 / w, w the axial distance from the projector's centre).
+struct LampFilter
+{
+    float emitter_m;  // metres: the emitter's base size, times the softness
+    float kernel_min; // texels: the floor of the search and filter radius
+    float kernel_max; // texels: the cap of the search and filter radius
+};
+// projectors: ST_SPOT_KERNEL_MIN 1.5 and ST_SPOT_KERNEL_TEXELS_MAX 12 (scripts/tests/test_projector_lamp_filter.py checks the shader's)
+constexpr LampFilter kProjectorLamp{ 0.045f, 1.5f, 12.0f };
+// point lights (stage L4, six faces with a guard of 16 texels: the cap is the guard less the bilinear footprint): prepared, not used
+// yet. The same base: the same physical lamp built either way casts the same shadow.
+constexpr LampFilter kPointLamp{ 0.045f, 1.5f, 14.0f };
 constexpr float kSoftnessDefault = LLShadowMethod::SOFTNESS_CENTRE; // RenderShadowLightSize's default (one constant: llshadowmethod.h)
 
-// clamp(ST_SPOT_RADIUS_MAX_M * k * N / w, 1, 12)
-inline float radiusCapTexels(float k, uint32_t n, float w)
+// the emitter's extent across the beam, in metres: the type's base times the softness (RenderShadowLightSize), the same on both
+// axes and for every lamp of the type. Zero is accepted and gives a point emitter (the filter keeps its floor); a negative or
+// non-finite softness gets the default
+inline float emitterExtent(const LampFilter& lamp, float softness)
 {
-    return std::min(std::max(kRadiusMaxM * k * (float)n / w, kKernelTexelsMin), kKernelTexelsMax);
-}
-
-// the emitter's extent across the beam, in metres: 1 cm times the softness (RenderShadowLightSize), the same on both axes and
-// for every lamp. A negative or non-finite softness gets the default
-inline float emitterExtent(float softness)
-{
-    return kEmitterM * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
+    return lamp.emitter_m * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
 }
 
 // texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N
 inline float penumbraTexelsPerDepth(float light, float k, uint32_t n, float c1)
 {
     return (0.5f / c1) * light * k * (float)n;
+}
+
+// the radius the search and the filter run at, from the physical one (texels): clamp(physical, kernel_min, kernel_max), as the
+// shader's clamp(pen * depth, vec2(ST_SPOT_KERNEL_MIN), kmax); a NaN reads as the floor
+inline float filterRadiusTexels(const LampFilter& lamp, float physical_texels)
+{
+    return std::isnan(physical_texels) ? lamp.kernel_min : std::min(std::max(physical_texels, lamp.kernel_min), lamp.kernel_max);
 }
 
 // N_i(s) = max(64, N_base >> s)
@@ -2104,7 +2121,7 @@ inline float coldItemMs(float cost_ema_ms)
 // the owner's machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
 
 constexpr uint32_t kCellGuard = 16;       // texels on each side of a cell's interior (wide lamps only)
-static_assert(kCellGuard >= uint32_t(kKernelTexelsMax) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
+static_assert(kCellGuard >= uint32_t(kProjectorLamp.kernel_max) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
 constexpr int      kMaxGrid = 4;          // cells per axis
 constexpr uint32_t kMaxCells = kMaxGrid * kMaxGrid;
 constexpr double   kTargetMinM = 0.003;   // metres: the floor texel the camera's near field is given (about 2.5 pixels at 1440p up close)
