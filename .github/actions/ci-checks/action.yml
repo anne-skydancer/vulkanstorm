@@ -114,11 +114,11 @@ runs:
         python3 scripts/tests/test_stochastic_layer_rank.py
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochasticlayerrank_test.cpp -o "$RUNNER_TEMP/stochastic-layer-rank-test"
         "$RUNNER_TEMP/stochastic-layer-rank-test"
-    - name: Check the texture streaming fixes (bounded retries of fetches that end without data, priority snapshots, pixel-area throttle)
+    - name: Check the texture streaming fixes (fetch retry rules, and the source guards of every texture streaming fix of 2026-11-18)
       shell: bash
       run: |
         python3 scripts/tests/test_texture_streaming_fixes.py
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
         "$RUNNER_TEMP/texture-fetch-policy-test"
     - name: Check that J2C textures with fewer resolutions than the first request's level decode (OpenJPEG reduce factor)
       shell: bash
