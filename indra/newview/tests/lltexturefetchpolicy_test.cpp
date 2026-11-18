@@ -8,6 +8,9 @@
 // while a retry waits (FetchRetry::mayRequest); processFetchResults retries a failed refinement after 1, 2
 // and 4 s and holds the texture at its level (mMinDiscardLevel) only when the third retry fails too; good
 // data and Refresh Textures (clearFetchedResults) start over.
+// A texture with no data yet whose fetch ends without data: a failure that may pass (an HTTP error other
+// than 404, a time-out, an empty reply, an abort) gets the same retries and marks the asset missing when they
+// are spent; a 404 or a failure that is not the network's marks it missing at once, as every failure did.
 
 #include "lltexturefetchpolicy.h"
 
@@ -139,6 +142,72 @@ namespace
         check(waiting.requests(50.f), "Refresh Textures ends a retry wait");
     }
 
+    // A texture with no data yet: processFetchResults marks it missing (setIsMissingAsset) at once for a 404
+    // or a failure that is not the network's, and otherwise when the retries are spent
+    struct FirstFetch
+    {
+        bool missing = false;   // mIsMissingAsset: updateFetch makes no request
+        FetchRetry retry;
+
+        bool requests(float now) const
+        {
+            return !missing && retry.mayRequest(now);
+        }
+
+        void failed(float now, bool missing_at_once)
+        {
+            if (missing_at_once || !retry.onFailure(now))
+            {
+                missing = true;
+            }
+        }
+    };
+
+    // Visits the texture every `step` seconds from `start` on (the round robin of updateImagesFetchTextures),
+    // fetching whenever a request is allowed, until it is missing or `end`. Each fetch fails. Returns the
+    // number of fetches made; `when` gets the time the asset was marked missing.
+    int failEveryFetch(FirstFetch& f, bool missing_at_once, float start, float step, float end, float& when)
+    {
+        int fetches = 0;
+        when = -1.f;
+        for (float now = start; now <= end && !f.missing; now += step)
+        {
+            if (f.requests(now))
+            {
+                ++fetches;
+                f.failed(now, missing_at_once);
+                if (f.missing)
+                {
+                    when = now;
+                }
+            }
+        }
+        return fetches;
+    }
+
+    void test_first_fetch()
+    {
+        // the owner's persistent 403s: the first fetch and three retries over about 7 s, then missing, never more
+        FirstFetch persistent;
+        float when = 0.f;
+        const int fetches = failEveryFetch(persistent, false, 0.f, 0.25f, 3600.f, when);
+        check(fetches == 4, "a failure that may pass gets the first fetch and three retries");
+        check(persistent.missing && when >= 7.f && when < 7.5f, "then the asset is missing, about 7 s after the first fetch");
+
+        // a 404, or the data did not decode (or cannot arrive): missing at the first failure, as before
+        FirstFetch not_found;
+        check(failEveryFetch(not_found, true, 0.f, 0.25f, 3600.f, when) == 1 && not_found.missing && when == 0.f,
+              "a 404 or a failure that is not the network's marks the asset missing at once");
+
+        // a transient failure (a 503, a time-out): the retry brings the data
+        FirstFetch transient;
+        transient.failed(0.f, false);
+        check(!transient.missing && !transient.requests(0.9f) && transient.requests(1.f),
+              "a transient failure is retried 1 s later instead of marking the asset missing");
+        transient.retry.reset(); // good data (processFetchResults)
+        check(transient.retry.mFailures == 0 && transient.requests(1.f), "good data after a retry starts over");
+    }
+
     void test_retry_delays()
     {
         FetchRetry retry;
@@ -160,6 +229,7 @@ int main()
     test_retry_delays();
     test_retries_then_holds();
     test_good_data_and_refresh_start_over();
+    test_first_fetch();
     if (failures == 0)
     {
         std::printf("lltexturefetchpolicy_test: all checks passed\n");
