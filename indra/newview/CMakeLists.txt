@@ -1650,6 +1650,7 @@ set(viewer_HEADER_FILES
     lltexturecachefast.h
     lltexturectrl.h
     lltexturefetch.h
+    lltexturefetchpolicy.h
     lltextureinfo.h
     lltextureinfodetails.h
     lltexturestats.h
