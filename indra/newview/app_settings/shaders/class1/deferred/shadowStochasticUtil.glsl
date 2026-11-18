@@ -390,11 +390,15 @@ float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec
     bool edge = any(lessThan(tc - r, vec2(1.0))) || any(greaterThan(tc + r, res - 2.0));
     float z_near = 0.0; // the blocker nearest the receiver: the largest map depth among the blocking texels
     float n_blk = 0.0;
-    for (int k = 0; k < ST_SPOT_SEARCH; ++k)
+    // the disc's gathers, then the receiver's own 2 x 2 texels (k == ST_SPOT_SEARCH): the disc starts a quarter of its radius out, up to
+    // 3 texels, so without it a blocker right over the receiver that is thinner than that (a lattice bar on a coarse tile) went unseen and
+    // the pixel read as lit, a hard step next to its filtered neighbours
+    for (int k = 0; k <= ST_SPOT_SEARCH; ++k)
     {
         vec4 ref;
         vec2 f;
-        vec4 z = stSpotQuadTile(tile, c.xy + stSpotDisc(k, ST_SPOT_SEARCH) * rs / res, c, g, z_bias, rp_max, edge, ref, f);
+        vec2 o = k < ST_SPOT_SEARCH ? stSpotDisc(k, ST_SPOT_SEARCH) * rs / res : vec2(0.0);
+        vec4 z = stSpotQuadTile(tile, c.xy + o, c, g, z_bias, rp_max, edge, ref, f);
         vec4 blk = vec4(lessThan(z, ref));
         n_blk += blk.x + blk.y + blk.z + blk.w;
         vec4 bz = blk * z;
@@ -404,7 +408,7 @@ float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec
     {
         return 1.0; // nothing between the receiver and the light
     }
-    if (n_blk == float(4 * ST_SPOT_SEARCH))
+    if (n_blk == float(4 * (ST_SPOT_SEARCH + 1)))
     {
         return 0.0; // the umbra: the filter's disc lies inside the search's
     }
