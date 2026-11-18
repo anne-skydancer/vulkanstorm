@@ -135,8 +135,8 @@ binaries.
 
 ### Rust core (`vkstorm-core-rust`, the `vkstorm-ffi` static library)
 
-Linked into the viewer on the `vkstorm-rust` line only (not on
-`vkstorm-devel`). Its crates are `GPL-3.0-or-later` (original code) or ports
+Linked into the viewer on the former `vkstorm-rust` line only (archived
+2026-11-18, tag `archive/vkstorm-rust/2026-11-18`; never on `vkstorm-devel`). Its crates are `GPL-3.0-or-later` (original code) or ports
 of Linden Lab code (LGPL-2.1, part of the GPL-3.0 whole); the vendored ports keep their own
 licences (`vkstorm-openjp2` BSD-2-Clause, the libogg/libvorbis part of
 `vkstorm-vorbis` BSD-3-Clause, the SoLoud part of `vkstorm-audio` Zlib). The
