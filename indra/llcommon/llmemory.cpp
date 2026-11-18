@@ -48,6 +48,7 @@
 #include "llframetimer.h"
 #include "lltrace.h"
 #include "llerror.h"
+#include "llheaplimit.h" // <Vulkanstorm>
 //----------------------------------------------------------------------------
 
 //static
@@ -157,7 +158,10 @@ void LLMemory::updateMemoryInfo()
 #endif
     sample(sAllocatedMem, sAllocatedMemInKB);
 
-    sAvailPhysicalMemInKB = llmin(sAvailPhysicalMemInKB, sMaxHeapSizeInKB - sAllocatedMemInKB);
+    // <Vulkanstorm> In 64 bits, and none left once the working set reaches the heap limit (llheaplimit.h): the U32
+    // difference wrapped to about 4 TB past the limit, and the memory read as the system's again
+    sAvailPhysicalMemInKB = U32Kilobytes(LLHeapLimit::availableKB(sAvailPhysicalMemInKB.value(), sMaxHeapSizeInKB.value(),
+                                                                  sAllocatedMemInKB.value()));
 
     return ;
 }
