@@ -5818,9 +5818,9 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         }
     }
 
-    // <Vulkanstorm> a face on the same triangles as an earlier face of its object is a draw of its
-    // own per rank (genDrawInfo assigns the rank; only the blended pass of a static object has one)
-    const U8 stochastic_rank = (type == LLRenderPass::PASS_ALPHA && !rigged) ? facep->getStochasticRank() : 0;
+    // <Vulkanstorm> the layer rank of a blended face, static or rigged (genDrawInfo assigns it; `type` is
+    // PASS_ALPHA for both, the rigged pass is passType): a batch breaks where the rank changes
+    const U8 stochastic_rank = (type == LLRenderPass::PASS_ALPHA) ? facep->getStochasticRank() : 0;
     // </Vulkanstorm>
 
     if (index < FACE_DO_NOT_BATCH_TEXTURES && idx >= 0)
@@ -6716,73 +6716,46 @@ struct CompareBatchBreakerRigged
     }
 };
 
-// <Vulkanstorm> stochastic transparency: the layer rank of each blended face of a static object (see
-// llstochasticlayerrank.h). The extents are the volume faces' own (object space, valid whatever
-// order the faces are processed in); the reference is the creator's order, the texture entry index.
-static void assign_stochastic_layer_ranks(LLFace** faces, U32 face_count)
+// <Vulkanstorm> stochastic transparency: the layer rank of each blended face, static or rigged (see
+// llstochasticlayerrank.h). rebuildGeom lists each drawable's faces one after another in face order
+// (add_face; a volume's face i is its texture entry i, LLDrawable::addFace, LLVOVolume::regenFaces), and
+// genDrawInfo ranks them before it sorts the list, so the faces of one object are a run of the list, in
+// the creator's order. The extents are the volume faces' own (object space; the faces of a rigged object
+// share its skin).
+static LLStochasticLayerRank::Box stochastic_face_box(const LLVolume& volume, S32 te)
 {
-    struct Entry
+    const float nan = std::numeric_limits<float>::quiet_NaN(); // no volume face: coincides with nothing
+    LLStochasticLayerRank::Box box = { { nan, nan, nan }, { nan, nan, nan } };
+    if (te >= 0 && te < volume.getNumVolumeFaces())
     {
-        const LLViewerObject* mObject;
-        U32 mTE;
-        LLFace* mFace;
-    };
-    std::vector<Entry> entries;
-    entries.reserve(face_count);
-    for (U32 k = 0; k < face_count; ++k)
-    {
-        LLFace* facep = faces[k];
-        const LLViewerObject* object = facep->getViewerObject();
-        if (object && object->getVolume() && !facep->isState(LLFace::RIGGED))
+        const LLVolumeFace& vf = volume.getVolumeFace(te);
+        if (vf.mExtents)
         {
-            entries.push_back({ object, (U32)facep->getTEOffset(), facep });
+            const F32* lo = vf.mExtents[0].getF32ptr();
+            const F32* hi = vf.mExtents[1].getF32ptr();
+            box = { { lo[0], lo[1], lo[2] }, { hi[0], hi[1], hi[2] } };
         }
     }
-    if (entries.size() < 2)
-    {
-        return;
-    }
-    std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b)
-    {
-        return std::less<const LLViewerObject*>()(a.mObject, b.mObject) ||
-               (a.mObject == b.mObject && a.mTE < b.mTE);
-    });
+    return box;
+}
 
-    std::vector<LLStochasticLayerRank::Box> boxes;
-    std::vector<U8> ranks;
-    for (size_t first = 0; first < entries.size();)
+static void assign_stochastic_layer_ranks(LLFace** faces, U32 face_count)
+{
+    for (U32 first = 0; first < face_count;)
     {
-        size_t last = first + 1;
-        while (last < entries.size() && entries[last].mObject == entries[first].mObject)
+        const LLViewerObject* object = faces[first]->getViewerObject();
+        U32 last = first + 1;
+        while (last < face_count && faces[last]->getViewerObject() == object)
         {
             ++last;
         }
-        if (last - first > 1)
+        const LLVolume* volume = object ? object->getVolume() : nullptr;
+        if (volume && last - first > 1)
         {
-            const LLVolume* volume = entries[first].mObject->getVolume();
-            const float nan = std::numeric_limits<float>::quiet_NaN(); // a face without a volume face: coincides with nothing
-            boxes.clear();
-            for (size_t e = first; e < last; ++e)
-            {
-                LLStochasticLayerRank::Box box = { { nan, nan, nan }, { nan, nan, nan } };
-                if (entries[e].mTE < (U32)volume->getNumVolumeFaces())
-                {
-                    const LLVolumeFace& vf = volume->getVolumeFace((S32)entries[e].mTE);
-                    if (vf.mExtents)
-                    {
-                        const F32* lo = vf.mExtents[0].getF32ptr();
-                        const F32* hi = vf.mExtents[1].getF32ptr();
-                        box = { { lo[0], lo[1], lo[2] }, { hi[0], hi[1], hi[2] } };
-                    }
-                }
-                boxes.push_back(box);
-            }
-            ranks.assign(last - first, 0);
-            LLStochasticLayerRank::assign(boxes.data(), boxes.size(), ranks.data());
-            for (size_t e = first; e < last; ++e)
-            {
-                entries[e].mFace->setStochasticRank(ranks[e - first]);
-            }
+            LLFace** run = faces + first;
+            LLStochasticLayerRank::assign(last - first,
+                [&](size_t i) { return stochastic_face_box(*volume, run[i]->getTEOffset()); },
+                [&](size_t i, U8 rank) { run[i]->setStochasticRank(rank); });
         }
         first = last;
     }
@@ -6795,13 +6768,14 @@ U32 LLVolumeGeometryManager::genDrawInfo(LLSpatialGroup* group, U32 mask, LLFace
 
     U32 geometryBytes = 0;
 
-    // <Vulkanstorm> the blended faces of a static, non-HUD object get their layer rank (the others
-    // none; a rank left from an earlier rebuild is cleared)
+    // <Vulkanstorm> the blended faces (the distance-sorted list, static and rigged) of a non-HUD object
+    // get their layer rank, before the sort; the others none (a rank left from an earlier rebuild is
+    // cleared). HUDs never take the stochastic passes (LLDrawPoolAlpha::renderPostDeferred).
     for (U32 k = 0; k < face_count; ++k)
     {
         faces[k]->setStochasticRank(0);
     }
-    if (distance_sort && !rigged && !group->isHUDGroup() && face_count > 1)
+    if (distance_sort && !group->isHUDGroup() && face_count > 1)
     {
         assign_stochastic_layer_ranks(faces, face_count);
     }
