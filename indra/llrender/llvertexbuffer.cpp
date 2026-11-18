@@ -1475,6 +1475,38 @@ U8* LLVertexBuffer::mapIndexBuffer(U32 index, S32 count)
     return mMappedIndexData + sizeof(U16)*index;
 }
 
+// <Vulkanstorm> One region per buffer, as mapVertexBuffer and mapIndexBuffer record them. On Apple's GL in a macOS or
+// ARM64 build, _unmapBuffer uploads a mapped buffer's whole CPU copy and reads no region; every other build reads the
+// regions, whatever the GL vendor.
+void LLVertexBuffer::zeroFill()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_VERTEX;
+    _mapBuffer();
+
+    if (mMappedData && mSize > 0)
+    {
+        memset(mMappedData, 0, mSize);
+#if LL_DARWIN || LL_ARM64
+        if (!gGLManager.mIsApple)
+#endif
+        {
+            mMappedVertexRegions.assign(1, MappedRegion{ 0, mSize - 1 });
+        }
+    }
+
+    if (mMappedIndexData && mIndicesSize > 0)
+    {
+        memset(mMappedIndexData, 0, mIndicesSize);
+#if LL_DARWIN || LL_ARM64
+        if (!gGLManager.mIsApple)
+#endif
+        {
+            mMappedIndexRegions.assign(1, MappedRegion{ 0, mIndicesSize - 1 });
+        }
+    }
+}
+// </Vulkanstorm>
+
 // flush the given byte range
 //  target -- "target" parameter for glBufferSubData
 //  start -- first byte to copy

@@ -10,6 +10,11 @@
   with data(), which is valid when empty, instead of &v[0]; LLMeshSkinInfo::updateHash takes no element of an empty
   inverse-bind list and converts no out-of-range float to an integer (upstream 8a55a86b81). Outputs and hashes of
   well-formed skins are unchanged.
+- H3 (b-6 F9): when a vertex buffer cannot be allocated, the 1-vertex, 3-index dummy of an avatar mesh face or a tree
+  is zeroed through LLVertexBuffer::zeroFill, which marks both whole buffers, so the zeros reach GL (a pooled buffer
+  kept its previous owner's bytes there); if the dummy cannot be allocated either, the face gets no buffer and a
+  warning once, instead of a write through a null copy. LLViewerJointMesh::drawShape draws nothing outside its face's
+  buffer (the joint meshes keep the full mesh's ranges), after the first pass's joint matrix upload.
 
     python3 scripts/tests/test_render_path_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_render_path_fixes.py   (another source tree)"""
@@ -44,6 +49,10 @@ VOVOLUME = code(read('indra/newview/llvovolume.cpp'))
 MODEL = code(read('indra/llprimitive/llmodel.cpp'))
 VOAVATAR = code(read('indra/newview/llvoavatar.cpp'))
 SKINNING = code(read('indra/newview/llskinningutil.cpp'))
+VERTEXBUFFER_H = code(read('indra/llrender/llvertexbuffer.h'))
+VERTEXBUFFER = code(read('indra/llrender/llvertexbuffer.cpp'))
+VOTREE = code(read('indra/newview/llvotree.cpp'))
+JOINTMESH = code(read('indra/newview/llviewerjointmesh.cpp'))
 
 
 class TextureMatrixOwnership(unittest.TestCase):
@@ -97,6 +106,52 @@ class SkinPalettes(unittest.TestCase):
         init = body(SKINNING, 'void LLSkinningUtil::initSkinningMatrixPalette(')
         self.assertIn('const LLMatrix4a* invBind = skin->mInvBindMatrix.data();', init)
         self.assertNotIn('mInvBindMatrix[', init)
+
+
+class AllocationFallbacks(unittest.TestCase):
+    def test_zero_fill_marks_both_whole_buffers(self):
+        self.assertRegex(VERTEXBUFFER_H, r'void\s+zeroFill\(\);')
+        fill = body(VERTEXBUFFER, 'void LLVertexBuffer::zeroFill()')
+        self.assertLess(fill.index('_mapBuffer();'), fill.index('memset('))
+        self.assertIn('memset(mMappedData, 0, mSize);', fill)
+        self.assertIn('mMappedVertexRegions.assign(1, MappedRegion{ 0, mSize - 1 });', fill)
+        self.assertIn('memset(mMappedIndexData, 0, mIndicesSize);', fill)
+        self.assertIn('mMappedIndexRegions.assign(1, MappedRegion{ 0, mIndicesSize - 1 });', fill)
+        # the regions are left out for Apple's GL under the same build condition as mapVertexBuffer's
+        apple_builds = '#if LL_DARWIN || LL_ARM64'
+        mapped = body(VERTEXBUFFER, 'U8* LLVertexBuffer::mapVertexBuffer(')
+        self.assertEqual(fill.count(apple_builds), 2 * mapped.count(apple_builds))
+
+    def test_no_fallback_zeroes_the_cpu_copy_alone(self):
+        for name, text in (('llvoavatar.cpp', VOAVATAR), ('llvotree.cpp', VOTREE)):
+            self.assertNotIn('getMappedData()', text, name)
+            self.assertNotIn('getMappedIndices()', text, name)
+
+    def test_the_avatar_dummy_is_checked_and_uploaded(self):
+        update = body(VOAVATAR, 'void LLVOAvatar::updateMeshData()')
+        self.assertIn('LLPointer<LLVertexBuffer> buff = facep->getVertexBuffer();', update)
+        self.assertIn('attach = buff->allocateBuffer(1, 3);', update)
+        self.assertIn('if (buff->allocateBuffer(1, 3))', update)
+        self.assertEqual(update.count('buff->zeroFill();'), 2)
+        self.assertIn('facep->setVertexBuffer(attach ? buff.get() : nullptr);', update)
+        self.assertEqual(update.count('LL_WARNS_ONCE("Avatar")'), 3)
+        self.assertEqual(len(re.findall(r'\bLL_WARNS\(', update)), 1)  # the "Substituting" branch, which no face reaches
+
+    def test_the_tree_dummy_is_checked_and_uploaded(self):
+        mesh = body(VOTREE, 'void LLVOTree::updateMesh()')
+        self.assertIn('LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK);', mesh)
+        start = mesh.index('if (!buff->allocateBuffer(vert_count, index_count))')
+        fallback = mesh[start:mesh.index('return;', start)]
+        self.assertRegex(fallback, r'if \(buff->allocateBuffer\(1, 3\)\)\s*\{\s*buff->zeroFill\(\);\s*'
+                                   r'facep->setVertexBuffer\(buff\);\s*\}\s*else\s*\{[^}]*facep->setVertexBuffer\(nullptr\);')
+
+    def test_joint_meshes_draw_only_inside_their_buffer(self):
+        draw = body(JOINTMESH, 'U32 LLViewerJointMesh::drawShape(')
+        guard = draw.index('if (end >= buff->getNumVerts() || offset + count > buff->getNumIndices())')
+        self.assertLess(guard, draw.index('buff->setBuffer();'))
+        block = draw[guard:draw.index('return 0;', guard)]
+        self.assertIn('if (first_pass && mMesh->hasWeights())', block)
+        self.assertIn('uploadJointMatrices();', block)
 
 
 if __name__ == '__main__':
