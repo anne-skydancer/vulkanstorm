@@ -649,6 +649,25 @@ const LLUUID LLVOAvatar::sStepSounds[LL_MCODE_END] =
 
 uuid_list_t LLVOAvatar::sEarlyAppearanceList;
 
+// <Vulkanstorm>
+void LLVOAvatar::registerEarlyAppearance(const LLUUID& av_id)
+{
+    constexpr size_t MAX_EARLY_APPEARANCES = 4096;
+    if (sEarlyAppearanceList.size() >= MAX_EARLY_APPEARANCES)
+    {
+        static bool warned = false;
+        if (!warned)
+        {
+            warned = true;
+            LL_WARNS("Avatar") << "Early appearance list full (" << MAX_EARLY_APPEARANCES
+                               << "), ignoring further entries" << LL_ENDL;
+        }
+        return;
+    }
+    sEarlyAppearanceList.emplace(av_id);
+}
+// </Vulkanstorm>
+
 S32 LLVOAvatar::sRenderName = RENDER_NAME_ALWAYS;
 S32 LLVOAvatar::sRenderGroupTitles = RENDER_GROUP_TITLE_ALWAYS;
 S32 LLVOAvatar::sNumVisibleChatBubbles = 0;

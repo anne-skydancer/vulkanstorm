@@ -343,6 +343,8 @@ class LLMessageSystem : public LLMessageSenderInterface
  protected:
     LLPacketRing        mHighPriorityInbound;
     LLPacketRing        mLowPriorityInbound;
+    // <Vulkanstorm> high priority packets popped since the last low priority one
+    S32                 mHighPopsSinceLow = 0;
 
  public:
     LLReliablePacketParams      mReliablePacketParams;
