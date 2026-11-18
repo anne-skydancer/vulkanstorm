@@ -407,6 +407,9 @@ protected:
 
     void setSizeInternal(void);
 
+    // Vulkanstorm: true while a worker thread is uploading from the shared memory (main thread only)
+    bool        mSharedMemoryInUse = false;
+
     bool        mTextureParamsReceived;     // the mRequestedTexture* fields are only valid when this is true
     S32         mRequestedTextureDepth;
     U32         mRequestedTextureInternalFormat;
@@ -532,6 +535,9 @@ protected:
     F64             mLoadedDuration;
 
 public:
+    // Vulkanstorm: set (main thread) while a worker thread is uploading from the shared memory
+    void setSharedMemoryInUse(bool in_use) { mSharedMemoryInUse = in_use; }
+
     // <FS:ND> Enable gstreamer plugin to report title/artist of current stream
     std::string const& getArtist() const
     { return mArtist; }
