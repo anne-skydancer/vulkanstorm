@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "message.h"
+#include "llmessagepriority.h" // <Vulkanstorm>
 
 // system library includes
 #if !LL_WINDOWS
@@ -880,41 +881,22 @@ bool LLMessageSystem::computeDrop()
 
 bool LLMessageSystem::isHighPriorityMessage(const LLPacketBuffer& pkt) const
 {
-    S32 size = pkt.getSize();
-
-    // avoid stepping out of bounds
-    const S32 MIN_VALID_PACKET_SIZE = LL_PACKET_ID_SIZE + 4;
-    if (size < MIN_VALID_PACKET_SIZE)
-    {
-        return false;
-    }
-
     // We want to prioritize crucial messages used to establish viewer <--> simulator connection,
     // which are all low-frequency. A simple approximation is to just prioritize all non high-
     // frequency messages.
     //
-    // High frequency messages use a single byte for message_id whereas medium- and low-
-    // frequency messages have 255 at the first byte (which is after the LL_PACKET_ID_SIZE
-    // bytes of packet_id).
-    const U8* header = (const U8*)pkt.getData() + LL_PACKET_ID_SIZE;
-    if (header[0] != 255)
-    {
-        // high-frequency message
-        return false;
-    }
-
     // BUG: The low-frequency AvatarAppearance message will be ignored if its agent is unknown
     // and the agent is created upon receipt of its first high-frequency ObjectUpdate message.
     // This race condition will be exacerbated by our default prioritization strategy.
     //
     // WORKAROUND: All middle- and low-frequency messages are high-priority except AvatarAppearance
     //
-    // AvatarAppearance is "Low 158" which means it is stored in four bytes: 0xff 0xff 0x00 0x9E
-    // the last two bytes represent 158 in a BigEndian U16
     // <Vulkanstorm> fix of LL #6017: the upstream test (header[1] != 255 && header[2] != 0 &&
     // header[3] != 158) made every low-frequency message with a non-zero high or low id byte
-    // low priority, and so deferred nearly all low-frequency messages, not just AvatarAppearance.
-    return !(header[1] == 255 && header[2] == 0 && header[3] == 158);
+    // low priority, and the first fix could not match a zero-coded AvatarAppearance (it is
+    // Zerocoded in message_template.msg), which arrives as FF FF 00 01 9E. The classification
+    // lives in llmessagepriority.h, with its own test.
+    return LLMessagePriority::isHighPriority((const U8*)pkt.getData(), pkt.getSize());
     // </Vulkanstorm>
 }
 
