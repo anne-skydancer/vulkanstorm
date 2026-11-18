@@ -5,7 +5,7 @@
 
 Changes flow one way: a feature or PR branch is merged into its base line
 (vkstorm-*) through its PR. Merging a base line into a feature branch
-("Merge vkstorm-rust into codex/...", GitHub's "Update branch") is not used in
+("Merge vkstorm-vulkan into codex/...", GitHub's "Update branch") is not used in
 this repository (AGENTS.md). To bring base changes into a branch, rebase it
 onto the base (preferred), or cherry-pick the base commits, or land the
 branch and follow up.
