@@ -51,6 +51,9 @@
 #include "llfloaterimcontainer.h"
 #include "llimprocessing.h"
 #include "llwindow.h"
+#if VKS_GPU_RESET_TEST
+#include "llgpuresettest.h" // <Vulkanstorm/> development builds only (doc/gl/gpu_reset.md)
+#endif
 #include "llviewerstats.h"
 #include "llviewerstatsrecorder.h"
 #include "llkeyconflict.h" // for legacy keybinding support, remove later
@@ -5284,6 +5287,9 @@ void LLAppViewer::abortQuit()
 // <Vulkanstorm> GPU reset (doc/gl/gpu_reset.md)
 void LLAppViewer::checkGPUReset()
 {
+#if VKS_GPU_RESET_TEST
+    LLGPUResetTest::update(); // development builds only: the RenderGPUResetTest hook
+#endif
     if (!mGPUResetHandled && gGLManager.pollGraphicsReset() != LLGLReset::Kind::NoReset)
     {
         mGPUResetHandled = true;

@@ -944,6 +944,10 @@ list(APPEND viewer_SOURCE_FILES ${viewer_GLTF_SOURCE_FILES})
 if (VKS_GL_STATS)
   list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp llprojectorshadowstatsapi.cpp)
 endif()
+# development only (the forced GPU reset test hook, doc/gl/gpu_reset.md): no empty object file when the option is off
+if (VKS_GPU_RESET_TEST)
+  list(APPEND viewer_SOURCE_FILES llgpuresettest.cpp)
+endif()
 # </FS:Ansariel> Group GLTF files into their subfolders
 
 # development only: the in-world readout of the directional shadows' dark gate; stripped by hand from a release

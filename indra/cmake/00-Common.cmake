@@ -45,6 +45,12 @@ option(VKS_FRAMEJOBS_GUARDS "LL::FrameJobs job-body guards (development builds o
 if (VKS_FRAMEJOBS_GUARDS)
   add_compile_definitions(VKS_FRAMEJOBS_GUARDS=1)
 endif()
+# Development only (never on in CI or release): the forced GPU reset test hook, the RenderGPUResetTest debug setting
+# (a long draw that makes the driver reset the GPU, or a simulated reset). See doc/gl/gpu_reset.md.
+option(VKS_GPU_RESET_TEST "Forced GPU reset test hook (development builds only)" OFF)
+if (VKS_GPU_RESET_TEST)
+  add_compile_definitions(VKS_GPU_RESET_TEST=1)
+endif()
 # Because older versions of Boost.Bind dumped placeholders _1, _2 et al. into
 # the global namespace, Boost now requires either BOOST_BIND_NO_PLACEHOLDERS
 # to avoid that or BOOST_BIND_GLOBAL_PLACEHOLDERS to state that we require it
