@@ -33,6 +33,7 @@
 #include "llshadowmethod.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -41,6 +42,10 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
+
+#ifndef llassert // the viewer's macro; the standalone test has none
+#define llassert(x) assert(x)
+#endif
 
 namespace llprojectorpool
 {
@@ -69,6 +74,7 @@ inline uint32_t pow2Round(double v)
     return uint32_t(1) << uint32_t(l);
 }
 
+// Test-only: the pool sizes a wide lamp's cells by the camera position (cell sizing, below) and does not call this.
 // d_ref  = min(1.5 * radius, 4 m)
 // N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
 inline uint32_t baseSize(float radius, float fov_radians)
@@ -574,12 +580,10 @@ namespace detail
     }
 }
 
-// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
-// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
-// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
-// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
-inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
-                           float tan_x, float tan_y, float near_d, float far_d)
+// The general (off-axis) pyramid of a projector's frustum: x0 .. x1 and y0 .. y1 are the tangents of the side planes across the
+// right and up axes (a cell of a wide lamp's image plane, see the cell rules below); otherwise as makePyramid.
+inline Pyramid makeFrustumPyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
+                                  float x0, float x1, float y0, float y1, float near_d, float far_d)
 {
     Pyramid py;
     float c[8][3];
@@ -591,8 +595,8 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         {
             for (int xi = 0; xi < 2; ++xi)
             {
-                const float x = (xi ? 1.f : -1.f) * tan_x * z;
-                const float y = (yi ? 1.f : -1.f) * tan_y * z;
+                const float x = (xi ? x1 : x0) * z;
+                const float y = (yi ? y1 : y0) * z;
                 for (int i = 0; i < 3; ++i)
                 {
                     c[k][i] = origin[i] + fwd[i] * z + right[i] * x + up[i] * y;
@@ -602,10 +606,11 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         }
     }
     // corner index = zi * 4 + yi * 2 + xi
-    float inside[3];
+    float inside[3]; // the middle of the cell at half depth (for a symmetric pyramid: on the axis)
+    const float zm = 0.5f * (near_d + far_d);
     for (int i = 0; i < 3; ++i)
     {
-        inside[i] = origin[i] + fwd[i] * 0.5f * (near_d + far_d);
+        inside[i] = origin[i] + fwd[i] * zm + right[i] * 0.5f * (x0 + x1) * zm + up[i] * 0.5f * (y0 + y1) * zm;
     }
     using namespace detail;
     py.planes[0] = through(c[4], c[0 + 4 + 2], c[0], inside);          // x = -1 side
@@ -627,6 +632,16 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         }
     }
     return py;
+}
+
+// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
+// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
+// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
+// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
+inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
+                           float tan_x, float tan_y, float near_d, float far_d)
+{
+    return makeFrustumPyramid(origin, fwd, right, up, -tan_x, tan_x, -tan_y, tan_y, near_d, far_d);
 }
 
 // the square pyramid of a full angle `fov` (radians)
@@ -974,6 +989,59 @@ private:
     bool mUseUnion = false;
 };
 
+// The avatar boxes that can touch one lamp's tiles: those that overlap the union of the tiles' bounds, in their order. intersects()
+// starts with the bounds test, so a box outside the union meets no tile of the lamp and the pairing loop can skip it; the loop's
+// result is the same, over fewer boxes. A non-finite bound (which overlaps() never rejects) turns the filter off, so every box still
+// gets the full test (the guard of ChangeIndex::mUseUnion).
+class BoxFilter
+{
+public:
+    void add(const Aabb& bounds)
+    {
+        if (!mUse)
+        {
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            if (!std::isfinite(bounds.lo[k]) || !std::isfinite(bounds.hi[k]))
+            {
+                mUse = false;
+                return;
+            }
+        }
+        if (!mAny)
+        {
+            mUnion = bounds;
+            mAny = true;
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            mUnion.lo[k] = std::min(mUnion.lo[k], bounds.lo[k]);
+            mUnion.hi[k] = std::max(mUnion.hi[k], bounds.hi[k]);
+        }
+    }
+
+    void select(const std::vector<Aabb>& boxes, std::vector<Aabb>& out) const
+    {
+        out.clear();
+        const bool use = mUse && mAny;
+        for (const Aabb& b : boxes)
+        {
+            if (!use || overlaps(mUnion, b))
+            {
+                out.push_back(b);
+            }
+        }
+    }
+
+private:
+    Aabb mUnion;
+    bool mAny = false;
+    bool mUse = true;
+};
+
 // ---------------------------------------------------------------------------------------------
 // The mover classifier and the rules built on it (section 4.4, D9). The viewer reads its objects and fills these structs.
 // ---------------------------------------------------------------------------------------------
@@ -1304,8 +1372,15 @@ struct StaticItem
 // any is pending (progress), even when its predicted cost alone exceeds the cap.
 // `a_left` is what the dynamic picks left of A_max: a static item whose avatar draws do not fit waits (the order is kept), except the
 // first one, which runs for progress (selectFrame makes room for it).
-inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
-                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+// The same selection as indices into `items` (the order of service); selectStatic maps them to keys. Only the items that can be
+// picked are ordered: every pick adds itemCost >= kDefaultItemMs to the spent time, so at most floor(t_s_ms / kDefaultItemMs) + 1 fit
+// the cap and the rest of the (possibly thousands of) pending items needs no order; K = floor(t_s_ms / kDefaultItemMs) + 2 are
+// ordered (all of them for a cap that is not a finite, non-negative number). Preconditions: the keys are unique within `items` (the
+// key breaks every tie, so the order is strict and total and a partial sort gives the same prefix as a full sort), and every cost is
+// floored at kDefaultItemMs (itemCost floors them all, NaN and inf included). The walk below therefore never passes the ordered
+// prefix: the float rounding of at most about 22 additions is far below the 0.05 ms slack of the extra item.
+inline std::vector<size_t> selectStaticIdx(const std::vector<StaticItem>& items, float t_s_ms,
+                                           uint32_t a_left = std::numeric_limits<uint32_t>::max())
 {
     std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
@@ -1326,25 +1401,69 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
     auto byAgeThenDist = [&byDist](const StaticItem* a, const StaticItem* b) {
         return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : byDist(a, b);
     };
-    std::sort(never.begin(), never.end(), byDist);
-    std::sort(rest.begin(), rest.end(), byAgeThenDist);
-
-    std::vector<uint32_t> out;
+    // how many picks at most: all of them for a cap that is not a finite, non-negative number
+    const size_t n = never.size() + rest.size();
+    size_t k = n;
+    if (std::isfinite(t_s_ms) && t_s_ms >= 0.f)
+    {
+        const double fit = std::floor(double(t_s_ms) / double(kDefaultItemMs)) + 2.0;
+        if (fit < double(n))
+        {
+            k = size_t(fit);
+        }
+    }
+    const StaticItem* const first = items.empty() ? nullptr : items.data();
+    const size_t kn = std::min(never.size(), k);
+    const size_t kr = std::min(rest.size(), k - kn);
+    if (kn == never.size())
+    {
+        std::sort(never.begin(), never.end(), byDist);
+    }
+    else if (kn > 0)
+    {
+        std::partial_sort(never.begin(), never.begin() + std::ptrdiff_t(kn), never.end(), byDist);
+    }
+    if (kr == rest.size())
+    {
+        std::sort(rest.begin(), rest.end(), byAgeThenDist);
+    }
+    else if (kr > 0)
+    {
+        std::partial_sort(rest.begin(), rest.begin() + std::ptrdiff_t(kr), rest.end(), byAgeThenDist);
+    }
+    std::vector<size_t> out;
     float spent = 0.f;
     uint32_t avatars = 0;
-    for (const auto* list : { &never, &rest })
+    for (int l = 0; l < 2; ++l)
     {
-        for (const StaticItem* it : *list)
+        const std::vector<const StaticItem*>& list = l == 0 ? never : rest;
+        for (size_t i = 0; i < list.size(); ++i)
         {
+            llassert(i < (l == 0 ? kn : kr)); // the walk never passes the ordered prefix (proof above)
+            const StaticItem* it = list[i];
             const float cost = itemCost(it->last_cpu_ms);
             if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
             {
                 return out; // over the cap or A_max: the order is kept, the rest waits
             }
-            out.push_back(it->key);
+            out.push_back(size_t(it - first));
             spent += cost;
             avatars += it->avatar_draws;
         }
+    }
+    return out;
+}
+
+// The keys of selectStaticIdx's picks, in the same order.
+inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+{
+    const std::vector<size_t> idx = selectStaticIdx(items, t_s_ms, a_left);
+    std::vector<uint32_t> out;
+    out.reserve(idx.size());
+    for (size_t i : idx)
+    {
+        out.push_back(items[i].key);
     }
     return out;
 }
@@ -1639,7 +1758,7 @@ inline float dynamicShareMs(bool statics_pending, float left_ms)
 }
 
 // Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
-// functions, and a pick is unpacked afterwards. Keys stay below 2^28 (a pool's counter of records).
+// functions, and a pick is unpacked afterwards. Keys stay below 2^28: a projector record key is lamp << 4 | cell, so the lamp counter stays below 2^24.
 constexpr uint32_t kPoolKeyBits = 28;
 inline uint32_t packKey(uint32_t pool, uint32_t key) { return (pool << kPoolKeyBits) | (key & ((1u << kPoolKeyBits) - 1u)); }
 inline uint32_t unpackPool(uint32_t packed) { return packed >> kPoolKeyBits; }
@@ -1665,8 +1784,8 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
                               uint32_t a_max, bool progress_ok)
 {
     FramePicks out;
-    std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
-    std::map<uint32_t, uint32_t> dyn_draws, st_draws;
+    std::map<uint32_t, float> dyn_cost; // the dynamic list's key space
+    std::map<uint32_t, uint32_t> dyn_draws;
     std::vector<DynamicItem> d = dynamics;
     for (DynamicItem& it : d)
     {
@@ -1679,8 +1798,6 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     {
         it.key = packKey(it.pool, it.key);
         it.avatar_draws = std::min(it.avatar_draws, a_max);
-        st_cost[it.key] = itemCost(it.last_cpu_ms);
-        st_draws[it.key] = it.avatar_draws;
     }
     // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
     constexpr float kEps = 1e-4f;
@@ -1736,11 +1853,12 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     }
     // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
     // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
+    // the head: the first static candidate (the same whatever the cap), an index into st
+    const std::vector<size_t> head = st.empty() ? std::vector<size_t>() : selectStaticIdx(st, 0.f);
     if (!st.empty())
     {
-        const std::vector<uint32_t> head = selectStatic(st, 0.f);
-        const float head_ms = head.empty() ? 0.f : st_cost[head[0]];
-        const uint32_t head_draws = head.empty() ? 0u : st_draws[head[0]];
+        const float head_ms = head.empty() ? 0.f : itemCost(st[head[0]].last_cpu_ms);
+        const uint32_t head_draws = head.empty() ? 0u : st[head[0]].avatar_draws;
         if (head_ms <= cap_ms + kEps)
         {
             while (head_ms > left + kEps && !out.dynamic.empty())
@@ -1763,24 +1881,21 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
         else if (progress_ok && !head.empty())
         {
             // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
-            for (const StaticItem& it : st)
+            const StaticItem& h = st[head[0]];
+            if (h.never_drawn || h.age_frames >= kDynamicDeadlineFrames)
             {
-                if (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames))
+                // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
+                // of that one item, so neither guarantee starves the other)
+                while (dropLastOther(out.dynamic))
                 {
-                    // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
-                    // of that one item, so neither guarantee starves the other)
-                    while (dropLastOther(out.dynamic))
-                    {
-                    }
-                    dyn_ms = sumCost(out.dynamic);
-                    dyn_avatars = 0;
-                    for (uint32_t k : out.dynamic)
-                    {
-                        dyn_avatars += dyn_draws[k];
-                    }
-                    left = out.dynamic.empty() ? cap_ms : 0.f;
-                    break;
                 }
+                dyn_ms = sumCost(out.dynamic);
+                dyn_avatars = 0;
+                for (uint32_t k : out.dynamic)
+                {
+                    dyn_avatars += dyn_draws[k];
+                }
+                left = out.dynamic.empty() ? cap_ms : 0.f;
             }
         }
         // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
@@ -1811,27 +1926,26 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
     bool head_beside_own = false;
     if (progress_ok && !st.empty() && !out.dynamic.empty())
     {
-        const std::vector<uint32_t> head = selectStatic(st, 0.f);
-        if (!head.empty() && st_cost[head[0]] > left + kEps)
+        if (!head.empty() && itemCost(st[head[0]].last_cpu_ms) > left + kEps)
         {
-            for (const StaticItem& it : st)
-            {
-                head_beside_own = head_beside_own || (it.key == head[0] && (it.never_drawn || it.age_frames >= kDynamicDeadlineFrames));
-            }
+            const StaticItem& h = st[head[0]];
+            head_beside_own = h.never_drawn || h.age_frames >= kDynamicDeadlineFrames;
         }
     }
-    out.fixed = selectStatic(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars);
+    std::vector<size_t> fixed_pick = selectStaticIdx(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars); // trimmed below with out.fixed
     float st_ms = 0.f;
-    for (uint32_t k : out.fixed)
+    for (size_t i : fixed_pick)
     {
-        st_ms += st_cost[k];
+        st_ms += itemCost(st[i].last_cpu_ms);
+        out.fixed.push_back(st[i].key);
     }
     if (st_ms > left + kEps && !(progress_ok && (out.dynamic.empty() || head_beside_own) && out.fixed.size() == 1))
     {
         // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
         while (!out.fixed.empty() && st_ms > left + kEps)
         {
-            st_ms -= st_cost[out.fixed.back()];
+            st_ms -= itemCost(st[fixed_pick.back()].last_cpu_ms);
+            fixed_pick.pop_back();
             out.fixed.pop_back();
         }
     }
@@ -1975,6 +2089,206 @@ inline float coldItemMs(float cost_ema_ms)
 {
     return std::min(itemCost(cost_ema_ms), kFrameCapMs / 4.f);
 }
+
+
+// ---------------------------------------------------------------------------------------------
+// Cells of a wide lamp and the camera position's sizing (projector tile resolution)
+// ---------------------------------------------------------------------------------------------
+//
+// A lamp wider than about 93 degrees (tan of the half-angle above 1.05) is split over its own image plane into g x g cells (per axis), each a tile of its own with a
+// sub-frustum off the same projection centre, near and far planes (so a cell's depth is the lamp's, and the lookup keeps the lamp's
+// matrix). Every cell carries a guard of kCellGuard texels on each side (its frustum widened by them), so the filter's taps at a
+// seam read the neighbour's content; a lamp with one cell keeps one tile and no guard. A cell's size follows the camera's POSITION
+// (its distance to the cell's volume: the way a game sizes a light's shadow), never the view direction, with hysteresis. The image of a
+// cell depends on the lamp, the scene and the cell's size only. Spec: reports/projector-edges-2026-11-16/design.md section 5 (kept on
+// the owner's machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
+
+constexpr uint32_t kCellGuard = 16;       // texels on each side of a cell's interior (wide lamps only)
+static_assert(kCellGuard >= uint32_t(kKernelTexelsMax) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
+constexpr int      kMaxGrid = 4;          // cells per axis
+constexpr uint32_t kMaxCells = kMaxGrid * kMaxGrid;
+constexpr double   kTargetMinM = 0.003;   // metres: the floor texel the camera's near field is given (about 2.5 pixels at 1440p up close)
+constexpr double   kTargetPerM = 0.002;   // plus this much per metre of the camera position's distance to the cell
+constexpr double   kRefMaxM = 4.0;        // the largest axial reference depth (the old baseSize reference)
+constexpr double   kSlackM = 2.0;         // the receivers this far beyond the camera along the lamp's axis count as near
+constexpr double   kHystOctaves = 0.75;   // a size changes only when the request leaves this many octaves around it ...
+constexpr double   kHoldSeconds = 0.5;    // ... and the new size has been asked for this long
+constexpr uint32_t kMaxResizesPerFrame = 3; // in-place resizes of one frame (the rest wait: a burst is spread over frames)
+
+// Cells per axis for a half-angle tangent: 1 up to tan = 1.05 (a lamp up to about 93 degrees: ceil(tan - 0.05) is 1 there), then
+// ceil(tan - 0.05), at most kMaxGrid. (The early return keeps a NaN or a tiny tangent at 1.)
+inline int gridAxis(double tan_half)
+{
+    if (!(tan_half > 1.0))
+    {
+        return 1;
+    }
+    return std::min(std::max(int(std::ceil(tan_half - 0.05)), 1), kMaxGrid);
+}
+
+struct CellGrid
+{
+    int gu = 1; // cells across the lamp's right axis
+    int gv = 1; // cells along its up axis
+    bool cells() const { return gu * gv > 1; }
+    uint32_t guard() const { return cells() ? kCellGuard : 0u; }
+    int count() const { return gu * gv; }
+    bool operator==(const CellGrid& o) const { return gu == o.gu && gv == o.gv; }
+    bool operator!=(const CellGrid& o) const { return !(*this == o); }
+};
+
+inline CellGrid gridOf(double tan_x, double tan_y)
+{
+    CellGrid g;
+    g.gu = gridAxis(tan_x);
+    g.gv = gridAxis(tan_y);
+    return g;
+}
+
+// the cell index in the shader's array of 16 (stride kMaxGrid): column i along the right axis, row j along the up axis
+constexpr uint32_t cellIndex(int i, int j) { return uint32_t(j * kMaxGrid + i); }
+
+// The tangent rectangle of the cell (i, j) on the image plane, from the lamp's half-angle tangents (the cells divide
+// [-tan, tan] into equal parts on each axis), widened by `guard` texels of the cell's `interior` texels on every side.
+struct CellTan
+{
+    double x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+};
+
+inline CellTan cellTanRect(const CellGrid& grid, double tan_x, double tan_y, int i, int j, uint32_t interior, uint32_t guard)
+{
+    CellTan c;
+    const double wx = 2.0 * tan_x / grid.gu, wy = 2.0 * tan_y / grid.gv;
+    c.x0 = -tan_x + wx * i;
+    c.x1 = c.x0 + wx;
+    c.y0 = -tan_y + wy * j;
+    c.y1 = c.y0 + wy;
+    if (guard > 0 && interior > 0)
+    {
+        const double ex = wx * double(guard) / double(interior), ey = wy * double(guard) / double(interior);
+        c.x0 -= ex;
+        c.x1 += ex;
+        c.y0 -= ey;
+        c.y1 += ey;
+    }
+    return c;
+}
+
+// the interior of a tile of nc texels
+constexpr uint32_t cellInterior(uint32_t nc, uint32_t guard) { return nc > 2 * guard ? nc - 2 * guard : 1u; }
+
+// A lower bound of the distance from p to the pyramid (0 inside): the largest distance outside one plane. Exact outside a face,
+// never more than the true distance elsewhere, so a cell is sized for the camera at least as finely as it needs.
+inline float pyramidDistance(const Pyramid& py, const float p[3])
+{
+    float d = 0.f;
+    for (const Plane& pl : py.planes)
+    {
+        d = std::max(d, -(pl.n[0] * p[0] + pl.n[1] * p[1] + pl.n[2] * p[2] + pl.d));
+    }
+    return d;
+}
+
+// The cell that holds an own avatar for the every-frame rule: the one whose interior volume contains the centre of the avatar's box
+// (so one cell per box, not every cell the box's width crosses near the apex). The other cells the box overlaps are served by deadline.
+inline bool cellHoldsOwn(const Pyramid& core, const Aabb& box)
+{
+    const float c[3] = { 0.5f * (box.lo[0] + box.hi[0]), 0.5f * (box.lo[1] + box.hi[1]), 0.5f * (box.lo[2] + box.hi[2]) };
+    return pyramidDistance(core, c) <= 0.f;
+}
+
+// T(D): the texel the camera position wants at distance D (m): about 2.5 pixels of a 1440p, 60 degree view
+inline double cellTargetM(double distance_m)
+{
+    return std::max(kTargetMinM, kTargetPerM * std::max(distance_m, 0.0));
+}
+
+// The axial reference depth at which a cell's texel is judged: the lamp's own 4 m (1.5 radius) at most, and at most kSlackM beyond the
+// camera's axial depth w_cam (clamped into the lamp's near .. far), so that the floor under a standing camera gets the target and
+// the floor a long way off does not.
+inline double cellRefDepth(double radius, double w_cam, double near_d, double far_d)
+{
+    const double w_c = std::min(std::max(w_cam, near_d), far_d);
+    return std::min(std::min(1.5 * radius, kRefMaxM), w_c + kSlackM);
+}
+
+// The continuous tile size (texels) a cell asks for: its interior spans tan_w * w_ref metres at the reference depth and wants texels of
+// cellTargetM(distance); plus the guard. Not yet a power of two or clamped (clampTile).
+inline double cellWanted(double tan_w, double w_ref, double distance_m, uint32_t guard)
+{
+    return tan_w * w_ref / cellTargetM(distance_m) + 2.0 * double(guard);
+}
+
+// The whole request of one cell, from the lamp and the camera's POSITION only (no view direction is an input, so the camera's
+// orientation cannot matter by the signature): the lamp's origin and forward axis (unit), its radius, near and far depths, the cell's
+// wider-axis tangent, the cell's interior volume and guard, and the camera's position. `distance_m` receives the camera's distance to the
+// cell's volume.
+inline double cellSizeRequest(const float lamp_origin[3], const float lamp_fwd[3], double radius, double near_d, double far_d, double tan_w,
+                              const Pyramid& core, uint32_t guard, const float cam_pos[3], float* distance_m = nullptr)
+{
+    const double w_cam = double(cam_pos[0] - lamp_origin[0]) * lamp_fwd[0] + double(cam_pos[1] - lamp_origin[1]) * lamp_fwd[1] +
+                         double(cam_pos[2] - lamp_origin[2]) * lamp_fwd[2];
+    const double w_ref = cellRefDepth(radius, w_cam, near_d, far_d);
+    const float dist = pyramidDistance(core, cam_pos);
+    if (distance_m)
+    {
+        *distance_m = dist;
+    }
+    return cellWanted(tan_w, w_ref, dist, guard);
+}
+
+// the size a request becomes: a power of two within [kMinTile, kMaxBase]
+inline uint32_t clampTile(double wanted)
+{
+    return std::min(std::max(pow2Round(wanted), kMinTile), kMaxBase);
+}
+
+// A cell's size with its hysteresis (spec 5.3): the size changes only when the continuous request leaves
+// [N / 2^kHystOctaves, N * 2^kHystOctaves] and the new size has been asked for kHoldSeconds in a row, in both directions. The first
+// request sets the size at once. update() returns true when the size changed (never on the first request).
+class SizeHysteresis
+{
+public:
+    uint32_t size() const { return mCur; }
+    void reset() { mCur = 0; mCand = 0; mSince = 0.0; }
+    bool update(double wanted, double now_s)
+    {
+        if (!std::isfinite(wanted))
+        {
+            return false;
+        }
+        const uint32_t cand = clampTile(wanted);
+        if (mCur == 0)
+        {
+            mCur = cand;
+            return false;
+        }
+        const double octaves = std::fabs(std::log2(std::max(wanted, 1.0) / double(mCur)));
+        if (octaves <= kHystOctaves || cand == mCur)
+        {
+            mCand = 0;
+            return false;
+        }
+        if (cand != mCand)
+        {
+            mCand = cand;
+            mSince = now_s;
+            return false;
+        }
+        if (now_s - mSince >= kHoldSeconds)
+        {
+            mCur = cand;
+            mCand = 0;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    uint32_t mCur = 0;
+    uint32_t mCand = 0;
+    double mSince = 0.0;
+};
 
 } // namespace llprojectorpool
 

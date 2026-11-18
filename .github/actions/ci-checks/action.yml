@@ -36,6 +36,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_cloud_noise_package.py
       shell: bash
+    - run: python3 scripts/tests/test_projector_edge_lookup.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
@@ -61,6 +63,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llshadowmethod_test.cpp -o "$RUNNER_TEMP/shadow-method-test"
         "$RUNNER_TEMP/shadow-method-test"
+    - name: Check the directional shadows' dark gate
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lldirectionalshadowgate_test.cpp -o "$RUNNER_TEMP/dark-gate-test"
+        "$RUNNER_TEMP/dark-gate-test"
     - name: Check that the Legacy shadow method is still Firestorm 7.2.5's code
       shell: bash
       run: |

@@ -1165,6 +1165,7 @@ set(viewer_HEADER_FILES
     lldebugview.h
     lldeferredsounds.h
     lldelayedgestureerror.h
+    lldirectionalshadowgate.h
     lldirpicker.h
     lldonotdisturbnotificationstorage.h
     lldndbutton.h
