@@ -1480,6 +1480,10 @@ struct SilhouetteFace
 // folds one face into a prim's key, field by field (no padding bytes are read)
 inline uint32_t silhouetteFaceMix(uint32_t key, const SilhouetteFace& f)
 {
+    if (!f.cutout && !f.double_sided)
+    {
+        return key; // an opaque single-sided face: no input at all
+    }
     auto mix = [](uint32_t k, const auto& value) { return silhouetteKeyMix(k, &value, sizeof(value)); };
     key = mix(mix(key, f.index), f.double_sided);
     if (!f.cutout)
