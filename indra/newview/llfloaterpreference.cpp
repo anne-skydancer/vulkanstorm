@@ -4131,7 +4131,7 @@ bool LLPanelPreferenceGraphics::postBuild()
 // <Vulkanstorm> Shadow softness
 void LLPanelPreferenceGraphics::onShadowSoftnessSlider()
 {
-    // the slider's position is the setting's logarithmic view; the setting keeps the real value
+    // the slider's position is the setting's offset-logarithmic view (0 at the left end); the setting keeps the real value
     const F32 value = LLShadowMethod::softnessFromPosition(mShadowSoftness->getValueF32());
     mShadowSoftnessBusy = true;
     gSavedSettings.setF32("RenderShadowLightSize", value);
