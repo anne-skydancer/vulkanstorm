@@ -12811,9 +12811,9 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         // <Vulkanstorm> the blended casters' blocks of the Stochastic method belong to the world texel, not to the map's:
         // the box moves in whole world texels, so the map column plus the box corner's world index k is constant, and the
         // caster rule takes gl_FragCoord - origin with origin = -(k mod 2^16) (alphaDitherOrigin; the modulus is even, so
-        // the 2 x 2 blocks keep their parity). The pattern moves to another block only when k crosses a multiple of 2^16
-        // (about 460 m of walking at the finest texel) and once at a region crossing, which re-anchors the world grid. Its
-        // frame rotates while the history accumulates (shadowCasterFrame). Reset to 0 once after the loop.
+        // the 2 x 2 blocks keep their parity). The pattern re-rolls only when k crosses a multiple of 2^16 (about 460 m of
+        // walking at the finest texel) and once at a region crossing, which re-anchors the world grid. Its frame rotates
+        // while the history accumulates (shadowCasterFrame). Reset to 0 once after the loop.
         {
             const LLShadowCascadeFit::DitherOrigin origin = LLShadowCascadeFit::alphaDitherOrigin(box);
             LLLocalShadowGL::setTileOrigin(origin.x, origin.y, caster_frame);

@@ -11,7 +11,7 @@
 //   - the snapped box holds the sphere's square, spans exactly res texels, and its texel grid
 //     stays at the same world phase while the camera moves;
 //   - the box corner's world-grid index k (returned by snappedSquare) matches the box and keeps a world point's
-//     map column + k constant while the camera walks (the Stochastic alpha dither origin, finding N1);
+//     map column + k constant while the camera walks (the origin of the Stochastic caster rule's cells, finding N1);
 //   - the light view's up axis is a unit vector orthogonal to the light.
 
 #include "llshadowcascadefit.h"
@@ -174,13 +174,12 @@ namespace
         }
     }
 
-    // The shader's hash (shadowAlphaMaskF.glsl), in float, of the fragment (fx, fy) minus the origin
-    float dither_hash(float fx, float fy, float origin_x, float origin_y)
+    // The caster rule's cell (shadowStochasticCasterF.glsl: ivec2(floor(gl_FragCoord.xy - shadow_tile_origin))), in float as
+    // the shader takes it, of the fragment coordinate f minus the origin; its 2 x 2 block is cell >> 1, its texel in the block
+    // the cell's parity
+    long long caster_cell(float f, float origin)
     {
-        const float a = 0.06711056f * (fx - origin_x) + 0.00583715f * (fy - origin_y);
-        const float b = a - std::floor(a);
-        const float c = 52.9829189f * b;
-        return c - std::floor(c);
+        return (long long)std::floor(f - origin);
     }
 
     // the old corner formula against the new one: equal, or (when the compiler fuses a + b * c) apart by at most the
@@ -192,10 +191,11 @@ namespace
     }
 
     // Finding N1: a camera walks (x, y and diagonal) past a fixed world point at the centre of a world texel. For the
-    // map pixel that holds the point, the hash of (gl_FragCoord - origin) with the origin from alphaDitherOrigin must
-    // be the same at every step: it depends only on the world texel (N) and on the 2^16 wrap epoch of k, which is
-    // the one place it may change (all points together). Eye positions are light-view coordinates of the eye; the
-    // world origin is at 0 there, so k = (eye - r) / texel for a sphere centred on the eye.
+    // map pixel that holds the point, the caster rule's cell floor(gl_FragCoord - origin) with the origin from
+    // alphaDitherOrigin must be the same at every step: it is the world texel (N) minus 2^16 times the wrap epoch of k,
+    // which is the one place it may change (all points together), and it keeps the world texel's parity (the 2 x 2
+    // blocks stay on the world grid). Eye positions are light-view coordinates of the eye; the world origin is at 0
+    // there, so k = (eye - r) / texel for a sphere centred on the eye.
     void walk_case(const char* name, double ex0, double ey0, double dirx, double diry, double stride, int steps,
         float res_x, float res_y, bool expect_wrap)
     {
@@ -206,7 +206,7 @@ namespace
         const long long nx = (long long)std::floor(midx / tx), ny = (long long)std::floor(midy / ty);
         const double wx = ((double)nx + 0.5) * tx, wy = ((double)ny + 0.5) * ty;
         long long kx_prev = 0, ky_prev = 0, epoch0 = 0, changes_x = 0, changes_y = 0, epoch_changes = 0, epoch_prev = 0;
-        float hash_ref = -1.f;
+        long long cell_ref_x = 0, cell_ref_y = 0;
         for (int step = 0; step <= steps; ++step)
         {
             const double ex = ex0 + dirx * stride * step, ey = ey0 + diry * stride * step;
@@ -228,17 +228,18 @@ namespace
             const long long my = (long long)std::floor((wy - ey - (double)box.min_y) / ty);
             check(mx >= 0 && mx < (long long)res_x && my >= 0 && my < (long long)res_y, "the world point stays in the map", (double)mx, (double)my);
             const auto origin = LLShadowCascadeFit::alphaDitherOrigin(box);
-            const float h = dither_hash((float)mx + 0.5f, (float)my + 0.5f, origin.x, origin.y);
-            // what the hash must be: the world texel's column minus the wrap epoch of k
+            const long long cell_x = caster_cell((float)mx + 0.5f, origin.x), cell_y = caster_cell((float)my + 0.5f, origin.y);
+            // what the cell must be: the world texel's column minus the wrap epoch of k (2^16 is even: the parity is the world's)
             const long long epoch_x = (long long)std::floor((double)box.k_x / 65536.0);
             const long long epoch_y = (long long)std::floor((double)box.k_y / 65536.0);
-            const float want = dither_hash((float)(nx - 65536 * epoch_x) + 0.5f, (float)(ny - 65536 * epoch_y) + 0.5f, 0.f, 0.f);
-            check(h == want, name, h, want);
+            check(cell_x == nx - 65536 * epoch_x && cell_y == ny - 65536 * epoch_y, name, (double)cell_x, (double)(nx - 65536 * epoch_x));
+            check(((cell_x ^ nx) & 1) == 0 && ((cell_y ^ ny) & 1) == 0, "the cell keeps the world texel's parity", (double)cell_x, (double)nx);
             check(std::fabs(origin.x) < 65536.f && std::fabs(origin.y) < 65536.f, "the origin stays below 2^16", origin.x, origin.y);
             const long long epoch = epoch_x * 1000003 + epoch_y;
             if (step == 0)
             {
-                hash_ref = h;
+                cell_ref_x = cell_x;
+                cell_ref_y = cell_y;
                 epoch0 = epoch;
             }
             else
@@ -247,7 +248,7 @@ namespace
                 changes_y += box.k_y != ky_prev;
                 if (epoch == epoch0)
                 {
-                    check(h == hash_ref, "the hash does not re-roll inside a wrap epoch", h, hash_ref);
+                    check(cell_x == cell_ref_x && cell_y == cell_ref_y, "the cell does not move inside a wrap epoch", (double)cell_x, (double)cell_ref_x);
                 }
                 epoch_changes += epoch != epoch_prev;
             }
