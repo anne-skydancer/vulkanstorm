@@ -941,47 +941,38 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 // the light's pose the tile holds (view, proj, origin), the avatar partitions and the worn objects are the only things it draws
 // (LLPipeline::LOCAL_SHADOW_DYNAMIC), and no camera test enters: an avatar behind the camera, or an impostor, casts like any other.
 // Depth is not cleared (S's copy is in L); the depth test composes the two layers. Leaves L's framebuffer bound.
-namespace
+// The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow,
+// a normal appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only
+// a friend, the agent or a control avatar. Nothing here reads the camera. Built once a frame by update(), before its first use (the
+// pairing of avatars with lamps, then every face's draw list); nothing moves or deletes an avatar during the frame's tile work, and the
+// list is emptied before update() returns, so no pointer outlives the frame.
+void LLProjectorShadows::collectCasters()
 {
-    struct AvatarCaster
+    static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
+    mCasters.clear();
+    for (LLCharacter* character : LLCharacter::sInstances)
     {
-        LLVOAvatar* avatar;
-        Aabb box;
-        bool own = false; // the user's own avatar (gAgentAvatarp): its faces are drawn every frame
-    };
-
-    // The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow,
-    // a normal appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only
-    // a friend, the agent or a control avatar. Nothing here reads the camera.
-    std::vector<AvatarCaster> casting_avatars()
-    {
-        static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
-        std::vector<AvatarCaster> out;
-        for (LLCharacter* character : LLCharacter::sInstances)
+        LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
+        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
+            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL ||
+            (friends_only() && !avatar->isControlAvatar() && !avatar->isSelf() && !avatar->isBuddy()))
         {
-            LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
-            if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
-                avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL ||
-                (friends_only() && !avatar->isControlAvatar() && !avatar->isSelf() && !avatar->isBuddy()))
-            {
-                continue;
-            }
-            const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
-            if (!ext)
-            {
-                continue;
-            }
-            AvatarCaster c;
-            c.avatar = avatar;
-            c.own = avatar->isSelf();
-            for (int i = 0; i < 3; ++i)
-            {
-                c.box.lo[i] = ext[0].getF32ptr()[i];
-                c.box.hi[i] = ext[1].getF32ptr()[i];
-            }
-            out.push_back(c);
+            continue;
         }
-        return out;
+        const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
+        if (!ext)
+        {
+            continue;
+        }
+        Caster c;
+        c.avatar = avatar;
+        c.own = avatar->isSelf();
+        for (int i = 0; i < 3; ++i)
+        {
+            c.box.lo[i] = ext[0].getF32ptr()[i];
+            c.box.hi[i] = ext[1].getF32ptr()[i];
+        }
+        mCasters.push_back(c);
     }
 }
 
@@ -992,9 +983,8 @@ namespace
 LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const
 {
     FaceAvatars face;
-    std::vector<std::pair<F32, const AvatarCaster*>> in_light;
-    const std::vector<AvatarCaster> casters = casting_avatars();
-    for (const AvatarCaster& c : casters)
+    std::vector<std::pair<F32, const Caster*>> in_light;
+    for (const Caster& c : mCasters)
     {
         if (intersects(rec.volume, c.box))
         {
@@ -1008,7 +998,7 @@ LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& re
     bool whole = false;
     for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
     {
-        const AvatarCaster& c = *in_light[i].second;
+        const Caster& c = *in_light[i].second;
         face.avatars.push_back(c.avatar);
         whole = whole || c.avatar->isImpostor();
         boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
@@ -1526,8 +1516,15 @@ void LLProjectorShadows::update(LLCamera& camera)
     // extents are stale, so it copies the whole tile). A jelly doll, an invisible or a too slow avatar and a UI avatar are not drawn by
     // the avatar pool either.
     const F32 camera_pos[3] = { camera.getOrigin().mV[VX], camera.getOrigin().mV[VY], camera.getOrigin().mV[VZ] };
+    // the frame's casting avatars, once (faceAvatars reads the same list for every face drawn below)
+    struct CastersOfFrame
+    {
+        LLProjectorShadows& pool;
+        ~CastersOfFrame() { pool.mCasters.clear(); } // no avatar pointer outlives update()
+    } casters_of_frame{ *this };
+    collectCasters();
     std::vector<Aabb> avatar_boxes, own_boxes;
-    for (const AvatarCaster& c : casting_avatars())
+    for (const Caster& c : mCasters)
     {
         (c.own ? own_boxes : avatar_boxes).push_back(c.box);
     }

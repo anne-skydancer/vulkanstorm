@@ -241,6 +241,15 @@ private:
     void copyAtlas(U32 from_tex, U32 to_tex);
     void blitRect(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
+    // The avatars that cast this frame (collectCasters, once per update): the pairing with the lamps and every face's draw list read it.
+    // The pointers are valid only inside update(), which empties the list before it returns.
+    struct Caster
+    {
+        LLVOAvatar* avatar = nullptr;
+        llprojectorpool::Aabb box;
+        bool own = false; // the user's own avatar (gAgentAvatarp): its faces are drawn every frame
+    };
+    void collectCasters();
     // The avatars a face draws, and the tile rectangle they cover (C3: the copy and the draw are limited to it).
     struct FaceAvatars
     {
@@ -307,6 +316,7 @@ private:
     U32 mDirtyBoxes = 0;
     F32 mDirtyAgeMsMax = 0.f;
     U64 mDirtyRenders = 0;
+    std::vector<Caster> mCasters;  // this frame's casting avatars (update() only; empty between frames, the capacity is kept)
 };
 
 #endif // LL_LLPROJECTORSHADOWS_H
