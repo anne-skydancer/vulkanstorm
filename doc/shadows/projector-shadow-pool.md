@@ -10,7 +10,10 @@ Legacy (method 0) keeps its two re-rendered slots, byte for byte (`scripts/shado
 Today's two slots (`mSpotShadow[0..1]`, window-sized maps) are handed from lamp to lamp by a view-dependent priority and are
 re-rendered every frame, so a lamp's shadow can vanish when the camera turns. The pool gives every projector within the shadows'
 reach (`min(RenderFarClip, 128 m)`, measured from the camera's position, with a hysteresis band) a tile of its own in a shared
-depth atlas. The tile's view and content come from the light alone (its size follows the camera's position, in place and with hysteresis: see "Tile resolution"); the caster LOD is closed by stage P3's pin (below) and, since stage P4 (below), the avatars are a dynamic layer chosen by position, never by what the camera sees.
+depth atlas. The tile's view, content and size come from the light alone (lamp shadows L2: the camera's position only picks which tiles
+shrink first when the atlas is over its budget, and a size change is drawn before it is shown; see "Tile resolution"); the caster LOD is
+closed by stage P3's pin (below) and, since stage P4 (below), the avatars are a dynamic layer chosen by position, never by what the
+camera sees. The lookup is a soft-shadow filter at the lamp's physical penumbra (lamp shadows L1, "The filter" below).
 
 ## Stage P2: tiles replace the slots
 
@@ -30,18 +33,19 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   log line of a successful allocation. An allocation that fails tries the
   smaller size; if that fails, the projectors have no tile (lit without a shadow), the failure is logged and the allocation is
   tried again with a back-off (5 s, doubling up to 60 s). The method never changes.
-- **Tile size** (P2: from the light only, `baseSize`: radius and field of view; since the tile-resolution PR from the lamp and the camera
-  position's distance to each tile, see "Tile resolution" at the end), shrunk together by one power of two when the atlas
-  fills (`LevelController`: shrink above 60 % demand, grow back after 3 s at or below 45 %). Placement by a buddy allocator;
-  arrivals and departures are incremental, a level step (or no room for a grown tile) is one repack (copies for same-size tiles, a nearest
-  blit for resized ones, then L to S in full); a size change is in place (see "Tile resolution").
+- **Tile size** (P2: from the light only, `baseSize`: radius and field of view; the tile-resolution PR sized every tile by the camera
+  position's distance to it; since lamp shadows L2 again from the lamp alone, `tileBaseSize`, with the pressure valve over the budget:
+  see "Tile resolution" at the end). Placement by a buddy allocator; arrivals and departures are incremental; a size change is drawn by
+  the tile's own render (draw-then-swap), and a repack is only a compaction at the tiles' sizes (bit-exact copies, then L to S in full)
+  when an arriving tile finds no block although the free texels hold it.
 - **What a frame does** (`LLProjectorShadows::update`, from `generateSunShadow`, not for probes): the light set, the level and
   placement, then the tile renders the budget allows. P2 has no change tracking, so every tile is a full render (the fixed
   objects and, until P4, the avatars into S, then S to L for the tile), ordered by `selectStatic`: never drawn first, nearest first; then
   **oldest first by age in frames, the distance only breaking a tie**, so the order is a round robin by staleness.
-  - **Budget (P2c; re-divided in P4, see "Stage P4").** A fixed cap of **0.35 ms** of **CPU** time per frame for the tile renders (since P4 `kFrameCapMs`, shared with the dynamic layer). The frame-time basis is
-    an assumed 8 ms frame (125 fps), not a measured one: on it the cap is 4.4 % and the former light and shadow budget (+5 %, retired 2026-11-16; the budget is now the fps floor, see AGENTS.md) was
-    about 0.4 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
+  - **Budget (P2c; re-divided in P4, see "Stage P4"; set from the fps floor in L2).** A fixed cap of **CPU** time per frame for the tile
+    renders (since P4 `kFrameCapMs`, shared with the dynamic layer): 0.35 ms until L2, on the basis of an assumed 8 ms frame (125 fps, not
+    a measured one) and the former light and shadow budget (+5 %, retired 2026-11-16); since L2 **0.5 ms**, 3 % of the owner's standing
+    floor frame (60 fps, AGENTS.md; "The combined cap" in Stage P4 has the numbers). The paragraphs below describe P2's 0.35 ms. The cap fits four measured tiles (0.07 ms each, owner session 2026-11-14) with a margin, so a room of four
     lamps redraws every tile every frame. It leaves 0.05 ms of the 0.4 ms. (P2c and P3 added a second cap of 0.30 ms for the dynamic tiles, which
     did not fit in the 0.05 ms: the two together could reach 0.65 ms in a frame that had both. P4 replaced the two by one combined cap.) The measured cost of a
     tile (`last_cpu_ms`) only predicts how many fit; it does not set the budget. A frame also stops rendering once the measured
@@ -74,32 +78,32 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   **Look change (Stochastic, pool only):** the ambiance is now shadowed like the beam. A lamp inside a separate shade prim no
   longer fills the room past an opaque shade, and on legacy materials the far side of a closed caster loses the fill it used to
   get from the lamp's ambiance.
-- **Filter radius in metres (P2b).** The largest radius of the blocker search and of the filter is a length at the receiver,
-  `ST_SPOT_RADIUS_MAX_M` = 4 cm (about the 10 texels of a 2048 tile at 4 m, with a 90 degree field of view), turned into texels of this
-  tile per axis in the shader: `clamp(0.04 * k N / w, 1, 12)` (`k N / w` = texels per metre at axial distance `w`). The lower bound
-  is one texel, the filter's floor (the edge reconstruction can draw an edge down to `ST_RV_MIN`, 0.25 texel, where the penumbra is narrower than
-  `ST_RV_HI`); the upper bound is 12 texels
-  because the cost is fixed (8 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
-  452 texels, and 32 bilinear 2 x 2 taps read 128 of them, 28 % against 41 % at the old 10 texels) and the penumbra turns grainy
-  before it turns wrong. A level step no longer changes the radius in metres; it only changes how many texels the 4 cm is.
-- **Emitter: a fixed 1 cm light (projector shadow sharpness P2).** Every lamp is a 1 cm light (SL's minimum prim size), whatever its
-  prim, at the apex of the lamp's frustum, the projection centre of the pose the tile was drawn with (the lamp's anchor point; the
-  uniform `proj_shadow_origin`, which the normal offset's direction to the lamp also uses). The penumbra's light size is the uniform
-  `proj_shadow_light_size` = 0.01 m times `RenderShadowLightSize`, on both axes of the map (`emitterExtent`, `llprojectorshadowpool.h`);
-  this replaces the prim's own face and its 2 cm .. 15 cm clamp (P2b). `RenderShadowLightSize` is the one softness factor of every
-  light: the sun and moon keep their formula (0.53 degrees times the EEP sun or moon scale times the setting), a projector lamp is
-  0.01 m times the setting, and point lights will use the same rule. Its default is 0.23 (it was 1.0), so a lamp's emitter is 2.3 mm
-  and the sun's disc is 0.23 of its physical size by default. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider
-  next to the Shadow method (Stochastic only): 0.05 to 1.0, logarithmic in two halves meeting at 0.23, in 0.01 steps of its
-  position, with an editable number box that shows and accepts the real value (`LLShadowMethod::softnessFromPosition` and
-  `softnessToPosition`). Graphic presets save and load it. Nothing depends on the camera.
+- **The filter (lamp shadows L1; P2b's radius cap in metres is gone).** After the blocker search the lookup filters at the physical
+  penumbra radius, from the nearest blocker, between a floor of 1.5 tile texels and a cap of 12 (see "The filter" below). P2b capped the
+  radius at 4 cm at the receiver; that made lamps above about 3 cm sharper than their size and is removed. The cap of 12 texels stays
+  because the cost is fixed (9 search and 32 filter gathers): over a wider disc the same taps are further apart (a 12-texel disc has
+  452 texels, and 32 bilinear 2 x 2 taps read 128 of them) and the penumbra turns grainy before it turns wrong.
+- **Emitter: 4.5 cm times the Shadow softness (lamp shadows L1; was 1 cm in P2).** Every lamp is a disc of 4.5 cm times
+  `RenderShadowLightSize`, whatever its prim, at the apex of the lamp's frustum, the projection centre of the pose the tile was drawn with
+  (the lamp's anchor point; the uniform `proj_shadow_origin`, which the normal offset's direction to the lamp also uses). The
+  penumbra's light size is the uniform `proj_shadow_light_size` = `emitterExtent(kProjectorLamp, RenderShadowLightSize)`, on both axes
+  of the map (`llprojectorshadowpool.h`: one function, a `LampFilter` per lamp type with its base, floor and cap; `kProjectorLamp` is
+  used, `kPointLamp` is prepared for the point-light stage). No script or build parameter carries a light size, so the base is a
+  constant (P2b took the prim's face, clamped 2 to 15 cm; P2 a fixed 1 cm). The base comes from the light-size study
+  (`reports/lamp-light-size-2026-11-18`, kept on the owner's machine): the largest size whose avatar shadows keep every body feature of
+  2.5 cm or more readable, so the default softness 0.23 gives 1.035 cm and the slider's top 4.5 cm, short of the 6 cm blobs.
+  `RenderShadowLightSize` is the one softness factor of every light: the sun and moon keep their formula (0.53 degrees times the EEP sun
+  or moon scale times the setting). Its default is 0.23. Preferences, Graphics, Rendering 2, has a "Shadow softness" slider next to the
+  Shadow method (Stochastic only): 0.05 to 1.0, logarithmic in two halves meeting at 0.23, in 0.01 steps of its position, with an
+  editable number box that shows and accepts the real value (`LLShadowMethod::softnessFromPosition` and `softnessToPosition`). Graphic
+  presets save and load it. Nothing depends on the camera.
 - **Contact hardening and a texel normal offset (P2).** The filter's radius follows the blocker nearest the receiver (the largest
   map depth among the blocking texels of the search), not the blockers' mean: an edge is as sharp as its closest contact allows, and
   a contact (a foot on a floor) is no longer blurred by the farther blockers (head, shoulders). The receiver is offset along its
   geometric normal by one texel of the tile at the receiver, scaled by sin(theta) of the angle to the lamp, the way the sun's
   `shadowNormalOffsetPos` works (texel = w / (k N), `w` the axial distance); it replaces the fixed 4 cm `spot_shadow_offset`, which
-  pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light, before the edge reconstruction
-  (`scripts/shadows/proj_march_bench.py --edges`, P2's lookup; 2.3 mm emitter): the toe's x50 lands within 1 mm of the reference on the 2048 and
+  pulled the shadow 5 to 11 mm short of a toe and left it grey under it. Measured against an analytic area light, with P2's lookup
+  (`scripts/shadows/proj_march_bench.py --edges`; 2.3 mm emitter, before L1): the toe's x50 lands within 1 mm of the reference on the 2048 and
   1024 tiles (today 5 mm short), the value under the toe is 0 (the study measured 0.04 to 0.19 there with today's lookup and the 6 and 15 cm prims) and the toe's
   RMS falls from 0.17 to 0.05; the isolated lookup costs about 7 % more (three timing runs of the bench's
   `--time`, 2048 and 1024 tiles: today 0.112 to 0.115 ms, P2 0.120 to 0.122 ms for a 2560x1440 full-screen layer, a mean of +6.7 %,
@@ -118,15 +122,15 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
 
 | Gate | How | Result |
 |---|---|---|
-| G1 lookup equivalence | `python scripts/shadows/projector_pool_g1.py` (offline GL, no viewer) | tile in the atlas equals the same code on a standalone map, max abs 0 (atlas handling only: the reference carries the same filter rule and the edge reconstruction, so it is not an independent check of the lookup; the independent evidence is the analytic scans of `proj_edges_bench.py`) |
-| Edge reconstruction | offline GL, the checkout's shader against the bench's prototype (drift check, max abs 1e-5) and the analytic scans: `--stairs --gates --grazing --time` (2 to 45 degrees at 0.25 texel, under 2 degrees at 0.50 as the default angles run from 0.5, the avatar gates; `--grazing` and `--time` are reported, not gated); `--stairs --sizes 64,128,256,512,1024,2048` (small tiles, reported); `--stairs --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048` (width within 5 % at 2 degrees and up); `--stairs --p2-regime --softness 1 --plate-h 1.8 --fovs 2.0 --sizes 2048` (identical to P2, 1e-6) | see "Edge reconstruction" |
+| G1 lookup equivalence | `python scripts/shadows/projector_pool_g1.py` (offline GL, no viewer) | tile in the atlas equals the same code on a standalone map, max abs 0 (atlas handling only: the reference carries the same filter rule, so it is not an independent check of the lookup; the independent evidence is the analytic scans of `proj_edges_bench.py` and the CPU twin) |
+| The filter (L1) | `scripts/shadows/lamp_filter_twin.py` (CPU, no GL): no hard square on glass, lace or a lattice at tile texels of 8 to 0.5 cm, a straight edge's width within 20 % of a disc's; `proj_edges_bench.py` (offline GL) `--gates` (the avatar), `--stairs --softness 1 --plate-h 1.2 --fovs 2.0 --sizes 1024,2048` (the width), `--grazing` and `--time` (reported) | see "The filter" |
 | G4 Legacy | `check_legacy_shadows.py` (C++ regions), `check_legacy_glsl.py` (GLSL text) | identical |
 | G2, O-4, method switches, window toggle, quit | viewer, see the stage's PR | needs a world with projectors for the lookup parts |
 
 ### Known limits of P2
 
 - **Avatar shadows (P2, history).** Legacy re-rendered its two slots, avatars included, every frame. P2 rendered the tiles that fit the 0.35 ms cap, oldest first, so with N lamps an avatar's shadow refreshed every ceil(N / tiles per frame) frames. P3 made a tile with an avatar in its light a dynamic item (a full tile render every frame). P4 (below) draws the avatars as a layer over the tile instead: S is not drawn again for an avatar.
-- The caster LOD no longer follows the camera (P3), and since P4 neither do the avatars. (The camera's position picks a tile's size, not what it holds: "Tile resolution".)
+- The caster LOD no longer follows the camera (P3), and since P4 neither do the avatars. (Since L2 the camera's position picks only which tiles shrink first when the atlas is over its budget, never what a tile holds: "Tile resolution".)
 - **Casters outside the main view: draw info is not camera-gated; loading still is.** A tile renders through the same `LLPipeline::renderShadow` as the sun cascades and Legacy's spot slots, with a camera built the same way (`generateSunShadow`, `pipeline.cpp:13073`-`13089`; `renderTile`). `renderShadow` runs `updateCull` and `stateSort`, and `stateSort` ends in `postSort`, which rebuilds the dirty groups it culled (`pipeline.cpp:3921`, `3954`). Beyond that, no group's draw info depends on the main view: a spatial group queues itself for a rebuild when it is created or dirtied (`llspatialpartition.cpp:315`, `437`, `480`, `606`; `LLPipeline::markRebuild`, `pipeline.cpp:3403`), and `rebuildPriorityGroups` (`pipeline.cpp:3120`, run every frame from `postSort`) builds every queued group whether or not any camera sees it. Occlusion is off during a shadow render (`sUseOcclusion = 0`). So a loaded caster the camera never saw has its draw info and appears in the tile. Three inputs still follow the main camera and are P3 work: (1) object loading: an object outside the near radius (`SceneLoadMinRadius`, 32 m) that never entered the main frustum or the rear sphere gets no drawable (`llvocache.cpp:1037`-`1060`; once loaded it stays, since eviction is disabled); (2) mesh and sculpt assets: a caster whose asset was never fetched is skipped (`llvovolume.cpp:6066`); (3) alpha-masked casters: their texture's virtual size comes from the main camera, so a texture never seen may stay low-resolution or unloaded (`llvovolume.cpp:889`-`905`, `6108`). The caster LOD (above) is the fourth.
 - A projector whose geometry the pool cannot use (field of view outside (0, 3.1 rad), zero or non-finite scale or radius) is not given a tile.
 - A failed atlas allocation is logged once and retried with a back-off (5 s up to 60 s).
@@ -134,107 +138,92 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   to the non-deferred path only, so the pool considers every eligible spotlight within reach. When they do not fit even at the
   smallest level, the lights that sort last (smaller tiles first, then key) have no tile and are lit without a shadow.
 
-## Edge reconstruction (projector edge revectorization, PR A)
+## The filter (lamp shadows L1)
 
-A projector's tile is a raster: on a floor under a wide lamp one texel is 7 to 35 mm, and the lookup's edge was as wide as its 1-texel
-filter floor (1.4 texels, 10 to 90 %) with a contour that wandered 0.6 to 0.94 texel peak to peak for edges 2 to 30 degrees to the tile's
-axes. #527 made the emitter physical (1 cm times `RenderShadowLightSize`), so the edge was as narrow as that filter allows and the
-steps showed. The lookup now reconstructs a straight edge from the silhouette wherever the physical penumbra is narrower than 2.5 texels.
-The tile is not changed and nothing in it depends on the camera: the reconstruction reads the tile only (plus the receiver plane from
-the geometric normal, as the filter always did).
+The owner's pictures of 2026-11-18 showed a projector's shadow broken into hard squares through a lattice or lace and dotted under
+glass. Three things multiplied (`reports/lamp-shadow-method-2026-11-18`, kept on the owner's machine): tiles sized by the camera's
+position (coarse when the camera stood back), see-through casters written as on/off texels, and a lookup that rebuilt a sharp edge
+wherever the physical penumbra was narrower than 2.5 texels: with a 2.3 mm lamp that was everywhere, so every texel of a lattice bar or a
+dithered pane was drawn as a square. L1 replaces the lookup's edge by the physical one; L2 (below, "Tile resolution") takes the camera
+out of the tile's size. The see-through casters keep today's rule (the stage L3 of the study changes them).
 
-Literature (logic only; no code was copied or read): Macedo and Apolinario, "Revectorization-Based Shadow Mapping" (Graphics Interface
-2016) and its follow-ups (the visibility-function and soft-shadow papers: only abstracts and summaries read; the arXiv listing grants no
-reuse); Reshetov, "Morphological Antialiasing" (HPG 2009) for the L, Z and U shapes; digital straight segments (Debled-Rennesson and
-Reveilles, 1995) for the staircase of a straight edge. No NVIDIA or Epic code was read.
+### The lookup (`shadowStochasticUtil.glsl`, `stSpotFilterTile`, inside the G1 block; fragment code only)
 
-### The lookup (`shadowStochasticUtil.glsl`, inside the G1 block; fragment code only)
+1. The blocker search: 8 gathers on a Vogel disc whose radius is the penumbra a blocker at the near plane would cast, between the floor
+   and the cap, plus one gather at the receiver's own 2 x 2 texels. The disc starts a quarter of its radius out; at the 12-texel cap
+   that is 3 texels, and without the receiver's gather a blocker thinner than that right over the receiver (a lattice bar on a coarse
+   tile) went unseen, the pixel read as lit beside filtered neighbours. Nothing blocked returns 1, all 36 texels blocked return 0.
+2. The filter: 32 bilinear gathers on a Vogel disc weighted 1 - 0.9 r^2, at the physical penumbra radius from the nearest blocker
+   (contact hardening), `pen * (c.z - z_near)` texels per axis, at least `ST_SPOT_KERNEL_MIN` = 1.5 texels (a narrower penumbra is drawn
+   soft, never as the tile's squares) and at most `ST_SPOT_KERNEL_TEXELS_MAX` = 12 (the taps' reach; a cell's guard of 16 texels covers
+   it, `static_assert(kCellGuard >= kProjectorLamp.kernel_max + 2)`).
+3. No edge reconstruction (`stRv*`, `ST_RV_*`: gone, with the bench gates that tested it) and no cap in metres (`ST_SPOT_RADIUS_MAX_M`:
+   gone). A coarser tile gives a softer edge, never a blockier one. The value of a receiver depends on its tile (or its cell's tile)
+   alone: no screen, frame or pixel term.
 
-1. The blocker search is unchanged (8 gathers, the nearest blocker `z_near`; none returns 1, all returns 0).
-2. `rphys = pen * (c.z - z_near)`, the physical radius in texels per axis, not floored at one texel. If `max(rphys) >= ST_RV_HI` (2.5
-   texels) the percentage-closer filter runs as before (`stSpotPCF`, the old second loop, same arithmetic): the penumbra's own blur hides
-   the staircase.
-3. Otherwise `stRvVisibility`: the binary silhouette (a texel is blocked when its depth is below the receiver's reference at its centre,
-   the filter's rule with the receiver plane; reads clamp to the tile as CLAMP_TO_EDGE does) in the 4 x 4 window around the receiver's
-   texel (4 gathers). All lit or all blocked returns that when the radius is at most one texel (the disc stays inside the window); a wider disc may reach past it, so the filter decides there. The edge frame is the one whose rows the window flips between more often.
-4. `stRvLine`: the boundary in the receiver's column, then a traversal both ways (up to `ST_RV_S` = 24 columns) while it stays a monotone
-   staircase of one- or two-row steps. A riser's midpoint is where a straight edge crosses a row centre. With risers on both sides (at most
-   `ST_RV_K` = 4 a side within `ST_RV_D` = 8 columns) the line is the least-squares line through the same number from each side (an
-   interpolation); otherwise MLAA's line over the receiver's run (Z, L and U shapes). A jump of three rows, or no line, in the first frame
-   tries the transposed frame. No single boundary (a feature thinner than the window, an end, a corner) returns to the filter.
-5. The visibility is the signed distance of the receiver to the line in units of the radius `max(min(rphys, kmax), ST_RV_MIN)` (the 4 cm cap holds for the edge too) (0.25 texel, the
-   narrowest edge: below the line's own accuracy it would only alias), turned into the share of a uniform disc on the lit side, which is
-   the exact penumbra of a disc emitter for a straight edge.
-6. Between `ST_RV_LO` (1.5) and `ST_RV_HI` the result blends into the filter with `smoothstep`, so there is no seam where the penumbra
-   grows. The search keeps its own cap on the receiver plane's lowering; the reconstruction reads with a cap of
-   `max(SHADOW_PLANE_BIAS_MAX_TEXELS, ST_SPOT_PLANE_SLOPE * (max(rs, ST_RV_HI) + 1))` texels, at least 8 * 3.5.
+The floor and the cap are the projector set of `llprojectorpool::LampFilter` (`kProjectorLamp`: 4.5 cm, 1.5, 12);
+`scripts/tests/test_projector_lamp_filter.py` checks that the shader's numbers are the C++ ones and that nothing of the reconstruction or
+the 4 cm cap is left. The constants are `#define`s and C++ constants: no uniform, no setting, no Preferences entry. The sun and Legacy
+are untouched: everything from `shadowMap0` to the G1 block of the util is byte-identical, and the Legacy checks pass.
 
-The constants are `#define`s: no uniform, no setting, no Preferences entry. `sampleProjectorShadow` is the only
-caller of `stSpotFilterTile`: the sun and Legacy are untouched (the util is linked only under Stochastic).
+### Measured
 
-### Measured (`scripts/shadows/proj_edges_bench.py`, RTX 5070 Ti, driver 621.14, offline GL 4.6, 2026-11-16)
+CPU twin of the lookup (`scripts/shadows/lamp_filter_twin.py`; the lamp-shadow study's scenes: a window frame with glass at alpha 0.5,
+an alpha-masked lace and an opaque lattice, a floor 4.5 m from the lamp, receivers 5 mm apart; the casters as today):
 
-The bench keeps its own prototype of the reconstruction as the oracle (`RV`) and compiles the checkout's shader as it is (`RVreal`);
-every scan prints the difference, and the run fails above max abs 1e-5. Measured: 0 in every scan of every run below.
-
-| test | P2 (#527) | RVreal |
-|---|---|---|
-| straight edges, worst step, 2 to 45 degrees, fov 2.0/2.5/3.0, tiles 256 to 2048 (gate 0.25 texel) | 0.85 to 0.97 texel | 0.18 to 0.21 texel |
-| straight edges, 0.5 to 1.5 degrees, tiles 256 to 2048 (gate 0.50 texel) | about 0.9 texel | up to 0.49 texel (fov 3.0, 512, 1.5 degrees) |
-| tiles 64 and 128 (reported, not gated) | up to 0.97 | up to 0.79 (fov 3.0, 128: a 69 mm texel; the normal offset's drift across the scan is in it) |
-| 10 to 90 % width, sharp lamp | 1.37 to 1.50 texels | 0.35 texel |
-| 10 to 90 % width, 1 cm lamp, plate 1.2 m, fov 2.0, 1024 / 2048 (analytic 6.34 mm) | 10.6 to 11.5 / 6.05 to 6.48 mm | 6.36 / 6.22 to 6.35 mm (gate 5 %: worst 2.0 %) |
-| P2 regime (plate 1.8 m, 2048, softness 1: `--p2-regime`) | | identical to P2, max abs 0 (gate 1e-6) |
-| avatar gates 2048 / 1024 / 512: toe x50 minus the reference | -0.6 / -0.6 / -0.7 mm | -0.6 / -0.6 / -0.7 mm |
-| under the toe | 0.000 | 0.000 |
-| toe RMS | 0.049 / 0.062 / 0.085 | 0.050 / 0.046 / 0.051 |
-| shoulder x50 minus the reference | -0.8 / -0.9 / +3.4 mm | -0.8 / -0.9 / +3.5 mm |
-| shoulder 10 to 90 % (analytic 2.4 mm) | 3.4 / 6.2 / 12.4 mm | 2.4 / 2.2 / 3.3 mm |
-| lit plane tilted 0 to 75 degrees: darkening | 0 | 0 |
-| G1 (4096 and 8192) | | max abs 0 tile against standalone; 1.2e-7 (1 ulp) against the reference source, which carries the same code |
-
-Gate thresholds follow the design's audit: the toe and shoulder x50 within 2 mm of the reference or no worse than P2's plus 0.1 mm (the
-512 shoulder is +3.4 mm for P2 itself); under 2 degrees the gate is 0.50 texel, not the audit's 0.45, because the full matrix measures
-0.49 (a run longer than the 24-column traversal has no riser on a side).
-
-### Cost (`proj_edges_bench.py --time`: 2560 x 1440 floor, every pixel inside the lamp, 24 plate edges plus the avatar)
-
-| lamp, tile | P2 ms | RVreal ms | difference |
+| | the shipped lookup (2.3 mm lamp, the study's twin) | L1, softness 0.23 (1.035 cm) | L1, softness 1.0 (4.5 cm) |
 |---|---|---|---|
-| fov 1.5, 2048 / 1024 / 512 | 0.1014 / 0.1025 / 0.1026 | 0.1454 / 0.1401 / 0.1372 | +0.044 / +0.038 / +0.035 ms (+43.5 / +36.7 / +33.7 %) |
-| fov 2.5, 2048 / 1024 / 512 | 0.1525 / 0.1536 / 0.1566 | 0.2049 / 0.2028 / 0.2014 | +0.052 / +0.049 / +0.045 ms (+34.4 / +32 / +28.7 %) |
+| neighbour pairs over 0.25 where the truth is smooth (the study's measure), tile texels 8 to 0.5 cm | 1.0 to 20.9 % | 0.00 to 0.03 % | 0.00 to 0.01 % |
+| hard squares (a neighbour jump over 0.5 where the truth is smooth) | yes (texel squares) | none | none |
+| largest jump where the truth is smooth | 1.0 | 0.32 (the floor's own ramp on 0.5 cm texels) | 0.27 |
+| glass at 1 cm texels, RMS against the truth of the same lamp | 0.123 | 0.075 | 0.069 |
 
-The scene's edge pixels (the partially lit share of the layer, printed by the bench) are 0.03 to 0.9 % of the pixels with the
-reconstruction (P2: 0.14 to 4.3 %), so most of the difference is the lookup's carrying cost and the search's pixels, not the fit.
+Before the receiver's gather was added to the search, the lattice at 1 cm texels had 54 hard squares at the default softness (pixels read
+lit beside neighbours at 0.15 to 0.34): the 4 cm cap had kept the search small on coarse tiles; with it gone the search runs at its cap.
 
-A first run gave +0.064 ms (+42 %) for fov 2.5, 2048 (that sample had a 7 % spread; the second run is above). Target (reported by the bench, not gated by its
-exit code): at most +45 % of the lookup and 0.06 ms per full-screen layer at 1440p. Against the owner's floor (about 60 fps standing, never below 25 moving): four
-overlapping lamps each covering 60 % of the screen add about 4 x 0.6 x 0.05 = 0.12 ms, 0.7 % of a 16.7 ms frame (60 to about 59.6 fps);
-the tile renders and the pool's scheduler are not touched. AMD and Intel are not measured: their register files differ, so the carrying
-cost may be higher (the prototype measured 5 to 7 % just for carrying the code). `ST_RV_S` 12 is the fallback (measured earlier: +17 to
-21 % for the lookup, and 2-degree edges then step 0.35 texel). The real `spotLightF` permutations' link time and occupancy were not measured.
+Straight opaque edges on a 2.5 mm tile (twin): the 10-90 % width is 0.82 to 0.90 of a uniform disc's wherever the radius is physical (the
+filter's weights draw an edge about 16 % narrower than a disc of the same radius); at the floor it is wider (1.88 to 1.98 texels for a
+1.035 cm lamp, physics 1.42), at the cap narrower. The 50 % contour wanders 0.01 to 0.87 texel inside that ramp.
 
-A wider lamp is dearer: with `--softness 1` (the slider's top, a 1 cm emitter instead of 2.3 mm) the same scene costs +0.071 ms (+69 %,
-two runs) at fov 1.5, 2048 and +0.059 ms (+39 %) at fov 2.5, 2048, so the 0.06 ms target is exceeded at fov 1.5; softness 0.5
-is +0.042 ms (+41 %). Pixels with a physical radius of 1 to 2.5 texels pay the search, the edge fit and, from 1.5 texels or on a
-fallback, the 32-tap filter as well (P2 plus the fit), and a wider lamp moves more silhouette pixels into that band. Their number is
-bounded by the silhouettes' length in pixels. A forced-fallback ceiling and a scene denser in edges than the bench's 24 plates were
-not measured; the fallbacks if the in-world check finds the band too dear are narrowing it (`ST_RV_HI` 2.0) and `ST_RV_S` 12.
+Offline GL (`proj_edges_bench.py`, RTX 5070 Ti, driver 621.14, 2026-11-18, no build running):
+
+| test | result |
+|---|---|
+| staircase width, fov 2.0, tiles 1024 and 2048, 2 to 45 degrees, a 4.5 cm lamp (`--softness 1 --plate-h 1.2`) | 23.7 to 25.0 mm against 28.5 mm (within 20 %: worst 17.1 % narrower, 12 scans) |
+| avatar, tiles 2048 / 1024 (texels 2.3 / 4.6 mm), softness 0.23 | toe x50 -0.6 mm, nothing under the toe, shoulder x50 -0.9 mm, shoulder width 84 % / 89 % of the reference: PASS |
+| toe contact RMS (reported) | 0.054 / 0.072 (P2: 0.049 / 0.062): the contact's own penumbra (0.4 mm) is far under the 1.5-texel floor |
+| acne: a lit plane tilted 0 to 75 degrees, tiles 2048 / 1024 / 512 | no darkening |
+| G1, the 4096 and 8192 atlases; the cells check | max abs 0 tile against standalone; PASS |
+
+The light-size study's avatar outline (its `avatar_twin.py` with L1's lookup, `reports/lamp-light-size-2026-11-18/bench/l1_edge_twin.py`):
+at the default softness the outline is set by the 1.5-texel floor on 2.5 and 5 mm tiles (0.5 and 1.0 cm in the figure plane); at the
+slider's top (4.5 cm) the head's and shoulder's edges are 0.6 to 0.85 of physics, because the 12-texel cap binds on a 1 mm tile and the
+nearest blocker and the weights narrow a curved silhouette.
+
+### Cost (`proj_edges_bench.py --time`: 2560 x 1440 floor, every pixel inside the lamp, 24 plate edges plus the avatar, softness 0.23)
+
+| lamp, tile | release (the reconstruction, 1 cm lamp) ms | L1 ms | difference |
+|---|---|---|---|
+| fov 1.5, 2048 / 1024 / 512 | 0.1484 / 0.1450 / 0.1431 | 0.1095 / 0.1124 / 0.1202 | -26 / -22 / -16 % |
+| fov 2.5, 2048 / 1024 / 512 | 0.2139 / 0.2129 / 0.2100 | 0.1785 / 0.2028 / 0.2431 | -17 / -5 / +16 % |
+
+The fov 2.5 lamp on a 512 tile is dearer: the 1.5-texel floor on a coarse tile puts 5.6 % of the pixels in the penumbra (the release
+lookup 0.9 %), and each runs the 32 filter gathers. The receiver's gather costs about 8 % of the lookup (P2 against L1 at fov 1.5, 2048:
+0.1015 against 0.1095 ms, the same penumbra share). Against the owner's floor: four lamps each covering 60 % of a 1440p screen cost
+about 0.26 to 0.58 ms on this card (the release lookup 0.34 to 0.51 ms). AMD and Intel are not measured.
 
 ### Limits
 
-- **Curves.** The reconstruction fits straight edges. On a round silhouette (a head, a table rim, most of an avatar) it is sharper
-  than the filter was, and the same 0.6 to 0.9 texel facets show crisp instead of blurred. Staircase part of a circle's contour
-  (peak to peak, texels, 512 / 1024 / 2048): 0.43 m radius P2 0.81 / 0.77 / 0.90, RVreal 0.87 / 0.55 / 0.63; 0.13 m P2 0.26 / 0.79 /
-  0.85, RVreal 0.24 / 0.77 / 0.86. The total contour error at 512 is a little worse than P2's (R 429 mm: RMS 10.5 against 8.3 mm,
-  bias -7.9 against -3.4 mm: chords lie inside a convex curve). Looked at by eye, the 512 tile / 0.43 m case shows isolated
-  texel-sized notches along the edge where neighbouring texels fit different lines. A curve-aware fit (a longer chord, a quadratic) and
-  more resolution (tile sizing, PR B) are the open options; neither is in this PR.
-- **Shallow edges** (a run longer than the traversal, under about 2.4 degrees) step up to 0.49 texel.
-- **Seams of sized or split tiles** (PR B) are not measured here.
-- **A moving caster:** a sub-texel move flips staircase bits and the fitted line moves by up to 0.2 texel on an edge 0.35 texel wide;
-  the contour jitter against P2 is not measured.
-- A small lateral bias shared with P2 (+0.1 texel away from the lamp's axis) comes from the one-texel normal offset and is not addressed.
+- **Contacts are wider than physics.** A contact's penumbra is narrower than the 1.5-texel floor; on a 2.5 mm tile a toe's edge is about
+  4 mm (10-90 %) where physics has 0.4 mm. Its position is right (within 1 mm).
+- **Big lamps on fine tiles are sharper than physics:** the 12-texel cap is 12 mm on a 1 mm tile, so above about 3 cm the slider's top
+  depends on the tile there (the light-size audit's A5).
+- **The umbra shortcut** (all 36 search texels blocked returns 0) can skip a hole of a lace within the filter disc: on a lace at 1 cm
+  texels with the 4.5 cm lamp, three neighbour pairs in 36,000 differ by 0.27.
+- **See-through casters** keep today's rule: glass is a dither (grain under the filter: the twin's gradient energy is 6 to 9 times the
+  truth's at 1 and 0.5 cm texels), lace takes the creator's cutoff on the mip-averaged mask (one solid shadow on coarse tiles). The
+  study's stage L3 (a light-let-through layer) is the fix.
+- **A moving caster** on a coarse tile moves in soft steps of the texel (L2 keeps the tiles at their lamp's size while the atlas has room).
 
 ## Stage P3: cache and camera-proof
 
@@ -260,7 +249,7 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `mover` | an object turned into a mover or a physical one, stopped being physical, or became active or static again (one push at each edge) |
 | `lamp` | the lamp's own pose changed: position more than 1 mm, rotation 1e-4, scale 1 mm, angle 1e-4, reach 1 cm |
 | `avatar` | P4: an avatar is in the light (the avatar layer of the tile is drawn again, S is not), or it left (one layer pass restores L from S) |
-| `lowres` | a layout change down-sized the tile (a blit): drawn again at its new size |
+| `lowres` | a resize (L2): the valve or the lamp's cone or reach changed the tile's size; its render draws the new size into a new rect and swaps it in (draw-then-swap; the name is kept for the stats) |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
 Texture-coordinate and colour rebuilds (texture animation, tints) never make a tile stale, nor do the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection, bump changes: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A texture, material, bump or glow change dirties tiles when the prim had a blended, alpha-masked or alpha-textured face before the change or has one after it (`llprojectorpool::texturedDirties(was, now)`): a face turned opaque closes a hole the cached tile still has, so it must push too. `was` is the object's `POOL_ALPHA_FACE` bit, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The bit is only kept while the feed tracks, so a second bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown `was` makes `texturedDirties(was, now, known)` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint, and so calls it again after an alpha change) or the new one (the `setTE*` and material setters, `changeTEImage`); the rule needs neither. An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the alpha bit (the face counts as alpha only once its texture's components are known) and pushes if it now has an alpha face. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
@@ -468,13 +457,16 @@ estimate.
 ### The combined cap
 
 P3 had two caps that could both be spent in one frame: static 0.35 ms and dynamic 0.30 ms, 0.65 ms, against about 0.4 ms of
-the former +5 % allowance (an assumed 8 ms frame; retired 2026-11-16, the budget is now the fps floor, see AGENTS.md). P4 has one (`llprojectorpool.h`, `selectFrame`):
+the former +5 % allowance (an assumed 8 ms frame, never measured). P4 has one (`llprojectorpool.h`, `selectFrame`). Lamp shadows L2 set it
+from the owner's frame-rate floor (AGENTS.md, since 2026-11-16: about 60 fps standing in a crowded room, never below 25 fps moving),
+which replaced the +5 % rule: the shadow caches' tile work may take 3 % of the standing floor's frame (`kFloorShare`,
+`kFloorStandingFps`).
 
 | | ms of CPU a frame | meaning |
 |---|---|---|
-| `kFrameCapMs` | **0.35** | everything the shadow caches' tile work spends in a frame, all caches together (4.4 % of an 8 ms frame; 0.05 ms of the 0.4 ms stays free) |
-| `kDynamicCapMs` | **0.20** | the dynamic layer's share while a static tile waits, spent first (a moving lamp's tile, the avatar layers). When no static tile waits, the share is the whole remaining cap (`dynamicShareMs`; hotfix C1) |
-| `kStaticCapMs` | **0.15** | what the static tiles keep when the dynamic layer takes its 0.20 ms (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.35 |
+| `kFrameCapMs` | **0.5** (was 0.35) | everything the shadow caches' tile work spends in a frame, all caches together: 0.03 x 1000 / 60 fps. Spent in full by a frame that is CPU-bound right at the floor it costs 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving; a static scene spends nothing, and a GPU-bound frame hides it |
+| `kDynamicCapMs` | **0.30** (was 0.20) | the dynamic layer's share while a static tile waits, spent first (a moving lamp's tile, the avatar layers). When no static tile waits, the share is the whole remaining cap (`dynamicShareMs`; hotfix C1) |
+| `kStaticCapMs` | **0.20** (was 0.15) | what the static tiles keep when the dynamic layer takes its 0.30 ms (`kFrameCapMs - kDynamicCapMs`); with no dynamic work they get all 0.5 |
 
 - **Priority: the dynamic layer first.** An avatar or a moving lamp that lags is seen at once; a dirty static tile shows a stale
   shadow of something that changed, and its wait is bounded by the age order (oldest first). A static tile is never starved: the first
@@ -485,8 +477,8 @@ the former +5 % allowance (an assumed 8 ms frame; retired 2026-11-16, the budget
   yet in the frame, a single item whose own prediction is above the cap runs alone. Two caches share the cap through the frame ledger
   (`frameLedger()`): the second takes what the first left, and a frame in which the cap is spent serves nothing more.
 - **A_max covers the static tiles too.** A static tile that draws avatars (a first fill, a dirty or low-res tile) is charged `min(avatars, A_max)` draws (`StaticItem::avatar_draws`) against what the dynamic picks left of A_max; one that does not fit waits (the order is kept), and the head tile keeps its place (the dynamic layer gives up its last avatar faces for it, only when the head is served; so for a cold fill of avatar-heavy tiles the dynamic avatar faces yield to the head tile), so a cold fill never draws more than A_max avatars in a frame.
-- **In the frame** each render also checks the measured time against the cap (the dynamic list against its share: 0.20 ms while a static tile waits, the whole remaining cap when none does).
-- **Cold start** (`coldItemMs`) is at most a quarter of the cap (0.0875 ms): four first fills a frame with no avatar layer, one a frame
+- **In the frame** each render also checks the measured time against the cap (the dynamic list against its share: 0.30 ms while a static tile waits, the whole remaining cap when none does).
+- **Cold start** (`coldItemMs`) is at most a quarter of the cap (0.125 ms): four first fills a frame with no avatar layer, one a frame
   while the dynamic layer is full.
 - Unit-tested: the combined cap is never exceeded with both kinds pending, over six costs on each side; the dynamic share, the static
   floor and the whole cap without dynamic work; the progress rule; two caches on one ledger.
@@ -501,25 +493,27 @@ owner's walk session; `pool.last_frame_avatar_draws`, `last_frame_layer_renders`
 Faces drawn a frame = **min(A_max left, dynamic CPU share / cost of a face)**, with A_max = 24 avatar draws (one per avatar in a lamp's
 volume), less the faces drawn every frame. The share has two regimes (hotfix C1, `dynamicShareMs`):
 
-- **while a static tile waits** it is 0.20 ms: with a 0.05 ms face that is **4 faces a frame**;
-- **when none waits** it is the whole remaining cap, 0.35 ms: up to **7 faces a frame** at the 0.05 ms floor.
+- **while a static tile waits** it is 0.30 ms: with a 0.05 ms face that is **6 faces a frame** (4 before L2);
+- **when none waits** it is the whole remaining cap, 0.5 ms: up to **10 faces a frame** at the 0.05 ms floor (7 before L2).
 
 A_max does not bind below 24 faces. The wait of the last face of a set is `ceil(faces / per frame)` frames. The order of service is:
 the faces of the user's own avatar first, then the faces past their deadline (the most overdue first, the safety net), then the camera
 POSITION's distance to the face's nearest other avatar (not the lamp's distance, which ties at 0 indoors), then the oldest. The prediction (`lastAvatarMs`) is an EMA
-(0.25) seeded by the first sample, each sample clamped to 0.7 ms (2 x the cap).
+(0.25) seeded by the first sample, each sample clamped to 1 ms (2 x the cap).
 
 Faces drawn a frame / worst gap in frames, indoors, one avatar under all lamps, no static tile waiting (a model of `update()`,
-`llprojectorshadowpool_test --table`; "before" is the release scheduler before C1, with its fixed 0.20 ms share):
+`llprojectorshadowpool_test --table`; "before C1" is the release scheduler before C1, with its fixed 0.20 ms share of 0.35 ms; "C1" the
+scheduler with the 0.35 ms cap; "L2" with the floor's 0.5 ms):
 
-| lamps | cost per face (ms) | before | after |
-|---|---|---|---|
-| 1 | 0.30 | 0.25 / 4 | 1.00 / 1 |
-| 2 | 0.15 | 1.00 / 4 | 2.00 / 1 |
-| 3 | 0.07 | 2.00 / 4 | 3.00 / 1 |
-| 4 | 0.10 | 2.00 / 4 | 3.00 / 2 |
-| 5 | 0.07 | 2.00 / 4 | 5.00 / 1 |
-| 5 | 0.15 | 1.00 / 5 | 2.00 / 3 |
+| lamps | cost per face (ms) | before C1 | C1 | L2 |
+|---|---|---|---|---|
+| 1 | 0.30 | 0.25 / 4 | 1.00 / 1 | 1.00 / 1 |
+| 2 | 0.15 | 1.00 / 4 | 2.00 / 1 | 2.00 / 1 |
+| 3 | 0.07 | 2.00 / 4 | 3.00 / 1 | 3.00 / 1 |
+| 3 | 0.15 | 1.00 / 4 | 2.00 / 2 | 3.00 / 1 |
+| 4 | 0.10 | 2.00 / 4 | 3.00 / 2 | 4.00 / 1 |
+| 5 | 0.07 | 2.00 / 4 | 5.00 / 1 | 5.00 / 1 |
+| 5 | 0.15 | 1.00 / 5 | 2.00 / 3 | 3.00 / 2 |
 
 (Estimated from the cap and the 0.05 ms floor; the real cost of a face is unmeasured. In a real overload, more face cost than the cap
 holds, the deadline turns the service into a round robin: the worst gap is then about the number of lamps, up to 5 in the model.)
@@ -573,13 +567,17 @@ No in-world check: the walk under three lamps, the dancer under club lights, the
 attachments (rigid and rigged) in the layer, the per-face cost and the off-screen animation of paired avatars. The viewer was built and
 the login screen started only. The owner's walk session is owed.
 
-## Tile resolution: cells of a wide lamp and the camera position's sizing
+## Tile resolution: cells of a wide lamp, sizes from the lamp and the pressure valve (lamp shadows L2)
 
-Owner report 2026-11-16: a projector's shadow on the floor has stepped edges. The step is the tile's texel (the filter cannot hide it:
-`reports/projector-edges-2026-11-16/design.md` section 2), so two things follow: more resolution where it matters (this section) and a
-straighter edge from the same texels (a separate PR). Rules kept: OpenGL 4.6, no compute; a tile's image depends on the lamp, the scene
-and its size only (the camera POSITION picks a size, never what the tile holds, and its direction enters nowhere). `reports/projector-edges-2026-11-16/design.md` is kept on the owner's machine, not in the repository (`reports/` is untracked); the rules and constants it motivates are inline here and in `llprojectorshadowpool.h`; Legacy and the sun
-are untouched; no Preferences entry (the constants are in `llprojectorshadowpool.h`).
+Owner report 2026-11-16: a projector's shadow on the floor had stepped edges, the step being the tile's texel; the tile-resolution PR
+gave wide lamps cells and sized every tile by the camera position's distance to it. Owner report 2026-11-18: hard squares that grow as
+the camera backs away, and the owner's own shadow stepping while walking. The camera-sized tiles made the picture depend on where the
+camera stood and resized tiles 7 to 24 times a second while walking (the earlier sizing model), each resize showing a nearest-stretched
+tile until its redraw. L2 sizes every tile from its lamp, lets the camera's position decide only who shrinks first when the atlas is over
+its budget, and draws a new size before it is shown. Rules kept: OpenGL 4.6, no compute; a tile's image depends on the lamp, the scene
+and its size only (the camera's direction enters nowhere); Legacy and the sun are untouched; no Preferences entry (the constants are in
+`llprojectorshadowpool.h`). The design files are on the owner's machine (`reports/projector-edges-2026-11-16/design.md`,
+`reports/lamp-shadow-method-2026-11-18`): the rules and constants they motivate are inline here and in the header.
 
 ### Cells (wide lamps)
 
@@ -591,65 +589,119 @@ are untouched; no Preferences entry (the constants are in `llprojectorshadowpool
   at a seam read the neighbour's content (the filter's largest radius is 12 texels). A tile of `Nc` texels has an interior of
   `Ni = Nc - 32` texels. The lamp's own border has no neighbour: the guard there is the lamp's frustum widened (real geometry).
 - **Lookup** (`shadowStochasticUtil.glsl`, `stCellPick` in the G1 block): the receiver's lamp-image position `c` (after the normal offset)
-  picks the cell `floor(c * g)`, the tile uv is `((c g - cell) Ni + G) / Nc`, the texel size, the bias, the penumbra's scale and the
-  radius cap use the virtual resolution `g Ni` (what one tile of the same texels would have), and the receiver plane's gradient is divided
-  by `g Ni / Nc`. Every tap reads that cell's tile. A cell without a drawn tile (`Nc` 0) lights without a shadow, like a lamp without one. The cell's guard must cover the filter's widest tap plus the bilinear footprint: `static_assert(kCellGuard >= kKernelTexelsMax + 2)`.
-  `stSpotQuadTile` and `stSpotFilterTile` take the tile as a parameter (`vec4`: atlas origin, size, 1 / atlas): the first step of the point
-  lights' Q2a refactor (`doc/shadows/point-light-shadows-plan.md` 3.4), the atlas stays the uniform; G1 stays max abs 0.
+  picks the cell `floor(c * g)`, the tile uv is `((c g - cell) Ni + G) / Nc`, the texel size, the bias and the penumbra's scale use the
+  virtual resolution `g Ni` (what one tile of the same texels would have), and the receiver plane's gradient is divided by `g Ni / Nc`.
+  Every tap reads that cell's tile. A cell without a drawn tile (`Nc` 0) lights without a shadow, like a lamp without one. The cell's
+  guard must cover the filter's widest tap plus the bilinear footprint: `static_assert(kCellGuard >= kProjectorLamp.kernel_max + 2)`.
+  `stSpotQuadTile` and `stSpotFilterTile` take the tile as a parameter (`vec4`: atlas origin, size, 1 / atlas), and the filter's cap is
+  a parameter too (a point-light face will pass its own); the atlas stays the uniform; G1 stays max abs 0.
 - **Uniforms**: `proj_shadow_grid` (gu, gv, G; 1, 1, 0 for one tile) and `proj_shadow_cells[16]` (x, y, Nc, Ni; index = row * 4 +
   column), set per lamp in `setupLight`. The lookup matrix is the lamp's, built from the pose of the most recently drawn cell; a cell drawn
   from another pose (the lamp moved since) reads as not drawn until it is drawn again, so a lookup never mixes two poses.
-- **One record per tile.** `Record` is a tile: key = lamp << 4 | cell index (the point lights' `lamp * 8 + face` pattern), so the scheduler,
-  the change index, the LOD pins, the layers and the stats work per cell unchanged. A cell's change volume (`Record::volume`) is its widened
-  frustum at its current size (an object that only a neighbour's guard holds dirties both cells); `Record::core` is its interior, for the
-  camera distance and the own avatar. A lamp edited to another grid drops its tiles and starts again.
+- **One record per tile.** `Record` is a tile: key = lamp << 4 | cell index, so the scheduler, the change index, the LOD pins, the layers
+  and the stats work per cell unchanged. A cell's change volume (`Record::volume`) is its widened frustum at its current size (an object
+  that only a neighbour's guard holds dirties both cells); `Record::core` is its interior, for the camera distance and the own avatar.
+- **A lamp whose cone crosses the split** (or whose aspect moves a cell boundary) gets a new grid (light-size study N3). Its old tiles
+  retire under the lamp's old id (`mRetiringOf`) and keep serving the lookup, as pose-stale tiles always do, until every tile of the new
+  grid is drawn; then they go (draw-then-swap; before L2 they were dropped and the lamp was lit without a shadow until the new cells were
+  drawn). A retiring tile is not drawn, resized or tested against the scene's changes, and counts at its size in the valve. A second grid
+  change while the new set is incomplete drops that set and keeps the complete old one; a lamp switched off drops its retiring tiles.
 
-### Sizing by the camera position
+### Sizes from the lamp
 
-- Per tile, every frame (`update`, from the lamp's pose and the camera's POSITION): `D` = the distance from the camera position to the
-  cell's interior volume (`pyramidDistance`, a lower bound, 0 inside), the target texel `T(D) = max(3 mm, 2 mm per m x D)`, the reference
-  depth `w_ref = min(1.5 r, 4 m, w_cam + 2 m)` (`w_cam`: the camera's axial depth in the lamp, inside its near and far; so the floor under
-  a standing camera gets the target), and the request `tan_w * w_ref / T(D) + 2 G` texels (`cellWanted`, `tan_w` the cell's wider axis; `cellSizeRequest` is the whole composition, from the lamp and the camera's position only: no view direction is a parameter).
-  A lamp of one tile is sized the same way (no guard); `baseSize` is no longer used by the pool.
-- **Hysteresis** (`SizeHysteresis`, per tile): the size is a power of two in `[64, 2048]`; it changes only when the request leaves 0.75
-  octave around it and has asked for the new size for 0.5 s. The first request sets the size at once.
-- **Budget**: the global `LevelController` (shrink above 60 % demand, grow back after 3 s at or below 45 %) shifts every tile together, as
-  before. The design's banded fit (nearer bands first) is not built: the global level is the model's second column (`design.md` 5.3).
-- **A size change in place** (`resizeInPlace`): a new rect is taken beside the old one, the old content is blitted over (nearest) to the new
-  rect in S and in L (L's own, so an avatar layer stays; a wide lamp's cell by its interior, so the content registers with the lookup,
-  and its guard strips hold the stretched edge until the redraw), the old rect is freed, and the tile is drawn again at its size (cause
-  `lowres`). The lookup never loses a shadow: it reads the blocky content until the redraw. Growth takes the same path as shrinking: design
-  5.4 asked for draw-then-free on growth (the old tile serving the lookup until the new one is drawn), which is not built; the redraw is
-  a static item, and `selectStatic` always runs the first pending one, so the blocky tile is bounded by the scheduler (many tiles resizing
-  together can wait several frames). At most `kMaxResizesPerFrame` (3) tiles resize in a frame; the rest keep their size and retry the next
-  frame (`resize_deferred` counts them), so a burst is spread. Only a level change, or no room in the buddy allocator, repacks the whole layout (the old
-  path: tile copies, blits, L to S in full); `resize_repacks` counts the fallbacks.
-- **The own avatar**: of a wide lamp's cells, only the one whose interior holds the centre of the avatar's box draws its layer every frame
-  (past the cap, `cellHoldsOwn`): one per lamp, however many cells the box's width crosses near the apex. The other cells the box overlaps
-  are served by deadline like any other avatar's face.
+- Every tile's size comes from its lamp alone (`tileBaseSize`): its interior spans `tan_w * d_ref` metres at the reference depth
+  `d_ref = min(1.5 r, 4 m)` and wants 4 mm texels there, plus the cell's two guards; a power of two in `[128, 2048]`. `tan_w` is the
+  tile's wider axis as a span of tangents (`2 tan(fov / 2)` times the aspect on the wider axis for one tile, its share of that for a
+  cell). It is computed with the tile's volume, only when the lamp's pose changes (cone, aspect, reach, grid). `baseSize` is its one-tile,
+  square case. There is no per-tile sizing in the frame loop any more (`SizeHysteresis`, `cellSizeRequest` and their constants are gone).
+- **While the atlas has room** (the tiles' demand at most 0.60 of the atlas) every tile keeps its lamp's size, whatever the camera does:
+  walking and orbiting change no size.
+
+### The pressure valve (over the budget)
+
+- Each tile sits in a **distance band**: the camera POSITION's distance to the tile's interior volume (`pyramidDistance`, a lower bound;
+  never the view direction), under 8 m, 8 to 16, 16 to 32, 32 to 64, 64 m and beyond (`bandOf`). A band changes only half an octave past
+  its bound (`nextBand`), so a camera standing at a bound changes nothing.
+- A **pressure** P shifts the tiles of band b down by `clamp(P - (4 - b), 0, 5)` octaves, never below 64 (`valveShift`): one step of P
+  halves the farthest shrinking band once more and starts the next nearer one, so a tile one band farther ends one octave coarser, its
+  texel growing with its distance as the screen's does. P rises at once (as many steps as it takes to be at or below 0.60, one more when
+  an arriving tile found no room even after a compaction) and falls one step after 3 s at or below 0.45: the hysteresis of the old global
+  level, which is the case of every tile in the farthest band (`LevelController`, the same class). P never passes the point where every
+  tile is at its floor (`pressureCeiling`), and a step down skips the steps that change nothing (a band with no tile), so no hold is
+  spent on them.
+- **Why the near band starts at 8 m:** within 8 m a lamp's 4 mm texel is about half a pixel of a 1440p, 60 degree view (0.8 mm a metre)
+  or coarser, so every near tile matters alike: a room is one band and shrinks evenly, with no size changes as the camera walks in it.
+  Measured with the sizing model (below): bands from 2 m changed 7.9 tile sizes a second in the model room and 28 in the club, from 8 m
+  0.23 and 7.6, with the same floor texel in the room and a finer one in the club; a 1 s hold on band changes bought only 7.6 -> 7.0 in
+  the club and is not built.
+- A lamp that is off (S2, below) and a lamp's retiring tiles count at their sizes; the valve does not size them.
+
+### Draw-then-swap
+
+- A tile whose wanted size differs from its drawn one is resized by its own render (`renderTile`): its rect is freed, the new size is
+  allocated and drawn in the same call, and the lookup reads it only afterwards (the lighting pass runs after the frame's tile work), so
+  it never shows a stretched or half-drawn tile. Nothing else can take the block in between, and the old texels are never read again.
+- A shrink always finds a block (its own); a growth waits until `BuddyAtlas::largestAfterFree` (the block it would get once its own rect
+  is freed and merged) holds the new size (`resizeDue`). A resize is a static item (cause `lowres`), under the frame budget like any.
+- A repack is now only a **compaction** (`compact`): every placed tile at its own size in a fresh layout (descending sizes pack a buddy
+  atlas without a gap, so what fitted fits again), the drawn ones moved by bit-exact copies, then L to S in full. It runs when an
+  arriving tile finds no block although the free texels would hold it (fragmentation); when even that leaves one out, the valve steps up.
+
+### Lamps that scripts switch (lamp shadows S2)
+
+- A projector that a script switches off, turns black or gives a radius of 0 (blinkers and strobes toggle every 0.03 to 1 s, a broken
+  tube sleeps up to 2 s) keeps its tiles for `kOffHoldSeconds` = 5 s (`holdOff`): back on in that time it is shadowed at once with no
+  redraw, since a tile depends on neither colour nor intensity. While off its tiles are not drawn or resized, keep their atlas space and
+  keep collecting the scene's changes (their last pose and volume stay); after the hold they and their LOD pins go like a lamp out of
+  range (a day and night switch). Before L2 such a lamp lost its tiles at once and was lit without a shadow until redrawn.
+- **The change feed ignores what cannot change a silhouette.** A blinker toggles `PRIM_FULLBRIGHT` and `PRIM_GLOW` with its light; on a
+  prim with any alpha face that used to push its extents and redraw every tile that saw it at the blink rate. The feed now keeps a
+  **silhouette key** per prim (`LLViewerObject::mPoolAlphaKey`, in place of the `POOL_ALPHA_FACE` bit): which faces are blended, masked or
+  alpha-textured and, for each, its alpha, texture and channel count, mapping (repeats, offset, rotation, planar) and alpha mode
+  (legacy or glTF, with the base colour texture and its transform). `noteTextured` pushes only when the key changes
+  (`llprojectorpool::texturedDirties(was_key, now_key, known)`); fullbright, glow, shine, bump, RGB tints and the light's own colour
+  never do. A face turned opaque or alpha, a new alpha texture or a moved mask still push. Every caller is a main-thread hook, as before.
+- Light colour and intensity changes from the server reach no tile (`LLVOVolume::parameterChanged` calls no hook); the reach (radius)
+  changes the tile's frustum, so a change of more than 1 cm redraws it, but a radius of 0 is "off" and holds the tiles.
 
 ### Stats
 
-`ProjectorShadows.stats` gains `cells` (tiles; `lights` counts the lamps), `resizes` (in-place size changes since the atlases were made),
-`resize_repacks`, `resize_deferred`, and per tile `lamp` and `cell`. The owner's walk reads: the cell sizes against the camera distance, resizes per second
-(target under 30), repacks per second while walking (target under 1), the CPU per cell render, and the fps standing (60) and moving (25).
+`Stats` keeps its fields; `resizes` counts size changes (draw-then-swap), `resizeRepacks` the compactions, `resizeDeferred` the renders
+of a growth that found no block after all (drawn at its old size), and `level` is the valve's pressure. The owner's walk reads: tile sizes
+against the camera distance (nothing should change while the atlas has room), resizes per second, compactions per second, the CPU per tile
+render, and the fps standing (60) and moving (25).
 
 ### Gates
 
 | gate | how |
 |---|---|
-| rules | `llprojectorshadowpool_test` (`testCells`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`, the request never rises with the distance, the hysteresis (an oscillation of +-0.7 octave changes nothing, one change per hold, a bad request), `cellSizeRequest` is the composition of the three sizing rules (no orientation is an input, by its signature), the own avatar's cell is one per box |
+| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (blinkers keep their tiles, a long switch gives them back once); the silhouette key |
+| sizing model | `scripts/shadows/projector_sizing_model.py` (CPU): the rules written out, a 60 s walk in the model room (four wide lamps), a room whose lamps fit and the club, on the 4096 and 8192 atlases; gate: no size change at pressure 0 |
 | G1 | `projector_pool_g1.py` (tile in the atlas against the standalone map, max abs 0) |
-| cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick; not covered: the glue in `sampleProjectorShadow` (second pick, `kn` and `z_tex`, `grad / tscale`) |
+| cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick |
 | Legacy, sun | `check_legacy_glsl.py`, `check_legacy_shadows.py` and their tests; `stSpotFilterTile` is reached only through `sampleProjectorShadow`, the sun programs call `sampleSpotShadow` |
+
+Sizing model (2026-11-18, 60 s walk at 1.4 m/s; the floor texel under the camera from the tile's interior, which the earlier model took as
+the whole tile):
+
+| scene | atlas | tiles | demand at the lamps' sizes | pressure | size changes a second | floor texel under the camera, median / p90 |
+|---|---|---|---|---|---|---|
+| room, four wide lamps (fov 2.5, 3 x 3 cells) and four wall spots | 4096 | 40 | 9.25 | 6 | 0.23 | 10.4 / 10.4 mm |
+| same | 8192 | 40 | 2.31 | 5 | 0.23 | 5.1 / 5.1 mm |
+| room whose lamps fit | 4096 / 8192 | 8 | 0.50 / 0.12 | 0 | 0 | 3.3 / 3.3 mm |
+| club, 20 lamps (fov 1.2 to 3.0) | 4096 | 193 | 43.4 | 7 | 7.5 | 40.2 / 72.4 mm |
+| same | 8192 | 193 | 10.8 | 6 | 7.6 | 18.7 / 33.8 mm |
+
+The camera-sized tiles before L2 (the earlier model, without the guard correction, so optimistic): room 6.67 changes a second and 4.9 mm
+(8192) / 9.8 mm (4096); club 24.5 a second and 17.6 mm (8192) / 35.1 mm (4096). With lamp-sized tiles a room of wide lamps is over the
+budget on either atlas, so its tiles are shrunk evenly by the valve; only a farther band shrinks first.
 
 ### Not verified (this section)
 
-In-world look and the real CPU cost of a cell render and of per-cell avatar layers; AMD and Intel; the seam between two cells of different
-sizes (a shift of the contour of at most 0.07 texel of the coarser in the offline model, `design.md` 5.2, not measured on this
-implementation); a wide lamp that moves (its cells are drawn over several frames: a cell from the older pose is lit without a shadow until
-redrawn; a known regression against the one-tile lamp, only for lamps wider than about 93 degrees that move, rotate or are edited; the fix
-is one matrix and origin per cell, or all-or-none scheduling of a moving lamp's cells; test with O-6 on a lamp wider than 93 degrees);
-the blocky tile after a size change (a growing tile shows blocks until its redraw; count `resize_deferred` in a burst); a camera-driven boost
-of tile sizes pushing the global level down for every tile (the banded fit is not built; read `repacks` per second near wide lamps); the
-own avatar's guard-only neighbour cell lagging by about 2 frames at a seam; RV's traversal across a seam (the revectorization reads the receiver's own cell tile like every tap, with `tile` threaded through `stRvBlk`, `stRvLine` and `stRvVisibility`; its run traversal (`ST_RV_S` = 24 texels) is longer than the guard of 16, and a read past the tile clamps to its edge, so a run that reaches a seam farther than 16 texels away sees a replicated edge texel; the line fit (risers within 8 columns, a 4 x 4 window) stays inside the guard; the effect of a clamped run end is not measured); the banded budget.
+In-world look and the real CPU cost of a tile render, a resize and a compaction; the owner's rooms (their lamps' cones and reaches, which
+L0 of the study measures); AMD and Intel; the seam between two cells of different sizes (a shift of the contour of at most 0.07 texel of
+the coarser in the offline model, not measured on this implementation); a wide lamp that moves (its cells are drawn over several frames:
+a cell from the older pose is lit without a shadow until redrawn, only for lamps wider than about 93 degrees that move, rotate or are
+edited); the own avatar's guard-only neighbour cell lagging by about 2 frames at a seam; the retiring cells of a lamp whose cone crosses
+the split (no unit test: the logic is in the GL class); a growth waiting long for a free block in a fragmented atlas (a compaction runs
+only for an arrival).
