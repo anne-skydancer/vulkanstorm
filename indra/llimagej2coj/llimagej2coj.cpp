@@ -26,6 +26,7 @@
 
 #include "linden_common.h"
 #include "llimagej2coj.h"
+#include "llj2creduce.h" // <Vulkanstorm>
 
 // this is defined so that we get static linking.
 #include "openjpeg.h"
@@ -304,7 +305,8 @@ public:
         S32& widthOut,
         S32& heightOut,
         S32& components,
-        S32& discard_level)
+        S32& discard_level,
+        S32& resolutions)
     {
         parameters.flags |= OPJ_DPARAMETERS_DUMP_FLAG;
 
@@ -373,6 +375,17 @@ public:
             discard_level++;
             tilesW >>= 1;
             tilesH >>= 1;
+        }
+
+        // <Vulkanstorm> The resolutions of the component with the fewest: decode stays below them (llj2creduce.h)
+        resolutions = 0;
+        if (codestream_info->m_default_tile_info.tccp_info)
+        {
+            for (OPJ_UINT32 comp = 0; comp < codestream_info->nbcomps; ++comp)
+            {
+                const S32 comp_resolutions = (S32)codestream_info->m_default_tile_info.tccp_info[comp].numresolutions;
+                resolutions = (comp == 0) ? comp_resolutions : llmin(resolutions, comp_resolutions);
+            }
         }
 
         return true;
@@ -881,7 +894,12 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     U32 image_channels = 0;
     S32 data_size = base.getDataSize();
     S32 max_bytes = (base.getMaxBytes() ? base.getMaxBytes() : data_size);
-    bool decoded = decoder.decode(base.getData(), max_bytes, &image_channels, base.mDiscardLevel);
+    // <Vulkanstorm> Never ask for a coarser level than the codestream has (llj2creduce.h): OpenJPEG refuses a reduce
+    // factor at or above its resolutions while it reads the header, so a 16 px texture (5 resolutions) failed its
+    // first decode (discard 5) and was marked missing. It decodes at its coarsest level now, which setDiscardLevel(f)
+    // below reports; every other request is passed on unchanged.
+    const S8 reduce = (S8)LLJ2CReduce::reduceFactor(base.mDiscardLevel, base.mNumResolutions);
+    bool decoded = decoder.decode(base.getData(), max_bytes, &image_channels, reduce);
 
     // set correct channel count early so failed decodes don't miss it...
     S32 channels = (S32)image_channels - first_channel;
@@ -1012,16 +1030,18 @@ bool LLImageJ2COJ::getMetadata(LLImageJ2C &base)
     S32 height = 0;
     S32 components = 0;
     S32 discard_level = 0;
+    S32 resolutions = 0;
 
     U32 dataSize = base.getDataSize();
     U8* data = base.getData();
-    bool header_read = decode.readHeader(data, dataSize, width, height, components, discard_level);
+    bool header_read = decode.readHeader(data, dataSize, width, height, components, discard_level, resolutions);
     if (!header_read)
     {
         return false;
     }
 
     base.mDiscardLevel = discard_level;
+    base.mNumResolutions = resolutions; // <Vulkanstorm> for decodeImpl's reduce factor
     base.setSize(width, height, components);
     return true;
 }
