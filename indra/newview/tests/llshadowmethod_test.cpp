@@ -188,8 +188,9 @@ namespace
         check(monotone, "softness is strictly increasing with the position");
         check(round_trip, "value -> position -> value round-trips (0 exactly)");
         check(round_trip_pos, "position -> value -> position round-trips");
-        // 0.01 steps of the slider are fine steps of the value: under 0.03 anywhere (the largest, 0.027, is at the top), under 4 % from the
-        // centre up (as fine as the old logarithmic half), and about 0.0024 out of 0, so nearly-sharp values are reachable too
+        // 0.01 steps of the slider are fine steps of the value: under 0.03 anywhere (the largest, 0.026, is at the top), under 4 % from the
+        // centre up (3.5 % at the centre down to 2.7 % at the top; the old logarithmic half took 3.0 % everywhere), and about 0.0024 out
+        // of 0, so nearly-sharp values are reachable too
         float worst_abs = 0.0f, worst_rel_upper = 0.0f;
         for (int i = 0; i < 100; ++i)
         {

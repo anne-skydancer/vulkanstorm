@@ -104,8 +104,9 @@ namespace LLShadowMethod
     // gives 0 at the left end, the default exactly at the centre (p = 0.5: r^1) and SOFTNESS_MAX at the right end (c (r + 1)).
     // It is a logarithmic scale with an offset, p = log(1 + v / a) / (2 log r) with a = c / (r - 1), about 0.098: about linear below
     // a, where a still narrower penumbra no longer shows (the lamps' filter floor, the sun's texels), logarithmic above, where a
-    // 0.01 step of the slider changes the value by 2.7 to 3.4 % between the centre and the top. One smooth curve, so the slider has
-    // no kink at its centre. The setting keeps the real value; only the slider's position is mapped.
+    // 0.01 step of the slider changes the value by 3.5 % at the centre down to 2.7 % at the top (the old logarithmic right half: 3.0 %
+    // everywhere; finer only above about 0.45). One smooth curve, so the slider has no kink at its centre. The setting keeps the real
+    // value; only the slider's position is mapped.
     constexpr float SOFTNESS_MIN = 0.0f;
     constexpr float SOFTNESS_CENTRE = 0.23f;   // the default of RenderShadowLightSize
     constexpr float SOFTNESS_MAX = 1.0f;
