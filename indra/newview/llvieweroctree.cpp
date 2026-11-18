@@ -34,6 +34,7 @@
 #include "llviewershadermgr.h"
 #include "lldrawpoolwater.h"
 #include "llglsubmitstats.h"
+#include "llsimdkernels.h" // <Vulkanstorm> multi-core stage 3 (K5)
 
 //-----------------------------------------------------------------------------------
 //static variables definitions
@@ -188,45 +189,10 @@ S32 AABBSphereIntersect(const LLVector4a& min, const LLVector4a& max, const LLVe
 
 S32 AABBSphereIntersectR2(const LLVector4a& min, const LLVector4a& max, const LLVector3 &origin, const F32 &r)
 {
-    F32 d = 0.f;
-    F32 t;
-
-    LLVector4a origina;
-    origina.load3(origin.mV);
-
-    LLVector4a v;
-    v.setSub(min, origina);
-
-    if (v.dot3(v) < r)
-    {
-        v.setSub(max, origina);
-        if (v.dot3(v) < r)
-        {
-            return 2;
-        }
-    }
-
-
-    for (U32 i = 0; i < 3; i++)
-    {
-        if (origin.mV[i] < min[i])
-        {
-            t = min[i] - origin.mV[i];
-            d += t*t;
-        }
-        else if (origin.mV[i] > max[i])
-        {
-            t = origin.mV[i] - max[i];
-            d += t*t;
-        }
-
-        if (d > r)
-        {
-            return 0;
-        }
-    }
-
-    return 1;
+    // <Vulkanstorm> multi-core stage 3 (K5): the code moved unchanged to llmath, where the eight-box kernel is tested
+    // against it.
+    return LLSimdKernels::aabbSphereIntersectR2(min, max, origin, r);
+    // </Vulkanstorm>
 }
 
 //-----------------------------------------------------------------------------------

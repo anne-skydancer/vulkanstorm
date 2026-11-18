@@ -28,6 +28,7 @@
 
 #include "llmath.h"
 #include "llcamera.h"
+#include "llsimdkernels.h" // <Vulkanstorm> multi-core stage 3 (K5)
 
 // ---------------- Constructors and destructors ----------------
 
@@ -295,6 +296,42 @@ S32 LLCamera::AABBInRegionFrustumNoFarClip(const LLVector4a& center, const LLVec
 {
     return AABBInFrustumNoFarClip(center, radius, mRegionPlanes);
 }
+
+// <Vulkanstorm> multi-core stage 3 (K5): the two tests above for eight boxes at once, the same planes and decisions.
+// Inline (its only callers are the two below), so that each gets the body with far_clip folded: RelWithDebInfo's /Ob1
+// inlines only functions marked inline, and a call here made the eight-box test 4 % slower (1.30-1.31 ns a box against
+// 1.25-1.26).
+inline void LLCamera::AABBInFrustum8Impl(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes, bool far_clip)
+{
+    if (!planes)
+    {
+        planes = mAgentPlanes;
+    }
+#if defined(__AVX2__)
+    static_assert(LLSimdKernels::detail::kOctants == U32(PLANE_MASK_NUM), "the kernel skips the masks the one-box tests skip");
+    // The one-box tests' planes: at most mAgentPlanes[]'s 7, every one, or all but the far plane (index 5).
+    LLSimdKernels::aabbInFrustum8(planes, mPlaneMask, llmin(mPlaneCount, (U32) AGENT_PLANE_USER_CLIP_NUM),
+                                  far_clip ? (U32) AGENT_PLANE_USER_CLIP_NUM : (U32) AGENT_PLANE_FAR, boxes, out);
+#else
+    for (S32 k = 0; k < 8; ++k)
+    {
+        const LLVector4a center(boxes.mCenter[0][k], boxes.mCenter[1][k], boxes.mCenter[2][k]);
+        const LLVector4a radius(boxes.mRadius[0][k], boxes.mRadius[1][k], boxes.mRadius[2][k]);
+        out[k] = far_clip ? AABBInFrustum(center, radius, planes) : AABBInFrustumNoFarClip(center, radius, planes);
+    }
+#endif
+}
+
+void LLCamera::AABBInFrustum8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes)
+{
+    AABBInFrustum8Impl(boxes, out, planes, true);
+}
+
+void LLCamera::AABBInFrustumNoFarClip8(const LLSimdKernels::CenterRadius8& boxes, S32* out, const LLPlane* planes)
+{
+    AABBInFrustum8Impl(boxes, out, planes, false);
+}
+// </Vulkanstorm>
 
 int LLCamera::sphereInFrustumQuick(const LLVector3 &sphere_center, const F32 radius)
 {

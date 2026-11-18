@@ -76,7 +76,8 @@ the installer's `MinVersion=10.0` and AVX2 check, and the Linux wrapper check, w
    the width (§4.5); the stage-2 gate does. **Its first users: the cascade cull + sort, and the decode-priority /
    `calcPixelArea` pass**; then avatar animation (`updateCharacter`). The projector tiles wait.
 4. Bit-exact AVX2 kernels: positions, normals and tangents, and an 8-boxes-per-register frustum test. K4 (palette SIMD) stays low:
-   at most 0.27 ms.
+   at most 0.27 ms. **Built in stage 3: K1 and K2 in `LLFace::getGeometryVolume`; K5 as a kernel with its `LLCamera` entry
+   points, which 5c's cull split will call; see §6.3 "Stage 3 as built".**
 5. FMA: the memo only (§9). Not adopted.
 6. 5a the audit (the multi-core trio), 5c parallel culling (**cascades first**, then the world view; tiles last). 5b geometry fill
    is **not justified by steady-state fps** (§5, §7.1) and stays after the OpenGL arenas stage G5 (2026-11-11) as a loading-time item.
@@ -89,10 +90,12 @@ the installer's `MinVersion=10.0` and AVX2 check, and the Linux wrapper check, w
   different** out of 4.2 M, edge cases spread through the whole buffer. The ratio depends on the SSE reference's timing, which
   moved between two builds of the bench (§4.2); the AVX2 times themselves are stable. FMA changes **about 44 %** of the floats
   (1,862,692 of 4,194,304) for **12–24 %** more at 1 MB and above (about 30 % in L1-sized data).
-- Testing eight boxes per register against the frustum gives **identical decisions** for 65,536 boxes (NaN and inf boxes
-  included) and is **about 10×** faster as a kernel (14.4–15.0 → 1.44–1.48 ns per box). Only the AABB half of the viewer's cull
-  test is benched. The cull gain in the viewer will be smaller, since the octree is walked node by node. The measured cull
-  share is small (all culls 1.8–2.3 ms a frame, world view 0.4–0.6 ms [stage 1]), which caps what K5 can return.
+- Testing eight boxes per register against the frustum gives **identical decisions** (stage 3: 2.1 M box tests and 0.59 M
+  boundary probes on eight real cameras, NaN and inf boxes included) and is **3.3–3.7×** faster as a kernel than the viewer's
+  `LLCamera` test (4.3–4.6 → 1.25–1.29 ns per box), **1.9–2.0×** when the boxes must first be gathered from the `LLVector4a`
+  pairs the octree keeps; the sphere half is 3.6–4.9× faster (§6.3). §4.3's 10× (14.4–15.0 → 1.44–1.48 ns) was against a slower
+  bench copy of the test. The cull gain in the viewer will be smaller, since the octree is walked node by node. The measured
+  cull share is small (all culls 1.8–2.3 ms a frame, world view 0.4–0.6 ms [stage 1]), which caps what K5 can return.
 - An idle `LL::ThreadPool` worker wakes by `Sleep(1)`: **2.0 ms** per sleep with the viewer's 1 ms timer period (the Windows worst
   case; a worker polling at a random phase waits about 1 ms on average; non-Windows uses `usleep(1)`), **15.6 ms** without the
   timer period. A FrameJobs dispatch costs **1.1–2.5 µs** back to back.
@@ -436,7 +439,8 @@ stays the other way round: job bodies never copy `LLPointer`s.
 
 `dumpbin /disasm` of the 2026-11-08 Release exe had one FMA instruction, a `vfmadd213ss` in `std::lerp` (re-exported as the
 viewer's `lerp`, `llmath.h`). MSVC `/fp:precise` does not fuse on its own; Linux builds use `-ffp-contract=off`
-(`indra/cmake/00-Common.cmake`). Not re-run on today's binary.
+(`indra/cmake/00-Common.cmake`). Stage 3 counted again in devel `df1a0ce92f`'s RelWithDebInfo CI build: the same single
+`vfmadd213ss` in `std::lerp`. The Linux counts and the CI gate are in §6.3.
 
 ### 4.8 Stage-1 frame measurements, 2026-11-16 [stage 1]
 
@@ -595,9 +599,9 @@ attached, a best-case share of the frame and not a prediction (the Amdahl bound 
 
 | # | Kernel | Where | Status | Gain | Note |
 |---|---|---|---|---|---|
-| K1 | position transform + texture-index select | `llface.cpp:2126-2132` | measured (bench, 2026-11-15) | at least 1.5× (1.48–3.2× across two builds), bit-exact. It sits in the fill, which is 0.1–0.3 ms a frame settled [stage 1]: a loading-time gain | stage 3 |
-| K2 | normal and tangent rotation | `llface.cpp:2161-2178`, `:2196-2216` | measured, reference anomaly | expect 1.5–1.9×, bit-exact | stage 3 |
-| K5 | box against frustum, eight per register | `llcamera.cpp:207-290`, callers `llspatialpartition.cpp:1089-1155` | measured kernel | about 10× kernel (AABB half only), decisions identical; needs a node layout for a real gain | stage 3 kernel, used by 5c. The measured cull share is small (world cull 0.4–0.6 ms, all culls 1.8–2.3 ms a frame [stage 1]), so the in-viewer return is bounded by that |
+| K1 | position transform + texture-index select | `llface.cpp:2126-2132` | measured (bench, 2026-11-15); built in stage 3 (§6.3) | at least 1.5× (1.48–3.2× across two builds), bit-exact. It sits in the fill, which is 0.1–0.3 ms a frame settled [stage 1]: a loading-time gain | stage 3 |
+| K2 | normal and tangent rotation | `llface.cpp:2161-2178`, `:2196-2216` | measured, reference anomaly; built in stage 3 (§6.3) | expect 1.5–1.9×, bit-exact | stage 3 |
+| K5 | box against frustum, eight per register | `llcamera.cpp:207-290`, callers `llspatialpartition.cpp:1089-1155` | built in stage 3 (§6.3), no viewer caller yet | 3.3–3.7× as a kernel against the viewer's `LLCamera` test, 1.9–2.0× with the gather from `LLVector4a` pairs; the sphere half 3.6–4.9×; decisions identical (§4.3's 10× was against a slower bench copy); needs a node layout for the full gain | stage 3 kernel, used by 5c. The measured cull share is small (world cull 0.4–0.6 ms, all culls 1.8–2.3 ms a frame [stage 1]), so the in-viewer return is bounded by that |
 | K4 | skin matrix palette (`matMulUnsafe` per joint) | `llskinningutil.cpp:128-182`, called lazily per draw (`llvoavatar.cpp:11331`) | **measured** [stage 1] | 277–400 calls and 9,900–14,100 joints a frame in a crowd (47 and 1,800 at home); `initSkinningMatrixPalette` **0.22–0.27 ms** a frame, `uploadMatrixPalette` 0.45–0.65 ms | **stays low: at most 0.27 ms (about 1 % of the frame)**; the upload half is G3's (skin-palette UBO) |
 | K6 | CPU skinning of rigged volumes | `llvovolume.cpp:5276-5390` | only for picking and edit (`:5028-5114`, `llselectmgr.cpp:6906`) | low | not in Phase A |
 | — | volume, normal and tangent generation | `llvolume.cpp:2025`, `:2051`, `:5146`, `:6022`, `:6815` | irregular loops | low as SIMD; better as C7 | Phase B |
@@ -704,6 +708,124 @@ As in #448, with two updates (the width rule, and the spin window's risks).
 - The K5 bit-for-bit test covers the whole `AABBInFrustumNoFarClip` (box and sphere halves) with NaN and inf boxes and a real
   camera's planes, not only the AABB half benched here (§4.3).
 - K4 stays low: stage 1 counted 277–400 palette calls a frame and at most 0.27 ms for the matrix math, and the uploads are G3's (it was in stage 3 in the 2026-11-10 plan; the move is decision D2).
+- **Stage 3 as built (2026-11-18, `codex/multicore-stage3-avx2-kernels`).** `indra/llmath/llsimdkernels.h` (K1, K2, K5),
+  `indra/llmath/tests/llsimdkernels_test.cpp` (`INTEGRATION_TEST_llsimdkernels`, 5 tests, about 2 s), `LLCamera::AABBInFrustum8` /
+  `AABBInFrustumNoFarClip8`, the K1 and K2 call sites in `LLFace::getGeometryVolume` with a Tracy zone `getGeometryVolume -
+  position` (normals and tangents already had one), `scripts/tests/check_fma_count.py` and its CI step, and the test in CI's
+  regression-test step on Windows, Linux and linux-lts, where it passed 5 of 5 on each (PR #558 at `466ec6c425`). Each of the
+  three zones holds more than its kernel: its stream's strider mapping (`mapVertexBuffer`), in the position zone the padding
+  loop, and in the tangent zone the `genTangents` call (`createTangents`, which runs on a face's first build).
+  `mapVertexBuffer` and `createTangents` have zones of their own, so a capture reads each kernel in its zone's self time; the
+  stage-1 captures have no position zone, so K1's before figure needs a capture of the base with that one zone added. Where it
+  differs from the text above:
+  - **K5 has no viewer caller yet**, as §5.2 plans ("stage 3 kernel, used by 5c"). The octree is walked one node at a time
+    (`LLViewerOctreeCull::traverse`, through each cull type's virtual `frustumCheck`); testing a node's children eight at a time
+    changes the traversal, which is 5c's cull split. Stage 3 ships the kernel, the `LLCamera` entry points and the tests; 5c wires
+    them in. The entry points belong to stage 3 because the kernel needs the camera's plane masks and plane count, which are
+    private to `LLCamera`: they are the only way to it, for the tests now and for 5c. Two things are left to 5c:
+    - **The region culls.** `llvocache.cpp`'s culls go through `AABBInRegionFrustum` / `AABBInRegionFrustumNoFarClip`, which
+      test against `mRegionPlanes`, also private. 5c adds the two eight-box region entry points beside its first region caller,
+      one line each over the shared implementation, as the one-box pair is; the tests already pass shifted plane sets as
+      `planes`.
+    - **The box layout.** The octree keeps each group's box as a pair of `LLVector4a` (`mBounds`, `mObjectBounds`). Unless
+      5c's node layout keeps the children's boxes as structures of arrays, the gain to expect is the gathered figure,
+      1.9–2.0×, not 3.3–3.7× (tables below).
+  - **The sphere half moved to llmath unchanged.** `AABBSphereIntersectR2` for `LLVector4a` boxes is now
+    `LLSimdKernels::aabbSphereIntersectR2`, which `llvieweroctree.cpp` calls, so the eight-box kernel is tested against the
+    function the viewer runs, not a copy.
+  - **The references are the code the kernels replace.** K1 and K2 against the former `llface.cpp` loops verbatim (the padding
+    and the last transform included); K5 against `LLCamera::AABBInFrustum` / `AABBInFrustumNoFarClip` on real `LLCamera` frusta
+    (perspective, axis-aligned, 5 and 160 degrees, a user clip plane, an ignored plane, a box-shaped cascade frustum, a degenerate
+    one, and shifted plane sets) and against the whole `LLOctreeCull::frustumCheck` (the frustum test, then the sphere test).
+  - **Inputs and floating-point states.** Random values and random bit patterns; ±0, ±inf, quiet and signalling NaNs with
+    payloads, denormals, ±FLT_MAX, values whose squares overflow or underflow; in vertices, seven kinds of matrix, boxes and planes;
+    counts 0–9, 15–17, 31–33, 255–257, 1,000, 1,001 and 4,099; both 16-byte phases of a 32-byte line; flush-to-zero and
+    denormals-are-zero on and off in all four rounding modes (16 MXCSR states). Boundary probes set a plane distance or a squared
+    radius exactly to the value computed for a box and to the floats next to it, so that any change in a kernel's arithmetic
+    (operation order, fusion) flips a decision, which random boxes almost never do.
+  - **Every deliberate break is caught.** 27 breaks of the kernels, each built and run against the unchanged test: the operation
+    order and an FMA in each kernel, the blend masks, the two-vertex step and the scalar tail, the vertex repeated into the
+    padding, the far-plane skip, the compare predicates and their NaN behaviour, the corner signs, the order of the sphere test's
+    two branches, an axis mix-up and the result decoding. All 27 made the test fail. The review fix round broke what it
+    changed, 7 times, each built in the worktree's CMake build and run: `AABBInFrustum8` skipping the far plane,
+    `AABBInFrustumNoFarClip8` testing it, the skip choice swapped, the user clip plane dropped from the plane count, the region
+    planes as the default, the kernel never skipping the far plane, and the octant bound one short. All 7 made the test fail.
+  - **One IEEE caveat.** Where two NaNs meet in one multiply or add, x86 returns the first operand's NaN, and the compiler may swap
+    the operands of a commutative operation in either version. So there "a NaN" is guaranteed, not which one; the tests require
+    both NaN at those floats and identical bits everywhere else. Each of the three streams shows the swap in some build, and
+    where depends on the compiler, the build and the place in the code: it is not a property of a kernel. The floats that
+    carried the other NaN's payload, of the 18,336 (K1), 9,836 (normals) and 7,008 (tangents) where two NaNs meet:
+
+    | Build of `INTEGRATION_TEST_llsimdkernels` | K1 positions | K2 normals | K2 tangents |
+    |---|---|---|---|
+    | CI Windows (MSVC 19.51, RelWithDebInfo, LTO), PR #558 at `466ec6c425` | 0 | 0 | 1,504 |
+    | CI Linux (GCC 15.2) and linux-lts (GCC 14.2), RelWithDebInfo, LTO, the same head | 3,072 | 0 | 0 |
+    | The review fix round's local build, the worktree's own CMake tree with CI's flags (MSVC 19.51.36260) | 0 | 0 | 1,504 |
+    | The first round's local build: the test and `llcamera.cpp` alone with LTO, linked against another tree's `llmath` | 0 | 2,128 | 1,504 |
+
+    The two local builds use the same compiler on the same machine and differ only in how they were built. Every other float
+    of the 3.97 M (K1), 3.16 M (normals) and 3.95 M (tangents) compared was identical on all three CI platforms and in both
+    local builds, and no box decision depends on a payload.
+  - **Two registers per iteration.** With one, the normal loop ran 0.28–0.30 ns a vertex during development; with two it runs
+    0.19–0.26 (table below).
+  - **Compile-time selection, no dispatch.** `__AVX2__` (the `USE_AVX2_OPTIMIZATION` builds: CI and the releases) compiles the AVX2
+    loops; any other build compiles today's SSE loops. The test does not compile when `USE_AVX2_OPTIMIZATION` is set without AVX2
+    code generation, so CI always tests the AVX2 path.
+  - **FMA gate.** `check_fma_count.py` counts FMA-family instructions in the viewer executable of the RelWithDebInfo test builds
+    (where the regression tests run; Release builds run no tests and are not counted, but they compile with the same
+    floating-point flags, `/fp:precise` and, with AVX2, `-ffp-contract=off` in every configuration, and the 2026-11-08 Release
+    exe held the same single `std::lerp` FMA, §4.7). The count must equal the platform's baseline: above it something new
+    fuses, below it a library or the compiler dropped some or the scan broke, and either way the change that moves it sets
+    the new baseline with the reason, so the baseline holds no slack (995 of Linux's 998 are SoLoud's; a SoLoud update that
+    dropped them must not leave room for new ones in the viewer's code). The baselines were counted in the CI builds of devel
+    `df1a0ce92f` (Windows, Linux) and of PR #554 at `dae06b2b5b` (linux-lts): **Windows 1** (`std::lerp(float, float, float)`,
+    which MSVC's library computes with `fma()`), **Linux 998** (995 in the prebuilt SoLoud package of the Ubuntu 26.04 build:
+    SoLoud, miniaudio, dr_mp3, stb_vorbis and its FFT; 3 in GCC's expansion of vectorised unsigned-int-to-float conversions,
+    `float(hi)·65536 + float(lo)`, whose product is exact, so fused and unfused give the same bits), **linux-lts 3** (the same 3;
+    its SoLoud package holds none). PR #558's CI at `466ec6c425` counted exactly these: 1 of 8,937,074 instructions (Windows),
+    998 of 11,547,446 (Linux), 3 of 11,366,455 (linux-lts); the fix round's local build, 1 of 8,935,418. The kernels add none:
+    0 in `llface.obj`, `llvieweroctree.obj` and the test executable. On a Windows viewer executable the check takes 10–27 s on
+    the dev machine; Check PR runs its self-test (the parsers, the verdict and the tool runner).
+
+  Measured with `LL_SIMD_KERNELS_BENCH=1` (the test's opt-in bench) in the viewer's floating-point state, best of 7 trials of at
+  least 20 ms each, on the configuration of §4.1 with background desktop load only (no build or viewer running). [measured,
+  stage 3] The tables are CI's configuration, measured in the review fix round: the worktree's own CMake build with CI's flags
+  (RelWithDebInfo `/O2 /Ob1`, `/arch:AVX2`, LTO), 12 runs of four builds that share the K1 and K2 code (`466ec6c425` and the
+  fix round's), CPU 1–28 % around the runs. The first round's standalone builds (the test and `llcamera.cpp` alone, linked
+  against another tree's libraries; three runs with LTO and two without, CPU 6–40 %, three of 150 vertex samples and one run's
+  K5 lines left out as disturbed by that load) follow the tables.
+
+  | Kernel, 384–65,536 vertices | Today's SSE loop, ns a vertex | AVX2 kernel, ns a vertex | Speed-up | One 1,500-vertex face |
+  |---|---|---|---|---|
+  | K1 positions | 0.64–0.70 | 0.24–0.30 | 2.15–2.67× | 0.96–1.00 → 0.38–0.39 µs |
+  | K2 normals | 0.39–0.45 | 0.19–0.26 | 1.58–2.16× | 0.59–0.62 → 0.30–0.31 µs |
+  | K2 tangents | 0.56–0.62 | 0.22–0.29 | 2.02–2.59× | 0.86–0.89 → 0.34–0.35 µs |
+  | Each of the three at 24 vertices | 1.14–1.30 | 0.96–1.19 | 1.02–1.26× | — |
+
+  | K5, 8,192 boxes near a real frustum (53 % out, 23 % cut, 24 % in) | One box at a time, ns a box | Eight per call | Speed-up |
+  |---|---|---|---|
+  | `AABBInFrustumNoFarClip` | 4.31–4.62 | 1.25–1.29 on structure-of-arrays data; 2.26–2.30 with the gather from `LLVector4a` pairs | 3.37–3.69×; 1.87–2.04× |
+  | the sphere half (`AABBSphereIntersectR2`) | 1.65–1.70 | 0.35–0.36 | 4.70–4.88× |
+
+  The AVX2 times are the same in every build; the SSE references are not. The first round's standalone builds gave K1
+  0.64–0.70 ns a vertex with LTO and 0.74–0.78 without (2.25–3.03×), the normal loop 0.73–0.78 with LTO and 0.40–0.44 without
+  (3.04–3.78× and 1.74–2.12×), tangents 0.57–0.61 (2.18–2.58×), the one-box frustum test 4.27–4.52 ns a box (3.33–3.62×,
+  gathered 1.86–1.98×) and the one-box sphere test 1.27–1.29 ns (3.60–3.65×). So the normal loop's 0.73–0.78 ns belongs to
+  that one build, not to LTO: CI's configuration has LTO and takes 0.39–0.45. As in §4.2, the ratio inside the viewer is what
+  the Tracy zones show. The K5 reference is the viewer's `LLCamera` code (4.3–4.6 ns a box), not §4.3's bench copy (14.4 ns),
+  hence 3.3–3.7× rather than 10×; the eight-box time is close to §4.3's (1.25–1.29 against 1.44–1.48 ns). In the fix round, a
+  call from the eight-box entry points to their shared implementation, which `/Ob1` did not inline, made the eight-box test 4 %
+  slower (1.30–1.31 ns a box); the implementation is inline since.
+
+  **Per frame.** The three streams of a 1,500-vertex face take 1.02–1.06 µs instead of 2.41–2.50 µs in CI's configuration
+  (56–59 % less; 59–66 % in the first round's builds). `LLFace::getGeometryVolume`, which also writes texture coordinates,
+  colours and weights, is 0.30 / 0.06 ms a frame at Risk / Rooftops Ultra (§4.8) and 1.49 ms in the capture taken during a mesh
+  settle (`MC1-still`, baseline §4.2), Tracy attached; the kernels' share of it is not measured. Upper bound, as if the function
+  were only these loops: 0.17–0.20 / 0.03–0.04 ms a frame settled (Risk 56.0 → at most 56.6 fps; Rooftops 30.2 → 30.2) and
+  0.8–1.0 ms a frame during a settle. **No steady-state fps gain is
+  expected**; the gain is in loading and geometry rebuilds, and one Tracy capture with the new position zone gives the real figure.
+  Against the fps floor the stage costs nothing: no memory, no thread, no GPU work and no change to what is drawn. K5 has no caller
+  yet, so it changes no frame; for 5c, the culls are 1.8–2.3 ms a frame (§4.8) and the box tests' share of them is not measured.
 
 ### 6.4 Stage 5a: the audit (the multi-core trio)
 
@@ -789,7 +911,7 @@ estimate. Order: 0 ✓, 1 ✓, 1a ✓ (hotfix), 1b, 2, 3, 4 ✓, 5a, 5c, 5b.
 | 1a | projector pool per-frame cost (the stage-1 finding: 1.8 ms Risk, 6.4 ms Rooftops, 5.4 of it unzoned self time) | `llprojectorshadowpool.h` and the change index (ours) | none | the pool's own time about 0.3 ms [Rooftops split] | — | **largely solved** by hotfixes `13b7d28981` and `e74e5c85be`. What is left is a tile rendered nearly every frame (about 1.0 ms, 1 tile in 97 % of Rooftops frames, cause not captured: `projector_stats` was null) and `pinCasters` 0.4 ms inside every tile | — |
 | 1b | **GPU-time capture** (GPU zones or a GL timer-query capture) at Rooftops and Isle of Repose | Tracy GPU context / `llglsubmitstats.h` (G0) | none | GPU ms of the shadow passes and the frame; settles whether Rooftops is CPU- or GPU-limited | — | small [inferred] | low. **Comes before FJ's fps gates** (§6.7) |
 | 2 | `LL::FrameJobs`, width rule, pool widths, dev guards, unit and stress tests. **Built (#553), without the pool widths and with no user: see §6.2 "Stage 2 as built"; the gates wait for the first user** | new `llcommon/llframejobs.*`; `llappviewer.cpp` `initThreads` (179) a few lines; `threadpool.cpp` (0); `llviewerdisplay.cpp` (32) the `beginFrameWork` / `endFrameWork` hooks; dev guards in `llrefcount.h` (1), `llvertexbuffer.cpp` (6), `gGL` | low–medium (small hunks in two busy files, `llappviewer.cpp` and `llviewerdisplay.cpp`) | no fps loss on S1; settle not slower; width sweep; spin-window power and driver-thread check; 4-core affinity run. **FJ's first users: the cascade cull + sort and the decode-priority / `calcPixelArea` pass; then `updateCharacter`** | sanity run | **1–1.5 d** | **low–medium**: thread start and shutdown order, hooks in `display()`, spin window |
-| 3 | K1, K2, K5 + bit-for-bit tests + FMA-count CI gate (K4 stays low: at most 0.27 ms) | new `llmath` kernel file; `llface.cpp` (18) two loops; `llcamera.cpp` (0) | low–medium | bit-for-bit tests on Windows and Linux; kernel zones faster; FMA count unchanged | — | **0.5–1 d** | low |
+| 3 | K1, K2, K5 + bit-for-bit tests + FMA-count CI gate (K4 stays low: at most 0.27 ms). **Built: see §6.3 "Stage 3 as built"; K5 has no viewer caller until 5c** | new `llmath` kernel file and test (`llmath/CMakeLists.txt` (3): the header and the test); `llface.cpp` (18) three loops and a zone; `llcamera.cpp` / `llcamera.h` (0) the eight-box entry points; `llvieweroctree.cpp` (2) the sphere test moved to llmath; the viewer-build action and Check PR | low–medium | bit-for-bit tests on Windows and Linux (**met** in CI on Windows, Linux and linux-lts); kernel zones faster (**waits** for a Tracy capture); FMA count unchanged (**met**: exactly the baselines) | — | **0.5–1 d** | low |
 | 4 | FMA memo | this document §9 | none | — | accepted with this study | **done** | — |
 | 5a | trio audit of C1–C4 (**C1 and the decode-priority pass first**), compare mode, `getMaterialParams` and tangent fixes (the dev guards landed with stage 2) | `lltextureentry.h` (0), `llface.cpp` (18), `llvolume.cpp` (18) | medium | compare mode clean on S1–S3; Release login test | — | **1–2 d** (0.8–1.2 M tokens; the main session asks first) | medium: races found become hotfixes |
 | 5c | `ViewContext`-lite, cull split, parallel **cascade cull + sort first, then the world view; projector tiles last** (they are 0.08–0.26 ms) | `pipeline.cpp` (32), `llspatialpartition.cpp` (7), `llvieweroctree.cpp` (2), `llvocache.cpp` (18), `lldrawable.cpp` (5), `llviewerdisplay.cpp` (32), `llprojectorshadows.cpp` (ours) | **high** (pipeline.cpp, llviewerdisplay.cpp) | cull lists identical (compare mode); main-thread ms lower on S1; no fps loss; byte-identical OpenGL captures of S1 and S2; **GPU gate against the fps floor (§6.7)**; Release login test. Expected: at best 1.19–1.26 times at 6 wide, only if CPU-bound (§4.9) | in-world once, after release | **2–4 d** | high: the attachment/avatar-visibility order, occlusion |
@@ -942,18 +1064,25 @@ Threading bugs that show only in-world are the main way this could run over; tha
 - A real teleport capture does not exist (the scripted series failed; settle is read from the log at one-second resolution).
 - The bench results of §4.1–4.7 were not re-run on 2026-11-16 (the machine was in use); the line numbers of §3 were not re-checked
   at 191c9985b9.
-- The in-viewer gain of K5: the octree is walked node by node; the 10× is a kernel number.
+- The in-viewer gain of K5: the octree is walked node by node, and stage 3's 3.3–3.7× (1.9–2.0× with the gather from
+  `LLVector4a` pairs, which today's octree layout needs) is a kernel number (§6.3); §4.3's 10× was against a slower bench copy.
 - The scaling run's job shapes (§4.5) are assumptions, not captures, and the table does not choose the width; the default of 5 is
   a reservation for the GL driver, decode and window threads and is decided by the stage-2 width sweep.
 - The GPU cost of the extra tiles (§6.7). The cull + sort of the tiles is measured now (0.08 / 0.26 ms a frame, §4.8).
 - The in-viewer behaviour of helpers spinning through the preparation window (§6.2): power, X3D boost, driver-thread contention.
-- The K2 and K1 SSE reference moved between two bench builds (§4.2); the speed-up carried is a floor of 1.5×.
-- K5 covers only the AABB half of the real cull test (§4.3).
+- The K2 and K1 SSE reference moved between two bench builds (§4.2); the speed-up carried is a floor of 1.5×. Stage 3 saw the same
+  with the viewer's own loops (the normal loop took 0.73–0.78 ns a vertex in one standalone LTO build and 0.39–0.45 in CI's
+  configuration, also LTO, and without LTO), while the AVX2 kernels' times did not move (§6.3); the ratio inside the viewer
+  needs the Tracy zones.
+- The §4.3 bench covers only the AABB half of the real cull test; stage 3's bit-for-bit test covers the whole test (§6.3), its
+  speed only as a kernel.
 - That hoisting the cascade culls is bit-exact against today's interleaved order (5c compare mode).
-- Stage 0's SDE and installer gate results were not re-run here; the FMA count was not re-run on today's binary.
+- Stage 0's SDE and installer gate results were not re-run here. The FMA count was re-run by stage 3 on the CI builds of devel
+  `df1a0ce92f` (§4.7, §6.3).
 - Dual-CCD + SMT behaviour (the stock setup of most X3D users) cannot be measured on the dev machine as configured; the width
   rule's dual-CCD branch is designed but unmeasured, to be confirmed on another machine or from user reports.
-- Linux: no `objdump` FMA count yet; `std::lerp` agreement between Windows and Linux.
+- `std::lerp` agreement between Windows and Linux: MSVC's library fuses it (§4.7), and the Linux executables hold no FMA in
+  `std::lerp` (stage 3's count, §6.3), so the two may differ in the last bit.
 
 **Risks:**
 

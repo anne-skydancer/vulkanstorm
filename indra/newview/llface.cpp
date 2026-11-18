@@ -34,6 +34,7 @@
 #include "llvolume.h"
 #include "m3math.h"
 #include "llmatrix4a.h"
+#include "llsimdkernels.h" // <Vulkanstorm> multi-core stage 3 (K1, K2)
 #include "v3color.h"
 
 #include "lldefs.h"
@@ -2081,11 +2082,12 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
         if (rebuild_pos)
         {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_FACE("getGeometryVolume - position"); // <Vulkanstorm> multi-core stage 3 (K1)
             LLVector4a* src = vf.mPositions;
 
             //_mm_prefetch((char*)src, _MM_HINT_T0);
 
-            LLVector4a* end = src+num_vertices;
+            //LLVector4a* end = src+num_vertices; // <Vulkanstorm> multi-core stage 3 (K1): the kernel takes the count
             //LLVector4a* end_64 = end-4;
 
             llassert(num_vertices > 0);
@@ -2114,22 +2116,26 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             llassert(index < LLGLSLShader::sIndexedTextureChannels);
 
-            LLVector4Logical mask;
-            mask.clear();
-            mask.setElement<3>();
+            // <Vulkanstorm> multi-core stage 3 (K1): the loop below, two vertices per AVX2 register with the same bits
+            // (llsimdkernels.h). res0 is left as the loop left it: the last vertex's transform, repeated into the padding.
+            //LLVector4Logical mask;
+            //mask.clear();
+            //mask.setElement<3>();
 
             texIdx.set(0,0,0,val);
 
-            LLVector4a tmp;
-
-
-            while (src < end)
-            {
-                mat_vert.affineTransform(*src++, res0);
-                tmp.setSelectWithMask(mask, texIdx, res0);
-                tmp.store4a((F32*) dst);
-                dst += 4;
-            }
+            //LLVector4a tmp;
+            //
+            //while (src < end)
+            //{
+            //    mat_vert.affineTransform(*src++, res0);
+            //    tmp.setSelectWithMask(mask, texIdx, res0);
+            //    tmp.store4a((F32*) dst);
+            //    dst += 4;
+            //}
+            LLSimdKernels::affineTransformPositions(mat_vert, src, dst, num_vertices, texIdx, res0);
+            dst += 4 * num_vertices;
+            // </Vulkanstorm>
 
             while (dst < end_f32)
             {
@@ -2156,26 +2162,19 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
             mVertexBuffer->getNormalStrider(norm, mGeomIndex, mGeomCount);
             F32* normals = (F32*) norm.get();
             LLVector4a* src = vf.mNormals;
-            LLVector4a* end = src+num_vertices;
-
-            while (src < end)
-            {
-                LLVector4a normal;
-// <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
-#if defined(__GNUC__) && (__GNUC__ >= 12)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-// </FS:Zi>
-                mat_normal.rotate(*src++, normal);
-// <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
-#if defined(__GNUC__) && (__GNUC__ >= 12)
-#pragma GCC diagnostic pop
-#endif
-// </FS:Zi>
-                normal.store4a(normals);
-                normals += 4;
-            }
+            // <Vulkanstorm> multi-core stage 3 (K2): the loop below, two normals per AVX2 register with the same bits
+            // (llsimdkernels.h).
+            //LLVector4a* end = src+num_vertices;
+            //
+            //while (src < end)
+            //{
+            //    LLVector4a normal;
+            //    mat_normal.rotate(*src++, normal);
+            //    normal.store4a(normals);
+            //    normals += 4;
+            //}
+            LLSimdKernels::rotateNormals(mat_normal, src, normals, num_vertices);
+            // </Vulkanstorm>
         }
 
         if (rebuild_tangent)
@@ -2186,34 +2185,28 @@ bool LLFace::getGeometryVolume(const LLVolume& volume,
 
             mVObjp->getVolume()->genTangents(face_index);
 
-            LLVector4Logical mask;
-            mask.clear();
-            mask.setElement<3>();
-
+            // <Vulkanstorm> multi-core stage 3 (K2): the loop below, two tangents per AVX2 register with the same bits
+            // (llsimdkernels.h); each keeps its w (the bitangent sign).
+            //LLVector4Logical mask;
+            //mask.clear();
+            //mask.setElement<3>();
+            //
+            //LLVector4a* src = vf.mTangents;
+            //LLVector4a* end = vf.mTangents +num_vertices;
+            //
+            //while (src < end)
+            //{
+            //    LLVector4a tangent_out;
+            //    mat_normal.rotate(*src, tangent_out);
+            //    tangent_out.setSelectWithMask(mask, *src, tangent_out);
+            //    tangent_out.store4a(tangents);
+            //
+            //    src++;
+            //    tangents += 4;
+            //}
             LLVector4a* src = vf.mTangents;
-            LLVector4a* end = vf.mTangents +num_vertices;
-
-            while (src < end)
-            {
-                LLVector4a tangent_out;
-// <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
-#if defined(__GNUC__) && (__GNUC__ >= 12)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
-// </FS:Zi>
-                mat_normal.rotate(*src, tangent_out);
-// <FS:Zi> GCC12 warning: maybe-uninitialized - probably bogus
-#if defined(__GNUC__) && (__GNUC__ >= 12)
-#pragma GCC diagnostic pop
-#endif
-// </FS:Zi>
-                tangent_out.setSelectWithMask(mask, *src, tangent_out);
-                tangent_out.store4a(tangents);
-
-                src++;
-                tangents += 4;
-            }
+            LLSimdKernels::rotateTangents(mat_normal, src, tangents, num_vertices);
+            // </Vulkanstorm>
         }
 
         if (rebuild_weights && vf.mWeights)
