@@ -69,7 +69,7 @@ void unpackTextureTransforms()
 {
     if (gltf_material_id != -1)
     {
-        int idx = gltf_material_id*12;
+        int idx = clamp(gltf_material_id, 0, MAX_UBO_VEC4S/12 - 1)*12; // Vulkanstorm: stay inside the declared block
 
         texture_base_color_transform[0] = gltf_material_data[idx+0];
         texture_base_color_transform[1] = gltf_material_data[idx+1];
@@ -244,7 +244,8 @@ uniform int gltf_node_id = 0;
 mat4 getGLTFTransform()
 {
     mat4 ret;
-    int idx = gltf_node_id*3;
+    // Vulkanstorm: stay inside the declared block (an oversize asset read undefined data)
+    int idx = clamp(gltf_node_id, 0, MAX_NODES_PER_GLTF_OBJECT/3 - 1)*3;
 
     vec4 src0 = gltf_nodes[idx+0];
     vec4 src1 = gltf_nodes[idx+1];
