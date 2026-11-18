@@ -106,6 +106,13 @@ void APIENTRY gl_debug_callback(GLenum source,
         return;
     }*/
 
+    // <Vulkanstorm> after a GPU reset every call on the lost context raises CONTEXT_LOST. The reset is logged once by
+    // the viewer, which then closes; nothing here may log per call or halt that close (doc/gl/gpu_reset.md).
+    if (gGLManager.isContextLost())
+    {
+        return;
+    }
+
     if (gGLManager.mIsDisabled &&
         severity == GL_DEBUG_SEVERITY_HIGH_ARB &&
         source == GL_DEBUG_SOURCE_API_ARB &&
@@ -1045,6 +1052,9 @@ void LLGLManager::initWGL()
         LL_WARNS("RenderInit") << "No ARB create context extensions" << LL_ENDL;
     }
 
+    // <Vulkanstorm> lets the window ask for GPU reset notification when it creates the context (doc/gl/gpu_reset.md)
+    mHasWGLContextRobustness = ExtensionExists("WGL_ARB_create_context_robustness", gGLHExts.mSysExts);
+
     // For retreiving information per AMD adapter,
     // because we can't trust curently selected/default one when there are multiple
     mHasAMDAssociations = ExtensionExists("WGL_AMD_gpu_association", gGLHExts.mSysExts);
@@ -1306,6 +1316,24 @@ bool LLGLManager::initGL()
         glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &mMaxAnisotropy);
     }
 
+    // <Vulkanstorm> GPU reset notification (doc/gl/gpu_reset.md). The strategy is fixed when the context is created:
+    // with NO_RESET_NOTIFICATION (the default) glGetGraphicsResetStatus always returns NO_ERROR, so it is only
+    // polled when the context was created with LOSE_CONTEXT_ON_RESET. The query is core since 4.5.
+    mHasResetNotification = false;
+    if (mGLVersion >= 4.49f)
+    {
+        GLint strategy = GL_NO_RESET_NOTIFICATION;
+        glGetIntegerv(GL_RESET_NOTIFICATION_STRATEGY, &strategy);
+        mHasResetNotification = strategy == GL_LOSE_CONTEXT_ON_RESET;
+#if LL_WINDOWS
+        mHasResetNotification = mHasResetNotification && glGetGraphicsResetStatus != nullptr; // a 4.5 entry point
+#endif
+    }
+    LL_INFOS("RenderInit") << "GPU reset notification: "
+        << (mHasResetNotification ? "on (a GPU reset is reported and the viewer closes cleanly)"
+                                  : "off (the driver does not report GPU resets to this context)") << LL_ENDL;
+    // </Vulkanstorm>
+
     initGLStates();
 
     return true;
@@ -1437,6 +1465,33 @@ void LLGLManager::shutdownGL()
         mInited = false;
     }
 }
+
+// <Vulkanstorm> GPU reset detection (doc/gl/gpu_reset.md)
+static_assert(LLGLReset::NO_ERROR_STATUS == GL_NO_ERROR);
+static_assert(LLGLReset::GUILTY_STATUS == GL_GUILTY_CONTEXT_RESET);
+static_assert(LLGLReset::INNOCENT_STATUS == GL_INNOCENT_CONTEXT_RESET);
+static_assert(LLGLReset::UNKNOWN_STATUS == GL_UNKNOWN_CONTEXT_RESET);
+
+LLGLReset::Kind LLGLManager::pollGraphicsReset()
+{
+    if (mHasResetNotification && !isContextLost())
+    {
+        noteGraphicsReset(glGetGraphicsResetStatus());
+    }
+    return getResetKind();
+}
+
+void LLGLManager::noteGraphicsReset(U32 status)
+{
+    const LLGLReset::Kind seen = getResetKind();
+    const LLGLReset::Kind kind = LLGLReset::latch(seen, status);
+    if (kind != seen)
+    {
+        mResetStatus = status;
+        mResetKind.store(kind, std::memory_order_relaxed);
+    }
+}
+// </Vulkanstorm>
 
 // these are used to turn software blending on. They appear in the Debug/Avatar menu
 // presence of vertex skinning/blending or vertex programs will set these to false by default.
@@ -2440,7 +2495,7 @@ void assert_glerror()
     {
         //funny looking if for branch prediction -- gDebugGL is almost always false and assert_glerror is called often
     }
-    else
+    else if (!gGLManager.isContextLost()) // <Vulkanstorm/> a lost context raises CONTEXT_LOST per call; the viewer is closing (doc/gl/gpu_reset.md)
     {
         do_assert_glerror();
     }

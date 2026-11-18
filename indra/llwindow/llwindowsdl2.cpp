@@ -750,11 +750,38 @@ bool LLWindowSDL::createContext(int x, int y, int width, int height, int bits, b
 
     // <FS:Zi> Make shared context work on Linux for multithreaded OpenGL
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+
+    // <Vulkanstorm> GPU reset notification (doc/gl/gpu_reset.md): the reset notification strategy only, not robust
+    // buffer access. SDL passes the strategy on GLX only (its EGL path ignores it), and only through
+    // glXCreateContextAttribsARB, which it uses once a profile is set: with its default 2.1/no profile/no flags it
+    // calls the legacy glXCreateContext, which takes no attributes. The compatibility mask is asked for with SDL's
+    // default version, so the driver still returns its highest compatibility version, as glXCreateContext does.
+    // Worker contexts (createSharedContext) are made from the same attributes, so their strategy matches the main
+    // context's, as sharing requires. If that context cannot be made, today's request is made unchanged.
+    const char* video_driver = SDL_GetCurrentVideoDriver();
+    const bool want_reset_notification = video_driver && !strcmp(video_driver, "x11");
+    if (want_reset_notification)
+    {
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_RESET_NOTIFICATION, SDL_GL_CONTEXT_RESET_LOSE_CONTEXT);
+    }
+    // </Vulkanstorm>
     mWindow = SDL_CreateWindow( mWindowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, mSDLFlags );
 
     if( mWindow )
     {
         mContext = SDL_GL_CreateContext( mWindow );
+
+        // <Vulkanstorm>
+        if (mContext == 0 && want_reset_notification)
+        {
+            LL_WARNS() << "Cannot create a GL context with GPU reset notification (" << SDL_GetError()
+                << "); creating one without it" << LL_ENDL;
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_RESET_NOTIFICATION, SDL_GL_CONTEXT_RESET_NO_NOTIFICATION);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, 0);
+            mContext = SDL_GL_CreateContext( mWindow );
+        }
+        // </Vulkanstorm>
 
         if( mContext == 0 )
         {

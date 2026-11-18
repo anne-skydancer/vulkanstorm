@@ -1953,20 +1953,28 @@ void* LLWindowWin32::createSharedContext()
     S32 version_major = llfloor(mMaxGLVersion);
     S32 version_minor = (S32)llround((mMaxGLVersion-version_major)*10);
 
+    // <Vulkanstorm> the last pair asks the driver to report a GPU reset (doc/gl/gpu_reset.md): the reset notification
+    // strategy only, not robust buffer access. A 0 key in its place ends the list without it.
+    constexpr size_t RESET_ATTRIB = 8;
     S32 attribs[] =
     {
         WGL_CONTEXT_MAJOR_VERSION_ARB, version_major,
         WGL_CONTEXT_MINOR_VERSION_ARB, version_minor,
         WGL_CONTEXT_PROFILE_MASK_ARB,  LLRender::sGLCoreProfile ? WGL_CONTEXT_CORE_PROFILE_BIT_ARB : WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
         WGL_CONTEXT_FLAGS_ARB, gDebugGL ? WGL_CONTEXT_DEBUG_BIT_ARB : 0,
+        WGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_ARB, WGL_LOSE_CONTEXT_ON_RESET_ARB,
         0
     };
+    static_assert(sizeof(attribs) / sizeof(attribs[0]) == RESET_ATTRIB + 3, "the reset pair is the last before the 0");
+    // </Vulkanstorm>
 
     HGLRC rc = 0;
 
     // <Vulkanstorm> a worker context (the main context already exists) gets one attempt with exactly the main context's
     // version, so it shares with it; on failure it returns null and the caller turns the texture thread
     // off. No step-down, no unshared legacy context, and the main window is never closed for a worker.
+    // The reset notification strategy must be the main context's too: WGL refuses to share between contexts whose
+    // strategies differ (WGL_ARB_create_context_robustness), and a reset is then reported to every context in the group.
     if (mhRC)
     {
         if (mContextMajor == 0)
@@ -1975,6 +1983,10 @@ void* LLWindowWin32::createSharedContext()
         }
         attribs[1] = mContextMajor;
         attribs[3] = mContextMinor;
+        if (!mContextResetNotification)
+        {
+            attribs[RESET_ATTRIB] = 0;
+        }
         rc = wglCreateContextAttribsARB(mhDC, mhRC, attribs);
         if (!rc)
         {
@@ -1987,12 +1999,30 @@ void* LLWindowWin32::createSharedContext()
     // main context: recorded below on success; reset so a recreated window never keeps stale values
     mContextMajor = 0;
     mContextMinor = 0;
+    mContextResetNotification = false;
+
+    // Ask for reset notification only when the driver lists the extension, and at each version try the same request
+    // without it before stepping down: a driver that refuses the strategy still gets today's context.
+    const bool want_reset_notification = gGLManager.mHasWGLContextRobustness;
+    auto create_main = [&]() -> HGLRC
+    {
+        if (want_reset_notification)
+        {
+            attribs[RESET_ATTRIB] = WGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_ARB;
+            if (HGLRC with_reset = wglCreateContextAttribsARB(mhDC, mhRC, attribs))
+            {
+                return with_reset;
+            }
+        }
+        attribs[RESET_ATTRIB] = 0;
+        return wglCreateContextAttribsARB(mhDC, mhRC, attribs);
+    };
     // </Vulkanstorm>
 
     bool done = false;
     while (!done)
     {
-        rc = wglCreateContextAttribsARB(mhDC, mhRC, attribs);
+        rc = create_main(); // <Vulkanstorm/> was wglCreateContextAttribsARB(mhDC, mhRC, attribs)
 
         if (!rc)
         {
@@ -2015,9 +2045,16 @@ void* LLWindowWin32::createSharedContext()
             // <Vulkanstorm>
             mContextMajor = attribs[1];
             mContextMinor = attribs[3];
+            mContextResetNotification = attribs[RESET_ATTRIB] != 0;
             // </Vulkanstorm>
             LL_INFOS() << "Created OpenGL " << llformat("%d.%d", attribs[1], attribs[3]) <<
-                (LLRender::sGLCoreProfile ? " core" : " compatibility") << " context." << LL_ENDL;
+                (LLRender::sGLCoreProfile ? " core" : " compatibility") << " context" <<
+                (mContextResetNotification ? " with GPU reset notification." : ".") << LL_ENDL; // <Vulkanstorm/>
+            if (want_reset_notification && !mContextResetNotification)
+            {
+                LL_WARNS("Window") << "The driver lists WGL_ARB_create_context_robustness but refused LOSE_CONTEXT_ON_RESET;"
+                    " a GPU reset will not be reported." << LL_ENDL; // <Vulkanstorm/>
+            }
             done = true;
         }
     }

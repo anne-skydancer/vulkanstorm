@@ -29,12 +29,14 @@
 
 // This file contains various stuff for handling gl extensions and other gl related stuff.
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <list>
 
 #include "llerror.h"
+#include "llglreset.h"
 #include "v4color.h"
 #include "llstring.h"
 #include "stdtypes.h"
@@ -144,9 +146,40 @@ public:
     // In ALL CAPS
     std::string mGLRenderer;
 
+    // <Vulkanstorm> GPU reset detection (doc/gl/gpu_reset.md)
+    // WGL_ARB_create_context_robustness: a context can be created with a reset notification strategy. Windows only,
+    // read by initWGL (on Linux SDL checks GLX_ARB_create_context_robustness itself).
+    bool mHasWGLContextRobustness = false;
+
+    // The main context reports GPU resets: it was created with the LOSE_CONTEXT_ON_RESET strategy. Read by initGL.
+    // Without it the GL never reports a reset, and glGetGraphicsResetStatus is not called.
+    bool mHasResetNotification = false;
+
+    // Main thread, once per frame, with the main context current: one glGetGraphicsResetStatus while no reset has
+    // been seen. Returns the first reset seen (it is kept, see LLGLReset::latch), NoReset while there is none.
+    LLGLReset::Kind pollGraphicsReset();
+
+    // Keeps the first reset from a glGetGraphicsResetStatus value: pollGraphicsReset's path, and the development
+    // test hook's for a simulated reset. Main thread.
+    void noteGraphicsReset(U32 status);
+
+    // Any thread: a reset has been seen. The main context and every context sharing with it are lost; every GL call
+    // on them does nothing (no effect, no output written, no wait) and raises CONTEXT_LOST.
+    LLGLReset::Kind getResetKind() const { return mResetKind.load(std::memory_order_relaxed); }
+    bool isContextLost() const { return getResetKind() != LLGLReset::Kind::NoReset; }
+
+    // The first reset's glGetGraphicsResetStatus value, for the log. Main thread.
+    U32 getResetStatus() const { return mResetStatus; }
+    // </Vulkanstorm>
+
 private:
     void initExtensions();
     void initGLStates();
+
+    // <Vulkanstorm> written once, by the main thread; read on any thread (the GL debug checks run on the workers too)
+    std::atomic<LLGLReset::Kind> mResetKind{ LLGLReset::Kind::NoReset };
+    U32 mResetStatus = 0;
+    // </Vulkanstorm>
 };
 
 extern LLGLManager gGLManager;

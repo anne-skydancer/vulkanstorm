@@ -207,6 +207,7 @@ protected:
     // <Vulkanstorm>
     S32         mContextMajor = 0;  // GL version the main context was created with (worker contexts use exactly this; 0 = legacy)
     S32         mContextMinor = 0;
+    bool        mContextResetNotification = false; // the main context asked for LOSE_CONTEXT_ON_RESET (worker contexts must match it)
     // </Vulkanstorm>
     HDC         mhDC = 0;           // Windows Device context handle
     HINSTANCE   mhInstance;     // handle to application instance
