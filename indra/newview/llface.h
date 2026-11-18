@@ -325,6 +325,12 @@ private:
     // gFrameTimeSeconds when mPixelArea was last updated
     F32         mLastPixelAreaUpdate = 0.f;
 
+    // <Vulkanstorm> calcPixelArea's outputs and result at that update, which it returns until the next one
+    // (until the first: no partial-overlap scaling, in the frustum)
+    F32         mLastCosAngleToViewDir = 1.f;
+    F32         mLastPixelRadius = 0.f;
+    bool        mLastInFrustum = true;
+
     // virtual size of face in texture area  (mPixelArea adjusted by texture repeats)
     // used to determine desired resolution of texture
     F32         mVSize;
