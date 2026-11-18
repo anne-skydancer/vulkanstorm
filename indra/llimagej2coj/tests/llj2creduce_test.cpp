@@ -1,25 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
-// Standalone checks of llj2creduce.h against OpenJPEG (no viewer libraries):
-//   g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj $(pkg-config --cflags libopenjp2) indra/llimagej2coj/tests/llj2creduce_test.cpp $(pkg-config --libs libopenjp2)
-// A texture's first request asks for discard level 5. The viewer's encoder gives a side below 32 px fewer than
-// 6 resolutions (1 + floor(log2(side)): 16 px, 5), and OpenJPEG refuses a reduce factor at or above the
-// resolutions while it reads the header, so such a texture failed its first decode and was marked missing.
-// The codestreams here are made with the viewer's encoder settings for a small upload (lossless, one layer,
-// RLCP, its resolution rule), and read and decoded with the calls of JPEG2KDecode (llimagej2coj.cpp):
-// readHeader takes the fewest resolutions of any component from opj_get_cstr_info, decode sets the reduce
-// factor before the header and decodes. LLImageJ2COJ::decodeImpl passes LLJ2CReduce::reduceFactor on.
+// Standalone checks of the rule in llj2creduce.h (no libraries):
+//   g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj indra/llimagej2coj/tests/llj2creduce_test.cpp
+// The same rule against OpenJPEG's decoder: llj2creduce_openjpeg_test.cpp.
+// A texture's first request asks for discard level 5. A codestream with fewer resolutions than that decodes at
+// its coarsest level when that level is no larger than level 5 of the largest image the viewer takes (4096,
+// MAX_IMAGE_SIZE): every texture the viewer's encoder makes with a side below 32 px (a strip one pixel thin at
+// its coarsest level), and nothing large. Any other request is passed on unchanged.
 
 #include "llj2creduce.h"
 
-#include "openjpeg.h"
-
-#include <algorithm>
 #include <cstdio>
-#include <cstring>
-#include <string>
-#include <vector>
 
 namespace
 {
@@ -34,358 +26,102 @@ namespace
         }
     }
 
-    // A codestream in memory, read and written with the semantics of the wrapper's opj_read, opj_skip and
-    // opj_seek (EOF as -1)
-    struct Stream
-    {
-        std::vector<unsigned char> bytes;
-        OPJ_OFF_T offset = 0;
-    };
+    constexpr int MAX_IMAGE_SIZE = 4096;   // llimage.h
+    constexpr int FIRST_REQUEST = 5;       // MAX_DISCARD_LEVEL: a texture of unknown size asks for it first
 
-    OPJ_SIZE_T streamRead(void* buffer, OPJ_SIZE_T count, void* user)
+    constexpr int firstRequest(int width, int height, int resolutions)
     {
-        Stream* s = static_cast<Stream*>(user);
-        if (s->offset < 0 || static_cast<OPJ_SIZE_T>(s->offset) >= s->bytes.size())
+        return LLJ2CReduce::reduceFactor(FIRST_REQUEST, resolutions, width, height, MAX_IMAGE_SIZE);
+    }
+
+    // The viewer's encoder (JPEG2KEncode::encode): 1 + floor(log2(the smaller side)) resolutions when a side fits
+    // one 64 px tile (below 128 px), 6 otherwise
+    int encoderResolutions(int width, int height)
+    {
+        const int smaller = width < height ? width : height;
+        if (width >= 128 && height >= 128)
         {
-            s->offset = static_cast<OPJ_OFF_T>(s->bytes.size());
-            return static_cast<OPJ_SIZE_T>(-1);
+            return 6;
         }
-        const OPJ_SIZE_T n = std::min<OPJ_SIZE_T>(count, s->bytes.size() - static_cast<OPJ_SIZE_T>(s->offset));
-        std::memcpy(buffer, s->bytes.data() + s->offset, n);
-        s->offset += static_cast<OPJ_OFF_T>(n);
-        return n;
-    }
-
-    OPJ_SIZE_T streamWrite(void* buffer, OPJ_SIZE_T count, void* user)
-    {
-        Stream* s = static_cast<Stream*>(user);
-        const OPJ_SIZE_T end = static_cast<OPJ_SIZE_T>(s->offset) + count;
-        if (end > s->bytes.size())
+        int log2 = 0;
+        while ((2 << log2) <= smaller)
         {
-            s->bytes.resize(end);
+            ++log2;
         }
-        std::memcpy(s->bytes.data() + s->offset, buffer, count);
-        s->offset = static_cast<OPJ_OFF_T>(end);
-        return count;
+        return 1 + log2;
     }
 
-    OPJ_OFF_T streamSkip(OPJ_OFF_T count, void* user)
+    void test_level_pixels()
     {
-        Stream* s = static_cast<Stream*>(user);
-        const OPJ_OFF_T next = s->offset + count;
-        if (next < 0 || next > static_cast<OPJ_OFF_T>(s->bytes.size()))
+        static_assert(LLJ2CReduce::levelPixels(16, 16, 4) == 1, "16 x 16 at level 4 is 1 x 1");
+        check(LLJ2CReduce::levelPixels(512, 16, 4) == 32, "512 x 16 at level 4 is 32 x 1");
+        check(LLJ2CReduce::levelPixels(24, 24, 4) == 4, "sides round up: 24 x 24 at level 4 is 2 x 2");
+        check(LLJ2CReduce::levelPixels(8192, 8192, 0) == 8192LL * 8192LL, "no overflow for a large level");
+        check(LLJ2CReduce::levelPixels(65535, 65535, 0) == 65535LL * 65535LL, "nor at the largest 16-bit size");
+    }
+
+    void test_unchanged_requests()
+    {
+        check(firstRequest(1024, 1024, 6) == 5, "6 resolutions: discard 5 unchanged (every texture in the cache)");
+        check(LLJ2CReduce::reduceFactor(4, 5, 16, 16, MAX_IMAGE_SIZE) == 4
+              && LLJ2CReduce::reduceFactor(0, 5, 16, 16, MAX_IMAGE_SIZE) == 0, "levels the codestream has are unchanged");
+        check(firstRequest(16, 16, 0) == 5, "resolutions not known: unchanged");
+        check(LLJ2CReduce::reduceFactor(-1, 5, 16, 16, MAX_IMAGE_SIZE) == -1, "a negative request is passed on unchanged");
+        check(LLJ2CReduce::reduceFactor(40, 5, 16, 16, MAX_IMAGE_SIZE) == 40, "an out-of-range request is passed on unchanged");
+    }
+
+    void test_small_textures_decode_at_their_coarsest()
+    {
+        static_assert(LLJ2CReduce::reduceFactor(5, 5, 16, 16, 4096) == 4, "16 x 16: discard 5 becomes 4");
+        check(firstRequest(16, 16, 5) == 4, "16 x 16 (5 resolutions): discard 5 becomes 4");
+        check(firstRequest(8, 8, 4) == 3, "8 x 8 (4 resolutions): discard 5 becomes 3");
+        check(firstRequest(4, 4, 3) == 2, "4 x 4 (3 resolutions): discard 5 becomes 2");
+        check(firstRequest(512, 16, 5) == 4, "512 x 16 strip: discard 5 becomes 4");
+
+        // every size the viewer's encoder gives fewer than 6 resolutions, up to MAX_IMAGE_SIZE: its coarsest level
+        bool all = true;
+        for (int width = 4; width <= MAX_IMAGE_SIZE; width *= 2)
         {
-            s->offset = std::clamp<OPJ_OFF_T>(next, 0, static_cast<OPJ_OFF_T>(s->bytes.size()));
-            return static_cast<OPJ_OFF_T>(-1);
-        }
-        s->offset = next;
-        return count;
-    }
-
-    OPJ_BOOL streamSeek(OPJ_OFF_T offset, void* user)
-    {
-        Stream* s = static_cast<Stream*>(user);
-        if (offset < 0 || offset > static_cast<OPJ_OFF_T>(s->bytes.size()))
-        {
-            return OPJ_FALSE;
-        }
-        s->offset = offset;
-        return OPJ_TRUE;
-    }
-
-    std::string lastError;
-
-    void onError(const char* msg, void*)
-    {
-        lastError += msg;
-    }
-
-    void quiet(const char*, void*)
-    {
-    }
-
-    opj_stream_t* openStream(Stream& s, bool input)
-    {
-        opj_stream_t* stream = opj_stream_create(input ? s.bytes.size() : 1u << 16, input ? OPJ_TRUE : OPJ_FALSE);
-        opj_stream_set_user_data(stream, &s, nullptr);
-        opj_stream_set_user_data_length(stream, s.bytes.size());
-        opj_stream_set_read_function(stream, streamRead);
-        opj_stream_set_write_function(stream, streamWrite);
-        opj_stream_set_skip_function(stream, streamSkip);
-        opj_stream_set_seek_function(stream, streamSeek);
-        return stream;
-    }
-
-    void setHandlers(opj_codec_t* codec)
-    {
-        opj_set_error_handler(codec, onError, nullptr);
-        opj_set_warning_handler(codec, quiet, nullptr);
-        opj_set_info_handler(codec, quiet, nullptr);
-    }
-
-    unsigned char pixel(int x, int y, int c)
-    {
-        return static_cast<unsigned char>((x * 13 + y * 7 + c * 50) % 256);
-    }
-
-    // JPEG2KEncode for a small upload: lossless (reversible, one layer, rate 0), RLCP, rate allocation by
-    // distortion, colour transform from 3 components, and fewer resolutions for a side below 64 px:
-    // 1 + floor(log2(the smaller side)), the rule of llimagej2coj.cpp (`resolutions` here)
-    std::vector<unsigned char> encode(int width, int height, int resolutions)
-    {
-        constexpr int COMPONENTS = 3;
-        opj_cparameters_t parameters;
-        opj_set_default_encoder_parameters(&parameters);
-        parameters.prog_order = OPJ_RLCP;
-        parameters.cp_disto_alloc = 1;
-        parameters.irreversible = 0;
-        parameters.tcp_numlayers = 1;
-        parameters.tcp_rates[0] = 0.0f;
-        parameters.tcp_mct = 1;
-        parameters.numresolution = resolutions;
-
-        std::vector<opj_image_cmptparm_t> components(COMPONENTS);
-        for (opj_image_cmptparm_t& c : components)
-        {
-            c.prec = 8;
-            c.sgnd = 0;
-            c.dx = static_cast<OPJ_UINT32>(parameters.subsampling_dx);
-            c.dy = static_cast<OPJ_UINT32>(parameters.subsampling_dy);
-            c.w = static_cast<OPJ_UINT32>(width);
-            c.h = static_cast<OPJ_UINT32>(height);
-        }
-        opj_image_t* image = opj_image_create(COMPONENTS, components.data(), OPJ_CLRSPC_SRGB);
-        image->x1 = static_cast<OPJ_UINT32>(width);
-        image->y1 = static_cast<OPJ_UINT32>(height);
-        for (int c = 0; c < COMPONENTS; ++c)
-        {
-            for (int y = 0; y < height; ++y)
+            for (int height = 4; height <= MAX_IMAGE_SIZE; height *= 2)
             {
-                for (int x = 0; x < width; ++x)
+                const int resolutions = encoderResolutions(width, height);
+                if (resolutions < FIRST_REQUEST + 1)
                 {
-                    image->comps[c].data[y * width + x] = pixel(x, y, c);
+                    all = all && firstRequest(width, height, resolutions) == resolutions - 1;
                 }
             }
         }
-
-        Stream out;
-        opj_codec_t* encoder = opj_create_compress(OPJ_CODEC_J2K);
-        setHandlers(encoder);
-        opj_stream_t* stream = openStream(out, false);
-        const bool ok = opj_setup_encoder(encoder, &parameters, image)
-                        && opj_start_compress(encoder, image, stream)
-                        && opj_encode(encoder, stream)
-                        && opj_end_compress(encoder, stream);
-        opj_stream_destroy(stream);
-        opj_destroy_codec(encoder);
-        opj_image_destroy(image);
-        if (!ok)
-        {
-            out.bytes.clear();
-        }
-        return out.bytes;
+        check(all, "every texture the encoder makes with a side below 32 px decodes at its coarsest level");
+        check(encoderResolutions(16, 16) == 5 && encoderResolutions(64, 64) == 7 && encoderResolutions(128, 128) == 6,
+              "the encoder's resolution rule as modelled");
     }
 
-    // JPEG2KDecode::readHeader: the size and the fewest resolutions of any component
-    struct Header
+    void test_large_codestreams_keep_their_request()
     {
-        bool ok = false;
-        int width = 0;
-        int height = 0;
-        int resolutions = 0;
-    };
+        // a crafted 8192 x 8192 codestream with 1 resolution: its coarsest level is the whole image, 1 GB in
+        // OpenJPEG for four components; its request is kept and fails as before
+        check(firstRequest(8192, 8192, 1) == 5, "8192 x 8192 with 1 resolution: discard 5 unchanged");
+        check(firstRequest(4096, 4096, 1) == 5, "4096 x 4096 with 1 resolution: discard 5 unchanged");
+        check(firstRequest(8192, 8192, 3) == 5, "8192 x 8192 with 3 resolutions (2048 x 2048 at its coarsest): unchanged");
+        check(firstRequest(256, 256, 1) == 5, "256 x 256 with 1 resolution: unchanged");
 
-    Header readHeader(const std::vector<unsigned char>& codestream)
-    {
-        Header header;
-        opj_dparameters_t parameters;
-        std::memset(&parameters, 0, sizeof(parameters));
-        opj_set_default_decoder_parameters(&parameters);
-        parameters.cp_reduce = 0;
-        parameters.flags |= OPJ_DPARAMETERS_DUMP_FLAG;
+        // the bound: level 5 of a 4096 image, 128 x 128
+        check(firstRequest(128, 128, 1) == 0, "128 x 128 with 1 resolution: at the bound, decoded at its only level");
+        check(firstRequest(256, 128, 1) == 5, "256 x 128 with 1 resolution: past the bound, unchanged");
+        check(firstRequest(256, 256, 2) == 1, "256 x 256 with 2 resolutions: 128 x 128 at its coarsest, decoded there");
 
-        Stream in{ codestream, 0 };
-        opj_codec_t* decoder = opj_create_decompress(OPJ_CODEC_J2K);
-        setHandlers(decoder);
-        opj_image_t* image = nullptr;
-        opj_stream_t* stream = openStream(in, true);
-        if (opj_setup_decoder(decoder, &parameters))
-        {
-#if OPJ_VERSION_MAJOR > 2 || (OPJ_VERSION_MAJOR == 2 && OPJ_VERSION_MINOR >= 5)
-            opj_decoder_set_strict_mode(decoder, OPJ_FALSE);
-#endif
-            if (opj_read_header(stream, decoder, &image))
-            {
-                opj_codestream_info_v2_t* info = opj_get_cstr_info(decoder);
-                if (info)
-                {
-                    header.ok = true;
-                    header.width = static_cast<int>(info->tw * info->tdx);
-                    header.height = static_cast<int>(info->th * info->tdy);
-                    for (OPJ_UINT32 c = 0; info->m_default_tile_info.tccp_info && c < info->nbcomps; ++c)
-                    {
-                        const int n = static_cast<int>(info->m_default_tile_info.tccp_info[c].numresolutions);
-                        header.resolutions = (c == 0) ? n : std::min(header.resolutions, n);
-                    }
-                    opj_destroy_cstr_info(&info);
-                }
-            }
-        }
-        if (image)
-        {
-            opj_image_destroy(image);
-        }
-        opj_stream_destroy(stream);
-        opj_destroy_codec(decoder);
-        return header;
-    }
-
-    // JPEG2KDecode::decode at reduce factor `reduce`: set before the header, as the wrapper does
-    struct Decoded
-    {
-        bool header = false;    // opj_read_header succeeded
-        bool decoded = false;   // opj_decode succeeded
-        unsigned factor = 0;    // comps[0].factor: the level decodeImpl reports (setDiscardLevel)
-        unsigned width = 0;
-        unsigned height = 0;
-        bool pixelsExact = false; // at factor 0: the encoded pixels (lossless)
-    };
-
-    Decoded decodeAt(const std::vector<unsigned char>& codestream, int reduce, int full_width, int full_height)
-    {
-        Decoded result;
-        lastError.clear();
-        opj_dparameters_t parameters;
-        std::memset(&parameters, 0, sizeof(parameters));
-        opj_set_default_decoder_parameters(&parameters);
-        parameters.cp_reduce = 0;
-
-        Stream in{ codestream, 0 };
-        opj_codec_t* decoder = opj_create_decompress(OPJ_CODEC_J2K);
-        opj_setup_decoder(decoder, &parameters);
-        setHandlers(decoder);
-        opj_stream_t* stream = openStream(in, true);
-        opj_image_t* image = nullptr;
-
-        opj_set_decoded_resolution_factor(decoder, static_cast<OPJ_UINT32>(reduce)); // before the header, as the wrapper
-#if OPJ_VERSION_MAJOR > 2 || (OPJ_VERSION_MAJOR == 2 && OPJ_VERSION_MINOR >= 5)
-        opj_decoder_set_strict_mode(decoder, OPJ_FALSE);
-#endif
-        result.header = opj_read_header(stream, decoder, &image);
-        if (result.header)
-        {
-            result.decoded = opj_decode(decoder, stream, image) && image && image->numcomps;
-            opj_end_decompress(decoder, stream);
-        }
-        if (result.decoded)
-        {
-            result.factor = image->comps[0].factor;
-            result.width = image->comps[0].w;
-            result.height = image->comps[0].h;
-            if (result.factor == 0 && result.width == unsigned(full_width) && result.height == unsigned(full_height))
-            {
-                result.pixelsExact = true;
-                for (OPJ_UINT32 c = 0; c < image->numcomps; ++c)
-                {
-                    for (int y = 0; y < full_height; ++y)
-                    {
-                        for (int x = 0; x < full_width; ++x)
-                        {
-                            result.pixelsExact = result.pixelsExact
-                                && image->comps[c].data[y * full_width + x] == pixel(x, y, int(c));
-                        }
-                    }
-                }
-            }
-        }
-        if (image)
-        {
-            opj_image_destroy(image);
-        }
-        opj_stream_destroy(stream);
-        opj_destroy_codec(decoder);
-        return result;
-    }
-
-    void test_rule()
-    {
-        static_assert(LLJ2CReduce::reduceFactor(5, 5) == 4, "a request below the coarsest level gets the coarsest");
-        check(LLJ2CReduce::reduceFactor(5, 6) == 5, "6 resolutions: discard 5 unchanged (every texture in the cache)");
-        check(LLJ2CReduce::reduceFactor(5, 5) == 4, "5 resolutions (16 px): discard 5 becomes 4");
-        check(LLJ2CReduce::reduceFactor(5, 4) == 3, "4 resolutions (8 px): discard 5 becomes 3");
-        check(LLJ2CReduce::reduceFactor(5, 1) == 0, "1 resolution: discard 0");
-        check(LLJ2CReduce::reduceFactor(4, 5) == 4 && LLJ2CReduce::reduceFactor(0, 5) == 0,
-              "levels the codestream has are unchanged");
-        check(LLJ2CReduce::reduceFactor(5, 0) == 5, "resolutions not known: unchanged");
-        check(LLJ2CReduce::reduceFactor(-1, 5) == -1, "a negative request is passed on unchanged, as before");
-    }
-
-    // A codestream with fewer resolutions than the first request's level: fails today, decodes at its coarsest now
-    void test_fewer_resolutions(int width, int height, int resolutions, const char* what)
-    {
-        const std::vector<unsigned char> codestream = encode(width, height, resolutions);
-        check(!codestream.empty(), what);
-        if (codestream.empty())
-        {
-            return;
-        }
-
-        const Header header = readHeader(codestream);
-        check(header.ok && header.width == width && header.height == height, "the header gives the full size");
-        check(header.resolutions == resolutions, "the header gives the codestream's resolutions");
-
-        // before the fix: the first request (discard 5) as it was passed on
-        const Decoded old_way = decodeAt(codestream, 5, width, height);
-        check(!old_way.header && !old_way.decoded, "a reduce factor at or above the resolutions fails the header read");
-        check(lastError.find("resolutions") != std::string::npos, "OpenJPEG names the resolutions as the reason");
-
-        // the fix: decoded at the coarsest level the codestream has, and that level is reported
-        const int reduce = LLJ2CReduce::reduceFactor(5, header.resolutions);
-        check(reduce == resolutions - 1, "the first request decodes at the coarsest level");
-        const Decoded fixed = decodeAt(codestream, reduce, width, height);
-        check(fixed.header && fixed.decoded, "the first request decodes");
-        check(fixed.factor == unsigned(resolutions - 1), "the decoded level is the coarsest, as reported to the fetcher");
-        // processFetchResults: the full size is the decoded size shifted by the reported level
-        check((fixed.width << fixed.factor) == unsigned(width) && (fixed.height << fixed.factor) == unsigned(height),
-              "the decoded size and level give back the full size");
-
-        // the whole image still decodes exactly (the refinement the texture asks for next)
-        const Decoded full = decodeAt(codestream, LLJ2CReduce::reduceFactor(0, header.resolutions), width, height);
-        check(full.decoded && full.pixelsExact, "discard 0 decodes the whole image losslessly");
-    }
-
-    // A codestream with at least 6 resolutions: discard 5 is passed on unchanged and decodes as before
-    void test_enough_resolutions(int width, int height, int resolutions)
-    {
-        const std::vector<unsigned char> codestream = encode(width, height, resolutions);
-        check(!codestream.empty(), "a codestream with 6 or more resolutions encodes");
-        if (codestream.empty())
-        {
-            return;
-        }
-        const Header header = readHeader(codestream);
-        check(header.ok && header.resolutions == resolutions, "the header gives its resolutions");
-        check(LLJ2CReduce::reduceFactor(5, header.resolutions) == 5, "discard 5 is passed on unchanged");
-        const Decoded at5 = decodeAt(codestream, 5, width, height);
-        check(at5.decoded && at5.factor == 5, "discard 5 decodes at level 5, as before");
-        check(at5.width == unsigned((width + 31) >> 5) && at5.height == unsigned((height + 31) >> 5),
-              "at the size of level 5");
+        // a finer request allows a larger level, as large as that request can be for any image
+        check(LLJ2CReduce::reduceFactor(1, 1, 2048, 2048, MAX_IMAGE_SIZE) == 0, "discard 1 of a 2048 codestream with 1 resolution");
+        check(LLJ2CReduce::reduceFactor(1, 1, 4096, 4096, MAX_IMAGE_SIZE) == 1, "discard 1 of a 4096 codestream with 1 resolution: unchanged");
     }
 }
 
 int main()
 {
-    std::printf("OpenJPEG %s\n", opj_version());
-    test_rule();
-    // the audit's case: 16 x 16, 5 resolutions (what the encoder picks for a 16 px side)
-    test_fewer_resolutions(16, 16, 5, "16 x 16 with 5 resolutions encodes");
-    // a strip with a 16 px side: 512 x 16, 5 resolutions
-    test_fewer_resolutions(512, 16, 5, "512 x 16 with 5 resolutions encodes");
-    // 8 x 8: 4 resolutions
-    test_fewer_resolutions(8, 8, 4, "8 x 8 with 4 resolutions encodes");
-    // 32 x 32 (6 resolutions) and 64 x 64 (7, the encoder's rule for one 64 px tile): unchanged
-    test_enough_resolutions(32, 32, 6);
-    test_enough_resolutions(64, 64, 7);
+    test_level_pixels();
+    test_unchanged_requests();
+    test_small_textures_decode_at_their_coarsest();
+    test_large_codestreams_keep_their_request();
     if (failures == 0)
     {
         std::printf("llj2creduce_test: all checks passed\n");

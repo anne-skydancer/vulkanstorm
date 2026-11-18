@@ -151,12 +151,24 @@ runs:
         python3 scripts/tests/test_texture_streaming_fixes.py
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
         "$RUNNER_TEMP/texture-fetch-policy-test"
-    - name: Check that J2C textures with fewer resolutions than the first request's level decode (OpenJPEG reduce factor)
+    - name: Check the J2C reduce factor rule (small textures decode at their coarsest level, large codestreams keep their request)
       shell: bash
       run: |
-        pkg-config --exists libopenjp2 || { sudo apt-get update -q && sudo apt-get install -y --no-install-recommends libopenjp2-7-dev; }
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj $(pkg-config --cflags libopenjp2) indra/llimagej2coj/tests/llj2creduce_test.cpp -o "$RUNNER_TEMP/j2c-reduce-test" $(pkg-config --libs libopenjp2)
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj indra/llimagej2coj/tests/llj2creduce_test.cpp -o "$RUNNER_TEMP/j2c-reduce-test"
         "$RUNNER_TEMP/j2c-reduce-test"
+    - name: Check the J2C reduce factor against OpenJPEG (skipped with a notice when libopenjp2 cannot be installed)
+      shell: bash
+      run: |
+        # An apt outage must not fail the gate: the rule itself is checked without the library above.
+        if ! pkg-config --exists libopenjp2; then
+          { timeout 300 sudo apt-get update -q && timeout 300 sudo apt-get install -y --no-install-recommends libopenjp2-7-dev; } || true
+        fi
+        if pkg-config --exists libopenjp2; then
+          g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj $(pkg-config --cflags libopenjp2) indra/llimagej2coj/tests/llj2creduce_openjpeg_test.cpp -o "$RUNNER_TEMP/j2c-reduce-openjpeg-test" $(pkg-config --libs libopenjp2)
+          "$RUNNER_TEMP/j2c-reduce-openjpeg-test"
+        else
+          echo "::notice title=OpenJPEG checks skipped::libopenjp2 could not be installed; llj2creduce_openjpeg_test.cpp did not run"
+        fi
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
