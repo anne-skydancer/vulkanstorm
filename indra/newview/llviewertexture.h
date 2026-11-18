@@ -205,7 +205,7 @@ protected:
     S32 mTextureListType; // along with mID identifies where to search for this texture in TextureList
 
     mutable F32 mMaxVirtualSize = 0.f;  // The largest virtual size of the image, in pixels - how much data to we need?
-    F32 mFetchVirtualSize = 0.f;        // <Vulkanstorm> the worn size: its download request is queued by at least this (lltexturefetchpolicy.h)
+    F32 mWornVirtualSize = 0.f;         // <Vulkanstorm/> the worn size, 0 on no worn face: the download request is queued by at least this (lltexturefetchpolicy.h)
     mutable S32  mMaxVirtualSizeResetCounter;
     mutable S32  mMaxVirtualSizeResetInterval;
     LLFrameTimer mLastReferencedTimer;

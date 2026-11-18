@@ -20,10 +20,11 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
 - LLFace::calcPixelArea's 0.1 s throttle hands back the outputs and the result of the last update instead of
   returning true with both outputs unwritten (getTextureVirtualSize read them).
 - A worn texture's request is queued by its avatar's area (LLTextureFetchPolicy::wornFetchArea, fetchPriority):
-  LLViewerTextureList::updateImageDecodePriority scales a worn face's area by the factors of the face's own size and
-  keeps the largest (mFetchVirtualSize), clamped and capped where mMaxVirtualSize is; LLViewerFetchedTexture::updateFetch
-  hands the raised priority to the fetcher (createRequest, updateRequestPriority) and decides everything else on
-  mMaxVirtualSize, as before.
+  LLViewerTextureList::updateImageDecodePriority takes the area of the avatar a worn face's object is drawn with only
+  while that avatar is drawn (isVisible, not isVisuallyMuted), scales it by the factors of the face's own size and keeps
+  the largest (mWornVirtualSize), clamped and capped where mMaxVirtualSize is; LLViewerFetchedTexture::updateFetch hands
+  the raised priority, which stays under a boosted texture's (the size setBoostLevel gives it), to the fetcher
+  (createRequest, updateRequestPriority) and decides everything else on mMaxVirtualSize, as before.
 - The OpenJPEG wrapper never asks for a coarser level than the codestream has: the header read keeps the fewest
   resolutions of any component (for a size that fits the image's 16-bit sides), and the decode clamps its reduce
   factor below them when the coarsest level is no larger than the requested level of a MAX_IMAGE_SIZE image
@@ -41,7 +42,8 @@ ROOT = Path(os.environ.get('VKSTORM_TEST_ROOT') or Path(__file__).resolve().pare
 TEXTURE = (ROOT / 'indra/newview/llviewertexture.cpp').read_text(encoding='utf-8', errors='replace')
 TEXTURE_H = (ROOT / 'indra/newview/llviewertexture.h').read_text(encoding='utf-8', errors='replace')
 TEXTURE_LIST = (ROOT / 'indra/newview/llviewertexturelist.cpp').read_text(encoding='utf-8', errors='replace')
-FETCH =(ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
+POLICY = (ROOT / 'indra/newview/lltexturefetchpolicy.h').read_text(encoding='utf-8', errors='replace')
+FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
 J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
@@ -259,10 +261,11 @@ class PixelAreaThrottle(unittest.TestCase):
 
 
 class WornFetchRank(unittest.TestCase):
-    FETCH_PRIORITY = 'const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mFetchVirtualSize, F_ALMOST_ZERO);'
-    WEARER = 'const LLVOAvatar* wearer = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;'
-    WORN_AREA = 'F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, wearer ? wearer->getPixelArea() : 0.f);'
-    STORE = 'imagep->mFetchVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);'
+    FETCH_PRIORITY = 'const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mWornVirtualSize, F_ALMOST_ZERO);'
+    AVATAR = 'LLVOAvatar* avatar = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;'
+    DRAWN = 'const bool drawn = avatar && avatar->isVisible() && !avatar->isVisuallyMuted();'
+    WORN_AREA = 'F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, drawn ? avatar->getPixelArea() : 0.f);'
+    STORE = 'imagep->mWornVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);'
 
     def decode_priority(self):
         return code(body(TEXTURE_LIST, 'void LLViewerTextureList::updateImageDecodePriority('))
@@ -287,8 +290,11 @@ class WornFetchRank(unittest.TestCase):
         self.assertLess(decode.index('F32 max_worn_vsize = 0.f;'), boosted)
         loop = decode[boosted:decode.index('imagep->addTextureStats(max_vsize);')]
         area = loop.index('F32 vsize = face->getPixelArea();')
-        self.assertLess(area, loop.index(self.WEARER))
-        self.assertLess(loop.index(self.WEARER), loop.index(self.WORN_AREA))
+        # the avatar the object is drawn with, counted only while it is drawn (out of view, hidden or a jelly doll: no area)
+        self.assertLess(area, loop.index(self.AVATAR))
+        self.assertLess(loop.index(self.AVATAR), loop.index(self.DRAWN))
+        self.assertLess(loop.index(self.DRAWN), loop.index(self.WORN_AREA))
+        self.assertEqual(loop.count('getPixelArea()'), 2)
         # each factor of the face's own size, in its order, and the same factor of its worn size right after it
         own = re.findall(r'(?<![\w.])vsize ([*/]=) (\w+);', loop)
         self.assertEqual(own, [('/=', 'min_scale'), ('/=', 'bias'), ('*=', 'camera_boost')])
@@ -306,24 +312,34 @@ class WornFetchRank(unittest.TestCase):
         # after the block of unboosted textures, so a boosted texture, which skips its faces, stores 0
         self.assertLess(decode.index('\n    }\n', stats), store)
         self.assertLess(store, decode.index('imagep->processTextureStats();'))
-        self.assertEqual(decode.count('mFetchVirtualSize'), 1)
+        self.assertEqual(decode.count('mWornVirtualSize'), 1)
 
     def test_capped_as_mMaxVirtualSize(self):
         for signature, cap in (('void LLViewerFetchedTexture::processTextureStats()', '(F32)(max_tex_res * max_tex_res)'),
                                ('void LLViewerLODTexture::processTextureStats()', 'max_tex_res * max_tex_res')):
             stats = code(body(TEXTURE, signature))
-            self.assertRegex(stats, r'mMaxVirtualSize = llmin\(mMaxVirtualSize, %s\);\s*mFetchVirtualSize = llmin\(mFetchVirtualSize, %s\);'
+            self.assertRegex(stats, r'mMaxVirtualSize = llmin\(mMaxVirtualSize, %s\);\s*mWornVirtualSize = llmin\(mWornVirtualSize, %s\);'
                              % (re.escape(cap), re.escape(cap)))
 
     def test_zeroed_with_mMaxVirtualSize(self):
         for signature in ('void LLViewerTexture::init(bool firstinit)', 'void LLViewerTexture::resetTextureStats()'):
-            self.assertRegex(code(body(TEXTURE, signature)), r'mMaxVirtualSize = 0\.0?f;\s*mFetchVirtualSize = 0\.f;')
+            self.assertRegex(code(body(TEXTURE, signature)), r'mMaxVirtualSize = 0\.0?f;\s*mWornVirtualSize = 0\.f;')
 
     def test_written_nowhere_else(self):
         # init, resetTextureStats and the two caps, and the store in updateImageDecodePriority
-        self.assertEqual(len(re.findall(r'\bmFetchVirtualSize = ', code(TEXTURE))), 4)
-        self.assertEqual(len(re.findall(r'\bmFetchVirtualSize = ', code(TEXTURE_LIST))), 1)
-        self.assertEqual(len(re.findall(r'\bF32 mFetchVirtualSize = 0\.f;', TEXTURE_H)), 1)
+        self.assertEqual(len(re.findall(r'\bmWornVirtualSize = ', code(TEXTURE))), 4)
+        self.assertEqual(len(re.findall(r'\bmWornVirtualSize = ', code(TEXTURE_LIST))), 1)
+        self.assertEqual(len(re.findall(r'\bF32 mWornVirtualSize = 0\.f;', TEXTURE_H)), 1)
+        self.assertNotIn('mFetchVirtualSize', TEXTURE + TEXTURE_H + TEXTURE_LIST)
+
+    def test_boosted_priority_is_the_boost_size(self):
+        # the worn rank stays under the size setBoostLevel gives a boosted texture, which updateImageDecodePriority
+        # leaves alone (it skips the faces of a boosted texture)
+        boost = code(body(TEXTURE, 'void LLViewerTexture::setBoostLevel(S32 level)'))
+        self.assertRegex(boost, r'if \(mBoostLevel >= LLViewerTexture::BOOST_HIGH\)\s*\{\s*mMaxVirtualSize = 2048\.f \* 2048\.f;')
+        self.assertIn('constexpr float BOOSTED_PRIORITY = 2048.f * 2048.f;', POLICY)
+        self.assertIn('constexpr float WORN_PRIORITY_MAX = BOOSTED_PRIORITY - 0.25f;', POLICY)
+        self.assertIn('std::max(decode_priority, std::min(worn_size, WORN_PRIORITY_MAX))', code(POLICY))
 
 
 class J2CReduceFactor(unittest.TestCase):

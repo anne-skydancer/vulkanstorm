@@ -51,7 +51,7 @@
 #include "lltexturefetch.h"
 #include "llviewercontrol.h"
 #include "llviewertexture.h"
-#include "llvoavatar.h"
+#include "llvoavatar.h" // <Vulkanstorm/> the worn rank (updateImageDecodePriority)
 #include "llviewermedia.h"
 #include "llviewernetwork.h"
 #include "llviewerregion.h"
@@ -978,11 +978,16 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
 
                     F32 vsize = face->getPixelArea();
 
-                    // <Vulkanstorm> A face of a worn object (an attachment, or animesh) is queued by its avatar's area
-                    // too, scaled below as vsize is (lltexturefetchpolicy.h); an avatar's own face is not worn
+                    // <Vulkanstorm> A face of a worn object is queued by its avatar's area too while that avatar is drawn,
+                    // scaled below as vsize is (lltexturefetchpolicy.h). The avatar the object is drawn with: the wearer of an
+                    // attachment, an animesh's own avatar (worn or not); an avatar's own face is not worn. An avatar out of
+                    // view or hidden (isVisible, as its bakes) or drawn as a jelly doll (isVisuallyMuted) counts nothing.
+                    // LL's objp, used below, is taken here.
                     LLViewerObject* objp = face->getViewerObject();
-                    const LLVOAvatar* wearer = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;
-                    F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, wearer ? wearer->getPixelArea() : 0.f);
+                    LLVOAvatar* avatar = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;
+                    const bool drawn = avatar && avatar->isVisible() && !avatar->isVisuallyMuted();
+                    F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, drawn ? avatar->getPixelArea() : 0.f);
+                    // </Vulkanstorm>
 
                     on_screen |= face->mInFrustum;
 
@@ -999,27 +1004,27 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
                     F32 min_scale = te ? llmin(fabsf(te->getScaleS()), fabsf(te->getScaleT())) : 1.f;
                     min_scale = llclamp(min_scale * min_scale, texture_scale_min(), texture_scale_max());
                     vsize /= min_scale;
-                    worn_vsize /= min_scale;
+                    worn_vsize /= min_scale; // <Vulkanstorm/>
 
                     // apply bias to offscreen faces all the time, but only to onscreen faces when bias is large
                     // use mImportanceToCamera to make bias switch a bit more gradual
                     if (!face->mInFrustum || LLViewerTexture::sDesiredDiscardBias > 1.9f + face->mImportanceToCamera / 2.f)
                     {
                         vsize /= bias;
-                        worn_vsize /= bias;
+                        worn_vsize /= bias; // <Vulkanstorm/>
                     }
 
                     // boost resolution of textures that are important to the camera
                     if (face->mInFrustum)
                     {
                         static LLCachedControl<F32> texture_camera_boost(gSavedSettings, "TextureCameraBoost", 8.f);
-                        const F32 camera_boost = llmax(face->mImportanceToCamera*texture_camera_boost, 1.f);
+                        const F32 camera_boost = llmax(face->mImportanceToCamera*texture_camera_boost, 1.f); // <Vulkanstorm/> for both sizes
                         vsize *= camera_boost;
-                        worn_vsize *= camera_boost;
+                        worn_vsize *= camera_boost; // <Vulkanstorm/>
                     }
 
                     max_vsize = llmax(max_vsize, vsize);
-                    max_worn_vsize = llmax(max_worn_vsize, worn_vsize);
+                    max_worn_vsize = llmax(max_worn_vsize, worn_vsize); // <Vulkanstorm/>
 
                     // addTextureStats limits size to sMaxVirtualSize
                     if (max_vsize >= LLViewerFetchedTexture::sMaxVirtualSize
@@ -1060,7 +1065,7 @@ void LLViewerTextureList::updateImageDecodePriority(LLViewerFetchedTexture* imag
 
     // <Vulkanstorm> clamped as addTextureStats clamps mMaxVirtualSize, and capped with it by processTextureStats;
     // 0 for a boosted texture, which skips the faces
-    imagep->mFetchVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);
+    imagep->mWornVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);
 
 #if 0
     imagep->setDebugText(llformat("%d/%d - %d/%d -- %d/%d",
