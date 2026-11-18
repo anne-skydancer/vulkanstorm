@@ -437,6 +437,9 @@ LLLocationInputCtrl::LLLocationInputCtrl(const LLLocationInputCtrl::Params& p)
     mAddLandmarkObserver    = new LLAddLandmarkObserver(this);
     gInventory.addObserver(mRemoveLandmarkObserver);
     gInventory.addObserver(mAddLandmarkObserver);
+    // <Vulkanstorm> bulk landmark reads finish asynchronously; refresh the star then
+    mLandmarksLoadedConnection = gLandmarkList.setLandmarksLoadedCallback(
+        boost::bind(&LLLocationInputCtrl::updateAddLandmarkButton, this));
 
     mParcelChangeObserver = new LLParcelChangeObserver(this);
     LLViewerParcelMgr::getInstance()->addObserver(mParcelChangeObserver);
@@ -469,6 +472,7 @@ LLLocationInputCtrl::~LLLocationInputCtrl()
     mParcelPropertiesControlConnection.disconnect();
     mParcelMgrConnection.disconnect();
     mLocationHistoryConnection.disconnect();
+    mLandmarksLoadedConnection.disconnect(); // <Vulkanstorm>
 }
 
 void LLLocationInputCtrl::setEnabled(bool enabled)

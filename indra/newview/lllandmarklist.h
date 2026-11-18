@@ -29,6 +29,9 @@
 
 #include <functional>
 #include <map>
+#include <set>
+#include <string>
+#include <boost/signals2.hpp>
 #include "lllandmark.h"
 #include "lluuid.h"
 #include "llassetstorage.h"
@@ -50,7 +53,16 @@ public:
     //const LLLandmark* getNext()   { return mList.getNextData(); }
 
     bool assetExists(const LLUUID& asset_uuid);
-    LLLandmark* getAsset(const LLUUID& asset_uuid, loaded_callback_t cb = nullptr);
+    // <Vulkanstorm> async: for a landmark that is not loaded yet, read the disk cache on the
+    // General thread instead of on the caller's thread (the first call still returns NULL);
+    // the landmarks-loaded signal fires on the main thread when the last such read is done.
+    LLLandmark* getAsset(const LLUUID& asset_uuid, loaded_callback_t cb = nullptr, bool async = false);
+    typedef boost::signals2::signal<void()> landmarks_loaded_signal_t;
+    boost::signals2::connection setLandmarksLoadedCallback(const landmarks_loaded_signal_t::slot_type& cb)
+    {
+        return mLandmarksLoadedSignal.connect(cb);
+    }
+    // </Vulkanstorm>
     static void processGetAssetReply(
         const LLUUID& uuid,
         LLAssetType::EType type,
@@ -66,6 +78,10 @@ protected:
     void onRegionHandle(const LLUUID& landmark_id);
     void eraseCallbacks(const LLUUID& landmark_id);
     void makeCallbacks(const LLUUID& landmark_id);
+    // <Vulkanstorm>
+    void onLandmarkData(const LLUUID& uuid, const std::string& data);
+    void onCacheRead(const LLUUID& uuid, const std::string& data);
+    // </Vulkanstorm>
 
     typedef std::map<LLUUID, LLLandmark*> landmark_list_t;
     landmark_list_t mList;
@@ -81,6 +97,10 @@ protected:
     // here and in LLLandmark.
     typedef std::multimap<LLUUID, loaded_callback_t> loaded_callback_map_t;
     loaded_callback_map_t mLoadedCallbackMap;
+
+    // <Vulkanstorm> cache reads in flight on the General thread
+    landmark_uuid_list_t mAsyncPending;
+    landmarks_loaded_signal_t mLandmarksLoadedSignal;
 };
 
 

@@ -66,7 +66,7 @@ public:
         if (!item || item->getType() != LLAssetType::AT_LANDMARK)
             return false;
 
-        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID());
+        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID(), nullptr, true); // <Vulkanstorm> async cache read
         if (!landmark) // the landmark not been loaded yet
             return false;
 
@@ -96,7 +96,7 @@ public:
         if (mFound || !item || item->getType() != LLAssetType::AT_LANDMARK)
             return false;
 
-        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID());
+        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID(), nullptr, true); // <Vulkanstorm> async cache read
         if (!landmark) // the landmark not been loaded yet
             return false;
 
@@ -136,7 +136,7 @@ public:
         if (!item || item->getType() != LLAssetType::AT_LANDMARK)
             return false;
 
-        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID());
+        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID(), nullptr, true); // <Vulkanstorm> async cache read
         if (!landmark) // the landmark not been loaded yet
             return false;
 
@@ -179,7 +179,7 @@ public:
         if (mFounded || !item || item->getType() != LLAssetType::AT_LANDMARK)
             return false;
 
-        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID());
+        LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID(), nullptr, true); // <Vulkanstorm> async cache read
         if (!landmark) // the landmark not been loaded yet
             return false;
 
@@ -241,7 +241,7 @@ bool LLLandmarkActions::hasParcelLandmark()
         LLInventoryItem* item = gInventory.getItem(sLastItemID);
         if (item)
         {
-            LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID());
+            LLLandmark* landmark = gLandmarkList.getAsset(item->getAssetUUID(), nullptr, true); // <Vulkanstorm> async cache read
             if (landmark)
             {
                 LLVector3d landmark_global_pos;
