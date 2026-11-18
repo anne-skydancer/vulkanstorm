@@ -3008,7 +3008,9 @@ void LLVOAvatar::updateMeshData()
                         LL_WARNS() << "Failed to allocate vertex buffer for Mesh, Substituting" << LL_ENDL;
                         // Attempt to create a dummy triangle (one vertex, 3 indices, all 0)
                         facep->setSize(1, 3);
-                        // <Vulkanstorm> as above (no write through a null copy; the zeros go to GL)
+                        // <Vulkanstorm> checked as above, so that no write goes through a null copy. This branch is
+                        // unreachable: the setSize at the top of the loop drops a face buffer whose counts change, so
+                        // a buffer the face still holds has these counts. This buffer is attached to no face.
                         if (buff->allocateBuffer(1, 3))
                         {
                             buff->zeroFill();
