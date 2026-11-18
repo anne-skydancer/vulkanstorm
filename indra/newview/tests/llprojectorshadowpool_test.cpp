@@ -1608,8 +1608,12 @@ float predicted(const FramePicks& p, const std::vector<StaticItem>& st, const st
 
 void testP4Caps()
 {
-    // the constants: one combined cap inside the +5 % allowance (about 0.4 ms), the dynamic layer's share and the static floor
-    check(kFrameCapMs <= 0.40f, "P4 the combined cap is inside the 0.4 ms of the +5 % allowance", kFrameCapMs);
+    // the constants: one combined cap, the floor's share of the standing floor's frame (L2), the dynamic layer's share and the static floor
+    check(std::fabs(kFrameCapMs - kFloorShare * 1000.f / kFloorStandingFps) < 1e-3f, "P4 the combined cap is 3 % of the 60 fps floor's frame", kFrameCapMs);
+    {
+        const float standing = 1000.f / (1000.f / kFloorStandingFps + kFrameCapMs), moving = 1000.f / (1000.f / kFloorMovingFps + kFrameCapMs);
+        check(standing > 58.f && moving > 24.6f, "P4 spent in full on a CPU-bound frame at the floor: about 58.3 fps standing, 24.7 moving", standing, moving);
+    }
     check(std::fabs(kDynamicCapMs + kStaticCapMs - kFrameCapMs) < 1e-6f, "P4 the dynamic share and the static floor add up to the cap");
     check(kDynamicCapMs > kStaticCapMs, "P4 the dynamic layer has the priority share");
 
@@ -1636,8 +1640,8 @@ void testP4Caps()
     }
     // without the progress rule (something was already spent) the cap holds without exception, even for one big item
     {
-        const std::vector<DynamicItem> dyn = faces(1, 0.5f, 9);   // overdue and over the cap alone
-        const std::vector<StaticItem> st = tiles(1, 0.5f);
+        const std::vector<DynamicItem> dyn = faces(1, 0.6f, 9);   // overdue and over the cap alone
+        const std::vector<StaticItem> st = tiles(1, 0.6f);
         const FramePicks p = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, false);
         check(p.dynamic.empty() && p.fixed.empty(), "P4 no progress pick once the frame has spent: an item over the cap waits");
         const FramePicks q = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
@@ -1647,7 +1651,7 @@ void testP4Caps()
     // a static tile above the whole cap is not starved by a standing avatar: after the wait it runs alone as the progress pick
     {
         const std::vector<DynamicItem> dyn = faces(3, 0.05f, 1);
-        std::vector<StaticItem> st = tiles(1, 0.5f);
+        std::vector<StaticItem> st = tiles(1, 0.6f);
         const FramePicks young = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
         check(young.dynamic.size() == 3 && young.fixed.empty(), "P4 a big static tile that has not waited yet leaves the cheap faces their frame");
         st[0].age_frames = kDynamicDeadlineFrames;
@@ -1664,7 +1668,7 @@ void testP4Caps()
         spent.add(kFrameCapMs + 0.01f);
         check(!mayRunPick(spent.left(kFrameCapMs), false, true, false), "P4 gate: a first static pick behind spent dynamic work is refused");
         // (b) the progress case from selectFrame: dynamic empty, ledger untouched, the head above the whole cap is allowed
-        std::vector<StaticItem> st = tiles(1, 0.5f);
+        std::vector<StaticItem> st = tiles(1, 0.6f);
         st[0].age_frames = kDynamicDeadlineFrames;
         FrameLedger fresh;
         fresh.begin(2);
@@ -1682,13 +1686,13 @@ void testP4Caps()
         const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
         const std::vector<StaticItem> st = tiles(10, 0.05f);
         const FramePicks p = selectFrame(st, dyn, kFrameCapMs, kAvatarDrawsMax, true);
-        check(p.dynamic.size() == 4, "P4 the dynamic layer takes its share: 0.20 ms / 0.05 ms = 4 faces", double(p.dynamic.size()));
-        check(p.fixed.size() == 3, "P4 the static tiles get what is left, at least the floor: 0.15 ms / 0.05 ms = 3 tiles", double(p.fixed.size()));
+        check(p.dynamic.size() == 6, "P4 the dynamic layer takes its share: 0.30 ms / 0.05 ms = 6 faces", double(p.dynamic.size()));
+        check(p.fixed.size() == 4, "P4 the static tiles get what is left, at least the floor: 0.20 ms / 0.05 ms = 4 tiles", double(p.fixed.size()));
         check(p.dynamic[0] == packKey(0, 1), "P4 the nearest face first (by position)");
         const FramePicks only_static = selectFrame(st, std::vector<DynamicItem>(), kFrameCapMs, kAvatarDrawsMax, true);
-        check(only_static.fixed.size() == 7, "P4 without dynamic work the static tiles may take the whole cap: 0.35 / 0.05 = 7", double(only_static.fixed.size()));
+        check(only_static.fixed.size() == 10, "P4 without dynamic work the static tiles may take the whole cap: 0.5 / 0.05 = 10", double(only_static.fixed.size()));
         const FramePicks only_dyn = selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true);
-        check(only_dyn.dynamic.size() == 7, "P4 the dynamic layer alone takes the whole cap when no static tile waits (C1): 0.35 / 0.05 = 7", double(only_dyn.dynamic.size()));
+        check(only_dyn.dynamic.size() == 10, "P4 the dynamic layer alone takes the whole cap when no static tile waits (C1): 0.5 / 0.05 = 10", double(only_dyn.dynamic.size()));
     }
     // a cap already spent by an earlier cache leaves less: the sum over both caches never exceeds the one cap
     {
@@ -1702,7 +1706,7 @@ void testP4Caps()
         check(ms + 0.20f <= kFrameCapMs + 1e-4f, "P4 a second cache spends only what the first left of the shared cap", ms);
         check(!p.dynamic.empty() || !p.fixed.empty(), "P4 and still serves something");
         check(unpackPool(p.dynamic.empty() ? p.fixed[0] : p.dynamic[0]) == 1 && unpackKey(p.dynamic.empty() ? p.fixed[0] : p.dynamic[0]) >= 1, "P4 picks come back with their pool and key");
-        ledger.add(0.20f);
+        ledger.add(kFrameCapMs - 0.20f); // the rest of the cap
         const FramePicks none = selectFrame(st, dyn, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
         check(none.dynamic.empty() && none.fixed.empty(), "P4 a spent cap serves nothing for the next cache", double(none.dynamic.size() + none.fixed.size()));
         ledger.begin(8);
@@ -1840,9 +1844,9 @@ void testP4Layer()
 void testP4Lag()
 {
     // faces drawn every frame (the nearest) are part of A_max
-    check(layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0) == 4, "P4 lag: 0.20 ms at 0.05 ms a face is 4 faces a frame", layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0));
-    check(layerFacesPerFrame(kDynamicCapMs, 0.04f, kAvatarDrawsMax, 0) == 4, "P4 lag: a face below the scheduler floor is predicted at the floor");
-    check(layerFacesPerFrame(kDynamicCapMs, 0.10f, kAvatarDrawsMax, 0) == 2, "P4 lag: 0.10 ms a face is 2 faces a frame");
+    check(layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0) == 6, "P4 lag: 0.30 ms at 0.05 ms a face is 6 faces a frame", layerFacesPerFrame(kDynamicCapMs, 0.05f, kAvatarDrawsMax, 0));
+    check(layerFacesPerFrame(kDynamicCapMs, 0.04f, kAvatarDrawsMax, 0) == 6, "P4 lag: a face below the scheduler floor is predicted at the floor");
+    check(layerFacesPerFrame(kDynamicCapMs, 0.10f, kAvatarDrawsMax, 0) == 3, "P4 lag: 0.10 ms a face is 3 faces a frame");
     check(layerFacesPerFrame(kDynamicCapMs, 0.5f, kAvatarDrawsMax, 0) == 1, "P4 lag: a face over the share still runs alone");
     check(layerFacesPerFrame(10.f, 0.05f, kAvatarDrawsMax, 0) == 24, "P4 lag: A_max binds first with a large share");
     check(layerFacesPerFrame(10.f, 0.05f, kAvatarDrawsMax, 20) == 4, "P4 lag: A_max left after the every-frame draws");
@@ -1943,10 +1947,14 @@ void testP4Owners()
 //
 // One face = one lamp whose light holds an avatar. The simulation drives the scheduler the way LLProjectorShadows::update does: the
 // pick (selectFrame), then the in-frame gate (mayRunPick, the dynamic share) with the measured cost, which is what each pick adds to
-// the ledger. `legacy` is the release scheduler as it was before C1 (a fixed 0.20 ms share, only an overdue face may run over it,
-// lamp distance for the order, the last measured cost as the prediction); its pick is reproduced here from the old code.
+// the ledger. `legacy` is the release scheduler as it was before C1 (a fixed 0.20 ms share of a 0.35 ms cap, only an overdue face may run
+// over it, lamp distance for the order, the last measured cost as the prediction); its pick is reproduced here from the old code, with
+// the caps it had (kC1FrameCapMs, kC1DynamicCapMs; L2 set today's from the fps floor).
 //   lamp_ties: every lamp at the same camera distance (0 indoors: the camera is inside every lamp's reach)
 //   shared_avatar: every lamp holds the SAME avatar (the owner's own), so the avatar distance ties as well
+constexpr float kC1FrameCapMs = 0.35f;   // the caps of the release scheduler before C1 (and before L2's floor-based budget)
+constexpr float kC1DynamicCapMs = 0.20f;
+
 struct CadenceResult
 {
     double faces_per_frame = 0;
@@ -2006,10 +2014,11 @@ CadenceResult cadenceSim(uint32_t lamps, float cost, bool legacy, bool lamp_ties
         FrameLedger ledger;
         ledger.begin(frame);
         std::vector<uint32_t> picks;
+        const float cap = legacy ? kC1FrameCapMs : kFrameCapMs;
         if (legacy)
         {
-            const float left = ledger.left(kFrameCapMs);
-            for (uint32_t k : legacySelectDynamic(items, std::min(kDynamicCapMs, left) + 1e-4f, kAvatarDrawsMax)) picks.push_back(k);
+            const float left = ledger.left(cap);
+            for (uint32_t k : legacySelectDynamic(items, std::min(kC1DynamicCapMs, left) + 1e-4f, kAvatarDrawsMax)) picks.push_back(k);
             float ms = 0.f;
             for (uint32_t k : picks) ms += itemCost(measured[k]);
             if (ms > left + 1e-4f && picks.size() != 1) picks.clear();
@@ -2019,12 +2028,12 @@ CadenceResult cadenceSim(uint32_t lamps, float cost, bool legacy, bool lamp_ties
             for (uint32_t k : selectFrame(std::vector<StaticItem>(), items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched()).dynamic)
                 picks.push_back(unpackKey(k));
         }
-        const float share = legacy ? kDynamicCapMs : dynamicShareMs(false, kFrameCapMs);
+        const float share = legacy ? kC1DynamicCapMs : dynamicShareMs(false, kFrameCapMs);
         float own = 0.f;
         bool first = true;
         for (uint32_t k : picks)
         {
-            if (!mayRunPick(ledger.left(kFrameCapMs), true, first, false) || (!first && own >= share)) break;
+            if (!mayRunPick(ledger.left(cap), true, first, false) || (!first && own >= share)) break;
             if (frame > warm) worst[k] = std::max(worst[k], frame - last[k]);
             last[k] = frame;
             measured[k] = legacy ? cost : smoothedCostMs(measured[k], cost);
@@ -2118,8 +2127,8 @@ void testP4Cadence(bool print_table)
     check(dynamicShareMs(true, 0.1f) == 0.1f && dynamicShareMs(false, -1.f) == 0.f, "C1 share: never more than what is left");
     {
         const std::vector<DynamicItem> dyn = faces(10, 0.05f, 1);
-        check(selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 7, "C1 share: 0.35 / 0.05 = 7 faces without a static tile");
-        check(selectFrame(tiles(1, 0.05f), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 4, "C1 share: with a static tile waiting, 4 faces as before");
+        check(selectFrame(std::vector<StaticItem>(), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 10, "C1 share: 0.5 / 0.05 = 10 faces without a static tile");
+        check(selectFrame(tiles(1, 0.05f), dyn, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 6, "C1 share: with a static tile waiting, 0.30 / 0.05 = 6 faces");
     }
     // a heavy single face: alone, every frame; not over the cap when the frame has spent already
     {
@@ -2141,7 +2150,7 @@ void testP4Cadence(bool print_table)
     {
         float p = 0.08f;
         p = smoothedCostMs(p, 0.30f);
-        check(p < 0.20f, "C1 smoothing: one spike of 0.30 ms leaves the prediction under the share", p);
+        check(p < kDynamicCapMs, "C1 smoothing: one spike of 0.30 ms leaves the prediction under the share", p);
         for (int i = 0; i < 40; ++i) p = smoothedCostMs(p, 0.30f);
         check(std::fabs(p - 0.30f) < 1e-3f, "C1 smoothing: a lasting change is followed", p);
         check(smoothedCostMs(0.1f, std::numeric_limits<float>::quiet_NaN()) == 0.1f && smoothedCostMs(0.1f, -1.f) == 0.1f, "C1 smoothing: a bad sample is ignored");
@@ -2153,7 +2162,7 @@ void testP4Cadence(bool print_table)
         check(smoothedCostMs(0.f, 50.f) == kCostSampleMaxMs, "C1 smoothing: a seed is clamped");
         float q = 0.08f;
         q = smoothedCostMs(q, 50.f);
-        check(q <= 0.08f + kCostSmoothing * (kCostSampleMaxMs - 0.08f) + 1e-6f, "C1 smoothing: a 50 ms hitch counts as 0.7 ms", q);
+        check(q <= 0.08f + kCostSmoothing * (kCostSampleMaxMs - 0.08f) + 1e-6f, "C1 smoothing: a 50 ms hitch counts as kCostSampleMaxMs (1 ms)", q);
         int frames_heavy = 0;
         while (q > kDynamicCapMs && frames_heavy < 100)
         {
