@@ -670,15 +670,6 @@ void LLProjectorShadows::copyAtlas(U32 from_tex, U32 to_tex)
     copyTile(from_tex, all, to_tex, all);
 }
 
-void LLProjectorShadows::blitRect(U32 from_fbo, const Rect& src, U32 to_fbo, const Rect& dst)
-{
-    LLGLDisable scissor(GL_SCISSOR_TEST); // a blit is clipped by the scissor test
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, from_fbo);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, to_fbo);
-    glBlitFramebuffer((GLint)src.x, (GLint)src.y, (GLint)(src.x + src.size), (GLint)(src.y + src.size), (GLint)dst.x, (GLint)dst.y,
-                      (GLint)(dst.x + dst.size), (GLint)(dst.y + dst.size), GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-}
-
 // Applies a compaction (spec 4.3), in one frame and with no name swap: every drawn tile S[old] -> L[new] at its own size (bit exact),
 // then L -> S in full, so both atlases hold the new layout with the old content. A compaction never changes a size (a tile changes its
 // size only in its own render, draw-then-swap), so no tile is ever shown stretched.

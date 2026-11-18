@@ -242,7 +242,6 @@ private:
     // S -> L over a rectangle of the tile (tile texels), the same texels of both atlases
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
     void copyAtlas(U32 from_tex, U32 to_tex);
-    void blitRect(U32 from_fbo, const llprojectorpool::Rect& src, U32 to_fbo, const llprojectorpool::Rect& dst);
     void renderTile(Record& rec, llprojectorpool::Cause cause, bool dynamic);
     // The avatars that cast this frame (collectCasters, once per update): the pairing with the lamps and every face's draw list read it.
     // The pointers are valid only inside update(), which empties the list before it returns.
