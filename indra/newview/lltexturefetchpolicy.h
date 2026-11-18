@@ -19,7 +19,7 @@
  * before did not end at all: the worker decoded that data again and sent the same request again at
  * once, for as long as the texture stayed on screen. And the waiting requests were sorted by their
  * live priorities, which other threads change during the sort. The textures of worn objects, a rigged
- * eye above all, waited behind nearly every other texture of a busy place (wornFetchArea).
+ * eye above all, waited behind nearly every other texture of a busy place (wornFetchArea, fetchPriority).
  */
 
 #ifndef LL_LLTEXTUREFETCHPOLICY_H
@@ -105,26 +105,44 @@ namespace LLTextureFetchPolicy
     // is sized by its own joint boxes instead of its avatar's box: right for the resolution it asks for, but a rigged
     // eye then queued 50 to 3,000 times lower than before, behind nearly every other texture of a busy place, and
     // loaded last unless the camera zoomed in on it.
-    // A face of a worn object (an attachment, or animesh) that has an area on screen counts the larger of its own
-    // area and its avatar's, as the avatar's baked textures are queued by the avatar's area
-    // (LLVOAvatar::addBakedTextureStats) and as rigged faces were before #2582. `avatar_area` is 0 for a face that is
-    // not worn, which counts nothing. LLViewerTextureList::updateImageDecodePriority scales the result by the face's
-    // factors (texture scale, bias, camera boost) as it scales the face's own size, keeps the largest over the
-    // texture's faces, and clamps it as mMaxVirtualSize is clamped: that is mFetchVirtualSize, the worn size.
+    // A face of a worn object that has an area on screen counts the larger of its own area and its avatar's: the avatar
+    // the object is drawn with (LLViewerObject::getAvatar of its root: the wearer of an attachment, an animesh's own
+    // avatar, worn or not), while that avatar is drawn. An avatar out of view or hidden (LLVOAvatar::isVisible, the test
+    // its bakes are ranked by) or drawn as a jelly doll (isVisuallyMuted: muted, set not to render, too complex or too
+    // slow; its attachments are not drawn) counts nothing, so `avatar_area` is 0 for a face that is not worn or whose
+    // avatar is not drawn. LLViewerTextureList::updateImageDecodePriority scales the result by the face's factors
+    // (texture scale, bias, camera boost) as it scales the face's own size, keeps the largest over the texture's faces,
+    // and clamps it as mMaxVirtualSize is clamped: that is mWornVirtualSize, the worn size. So a worn texture ranks by
+    // its avatar's area (LLVOAvatar::mPixelArea, as the avatar's bakes do: LLVOAvatar::addBakedTextureStats) times the
+    // face's own factors, which the bakes do not get; rigged faces before #2582 used the box area of
+    // LLFace::calcPixelArea instead.
     inline float wornFetchArea(float face_area, float avatar_area)
     {
         return (face_area > 0.f && avatar_area > 0.f) ? std::max(face_area, avatar_area) : 0.f;
     }
 
+    // The priority of a boosted texture (BOOST_HIGH and above: the UI, icons, thumbnails, the map, the HUD, sculpt maps,
+    // previews, selected objects, your own bakes): LLViewerTexture::setBoostLevel sets mMaxVirtualSize to it and
+    // updateImageDecodePriority leaves it there. processTextureStats caps an unboosted texture's size at
+    // RenderMaxTextureResolution squared, which is at most this.
+    constexpr float BOOSTED_PRIORITY = 2048.f * 2048.f;
+    // The highest priority a worn size raises a request to: the largest float under BOOSTED_PRIORITY (std::nextafter,
+    // checked by the test), so a worn texture never ties with a boosted one nor passes it.
+    constexpr float WORN_PRIORITY_MAX = BOOSTED_PRIORITY - 0.25f;
+
     // The priority of a texture's request (LLTextureFetch::createRequest, updateRequestPriority): `decode_priority`,
-    // the size the texture is fetched for (mMaxVirtualSize), raised to its worn size `worn_size` (mFetchVirtualSize).
-    // Under `abort_below` (F_ALMOST_ZERO: a fetch worker whose priority is under it aborts) it is `decode_priority`
-    // as it is, so the same fetches abort; the level asked for and every other decision keep `decode_priority`. Only
-    // the order of the waiting requests changes (and, on OpenSim, the priority a UDP request sends). A texture on no
-    // worn face (a worn size of 0) keeps `decode_priority` exactly.
+    // the size the texture is fetched for (mMaxVirtualSize), raised to its worn size `worn_size` (mWornVirtualSize), at
+    // most to WORN_PRIORITY_MAX. Under `abort_below` (F_ALMOST_ZERO: a fetch worker whose priority is under it aborts)
+    // it is `decode_priority` as it is, so the same fetches abort; the level asked for and every other decision keep
+    // `decode_priority`. A texture on no worn face (a worn size of 0) keeps `decode_priority` exactly, and a raised
+    // request stays under every boosted one (and, at the default RenderMaxTextureResolution of 2048, under every texture
+    // whose own size reaches the cap). Only the order of the waiting requests changes: the HTTP release, and on OpenSim
+    // the UDP list and the priority it sends. That list keeps one request per priority in each round
+    // (PrioritySnapshot), so the worn requests that share their avatar's rank leave it one per round (0.1 s) there.
     inline float fetchPriority(float decode_priority, float worn_size, float abort_below)
     {
-        return decode_priority < abort_below ? decode_priority : std::max(decode_priority, worn_size);
+        return decode_priority < abort_below ? decode_priority
+                                             : std::max(decode_priority, std::min(worn_size, WORN_PRIORITY_MAX));
     }
 }
 

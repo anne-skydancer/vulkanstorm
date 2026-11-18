@@ -20,17 +20,23 @@
 // PrioritySnapshot copies, each priority read once: the order is the copies', whatever the priorities do after.
 // That the fetcher takes each copy under the worker's lock, and outside the network queue lock, is guarded by
 // scripts/tests/test_texture_streaming_fixes.py (PrioritySnapshots); nothing here runs lltexturefetch.cpp.
-// A worn texture's request is queued by its avatar's area (wornFetchArea, fetchPriority): a face with no area or no
-// avatar counts nothing, a worn face the larger of its own area and its avatar's; the request's priority is raised to
-// that worn size, except under the abort threshold, so the same fetches abort and every other request keeps its
-// priority exactly. Replayed through the HTTP release, a rigged eye in a busy place leaves with its avatar's textures
-// instead of last, and the other requests leave in the same order as before. That LLViewerTextureList scales the worn
-// size as the face's own and caps it as mMaxVirtualSize is capped, and that updateFetch decides everything else on
-// mMaxVirtualSize, is guarded by test_texture_streaming_fixes.py (WornFetchRank).
+// A worn texture's request is queued by its avatar's area (wornFetchArea, fetchPriority): a face with no area, or with
+// no avatar or one that is not drawn (the caller hands no area), counts nothing, a worn face the larger of its own area
+// and its avatar's; the request's priority is raised to that worn size, at most to just under a boosted texture's,
+// except under the abort threshold, so the same fetches abort, boosted textures stay first and a request on no worn
+// face keeps its priority exactly. Replayed through the HTTP release: with a single worn request, a rigged eye in a busy
+// place leaves first instead of last and the other requests leave in the same order as before; in a crowd, the eye
+// leaves within the rounds of its avatar's textures at the top of the worn rank, after the boosted texture and the
+// textures at the cap on their own, the textures of an avatar that is not drawn keep their own rank, and every other
+// request leaves in the order of its own size, later than before by exactly the worn requests raised past it. That
+// LLViewerTextureList ranks only drawn avatars, scales the worn size as the face's own and caps it as mMaxVirtualSize
+// is capped, and that updateFetch decides everything else on mMaxVirtualSize, is guarded by
+// test_texture_streaming_fixes.py (WornFetchRank).
 
 #include "lltexturefetchpolicy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <initializer_list>
@@ -355,6 +361,8 @@ namespace
     // window and a 60 degree field of view give its face about 2,675 px², 21,404 with the camera boost of 8.
     constexpr float ABORT_BELOW = 0.0001f;     // F_ALMOST_ZERO (llmath.h): a fetch worker whose priority is under it aborts
     constexpr float CAP = 2048.f * 2048.f;     // mMaxVirtualSize's cap at the default RenderMaxTextureResolution
+    using LLTextureFetchPolicy::BOOSTED_PRIORITY;
+    using LLTextureFetchPolicy::WORN_PRIORITY_MAX;
 
     void test_worn_fetch_area()
     {
@@ -363,9 +371,10 @@ namespace
         const float avatar = 524288.f;
         check(wornFetchArea(eye, avatar) == avatar, "a worn face counts its avatar's area when that is larger");
         check(wornFetchArea(600000.f, avatar) == 600000.f, "a worn face larger than its avatar counts its own area");
-        check(wornFetchArea(eye, 0.f) == 0.f, "a face that is not worn counts nothing");
+        check(wornFetchArea(eye, 0.f) == 0.f,
+              "a face that is not worn, or whose avatar is not drawn (the caller hands no area), counts nothing");
         check(wornFetchArea(0.f, avatar) == 0.f && wornFetchArea(-1.f, avatar) == 0.f,
-              "a worn face with no area on screen counts nothing (an attachment that is not drawn)");
+              "a worn face with no area on screen counts nothing");
         const float nan = std::numeric_limits<float>::quiet_NaN();
         check(wornFetchArea(nan, avatar) == 0.f && wornFetchArea(eye, nan) == 0.f, "an undefined area counts nothing");
     }
@@ -373,20 +382,32 @@ namespace
     void test_fetch_priority()
     {
         using LLTextureFetchPolicy::fetchPriority;
-        check(fetchPriority(21404.f, CAP, ABORT_BELOW) == CAP, "a worn texture's request is raised to its worn size");
+        check(WORN_PRIORITY_MAX < BOOSTED_PRIORITY && WORN_PRIORITY_MAX == std::nextafter(BOOSTED_PRIORITY, 0.f),
+              "the worn rank tops out at the largest priority under a boosted texture's");
+        check(BOOSTED_PRIORITY == CAP, "a boosted texture's priority is the cap of the default RenderMaxTextureResolution");
+        check(fetchPriority(21404.f, 1.0e6f, ABORT_BELOW) == 1.0e6f, "a worn texture's request is raised to its worn size");
+        check(fetchPriority(21404.f, CAP, ABORT_BELOW) == WORN_PRIORITY_MAX,
+              "a worn size at the cap raises a request to just under a boosted texture's priority");
+        check(fetchPriority(21404.f, 6.7e7f, ABORT_BELOW) == WORN_PRIORITY_MAX, "and no higher, whatever the worn size");
+        check(fetchPriority(CAP, CAP, ABORT_BELOW) == CAP, "a texture whose own size is at the cap keeps its priority");
+        check(fetchPriority(BOOSTED_PRIORITY, 0.f, ABORT_BELOW) == BOOSTED_PRIORITY, "a boosted texture keeps its priority");
         check(fetchPriority(2.9e6f, 0.f, ABORT_BELOW) == 2.9e6f, "a texture on no worn face keeps its priority");
         check(fetchPriority(2.9e6f, 1.0e6f, ABORT_BELOW) == 2.9e6f, "a worn size under the texture's own size changes nothing");
         check(fetchPriority(0.f, CAP, ABORT_BELOW) == 0.f, "a request at priority 0 stays at 0, so it still aborts");
         check(fetchPriority(-1.f, CAP, ABORT_BELOW) == -1.f, "a negative priority is left as it is");
         check(fetchPriority(0.00005f, CAP, ABORT_BELOW) == 0.00005f, "a priority under the abort threshold is left as it is");
-        check(fetchPriority(ABORT_BELOW, CAP, ABORT_BELOW) == CAP, "from the abort threshold on, the worn size counts");
+        check(fetchPriority(ABORT_BELOW, CAP, ABORT_BELOW) == WORN_PRIORITY_MAX, "from the abort threshold on, the worn size counts");
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        check(fetchPriority(21404.f, nan, ABORT_BELOW) == 21404.f, "an undefined worn size changes nothing");
 
         // Over a grid: a request is never ranked under its texture's own size, aborts exactly when that size would abort
-        // it, and is that size exactly when no worn face counts
-        const float sizes[] = { -1.f, 0.f, 1e-7f, 0.00005f, 0.0001f, 0.0002f, 1.f, 10.f, 574.f, 21404.f, 2.9e5f, 2.9e6f, CAP, 6.7e7f };
+        // it, is that size exactly when no worn face counts, and reaches a boosted texture's priority only by its own size
+        const float sizes[] = { -1.f, 0.f, 1e-7f, 0.00005f, 0.0001f, 0.0002f, 1.f, 10.f, 574.f, 21404.f, 2.9e5f, 2.9e6f,
+                                WORN_PRIORITY_MAX, CAP, 6.7e7f };
         bool never_lower = true;
         bool same_aborts = true;
         bool unworn_exact = true;
+        bool under_boosted = true;
         for (float decode : sizes)
         {
             unworn_exact = unworn_exact && fetchPriority(decode, 0.f, ABORT_BELOW) == decode;
@@ -399,11 +420,13 @@ namespace
                 const float priority = fetchPriority(decode, worn, ABORT_BELOW);
                 never_lower = never_lower && priority >= decode;
                 same_aborts = same_aborts && ((priority < ABORT_BELOW) == (decode < ABORT_BELOW));
+                under_boosted = under_boosted && ((priority >= BOOSTED_PRIORITY) == (decode >= BOOSTED_PRIORITY));
             }
         }
         check(never_lower, "a request is never ranked under its texture's own size");
         check(same_aborts, "a request aborts exactly when its texture's own size would abort it");
         check(unworn_exact, "a texture on no worn face keeps its priority exactly");
+        check(under_boosted, "a worn size never lifts a request to a boosted texture's priority: only its own size does");
     }
 
     // Replays LLTextureFetch::releaseHttpWaiters on requests that all wait: `per_round` leave in each round, highest
@@ -434,11 +457,11 @@ namespace
     {
         using LLTextureFetchPolicy::fetchPriority;
         using LLTextureFetchPolicy::wornFetchArea;
-        // A busy place: 600 waiting requests of scenery, bodies and clothes, all larger on screen than the eye (10^5 to
-        // 4 x 10^6, distinct), and the rigged eye of an avatar 1 m away: 21,404 on its own, and its avatar's area with
-        // the face's camera boost, at the cap. 50 leave per round, as releaseHttpWaiters releases them.
+        // A busy place with a single worn request: 600 waiting requests on no worn face, all larger on screen than the eye
+        // (10^5 to 4 x 10^6, distinct), and the rigged eye of an avatar 1 m away: 21,404 on its own, and its avatar's area
+        // with the face's camera boost, at the cap. 50 leave per round, as releaseHttpWaiters releases them.
         std::vector<float> own;  // each texture's own size (mMaxVirtualSize, the decode priority)
-        std::vector<float> worn; // its worn size (mFetchVirtualSize)
+        std::vector<float> worn; // its worn size (mWornVirtualSize)
         for (int i = 0; i < 600; ++i)
         {
             own.push_back(1.0e5f + 6500.f * float(i));
@@ -456,12 +479,134 @@ namespace
         std::vector<std::size_t> before = releaseOrder(own, 50); // ranked by their own sizes, as before
         std::vector<std::size_t> after = releaseOrder(rank, 50);
         check(before.back() == eye, "ranked by its own size, the eye leaves last, in the thirteenth round");
-        check(after.front() == eye, "ranked by its avatar's area, the eye leaves first, in the first round");
+        check(after.front() == eye, "ranked by its avatar's area, a single worn request leaves first, in the first round");
 
-        // the other requests leave in the same order as before
+        // with a single worn request, the other requests leave in the same order as before
         before.erase(std::find(before.begin(), before.end(), eye));
         after.erase(std::find(after.begin(), after.end(), eye));
-        check(before == after, "every other request leaves in the same order as before");
+        check(before == after, "with a single worn request, every other request leaves in the same order as before");
+    }
+
+    // A crowd, 50 requests leaving per round. The eye's avatar is drawn 1 m away: its 60 worn textures, the eye among them
+    // (21,404 on its own), reach the cap of the worn rank. A second drawn avatar further away ranks its 60 at 1.5 x 10^6,
+    // its eye (5,000 on its own) among them; those of its textures larger on their own keep their own size. A third avatar
+    // stands behind the camera, so it is not drawn: the caller hands no area, and its 60 keep their own sizes. Then 598
+    // textures of scenery, two more at the cap on their own, and a boosted texture (the map, a thumbnail). No two own sizes
+    // tie except the three at the top; the rank makes ties, which std::partial_sort leaves in any order, so every check
+    // holds for every order of the ties.
+    void test_crowd_release_order()
+    {
+        using LLTextureFetchPolicy::fetchPriority;
+        enum Kind { SCENERY, BOOSTED, NEAR, FAR, HIDDEN };
+        struct Waiter
+        {
+            Kind kind;
+            float own;  // mMaxVirtualSize, the decode priority
+            float worn; // mWornVirtualSize, as updateImageDecodePriority stores it and processTextureStats caps it
+        };
+        // own sizes in steps of 6,500: the scenery's on the steps, each avatar's between them, so no two own sizes tie
+        const auto step = [](int i, float offset) { return 1.0e5f + 6500.f * float(i) + offset; };
+        std::vector<Waiter> textures;
+        for (int i = 0; i < 598; ++i)
+        {
+            textures.push_back({ SCENERY, step(i, 0.f), 0.f });
+        }
+        textures.push_back({ SCENERY, CAP, 0.f });
+        textures.push_back({ SCENERY, CAP, 0.f });
+        textures.push_back({ BOOSTED, BOOSTED_PRIORITY, 0.f }); // its faces are skipped: no worn size
+        const std::size_t near_eye = textures.size();
+        textures.push_back({ NEAR, 21404.f, CAP });
+        for (int k = 1; k < 60; ++k)
+        {
+            textures.push_back({ NEAR, step(10 * k, 3250.f), CAP });
+        }
+        const float far_rank = 1.5e6f + 1234.f;
+        const std::size_t far_eye = textures.size();
+        textures.push_back({ FAR, 5000.f, far_rank });
+        for (int k = 1; k < 60; ++k)
+        {
+            textures.push_back({ FAR, step(10 * k - 5, 1625.f), far_rank });
+        }
+        for (int k = 0; k < 60; ++k)
+        {
+            textures.push_back({ HIDDEN, step(10 * k + 7, 4875.f), 0.f }); // not drawn: the caller hands no area
+        }
+
+        const std::size_t count = textures.size();
+        std::vector<float> own(count);
+        std::vector<float> rank(count);
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            own[i] = textures[i].own;
+            rank[i] = fetchPriority(textures[i].own, textures[i].worn, ABORT_BELOW);
+        }
+        const std::vector<std::size_t> before_order = releaseOrder(own, 50); // ranked by their own sizes, as before
+        const std::vector<std::size_t> after_order = releaseOrder(rank, 50);
+        std::vector<std::size_t> before(count); // the place each request leaves at
+        std::vector<std::size_t> after(count);
+        for (std::size_t place = 0; place < count; ++place)
+        {
+            before[before_order[place]] = place;
+            after[after_order[place]] = place;
+        }
+        const auto round = [](std::size_t place) { return place / 50 + 1; };
+        const std::size_t last_round = round(count - 1);
+
+        bool top_first = true;      // the boosted texture and the two at the cap on their own
+        bool near_early = true;     // every texture of the near avatar
+        bool far_eye_ahead = true;  // the far avatar's eye, ahead of every request ranked under its avatar
+        bool hidden_kept = true;    // the avatar that is not drawn: own sizes, behind the near avatar's eye
+        bool exact_delay = true;    // a request that is not raised: later than before by exactly the raised ones passing it
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            const Waiter& t = textures[i];
+            if (t.kind == BOOSTED || (t.kind == SCENERY && t.own == CAP))
+            {
+                top_first = top_first && after[i] < 3 && before[i] < 3;
+            }
+            if (t.kind == NEAR)
+            {
+                near_early = near_early && rank[i] == WORN_PRIORITY_MAX && after[i] < 3 + 60;
+            }
+            if (rank[i] < far_rank)
+            {
+                far_eye_ahead = far_eye_ahead && after[far_eye] < after[i];
+            }
+            if (t.kind == HIDDEN)
+            {
+                hidden_kept = hidden_kept && rank[i] == t.own && after[near_eye] < after[i];
+            }
+            if (rank[i] == t.own && t.own < CAP)
+            {
+                std::size_t passing = 0; // raised from under this request's size to over it
+                for (std::size_t j = 0; j < count; ++j)
+                {
+                    passing += (own[j] < t.own && rank[j] > t.own) ? 1 : 0;
+                }
+                exact_delay = exact_delay && after[i] == before[i] + passing;
+            }
+        }
+        check(round(before[near_eye]) == last_round, "ranked by its own size, the near avatar's eye leaves in the last round");
+        check(top_first, "the boosted texture and the textures at the cap on their own leave first, ahead of every worn one");
+        check(near_early && round(after[near_eye]) <= 2,
+              "the near avatar's textures, its eye among them, leave right after those, in the first two rounds");
+        check(round(before[far_eye]) == last_round && far_eye_ahead,
+              "the far avatar's eye, last before, leaves ahead of every request ranked under its avatar");
+        check(hidden_kept, "the textures of an avatar that is not drawn keep their own sizes, behind the drawn avatar's eye");
+        check(exact_delay, "a request that is not raised leaves later than before by exactly the worn requests raised past it");
+
+        // the requests that are not raised leave in the order of their own sizes, as before
+        float previous = BOOSTED_PRIORITY;
+        bool own_order = true;
+        for (std::size_t i : after_order)
+        {
+            if (rank[i] == own[i])
+            {
+                own_order = own_order && own[i] <= previous;
+                previous = own[i];
+            }
+        }
+        check(own_order, "the requests that are not raised leave in the order of their own sizes, as before");
     }
 
     void test_retry_delays()
@@ -492,6 +637,7 @@ int main()
     test_worn_fetch_area();
     test_fetch_priority();
     test_worn_release_order();
+    test_crowd_release_order();
     if (failures == 0)
     {
         std::printf("lltexturefetchpolicy_test: all checks passed\n");

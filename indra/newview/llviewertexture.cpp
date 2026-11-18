@@ -839,7 +839,7 @@ LLViewerTexture::~LLViewerTexture()
 void LLViewerTexture::init(bool firstinit)
 {
     mMaxVirtualSize = 0.f;
-    mFetchVirtualSize = 0.f; // <Vulkanstorm>
+    mWornVirtualSize = 0.f; // <Vulkanstorm/>
     mMaxVirtualSizeResetInterval = 1;
     mMaxVirtualSizeResetCounter = mMaxVirtualSizeResetInterval;
     mParcelMedia = NULL;
@@ -993,7 +993,7 @@ void LLViewerTexture::addTextureStats(F32 virtual_size, bool needs_gltexture) co
 void LLViewerTexture::resetTextureStats()
 {
     mMaxVirtualSize = 0.0f;
-    mFetchVirtualSize = 0.f; // <Vulkanstorm>
+    mWornVirtualSize = 0.f; // <Vulkanstorm/>
     mMaxVirtualSizeResetCounter = 0;
 }
 
@@ -1904,7 +1904,7 @@ void LLViewerFetchedTexture::processTextureStats()
             // sanity clamp debug setting to avoid settings hack shenanigans
             max_tex_res = (U32)llclamp((U32)max_texture_resolution, 512, MAX_IMAGE_SIZE_DEFAULT);
             mMaxVirtualSize = llmin(mMaxVirtualSize, (F32)(max_tex_res * max_tex_res));
-            mFetchVirtualSize = llmin(mFetchVirtualSize, (F32)(max_tex_res * max_tex_res)); // <Vulkanstorm> the same cap
+            mWornVirtualSize = llmin(mWornVirtualSize, (F32)(max_tex_res * max_tex_res)); // <Vulkanstorm/> the same cap
         }
 
         if (textures_fullres)
@@ -2272,9 +2272,10 @@ bool LLViewerFetchedTexture::updateFetch()
     S32 current_discard = getCurrentDiscardLevelForFetching();
     S32 desired_discard = getDesiredDiscardLevel();
     F32 decode_priority = mMaxVirtualSize;
-    // <Vulkanstorm> The priority the request carries: a worn texture's is raised to its avatar's size (mFetchVirtualSize,
-    // lltexturefetchpolicy.h). It only orders the waiting requests; every decision here keeps decode_priority.
-    const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mFetchVirtualSize, F_ALMOST_ZERO);
+    // <Vulkanstorm> The priority the request carries: a worn texture's is raised to its worn size (mWornVirtualSize, its drawn
+    // avatar's area), under every boosted texture's (lltexturefetchpolicy.h). It only orders the waiting requests; every
+    // decision here keeps decode_priority.
+    const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mWornVirtualSize, F_ALMOST_ZERO);
 
     if (mIsFetching)
     {
@@ -3279,7 +3280,7 @@ void LLViewerLODTexture::processTextureStats()
         // sanity clamp debug setting to avoid settings hack shenanigans
         max_tex_res = (F32)llclamp((S32)max_texture_resolution, 512, MAX_IMAGE_SIZE_DEFAULT);
         mMaxVirtualSize = llmin(mMaxVirtualSize, max_tex_res * max_tex_res);
-        mFetchVirtualSize = llmin(mFetchVirtualSize, max_tex_res * max_tex_res); // <Vulkanstorm> the same cap
+        mWornVirtualSize = llmin(mWornVirtualSize, max_tex_res * max_tex_res); // <Vulkanstorm/> the same cap
     }
 
     if (textures_fullres)
