@@ -114,11 +114,11 @@ runs:
         python3 scripts/tests/test_stochastic_layer_rank.py
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochasticlayerrank_test.cpp -o "$RUNNER_TEMP/stochastic-layer-rank-test"
         "$RUNNER_TEMP/stochastic-layer-rank-test"
-    - name: Check the texture streaming fixes (bounded retries of fetches that end without data)
+    - name: Check the texture streaming fixes (bounded retries of fetches that end without data, priority snapshots)
       shell: bash
       run: |
         python3 scripts/tests/test_texture_streaming_fixes.py
-        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/lltexturefetchpolicy_test.cpp -o "$RUNNER_TEMP/texture-fetch-policy-test"
         "$RUNNER_TEMP/texture-fetch-policy-test"
     - name: Keep development hooks out of release
       shell: bash

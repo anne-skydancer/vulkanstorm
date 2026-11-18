@@ -2,16 +2,19 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 /**
  * @file lltexturefetchpolicy.h
- * @brief Texture fetch rules: the bounded retry of fetches that end without data.
+ * @brief Texture fetch rules: the bounded retry of fetches that end without data, and the priority
+ *        snapshots that order waiting requests.
  *
- * Free of GL and viewer types: LLViewerFetchedTexture (llviewertexture.cpp) applies the rules, and
- * indra/newview/tests/lltexturefetchpolicy_test.cpp checks them standalone.
+ * Free of GL and viewer types: LLViewerFetchedTexture (llviewertexture.cpp) and LLTextureFetch
+ * (lltexturefetch.cpp) apply the rules, and indra/newview/tests/lltexturefetchpolicy_test.cpp checks
+ * them standalone.
  *
  * Why: a refinement fetch that ended without data (an HTTP error, an empty or broken reply, a failed
  * decode, a request aborted while its texture was off screen) set mMinDiscardLevel to the texture's
  * level at once, and no request was made again while the texture stayed at that level: it stayed
  * blurry for the life of the texture object, zooming in did not help, and Refresh Textures did not
- * clear it either.
+ * clear it either. And the waiting requests were sorted by their live priorities, which other threads
+ * change during the sort.
  */
 
 #ifndef LL_LLTEXTUREFETCHPOLICY_H
@@ -51,6 +54,25 @@ namespace LLTextureFetchPolicy
         {
             mFailures = 0;
             mRetryTime = 0.f;
+        }
+    };
+
+    // A request's priority, read once under the request's lock, for one ordering of the waiting requests
+    // (LLTextureFetch::releaseHttpWaiters, and sendRequestListToSimulators on OpenSim). The orderings used
+    // to compare the live priorities, which other threads change meanwhile (createRequest on the main
+    // thread, updateRequestPriority's task on the fetch thread): a data race, and a comparison that can
+    // contradict itself during the sort (std::partial_sort, std::set), which then breaks its ordering.
+    // Greater priority first; equal priorities are equivalent, so a std::set keeps the first one inserted,
+    // as the set of requests ordered by the live value did.
+    template <typename Request>
+    struct PrioritySnapshot
+    {
+        float mPriority;
+        Request* mRequest;
+
+        bool operator<(const PrioritySnapshot& rhs) const
+        {
+            return mPriority > rhs.mPriority;
         }
     };
 }
