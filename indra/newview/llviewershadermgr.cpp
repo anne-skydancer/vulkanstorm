@@ -1018,13 +1018,6 @@ std::string LLViewerShaderMgr::loadBasicShaders()
     shaders.push_back( make_pair( "deferred/textureUtilV.glsl",             1 ) );
     shaders.push_back( make_pair( "objects/indexedTextureV.glsl",           1 ) );
     shaders.push_back( make_pair( "objects/nonindexedTextureV.glsl",        1 ) );
-    // <Vulkanstorm> the Stochastic shadow method's blended casters: the triangle's seed (STOCHASTIC_SHADOW_ALPHA programs;
-    // a failed build is a failed basic shader, as the method's shadow util below)
-    if (use_stochastic_shadows())
-    {
-        shaders.push_back( make_pair( STOCHASTIC_CASTER_VERTEX_OBJECT,     1 ) );
-    }
-    // </Vulkanstorm>
 
     std::map<std::string, std::string> attribs;
     attribs["MAX_JOINTS_PER_MESH_OBJECT"] =
@@ -2650,7 +2643,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("DEPTH_CLAMP", "1");
         gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("IS_FULLBRIGHT", "1");
         if (use_stochastic_shadows())
-        {   // <Vulkanstorm/> dither in place of the column stipple
+        {   // <Vulkanstorm/> the caster rule in place of the column stipple (shadowStochasticCasterF.glsl)
             gDeferredShadowFullbrightAlphaMaskProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
         }
 
@@ -2671,7 +2664,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
         gDeferredShadowAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskF.glsl", GL_FRAGMENT_SHADER));
         if (use_stochastic_shadows())
-        {   // <Vulkanstorm/> dither in place of the column stipple
+        {   // <Vulkanstorm/> the caster rule in place of the column stipple (shadowStochasticCasterF.glsl)
             gDeferredShadowAlphaMaskProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
         }
         gDeferredShadowAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
@@ -2706,7 +2699,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredShadowGLTFAlphaBlendProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredShadowGLTFAlphaBlendProgram.clearPermutations();
         if (use_stochastic_shadows())
-        {   // <Vulkanstorm/> dither in place of the column stipple
+        {   // <Vulkanstorm/> the caster rule in place of the column stipple (shadowStochasticCasterF.glsl)
             gDeferredShadowGLTFAlphaBlendProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
         }
 
@@ -2739,7 +2732,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         if (use_stochastic_shadows())
-        {   // <Vulkanstorm/> dither in place of the column stipple
+        {   // <Vulkanstorm/> the caster rule in place of the column stipple (shadowStochasticCasterF.glsl)
             gDeferredAvatarAlphaShadowProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
         }
         success = gDeferredAvatarAlphaShadowProgram.createShader();
@@ -2753,10 +2746,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaShadowV.glsl", GL_VERTEX_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderFiles.push_back(make_pair("deferred/avatarAlphaMaskShadowF.glsl", GL_FRAGMENT_SHADER));
         gDeferredAvatarAlphaMaskShadowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        if (use_stochastic_shadows())
-        {   // <Vulkanstorm/> dither in place of the column stipple
-            gDeferredAvatarAlphaMaskShadowProgram.addPermutation("STOCHASTIC_SHADOW_ALPHA", "1");
-        }
+        // <Vulkanstorm/> no Stochastic permutation: that method has no avatar alpha mask pass (LLDrawPoolAvatar::getNumShadowPasses)
         success = gDeferredAvatarAlphaMaskShadowProgram.createShader();
         llassert(success);
     }

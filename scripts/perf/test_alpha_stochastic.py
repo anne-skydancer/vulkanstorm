@@ -1451,11 +1451,12 @@ if True:
                     # half-float step on a pixel in 40 frames of 2048, which the history then carries to its neighbours), so there the bound is a few steps on under 2 % of the pixels
                     assert r['identical'] or (name=='S10' and r['worst']<=4/1024 and r['differing']<=W*H//50),('whole-pixel pan changed',name,d,r)
                 else:
-                    # at S = 8 the hair strips on a pan are about as good as the plain samples' smear share (the viewer before the upgrade is worse: 'before' against 'plain_before')
-                    # (hair: the measured frame-40 / plain low-pass ratio is 0.87 to 1.02 over these pans at 64 x 32 with the Aurora Viewer's dither, stoch_xi24
-                    # since 2026-11-18, and 0.87 to 0.97 at 128 x 128; the dither before it measured 0.89 to 0.97 here, under a bound of 0.98. The bound sits just
-                    # above the worst, 1.04: 64 x 32 measures the hair on 1152 pixels)
-                    assert r['new'][1]<(r['plain'][1]*1.04 if name=='S10' else r['plain'][1]),('the history beats plain 8 samples in low-pass error (hair: within 4 %, measured ratio at most 1.02, bound 1.04)',name,d,r['new'][1]/r['plain'][1],r)
+                    # textured layers: the history beats plain 8 samples in low-pass error. Hair (S10) at S = 8: the history stays within 4 % of them (the viewer
+                    # before the upgrade is worse: 'before' against 'plain_before'), and no longer beats them on every pan. The frame-40 / plain low-pass ratio is
+                    # 0.87 to 1.02 over these pans at 64 x 32 with the Aurora Viewer's dither (stoch_xi24, stage T1, 2026-11-18; the 0.5 px pan 1.02, 0.97 before
+                    # it) and 0.87 to 0.97 at 128 x 128 (0.5 px: 0.97, 0.94 before); the dither before T1 measured 0.89 to 0.97 here under a bound of 0.98. The
+                    # 0.5 px loss is a measured cost of that dither (owner decision D3). 64 x 32 measures the hair on 1152 pixels; the bound sits just above the worst
+                    assert r['new'][1]<(r['plain'][1]*1.04 if name=='S10' else r['plain'][1]),(('hair: the history stays within 4 % of plain 8 samples in low-pass error (measured ratio at most 1.02, bound 1.04)' if name=='S10' else 'the history beats plain 8 samples in low-pass error'),name,d,r['new'][1]/r['plain'][1],r)
                     if name=='S10': assert r['new'][0]<r['before'][0],('hair: the upgrade beats the viewer before it in rmse',name,d,r)
                     if name!='S10': assert r['new'][0]<r['plain'][0],('the history beats plain 8 samples in rmse on textured layers',name,d,r)
                     # (0.65 and 0.55 of the nearest read's error, set from the measured ratios of the resolve; the bound was 0.6 and 0.5 before the upgrade)

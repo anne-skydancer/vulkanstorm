@@ -217,7 +217,8 @@ and within 1.4 for any alpha (measured 1.375 over a 1/1024 sweep: the local disc
 (the A/B below was measured with the previous tile). The harness's sub-pixel pans, the previous dither against this one (`test_alpha_stochastic.py`, NVIDIA 621.14,
 frame 40): the history's rmse moves by -1.6 to +2.4 % at 64 x 32 and by -0.9 to +1.7 % at 128 x 128, the plain 8 samples' by -1.6 to +0.3 %; on the hair strips at
 0.5 px per frame the history's low-pass error is 1.02 times the plain samples' at 64 x 32 (0.97 before) and 0.97 at 128 x 128 (0.94 before), so the harness's
-bound for hair is 1.04 (it was 0.98).
+bound for hair is 1.04 (it was 0.98): on hair it now checks that the history stays within 4 % of the plain samples, no longer that it beats them on every pan. The
+0.5 px loss (+5 % at 64 x 32, +3 % at 128 x 128) is a measured cost of the Aurora Viewer's dither (D3); the textured layers keep the bound of 1.
 
 NaN guard (PR 3663's set, with a bit test of the exponent, not `isnan`): a fragment with a non-finite alpha is discarded in the alpha-only passes; the measuring pass and the
 composite zero NaN samples and clamp infinities; the Catmull-Rom taps skip non-finite texels, the 3 x 3 box skips non-finite values, and a blend that is
@@ -537,7 +538,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 ## Tests and measurements
 
 - `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`), of the upgrade before the mask (`STOCH_REF_REF`, `c121dc100c`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
-- `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue, the Aurora Viewer's by SHA-256), and C++ twins of the dither and the mask lookup with the Aurora Viewer's properties and golden values (computed from its formulas on its own tile file).
+- `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue, the Aurora Viewer's by SHA-256), and C++ twins of the dither and the mask lookup with the Aurora Viewer's properties and golden values (computed from its formulas on its own tile file by `scripts/tests/gen_stochastic_goldens.py`, whose `--check` in ci-checks finds each of them in the test).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass
   structure: the mask table, every covered sample against a Python model of the mask (8 and 4, each in
   one pass), the total alpha, visibility and composite, an opaque occluder, the glow,

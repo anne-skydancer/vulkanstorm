@@ -105,10 +105,10 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   `--time`, 2048 and 1024 tiles: today 0.112 to 0.115 ms, P2 0.120 to 0.122 ms for a 2560x1440 full-screen layer, a mean of +6.7 %,
   0.008 ms per layer; the study measured +4 %, and earlier single runs of this change varied between -1 % and +6.5 %, so the
   measurement noise on a shared PC is about 6 %). Static shadows get it too: the lookup is the same for every tile.
-- **Caster dither.** The hashed dither of semi-transparent casters uses `gl_FragCoord.xy - shadow_tile_origin` (zero outside the
-  pool and the sun cascades), so a tile's pattern does not depend on where the tile sits in the atlas. The Stochastic sun
-  cascades set the same uniform to `-(k mod 2^16)`, k the map corner's index on the world grid (`LLShadowCascadeFit::alphaDitherOrigin`),
-  so their dither follows the world texel while the camera walks.
+- **Caster blocks.** The Stochastic casters' rule (`shadowStochasticCasterF.glsl`, see `shadow-method.md`) takes its 2 x 2 blocks
+  from `gl_FragCoord.xy - shadow_tile_origin` (zero outside the pool and the sun cascades), so a tile's pattern does not depend on
+  where the tile sits in the atlas. The Stochastic sun cascades set the same uniform to `-(k mod 2^16)`, k the map corner's index on
+  the world grid (`LLShadowCascadeFit::alphaDitherOrigin`), so their blocks follow the world texel while the camera walks.
 - **Lifetime.** Allocated in `allocateShadowBuffer` (the place of the spot maps, not for probe snapshots), released when the method
   or detail leaves Stochastic detail 2, in `destroyGL` and in `cleanup` (while the context lives). Every entry point is on the main
   thread and returns at once off it or while the viewer exits. Nothing is added to `LLRender::shutdown`, `LLImageGL` or

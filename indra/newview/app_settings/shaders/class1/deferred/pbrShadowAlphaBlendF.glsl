@@ -34,8 +34,7 @@ in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-flat in uint shadow_caster_tri;   // <Vulkanstorm/> the triangle's seed (shadowStochasticCasterV.glsl)
-bool shadow_caster_keeps(float alpha, uint tri);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
+bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
 void main()
@@ -47,7 +46,7 @@ void main()
 #if defined(STOCHASTIC_SHADOW_ALPHA)
     // <Vulkanstorm/> Stochastic shadows: in proportion to the opacity with no cut, solid at full opacity (the caster rule,
     // see shadowAlphaMaskF.glsl). Legacy keeps the stock floor and the 0.88 stipple.
-    if (alpha < 1.0 && !shadow_caster_keeps(alpha, shadow_caster_tri))
+    if (alpha < 1.0 && !shadow_caster_keeps(alpha))
     {
         discard;
     }

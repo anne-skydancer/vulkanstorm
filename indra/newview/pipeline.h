@@ -459,9 +459,8 @@ public:
     void resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map); // raw rays + last frame -> the light map, and the next history
     void composeShadowStochastic(LLRenderTarget& raw, U32 resolved, F32 scale, LLRenderTarget& light_map); // the light map from a resolved or summed colour
     // the blended casters' rule (shadowStochasticCasterF.glsl): the engine's table, whose spare rows hold the blue-noise tile, held while
-    // the method is Stochastic (wanted false, or the screen buffers' release, lets it go); and the frame of a sun cascade's pattern
+    // the method is Stochastic (wanted false, or releaseGLBuffers, lets it go)
     void holdShadowCasterMasks(bool wanted);
-    S32  shadowCasterFrame() const;
     // </Vulkanstorm>
 
     // </FS>

@@ -267,7 +267,8 @@ const F32 BACKLIGHT_NIGHT_MAGNITUDE_OBJECT = 0.08f;
 const F32 ALPHA_BLEND_CUTOFF = 0.598f;
 // <Vulkanstorm/> Stochastic shadows: shadow_solid_alpha of shadowAlphaMaskF.glsl. Blend faces cast by the caster rule
 // (shadowStochasticCasterF.glsl) below full opacity, with no solid cut (owner decision D4, 2026-11-18: a 98 % pane lets 2 %
-// through); mask faces follow the creator's cutoff alone (0: never dithered). Absent in the Legacy permutation.
+// through); mask faces (0) follow the creator's cutoff and the stock 0.05 floor and are solid above them, never the rule.
+// Absent in the Legacy permutation.
 const F32 SHADOW_BLEND_SOLID_ALPHA = 1.f;
 const F32 SHADOW_MASK_SOLID_ALPHA = 0.f;
 // <Vulkanstorm/> Stochastic shadows: classic blend faces take no minimum alpha instead of being cut below ALPHA_BLEND_CUTOFF:
@@ -7774,10 +7775,10 @@ void LLPipeline::renderAlphaObjects(bool rigged)
     U32 type = LLRenderPass::PASS_ALPHA;
     // classic blend faces: the stock cutoff in Legacy, none under Stochastic (Legacy behaviour is unchanged)
     const F32 blend_minimum_alpha = RenderShadowMethod == LLShadowMethod::STOCHASTIC ? SHADOW_BLEND_MIN_ALPHA_STOCHASTIC : ALPHA_BLEND_CUTOFF;
-    // <Vulkanstorm> Stochastic shadows: the caster rule's seed takes the draw's identity (LLDrawInfo::mStochasticSeed, the face's,
-    // so identical meshes of different objects are independent layers), and its blue-noise tile is read from the engine's
-    // table, bound on the unit the bound program gives it (texture units are global state, and the two programs below
-    // alternate: on every change of program)
+    // <Vulkanstorm> Stochastic shadows: the caster rule's seed takes the draw's identity (LLDrawInfo::mStochasticSeed, its first
+    // face's, so the faces of different draws are independent layers; the triangles of one draw are told apart by their
+    // index, gl_PrimitiveID), and its blue-noise tile is read from the engine's table, bound on the unit the bound program
+    // gives it (texture units are global state, and the two programs below alternate: on every change of program)
     const bool stochastic_casters = RenderShadowMethod == LLShadowMethod::STOCHASTIC;
     const LLGLSLShader* tile_bound_for = nullptr;
     auto stochastic_caster = [&](const LLDrawInfo& params)
@@ -7825,7 +7826,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowGLTFAlphaBlendProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
-                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                // <Vulkanstorm/> no minimum alpha: pbrShadowAlphaBlendF.glsl reads none in either method (stock set ALPHA_BLEND_CUTOFF)
                 stochastic_caster(*pparams); // <Vulkanstorm/>
                 LLRenderPass::pushRiggedGLTFBatch(*pparams, lastAvatarGLTF, lastMeshIdGLTF, skipLastSkinGLTF);
             }
@@ -7850,7 +7851,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowGLTFAlphaBlendProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
-                LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(ALPHA_BLEND_CUTOFF);
+                // <Vulkanstorm/> no minimum alpha: pbrShadowAlphaBlendF.glsl reads none in either method (stock set ALPHA_BLEND_CUTOFF)
                 stochastic_caster(*pparams); // <Vulkanstorm/>
                 LLRenderPass::pushGLTFBatch(*pparams);
             }
@@ -8804,22 +8805,6 @@ void LLPipeline::holdShadowCasterMasks(bool wanted)
         mShadowSTMasksHeld = false;
         mShadowSTMasksFailed = false;
     }
-}
-
-// The frame of the casters' pattern in the sun cascades (shadowStochasticCasterF.glsl shadow_caster_frame). While the main
-// view's Stochastic shadow history accumulates the pattern takes a new seed every frame, 1 to 8 (the Aurora Viewer's period),
-// and the history's resolve averages it out, as Enderton et al. (I3D 2010, section 3.4) render the transparent shadow map
-// again with new seeds. 0, a fixed pattern, everywhere else: probes, no history (or not yet: the history is made in the
-// lighting pass, after the maps). (A snapshot renders no shadow map: it reads the last frame's.)
-S32 LLPipeline::shadowCasterFrame() const
-{
-    if (RenderShadowMethod != LLShadowMethod::STOCHASTIC || mRT != &mMainRT || gCubeSnapshot || gSnapshot ||
-        !mShadowSTHistory.isAllocated() || !gShadowStochasticResolveProgram.mProgramObject ||
-        !gShadowStochasticComposeProgram.mProgramObject)
-    {
-        return 0;
-    }
-    return (S32)(LLFrameTimer::getFrameCount() & 7) + 1;
 }
 
 void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& light_map)
@@ -12636,8 +12621,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
     glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
 {
-    bool origin_set = false; // the dither origin of the alpha passes was set for a cascade (reset after the loop)
-    const S32 caster_frame = shadowCasterFrame(); // <Vulkanstorm/> the frame of the blended casters' pattern (0: fixed)
+    bool origin_set = false; // the origin of the blended casters' blocks was set for a cascade (reset after the loop)
     for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
     {
         if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
@@ -12812,11 +12796,11 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         // the box moves in whole world texels, so the map column plus the box corner's world index k is constant, and the
         // caster rule takes gl_FragCoord - origin with origin = -(k mod 2^16) (alphaDitherOrigin; the modulus is even, so
         // the 2 x 2 blocks keep their parity). The pattern re-rolls only when k crosses a multiple of 2^16 (about 460 m of
-        // walking at the finest texel) and once at a region crossing, which re-anchors the world grid. Its frame rotates
-        // while the history accumulates (shadowCasterFrame). Reset to 0 once after the loop.
+        // walking at the finest texel) and once at a region crossing, which re-anchors the world grid. Reset to 0 once
+        // after the loop.
         {
             const LLShadowCascadeFit::DitherOrigin origin = LLShadowCascadeFit::alphaDitherOrigin(box);
-            LLLocalShadowGL::setTileOrigin(origin.x, origin.y, caster_frame);
+            LLLocalShadowGL::setTileOrigin(origin.x, origin.y);
             origin_set = true;
         }
         {
@@ -12834,8 +12818,8 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
     }
     if (origin_set)
     {
-        // <Vulkanstorm/> every pass but the sun cascades and the projector tiles expects origin 0 and a fixed pattern;
-        // renderShadow leaves its own program bound, so rebind the one the callers expect (as LLLocalShadowGL::Scope does)
+        // <Vulkanstorm/> every pass but the sun cascades and the projector tiles expects origin 0; renderShadow leaves
+        // its own program bound, so rebind the one the callers expect (as LLLocalShadowGL::Scope does)
         LLLocalShadowGL::setTileOrigin(0.f, 0.f);
         gDeferredShadowCubeProgram.bind();
     }

@@ -1,7 +1,7 @@
 /**
  * @file lllocalshadows.h
  * @brief What the local shadow caches (the projector pool, later the point-light face pool) share: one save and restore of the GL
- *        state their tile renders change, and the tile origin of the dithering programs
+ *        state their tile renders change, and the tile origin of the Stochastic caster rule's programs
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -43,9 +43,8 @@ public:
 
     // The programs of the semi-transparent casters' rule (Stochastic, shadowStochasticCasterF.glsl): the texel origin of its
     // blocks, a projector tile's (not of the atlas) or a sun cascade's wrapped world-grid index
-    // (LLShadowCascadeFit::alphaDitherOrigin), and the frame of the pattern (0: fixed; the sun cascades of the main view
-    // rotate it while the Stochastic shadows' history accumulates, LLPipeline::shadowCasterFrame). (0, 0, 0) puts it back.
-    static void setTileOrigin(F32 x, F32 y, S32 frame = 0);
+    // (LLShadowCascadeFit::alphaDitherOrigin). (0, 0) puts it back.
+    static void setTileOrigin(F32 x, F32 y);
 };
 
 #endif // LL_LLLOCALSHADOWS_H

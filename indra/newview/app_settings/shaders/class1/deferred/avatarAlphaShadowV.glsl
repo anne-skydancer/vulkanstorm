@@ -38,11 +38,6 @@ out float pos_w;
 out float target_pos_x;
 out vec2 vary_texcoord0;
 
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-flat out uint shadow_caster_tri;              // <Vulkanstorm/> the triangle's seed in the Stochastic caster rule
-uint shadow_caster_vertex_seed(vec3 p);       // <Vulkanstorm/> shadowStochasticCasterV.glsl
-#endif
-
 void main()
 {
     vec4 pos;
@@ -71,8 +66,5 @@ void main()
     gl_Position = pos;
 
     passTextureIndex();
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-    shadow_caster_tri = shadow_caster_vertex_seed(position); // <Vulkanstorm/> the provoking vertex's is the triangle's
-#endif
 }
 

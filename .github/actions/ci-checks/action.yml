@@ -84,7 +84,7 @@ runs:
       run: |
         python3 scripts/tests/test_check_legacy_shadows.py
         python3 scripts/shadows/check_legacy_shadows.py
-    - name: Check the semi-transparent shadow casters (stock stipple in Legacy, one dither under Stochastic)
+    - name: Check the semi-transparent shadow casters (stock stipple in Legacy, the caster rule under Stochastic)
       shell: bash
       run: python3 scripts/tests/test_shadow_alpha_permutation.py
     - name: Check the blended passes' sun-shadow gate (CPU twin, shader text)
@@ -129,6 +129,9 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochastichistory_test.cpp -o "$RUNNER_TEMP/stochastic-history-test"
         "$RUNNER_TEMP/stochastic-history-test"
+    - name: Check the stochastic engine's golden values against the Aurora Viewer's formulas
+      shell: bash
+      run: python3 scripts/tests/gen_stochastic_goldens.py --check
     - name: Check the image comparison of the identical-image check
       shell: bash
       # a development test: release and the other lines do not have it

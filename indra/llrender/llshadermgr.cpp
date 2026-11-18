@@ -197,15 +197,6 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
         return false;
     }
 
-    // <Vulkanstorm> the Stochastic shadows' blended casters: the triangle's seed (the fragment half and the engine's
-    // sampling are attached below)
-    const bool stochastic_caster = shader->mDefines.count("STOCHASTIC_SHADOW_ALPHA") > 0;
-    if (stochastic_caster && !shader->attachVertexObject(STOCHASTIC_CASTER_VERTEX_OBJECT))
-    {
-        return false;
-    }
-    // </Vulkanstorm>
-
     ///////////////////////////////////////
     // Attach Fragment Shader Features Next
     ///////////////////////////////////////
@@ -225,6 +216,7 @@ bool LLShaderMgr::attachShaderFeatures(LLGLSLShader * shader)
     // STOCHASTIC_SHADOW_ALPHA: the blended casters' rule takes the engine's dither). The shadows' rays have their own noise
     // (shadowStochasticUtil.glsl) and do not.
     const bool alpha_stochastic = shader->mDefines.count("ALPHA_STOCHASTIC") > 0;
+    const bool stochastic_caster = shader->mDefines.count("STOCHASTIC_SHADOW_ALPHA") > 0;   // the blended casters' rule, attached below
     if ((alpha_stochastic || stochastic_caster || shader->mDefines.count("STOCH_SAMPLE")) &&
         !shader->attachFragmentObject(STOCH_SAMPLE_OBJECT))
     {

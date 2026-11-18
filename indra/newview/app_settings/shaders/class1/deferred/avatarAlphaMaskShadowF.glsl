@@ -32,26 +32,10 @@ in float target_pos_x;
 in float pos_w;
 in vec2 vary_texcoord0;
 
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-uniform vec4 color;               // <Vulkanstorm/> the mesh colour, as avatarAlphaShadowF.glsl takes it
-flat in uint shadow_caster_tri;   // <Vulkanstorm/> the triangle's seed (shadowStochasticCasterV.glsl)
-bool shadow_caster_keeps(float alpha, uint tri);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
-#endif
-
 void main()
 {
     float alpha = texture(diffuseMap, vary_texcoord0.xy).a;
 
-#if defined(STOCHASTIC_SHADOW_ALPHA)
-    // <Vulkanstorm/> Stochastic shadows: this pass draws the same meshes as the alpha blend pass (LLDrawPoolAvatar, both with
-    // the transparent parts), so it takes the same alpha and the same rule, with no cut: the two passes then keep the same
-    // texels and the avatar casts one layer, not two (see avatarAlphaShadowF.glsl and shadowAlphaMaskF.glsl).
-    alpha *= color.a;
-    if (alpha < 1.0 && !shadow_caster_keeps(alpha, shadow_caster_tri))
-    {
-        discard;
-    }
-#else
     if (alpha < 0.05) // treat as totally transparent
     {
         discard;
@@ -64,7 +48,6 @@ void main()
         discard;
       }
     }
-#endif
 
     frag_color = vec4(1,1,1,1);
 }

@@ -34,8 +34,7 @@ in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 #if defined(STOCHASTIC_SHADOW_ALPHA)
 uniform float shadow_solid_alpha; // <Vulkanstorm/> 1.0 for blend faces (the caster rule below full opacity); 0.0 for mask faces
-flat in uint shadow_caster_tri;   // <Vulkanstorm/> the triangle's seed (shadowStochasticCasterV.glsl)
-bool shadow_caster_keeps(float alpha, uint tri);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
+bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
 void main()
@@ -64,7 +63,7 @@ void main()
             discard;
         }
     }
-    else if (alpha < shadow_solid_alpha && !shadow_caster_keeps(alpha, shadow_caster_tri))
+    else if (alpha < shadow_solid_alpha && !shadow_caster_keeps(alpha))
     {
         discard;
     }

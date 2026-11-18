@@ -94,14 +94,14 @@ LLLocalShadowGL::Scope::~Scope()
 }
 
 // static
-void LLLocalShadowGL::setTileOrigin(F32 x, F32 y, S32 frame)
+void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
 {
-    // the programs of the semi-transparent casters' rule: the texel origin of its blocks, the tile's (not the atlas') or the
-    // sun cascade's wrapped world-grid index (generateSunCascadesStable), and the frame of its pattern
-    static const LLStaticHashedString sCasterFrame("shadow_caster_frame");
+    // the programs of the semi-transparent casters' rule (Stochastic): the texel origin of its blocks, the tile's (not the
+    // atlas') or the sun cascade's wrapped world-grid index (generateSunCascadesStable). (The avatar's alpha mask program has
+    // no rule: the Stochastic method skips its pass.)
     LLGLSLShader* programs[] = {
         &gDeferredShadowAlphaMaskProgram, &gDeferredShadowFullbrightAlphaMaskProgram, &gDeferredShadowGLTFAlphaBlendProgram,
-        &gDeferredAvatarAlphaShadowProgram, &gDeferredAvatarAlphaMaskShadowProgram
+        &gDeferredAvatarAlphaShadowProgram
     };
     for (LLGLSLShader* program : programs)
     {
@@ -111,7 +111,6 @@ void LLLocalShadowGL::setTileOrigin(F32 x, F32 y, S32 frame)
             {
                 variant->bind();
                 variant->uniform2f(LLShaderMgr::SHADOW_TILE_ORIGIN, x, y);
-                variant->uniform1i(sCasterFrame, frame);
             }
         }
     }

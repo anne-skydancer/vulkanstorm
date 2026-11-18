@@ -251,9 +251,9 @@ How a semi-transparent texel casts depends on the method.
 - Legacy: the stock stipple. A texel below 0.88 alpha is stippled (every other texel column dropped), below 0.05 it casts
   nothing, and blend faces are cut below 0.598 (`ALPHA_BLEND_CUTOFF`) first. The shader text with
   `STOCHASTIC_SHADOW_ALPHA` undefined is the stock text (`scripts/tests/test_shadow_alpha_permutation.py`).
-- Stochastic: alpha-mask faces follow the creator's cutoff and nothing else: a hard cut, solid above it, no dither
-  (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws; the stock 0.05 floor stays on them, so a map without
-  blended casters is the one it was).
+- Stochastic: alpha-mask faces follow the creator's cutoff and the stock 0.05 floor: a hard cut, solid above them, never
+  the caster rule (`shadow_solid_alpha` is 0 for the mask and fullbright-mask draws), so a map without blended casters is
+  the one it was.
 - Stochastic, blended faces (classic, glTF, rigged, and the avatar's own blended parts: skirt, eyelashes, hair), since
   2026-11-18: the Aurora Viewer's caster rule (stage C1 of the Aurora port; `shadowStochasticCasterF.glsl` after its
   `shadow_alpha.wgsl`, Anne Skydancer, GPL-3.0-or-later). A blended face casts R = floor(4 alpha + xi) of the 4 texels of
@@ -264,28 +264,41 @@ How a semi-transparent texel casts depends on the method.
   sheer casts 3 % and a 98 % pane lets 2 % through (`shadow_solid_alpha` is 1 for the blend draws, the classic blend faces'
   minimum alpha 0; the glTF and avatar shaders test `alpha < 1.0`).
   - xi is the stochastic engine's dither at the block (`stoch_xi24`: the Aurora Viewer's blue-noise tile from the engine's
-    table, the layer's own offset, the frame's golden-ratio step; owner decision D3). The method holds a reference to the
-    table while it draws the casters (`LLPipeline::holdShadowCasterMasks`), and the draws bind it on their program's unit.
-  - The layer's seed: the draw's identity (`st_seed`: `LLDrawInfo::mStochasticSeed`, or the avatar's id for the avatar
-    passes), the triangle (a hash of its provoking vertex's position, `shadowStochasticCasterV.glsl`, stable when a batch
-    is sorted again) and the side. Identical meshes of different objects (rigged clothing, attachments, repeats) are
-    independent layers; two coincident triangles of one draw that share their last vertex are one layer.
+    table, rotated by the layer's own offset; owner decision D3). The method holds a reference to the table while it draws
+    the casters (`LLPipeline::holdShadowCasterMasks`), and the draws bind it on their program's unit.
+  - The layer's seed is the Aurora Viewer's (`sst_seed`): the draw's identity (`st_seed`: `LLDrawInfo::mStochasticSeed`,
+    or the avatar's id for the avatar's alpha pass), the triangle's index in the draw (`gl_PrimitiveID`) and the side. Faces of
+    different draws (identical meshes of different objects: rigged clothing, attachments, repeats), the triangles of one
+    draw (coincident copies merged into one batch among them) and the two sides of a triangle are independent layers. The
+    seed does not depend on the vertices' positions, so a swaying flexible prim or a moving object keeps its pattern. A
+    draw that holds several faces (a batch) takes its first face's identity and counts its triangles from its start: when
+    the batch is formed again (its group re-sorted once the direction from the camera to it has turned by about 37 degrees,
+    or rebuilt) its pattern is drawn anew, a one-time change of grain with the same mean.
   - The blocks are anchored where the map's texels are: a sun cascade's wrapped world-grid index (`alphaDitherOrigin`, an
     even modulus, so the blocks keep their parity), a projector tile's corner in the atlas.
-  - The pattern rotates every frame in the main view's sun cascades while the Stochastic shadow history accumulates
-    (`shadow_caster_frame` 1 to 8, the Aurora Viewer's period; `LLPipeline::shadowCasterFrame`), and the history's resolve
-    averages it, as Enderton et al. render the transparent shadow map again with new seeds. Projector tiles, probes and
-    frames without the history keep a fixed pattern (0); a snapshot renders no shadow map and reads the last frame's (one
-    pattern, which its 8 summed sun passes do not average). Over the 8 frames a block's R sums to 8 x 4 alpha
-    within 1 for alpha on a 1/64 grid and within 1.4 for any alpha (measured 1.375: the local discrepancy of eight
-    golden-ratio points).
+  - The pattern is fixed. The Aurora Viewer rotates it with the frame only under TAA or FSR, where every pixel of the view
+    is averaged over the frames. Here the deferred sun pass keeps a history, but the forward receivers of the same
+    cascades (`alphaF`, `pbralphaF`, `materialF`, `pbrmetallicroughnessF`, `waterF`) read each frame alone with fixed
+    rays, so a pattern that changed every frame would flicker on water and on transparent surfaces under blended leaves or
+    sheers. The receivers' filter (8 rays, and the deferred pass's history of rotating rays) averages the fixed grain over
+    its footprint; where that footprint is one texel (a sheer's contact shadow seen from close by) the 2 x 2 grain stays
+    visible, still, as the hashed dither's did before.
   - Lamps (projector tiles) use the same rule; their light-let-through layer (lamp study L3) comes later.
-  - The avatar's two alpha passes draw the same meshes; under Stochastic both take the same alpha (texture x mesh colour)
-    and the same seed, so they keep the same texels and the avatar casts one layer. (In Legacy the avatar branch is inert:
-    the avatar shadow pass never sets `minimum_alpha`, so a texel from 0.05 up is solid.)
-  - Checked by `indra/newview/tests/llstochastichistory_test.cpp` (a C++ twin with the Aurora Viewer's golden values and
-    properties: coverage 1 - alpha within 0.002 for one layer, products for two and three layers) and
-    `scripts/tests/test_shadow_alpha_permutation.py` (the GLSL lines the twin follows, the Legacy text, the plumbing).
+  - The avatar's transparent parts cast in its alpha blend pass, with alpha = texture x mesh colour. Each mesh (skirt,
+    eyelashes, hair) is its own draw under the avatar's id, its triangles counted from 0, so two of one avatar's meshes
+    share a layer seed only where a triangle of one and the triangle with the same index of the other overlap in the light
+    (there they are not independent: two equal opacities cast as one layer, not the product; rare, since it takes the same
+    index and the same place).
+    The stock alpha mask pass draws the same meshes into the same map again; under Stochastic it is left out
+    (`LLDrawPoolAvatar::getNumShadowPasses`), and its program keeps the stock text. (In Legacy both passes run as in
+    stock: the avatar shadow pass never sets `minimum_alpha`, so a texel from 0.05 up is solid.)
+  - Checked by `indra/newview/tests/llstochastichistory_test.cpp` (a C++ twin with golden values computed from the Aurora
+    Viewer's formulas by `scripts/tests/gen_stochastic_goldens.py`, and its properties: one layer lets 1 - alpha through
+    within one stratum, 1/16384, over a tile period; products for two and three layers),
+    `scripts/tests/test_shadow_alpha_permutation.py` (the GLSL lines the twin follows, the Legacy text, the plumbing) and
+    `scripts/perf/test_shadow_caster_rule.py` (offscreen GL, no viewer: every caster program compiles and links, the GPU
+    keeps the model's texels and the C++ test's golden texels, mask faces keep the creator's cutoff and the floor; `--bench`
+    times the caster fragment).
     Tinted glass still casts a grey shadow: alpha is taken as transmittance.
 
 ## Dark gate (Stochastic only)
@@ -334,3 +347,20 @@ Legacy costs what the PCF with the receiver-plane bias costs. The offline sun-li
 and checks that Legacy's light map is bit-identical to the devel tip; Stochastic's costs are measured by
 `scripts/perf/bench_shadow_stochastic.py` against Legacy. PCSS's costs (+0.02 to +0.03 ms at High, +0.07 to
 +0.13 ms at HighUltra over Legacy) are in the archived study.
+
+The blended casters' rule (Stochastic, see Alpha casters) was measured offline on an RTX 5070 Ti (NVIDIA 621.14,
+2026-11-18), not in-world and not on AMD, Intel or Mesa:
+
+- Per blended caster fragment (`scripts/perf/test_shadow_caster_rule.py --bench REF`: 16 layers of alpha 0.5 into a
+  2048 x 2048 depth-only map, 67.1 M fragments, five runs): 7.7 to 9.3 us per million fragments, against 3.9 to 4.8 for
+  Legacy and for the hashed dither before the rule (both raster-bound), so +3.7 to +4.6 us per million. One blended layer
+  over every texel of the four sun cascades at 2560 x 1440 (14.7 M texels) costs +0.05 to +0.07 ms of GPU time, about
+  -0.2 fps at 60 fps and -0.04 fps at 25 fps; real scenes cover a fraction of that.
+- Per blended draw, the seed (`st_seed`, a uniform that changes on every draw, so `LLGLSLShader`'s value cache never
+  saves the call; `scripts/perf/bench_shadow_caster_seed.cpp`, tiny depth-only draws that each bind their own texture):
+  +3.5 ns on the app thread, +30 to +44 ns of GPU time (the GPU's waits for the driver included) and +70 to +130 ns to
+  the end of `glFinish`, the driver's own thread included. At the 4,399 blended caster draws of the Rooftops cascades
+  (`sun-shadow-cost-study.md`) that is +0.015 ms on the main thread, +0.13 to +0.19 ms of GPU time (-0.5 to -0.7 fps at
+  60 fps, -0.1 fps at 25 fps, where the frame is bound by the GPU) and +0.3 to +0.56 ms on the driver's thread, which
+  runs beside the main thread under the NVIDIA driver's threaded optimisation. A draw parameter would carry the seed
+  without a state change (`gl_BaseInstance`, GL 4.6); not done.

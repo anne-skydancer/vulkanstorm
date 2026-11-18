@@ -35,8 +35,7 @@ in vec2 vary_texcoord0;
 uniform vec4 color;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
-flat in uint shadow_caster_tri;   // <Vulkanstorm/> the triangle's seed (shadowStochasticCasterV.glsl)
-bool shadow_caster_keeps(float alpha, uint tri);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
+bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
 void main()
@@ -47,7 +46,7 @@ void main()
     // <Vulkanstorm/> Stochastic shadows: the avatar's blended parts (skirt, eyelashes, hair) cast in proportion to their opacity
     // with no cut, solid at full opacity (the caster rule, see shadowAlphaMaskF.glsl). The stock branch below depends on
     // minimum_alpha, which the avatar shadow pass never sets (0): in Legacy a texel from 0.05 up is solid.
-    if (alpha < 1.0 && !shadow_caster_keeps(alpha, shadow_caster_tri))
+    if (alpha < 1.0 && !shadow_caster_keeps(alpha))
     {
         discard;
     }
