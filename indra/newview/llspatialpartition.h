@@ -577,6 +577,8 @@ public:
     void pushDrawable(LLDrawable* drawable);
     void pushBridge(LLSpatialBridge* bridge);
     void pushDrawInfo(U32 type, LLDrawInfo* draw_info);
+    // <Vulkanstorm/> multi-core 5c-2: pushDrawInfo(type, infos[i]) for i in [0, count), in one step
+    void appendDrawInfos(size_t type, LLDrawInfo* const* infos, size_t count);
 
     U32 getVisibleGroupsSize()      { return mVisibleGroupsSize; }
     U32 getAlphaGroupsSize()        { return mAlphaGroupsSize; }

@@ -438,6 +438,35 @@ static const char* vks_pool_name(U32 type)
 
 static LLCullResult* sCull = NULL;
 
+// <Vulkanstorm> multi-core 5c
+namespace
+{
+    // Visible groups a chunk of the render-map build (5c-2). A cascade's build is about 0.1 microseconds a group, and a
+    // chunk should be worth a dispatch: about 10 to 20 microseconds.
+    constexpr size_t RENDER_MAP_GRAIN = 128;
+
+#if VKS_FRAMEJOBS_COMPARE
+    // development only: adds the time of its scope to a counter of the sun cascades' frame jobs (nothing for a null counter)
+    struct LLSunCascadeTimer
+    {
+        explicit LLSunCascadeTimer(F64* sum) : mSum(sum), mStart(sum ? LLTimer::getTotalSeconds().value() : 0.0) { }
+        ~LLSunCascadeTimer()
+        {
+            if (mSum)
+            {
+                *mSum += LLTimer::getTotalSeconds().value() - mStart;
+            }
+        }
+        LLSunCascadeTimer(const LLSunCascadeTimer&) = delete;
+        LLSunCascadeTimer& operator=(const LLSunCascadeTimer&) = delete;
+
+        F64* const mSum;
+        const F64  mStart;
+    };
+#endif
+}
+// </Vulkanstorm>
+
 void validate_framebuffer_object();
 
 // Add color attachments for deferred rendering
@@ -3995,6 +4024,181 @@ void renderSoundHighlights(LLDrawable *drawablep)
     }
 }
 
+// <Vulkanstorm> multi-core 5c-2: postSort's "build render map" loop in parts, so that the loop and the build in chunks
+// (buildRenderMapJobs) run the same code. The skip rule of the loop:
+bool LLPipeline::renderMapSkipsGroup(LLSpatialGroup* group)
+{
+    if (group->isDead())
+    {
+        return true;
+    }
+
+    if ((sUseOcclusion && group->isOcclusionState(LLSpatialGroup::OCCLUDED)) ||
+        (RenderAutoHideSurfaceAreaLimit > 0.f &&
+         group->mSurfaceArea > RenderAutoHideSurfaceAreaLimit * llmax(group->mObjectBoxSize, 10.f)))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+// What the loop appends for one group: its draw infos of the pass's render types, and the group itself when it has a
+// blended or a rigged blended entry. `sink` is the cull result or the fragment of a chunk. In a chunk (a frame job) it
+// only reads the group and appends to its own fragment: the two branches that write elsewhere (the triangle count, the
+// blended group's distance) run in no shadow pass.
+template <typename SINK>
+void LLPipeline::renderMapPushGroup(LLSpatialGroup* group, LLCamera& camera, SINK& sink)
+{
+    for (LLSpatialGroup::draw_map_t::iterator j = group->mDrawMap.begin(); j != group->mDrawMap.end(); ++j)
+    {
+        LLSpatialGroup::drawmap_elem_t &src_vec = j->second;
+        if (!hasRenderType(j->first))
+        {
+            continue;
+        }
+
+        for (LLSpatialGroup::drawmap_elem_t::iterator k = src_vec.begin(); k != src_vec.end(); ++k)
+        {
+            LLDrawInfo *info = *k;
+
+            sink.pushDrawInfo(j->first, info);
+            if (!sShadowRender && !sReflectionRender && !gCubeSnapshot)
+            {
+                addTrianglesDrawn(info->mCount);
+            }
+        }
+    }
+
+    if (hasRenderType(LLPipeline::RENDER_TYPE_PASS_ALPHA))
+    {
+        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("Collect Alpha groups");
+        LLSpatialGroup::draw_map_t::iterator alpha = group->mDrawMap.find(LLRenderPass::PASS_ALPHA);
+
+        if (alpha != group->mDrawMap.end())
+        {  // store alpha groups for sorting
+            LLSpatialBridge *bridge = group->getSpatialPartition()->asBridge();
+            if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD && !gCubeSnapshot)
+            {
+                if (bridge)
+                {
+                    LLCamera trans_camera = bridge->transformCamera(camera);
+                    group->updateDistance(trans_camera);
+                }
+                else
+                {
+                    group->updateDistance(camera);
+                }
+            }
+
+            if (hasRenderType(LLDrawPool::POOL_ALPHA))
+            {
+                sink.pushAlphaGroup(group);
+            }
+        }
+
+        LLSpatialGroup::draw_map_t::iterator rigged_alpha = group->mDrawMap.find(LLRenderPass::PASS_ALPHA_RIGGED);
+
+        if (rigged_alpha != group->mDrawMap.end())
+        {  // store rigged alpha groups for LLDrawPoolAlpha prepass (skip distance update, rigged attachments use depth buffer)
+            if (hasRenderType(LLDrawPool::POOL_ALPHA))
+            {
+                sink.pushRiggedAlphaGroup(group);
+            }
+        }
+    }
+}
+
+// The render map of a sun cascade in chunks on the frame job helpers (reports/multicore-5a-2026-11-18/report.md section
+// 2.2, 5c-2). The lists come out as the loop's, element for element:
+//   - a pre-pass on the main thread walks the visible groups in the loop's order, applies the skip rule and runs the
+//     rebuild (GL, so it stays here), group by group as the loop does, and keeps the groups the loop would append from;
+//   - chunks of RENDER_MAP_GRAIN kept groups append to a fragment each (renderMapPushGroup: reads only);
+//   - the fragments are appended to the cull result in chunk order.
+// The pre-pass runs every rebuild before the first append, where the loop ran a group's rebuild after the appends of
+// the groups before it. A rebuild makes its own group's draw map, so those appends read the same lists.
+// Only for a sun cascade's pass (mRenderMapJobs): the world pass also updates the blended groups' distances from this
+// loop, which can queue a group for a rebuild, and stays serial.
+void LLPipeline::buildRenderMapJobs(LLCamera& camera)
+{
+    llassert(sShadowRender && !sReflectionRender && !gCubeSnapshot);
+    llassert(LLViewerCamera::sCurCameraID != LLViewerCamera::CAMERA_WORLD);
+
+    {
+#if VKS_FRAMEJOBS_COMPARE
+        LLSunCascadeTimer timer(&mSunCascadeJobsStats.map_s);
+#endif
+        mRenderMapGroups.clear();
+        for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
+        {
+            LLSpatialGroup *group = *i;
+
+            if (renderMapSkipsGroup(group))
+            {
+                continue;
+            }
+
+            if (group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot)
+            {  // no way this group is going to be drawable without a rebuild
+                group->rebuildGeom();
+            }
+
+            mRenderMapGroups.push_back(group);
+        }
+
+        LLSpatialGroup* const* groups = mRenderMapGroups.data();
+        const size_t chunks = LLCullJobs::runChunks(mRenderMapGroups.size(), RENDER_MAP_GRAIN, mRenderMapFragments,
+            [this, groups, &camera](size_t i, LLCullJobs::RenderMapFragment<LLDrawInfo, LLSpatialGroup, LLRenderPass::NUM_RENDER_TYPES>& fragment)
+            {
+                renderMapPushGroup(groups[i], camera, fragment);
+            });
+
+        for (size_t c = 0; c < chunks; ++c)
+        {
+            LLCullJobs::mergeRenderMap(mRenderMapFragments[c], *sCull);
+        }
+#if VKS_FRAMEJOBS_COMPARE
+        ++mSunCascadeJobsStats.map_builds;
+        mSunCascadeJobsStats.map_chunks += (U32)chunks;
+#endif
+    }
+
+#if VKS_FRAMEJOBS_COMPARE
+    if (mSunCascadeCompare != 0)
+    {
+        if (mSunCascadeCompare == 2 && mSunCascadePass == 1)
+        {
+            // the deliberate fault: two draw infos of one type change places, which the compare mode must report
+            for (U32 type = 0; type < LLRenderPass::NUM_RENDER_TYPES; ++type)
+            {
+                if (sCull->getRenderMapSize(type) > 1)
+                {
+                    std::swap(sCull->beginRenderMap(type)[0], sCull->beginRenderMap(type)[1]);
+                    break;
+                }
+            }
+        }
+        // Compare mode: the former loop again, into a result of its own. The pre-pass has run the rebuilds, so this
+        // loop only applies the skip rule and appends. It checks the chunks and the merge, and that the skip rule
+        // still gives the pre-pass's groups once every rebuild has run; it does not check the order of the rebuilds
+        // against the appends.
+        static LLCullResult serial;
+        serial.clear();
+        for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
+        {
+            LLSpatialGroup *group = *i;
+            if (renderMapSkipsGroup(group))
+            {
+                continue;
+            }
+            renderMapPushGroup(group, camera, serial);
+        }
+        compareSunCascadeRenderMap(*sCull, serial, mSunCascadePass);
+    }
+#endif
+}
+// </Vulkanstorm>
+
 void LLPipeline::postSort(LLCamera &camera)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
@@ -4031,18 +4235,22 @@ void LLPipeline::postSort(LLCamera &camera)
     // build render map
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("build render map");
+    // <Vulkanstorm> multi-core 5c-2: the loop's body is renderMapSkipsGroup, the rebuild and renderMapPushGroup (above),
+    // unchanged; a sun cascade's pass with mRenderMapJobs set runs the same three in buildRenderMapJobs
+    if (mRenderMapJobs)
+    {
+        buildRenderMapJobs(camera);
+    }
+    else
+    {
+#if VKS_FRAMEJOBS_COMPARE
+        LLSunCascadeTimer timer(mSunCascadePass >= 0 && !gCubeSnapshot ? &mSunCascadeJobsStats.map_s : nullptr);
+#endif
     for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
     {
         LLSpatialGroup *group = *i;
 
-        if (group->isDead())
-        {
-            continue;
-        }
-
-        if ((sUseOcclusion && group->isOcclusionState(LLSpatialGroup::OCCLUDED)) ||
-            (RenderAutoHideSurfaceAreaLimit > 0.f &&
-             group->mSurfaceArea > RenderAutoHideSurfaceAreaLimit * llmax(group->mObjectBoxSize, 10.f)))
+        if (renderMapSkipsGroup(group))
         {
             continue;
         }
@@ -4052,64 +4260,10 @@ void LLPipeline::postSort(LLCamera &camera)
             group->rebuildGeom();
         }
 
-        for (LLSpatialGroup::draw_map_t::iterator j = group->mDrawMap.begin(); j != group->mDrawMap.end(); ++j)
-        {
-            LLSpatialGroup::drawmap_elem_t &src_vec = j->second;
-            if (!hasRenderType(j->first))
-            {
-                continue;
-            }
-
-            for (LLSpatialGroup::drawmap_elem_t::iterator k = src_vec.begin(); k != src_vec.end(); ++k)
-            {
-                LLDrawInfo *info = *k;
-
-                sCull->pushDrawInfo(j->first, info);
-                if (!sShadowRender && !sReflectionRender && !gCubeSnapshot)
-                {
-                    addTrianglesDrawn(info->mCount);
-                }
-            }
-        }
-
-        if (hasRenderType(LLPipeline::RENDER_TYPE_PASS_ALPHA))
-        {
-            LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("Collect Alpha groups");
-            LLSpatialGroup::draw_map_t::iterator alpha = group->mDrawMap.find(LLRenderPass::PASS_ALPHA);
-
-            if (alpha != group->mDrawMap.end())
-            {  // store alpha groups for sorting
-                LLSpatialBridge *bridge = group->getSpatialPartition()->asBridge();
-                if (LLViewerCamera::sCurCameraID == LLViewerCamera::CAMERA_WORLD && !gCubeSnapshot)
-                {
-                    if (bridge)
-                    {
-                        LLCamera trans_camera = bridge->transformCamera(camera);
-                        group->updateDistance(trans_camera);
-                    }
-                    else
-                    {
-                        group->updateDistance(camera);
-                    }
-                }
-
-                if (hasRenderType(LLDrawPool::POOL_ALPHA))
-                {
-                    sCull->pushAlphaGroup(group);
-                }
-            }
-
-            LLSpatialGroup::draw_map_t::iterator rigged_alpha = group->mDrawMap.find(LLRenderPass::PASS_ALPHA_RIGGED);
-
-            if (rigged_alpha != group->mDrawMap.end())
-            {  // store rigged alpha groups for LLDrawPoolAlpha prepass (skip distance update, rigged attachments use depth buffer)
-                if (hasRenderType(LLDrawPool::POOL_ALPHA))
-                {
-                    sCull->pushRiggedAlphaGroup(group);
-                }
-            }
-        }
+        renderMapPushGroup(group, camera, *sCull);
     }
+    }
+    // </Vulkanstorm>
     }
 
     /*bool use_transform_feedback = gTransformPositionProgram.mProgramObject && !mMeshDirtyGroup.empty();
@@ -11842,26 +11996,6 @@ namespace
 
         const S32 mSavedOcclusion;
     };
-
-#if VKS_FRAMEJOBS_COMPARE
-    // development only: adds the time of its scope to a counter of the sun cascades' frame jobs (nothing for a null counter)
-    struct LLSunCascadeTimer
-    {
-        explicit LLSunCascadeTimer(F64* sum) : mSum(sum), mStart(sum ? LLTimer::getTotalSeconds().value() : 0.0) { }
-        ~LLSunCascadeTimer()
-        {
-            if (mSum)
-            {
-                *mSum += LLTimer::getTotalSeconds().value() - mStart;
-            }
-        }
-        LLSunCascadeTimer(const LLSunCascadeTimer&) = delete;
-        LLSunCascadeTimer& operator=(const LLSunCascadeTimer&) = delete;
-
-        F64* const mSum;
-        const F64  mStart;
-    };
-#endif
 }
 
 void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp, bool culled_ahead)
@@ -13399,7 +13533,11 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         }
         {
             mSunCascadePass = j;
+            // multi-core 5c-2: the render maps of cascades 1 to 3 in chunks on the frame job helpers. Cascade 0's is
+            // too small to be worth a batch, and a probe's cascades are outside the frame-work window.
+            mRenderMapJobs = cascade_jobs && j >= 1 && !gCubeSnapshot;
             renderShadow(view[j], proj[j], shadow_cam, result[j], true, culled_ahead);
+            mRenderMapJobs = false;
             mSunCascadePass = -1;
         }
         // </Vulkanstorm>

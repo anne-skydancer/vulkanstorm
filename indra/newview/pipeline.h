@@ -302,6 +302,13 @@ public:
     void stateSort(LLSpatialBridge* bridge, LLCamera& camera, bool fov_changed = false);
     void stateSort(LLDrawable* drawablep, LLCamera& camera);
     void postSort(LLCamera& camera);
+    // <Vulkanstorm> multi-core 5c-2: the parts of postSort's "build render map" loop, and the build in chunks on the frame
+    // job helpers (the sun cascades 1 to 3 of generateSunCascadesStable). renderMapSkipsGroup is the loop's skip rule;
+    // renderMapPushGroup is what the loop appends for one group, to `sink` (the cull result, or a chunk's fragment).
+    bool renderMapSkipsGroup(LLSpatialGroup* group);
+    template <typename SINK> void renderMapPushGroup(LLSpatialGroup* group, LLCamera& camera, SINK& sink);
+    void buildRenderMapJobs(LLCamera& camera);
+    // </Vulkanstorm>
 
     void forAllVisibleDrawables(void (*func)(LLDrawable*));
 
@@ -804,6 +811,9 @@ public:
     S32                      mSunCascadeCullNodes[4] = { 0, 0, 0, 0 };              // nodes the jobs counted, per cascade
     S32                      mSunCascadePass = -1;    // the cascade generateSunCascadesStable is rendering, -1 outside
     S32                      mSunCascadeCompare = 0;  // RenderSunCascadeJobsCompare for this sun pass (0 without the compare mode)
+    bool                     mRenderMapJobs = false;  // postSort builds the render map in chunks (set around a cascade's render)
+    std::vector<LLSpatialGroup*> mRenderMapGroups;    // the visible groups the build keeps, in their order
+    std::vector<LLCullJobs::RenderMapFragment<LLDrawInfo, LLSpatialGroup, LLRenderPass::NUM_RENDER_TYPES>> mRenderMapFragments; // one per chunk
     // </Vulkanstorm>
 
     S32                      mDebugTextureUploadCost;

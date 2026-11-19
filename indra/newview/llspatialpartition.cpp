@@ -4492,6 +4492,23 @@ void LLCullResult::pushDrawInfo(U32 type, LLDrawInfo* draw_info)
 }
 
 
+// <Vulkanstorm> multi-core 5c-2: the state pushDrawInfo leaves after `count` calls. The list keeps one NULL after its
+// last allocated slot, and the slots from the size up are NULL (clear() zeroes the used ones).
+void LLCullResult::appendDrawInfos(size_t type, LLDrawInfo* const* infos, size_t count)
+{
+    drawinfo_list_t& render_map = mRenderMap[type];
+    const size_t size = mRenderMapSize[type];
+    if (render_map.size() < size + count + 1)
+    {
+        render_map.resize(size + count + 1, nullptr);
+        mRenderMapAllocated[type] = (U32)(render_map.size() - 1);
+    }
+    std::copy(infos, infos + count, render_map.begin() + size);
+    mRenderMapSize[type] = (U32)(size + count);
+    mRenderMapEnd[type] = &(render_map[mRenderMapSize[type]]);
+}
+// </Vulkanstorm>
+
 void LLCullResult::assertDrawMapsEmpty()
 {
     for (U32 i = 0; i < LLRenderPass::NUM_RENDER_TYPES; i++)
