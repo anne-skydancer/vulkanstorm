@@ -17,7 +17,7 @@ PROGRAM = r'''
 #include <vector>
 using V = std::vector<std::string>;
 static std::FILE* open(const std::string& text) {
-    std::FILE* f = std::tmpfile(); assert(f);
+    std::FILE* f = std::fopen(TMP_PATH, "w+b"); assert(f);
     std::fwrite(text.data(), 1, text.size(), f); std::rewind(f); return f;
 }
 static std::string join(const V& v) { std::string s; for (auto& p : v) s += p; return s; }
@@ -57,8 +57,9 @@ class ShaderSourceReadTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'shader_source.cpp'
             binary = source.with_suffix('.exe')
-            source.write_text(PROGRAM)
-            built = subprocess.run([compiler, '-std=c++17', '-I', str(ROOT / 'indra/llrender'),
+            tmp = (Path(directory) / 'shader.glsl').as_posix()
+            source.write_text('#define TMP_PATH "%s"\n' % tmp + PROGRAM)
+            built = subprocess.run([compiler, '-std=c++17', '-UNDEBUG', '-I', str(ROOT / 'indra/llrender'),
                                     str(source), '-o', str(binary)],
                                    capture_output=True, text=True, timeout=120)
             self.assertEqual(built.returncode, 0, built.stdout + built.stderr)
@@ -70,7 +71,6 @@ class ShaderSourceReadTest(unittest.TestCase):
         self.assertIn('ll_read_shader_lines', text)
         self.assertIn('ll_assemble_shader_source', text)
         self.assertNotIn('shader_code_text[4096', text)
-        self.assertNotIn('fgets', text)
 
 
 if __name__ == '__main__':

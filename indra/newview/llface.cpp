@@ -78,7 +78,13 @@ static LLStaticHashedString sColorIn("color_in");
 // nothing resyncs it when the volume is filled), as the checks at the other volume-face reads do
 static inline bool te_has_volume_face(const LLVolume* volume, S32 te_offset)
 {
-    return volume && te_offset >= 0 && te_offset < volume->getNumVolumeFaces();
+    const bool has_face = volume && te_offset >= 0 && te_offset < volume->getNumVolumeFaces();
+    if (volume && !has_face)
+    {
+        LL_WARNS_ONCE("Face") << "Texture entry " << te_offset << " has no volume face (" << volume->getNumVolumeFaces()
+                              << " faces); Local Mesh with an unloaded volume?" << LL_ENDL;
+    }
+    return has_face;
 }
 
 bool LLFace::sSafeRenderSelect = true; // false
