@@ -40,8 +40,8 @@ permissions:
 
 # One group for every run, so two runs never write the same PR (or create its sticky comment)
 # at once. A run in progress finishes (cancelling it would leave a cancelled job on the PR);
-# a newer one waits, and only the newest waiting one is kept, since every run reads the whole
-# state. Runs take a few seconds.
+# a newer one waits, and only the newest waiting one is kept. That is safe because every run
+# evaluates all open PRs (scripts/ci_pr_readiness.py, affected_prs). Runs take a few seconds.
 concurrency:
   group: pr-readiness
   cancel-in-progress: false
@@ -49,6 +49,11 @@ concurrency:
 jobs:
   readiness:
     name: readiness
+    # A review event on a fork PR has a read-only token and writes nothing: PR review event
+    # covers it. Skipped here, so it does not take the concurrency group either.
+    if: >-
+      !startsWith(github.event_name, 'pull_request_review')
+      || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

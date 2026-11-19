@@ -99,7 +99,7 @@ so a resolve (and an unresolve) shows at the next event above; rerun the
 once the workflow is on `vkstorm-release`, the default branch. A PR that
 conflicts cannot start `pull_request` workflows, so a conflict is found only
 through the push to its base line. A fork PR's own events have a read-only
-token: its status is written by the Check PR `workflow_run`, and for a review or review comment by the `PR review event` workflow, an empty unprivileged job whose `workflow_run` re-evaluates the PR with the run's head commit (no artifact, nothing from the fork is read).
+token: its status is written by the Check PR `workflow_run`, and for a review or review comment by the `PR review event` workflow, an empty unprivileged job whose `workflow_run` re-evaluates the open PRs (no artifact, nothing from the fork is read; the direct review events skip fork PRs). Every run evaluates all open PRs, so the single waiting run that the concurrency group keeps never drops another PR's update.
 
 Drafts get the status too. It is for reading, not a required check; no branch
 protection depends on it. The script only reads the PR through the API and
