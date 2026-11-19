@@ -44,6 +44,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_shader_source_read.py
       shell: bash
+    - run: python3 scripts/tests/test_uuid_seed_local.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
