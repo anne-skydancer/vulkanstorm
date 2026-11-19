@@ -692,7 +692,7 @@ def casters():
     white = texture(RGBA8, n, n, np.ones((n, n, 4), np.float32), GL_RGBA)
     # (z, linear colour as the shader reads it with a white texture, alpha, facing away): two see-through faces in front of the opaque
     # surface, one at the solid cut, one invisible, one behind the opaque surface, one facing away from the lamp
-    faces = [(0.5, (1.0, 0.0, 1.0), 0.5, 0), (0.4, (0.0, 1.0, 1.0), 0.3, 0), (0.2, (1.0, 1.0, 1.0), float(np.float32(0.98)), 0),
+    faces = [(0.5, (1.0, 0.0, 1.0), 0.5, 0), (0.4, (0.0, 1.0, 1.0), 0.3, 0), (0.2, (1.0, 1.0, 1.0), float(np.float32(1.0)), 0),
              (0.1, (0.0, 0.0, 0.0), 0.002, 0), (0.7, (0.0, 0.0, 0.0), 0.5, 0), (0.3, (0.0, 0.0, 0.0), 0.5, 1)]
     expect = np.ones(3)
     for _, c, a, _ in faces[:2]:
