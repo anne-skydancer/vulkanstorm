@@ -255,7 +255,7 @@ Not reprojected: the surfaces' own motion; there the history ghosts, limited by 
 
 ### Measured against the viewer before the upgrade (offline, the viewer's shaders)
 
-`scripts/perf/test_alpha_stochastic.py` (the harness's pan scenes at 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position; RTX 5070 Ti, NVIDIA 621.14; before = the shaders of git ref `1f38b56b50`: S = 8, hashed dither, the 1/8 resolve; after = this tree, S = 8, one pass of 8 samples; the last column is the first version of the upgrade at S = 4, kept for the record):
+`scripts/perf/test_alpha_stochastic.py` (the harness's pan scenes at 256 x 256, 40 frames, rmse/255 against sorted alpha at the same position; RTX 5070 Ti, NVIDIA 621.14; before = the shaders of git ref `ab8740c32e` (release; the same as devel's `1f38b56b50`): S = 8, hashed dither, the 1/8 resolve; after = this tree, S = 8, one pass of 8 samples; the last column is the first version of the upgrade at S = 4, kept for the record):
 
 | scene | motion | plain 8 samples (before) | before: S = 8 + history | plain 8 samples (new dither) | after: S = 8 + grain resolve | the same at S = 4 (dropped 2026-11-15) |
 |---|---|---|---|---|---|---|
@@ -280,7 +280,7 @@ alpha change at frame 24 the first frame reads 0.45 against 0.75 without history
 The harness checks that one layer has zero grain and takes no history, that two layers have grain, and that the history is left out when the total alpha changes (1.00 of the pixels) or the far layer slides 2 px (0.90; 0 at 0 and 0.1 px).
 The gain is the resolve, not the dither: the plain 8 samples with the new dither are as noisy as before (T3 3.73 against 3.63, Q10 5.50 against 5.48: not a gain); no A/B of the dither alone was run.
 
-**The mask and the folded smooth are exact.** `test_alpha_stochastic.py` runs the new passes and the passes of git `c121dc100c` (unmasked blend, a smooth of its own) side by side over two sequences of 22 frames, static and with a 1.3, 0.7 px pan: nothing, transparency appearing, moving, scattered (hair in the middle, a window in a corner, an alpha 0 face with only a glow, a face too faint to move the half-float transparency), gone the next frame, back elsewhere, everything, nothing. Every frame the image, both history textures, both of the last total alpha and part left out, and the aux target are equal bit for bit (`np.array_equal`). The test has teeth: without the glow clause in the mask the glow-only face fails it.
+**The mask and the folded smooth are exact.** `test_alpha_stochastic.py` runs the new passes and the passes of git `4ecd44c3d2` (unmasked blend, a smooth of its own) side by side over two sequences of 22 frames, static and with a 1.3, 0.7 px pan: nothing, transparency appearing, moving, scattered (hair in the middle, a window in a corner, an alpha 0 face with only a glow, a face too faint to move the half-float transparency), gone the next frame, back elsewhere, everything, nothing. Every frame the image, both history textures, both of the last total alpha and part left out, and the aux target are equal bit for bit (`np.array_equal`). The test has teeth: without the glow clause in the mask the glow-only face fails it.
 
 The farthest depth (review round): the first version took the farthest stochastic depth over all samples. A sample no layer covers still holds the opaque depth (the spread), so a pane in front of a
 wall had the wall as its "far layer", and any camera translation that slid the wall 3/4 px past the pane (a few pixels a frame at a few metres) dropped the history of all the glass. The measuring pass now reads the scene depth
@@ -293,7 +293,7 @@ The measuring pass zeroes a NaN and clamps an infinity before the blend, so the 
 
 ### GPU time per pass (2560 x 1440, `scripts/perf/bench_stochastic_resolve.py`, GL_TIME_ELAPSED)
 
-Per pass the median of 68 timed frames of a run (80 frames, the first 12 not timed), and of three runs the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of those pass times (alpha, depth, accumulation, measure, blend, smooth where it is a pass, composite). shipping = git ref `1f38b56b50` (S = 8, before the upgrade), c121 = `c121dc100c` (the upgrade before the mask: unmasked blend, a smooth pass of its own), now = this tree. The harness composite draws the colour and the glow pass; the viewer draws the glow only when a glowing face is drawn. RTX 5070 Ti, NVIDIA 621.14. ms:
+Per pass the median of 68 timed frames of a run (80 frames, the first 12 not timed), and of three runs the **lowest** median per pass (the GPU's clock state moves a run by tens of percent; the minimum is the repeatable one). The total is the sum of those pass times (alpha, depth, accumulation, measure, blend, smooth where it is a pass, composite). shipping = git ref `ab8740c32e` (S = 8, before the upgrade), c121 = `4ecd44c3d2` (the upgrade before the mask: unmasked blend, a smooth pass of its own), now = this tree. The harness composite draws the colour and the glow pass; the viewer draws the glow only when a glowing face is drawn. RTX 5070 Ti, NVIDIA 621.14. ms:
 
 | scene | shipping | c121 | now | now - shipping | now - c121 |
 |---|---|---|---|---|---|
@@ -465,7 +465,7 @@ if the large buffer cannot have the targets, and fails with a message if the win
 
 ## Tests and measurements
 
-- `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `1f38b56b50`), of the upgrade before the mask (`STOCH_REF_REF`, `c121dc100c`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
+- `scripts/perf/bench_stochastic_resolve.py`: GPU time per pass of the viewer before the 2026-11-14 upgrade (git ref `STOCH_OLD_REF`, default `ab8740c32e`), of the upgrade before the mask (`STOCH_REF_REF`, `4ecd44c3d2`) and of this tree, on the pan scenes at `STOCH_TEST_SIZE` (the harness blocks of `test_alpha_stochastic.py` run in it).
 - `indra/newview/tests/llstochastichistory_test.cpp`: the engine's GL-free rules and the transparency's table (`TRANSPARENCY_TABLE_HASH`, the blue-noise tile a permutation of 0 to 4095 and blue).
 - `indra/newview/tests/llstochasticlayerrank_test.cpp` and `scripts/tests/test_stochastic_layer_rank.py` (ci-checks): the layer rank's rules and margins on a model of the passes, and text guards that the rank reaches the stochastic passes only (sorted alpha only sees its draws split).
 - `scripts/perf/test_alpha_stochastic.py`: offscreen (`STOCH_TEST_SIZE=70x37` partial edges), the viewer's shaders with the viewer's pass

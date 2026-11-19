@@ -35,7 +35,7 @@ LLDrawPoolAlpha::renderStochastic on a small target:
     the history is dropped where the total alpha changes or the far layer slides, the smooth leaves edges alone;
   * the mask (the resolve and the composite draw only where something transparent was drawn) and the smooth folded into the composite:
     over frame sequences (transparency appearing, moving, scattered, gone the next frame) the image, the history and the last
-    total alpha equal those of the passes before the mask (git ref c121dc100c: unmasked blend, separate smooth) bit for bit;
+    total alpha equal those of the passes before the mask (git ref 4ecd44c3d2: unmasked blend, separate smooth) bit for bit;
   * the NaN guard: NaN and infinite colours, alphas and transparencies injected into the passes never reach the
     history, the neighbours or the image.
 ;
@@ -204,13 +204,15 @@ composite=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticComposi
 current_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticCurrentF.glsl'))])
 resolve_prog=program([(0x8B31,screen_vertex),(0x8B30,viewer('alphaStochasticResolveF.glsl')),(0x8B30,viewer('stochasticResolveUtilF.glsl'))])
 # The before: the shaders of OLD_REF (the viewer before the 2026-11-14 upgrade: S = 8, the hashed dither, the temporal pair without
-# grain, the composite reading the history), from git, as the viewer compiled them then
+# grain, the composite reading the history), from git, as the viewer compiled them then. Both defaults are release commits, so a
+# clone has them: ab8740c32e holds the same shaders as devel's 1f38b56b50, and 4ecd44c3d2 (REF_REF) the same as c121dc100c, which no
+# branch holds
 import subprocess
-OLD_REF=os.environ.get('STOCH_OLD_REF','1f38b56b50')
+OLD_REF=os.environ.get('STOCH_OLD_REF','ab8740c32e')
 def old_viewer(name,version=420):
     text=subprocess.run(['git','show',OLD_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,capture_output=True,text=True,check=True).stdout
     return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')
-REF_REF=os.environ.get('STOCH_REF_REF','c121dc100c')   # the commit before the mask: unmasked blend, a smooth pass of its own
+REF_REF=os.environ.get('STOCH_REF_REF','4ecd44c3d2')   # the commit before the mask: unmasked blend, a smooth pass of its own
 def ref_viewer(name,version=420):
     text=subprocess.run(['git','show',REF_REF+':indra/newview/app_settings/shaders/class1/deferred/'+name],cwd=root,capture_output=True,text=True,check=True).stdout
     return ('#version %d\n'%version)+text.replace('/*[EXTRA_CODE_HERE]*/','')

@@ -4,9 +4,10 @@
 
 Runs the viewer's own shaders with the pass structure and GL state of LLPipeline / LLDrawPoolAlpha::renderStochastic
 (the harness of test_alpha_stochastic.py: its shared blocks are executed here, so the two cannot differ):
-  shipping  the shaders of the git ref STOCH_OLD_REF (default 1f38b56b50, the viewer before the 2026-11-14 upgrade): S = 8 samples in
+  shipping  the shaders of the git ref STOCH_OLD_REF (default ab8740c32e, the viewer before the 2026-11-14 upgrade): S = 8 samples in
             one pass of 8, the hashed dither, the averaging pre-pass into RGBA32F, the 1/8 resolve, the composite;
-  c121      the shaders of STOCH_REF_REF (default c121dc100c, the upgrade before the mask): measuring pass, blend, a smooth pass, composite;
+  c121      the shaders of STOCH_REF_REF (default 4ecd44c3d2, the upgrade before the mask, named after c121dc100c, which holds the same
+            shaders and no branch holds): measuring pass, blend, a smooth pass, composite;
   now       the working tree: the measuring pass also writes the mask (R8) of where anything transparent was drawn, the blend and the
             composite (which smooths) draw only under it.
 Scenes (the pan scenes of the test): T3 three textured layers, Q10 ten textured layers, S10 ten layers of hair strips, all full screen; SC a
