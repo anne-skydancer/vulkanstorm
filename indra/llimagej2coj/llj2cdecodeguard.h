@@ -5,7 +5,8 @@
  * @brief The J2C codestreams the OpenJPEG wrapper refuses before OpenJPEG allocates for them.
  *
  * Free of viewer headers: JPEG2KDecode::decode (llimagej2coj.cpp) applies it between opj_read_header and
- * opj_decode, and indra/llimagej2coj/tests/llj2cdecodeguard_openjpeg_test.cpp checks it against OpenJPEG.
+ * opj_decode, LLImageJ2COJ::getMetadata applies its component rule to the header read, and
+ * indra/llimagej2coj/tests/llj2cdecodeguard_openjpeg_test.cpp checks it against OpenJPEG.
  *
  * Why: opj_decode allocates a 4-byte sample for every pixel of every component at the decoded size before it
  * reads a single code-block, and the size and the component count come from the main header alone. A header of
@@ -26,7 +27,8 @@ namespace LLJ2CDecodeGuard
     // OpenJPEG decodes every sample into an OPJ_INT32
     constexpr unsigned long long BYTES_PER_SAMPLE = 4;
 
-    // A component count the viewer takes: 1 to `max_components` (MAX_IMAGE_COMPONENTS)
+    // A component count the viewer takes: 1 to `max_components` (MAX_IMAGE_COMPONENTS). LLImageBase keeps the
+    // count in a signed byte, where a larger one would wrap (260 reads as 4).
     constexpr bool componentsSupported(unsigned long long components, unsigned long long max_components)
     {
         return components >= 1 && components <= max_components;
