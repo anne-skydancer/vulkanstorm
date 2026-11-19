@@ -92,7 +92,9 @@ class RunTest(unittest.TestCase):
             with open(run / "manifest.csv", encoding="utf-8") as f:
                 rows = list(csv.DictReader(f))
             self.assertEqual(len(rows), 4)
-            self.assertEqual(index["hook_bench"]["hooks_per_draw"], 20)
+            self.assertEqual(index["hook_bench"]["hooks_per_draw"], 24)
+            self.assertEqual(index["hook_bench"]["ns_per_census_record"], 180.0)     # the census's cost per recorded face
+            self.assertEqual(index["hook_bench"]["census_faces_sampled"], 1024)
             self.assertIsNotNone(index["presets"]["north"]["fps_stats_off"])
             self.assertIn("overhead_pct", index["presets"]["north"])
             self.assertEqual(rows[0]["draws"], "4200.0")
@@ -293,7 +295,9 @@ class CensusAndProofsTest(unittest.TestCase):
         sc = pc.load_scenario(CENSUS)
         self.assertTrue(sc["census"]["enabled"] and sc["census"]["resident"])
         self.assertEqual(sc["compare"]["prove_passes"], [1, 13, 14, 15])
+        self.assertEqual(sc["compare"]["require_passes"], [13, 14, 15])     # G4-0b's gate
         self.assertGreater(sc["compare"]["frames"], 1)
+        self.assertGreater(sc["census"]["settle_frames"], 0)
         self.assertEqual({v["id"] for v in sc["variants"]}, {"sun", "all", "impostors", "mirrors"})
 
     def test_a_census_run_writes_its_own_window_and_the_resident_census(self):
@@ -311,11 +315,22 @@ class CensusAndProofsTest(unittest.TestCase):
             self.assertEqual(fv.gl_window_begins[-1], {"frames": 7, "gpu": False, "census": True})
             self.assertFalse(fv.gl_window_begins[0].get("census", False))
             self.assertEqual(len(fv.gl_census_paths), 1)
-            # the report has the copy census per run
+            # the records on (every draw item rebuilt) before the census window, off after the resident census
+            self.assertEqual(fv.gl_census_records[:3], [True, "census", False])
+            self.assertFalse(fv.gl_census_recording)      # and the run's cleanup leaves them off
+            self.assertEqual(c["groups_rebuilt"], 120)
+            self.assertEqual(c["resident"]["items_without_record"], 0)
+            w = json.loads((run / c["window_file"]).read_text(encoding="utf-8"))
+            self.assertTrue(w["census_window"])
+            # the report has the copy census per run, N-SF1's long runs per pass and X1-P2's vertex-byte shares
             self.assertEqual(apc.main([str(run)]), 0)
             text = (run / "report.txt").read_text(encoding="utf-8")
             self.assertIn("copy census", text)
             self.assertIn("4.00", text)     # the resident instancing ratio
+            self.assertIn("N-SF1 per pass", text)
+            self.assertIn("small rep vb %", text)
+            self.assertIn("9.75", text)     # the repeated small faces' vertex bytes: 390000 of 4.0e6
+            self.assertIn("20.0", text)     # a fifth of the eligible vertices in runs of 17+ copies of a 64-255 template
 
     def test_without_the_census_operation_a_census_scenario_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -349,6 +364,81 @@ class CensusAndProofsTest(unittest.TestCase):
             index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
             self.assertFalse(index["proofs"]["15"]["ok"] or index["proofs"]["15"]["ran"])
             self.assertTrue(any("pass 15 is not proven" in w for w in index["warnings"]))
+
+    def test_a_pass_that_gave_no_result_is_recorded_as_not_compared(self):
+        # a viewer that leaves a pass out of its results (as before the per-pass "did not run" results): the run records
+        # the pass as not compared, never as passed, and the report lists it
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_omit_passes=(14,))
+            code, run = run_main(fv, tmp, presets=self.ONE)
+            self.assertEqual(code, 0)       # no gate asked for 14
+            res = json.loads((run / "compare_current.json").read_text(encoding="utf-8"))["-1"]
+            hud = [r for r in res if r["pass"] == 14]
+            self.assertEqual(len(hud), 1)
+            self.assertFalse(hud[0]["ran"] or hud[0]["identical"])
+            self.assertTrue(hud[0]["missing"])
+            self.assertEqual(sorted(r["pass"] for r in res), sorted(pc.COMPARE_LABELS))
+            self.assertEqual(apc.main([str(run)]), 0)
+            text = (run / "report.txt").read_text(encoding="utf-8")
+            self.assertRegex(text, r"pass -1 +HUD +not compared: the viewer returned no result")
+
+    def test_the_gate_is_met_by_proven_identical_passes(self):
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 13, 14, 15], "frames": 30,
+                   "require_passes": [13, 14, 15]}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["gate"], {"passes": [13, 14, 15], "met": True, "why": []})
+            self.assertEqual(index["proofs"]["13"]["view"], "probe face")
+            self.assertEqual(apc.main([str(run)]), 0)
+            text = (run / "report.txt").read_text(encoding="utf-8")
+            self.assertIn("gate (compares 13, 14, 15 proven and IDENTICAL): MET", text)
+            self.assertIn("proof pass 15 : CAUGHT", text)
+            self.assertIn("probe face (probe face)", text)      # the result names the view 13 was compared in
+
+    def test_the_gate_is_not_met_by_a_pass_that_never_ran(self):
+        # no impostor regenerated in any armed frame: G4-0b's gate cannot be met by a pass that was never compared
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 13, 14, 15], "frames": 30,
+                   "require_passes": [13, 14, 15]}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_not_run_passes=(15,))
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["gate"]["met"])
+            self.assertEqual(len(index["gate"]["why"]), 2)       # not proven, and never compared
+            self.assertTrue(all(w.startswith("15 impostor") for w in index["gate"]["why"]))
+            self.assertEqual(index["proofs"]["15"]["tries"], 2)  # tried again after the run
+            self.assertEqual(apc.main([str(run)]), 0)
+            text = (run / "report.txt").read_text(encoding="utf-8")
+            self.assertIn("NOT MET", text)
+            self.assertIn("proof pass 15 : NOT PROVEN", text)
+            self.assertIn("warnings of the run:", text)
+        with tempfile.TemporaryDirectory() as tmp:
+            # nor by one that gave no result at all
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_omit_passes=(14,))
+            compare_hud = dict(compare, prove_passes=[1], require_passes=[14], prove_with_injection=False)
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare_hud)
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["gate"]["why"], ["14 HUD: never compared in any run (not run in current)"])
+
+    def test_an_unproven_pass_is_proven_in_a_later_run(self):
+        # the impostor does not regenerate in the start proof's armed frames, then does: proven after the first run
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 15], "frames": 30,
+                   "require_passes": [15]}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_not_run_armings={15: 1})
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            proof = index["proofs"]["15"]
+            self.assertTrue(proof["ok"] and proof["ran"])
+            self.assertEqual((proof["at"], proof["tries"]), ("current", 2))
+            self.assertTrue(index["gate"]["met"])
+            self.assertTrue(any("pass 15 is not proven yet" in w for w in index["warnings"]))
 
     def test_a_pass_that_ran_and_missed_the_bit_fails_the_run(self):
         compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 14], "frames": 30}

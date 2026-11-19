@@ -90,7 +90,8 @@ class FakeViewer:
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
                  logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False,
-                 gl_m1_fps_factor=1.0, u32_as_string=False, projector=None, gl_not_run_passes=(), gl_missed_injection_passes=()):
+                 gl_m1_fps_factor=1.0, u32_as_string=False, projector=None, gl_not_run_passes=(), gl_missed_injection_passes=(),
+                 gl_omit_passes=(), gl_not_run_armings=None):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
         self.projector = projector            # a model of the projector shadow pool (ProjectorShadows.stats), or None
@@ -105,6 +106,11 @@ class FakeViewer:
         self.gl_short_window = gl_short_window  # the window never reaches its frame target
         self.gl_not_run_passes = set(gl_not_run_passes)   # compare ids that do not run in their armed frames (no impostor)
         self.gl_missed_injection = set(gl_missed_injection_passes)  # compare ids whose check misses the injected bit
+        self.gl_omit_passes = set(gl_omit_passes)         # compare ids that give no result at all (a viewer from before 2b-1's fixes)
+        # {compare id: n}: the pass does not run in the first n armings that ask for it (an impostor regenerates later)
+        self.gl_not_run_armings = dict(gl_not_run_armings or {})
+        self.gl_census_recording = False
+        self.gl_census_records = []     # every censusRecord request's "on", in order, with the census op calls between them
         self.gl_arms = []               # every compareArm request, as sent
         self.gl_window_begins = []      # every windowBegin request, as sent
         self.gl_census_paths = []       # every census request's path
@@ -251,7 +257,8 @@ class FakeViewer:
                     return self._reply(d, {"error": "no such API GLSubmitStats"})
                 return self._reply(d, {"name": "GLSubmitStats", "ops": [
                     {"name": o} for o in ("status", "windowBegin", "windowStop", "summary", "dump", "compareArm",
-                                          "compareResults", "profileFrame", "selfBench", "census") if o not in self.drop_ops]})
+                                          "compareResults", "profileFrame", "selfBench", "censusRecord", "census")
+                    if o not in self.drop_ops]})
             ops = {"LLStartUp": ["postStartupState", "getStateTable"], "LLViewerControl": ["get", "set", "groups"],
                    "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible", "clickButton"],
                    "UI": ["getValue", "setSelectedByValue"],
@@ -536,6 +543,19 @@ class FakeViewer:
                 "mdvSyncs": 1800.0, "bufSubData": 12.0, "stateToggles": 300.0, "occBlocking": 0.0, "runs": 2900.0,
                 "mergeableDraws": 1300.0, "cpu_ms": 9.5, "gpu_ms": 7.25}
 
+    @staticmethod
+    def _gl_census(scale):
+        """A copy census of one scope (census windows): 1000 eligible vertices times scale, a fifth of them in runs of 17+
+        copies of a 64-255 template, a tenth in runs of 17+ copies of a face under 64 vertices."""
+        e = 1000.0 * scale
+        zeros = [0.0] * 8
+        return {"faces": 30.0 * scale, "vertices": 1500.0 * scale, "by_reason": {"eligible": {"faces": 20.0 * scale, "vertices": e}},
+                "items": 10.0 * scale, "instanced_items": 6.0 * scale, "mixed_items": 1.0 * scale, "sets": 8.0 * scale,
+                "p0_extra_calls": 2.0 * scale, "p0_switches": 3.0 * scale, "p1_lost_vertices": 100.0 * scale,
+                "run_hist": {"under_64": [1.0, 0, 0, 0, 0, 1.0, 0, 0], "64_255": [2.0, 0, 0, 0, 0, 1.0, 0, 0]},
+                "run_vertices": {"under_64": [40.0 * scale, 0, 0, 0, 0, 0.1 * e, 0, 0], "64_255": [200.0 * scale, 0, 0, 0, 0, 0.2 * e, 0, 0],
+                                 "256_575": list(zeros)}}
+
     def _frame_count(self):
         """Frames rendered so far: 60 per second, times gl_m1_fps_factor while RenderAlphaSortMethod is 1."""
         now = time.monotonic()
@@ -550,7 +570,7 @@ class FakeViewer:
         if op == "status":
             self._reply(d, {"compiled": True, "window_target": w["target"], "window_collected": w["collected"],
                             "window_gpu_frames": w["gpu"], "window_active": w["collected"] < w["target"],
-                            "window_census": bool(w.get("census")),
+                            "window_census": bool(w.get("census")), "census_recording": self.gl_census_recording,
                             "compare_armed": 0, "compare_results": len(self.gl_compare_results),
                             "frame_count": int(self._frame_count())})
         elif op == "windowBegin":
@@ -562,7 +582,7 @@ class FakeViewer:
                 return
             self.gl_window = {"target": n, "collected": n, "gpu": (n - 1 if self.gl_gpu_lag else n) if d.get("gpu", True) else 0,
                               "census": bool(d.get("census"))}
-            self._reply(d, {"frames": n, "census": bool(d.get("census"))})
+            self._reply(d, {"frames": n, "census": bool(d.get("census")), "census_recording": self.gl_census_recording})
         elif op == "windowStop":
             self._reply(d, {"collected": w["collected"]})
         elif op == "summary":
@@ -572,8 +592,14 @@ class FakeViewer:
             import json  # noqa: PLC0415
             t = self._gl_totals()
             method = int(self.settings["RenderAlphaSortMethod"][1])
+            census = bool(w.get("census"))
+            totals = dict(t, run_hist=[1400.0, 700.0, 500.0, 200.0, 80.0, 20.0], runsNoUniform=2100.0,
+                          run_hist_no_uniform=[900.0, 600.0, 400.0, 150.0, 40.0, 10.0])
+            if census:
+                # a census window: the copy census per pass, the draw-state keys and the records made
+                totals.update(stateKeysDistinct=650.0, censusFaces=40.0, census=self._gl_census(4.0))
             doc = {"schema": 1, "kind": "window", "scale": "per_frame_mean", "frames": w["collected"], "gpu_frames": w["gpu"],
-                   "totals": dict(t, run_hist=[1400.0, 700.0, 500.0, 200.0, 80.0, 20.0]),
+                   "census_window": census, "totals": totals,
                    "views": [{"view": "frame", "calls": 1.0, "cpu_ms": 9.5, "gpu_ms": 7.25, "draws": 0.0},
                              {"view": "main", "calls": 3.0, "cpu_ms": 6.0, "gpu_ms": 5.0, "draws": 3000.0, "vbChanges": 2800.0}],
                    "passes": [{"view": "main", "pass": "gbuffer", "calls": 1.0, "cpu_ms": 4.0, "gpu_ms": 3.5, "draws": 2500.0},
@@ -583,6 +609,9 @@ class FakeViewer:
                               {"view": "sun cascade 0", "pass": "shadow opaque 0", "calls": 1.0, "cpu_ms": 1.0, "gpu_ms": 0.9,
                                "draws": 900.0}],
                    "compare": []}
+            if census:
+                doc["passes"][0]["census"] = self._gl_census(1.0)
+                doc["passes"][2]["census"] = self._gl_census(3.0)
             pathlib.Path(d["path"]).parent.mkdir(parents=True, exist_ok=True)
             pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
             self._reply(d, {"path": d["path"]})
@@ -601,12 +630,18 @@ class FakeViewer:
                 for i, label in self.GL_PASSES.items():
                     if self.gl_compare_pending not in (-1, i):
                         continue
-                    if self.gl_not_run or i in self.gl_not_run_passes:
-                        results.append({"pass": i, "label": label, "ran": False, "identical": False, "note": "not run", "attachments": []})
+                    if i in self.gl_omit_passes:
                         continue
-                    # the injection goes into the first attachment of the first pass the arming compares
-                    injected = bool(inject and i == (1 if self.gl_compare_pending == -1 else self.gl_compare_pending) and self.gl_catches
-                                    and i not in self.gl_missed_injection)
+                    left = self.gl_not_run_armings.get(i, 0)
+                    if left:
+                        self.gl_not_run_armings[i] = left - 1
+                    if self.gl_not_run or i in self.gl_not_run_passes or left:
+                        results.append({"pass": i, "label": label, "ran": False, "identical": False,
+                                        "note": "not run: did not run in the armed frames", "attachments": []})
+                        continue
+                    # as the viewer does: while the injection is set, the first attachment of every pass the arming
+                    # compares gets the flipped bit (the proofs arm one pass at a time)
+                    injected = bool(inject and self.gl_catches and i not in self.gl_missed_injection)
                     other = self.gl_diff_pass == label
                     distinct = 1 if (self.gl_empty_gbuffer and i == 1) else 50
                     first = "color" if i == 14 else "color0"
@@ -618,24 +653,41 @@ class FakeViewer:
                     elif other:
                         atts[0]["mismatched_pixels"] = 1
                     results.append({"pass": i, "label": label, "ran": True, "identical": not (injected or other), "attachments": atts})
+                    if i == 13:
+                        results[-1]["view"] = "probe face"
                 self.gl_compare_results = results
                 self.gl_serial += 1
                 self.gl_compare_pending = 0
                 self.settings["RenderGLSubmitCompare"] = ("S32", 0)
             self._reply(d, {"armed": 0, "pending": 0, "frame": 1, "arm_serial": self.gl_serial, "results": self.gl_compare_results})
         elif op == "selfBench":
-            self._reply(d, {"iterations": d.get("iterations"), "hooks_per_draw": 20, "ns_per_draw_not_collecting": 9.0,
+            self._reply(d, {"iterations": d.get("iterations"), "hooks_per_draw": 24, "ns_per_draw_not_collecting": 9.0,
                             "ns_per_draw_collecting": 80.0, "ns_per_hook_not_collecting": 0.45, "ns_per_hook_collecting": 4.0,
-                            "ns_per_scope_cpu_only": 400.0, "ns_per_scope_with_gpu_timers": 900.0})
+                            "ns_per_scope_cpu_only": 400.0, "ns_per_scope_with_gpu_timers": 900.0, "census_faces_sampled": 1024,
+                            "ns_per_census_record": 180.0, "ns_per_census_bake_timer": 45.0})
+        elif op == "censusRecord":
+            self.gl_census_recording = bool(d.get("on"))
+            self.gl_census_records.append(self.gl_census_recording)
+            self._reply(d, {"recording": self.gl_census_recording, "groups_rebuilt": 120 if self.gl_census_recording else 0})
         elif op == "census":
             import json  # noqa: PLC0415
             self.gl_census_paths.append(d.get("path"))
-            doc = {"schema": 1, "kind": "resident_census", "items": 900, "items_without_record": 0, "faces": 1500,
-                   "instancing": {"min_vertices": 64, "baked_bytes": 40.0e6, "unique_bytes": 10.0e6, "ratio": 4.0}}
+            self.gl_census_records.append("census")
+            missing = 0 if self.gl_census_recording else 900
+            small = {"faces": 400, "vertices": 9000, "keys": 50, "baked_bytes": 500000, "unique_bytes": 80000, "baked_vertex_bytes": 400000,
+                     "unique_vertex_bytes": 60000, "repeated_faces": 380, "repeated_vertex_bytes": 390000, "bake_ms": 3.0,
+                     "repeat_bake_ms": 2.5, "keys_by_copies": [10, 10, 10, 10, 5, 3, 2, 0]}
+            doc = {"schema": 2, "kind": "resident_census", "recording": self.gl_census_recording, "items": 900,
+                   "items_without_record": missing, "faces": 1500, "vertices": 600000, "bytes": 52.0e6, "vertex_bytes": 4.0e6,
+                   "index_bytes": 12.0e6, "bake_ms": 40.0, "by_reason": {"eligible": {"faces": 1200, "vertices": 500000}},
+                   "eligible_by_size": {"under_64": small},
+                   "instancing": {"min_vertices": 64, "baked_bytes": 40.0e6, "unique_bytes": 10.0e6, "ratio": 4.0},
+                   "rigged_sharing": {"faces": 100, "keys": 20, "bytes": 3.0e6, "unique_bytes": 1.0e6}}
             pathlib.Path(d["path"]).parent.mkdir(parents=True, exist_ok=True)
             pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
-            self._reply(d, {"path": d["path"], "faces": 1500, "items_without_record": 0, "instancing_baked_bytes": 40.0e6,
-                            "instancing_unique_bytes": 10.0e6, "instancing_ratio": 4.0})
+            self._reply(d, {"path": d["path"], "recording": self.gl_census_recording, "faces": 1500, "items": 900,
+                            "items_without_record": missing, "instancing_baked_bytes": 40.0e6, "instancing_unique_bytes": 10.0e6,
+                            "instancing_ratio": 4.0})
         elif op == "profileFrame":
             if self.logs_dir:
                 p = pathlib.Path(self.logs_dir) / "profile.vfake.json"

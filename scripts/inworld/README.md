@@ -303,11 +303,15 @@ mirror if there is one, and leave the viewer alone (about 10 minutes). The tier 
 
 It proves the identical-image check on the G-buffer (1), a probe face (13), the HUD (14) and an impostor (15): one flipped bit
 must be caught in each that ran; a pass that did not run in its 120 armed frames (no HUD worn, no impostor regenerated) is
-recorded as not proven, with a warning. Then, for `still` (sun shadows, all shadows, few non-impostors, mirrors on) and
-`moving` (turning at 10 deg/s; sun, all): the frame rate with nothing collecting, a timed window (`window_<run>.json`), every
-compare armed for up to 120 frames (`compare_<run>.json`), a census window (`census_window_<run>.json`) and the resident
-copy census (`census_resident_<run>.json`). `perf.json` has, per run, the census files and the resident headline (faces, the
-instancing ratio of faces of 64 vertices and more), and `proofs` the proof of each pass.
+recorded as not proven, with a warning, and tried again after each run. Then, for `still` (sun shadows, all shadows, few
+non-impostors, mirrors on) and `moving` (turning at 10 deg/s; sun, all): the frame rate with nothing collecting, a timed window
+(`window_<run>.json`), every compare armed for up to 120 frames (`compare_<run>.json`; a pass that did not run, or gave no
+result, is listed as not run), then the census records switched on (`GLSubmitStats.censusRecord`: every draw item rebuilt with
+its record, 30 frames to settle), a census window (`census_window_<run>.json`), the resident copy census
+(`census_resident_<run>.json`) and the records off again. `perf.json` has, per run, the census files and the resident headline
+(faces, draw items without a record, the instancing ratio of faces of 64 vertices and more), `proofs` the proof of each pass,
+and `gate` G4-0b's gate: 13, 14 and 15 proven and IDENTICAL in at least one run (`compare.require_passes`). A gate not met fails
+the run (exit 4) with the reason in the log, `perf.json` and `report.txt`.
 
 # Sorted alpha against stochastic in a crowd (`alpha_crowd.json`)
 

@@ -24,7 +24,8 @@ TOTAL_COLUMNS = [
     ("iboBinds", "ibo"), ("shaderBinds", "shader"), ("texBindFast", "texFast"), ("texBindFastRedundant", "texRed"),
     ("texGLBind", "glBindTex"), ("uniformGL", "uni gl"), ("uniformBytes", "uni B"), ("paletteUploads", "palette"),
     ("paletteDistinct", "pal dist"), ("mdvSyncs", "mdv sync"), ("bufSubData", "bufSub"), ("stateToggles", "state"),
-    ("occBlocking", "occ blk"), ("runs", "runs"), ("mergeableDraws", "mergeable"), ("cpu_ms", "cpu ms"), ("gpu_ms", "gpu ms"),
+    ("occBlocking", "occ blk"), ("runs", "runs"), ("mergeableDraws", "mergeable"), ("runsNoUniform", "runs noU"),
+    ("mergeableDrawsNoUniform", "mergeable noU"), ("cpu_ms", "cpu ms"), ("gpu_ms", "gpu ms"),
 ]
 
 
@@ -81,6 +82,9 @@ def ratios(t):
     if runs:
         r.append(("mean mergeable run length (draws per run)", d / runs))
         r.append(("share of draws that could join the previous draw", num(t.get("mergeableDraws")) / d))
+    runs_nu = num(t.get("runsNoUniform"))
+    if runs_nu:
+        r.append(("... with uniforms from per-draw records (G6r-0)", d / runs_nu))
     return r
 
 
@@ -96,6 +100,9 @@ def report_preset(pid, entry):
     hist = t.get("run_hist")
     if hist:
         lines.append("  mergeable run lengths (1, 2, 3-4, 5-8, 9-16, 17+ draws): " + ", ".join(fmt(h) for h in hist))
+    hist = t.get("run_hist_no_uniform")
+    if hist:
+        lines.append("  ... with uniforms from per-draw records:                " + ", ".join(fmt(h) for h in hist))
     lines.append("")
     views = w.get("views", [])
     lines.append("views (counters exclusive, times inclusive):")
@@ -107,8 +114,9 @@ def report_preset(pid, entry):
     top = sorted(passes, key=lambda p: -num(p.get("gpu_ms")) if p.get("gpu_ms") is not None else -num(p.get("cpu_ms")))[:25]
     lines.append("passes by GPU ms (CPU ms if no GPU time), top %d of %d:" % (len(top), len(passes)))
     lines.append(table([[p.get("view"), p.get("pass"), fmt(p.get("calls")), fmt(p.get("draws")), fmt(p.get("cpu_ms")),
-                         fmt(p.get("gpu_ms")), fmt(p.get("vbChanges")), fmt(p.get("uniformGL")), fmt(p.get("runs"))] for p in top],
-                       ["view", "pass", "calls", "draws", "cpu ms", "gpu ms", "vbo chg", "uni gl", "runs"]))
+                         fmt(p.get("gpu_ms")), fmt(p.get("vbChanges")), fmt(p.get("uniformGL")), fmt(p.get("runs")),
+                         fmt(p.get("runsNoUniform"))] for p in top],
+                       ["view", "pass", "calls", "draws", "cpu ms", "gpu ms", "vbo chg", "uni gl", "runs", "runs noU"]))
     return lines
 
 
@@ -122,13 +130,32 @@ def read_json(path):
         return None
 
 
+def long_run_vertices(census, size):
+    """Vertices drawn in runs of one key of 17 copies or more (buckets 17-32, 33-64, 65+) of one size class; None for a census
+    from before run_vertices."""
+    if "run_vertices" not in census:
+        return None
+    return sum(num(v) for v in ((census.get("run_vertices") or {}).get(size) or [])[5:])
+
+
+def eligible_vertices(census):
+    return num(((census.get("by_reason") or {}).get("eligible") or {}).get("vertices"))
+
+
+def pct(part, whole):
+    return fmt(100.0 * part / whole) if whole and part is not None else "-"
+
+
 def report_census(run_dir, idx):
-    """The copy census (G5b-0, X1-0): per run, the resident census of the scene and the census window's per-frame totals."""
+    """The copy census (G5b-0, X1-0): per run, the resident census of the scene, the census window's per-frame totals, and
+    N-SF1's long runs per pass."""
     runs = [(pid, info["census"]) for pid, info in (idx or {}).get("presets", {}).items() if info.get("census")]
     if not runs or run_dir is None:
         return []
     lines = ["=" * 100, "copy census (doc/gl/instrumentation.md, 'The copy census'); MB = 10^6 bytes"]
-    res_rows, win_rows = [], []
+    res_rows, win_rows, nsf1_rows = [], [], []
+    bench = (idx or {}).get("hook_bench") or {}
+    per_face_ns = num(bench.get("ns_per_census_record")) + num(bench.get("ns_per_census_bake_timer"))
     for pid, c in runs:
         res = read_json(run_dir / c["resident_file"]) if c.get("resident_file") else None
         if res:
@@ -136,55 +163,114 @@ def report_census(run_dir, idx):
             eligible = num(((res.get("by_reason") or {}).get("eligible") or {}).get("faces"))
             sizes = res.get("eligible_by_size") or {}
             small = sizes.get("under_64") or {}
-            all_bytes = num(res.get("bytes"))
-            small_repeat = num(small.get("baked_bytes")) - num(small.get("unique_bytes"))
+            all_vb = num(res.get("vertex_bytes"))
+            has_vb = "vertex_bytes" in res          # schema 2: vertex bytes apart from index bytes
             inst = res.get("instancing") or {}
             rig = res.get("rigged_sharing") or {}
-            res_rows.append([pid, fmt(faces), fmt(100.0 * eligible / faces) if faces else "-",
+            res_rows.append([pid, fmt(faces), pct(eligible, faces), fmt(res.get("items_without_record")),
                              fmt(num(inst.get("baked_bytes")) / 1.0e6), fmt(num(inst.get("unique_bytes")) / 1.0e6), fmt(inst.get("ratio")),
-                             fmt(100.0 * small_repeat / all_bytes) if all_bytes else "-", fmt(small.get("repeat_bake_ms")),
+                             pct(num(small.get("repeated_vertex_bytes")), all_vb) if has_vb else "-",
+                             pct(num(small.get("baked_vertex_bytes")) - num(small.get("unique_vertex_bytes")), all_vb) if has_vb else "-",
+                             fmt(small.get("repeat_bake_ms")),
                              fmt(num(rig.get("bytes")) / 1.0e6), fmt(num(rig.get("unique_bytes")) / 1.0e6)])
         win = read_json(run_dir / c["window_file"]) if c.get("window_file") else None
         if win:
             t = win.get("totals") or {}
             cs = t.get("census") or {}
-            long_runs = sum(num(h) for s in CENSUS_SIZES[:3] for h in ((cs.get("run_hist") or {}).get(s) or [])[5:])
+            ev = eligible_vertices(cs)
             win_rows.append([pid, fmt(cs.get("faces")), fmt(cs.get("instanced_items")), fmt(cs.get("mixed_items")),
                              fmt(cs.get("p0_extra_calls")), fmt(cs.get("p0_switches")), fmt(cs.get("p1_lost_vertices")),
-                             fmt(long_runs), fmt(t.get("runs")), fmt(t.get("runsNoUniform")), fmt(t.get("stateKeysDistinct"))])
+                             pct(long_run_vertices(cs, "64_255"), ev), pct(long_run_vertices(cs, "256_575"), ev),
+                             pct(long_run_vertices(cs, "under_64"), ev), fmt(t.get("runs")), fmt(t.get("runsNoUniform")),
+                             fmt(t.get("stateKeysDistinct")), fmt(t.get("censusFaces")),
+                             fmt(num(t.get("censusFaces")) * per_face_ns / 1.0e6) if per_face_ns else "-"])
+            # N-SF1 per pass: the share of a pass's eligible vertices drawn in runs of 17+ copies, by size class
+            passes = []
+            for ps in win.get("passes") or []:
+                pc = ps.get("census") or {}
+                pev = eligible_vertices(pc)
+                if not pev:
+                    continue
+                a, b, u = (long_run_vertices(pc, k) for k in ("64_255", "256_575", "under_64"))
+                if a is None:
+                    continue
+                passes.append((max(a, b) / pev, [pid, ps.get("view"), ps.get("pass"), fmt(pev), pct(a, pev), pct(b, pev), pct(u, pev)]))
+            nsf1_rows += [row for _, row in sorted(passes, key=lambda e: -e[0])[:6]]
     if res_rows:
-        lines.append("resident (each face once): eligible share of faces; instancing = eligible faces of 64 vertices and more, baked "
-                     "(every copy) against unique (one per key); small repeated = baked minus unique bytes of eligible faces under "
-                     "64 vertices, as a share of all baked bytes (X1-P2 asks for 10 %), and the bake of their copies past the first "
-                     "(X1-P2 asks for 20 ms per teleport); rigged sharing = rigged, non-blended faces")
-        lines.append(table(res_rows, ["run", "faces", "eligible %", "inst MB", "unique MB", "ratio", "small rep %", "small rep ms",
-                                      "rigged MB", "rigged uniq MB"]))
+        lines.append("resident (each face once): eligible share of faces; draw items without a record (not rebuilt since the "
+                     "records were switched on: 0 expected); instancing = eligible faces of 64 vertices and more, baked (every "
+                     "copy) against unique (one per key); for eligible faces under 64 vertices (X1-P2's trigger: 10 % of baked "
+                     "vertex bytes, or 20 ms of bake per teleport), small rep vb = the vertex bytes of keys with 2+ copies (every "
+                     "copy), small saved vb = what one copy per key would save (baked minus unique), both as a share of all "
+                     "baked vertex bytes, and the bake of their copies past the first; rigged sharing = rigged, non-blended faces")
+        lines.append(table(res_rows, ["run", "faces", "eligible %", "no record", "inst MB", "unique MB", "ratio", "small rep vb %",
+                                      "small saved vb %", "small rep ms", "rigged MB", "rigged uniq MB"]))
         lines.append("")
     if win_rows:
         lines.append("census window, per frame: P0 = per face (extra calls; baked/instanced switches in list order), P1 = per item "
-                     "(lost: instanced vertices of mixed items); long runs = runs of one key of 17+ copies under 576 vertices "
-                     "(N-SF1's replicas); runs against runsNoUniform (G6r-0); state keys (the bucket count)")
-        lines.append(table(win_rows, ["run", "faces", "inst items", "mixed", "P0 calls", "P0 switch", "P1 lost v", "long runs",
-                                      "runs", "runsNoUni", "state keys"]))
+                     "(lost: instanced vertices of mixed items); long = vertices in runs of one key of 17+ copies, as a share of "
+                     "the eligible vertices drawn, by size class (64-255 and 256-575 are N-SF1's; under 64 stays baked, X1-P2's "
+                     "remedy at most); runs against runsNoUniform (G6r-0); state keys (the bucket count); census faces = "
+                     "records made, and their cost (selfBench's record and bake timer per face; census windows only)")
+        lines.append(table(win_rows, ["run", "faces", "inst items", "mixed", "P0 calls", "P0 switch", "P1 lost v", "long 64-255 %",
+                                      "long 256-575 %", "long <64 %", "runs", "runsNoUni", "state keys", "census faces",
+                                      "census ms"]))
+        lines.append("")
+    if nsf1_rows:
+        lines.append("N-SF1 per pass (top 6 per run by the larger share): vertices in runs of 17+ copies as a share of the pass's "
+                     "eligible vertices; the replica rule is built only at a measurable share (research audit.md 2.6)")
+        lines.append(table(nsf1_rows, ["run", "view", "pass", "eligible v", "64-255 %", "256-575 %", "under 64 %"]))
     return lines
 
 
+def compare_label(r):
+    label = str(r.get("label", r.get("pass")))
+    return "%s (%s)" % (label, r["view"]) if r.get("view") else label
+
+
 def report_compare(idx):
+    """The identical-image check: the proofs (every pass proven or why not), the gate, every result (a pass that did not
+    run or gave no result is listed as not run, never left out) and the run's warnings."""
     if not idx:
         return []
     lines = ["=" * 100, "identical-image check"]
     proof = idx.get("proof")
     if proof is not None:
         lines.append("  proof (one bit flipped in the second G-buffer readback): %s" % ("CAUGHT" if proof.get("ok") else "NOT CAUGHT, the check is not trustworthy"))
+    for pid, pr in sorted((idx.get("proofs") or {}).items(), key=lambda e: int(e[0])):
+        if pid == "1":
+            continue
+        where = " (%s)" % pr["view"] if pr.get("view") else ""
+        tries = int(pr.get("tries", 1))
+        if pr.get("ran"):
+            state = "CAUGHT" if pr.get("ok") else "NOT CAUGHT: %s" % pr.get("why")
+            extra = " (in %s, try %d)" % (pr.get("at"), tries) if pr.get("at") not in (None, "start") else ""
+        else:
+            state = "NOT PROVEN: %s" % pr.get("why")
+            extra = " (%d tries)" % tries if tries > 1 else ""
+        lines.append("  proof pass %-3s%s: %s%s" % (pid, where, state, extra))
+    gate = idx.get("gate")
+    if gate:
+        lines.append("  gate (compares %s proven and IDENTICAL): %s" % (", ".join(str(p) for p in gate.get("passes") or []),
+                                                                         "MET" if gate.get("met") else "NOT MET"))
+        for w in gate.get("why") or []:
+            lines.append("      %s" % w)
     for pid, info in idx.get("presets", {}).items():
         for p, results in (info.get("compare") or {}).items():
             for r in results:
-                state = "IDENTICAL" if r.get("identical") else ("not run: %s" % r.get("note", "") if not r.get("ran") else "DIFFERENT")
-                lines.append("  %-10s pass %-3s %-16s %s" % (pid, p, r.get("label"), state))
+                note = str(r.get("note", ""))
+                state = "IDENTICAL" if r.get("identical") else (
+                    (note if note.startswith("not ") else "not run: %s" % note) if not r.get("ran") else "DIFFERENT")
+                lines.append("  %-10s pass %-3s %-16s %s" % (pid, p, compare_label(r), state))
                 for a in r.get("attachments", []):
                     if a.get("mismatched_pixels"):
                         lines.append("      %s: %s of %s pixels, max diff %s, first at (%s, %s)" % (
                             a.get("name"), a.get("mismatched_pixels"), a.get("pixels"), a.get("max_diff"), a.get("first_x"), a.get("first_y")))
+    warnings = idx.get("warnings") or []
+    if warnings:
+        lines.append("")
+        lines.append("warnings of the run:")
+        lines += ["  " + w for w in warnings]
     return lines
 
 
