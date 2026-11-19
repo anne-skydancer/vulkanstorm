@@ -1791,7 +1791,7 @@ void LLVertexBuffer::setBuffer()
         "Attribute mask mismatch! mTypeMask should be a superset of data_mask.  data_mask: 0x"
                 << std::hex << data_mask << " mTypeMask: 0x" << mTypeMask << " Missing: 0x" << (data_mask & ~mTypeMask) <<  std::dec);
 
-    VKS_GLSTAT_VBO(mGLBuffer);
+    VKS_GLSTAT_VBO(mGLBuffer, mTypeMask);
 
     if (sGLRenderBuffer != mGLBuffer)
     {

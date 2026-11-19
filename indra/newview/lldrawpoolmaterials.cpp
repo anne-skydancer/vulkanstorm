@@ -32,6 +32,7 @@
 #include "pipeline.h"
 #include "llglcommonfunc.h"
 #include "llvoavatar.h"
+#include "llglsubmitstats.h"
 
 LLDrawPoolMaterials::LLDrawPoolMaterials()
 :  LLRenderPass(LLDrawPool::POOL_MATERIALS)
@@ -277,6 +278,7 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
         }*/
 
         params.mVertexBuffer->setBuffer();
+        VKS_GLSTAT_CENSUS_DRAW(params);
         params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
         if (tex_setup)

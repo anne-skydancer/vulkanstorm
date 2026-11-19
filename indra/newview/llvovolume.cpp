@@ -96,6 +96,7 @@
 #include "llgltfmateriallist.h"
 #include "gltfscenemanager.h"
 #include "gltf/asset.h" // <Vulkanstorm/> Asset::releaseGL()
+#include "llglsubmitstatsapi.h" // <Vulkanstorm/> the copy census of the OpenGL instrumentation (development builds)
 // [RLVa:KB] - Checked: RLVa-2.0.0
 #include "rlvactions.h"
 #include "rlvlocks.h"
@@ -6001,6 +6002,8 @@ void LLVolumeGeometryManager::registerFace(LLSpatialGroup* group, LLFace* facep,
         draw_info->validate();
     }
 
+    VKS_GLSTAT_CENSUS_FACE(*info, facep, type); // <Vulkanstorm/> the face as a copy would see it (G5b-0, X1-0)
+
     llassert(info->mGLTFMaterial == nullptr || (info->mVertexBuffer->getTypeMask() & LLVertexBuffer::MAP_TANGENT) != 0);
     llassert(type != LLPipeline::RENDER_TYPE_PASS_GLTF_PBR || info->mGLTFMaterial != nullptr);
     llassert(type != LLPipeline::RENDER_TYPE_PASS_GLTF_PBR_RIGGED || info->mGLTFMaterial != nullptr);
@@ -7058,6 +7061,7 @@ U32 LLVolumeGeometryManager::genDrawInfo(LLSpatialGroup* group, U32 mask, LLFace
                 facep->updateRebuildFlags();
 
                 { //copy face geometry into vertex buffer
+                    VKS_GLSTAT_CENSUS_BAKE(facep); // <Vulkanstorm/> the census's bake time of this face
                     LLDrawable* drawablep = facep->getDrawable();
                     LLVOVolume* vobj = drawablep->getVOVolume();
                     LLVolume* volume = vobj->getVolume();

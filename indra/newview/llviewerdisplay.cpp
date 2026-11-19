@@ -1332,7 +1332,7 @@ void display_cube_face()
 {
     LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Render Cube Face");
     LL_PROFILE_GPU_ZONE("display cube face");
-    VKS_GLSTAT_VIEW("probe face");
+    VKS_GLSTAT_VIEW(gPipeline.mHeroProbeManager.isMirrorPass() ? "hero face" : "probe face");
 
     llassert(!gSnapshot);
     llassert(!gTeleportDisplay);
@@ -1414,6 +1414,11 @@ void display_cube_face()
     gGL.setColorMask(true, true);
 
     gPipeline.mRT->deferredScreen.bindTarget();
+    VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_PROBE_FACE, &gPipeline.mRT->deferredScreen, false)
+    if (VKS_GLCMP_REPLAY())
+    {
+        gGL.setColorMask(true, true); // the first render left the alpha write off
+    }
     if (gUseWireframe)
     {
         glClearColor(0.5f, 0.5f, 0.5f, 1.f);
@@ -1427,6 +1432,7 @@ void display_cube_face()
     LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
 
     gPipeline.renderGeomDeferred(*LLViewerCamera::getInstance());
+    VKS_GLCMP_END()
 
     gPipeline.mRT->deferredScreen.flush();
 
@@ -1536,7 +1542,9 @@ void render_hud_attachments()
         {
             VKS_GLSTAT_VIEW("hud");
             VKS_GLSTAT_PASS("geom post-deferred");
+            VKS_GLCMP_BEGIN_BACK_BUFFER(LLGLSubmitCompare::PASS_HUD, true, &LLGLSubmitCompare::tailNotRepeatable)
             gPipeline.renderGeomPostDeferred(hud_cam);
+            VKS_GLCMP_END()
         }
 
         LLSpatialGroup::sNoDelete = false;

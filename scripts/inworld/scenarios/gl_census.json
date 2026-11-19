@@ -1,0 +1,150 @@
+{
+  "name": "gl_census",
+  "description": "Phase-2b step 1 (doc/gl/instrumentation.md, 'The copy census' and 'Compares 13-15'): one owner session per place. The owner logs in, stands where the scene is worth measuring (Rooftops in a crowd; then home, or a dense-mesh place) and leaves the viewer alone. The tier is the feature table's Ultra list, as in mc1b. First the proofs: one flipped bit must be caught in the G-buffer (1), a probe face (13), the HUD (14, needs a worn HUD) and an impostor (15, needs an impostor regenerated within 120 frames); a pass that did not run is recorded as not proven and tried again after each run. The gate (G4-0b): 13, 14 and 15 proven and IDENTICAL in at least one run, or the run fails with what is missing. Then still (the view as it is): sun shadows, all shadows, few non-impostors (most avatars as impostors) and mirrors on; moving (turning at 10 deg/s): sun and all. Every run: the frame rate with nothing collecting, a timed window of 120 frames (counters per view and pass with the run-tracker extensions, CPU and GPU ms, window_<run>.json), the identical-image check on every pass, armed for up to 120 frames so the probe face, the HUD and an impostor can run (compare_<run>.json), the census records switched on (every draw item rebuilt with its record, 30 frames to settle), a census window of 120 frames (the copy census and the draw-state keys, census_window_<run>.json) and the resident copy census of the scene (census_resident_<run>.json), then the records off again.",
+  "settle": {
+    "post_login_s": 30.0,
+    "after_camera_s": 4.0,
+    "after_setting_s": 3.0,
+    "window_timeout_s": 240.0,
+    "compare_wait_s": 15.0,
+    "warmup_min_s": 10.0,
+    "warmup_max_s": 45.0
+  },
+  "window": {
+    "frames": 120,
+    "gpu": true
+  },
+  "settings": {
+    "RenderVSyncEnable": false,
+    "FSLimitFramerate": false,
+    "AFKTimeout": 0,
+    "BackgroundYieldTime": 0
+  },
+  "soft_settings": {
+    "RenderAnisotropic": true,
+    "RenderAvatarLODFactor": 1.0,
+    "RenderAvatarMaxComplexity": 350000,
+    "RenderAvatarMaxNonImpostors": 16,
+    "RenderAvatarPhysicsLODFactor": 1.0,
+    "RenderCASSharpness": 0.4,
+    "RenderDeferredSSAO": true,
+    "RenderExposure": 1.0,
+    "RenderFSAASamples": 3,
+    "RenderFSAAType": 2,
+    "RenderFarClip": 256.0,
+    "RenderFlexTimeFactor": 1.0,
+    "RenderGlowResolutionPow": 9,
+    "RenderHeroProbeConservativeUpdateMultiplier": 4,
+    "RenderHeroProbeDistance": 16.0,
+    "RenderHeroProbeResolution": 2048,
+    "RenderHeroProbeUpdateRate": 2,
+    "RenderLocalLightCount": 8192,
+    "RenderMaxPartCount": 8192,
+    "RenderMaxTextureResolution": 2048,
+    "RenderMirrors": false,
+    "RenderReflectionProbeCount": 256,
+    "RenderReflectionProbeDetail": 1,
+    "RenderReflectionProbeLevel": 3,
+    "RenderReflectionsEnabled": true,
+    "RenderScreenSpaceReflections": false,
+    "RenderShadowDetail": 2,
+    "RenderShadowDistance": 192.0,
+    "RenderShadowMethod": 2,
+    "RenderTerrainDetail": 1,
+    "RenderTerrainLODFactor": 2.0,
+    "RenderTerrainPBRDetail": 0,
+    "RenderTerrainPBRPlanarSampleCount": 3,
+    "RenderTonemapMix": 0.7,
+    "RenderTonemapType": 1,
+    "RenderTransparentWater": true,
+    "RenderTreeLODFactor": 1.0,
+    "RenderVolumeLODFactor": 3.0,
+    "WLSkyDetail": 128,
+    "WindLightUseAtmosShaders": true
+  },
+  "presets": [
+    {
+      "id": "still",
+      "camera": null,
+      "variants": [
+        "sun",
+        "all",
+        "impostors",
+        "mirrors"
+      ]
+    },
+    {
+      "id": "moving",
+      "camera": {
+        "az_deg": 0.0,
+        "pitch_deg": 0.0
+      },
+      "motion": {
+        "orbit_deg_per_s": 10
+      },
+      "variants": [
+        "sun",
+        "all"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "sun",
+      "settings": {
+        "RenderShadowDetail": 1
+      }
+    },
+    {
+      "id": "all",
+      "settings": {
+        "RenderShadowDetail": 2
+      }
+    },
+    {
+      "id": "impostors",
+      "settings": {
+        "RenderShadowDetail": 1,
+        "RenderAvatarMaxNonImpostors": 3
+      }
+    },
+    {
+      "id": "mirrors",
+      "settings": {
+        "RenderShadowDetail": 1,
+        "RenderMirrors": true
+      }
+    }
+  ],
+  "profile_frame": false,
+  "overhead": {
+    "probe_s": 5.0,
+    "probe_repeats": 1,
+    "bench_iterations": 2000000
+  },
+  "compare": {
+    "enabled": true,
+    "passes": [
+      -1
+    ],
+    "prove_with_injection": true,
+    "prove_passes": [
+      1,
+      13,
+      14,
+      15
+    ],
+    "frames": 120,
+    "require_passes": [
+      13,
+      14,
+      15
+    ]
+  },
+  "census": {
+    "enabled": true,
+    "frames": 120,
+    "resident": true,
+    "settle_frames": 30
+  }
+}

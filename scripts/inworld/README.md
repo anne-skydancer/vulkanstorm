@@ -294,6 +294,25 @@ By hand, without the script (the same API from any LEAP client, or the debug set
 every frame; `RenderGLSubmitCompare` set to a pass (-1 all) for one frame logs `GLSubmitCompare` lines and answers
 `GLSubmitStats.compareResults`; Develop > Render > Frame Profile writes the profile with the `submit` section.
 
+## The census session (`gl_census.json`)
+
+Phase 2b's step 1 (`doc/gl/instrumentation.md`, "The census session"): the same launch line with
+`--scenario $scripts/scenarios/gl_census.json` and `--out .../.captures/glcensus-$stamp`, on a devel build with
+`-DVKS_GL_STATS=ON`. Log in, wear a HUD, stand in the crowd (Rooftops; then once more at home or a dense-mesh place), near a
+mirror if there is one, and leave the viewer alone (about 10 minutes). The tier is Ultra, as in mc1b.
+
+It proves the identical-image check on the G-buffer (1), a probe face (13), the HUD (14) and an impostor (15): one flipped bit
+must be caught in each that ran; a pass that did not run in its 120 armed frames (no HUD worn, no impostor regenerated) is
+recorded as not proven, with a warning, and tried again after each run. Then, for `still` (sun shadows, all shadows, few
+non-impostors, mirrors on) and `moving` (turning at 10 deg/s; sun, all): the frame rate with nothing collecting, a timed window
+(`window_<run>.json`), every compare armed for up to 120 frames (`compare_<run>.json`; a pass that did not run, or gave no
+result, is listed as not run), then the census records switched on (`GLSubmitStats.censusRecord`: every draw item rebuilt with
+its record, 30 frames to settle), a census window (`census_window_<run>.json`), the resident copy census
+(`census_resident_<run>.json`) and the records off again. `perf.json` has, per run, the census files and the resident headline
+(faces, draw items without a record, the instancing ratio of faces of 64 vertices and more), `proofs` the proof of each pass,
+and `gate` G4-0b's gate: 13, 14 and 15 proven and IDENTICAL in at least one run (`compare.require_passes`). A gate not met fails
+the run (exit 4) with the reason in the log, `perf.json` and `report.txt`.
+
 # Sorted alpha against stochastic in a crowd (`alpha_crowd.json`)
 
 Stage 0 of the legacy-alpha work: does `RenderAlphaSortMethod=1` (stochastic, S=8) cost more than `0` (sorted) when many avatars

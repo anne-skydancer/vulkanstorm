@@ -50,6 +50,9 @@
 //</FS:Beq>
 #include <queue>
 #include <unordered_map>
+#if VKS_GL_STATS
+#include "llglsubmitstats.h" // <Vulkanstorm/> LLDrawInfo's copy census record (development builds)
+#endif
 
 #define SG_STATE_INHERIT_MASK (OCCLUDED)
 #define SG_INITIAL_STATE_MASK (static_cast<U32>(DIRTY) | static_cast<U32>(GEOM_DIRTY))
@@ -157,6 +160,12 @@ public:
     // face in the stochastic passes. The faces of a draw share one rank: registerFace breaks the batch
     // where the rank changes. Every draw of a face without a coincident earlier face has rank 0.
     U8 mStochasticRank = 0;
+
+#if VKS_GL_STATS
+    // <Vulkanstorm> development builds: the copy census's record of this draw's faces, in draw order (G5b-0, X1-0;
+    // LLGLSubmitStatsApi::censusFace, doc/gl/instrumentation.md)
+    std::vector<LLGLSubmitMath::CensusFace> mGLSubmitCensus;
+#endif
 
     struct CompareTexture
     {

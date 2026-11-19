@@ -47,6 +47,7 @@
 #include "llviewertexturelist.h"
 #include "pipeline.h"
 #include "llspatialpartition.h"
+#include "llglsubmitstats.h"
 #include "llviewershadermgr.h"
 #include "llmodel.h"
 
@@ -416,6 +417,7 @@ void LLDrawPoolBump::renderGroup(LLSpatialGroup* group, U32 type, bool texture =
         applyModelMatrix(params);
 
         params.mVertexBuffer->setBuffer();
+        VKS_GLSTAT_CENSUS_DRAW(params);
         params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
     }
 }
@@ -1069,6 +1071,7 @@ void LLRenderPass::pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_te
     }
 
     params.mVertexBuffer->setBuffer();
+    VKS_GLSTAT_CENSUS_DRAW(params);
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     if (tex_setup)

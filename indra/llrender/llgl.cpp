@@ -2575,7 +2575,7 @@ void LLGLState::setEnabled(S32 enabled)
     else if (enabled == ENABLED_STATE && sStateMap[mState] != GL_TRUE)
     {
         VKS_GLSTAT_INC(stateToggles);
-        VKS_GLSTAT_STATE_CHANGE();
+        VKS_GLSTAT_CAP_TOGGLE(mState);
         gGL.flush();
         glEnable(mState);
         sStateMap[mState] = GL_TRUE;
@@ -2583,7 +2583,7 @@ void LLGLState::setEnabled(S32 enabled)
     else if (enabled == DISABLED_STATE && sStateMap[mState] != GL_FALSE)
     {
         VKS_GLSTAT_INC(stateToggles);
-        VKS_GLSTAT_STATE_CHANGE();
+        VKS_GLSTAT_CAP_TOGGLE(mState);
         gGL.flush();
         glDisable(mState);
         sStateMap[mState] = GL_FALSE;
@@ -2614,7 +2614,7 @@ LLGLState::~LLGLState()
         if (mIsEnabled != mWasEnabled)
         {
             VKS_GLSTAT_INC(stateToggles);
-            VKS_GLSTAT_STATE_CHANGE();
+            VKS_GLSTAT_CAP_TOGGLE(mState);
             gGL.flush();
             if (mWasEnabled)
             {
