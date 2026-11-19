@@ -143,6 +143,9 @@ LLMotionController::LLMotionController()
       mIsSelf(false),
       mLastCountAfterPurge(0)
 {
+    // <Vulkanstorm/> a motion started before the first update reads the signature (activateMotionInstance passes it to
+    // onUpdate, where a keyframe constraint tests it): it was uninitialised memory until the first resetJointSignatures()
+    resetJointSignatures();
 }
 
 
