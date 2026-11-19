@@ -1047,12 +1047,15 @@ S32 LLVOCachePartition::cull(LLCamera &camera, bool do_occlusion)
         return 0;
     }
 
-    ((LLViewerOctreeGroup*)mOctree->getListener(0))->rebound();
-
+    // <Vulkanstorm> multi-core 5c-0: the camera test first. Only the world camera reads this tree, and its cull rebounds
+    // the root itself, so the other cameras no longer rebound a tree they do not read.
     if(LLViewerCamera::sCurCameraID != LLViewerCamera::CAMERA_WORLD)
     {
         return 0; //no need for those cameras.
     }
+
+    ((LLViewerOctreeGroup*)mOctree->getListener(0))->rebound();
+    // </Vulkanstorm>
 
     if(mCulledTime[LLViewerCamera::sCurCameraID] == LLViewerOctreeEntryData::getCurrentFrame())
     {

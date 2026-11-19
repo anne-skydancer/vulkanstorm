@@ -273,6 +273,16 @@ public:
 
     // Populate given LLCullResult with results of a frustum cull of the entire scene against the given LLCamera
     void updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments = false);
+    // <Vulkanstorm> multi-core 5c-1: two parts of updateCull, shared with updateCullSunCascades. updateCullBegin is what
+    // comes before the partitions (the pass count, the water clip plane on `camera`, `result` made current and cleared);
+    // cullsPartition is the rule for which of a region's partitions the pass culls.
+    void updateCullBegin(LLCamera& camera, LLCullResult& result);
+    bool cullsPartition(U32 i, LLSpatialPartition* part, bool hud_attachments);
+    // updateCull for the sun cascades that are not off, all at once: one cull job per cascade and partition on the frame
+    // job helpers, merged into each cascade's result in updateCull's order, so every list equals updateCull's. Main
+    // thread. Returns false, with nothing done, when the pass must be culled by updateCull instead.
+    bool updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* results, const bool* cascade_off, S32 cascade_count);
+    // </Vulkanstorm>
     void createObjects(F32 max_dtime);
     void createObject(LLViewerObject* vobj);
     void processPartitionQ();
@@ -292,6 +302,15 @@ public:
     void stateSort(LLSpatialBridge* bridge, LLCamera& camera, bool fov_changed = false);
     void stateSort(LLDrawable* drawablep, LLCamera& camera);
     void postSort(LLCamera& camera);
+    // <Vulkanstorm> multi-core 5c-2: the parts of postSort's "build render map" loop, and the build in chunks on the frame
+    // job helpers (the sun cascades 1 to 3 of generateSunCascadesStable). renderMapSkipsGroup is the loop's skip rule;
+    // renderMapRebuildsGroup is its rule for rebuilding a kept group before it is read; renderMapPushGroup is what the
+    // loop appends for one group, to `sink` (the cull result, or a chunk's fragment).
+    bool renderMapSkipsGroup(LLSpatialGroup* group);
+    bool renderMapRebuildsGroup(LLSpatialGroup* group);
+    template <typename SINK> void renderMapPushGroup(LLSpatialGroup* group, LLCamera& camera, SINK& sink);
+    void buildRenderMapJobs(LLCamera& camera);
+    // </Vulkanstorm>
 
     void forAllVisibleDrawables(void (*func)(LLDrawable*));
 
@@ -385,8 +404,43 @@ public:
 
     void renderHighlight(const LLViewerObject* obj, F32 fade);
 
-    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
-    void renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    // <Vulkanstorm/> multi-core 5c-1: culled_ahead = `result` already holds the pass's cull (updateCullSunCascades), so only the sort runs
+    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp, bool culled_ahead = false);
+    void renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp, bool culled_ahead);
+    // <Vulkanstorm> multi-core 5c-0 (D5): the two halves of a shadow render; only renderShadowImpl calls them
+    void shadowCullAndSort(LLCamera& camera, LLCullResult& result, bool culled_ahead);
+    void shadowSubmit(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    // </Vulkanstorm>
+#if VKS_FRAMEJOBS_COMPARE
+    // <Vulkanstorm> multi-core 5c, development only (not for vkstorm-release): the compare mode's list checks and the
+    // counters of the sun cascades' frame jobs, written as one "SunCascadeJobs:" log line a second with the debug setting
+    // RenderSunCascadeJobsStats. The counters are sums since the last line; the mismatch totals are for the session.
+    struct SunCascadeJobsStats
+    {
+        U32 passes = 0;          // sun passes of the main view (generateSunCascadesStable)
+        U32 jobs_passes = 0;     // those whose culls ran as frame jobs
+        U32 cull_items = 0;      // cull jobs: one per cascade and partition
+        U32 cull_groups = 0;     // groups those jobs found
+        U32 map_builds = 0;      // render maps built in chunks
+        U32 map_chunks = 0;      // their chunks
+        U32 culls_compared = 0;  // compare mode: cascades culled again on the main thread
+        U32 cull_mismatches = 0; // those whose lists differed
+        U32 maps_compared = 0;   // compare mode: render maps built again in the former loop
+        U32 map_mismatches = 0;  // those that differed
+        F64 cull_s = 0.0;        // main-thread time of the cascades' culls (either path; the compare mode's own time is left out)
+        F64 map_s = 0.0;         // main-thread time of the cascades' render-map builds (the same)
+    };
+    SunCascadeJobsStats mSunCascadeJobsStats;
+    U32 mSunCascadeCullMismatchTotal = 0;
+    U32 mSunCascadeMapMismatchTotal = 0;
+    // The lists a cull leaves (visible and drawable groups; the lists the sort fills must be empty in both) and the node
+    // counts. Logs the first difference of the first 20 mismatches, counts all of them, and returns true when equal.
+    bool compareSunCascadeCull(LLCullResult& jobs, LLCullResult& serial, S32 jobs_nodes, S32 serial_nodes, S32 cascade);
+    // The render map of every type and the blended groups' lists; as above.
+    bool compareSunCascadeRenderMap(LLCullResult& jobs, LLCullResult& serial, S32 cascade);
+    void reportSunCascadeJobs();
+    // </Vulkanstorm>
+#endif
     void renderSelectedFaces(const LLColor4& color);
     void renderHighlights();
     bool renderVignette(LLRenderTarget* src, LLRenderTarget* dst);
@@ -746,6 +800,23 @@ public:
     S32                      mMatrixOpCount;
     S32                      mTextureMatrixOps;
     S32                      mNumVisibleNodes;
+
+    // <Vulkanstorm> multi-core 5c: the sun cascades' frame jobs (generateSunCascadesStable). The lists keep their capacity
+    // from frame to frame and are freed with the pipeline; they hold raw pointers for the length of one sun pass only.
+    struct SunCascadeCullItem
+    {
+        LLSpatialPartition* mPartition;
+        S32                 mCascade;
+    };
+    std::vector<SunCascadeCullItem>                       mSunCascadeCullItems;     // one per cascade and partition, in updateCull's order
+    std::vector<LLCullJobs::CullFragment<LLSpatialGroup>> mSunCascadeCullFragments; // one per item
+    S32                      mSunCascadeCullNodes[4] = { 0, 0, 0, 0 };              // nodes the jobs counted, per cascade
+    S32                      mSunCascadePass = -1;    // the cascade generateSunCascadesStable is rendering, -1 outside
+    S32                      mSunCascadeCompare = 0;  // RenderSunCascadeJobsCompare for this sun pass (0 without the compare mode)
+    bool                     mRenderMapJobs = false;  // postSort builds the render map in chunks (set around a cascade's render)
+    std::vector<LLSpatialGroup*> mRenderMapGroups;    // the visible groups the build keeps, in their order
+    std::vector<LLCullJobs::RenderMapFragment<LLDrawInfo, LLSpatialGroup, LLRenderPass::NUM_RENDER_TYPES>> mRenderMapFragments; // one per chunk
+    // </Vulkanstorm>
 
     S32                      mDebugTextureUploadCost;
     S32                      mDebugSculptUploadCost;

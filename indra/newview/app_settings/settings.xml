@@ -13841,6 +13841,39 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>0</integer>
     </map>
+    <key>RenderSunCascadeJobs</key>
+    <map>
+      <key>Comment</key>
+      <string>Cull the sun shadow cascades together on the frame job helpers, ahead of the first cascade&apos;s render, and build the render maps of cascades 1 to 3 in chunks on them (multi-core). They are used only when frame job helpers run (4 fast cores or more, not in serial mode) or RenderSunCascadeJobsCompare is set. Off: each cascade is culled by the former cull and its render map built by the former loop on the main thread, inside its own render. The setting switches these two job paths only: the serial restructure that came with them (the cascade cameras built first, the shadow render split into cull-and-sort and submit) stays either way. The shadows are the same either way.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>RenderSunCascadeJobsCompare</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core debugging (5c): 1 = every frame, cull each sun cascade again on the main thread at its former place and build its render map again in the former loop, and count the lists that differ from the ones the frame jobs made (RenderSunCascadeJobsStats shows the counts; they must stay 0). 2 = the same with a deliberate fault in cascade 1&apos;s lists, to see the counts move (cascade 1 must be on: RenderShadowSplits 1 or more).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>RenderSunCascadeJobsStats</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core measuring (5c): write one SunCascadeJobs line a second to the log (the sun cascades&apos; cull and render-map times on the main thread, the cull jobs and their groups, and the compare mode&apos;s counts).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>RenderSunDynamicRange</key>
     <map>
       <key>Comment</key>

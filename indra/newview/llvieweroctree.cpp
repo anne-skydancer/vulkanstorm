@@ -512,11 +512,11 @@ void LLViewerOctreeGroup::unbound()
 //virtual
 void LLViewerOctreeGroup::rebound()
 {
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE;
     if (!isDirty())
     {
         return;
     }
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE; // <Vulkanstorm/> multi-core 5c-0: after the early return, so a clean node costs no zone
 
     if (mOctreeNode->getChildCount() == 1 && mOctreeNode->getElementCount() == 0)
     {
@@ -738,13 +738,20 @@ bool LLViewerOctreeGroup::isRecentlyVisible() const
 
 void LLViewerOctreeGroup::setVisible()
 {
-    mVisible[LLViewerCamera::sCurCameraID] = LLViewerOctreeEntryData::getCurrentFrame();
+    setVisibleFor(LLViewerCamera::sCurCameraID); // <Vulkanstorm/> multi-core 5c-1
+}
 
-    if(LLViewerCamera::sCurCameraID < LLViewerCamera::CAMERA_WATER0)
+// <Vulkanstorm> multi-core 5c-1: the body of setVisible(), for a given camera
+void LLViewerOctreeGroup::setVisibleFor(LLViewerCamera::eCameraID id)
+{
+    mVisible[id] = LLViewerOctreeEntryData::getCurrentFrame();
+
+    if(id < LLViewerCamera::CAMERA_WATER0)
     {
         mAnyVisible = LLViewerOctreeEntryData::getCurrentFrame();
     }
 }
+// </Vulkanstorm>
 
 void LLViewerOctreeGroup::checkStates()
 {
@@ -1318,7 +1325,7 @@ bool LLViewerOctreeCull::earlyFail(LLViewerOctreeGroup* group)
 //virtual
 void LLViewerOctreeCull::traverse(const OctreeNode* n)
 {
-    LL_PROFILE_ZONE_SCOPED;
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE; // <Vulkanstorm/> multi-core 5c-0: the per-node cull zones are in the OCTREE category
     LLViewerOctreeGroup* group = (LLViewerOctreeGroup*) n->getListener(0);
 
     if (earlyFail(group))

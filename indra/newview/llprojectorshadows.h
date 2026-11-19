@@ -123,7 +123,7 @@ public:
     // From LLPipeline::unlinkDrawable (a drawable is going away): its record and tile are dropped.
     void forget(const LLDrawable* drawable);
 
-    // From LLPipeline::renderShadowImpl, after the tile's cull and sort (LLPipeline::LOCAL_SHADOW_STATIC): the LOD pin. Every volume the
+    // From LLPipeline::shadowCullAndSort (the first half of renderShadowImpl), after the tile's cull and sort (LLPipeline::LOCAL_SHADOW_STATIC): the LOD pin. Every volume the
     // tile is about to draw, inside the light's volume, is held at full detail (a counter on the volume, one per tile).
     void pinCasters(LLCullResult& result);
 

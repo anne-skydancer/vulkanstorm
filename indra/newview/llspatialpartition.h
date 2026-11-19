@@ -53,6 +53,7 @@
 #if VKS_GL_STATS
 #include "llglsubmitstats.h" // <Vulkanstorm/> LLDrawInfo's copy census record (development builds)
 #endif
+#include "llculljobs.h" // <Vulkanstorm/> multi-core 5c
 
 #define SG_STATE_INHERIT_MASK (OCCLUDED)
 #define SG_INITIAL_STATE_MASK (static_cast<U32>(DIRTY) | static_cast<U32>(GEOM_DIRTY))
@@ -442,6 +443,15 @@ public:
     bool visibleObjectsInFrustum(LLCamera& camera);
     /*virtual*/ S32 cull(LLCamera &camera, bool do_occlusion=false); // Cull on arbitrary frustum
     S32 cull(LLCamera &camera, std::vector<LLDrawable *>* results, bool for_select); // Cull on arbitrary frustum
+    // <Vulkanstorm> multi-core 5c-1: cull(camera) of a shadow pass in two steps, for LLPipeline::updateCullSunCascades.
+    // cullShadowPrepare rebounds the root (main thread, before the batch; one call serves every cascade). cullShadowJob
+    // is the traversal with the shadow culler, for the camera `id`; it may run as a frame job beside the jobs of other
+    // cascades and partitions. It records the groups in `out` instead of pushing them into the pipeline's cull result,
+    // stamps them for `id`, and touches nothing else. Occlusion culling must be off (sUseOcclusion 0), as it is in every
+    // shadow pass.
+    void cullShadowPrepare();
+    void cullShadowJob(LLCamera& camera, LLViewerCamera::eCameraID id, LLCullJobs::CullFragment<LLSpatialGroup>& out);
+    // </Vulkanstorm>
 
     bool isVisible(const LLVector3& v);
     bool isHUDPartition() ;
@@ -568,6 +578,8 @@ public:
     void pushDrawable(LLDrawable* drawable);
     void pushBridge(LLSpatialBridge* bridge);
     void pushDrawInfo(U32 type, LLDrawInfo* draw_info);
+    // <Vulkanstorm/> multi-core 5c-2: pushDrawInfo(type, infos[i]) for i in [0, count), in one step
+    void appendDrawInfos(size_t type, LLDrawInfo* const* infos, size_t count);
 
     U32 getVisibleGroupsSize()      { return mVisibleGroupsSize; }
     U32 getAlphaGroupsSize()        { return mAlphaGroupsSize; }
