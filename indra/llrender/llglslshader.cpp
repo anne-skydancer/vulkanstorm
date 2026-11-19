@@ -1487,6 +1487,12 @@ bool LLGLSLShader::mapGeneratedUniforms()
         mBlockDirty = false;
     }
 
+    // like mapUniform(): every block member is reachable by name, reserved or not
+    for (const auto& m : members)
+    {
+        mUniformMap[LLStaticHashedString(m.first)] = (GLint) m.second.offset;
+    }
+
     for (U32 i = 0; i < LLShaderMgr::instance()->mReservedUniforms.size(); i++)
     {
         const std::string& name = LLShaderMgr::instance()->mReservedUniforms[i];
@@ -1494,7 +1500,6 @@ bool LLGLSLShader::mapGeneratedUniforms()
         if (member != members.end())
         {
             mUniform[i] = (GLint) member->second.offset;
-            mUniformMap[LLStaticHashedString(name)] = (GLint) member->second.offset;
             mTotalUniformSize += (S32) member->second.size;
             continue;
         }
@@ -2140,7 +2145,7 @@ GLint LLGLSLShader::getUniformLocation(const LLStaticHashedString& uniform)
         LLStaticStringTable<GLint>::iterator iter = mUniformMap.find(uniform);
         if (iter != mUniformMap.end())
         {
-            if (gDebugGL)
+            if (gDebugGL && !mGenerated) // a generated program's location is a block offset, not a GL location
             {
                 stop_glerror();
                 if (iter->second != glGetUniformLocation(mProgramObject, uniform.String().c_str()))

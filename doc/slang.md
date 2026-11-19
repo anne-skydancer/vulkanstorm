@@ -110,7 +110,7 @@ A generated program is bound the way slangc writes it; nothing is restored to lo
 
 ## The pilot (S2): the interface family
 
-`registered by interfaceStages()` in `llviewershadermgr.cpp` (`VKS_SLANG_PILOT=0` selects the hand-written GLSL for the A/B; both
+Programs are registered by `interfaceStages()` in `llviewershadermgr.cpp` (`VKS_SLANG_PILOT=0` selects the hand-written GLSL for the A/B; both
 the switch and the GLSL of the converted programs go when the pilot is accepted). Converted: ui, alphamask, benchmark, clip, copy
 (+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
 (+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
