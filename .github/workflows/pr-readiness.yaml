@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# PR readiness: sets the commit status "PR readiness" on a pull request's head
+# and keeps one sticky comment up to date. Ready means the viewer builds
+# (windows, linux, linux-lts) are green and no review thread is open; a PR that
+# changes only CI files and documentation builds no viewer and needs none.
+# Event driven: every event that can change the answer re-evaluates the PRs it
+# touches. Not a required check (no branch protection by decision); it is read
+# by the owner. Never builds, never runs PR code beyond this script; the PR is
+# read through the API. doc/release_channels.md, "PR readiness".
+name: PR readiness
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  # GitHub has no workflow event for resolving a thread: a resolve shows at the
+  # next event (a push, a review, a build ending).
+  workflow_run:
+    # Check PR runs on every PR, fork or not, so it is also the write path of a
+    # PR that builds no viewer: workflow_run has a write token in the base context.
+    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL"]
+    types: [completed]
+  # A base line that moves can make open PRs on it conflict.
+  push:
+    branches: ["vkstorm-*"]
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+  checks: read
+  actions: read
+
+# One group per PR whatever the event, so two runs never write the same PR at once.
+# A run in progress finishes (cancelling it would leave a cancelled job on the PR);
+# a newer one waits, and only the newest waiting one is kept, since every run reads
+# the whole state. Events without a PR number group by branch.
+concurrency:
+  group: pr-readiness-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    name: readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # workflow_run and push run the base's own copy of the script; the
+      # pull_request events run the PR's merge ref, whose token GitHub makes
+      # read-only for forks.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: PyYAML
+        run: python3 -c 'import yaml'  # shipped on the runner image; fail loudly if it is not
+      - name: Evaluate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci_pr_readiness.py

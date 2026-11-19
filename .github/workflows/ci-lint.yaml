@@ -61,6 +61,8 @@ jobs:
           if [ -f scripts/linux_lts_packages.json ]; then
             python3 scripts/ci_autobuild_override.py scripts/linux_lts_packages.json --check
           fi
+      - name: PR readiness verdict
+        run: python3 scripts/tests/ci_pr_readiness_test.py
       - name: CI files parse; composite actions match their callers
         run: |
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user pyyaml
