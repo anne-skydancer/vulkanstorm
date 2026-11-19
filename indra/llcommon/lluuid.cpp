@@ -35,6 +35,8 @@
 #include "lldefs.h"
 #include "llerror.h"
 
+#include <cstring>
+
 #include "lluuid.h"
 #include "llerror.h"
 #include "llrand.h"
