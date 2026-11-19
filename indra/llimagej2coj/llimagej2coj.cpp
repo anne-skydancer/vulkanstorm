@@ -28,6 +28,7 @@
 #include "llimagej2coj.h"
 #include "llj2creduce.h" // <Vulkanstorm>
 #include "llj2cdecodeguard.h" // <Vulkanstorm>
+#include "llj2cdecoderlimits.h" // <Vulkanstorm>
 
 // this is defined so that we get static linking.
 #include "openjpeg.h"
@@ -72,8 +73,21 @@ static std::string chomp(const char* msg)
 /**
 sample error callback expecting a LLFILE* client object
 */
-void error_callback(const char* msg, void*)
+void error_callback(const char* msg, void* user_data)
 {
+    // <Vulkanstorm> user_data is the std::string of JPEG2KBase::last_error (or null): the decoder's own words for a
+    // refusal, such as the SL limits, are logged by the caller when the header or the decode fails. OpenJPEG
+    // reports the cause first and a generic failure after it ("Marker handler function failed to read the marker
+    // segment"), so the first message is kept.
+    if (user_data && msg && static_cast<std::string*>(user_data)->empty())
+    {
+        std::string* last_error = static_cast<std::string*>(user_data);
+        *last_error = msg;
+        while (!last_error->empty() && (last_error->back() == '\n' || last_error->back() == '\r'))
+        {
+            last_error->pop_back();
+        }
+    }
 #if WANT_VERBOSE_OPJ_SPAM
     LL_WARNS() << "LLImageJ2COJ: " << chomp(msg) << LL_ENDL;
 #endif
@@ -111,6 +125,7 @@ public:
     U8*        buffer = nullptr;
     OPJ_SIZE_T size = 0;
     OPJ_OFF_T  offset = 0;
+    std::string last_error; // <Vulkanstorm> the first message OpenJPEG reported, logged when the header or decode fails
 };
 
 static OPJ_SIZE_T opj_read(void * buffer, OPJ_SIZE_T bytes, void* user_data)
@@ -313,13 +328,22 @@ public:
 
         decoder = opj_create_decompress(OPJ_CODEC_J2K);
 
+        last_error.clear();
         /* catch events using our callbacks and give a local context */
-        opj_set_error_handler(decoder, error_callback, nullptr);
+        opj_set_error_handler(decoder, error_callback, &last_error);
         opj_set_warning_handler(decoder, warning_callback, nullptr);
         opj_set_info_handler(decoder, info_callback, nullptr);
 
         if (!opj_setup_decoder(decoder, &parameters))
         {
+            return false;
+        }
+
+        // <Vulkanstorm> The SL limits are checked from the headers before OpenJPEG allocates (llj2cdecoderlimits.h).
+        if (!LLJ2CDecoderLimits::applySLTexture(decoder))
+        {
+            LL_WARNS("Texture") << "J2C header: the OpenJPEG decoder limits could not be set, refusing to decode"
+                                << LL_ENDL;
             return false;
         }
 
@@ -351,6 +375,9 @@ public:
         /* Read the main header of the codestream and if necessary the JP2 boxes*/
         if (!opj_read_header((opj_stream_t*)stream, decoder, &image))
         {
+            // debug level: a partial download routinely fails its first header pass
+            LL_DEBUGS("Texture") << "J2C header refused or unreadable (" << dataSize << " bytes): "
+                                 << (last_error.empty() ? "no OpenJPEG message" : last_error.c_str()) << LL_ENDL;
             return false;
         }
 
@@ -403,9 +430,18 @@ public:
         decoder = opj_create_decompress(OPJ_CODEC_J2K);
         opj_setup_decoder(decoder, &parameters);
 
+        // <Vulkanstorm> The SL limits again on this decoder (llj2cdecoderlimits.h), before the header is read.
+        if (!LLJ2CDecoderLimits::applySLTexture(decoder))
+        {
+            LL_WARNS("Texture") << "J2C decode: the OpenJPEG decoder limits could not be set, refusing to decode"
+                                << LL_ENDL;
+            return false;
+        }
+
         opj_set_info_handler(decoder, info_callback, this);
         opj_set_warning_handler(decoder, warning_callback, this);
-        opj_set_error_handler(decoder, error_callback, this);
+        last_error.clear();
+        opj_set_error_handler(decoder, error_callback, &last_error);
 
         if (stream)
         {
@@ -443,6 +479,8 @@ public:
 
         if (!opj_read_header(stream, decoder, &image))
         {
+            LL_DEBUGS("Texture") << "J2C decode: header refused or unreadable (" << dataSize << " bytes): "
+                                 << (last_error.empty() ? "no OpenJPEG message" : last_error.c_str()) << LL_ENDL;
             return false;
         }
 
@@ -454,9 +492,9 @@ public:
 
         // <Vulkanstorm> Refuse a header that would make opj_decode allocate gigabytes (llj2cdecodeguard.h): it takes
         // 4 bytes per sample of every component at the size AFTER the discard (reduce) factor, which is what the
-        // limits apply to. Each side is held to 16384, far above MAX_IMAGE_SIZE (4096), since images larger than
-        // that decode and display; the components to 1 to MAX_IMAGE_COMPONENTS; and the samples to 1 GiB, which
-        // 8192 x 8192 with 4 components still fits. 16384 x 16384 with 4 components would be 4 GiB.
+        // limits apply to. The SL profile set above is the real bound (2048 px per decoded side, 256 MiB, 8
+        // components, checked by OpenJPEG itself); this guard is a second check behind it: each side is held to
+        // 16384, the components to 1 to MAX_IMAGE_COMPONENTS, and the samples to 1 GiB.
         {
             const U32 ref_w = (image->x1 > image->x0) ? (image->x1 - image->x0) : 0;
             const U32 ref_h = (image->y1 > image->y0) ? (image->y1 - image->y0) : 0;
@@ -475,6 +513,8 @@ public:
         // dereference the array.
         if (!decoded || !image || !image->numcomps)
         {
+            LL_WARNS("Texture") << "J2C decode failed (" << dataSize << " bytes): "
+                                << (last_error.empty() ? "no OpenJPEG message" : last_error.c_str()) << LL_ENDL;
             opj_end_decompress(decoder, stream);
             return false;
         }
@@ -943,7 +983,7 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
     // Refuse what the copy loop below cannot handle: it strides every component by comps[0].w,
     // and raw_image takes U16 dimensions (the copy loop runs over the full U32 extent), so a
     // mismatching component, a decoded size beyond U16 or an odd channel count would read or
-    // write out of bounds. There is no MAX_IMAGE_SIZE limit here: images above 4096 work today.
+    // write out of bounds. The size limit is the SL decoder profile (2048 px per decoded side), applied inside OpenJPEG.
     bool image_ok = (channels >= 1 && channels <= 4
                      && width > 0 && height > 0
                      && width <= 65535u && height <= 65535u
