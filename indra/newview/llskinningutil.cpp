@@ -34,6 +34,7 @@
 #include "llmeshrepository.h"
 #include "llvolume.h"
 #include "llrigginginfo.h"
+#include "lljointnumtable.h"
 
 #define DEBUG_SKINNING  LL_DEBUG
 
@@ -287,6 +288,12 @@ void LLSkinningUtil::getPerVertexSkinMatrix(
     (void)valid_weights;
 }
 
+LLJointNumTablePublisher& LLSkinningUtil::jointNumTables()
+{
+    static LLJointNumTablePublisher sTables;
+    return sTables;
+}
+
 void LLSkinningUtil::initJointNums(LLMeshSkinInfo* skin, LLVOAvatar *avatar)
 {
     if (!skin->mJointNumsInitialized)
@@ -327,16 +334,43 @@ void LLSkinningUtil::initJointNums(LLMeshSkinInfo* skin, LLVOAvatar *avatar)
     }
 }
 
+// <Vulkanstorm> the joint numbers come from the skin (initialised by the caller, the main thread or the joint number
+// table), so a mesh worker thread can run this without the avatar
 void LLSkinningUtil::updateRiggingInfo(const LLMeshSkinInfo* skin, LLVOAvatar *avatar, LLVolumeFace& vol_face)
+{
+    if (vol_face.mJointRiggingInfoTab.needsUpdate() &&
+        vol_face.mNumVertices > 0 && vol_face.mWeights && !skin->mJointNames.empty())
+    {
+        initJointNums(const_cast<LLMeshSkinInfo*>(skin), avatar);
+        updateRiggingInfo(skin, vol_face);
+    }
+}
+
+bool LLSkinningUtil::initJointNumsFromTable(LLMeshSkinInfo* skin, const LLJointNumTable& table)
+{
+    if (skin->mJointNumsInitialized)
+    {
+        return true;
+    }
+    std::vector<int32_t> nums;
+    if (!table.lookupAll(skin->mJointNames, nums))
+    {
+        return false; // a name the table does not know: the main thread initialises the skin on first use
+    }
+    skin->mJointNums.assign(nums.begin(), nums.end());
+    skin->mJointNumsInitialized = true;
+    return true;
+}
+
+void LLSkinningUtil::updateRiggingInfo(const LLMeshSkinInfo* skin, LLVolumeFace& vol_face)
 {
     if (vol_face.mJointRiggingInfoTab.needsUpdate())
     {
         S32 num_verts = vol_face.mNumVertices;
         S32 num_joints = static_cast<S32>(skin->mJointNames.size());
-        if (num_verts > 0 && vol_face.mWeights && num_joints > 0)
+        if (num_verts > 0 && vol_face.mWeights && num_joints > 0 && skin->mJointNumsInitialized)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
-            initJointNums(const_cast<LLMeshSkinInfo*>(skin), avatar);
             if (vol_face.mJointRiggingInfoTab.size()==0)
             {
                 vol_face.mJointRiggingInfoTab.resize(LL_CHARACTER_MAX_ANIMATED_JOINTS);
@@ -383,6 +417,7 @@ void LLSkinningUtil::updateRiggingInfo(const LLMeshSkinInfo* skin, LLVOAvatar *a
         }
     }
 }
+// </Vulkanstorm>
 
 // This is used for extracting rotation from a bind shape matrix that
 // already has scales baked in

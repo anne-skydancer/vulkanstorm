@@ -72,6 +72,8 @@
 #include "rlvhandler.h"
 #include "rlvhelper.h"
 #include "rlvlocks.h"
+#include "lljointnumtable.h"
+#include "llskinningutil.h"
 // [/RLVa:KB]
 
 
@@ -272,7 +274,41 @@ void LLVOAvatarSelf::initInstance()
     doPeriodically(check_for_unsupported_baked_appearance, 120.0);
     doPeriodically(boost::bind(&LLVOAvatarSelf::checkStuckAppearance, this), 30.0);
 
-    initAllJoints(); // mesh thread uses LLVOAvatarSelf as a joint source
+    initAllJoints();
+
+    // <Vulkanstorm> the mesh threads no longer use LLVOAvatarSelf as a joint source: they read this immutable table,
+    // published once the joints are complete (release; the readers acquire)
+    {
+        std::vector<std::string> names;
+        {
+            std::lock_guard lock(mJointMapMutex);
+            for (const auto& entry : mJointMap)
+            {
+                names.push_back(entry.first);
+            }
+        }
+        for (S32 i = 0; i < mNumBones; ++i)
+        {
+            if (mSkeleton[i])
+            {
+                names.push_back(mSkeleton[i]->getName());
+            }
+        }
+        for (S32 i = 0; i < mNumCollisionVolumes; ++i)
+        {
+            names.push_back(mCollisionVolumes[i].getName());
+        }
+        auto table = std::make_unique<LLJointNumTable>();
+        for (const std::string& name : names)
+        {
+            if (LLJoint* joint = getJoint(name))
+            {
+                table->add(name, joint->getJointNum());
+            }
+        }
+        LLSkinningUtil::jointNumTables().publish(std::move(table));
+    }
+    // </Vulkanstorm>
 
     mInitFlags |= 1<<2;
 }
