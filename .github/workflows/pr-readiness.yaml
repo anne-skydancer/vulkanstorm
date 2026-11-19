@@ -23,7 +23,7 @@ on:
   workflow_run:
     # Check PR runs on every PR, fork or not, so it is also the write path of a
     # PR that builds no viewer: workflow_run has a write token in the base context.
-    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL"]
+    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL", "FreeBSD runner image"]
     types: [completed]
   # A base line that moves can make open PRs on it conflict.
   push:

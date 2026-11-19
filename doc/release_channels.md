@@ -88,8 +88,9 @@ and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
 place by the bot, never a new comment per run). It reruns on the events that
 can change the answer: PR open, push, reopen, ready for review and base
 change; reviews and review comments; the end of a Build Windows, Build Linux,
-Build Linux LTS, Check PR, CI lint or CodeQL run; and a push to a `vkstorm-*`
-line, which can make an open PR conflict. One run per PR at a time.
+Build Linux LTS, Check PR, CI lint, CodeQL or FreeBSD runner image run; and a
+push to a `vkstorm-*` line, which can make an open PR conflict. One run per PR
+at a time.
 
 - `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a
   skipped viewer job is not green), no other check is running or failed, and
