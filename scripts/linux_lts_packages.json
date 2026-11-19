@@ -10,10 +10,10 @@
       }
     },
     "openjpeg": {
-      "version": "2.5.4.42293961644",
+      "version": "2.5.4.44499299587",
       "linux64": {
-        "url": "https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.3/openjpeg-2.5.4.42293961644-linux64-lts-42293961644.tar.zst",
-        "hash": "34aedbb9a8cd7efb71818be47e2aecf468720b209bb77679d9a48cc8ff4d727c",
+        "url": "https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.4/openjpeg-2.5.4.44499299587-linux64-lts-44499299587.tar.zst",
+        "hash": "6ff871fcb623ab2549ef6309f1f1f429e98693fd08b582b520406b9e357fd1b9",
         "hash_algorithm": "sha256"
       }
     },
