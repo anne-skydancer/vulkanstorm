@@ -214,9 +214,15 @@ inline bool verify(const uint8_t* data, size_t size, const std::string& expected
 
 // ---- the viewer's copy (llcloudnoise.cpp)
 
-// Reads app_settings/clouds/cloud_noise.vkcn and verifies it against the compiled-in SHA-256. On success the
-// bytes stay in memory (about 8.6 MB) for the GL upload of the clouds; call release() when they are uploaded.
-// On failure returns false with the reason in `error` and the path in `path`.
+// Reads app_settings/clouds/cloud_noise.vkcn into `bytes` and verifies it against the compiled-in SHA-256; `parsed`
+// then views into `bytes`. It touches no shared state, so a worker thread may call it (the volumetric clouds load the
+// noise off the main thread, LLVolumetricClouds). On failure returns false with the reason in `error` (and `bytes`
+// empty); `path` is the file's path either way.
+bool loadInto(std::vector<uint8_t>& bytes, Parsed& parsed, std::string& path, std::string& error);
+
+// The start-up check's copy (LLAppViewer::init, main thread): loadInto() into this file's own storage. On success the
+// bytes stay in memory (about 8.6 MB) until release(). On failure returns false with the reason in `error` and the
+// path in `path`.
 bool loadAndVerify(std::string& path, std::string& error);
 
 // the verified file, or nullptr before a successful loadAndVerify() and after release()

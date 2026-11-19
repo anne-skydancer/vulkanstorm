@@ -1495,6 +1495,7 @@ void LLPipeline::releaseGLBuffers()
     }
 
     releaseLUTBuffers();
+    mVolumetricClouds.release(); // <Vulkanstorm/> stage L7: made again on the next use (the noise is read again)
 
     mWaterDis.release();
 
@@ -11053,6 +11054,14 @@ void LLPipeline::renderDeferredLighting()
 
         gGL.setColorMask(true, true);
     }
+
+    // <Vulkanstorm> stage L7: the volumetric clouds over the sky's pixels of the lit image (main view and photos; the
+    // probes and mirrors keep the flat layer), before the transparent and water passes draw over the sky
+    if (!gCubeSnapshot)
+    {
+        mVolumetricClouds.render(mRT->deferredScreen, screen_target->getWidth(), screen_target->getHeight());
+    }
+    // </Vulkanstorm>
 
     {  // render non-deferred geometry (alpha, fullbright, glow)
         LLGLDisable blend(GL_BLEND);

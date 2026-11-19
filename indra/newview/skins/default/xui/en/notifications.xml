@@ -15575,4 +15575,11 @@ Failed to start external editor server on port [PORT].
    type="notifytip">
 External editor server stopped.
   </notification>
+  <!-- <Vulkanstorm> stage L7: once a session, when the volumetric clouds cannot read their noise file (LLVolumetricClouds) -->
+  <notification
+   icon="notifytip.tga"
+   name="CloudNoiseDamaged"
+   type="notifytip">
+The volumetric clouds' noise file is missing or damaged, so the flat clouds are drawn. Reinstalling the viewer restores it.
+  </notification>
 </notifications>

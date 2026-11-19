@@ -11496,6 +11496,171 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>7.6</real>
     </map>
+    <key>RenderVolumetricClouds</key>
+    <map>
+      <key>Comment</key>
+      <string>Volumetric clouds (Preferences &gt; Graphics): the main view and photos draw automatically generated volumetric clouds, shaped by the sky&apos;s cloud sliders (llcloudscape.h), instead of the flat cloud layer; they also cast the ground&apos;s cloud shadows. Recommended by GPU class through the feature tables (on from the High Ultra graphics level up). Off, or when the noise file is damaged (the policy for that is pending, doc/light/volumetric-clouds.md): the flat cloud layer.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>RenderVolumetricCloudsSunGain</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the volumetric clouds&apos; sunlit brightness against the flat layer&apos;s sun term (the Aurora Viewer&apos;s SUN_GAIN, fitted side by side with the flat layer).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>4.5</real>
+    </map>
+    <key>RenderVolumetricCloudsSkyGain</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the volumetric clouds&apos; brightness in the sky light against the flat layer&apos;s ambient term (the Aurora Viewer&apos;s AMB_GAIN).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.9</real>
+    </map>
+    <key>RenderCloudscapeMiddleScale</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the middle etage (altocumulus, altostratus): smaller elements, the WMO&apos;s criterion (llcloudscape.h). It rises smoothly as the scale falls from 1.25 to 0.8 times this value. 0: never.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.15</real>
+    </map>
+    <key>RenderCloudscapeHighScale</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the high etage (cirrocumulus, cirrostratus), rising from 1.25 to 0.8 times this value. 0: never; at most RenderCloudscapeMiddleScale.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.05</real>
+    </map>
+    <key>RenderCloudscapeCongestusDensity</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the cloud Density D from which heaps grow into cumulus congestus (tops to 6 km) and sheets thicken into nimbostratus.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1.0</real>
+    </map>
+    <key>RenderCloudscapeCumulonimbusDensity</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the cloud Density D from which heaps become cumulonimbus (tops at about 11 km, with an anvil).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>2.0</real>
+    </map>
+    <key>RenderCloudscapeAltocumulusCover</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the mean cover of a generated band of altocumulus cells (3 to 3.6 km) over a low cloud layer; 0, the default, draws none. No EEP lever drives it (Detail D, its first lever, defaults to its maximum in EEP); which lever, or new EEP keys, is the owner&apos;s decision.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>RenderCloudscapeCirrusBase</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the cirrus band&apos;s mean cover at cloud variance 0 (0: no cirrus unless the sky asks for it).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.0</real>
+    </map>
+    <key>RenderCloudscapeCirrusVariance</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the cirrus band&apos;s mean cover per unit of cloud variance (the flat layer&apos;s streaks); cirrostratus as it closes.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.8</real>
+    </map>
+    <key>RenderCloudscapePatchBase</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the amplitude of the patches and gaps of the sky&apos;s own cloud layer at cloud variance 0 (the modulation keeps every band&apos;s mean cover; the generated bands, which have no pattern of their own, take all the amplitude the growth leaves).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.3</real>
+    </map>
+    <key>RenderCloudscapePatchVariance</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the patches&apos; amplitude in the sky&apos;s own cloud layer per unit of cloud variance.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.4</real>
+    </map>
+    <key>RenderCloudscapeGrowth</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the amplitude of the clouds&apos; growth and decay (patches + growth are kept at most 1).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>0.3</real>
+    </map>
+    <key>RenderCloudscapeLifetime</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: a cloud cell&apos;s life in seconds (fair-weather cumulus live 10 to 30 minutes); the growth stops with the cloud scroll.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>1200.0</real>
+    </map>
+    <key>RenderCloudscapeShearHeight</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: the wind&apos;s height scale in km: a band at height h drifts (1 + h / this) / (1 + h0 / this) as fast as the sky&apos;s cloud layer.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>F32</string>
+      <key>Value</key>
+      <real>4.0</real>
+    </map>
     <key>RenderLightHandoverSwing</key>
     <map>
       <key>Comment</key>

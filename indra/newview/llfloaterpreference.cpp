@@ -493,6 +493,11 @@ LLFloaterPreference::LLFloaterPreference(const LLSD& key)
     mCommitCallbackRegistrar.add("Pref.ResetSkyTuning", [](LLUICtrl*, const LLSD&)
     {
         for (const char* name : { "RenderCloudShadowStrength", "RenderCloudShadowPenumbraHeight", "RenderCloudShadowExtent", "RenderCloudOpticalDepth",
+                                  "RenderVolumetricCloudsSunGain", "RenderVolumetricCloudsSkyGain", "RenderCloudscapeMiddleScale",
+                                  "RenderCloudscapeHighScale", "RenderCloudscapeCongestusDensity", "RenderCloudscapeCumulonimbusDensity",
+                                  "RenderCloudscapeAltocumulusCover", "RenderCloudscapeCirrusBase", "RenderCloudscapeCirrusVariance",
+                                  "RenderCloudscapePatchBase", "RenderCloudscapePatchVariance", "RenderCloudscapeGrowth",
+                                  "RenderCloudscapeLifetime", "RenderCloudscapeShearHeight",
                                   "RenderShadowBlurSize",
                                   "RenderLightHandoverSwing", "RenderLightHandoverFade", "RenderMoonlightCompensation",
                                   "RenderMoonAdaptationDepth", "RenderAtmosphereHazeSlab", "RenderAtmospherePhysicalLight" })

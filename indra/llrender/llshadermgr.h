@@ -428,6 +428,15 @@ public:
         PROJ_SHADOW_CELLS,                  //  "proj_shadow_cells"
         SHADOW_TILE_ORIGIN,                 //  "shadow_tile_origin"
         // </Vulkanstorm>
+        // <Vulkanstorm> the volumetric clouds (stage L7: deferred/cloudsVol*.glsl, deferred/cloudShadowVolF.glsl)
+        CLOUD_VOL_BASE,                     //  "cloud_vol_base"
+        CLOUD_VOL_EROSION,                  //  "cloud_vol_erosion"
+        CLOUD_VOL_CURL,                     //  "cloud_vol_curl"
+        CLOUD_VOL_WEATHER,                  //  "cloud_vol_weather"
+        CLOUD_VOL_TRACE,                    //  "cloud_vol_trace"
+        CLOUD_VOL_TDEPTH,                   //  "cloud_vol_tdepth"
+        CLOUD_VOL_HISTORY,                  //  "cloud_vol_history"
+        // </Vulkanstorm>
         END_RESERVED_UNIFORMS
     } eGLSLReservedUniforms;
     // clang-format on
