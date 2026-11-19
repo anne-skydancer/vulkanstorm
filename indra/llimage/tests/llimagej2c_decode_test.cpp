@@ -98,18 +98,22 @@ namespace tut
     template<> template<>
     void llimagej2c_decode_test_object_t::test<3>()
     {
-        set_test_name("an image wider than MAX_IMAGE_SIZE (4096) still decodes");
-        std::vector<U8> bytes = encode(5000, 64, 3);
+        set_test_name("a 2048 px wide image decodes, a wider one is refused (SL decoder profile)");
+        std::vector<U8> bytes = encode(2048, 64, 3);
         ensure("encoded", !bytes.empty());
         LLPointer<LLImageRaw> raw = decode(bytes);
-        ensure_equals("width", raw->getWidth(), 5000);
+        ensure_equals("width", raw->getWidth(), 2048);
         ensure_equals("height", raw->getHeight(), 64);
+        std::vector<U8> wide = encode(5000, 64, 3);
+        ensure("encoded wide", !wide.empty());
+        LLPointer<LLImageRaw> refused = decode(wide);
+        ensure_equals("nothing decoded", refused->getWidth(), 0);
     }
 
     template<> template<>
     void llimagej2c_decode_test_object_t::test<4>()
     {
-        set_test_name("a header declaring more than 16384 after the discard factor is refused");
+        set_test_name("a header declaring more than 16384 is refused");
         std::vector<U8> bytes = encode(17000, 64, 3);
         ensure("encoded", !bytes.empty());
         LLPointer<LLImageRaw> raw = decode(bytes);

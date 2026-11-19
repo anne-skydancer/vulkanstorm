@@ -19,10 +19,10 @@
 
 namespace LLJ2CDecodeGuard
 {
-    // The longest side decoded, after the reduce factor: far above MAX_IMAGE_SIZE (4096), since images larger than
-    // that decode and display
+    // The longest side decoded, after the reduce factor. Defence in depth: the SL decoder profile (2048 px per
+    // decoded side, 256 MiB, see llj2cdecoderlimits.h) is applied inside OpenJPEG and is the tighter bound
     constexpr unsigned long long MAX_DECODE_DIMENSION = 16384;
-    // The most OpenJPEG may allocate for the decoded samples: 1 GiB, 8192 x 8192 with 4 components
+    // The most OpenJPEG may allocate for the decoded samples: 1 GiB (the SL profile allows 256 MiB)
     constexpr unsigned long long MAX_DECODE_BYTES = 1ull << 30;
     // OpenJPEG decodes every sample into an OPJ_INT32
     constexpr unsigned long long BYTES_PER_SAMPLE = 4;
