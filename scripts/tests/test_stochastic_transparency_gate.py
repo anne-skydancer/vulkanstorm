@@ -58,9 +58,9 @@ class TransparencyGate(unittest.TestCase):
         # the gate mirrors loadShaderFile: from GLSL 4.20 a fragment shader is compiled at #version 420, below at 400
         version = SHADER_MGR[SHADER_MGR.index('if (major_version >= 4)'):]
         version = version[:version.index('else if (major_version == 3)')]
-        self.assertRegex(version, r'else if \(minor_version >= 20\)\s*\{\s*shader_code_text\[shader_code_count\+\+\] = '
-                                  r'strdup\("#version 420\\n"\);\s*\}\s*else\s*\{\s*shader_code_text\[shader_code_count\+\+\] = '
-                                  r'strdup\("#version 400\\n"\);')
+        self.assertRegex(version, r'else if \(minor_version >= 20\)\s*\{\s*version = '
+                                  r'"#version 420\\n";\s*\}\s*else\s*\{\s*version = '
+                                  r'"#version 400\\n";')
 
     def test_the_composite_needs_what_the_gate_admits(self):
         # packHalf2x16 is why the gate takes GLSL 4.20; if the composite stops using the 4.20 packing, the gate can go back
