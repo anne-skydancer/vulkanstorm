@@ -114,18 +114,51 @@ Programs are registered by `interfaceStages()` in `llviewershadermgr.cpp` (`VKS_
 the switch and the GLSL of the converted programs go when the pilot is accepted). Converted: ui, alphamask, benchmark, clip, copy
 (+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
 (+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
-Left hand-written for now: the programs with a skinned variant built from the same files (`gHighlightProgram`, `gDebugProgram`,
-`gSkinnedOcclusionProgram`, `normaldebug`, which has a geometry stage) wait for the skinning module (S3), and `pbrTerrainBake`.
+Left hand-written for now: `normaldebug` (it has a geometry stage) and `pbrTerrainBake`. The programs with a skinned variant moved with the skinning module (below).
 
 ## The position module
 
-Every program takes its position (skinning included) from **one shared module**, written before the families convert. The
-gate in `slang_check.py position` fails when any `.slang` file other than the module writes `gl_Position`, returns
-`SV_Position` straight from a function, or assigns an `SV_Position` field from anything but a call of the module's
-`vkPosition*` functions (whole, with plain `=`); when a program's vertex source does not import the module or never calls
-it; or when a generated vertex stage does not write `gl_Position` exactly once. The generated text cannot show where the
-value came from (slangc copies the field to `gl_Position`), so the source check is the guard. The gate is wired and **allowed empty**: it passes while no program has a vertex stage, and fails once one does if
-`indra/newview/slang/position.slang` is missing. The AMD decal `invariant`/`precise` goes into that module when needed.
+Every program takes its position (skinning included) from **one shared module**, `indra/newview/slang/position.slang`:
+
+| Function | Use |
+|---|---|
+| `vkPositionClip(mvp, p)` | static prims, attachments, UI and full-screen quads |
+| `vkPositionNdc(p)` | points already in -1..1 |
+| `vkSkinObject(palette, weight4)` | the rigged object's skin: four joints of the 110-matrix palette (`VK_MAX_JOINTS`, checked against `LL_MAX_JOINTS_PER_MESH_OBJECT` by the tests) |
+| `vkPositionRigged(projection, modelview_skin, p, eye)` | a rigged point: `projection * (modelview * skin * p)`, with the eye-space position out for normals and varyings |
+
+A program declares its own `matrixPalette` uniform and passes it in, so a program that does not skin carries no palette in its block.
+
+**The gate.** `slang_check.py position` is armed: the module must exist whatever programs there are. It fails when any other `.slang` file
+writes `gl_Position`, returns `SV_Position` straight from a function, or assigns an `SV_Position` field from anything but a call of the
+module's `vkPosition*` functions (whole, with plain `=`); when a program's vertex source does not import the module or never calls it; when a
+generated vertex stage does not write `gl_Position` exactly once; and when the module makes the position invariant and a stage does not say so.
+The generated text cannot show where the value came from (slangc copies the field to `gl_Position`), so the source check is the guard.
+The hand-written GLSL that still writes `gl_Position` is the list `scripts/shaders/glsl_position_baseline.txt`, which **only shrinks**: a new
+`.glsl` file that writes it fails, and so does a listed file that no longer does. The switchover empties it.
+
+**The AMD decal fix.** A tattoo or applier is drawn over the body by another program than the body, so the two positions must agree bit for bit.
+Two things give that. The skinned position is one text in each program's single compilation unit (the hand-written skinning was a separate shader
+object, which GLSL 4.20 section 4.8.1 gives no guarantee across). And every vertex program declares `invariant gl_Position;`, which the module
+emits through a prelude (`VK_POSITION_INVARIANT`, default 1; 0 removes it from every program at once). Slang's GLSL front end rejects `invariant
+gl_Position;` as source, and its `precise` is dropped from the GLSL whenever the temporary folds away, so the prelude is the one way that holds.
+`invariant` makes the driver multiply then add where it would fuse them: depth moves by a few steps on NVIDIA (invariance-audit.md 3.4), and the
+hand-written programs still outside the tree keep their fused form until the switchover, so the interim tree mixes the two. Not yet measured on AMD.
+
+The system avatar's own skin (`avatarV.glsl`, the 45-row eye-space palette) joins the module with its program, which waits for the forward
+lighting and atmospherics.
+
+## Objects family (S3, first part)
+
+Converted: bump (static and rigged), impostor, object preview (static and rigged), physics preview, draw colour, and the programs that
+waited for the skin: highlight (static and rigged), debug (static and rigged), the skinned occlusion. `VKS_SLANG_PILOT=0` selects their
+GLSL, as for the interface family. `make_rigged_variant(..., generated_id)` names the `HAS_SKIN` 1 program. The IS_AMD_CARD static
+references of the old palette arrays (a loose-uniform storage workaround) have no meaning for a block member and are gone. `mirrorclip.slang`
+is the one import for the mirror clip (it adds `mirror_flag` and `clipPlane` to the block of a program that uses it).
+
+Not converted, and why: `avatarV/F`, `simpleNoColorV` and `simpleF` call the forward lighting (`calcLighting`) and `calcAtmospherics`
+(windlight), which belong to the lighting and atmosphere families. `eyeballV/F` were never registered and are deleted.
+The block upload sends the dirty byte range, not the block, because the 110-matrix palette makes a rigged program's block 5.4 KB.
 
 ## CI
 
@@ -141,7 +174,8 @@ The `ci-checks` action also runs the loader-format test and the tool tests that 
 same fixed inputs (a procedural environment cube array; three faces, four mip levels, two layers), reads both back as float32 and
 compares them. `--selftest` proves the harness: identity gives zero differing values, one changed constant is caught, and the
 generated-program path (uniforms packed into a std140 block from introspection, a sampler with `layout(binding)`) renders
-the fixture program bit for bit like a loose-uniform twin. Windows and NVIDIA now; the RX 9070 XT run comes later. Exit code
+the fixture program bit for bit like a loose-uniform twin. Windows and NVIDIA now; the RX 9070 XT run comes later. `python scripts/shaders/ab_harness.py skin` draws a wavy skinned grid with the hand-written `bumpV.glsl` plus `objectSkinV.glsl` and with the generated bump
+programs (rigged and static) over four palettes and view angles, and compares the eye position per pixel. Exit code
 2 means the candidate is not generated yet.
 
 ## Licence

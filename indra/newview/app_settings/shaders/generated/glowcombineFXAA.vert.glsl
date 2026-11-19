@@ -22,8 +22,16 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
+invariant gl_Position;
+void vkInvariantPosition_0()
+{
+    ;
+    return;
+}
+
 vec4 vkPositionNdc_0(vec3 p_0)
 {
+    vkInvariantPosition_0();
     return vec4(p_0, 1.0);
 }
 

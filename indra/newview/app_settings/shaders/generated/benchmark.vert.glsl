@@ -22,8 +22,16 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
+invariant gl_Position;
+void vkInvariantPosition_0()
+{
+    ;
+    return;
+}
+
 vec4 vkPositionNdc_0(vec3 p_0)
 {
+    vkInvariantPosition_0();
     return vec4(p_0, 1.0);
 }
 
@@ -42,10 +50,11 @@ struct Varyings_0
 void main()
 {
     Varyings_0 o_0;
-    o_0.pos_0 = vkPositionNdc_0(v_position_0);
+    vec4 _S1 = vkPositionNdc_0(v_position_0);
+    o_0.pos_0 = _S1;
     o_0.tc0_0 = v_position_0.xy * 0.5 + 0.5;
-    Varyings_0 _S1 = o_0;
+    Varyings_0 _S2 = o_0;
     gl_Position = o_0.pos_0;
-    entryPointParam_vsMain_tc0_0 = _S1.tc0_0;
+    entryPointParam_vsMain_tc0_0 = _S2.tc0_0;
     return;
 }

@@ -1,5 +1,5 @@
 /**
- * @file eyeballF.glsl
+ * @file mirrorclip.slang (converted from deferred/globalF.glsl (mirrorClip))
  *
  * $LicenseInfo:firstyear=2007&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -22,13 +22,20 @@
  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
  * $/LicenseInfo$
  */
+import glsl;
 
+// The mirror and reflection clip of the world fragment programs (globalF.glsl): a fragment behind the clip plane is
+// dropped while a mirror or reflection is drawn. Importing it adds the two uniforms to the program's block.
+uniform float mirror_flag;
+uniform vec4 clipPlane;
 
-
-void default_lighting();
-
-void main()
+public void mirrorClip(vec3 pos)
 {
-    default_lighting();
+    if (mirror_flag > 0)
+    {
+        if ((dot(pos.xyz, clipPlane.xyz) + clipPlane.w) < 0.0)
+        {
+            discard;
+        }
+    }
 }
-

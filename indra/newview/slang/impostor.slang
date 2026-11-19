@@ -1,5 +1,5 @@
 /**
- * @file eyeballV.glsl
+ * @file impostor.slang (converted from objects/impostorV.glsl, objects/impostorF.glsl)
  *
  * $LicenseInfo:firstyear=2007&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -22,38 +22,42 @@
  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
  * $/LicenseInfo$
  */
+import glsl;
+import position;
 
-uniform mat3 normal_matrix;
 uniform mat4 texture_matrix0;
-uniform mat4 modelview_matrix;
 uniform mat4 modelview_projection_matrix;
+uniform float minimum_alpha;
+uniform sampler2D diffuseMap;
 
-in vec3 position;
-in vec4 diffuse_color;
-in vec3 normal;
-in vec2 texcoord0;
-
-out vec4 vertex_color;
-out vec2 vary_texcoord0;
-
-vec4 calcLightingSpecular(vec3 pos, vec3 norm, vec4 color, inout vec4 specularColor);
-void calcAtmospherics(vec3 inPositionEye);
-
-void main()
+struct VertexIn
 {
-    //transform vertex
-    vec3 pos = (modelview_matrix * vec4(position.xyz, 1.0)).xyz;
-    gl_Position = modelview_projection_matrix * vec4(position.xyz, 1.0);
-    vary_texcoord0 = (texture_matrix0 * vec4(texcoord0,0,1)).xy;
+    [[vk::location(0)]] vec3 position : POSITION;
+    [[vk::location(2)]] vec2 texcoord0 : TEXCOORD0;
+};
 
+struct Varyings
+{
+    vec4 pos : SV_Position;
+    [[vk::location(0)]] vec2 vary_texcoord0 : VARY_TEXCOORD0;
+};
 
-    vec3 norm = normalize(normal_matrix * normal);
-
-    calcAtmospherics(pos.xyz);
-
-    vec4 specular = vec4(1.0);
-    vec4 color = calcLightingSpecular(pos, norm, diffuse_color, specular);
-    vertex_color = color;
-
+[shader("vertex")]
+Varyings vsMain(VertexIn v)
+{
+    Varyings o;
+    o.pos = vkPositionClip(modelview_projection_matrix, v.position.xyz);
+    o.vary_texcoord0 = (texture_matrix0 * vec4(v.texcoord0, 0, 1)).xy;
+    return o;
 }
 
+[shader("fragment")]
+vec4 fsMain(Varyings i) : SV_Target0
+{
+    vec4 color = texture(diffuseMap, i.vary_texcoord0.xy);
+    if (color.a < minimum_alpha)
+    {
+        discard;
+    }
+    return max(color, vec4(0));
+}

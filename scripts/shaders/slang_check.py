@@ -10,7 +10,9 @@
               loader's define block (see assemble_source) once with every hook 0 and once with every hook 1
   position    the position-module gate: every program takes its position from the one shared module (its vertex
               source imports it and calls its `prefix` functions, the SV_Position field is assigned whole from such a
-              call, no other Slang source writes gl_Position). Allowed empty (it passes with no vertex program) until programs exist.
+              call, no other Slang source writes gl_Position), and the module must exist. The hand-written GLSL that
+              still writes gl_Position is a shrinking list (glsl_position_baseline.txt): a new file that writes it, or a
+              listed file that no longer does, fails.
   manifest    the manifest agrees with the files: hashes, hook lists, header
 
   python scripts/shaders/slang_check.py all [--generated DIR] [--src-dir DIR] [--glslang PATH]
@@ -218,21 +220,45 @@ def _strip_comments(text):
     return re.sub(r'//[^\n]*', '', text)
 
 
-def check_position(src_dir, generated):
-    """The position-module gate. Passes when no program has a vertex stage; once one does, the module must exist."""
+GLSL_POSITION = re.compile(r'\bgl_Position\b\s*(?:\.\w+)?\s*[-+*/]?=(?!=)')
+
+
+def check_glsl_baseline(glsl_root, baseline):
+    """The hand-written GLSL that writes gl_Position is a list that only shrinks until the switchover removes the GLSL.
+
+    A new .glsl file that writes it fails (new programs are Slang, through the position module); a listed file that no
+    longer writes it, or is gone, fails too, so the list is cut as the conversion goes."""
+    root = Path(glsl_root)
+    listed = {line.strip() for line in Path(baseline).read_text(encoding='utf-8').splitlines()
+              if line.strip() and not line.startswith('#')}
+    found = set()
+    for path in root.rglob('*.glsl'):
+        rel = path.relative_to(root).as_posix()
+        if rel.startswith('generated/'):
+            continue
+        if GLSL_POSITION.search(_strip_comments(path.read_text(encoding='utf-8', errors='replace'))):
+            found.add(rel)
+    errors = [f'{rel}: hand-written GLSL writes gl_Position; write the program in Slang, through the position module'
+              for rel in sorted(found - listed)]
+    errors += [f'{rel}: listed in {Path(baseline).name} but no longer writes gl_Position (or is gone); remove the line'
+               for rel in sorted(listed - found)]
+    return errors
+
+
+def check_position(src_dir, generated, glsl_root=None, baseline=None):
+    """The position-module gate: the module and its list entry must exist, and every program takes its position from it."""
     errors = []
     src_dir = Path(src_dir)
     plist = json.loads((src_dir / 'program_list.json').read_text(encoding='utf-8'))
     position = plist.get('position')
     vertex_programs = [p for p in plist.get('programs', []) if 'vertex' in p['entries']]
-    if not vertex_programs:
-        return errors
+    if glsl_root is not None and baseline is not None:
+        errors += check_glsl_baseline(glsl_root, baseline)
     if not position:
-        return ['program_list.json has vertex programs but no "position" entry naming the shared position module']
+        return errors + ['program_list.json has no "position" entry naming the shared position module']
     module = _module_file(src_dir, position['module'])
     if module is None:
-        return [f'the position module {position["module"]}.slang does not exist, yet {len(vertex_programs)} program(s) '
-                'have a vertex stage']
+        return errors + [f'the position module {position["module"]}.slang does not exist']
     prefix = position.get('prefix', 'vkPosition')
     call = re.compile(r'\b' + re.escape(prefix) + r'\w*\s*\(')
     for slang in sorted(src_dir.rglob('*.slang')):
@@ -259,6 +285,9 @@ def check_position(src_dir, generated):
         elif not any(call.search(_strip_comments(p.read_text(encoding='utf-8')))
                      for p in files if p.resolve() != module.resolve()):
             errors.append(f'{prog["name"]}: imports {position["module"]} but never calls {prefix}*()')
+    # the module's default for `invariant gl_Position` (VK_POSITION_INVARIANT): when on, every vertex stage declares it
+    default = re.search(r'(?m)^#define\s+VK_POSITION_INVARIANT\s+(\d)', module.read_text(encoding='utf-8'))
+    invariant = bool(default and default.group(1) == '1')
     manifest = load_manifest(generated)
     for prog in manifest['programs']:
         info = prog['stages'].get('vertex')
@@ -267,6 +296,8 @@ def check_position(src_dir, generated):
         text = (Path(generated) / info['file']).read_text(encoding='utf-8')
         if len(re.findall(r'\bgl_Position(?:\.\w+)?\s*[-+*/]?=(?!=)', text)) != 1:
             errors.append(f'{info["file"]}: gl_Position must be written exactly once')
+        if invariant and not re.search(r'(?m)^invariant gl_Position;', text):
+            errors.append(f'{info["file"]}: the position module makes gl_Position invariant, but the stage does not declare it')
     return errors
 
 
@@ -276,6 +307,8 @@ def main():
     ap.add_argument('--generated', default=str(common.GENERATED))
     ap.add_argument('--src-dir', default=str(common.SLANG_SRC))
     ap.add_argument('--glslang')
+    ap.add_argument('--glsl-root', default=str(common.LEGACY_SHADERS))
+    ap.add_argument('--glsl-baseline', default=str(Path(__file__).resolve().with_name('glsl_position_baseline.txt')))
     args = ap.parse_args()
     which = ['manifest', 'interface', 'position', 'compile'] if args.check == 'all' else [args.check]
     failed = False

@@ -287,8 +287,8 @@ LLGLSLShader            gGLTFPBRMetallicRoughnessProgram;
 
 //helper for making a rigged variant of a given shader
 // <Vulkanstorm> Slang pilot (S2): the interface family (UI, glow, copy, solid colour, clip, highlight, occlusion, pathfinding,
-// the probe filters, ...) is generated from indra/newview/slang/. Programs with a skinned variant (gHighlightProgram,
-// gDebugProgram, the skinned occlusion) stay hand-written until the skinning module converts. VKS_SLANG_PILOT=0 selects
+// the probe filters, ..., and the object programs: bump, impostor, preview, draw colour) is generated from indra/newview/slang/;
+// the rigged variants take their skin from the shared position module. VKS_SLANG_PILOT=0 selects
 // the hand-written GLSL for every converted program: the measurement switch of the pilot's A/B, removed with the GLSL.
 static bool pilotGenerated()
 {
@@ -315,15 +315,27 @@ static void interfaceStages(LLGLSLShader& shader, const char* generated_id, cons
 }
 // </Vulkanstorm>
 
-static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader)
+// <Vulkanstorm> `generated_id` names the rigged program of a generated (Slang) program: the HAS_SKIN 1 permutation, with
+// the skinning from the shared position module instead of the hand-written skinning object.
+static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader, const char* generated_id = nullptr)
 {
     riggedShader.mName = llformat("Skinned %s", shader.mName.c_str());
     riggedShader.mFeatures = shader.mFeatures;
     riggedShader.mFeatures.hasObjectSkinning = true;
     riggedShader.mDefines = shader.mDefines;    // NOTE: Must come before addPermutation
 
-    riggedShader.addPermutation("HAS_SKIN", "1");
-    riggedShader.mShaderFiles = shader.mShaderFiles;
+    if (generated_id && pilotGenerated())
+    {
+        riggedShader.mShaderFiles.clear();
+        riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".vert.glsl", GL_VERTEX_SHADER));
+        riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".frag.glsl", GL_FRAGMENT_SHADER));
+    }
+    else
+    {
+        riggedShader.addPermutation("HAS_SKIN", "1");
+        riggedShader.mShaderFiles = shader.mShaderFiles;
+    }
+    // </Vulkanstorm>
     riggedShader.mShaderLevel = shader.mShaderLevel;
     riggedShader.mShaderGroup = shader.mShaderGroup;
 
@@ -3811,10 +3823,9 @@ bool LLViewerShaderMgr::loadShadersObject()
     {
         gObjectBumpProgram.mName = "Bump Shader";
         gObjectBumpProgram.mShaderFiles.clear();
-        gObjectBumpProgram.mShaderFiles.push_back(make_pair("objects/bumpV.glsl", GL_VERTEX_SHADER));
-        gObjectBumpProgram.mShaderFiles.push_back(make_pair("objects/bumpF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gObjectBumpProgram, "bump__HAS_SKIN0", "objects/bumpV.glsl", "objects/bumpF.glsl");
         gObjectBumpProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
-        success = make_rigged_variant(gObjectBumpProgram, gSkinnedObjectBumpProgram);
+        success = make_rigged_variant(gObjectBumpProgram, gSkinnedObjectBumpProgram, "bump__HAS_SKIN1");
         success = success && gObjectBumpProgram.createShader();
         if (success)
         { //lldrawpoolbump assumes "texture0" has channel 0 and "texture1" has channel 1
@@ -3850,8 +3861,7 @@ bool LLViewerShaderMgr::loadShadersObject()
         gImpostorProgram.mName = "Impostor Shader";
         gImpostorProgram.mFeatures.hasSrgb = true;
         gImpostorProgram.mShaderFiles.clear();
-        gImpostorProgram.mShaderFiles.push_back(make_pair("objects/impostorV.glsl", GL_VERTEX_SHADER));
-        gImpostorProgram.mShaderFiles.push_back(make_pair("objects/impostorF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gImpostorProgram, "impostor", "objects/impostorV.glsl", "objects/impostorF.glsl");
         gImpostorProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
         success = gImpostorProgram.createShader();
     }
@@ -3860,10 +3870,9 @@ bool LLViewerShaderMgr::loadShadersObject()
     {
         gObjectPreviewProgram.mName = "Object Preview Shader";
         gObjectPreviewProgram.mShaderFiles.clear();
-        gObjectPreviewProgram.mShaderFiles.push_back(make_pair("objects/previewV.glsl", GL_VERTEX_SHADER));
-        gObjectPreviewProgram.mShaderFiles.push_back(make_pair("objects/previewF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gObjectPreviewProgram, "preview__HAS_SKIN0", "objects/previewV.glsl", "objects/previewF.glsl");
         gObjectPreviewProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
-        success = make_rigged_variant(gObjectPreviewProgram, gSkinnedObjectPreviewProgram);
+        success = make_rigged_variant(gObjectPreviewProgram, gSkinnedObjectPreviewProgram, "preview__HAS_SKIN1");
         success = gObjectPreviewProgram.createShader();
         gObjectPreviewProgram.mFeatures.hasLighting = true;
         gSkinnedObjectPreviewProgram.mFeatures.hasLighting = true;
@@ -3878,8 +3887,7 @@ bool LLViewerShaderMgr::loadShadersObject()
         gPhysicsPreviewProgram.mFeatures.hasAtmospherics = false;
         gPhysicsPreviewProgram.mFeatures.hasLighting = false;
         gPhysicsPreviewProgram.mShaderFiles.clear();
-        gPhysicsPreviewProgram.mShaderFiles.push_back(make_pair("objects/previewPhysicsV.glsl", GL_VERTEX_SHADER));
-        gPhysicsPreviewProgram.mShaderFiles.push_back(make_pair("objects/previewPhysicsF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gPhysicsPreviewProgram, "previewPhysics", "objects/previewPhysicsV.glsl", "objects/previewPhysicsF.glsl");
         gPhysicsPreviewProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
         success = gPhysicsPreviewProgram.createShader();
         gPhysicsPreviewProgram.mFeatures.hasLighting = false;
@@ -3944,10 +3952,9 @@ bool LLViewerShaderMgr::loadShadersInterface()
     {
         gHighlightProgram.mName = "Highlight Shader";
         gHighlightProgram.mShaderFiles.clear();
-        gHighlightProgram.mShaderFiles.push_back(make_pair("interface/highlightV.glsl", GL_VERTEX_SHADER));
-        gHighlightProgram.mShaderFiles.push_back(make_pair("interface/highlightF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gHighlightProgram, "highlightdiffuse__HAS_SKIN0", "interface/highlightV.glsl", "interface/highlightF.glsl");
         gHighlightProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
-        success = make_rigged_variant(gHighlightProgram, gSkinnedHighlightProgram);
+        success = make_rigged_variant(gHighlightProgram, gSkinnedHighlightProgram, "highlightdiffuse__HAS_SKIN1");
         success = success && gHighlightProgram.createShader();
     }
 
@@ -4090,8 +4097,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
         gSkinnedOcclusionProgram.mName = "Skinned Occlusion Shader";
         gSkinnedOcclusionProgram.mFeatures.hasObjectSkinning = true;
         gSkinnedOcclusionProgram.mShaderFiles.clear();
-        gSkinnedOcclusionProgram.mShaderFiles.push_back(make_pair("interface/occlusionSkinnedV.glsl", GL_VERTEX_SHADER));
-        gSkinnedOcclusionProgram.mShaderFiles.push_back(make_pair("interface/occlusionF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gSkinnedOcclusionProgram, "occlusionSkinned", "interface/occlusionSkinnedV.glsl", "interface/occlusionF.glsl");
         gSkinnedOcclusionProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
         success = gSkinnedOcclusionProgram.createShader();
     }
@@ -4109,11 +4115,10 @@ bool LLViewerShaderMgr::loadShadersInterface()
     {
         gDebugProgram.mName = "Debug Shader";
         gDebugProgram.mShaderFiles.clear();
-        gDebugProgram.mShaderFiles.push_back(make_pair("interface/debugV.glsl", GL_VERTEX_SHADER));
-        gDebugProgram.mShaderFiles.push_back(make_pair("interface/debugF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDebugProgram, "debug__HAS_SKIN0", "interface/debugV.glsl", "interface/debugF.glsl");
         gDebugProgram.mRiggedVariant = &gSkinnedDebugProgram;
         gDebugProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
-        success = make_rigged_variant(gDebugProgram, gSkinnedDebugProgram);
+        success = make_rigged_variant(gDebugProgram, gSkinnedDebugProgram, "debug__HAS_SKIN1");
         success = success && gDebugProgram.createShader();
     }
 
@@ -4202,8 +4207,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
     {
         gDrawColorProgram.mName = "Draw Color Shader";
         gDrawColorProgram.mShaderFiles.clear();
-        gDrawColorProgram.mShaderFiles.push_back(make_pair("objects/simpleNoAtmosV.glsl", GL_VERTEX_SHADER));
-        gDrawColorProgram.mShaderFiles.push_back(make_pair("objects/simpleColorF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDrawColorProgram, "drawcolor", "objects/simpleNoAtmosV.glsl", "objects/simpleColorF.glsl");
         gDrawColorProgram.clearPermutations();
         gDrawColorProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
         success = gDrawColorProgram.createShader();

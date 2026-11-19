@@ -22,6 +22,20 @@
       }
     },
     {
+      "name": "bump",
+      "source": "bump.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "clip",
       "source": "clip.slang",
       "entries": {
@@ -41,6 +55,28 @@
           0,
           1
         ]
+      }
+    },
+    {
+      "name": "debug",
+      "source": "debug.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "drawcolor",
+      "source": "drawcolor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
       }
     },
     {
@@ -82,6 +118,28 @@
       }
     },
     {
+      "name": "highlightdiffuse",
+      "source": "highlightdiffuse.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "impostor",
+      "source": "impostor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "irradianceGen",
       "source": "irradianceGen.slang",
       "entries": {
@@ -104,6 +162,14 @@
       }
     },
     {
+      "name": "occlusionSkinned",
+      "source": "occlusionSkinned.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "onetexturefilter",
       "source": "onetexturefilter.slang",
       "entries": {
@@ -123,6 +189,28 @@
           0,
           1
         ]
+      }
+    },
+    {
+      "name": "preview",
+      "source": "preview.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "previewPhysics",
+      "source": "previewPhysics.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
       }
     },
     {

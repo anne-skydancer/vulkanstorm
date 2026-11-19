@@ -1526,6 +1526,10 @@ void LLGLSLShader::blockPut(GLint offset, const void* src, U32 bytes)
     if (memcmp(dst, src, bytes) != 0)
     {
         memcpy(dst, src, bytes);
+        const U32 begin = (U32) offset;
+        const U32 end = begin + bytes;
+        mBlockDirtyBegin = mBlockDirty ? llmin(mBlockDirtyBegin, begin) : begin;
+        mBlockDirtyEnd = mBlockDirty ? llmax(mBlockDirtyEnd, end) : end;
         mBlockDirty = true;
     }
 }
@@ -1572,7 +1576,8 @@ void LLGLSLShader::blockPutMatrix(GLint offset, U32 count, GLboolean transpose, 
 void LLGLSLShader::uploadBlock()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
-    glNamedBufferSubData(mBlockBuffer, 0, (GLsizeiptr) mBlockData.size(), mBlockData.data());
+    glNamedBufferSubData(mBlockBuffer, (GLintptr) mBlockDirtyBegin, (GLsizeiptr) (mBlockDirtyEnd - mBlockDirtyBegin),
+                         mBlockData.data() + mBlockDirtyBegin);
     mBlockDirty = false;
 }
 

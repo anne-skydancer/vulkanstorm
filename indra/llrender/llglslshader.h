@@ -361,6 +361,8 @@ public:
     GLuint mBlockBinding = 0;
     std::vector<U8> mBlockData;
     bool mBlockDirty = false;
+    U32 mBlockDirtyBegin = 0;   // the byte range the setters changed since the last upload (the 110-matrix skin palette is
+    U32 mBlockDirtyEnd = 0;     // 5 KB; a draw that changes one member sends that member, not the block)
     // the flush every draw call makes: upload the bound generated program's block when a setter changed it
     static void flushBlock()
     {

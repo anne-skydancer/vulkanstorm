@@ -249,15 +249,49 @@ class GeneratorTest(unittest.TestCase):
         vert = (self.out / 'tint__DOUBLE0.vert.glsl').read_text(encoding='utf-8')
         self.assertEqual(check.block_of(vert)[0], common.GLOBALS_BINDING)
 
-    def test_gate_is_allowed_empty_until_programs_exist(self):
+    def test_gate_is_armed_even_with_no_program(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / 'src'
             src.mkdir()
             (src / 'program_list.json').write_text('{"hooks": {}, "programs": []}', encoding='utf-8')
-            self.assertEqual(check.check_position(src, self.out), [])
+            self.assertTrue(check.check_position(src, self.out))  # no "position" entry
+            (src / 'program_list.json').write_text(json.dumps({'hooks': {}, 'position': {'module': 'position'},
+                                                               'programs': []}), encoding='utf-8')
+            self.assertTrue(check.check_position(src, self.out))  # the module file is missing
             (src / 'program_list.json').write_text(json.dumps({'hooks': {}, 'programs': [
                 {'name': 'a', 'source': 'a.slang', 'entries': {'vertex': 'vs'}}]}), encoding='utf-8')
             self.assertTrue(check.check_position(src, self.out))  # a vertex program but no position module
+
+    def test_glsl_baseline_only_shrinks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'shaders'
+            (root / 'class1').mkdir(parents=True)
+            (root / 'generated').mkdir()
+            (root / 'class1' / 'oldV.glsl').write_text('// gl_Position = x;\nvoid main() { gl_Position = vec4(0); }\n',
+                                                       encoding='utf-8')
+            (root / 'class1' / 'noV.glsl').write_text('void main() { bool b = gl_Position.x == 1.0; }\n', encoding='utf-8')
+            (root / 'generated' / 'a.vert.glsl').write_text('void main() { gl_Position = vec4(0); }\n', encoding='utf-8')
+            base = Path(tmp) / 'baseline.txt'
+            base.write_text('# comment\nclass1/oldV.glsl\n', encoding='utf-8')
+            self.assertEqual(check.check_glsl_baseline(root, base), [])
+            (root / 'class1' / 'newV.glsl').write_text('void main() { gl_Position.z = 0.0; }\n', encoding='utf-8')
+            errors = check.check_glsl_baseline(root, base)
+            self.assertEqual(len(errors), 1)
+            self.assertIn('newV.glsl', errors[0])
+            (root / 'class1' / 'newV.glsl').unlink()
+            base.write_text('class1/oldV.glsl\nclass1/goneV.glsl\n', encoding='utf-8')
+            errors = check.check_glsl_baseline(root, base)
+            self.assertEqual(len(errors), 1)
+            self.assertIn('goneV.glsl', errors[0])
+
+    def test_invariant_position_is_declared_by_every_vertex_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            shutil.copytree(FIXTURES, src)
+            module = src / 'position_mod.slang'
+            module.write_text(module.read_text(encoding='utf-8') + '\n#define VK_POSITION_INVARIANT 1\n', encoding='utf-8')
+            errors = check.check_position(src, self.out)
+            self.assertTrue(any('invariant' in e for e in errors), errors)
 
     def test_source_without_a_licence_header_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -285,7 +319,22 @@ class CommittedTreeTest(unittest.TestCase):
     def test_manifest_agrees_with_the_files(self):
         self.assertEqual(check.check_manifest(common.GENERATED), [])
         self.assertEqual(check.check_interface(common.GENERATED), [])
-        self.assertEqual(check.check_position(common.SLANG_SRC, common.GENERATED), [])
+        baseline = ROOT / 'scripts/shaders/glsl_position_baseline.txt'
+        self.assertEqual(check.check_position(common.SLANG_SRC, common.GENERATED, common.LEGACY_SHADERS, baseline), [])
+
+    def test_the_position_module_agrees_with_the_viewers_joint_limit(self):
+        limit = re.search(r'LL_MAX_JOINTS_PER_MESH_OBJECT\s*=\s*(\d+)',
+                          (ROOT / 'indra/llcharacter/lljoint.h').read_text(encoding='utf-8')).group(1)
+        module = (common.SLANG_SRC / 'position.slang').read_text(encoding='utf-8')
+        self.assertEqual(re.search(r'VK_MAX_JOINTS\s*=\s*(\d+)', module).group(1), limit)
+
+    def test_the_module_makes_the_position_invariant_and_every_vertex_stage_says_so(self):
+        module = (common.SLANG_SRC / 'position.slang').read_text(encoding='utf-8')
+        self.assertIn('#define VK_POSITION_INVARIANT 1', module)
+        stages = list(common.GENERATED.glob('*.vert.glsl'))
+        self.assertTrue(stages)
+        for path in stages:
+            self.assertIn('\ninvariant gl_Position;\n', path.read_text(encoding='utf-8'), path.name)
 
     def test_every_slang_source_carries_the_licence_line(self):
         for path in common.SLANG_SRC.rglob('*.slang'):

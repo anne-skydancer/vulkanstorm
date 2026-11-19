@@ -47,6 +47,15 @@ GL_SAMPLER_CUBE_MAP_ARRAY = 0x900C
 SAMPLER_TYPES = {0x8B5E, 0x8B60, 0x900C, 0x8DC1, 0x8DC5, 0x8B62, 0x904D, 0x8DC8}
 
 
+class Mat3x4Array:
+    """A uniform array of GLSL mat3x4 (3 columns of 4 rows): `rows` is each matrix as 4 rows of 3 values, row-major (what
+    glUniformMatrix3x4fv takes with transpose set, and what the viewer's palette upload sends)."""
+
+    def __init__(self, rows):
+        self.rows = [float(x) for x in rows]
+        self.count = len(self.rows) // 12
+
+
 class GL:
     """A hidden window with an OpenGL 4.6 core context, and the few entry points the cases need."""
 
@@ -178,6 +187,19 @@ class GL:
             if key is None or u['type'] in SAMPLER_TYPES:
                 continue
             v = values[key]
+            if isinstance(v, Mat3x4Array):  # GLSL mat3x4 array: v.rows holds 4 rows of 3 values per matrix (row-major)
+                if u['block'] < 0:
+                    data = struct.pack(f'{len(v.rows)}f', *v.rows)
+                    g('glUniformMatrix3x4fv', None, C.c_int, C.c_int, C.c_ubyte, C.c_void_p)(u['location'], v.count, 1, data)
+                else:
+                    buf = buffers.setdefault(u['block'], bytearray(blocks[u['block']]['size']))
+                    for m in range(v.count):
+                        for c in range(3):  # std140, column_major: a column is a vec4, 16 bytes
+                            column = [v.rows[m * 12 + r * 3 + c] for r in range(4)]
+                            at = u['offset'] + m * u['array_stride'] + c * u['matrix_stride']
+                            buf[at:at + 16] = struct.pack('4f', *column)
+                done.add(key)
+                continue
             vals = list(v) if isinstance(v, (list, tuple)) else [v]
             is_int = all(isinstance(x, int) and not isinstance(x, bool) for x in vals) and u['type'] in (0x1404, 0x8B53, 0x8B54, 0x8B55)
             data = struct.pack(f'{len(vals)}{"i" if is_int else "f"}', *vals)
@@ -277,6 +299,42 @@ class Target:
         g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
         g('glDeleteVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
         return np.frombuffer(out, dtype='<f4').reshape(self.h, self.w, 4).copy()
+
+
+def _draw_mesh(self, prog, attribs, count):
+    """Draw `count` vertices as triangles; attribs maps slot to an (count, n) float32 array. Returns the RGBA32F image."""
+    g = self.gl.fn
+    g('glBindFramebuffer', None, C.c_uint, C.c_uint)(GL_FRAMEBUFFER, self.fbo)
+    g('glViewport', None, C.c_int, C.c_int, C.c_int, C.c_int)(0, 0, self.w, self.h)
+    vao = C.c_uint()
+    g('glGenVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
+    g('glBindVertexArray', None, C.c_uint)(vao.value)
+    vbos = []
+    for slot, array in attribs.items():
+        vbo = C.c_uint()
+        g('glGenBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
+        g('glBindBuffer', None, C.c_uint, C.c_uint)(GL_ARRAY_BUFFER, vbo.value)
+        data = np.ascontiguousarray(array, dtype='<f4').tobytes()
+        g('glBufferData', None, C.c_uint, C.c_ssize_t, C.c_void_p, C.c_uint)(GL_ARRAY_BUFFER, len(data), data, GL_STATIC_DRAW)
+        g('glEnableVertexAttribArray', None, C.c_uint)(slot)
+        g('glVertexAttribPointer', None, C.c_uint, C.c_int, C.c_uint, C.c_ubyte, C.c_int, C.c_void_p)(
+            slot, array.shape[1], GL_FLOAT, 0, 4 * array.shape[1], None)
+        vbos.append(vbo)
+    g('glUseProgram', None, C.c_uint)(prog)
+    g('glClearColor', None, C.c_float, C.c_float, C.c_float, C.c_float)(-1.0, -1.0, -1.0, -1.0)
+    g('glClear', None, C.c_uint)(0x4000)
+    g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(GL_TRIANGLES, 0, count)
+    g('glFinish', None)()
+    out = (C.c_float * (self.w * self.h * 4))()
+    g('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+        0, 0, self.w, self.h, GL_RGBA, GL_FLOAT, out)
+    for vbo in vbos:
+        g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
+    g('glDeleteVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
+    return np.frombuffer(out, dtype='<f4').reshape(self.h, self.w, 4).copy()
+
+
+Target.draw_mesh = _draw_mesh
 
 
 # -- comparison -----------------------------------------------------------------------------------------------------
@@ -419,6 +477,110 @@ def radiance_candidate(gl, generated, program_id):
     return gl.program(texts['vertex'], texts['fragment'])
 
 
+# -- the object skin and the shared position module (bump, rigged and static) -----------------------------------------
+# The reference is class1/objects/bumpV.glsl with the hand-written class1/avatar/objectSkinV.glsl in the same unit; the
+# candidate is the generated bump program. Both fragment programs are replaced by one that writes the eye position
+# (vary_position) and the texture coordinates, so the image shows what the vertex stage computed, per pixel.
+SKIN_REF_FS = """#version 420
+in vec2 vary_texcoord0; in vec2 vary_texcoord1; in vec3 vary_position; out vec4 frag_color;
+void main() { frag_color = vec4(vary_position, vary_texcoord0.x + 2.0 * vary_texcoord1.y); }
+"""
+SKIN_CAND_FS = """#version 460
+layout(location = 0) in vec2 vary_texcoord0; layout(location = 1) in vec2 vary_texcoord1; layout(location = 2) in vec3 vary_position;
+layout(location = 0) out vec4 frag_color;
+void main() { frag_color = vec4(vary_position, vary_texcoord0.x + 2.0 * vary_texcoord1.y); }
+"""
+ATTRIB_SLOTS = ('position', 'normal', 'texcoord0', 'texcoord1', 'texcoord2', 'texcoord3', 'diffuse_color', 'emissive',
+                'tangent', 'weight', 'weight4')
+
+
+def skin_reference(gl, rigged):
+    defines = {'MAX_JOINTS_PER_MESH_OBJECT': '110'}
+    if rigged:
+        defines['HAS_SKIN'] = '1'
+    vs = read_legacy('objects/bumpV.glsl', defines, 'vertex')
+    if rigged:
+        skin = (common.LEGACY_SHADERS / 'class1/avatar/objectSkinV.glsl').read_text(encoding='utf-8')
+        vs += chr(10) + skin
+    return gl.program(vs, SKIN_REF_FS, attribs=ATTRIB_SLOTS)
+
+
+def skin_candidate(gl, generated, program_id):
+    manifest = check.load_manifest(generated)
+    prog = next((p for p in manifest['programs'] if p['id'] == program_id), None)
+    if prog is None:
+        return None
+    text = (Path(generated) / prog['stages']['vertex']['file']).read_text(encoding='utf-8')
+    return gl.program(check.assemble_source('vertex', text, {}), SKIN_CAND_FS)
+
+
+def _perspective(fov_deg, aspect, near, far):
+    f = 1.0 / np.tan(np.radians(fov_deg) / 2.0)
+    m = np.zeros((4, 4), dtype='f4')
+    m[0, 0], m[1, 1] = f / aspect, f
+    m[2, 2], m[2, 3] = (far + near) / (near - far), 2 * far * near / (near - far)
+    m[3, 2] = -1.0
+    return m
+
+
+def skin_mesh(rng, joints=6, cells=12):
+    """A wavy grid of triangles with four joints per vertex (index in the integer part, weight in the fraction)."""
+    xs = np.linspace(-1, 1, cells + 1, dtype='f4')
+    pos, uv0, uv1, weights = [], [], [], []
+    for i in range(cells):
+        for j in range(cells):
+            for ci, cj in [(i, j), (i + 1, j), (i, j + 1), (i + 1, j), (i + 1, j + 1), (i, j + 1)]:
+                pos.append((xs[ci], xs[cj], 0.3 * np.sin(3 * xs[ci]) * np.cos(2 * xs[cj])))
+                uv0.append((ci / cells, cj / cells))
+                uv1.append((cj / cells, ci / cells))
+                weights.append(rng.integers(0, joints, size=4) + rng.uniform(0.05, 0.95, size=4))
+    return np.array(pos, 'f4'), np.array(uv0, 'f4'), np.array(uv1, 'f4'), np.array(weights, 'f4')
+
+
+def run_skin(gl, rigged, candidate, size=96, frames=4, mode='tolerance'):
+    """Draw the rigged (or static) bump program with both the hand-written and the generated programs, over several
+    palettes and view angles, and compare the images of the eye position."""
+    rng = np.random.default_rng(11)
+    reference = skin_reference(gl, rigged)
+    target = Target(gl, size, size)
+    pos, uv0, uv1, weights = skin_mesh(rng)
+    attribs = {0: pos, 2: uv0, 3: uv1}
+    if rigged:
+        attribs[10] = weights
+    results = []
+    for frame in range(frames):
+        palette = []
+        for _ in range(6):
+            rot = np.eye(3, dtype='f4') + rng.normal(0, 0.15, (3, 3)).astype('f4')
+            trans = rng.normal(0, 0.25, 3).astype('f4')
+            palette += list(rot.reshape(-1)) + list(trans)  # 4 rows of 3: the 3x3 part, then the translation row
+        palette += [0.0] * (12 * (110 - 6))
+        angle = 0.35 * frame - 0.4
+        c, s = np.cos(angle), np.sin(angle)
+        view = np.array([[c, 0, s, 0.1], [0, 1, 0, -0.05], [-s, 0, c, -3.0], [0, 0, 0, 1]], dtype='f4')
+        proj = _perspective(60.0, 1.0, 0.1, 100.0)
+        values = {'modelview_matrix': list(view.T.reshape(-1)), 'projection_matrix': list(proj.T.reshape(-1)),
+                  'modelview_projection_matrix': list((proj @ view).T.reshape(-1)),
+                  'texture_matrix0': list(np.eye(4, dtype='f4').reshape(-1)), 'matrixPalette': Mat3x4Array(palette)}
+        images = {}
+        unset = []
+        for name, prog in (('ref', reference), ('cand', candidate)):
+            done = gl.set_uniforms(prog, values)
+            images[name] = target.draw_mesh(prog, attribs, len(pos))
+            if name == 'cand':
+                needed = {'modelview_matrix', 'texture_matrix0'}
+                needed |= {'projection_matrix', 'matrixPalette'} if rigged else {'modelview_projection_matrix'}
+                unset = sorted(needed - done)
+        r = compare(images['ref'], images['cand'], mode=mode)
+        r.update(case=f'{"rigged" if rigged else "static"} frame {frame}')
+        r['nonblack'] = int((images['ref'][..., 3] >= 0).sum())  # drawn pixels (the clear value is -1)
+        r['unset_uniforms'] = unset
+        if unset:
+            r['pass'] = False
+        results.append(r)
+    return results
+
+
 def summarize(results):
     return {
         'cases': len(results),
@@ -514,7 +676,7 @@ def selftest(gl):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('case', nargs='?', choices=['radiance'])
+    ap.add_argument('case', nargs='?', choices=['radiance', 'skin'])
     ap.add_argument('--list', action='store_true')
     ap.add_argument('--selftest', action='store_true')
     ap.add_argument('--generated', default=str(common.GENERATED))
@@ -524,6 +686,8 @@ def main():
     args = ap.parse_args()
     if args.list:
         print('radiance: class1/interface/radianceGen{V,F}.glsl against the generated program (tolerance mode)')
+        print('skin: class1/objects/bumpV.glsl with class1/avatar/objectSkinV.glsl (rigged) and without (static) against the '
+              'generated bump programs: the eye position per pixel (tolerance mode)')
         return 0
     gl = GL()
     print(f'GL: {gl.info["renderer"]} | {gl.info["version"]} | GLSL {gl.info["glsl"]}')
@@ -545,6 +709,17 @@ def main():
             print('FAIL: the reference drew nothing in at least one case; the comparison proves nothing')
             return 1
         return 0 if not summary['failed'] else 1
+    if args.case == 'skin':
+        failed = False
+        for rigged, program_id in ((True, 'bump__HAS_SKIN1'), (False, 'bump__HAS_SKIN0')):
+            cand = skin_candidate(gl, args.generated, program_id)
+            if cand is None:
+                print(f'candidate {program_id} is not generated yet; nothing compared')
+                return 2
+            summary = summarize(run_skin(gl, rigged, cand))
+            print(program_id, json.dumps(summary, indent=1))
+            failed |= bool(summary['failed']) or summary['nonblack_min'] == 0
+        return 1 if failed else 0
     ap.print_help()
     return 0
 
