@@ -2954,7 +2954,11 @@ void LLPipeline::markOccluder(LLSpatialGroup* group)
                 parent->getElementCount() == 0 &&
                 parent->needsUpdate())
             {
-                sCull->pushOcclusionGroup(group);
+                // <Vulkanstorm> queue the parent whose flag is set below; pushing the child a second time left the
+                // parent's ACTIVE_OCCLUSION set forever (only pushed groups are cleared in doOcclusion), so the
+                // parent was never occlusion-tested again
+                sCull->pushOcclusionGroup(parent);
+                // </Vulkanstorm>
                 parent->setOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION);
             }
         }
