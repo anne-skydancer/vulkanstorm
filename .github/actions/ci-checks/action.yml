@@ -133,6 +133,11 @@ runs:
         python3 scripts/tests/test_stochastic_layer_rank.py
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochasticlayerrank_test.cpp -o "$RUNNER_TEMP/stochastic-layer-rank-test"
         "$RUNNER_TEMP/stochastic-layer-rank-test"
+    - name: Check the skin palette cache's age rule (bounded while skins change, no entry in use dropped)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llskinpalettecache_test.cpp -o "$RUNNER_TEMP/skin-palette-cache-test"
+        "$RUNNER_TEMP/skin-palette-cache-test"
     - name: Check the texture streaming fixes (fetch retry rules, and the source guards of every texture streaming fix of 2026-11-18)
       shell: bash
       run: |
