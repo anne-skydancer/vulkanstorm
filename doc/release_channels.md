@@ -88,7 +88,7 @@ and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
 place by the bot, never a new comment per run). It reruns on the events that
 can change the answer: PR open, push, reopen, ready for review and base
 change; reviews and review comments; the end of a Build Windows, Build Linux,
-Build Linux LTS, Check PR, CI lint, CodeQL or FreeBSD runner image run; and a
+Build Linux LTS, Check PR, CI lint, CodeQL, FreeBSD runner image or PR review event run; and a
 push to a `vkstorm-*` line, which can make an open PR conflict. One run per PR
 at a time.
 
@@ -110,7 +110,7 @@ so a resolve (and an unresolve) shows at the next event above; rerun the
 once the workflow is on `vkstorm-release`, the default branch. A PR that
 conflicts cannot start `pull_request` workflows, so a conflict is found only
 through the push to its base line. A fork PR's own events have a read-only
-token: its status is written by the Check PR `workflow_run`.
+token: its status is written by the Check PR `workflow_run`, and for a review or review comment by the `PR review event` workflow, an empty unprivileged job whose `workflow_run` re-evaluates the PR with the run's head commit (no artifact, nothing from the fork is read).
 
 Drafts get the status too. It is for reading, not a required check; no branch
 protection depends on it. The script only reads the PR through the API and

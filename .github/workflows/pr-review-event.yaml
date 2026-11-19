@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# The unprivileged half of PR readiness for fork PRs. A review or review comment on a fork PR
+# runs workflows with a read-only token, so pr-readiness.yaml cannot write the status from
+# those events. This workflow does nothing; its completion triggers pr-readiness.yaml's
+# workflow_run in the base context (write token), which maps the run to its PR by the run's
+# head commit (never from anything this run produces). No checkout, no secrets, no PR code.
+# doc/release_channels.md, "PR readiness".
+name: PR review event
+
+on:
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+
+permissions: {}
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "Review event on ${{ github.event.pull_request.number }}; PR readiness re-evaluates it from the workflow_run."
