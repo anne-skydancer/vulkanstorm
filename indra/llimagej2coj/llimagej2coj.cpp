@@ -27,6 +27,7 @@
 #include "linden_common.h"
 #include "llimagej2coj.h"
 #include "llj2creduce.h" // <Vulkanstorm>
+#include "llj2cdecodeguard.h" // <Vulkanstorm>
 
 // this is defined so that we get static linking.
 #include "openjpeg.h"
@@ -451,22 +452,19 @@ public:
             *channels = image->numcomps;
         }
 
-        // Refuse a header that would make opj_decode allocate gigabytes. The limit applies to the
-        // size AFTER the discard (reduce) factor, which is what gets allocated and copied, and is
-        // deliberately far above MAX_IMAGE_SIZE (4096): images larger than that decode and display
-        // today (e.g. on OpenSim), so nothing that works now is refused. 16384 x 16384 x 4 channels
-        // is 1 GB, the most the old path could be asked for in practice.
+        // <Vulkanstorm> Refuse a header that would make opj_decode allocate gigabytes (llj2cdecodeguard.h): it takes
+        // 4 bytes per sample of every component at the size AFTER the discard (reduce) factor, which is what the
+        // limits apply to. Each side is held to 16384, far above MAX_IMAGE_SIZE (4096), since images larger than
+        // that decode and display; the components to 1 to MAX_IMAGE_COMPONENTS; and the samples to 1 GiB, which
+        // 8192 x 8192 with 4 components still fits. 16384 x 16384 with 4 components would be 4 GiB.
         {
-            constexpr U32 MAX_DECODE_DIMENSION = 16384;
             const U32 ref_w = (image->x1 > image->x0) ? (image->x1 - image->x0) : 0;
             const U32 ref_h = (image->y1 > image->y0) ? (image->y1 - image->y0) : 0;
-            const U32 round = (1u << discard_level) - 1;
-            const U64 reduced_w = ((U64)ref_w + round) >> discard_level;
-            const U64 reduced_h = ((U64)ref_h + round) >> discard_level;
-            if (reduced_w > MAX_DECODE_DIMENSION || reduced_h > MAX_DECODE_DIMENSION)
+            if (!LLJ2CDecodeGuard::decodeAllowed(ref_w, ref_h, image->numcomps, discard_level, MAX_IMAGE_COMPONENTS))
             {
-                LL_WARNS("Texture") << "J2C header declares " << reduced_w << "x" << reduced_h
-                                    << " after discard level " << (U32)discard_level << ", refusing to decode" << LL_ENDL;
+                LL_WARNS("Texture") << "J2C header declares " << ref_w << "x" << ref_h << " with " << image->numcomps
+                                    << " components, at discard level " << (U32)discard_level << ", refusing to decode"
+                                    << LL_ENDL;
                 return false;
             }
         }

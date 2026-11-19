@@ -30,6 +30,9 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
   factor below them when the coarsest level is no larger than the requested level of a MAX_IMAGE_SIZE image
   (llj2creduce.h; the rule is checked by indra/llimagej2coj/tests/llj2creduce_test.cpp, and against OpenJPEG by
   llj2creduce_openjpeg_test.cpp), with the calls in the same order as before.
+- The OpenJPEG wrapper refuses a header before opj_decode allocates for it when, after the reduce factor, a side
+  exceeds 16384, the components are not 1 to MAX_IMAGE_COMPONENTS or the samples (4 bytes each) exceed 1 GiB
+  (llj2cdecodeguard.h, checked against OpenJPEG by indra/llimagej2coj/tests/llj2cdecodeguard_openjpeg_test.cpp).
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -48,6 +51,7 @@ FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='r
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
 J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
 J2C_H = (ROOT / 'indra/llimage/llimagej2c.h').read_text(encoding='utf-8', errors='replace')
+J2C_GUARD = (ROOT / 'indra/llimagej2coj/llj2cdecodeguard.h').read_text(encoding='utf-8', errors='replace')
 
 
 def body(text, signature):
@@ -376,6 +380,22 @@ class J2CReduceFactor(unittest.TestCase):
         decode = code(member(J2COJ, '    bool decode(U8* data, U32 dataSize, U32* channels, U8 discard_level)'))
         factor = decode.index('opj_set_decoded_resolution_factor(decoder, discard_level);')
         self.assertLess(factor, decode.index('opj_read_header(stream, decoder, &image)'))
+
+
+class J2CDecodeGuard(unittest.TestCase):
+    def test_decode_refuses_before_opj_decode(self):
+        decode = code(member(J2COJ, '    bool decode(U8* data, U32 dataSize, U32* channels, U8 discard_level)'))
+        guard = decode.index('if (!LLJ2CDecodeGuard::decodeAllowed(ref_w, ref_h, image->numcomps, discard_level, '
+                             'MAX_IMAGE_COMPONENTS))')
+        self.assertLess(decode.index('opj_read_header(stream, decoder, &image)'), guard)
+        self.assertLess(guard, decode.index('opj_decode(decoder, stream, image)'))
+        self.assertEqual(decode.count('opj_decode('), 1)
+
+    def test_the_bounds(self):
+        guard = code(J2C_GUARD)
+        self.assertIn('constexpr unsigned long long MAX_DECODE_DIMENSION = 16384;', guard)
+        self.assertIn('constexpr unsigned long long MAX_DECODE_BYTES = 1ull << 30;', guard)
+        self.assertIn('constexpr unsigned long long BYTES_PER_SAMPLE = 4;', guard)
 
 
 if __name__ == '__main__':
