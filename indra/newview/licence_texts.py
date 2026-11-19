@@ -17,6 +17,45 @@ LICENCE_TEXTS = (
     ("../../NOTICE.md", "NOTICE.md"),
 )
 
+# The package licence files (packages/LICENSES) the viewer does not ship as
+# notices: the package is proprietary (kept out of the build), off in our
+# configuration or not part of this viewer. soloud*.txt and mesazink.txt are
+# staged by the manifest's own option checks. Every other *.txt there is
+# copied into licenses/ by package_licence_files(), so a bundled library can
+# never lack its notice (scripts/tests/test_licence_notices.py).
+PACKAGE_LICENCES_NOT_SHIPPED = frozenset({
+    "BUGSPLAT_LICENSE.txt",      # BugSplat, proprietary, off
+    "HavokSublicense.pdf",       # Havok, proprietary, stub only
+    "havok.txt",
+    "kdu.txt",                   # Kakadu, proprietary, never shipped
+    "fmodstudio.txt",            # FMOD, proprietary, off
+    "discord_sdk.txt",           # Discord Social SDK, proprietary, off
+    "discord-rpc.txt",           # USE_DISCORD, off
+    "llappearanceutility.txt",   # Linden Lab proprietary
+    "llphysicsextensions.txt",
+    "mesa.txt",                  # Mesa / Zink, not shipped
+    "mesazink.txt",              # staged by the manifest when USE_MESAZINK is on
+    "openal-soft.txt",           # USE_OPENAL, off
+    "gstreamer.txt",             # not shipped
+    "tracy_license.txt",         # USE_TRACY, off
+    "velopack.txt",              # USE_VELOPACK, off
+    "soloud.txt",                # staged by the manifest when SoLoud is built
+    "soloud-miniaudio.txt",
+})
+
+
+# Notices that the packages install at the top of packages/ instead of LICENSES/.
+PACKAGE_ROOT_LICENCES = ("mikktspace.txt", "vulkan_gltf.txt")
+
+
+def package_licence_files(directory):
+    """The notice files of the bundled packages: every *.txt of the directory but the unshipped ones."""
+    import os
+    return sorted(name for name in os.listdir(directory)
+                  if name.endswith(".txt") and name not in PACKAGE_LICENCES_NOT_SHIPPED
+                  and os.path.isfile(os.path.join(directory, name)))
+
+
 INSTALLER_LICENCE_HEADER = """\
 Vulkanstorm is free software, licensed under the GNU General Public License,
 version 3 or (at your option) any later version (the text below).

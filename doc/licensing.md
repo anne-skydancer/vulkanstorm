@@ -48,6 +48,20 @@ licence text in `licenses-*.txt`. OpenSim builds keep voice through WebRTC
 (`llwebrtc`, the os-webrtc-janus compatible path of Firestorm 7.1.10 and
 later); the voice-server selection no longer offers Vivox.
 
+## Notices shipped with the viewer
+
+Every build ships the notice of each bundled package in `licenses/`:
+`viewer_manifest.py` copies every `*.txt` of `packages/LICENSES/` plus
+`mikktspace.txt` and `vulkan_gltf.txt` (`licence_texts.package_licence_files`),
+except the packages listed in `PACKAGE_LICENCES_NOT_SHIPPED` (proprietary or
+off in our configuration: Kakadu, Havok, FMOD, BugSplat, Discord, Mesa/Zink,
+OpenAL, Tracy, Velopack). SoLoud and the Zink notices are staged by their
+options. `licenses.txt` (`licenses-win32.txt`, `licenses-linux.txt`) carries
+the notices that need a full text beside the binary, among them OpenJPEG
+(BSD-2-Clause, clause 2) and libjpeg-turbo with the IJG credit line; it holds
+no text of a component we do not ship. `scripts/tests/test_licence_notices.py`
+(run by `ci-checks`) guards both.
+
 ## Status key
 
 **OK** compatible with GPL-3.0; **separate** a separate program, distributed
