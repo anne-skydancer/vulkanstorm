@@ -30,6 +30,7 @@ from leap_client import LeapError, LeapSession, ViewerGone  # noqa: E402
 SCENARIO = HERE.parent / "scenarios" / "gl_submit_g0.json"
 ALPHA_CROWD = HERE.parent / "scenarios" / "alpha_crowd.json"
 ALPHA_CROWD_LOW = HERE.parent / "scenarios" / "alpha_crowd_lowtier.json"
+CENSUS = HERE.parent / "scenarios" / "gl_census.json"
 
 
 def session_for(fake):
@@ -267,10 +268,97 @@ class ProofRulesTest(unittest.TestCase):
         del bad[0]["attachments"][0]["injected"]
         self.assertFalse(pc.injection_caught(bad)[0])
 
+    def test_other_passes_and_the_back_buffer(self):
+        hud = [{"pass": 14, "label": "HUD", "ran": True, "attachments": [
+            {"name": "color", "injected": True, "mismatched_pixels": 1}, {"name": "depth", "mismatched_pixels": 0}]}]
+        self.assertEqual(pc.injection_caught(hud, 14), (True, "caught"))
+        self.assertFalse(pc.injection_caught(hud, 15)[0])     # the result of another pass proves nothing
+        self.assertFalse(pc.injection_caught(hud)[0])         # nor for the G-buffer
+        bad = json.loads(json.dumps(hud))
+        bad[0]["attachments"][0].pop("injected")
+        bad[0]["attachments"][1]["injected"] = True
+        self.assertFalse(pc.injection_caught(bad, 14)[0])     # the bit goes into the first attachment
+        self.assertIn("did not run", pc.injection_caught([{"pass": 15, "label": "impostor", "ran": False}], 15)[1])
+
     def test_thin_attachments(self):
         res = [{"label": "sun cascade 0", "ran": True, "identical": True, "attachments": [{"name": "depth", "distinct_values": 1}]},
                {"label": "G-buffer", "ran": True, "identical": True, "attachments": [{"name": "color0", "distinct_values": 40}]}]
         self.assertEqual(pc.thin_attachments(res), [("sun cascade 0", "depth")])
+
+
+class CensusAndProofsTest(unittest.TestCase):
+    ONE = [{"id": "current", "camera": None}]
+
+    def test_the_census_scenario_loads(self):
+        sc = pc.load_scenario(CENSUS)
+        self.assertTrue(sc["census"]["enabled"] and sc["census"]["resident"])
+        self.assertEqual(sc["compare"]["prove_passes"], [1, 13, 14, 15])
+        self.assertGreater(sc["compare"]["frames"], 1)
+        self.assertEqual({v["id"] for v in sc["variants"]}, {"sun", "all", "impostors", "mirrors"})
+
+    def test_a_census_run_writes_its_own_window_and_the_resident_census(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=self.ONE, census={"enabled": True, "frames": 7, "resident": True})
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            c = index["presets"]["current"]["census"]
+            self.assertEqual(c["frames"], 7)
+            self.assertTrue((run / c["window_file"]).is_file())
+            self.assertTrue((run / c["resident_file"]).is_file())
+            self.assertEqual(c["resident"]["instancing_ratio"], 4.0)
+            # the timed window counts no census; the census window has no GPU timers
+            self.assertEqual(fv.gl_window_begins[-1], {"frames": 7, "gpu": False, "census": True})
+            self.assertFalse(fv.gl_window_begins[0].get("census", False))
+            self.assertEqual(len(fv.gl_census_paths), 1)
+            # the report has the copy census per run
+            self.assertEqual(apc.main([str(run)]), 0)
+            text = (run / "report.txt").read_text(encoding="utf-8")
+            self.assertIn("copy census", text)
+            self.assertIn("4.00", text)     # the resident instancing ratio
+
+    def test_without_the_census_operation_a_census_scenario_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, drop_ops=("census",))
+            code, _run = run_main(fv, tmp, presets=self.ONE, census={"enabled": True, "frames": 5, "resident": True})
+            self.assertEqual(code, 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, drop_ops=("census",))
+            code, _run = run_main(fv, tmp, presets=self.ONE)
+            self.assertEqual(code, 0)       # a scenario without the census does not need it
+
+    def test_each_listed_pass_is_proven_with_the_armed_frames(self):
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 13, 14, 15], "frames": 30}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(index["proofs"], key=int), ["1", "13", "14", "15"])
+            self.assertTrue(all(p["ok"] and p["ran"] for p in index["proofs"].values()))
+            self.assertTrue(index["proof"]["ok"])
+            self.assertIn({"pass": 15, "frames": 30}, fv.gl_arms)
+            self.assertIn({"pass": -1, "frames": 30}, fv.gl_arms)
+
+    def test_a_pass_that_did_not_run_is_not_proven_and_warned_about(self):
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 15], "frames": 30}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_not_run_passes=(15,))
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertFalse(index["proofs"]["15"]["ok"] or index["proofs"]["15"]["ran"])
+            self.assertTrue(any("pass 15 is not proven" in w for w in index["warnings"]))
+
+    def test_a_pass_that_ran_and_missed_the_bit_fails_the_run(self):
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 14], "frames": 30}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp, gl_missed_injection_passes=(14,))
+            code, run = run_main(fv, tmp, presets=self.ONE, compare=compare)
+            self.assertEqual(code, 4)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertTrue(index["proofs"]["14"]["ran"])
+            self.assertFalse(index["proofs"]["14"]["ok"])
 
 
 def window_with(cpu, samples=1.0e6):

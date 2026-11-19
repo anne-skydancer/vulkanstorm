@@ -7,11 +7,14 @@ viewer with --leap (see README.md for the PowerShell lines). The script waits un
 scene has settled, then:
 
   1. proves the identical-image check: it compares the G-buffer with one bit flipped in the second readback and
-     requires the check to say DIFFERENT (without that proof a later IDENTICAL means nothing);
+     requires the check to say DIFFERENT (without that proof a later IDENTICAL means nothing); "prove_passes" proves
+     other compares the same way (a pass that did not run in its armed frames is recorded as not proven, a warning);
   2. for each camera preset of the scenario: points the camera, collects a window of N frames (counters per view
      and pass, CPU ms, GPU ms from timestamp queries), writes the window as JSON, optionally writes a Frame
      Profile, and runs the identical-image check on every pass it supports (the pass is rendered twice in one
-     frame and compared bit for bit; today both renders use the same path, so any difference is a harness bug).
+     frame and compared bit for bit; today both renders use the same path, so any difference is a harness bug);
+     with "census" enabled, a census window of its own (the copy census and the draw-state keys, dearer than the
+     counters) and the resident copy census of the scene, both as JSON.
 
 A scenario may list "variants" (each with its own settings, e.g. RenderAlphaSortMethod 0 and 1): every preset is
 measured once per variant, back to back, the order alternating from preset to preset (no order bias), and the other
@@ -58,6 +61,7 @@ DIRECTIONAL_API = "DirectionalShadows"  # optional: the dark gate's readout reco
 # the fixed skies of World > Environment that a variant may select ("region", the way back, is the script's own)
 ENVIRONMENTS = ("sunrise", "noon", "legacy noon", "sunset", "midnight")
 REQUIRED_OPS = ["status", "windowBegin", "windowStop", "summary", "dump", "compareArm", "compareResults", "profileFrame"]
+CENSUS_OPS = ["census"]     # required only by a scenario with the census enabled
 SETTINGS = ["RenderGLSubmitStats", "RenderGLSubmitStatsGPU", "RenderGLSubmitCompare", "RenderGLSubmitCompareInject",
             "RenderGLSubmitPath", "RenderAlphaSortMethod"]
 # what can cap the frame rate: recorded in perf.json, so a capped run can be recognised
@@ -81,7 +85,12 @@ DEFAULTS = {
     "presets": [{"id": "current", "camera": None}],
     "profile_frame": False,
     "overhead": {"probe_s": 5.0, "probe_repeats": 3, "bench_iterations": 2000000},
-    "compare": {"enabled": True, "passes": [-1], "prove_with_injection": True},
+    # prove_passes: the compares whose injection is proven (the G-buffer's is required); frames: how many frames an arming
+    # stays open until its passes have run (an impostor is regenerated now and then, not in every frame)
+    "compare": {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1], "frames": 1},
+    # the copy census (G5b-0, X1-0): after each preset's window, a census window of "frames" frames and, with "resident",
+    # the resident census of the whole scene
+    "census": {"enabled": False, "frames": 120, "resident": True},
 }
 
 
@@ -281,8 +290,9 @@ class TracyCapture:
                 self.proc.kill()
 
 
-def check_api(v):
-    """The GLSubmitStats API exists and has every operation. Returns the list of what is missing."""
+def check_api(v, census=False):
+    """The GLSubmitStats API exists and has every operation (the census's too when the scenario has it). Returns the list
+    of what is missing."""
     try:
         reply = v.req("LLLeap", "getAPI", api=API, timeout=30)
     except LeapError as exc:
@@ -290,7 +300,7 @@ def check_api(v):
     ops = {str(o.get("name")) for o in (reply.get("ops") or []) if isinstance(o, dict)}
     if not ops:
         return ["the API %s is not there: this viewer was not built with -DVKS_GL_STATS=ON" % API]
-    return ["operation %s.%s is missing" % (API, op) for op in REQUIRED_OPS if op not in ops]
+    return ["operation %s.%s is missing" % (API, op) for op in REQUIRED_OPS + (CENSUS_OPS if census else []) if op not in ops]
 
 
 def thin_attachments(results):
@@ -304,15 +314,19 @@ def thin_attachments(results):
     return out
 
 
-def injection_caught(results):
-    """(ok, why): the G-buffer ran and exactly the injection differs: color0, flagged injected, one pixel, nothing else."""
-    g = next((r for r in results or [] if r.get("label") == "G-buffer"), None)
+def injection_caught(results, pass_id=1):
+    """(ok, why): the pass ran and exactly the injection differs: its first attachment, flagged injected, one pixel,
+    nothing else."""
+    g = next((r for r in results or [] if str(r.get("pass")) == str(pass_id)), None)
+    if g is None and pass_id == 1:
+        g = next((r for r in results or [] if r.get("label") == "G-buffer"), None)
+    label = (g or {}).get("label") or ("pass %s" % pass_id)
     if g is None or not g.get("ran"):
-        return False, "the G-buffer did not run"
+        return False, "the %s did not run" % label if pass_id == 1 else "%s did not run" % label
     atts = g.get("attachments") or []
     injected = [a for a in atts if a.get("injected")]
-    if len(injected) != 1 or injected[0].get("name") != "color0":
-        return False, "no injection into color0 was reported"
+    if len(injected) != 1 or not atts or injected[0] is not atts[0]:
+        return False, "no injection into the first attachment (%s) was reported" % (atts[0].get("name") if atts else "none")
     if int(injected[0].get("mismatched_pixels", 0)) != 1:
         return False, "the injected bit changed %s pixels, not 1" % injected[0].get("mismatched_pixels")
     others = [a.get("name") for a in atts if not a.get("injected") and int(a.get("mismatched_pixels", 1)) != 0]
@@ -515,15 +529,16 @@ class Run:
                 log("could not restore %s=%r: %s" % (key, val, exc))
 
     # -- steps -----------------------------------------------------------------------------------
-    def wait_window(self, start_wall):
+    def wait_window(self, start_wall, want_gpu=None):
         sc = self.sc
+        want_gpu = sc["window"]["gpu"] if want_gpu is None else want_gpu
         end = time.monotonic() + sc["settle"]["window_timeout_s"]
         while True:
             st = self.v.req(API, "status")
             collected, target = int(st.get("window_collected", 0)), int(st.get("window_target", 0))
             gpu = int(st.get("window_gpu_frames", 0))
             done = not st.get("window_active") and collected >= target > 0
-            if done and (not sc["window"]["gpu"] or gpu >= collected):
+            if done and (not want_gpu or gpu >= collected):
                 return collected, gpu, time.monotonic() - start_wall
             if time.monotonic() > end:
                 self.warn("the window did not finish in %.0f s (collected %d of %d, gpu %d)"
@@ -532,11 +547,12 @@ class Run:
             self.tick(0.5)
 
     def compare_once(self, pass_id, inject=0):
-        """Arm the check for the next frame and read its results."""
+        """Arm the check for the next frame (or the scenario's "frames", until the passes have run) and read its results."""
         if inject:
             self.change("RenderGLSubmitCompareInject", inject)
         before = int(self.v.req(API, "compareResults").get("arm_serial", 0))
-        self.v.req(API, "compareArm", **{"pass": pass_id})
+        frames = int(self.sc["compare"].get("frames", 1))
+        self.v.req(API, "compareArm", **({"pass": pass_id, "frames": frames} if frames > 1 else {"pass": pass_id}))
         end = time.monotonic() + self.sc["settle"]["compare_wait_s"] + 20.0
         # the setting stays set until a frame takes it; the frame disarms itself when it is over
         finished = False
@@ -559,16 +575,56 @@ class Run:
         return r.get("results") or []
 
     def prove_injection(self):
-        try:
-            results = self.compare_once(1, inject=1)
-            ok, why = injection_caught(results)
-        except LeapError as exc:
-            results, ok, why = [], False, str(exc)
-        self.index["proof"] = {"ok": ok, "why": why, "results": results}
-        log("PROOF %s: one flipped bit in the G-buffer readback: %s" % ("PASS" if ok else "FAIL", why))
-        for label, name in thin_attachments(results):
-            log("note: %s %s holds one distinct value" % (label, name))
-        return ok
+        """The G-buffer's proof is required. Each other pass of "prove_passes" is proven the same way: one that ran without
+        catching the bit fails the run; one that did not run in its armed frames is recorded as not proven, with a warning."""
+        ok_all = True
+        proofs = {}
+        for pass_id in [1] + [int(p) for p in self.sc["compare"].get("prove_passes", [1]) if int(p) != 1]:
+            try:
+                results = self.compare_once(pass_id, inject=1)
+                ok, why = injection_caught(results, pass_id)
+            except LeapError as exc:
+                results, ok, why = [], False, str(exc)
+            ran = any(str(r.get("pass")) == str(pass_id) and r.get("ran") for r in results) or (pass_id == 1 and ok)
+            proofs[str(pass_id)] = {"ok": ok, "ran": ran, "why": why, "results": results}
+            if pass_id == 1:
+                self.index["proof"] = {"ok": ok, "why": why, "results": results}
+                log("PROOF %s: one flipped bit in the G-buffer readback: %s" % ("PASS" if ok else "FAIL", why))
+                ok_all = ok_all and ok
+            elif ran:
+                log("PROOF %s: one flipped bit in pass %d's readback: %s" % ("PASS" if ok else "FAIL", pass_id, why))
+                ok_all = ok_all and ok
+            else:
+                self.warn("pass %d is not proven: %s" % (pass_id, why))
+            for label, name in thin_attachments(results):
+                log("note: %s %s holds one distinct value" % (label, name))
+        self.index["proofs"] = proofs
+        return ok_all
+
+    def census(self, key, info):
+        """A census window of its own (the copy census and the draw-state keys cost a hash and a set insertion per draw and
+        face, so they stay out of the timed window) and the resident census of the scene."""
+        cs = self.sc["census"]
+        start = time.monotonic()
+        self.v.req(API, "windowBegin", frames=int(cs["frames"]), gpu=False, census=True)
+        collected, _gpu, wall = self.wait_window(start, want_gpu=False)
+        path = self.out / ("census_window_%s.json" % key)
+        self.v.req(API, "dump", kind="window", path=str(path).replace("\\", "/"))
+        entry = {"frames": collected, "wall_s": round(wall, 3), "window_file": path.name}
+        if collected < int(cs["frames"]):
+            self.index["window_failures"].append({"preset": key, "census": True, "collected": collected, "target": int(cs["frames"])})
+        if cs.get("resident", True):
+            rpath = self.out / ("census_resident_%s.json" % key)
+            r = self.v.req(API, "census", path=str(rpath).replace("\\", "/"))
+            entry["resident_file"] = rpath.name
+            entry["resident"] = {k: r.get(k) for k in ("faces", "items_without_record", "instancing_baked_bytes",
+                                                        "instancing_unique_bytes", "instancing_ratio")}
+            log("census %s: %s faces resident, instancing (64+ vertices) %.1f MB baked against %.1f MB unique (%.2fx)%s" % (
+                key, r.get("faces"), float(r.get("instancing_baked_bytes") or 0) / 1.0e6,
+                float(r.get("instancing_unique_bytes") or 0) / 1.0e6, float(r.get("instancing_ratio") or 0),
+                "; %s draw items have no census record (built before the viewer recorded them)" % r.get("items_without_record")
+                if r.get("items_without_record") else ""))
+        info["census"] = entry
 
     def tick(self, period):
         """Wait `period` s; with a moving camera instead turn it on (about 10 Hz) by point_camera calls."""
@@ -1027,6 +1083,9 @@ class Run:
             info["compare"] = allres
             write_json_atomic(self.out / ("compare_%s.json" % key), allres)
 
+        if sc["census"].get("enabled"):
+            self.census(key, info)
+
     def go(self):
         sc = self.sc
         v = self.v
@@ -1364,7 +1423,7 @@ def dry_run(v, sc, args, outdir):
             except LeapError as exc:
                 rows.append(("api " + api, "FAIL", str(exc)))
     else:
-        problems = check_api(v)
+        problems = check_api(v, census=bool(sc["census"].get("enabled")))
         rows = [("api", "FAIL" if problems else "PASS", "; ".join(problems) or "%s has %d operations" % (API, len(REQUIRED_OPS)))]
     if not problems and not args.fps_from_log:
         st = v.req(API, "status")
@@ -1512,7 +1571,7 @@ def execute(session, args, sc, outdir):
         args.vlog = vlog
         if args.dry_run:
             return dry_run(v, sc, args, outdir)
-        problems = [] if args.fps_from_log else check_api(v)
+        problems = [] if args.fps_from_log else check_api(v, census=bool(sc["census"].get("enabled")))
         if problems:
             log("FAILED: " + "; ".join(problems))
             return 1

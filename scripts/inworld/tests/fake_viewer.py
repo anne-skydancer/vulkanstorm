@@ -90,7 +90,7 @@ class FakeViewer:
                  water_combo=REGION_DEFAULT, dc_combo=REGION_DEFAULT, on_op=None, personal_open=False, break_after_ops=0, crowd=0, fixed_open=False,
                  bad_takes=(), bad_kind="black", gl_stats=False, gl_stats_catches_injection=True, gl_stats_diff_pass=None,
                  logs_dir=None, gl_stale_results=False, gl_not_run=False, gl_gpu_lag=False, gl_empty_gbuffer=False, gl_short_window=False,
-                 gl_m1_fps_factor=1.0, u32_as_string=False, projector=None):
+                 gl_m1_fps_factor=1.0, u32_as_string=False, projector=None, gl_not_run_passes=(), gl_missed_injection_passes=()):
         # gl_stats: the viewer has the GLSubmitStats API (a development build). gl_stats_catches_injection=False models a
         # broken identical-image check; gl_stats_diff_pass names a pass the fake renders differently the second time.
         self.projector = projector            # a model of the projector shadow pool (ProjectorShadows.stats), or None
@@ -103,6 +103,11 @@ class FakeViewer:
         self.gl_gpu_lag = gl_gpu_lag          # the GPU times of the last window frame never arrive
         self.gl_empty_gbuffer = gl_empty_gbuffer
         self.gl_short_window = gl_short_window  # the window never reaches its frame target
+        self.gl_not_run_passes = set(gl_not_run_passes)   # compare ids that do not run in their armed frames (no impostor)
+        self.gl_missed_injection = set(gl_missed_injection_passes)  # compare ids whose check misses the injected bit
+        self.gl_arms = []               # every compareArm request, as sent
+        self.gl_window_begins = []      # every windowBegin request, as sent
+        self.gl_census_paths = []       # every census request's path
         self.gl_serial = 0
         self.gl_window = {"target": 0, "collected": 0, "gpu": 0}
         self.u32_as_string = u32_as_string          # LLSD has no unsigned type: the real viewer returns a U32 as a string
@@ -246,7 +251,7 @@ class FakeViewer:
                     return self._reply(d, {"error": "no such API GLSubmitStats"})
                 return self._reply(d, {"name": "GLSubmitStats", "ops": [
                     {"name": o} for o in ("status", "windowBegin", "windowStop", "summary", "dump", "compareArm",
-                                          "compareResults", "profileFrame", "selfBench") if o not in self.drop_ops]})
+                                          "compareResults", "profileFrame", "selfBench", "census") if o not in self.drop_ops]})
             ops = {"LLStartUp": ["postStartupState", "getStateTable"], "LLViewerControl": ["get", "set", "groups"],
                    "LLFloaterReg": ["showInstance", "hideInstance", "instanceVisible", "clickButton"],
                    "UI": ["getValue", "setSelectedByValue"],
@@ -521,8 +526,8 @@ class FakeViewer:
             self._reply(d, {"items": items})
 
     # -- GLSubmitStats (a development build) -----------------------------------------------------
-    GL_PASSES = ["G-buffer", "sun cascade 0", "sun cascade 1", "sun cascade 2", "sun cascade 3", "spot shadow 0",
-                 "spot shadow 1", "post-deferred"]
+    GL_PASSES = {1: "G-buffer", 2: "sun cascade 0", 3: "sun cascade 1", 4: "sun cascade 2", 5: "sun cascade 3", 6: "spot shadow 0",
+                 7: "spot shadow 1", 8: "post-deferred", 13: "probe face", 14: "HUD", 15: "impostor"}
 
     def _gl_totals(self):
         return {"draws": 4200.0, "drawTriangles": 1.5e6, "vbChanges": 3900.0, "attribRespecs": 3950.0, "iboBinds": 3900.0,
@@ -545,16 +550,19 @@ class FakeViewer:
         if op == "status":
             self._reply(d, {"compiled": True, "window_target": w["target"], "window_collected": w["collected"],
                             "window_gpu_frames": w["gpu"], "window_active": w["collected"] < w["target"],
+                            "window_census": bool(w.get("census")),
                             "compare_armed": 0, "compare_results": len(self.gl_compare_results),
                             "frame_count": int(self._frame_count())})
         elif op == "windowBegin":
             n = int(d.get("frames", 60))
+            self.gl_window_begins.append({k: d[k] for k in ("frames", "gpu", "census") if k in d})
             if self.gl_short_window:
                 self.gl_window = {"target": n, "collected": n // 2, "gpu": n // 2}
                 self._reply(d, {"frames": n})
                 return
-            self.gl_window = {"target": n, "collected": n, "gpu": (n - 1 if self.gl_gpu_lag else n) if d.get("gpu", True) else 0}
-            self._reply(d, {"frames": n})
+            self.gl_window = {"target": n, "collected": n, "gpu": (n - 1 if self.gl_gpu_lag else n) if d.get("gpu", True) else 0,
+                              "census": bool(d.get("census"))}
+            self._reply(d, {"frames": n, "census": bool(d.get("census"))})
         elif op == "windowStop":
             self._reply(d, {"collected": w["collected"]})
         elif op == "summary":
@@ -579,6 +587,7 @@ class FakeViewer:
             pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
             self._reply(d, {"path": d["path"]})
         elif op == "compareArm":
+            self.gl_arms.append({k: d[k] for k in ("pass", "frames") if k in d})
             if self.gl_stale:
                 return self._reply(d, {"armed": int(d.get("pass", -1))})
             self.gl_compare_pending = int(d.get("pass", -1))
@@ -589,16 +598,19 @@ class FakeViewer:
                 # the next frame takes the arming; it compares, then the setting is back to 0
                 inject = self.settings["RenderGLSubmitCompareInject"][1]
                 results = []
-                for i, label in enumerate(self.GL_PASSES, 1):
+                for i, label in self.GL_PASSES.items():
                     if self.gl_compare_pending not in (-1, i):
                         continue
-                    if self.gl_not_run:
+                    if self.gl_not_run or i in self.gl_not_run_passes:
                         results.append({"pass": i, "label": label, "ran": False, "identical": False, "note": "not run", "attachments": []})
                         continue
-                    injected = bool(inject and i == 1 and self.gl_catches)
+                    # the injection goes into the first attachment of the first pass the arming compares
+                    injected = bool(inject and i == (1 if self.gl_compare_pending == -1 else self.gl_compare_pending) and self.gl_catches
+                                    and i not in self.gl_missed_injection)
                     other = self.gl_diff_pass == label
                     distinct = 1 if (self.gl_empty_gbuffer and i == 1) else 50
-                    atts = [{"name": "color0", "pixels": 100, "mismatched_pixels": 1 if injected else 0, "distinct_values": distinct}]
+                    first = "color" if i == 14 else "color0"
+                    atts = [{"name": first, "pixels": 100, "mismatched_pixels": 1 if injected else 0, "distinct_values": distinct}]
                     if injected:
                         atts[0]["injected"] = True
                     if i == 1:
@@ -615,6 +627,15 @@ class FakeViewer:
             self._reply(d, {"iterations": d.get("iterations"), "hooks_per_draw": 20, "ns_per_draw_not_collecting": 9.0,
                             "ns_per_draw_collecting": 80.0, "ns_per_hook_not_collecting": 0.45, "ns_per_hook_collecting": 4.0,
                             "ns_per_scope_cpu_only": 400.0, "ns_per_scope_with_gpu_timers": 900.0})
+        elif op == "census":
+            import json  # noqa: PLC0415
+            self.gl_census_paths.append(d.get("path"))
+            doc = {"schema": 1, "kind": "resident_census", "items": 900, "items_without_record": 0, "faces": 1500,
+                   "instancing": {"min_vertices": 64, "baked_bytes": 40.0e6, "unique_bytes": 10.0e6, "ratio": 4.0}}
+            pathlib.Path(d["path"]).parent.mkdir(parents=True, exist_ok=True)
+            pathlib.Path(d["path"]).write_text(json.dumps(doc), encoding="utf-8")
+            self._reply(d, {"path": d["path"], "faces": 1500, "items_without_record": 0, "instancing_baked_bytes": 40.0e6,
+                            "instancing_unique_bytes": 10.0e6, "instancing_ratio": 4.0})
         elif op == "profileFrame":
             if self.logs_dir:
                 p = pathlib.Path(self.logs_dir) / "profile.vfake.json"

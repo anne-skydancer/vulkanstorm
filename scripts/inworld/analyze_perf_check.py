@@ -3,7 +3,8 @@
 """Report on a perf_check.py run folder (or on one window JSON written by GLSubmitStats.dump).
 
   python analyze_perf_check.py RUNDIR                 -> RUNDIR/report.txt (also printed)
-  (a run with "variants", e.g. alpha_crowd.json, also gets the sorted alpha vs stochastic table and the verdict)
+  (a run with "variants", e.g. alpha_crowd.json, also gets the sorted alpha vs stochastic table and the verdict;
+   a run with the census, gl_census.json, gets the copy census per run)
   python analyze_perf_check.py RUNDIR --compare BASE  -> the totals of each preset against the same preset of BASE
                                                          (delta = RUNDIR minus BASE)
 
@@ -108,6 +109,63 @@ def report_preset(pid, entry):
     lines.append(table([[p.get("view"), p.get("pass"), fmt(p.get("calls")), fmt(p.get("draws")), fmt(p.get("cpu_ms")),
                          fmt(p.get("gpu_ms")), fmt(p.get("vbChanges")), fmt(p.get("uniformGL")), fmt(p.get("runs"))] for p in top],
                        ["view", "pass", "calls", "draws", "cpu ms", "gpu ms", "vbo chg", "uni gl", "runs"]))
+    return lines
+
+
+CENSUS_SIZES = ["under_64", "64_255", "256_575", "576_up"]
+
+
+def read_json(path):
+    try:
+        return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def report_census(run_dir, idx):
+    """The copy census (G5b-0, X1-0): per run, the resident census of the scene and the census window's per-frame totals."""
+    runs = [(pid, info["census"]) for pid, info in (idx or {}).get("presets", {}).items() if info.get("census")]
+    if not runs or run_dir is None:
+        return []
+    lines = ["=" * 100, "copy census (doc/gl/instrumentation.md, 'The copy census'); MB = 10^6 bytes"]
+    res_rows, win_rows = [], []
+    for pid, c in runs:
+        res = read_json(run_dir / c["resident_file"]) if c.get("resident_file") else None
+        if res:
+            faces = num(res.get("faces"))
+            eligible = num(((res.get("by_reason") or {}).get("eligible") or {}).get("faces"))
+            sizes = res.get("eligible_by_size") or {}
+            small = sizes.get("under_64") or {}
+            all_bytes = num(res.get("bytes"))
+            small_repeat = num(small.get("baked_bytes")) - num(small.get("unique_bytes"))
+            inst = res.get("instancing") or {}
+            rig = res.get("rigged_sharing") or {}
+            res_rows.append([pid, fmt(faces), fmt(100.0 * eligible / faces) if faces else "-",
+                             fmt(num(inst.get("baked_bytes")) / 1.0e6), fmt(num(inst.get("unique_bytes")) / 1.0e6), fmt(inst.get("ratio")),
+                             fmt(100.0 * small_repeat / all_bytes) if all_bytes else "-", fmt(small.get("repeat_bake_ms")),
+                             fmt(num(rig.get("bytes")) / 1.0e6), fmt(num(rig.get("unique_bytes")) / 1.0e6)])
+        win = read_json(run_dir / c["window_file"]) if c.get("window_file") else None
+        if win:
+            t = win.get("totals") or {}
+            cs = t.get("census") or {}
+            long_runs = sum(num(h) for s in CENSUS_SIZES[:3] for h in ((cs.get("run_hist") or {}).get(s) or [])[5:])
+            win_rows.append([pid, fmt(cs.get("faces")), fmt(cs.get("instanced_items")), fmt(cs.get("mixed_items")),
+                             fmt(cs.get("p0_extra_calls")), fmt(cs.get("p0_switches")), fmt(cs.get("p1_lost_vertices")),
+                             fmt(long_runs), fmt(t.get("runs")), fmt(t.get("runsNoUniform")), fmt(t.get("stateKeysDistinct"))])
+    if res_rows:
+        lines.append("resident (each face once): eligible share of faces; instancing = eligible faces of 64 vertices and more, baked "
+                     "(every copy) against unique (one per key); small repeated = baked minus unique bytes of eligible faces under "
+                     "64 vertices, as a share of all baked bytes (X1-P2 asks for 10 %), and the bake of their copies past the first "
+                     "(X1-P2 asks for 20 ms per teleport); rigged sharing = rigged, non-blended faces")
+        lines.append(table(res_rows, ["run", "faces", "eligible %", "inst MB", "unique MB", "ratio", "small rep %", "small rep ms",
+                                      "rigged MB", "rigged uniq MB"]))
+        lines.append("")
+    if win_rows:
+        lines.append("census window, per frame: P0 = per face (extra calls; baked/instanced switches in list order), P1 = per item "
+                     "(lost: instanced vertices of mixed items); long runs = runs of one key of 17+ copies under 576 vertices "
+                     "(N-SF1's replicas); runs against runsNoUniform (G6r-0); state keys (the bucket count)")
+        lines.append(table(win_rows, ["run", "faces", "inst items", "mixed", "P0 calls", "P0 switch", "P1 lost v", "long runs",
+                                      "runs", "runsNoUni", "state keys"]))
     return lines
 
 
@@ -387,6 +445,8 @@ def main(argv=None):
         lines += report_preset(pid, entry)
     lines += report_methods(entries)
     lines += report_compare(idx)
+    run_path = pathlib.Path(args.run)
+    lines += report_census(run_path if run_path.is_dir() else None, idx)
     if args.compare:
         base, _ = load(args.compare)
         lines += report_delta(entries, base)
