@@ -48,8 +48,10 @@ class ProjectorLampFilter(unittest.TestCase):
 
     def test_lookup_passes_the_projector_cap(self):
         util = UTIL.read_text(encoding='utf-8')
-        sample = util[util.index('float sampleProjectorShadow('):]
+        sample = util[util.index('vec3 sampleProjectorShadow('):]   # per colour channel since lamp shadows L3
         self.assertIn('pen, vec2(ST_SPOT_KERNEL_TEXELS_MAX))', sample)
+        # the light-through filter takes the same cap (scripts/tests/test_light_through_twin.py checks the rest of it)
+        self.assertIn('SHADOW_BIAS_TEXELS * z_tex, z_tex, pen,\n                               vec2(ST_SPOT_KERNEL_TEXELS_MAX));', sample)
 
 
 if __name__ == '__main__':

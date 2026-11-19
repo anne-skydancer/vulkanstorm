@@ -248,9 +248,10 @@ release lookup L1 costs -0.08 to +0.07 ms, +0.3 to -0.25 fps at 60. AMD and Inte
   depends on the tile there (the light-size audit's A5).
 - **The umbra shortcut** (all 36 search texels blocked returns 0) can skip a hole of a lace within the filter disc: on a lace at 1 cm
   texels with the 4.5 cm lamp, three neighbour pairs in 36,000 differ by 0.27.
-- **See-through casters** keep today's rule: glass is a dither (grain under the filter: the twin's gradient energy is 6 to 9 times the
-  truth's at 1 and 0.5 cm texels), lace takes the creator's cutoff on the mip-averaged mask (one solid shadow on coarse tiles). The
-  study's stage L3 (a light-let-through layer) is the fix.
+- **See-through casters** in L1 kept the old rule: glass was a dither (grain under the filter: the twin's gradient energy is 6 to 9
+  times the truth's at 1 and 0.5 cm texels), lace takes the creator's cutoff on the mip-averaged mask (one solid shadow on coarse
+  tiles). Lamp shadows L3 (below, "The light let through see-through casters") replaces the dither of blended faces in the fixed layer;
+  mask faces keep the cutoff.
 - **A moving caster** on a coarse tile moves in soft steps of the texel (L2 keeps the tiles at their lamp's size while the atlas has room).
 
 ## Stage P3: cache and camera-proof
@@ -280,7 +281,7 @@ One cause per render (the first that made it stale); the stats API counts them (
 | `lowres` | a resize (L2): the valve or the lamp's cone or reach changed the tile's size; its render draws the new size into a new rect and swaps it in (draw-then-swap; the name is kept for the stats) |
 | `other` | the dirty list overflowed (65536 boxes in one frame), or a hook ran off the main thread: every tile is stale once |
 
-Texture-coordinate and colour rebuilds (texture animation) never make a tile stale, nor does a request for the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. `markForUpdate` also sets `mVolumeChanged`, so the prim's rebuild moves it in the octree once and that move pushes (selecting or deselecting a prim redraws the tiles that see it once). The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A tint and the material setters ask for `REBUILD_ALL`, which the rule counts; they are handled as texture-entry rebuilds (under "Lamps that scripts switch" below), so a tint, an emissive, a PBR colour or a material that leaves the silhouette alone pushes nothing at its request or at its rebuild, in a static linkset or an active one. A texture, material, bump, glow or colour change dirties tiles only when it changes the prim's silhouette key (`llprojectorpool::texturedDirties(was_key, now_key, known)`; what goes into the key is under "Lamps that scripts switch" below): a face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one, so both change the key and push. `was_key` is the object's `mPoolAlphaKey`, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The key is only kept while the feed tracks, so a bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown key makes `texturedDirties` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint) or the new one (the `setTE*` and material setters, `changeTEImage`). A call that sees the old state finds the key it stored and pushes nothing, so the call after the change is the one that counts: `setTEColor` calls `markTextured` again after an alpha change, and that second call is required (its `REBUILD_VOLUME` pushes as well). An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the key (the face counts as alpha only once its texture's components are known, and the channel count is in the key) and pushes when the key changed. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
+Texture-coordinate and colour rebuilds (texture animation) never make a tile stale, nor does a request for the whole `REBUILD_GEOMETRY` set (`markForUpdate`, selection: it carries `POSITION` only because it rebuilds everything), nor a lamp's colour, intensity or falloff. `markForUpdate` also sets `mVolumeChanged`, so the prim's rebuild moves it in the octree once and that move pushes (selecting or deselecting a prim redraws the tiles that see it once). The rule is tested with the real `LLDrawable` flag values (`llprojectorpool::rebuildDirties`; `llshadowdirtyfeed.cpp` static-asserts that they match `lldrawable.h`). A tint and the material setters ask for `REBUILD_ALL`, which the rule counts; they are handled as texture-entry rebuilds (under "Lamps that scripts switch" below), so a tint, an emissive, a PBR colour or a material that leaves the silhouette alone pushes nothing at its request or at its rebuild, in a static linkset or an active one (since lamp shadows L3 the colour of a face the blend pass draws is part of the silhouette: it colours the light the face lets through, so its tint pushes; see "The light let through see-through casters"). A texture, material, bump, glow or colour change dirties tiles only when it changes the prim's silhouette key (`llprojectorpool::texturedDirties(was_key, now_key, known)`; what goes into the key is under "Lamps that scripts switch" below): a face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one, so both change the key and push. `was_key` is the object's `mPoolAlphaKey`, what the feed last saw; `noteTextured` and `noteDrawable` (every put, rebuild and edit of an object that can be a fixed caster) refresh it. The key is only kept while the feed tracks, so a bit, `POOL_ALPHA_KNOWN`, says it was written since tracking started (`setTracking(true)` clears it on every object in one walk of the object list, once per switch-on; an object that leaves the fixed layer loses it too): an unknown key makes `texturedDirties` push once, conservatively, and the object is known from then on. A prim with an alpha face that predates tracking (login with Stochastic, a switch from Legacy) and is made opaque by its first edit is therefore covered. A face whose material has alpha mode None or Emissive counts as opaque whatever its texture carries (it goes to the opaque pool and is not masked: `LLPipeline::getPoolTypeFromTE`), like the shadow pass. `LLPipeline::markTextured` callers differ in whether the hook sees the old state (`LLVOVolume::setTEColor` calls it before `LLPrimitive::setTEColor` applies the tint) or the new one (the `setTE*` and material setters, `changeTEImage`). A call that sees the old state finds the key it stored and pushes nothing, so the call after the change is the one that counts: `setTEColor` calls `markTextured` again after an alpha change, and that second call is required (its `REBUILD_VOLUME` pushes as well). An opaque prim's opaque-to-opaque texture swaps never push. Animated textures never do, on any face (a known limit for alpha faces: the tile keeps the silhouette of its last render). An alpha texture that finishes loading raises `REBUILD_VOLUME` in `LLFace::dirtyTexture` and so dirties; an opaque or still-unloaded texture does not. A texture of any component count that finishes loading also calls `markTextured` at the end of `LLFace::dirtyTexture`, which refreshes the key (the face counts as alpha only once its texture's components are known, and the channel count is in the key) and pushes when the key changed. A tint's alpha change raises `REBUILD_VOLUME` in `LLVOVolume::setTEColor` and dirties by itself. A 2-component (grey plus alpha) texture arriving later is covered by that `markTextured` call, although `dirtyTexture` raises the rebuild only for 4-component textures; the upstream condition is left as it is.
 
 ### The hooks, and the thread each runs on
 
@@ -715,9 +716,17 @@ and its size only (the camera's direction enters nowhere); Legacy and the sun ar
   alpha-textured and, for each, its alpha, texture and channel count, mapping (repeats, offset, rotation, planar) and alpha mode
   (legacy or glTF, with the base colour texture and its transform); and which glTF faces are double-sided, since the shadow pass draws
   their back faces too (`lldrawpool.cpp` disables the cull for them). `noteTextured` pushes only when the key changes
-  (`llprojectorpool::texturedDirties(was_key, now_key, known)`); fullbright, glow, shine, bump, RGB tints, emissive, the PBR colour and
-  the light's own colour never do. A face turned opaque or alpha, a new alpha texture, a moved mask or a material turned double-sided
-  still push. Every caller is a main-thread hook, as before.
+  (`llprojectorpool::texturedDirties(was_key, now_key, known)`); fullbright, glow, shine, bump, emissive, the RGB of an opaque or
+  alpha-masked face and the light's own colour never do. A face turned opaque or alpha, a new alpha texture, a moved mask or a material
+  turned double-sided still push. Every caller is a main-thread hook, as before.
+- **Since lamp shadows L3 the colour of a blended face is a silhouette input.** The light-through layer colours a lamp's light by the
+  vertex colour of the faces the blend pass draws (`LLPipeline::getPoolTypeFromTE` gives the alpha pool: the face's tint, or a glTF
+  material's base colour, the bytes `LLFace` writes), so the key carries those three bytes (`SilhouetteFace::tint`, `rgb`): a red pane
+  recoloured blue, by an edit, a script's `PRIM_COLOR` or a glTF override, redraws the tiles that see it. The trade-off against S2: a
+  blinker that toggles the colour of a blended face (not of an opaque or masked one) pushes once a toggle (the rebuild's first own push
+  finds the new key: `testTextureEntryRebuilds`, 600 pushes in a minute of 0.1 s toggles, static or in an active linkset), and its
+  tiles are redrawn at the blink rate, within the frame caps. A tint of an opaque or masked face and every other blinker input push
+  nothing, as before.
 - **Texture-entry rebuilds.** A tint (`LLVOVolume::setTEColor`'s `dirtyMesh`) and the material setters (`setTEMaterialID`,
   `setTEMaterialParams` and `setTEGLTFMaterialOverride`, which carries a script's emissive and PBR colour) ask for `REBUILD_ALL`: the
   renderer rebuilds the whole prim, not because its shape moved. `rebuildDirties` counts that, so a blinker that toggles a colour or an
@@ -771,7 +780,7 @@ fps standing (60) and moving (25).
 
 | gate | how |
 |---|---|
-| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`, `testTextureEntryRebuilds`, `testPlacement`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (`holdOffFrame`: blinkers keep their tiles, a long switch gives them back once); the silhouette key's inputs (`silhouetteFaceMix`: each moves the key, an opaque face only by being double-sided, an opaque single-sided one not at all); the texture-entry mark and the quiet record over the hooks' order (a tint, emissive or material blinker pushes nothing in a minute of 0.1 s toggles, static or as the child or the root of an active linkset, where the wiring before the follow-up review's B1 pushed 1,200 and 1,800 times; a silhouette change pushes once, wherever the setter's `markTextured` runs; a new LOD, a scale, `markForUpdate`, a move around a tint and the linkset's own move still push; two quiet prims of one linkset keep the record, a counted move before or after ends it; each of six mutations of these rules fails a check); placement, by a GL-free replay of `layout()` and the resize built from the same rules: a lamp switched on near the camera while far tiles hold the atlas waits for their shrinks and the pressure ends at the rule's (review B1), a shortfall only at the ceiling, after a compaction every arrival set and growth the free texels hold fits (random fragmented atlases), a growth blocked by fragmentation grows after the hold with one compaction (Q1). The light set's bookkeeping around the hold and the retiring cells (records marked seen, skipped by the scheduler, counted as fixed) is the GL class's and has no unit test |
+| rules | `llprojectorshadowpool_test` (`testCells`, `testScriptLamps`, `testTextureEntryRebuilds`, `testPlacement`): the grid table, the cells partition the lamp's pyramid, a widened pyramid holds its interior, an object in a neighbour's guard dirties both cells, `pyramidDistance`; the size from the lamp (the guard term, bad input); the bands and their hysteresis; the valve (no size change in a minute of random bands while the atlas has room; the far tiles shrink first and never end larger than a near one; the pressure falls back; the ceiling; no hold on steps that change nothing; fixed tiles; the old level is the all-far case); `largestAfterFree`; the hold of a switched-off lamp (`holdOffFrame`: blinkers keep their tiles, a long switch gives them back once); the silhouette key's inputs (`silhouetteFaceMix`: each moves the key, an opaque face only by being double-sided, an opaque single-sided one not at all, the RGB of a face the blend pass draws since L3 and of no other face); the texture-entry mark and the quiet record over the hooks' order (a tint, emissive or material blinker pushes nothing in a minute of 0.1 s toggles, static or as the child or the root of an active linkset (L3: a tint blinker on a blended face pushes once a toggle), where the wiring before the follow-up review's B1 pushed 1,200 and 1,800 times; a silhouette change pushes once, wherever the setter's `markTextured` runs; a new LOD, a scale, `markForUpdate`, a move around a tint and the linkset's own move still push; two quiet prims of one linkset keep the record, a counted move before or after ends it; each of six mutations of these rules fails a check); placement, by a GL-free replay of `layout()` and the resize built from the same rules: a lamp switched on near the camera while far tiles hold the atlas waits for their shrinks and the pressure ends at the rule's (review B1), a shortfall only at the ceiling, after a compaction every arrival set and growth the free texels hold fits (random fragmented atlases), a growth blocked by fragmentation grows after the hold with one compaction (Q1). The light set's bookkeeping around the hold and the retiring cells (records marked seen, skipped by the scheduler, counted as fixed) is the GL class's and has no unit test |
 | sizing model | `scripts/shadows/projector_sizing_model.py` (CPU): the rules written out, a 60 s walk in the model room (four wide lamps), a room whose lamps fit and the club, on the 4096 and 8192 atlases; gates: the size changes a second within the scene's limit (room 0.5, club 10, the room that fits 0; bands from 2 m fail it, 8.8 a second in the room and 21 and 31 in the club on a 20 s walk), and no tile more than twice as far as another of the same lamp size is larger (an inverted band order fails it). No allocator: placement is the unit test's |
 | G1 | `projector_pool_g1.py` (tile in the atlas against the standalone map, max abs 0) |
 | cells | `scripts/shadows/projector_cells_check.py [--grid n,n --ni N --time]`: the production `stCellPick` and `stSpotFilterTile` through cells against one virtual tile of the same texel grid, receivers over the whole lamp image, seams included; an undrawn cell is reported; with `--time` the cost of the pick |
@@ -812,3 +821,257 @@ CPU of the per-frame valve work in the viewer's "projector sweep" and "projector
 same rules: the band test, the valve's ceiling and demand passes, the growth check and `resizeDue` cost about 0.02 ms a frame for 2,466
 tiles and 0.002 ms for 193; the viewer walks a map of large records, so expect more), and the silhouette key's hashing on every rebuild
 of a prim (offline about 18 ns per alpha face).
+
+## The light let through see-through casters (lamp shadows L3)
+
+Owner decision D11 (a light-let-through layer in lamp tiles), with D4 (a) coloured. Plan: `reports/light-through-l3-2026-11-18/plan.md`
+(kept on the owner's machine). Before L3 a lamp shadow was all or nothing: a blended caster below full opacity was a stochastic cover in the depth tile (a hashed dither, since #559 the Aurora caster rule), frozen
+grain in a cached tile with no history to average it, and stacked sheers passed the most opaque layer's light instead of the product
+(the caster rule's layers multiply, but its grain stays). L3 lets light through such casters in proportion and coloured by them, deterministically.
+
+### The method
+
+Beside each tile's depth, a second cached picture: per texel, the share of the lamp's light the see-through casters in front of the
+tile's opaque depth let through, per colour channel (tau), and the depth of the nearest of them (zt). The lookup multiplies the depth's
+visibility by it. This is the single-layer coloured translucency map (Gosselin et al. 2004; Filion & McNaughton 2008, StarCraft II;
+Crytek 2011): deterministic, so a cached tile holds no grain, camera-independent, and cheap. Stacked casters multiply, in any order (the
+blend is a product). Rejected: coloured stochastic shadow maps (McGuire & Enderton 2011) and the Aurora Viewer's caster rule freeze grain
+into tiles that have no history; deep shadow maps, opacity and Fourier opacity maps, moment-based and adaptive volumetric maps are built
+for smoke and hair and ring or blur on thin sheets (`research_notes/Shadow methods for avatars and many lights/transmission.md`, kept on
+the owner's machine). The known limit of one stored depth: a receiver between two see-through casters gets both.
+
+**The light through one face** (`lllightthrough.h`, `transmittance`): `tau = (1 - a)(1 + a C)` per channel, `a` the face's opacity (texture
+alpha times face alpha), `C` its linear colour (classic: texture times face colour in sRGB, then linear, as `alphaF.glsl`; glTF: the base
+colour texture in linear times the factor, as `pbralphaF.glsl`). It is McGuire & Enderton's `rho = a (1 - t)` with `t = C (1 - a)`, the
+lowest-order `t` that keeps a faint face a pure filter of its colour and an `a = 1` face opaque, as SL draws it. It lies between `1 - a`
+(a black or neutral face) and `1 - a^2` (white): a red pane at 0.6 lets (0.64, 0.40, 0.40) through, clear glass at 0.3 lets 0.91. A texel
+at full opacity (1.0) is solid in the depth, where the layer passes 0: there is no cut, as the owner removed the 0.05 and 0.98 cuts on
+2026-11-18 (D4, #559), so the switch is no step at all. A
+face at or below 1/255 is left out (invisible), so it records no depth either.
+
+### The layer (`lllightthroughgl.h`, `LLLightThroughLayer`)
+
+- **Textures.** RGBA8 tau (LINEAR) and R32F zt (NEAREST), at the pool's atlas edge and with its texels (a tile's rect is the same in
+  both), counted in the viewer's texture memory: 32 MiB at the 2048 atlas, 128 MiB at 4096, 512 MiB at 8192 (as much as the pool's two
+  depth atlases; the 8192 tier is only chosen from 11 GB of dedicated video memory). With its layer the pool counts twice its atlases in
+  the texture budget: at 8192 1 GiB, about 21 % of a 12 GB card's 4.9 GB budget (10 % of a 24 GB card's), at 4096 256 MiB, 8 % of an
+  8 GB card's 3.2 GB (watch the texture discard bias in-world, as for the 8192 tier above). The first build's 16-bit depth took a quarter
+  less; the exact depth is the reason for the difference (below). Made the first time a tile meets a see-through
+  caster (`ensure`, from `LLPipeline::renderShadow` inside the tile's static render); freed with the atlases (`freeAtlases`: `release` and
+  a failed `allocateAtlases`, before S, its framebuffer's depth attachment), and once no tile has held a see-through caster for 30 s
+  (`kThroughIdleSeconds`, checked once a second in `update` while the layer exists: the lamps' glass is gone, or the debug setting was
+  turned off and every tile drawn again; a tile of a lamp that is off keeps its flag, so its layer stays). The caster pass runs inside a `GL_ANY_SAMPLES_PASSED` query (`LLLightThroughLayer::beginQuery`, one per static tile render); once the
+  GPU has its result (`resolveQueries` in `update`, never waited for) a tile whose pass wrote no sample (every fragment discarded, or behind the
+  tile's opaque depth) loses its flag, so a fully transparent face or a pane behind a wall neither holds the layer nor turns the lamp's lookup
+  on; until then the flag stays (the image is the same either way: an empty layer reads "no caster"). `lllightthrough::PendingQueries` keeps
+  which tile each query belongs to (tested in `lllightthrough_test.cpp`). OpenGL 4.4 (`glClearTexImage`);
+  below it, or when the textures cannot be made (logged once, not tried again until the atlases are made again), the tile's blend faces
+  dither into the depth as before.
+- **The depth as it is.** zt holds the caster's window depth in 32-bit float (`gl_FragCoord.z`, no conversion, no rounding), as the depth
+  atlas does (D32F): a receiver is behind a pane by the depth lookup's own test (its depth less one texel of bias, lowered by the receiver
+  plane: `stThroughRef`). The first L3 build stored 16 bits of window depth one step farther, which left a receiver up to two steps
+  behind a pane untinted; with the near plane at the prim's face that band was about 9 cm at 10 m and 20 cm at 15 m for a 5 cm prim (and
+  60 cm at 20 m for a point light's 2 cm near plane): a sill or a floor right behind stained glass got white light in a strip along it.
+- **Depth-tested against the tile's opaque casters.** The layer's framebuffer has the pool's static depth atlas S as its depth
+  attachment, read only (`GL_LEQUAL`, no depth writes): a see-through caster is recorded only where it lies in front of the nearest opaque
+  caster of its texel. A pane hidden behind a wall or a floor (glass in the room below, a window behind a wall, blended leaves outside)
+  tints nothing in front of it. The first build drew every caster whatever lay in front of it, so the floor under a lamp's glass globe
+  (or under any pane in front of it) got the product of every blended face down to the far plane (the twin's hidden pane: the floor got
+  0.40 / 0.25 / 0.25 where the truth is 0.625; now 0.624, within the 8 bits). The frame of a window is handled in the lookup (the open
+  weight, below), so this costs the frame's penumbra nothing.
+- **Its own face rule.** The caster pass culls back faces (`DrawScope`'s `LLGLEnable(GL_CULL_FACE)`), whatever the caller's depth pass
+  does: a one-sided face lets the light through once, from the side a camera at the lamp would see it, as it shows its alpha once to the
+  viewer (a thin glass box prim filters the light once, not twice); a double-sided glTF material is drawn from both sides by its own batch
+  (`LLRenderPass::pushGLTFBatch` disables the cull for it). The projector's depth pass culls back faces too; the point-light faces' depth
+  pass draws both sides (L4), and the rule keeps a glass box from filtering their light twice.
+- **Drawing** (`renderTile`): the tile's rect is cleared to "no caster" (`clearRect`, `glClearTexSubImage`), then the pool names the layer
+  and the rect (`LLLocalShadowGL::setThroughTarget`) and `renderShadow` runs. There, when the static cull holds a blend face that is not
+  rigged and both caster programs are built (`hasLightThroughCasters`) and the layer exists or can be made, the depth pass's blend faces
+  set `shadow_through` (`renderAlphaObjects`): `shadowAlphaMaskF.glsl` and `pbrShadowAlphaBlendF.glsl` discard every texel below the solid
+  cut instead of dithering it. After every depth caster (the last glTF mask batches), `renderLightThroughObjects` draws those faces again
+  with `shadowLightThroughF.glsl` (`gDeferredShadowLightThroughProgram`, indexed textures; `gDeferredShadowGLTFLightThroughProgram`,
+  `LIGHT_THROUGH_GLTF`) inside `LLLightThroughLayer::DrawScope`: the layer's framebuffer with both targets, `glBlendFunc(GL_ZERO,
+  GL_SRC_COLOR)` (tau: the product), `glBlendEquationi(1, GL_MIN)` (zt: the nearest), the depth test against S, the face rule, colour
+  writes on, the scissor at the tile's rect (the rect must be the render's viewport: asserted, so the casters land on the same texels as
+  in S). The scope puts back the framebuffer, the blend equation (GL_FUNC_ADD) and function (LLRender's, `BT_ALPHA`, which
+  `LLGLState::checkStates` expects), the shadow pass's colour mask, and the blend, depth, cull and scissor states LLGLState knew; the
+  scissor box stays at the rect, the box every static tile render sets. `endThroughTarget` tells the pool whether the render ran the caster
+  pass (`Record::through`). If a caster program does not build, a development build stops (`llassert`); a Release build logs it and the
+  lamps dither as before.
+- **Every drawn tile's rect is valid** once the layer exists (cleared at each static render, carried through a repack), so the lookup's
+  flag is per lamp (`proj_through`: one of its drawn tiles holds a caster) and a wide lamp's cell without a caster reads exactly 1.
+- **Repacks** (`applyPlan`): `lllightthrough::planCarry` lists the moved tiles that hold a caster and keep their size (copied), and the
+  other moved ones (their new rect cleared: a resized tile has no content at its new size, so its layer is drawn again with its depth). The
+  moves can form cycles, so `LLLightThroughLayer::carry` reads every source into a transient texture pair first, then clears, then writes
+  the copies; a copy between rects of two sizes is refused there too. The transients hold every copied tile at once: at most one more
+  layer, for the length of the repack (a rare event: an arriving tile that finds no block, or a fragmented atlas). A tile whose transient
+  cannot be made reads no caster and is drawn again (`markStale`).
+- **What does not take part**: the avatars' layer (P4) keeps the dither; a rigged face that reaches the fixed layer (an animesh's, if
+  its faces do: not verified) keeps the depth rule (its binds set `shadow_through` 0, and the layer's draw skips it); mask faces keep the
+  creator's cutoff (below, "Mask faces"); the sun's cascades are untouched.
+- **A recolour redraws.** The colour of a face the blend pass draws is part of the prim's silhouette key ("Lamps that scripts switch",
+  above), so an edit, a script's `PRIM_COLOR` or a glTF base-colour override of a pane redraws the tiles that see it: the cached tint
+  follows. A blinker that toggles the colour of a blended face pushes once a toggle.
+- **Debug setting** `RenderShadowLightThrough` (on), for A/B only: off, no tile is named a target and the blend faces dither as before. A
+  change draws every tile again (`Cause::Other`); until a tile is drawn again its lookup follows the rule it was drawn with. No
+  Preferences entry.
+- **Threads.** Main render thread only, like the pool: the layer is made inside a static tile render, freed with the atlases or from
+  `update` (the pool's `release` runs from `LLPipeline::destroyGL`, `allocateShadowBuffer` and `releaseShadowBuffers`, all on the main
+  thread with the context alive), and nothing is reached from `LLRender::shutdown`, `LLImageGL` or `LLVertexBuffer::cleanupClass`. The
+  destructor makes no GL call. The feed's colour input is read in the same main-thread hooks as the rest of the key.
+
+### The lookup (`shadowStochasticUtil.glsl`, inside the G1 block)
+
+`sampleProjectorShadow` returns a colour: the depth's visibility, times `stThroughFilter` when the lamp's tiles hold a caster and the
+pixel is not in the umbra. `spotLightF.glsl` keeps its six multiplies (a colour times a colour now). `stThroughFilter(tau, zt, depth,
+tile, c, g, z_bias, z_tex, pen, kmax)` takes the projector's atlas as `depth` (the one the depth filter reads, with the avatars) and the
+depth filter's receiver plane, bias and cap:
+
+1. **The reference** at each texel is the depth lookup's (`stThroughRef`, the C++ `texelRef`): the receiver's depth less one texel of
+   bias, lowered (never raised) by the receiver plane over the texel's offset, at most the depth filter's `rp_max`, set up once per
+   receiver (`stThroughPlane`: the same sum as `stSpotQuadTile`'s in another order). A pane flush in a wall lit obliquely no longer reads
+   as in front of the wall beside it: the first build's flat reference tinted a fringe of 0.017, 0.12 and 0.21 there at 30, 45 and 60
+   degrees (the twin's flush window); now exactly 1.
+2. **The search**: the depth search's Vogel disc and radius (`pen * c.z`, between the floor and the cap) plus the receiver's own 2 x 2
+   texels, 9 gathers of zt, for the nearest caster in front of the receiver (the largest stored depth below its reference). None: exactly
+   1 (a receiver in front of a window, such as an avatar between the lamp and the glass, gets no tinted rim).
+3. **The filter**: 16 taps on a Vogel disc at the physical radius from that caster (`pen * (c.z - z_near)`, between 1.5 and 12 texels:
+   the depth filter's rule), weighted 1 - 0.9 r^2 as the depth filter's taps. Each tap (`stThroughTap`) gathers zt and the depth atlas at
+   the same four texels (its uv clamped half a texel inside the tile: the tile's own CLAMP_TO_EDGE, no texel of a neighbour tile enters)
+   and reads their bilinear tau. Its weight is the bilinear weight of the texels the depth does not block (the depth filter's lit test):
+   a texel behind an opaque caster lets nothing through, and its tint must not count. Its light is that weight less `r (1 - tb)`, `tb` the
+   bilinear tau and `r` the share of the caster texels' weight that is unblocked with its caster in front of the receiver: exact where
+   every caster of the footprint is unblocked and in front of the receiver, exactly its weight where none is in front. The filter's value is the taps' light over
+   their weight (the light through the unblocked part of the disc), 1 where every tap is blocked (the depth's own value is about 0 there).
+   So a window frame does not brighten the inside of its penumbra, whether the pane runs on under the frame or stops at it (painted
+   leading, a cut pane: the first build brightened those, RMS 0.045 against 0.034 at 1 cm texels, 0.033 against 0.013 at the slider's top).
+
+The samplers are arguments, so every lamp pool reads its own layer and atlas through the same functions. 16 taps draw the tint's edge as
+wide as the depth filter draws a shadow's edge, at any angle; 8 left gaps between the taps at wide radii (the twin: 0.70 to 0.92 of a
+disc's 10-90 % width, depending on the edge's angle, against 0.85 to 0.91 with 16).
+
+### For the point-light faces (L4)
+
+L4 (`codex/point-light-shadows-l4`, reviewed at 94fccc14c1, at d7a2d2b310 when this was written) plugs into the same parts; nothing in
+L3 is the projector's alone except its uniforms. What the point pool adds, and where a rebase onto L4 meets:
+
+- **Owns a layer**: an `LLLightThroughLayer` at its own atlas edge with its own static depth atlas (`setAtlas(edge, S)` when its atlases
+  are made; `free` with them, before S; `freeStorage` when idle, as `LLProjectorShadows::update` does), `clearRect` before each face's
+  static render, `carry` if it repacks (with `planCarry`; a face's size change is cleared, not copied), `unbindUnits` before its tile work
+  and `bind(shader, tau_uniform, depth_uniform)` with its own two sampler uniforms (`bind` no longer names the projector's).
+- **Per face**: a `through` flag in its face record (the projector's is `Record::through`), set from `LLLocalShadowGL::endThroughTarget()`
+  after `LLLocalShadowGL::setThroughTarget(layer, face_rect)` around the face's static render (the rect is the render's viewport: the
+  scope asserts it); its lost carries and the debug toggle (`RenderShadowLightThrough`: a change draws every face again) mark faces stale.
+  `LLPipeline::renderShadow` needs no change: the caster pass brings its own depth test, face rule and scissor, so L4's two-sided depth pass
+  (`sLocalShadowTwoSided`) does not make a glass box filter twice.
+- **Per lamp**: a flag uniform for the point programs (the projector's `proj_through`: one of the lamp's faces holds a caster).
+- **The lookup**: `samplePointShadow` returns a float in L4, so `pointLightF.glsl` and `multiPointLightF.glsl` take a colour visibility
+  (as `spotLightF.glsl` does here) and the face's lookup calls `stThroughFilter(tau, zt, depth, tile, c, g, z_bias, z_tex, pen, kmax)` after
+  its own depth filter with its pool's samplers (its far tier's one-tap form can call `stThroughTap` at the receiver and divide by its
+  weight). If its six faces are drawn in one instanced submit, the target must name the cube's six rects and the caster programs need the
+  depth's per-instance face mapping (the same vertex shader and instance attribute).
+- **Where the rebase meets** (L4 at d7a2d2b310): `sampleProjectorShadow`, where L4 passes the atlas into `stSpotFilterTile` on the line
+  the L3 `vis` lines follow; `LLProjectorShadows::renderTile`, whose static render L4 rewrites around the lines where L3 clears the rect
+  and names the target; `LLProjectorShadows::update`, whose frame work L4 moves into `LLLocalShadows::updateFrame`, around the change
+  index's hit loop (which L3 now runs through `markStale`) and the unbind loop (where L3 adds the toggle redraw, the idle free and
+  `mThrough.unbindUnits()`); `lllocalshadows.{h,cpp}`, where both add code (L4 about 400 lines; L3's seam is `setThroughTarget`,
+  `throughTarget`, `endThroughTarget` and `LLLightThroughTarget`); `llprojectorshadowpool.h` and `llshadowdirtyfeed.cpp` (L4's dirty
+  boxes carry their source drawable, L3's silhouette key a blended face's colour: different lines); the shader and uniform lists, the G1
+  block's neighbourhood, `ci-checks` and these docs. L3 does not touch `stSpotQuadTile`, `stSpotFilterTile` or `stSpotPCF`.
+
+### Meeting #559 (devel's caster rule)
+
+Devel's #559 (902cde39ac, merged as 4f077cdb73; owner decision D4 of 2026-11-18) replaces the blend faces' dither in these same two
+shaders (`shadowAlphaMaskF.glsl`, `pbrShadowAlphaBlendF.glsl`) with the Aurora Viewer's caster rule and drops the 0.98 cut and the 0.05
+floor for blend faces (`SHADOW_BLEND_SOLID_ALPHA` 1.0, `alpha < 1.0`); lamps use the same rule where no layer holds the texel. This
+branch is re-cut onto devel with it:
+
+- **The order**: in a static lamp tile with a layer the `shadow_through` discard comes first (`shadow_through != 0 ||
+  !shadow_caster_keeps(alpha)`), so the layer holds every texel below full opacity; the caster rule stays for every other pass: the
+  sun's cascades, the avatars' layer, a rigged face, a tile without a layer.
+- **The cut is one number**, 1.0, in `kSolidAlpha`, `LIGHT_THROUGH_SOLID`, `SHADOW_BLEND_SOLID_ALPHA` and the glTF blend shader's
+  literal; `test_light_through_twin.py` fails when one moves alone. The transmission rule `(1 - a)(1 + a C)` goes to 0 as a reaches
+  1, so the layer needs no cut: the switch to the depth is continuous.
+- **For the owner**: the sun and the lamps use different transmittances: #559's coverage passes `1 - a` (grey: a white pane at 0.5 passes
+  0.5), L3 passes `(1 - a)(1 + a C)` (coloured: the same pane passes 0.75 of a lamp's light). One rule for both is the owner's call.
+
+### Mask faces (the plan's stage L3.3: not built)
+
+The plan's rule for alpha-mask lace (D5 a) was a sharpened coverage `a' = clamp((a - cutoff) / max(fwidth(a), 1e-4) + 0.5)`: depth where
+`a' >= 0.98`, the layer times `1 - a'` below. The twin shows it does not give the open share where the tile does not resolve the holes:
+the shadow pass samples the mask's mipmaps, whose average is smooth there, so `fwidth` is small and `a'` thresholds the average like the
+cutoff does (the lace of the twin, open share 0.442: the cutoff gives 0.000 / 0.073 / 0.265 / 0.291 / 0.403 at 8 / 4 / 2 / 1 / 0.5 cm
+texels, the plan's rule 0.007 / 0.104 / 0.267 / 0.343 / 0.413). An open share under minification needs the texture's level of detail in
+the rule (a mask that the tile minifies passes `1 - a` of its mip average, the cutoff where the tile resolves it), which the indexed
+textures of the classic mask draws do not give the shader; that is a design change, so mask faces keep the creator's cutoff here and the
+question goes back to the plan.
+
+### Measured
+
+| gate | result |
+|---|---|
+| `indra/newview/tests/lllightthrough_test.cpp` (ci-checks; g++ 13.2 -O0/-O2 with -Wshadow, clang, MSVC) | the rule's limits and bounds, the plan's examples, the step at the solid switch (under 1e-6), stacking; the reference (lowered, never raised, capped); the tap: behind every caster the bilinear tau, in front of them all or with none exactly its open weight, a frame with no pane under it exact over the open texels (the penumbra passes the pane's 0.5, not 0.75), the combine within [0, 1], an empty filter multiplying a visibility bit for bit; the memory figures; the carry (swap, chain, cycle; a resized tile cleared, never copied; 200 random repacks of the pool's planner with a quarter of the tiles shrinking): PASS |
+| `llprojectorshadowpool_test` (ci-checks) | the RGB of a face the blend pass draws moves the silhouette key, that of a masked or opaque face does not; a tint blinker on a blended face pushes once a toggle (600 in a minute of 0.1 s toggles, static, active child, active root); every S2 check as before: PASS |
+| `scripts/tests/test_light_through_twin.py` (ci-checks) | the GLSL pinned to its C++ twins (the rule, the tap, the combine, the reference against `stSpotQuadTile`'s, the plane cap against `stSpotFilterTile`'s), the limits one number everywhere, the samplers arguments, the caster pass's state (S attached, `GL_LEQUAL` without writes, the cull, the scissor, the viewport asserted), the carry's size guard, the pipeline's flag on every blend bind before its draw, rigged faces on the depth rule, the programs only with the pool and stopping a development build, the feed's colour input: 13/13 |
+| `scripts/shadows/lamp_filter_twin.py --l3` (CPU) | uniform glass at 0.5: one value over the patch (spread 0, the dither's 0.33 to 0.83); glass behind its frame, RMS against the truth: 0.127 / 0.095 / 0.059 / 0.034 / 0.016 at 8 to 0.5 cm texels and the default softness (the dither 0.150 / 0.119 / 0.091 / 0.075 / 0.068), 0.116 to 0.007 at the top; painted leading: the same (the first build 0.135 / 0.115 / 0.074 / 0.045 / 0.026); two stacked panes: the product within 0.001; a receiver in front of both: exactly 1; a pane hidden under the floor: the front pane's 0.624 (truth 0.625; the first build 0.40 / 0.25 / 0.25), a glass globe over it 0.890 (truth 0.889); a red pane's edge: 0.85 to 0.91 of a uniform disc's 10-90 % width where the radius is physical; a window flush in a wall at 30 to 60 degrees: no tint on the wall (the flat reference 0.017 to 0.21) |
+| `scripts/shadows/light_through_gate.py` (GPU, RTX 5070 Ti, NVIDIA 621.14) | link: both caster programs as the viewer composes them (the loader's header, the indexed-texture code, `textureUtilV`, `indexedTextureV` or `nonindexedTextureV`, `srgbF`) compile and link; casters: tau the product of the two see-through faces within 0.0034, the solid, invisible, hidden and back-facing ones left out, the depth the nearest's exactly, S untouched; identity: `sampleProjectorShadow` against b62d0fca18, 1024 x 1024 receivers, softness 0.23 and 1.0, `proj_through` 0 and 1 on an empty layer, max abs difference 0; spot: class3 `spotLightF.glsl`'s pool branch with a colour visibility against the base's float, the same stubs, classic and PBR pixels, both `classic_mode`s: 0 differing words of 262,144 pixels; twin: `stThroughFilter` against the CPU twin on seven layers with their depth tiles (frame, painted leading, stacked, hidden, red edge, flush window at 60 degrees, 40 random casters over random opaque depths), weighted by the open share, largest 0.00069 (a receiver on the edge of a decision, a caster within float rounding of its reference, is left out: 0 to 18 per scene) |
+| `projector_pool_g1.py`, `projector_cells_check.py`, `proj_march_bench.py`, `proj_edges_bench.py` | G1 PASS, cells PASS, P2 gates PASS; both benches compile the checkout's lookup (its red channel) |
+
+GPU cost of the lookup (`light_through_gate.py --time --first e082aadcf6`: 2560 x 1440 floor receivers, every one lit by the lamp, a
+1024 tile; interleaved rounds, median of 9 x 20 draws, the first L3 build's lookup in the same rounds; six runs, each with a build
+compiling or linking beside it, three of them with the layer's depth also timed in R16 and R16F; the three steadiest, those three, with
+a spread within the run of a few per cent, first, then the range of all six):
+
+| lamp | ms per full-screen lamp, steady runs | against L1 + L2 | the first L3 build, same rounds | all six runs |
+|---|---|---|---|---|
+| L1 + L2 (b62d0fca18) | 0.187 (0.0507 per lit megapixel) | | | 0.169 to 0.191 |
+| no see-through caster in its tiles (`proj_through` 0; the value bit for bit) | 0.195 to 0.196 | +4.3 to +4.8 % | (+2.8 to +3.4 % when it was measured) | 0.177 to 0.196, +4.1 to +4.8 % where the base read steady |
+| a caster in its tiles, none in front of the pixel (the search alone) | 0.234 to 0.235 | +25 to +26 % | 0.217 to 0.218, +16 to +17 % | 0.232 to 0.235; the first build 0.210 to 0.227 |
+| every pixel behind a pane (the search and the 16 taps) | 0.400 to 0.409 | +114 to +118 % | 0.335 to 0.336, +79 to +80 % | 0.400 to 0.625; the first build 0.335 to 0.443 (this build 1.19 to 1.44 times the first) |
+
+The search's extra cost is the receiver plane's references (9 gathers of 4 references), the taps' is the depth atlas's gather (3 reads a
+tap instead of 2, as the read count predicts): the price of the frame rim, painted leading, the hidden casters and the flush window. The
+layer's format does not matter here (zt in R16, R16F or R32F timed the same). The +4 % on every lamp is the light-through code's presence
+in the program (only a second program variant per lamp kind removes it). Against the floor, from the steady runs: the living room at
+1440p with four projectors, each lighting 60 % of the screen, two of them through a window with 30 % of their pixels behind the glass:
++0.011 ms for the two without glass, +0.040 ms of searches and +0.077 ms behind the glass for the two with, about 0.13 ms, so 60 -> 59.5
+fps standing and 25 -> 24.9 fps moving on a frame that is GPU-bound exactly at the floor (the noisiest runs' pane figure would make it
+about 0.21 ms: 60 -> 59.2 fps). A lamp inside a glass globe or cover that is a separate prim of its linkset has every lit pixel behind
+glass: eight such lamps each lighting half of a 1440p screen add about 0.87 ms (60 -> 57.0 fps, 25 -> 24.5 fps). The caster pass adds
+one draw per blended batch to a static tile render (a change, a lamp edit, a first fill; none in a static scene) and a clear of the
+tile's rect; its CPU and GPU cost in the viewer is not measured.
+
+### Limits
+
+- **One depth.** A receiver between two see-through casters gets both tints (a pane in front of a curtain lit from the lamp's side, or
+  double glazing with nothing between the panes, are right).
+- **Pale blended lace** that the tile minifies comes out brighter than its open share (up to about 0.25 at a = 0.5 by the plan's
+  estimate, not measured here): the rule is applied to the mip-averaged alpha, and it is not linear in it. Mask lace keeps the cutoff
+  (above).
+- **A step at the outer edge of a glazed frame's penumbra** (L1's): L1's search has 8 gathers and the receiver's own texels; a thin bar
+  between them reads as no blocker (exactly 1), so neighbouring receivers jump where the truth is smooth. The dithered glass used to keep
+  the search finding blockers; with the glass in the layer the step shows at every glazed frame and every came of stained glass: the
+  largest neighbour step there is 0.13 / 0.18 / 0.18 / 0.12 at 4 / 2 / 1 / 0.5 cm texels and the default softness (the dither's 0.04 /
+  0.09 / 0.17 / 0.27; L1's own table records 0.27 to 0.32 on other scenes). It belongs to the L1 filter's search.
+- **A see-through caster within about a texel of depth of the receiver** is lost as an opaque caster that close is (the depth bias): a
+  sheer 5 cm in front of a wall on a 4 cm tile lets 0.60 instead of 0.5 through, on an 8 cm tile all of it (1 cm and 2 cm tiles: 0.502).
+- **The texture's level of detail at render time**: a tile's tint is drawn from the mip and discard level the caster's texture had when
+  the tile was drawn, which follows the camera; nothing redraws the tile when the texture sharpens (the key tracks the channel count
+  only). Masks have the same limit; for stained glass it is the whole pattern (a blurred pattern until something else redraws the tile).
+- **A lamp whose tiles meet a blend face that lets no light through** (a material in blend mode with a solid texture, or one hidden
+  behind walls: the flag is set when the static cull holds a blended face, whether or not a texel of it reached the layer) pays the search
+  on its lit pixels and makes the layer. An occlusion query around the caster pass could clear the flag a frame later.
+- **A glass shade or globe in the lamp's own linkset** (only the emitter prim is skipped) now tints and dims the lamp's whole light by its
+  tau, as a real one does; before L3 it dithered.
+- **Hardware filtering**: a tap's bilinear tau has the hardware's 8 bits of sub-texel weight, and the filter divides by the unblocked
+  share of its disc, so where only a sliver of the disc is unblocked its value carries that error over the sliver's share (up to 0.5 on
+  the GPU gate's frame scene). The depth's own visibility is small there too, which keeps the lit result's error small (the gate weighs
+  its comparison by the open share, within 1/255; the product with the depth's visibility is not compared).
+
+### Not verified (this section)
+
+In-world: the look (a lamp behind tinted glass, a sheer curtain, stacked panes, stained glass with leading, an opaque prim beside them,
+the slider at 0, 0.23 and 1), the step at a glazed frame's penumbra, a lamp in a glass shade of its linkset, a recolour of a pane, the CPU
+and GPU cost of the caster pass and of covered lamps in a real scene, the carry under memory pressure, the idle free, whether an
+animesh's blended faces reach the fixed layer (they keep the dither if they do), AMD and Intel. No viewer was launched for this stage: the
+caster programs were linked as the viewer composes them, and the spot program compared bit for bit, on NVIDIA only.

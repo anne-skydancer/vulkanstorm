@@ -427,6 +427,11 @@ public:
         PROJ_SHADOW_GRID,                   //  "proj_shadow_grid"
         PROJ_SHADOW_CELLS,                  //  "proj_shadow_cells"
         SHADOW_TILE_ORIGIN,                 //  "shadow_tile_origin"
+        // lamp shadows L3: the light-through layer (lllightthroughgl.h; the casters, shadowLightThroughF.glsl; the lookup)
+        SHADOW_THROUGH,                     //  "shadow_through"
+        PROJ_THROUGH_ATLAS,                 //  "proj_through_atlas"
+        PROJ_THROUGH_DEPTH,                 //  "proj_through_depth"
+        PROJ_THROUGH,                       //  "proj_through"
         // </Vulkanstorm>
         // <Vulkanstorm> the volumetric clouds (stage L7: deferred/cloudsVol*.glsl, deferred/cloudShadowVolF.glsl)
         CLOUD_VOL_BASE,                     //  "cloud_vol_base"

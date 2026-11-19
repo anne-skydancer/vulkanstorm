@@ -7773,7 +7773,11 @@ void LLPipeline::renderGLTFObjects(U32 type, bool texture, bool rigged)
 }
 
 // Currently only used for shadows -Cosmic,2023-04-19
-void LLPipeline::renderAlphaObjects(bool rigged)
+// <Vulkanstorm> through (lamp shadows L3): a static lamp tile with a light-through layer; its blend faces leave every texel below the
+// solid cut to the layer (renderLightThroughObjects) instead of dithering it into the depth. Every blend bind here sets the flag, so no
+// blend draw inherits it; the mask passes bind the same classic program without setting it and may inherit a 1, which they never read
+// (shadow_solid_alpha 0 keeps them out of the branch that tests it, shadowAlphaMaskF.glsl). </Vulkanstorm>
+void LLPipeline::renderAlphaObjects(bool rigged, bool through)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
@@ -7835,6 +7839,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowGLTFAlphaBlendProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SHADOW_THROUGH, 0); // <Vulkanstorm/> a rigged face keeps the depth rule (no layer)
                 // <Vulkanstorm/> no minimum alpha: pbrShadowAlphaBlendF.glsl reads none in either method (stock set ALPHA_BLEND_CUTOFF)
                 stochastic_caster(*pparams); // <Vulkanstorm/>
                 LLRenderPass::pushRiggedGLTFBatch(*pparams, lastAvatarGLTF, lastMeshIdGLTF, skipLastSkinGLTF);
@@ -7844,6 +7849,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SHADOW_THROUGH, 0); // <Vulkanstorm/> a rigged face keeps the depth rule (no layer)
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(blend_minimum_alpha);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 stochastic_caster(*pparams); // <Vulkanstorm/>
@@ -7860,6 +7866,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowGLTFAlphaBlendProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SHADOW_THROUGH, through ? 1 : 0); // <Vulkanstorm/>
                 // <Vulkanstorm/> no minimum alpha: pbrShadowAlphaBlendF.glsl reads none in either method (stock set ALPHA_BLEND_CUTOFF)
                 stochastic_caster(*pparams); // <Vulkanstorm/>
                 LLRenderPass::pushGLTFBatch(*pparams);
@@ -7869,6 +7876,7 @@ void LLPipeline::renderAlphaObjects(bool rigged)
                 gDeferredShadowAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, sun_up);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
+                LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SHADOW_THROUGH, through ? 1 : 0); // <Vulkanstorm/>
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(blend_minimum_alpha);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_SOLID_ALPHA, SHADOW_BLEND_SOLID_ALPHA);
                 stochastic_caster(*pparams); // <Vulkanstorm/>
@@ -7880,6 +7888,70 @@ void LLPipeline::renderAlphaObjects(bool rigged)
     gGL.loadMatrix(gGLModelView);
     gGLLastMatrix = NULL;
 }
+
+// <Vulkanstorm> lamp shadows L3: whether this cull holds a see-through caster for a light-through layer (a blend face that is not
+// rigged: a rigged face, an animesh's, keeps the depth rule), and both caster programs are built
+bool LLPipeline::hasLightThroughCasters()
+{
+    if (!gDeferredShadowLightThroughProgram.mProgramObject || !gDeferredShadowGLTFLightThroughProgram.mProgramObject)
+    {
+        return false;
+    }
+    auto* end = endRenderMap(LLRenderPass::PASS_ALPHA);
+    for (LLCullResult::drawinfo_iterator i = beginRenderMap(LLRenderPass::PASS_ALPHA); i != end; ++i)
+    {
+        if ((*i)->mAvatar == nullptr)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// The see-through casters of a static lamp tile into its light-through layer (shadowLightThroughF.glsl): this cull's blend faces that
+// are not rigged, the classic ones as renderAlphaObjects draws them (indexed textures) and the glTF ones with their material. The
+// depth pass (renderAlphaObjects with through) has drawn their solid texels; the layer takes the ones below the solid cut that lie in
+// front of the tile's opaque depth, multiplying what they let through and keeping the nearest depth (LLLightThroughLayer::DrawScope:
+// the depth test, the face rule and the scissor at the tile's rect). rect: the tile's, the viewport; color_writes_after: the colour
+// mask the shadow pass had; query: the layer's query of the pass (0: none), which tells whether any caster fragment was written.
+void LLPipeline::renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after, U32 query)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    assertInitialized();
+    gGL.loadMatrix(gGLModelView);
+    gGLLastMatrix = NULL;
+    {
+        LLLightThroughLayer::DrawScope scope(layer, rect, color_writes_after, query);
+        const LLGLSLShader* bound = nullptr;
+        auto* end = endRenderMap(LLRenderPass::PASS_ALPHA);
+        for (LLCullResult::drawinfo_iterator i = beginRenderMap(LLRenderPass::PASS_ALPHA); i != end; )
+        {
+            LLDrawInfo* pparams = *i;
+            LLCullResult::increment_iterator(i, end);
+            if (pparams->mAvatar != nullptr)
+            {
+                continue;
+            }
+            LLGLSLShader& program = pparams->mGLTFMaterial ? gDeferredShadowGLTFLightThroughProgram : gDeferredShadowLightThroughProgram;
+            if (bound != &program)
+            {
+                program.bind();
+                bound = &program;
+            }
+            if (pparams->mGLTFMaterial)
+            {
+                LLRenderPass::pushGLTFBatch(*pparams);
+            }
+            else
+            {
+                mSimplePool->pushBatch(*pparams, true, true);
+            }
+        }
+    }
+    gGL.loadMatrix(gGLModelView);
+    gGLLastMatrix = NULL;
+}
+// </Vulkanstorm>
 
 // Currently only used for shadows -Cosmic,2023-04-19
 void LLPipeline::renderMaskedObjects(U32 type, bool texture, bool batch_texture, bool rigged)
@@ -11802,6 +11874,13 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         renderGeomShadow(shadow_cam);
     }
 
+    // <Vulkanstorm> lamp shadows L3: the static render of a lamp tile with a light-through target draws its see-through casters into the
+    // layer (renderLightThroughObjects, below) instead of dithering them into the depth; the layer is made the first time a tile meets
+    // one. Every other pass, a tile with no such caster, and a layer that could not be made: the blend faces dither as before.
+    LLLightThroughTarget* through_target = sLocalShadowPass == LOCAL_SHADOW_STATIC ? LLLocalShadowGL::throughTarget() : nullptr;
+    const bool light_through = through_target && through_target->layer && hasLightThroughCasters() && through_target->layer->ensure();
+    // </Vulkanstorm>
+
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha");
         LL_PROFILE_GPU_ZONE("shadow alpha");
@@ -11828,7 +11907,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha blend");
                 LL_PROFILE_GPU_ZONE("shadow alpha blend");
                 VKS_GLSTAT_PASS("blend", i);
-                renderAlphaObjects(rigged);
+                renderAlphaObjects(rigged, light_through && !rigged); // <Vulkanstorm/> L3: a rigged face keeps the depth rule
             }
 
             {
@@ -11890,6 +11969,18 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
             gGL.loadMatrix(gGLModelView);
             gGLLastMatrix = NULL;
         }
+
+        // <Vulkanstorm> lamp shadows L3: the see-through casters into the tile's light-through layer, after every depth caster; the colour
+        // mask goes back to the shadow pass's (off unless the detail is above 2)
+        if (light_through)
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow light through");
+            LL_PROFILE_GPU_ZONE("shadow light through");
+            renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2,
+                                      through_target->layer->beginQuery(through_target->key));
+            through_target->drawn = true;
+        }
+        // </Vulkanstorm>
     }
 
     gDeferredShadowCubeProgram.bind();

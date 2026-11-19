@@ -25,11 +25,12 @@
 //                   size change while the atlas has room; farthest first over the budget; the ceiling; no hold for empty steps), and
 //                   the block a draw-then-swap resize gets (BuddyAtlas::largestAfterFree)
 //   ScriptLamps (S2) the hold of a lamp switched off, black or at radius 0 (holdOffFrame: blinkers keep their tiles, a day and night
-//                   switch gives them back once); the silhouette key's inputs (silhouetteFaceMix: each moves the key, nothing else is one)
+//                   switch gives them back once); the silhouette key's inputs (silhouetteFaceMix: each moves the key, nothing else is one;
+//                   L3: the RGB of a face the blend pass draws is one)
 //   TextureEntryRebuilds (S2) a tint, emissive or material that leaves the silhouette alone pushes nothing at its rebuild either
 //                   (the texture-entry mark), in a static or an active linkset (the bridge's markMoved and its move, the follow-up
-//                   review's B1); a silhouette change pushes once, wherever the setter's markTextured runs; a new LOD, a scale,
-//                   markForUpdate, a move around a tint and the linkset's own move still push
+//                   review's B1); a silhouette change pushes once, wherever the setter's markTextured runs (L3: a tint blinker on a
+//                   blended face, once a toggle); a new LOD, a scale, markForUpdate, a move around a tint and the linkset's own move still push
 //   Placement (L2)  a GL-free replay of layout() and renderTile()'s resize: an arrival that finds no room waits for the shrinks and the
 //                   pressure ends at the rule's (review B1); a shortfall only at the ceiling; after a compaction the free texels hold
 //                   every arrival set and growth they cover; a growth blocked by fragmentation gets one compaction after its hold (Q1)
@@ -1494,9 +1495,32 @@ void testP3MoverRules()
         check(texturedDirties(lace, opaque, true), "P3 a face turned opaque (alpha texture replaced by an RGB one) dirties: the hole closes");
         check(texturedDirties(opaque, lace, true), "P3 an opaque face turned alpha dirties: a hole opens");
         check(!texturedDirties(opaque, opaque, true), "P3 opaque to opaque (a plain texture swap, an animated texture) does not dirty");
-        // fullbright, glow, shine, bump and an RGB-only tint are no field of SilhouetteFace: a blinker that toggles them gives the feed the
-        // same inputs, hence the same key, and redraws nothing
+        // fullbright, glow, shine, bump and the RGB of a face the blend pass does not draw are no input: a blinker that toggles them gives
+        // the feed the same inputs, hence the same key, and redraws nothing
         check(!texturedDirties(lace, silhouetteFaceMix(opaque, lace_face), true), "S2 the same silhouette inputs (a blinker's fullbright, glow or RGB tint) do not dirty");
+        SilhouetteFace mask_red = lace_face;
+        mask_red.rgb[0] = 255;
+        mask_red.rgb[1] = mask_red.rgb[2] = 0;
+        check(silhouetteFaceMix(opaque, mask_red) == lace, "S2 the RGB of a face the blend pass does not draw (an alpha-masked one) is no input");
+        // L3: a face the blend pass draws lets a lamp's light through coloured by its RGB (the light-through layer), so its RGB is an
+        // input: a recolour redraws the tiles that see it, and a tint blinker on a blended face pushes, one push a toggle (by design)
+        SilhouetteFace glass = lace_face;
+        glass.tint = true;
+        SilhouetteFace glass_red = glass;
+        glass_red.rgb[1] = glass_red.rgb[2] = 0;
+        SilhouetteFace glass_blue = glass;
+        glass_blue.rgb[0] = glass_blue.rgb[1] = 0;
+        const uint32_t k_glass = silhouetteFaceMix(opaque, glass);
+        const uint32_t k_red = silhouetteFaceMix(opaque, glass_red);
+        const uint32_t k_blue = silhouetteFaceMix(opaque, glass_blue);
+        check(k_glass != lace && k_red != k_glass && k_blue != k_red && k_blue != k_glass,
+              "L3 a blended face's RGB is an input: white, red and blue glass give three keys");
+        check(texturedDirties(k_red, k_blue, true), "L3 a red pane recoloured blue dirties its tiles");
+        check(silhouetteFaceMix(opaque, glass_red) == k_red, "L3 the same colour gives the same key");
+        SilhouetteFace opaque_red = single;
+        opaque_red.tint = true;
+        opaque_red.rgb[1] = opaque_red.rgb[2] = 0;
+        check(silhouetteFaceMix(opaque, opaque_red) == opaque, "L3 an opaque single-sided face is still no input, whatever its colour");
         check(texturedDirties(opaque, opaque, false) && texturedDirties(lace, lace, false), "P3 an unknown past (the prim predates tracking) pushes once, whatever it looks like now");
     }
 }
@@ -3710,6 +3734,31 @@ void testTextureEntryRebuilds()
         check(blinkerPushes(true, false, true, kind) == 1200 && blinkerPushes(true, true, true, kind) == 1800,
               "S2 B1: the old wiring pushes an active child blinker twice a toggle, a root three times", double(blinkerPushes(true, false, true, kind)),
               double(blinkerPushes(true, true, true, kind)));
+    }
+    // L3: a tint blinker on a blended face changes the face's RGB, an input of the key (the light-through layer's colour): its toggles push,
+    // once each (the rebuild's first own push finds the new key and stores it), static, as a child or as the root of an active linkset
+    for (const bool bridged : { false, true })
+    {
+        for (const bool root : { false, true })
+        {
+            if (root && !bridged)
+            {
+                continue;
+            }
+            const uint32_t red = 0x1234u, blue = 0x4321u;
+            FeedModel m;
+            m.stored = red;
+            m.bridged = bridged;
+            m.root = root;
+            for (int t = 0; t < 600; ++t)
+            {
+                const uint32_t now = (t % 2) == 0 ? blue : red;
+                m.setter(now, Textured::None);
+                m.rebuild(now);
+            }
+            check(m.pushes == 600, "L3 a tint blinker on a blended face pushes once a toggle (static, active child, active root)", double(m.pushes),
+                  double(bridged) + double(root));
+        }
     }
     // a silhouette change through a setter pushes once, at its markTextured, wherever that runs; the rebuild's own pushes (and the bridge's)
     // find the key stored

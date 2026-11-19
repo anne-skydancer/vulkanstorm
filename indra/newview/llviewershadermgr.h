@@ -257,6 +257,8 @@ extern LLGLSLShader         gDeferredShadowAlphaMaskProgram;
 extern LLGLSLShader         gDeferredShadowGLTFAlphaMaskProgram;
 extern LLGLSLShader         gDeferredShadowGLTFAlphaBlendProgram;
 extern LLGLSLShader         gDeferredShadowFullbrightAlphaMaskProgram;
+extern LLGLSLShader         gDeferredShadowLightThroughProgram;     // <Vulkanstorm/> lamp shadows L3
+extern LLGLSLShader         gDeferredShadowGLTFLightThroughProgram; // <Vulkanstorm/>
 extern LLGLSLShader         gDeferredPostProgram;
 extern LLGLSLShader         gDeferredCoFProgram;
 extern LLGLSLShader         gDeferredDoFCombineProgram;

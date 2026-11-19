@@ -102,8 +102,9 @@ reconstructed and no radius is capped in metres: a coarser tile gives a softer e
 "The filter"). At the default softness a head's edge on fine tiles widens from about 0.4 texel (the release) to about 1.8 to 1.9 texels:
 the default edge's physical width there and the 1.5-texel floor each give about that; see "The default edge against the release" there. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's width on the bench (within one map texel
 plus one pixel); the projector's straight edges are 0.82 to 0.90 of a disc light's where the radius lies between the floor and the cap
-(the CPU twin and the GL bench). The projector lookup costs 9 search gathers, plus 32 filter gathers on penumbra pixels. See the Cost table
-in `projector-shadow-pool.md`. Under Stochastic with
+(the CPU twin and the GL bench). The projector lookup costs 9 search gathers, plus 32 filter gathers on penumbra pixels; a lamp whose
+tiles hold a see-through caster adds 9 gathers of its light-through layer, and 16 taps of it where a caster lies in front of the pixel
+(two gathers, of the layer's depth and of the atlas, and one bilinear read each: lamp shadows L3). See the Cost tables in `projector-shadow-pool.md`. Under Stochastic with
 detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
 `doc/shadows/projector-shadow-pool.md`), not the two slots through the sun pass.
 
@@ -288,7 +289,14 @@ How a semi-transparent texel casts depends on the method.
     sheers. The receivers' filter (8 rays, and the deferred pass's history of rotating rays) averages the fixed grain over
     its footprint; where that footprint is one texel (a sheer's contact shadow seen from close by) the 2 x 2 grain stays
     visible, still, as the hashed dither's did before.
-  - Lamps (projector tiles) use the same rule; their light-let-through layer (lamp study L3) comes later.
+  - Lamps (projector tiles) use the same rule, and a static lamp tile that has a light-through layer (lamp shadows L3) takes
+    its blend texels below full opacity out of the depth (`shadow_through` set on the blend draws): they go into the pool's
+    light-through layer where they lie in front of the tile's opaque depth, which lets the lamp's light through each in
+    proportion and coloured, `(1 - a)(1 + a C)` per channel (it goes to 0 as a reaches 1, so no cut is needed), stacked ones
+    multiplying, and the lookup multiplies the depth's visibility by it over the part of its disc the depth does not block.
+    The sun's cascades, the lamps' avatar layer and rigged faces keep the caster rule; mask faces keep the cutoff. See
+    `projector-shadow-pool.md` ("The light let through see-through casters"); `RenderShadowLightThrough` (a debug setting, on)
+    turns it off for A/B.
   - The avatar's transparent parts cast in its alpha blend pass, with alpha = texture x mesh colour. Each mesh (skirt,
     eyelashes, hair) is its own draw under the avatar's id, its triangles counted from 0, so two of one avatar's meshes
     share a layer seed only where a triangle of one and the triangle with the same index of the other overlap in the light

@@ -1,7 +1,8 @@
 /**
  * @file lllocalshadows.h
  * @brief What the local shadow caches (the projector pool, later the point-light face pool) share: one save and restore of the GL
- *        state their tile renders change, and the tile origin of the Stochastic caster rule's programs
+ *        state their tile renders change, the tile origin of the Stochastic caster rule's programs, and the light-through target
+ *        of a static render
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -22,6 +23,20 @@
 #define LL_LLLOCALSHADOWS_H
 
 #include "llprojectorshadowpool.h"
+
+class LLLightThroughLayer;
+
+// Lamp shadows L3: the light-through layer a static tile render draws its see-through casters into, and the tile's rect in it (the
+// same texels as the tile's rect in its depth atlas, and the render's viewport: the caster pass asserts it and scissors to the rect).
+// Set by the pool around the render (LLLocalShadowGL::setThroughTarget), read by LLPipeline::renderShadow in the static pass
+// (LLPipeline::LOCAL_SHADOW_STATIC); every other pass has none.
+struct LLLightThroughTarget
+{
+    LLLightThroughLayer* layer = nullptr;
+    llprojectorpool::Rect rect;
+    unsigned key = 0;   // the tile's key (the layer's query of its caster pass)
+    bool drawn = false; // the render ran the caster pass into the rect (set by renderShadow)
+};
 
 // The tile renders of a frame change the framebuffer, the viewport, the matrices and the camera id, and leave the shadow programs
 // bound. A scope saves that state when the first scope of the frame opens and puts it back when the last one closes (a counter,
@@ -45,6 +60,16 @@ public:
     // blocks, a projector tile's (not of the atlas) or a sun cascade's wrapped world-grid index
     // (LLShadowCascadeFit::alphaDitherOrigin). (0, 0) puts it back.
     static void setTileOrigin(F32 x, F32 y);
+
+    // Lamp shadows L3, the seam every lamp pool uses: around the static render of a tile (or of a point light's face), the pool names its
+    // light-through layer and the tile's rect, the render's viewport; LLPipeline::renderShadow then draws the see-through casters of
+    // that render into the rect (making the layer the first time one is met) instead of dithering them into the depth, depth-tested
+    // against the pool's static depth atlas (LLLightThroughLayer::setAtlas) and with its own face rule (LLLightThroughLayer::DrawScope),
+    // whatever the render's own. throughTarget() is null when none is set; endThroughTarget() clears it and returns whether the render
+    // ran the caster pass into it. Main render thread only.
+    static void setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect, unsigned key);
+    static LLLightThroughTarget* throughTarget();
+    static bool endThroughTarget();
 };
 
 #endif // LL_LLLOCALSHADOWS_H

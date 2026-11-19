@@ -56,6 +56,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_vertexbuffer_free_delay.py
       shell: bash
+    - run: python3 scripts/tests/test_light_through_twin.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
@@ -76,6 +78,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llprojectorshadowpool_test.cpp -o "$RUNNER_TEMP/projector-pool-test"
         "$RUNNER_TEMP/projector-pool-test"
+    - name: Check the lamps' light-through layer core (the light through a face, the tap, the depth store, the carry)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllightthrough_test.cpp -o "$RUNNER_TEMP/light-through-test"
+        "$RUNNER_TEMP/light-through-test"
     - name: Check the shadow method migration
       shell: bash
       run: |

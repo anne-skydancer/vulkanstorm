@@ -144,7 +144,16 @@ def sources_checkout():
     common_fns = ''.join(func(common, s) for s in (
         'vec3 shadowRow(', 'vec2 shadowUVScale(', 'float shadowDepthScale(', 'float shadowTexelMetres(',
         'vec2 shadowPlaneGradient(', 'float shadowWorldBias(', 'vec3 shadowNormalOffsetPos(', 'vec3 shadowReceiverGeometry('))
-    return defines, common_fns + func(util, 'vec2 stSpotGradient(') + g1, func(util, 'float sampleProjectorShadow(')
+    return defines, common_fns + func(util, 'vec2 stSpotGradient(') + g1, scalar_lookup(util)
+
+
+def scalar_lookup(util):
+    """sampleProjectorShadow as a float: since lamp shadows L3 it returns a colour (the light through see-through casters); the
+    benches here have none, so its red channel is the depth's value, bit for bit"""
+    if 'vec3 sampleProjectorShadow(' not in util:
+        return func(util, 'float sampleProjectorShadow(')
+    return (func(util, 'vec3 sampleProjectorShadow(').replace('vec3 sampleProjectorShadow(', 'vec3 sampleProjectorShadowRGB(', 1) +
+            'float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 ps) { return sampleProjectorShadowRGB(pos, norm, ps).r; }\n')
 
 
 BASE = sources(opts.baseline_ref)
