@@ -73,6 +73,14 @@
 static LLStaticHashedString sTextureIndexIn("texture_index_in");
 static LLStaticHashedString sColorIn("color_in");
 
+// <Vulkanstorm> the volume face a texture entry index names, or false when the volume has fewer faces
+// than the object has texture entries (Local Mesh sets the entry count while the local volume is unloaded;
+// nothing resyncs it when the volume is filled), as the checks at the other volume-face reads do
+static inline bool te_has_volume_face(const LLVolume* volume, S32 te_offset)
+{
+    return volume && te_offset >= 0 && te_offset < volume->getNumVolumeFaces();
+}
+
 bool LLFace::sSafeRenderSelect = true; // false
 
 
@@ -639,7 +647,7 @@ void renderFace(LLDrawable* drawable, LLFace *face)
             volume = vobj->getVolume();
         }
 
-        if (volume)
+        if (te_has_volume_face(volume, face->getTEOffset()))
         {
             const LLVolumeFace& vol_face = volume->getVolumeFace(face->getTEOffset());
             LLVertexBuffer::drawElements(LLRender::TRIANGLES, vol_face.mPositions, NULL, vol_face.mNumIndices, vol_face.mIndices);
@@ -922,7 +930,8 @@ LLVector2 LLFace::surfaceToTexture(LLVector2 surface_coord, const LLVector4a& po
     //VECTORIZE THIS
     // see if we have a non-default mapping
     U8 texgen = tep->getTexGen();
-    if (texgen != LLTextureEntry::TEX_GEN_DEFAULT)
+    if (texgen != LLTextureEntry::TEX_GEN_DEFAULT
+        && te_has_volume_face(mDrawablep->getVOVolume()->getVolume(), mTEOffset))
     {
         LLVector4a& center = *(mDrawablep->getVOVolume()->getVolume()->getVolumeFace(mTEOffset).mCenter);
 
@@ -2436,7 +2445,7 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
         if (avatar && avatar->mDrawable)
         {
             LLVolume* volume = mVObjp->getVolume();
-            if (volume)
+            if (te_has_volume_face(volume, mTEOffset))
             {
                 LLVolumeFace& face = volume->getVolumeFace(mTEOffset);
 
