@@ -26,7 +26,6 @@ MARKER = "<!-- pr-readiness -->"
 BUILDS = ("windows", "linux", "linux-lts")
 BUILD_WORKFLOW = ".github/workflows/build-windows.yaml"  # test_ci_files.py keeps all three equal
 BAD_CONCLUSIONS = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
-OK_CONCLUSIONS = {"success", "skipped", "neutral"}
 STATUS_MAX = 140
 
 
@@ -77,17 +76,23 @@ def thread_info(thread):
 
 
 def latest_runs(check_runs):
-    """The latest check run of each name."""
+    """The latest attempt of each job, keyed by workflow run and job name (Build Windows, Build
+    Linux and Build Linux LTS each have a job named `checks`; a rerun keeps the run id)."""
     latest = {}
     for run in check_runs:
-        if run["name"] not in latest or run.get("id", 0) > latest[run["name"]].get("id", 0):
-            latest[run["name"]] = run
+        match = re.search(r"/actions/runs/(\d+)", run.get("details_url") or "")
+        key = (match.group(1) if match else "", run["name"])
+        if key not in latest or run.get("id", 0) > latest[key].get("id", 0):
+            latest[key] = run
     return latest
 
 
 def build_states(check_runs):
     """{build: (state, detail)} from the head's check runs."""
-    latest = latest_runs(check_runs)
+    latest = {}
+    for (_, name), run in latest_runs(check_runs).items():
+        if name in BUILDS and (name not in latest or run.get("id", 0) > latest[name].get("id", 0)):
+            latest[name] = run
     states = {}
     for name in BUILDS:
         run = latest.get(name)
@@ -95,8 +100,8 @@ def build_states(check_runs):
             states[name] = ("missing", "not started")
         elif run.get("status") != "completed":
             states[name] = ("running", run.get("status") or "running")
-        elif run.get("conclusion") in OK_CONCLUSIONS:
-            states[name] = ("pass", run.get("conclusion"))
+        elif run.get("conclusion") == "success":  # a skipped viewer job means its prerequisite failed
+            states[name] = ("pass", "success")
         else:
             states[name] = ("fail", run.get("conclusion") or "unknown")
     return states
@@ -104,8 +109,8 @@ def build_states(check_runs):
 
 def failed_checks(check_runs):
     """Names of the completed check runs, latest per name, that failed (builds or any other)."""
-    return sorted(n for n, r in latest_runs(check_runs).items()
-                  if r.get("status") == "completed" and r.get("conclusion") in BAD_CONCLUSIONS)
+    return sorted({name for (_, name), r in latest_runs(check_runs).items()
+                   if r.get("status") == "completed" and r.get("conclusion") in BAD_CONCLUSIONS})
 
 
 def evaluate(pr):
@@ -116,7 +121,7 @@ def evaluate(pr):
     """
     runs = pr.get("check_runs") or []
     builds = build_states(runs) if pr["builds_required"] else {}
-    failed = failed_checks(runs)
+    failed = sorted(set(failed_checks(runs)) | {n for n, (st, _) in builds.items() if st == "fail"})
     threads = pr.get("threads") or []
     conflict = pr.get("mergeable") is False
     unknown = pr.get("mergeable") is None

@@ -45,11 +45,12 @@ and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
 place, never a new comment per run). It reruns on the events that can change
 the answer: PR open, push, reopen, ready for review and base change; reviews
 and review comments; the end of a Build Windows,
-Build Linux or Build Linux LTS run; and a push to a `vkstorm-*` line, which can
+Build Linux, Build Linux LTS or Check PR run; and a push to a `vkstorm-*` line, which can
 make an open PR conflict. GitHub has no workflow event for resolving a
 thread, so a resolve shows at the next of these events.
 
-- `success`: ready. The builds `windows`, `linux` and `linux-lts` are green and
+- `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a skipped
+  viewer job is not green) and
   no review thread is open. A PR that changes only CI files and documentation
   (the build workflows' `paths-ignore`) builds no viewer and needs no builds.
 - `pending`: waiting for builds, open review threads (the comment lists them
