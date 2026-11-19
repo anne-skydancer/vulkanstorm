@@ -22,6 +22,8 @@ namespace LLImpostorProof
     // true once after RenderImpostorFullPBR changed, so every impostor must regenerate
     bool settingChanged();
 
+    // set by LLFetchedGLTFMaterial::bind while recording: 1 = shadow-pass binding (stripped), 2 = full material; read by the next draw
+    extern int sLastGltfBind;
     extern bool sRecording; // between beginGeneration and endGeneration of a logged impostor
 
     void beginGeneration(LLVOAvatar* avatar);

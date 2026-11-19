@@ -12,7 +12,9 @@ count of each item before and after, and the pictures.
 
 Material path: "full PBR" (the item's real material), "stripped" (the shadow-pass binding: base colour only, the other
 maps and the cut-off left over from earlier draws) or "legacy" (not glTF). Blend count: draws of the item with blending
-on and colour written during the generation; 1 is right, 2 is the old double blending.
+on and colour written during the generation (blend_count; emissive redraws and merged draws of equal items add to it, so
+read it as a before/after difference); blend_second is the same in the impostor's second (alpha depth) render, which the fix
+makes 0.
 """
 import argparse
 import json
@@ -106,7 +108,7 @@ def main():
     avatars = sorted({r['avatar'] for r in records})
 
     def interesting(r):
-        return r and (r.get('path') in ('full PBR', 'stripped') or r.get('blend_count', 0) > 0)
+        return r and (r.get('path') in ('full PBR', 'stripped') or r.get('blend_count', 0) > 0 or r.get('blend_second', 0) > 0)
 
     lines = ['# Impostor PBR proof: before and after', '']
     n_gen = {t: len({(r['session'], r['gen']) for r in records if r.get('tag') == t}) for t in ('before', 'after')}
@@ -123,10 +125,10 @@ def main():
               f'| glTF items bound "stripped" | {count(before, lambda r: r["path"] == "stripped")} | {count(after, lambda r: r["path"] == "stripped")} |',
               f'| glTF items bound "full PBR" | {count(before, lambda r: r["path"] == "full PBR")} | {count(after, lambda r: r["path"] == "full PBR")} |',
               f'| blended items | {count(before, lambda r: r["blend_count"] > 0)} | {count(after, lambda r: r["blend_count"] > 0)} |',
-              f'| blended more than once | {count(before, lambda r: r["blend_count"] > 1)} | {count(after, lambda r: r["blend_count"] > 1)} |',
+              f'| items blended in the second render | {count(before, lambda r: r.get("blend_second", 0) > 0)} | {count(after, lambda r: r.get("blend_second", 0) > 0)} |',
               '']
-    lines += ['Expected after the fix: no glTF item "stripped", no item blended more than once. Before: glTF items "stripped", '
-              'blended items counted twice.', '']
+    lines += ['Expected after the fix: no glTF item "stripped", no item blended in the second render. Before: glTF items "stripped", '
+              'blended items drawn again with colour in the second render.', '']
 
     pics = root / 'report'
     pics.mkdir(exist_ok=True)
@@ -149,7 +151,8 @@ def main():
                   '|---|---|---|---|---|---|']
         for k, _, alpha, b, a in rows:
             lines.append(f'| `{k}` | {alpha} | {b["path"] if b else "-"} | {a["path"] if a else "-"} | '
-                         f'{b["blend_count"] if b else "-"} | {a["blend_count"] if a else "-"} |')
+                         f'{b["blend_count"] if b else "-"} (2nd: {b.get("blend_second", 0) if b else "-"}) | '
+                         f'{a["blend_count"] if a else "-"} (2nd: {a.get("blend_second", 0) if a else "-"}) |')
         lines.append('')
         bp, ap_ = before_png.get(avatar), after_png.get(avatar)
         if bp or ap_:

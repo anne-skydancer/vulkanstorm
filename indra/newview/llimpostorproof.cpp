@@ -7,7 +7,6 @@
 #include "llimpostorproof.h"
 
 #include <cctype>
-#include <fstream>
 #include <string>
 #include <vector>
 
@@ -28,6 +27,7 @@
 namespace LLImpostorProof
 {
     bool sRecording = false;
+    int sLastGltfBind = 0;
 
     namespace
     {
@@ -41,7 +41,8 @@ namespace LLImpostorProof
             U32 mSeed = 0;
             bool mRigged = false;
             S32 mDraws = 0;
-            S32 mBlended = 0;       // draws with blending on and colour written: how often the item was blended
+            S32 mBlended = 0;       // draws with blending on and colour written, both renders
+            S32 mBlendedSecond = 0; // the same in the impostor's second (alpha depth) render: the fix makes it 0
         };
 
         std::vector<Item> sItems;
@@ -132,8 +133,9 @@ namespace LLImpostorProof
             case LLGLTFMaterial::ALPHA_MODE_BLEND: item.mAlphaMode = "blend"; break;
             default:                               item.mAlphaMode = "opaque"; break;
             }
-            // what LLFetchedGLTFMaterial::bind did for this generation
-            item.mPath = LLPipeline::sImpostorFullPBR ? "full PBR" : "stripped";
+            // the branch LLFetchedGLTFMaterial::bind really took for this draw (it runs before the draw)
+            item.mPath = sLastGltfBind == 2 ? "full PBR" : sLastGltfBind == 1 ? "stripped" : "unbound";
+            sLastGltfBind = 0;
         }
         else
         {
@@ -145,6 +147,7 @@ namespace LLImpostorProof
         GLboolean mask[4] = { GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
         glGetBooleanv(GL_COLOR_WRITEMASK, mask);
         const bool blended = glIsEnabled(GL_BLEND) && (mask[0] || mask[1] || mask[2]);
+        const bool second = LLPipeline::sImpostorRenderAlphaDepthPass;
 
         for (Item& known : sItems)
         {
@@ -152,11 +155,13 @@ namespace LLImpostorProof
             {
                 ++known.mDraws;
                 known.mBlended += blended ? 1 : 0;
+                known.mBlendedSecond += (blended && second) ? 1 : 0;
                 return;
             }
         }
         item.mDraws = 1;
         item.mBlended = blended ? 1 : 0;
+        item.mBlendedSecond = (blended && second) ? 1 : 0;
         sItems.push_back(item);
     }
 
@@ -182,9 +187,23 @@ namespace LLImpostorProof
         if (width > 0 && height > 0)
         {
             LLPointer<LLImageRaw> raw = new LLImageRaw(width, height, 4);
+            GLint old_read_buffer = 0, old_align = 4, old_pbo = 0;
+            glGetIntegerv(GL_READ_BUFFER, &old_read_buffer);
+            glGetIntegerv(GL_PACK_ALIGNMENT, &old_align);
+            glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &old_pbo);
+            if (old_pbo)
+            {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0); // a bound buffer would turn the read into an offset write
+            }
             glReadBuffer(GL_COLOR_ATTACHMENT0);
             glPixelStorei(GL_PACK_ALIGNMENT, 1);
             glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, raw->getData());
+            glPixelStorei(GL_PACK_ALIGNMENT, old_align);
+            glReadBuffer((GLenum)old_read_buffer);
+            if (old_pbo)
+            {
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint)old_pbo);
+            }
             png_name = tag + "/" + sessionTag() + "_" + llformat("%05u", gen) + "_" + safeName(name) + ".png";
             LLPointer<LLImagePNG> png = new LLImagePNG();
             if (png->encode(raw, 0.f))
@@ -198,7 +217,7 @@ namespace LLImpostorProof
         }
 
         // one JSON object per line
-        std::ofstream out(proofDir() + delim + "items.jsonl", std::ios::app);
+        llofstream out(proofDir() + delim + "items.jsonl", std::ios::app);
         S32 gltf_items = 0;
         S32 blended_items = 0;
         const std::string head = "{\"session\":\"" + sessionTag() + "\",\"gen\":" + std::to_string(gen) +
@@ -210,11 +229,11 @@ namespace LLImpostorProof
             out << head << ",\"item\":\"" << item.mKey << "\",\"texture\":\"" << item.mTexture
                 << "\",\"material\":\"" << item.mMaterial << "\",\"rigged\":" << (item.mRigged ? "true" : "false")
                 << ",\"path\":\"" << item.mPath << "\",\"alpha_mode\":\"" << item.mAlphaMode
-                << "\",\"draws\":" << item.mDraws << ",\"blend_count\":" << item.mBlended
+                << "\",\"draws\":" << item.mDraws << ",\"blend_count\":" << item.mBlended << ",\"blend_second\":" << item.mBlendedSecond
                 << ",\"png\":\"" << jsonEscape(png_name) << "\"}\n";
             LL_INFOS("ImpostorProof") << "gen " << gen << " [" << tag << "] avatar " << name << " item " << item.mKey
                                       << " path " << item.mPath << " alpha " << item.mAlphaMode
-                                      << " draws " << item.mDraws << " blended " << item.mBlended << LL_ENDL;
+                                      << " draws " << item.mDraws << " blended " << item.mBlended << " blended-in-second-render " << item.mBlendedSecond << LL_ENDL;
         }
         if (sItems.empty())
         {

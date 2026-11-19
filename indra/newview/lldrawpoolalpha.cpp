@@ -772,7 +772,6 @@ inline void Draw(LLDrawInfo* draw, U32 mask)
 {
     draw->mVertexBuffer->setBuffer();
     LLRenderPass::applyModelMatrix(*draw);
-    VKS_IMPOSTOR_PROOF_DRAW(*draw); // MEASURING BUILD
     draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 

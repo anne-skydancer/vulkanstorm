@@ -81,6 +81,9 @@ function Invoke-ProofSession {
     }
     $p = Start-Process -FilePath $Exe -ArgumentList $viewerArgs -WorkingDirectory (Split-Path $Exe) -PassThru
     $p.WaitForExit()
+    # if the exe respawned itself, wait for every process of that name too (the profile is deleted below)
+    $exeName = [IO.Path]::GetFileNameWithoutExtension($Exe)
+    while (Get-Process -Name $exeName -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }
     $env:APPDATA = $saved.APPDATA
     $env:LOCALAPPDATA = $saved.LOCALAPPDATA
 
@@ -89,8 +92,10 @@ function Invoke-ProofSession {
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
     $proof = @(Get-ChildItem -LiteralPath $prof -Recurse -Directory -Filter 'impostor_proof' -ErrorAction SilentlyContinue)
     foreach ($d in $proof) { Copy-Item -LiteralPath $d.FullName -Destination $dest -Recurse -Force }
+    # only the proof lines of the viewer log: the full log names the account
     foreach ($log in @(Get-ChildItem -LiteralPath $prof -Recurse -File -Filter '*.log' -ErrorAction SilentlyContinue)) {
-        Copy-Item -LiteralPath $log.FullName -Destination (Join-Path $dest $log.Name) -Force
+        $lines = @(Select-String -LiteralPath $log.FullName -Pattern 'ImpostorProof' | ForEach-Object { $_.Line })
+        if ($lines.Count) { Set-Content -LiteralPath (Join-Path $dest ('proof-' + $log.Name)) -Value $lines }
     }
     Remove-Item -LiteralPath $prof -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $prof) { Write-Warning "The scratch profile could not be deleted: $prof (it may hold a remembered login: delete it by hand)" }

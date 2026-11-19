@@ -19,6 +19,7 @@ FORBIDDEN = re.compile(
     r"FocusMemory|TextureDeliveryTest|FocusRenderProbe|RenderAlphaOITProfile|OITProfileSample|"
     r"sCompletionPending|sampleSourceMemory|accumulateSourceMemory|"
     r"getOwnedRawBytes|getPeakOwnedRawBytes|getOwnedOtherImageBytes|getDetachedRawBytes|"
+    r"VKS_IMPOSTOR_PROOF_DRAW|llimpostorproof|LLImpostorProof|RenderImpostorProofLog|RenderImpostorFullPBR|sImpostorFullPBR|impostorDepthOnly|"
     r"getCPUVertexBytes|getCPUIndexBytes|USE_TRACY_MEMORY|"
     r"VKS_GL_STATS|VKS_GL(?:STAT|CMP)\w*|LLGLSubmit\w+|RenderGLSubmit\w+|llglsubmitstats\w*|ProjectorShadowStats\w*|llprojectorshadowstatsapi\w*|DirectionalShadowReadout\w*|lldirectionalshadowreadout\w*)\b"
 )

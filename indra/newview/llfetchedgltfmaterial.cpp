@@ -26,6 +26,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "llfetchedgltfmaterial.h"
+#include "llimpostorproof.h"
 
 #include "llviewertexturelist.h"
 #include "llavatarappearancedefines.h"
@@ -101,6 +102,10 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     // MEASURING BUILD: RenderImpostorFullPBR = FALSE restores the binding from before the fix
     const bool impostor_full = LLPipeline::sImpostorRender && LLPipeline::sImpostorFullPBR;
     const bool shadow_pass = LLPipeline::sShadowRender && !impostor_full;
+    if (LLImpostorProof::sRecording) // MEASURING BUILD: what this bind really does, read by the next logged draw
+    {
+        LLImpostorProof::sLastGltfBind = shadow_pass ? 1 : 2;
+    }
     const bool pool_cutoff = impostor_full && mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;
 
     if ((!shadow_pass || (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)) && !pool_cutoff)
