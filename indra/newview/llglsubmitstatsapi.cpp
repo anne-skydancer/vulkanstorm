@@ -1834,7 +1834,8 @@ LLGLSubmitStatsApi::DisplayFrame::DisplayFrame(bool profile_frame)
         ++sArmSerial;
         gSavedSettings.setS32("RenderGLSubmitCompare", 0);
         LL_INFOS(kTag) << "armed for " << (want == LLGLSubmitCompare::PASS_ALL ? "all passes" : passLabel(want))
-                       << " in frame " << gFrameCount << " for up to " << sFrames.frames << " frames" << LL_ENDL;
+                       << " in frame " << gFrameCount << " for up to " << sFrames.frames
+                       << (sFrames.frames == 1 ? " frame" : " frames") << LL_ENDL;
         break;
     case LLGLSubmitMath::CompareFrames::BEGIN_CARRIED:
         mOwnsCompare = true; // an arming of several frames whose passes have not all run
