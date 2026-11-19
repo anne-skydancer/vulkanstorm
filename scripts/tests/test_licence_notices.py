@@ -129,7 +129,7 @@ class StagedTest(unittest.TestCase):
         for banned in PACKAGE_LICENCES_NOT_SHIPPED - {'soloud.txt', 'soloud-miniaudio.txt', 'ru_ru-dictionary-license.txt'}:
             self.assertNotIn(banned, have)
         for needed in ('openjpeg.txt', 'libjpeg-turbo.txt', 'openssl.txt', 'zlib-ng.txt', 'curl.txt',
-                       'mikktspace.txt', 'vulkan_gltf.txt'):
+                       'mikktspace.txt'):
             self.assertIn(needed, have)
         text = (Path(STAGED) / 'licenses.txt').read_text(encoding='utf-8')
         for word in UNSHIPPED_WORDS:

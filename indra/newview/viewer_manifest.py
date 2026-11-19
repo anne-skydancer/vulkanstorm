@@ -97,7 +97,9 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         # <Vulkanstorm> and the two notices the packages install beside the folder
         with self.prefix(src=pkgdir, dst='licenses'):
             for licence in PACKAGE_ROOT_LICENCES:
-                self.path(licence)
+                # canary does not use the vulkan_gltf package (no VulkanGltf.cmake include): stage what is installed
+                if os.path.exists(os.path.join(pkgdir, licence)):
+                    self.path(licence)
         # </Vulkanstorm>
         self.path('luau.txt', 'licenses/luau.txt')
         # <Vulkanstorm> The volumetric clouds' noise file (the cloudnoise package, indra/cmake/CloudNoise.cmake
