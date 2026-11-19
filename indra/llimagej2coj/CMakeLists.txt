@@ -19,6 +19,7 @@ set(llimagej2coj_HEADER_FILES
 
     llimagej2coj.h
     llj2cdecodeguard.h
+    llj2cdecoderlimits.h
     llj2creduce.h
     )
 
