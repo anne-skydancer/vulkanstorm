@@ -14,6 +14,20 @@
       }
     },
     {
+      "name": "avatareyes",
+      "source": "avatareyes.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "benchmark",
       "source": "benchmark.slang",
       "entries": {
@@ -58,6 +72,24 @@
       }
     },
     {
+      "name": "dbump",
+      "source": "dbump.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "debug",
       "source": "debug.slang",
       "entries": {
@@ -72,6 +104,20 @@
       }
     },
     {
+      "name": "dimpostor",
+      "source": "dimpostor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "drawcolor",
       "source": "drawcolor.slang",
       "entries": {
@@ -80,8 +126,38 @@
       }
     },
     {
+      "name": "dtree",
+      "source": "dtree.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "gaussian",
       "source": "gaussian.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "genbrdflut",
+      "source": "genbrdflut.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glow",
+      "source": "glow.slang",
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"
@@ -101,6 +177,20 @@
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glowextract",
+      "source": "glowextract.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_NOISE": [
+          0,
+          1
+        ]
       }
     },
     {
@@ -142,6 +232,14 @@
     {
       "name": "irradianceGen",
       "source": "irradianceGen.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "normgen",
+      "source": "normgen.slang",
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"
@@ -236,6 +334,14 @@
       }
     },
     {
+      "name": "snapshotframe",
+      "source": "snapshotframe.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "solidcolor",
       "source": "solidcolor.slang",
       "entries": {
@@ -254,6 +360,14 @@
     {
       "name": "ui",
       "source": "ui.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "vignette",
+      "source": "vignette.slang",
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"

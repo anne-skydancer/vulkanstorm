@@ -313,6 +313,19 @@ static void interfaceStages(LLGLSLShader& shader, const char* generated_id, cons
         shader.mShaderFiles.push_back(make_pair(std::string(legacy_fragment), GL_FRAGMENT_SHADER));
     }
 }
+
+// The generated G-buffer programs come in two permutations of the emissive target (RenderEnableEmissiveBuffer, the
+// HAS_EMISSIVE define of the hand-written programs): the id names the one to load.
+static std::string emissiveId(const char* base, const char* skin_axis = nullptr)
+{
+    static LLCachedControl<bool> emissive(gSavedSettings, "RenderEnableEmissiveBuffer", false);
+    std::string id = llformat("%s__HAS_EMISSIVE%d", base, emissive ? 1 : 0);
+    if (skin_axis)
+    {
+        id += skin_axis;
+    }
+    return id;
+}
 // </Vulkanstorm>
 
 // <Vulkanstorm> `generated_id` names the rigged program of a generated (Slang) program: the HAS_SKIN 1 permutation, with
@@ -1403,8 +1416,7 @@ bool LLViewerShaderMgr::loadShadersEffects()
     {
         gGlowProgram.mName = "Glow Shader (Post)";
         gGlowProgram.mShaderFiles.clear();
-        gGlowProgram.mShaderFiles.push_back(make_pair("effects/glowV.glsl", GL_VERTEX_SHADER));
-        gGlowProgram.mShaderFiles.push_back(make_pair("effects/glowF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gGlowProgram, "glow", "effects/glowV.glsl", "effects/glowF.glsl");
         gGlowProgram.mShaderLevel = mShaderLevel[SHADER_EFFECT];
         success = gGlowProgram.createShader();
         if (!success)
@@ -1420,8 +1432,8 @@ bool LLViewerShaderMgr::loadShadersEffects()
 
         gGlowExtractProgram.mName = llformat("Glow Extract Shader (Post)%s", glow_noise_label.c_str());
         gGlowExtractProgram.mShaderFiles.clear();
-        gGlowExtractProgram.mShaderFiles.push_back(make_pair("effects/glowExtractV.glsl", GL_VERTEX_SHADER));
-        gGlowExtractProgram.mShaderFiles.push_back(make_pair("effects/glowExtractF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gGlowExtractProgram, use_glow_noise ? "glowextract__HAS_NOISE1" : "glowextract__HAS_NOISE0",
+                        "effects/glowExtractV.glsl", "effects/glowExtractF.glsl");
         gGlowExtractProgram.mShaderLevel = mShaderLevel[SHADER_EFFECT];
 
         if (use_glow_noise)
@@ -1441,8 +1453,7 @@ bool LLViewerShaderMgr::loadShadersEffects()
     {
         gPostVignetteProgram.mName = "Vignette Post";
         gPostVignetteProgram.mShaderFiles.clear();
-        gPostVignetteProgram.mShaderFiles.push_back(make_pair("post/exoPostBaseV.glsl", GL_VERTEX_SHADER));
-        gPostVignetteProgram.mShaderFiles.push_back(make_pair("post/exoVignetteF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gPostVignetteProgram, "vignette", "post/exoPostBaseV.glsl", "post/exoVignetteF.glsl");
         gPostVignetteProgram.mShaderLevel = mShaderLevel[SHADER_EFFECT];
         success = gPostVignetteProgram.createShader();
     }
@@ -1452,8 +1463,7 @@ bool LLViewerShaderMgr::loadShadersEffects()
     {
         gPostSnapshotFrameProgram.mName = "Snapshot Frame Post";
         gPostSnapshotFrameProgram.mShaderFiles.clear();
-        gPostSnapshotFrameProgram.mShaderFiles.push_back(make_pair("post/exoPostBaseV.glsl", GL_VERTEX_SHADER));
-        gPostSnapshotFrameProgram.mShaderFiles.push_back(make_pair("post/snapshotFrameF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gPostSnapshotFrameProgram, "snapshotframe", "post/exoPostBaseV.glsl", "post/snapshotFrameF.glsl");
         gPostSnapshotFrameProgram.mShaderLevel = mShaderLevel[SHADER_EFFECT];
         success = gPostSnapshotFrameProgram.createShader();
     }
@@ -1676,11 +1686,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredBumpProgram.mName = "Deferred Bump Shader";
         gDeferredBumpProgram.mShaderFiles.clear();
-        gDeferredBumpProgram.mShaderFiles.push_back(make_pair("deferred/bumpV.glsl", GL_VERTEX_SHADER));
-        gDeferredBumpProgram.mShaderFiles.push_back(make_pair("deferred/bumpF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDeferredBumpProgram, emissiveId("dbump", "__HAS_SKIN0").c_str(), "deferred/bumpV.glsl", "deferred/bumpF.glsl");
         gDeferredBumpProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gDeferredBumpProgram);
-        success = make_rigged_variant(gDeferredBumpProgram, gDeferredSkinnedBumpProgram);
+        success = make_rigged_variant(gDeferredBumpProgram, gDeferredSkinnedBumpProgram, emissiveId("dbump", "__HAS_SKIN1").c_str());
         success = success && gDeferredBumpProgram.createShader();
         llassert(success);
     }
@@ -2001,8 +2010,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredTreeProgram.mName = "Deferred Tree Shader";
         gDeferredTreeProgram.mShaderFiles.clear();
-        gDeferredTreeProgram.mShaderFiles.push_back(make_pair("deferred/treeV.glsl", GL_VERTEX_SHADER));
-        gDeferredTreeProgram.mShaderFiles.push_back(make_pair("deferred/treeF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDeferredTreeProgram, emissiveId("dtree").c_str(), "deferred/treeV.glsl", "deferred/treeF.glsl");
         gDeferredTreeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredTreeProgram);
@@ -2039,8 +2047,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredImpostorProgram.mName = "Deferred Impostor Shader";
         gDeferredImpostorProgram.mFeatures.hasSrgb = true;
         gDeferredImpostorProgram.mShaderFiles.clear();
-        gDeferredImpostorProgram.mShaderFiles.push_back(make_pair("deferred/impostorV.glsl", GL_VERTEX_SHADER));
-        gDeferredImpostorProgram.mShaderFiles.push_back(make_pair("deferred/impostorF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDeferredImpostorProgram, emissiveId("dimpostor").c_str(), "deferred/impostorV.glsl", "deferred/impostorF.glsl");
         gDeferredImpostorProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredImpostorProgram);
@@ -2378,8 +2385,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarEyesProgram.mFeatures.hasShadows = true;
 
         gDeferredAvatarEyesProgram.mShaderFiles.clear();
-        gDeferredAvatarEyesProgram.mShaderFiles.push_back(make_pair("deferred/avatarEyesV.glsl", GL_VERTEX_SHADER));
-        gDeferredAvatarEyesProgram.mShaderFiles.push_back(make_pair("deferred/diffuseF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDeferredAvatarEyesProgram, emissiveId("avatareyes").c_str(), "deferred/avatarEyesV.glsl", "deferred/diffuseF.glsl");
         gDeferredAvatarEyesProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredAvatarEyesProgram);
@@ -3636,8 +3642,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gNormalMapGenProgram.mName = "Normal Map Generation Program";
         gNormalMapGenProgram.mShaderFiles.clear();
-        gNormalMapGenProgram.mShaderFiles.push_back(make_pair("deferred/normgenV.glsl", GL_VERTEX_SHADER));
-        gNormalMapGenProgram.mShaderFiles.push_back(make_pair("deferred/normgenF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gNormalMapGenProgram, "normgen", "deferred/normgenV.glsl", "deferred/normgenF.glsl");
         gNormalMapGenProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gNormalMapGenProgram.mShaderGroup = LLGLSLShader::SG_SKY;
         success = gNormalMapGenProgram.createShader();
@@ -3647,8 +3652,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredGenBrdfLutProgram.mName = "Brdf Gen Shader";
         gDeferredGenBrdfLutProgram.mShaderFiles.clear();
-        gDeferredGenBrdfLutProgram.mShaderFiles.push_back(make_pair("deferred/genbrdflutV.glsl", GL_VERTEX_SHADER));
-        gDeferredGenBrdfLutProgram.mShaderFiles.push_back(make_pair("deferred/genbrdflutF.glsl", GL_FRAGMENT_SHADER));
+        interfaceStages(gDeferredGenBrdfLutProgram, "genbrdflut", "deferred/genbrdflutV.glsl", "deferred/genbrdflutF.glsl");
         gDeferredGenBrdfLutProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredGenBrdfLutProgram.createShader();
     }

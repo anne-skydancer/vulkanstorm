@@ -123,6 +123,397 @@
    }
   },
   {
+   "id": "avatareyes__HAS_EMISSIVE0",
+   "program": "avatareyes",
+   "permutation": {
+    "HAS_EMISSIVE": "0"
+   },
+   "source": "slang/avatareyes.slang",
+   "stages": {
+    "vertex": {
+     "file": "avatareyes__HAS_EMISSIVE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "300b11ea442d43553cb6d699f994848506f4441abb15632d40ca8be4bcb7ff93",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "normal_matrix",
+        "offset": 0,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 48,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 112,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "avatareyes__HAS_EMISSIVE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "fb0363238db18291daaad79e722f7534c7c088ad30d223d17d71e357111e1f00",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "normal_matrix",
+        "offset": 0,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 48,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 112,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "avatareyes__HAS_EMISSIVE1",
+   "program": "avatareyes",
+   "permutation": {
+    "HAS_EMISSIVE": "1"
+   },
+   "source": "slang/avatareyes.slang",
+   "stages": {
+    "vertex": {
+     "file": "avatareyes__HAS_EMISSIVE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "0087f8a82ab0520eea81dd842bdd7da5940c79a5e04b154846826d621c768943",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "normal_matrix",
+        "offset": 0,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 48,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 112,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "avatareyes__HAS_EMISSIVE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "683bbf847527a83a901b2a468d85e6cca34f148e2b0af2a5dc4ebd165319f0b7",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "normal_matrix",
+        "offset": 0,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 48,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 112,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "benchmark",
    "program": "benchmark",
    "permutation": {},
@@ -763,6 +1154,970 @@
    }
   },
   {
+   "id": "dbump__HAS_EMISSIVE0__HAS_SKIN0",
+   "program": "dbump",
+   "permutation": {
+    "HAS_EMISSIVE": "0",
+    "HAS_SKIN": "0"
+   },
+   "source": "slang/dbump.slang",
+   "stages": {
+    "vertex": {
+     "file": "dbump__HAS_EMISSIVE0__HAS_SKIN0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "5ad6bb124e71d51a532653f68360f46c056c17b9cd493aa74be52a32ddc173af",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dbump__HAS_EMISSIVE0__HAS_SKIN0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "e763240ac2af4f32d7bd8dd15076df72dad8aca8ca6544b42232753dfc705f45",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "bumpMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dbump__HAS_EMISSIVE0__HAS_SKIN1",
+   "program": "dbump",
+   "permutation": {
+    "HAS_EMISSIVE": "0",
+    "HAS_SKIN": "1"
+   },
+   "source": "slang/dbump.slang",
+   "stages": {
+    "vertex": {
+     "file": "dbump__HAS_EMISSIVE0__HAS_SKIN1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "16617a4205502388b1f4c0542a7d6c2559eb5f4616cba7e483ea19e2f91869f1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 192,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5472,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5476,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5488,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dbump__HAS_EMISSIVE0__HAS_SKIN1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "19151957690af9fecf22150e87e5f89b2ce3b8681bd489907bd9feb9369675aa",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 192,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5472,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5476,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5488,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "bumpMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dbump__HAS_EMISSIVE1__HAS_SKIN0",
+   "program": "dbump",
+   "permutation": {
+    "HAS_EMISSIVE": "1",
+    "HAS_SKIN": "0"
+   },
+   "source": "slang/dbump.slang",
+   "stages": {
+    "vertex": {
+     "file": "dbump__HAS_EMISSIVE1__HAS_SKIN0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "3bfd2d574eff2129704d039cb9d44e27b1bcb3307036eec32ea8548b618625d7",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dbump__HAS_EMISSIVE1__HAS_SKIN0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "44e86b9a3049c01d3b658e1c82a68c0b1bfdfc774a2bf51a4041d966ed40866e",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "bumpMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dbump__HAS_EMISSIVE1__HAS_SKIN1",
+   "program": "dbump",
+   "permutation": {
+    "HAS_EMISSIVE": "1",
+    "HAS_SKIN": "1"
+   },
+   "source": "slang/dbump.slang",
+   "stages": {
+    "vertex": {
+     "file": "dbump__HAS_EMISSIVE1__HAS_SKIN1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "1af1b0b6d2ed465960a3bdc32f4ead88a1beb51015f026c50efe2c657bc6ee04",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 192,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5472,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5476,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5488,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dbump__HAS_EMISSIVE1__HAS_SKIN1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "3d0b2b223f373cc5d2dc4d90af45380ef5ab83a83f92c806fc1d62d996c4a1fa",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_mat0",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat1",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_mat2",
+        "location": 2,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 3,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 4,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 5,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 192,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5472,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5476,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5488,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "bumpMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "debug__HAS_SKIN0",
    "program": "debug",
    "permutation": {
@@ -936,6 +2291,265 @@
    }
   },
   {
+   "id": "dimpostor__HAS_EMISSIVE0",
+   "program": "dimpostor",
+   "permutation": {
+    "HAS_EMISSIVE": "0"
+   },
+   "source": "slang/dimpostor.slang",
+   "stages": {
+    "vertex": {
+     "file": "dimpostor__HAS_EMISSIVE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "d244a00004cbb0cacd32a5930d5cd7b07419cb7411e1111f4dafb800450a7fb3",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dimpostor__HAS_EMISSIVE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "e6daef8e40829da4b71a2c89165430dd261bdd513227a6794bb14aab2f2ba7a4",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "normalMap",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "specularMap",
+        "binding": 2,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dimpostor__HAS_EMISSIVE1",
+   "program": "dimpostor",
+   "permutation": {
+    "HAS_EMISSIVE": "1"
+   },
+   "source": "slang/dimpostor.slang",
+   "stages": {
+    "vertex": {
+     "file": "dimpostor__HAS_EMISSIVE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "388db2ceda4e842ed0d4c4e1a1aab02955780743d447bca29e2187db7fccbd7b",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dimpostor__HAS_EMISSIVE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "07b3d7260089190a08bd6501171b40464c0d0b62d68f5467ba9e5a1fec3563d7",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "normalMap",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "specularMap",
+        "binding": 2,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "drawcolor",
    "program": "drawcolor",
    "permutation": {},
@@ -1013,6 +2627,411 @@
        }
       ],
       "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "dtree__HAS_EMISSIVE0",
+   "program": "dtree",
+   "permutation": {
+    "HAS_EMISSIVE": "0"
+   },
+   "source": "slang/dtree.slang",
+   "stages": {
+    "vertex": {
+     "file": "dtree__HAS_EMISSIVE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "5111ce6e1209928f53a0729a848af13afbeae443224529f06367fe3abccf3586",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 192,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dtree__HAS_EMISSIVE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "47bd8eca2657ae855d8397db9747cdac14a11c94cf48b71fdb258dd5aed9ef55",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 192,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dtree__HAS_EMISSIVE1",
+   "program": "dtree",
+   "permutation": {
+    "HAS_EMISSIVE": "1"
+   },
+   "source": "slang/dtree.slang",
+   "stages": {
+    "vertex": {
+     "file": "dtree__HAS_EMISSIVE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "44c0d4de3c321a089815ff289f1eb99e7c93474819f082bae7d452f4e14d6105",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 192,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dtree__HAS_EMISSIVE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "c25c5faf17d27c412b0864bd1ddaf8b0e0dec9dc7bc32e08722fbdc58b0a9778",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vertex_color",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 3,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "texture_matrix0",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 128,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 192,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 240,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 244,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
      }
     }
    }
@@ -1109,6 +3128,180 @@
       "textures": [
        {
         "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "genbrdflut",
+   "program": "genbrdflut",
+   "permutation": {},
+   "source": "slang/genbrdflut.slang",
+   "stages": {
+    "vertex": {
+     "file": "genbrdflut.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "5fd76dc381e33381a935015ee9d694f8cd97e532242f085ab78db05f2878ee65",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_uv",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "genbrdflut.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "2be2b7b6aa216c686f3e93b0752775ba819fa9da61b778bcc3756fb646fcfaff",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_uv",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "glow",
+   "program": "glow",
+   "permutation": {},
+   "source": "slang/glow.slang",
+   "stages": {
+    "vertex": {
+     "file": "glow.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "5382a09f73aed945093c14bb802c19b0a46abec1150cf43752cc23e8b1fc4705",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "glowStrength",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "glowDelta",
+        "offset": 8,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "glow.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "12121e05865cc90b2cd9a2d5dff6fb636759e232b96aeb904195a911c723ae0e",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "glowStrength",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "glowDelta",
+        "offset": 8,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
         "binding": 0,
         "type": "texture2D"
        }
@@ -1239,6 +3432,275 @@
        {
         "name": "diffuseRect",
         "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "glowextract__HAS_NOISE0",
+   "program": "glowextract",
+   "permutation": {
+    "HAS_NOISE": "0"
+   },
+   "source": "slang/glowextract.slang",
+   "stages": {
+    "vertex": {
+     "file": "glowextract__HAS_NOISE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "251b5f86880686672f3d5a0d980b34f8b558da94b81b6d6f035ded0365c93ebe",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "minLuminance",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "maxExtractAlpha",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "lumWeights",
+        "offset": 16,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthWeights",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthAmount",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "glowextract__HAS_NOISE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "f6060aada53e5b5fd6a33fcdb4b690cdc821f55928839dc6cf9d8d4ed5421ffa",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "minLuminance",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "maxExtractAlpha",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "lumWeights",
+        "offset": 16,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthWeights",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthAmount",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "glowextract__HAS_NOISE1",
+   "program": "glowextract",
+   "permutation": {
+    "HAS_NOISE": "1"
+   },
+   "source": "slang/glowextract.slang",
+   "stages": {
+    "vertex": {
+     "file": "glowextract__HAS_NOISE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "21511fb5c6f310d460689be8959f2235343ac2a587f7b573ceae1f3438abe7ed",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "minLuminance",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "maxExtractAlpha",
+        "offset": 12,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "lumWeights",
+        "offset": 16,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthWeights",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthAmount",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "glowextract__HAS_NOISE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "95d8ba0be3947247a618fb569dcda6ea78fb958083e828d121068bf807aa5394",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "minLuminance",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "maxExtractAlpha",
+        "offset": 12,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "lumWeights",
+        "offset": 16,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthWeights",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "warmthAmount",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "glowNoiseMap",
+        "binding": 1,
         "type": "texture2D"
        }
       ]
@@ -1902,6 +4364,123 @@
         "name": "reflectionProbes",
         "binding": 0,
         "type": "textureCube"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "normgen",
+   "program": "normgen",
+   "permutation": {},
+   "source": "slang/normgen.slang",
+   "stages": {
+    "vertex": {
+     "file": "normgen.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "ee8ccc5da25de44822e7c5e6277669488ca8884897ed9f593f8c4624086a96e7",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "stepX",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "stepY",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "norm_scale",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "bump_code",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "normgen.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "4f2569ad08a10399cd9984a6a82d36fdaa72220749026faf2e05298558c7d992",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_texcoord0",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "stepX",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "stepY",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "norm_scale",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "bump_code",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "srcMap",
+        "binding": 0,
+        "type": "texture2D"
        }
       ]
      }
@@ -3272,6 +5851,118 @@
    }
   },
   {
+   "id": "snapshotframe",
+   "program": "snapshotframe",
+   "permutation": {},
+   "source": "slang/snapshotframe.slang",
+   "stages": {
+    "vertex": {
+     "file": "snapshotframe.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "af90c33dc1830177662a2ff0be905f73fd7b76e1e52091573fe2de6ae03400db",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_fragcoord",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "frame_rect",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "border_color",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "border_thickness",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "snapshotframe.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "2356785dd90690d7d8aadf6789b72351df2f8d8dd66b602f1900a70dd8cc59ca",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_fragcoord",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "frame_rect",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "border_color",
+        "offset": 32,
+        "size": 12,
+        "type": "float32x3"
+       },
+       {
+        "name": "border_thickness",
+        "offset": 44,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "solidcolor",
    "program": "solidcolor",
    "permutation": {},
@@ -3606,6 +6297,82 @@
       "textures": [
        {
         "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "vignette",
+   "program": "vignette",
+   "permutation": {},
+   "source": "slang/vignette.slang",
+   "stages": {
+    "vertex": {
+     "file": "vignette.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "9d99ef26886fe79635b811b13525b08d4fed9af0639ada1ee6eca50be2a8eaa2",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_fragcoord",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "vignette",
+        "offset": 0,
+        "size": 12,
+        "type": "float32x3"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "vignette.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "9ff48eed6f47a77e9d65933665ce83e8f7efa8e87ca2bef23312b5cc07a46227",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_fragcoord",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "vignette",
+        "offset": 0,
+        "size": 12,
+        "type": "float32x3"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
         "binding": 0,
         "type": "texture2D"
        }
