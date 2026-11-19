@@ -8986,6 +8986,7 @@ void LLPipeline::resolveShadowStochastic(LLRenderTarget& raw, LLRenderTarget& li
     if (compute)
     {
         mShadowSTHistory.bindWriteImage();   // never the texture bound for reading above
+        LLGLSLShader::flushBlock();          // a generated compute program's uniform block (this one is hand-written today)
         glDispatchCompute((w + 15) / 16, (h + 15) / 16, 1);   // the shader's 16 x 16 local size
         mShadowSTHistory.endComputeWrite();  // the barrier that makes the stores visible to the light map pass and the next frame
     }

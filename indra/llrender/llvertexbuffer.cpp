@@ -969,6 +969,7 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
     llassert(mGLBuffer == sGLRenderBuffer);
     llassert(mGLIndices == sGLRenderIndices);
     gGL.syncMatrices();
+    LLGLSLShader::flushBlock(); // <Vulkanstorm/> a generated program's uniform block
     STOP_GLERROR;
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
@@ -1016,6 +1017,7 @@ bool LLVertexBuffer::drawSkipping(U32 mode, U32 start, U32 end, U32 count, U32 i
 
 void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
 {
+    LLGLSLShader::flushBlock(); // <Vulkanstorm/> a generated program's uniform block
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
@@ -1036,6 +1038,7 @@ void LLVertexBuffer::drawArrays(U32 mode, U32 first, U32 count) const
     llassert(mGLIndices == sGLRenderIndices);
 
     gGL.syncMatrices();
+    LLGLSLShader::flushBlock(); // <Vulkanstorm/> a generated program's uniform block
     STOP_GLERROR;
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT_INC(drawArraysCalls);

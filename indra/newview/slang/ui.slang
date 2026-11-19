@@ -1,5 +1,5 @@
 /**
- * @file eyeballF.glsl
+ * @file ui.slang (converted from uiV.glsl)
  *
  * $LicenseInfo:firstyear=2007&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -22,13 +22,39 @@
  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
  * $/LicenseInfo$
  */
+import glsl;
+import position;
 
+uniform mat4 texture_matrix0;
+uniform mat4 modelview_projection_matrix;
+uniform sampler2D diffuseMap;
 
-
-void default_lighting();
-
-void main()
+struct VertexIn
 {
-    default_lighting();
+    [[vk::location(0)]] vec3 position : POSITION;
+    [[vk::location(6)]] vec4 diffuse_color : COLOR0;
+    [[vk::location(2)]] vec2 texcoord0 : TEXCOORD0;
+};
+
+struct Varyings
+{
+    vec4 pos : SV_Position;
+    [[vk::location(0)]] vec4 vertex_color : VERTEX_COLOR;
+    [[vk::location(1)]] vec2 vary_texcoord0 : VARY_TEXCOORD0;
+};
+
+[shader("vertex")]
+Varyings vsMain(VertexIn v)
+{
+    Varyings o;
+    o.pos = vkPositionClip(modelview_projection_matrix, v.position);
+    o.vary_texcoord0 = (texture_matrix0 * vec4(v.texcoord0, 0, 1)).xy;
+    o.vertex_color = v.diffuse_color;
+    return o;
 }
 
+[shader("fragment")]
+vec4 fsMain(Varyings i) : SV_Target0
+{
+    return i.vertex_color * texture(diffuseMap, i.vary_texcoord0.xy);
+}

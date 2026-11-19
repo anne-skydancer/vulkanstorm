@@ -2498,6 +2498,7 @@ bool LLImageGL::scaleDown(S32 desired_discard)
         // draw a full screen triangle
         if (gGL.getTexUnit(0)->bind(this, true, true))
         {
+            LLGLSLShader::flushBlock(); // <Vulkanstorm/> a generated program's uniform block
             glDrawArrays(GL_TRIANGLES, 0, 3);
 
 #if LL_DARWIN

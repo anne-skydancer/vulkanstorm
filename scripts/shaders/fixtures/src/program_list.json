@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SSR": "screen space reflections on (RenderScreenSpaceReflections)"
+  },
+  "position": {"module": "position_mod", "prefix": "vkPosition"},
+  "programs": [
+    {
+      "name": "tint",
+      "source": "tint.slang",
+      "entries": {"vertex": "vsMain", "fragment": "fsMain"},
+      "permutations": {"DOUBLE": [0, 1]}
+    }
+  ]
+}

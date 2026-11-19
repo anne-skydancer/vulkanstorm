@@ -1,0 +1,498 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+"""Visual A/B cases for every converted program: the hand-written GLSL (reference) against the generated Slang program.
+
+`python scripts/shaders/ab_harness.py programs [--only TEXT]` draws each case on a fixed grid mesh from fixed inputs, with
+both programs, into float targets (colour attachments and, where a program writes it, depth), reads both back and compares
+them (decision D3: the Slang output is taken as it is, so the test is a sanity check with a tolerance; a depth written
+straight from a texture is compared exactly).
+
+Nothing here is tuned to the program under test:
+  * the uniforms are filled from the reference program's own active uniforms (introspection), by name and type: a view,
+    projection and model-view-projection matrix, a normal matrix, a texture matrix with scale and offset, and a stable
+    pseudo-random value per name; a case lists overrides for the few that need a particular value (an integer mode);
+  * the samplers are filled by type (2D, cube, cube array) with smooth procedural data whose alpha straddles the
+    alpha-test values, so a discard shows;
+  * a uniform the reference has and the candidate does not take is a failed case unless the case lists it as optional
+    (the optimiser dropped it); a case where the reference draws nothing proves nothing and fails.
+The mirror and reflection clip is run on and off for the G-buffer programs.
+"""
+import ctypes as C
+import re
+import zlib
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+import ab_harness as H
+import slang_check as check
+import slang_common as common
+
+SIZE = 64
+GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_DEPTH_ATTACHMENT = 0x8CAC, 0x1902, 0x8D00
+GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8513, 0x8515
+GL_DEPTH_TEST, GL_ALWAYS, GL_REPEAT = 0x0B71, 0x0207, 0x2901
+SAMPLER2D, SAMPLERCUBE, SAMPLERCUBEARRAY = 0x8B5E, 0x8B60, 0x900C
+GL_FLOAT_T, VEC2, VEC3, VEC4, INT_T, IVEC2, IVEC3, IVEC4, MAT3, MAT4 = 0x1406, 0x8B50, 0x8B51, 0x8B52, 0x1404, 0x8B53, 0x8B54, 0x8B55, 0x8B5B, 0x8B5C
+COMPONENTS = {GL_FLOAT_T: 1, VEC2: 2, VEC3: 3, VEC4: 4, INT_T: 1, IVEC2: 2, IVEC3: 3, IVEC4: 4}
+GBUFFER_DEFS = ('#define GBUFFER_FLAG_SKIP_ATMOS 0.0\n#define GBUFFER_FLAG_HAS_ATMOS 0.34\n#define GBUFFER_FLAG_HAS_PBR 0.67\n'
+                '#define GBUFFER_FLAG_HAS_HDRI 1.0\n#define GET_GBUFFER_FLAG(data, flag) (abs(data-flag)< 0.1)\n')
+
+
+@dataclass
+class Case:
+    name: str
+    vs: str                      # legacy vertex file under class1/
+    fs: str                      # legacy fragment file under class1/
+    gen: str                     # generated program id
+    defines: dict = field(default_factory=dict)
+    outputs: int = 1             # colour attachments compared
+    depth: bool = False          # the program writes gl_FragDepth: compare it exactly
+    skin: bool = False           # append objectSkinV and feed weight4 and a palette
+    uniforms: dict = field(default_factory=dict)
+    optional: tuple = ()         # uniforms the candidate may legitimately not take
+    clip: bool = False           # also run with the mirror clip on (G-buffer programs)
+    depth_info: bool = False     # report (never fail) how far the generated depth is from the hand-written one: the generated vertex
+                                 # stage declares `invariant gl_Position`, the hand-written one does not
+    flat_ok: tuple = ()          # colour targets the program legitimately writes as one constant (colour writes off, zero specular)
+    variants: tuple = ()         # extra override dicts: the case is drawn once per variant (a cube face, a source layer)
+
+
+def _hash01(name, salt=0):
+    return (zlib.crc32(f'{name}/{salt}'.encode()) & 0xFFFF) / 65535.0
+
+
+def _matrices():
+    view = np.array([[0.95, 0.0, 0.31, 0.1], [0.0, 1.0, 0.0, -0.05], [-0.31, 0.0, 0.95, -3.0], [0, 0, 0, 1]], dtype='f4')
+    proj = H._perspective(60.0, 1.0, 0.1, 100.0)
+    normal = np.linalg.inv(view[:3, :3]).T.astype('f4')
+    tex = np.array([[0.9, 0.0, 0.0, 0.05], [0.0, 0.85, 0.0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]], dtype='f4')
+    return view, proj, normal, tex
+
+
+def fill_uniforms(gl, ref, overrides, clip):
+    """Values for every active non-sampler uniform of the reference, by name and type, plus the case's overrides."""
+    view, proj, normal, tex = _matrices()
+    col = lambda m: [float(x) for x in np.asarray(m, 'f4').T.reshape(-1)]  # column-major, as GL takes it
+    fixed = {
+        'modelview_matrix': col(view), 'projection_matrix': col(proj), 'modelview_projection_matrix': col(proj @ view),
+        'normal_matrix': col(normal), 'texture_matrix0': col(tex),
+        'minimum_alpha': 0.4, 'mirror_flag': 1.0 if clip else 0.0, 'clipPlane': [0.0, 0.0, 1.0, 3.0],
+        'screen_res': [float(SIZE), float(SIZE)], 'color': [0.8, 0.5, 0.3, 0.7],
+    }
+    values = {}
+    for u in gl.uniforms(ref):
+        if u['type'] in H.SAMPLER_TYPES:
+            continue
+        name = re.sub(r'\[0\]$', '', u['name'].split('.')[-1])
+        if name in fixed:
+            values[name] = fixed[name]
+        elif u['type'] == MAT4:
+            values[name] = col(np.eye(4, dtype='f4') * 0.9 + 0.02)
+        elif u['type'] == MAT3:
+            values[name] = [float(x) for x in (np.eye(3, dtype='f4') * 0.9 + 0.03).T.reshape(-1)]
+        elif u['type'] in (INT_T, IVEC2, IVEC3, IVEC4):
+            values[name] = [1] * COMPONENTS[u['type']] if COMPONENTS[u['type']] > 1 else 1
+        elif u['type'] in COMPONENTS:
+            n = COMPONENTS[u['type']]
+            vals = [0.25 + 0.6 * _hash01(name, k) for k in range(n)]
+            values[name] = vals if n > 1 else vals[0]
+        else:
+            values[name] = None   # a type this driver does not fill: the case must override it
+    values.update(overrides)
+    return {k: v for k, v in values.items() if v is not None}
+
+
+def palette_values(rng, joints=6):
+    palette = []
+    for _ in range(joints):
+        rot = np.eye(3, dtype='f4') + rng.normal(0, 0.15, (3, 3)).astype('f4')
+        trans = rng.normal(0, 0.25, 3).astype('f4')
+        palette += list(rot.reshape(-1)) + list(trans)
+    palette += [0.0] * (12 * (110 - joints))
+    return H.Mat3x4Array(palette)
+
+
+def grid_mesh(rng, cells=10, joints=6):
+    """A wavy grid (two triangles a cell) covering the viewport, with every attribute the viewer's programs read."""
+    xs = np.linspace(-1, 1, cells + 1, dtype='f4')
+    pos, nrm, uv0, uv1, col, tan, wgt = [], [], [], [], [], [], []
+    for i in range(cells):
+        for j in range(cells):
+            for ci, cj in [(i, j), (i + 1, j), (i, j + 1), (i + 1, j), (i + 1, j + 1), (i, j + 1)]:
+                x, y = xs[ci], xs[cj]
+                pos.append((x, y, 0.3 * np.sin(3 * x) * np.cos(2 * y)))
+                n = np.array([0.4 * np.cos(3 * x), 0.3 * np.sin(2 * y), 1.0], 'f4')
+                nrm.append(n / np.linalg.norm(n))
+                uv0.append((ci / cells, cj / cells))
+                uv1.append((cj / cells, ci / cells))
+                col.append(rng.uniform(0.2, 1.0, 4))
+                tan.append((1.0, 0.1 * x, 0.0, 1.0))
+                wgt.append(rng.integers(0, joints, size=4) + rng.uniform(0.05, 0.95, size=4))
+    arrays = {0: pos, 1: nrm, 2: uv0, 3: uv1, 6: col, 7: col, 8: tan, 10: wgt}
+    return {k: np.array(v, 'f4') for k, v in arrays.items()}, len(pos)
+
+
+def texture_for(gl, kind, name):
+    """A smooth procedural texture, deterministic per sampler name; alpha runs 0.1..1 so alpha tests discard some."""
+    g = gl.fn
+    if kind == SAMPLERCUBEARRAY:   # the environment the probe filters run on (two layers, mips)
+        data, levels = H.fixed_probe_cube()
+        return H.upload_cube(gl, data, levels), H.GL_TEXTURE_CUBE_MAP_ARRAY
+    tex = C.c_uint()
+    g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(tex))
+    g('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0 + 15)
+    a, b, p = 2 + 6 * _hash01(name, 1), 2 + 6 * _hash01(name, 2), 6.28 * _hash01(name, 3)
+
+    def face(n, salt):
+        u, v = np.meshgrid((np.arange(n, dtype='f4') + 0.5) / n, (np.arange(n, dtype='f4') + 0.5) / n)
+        img = np.stack([0.5 + 0.45 * np.sin(a * u + b * v + p + salt), 0.5 + 0.45 * np.cos(b * u - a * v + p + 2 * salt),
+                        0.5 + 0.45 * np.sin((a + b) * (u - v) + p), 0.1 + 0.9 * (0.5 + 0.5 * np.sin(a * 2 * u + b * 2 * v + p + salt))], -1)
+        return img.astype('<f4')
+
+    if kind == SAMPLER2D:
+        data = face(64, 0)
+        g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, tex.value)
+        g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+            H.GL_TEXTURE_2D, 0, H.GL_RGBA32F, 64, 64, 0, H.GL_RGBA, H.GL_FLOAT, data.tobytes())
+        target = H.GL_TEXTURE_2D
+    elif kind == SAMPLERCUBE:
+        g('glBindTexture', None, C.c_uint, C.c_uint)(GL_TEXTURE_CUBE_MAP, tex.value)
+        for f in range(6):
+            g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, H.GL_RGBA32F, 32, 32, 0, H.GL_RGBA, H.GL_FLOAT, face(32, f).tobytes())
+        target = GL_TEXTURE_CUBE_MAP
+    else:
+        raise RuntimeError(f'sampler type {kind:#x} of {name} has no procedural texture')
+    for p_, v in ((H.GL_TEXTURE_MIN_FILTER, H.GL_LINEAR), (H.GL_TEXTURE_MAG_FILTER, H.GL_LINEAR),
+                  (H.GL_TEXTURE_WRAP_S, H.GL_CLAMP_TO_EDGE), (H.GL_TEXTURE_WRAP_T, H.GL_CLAMP_TO_EDGE)):
+        g('glTexParameteri', None, C.c_uint, C.c_uint, C.c_int)(target, p_, v)
+    return tex.value, target
+
+
+class MRT:
+    """`n` RGBA32F colour attachments and a 32 bit float depth, cleared to -1 and 1."""
+
+    def __init__(self, gl, w, h, n):
+        g = gl.fn
+        self.gl, self.w, self.h, self.n = gl, w, h, n
+        self.colour = []
+        fbo = C.c_uint()
+        g('glGenFramebuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(fbo))
+        g('glBindFramebuffer', None, C.c_uint, C.c_uint)(H.GL_FRAMEBUFFER, fbo.value)
+        for i in range(n):
+            tex = C.c_uint()
+            g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(tex))
+            g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, tex.value)
+            g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+                H.GL_TEXTURE_2D, 0, H.GL_RGBA32F, w, h, 0, H.GL_RGBA, H.GL_FLOAT, None)
+            g('glFramebufferTexture2D', None, C.c_uint, C.c_uint, C.c_uint, C.c_uint, C.c_int)(
+                H.GL_FRAMEBUFFER, H.GL_COLOR_ATTACHMENT0 + i, H.GL_TEXTURE_2D, tex.value, 0)
+            self.colour.append(tex.value)
+        depth = C.c_uint()
+        g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(depth))
+        g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, depth.value)
+        g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+            H.GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, w, h, 0, GL_DEPTH_COMPONENT, H.GL_FLOAT, None)
+        g('glFramebufferTexture2D', None, C.c_uint, C.c_uint, C.c_uint, C.c_uint, C.c_int)(
+            H.GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, H.GL_TEXTURE_2D, depth.value, 0)
+        bufs = (C.c_uint * n)(*[H.GL_COLOR_ATTACHMENT0 + i for i in range(n)])
+        g('glDrawBuffers', None, C.c_int, C.c_void_p)(n, bufs)
+        if g('glCheckFramebufferStatus', C.c_uint, C.c_uint)(H.GL_FRAMEBUFFER) != H.GL_FRAMEBUFFER_COMPLETE:
+            raise RuntimeError('MRT framebuffer incomplete')
+        self.fbo = fbo.value
+
+    def draw(self, prog, attribs, count, bind_textures):
+        g = self.gl.fn
+        g('glBindFramebuffer', None, C.c_uint, C.c_uint)(H.GL_FRAMEBUFFER, self.fbo)
+        g('glViewport', None, C.c_int, C.c_int, C.c_int, C.c_int)(0, 0, self.w, self.h)
+        g('glEnable', None, C.c_uint)(GL_DEPTH_TEST)
+        g('glDepthFunc', None, C.c_uint)(GL_ALWAYS)
+        g('glDepthMask', None, C.c_ubyte)(1)
+        vao = C.c_uint()
+        g('glGenVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
+        g('glBindVertexArray', None, C.c_uint)(vao.value)
+        vbos = []
+        for slot, array in attribs.items():
+            vbo = C.c_uint()
+            g('glGenBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
+            g('glBindBuffer', None, C.c_uint, C.c_uint)(H.GL_ARRAY_BUFFER, vbo.value)
+            data = np.ascontiguousarray(array, dtype='<f4').tobytes()
+            g('glBufferData', None, C.c_uint, C.c_ssize_t, C.c_void_p, C.c_uint)(H.GL_ARRAY_BUFFER, len(data), data, H.GL_STATIC_DRAW)
+            g('glEnableVertexAttribArray', None, C.c_uint)(slot)
+            g('glVertexAttribPointer', None, C.c_uint, C.c_int, C.c_uint, C.c_ubyte, C.c_int, C.c_void_p)(
+                slot, array.shape[1], H.GL_FLOAT, 0, 4 * array.shape[1], None)
+            vbos.append(vbo)
+        g('glUseProgram', None, C.c_uint)(prog)
+        bind_textures()
+        g('glClearColor', None, C.c_float, C.c_float, C.c_float, C.c_float)(-1.0, -1.0, -1.0, -1.0)
+        g('glClearDepth', None, C.c_double)(1.0)
+        g('glClear', None, C.c_uint)(0x4000 | 0x100)
+        g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, count)
+        g('glFinish', None)()
+        images = []
+        for i in range(self.n):
+            g('glReadBuffer', None, C.c_uint)(H.GL_COLOR_ATTACHMENT0 + i)
+            out = (C.c_float * (self.w * self.h * 4))()
+            g('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+                0, 0, self.w, self.h, H.GL_RGBA, H.GL_FLOAT, out)
+            images.append(np.frombuffer(out, dtype='<f4').reshape(self.h, self.w, 4).copy())
+        dout = (C.c_float * (self.w * self.h))()
+        g('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+            0, 0, self.w, self.h, GL_DEPTH_COMPONENT, H.GL_FLOAT, dout)
+        depth = np.frombuffer(dout, dtype='<f4').reshape(self.h, self.w).copy()
+        for vbo in vbos:
+            g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
+        g('glDeleteVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
+        g('glDisable', None, C.c_uint)(GL_DEPTH_TEST)
+        return images, depth
+
+
+def legacy_source(path, defines, stage, case):
+    text = H.read_legacy(path, defines, stage)
+    helpers = ''
+    if stage == 'fragment':
+        text = text.replace('#version 420\n', '#version 420\n' + GBUFFER_DEFS, 1)
+        if 'mirrorClip' in text or 'encodeNormal' in text:
+            helpers = '\n' + (common.LEGACY_SHADERS / 'class1/deferred/globalF.glsl').read_text(encoding='utf-8')
+    elif case.skin:
+        helpers = '\n' + (common.LEGACY_SHADERS / 'class1/avatar/objectSkinV.glsl').read_text(encoding='utf-8')
+    return text + helpers
+
+
+def build_reference(gl, case):
+    defines = dict(case.defines)
+    if case.skin:
+        defines.update({'HAS_SKIN': '1', 'MAX_JOINTS_PER_MESH_OBJECT': '110'})
+    vs = legacy_source(case.vs, defines, 'vertex', case)
+    fs = legacy_source(case.fs, defines, 'fragment', case)
+    return gl.program(vs, fs, attribs=H.ATTRIB_SLOTS)
+
+
+def build_candidate(gl, generated, program_id):
+    manifest = check.load_manifest(generated)
+    prog = next((p for p in manifest['programs'] if p['id'] == program_id), None)
+    if prog is None:
+        return None
+    texts = {}
+    for stage in ('vertex', 'fragment'):
+        text = (Path(generated) / prog['stages'][stage]['file']).read_text(encoding='utf-8')
+        texts[stage] = check.assemble_source(stage, text, {})
+    return gl.program(texts['vertex'], texts['fragment'])
+
+
+def run_case(gl, case, generated, rng_seed=7):
+    cand = build_candidate(gl, generated, case.gen)
+    if cand is None:
+        return [{'case': f'{case.name}: candidate {case.gen} is not generated', 'pass': False, 'max_ulp': 0, 'max_abs': 0.0,
+                 'values_differing': 0, 'outside_tolerance': 0, 'nonblack': 0, 'unset_uniforms': []}]
+    ref = build_reference(gl, case)
+    samplers = [(re.sub(r'\[0\]$', '', u['name']), u['type']) for u in gl.uniforms(ref) if u['type'] in H.SAMPLER_TYPES]
+    names = [n for n, _ in samplers]
+    textures = {n: texture_for(gl, t, n) for n, t in samplers if t in (SAMPLER2D, SAMPLERCUBE, SAMPLERCUBEARRAY)}
+    results = []
+    runs = [(clip, i, v) for clip in ([False, True] if case.clip else [False]) for i, v in enumerate(case.variants or ({},))]
+    for clip, variant_index, variant in runs:
+        rng = np.random.default_rng(rng_seed)
+        attribs, count = grid_mesh(rng)
+        values = fill_uniforms(gl, ref, {**case.uniforms, **variant}, clip)
+        if case.skin:
+            values['matrixPalette'] = palette_values(np.random.default_rng(rng_seed + 1))
+        units = {'ref': gl.sampler_units(ref, names, assign=True), 'cand': gl.sampler_units(cand, names, assign=False)}
+        target = MRT(gl, SIZE, SIZE, max(case.outputs, 1))
+        images = {}
+        unset = []
+        for label, prog in (('ref', ref), ('cand', cand)):
+            done = gl.set_uniforms(prog, values)
+            if label == 'cand':
+                unset = sorted(set(values) - done - set(case.optional))
+
+            def bind(units=units[label]):
+                for n, unit in units.items():
+                    if n in textures:
+                        tex, tgt = textures[n]
+                        gl.fn('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0 + unit)
+                        gl.fn('glBindTexture', None, C.c_uint, C.c_uint)(tgt, tex)
+            images[label] = target.draw(prog, attribs, count, bind)
+        suffix = (' mirror clip on' if clip else '') + (f' variant {variant_index}' if case.variants else '')
+        for i in range(case.outputs):
+            r = H.compare(images['ref'][0][i], images['cand'][0][i])
+            drawn = images['ref'][0][i][images['ref'][0][i][..., 3] >= 0][:, :3]
+            r.update(case=f'{case.name} colour {i}{suffix}', nonblack=int(len(drawn)), unset_uniforms=unset,
+                     flat=bool(len(drawn) and float(np.ptp(drawn)) == 0.0))
+            if unset or r['nonblack'] == 0:
+                r['pass'] = False
+            # a constant image proves nothing about its channel: only the listed ones (and the emissive target, which no
+            # program of these writes anything into) may be flat
+            if r['flat'] and i not in case.flat_ok and not (i == 3 and case.outputs == 4):
+                r['pass'] = False
+            results.append(r)
+        if case.depth:
+            r = H.compare(images['ref'][1], images['cand'][1], mode='exact')
+            r.update(case=f'{case.name} depth{suffix}', nonblack=int((images['ref'][1] < 1.0).sum()), unset_uniforms=unset)
+            if r['nonblack'] == 0:
+                r['pass'] = False
+            results.append(r)
+        if case.depth_info and not case.depth:
+            r = H.compare(images['ref'][1], images['cand'][1], mode='exact')
+            r.update(case=f'{case.name} depth (info){suffix}', nonblack=int((images['ref'][1] < 1.0).sum()), unset_uniforms=unset, info=True)
+            r['pass'] = True
+            results.append(r)
+    return results
+
+
+def cases():
+    I, O, D = 'interface/', 'objects/', 'deferred/'
+    c = []
+    add = lambda *a, **k: c.append(Case(*a, **k))
+    add('ui', I + 'uiV.glsl', I + 'uiF.glsl', 'ui')
+    add('alphamask', I + 'alphamaskV.glsl', I + 'alphamaskF.glsl', 'alphamask')
+    add('benchmark', I + 'benchmarkV.glsl', I + 'benchmarkF.glsl', 'benchmark')
+    add('clip', I + 'clipV.glsl', I + 'clipF.glsl', 'clip', uniforms={'clip_plane': [0.0, 0.0, 1.0, 3.0]})
+    add('copy', I + 'copyV.glsl', I + 'copyF.glsl', 'copy__COPY_DEPTH0')
+    add('copy-depth', I + 'copyV.glsl', I + 'copyF.glsl', 'copy__COPY_DEPTH1', defines={'COPY_DEPTH': '1'}, depth=True)
+    add('glowcombine', I + 'glowcombineV.glsl', I + 'glowcombineF.glsl', 'glowcombine')
+    add('glowcombineFXAA', I + 'glowcombineFXAAV.glsl', I + 'glowcombineFXAAF.glsl', 'glowcombineFXAA')
+    add('gaussian', I + 'splattexturerectV.glsl', I + 'gaussianF.glsl', 'gaussian', uniforms={'direction': [1.0, 0.0], 'resScale': 0.01})
+    add('gaussian-vertical', I + 'splattexturerectV.glsl', I + 'gaussianF.glsl', 'gaussian', uniforms={'direction': [0.0, 1.0], 'resScale': 0.02})
+    add('reflectionmip', I + 'splattexturerectV.glsl', I + 'reflectionmipF.glsl', 'reflectionmip')
+    add('solidcolor', I + 'solidcolorV.glsl', I + 'solidcolorF.glsl', 'solidcolor')
+    add('onetexturefilter', I + 'onetexturefilterV.glsl', I + 'onetexturefilterF.glsl', 'onetexturefilter')
+    add('twotexturecompare', I + 'twotexturecompareV.glsl', I + 'twotexturecompareF.glsl', 'twotexturecompare')
+    add('occlusion', I + 'occlusionV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE0', outputs=3, flat_ok=(0, 1))
+    add('occlusion-cube', I + 'occlusionCubeV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE1', outputs=3, flat_ok=(0, 1))
+    add('occlusion-skinned', I + 'occlusionSkinnedV.glsl', I + 'occlusionF.glsl', 'occlusionSkinned', outputs=3, skin=True, flat_ok=(0, 1))
+    add('highlight-diffuse', I + 'highlightV.glsl', I + 'highlightF.glsl', 'highlightdiffuse__HAS_SKIN0')
+    add('highlight-diffuse-rigged', I + 'highlightV.glsl', I + 'highlightF.glsl', 'highlightdiffuse__HAS_SKIN1', skin=True)
+    add('highlight-normals', I + 'highlightNormV.glsl', I + 'highlightF.glsl', 'highlight__UVSET1')
+    add('highlight-specular', I + 'highlightSpecV.glsl', I + 'highlightF.glsl', 'highlight__UVSET2')
+    add('pathfinding', I + 'pathfindingV.glsl', I + 'pathfindingF.glsl', 'pathfinding__NORMALS1')
+    add('pathfinding-no-normals', I + 'pathfindingNoNormalV.glsl', I + 'pathfindingF.glsl', 'pathfinding__NORMALS0')
+    add('debug', I + 'debugV.glsl', I + 'debugF.glsl', 'debug__HAS_SKIN0')
+    add('debug-rigged', I + 'debugV.glsl', I + 'debugF.glsl', 'debug__HAS_SKIN1', skin=True)
+    add('drawcolor', O + 'simpleNoAtmosV.glsl', O + 'simpleColorF.glsl', 'drawcolor')
+    add('impostor', O + 'impostorV.glsl', O + 'impostorF.glsl', 'impostor')
+    add('preview', O + 'previewV.glsl', O + 'previewF.glsl', 'preview__HAS_SKIN0')
+    add('preview-rigged', O + 'previewV.glsl', O + 'previewF.glsl', 'preview__HAS_SKIN1', skin=True)
+    add('physics-preview', O + 'previewPhysicsV.glsl', O + 'previewPhysicsF.glsl', 'previewPhysics')
+    faces = tuple({'modelview_matrix': m, 'sourceIdx': layer, 'max_probe_lod': 5.0} for m in H.FACE_MATRICES.values() for layer in (0, 1))
+    add('irradiance', I + 'irradianceGenV.glsl', '../class2/interface/irradianceGenF.glsl', 'irradianceGen', variants=faces)
+    # this stage: effects, post, quiet G-buffer programs
+    add('glow', 'effects/glowV.glsl', 'effects/glowF.glsl', 'glow')
+    add('glowextract', 'effects/glowExtractV.glsl', 'effects/glowExtractF.glsl', 'glowextract__HAS_NOISE0')
+    add('glowextract-noise', 'effects/glowExtractV.glsl', 'effects/glowExtractF.glsl', 'glowextract__HAS_NOISE1', defines={'HAS_NOISE': '1'})
+    add('vignette', 'post/exoPostBaseV.glsl', 'post/exoVignetteF.glsl', 'vignette', uniforms={'vignette': [0.8, 1.2, 1.5]})
+    add('snapshotframe', 'post/exoPostBaseV.glsl', 'post/snapshotFrameF.glsl', 'snapshotframe',
+        uniforms={'frame_rect': [0.25, 0.25, 0.75, 0.75], 'border_color': [1.0, 0.2, 0.1], 'border_thickness': 3.0})
+    add('normgen', D + 'normgenV.glsl', D + 'normgenF.glsl', 'normgen', uniforms={'bump_code': 1, 'stepX': 0.015, 'stepY': 0.015, 'norm_scale': 0.5})
+    add('normgen-darkness', D + 'normgenV.glsl', D + 'normgenF.glsl', 'normgen', uniforms={'bump_code': 2, 'stepX': 0.015, 'stepY': 0.015, 'norm_scale': 0.5})
+    add('genbrdflut', D + 'genbrdflutV.glsl', D + 'genbrdflutF.glsl', 'genbrdflut')
+    for emissive in (0, 1):
+        e = {'HAS_EMISSIVE': '1'} if emissive else {}
+        n = 4 if emissive else 3
+        tag = '-emissive' if emissive else ''
+        add('deferred-bump' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN0', defines=e, outputs=n, clip=True, depth_info=True)
+        add('deferred-bump-rigged' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN1', defines=e, outputs=n, skin=True, clip=True, depth_info=True)
+        add('deferred-impostor' + tag, D + 'impostorV.glsl', D + 'impostorF.glsl', f'dimpostor__HAS_EMISSIVE{emissive}', defines=e, outputs=n)
+        add('deferred-tree' + tag, D + 'treeV.glsl', D + 'treeF.glsl', f'dtree__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True, flat_ok=(1, 3))
+        add('avatar-eyes' + tag, D + 'avatarEyesV.glsl', D + 'diffuseF.glsl', f'avatareyes__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True)
+    return c
+
+
+def run_programs(gl, generated, only=None, json_out=None):
+    import json
+    failed, total = [], 0
+    everything = []
+    for case in cases():
+        if only and only not in case.name:
+            continue
+        try:
+            results = run_case(gl, case, generated)
+        except RuntimeError as e:
+            print(f'{case.name}: ERROR {str(e).splitlines()[0]}')
+            print('   ' + '\n   '.join(str(e).splitlines()[1:6]))
+            failed.append(case.name)
+            continue
+        for r in results:
+            total += 1
+            everything.append(r)
+            flag = 'pass' if r['pass'] else 'FAIL'
+            print(f'{r["case"]:46s} {flag}  drawn={r["nonblack"]:5d}  differing={r["values_differing"]:6d}  max_ulp={r["max_ulp"]:8d}  '
+                  f'max_abs={r["max_abs"]:.3g}  outside_tol={r["outside_tolerance"]}' + ('  (flat image)' if r.get('flat') else '') + (f'  UNSET {r["unset_uniforms"]}' if r['unset_uniforms'] else ''))
+            if not r['pass']:
+                failed.append(r['case'])
+    if json_out:
+        Path(json_out).write_text(json.dumps(everything, indent=1), encoding='utf-8')
+    print(f'{total} comparison(s), {len(failed)} failed')
+    return 1 if failed else 0
+
+
+# -- the manifest against the driver ----------------------------------------------------------------------------------
+GL_PROGRAM_INPUT = 0x92E3
+
+
+def check_manifest_against_driver(gl, generated):
+    """Link every generated program on the real driver and compare what the driver says with programs.json, which the
+    viewer trusts instead of asking: the block's name and binding, every member's byte offset (GL_UNIFORM_OFFSET) and
+    the set of members, each sampler's unit, and the vertex input locations. Returns the list of problems."""
+    errors = []
+    manifest = check.load_manifest(generated)
+    header = (common.ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
+    block_name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)
+    linked = 0
+    for entry in manifest['programs']:
+        pid = entry['id']
+        try:
+            prog = build_candidate(gl, generated, pid)
+        except RuntimeError as e:
+            errors.append(f'{pid}: does not link on the driver: {str(e).splitlines()[0]}')
+            continue
+        linked += 1
+        members, textures, inputs, per_stage = {}, {}, set(), []
+        for stage, info in entry['stages'].items():
+            iface = info['interface']
+            for m in iface['uniforms']:
+                members[m['name']] = m
+                per_stage.append((stage, m))
+            for t in iface['textures']:
+                textures[t['name']] = t['binding']
+            if stage == 'vertex':
+                inputs = {i['location'] for i in iface['inputs']}
+        blocks = gl.blocks(prog)
+        if members:
+            if [b['name'] for b in blocks] != [block_name]:
+                errors.append(f'{pid}: the driver has blocks {[b["name"] for b in blocks]}, the loader asks for {block_name}')
+                continue
+            text = (Path(generated) / entry['stages']['fragment' if 'fragment' in entry['stages'] else 'vertex']['file']).read_text(encoding='utf-8')
+            declared = check.block_of(text)
+            if declared and declared[0] != blocks[0]['binding']:
+                errors.append(f'{pid}: the driver binds the block at {blocks[0]["binding"]}, the source says {declared[0]}')
+        elif blocks:
+            errors.append(f'{pid}: the driver has a block, the manifest lists no uniform')
+        gl_members = {}
+        for u in gl.uniforms(prog):
+            if u['block'] >= 0:
+                base = re.sub(r'\[0\]$', '', u['name'].split('.')[-1])
+                gl_members[base] = u
+        for stage, m in per_stage:   # every stage lists the members it uses; the loader merges them, so each must be right
+            u = gl_members.get(m['name'])
+            if u is None:
+                errors.append(f'{pid}.{stage}: manifest member {m["name"]} is not in the driver block')
+            elif u['offset'] != m['offset']:
+                errors.append(f'{pid}.{stage}: {m["name"]} at byte {m["offset"]} in the manifest, {u["offset"]} by GL_UNIFORM_OFFSET')
+        for name in sorted(set(gl_members) - set(members)):
+            errors.append(f'{pid}: the driver block has {name}, the manifest does not (the viewer could never set it)')
+        for u in gl.uniforms(prog):
+            if u['type'] in H.SAMPLER_TYPES and u['block'] < 0:
+                name = re.sub(r'\[0\]$', '', u['name'])
+                unit = C.c_int()
+                gl.fn('glUseProgram', None, C.c_uint)(prog)
+                gl.fn('glGetUniformiv', None, C.c_uint, C.c_int, C.POINTER(C.c_int))(prog, u['location'], C.byref(unit))
+                if textures.get(name) != unit.value:
+                    errors.append(f'{pid}: sampler {name} is on unit {unit.value} by the driver, {textures.get(name)} in the manifest')
+        gl_inputs = {v[2] for _, v in gl._resources(prog, GL_PROGRAM_INPUT, [H.GL_NAME_LENGTH, H.GL_TYPE, H.GL_LOCATION])}
+        if gl_inputs != inputs:
+            errors.append(f'{pid}: vertex input locations {sorted(gl_inputs)} by the driver, {sorted(inputs)} in the manifest')
+    print(f'manifest against the driver: {linked} of {len(manifest["programs"])} programs linked')
+    return errors

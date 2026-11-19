@@ -1,0 +1,377 @@
+{
+  "hooks": {},
+  "position": {
+    "module": "position",
+    "prefix": "vkPosition"
+  },
+  "programs": [
+    {
+      "name": "alphamask",
+      "source": "alphamask.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "avatareyes",
+      "source": "avatareyes.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "benchmark",
+      "source": "benchmark.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "bump",
+      "source": "bump.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "clip",
+      "source": "clip.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "copy",
+      "source": "copy.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "COPY_DEPTH": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "dbump",
+      "source": "dbump.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "debug",
+      "source": "debug.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "dimpostor",
+      "source": "dimpostor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "drawcolor",
+      "source": "drawcolor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "dtree",
+      "source": "dtree.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "gaussian",
+      "source": "gaussian.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "genbrdflut",
+      "source": "genbrdflut.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glow",
+      "source": "glow.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glowcombine",
+      "source": "glowcombine.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glowcombineFXAA",
+      "source": "glowcombineFXAA.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "glowextract",
+      "source": "glowextract.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_NOISE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "highlight",
+      "source": "highlight.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "UVSET": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "name": "highlightdiffuse",
+      "source": "highlightdiffuse.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "impostor",
+      "source": "impostor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "irradianceGen",
+      "source": "irradianceGen.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "normgen",
+      "source": "normgen.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "occlusion",
+      "source": "occlusion.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "CUBE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "occlusionSkinned",
+      "source": "occlusionSkinned.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "onetexturefilter",
+      "source": "onetexturefilter.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "pathfinding",
+      "source": "pathfinding.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "NORMALS": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "preview",
+      "source": "preview.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "previewPhysics",
+      "source": "previewPhysics.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "radianceGen",
+      "source": "radianceGen.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "PROBE_FILTER_SAMPLES": [
+          32,
+          4
+        ]
+      }
+    },
+    {
+      "name": "reflectionmip",
+      "source": "reflectionmip.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "snapshotframe",
+      "source": "snapshotframe.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "solidcolor",
+      "source": "solidcolor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "twotexturecompare",
+      "source": "twotexturecompare.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "ui",
+      "source": "ui.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "vignette",
+      "source": "vignette.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    }
+  ]
+}

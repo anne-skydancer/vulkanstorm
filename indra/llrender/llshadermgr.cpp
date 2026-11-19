@@ -33,6 +33,8 @@
 #include "llsdutil.h"
 #include "llsdserialize.h"
 #include "hbxxh.h"
+#include "llgeneratedshader.h"
+#include "llgeneratedmanifest.h"
 
 #if LL_DARWIN
 #include "OpenGL/OpenGL.h"
@@ -877,6 +879,152 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     LL_DEBUGS("ShaderLoading") << "loadShaderFile() completed, ret: " << U32(ret) << LL_ENDL;
     return ret;
 }
+
+// <Vulkanstorm> Generated (Slang) shader stages. See llgeneratedshader.h for the exact text the driver gets.
+bool LLShaderMgr::readGeneratedShaderText(const std::string& filename, std::string& text, std::string& path)
+{
+    if (!LLGeneratedShader::isGeneratedFile(filename))
+    {
+        LL_WARNS("ShaderLoading") << "Not a generated shader file: " << filename << LL_ENDL;
+        return false;
+    }
+
+    const std::string relative = filename.substr(LLGeneratedShader::kDirectory.size());
+    path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "generated", relative);
+
+    // the whole file: there is no line or piece limit on this path
+    text.clear();
+    LLFILE* file = LLFile::fopen(path, "rb");
+    if (!file)
+    {
+        LL_WARNS("ShaderLoading") << "Generated shader file not found: " << path << LL_ENDL;
+        return false;
+    }
+    char buffer[1 << 16];
+    size_t got;
+    while ((got = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        text.append(buffer, got);
+        if (text.size() > (64u << 20))
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader file is larger than 64 MiB: " << path << LL_ENDL;
+            fclose(file);
+            return false;
+        }
+    }
+    const bool read_error = ferror(file) != 0;
+    fclose(file);
+    if (read_error)
+    {
+        LL_WARNS("ShaderLoading") << "Generated shader file could not be read: " << path << LL_ENDL;
+        return false;
+    }
+    return true;
+}
+
+const LLGeneratedShader::StageInterface* LLShaderMgr::getGeneratedInterface(const std::string& filename)
+{
+    // keyed by the stage file's name under generated/; built once from programs.json (an immutable map, read by the
+    // render thread and by any worker that creates a shader, so it is built under a magic-static guard)
+    static const std::map<std::string, LLGeneratedShader::StageInterface> sInterfaces = []()
+    {
+        std::map<std::string, LLGeneratedShader::StageInterface> out;
+        const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "generated", "programs.json");
+        std::string text;
+        if (!LLFile::isfile(path))
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader manifest not found: " << path << LL_ENDL;
+            return out;
+        }
+        LLFILE* file = LLFile::fopen(path, "rb");
+        if (!file)
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader manifest could not be opened: " << path << LL_ENDL;
+            return out;
+        }
+        char buffer[1 << 16];
+        size_t got;
+        while ((got = fread(buffer, 1, sizeof(buffer), file)) > 0)
+        {
+            text.append(buffer, got);
+        }
+        fclose(file);
+        std::string error;
+        if (!LLGeneratedShader::parseManifest(text, out, error))
+        {
+            // a stale or hand-edited manifest: every generated program then fails to load cleanly
+            LL_WARNS("ShaderLoading") << "Generated shader manifest is malformed (" << path << "): " << error << LL_ENDL;
+        }
+        return out;
+    }();
+
+    if (!LLGeneratedShader::isGeneratedFile(filename))
+    {
+        return nullptr;
+    }
+    const auto it = sInterfaces.find(filename.substr(LLGeneratedShader::kDirectory.size()));
+    if (it == sInterfaces.end())
+    {
+        LL_WARNS("ShaderLoading") << "Generated shader " << filename << " is not in the manifest" << LL_ENDL;
+        return nullptr;
+    }
+    return &it->second;
+}
+
+GLuint LLShaderMgr::loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines)
+{
+    std::string text, path;
+    if (!readGeneratedShaderText(filename, text, path))
+    {
+        return 0;
+    }
+
+    // A hook takes the program's own define, else the viewer-wide one (the settings the hand-written helper objects
+    // read through sGlobalDefines), else 0.
+    std::map<std::string, std::string> values = LLGLSLShader::sGlobalDefines;
+    if (defines)
+    {
+        for (const auto& define : *defines)
+        {
+            values[define.first] = define.second;
+        }
+    }
+    for (const std::string& hook : LLGeneratedShader::hooksOf(text))
+    {
+        if (values.find(hook) == values.end() && !(hook == "IS_AMD_CARD" && gGLManager.mIsAMD))
+        {
+            LL_DEBUGS("ShaderLoading") << "Generated shader " << filename << ": hook " << hook << " has no value, using 0" << LL_ENDL;
+        }
+    }
+    const std::string source = LLGeneratedShader::assemble(text, values, gGLManager.mIsAMD);
+
+    glGetError();
+    GLuint ret = glCreateShader(type);
+    if (!ret)
+    {
+        LL_WARNS("ShaderLoading") << "GL ERROR in glCreateShader: " << glGetError() << " for file: " << path << LL_ENDL;
+        return 0;
+    }
+
+    const GLchar* piece = source.c_str();
+    const GLint length = (GLint) source.size();
+    glShaderSource(ret, 1, &piece, &length);
+    glCompileShader(ret);
+
+    GLint success = GL_FALSE;
+    glGetShaderiv(ret, GL_COMPILE_STATUS, &success);
+    if (glGetError() != GL_NO_ERROR || success == GL_FALSE)
+    {
+        LL_WARNS("ShaderLoading") << "GLSL Compilation Error:" << LL_ENDL;
+        dumpObjectLog(ret, true, path);
+        glDeleteShader(ret);
+        return 0;
+    }
+    // not kept in mVertexShaderObjects or mFragmentShaderObjects: a generated stage belongs to its one program,
+    // which frees it when it unloads
+    return ret;
+}
+// </Vulkanstorm>
 
 bool LLShaderMgr::linkProgramObject(GLuint obj, bool suppress_errors)
 {

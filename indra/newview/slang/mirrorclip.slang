@@ -1,5 +1,5 @@
 /**
- * @file eyeballV.glsl
+ * @file mirrorclip.slang (converted from deferred/globalF.glsl (mirrorClip))
  *
  * $LicenseInfo:firstyear=2007&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -22,38 +22,20 @@
  * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
  * $/LicenseInfo$
  */
+import glsl;
 
-uniform mat3 normal_matrix;
-uniform mat4 texture_matrix0;
-uniform mat4 modelview_matrix;
-uniform mat4 modelview_projection_matrix;
+// The mirror and reflection clip of the world fragment programs (globalF.glsl): a fragment behind the clip plane is
+// dropped while a mirror or reflection is drawn. Importing it adds the two uniforms to the program's block.
+uniform float mirror_flag;
+uniform vec4 clipPlane;
 
-in vec3 position;
-in vec4 diffuse_color;
-in vec3 normal;
-in vec2 texcoord0;
-
-out vec4 vertex_color;
-out vec2 vary_texcoord0;
-
-vec4 calcLightingSpecular(vec3 pos, vec3 norm, vec4 color, inout vec4 specularColor);
-void calcAtmospherics(vec3 inPositionEye);
-
-void main()
+public void mirrorClip(vec3 pos)
 {
-    //transform vertex
-    vec3 pos = (modelview_matrix * vec4(position.xyz, 1.0)).xyz;
-    gl_Position = modelview_projection_matrix * vec4(position.xyz, 1.0);
-    vary_texcoord0 = (texture_matrix0 * vec4(texcoord0,0,1)).xy;
-
-
-    vec3 norm = normalize(normal_matrix * normal);
-
-    calcAtmospherics(pos.xyz);
-
-    vec4 specular = vec4(1.0);
-    vec4 color = calcLightingSpecular(pos, norm, diffuse_color, specular);
-    vertex_color = color;
-
+    if (mirror_flag > 0)
+    {
+        if ((dot(pos.xyz, clipPlane.xyz) + clipPlane.w) < 0.0)
+        {
+            discard;
+        }
+    }
 }
-

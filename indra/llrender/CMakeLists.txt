@@ -68,6 +68,8 @@ set(llrender_HEADER_FILES
     lluiimage.h
     lluiimage.inl
     llvertexbuffer.h
+    llgeneratedshader.h
+    llgeneratedmanifest.h
     llglcommonfunc.h
     )
 
