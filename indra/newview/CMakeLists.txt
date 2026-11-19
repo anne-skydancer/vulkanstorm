@@ -1593,6 +1593,7 @@ set(viewer_HEADER_FILES
     llsechandler_basic.h
     llselectmgr.h
     llsetkeybinddialog.h
+    llocclusionqueue.h
     llshadowcascadefit.h
     llshadowmethod.h
     llsettingspicker.h
