@@ -100,7 +100,7 @@ LLLocalBitmap::LLLocalBitmap(std::string filename)
     {
         mExtension = ET_IMG_JPG;
     }
-    else if (temp_exten == "j2c" || temp_exten == "jp2")
+    else if (temp_exten == "j2c")
     {
         mExtension = ET_IMG_J2C;
     }
