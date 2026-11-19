@@ -46,7 +46,7 @@ import time
 sys.dont_write_bytecode = True # <FS:Ansariel> Prevents creating __pycache__ directory
 
 from fs_viewer_manifest import FSViewerManifest #<FS:ND/> Manifest extensions for Firestorm
-from licence_texts import LICENCE_TEXTS, write_installer_licence # <Vulkanstorm/> licence texts
+from licence_texts import LICENCE_TEXTS, PACKAGE_ROOT_LICENCES, package_licence_files, write_installer_licence # <Vulkanstorm/> licence texts
 
 viewer_dir = os.path.dirname(__file__)
 # Add indra/lib/python to our path so we don't have to muck with PYTHONPATH.
@@ -89,12 +89,16 @@ class ViewerManifest(LLManifest,FSViewerManifest):
         # <FS:LO> Copy dictionaries to a place where the viewer can find them if ran from visual studio
         pkgdir = os.path.join(self.args['build'], os.pardir, 'packages')
         with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
-            self.path('websocketpp.txt')
-            self.path('lsl_definitions.txt')
-            # <Vulkanstorm> the licences of the cloud noise (TileableVolumeNoise, glm, the generator)
-            for licence in ('TileableVolumeNoise.txt', 'glm.txt', 'cloudnoise.txt'):
+            # <Vulkanstorm> The notice of every bundled package (the cloud noise's TileableVolumeNoise,
+            # glm and generator included): licence_texts.package_licence_files lists them.
+            for licence in package_licence_files(os.path.join(pkgdir, 'LICENSES')):
                 self.path(licence)
             # </Vulkanstorm>
+        # <Vulkanstorm> and the two notices the packages install beside the folder
+        with self.prefix(src=pkgdir, dst='licenses'):
+            for licence in PACKAGE_ROOT_LICENCES:
+                self.path(licence)
+        # </Vulkanstorm>
         self.path('luau.txt', 'licenses/luau.txt')
         # <Vulkanstorm> The volumetric clouds' noise file (the cloudnoise package, indra/cmake/CloudNoise.cmake
         # checks its hash at configure time and the viewer again at start-up) and the licences of what made it.

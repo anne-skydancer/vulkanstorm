@@ -34,6 +34,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_files.py
       shell: bash
+    - run: python3 scripts/tests/test_licence_notices.py
+      shell: bash
     - run: python3 scripts/tests/test_cloud_noise_package.py
       shell: bash
     - run: python3 scripts/tests/test_projector_edge_lookup.py

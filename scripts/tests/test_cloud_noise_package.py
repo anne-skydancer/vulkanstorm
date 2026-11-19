@@ -134,8 +134,11 @@ class CloudNoisePackageWiringTest(unittest.TestCase):
         text = (ROOT / 'indra/newview/viewer_manifest.py').read_text(encoding='utf-8')
         self.assertIn("CLOUD_NOISE_FILE_NAME = 'cloud_noise.vkcn'", text)
         self.assertIn("dst='app_settings/clouds'", text)
+        # The licences ship through the manifest's rule for every package notice.
+        self.assertIn('package_licence_files(', text)
+        licence_texts = (ROOT / 'indra/newview/licence_texts.py').read_text(encoding='utf-8')
         for name in chk.LICENCES:
-            self.assertIn(name, text)
+            self.assertNotIn(f'"{name}"', licence_texts)  # not on the unshipped list
         self.assertIn('Attribs: readonly', text)
         self.assertIn('0o444', text)
         self.assertNotIn('isfile(noise_file)', text)  # a missing file is an error, not a skip
