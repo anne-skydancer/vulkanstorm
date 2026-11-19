@@ -464,6 +464,11 @@ public:
     bool    linkProgramObject(GLuint obj, bool suppress_errors = false);
     bool    validateProgramObject(GLuint obj);
     GLuint loadShaderFile(const std::string& filename, S32 & shader_level, GLenum type, std::map<std::string, std::string>* defines = NULL, S32 texture_index_channels = -1);
+    // <Vulkanstorm> A generated (Slang) shader stage: one whole file under app_settings/shaders/generated/, compiled
+    // as `#version 460`, the hook defines, then the file (llgeneratedshader.h). No class search, no helper objects, no
+    // fallback to hand-written GLSL. Returns the shader object, or 0 after logging why.
+    GLuint loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines = NULL);
+    // </Vulkanstorm>
 
     // Implemented in the application to actually point to the shader directory.
     virtual std::string getShaderDirPrefix(void) = 0; // Pure Virtual

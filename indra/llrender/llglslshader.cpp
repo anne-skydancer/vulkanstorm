@@ -29,6 +29,7 @@
 #include "llglslshader.h"
 
 #include "llshadermgr.h"
+#include "llgeneratedshader.h"
 #include "llfile.h"
 #include "llrender.h"
 #include "llvertexbuffer.h"
@@ -429,6 +430,23 @@ bool LLGLSLShader::createShader()
 
     llassert_always(!mShaderFiles.empty());
 
+    // <Vulkanstorm> A program is generated (Slang) or hand-written, never both
+    bool generated = false;
+    {
+        size_t generated_files = 0;
+        for (const auto& file : mShaderFiles)
+        {
+            generated_files += LLGeneratedShader::isGeneratedFile(file.first) ? 1 : 0;
+        }
+        generated = generated_files > 0;
+        if (generated && generated_files != mShaderFiles.size())
+        {
+            LL_SHADER_LOADING_WARNS() << "Shader " << mName << " mixes generated and hand-written stages" << LL_ENDL;
+            return false;
+        }
+    }
+    // </Vulkanstorm>
+
 #if LL_DARWIN
     if(!gGLManager.mIsApple)
     {
@@ -463,7 +481,11 @@ bool LLGLSLShader::createShader()
         vector< pair<string, GLenum> >::iterator fileIter = mShaderFiles.begin();
         for (; fileIter != mShaderFiles.end(); fileIter++)
         {
-            GLuint shaderhandle = LLShaderMgr::instance()->loadShaderFile((*fileIter).first, mShaderLevel, (*fileIter).second, &mDefines, mFeatures.mIndexedTextureChannels);
+            // <Vulkanstorm> generated (Slang) stages are whole files: no class search, no shader level
+            GLuint shaderhandle = generated
+                ? LLShaderMgr::instance()->loadGeneratedShaderFile((*fileIter).first, (*fileIter).second, &mDefines)
+                : LLShaderMgr::instance()->loadShaderFile((*fileIter).first, mShaderLevel, (*fileIter).second, &mDefines, mFeatures.mIndexedTextureChannels);
+            // </Vulkanstorm>
             LL_DEBUGS("ShaderLoading") << "SHADER FILE: " << (*fileIter).first << " mShaderLevel=" << mShaderLevel << LL_ENDL;
             if (shaderhandle)
             {
@@ -476,8 +498,8 @@ bool LLGLSLShader::createShader()
         }
     }
 
-    // Attach existing objects
-    if (!LLShaderMgr::instance()->attachShaderFeatures(this))
+    // Attach existing objects (a generated program is whole: it has no helper objects to attach)
+    if (!generated && !LLShaderMgr::instance()->attachShaderFeatures(this))
     {
         unloadInternal();
         return false;
@@ -495,8 +517,8 @@ bool LLGLSLShader::createShader()
     {
         LL_SHADER_LOADING_WARNS() << "Failed to link shader: " << mName << LL_ENDL;
 
-        // Try again using a lower shader level;
-        if (mShaderLevel > 0)
+        // Try again using a lower shader level (never for a generated program: there is no hand-written fallback)
+        if (!generated && mShaderLevel > 0)
         {
             LL_SHADER_LOADING_WARNS() << "Failed to link using shader level " << mShaderLevel << " trying again using shader level " << (mShaderLevel - 1) << LL_ENDL;
             mShaderLevel--;
