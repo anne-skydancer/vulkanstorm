@@ -444,10 +444,11 @@ public:
     /*virtual*/ S32 cull(LLCamera &camera, bool do_occlusion=false); // Cull on arbitrary frustum
     S32 cull(LLCamera &camera, std::vector<LLDrawable *>* results, bool for_select); // Cull on arbitrary frustum
     // <Vulkanstorm> multi-core 5c-1: cull(camera) of a shadow pass in two steps, for LLPipeline::updateCullSunCascades.
-    // cullShadowPrepare rebounds the root (main thread, before the batch). cullShadowJob is the traversal with the
-    // shadow culler, for the camera `id`; it may run as a frame job beside the jobs of other cascades and partitions. It
-    // records the groups in `out` instead of pushing them into the pipeline's cull result, stamps them for `id`, and
-    // touches nothing else. Occlusion culling must be off (sUseOcclusion 0), as it is in every shadow pass.
+    // cullShadowPrepare rebounds the root (main thread, before the batch; one call serves every cascade). cullShadowJob
+    // is the traversal with the shadow culler, for the camera `id`; it may run as a frame job beside the jobs of other
+    // cascades and partitions. It records the groups in `out` instead of pushing them into the pipeline's cull result,
+    // stamps them for `id`, and touches nothing else. Occlusion culling must be off (sUseOcclusion 0), as it is in every
+    // shadow pass.
     void cullShadowPrepare();
     void cullShadowJob(LLCamera& camera, LLViewerCamera::eCameraID id, LLCullJobs::CullFragment<LLSpatialGroup>& out);
     // </Vulkanstorm>

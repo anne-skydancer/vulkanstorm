@@ -13844,7 +13844,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderSunCascadeJobs</key>
     <map>
       <key>Comment</key>
-      <string>Cull the sun shadow cascades together on the frame job helpers, ahead of the first cascade&apos;s render, and build the render maps of cascades 1 to 3 in chunks on them (multi-core). Off: each cascade is culled and its render map built on the main thread inside its own render, as before. The shadows are the same either way.</string>
+      <string>Cull the sun shadow cascades together on the frame job helpers, ahead of the first cascade&apos;s render, and build the render maps of cascades 1 to 3 in chunks on them (multi-core). They are used only when frame job helpers run (4 fast cores or more, not in serial mode) or RenderSunCascadeJobsCompare is set. Off: each cascade is culled by the former cull and its render map built by the former loop on the main thread, inside its own render. The setting switches these two job paths only: the serial restructure that came with them (the cascade cameras built first, the shadow render split into cull-and-sort and submit) stays either way. The shadows are the same either way.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -13855,7 +13855,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderSunCascadeJobsCompare</key>
     <map>
       <key>Comment</key>
-      <string>Multi-core debugging (5c): 1 = every frame, cull each sun cascade again on the main thread at its former place and build its render map again in the former loop, and count the lists that differ from the ones the frame jobs made (RenderSunCascadeJobsStats shows the counts; they must stay 0). 2 = the same with a deliberate fault in cascade 1&apos;s lists, to see the counts move.</string>
+      <string>Multi-core debugging (5c): 1 = every frame, cull each sun cascade again on the main thread at its former place and build its render map again in the former loop, and count the lists that differ from the ones the frame jobs made (RenderSunCascadeJobsStats shows the counts; they must stay 0). 2 = the same with a deliberate fault in cascade 1&apos;s lists, to see the counts move (cascade 1 must be on: RenderShadowSplits 1 or more).</string>
       <key>Persist</key>
       <integer>0</integer>
       <key>Type</key>

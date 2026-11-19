@@ -1181,7 +1181,7 @@ public:
         : LLOctreeCullShadow(camera), mCameraID(id), mOut(out) { }
 
     // LLOctreeCull::earlyFail with sUseOcclusion 0: checkOcclusion returns at once and no group fails early
-    bool earlyFail(LLViewerOctreeGroup* base_group) override
+    bool earlyFail(LLViewerOctreeGroup*) override
     {
         return false;
     }

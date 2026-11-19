@@ -304,8 +304,10 @@ public:
     void postSort(LLCamera& camera);
     // <Vulkanstorm> multi-core 5c-2: the parts of postSort's "build render map" loop, and the build in chunks on the frame
     // job helpers (the sun cascades 1 to 3 of generateSunCascadesStable). renderMapSkipsGroup is the loop's skip rule;
-    // renderMapPushGroup is what the loop appends for one group, to `sink` (the cull result, or a chunk's fragment).
+    // renderMapRebuildsGroup is its rule for rebuilding a kept group before it is read; renderMapPushGroup is what the
+    // loop appends for one group, to `sink` (the cull result, or a chunk's fragment).
     bool renderMapSkipsGroup(LLSpatialGroup* group);
+    bool renderMapRebuildsGroup(LLSpatialGroup* group);
     template <typename SINK> void renderMapPushGroup(LLSpatialGroup* group, LLCamera& camera, SINK& sink);
     void buildRenderMapJobs(LLCamera& camera);
     // </Vulkanstorm>

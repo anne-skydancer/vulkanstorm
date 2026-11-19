@@ -4043,6 +4043,13 @@ bool LLPipeline::renderMapSkipsGroup(LLSpatialGroup* group)
     return false;
 }
 
+// The rebuild rule of the loop, for a group the skip rule kept: "no way this group is going to be drawable without a
+// rebuild"
+bool LLPipeline::renderMapRebuildsGroup(LLSpatialGroup* group)
+{
+    return group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot;
+}
+
 // What the loop appends for one group: its draw infos of the pass's render types, and the group itself when it has a
 // blended or a rigged blended entry. `sink` is the cull result or the fragment of a chunk. In a chunk (a frame job) it
 // only reads the group and appends to its own fragment: the two branches that write elsewhere (the triangle count, the
@@ -4138,8 +4145,8 @@ void LLPipeline::buildRenderMapJobs(LLCamera& camera)
                 continue;
             }
 
-            if (group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot)
-            {  // no way this group is going to be drawable without a rebuild
+            if (renderMapRebuildsGroup(group))
+            {
                 group->rebuildGeom();
             }
 
@@ -4178,19 +4185,15 @@ void LLPipeline::buildRenderMapJobs(LLCamera& camera)
                 }
             }
         }
-        // Compare mode: the former loop again, into a result of its own. The pre-pass has run the rebuilds, so this
-        // loop only applies the skip rule and appends. It checks the chunks and the merge, and that the skip rule
-        // still gives the pre-pass's groups once every rebuild has run; it does not check the order of the rebuilds
-        // against the appends.
+        // Compare mode: the former loop's appends again, one group after the other into a result of its own, for the
+        // groups the pre-pass kept. It checks the chunks and the merge. The skip rule is not applied a second time: the
+        // loop applies it to a group before that group's rebuild, as the pre-pass did, and a rebuild sets its group's
+        // surface area and box size anew (LLVolumeGeometryManager::rebuildGeom), so the rule can answer differently
+        // afterwards. It does not check the order of the rebuilds against the appends.
         static LLCullResult serial;
         serial.clear();
-        for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
+        for (LLSpatialGroup* group : mRenderMapGroups)
         {
-            LLSpatialGroup *group = *i;
-            if (renderMapSkipsGroup(group))
-            {
-                continue;
-            }
             renderMapPushGroup(group, camera, serial);
         }
         compareSunCascadeRenderMap(*sCull, serial, mSunCascadePass);
@@ -4235,35 +4238,36 @@ void LLPipeline::postSort(LLCamera &camera)
     // build render map
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("build render map");
-    // <Vulkanstorm> multi-core 5c-2: the loop's body is renderMapSkipsGroup, the rebuild and renderMapPushGroup (above),
-    // unchanged; a sun cascade's pass with mRenderMapJobs set runs the same three in buildRenderMapJobs
-    if (mRenderMapJobs)
-    {
-        buildRenderMapJobs(camera);
-    }
-    else
-    {
-#if VKS_FRAMEJOBS_COMPARE
-        LLSunCascadeTimer timer(mSunCascadePass >= 0 && !gCubeSnapshot ? &mSunCascadeJobsStats.map_s : nullptr);
-#endif
-    for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
-    {
-        LLSpatialGroup *group = *i;
-
-        if (renderMapSkipsGroup(group))
+        // <Vulkanstorm> multi-core 5c-2: the loop's body is renderMapSkipsGroup, renderMapRebuildsGroup with the rebuild,
+        // and renderMapPushGroup (above), unchanged; a sun cascade's pass with mRenderMapJobs set runs the same three in
+        // buildRenderMapJobs
+        if (mRenderMapJobs)
         {
-            continue;
+            buildRenderMapJobs(camera);
         }
+        else
+        {
+#if VKS_FRAMEJOBS_COMPARE
+            LLSunCascadeTimer timer(mSunCascadePass >= 0 && !gCubeSnapshot ? &mSunCascadeJobsStats.map_s : nullptr);
+#endif
+            for (LLCullResult::sg_iterator i = sCull->beginVisibleGroups(); i != sCull->endVisibleGroups(); ++i)
+            {
+                LLSpatialGroup *group = *i;
 
-        if (group->hasState(LLSpatialGroup::NEW_DRAWINFO) && group->hasState(LLSpatialGroup::GEOM_DIRTY) && !gCubeSnapshot)
-        {  // no way this group is going to be drawable without a rebuild
-            group->rebuildGeom();
+                if (renderMapSkipsGroup(group))
+                {
+                    continue;
+                }
+
+                if (renderMapRebuildsGroup(group))
+                {
+                    group->rebuildGeom();
+                }
+
+                renderMapPushGroup(group, camera, *sCull);
+            }
         }
-
-        renderMapPushGroup(group, camera, *sCull);
-    }
-    }
-    // </Vulkanstorm>
+        // </Vulkanstorm>
     }
 
     /*bool use_transform_feedback = gTransformPositionProgram.mProgramObject && !mMeshDirtyGroup.empty();
@@ -12088,6 +12092,7 @@ bool LLPipeline::updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* resu
     // the work list
     mSunCascadeCullItems.clear();
     size_t first_item[5] = { 0, 0, 0, 0, 0 };
+    bool roots_rebounded = false; // cullsPartition does not depend on the cascade: the first cascade's walk meets every root
     for (S32 j = 0; j < cascade_count; ++j)
     {
         first_item[j] = mSunCascadeCullItems.size();
@@ -12109,12 +12114,16 @@ bool LLPipeline::updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* resu
                 LLSpatialPartition* part = region->getSpatialPartition(i);
                 if (part && cullsPartition(i, part, false))
                 {
-                    part->cullShadowPrepare();
+                    if (!roots_rebounded)
+                    {
+                        part->cullShadowPrepare();
+                    }
                     mSunCascadeCullItems.push_back({ part, j });
                 }
             }
             // the VO cache tree is not an item: its cull returns at once for any camera but the world's
         }
+        roots_rebounded = true;
     }
     first_item[cascade_count] = mSunCascadeCullItems.size();
 
@@ -12133,6 +12142,10 @@ bool LLPipeline::updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* resu
     // the merge, in item order
     for (S32 j = 0; j < cascade_count; ++j)
     {
+        if (cascade_off[j])
+        {
+            continue; // no item, and its result keeps the lists of the last pass it was on: not this pass's
+        }
         S32 nodes = 0;
         for (size_t i = first_item[j]; i < first_item[j + 1]; ++i)
         {
@@ -12154,9 +12167,10 @@ bool LLPipeline::updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* resu
         ++mSunCascadeJobsStats.jobs_passes;
         mSunCascadeJobsStats.cull_items += (U32)count;
     }
-    if (mSunCascadeCompare == 2 && cascade_count > 1 && results[1].getVisibleGroupsSize() > 1)
+    if (mSunCascadeCompare == 2 && cascade_count > 1 && !cascade_off[1] && results[1].getVisibleGroupsSize() > 1)
     {
-        // the deliberate fault: two groups of cascade 1 change places, which the compare mode must report
+        // the deliberate fault: two groups of cascade 1 change places, which the compare mode must report (only when
+        // cascade 1 is on)
         std::swap(results[1].beginVisibleGroups()[0], results[1].beginVisibleGroups()[1]);
     }
 #endif
@@ -13456,14 +13470,23 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
     }
 
     // multi-core 5c-1: the culls of all the cascades as one batch of frame jobs, ahead of the first render. The debug
-    // setting RenderSunCascadeJobs switches it off: each cascade is then culled by updateCull inside its render, as before.
+    // setting RenderSunCascadeJobs switches the two job paths off (this one, and the render maps in chunks below): each
+    // cascade is then culled by updateCull and its render map built by postSort's loop inside its own render. The 5c-0
+    // restructure stays whatever the setting: the cameras built in the first loop above, and the shadow render as
+    // shadowCullAndSort followed by shadowSubmit.
+    // The job paths are taken only when helpers will run them. With no helper (below 4 fast cores) or in serial mode a
+    // batch runs on this thread, and the fragments and the merge only add to the former path's time (model bench: 0.96
+    // times its speed for the culls, 0.69 for a render map), so the pass then takes the former path. The compare mode
+    // takes the job paths regardless, so that they can be checked on any machine.
     static LLCullResult result[4];
     static LLCachedControl<bool> cascade_jobs(gSavedSettings, "RenderSunCascadeJobs", true);
 #if VKS_FRAMEJOBS_COMPARE
     static LLCachedControl<S32> cascade_compare(gSavedSettings, "RenderSunCascadeJobsCompare", 0);
     mSunCascadeCompare = cascade_compare;
 #endif
-    const bool culled_ahead = cascade_jobs && updateCullSunCascades(shadow_cams, result, cascade_off, cascade_count);
+    const bool use_jobs = cascade_jobs &&
+        ((LL::FrameJobs::helperCount() > 0 && !LL::FrameJobs::isSerial()) || mSunCascadeCompare != 0);
+    const bool culled_ahead = use_jobs && updateCullSunCascades(shadow_cams, result, cascade_off, cascade_count);
 
     bool origin_set = false; // the origin of the blended casters' blocks was set for a cascade (reset after the loop)
     for (S32 j = 0; j < cascade_count; j++)
@@ -13535,7 +13558,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
             mSunCascadePass = j;
             // multi-core 5c-2: the render maps of cascades 1 to 3 in chunks on the frame job helpers. Cascade 0's is
             // too small to be worth a batch, and a probe's cascades are outside the frame-work window.
-            mRenderMapJobs = cascade_jobs && j >= 1 && !gCubeSnapshot;
+            mRenderMapJobs = use_jobs && j >= 1 && !gCubeSnapshot;
             renderShadow(view[j], proj[j], shadow_cam, result[j], true, culled_ahead);
             mRenderMapJobs = false;
             mSunCascadePass = -1;

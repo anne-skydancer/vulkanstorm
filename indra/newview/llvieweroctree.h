@@ -178,7 +178,6 @@ protected:
 };//LL_ALIGN_POSTFIX(16);
 
 
-//defines an octree group for an octree node, which contains multiple entries.
 // <Vulkanstorm> multi-core 5c-1: an S32 that several frame jobs may store the same value into at the same time (the cull
 // jobs of the sun cascades stamp a group they all see with the frame number). The order is relaxed, so a load or a store
 // is the plain instruction on x86; the value still copies like an S32.
@@ -199,6 +198,7 @@ private:
 };
 // </Vulkanstorm>
 
+//defines an octree group for an octree node, which contains multiple entries.
 //LL_ALIGN_PREFIX(16)
 class LLViewerOctreeGroup
 :   public OctreeListener

@@ -904,8 +904,8 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   split) is serial on one GL context and as large as, or larger than, everything 5c can take. It belongs to the OpenGL programme
   (fewer or cheaper shadow draws, reuse of cascade results across frames).
 - **Shared with the point-light plan:** both need `renderShadowImpl` split into its cull and its submit
-  (`pipeline.cpp:11661-11675` against `:11677-11760`; `point-light-shadows-plan.md:215`). The split is done once, by whichever
-  lands first, and the other builds on it.
+  (`point-light-shadows-plan.md:215`). **Done by 5c-0 (2026-11-19):** `LLPipeline::shadowCullAndSort` and
+  `LLPipeline::shadowSubmit`; the point-light plan builds on them.
 - **5c core as built (2026-11-19, `codex/mc-5c-core`): the sun cascades' culls and render maps on `LL::FrameJobs`**, as
   designed in `reports/multicore-5a-2026-11-18/report.md` section 2. It covers the Stochastic and PCSS cascades
   (`generateSunCascadesStable`); the Legacy cascades, the world pass, the projector tiles and the point-light faces are
@@ -920,7 +920,7 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   - **5c-1, culls.** `LLPipeline::updateCullSunCascades` makes one item per (cascade, region, partition) in
     `updateCull`'s loop order and by its rule (`cullsPartition`, shared with `updateCull`). On the main thread, before
     the batch: `updateCull`'s own start for each cascade (`updateCullBegin`: the pass count, the water clip plane, the
-    result cleared) and `rebound()` of every partition root. A job (`LLSpatialPartition::cullShadowJob`) traverses its
+    result cleared) and `rebound()` of every partition root, once for all the cascades. A job (`LLSpatialPartition::cullShadowJob`) traverses its
     partition with `LLOctreeCullShadowJob`: the traversal and frustum tests of `LLOctreeCullShadow` unchanged, and a
     `processGroup` that is `markNotCulled` for a shadow camera with occlusion off: it stamps the group for its cascade
     (`setVisibleFor`) and records it in its own fragment. No GL call, no `LLPointer` copy, no occlusion state read or
@@ -938,15 +938,27 @@ As in #448, with two updates (the width rule, and the spin window's risks).
     `tests/llculljobs_test.cpp`: a model octree with single-child chains, fully-inside subtrees, empty groups and both
     kinds of partition, culled serially and as jobs at 0 to 7 helpers, in serial mode and as one chunk; the render map
     at several grains; deliberate breaks (fragments swapped or dropped, another cascade's camera id, a root left dirty).
+  - **When the job paths run.** Only when helpers will run them: `LL::FrameJobs::helperCount() > 0` and not serial
+    mode. With no helper (below 4 fast cores) a batch runs on the main thread and the fragments and the merge only cost
+    (model bench: 0.96 times the former speed for the culls, 0.69 for a render map), so the pass takes the former path,
+    the same as with the setting off. The compare mode takes the job paths regardless.
   - **Debug settings:** `RenderSunCascadeJobs` (on; off, each cascade is culled by `updateCull` and its render map built
-    by the loop inside its own render, as before). Development only, compiled with `VKS_FRAMEJOBS_COMPARE` (on by default
+    by the loop inside its own render). It switches the 5c-1 and 5c-2 job paths only: the 5c-0 restructure (cameras
+    first, the split, the `LLVOCachePartition::cull` reorder, the D12 removal) stays either way and is not what the
+    setting or the compare mode tests; it rests on the code reading. Development only, compiled with `VKS_FRAMEJOBS_COMPARE` (on by default
     on this line, rejected on `vkstorm-release` by `scripts/tests/check_release_hooks.py`): `RenderSunCascadeJobsCompare`
     (1: every frame each cascade is culled again by `updateCull` at its former place and its render map built again by
     the loop, and every list is compared element for element; 2: the same with a deliberate fault in cascade 1) and
     `RenderSunCascadeJobsStats` (one `SunCascadeJobs:` log line a second: the cascades' cull and render-map times on the
     main thread per sun pass, the jobs, groups and chunks, and the compare counts with session totals).
-  - **Not proven by the compare mode:** the sort loops (untouched), and the order of rebuilds against appends inside the
-    render-map build (the reference loop runs after the pre-pass's rebuilds).
+  - **Not proven by the compare mode:** the sort loops (untouched), the 5c-0 restructure, and the order of rebuilds
+    against appends inside the render-map build (the reference appends run after the pre-pass's rebuilds, for the groups
+    the pre-pass kept). The unit test drives a model that transcribes the traversal, not `LLOctreeCullShadowJob`,
+    `cullShadowJob` or `updateCullSunCascades` themselves: the compare mode in a running viewer is the only check of the
+    real cullers. Of the lists it compares after a cull, the visible and the drawable groups carry the result; the
+    occlusion, alpha and rigged alpha lists are empty on both sides at that point.
+  - **Cascades turned off** (`RenderShadowSplits` below 3) have no cull item, are left out of `cull_groups`, and the
+    deliberate fault of compare mode 2 needs cascade 1 on.
 
 ### 6.6 Stage 5b: plan / fill / flush geometry, after G5
 
