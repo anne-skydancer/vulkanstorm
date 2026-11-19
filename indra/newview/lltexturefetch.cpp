@@ -344,30 +344,49 @@ private:
         LLUUID mID;
     };
 
+    // <Vulkanstorm> The responder keeps the worker it was made for and holds a count on the worker's mDecodesInFlight from its
+    // construction to the end of completed() (or to its destruction, when the decode never ran). deleteOK() is false
+    // while the flag is set, so the decode thread can no longer reach a worker the main thread has deleted: it used to
+    // look the worker up by id under mQueueMutex, unlock, and only then lock the worker in callbackDecoded.
     class DecodeResponder : public LLImageDecodeThread::Responder
     {
     public:
 
         // Threads:  Ttf
         DecodeResponder(LLTextureFetch* fetcher, const LLUUID& id, LLTextureFetchWorker* worker)
-            : mFetcher(fetcher), mID(id)
+            : mFetcher(fetcher), mID(id), mWorker(worker)
         {
+            mWorker->mDecodesInFlight.fetch_add(1, std::memory_order_acq_rel);
+        }
+
+        // Threads:  Tid, or whichever thread drops a decode that never ran
+        ~DecodeResponder()
+        {
+            if (mWorker)
+            {
+                mWorker->mDecodesInFlight.fetch_sub(1, std::memory_order_acq_rel);
+            }
         }
 
         // Threads:  Tid
         virtual void completed(bool success, const std::string& error_message, LLImageRaw* raw, LLImageRaw* aux, U32 request_id)
         {
             LL_PROFILE_ZONE_SCOPED;
-            LLTextureFetchWorker* worker = mFetcher->getWorker(mID);
+            LLTextureFetchWorker* worker = mWorker;
+            mWorker = nullptr;
             if (worker)
             {
                 worker->callbackDecoded(success, error_message, raw, aux, request_id);
+                // last touch: the main thread may delete the worker as soon as it sees the count drop
+                worker->mDecodesInFlight.fetch_sub(1, std::memory_order_acq_rel);
             }
         }
     private:
         LLTextureFetch* mFetcher;
         LLUUID mID;
+        LLTextureFetchWorker* mWorker;
     };
+    // </Vulkanstorm>
 
     // <Vulkanstorm> The orderings of waiting requests compare priorities read once under each worker's lock
     // (LLTextureFetchPolicy::PrioritySnapshot), not the live mImagePriority as Compare did.
@@ -583,6 +602,7 @@ private:
                                 mCachedSize;
     e_request_state mSentRequest;
     handle_t mDecodeHandle;
+    std::atomic<S32> mDecodesInFlight{0}; // <Vulkanstorm> DecodeResponders holding this worker (a re-initialised worker can have two)
     bool mLoaded;
     bool mDecoded;
     bool mWritten;
@@ -2324,6 +2344,14 @@ bool LLTextureFetchWorker::deleteOK()
             delete_ok = false;
         }
     }
+
+    // <Vulkanstorm> a decode in flight holds a pointer to this worker; the responder drops its count when it is done
+    // with it (or is destroyed unrun), so this cannot hold the worker for good
+    if (mDecodesInFlight.load(std::memory_order_acquire) > 0)
+    {
+        delete_ok = false;
+    }
+    // </Vulkanstorm>
 
     // Allow any pending reads or writes to complete
     if (mCacheReadHandle != LLTextureCache::nullHandle())
