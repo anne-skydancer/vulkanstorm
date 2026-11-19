@@ -105,6 +105,10 @@ public:
 
     LLCharacter* getCharacter() { return mCharacter; }
 
+    // <Vulkanstorm/> multi-core C6: reads the settings onUpdate uses once on the main thread (a frame job must not be
+    // the first to use an LLCachedControl)
+    static void prepareForJobs();
+
 protected:
     void addMotion(LLPhysicsMotion *motion);
 private:

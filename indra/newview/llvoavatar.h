@@ -284,7 +284,31 @@ public:
     void            updateAnimationDebugText();
     virtual void    updateDebugText();
     virtual bool    computeNeedsUpdate();
-    virtual bool    updateCharacter(LLAgent &agent);
+    // <Vulkanstorm> multi-core C6: the idle update in three steps, so that the animation core of other avatars than the
+    // agent's can run as a frame job (llavataranimationjobs.h). idleUpdate() is idleUpdateBegin(), updateCharacterCore()
+    // and idleUpdateEnd() one after the other: the statements of the former idleUpdate and updateCharacter in their
+    // order, with one move: the joints' world matrices are refreshed at the end of the core, ahead of the head offset
+    // and the footsteps that read them (the same values: those reads refreshed the joints they needed).
+    enum EIdleUpdatePath { IDLE_UPDATE_SKIP, IDLE_UPDATE_NOT_FRIEND, IDLE_UPDATE_RENDER_TYPE_OFF, IDLE_UPDATE_FULL };
+    EIdleUpdatePath idleUpdatePath() const;          // the way idleUpdateBegin will go; changes nothing
+    bool            idleUpdateBegin(LLAgent &agent, const F64 &time); // true: the core and the end are due
+    virtual void    updateCharacterBegin(LLAgent &agent); // the former updateCharacter up to the motions' update
+    void            updateCharacterCore();           // the motions and the joints: touches this avatar only
+    bool            updateCharacterEnd();            // returns what updateCharacter returned (a detailed update)
+    void            idleUpdateEnd();
+    // LLAvatarAnimationJobs may take this avatar's idle update apart (false: the agent's avatar, a UI avatar)
+    virtual bool    idleUpdateSplits() const { return !isSelf() && !isUIAvatar(); }
+    // updateCharacterCore may run as a frame job this frame; asked after idleUpdateBegin
+    bool            animationCoreJobSafe();
+    // the core is about to run as a frame job: what it must not do there is recorded and done in idleUpdateEnd
+    void            beginAnimationJob() { mMotionController.beginDeferredEffects(); }
+    // the job did not run after all (the avatar died in between): nothing was recorded, the deferral ends
+    void            cancelAnimationJob() { mMotionController.applyDeferredEffects(); }
+    // the last updateCharacterCore refreshed the joints' world matrices (a full update, not a hidden one)
+    bool            animationCoreRefreshesJoints() const { return mAnimStep == ANIM_STEP_FULL; }
+    // an animated object's avatar: the root of the linkset it follows (the wearer for an attached one); null otherwise
+    virtual LLViewerObject* getAnimationVolumeRoot() const { return nullptr; }
+    // </Vulkanstorm>
     void            updateFootstepSounds();
     void            computeUpdatePeriod();
     void            updateOrientation(LLAgent &agent, F32 speed, F32 delta_time);
@@ -511,6 +535,16 @@ public:
     LLVector3           mTargetRootToHeadOffset;
 
     S32                 mLastSkeletonSerialNum;
+    // <Vulkanstorm> multi-core C6: what updateCharacterBegin leaves for updateCharacterCore and updateCharacterEnd
+    enum EAnimStep : U8 { ANIM_STEP_NONE, ANIM_STEP_HIDDEN, ANIM_STEP_FULL };
+    U8                      mAnimStep = ANIM_STEP_NONE;
+    bool                    mAnimCoreDue = false;                  // LLCharacter::updateMotionsBegin's answer
+    bool                    mAnimVisible = false;
+    bool                    mAnimWasSitGroundConstrained = false;
+    bool                    mAnimSexChangeDeferred = false;        // a sex change met inside a frame job (updateVisualParams)
+    ESex                    mAnimSexBeforeChange = SEX_FEMALE;
+    LLCharacter::e_update_t mAnimUpdateType = LLCharacter::NORMAL_UPDATE;
+    // </Vulkanstorm>
 
 
 /**                    Skeleton

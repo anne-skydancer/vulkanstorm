@@ -451,12 +451,24 @@ F32 LLPhysicsMotion::calculateAcceleration_local(const F32 velocity_local, const
         return smoothed_acceleration_local;
 }
 
+// <Vulkanstorm> multi-core C6: the setting of onUpdate, in one place so that prepareForJobs can make its first use
+static bool avatar_physics_enabled()
+{
+    static LLCachedControl<bool> av_physics(gSavedSettings, "AvatarPhysics");
+    return av_physics;
+}
+
+void LLPhysicsMotionController::prepareForJobs()
+{
+    avatar_physics_enabled();
+}
+// </Vulkanstorm>
+
 bool LLPhysicsMotionController::onUpdate(F32 time, U8* joint_mask)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     // Skip if disabled globally.
-    static LLCachedControl<bool> av_physics(gSavedSettings, "AvatarPhysics");
-    if (!av_physics)
+    if (!avatar_physics_enabled())
     {
             return true;
     }

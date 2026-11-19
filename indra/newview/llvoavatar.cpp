@@ -3197,15 +3197,54 @@ S32 LLVOAvatar::getExtentUpdatePeriod()
 
 void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
 {
+    // <Vulkanstorm> multi-core C6: in three steps (llvoavatar.h)
+    if (idleUpdateBegin(agent, time))
+    {
+        updateCharacterCore();
+        idleUpdateEnd();
+    }
+}
+
+// The way idleUpdateBegin goes, from the tests it used to make in place. Nothing it does before them changes their
+// outcome, so LLAvatarAnimationJobs can ask ahead.
+LLVOAvatar::EIdleUpdatePath LLVOAvatar::idleUpdatePath() const
+{
+    if (LLApp::isExiting() || isDead())
+    {
+        return IDLE_UPDATE_SKIP;
+    }
+
+    static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
+    if (friends_only()
+        && !isUIAvatar()
+        && !isControlAvatar()
+        && !isSelf()
+        && !isBuddy())
+    {
+        return IDLE_UPDATE_NOT_FRIEND;
+    }
+
+    static LLCachedControl<bool> disable_all_render_types(gSavedSettings, "DisableAllRenderTypes");
+    if (!(gPipeline.hasRenderType(mIsControlAvatar ? LLPipeline::RENDER_TYPE_CONTROL_AV : LLPipeline::RENDER_TYPE_AVATAR))
+        && !disable_all_render_types && !isSelf())
+    {
+        return IDLE_UPDATE_RENDER_TYPE_OFF;
+    }
+    return IDLE_UPDATE_FULL;
+}
+
+bool LLVOAvatar::idleUpdateBegin(LLAgent &agent, const F64 &time)
+{
+    // </Vulkanstorm>
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
 
     if (LLApp::isExiting())
-        return;
+        return false;
 
     if (isDead())
     {
         LL_INFOS() << "Warning!  Idle on dead avatar" << LL_ENDL;
-        return;
+        return false;
     }
 
     // <Vulkanstorm> drop the skin palettes no draw has asked for lately: the cache kept every skin the avatar ever drew
@@ -3216,12 +3255,8 @@ void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
     }
     // </Vulkanstorm>
 
-    static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
-    if (friends_only()
-        && !isUIAvatar()
-        && !isControlAvatar()
-        && !isSelf()
-        && !isBuddy())
+    const EIdleUpdatePath path = idleUpdatePath(); // <Vulkanstorm/> multi-core C6: the two tests below, in one place
+    if (path == IDLE_UPDATE_NOT_FRIEND)
     {
         if (mNameText)
         {
@@ -3233,21 +3268,19 @@ void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
         deleteParticleSource();
         mVoiceVisualizer->setVoiceEnabled(false);
 
-        return;
+        return false;
     }
 
     // record time and refresh "tooSlow" status
     updateTooSlow();
 
-    static LLCachedControl<bool> disable_all_render_types(gSavedSettings, "DisableAllRenderTypes");
-    if (!(gPipeline.hasRenderType(mIsControlAvatar ? LLPipeline::RENDER_TYPE_CONTROL_AV : LLPipeline::RENDER_TYPE_AVATAR))
-        && !disable_all_render_types && !isSelf())
+    if (path == IDLE_UPDATE_RENDER_TYPE_OFF)
     {
         if (!mIsControlAvatar)
         {
             idleUpdateNameTag(idleCalcNameTagPosition(mLastRootPos));
         }
-        return;
+        return false;
     }
 
     // Update should be happening max once per frame.
@@ -3349,7 +3382,16 @@ void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
     // animate the character
     // store off last frame's root position to be consistent with camera position
     mLastRootPos = mRoot->getWorldPosition();
-    bool detailed_update = updateCharacter(agent);
+    // <Vulkanstorm> multi-core C6: the first step ends with the character's; the core follows (here, or as a frame job)
+    updateCharacterBegin(agent);
+    return true;
+}
+
+void LLVOAvatar::idleUpdateEnd()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    bool detailed_update = updateCharacterEnd();
+    // </Vulkanstorm>
 
     static LLUICachedControl<bool> visualizers_in_calls("ShowVoiceVisualizersInCalls", false);
     bool voice_enabled = (visualizers_in_calls || LLVoiceClient::getInstance()->inProximalChannel()) &&
@@ -5792,14 +5834,19 @@ bool LLVOAvatar::computeNeedsUpdate()
 // simulator.
 //
 //------------------------------------------------------------------------
-bool LLVOAvatar::updateCharacter(LLAgent &agent)
+// <Vulkanstorm> multi-core C6: updateCharacter in three steps (llvoavatar.h). Begin: everything up to the motions'
+// update, with its serial part (LLCharacter::updateMotionsBegin). Core: the motions' update, the fix-up for sitting on
+// the ground and the joints' world matrices. End: the head offset, the footsteps and the skin flag.
+void LLVOAvatar::updateCharacterBegin(LLAgent &agent)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR; // <Vulkanstorm> multicore stage 1
+    mAnimStep = ANIM_STEP_NONE;
+    mAnimCoreDue = false;
     updateDebugText();
 
     if (!mIsBuilt)
     {
-        return false;
+        return;
     }
 
     bool visible = isVisible();
@@ -5826,8 +5873,10 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
     //--------------------------------------------------------------------
     if (!needs_update && !isSelf())
     {
-        updateMotions(LLCharacter::HIDDEN_UPDATE);
-        return false;
+        mAnimUpdateType = LLCharacter::HIDDEN_UPDATE;
+        mAnimStep = ANIM_STEP_HIDDEN;
+        mAnimCoreDue = updateMotionsBegin(mAnimUpdateType);
+        return;
     }
 
     //--------------------------------------------------------------------
@@ -5886,20 +5935,46 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
     // update animations
     if (!visible && !isSelf()) // NOTE: never do a "hidden update" for self avatar as it interrupts controller processing
     {
-        updateMotions(LLCharacter::HIDDEN_UPDATE);
+        mAnimUpdateType = LLCharacter::HIDDEN_UPDATE;
     }
     else if (mSpecialRenderMode == 1) // Animation Preview
     {
-        updateMotions(LLCharacter::FORCE_UPDATE);
+        mAnimUpdateType = LLCharacter::FORCE_UPDATE;
     }
     else
     {
         // Might be better to do HIDDEN_UPDATE if cloud
-        updateMotions(LLCharacter::NORMAL_UPDATE);
+        mAnimUpdateType = LLCharacter::NORMAL_UPDATE;
+    }
+    mAnimVisible = visible;
+    mAnimWasSitGroundConstrained = was_sit_ground_constrained;
+    mAnimStep = ANIM_STEP_FULL;
+    mAnimCoreDue = updateMotionsBegin(mAnimUpdateType);
+}
+
+// The animation core. For other avatars than the agent's it may run as a frame job (LLAvatarAnimationJobs): it reads and
+// writes this avatar only (its motions, joints, visual params and morphed meshes), reads the world, and leaves what a
+// job must not do to updateCharacterEnd (the controller's deferred effects, a sex change's restart of the sit motion).
+void LLVOAvatar::updateCharacterCore()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    if (mAnimStep == ANIM_STEP_NONE)
+    {
+        return;
+    }
+
+    if (mAnimCoreDue)
+    {
+        updateMotionsCore(mAnimUpdateType);
+    }
+
+    if (mAnimStep != ANIM_STEP_FULL)
+    {
+        return;
     }
 
     // Special handling for sitting on ground.
-    if (!getParent() && (isSitting() || was_sit_ground_constrained))
+    if (!getParent() && (isSitting() || mAnimWasSitGroundConstrained))
     {
 
         F32 off_z = (F32)LLVector3d(getHoverOffset()).mdV[VZ];
@@ -5913,23 +5988,65 @@ bool LLVOAvatar::updateCharacter(LLAgent &agent)
         }
     }
 
+    // Update child joints as needed.
+    mRoot->updateWorldMatrixChildren();
+}
+
+bool LLVOAvatar::updateCharacterEnd()
+{
+    // what the core left for the main thread when it ran as a frame job, in the order it was recorded
+    if (mMotionController.isDeferringEffects())
+    {
+        mMotionController.applyDeferredEffects();
+        if (mAnimSexChangeDeferred)
+        {
+            // updateVisualParams' restart of the sit motion: stopped under the former sex, started under the new one
+            mAnimSexChangeDeferred = false;
+            const ESex new_sex = getSex();
+            setSex(mAnimSexBeforeChange);
+            stopMotion(ANIM_AGENT_SIT);
+            setSex(new_sex);
+            startMotion(ANIM_AGENT_SIT);
+        }
+    }
+
+    if (mAnimStep != ANIM_STEP_FULL)
+    {
+        return false;
+    }
+
     // update head position
     updateHeadOffset();
 
     // Generate footstep sounds when feet hit the ground
     updateFootstepSounds();
 
-    // Update child joints as needed.
-    mRoot->updateWorldMatrixChildren();
-
-    if (visible)
+    if (mAnimVisible)
     {
         // System avatar mesh vertices need to be reskinned.
         mNeedsSkin = true;
     }
 
-    return visible;
+    return mAnimVisible;
 }
+
+// Whether updateCharacterCore may run as a frame job this frame. Asked on the main thread after idleUpdateBegin.
+bool LLVOAvatar::animationCoreJobSafe()
+{
+    if (mAnimStep == ANIM_STEP_NONE || isSelf() || isUIAvatar())
+    {
+        return false;
+    }
+    // a motion that must stay on the main thread (the poser's), or the time-step quantum
+    if (!mMotionController.canUpdateInJob())
+    {
+        return false;
+    }
+    // a pending change of sex: updateVisualParams restarts the sit motion, and motions are created on the main thread
+    const ESex avatar_sex = (getVisualParamWeight("male") > 0.5f) ? SEX_MALE : SEX_FEMALE;
+    return getSex() == avatar_sex;
+}
+// </Vulkanstorm>
 
 //-----------------------------------------------------------------------------
 // updateHeadOffset()
@@ -8342,9 +8459,25 @@ void LLVOAvatar::updateVisualParams()
             // (female and male sit ids are same server side, so it is likely unaware that it
             // need to send update)
             // Make sure motion is up to date
+            // <Vulkanstorm> multi-core C6: inside a frame job (a motion's update reaches here) the restart is left to
+            // updateCharacterEnd: starting a motion creates and initialises it. animationCoreJobSafe() keeps an avatar
+            // whose sex is about to change out of the jobs, so this is the guard for a change made by a motion itself.
+            if (mMotionController.isDeferringEffects())
+            {
+                if (!mAnimSexChangeDeferred)
+                {
+                    mAnimSexChangeDeferred = true;
+                    mAnimSexBeforeChange = getSex();
+                }
+                setSex(avatar_sex);
+            }
+            else
+            {
+            // </Vulkanstorm>
             stopMotion(ANIM_AGENT_SIT);
             setSex(avatar_sex);
             startMotion(ANIM_AGENT_SIT);
+            } // <Vulkanstorm/>
         }
         else
         {
