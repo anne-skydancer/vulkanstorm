@@ -592,6 +592,12 @@ public:
     static void destroyGL();
     static void restoreGL();
     S32         mSpecialRenderMode; // special lighting
+    // <Vulkanstorm> multi-core C8 (H3): the area this avatar's worn textures are ranked by in one texture list pass
+    // (its pixel area while it is drawn, otherwise 0), taken at the pass's first face of it instead of once a face
+    // (LLViewerTextureList::wornAvatarArea). mWornRankPass names the pass; 0: none.
+    U32         mWornRankPass = 0;
+    F32         mWornRankArea = 0.f;
+    // </Vulkanstorm>
 
 private:
     friend class LLPipeline;

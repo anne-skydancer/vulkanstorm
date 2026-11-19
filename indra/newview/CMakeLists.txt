@@ -1214,6 +1214,7 @@ set(viewer_HEADER_FILES
     llexperiencelog.h
     llexternaleditor.h
     llface.h
+    llfacepixelarea.h
     llfasttimerview.h
     llfavoritesbar.h
     llfeaturemanager.h
@@ -3286,6 +3287,7 @@ if (LL_TESTS)
 
 # LL_ADD_INTEGRATION_TEST(llhttpretrypolicy "llhttpretrypolicy.cpp" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lltexturematrix "" "${test_libs}") # </FS:Beq> Texture-animation matrix lifetime regression coverage.
+  LL_ADD_INTEGRATION_TEST(llfacepixelarea "" "${test_libs}") # <Vulkanstorm/> multi-core C8: the pixel-area pass on LL::FrameJobs
 
   #ADD_VIEWER_BUILD_TEST(llmemoryview viewer)
   #ADD_VIEWER_BUILD_TEST(llagentaccess viewer)

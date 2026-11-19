@@ -696,6 +696,51 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   core time, cache and SMT-less execution resources the driver thread wants) are unmeasured. The stage-2 gate covers the fps
   effect; it must also compare package power and the driver thread's CPU time, and the spin window (50 µs, or park at once
   during long serial stretches) is a tuning point of that gate.
+- **C8 as built (2026-11-19, `codex/mc-c8-pixel-area`): the first FrameJobs user**, the texture list's pixel-area pass
+  (decision D-A of `reports/multicore-5a-2026-11-18/report.md`).
+  - **Two steps.** `LLFace::calcPixelArea` is now `computePixelArea` (the values, written to an `LLFacePixelArea::Result`)
+    followed by `applyPixelArea` (the writes to the face and the `ll_frand` draw). The arithmetic is in
+    `indra/newview/llfacepixelarea.h` (llmath only). The serial path and the jobs run the same code, so a face computed on a
+    helper gets the bits the main thread would give it.
+  - **The pass** (`LLViewerTextureList::updateImagesFetchTextures`). `precomputePixelAreas` lists the faces the loop can
+    reach, each once and in the loop's order (the loop's own rules: referenced, not boosted, at most 1,024 faces a texture,
+    not measured in the last 10 frames), and computes them with `parallelFor` (64 faces a chunk) in read-only mode. The loop
+    is unchanged otherwise: at a face's turn `calcFacePixelArea` stores the value computed ahead, so face state, texture
+    state and the main thread's random numbers change in the serial order. The list may hold faces the loop then leaves out
+    (its early exits, the time box); their values are dropped.
+  - **Batches (review of #575).** The faces are listed and computed a batch at a time (entries until 1,024 faces are
+    listed), each batch when the loop gets to its first entry. The loop tests its time box after every entry, so the work
+    done ahead is inside the box: a pass the box ends has computed at most one batch for entries it does not reach. With no
+    helpers or in serial mode (`FrameJobsSerial`) nothing is computed ahead.
+  - **Back to the main thread.** In read-only mode a face returns `NEEDS_SERIAL` where the serial code writes: rigging info
+    to build (`updateRiggingInfo` writes the shared volume face and skin), a joint whose world matrix is dirty
+    (`getWorldMatrix` updates the chain), a texture entry without a volume face (the log line). The loop runs
+    `calcPixelArea` for those, and for any face it finds without a value.
+  - **H3.** The worn rank's avatar tests (`isVisible`, `isVisuallyMuted`, the avatar's area) run once an avatar a pass
+    (`wornAvatarArea`), not once a face.
+  - **Exactness.** For a fixed number of textures processed, the faces, the textures and the random stream equal the
+    serial pass's bit for bit. What changes is how many textures a frame reaches before the time box ends the pass (it ended
+    32 % of the frames at Rooftops): textures are re-ranked sooner.
+  - **Debug settings:** `TexturePixelAreaJobs` (on; off is the pass as it was), `TexturePixelAreaCompare` (every value
+    computed ahead is computed again on the main thread at the face's turn and compared bit for bit; so is the avatar
+    snapshot) and `TexturePixelAreaStats` (probe R0: one `TexturePixelArea:` log line a second with the quota, the entries,
+    the entries processed, the passes cut by the time box, the batches and faces computed ahead, the faces applied and
+    measured serially, the compare mismatches, the time spent ahead (mean and largest) and the pass time; the same values as Tracy plots in a Tracy build). The probe and the
+    compare mode are development only: `scripts/tests/check_release_hooks.py` rejects them on `vkstorm-release`.
+    `TexturePixelAreaCompare` is not saved between sessions.
+  - **Tests.** `INTEGRATION_TEST_llfacepixelarea` (`indra/newview/tests/llfacepixelarea_test.cpp`): the two steps against
+    the former `calcPixelArea` transcribed, bit for bit over 12 frames; the pass on 0 to 7 helpers against the serial pass
+    at a fixed count, in one batch and in batches of 1,024 and 700; two deliberate breaks; an opt-in bench (`LL_FACE_PIXEL_AREA_BENCH=1`). Source guards in
+    `scripts/tests/test_texture_streaming_fixes.py` (`PixelAreaJobs`, `PixelAreaThrottle`, `WornFetchRank`).
+  - **Offline bench** (dev machine, 8 cores, other work running; 2,600 model faces, two thirds rigged, 1 ms of main-thread
+    work before each batch so the helpers have parked): batch median 284 µs on the main thread alone, 146 / 110 / 82 / 70 /
+    62 / 57 µs with 1 to 6 helpers (4.6x at the rule's 5), 117 µs with 7 (every core taken). Beside four busy threads at
+    normal priority the 5-helper batch takes 118 µs (median) and 3 helpers 83 µs; with those threads below normal priority,
+    66 µs and 84 µs. The model faces cost about a fifth of real ones (no pointer chasing), so the ratios carry over and the
+    absolute times do not.
+  - **Still open (the stage-2 first-user gates, in world):** fps and main-thread ms at Rooftops and Risk with
+    `TexturePixelAreaJobs` on and off, the width sweep with `FrameJobsHelpers`, the settle after a teleport, and D-D (the
+    decode pool below normal priority, which the bench above supports but which is not built here).
 
 ### 6.3 Stage 3: bit-exact AVX2 kernels
 
