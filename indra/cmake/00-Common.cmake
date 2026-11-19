@@ -46,9 +46,10 @@ if (VKS_FRAMEJOBS_GUARDS)
   add_compile_definitions(VKS_FRAMEJOBS_GUARDS=1)
 endif()
 # Development only (vkstorm-devel; never on vkstorm-release, scripts/tests/check_release_hooks.py): the compare mode and
-# the counters of the frame jobs in the pipeline (multi-core 5c: the sun cascades' culls and render maps). It is compiled
-# in by default on this line so that a test build can arm it; it does nothing until the debug setting
-# RenderSunCascadeJobsCompare or RenderSunCascadeJobsStats is set.
+# the counters of the frame jobs in the pipeline (multi-core 5c: the sun cascades' culls and render maps; C6: the avatars'
+# animation cores). It is compiled in by default on this line so that a test build can arm it; it does nothing until a
+# debug setting is set: RenderSunCascadeJobsCompare or RenderSunCascadeJobsStats, AvatarAnimationJobsCompare or
+# AvatarAnimationJobsStats.
 option(VKS_FRAMEJOBS_COMPARE "LL::FrameJobs compare mode and counters in the pipeline (development line only)" ON)
 if (VKS_FRAMEJOBS_COMPARE)
   add_compile_definitions(VKS_FRAMEJOBS_COMPARE=1)

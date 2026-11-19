@@ -2147,6 +2147,39 @@
       <key>Value</key>
       <real>1.0</real>
     </map>
+    <key>AvatarAnimationJobs</key>
+    <map>
+      <key>Comment</key>
+      <string>Animate the other avatars and animated objects on the frame job helpers (multi-core): each one&apos;s motions, pose blend and joint transforms are one job; your own avatar stays on the main thread. Used only when frame job helpers run (4 fast cores or more, not in serial mode) or AvatarAnimationJobsCompare is set. Off: every avatar is animated inside its own idle update on the main thread, in the former loop. The animation is the same either way.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>AvatarAnimationJobsCompare</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core debugging (C6): 1 = every frame, compute the joint world transforms of every avatar animated by a job again on the main thread and compare them bit for bit, and run each batch as two halves while checking that the joints of the other half&apos;s avatars keep their bits (AvatarAnimationJobsStats shows the counts; they must stay 0). 2 = the same with one deliberate fault a batch, to see the joint count move.</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>AvatarAnimationJobsStats</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core measuring (C6): write one AvatarAnimJobs line a second to the log (the time of the active objects&apos; update loop with the jobs on or off, the time of the animation batches, the avatars animated by jobs and on the main thread, the objects held back, the batches, and the compare mode&apos;s counts).</string>
+      <key>Persist</key>
+      <integer>0</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>AvatarAxisDeadZone0</key>
     <map>
       <key>Comment</key>

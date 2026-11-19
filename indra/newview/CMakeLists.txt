@@ -245,6 +245,7 @@ set(viewer_SOURCE_FILES
     llaudiosourcevo.cpp
     llautoreplace.cpp
     llavataractions.cpp
+    llavataranimationjobs.cpp
     llavatariconctrl.cpp
     llavatarlist.cpp
     llavatarlistitem.cpp
@@ -1139,6 +1140,7 @@ set(viewer_HEADER_FILES
     llaudiosourcevo.h
     llautoreplace.h
     llavataractions.h
+    llavataranimationjobs.h
     llavatariconctrl.h
     llavatarlist.h
     llavatarlistitem.h

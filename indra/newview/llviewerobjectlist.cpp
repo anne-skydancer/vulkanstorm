@@ -28,6 +28,7 @@
 
 #include "llviewerobjectlist.h"
 
+#include "llavataranimationjobs.h" // <Vulkanstorm/> multi-core C6
 #include "message.h"
 #include "llfasttimer.h"
 #include "llrender.h"
@@ -1134,6 +1135,16 @@ void LLViewerObjectList::update(LLAgent &agent)
     }
     else
     {
+        // <Vulkanstorm> multi-core C6: the same updates with the avatars' animation cores as frame jobs
+        // (llavataranimationjobs.h). It returns false when that path is off (AvatarAnimationJobs) or has no helpers:
+        // the loop below then runs as it always did.
+#if VKS_FRAMEJOBS_COMPARE
+        const F64 loop_start = LLTimer::getTotalSeconds().value();
+#endif
+        const bool animation_jobs = LLAvatarAnimationJobs::idleUpdateObjects(idle_list.data(), idle_count, agent, frame_time);
+        if (!animation_jobs)
+        {
+        // </Vulkanstorm>
         for (std::vector<LLViewerObject*>::iterator idle_iter = idle_list.begin();
             idle_iter != idle_end; idle_iter++)
         {
@@ -1141,6 +1152,10 @@ void LLViewerObjectList::update(LLAgent &agent)
             llassert(objectp->isActive());
                 objectp->idleUpdate(agent, frame_time);
         }
+        } // <Vulkanstorm/>
+#if VKS_FRAMEJOBS_COMPARE
+        LLAvatarAnimationJobs::noteLoop(LLTimer::getTotalSeconds().value() - loop_start, idle_count, animation_jobs); // <Vulkanstorm/>
+#endif
 
         //update flexible objects
         LLVolumeImplFlexible::updateClass();
