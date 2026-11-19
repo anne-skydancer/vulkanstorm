@@ -33,6 +33,8 @@ indra/newview/tests/lltexturefetchpolicy_test.cpp).
 - The OpenJPEG wrapper refuses a header before opj_decode allocates for it when, after the reduce factor, a side
   exceeds 16384, the components are not 1 to MAX_IMAGE_COMPONENTS or the samples (4 bytes each) exceed 1 GiB
   (llj2cdecodeguard.h, checked against OpenJPEG by indra/llimagej2coj/tests/llj2cdecodeguard_openjpeg_test.cpp).
+  Its header read refuses a component count above MAX_IMAGE_COMPONENTS before LLImageBase stores it in a signed
+  byte, where 260 components read as 4.
 
     python3 scripts/tests/test_texture_streaming_fixes.py
     VKSTORM_TEST_ROOT=PATH python3 scripts/tests/test_texture_streaming_fixes.py   (another source tree)"""
@@ -390,6 +392,15 @@ class J2CDecodeGuard(unittest.TestCase):
         self.assertLess(decode.index('opj_read_header(stream, decoder, &image)'), guard)
         self.assertLess(guard, decode.index('opj_decode(decoder, stream, image)'))
         self.assertEqual(decode.count('opj_decode('), 1)
+
+    def test_header_read_refuses_components_before_storing_them(self):
+        # LLImageBase keeps the count in a signed byte (260 read as 4): refused before anything reaches the image
+        metadata = code(body(J2COJ, 'bool LLImageJ2COJ::getMetadata('))
+        refuse = metadata.index('if (!LLJ2CDecodeGuard::componentsSupported(components, MAX_IMAGE_COMPONENTS))')
+        self.assertLess(metadata.index('decode.readHeader('), refuse)
+        self.assertLess(refuse, metadata.index('base.mDiscardLevel = discard_level;'))
+        self.assertLess(refuse, metadata.index('base.setSize(width, height, components);'))
+        self.assertRegex(metadata[refuse:], r'^[^}]*return false;\s*\}')
 
     def test_the_bounds(self):
         guard = code(J2C_GUARD)

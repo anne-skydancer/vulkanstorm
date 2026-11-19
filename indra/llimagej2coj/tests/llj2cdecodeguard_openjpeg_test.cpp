@@ -9,6 +9,8 @@
 // so they decode to mid-grey), built as the crafted streams of the 2026-11-18 audit were, and decoded with the calls
 // of JPEG2KDecode::decode (llimagej2coj.cpp): the reduce factor is set before the header, and the guard runs between
 // opj_read_header and opj_decode. The largest image it admits, 8192 x 8192 with 4 components, takes 1 GiB here.
+// The header read before it (LLImageJ2COJ::getMetadata) refuses a component count the viewer does not take before
+// LLImageBase stores it in a signed byte, where 260 components read as 4.
 
 #include "llj2cdecodeguard.h"
 
@@ -179,6 +181,61 @@ namespace
         return decoder;
     }
 
+    // JPEG2KDecode::readHeader, for LLImageJ2COJ::getMetadata: the component count of the main header
+    struct Header
+    {
+        bool ok = false;
+        unsigned components = 0;
+    };
+
+    Header readHeader(const std::vector<unsigned char>& codestream)
+    {
+        Header header;
+        opj_dparameters_t parameters;
+        std::memset(&parameters, 0, sizeof(parameters));
+        opj_set_default_decoder_parameters(&parameters);
+        parameters.cp_reduce = 0;
+        parameters.flags |= OPJ_DPARAMETERS_DUMP_FLAG;
+        Stream in{ codestream, 0 };
+        opj_codec_t* decoder = opj_create_decompress(OPJ_CODEC_J2K);
+        opj_set_error_handler(decoder, quiet, nullptr);
+        opj_set_warning_handler(decoder, quiet, nullptr);
+        opj_set_info_handler(decoder, quiet, nullptr);
+        opj_stream_t* stream = openStream(in);
+        opj_image_t* image = nullptr;
+        if (opj_setup_decoder(decoder, &parameters))
+        {
+#if OPJ_VERSION_MAJOR > 2 || (OPJ_VERSION_MAJOR == 2 && OPJ_VERSION_MINOR >= 5)
+            opj_decoder_set_strict_mode(decoder, OPJ_FALSE);
+#endif
+            if (opj_read_header(stream, decoder, &image))
+            {
+                opj_codestream_info_v2_t* info = opj_get_cstr_info(decoder);
+                if (info)
+                {
+                    header.ok = true;
+                    header.components = info->nbcomps;
+                    opj_destroy_cstr_info(&info);
+                }
+            }
+        }
+        if (image)
+        {
+            opj_image_destroy(image);
+        }
+        opj_stream_destroy(stream);
+        opj_destroy_codec(decoder);
+        return header;
+    }
+
+    // getMetadata: a count of 1 to MAX_IMAGE_COMPONENTS is stored, any other refused before anything is
+    void test_metadata(std::uint32_t side, std::uint32_t components, bool supported, const char* what)
+    {
+        const Header header = readHeader(craft(side, side, components));
+        check(header.ok && header.components == components, "the header read gives the component count");
+        check(LLJ2CDecodeGuard::componentsSupported(header.components, MAX_IMAGE_COMPONENTS) == supported, what);
+    }
+
     // JPEG2KDecode::decode: the header, the guard, and opj_decode only when the guard admits the image
     struct Decoded
     {
@@ -288,6 +345,17 @@ int main()
 {
     std::printf("OpenJPEG %s\n", opj_version());
     test_bounds();
+    // the header read: 260 components are refused, where LLImageBase's signed byte read them as 4
+    test_metadata(4096, 260, false, "4096 x 4096 x 260 is refused at the header read");
+    {
+        const Header header = readHeader(craft(64, 64, 260));
+        check(header.ok && static_cast<signed char>(header.components) == 4,
+              "260 components in a signed byte, as LLImageBase stored them, read as 4");
+    }
+    test_metadata(64, 9, false, "9 components are refused at the header read");
+    test_metadata(64, 8, true, "8 components are taken");
+    test_metadata(1024, 4, true, "1024 x 1024 x 4 is taken");
+    test_metadata(16384, 4, true, "16384 x 16384 x 4 is taken at the header read (its decode is refused below)");
     // the audit's codestreams: refused before OpenJPEG allocates for them
     test_refused(16384, 4, "16384 x 16384 x 4 (4 GiB in OpenJPEG) is refused before opj_decode");
     test_refused(4096, 260, "4096 x 4096 x 260 (16.25 GiB in OpenJPEG) is refused before opj_decode");
