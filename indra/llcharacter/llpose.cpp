@@ -193,7 +193,7 @@ LLJointStateBlender::~LLJointStateBlender()
 //-----------------------------------------------------------------------------
 // addJointState()
 //-----------------------------------------------------------------------------
-bool LLJointStateBlender::addJointState(const LLPointer<LLJointState>& joint_state, S32 priority, bool additive_blend)
+bool LLJointStateBlender::addJointState(LLJointState* joint_state, S32 priority, bool additive_blend)
 {
     llassert(joint_state);
 
@@ -203,7 +203,7 @@ bool LLJointStateBlender::addJointState(const LLPointer<LLJointState>& joint_sta
 
     for(S32 i = 0; i < JSB_NUM_JOINT_STATES; i++)
     {
-        if (mJointStates[i].isNull())
+        if (!mJointStates[i])
         {
             mJointStates[i] = joint_state;
             mPriorities[i] = priority;
@@ -240,7 +240,7 @@ void LLJointStateBlender::blendJointStates(bool apply_now)
     // we need at least one joint to blend
     // if there is one, it will be in slot zero according to insertion logic
     // instead of resetting joint state to default, just leave it unchanged from last frame
-    if (mJointStates[0].isNull())
+    if (!mJointStates[0])
     {
         return;
     }
@@ -269,7 +269,7 @@ void LLJointStateBlender::blendJointStates(bool apply_now)
     sum_weights[SCALE_WEIGHT] = 0.f;
 
     for(S32 joint_state_index = 0;
-        joint_state_index < JSB_NUM_JOINT_STATES && mJointStates[joint_state_index].notNull();
+        joint_state_index < JSB_NUM_JOINT_STATES && mJointStates[joint_state_index];
         joint_state_index++)
     {
         LLJointState* jsp = mJointStates[joint_state_index];
@@ -516,6 +516,8 @@ void LLPoseBlender::blendAndApply()
     {
         LLJointStateBlender* jsbp = *iter++;
         jsbp->blendJointStates();
+        // <Vulkanstorm/> multi-core C6 (H6): the slots are plain pointers and must not outlive the update
+        llassert(jsbp->isEmpty());
     }
 
     // we're done now so there are no more active blenders for this frame
@@ -550,6 +552,25 @@ void LLPoseBlender::interpolate(F32 u)
         LLJointStateBlender* jsbp = *iter;
         jsbp->interpolate(u);
     }
+}
+
+//-----------------------------------------------------------------------------
+// isEmpty()
+//-----------------------------------------------------------------------------
+bool LLPoseBlender::isEmpty() const
+{
+    if (!mActiveBlenders.empty())
+    {
+        return false;
+    }
+    for (const blender_map_t::value_type& blender_pair : mJointStateBlenderPool)
+    {
+        if (!blender_pair.second->isEmpty())
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 //-----------------------------------------------------------------------------

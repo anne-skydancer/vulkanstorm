@@ -172,6 +172,19 @@ void LLMotionController::incMotionCounts(S32& num_motions, S32& num_loading_moti
 //-----------------------------------------------------------------------------
 void LLMotionController::deleteAllMotions()
 {
+    // <Vulkanstorm> multi-core C6 (H6): the blender's pointers do not keep joint states alive; motions recorded for a
+    // deferred deletion are no longer in the lists below
+    mPoseBlender.clearBlenders();
+    for (DeferredEffect& effect : mDeferredEffects)
+    {
+        if (effect.mKind == DeferredEffect::DELETE_MOTION)
+        {
+            delete effect.mMotion;
+        }
+    }
+    mDeferredEffects.clear();
+    mDeferEffects = false;
+    // </Vulkanstorm>
     mLoadingMotions.clear();
     mLoadedMotions.clear();
     mActiveMotions.clear();
@@ -337,9 +350,97 @@ void LLMotionController::removeMotionInstance(LLMotion* motionp)
         mLoadingMotions.erase(motionp);
         mLoadedMotions.erase(motionp);
         mActiveMotions.remove(motionp);
+        // <Vulkanstorm> multi-core C6
+        if (mTimeStep != 0.f)
+        {
+            // the time-step quantum keeps joint states in the blender between updates (blendAndCache), by plain pointer (H6)
+            mPoseBlender.clearBlenders();
+        }
+        if (mDeferEffects)
+        {
+            // a frame job deletes nothing: applyDeferredEffects() does, on the owner's thread
+            mDeferredEffects.push_back({ DeferredEffect::DELETE_MOTION, motionp, LLUUID::null });
+            return;
+        }
+        // </Vulkanstorm>
         delete motionp;
     }
 }
+
+// <Vulkanstorm> multi-core C6
+void LLMotionController::requestStop(LLMotion* motion)
+{
+    if (mDeferEffects)
+    {
+        mDeferredEffects.push_back({ DeferredEffect::STOP_REQUEST, motion, LLUUID::null });
+    }
+    else
+    {
+        mCharacter->requestStopMotion(motion);
+    }
+}
+
+void LLMotionController::deferEmoteStart(const LLUUID& emote_id)
+{
+    mDeferredEffects.push_back({ DeferredEffect::EMOTE_START, nullptr, emote_id });
+}
+
+void LLMotionController::beginDeferredEffects()
+{
+    llassert(mDeferredEffects.empty());
+    mDeferEffects = true;
+}
+
+void LLMotionController::applyDeferredEffects()
+{
+    mDeferEffects = false;
+    if (mDeferredEffects.empty())
+    {
+        return;
+    }
+    // an effect may record nothing new (the deferral is over), but keep the list out of reach of whatever it calls
+    std::vector<DeferredEffect> effects;
+    effects.swap(mDeferredEffects);
+    for (const DeferredEffect& effect : effects)
+    {
+        switch (effect.mKind)
+        {
+        case DeferredEffect::STOP_REQUEST:
+            mCharacter->requestStopMotion(effect.mMotion);
+            break;
+        case DeferredEffect::EMOTE_START:
+            // as LLKeyframeMotion::onActivate: not when already active
+            if (!mCharacter->isMotionActive(effect.mID))
+            {
+                mCharacter->startMotion(effect.mID);
+            }
+            break;
+        case DeferredEffect::DELETE_MOTION:
+            delete effect.mMotion;
+            break;
+        }
+    }
+    effects.clear();
+    llassert(mDeferredEffects.empty());
+    effects.swap(mDeferredEffects); // keep the capacity for the next frame
+}
+
+bool LLMotionController::canUpdateInJob() const
+{
+    if (mTimeStep != 0.f)
+    {
+        return false;
+    }
+    for (const LLMotion* motionp : mActiveMotions)
+    {
+        if (motionp && !motionp->canUpdateInJob())
+        {
+            return false;
+        }
+    }
+    return true;
+}
+// </Vulkanstorm>
 
 //-----------------------------------------------------------------------------
 // createMotion()
@@ -530,7 +631,7 @@ void LLMotionController::updateIdleMotion(LLMotion* motionp)
         // this will only be called when an animation stops itself (runs out of time)
         if (mLastTime <= motionp->mSendStopTimestamp)
         {
-            mCharacter->requestStopMotion( motionp );
+            requestStop( motionp ); // <Vulkanstorm/> multi-core C6: mCharacter->requestStopMotion, deferred inside a frame job
             stopMotionInstance(motionp, false);
         }
     }
@@ -632,7 +733,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
                 // this will only be called when an animation stops itself (runs out of time)
                 if (mLastTime <= motionp->mSendStopTimestamp)
                 {
-                    mCharacter->requestStopMotion( motionp );
+                    requestStop( motionp ); // <Vulkanstorm/> multi-core C6
                     stopMotionInstance(motionp, false);
                 }
             }
@@ -713,7 +814,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
                 // this will only be called when an animation stops itself (runs out of time)
                 if (mLastTime <= motionp->mSendStopTimestamp)
                 {
-                    mCharacter->requestStopMotion( motionp );
+                    requestStop( motionp ); // <Vulkanstorm/> multi-core C6
                     stopMotionInstance(motionp, false);
                 }
             }
@@ -759,7 +860,7 @@ void LLMotionController::updateMotionsByType(LLMotion::LLMotionBlendType anim_ty
                 // animation has stopped itself due to internal logic
                 // propagate this to the network
                 // as not all viewers are guaranteed to have access to the same logic
-                mCharacter->requestStopMotion( motionp );
+                requestStop( motionp ); // <Vulkanstorm/> multi-core C6
                 stopMotionInstance(motionp, false);
             }
 
@@ -823,6 +924,16 @@ void LLMotionController::updateLoadingMotions()
 //-----------------------------------------------------------------------------
 void LLMotionController::updateMotions(bool force_update)
 {
+    // <Vulkanstorm> multi-core C6: in two steps (llmotioncontroller.h)
+    if (updateMotionsBegin(force_update))
+    {
+        updateMotionsCore(force_update);
+    }
+}
+
+bool LLMotionController::updateMotionsBegin(bool force_update)
+{
+    // </Vulkanstorm>
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     // SL-763: "Distant animated objects run at super fast speed"
     // The use_quantum optimization or possibly the associated code in setTimeStamp()
@@ -864,7 +975,7 @@ void LLMotionController::updateMotions(bool force_update)
 
                 updateLoadingMotions();
 
-                return;
+                return false; // <Vulkanstorm/> the update is complete
             }
 
             // is calculating a new keyframe pose, make sure the last one gets applied
@@ -882,6 +993,16 @@ void LLMotionController::updateMotions(bool force_update)
     }
 
     updateLoadingMotions();
+
+    // <Vulkanstorm> multi-core C6: the second step starts here
+    return true;
+}
+
+void LLMotionController::updateMotionsCore(bool force_update)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    const bool use_quantum = (mTimeStep != 0.f);
+    // </Vulkanstorm>
 
     resetJointSignatures();
 
@@ -919,12 +1040,27 @@ void LLMotionController::updateMotions(bool force_update)
 //-----------------------------------------------------------------------------
 void LLMotionController::updateMotionsMinimal()
 {
+    // <Vulkanstorm> multi-core C6: in two steps (llmotioncontroller.h)
+    updateMotionsMinimalBegin();
+    updateMotionsMinimalCore();
+}
+
+void LLMotionController::updateMotionsMinimalBegin()
+{
+    // </Vulkanstorm>
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     // Always update mPrevTimerElapsed
     mPrevTimerElapsed = mTimer.getElapsedTimeF32();
 
     purgeExcessMotions();
     updateLoadingMotions();
+    // <Vulkanstorm> multi-core C6: the second step starts here
+}
+
+void LLMotionController::updateMotionsMinimalCore()
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    // </Vulkanstorm>
     resetJointSignatures();
 
     deactivateStoppedMotions();

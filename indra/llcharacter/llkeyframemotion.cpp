@@ -629,7 +629,7 @@ bool LLKeyframeMotion::setupPose()
     // add all valid joint states to the pose
     for (U32 jm=0; jm<mJointMotionList->getNumJointMotions(); jm++)
     {
-        LLPointer<LLJointState> joint_state = getJointState(jm);
+        const LLPointer<LLJointState>& joint_state = getJointState(jm); // <Vulkanstorm/> no reference count for the lookup
         if ( joint_state->getJoint() )
         {
             addJointState( joint_state );
@@ -668,8 +668,16 @@ bool LLKeyframeMotion::onActivate()
     // If the keyframe anim has an associated emote, trigger it.
     if (mJointMotionList->mEmoteID.notNull())
     {
+        // <Vulkanstorm> multi-core C6: starting a motion creates and initialises it (the registry, the asset system, the
+        // shared keyframe cache). While the controller defers effects (its update runs as a frame job) the start is
+        // recorded and made after the batch. Motions activate in the serial step today, so this is the guard.
+        if (mCharacter->getMotionController().isDeferringEffects())
+        {
+            mCharacter->getMotionController().deferEmoteStart(mJointMotionList->mEmoteID);
+        }
+        // </Vulkanstorm>
         // don't start emote if already active to avoid recursion
-        if (!mCharacter->isMotionActive(mJointMotionList->mEmoteID))
+        else if (!mCharacter->isMotionActive(mJointMotionList->mEmoteID))
         {
             mCharacter->startMotion(mJointMotionList->mEmoteID);
         }
@@ -1215,7 +1223,8 @@ void LLKeyframeMotion::applyConstraint(JointConstraint* constraint, F32 time, U8
     else if (getJointState(shared_data->mJointStateIndices[0])->getUsage() & LLJointState::POS)
     {
         LLVector3 delta = source_to_target * weight;
-        LLPointer<LLJointState> current_joint_state = getJointState(shared_data->mJointStateIndices[0]);
+        // <Vulkanstorm/> multi-core C6: a plain pointer, this runs inside frame jobs (no reference counts there)
+        LLJointState* current_joint_state = getJointState(shared_data->mJointStateIndices[0]).get();
         LLQuaternion parent_rot = current_joint_state->getJoint()->getParent()->getWorldRotation();
         delta = delta * ~parent_rot;
         current_joint_state->setPosition(current_joint_state->getJoint()->getPosition() + delta);

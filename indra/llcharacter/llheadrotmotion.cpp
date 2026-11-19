@@ -463,34 +463,36 @@ void LLEyeMotion::adjustEyeTarget(LLVector3* targetPos, LLJointState& left_eye_s
 bool LLEyeMotion::onUpdate(F32 time, U8* joint_mask)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    // <Vulkanstorm/> multi-core C6 (D-C): the random numbers below come from the character's own stream
+    // (LLCharacter::motionRandom), not from the thread's (ll_frand), so a frame job draws what the main thread would
     //calculate jitter
     if (mEyeJitterTimer.getElapsedTimeF32() > mEyeJitterTime)
     {
-        mEyeJitterTime = EYE_JITTER_MIN_TIME + ll_frand(EYE_JITTER_MAX_TIME - EYE_JITTER_MIN_TIME);
-        mEyeJitterYaw = (ll_frand(2.f) - 1.f) * EYE_JITTER_MAX_YAW;
-        mEyeJitterPitch = (ll_frand(2.f) - 1.f) * EYE_JITTER_MAX_PITCH;
+        mEyeJitterTime = EYE_JITTER_MIN_TIME + mCharacter->motionRandom(EYE_JITTER_MAX_TIME - EYE_JITTER_MIN_TIME);
+        mEyeJitterYaw = (mCharacter->motionRandom(2.f) - 1.f) * EYE_JITTER_MAX_YAW;
+        mEyeJitterPitch = (mCharacter->motionRandom(2.f) - 1.f) * EYE_JITTER_MAX_PITCH;
         // make sure lookaway time count gets updated, because we're resetting the timer
         mEyeLookAwayTime -= llmax(0.f, mEyeJitterTimer.getElapsedTimeF32());
         mEyeJitterTimer.reset();
     }
     else if (mEyeJitterTimer.getElapsedTimeF32() > mEyeLookAwayTime)
     {
-        if (ll_frand() > 0.1f)
+        if (mCharacter->motionRandom() > 0.1f)
         {
             // blink while moving eyes some percentage of the time
             mEyeBlinkTime = mEyeBlinkTimer.getElapsedTimeF32();
         }
         if (mEyeLookAwayYaw == 0.f && mEyeLookAwayPitch == 0.f)
         {
-            mEyeLookAwayYaw = (ll_frand(2.f) - 1.f) * EYE_LOOK_AWAY_MAX_YAW;
-            mEyeLookAwayPitch = (ll_frand(2.f) - 1.f) * EYE_LOOK_AWAY_MAX_PITCH;
-            mEyeLookAwayTime = EYE_LOOK_BACK_MIN_TIME + ll_frand(EYE_LOOK_BACK_MAX_TIME - EYE_LOOK_BACK_MIN_TIME);
+            mEyeLookAwayYaw = (mCharacter->motionRandom(2.f) - 1.f) * EYE_LOOK_AWAY_MAX_YAW;
+            mEyeLookAwayPitch = (mCharacter->motionRandom(2.f) - 1.f) * EYE_LOOK_AWAY_MAX_PITCH;
+            mEyeLookAwayTime = EYE_LOOK_BACK_MIN_TIME + mCharacter->motionRandom(EYE_LOOK_BACK_MAX_TIME - EYE_LOOK_BACK_MIN_TIME);
         }
         else
         {
             mEyeLookAwayYaw = 0.f;
             mEyeLookAwayPitch = 0.f;
-            mEyeLookAwayTime = EYE_LOOK_AWAY_MIN_TIME + ll_frand(EYE_LOOK_AWAY_MAX_TIME - EYE_LOOK_AWAY_MIN_TIME);
+            mEyeLookAwayTime = EYE_LOOK_AWAY_MIN_TIME + mCharacter->motionRandom(EYE_LOOK_AWAY_MAX_TIME - EYE_LOOK_AWAY_MIN_TIME);
         }
     }
 
@@ -529,7 +531,7 @@ bool LLEyeMotion::onUpdate(F32 time, U8* joint_mask)
             if (rightEyeBlinkMorph == 0.f)
             {
                 mEyesClosed = false;
-                mEyeBlinkTime = EYE_BLINK_MIN_TIME + ll_frand(EYE_BLINK_MAX_TIME - EYE_BLINK_MIN_TIME);
+                mEyeBlinkTime = EYE_BLINK_MIN_TIME + mCharacter->motionRandom(EYE_BLINK_MAX_TIME - EYE_BLINK_MIN_TIME);
                 mEyeBlinkTimer.reset();
             }
         }
