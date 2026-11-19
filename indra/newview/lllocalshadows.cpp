@@ -205,6 +205,7 @@ void LLLocalShadows::pinCasters(LLCullResult& result, llprojectorpool::PinBook& 
     {
         return;
     }
+    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("local shadows pinCasters"); // <Vulkanstorm> multicore stage 1
     auto pin_drawable = [&](LLDrawable* drawable) {
         LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
         if (!object || object->isDead() || drawable == skip)
