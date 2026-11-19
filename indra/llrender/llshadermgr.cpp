@@ -34,6 +34,7 @@
 #include "llsdserialize.h"
 #include "hbxxh.h"
 #include "llgeneratedshader.h"
+#include <boost/json.hpp>
 
 #if LL_DARWIN
 #include "OpenGL/OpenGL.h"
@@ -919,6 +920,82 @@ bool LLShaderMgr::readGeneratedShaderText(const std::string& filename, std::stri
         return false;
     }
     return true;
+}
+
+const LLGeneratedShader::StageInterface* LLShaderMgr::getGeneratedInterface(const std::string& filename)
+{
+    // keyed by the stage file's name under generated/; built once from programs.json (an immutable map, read by the
+    // render thread and by any worker that creates a shader, so it is built under a magic-static guard)
+    static const std::map<std::string, LLGeneratedShader::StageInterface> sInterfaces = []()
+    {
+        std::map<std::string, LLGeneratedShader::StageInterface> out;
+        const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "generated", "programs.json");
+        std::string text;
+        if (!LLFile::isfile(path))
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader manifest not found: " << path << LL_ENDL;
+            return out;
+        }
+        LLFILE* file = LLFile::fopen(path, "rb");
+        if (!file)
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader manifest could not be opened: " << path << LL_ENDL;
+            return out;
+        }
+        char buffer[1 << 16];
+        size_t got;
+        while ((got = fread(buffer, 1, sizeof(buffer), file)) > 0)
+        {
+            text.append(buffer, got);
+        }
+        fclose(file);
+        boost::system::error_code ec;
+        boost::json::value root = boost::json::parse(text, ec);
+        if (ec || !root.is_object() || !root.as_object().if_contains("programs") || !root.at("programs").is_array())
+        {
+            LL_WARNS("ShaderLoading") << "Generated shader manifest is not valid JSON: " << path << LL_ENDL;
+            return out;
+        }
+        for (const boost::json::value& program : root.at("programs").as_array())
+        {
+            for (const auto& stage : program.at("stages").as_object())
+            {
+                const boost::json::object& info = stage.value().as_object();
+                const boost::json::object& iface = info.at("interface").as_object();
+                LLGeneratedShader::StageInterface si;
+                for (const boost::json::value& v : iface.at("inputs").as_array())
+                {
+                    const boost::json::object& o = v.as_object();
+                    si.inputs.push_back({ std::string(o.at("name").as_string()), (int) o.at("location").to_number<int64_t>() });
+                }
+                for (const boost::json::value& v : iface.at("uniforms").as_array())
+                {
+                    const boost::json::object& o = v.as_object();
+                    si.uniforms.push_back({ std::string(o.at("name").as_string()), (unsigned) o.at("offset").to_number<int64_t>(),
+                                            (unsigned) o.at("size").to_number<int64_t>() });
+                }
+                for (const boost::json::value& v : iface.at("textures").as_array())
+                {
+                    const boost::json::object& o = v.as_object();
+                    si.textures.push_back({ std::string(o.at("name").as_string()), (int) o.at("binding").to_number<int64_t>() });
+                }
+                out[std::string(info.at("file").as_string())] = std::move(si);
+            }
+        }
+        return out;
+    }();
+
+    if (!LLGeneratedShader::isGeneratedFile(filename))
+    {
+        return nullptr;
+    }
+    const auto it = sInterfaces.find(filename.substr(LLGeneratedShader::kDirectory.size()));
+    if (it == sInterfaces.end())
+    {
+        LL_WARNS("ShaderLoading") << "Generated shader " << filename << " is not in the manifest" << LL_ENDL;
+        return nullptr;
+    }
+    return &it->second;
 }
 
 GLuint LLShaderMgr::loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines)

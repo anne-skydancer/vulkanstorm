@@ -200,6 +200,30 @@ public:
     void attachObjects(GLuint* objects = NULL, S32 count = 0);
     bool mapAttributes();
     bool mapUniforms();
+    // <Vulkanstorm> generated programs (see mGenerated): the interface from the manifest
+    bool mapGeneratedAttributes();
+    bool mapGeneratedUniforms();
+    void blockPut(GLint offset, const void* src, U32 bytes);
+    void blockPutArray(GLint offset, const void* src, U32 element_bytes, U32 count);
+    void blockPutMatrix(GLint offset, U32 count, GLboolean transpose, const GLfloat* v, U32 cols, U32 rows);
+    void slUniform1i(GLint location, GLint x);
+    void slUniform1f(GLint location, GLfloat x);
+    void slUniform2f(GLint location, GLfloat x, GLfloat y);
+    void slUniform3f(GLint location, GLfloat x, GLfloat y, GLfloat z);
+    void slUniform4f(GLint location, GLfloat x, GLfloat y, GLfloat z, GLfloat w);
+    void slUniform1iv(GLint location, U32 count, const GLint* v);
+    void slUniform4iv(GLint location, U32 count, const GLint* v);
+    void slUniform1fv(GLint location, U32 count, const GLfloat* v);
+    void slUniform2fv(GLint location, U32 count, const GLfloat* v);
+    void slUniform3fv(GLint location, U32 count, const GLfloat* v);
+    void slUniform4fv(GLint location, U32 count, const GLfloat* v);
+    void slUniform4uiv(GLint location, U32 count, const GLuint* v);
+    void slUniform2i(GLint location, GLint x, GLint y);
+    void slUniformMatrix2fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v);
+    void slUniformMatrix3fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v);
+    void slUniformMatrix3x4fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v);
+    void slUniformMatrix4fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v);
+    // </Vulkanstorm>
     void mapUniform(GLint index);
     void uniform1i(U32 index, GLint i);
     void uniform1f(U32 index, GLfloat v);
@@ -326,6 +350,29 @@ public:
     // </Vulkanstorm>
     LLUUID mShaderHash;
     bool mUsingBinaryProgram = false;
+
+    // <Vulkanstorm> A generated (Slang) program takes its uniforms through one std140 uniform block, not loose
+    // uniforms (owner decision D4, doc/slang.md). The block layout, the attribute slots and the sampler units come
+    // from the manifest (the generator's reflection). A setter writes the member into mBlockData (a CPU copy of the
+    // block, bytes at the member's offset) and marks it dirty; the one upload per draw is flushBlock(), called by the
+    // draw calls. mUniform and mUniformMap hold the member's byte offset where a loose program holds its location.
+    bool mGenerated = false;
+    GLuint mBlockBuffer = 0;
+    GLuint mBlockBinding = 0;
+    std::vector<U8> mBlockData;
+    bool mBlockDirty = false;
+    // the flush every draw call makes: upload the bound generated program's block when a setter changed it
+    static void flushBlock()
+    {
+        LLGLSLShader* shader = sCurBoundShaderPtr;
+        if (shader && shader->mBlockDirty)
+        {
+            shader->uploadBlock();
+        }
+    }
+    void uploadBlock();
+    static GLuint sBlockBound[16]; // the buffer bound at each uniform block binding point
+    // </Vulkanstorm>
 
     //statistics for profiling shader performance
     bool mProfilePending = false;

@@ -7,8 +7,7 @@ study is in `reports/slang-shaders-2026-11-18/`). Slang is a **build tool**: the
 the OpenGL viewer compiles. No Slang compiler or library is in the viewer or the installers. The same sources later
 compile to SPIR-V for the Vulkan line.
 
-This page describes the groundwork (stage S1). No program is converted yet: `indra/newview/slang/program_list.json` lists
-none and `app_settings/shaders/generated/` holds only an empty manifest.
+This page describes the groundwork (stage S1) and the pilot (S2, the interface family and the binding model).
 
 ## Decisions in force
 
@@ -82,21 +81,41 @@ hand-written GLSL. A stage that does not compile fails the program with the driv
 and hand-written stages is refused. The format is `LLGeneratedShader::assemble` and, for the checks, `assemble_source()` in
 `slang_check.py`; both are tested against one literal.
 
-Not done yet (pilot, S2), all consequences of the binding model (D4); until S2 no generated program is registered in
-`llviewershadermgr.cpp`:
+## The binding model on the C++ side (pilot S2, D4)
 
-- **The program's uniform block.** Binding it from reflection and the per-draw CPU cost of it (measured first). The block is
-  pinned at binding 4 (`slangc -fvk-bind-globals 4 0`), above the viewer's own UBO bindings 0 to 3
-  (`LLGLSLShader::UniformBlock`); `slang_check.py interface` fails a block below that. S2 reads the binding from the manifest.
-- **Vertex attributes.** `mapAttributes()` binds and reads attributes by the reserved names (`position`, `texcoord0`, ...),
-  but slangc renames the inputs (`v_position_0`), so a generated vertex stage would get an empty attribute mask. S2 builds
-  `mAttribute` and `mAttributeMask` from the manifest's vertex `inputs` (location is the reserved slot) and does not use
-  `glGetAttribLocation` for generated programs. CI already fails a vertex input whose name and `[[vk::location]]` differ from
-  the slot in `mReservedAttribs`.
+A generated program is bound the way slangc writes it; nothing is restored to loose uniforms.
+
+- **Uniforms are one std140 block**, `block_GlobalParams_0`, shared by both stages and pinned at binding 4
+  (`slangc -fvk-bind-globals 4 0`), above the viewer's own UBO bindings 0 to 3 (`LLGLSLShader::UniformBlock`); `slang_check.py
+  interface` fails a block below that. After the link `LLGLSLShader::mapGeneratedUniforms()` reads the block's size and binding
+  from the driver and the members' byte offsets from the manifest, makes one `GL_DYNAMIC_DRAW` buffer per program and a CPU copy
+  of it (`mBlockData`). `mUniform` and `mUniformMap` hold the **member's byte offset** where a loose program holds its location,
+  so every existing `uniform*()` call keeps working: the setters end in `slUniform*()`, which calls `glUniform*` for a hand-written
+  program and writes the block copy (compared with `memcmp`, so an unchanged value stays clean) for a generated one. std140 rules
+  are applied there: an array of scalars or vectors has a 16 byte stride, a matrix is its columns on 16 byte boundaries.
+- **One upload per draw.** `LLGLSLShader::flushBlock()` runs in the draw calls (`LLVertexBuffer::drawRange`, `drawRangeFast`,
+  `drawArrays`, the downscale draw in `llimagegl.cpp`): if the bound program's block is dirty it is sent with one
+  `glNamedBufferSubData`. `bind()` rebinds the program's buffer at the block binding when another generated program changed it.
+  Code that calls `glUniform*` itself with `getUniformLocation()` (the materials pool does) cannot be used on a generated program.
+- **Samplers have explicit units** (`layout(binding = N)`, N from 0, declaration order): `mTexture[]` takes the unit from the
+  manifest, `mUniform[]` stays -1, so `uniform1i(sampler, unit)` is a no-op and `bindTexture()` binds the declared unit. Declare
+  the sampler the viewer binds first (`diffuseMap`) first.
+- **Vertex attributes** come from the manifest's vertex `inputs` (location is the reserved slot): `mapGeneratedAttributes()` links
+  without `glBindAttribLocation` and builds `mAttribute` and `mAttributeMask` from them. A vertex input the stage does not read is
+  not declared, so the mask is the one `glGetAttribLocation` gave the hand-written program.
 - **Hooks.** A hook takes the program's define, else the viewer-wide `sGlobalDefines` value, else 0 (a debug log line names a
   hook with no value). The binary-cache key (`LLGLSLShader::hash()`) includes the text of each generated file.
 - **Windows and Linux output.** The generated tree was written on Windows; the CI drift check runs on Linux. Run the job
   once before the tree grows; if the two differ, fix the generator, not the check.
+
+## The pilot (S2): the interface family
+
+`registered by interfaceStages()` in `llviewershadermgr.cpp` (`VKS_SLANG_PILOT=0` selects the hand-written GLSL for the A/B; both
+the switch and the GLSL of the converted programs go when the pilot is accepted). Converted: ui, alphamask, benchmark, clip, copy
+(+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
+(+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
+Left hand-written for now: the programs with a skinned variant built from the same files (`gHighlightProgram`, `gDebugProgram`,
+`gSkinnedOcclusionProgram`, `normaldebug`, which has a geometry stage) wait for the skinning module (S3), and `pbrTerrainBake`.
 
 ## The position module
 

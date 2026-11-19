@@ -33,6 +33,22 @@ namespace LLGeneratedShader
         return filename.substr(0, kDirectory.size()) == kDirectory;
     }
 
+    // The program's one uniform block, as slangc names it (every generated stage that has global uniforms declares it).
+    inline constexpr std::string_view kBlockName = "block_GlobalParams_0";
+
+    // One generated stage's interface from the manifest (programs.json): what the C++ side needs to bind it without
+    // asking the driver by name. Attribute slots are the viewer's reserved attribute indices; a uniform is a member
+    // of the block at a byte offset; a texture is a sampler with its explicit texture unit.
+    struct StageInterface
+    {
+        struct Input { std::string name; int location = -1; };
+        struct Member { std::string name; unsigned offset = 0; unsigned size = 0; };
+        struct Texture { std::string name; int binding = -1; };
+        std::vector<Input> inputs;
+        std::vector<Member> uniforms;
+        std::vector<Texture> textures;
+    };
+
     // The hook names in the file's leading comment block: the line "// hooks: A B C" (none when it lists none).
     inline std::vector<std::string> hooksOf(std::string_view text)
     {

@@ -29,6 +29,7 @@
 
 #include "llgl.h"
 #include "llglslshader.h"
+#include "llgeneratedshader.h"
 
 // <Vulkanstorm> the Stochastic shadow method's own shadow util; when it is built (RenderShadowMethod 2)
 // every program that links a shadow util takes it instead of deferred/shadowUtil.glsl, with the
@@ -470,6 +471,9 @@ public:
     // the whole text of a generated stage (also read by LLGLSLShader::hash(), which keys the binary cache on it)
     static bool readGeneratedShaderText(const std::string& filename, std::string& text, std::string& path);
     GLuint loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines = NULL);
+    // the manifest's interface of a generated stage file ("generated/<id>.<vert|frag>.glsl"), or null (logged) when the
+    // manifest has none. The manifest (generated/programs.json) is read once, on the first call.
+    static const LLGeneratedShader::StageInterface* getGeneratedInterface(const std::string& filename);
     // </Vulkanstorm>
 
     // Implemented in the application to actually point to the shader directory.
