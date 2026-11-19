@@ -35,6 +35,7 @@
 #include "hbxxh.h"
 #include "llgeneratedshader.h"
 #include <boost/json.hpp>
+#include "llgeneratedmanifest.h"
 
 #if LL_DARWIN
 #include "OpenGL/OpenGL.h"
@@ -949,47 +950,11 @@ const LLGeneratedShader::StageInterface* LLShaderMgr::getGeneratedInterface(cons
             text.append(buffer, got);
         }
         fclose(file);
-        boost::system::error_code ec;
-        boost::json::value root = boost::json::parse(text, ec);
-        if (ec || !root.is_object() || !root.as_object().if_contains("programs") || !root.at("programs").is_array())
-        {
-            LL_WARNS("ShaderLoading") << "Generated shader manifest is not valid JSON: " << path << LL_ENDL;
-            return out;
-        }
-        try
-        {
-            for (const boost::json::value& program : root.at("programs").as_array())
-            {
-                for (const auto& stage : program.at("stages").as_object())
-                {
-                    const boost::json::object& info = stage.value().as_object();
-                    const boost::json::object& iface = info.at("interface").as_object();
-                    LLGeneratedShader::StageInterface si;
-                    for (const boost::json::value& v : iface.at("inputs").as_array())
-                    {
-                        const boost::json::object& o = v.as_object();
-                        si.inputs.push_back({ std::string(o.at("name").as_string()), (int) o.at("location").to_number<int64_t>() });
-                    }
-                    for (const boost::json::value& v : iface.at("uniforms").as_array())
-                    {
-                        const boost::json::object& o = v.as_object();
-                        si.uniforms.push_back({ std::string(o.at("name").as_string()), (unsigned) o.at("offset").to_number<int64_t>(),
-                                                (unsigned) o.at("size").to_number<int64_t>() });
-                    }
-                    for (const boost::json::value& v : iface.at("textures").as_array())
-                    {
-                        const boost::json::object& o = v.as_object();
-                        si.textures.push_back({ std::string(o.at("name").as_string()), (int) o.at("binding").to_number<int64_t>() });
-                    }
-                    out[std::string(info.at("file").as_string())] = std::move(si);
-                }
-            }
-        }
-        catch (const std::exception& e)
+        std::string error;
+        if (!LLGeneratedShader::parseManifest(text, out, error))
         {
             // a stale or hand-edited manifest: every generated program then fails to load cleanly
-            LL_WARNS("ShaderLoading") << "Generated shader manifest is malformed: " << e.what() << LL_ENDL;
-            out.clear();
+            LL_WARNS("ShaderLoading") << "Generated shader manifest is malformed (" << path << "): " << error << LL_ENDL;
         }
         return out;
     }();

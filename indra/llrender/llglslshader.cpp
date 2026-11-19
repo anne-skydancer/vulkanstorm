@@ -1534,48 +1534,15 @@ void LLGLSLShader::blockPut(GLint offset, const void* src, U32 bytes)
     }
 }
 
-// std140: every element of an array of scalars or vectors starts on a 16 byte boundary
+// std140 packing: LLGeneratedShader::putArray and putMatrix (llgeneratedshader.h, tested on their own)
 void LLGLSLShader::blockPutArray(GLint offset, const void* src, U32 element_bytes, U32 count)
 {
-    if (count <= 1)
-    {
-        blockPut(offset, src, element_bytes * count);
-        return;
-    }
-    const U8* bytes = static_cast<const U8*>(src);
-    for (U32 i = 0; i < count; ++i)
-    {
-        blockPut(offset + (GLint) (16 * i), bytes + (size_t) element_bytes * i, element_bytes);
-    }
+    LLGeneratedShader::putArray(offset, src, element_bytes, count, [this](GLint at, const void* data, U32 bytes) { blockPut(at, data, bytes); });
 }
 
-// std140, column_major block: a matrix is an array of its columns, each starting on a 16 byte boundary. `v` holds
-// `count` matrices of cols x rows values, in column order, or in row order when `transpose`.
 void LLGLSLShader::blockPutMatrix(GLint offset, U32 count, GLboolean transpose, const GLfloat* v, U32 cols, U32 rows)
 {
-    if (!transpose && count == 1 && cols == 4 && rows == 4)
-    {
-        blockPut(offset, v, 64); // the four columns are the 64 bytes
-        return;
-    }
-    if (!transpose && rows == 4)
-    {
-        blockPut(offset, v, count * cols * 16); // every column is a vec4 and the matrices follow each other: one copy (the rigged palette)
-        return;
-    }
-    for (U32 m = 0; m < count; ++m)
-    {
-        const GLfloat* mat = v + (size_t) m * cols * rows;
-        for (U32 c = 0; c < cols; ++c)
-        {
-            GLfloat column[4] = { 0.f, 0.f, 0.f, 0.f };
-            for (U32 r = 0; r < rows; ++r)
-            {
-                column[r] = transpose ? mat[r * cols + c] : mat[c * rows + r];
-            }
-            blockPut(offset + (GLint) (16 * (m * cols + c)), column, rows * 4);
-        }
-    }
+    LLGeneratedShader::putMatrix(offset, count, transpose != GL_FALSE, v, cols, rows, [this](GLint at, const void* data, U32 bytes) { blockPut(at, data, bytes); });
 }
 
 void LLGLSLShader::uploadBlock()

@@ -49,6 +49,56 @@ namespace LLGeneratedShader
         std::vector<Texture> textures;
     };
 
+    // std140 packing of the viewer's uniform setters into a generated program's block. `put(offset, src, bytes)` writes
+    // into the block copy (LLGLSLShader::blockPut). Free of GL, so the layout is tested on its own.
+    //
+    // An array of scalars or vectors starts every element on a 16 byte boundary (the elements of one-element arrays and
+    // single values are packed as they are).
+    template <class Put>
+    inline void putArray(int offset, const void* src, unsigned element_bytes, unsigned count, Put&& put)
+    {
+        if (count <= 1)
+        {
+            put(offset, src, element_bytes * count);
+            return;
+        }
+        const unsigned char* bytes = static_cast<const unsigned char*>(src);
+        for (unsigned i = 0; i < count; ++i)
+        {
+            put(offset + (int) (16 * i), bytes + (size_t) element_bytes * i, element_bytes);
+        }
+    }
+
+    // A matrix in a column_major std140 block is an array of its columns, each starting on a 16 byte boundary. `v` holds
+    // `count` matrices of cols x rows values, in column order, or in row order when `transpose` (glUniformMatrix's flag).
+    template <class Put>
+    inline void putMatrix(int offset, unsigned count, bool transpose, const float* v, unsigned cols, unsigned rows, Put&& put)
+    {
+        if (!transpose && count == 1 && cols == 4 && rows == 4)
+        {
+            put(offset, v, 64); // the four columns are the 64 bytes
+            return;
+        }
+        if (!transpose && rows == 4)
+        {
+            put(offset, v, count * cols * 16); // every column is a vec4 and the matrices follow each other: one copy (the rigged palette)
+            return;
+        }
+        for (unsigned m = 0; m < count; ++m)
+        {
+            const float* mat = v + (size_t) m * cols * rows;
+            for (unsigned c = 0; c < cols; ++c)
+            {
+                float column[4] = { 0.f, 0.f, 0.f, 0.f };
+                for (unsigned r = 0; r < rows; ++r)
+                {
+                    column[r] = transpose ? mat[r * cols + c] : mat[c * rows + r];
+                }
+                put(offset + (int) (16 * (m * cols + c)), column, rows * 4);
+            }
+        }
+    }
+
     // The hook names in the file's leading comment block: the line "// hooks: A B C" (none when it lists none).
     inline std::vector<std::string> hooksOf(std::string_view text)
     {

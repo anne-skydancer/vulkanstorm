@@ -5,6 +5,7 @@
   interface   the manifest's interface, from slangc's reflection: every fragment input matches a vertex output by
               location and type (names are informational); locations and texture bindings are unique; both stages declare
               the same uniform block members (parsed from the generated text), above the viewer's own UBO bindings;
+              a program's texture units are 0..n-1 in a row, and diffuseMap is unit 0;
               every vertex input sits at the slot and name of the viewer's reserved attribute table
   compile     every generated stage compiled and every program linked with glslang as GLSL 4.60 for OpenGL, with the
               loader's define block (see assemble_source) once with every hook 0 and once with every hook 1
@@ -129,6 +130,17 @@ def check_interface(generated):
                 if u['offset'] < end:
                     errors.append(f'{pid}.{stage}: uniform {u["name"]} overlaps the one before it')
                 end = u['offset'] + u['size']
+        # texture units: the program's samplers take units 0, 1, 2, ... in declaration order with no gap (a gap wastes a unit
+        # and LLGLSLShader::mActiveTextureChannels is the highest unit plus one), and diffuseMap, the sampler the viewer
+        # binds first, takes unit 0 (doc/slang.md: declare it first)
+        units = {}
+        for s, i in stages.items():
+            for t in i['interface']['textures']:
+                units[t['name']] = t['binding']
+        if sorted(units.values()) != list(range(len(units))):
+            errors.append(f'{pid}: texture units {sorted(units.values())} are not 0..{len(units) - 1} in a row')
+        if 'diffuseMap' in units and units['diffuseMap'] != 0:
+            errors.append(f'{pid}: diffuseMap is on texture unit {units["diffuseMap"]}, declare it first (unit 0)')
         if len(stages) > 1:
             present = {s: b for s, b in blocks.items() if b}
             if len({json.dumps(b) for b in present.values()}) > 1:

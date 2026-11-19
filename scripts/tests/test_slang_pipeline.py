@@ -255,6 +255,29 @@ class GeneratorTest(unittest.TestCase):
             (copy / 'programs.json').write_text(json.dumps(mf), encoding='utf-8')
             self.assertTrue(any('reserved table' in e for e in check.check_interface(copy)))
 
+    def test_texture_unit_order_is_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / 'generated'
+            shutil.copytree(self.out, copy)
+            self.assertEqual(check.check_interface(copy), [])
+            mf = json.loads((copy / 'programs.json').read_text(encoding='utf-8'))
+            for prog in mf['programs']:
+                for info in prog['stages'].values():
+                    for tex in info['interface']['textures']:
+                        tex['binding'] += 1   # a gap at unit 0, and diffuseMap off unit 0
+            (copy / 'programs.json').write_text(json.dumps(mf), encoding='utf-8')
+            errors = check.check_interface(copy)
+            self.assertTrue(any('in a row' in e for e in errors), errors)
+            self.assertTrue(any('diffuseMap' in e for e in errors), errors)
+
+    def test_block_name_is_the_one_the_loader_asks_for(self):
+        header = (ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
+        name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)
+        for path in self.out.glob('*.glsl'):
+            block = check.block_of(path.read_text(encoding='utf-8'))
+            if block:
+                self.assertEqual(block[1], name, path.name)
+
     def test_generated_block_clears_the_viewers_own_bindings(self):
         self.assertEqual(common.GLOBALS_BINDING, common.reserved_block_count())
         vert = (self.out / 'tint__DOUBLE0.vert.glsl').read_text(encoding='utf-8')
@@ -364,6 +387,22 @@ class CommittedTreeTest(unittest.TestCase):
         self.assertTrue(stages)
         for path in stages:
             self.assertEqual('\ninvariant gl_Position;\n' in path.read_text(encoding='utf-8'), want, path.name)
+
+    def test_block_name_and_manifest_keys_match_the_loader(self):
+        header = (ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
+        name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)
+        manifest = check.load_manifest(common.GENERATED)
+        for prog in manifest['programs']:
+            for stage, info in prog['stages'].items():
+                text = (common.GENERATED / info['file']).read_text(encoding='utf-8')
+                block = check.block_of(text)
+                if block:
+                    self.assertEqual(block[1], name, info['file'])
+                iface = info['interface']   # every key LLGeneratedShader::parseManifest reads with .at()
+                for key, fields in (('inputs', ('name', 'location')), ('uniforms', ('name', 'offset', 'size')), ('textures', ('name', 'binding'))):
+                    for entry in iface[key]:
+                        for field in fields:
+                            self.assertIn(field, entry, f'{info["file"]} {key}')
 
     def test_every_slang_source_carries_the_licence_line(self):
         for path in common.SLANG_SRC.rglob('*.slang'):

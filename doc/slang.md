@@ -160,13 +160,59 @@ Not converted, and why: `avatarV/F`, `simpleNoColorV` and `simpleF` call the for
 (windlight), which belong to the lighting and atmosphere families. `eyeballV/F` were never registered and are deleted.
 The block upload sends the dirty byte range, not the block, because the 110-matrix palette makes a rigged program's block 5.4 KB.
 
+## Quiet families (S3, second part): effects, post, G-buffer
+
+Converted: glow (post), glow extract (HAS_NOISE 0 and 1, RenderGlowNoise), vignette, snapshot frame, normal-map generation,
+BRDF LUT generation (the MIT notice of the original stays in the source), and the G-buffer programs that need nothing from the hot families:
+the deferred bump (static and rigged), impostor, tree and the avatar eyes. Each G-buffer program has a `HAS_EMISSIVE` axis
+(RenderEnableEmissiveBuffer): its output struct has a fourth target only then, so `emissiveId()` in `llviewershadermgr.cpp` picks
+`name__HAS_EMISSIVE0` or `1`. `gbuffer.slang` now carries `encodeNormal` (the packing of `globalF.glsl`) and the `HAS_ATMOS` flag.
+
+Not converted, and why:
+
+| Programs | Reason |
+|---|---|
+| forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar shader calls `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
+| every deferred world program that calls `calcAtmospherics` (fullbright, emissive, terrain, alpha) and `rlv` (`getPositionWithDepth`, `deferredUtil`) | atmosphere and `deferredUtil` are hot |
+| diffuse, diffuse alpha mask, non-indexed variants | the texture-index lookup (`diffuseLookup`, `passTextureIndex`) is composed at run time from the device's texture unit count; needs its own design (a hook or a permutation per count) |
+| `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
+| glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
+| environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
+| `normaldebug` | has a geometry stage |
+| SMAA, FXAA, CAS | third-party code, stays hand-written (planner) |
+
+The pilot's radianceGen, irradianceGen, copy-depth and alphamask conversions stay (the owner asked for the radiance filter A/B first);
+like every converted program they are regenerated at the switchover from the settled code.
+
+## The test gaps of the pilot, closed
+
+- **std140 packing** (`LLGeneratedShader::putArray` and `putMatrix` in `llgeneratedshader.h`, used by `LLGLSLShader::blockPutArray` and
+  `blockPutMatrix`): `tests/llgeneratedshader_test.cpp` checks the transposed mat4, mat3 (three columns of three floats, the fourth untouched),
+  mat2, the mat3x4 palette with and without transpose, an offset inside the block, and the 16 byte stride of float, vec3, vec4 and int arrays.
+- **The manifest parse** (`LLGeneratedShader::parseManifest` in `llgeneratedmanifest.h`, used by `LLShaderMgr::getGeneratedInterface`):
+  `tests/llgeneratedmanifest_test.cpp` runs it on small literals (broken JSON, a missing key, a stage without its interface) and on the committed
+  `programs.json` (members ordered and never overlapping, unique texture bindings and input locations). It runs in Check PR (`slang-shaders`).
+- **The manifest against the driver**: `ab_harness.py manifest` links every generated program and compares the block name and binding, each
+  member's byte offset (`GL_UNIFORM_OFFSET`), the member set, each sampler's unit and the vertex input locations with `programs.json`. The harness
+  self-test proves it catches a wrong offset, unit and input location. Needs a GPU, so it is run by hand with the A/B.
+- **Texture units**: `slang_check.py interface` fails a program whose units are not 0..n-1 in a row or whose `diffuseMap` is not unit 0.
+- The block name is the one in `kBlockName` (`test_slang_pipeline.py`, on the committed tree and on the generator's output).
+
+## Visual A/B of every converted program
+
+`python scripts/shaders/ab_harness.py programs [--only TEXT]` (`scripts/shaders/ab_cases.py`) draws each converted program with the
+hand-written GLSL and the generated one on a fixed grid mesh, from uniforms and textures filled by type and name, into float targets
+(up to four colour attachments and depth), and compares them. The G-buffer programs also run with the mirror clip on, and with the emissive target.
+`radiance --program radianceGen__PROBE_FILTER_SAMPLES4` runs the 4-sample hero filter. Results on the NVIDIA 621.14 driver are in the PR.
+
 ## CI
 
 `Check PR` job `slang-shaders` (Linux): fetch the pin, run `scripts/tests/test_slang_pipeline.py`, then
 `slang_gen.py --check --strict` (generated output drift) and `slang_check.py all` (manifest, interface from reflection,
 position gate, and every stage compiled and every program linked with glslang as GLSL 4.60 for OpenGL, once with every hook 0
 and once with every hook 1). glslang is not a driver; the visual A/B and the viewer's own shader load are the driver checks.
-The `ci-checks` action also runs the loader-format test and the tool tests that need no compiler.
+The `ci-checks` action also runs the loader-format test (with the std140 packing fixtures) and the tool tests that need no compiler; `slang-shaders` also
+builds and runs the manifest parse test.
 
 ## Visual A/B harness
 

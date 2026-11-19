@@ -14,6 +14,8 @@ radiance filter (class1/interface/radianceGen{V,F}.glsl).
   python scripts/shaders/ab_harness.py --list
   python scripts/shaders/ab_harness.py --selftest                  the harness proves itself (identity, detects a change)
   python scripts/shaders/ab_harness.py radiance                    reference against generated radianceGen
+  python scripts/shaders/ab_harness.py manifest                    programs.json against the driver (offsets, block, units, inputs)
+  python scripts/shaders/ab_harness.py programs [--only TEXT]      every other converted program (ab_cases.py)
 Exit codes: 0 pass, 1 fail, 2 candidate not generated yet (nothing compared).
 """
 import argparse
@@ -207,6 +209,8 @@ class GL:
                 n = len(vals)
                 if u['type'] == 0x8B5C:  # mat4
                     g('glUniformMatrix4fv', None, C.c_int, C.c_int, C.c_ubyte, C.c_void_p)(u['location'], 1, 0, data)
+                elif u['type'] == 0x8B5B:  # mat3
+                    g('glUniformMatrix3fv', None, C.c_int, C.c_int, C.c_ubyte, C.c_void_p)(u['location'], 1, 0, data)
                 elif is_int:
                     g({1: 'glUniform1iv', 2: 'glUniform2iv', 3: 'glUniform3iv', 4: 'glUniform4iv'}[n], None, C.c_int, C.c_int, C.c_void_p)(u['location'], 1, data)
                 else:
@@ -217,6 +221,10 @@ class GL:
                     for col in range(4):
                         at = u['offset'] + col * u['matrix_stride']
                         buf[at:at + 16] = data[col * 16:(col + 1) * 16]
+                elif u['type'] == 0x8B5B:  # a column-major mat3: 3 columns of 3 floats, matrix_stride apart
+                    for col in range(3):
+                        at = u['offset'] + col * u['matrix_stride']
+                        buf[at:at + 12] = data[col * 12:(col + 1) * 12]
                 else:
                     buf[u['offset']:u['offset'] + len(data)] = data
             done.add(key)
@@ -652,6 +660,29 @@ def radiance_candidate_for(gl, generated, program_id):
     return radiance_candidate(gl, generated, program_id)
 
 
+def selftest_manifest(gl):
+    """The manifest check against the driver catches a wrong offset, a wrong sampler unit and a wrong input location."""
+    import shutil
+    import tempfile
+    sys.modules.setdefault('ab_harness', sys.modules[__name__])
+    import ab_cases
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = Path(tmp) / 'generated'
+        shutil.copytree(common.GENERATED, copy)
+        if ab_cases.check_manifest_against_driver(gl, copy):
+            return False
+        mf = json.loads((copy / 'programs.json').read_text(encoding='utf-8'))
+        prog = next(p for p in mf['programs'] if p['id'] == 'twotexturecompare')
+        prog['stages']['vertex']['interface']['uniforms'][0]['offset'] += 16
+        prog['stages']['fragment']['interface']['textures'][0]['binding'] += 1
+        prog['stages']['vertex']['interface']['inputs'][1]['location'] += 5
+        (copy / 'programs.json').write_text(json.dumps(mf), encoding='utf-8')
+        errors = ab_cases.check_manifest_against_driver(gl, copy)
+        wanted = ('GL_UNIFORM_OFFSET', 'by the driver', 'vertex input locations')
+        print('manifest self-test: the wrong offset, unit and input are reported:', len(errors), 'problem(s)')
+        return all(any(w in e for e in errors) for w in wanted)
+
+
 def selftest(gl):
     """The harness proves itself: the reference against itself passes with zero differing values, and against a
     program with one changed constant it fails, so a real difference cannot slip through."""
@@ -667,7 +698,8 @@ def selftest(gl):
                                      size=8, mips=(2,)))
     unset_caught = lacking['unset_uniforms'] == ['probe_strength'] and bool(lacking['failed'])
     block_ok = selftest_block_path(gl) if common.slangc_path(common.read_pin()) else True
-    ok = (not same['failed'] and same['values_differing'] == 0 and same['nonblack_min'] > 0
+    manifest_ok = selftest_manifest(gl)
+    ok = (manifest_ok and not same['failed'] and same['values_differing'] == 0 and same['nonblack_min'] > 0
           and changed['failed'] and changed['values_differing'] > 0 and block_ok
           and not exact['failed'] and exact['values_differing'] == 0 and one_ulp_fails_exact and unset_caught)
     print(json.dumps({'identity': same, 'one_constant_changed': changed, 'exact_mode_identity': exact, 'one_ulp_fails_exact_passes_tolerance': one_ulp_fails_exact, 'unset_uniform_caught': unset_caught}, indent=1))
@@ -676,13 +708,14 @@ def selftest(gl):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('case', nargs='?', choices=['radiance', 'skin'])
+    ap.add_argument('case', nargs='?', choices=['radiance', 'skin', 'programs', 'manifest'])
     ap.add_argument('--list', action='store_true')
     ap.add_argument('--selftest', action='store_true')
     ap.add_argument('--generated', default=str(common.GENERATED))
     ap.add_argument('--program', default='radianceGen__PROBE_FILTER_SAMPLES32', help='generated program id of the candidate')
     ap.add_argument('--optional', nargs='*', default=[], help='uniform names the candidate may legitimately lack')
     ap.add_argument('--json', help='write the per-case results here')
+    ap.add_argument('--only', help='programs: run only the cases whose name contains this text')
     args = ap.parse_args()
     if args.list:
         print('radiance: class1/interface/radianceGen{V,F}.glsl against the generated program (tolerance mode)')
@@ -700,7 +733,9 @@ def main():
         if cand is None:
             print(f'candidate {args.program} is not generated yet; nothing compared')
             return 2
-        results = run_radiance(gl, radiance_reference(gl), cand, optional=('u_width', *args.optional))
+        samples = re.search(r'SAMPLES(\d+)$', args.program)  # the 4-sample hero filter is its own program
+        reference = radiance_reference(gl, {'PROBE_FILTER_SAMPLES': samples.group(1)} if samples else None)
+        results = run_radiance(gl, reference, cand, optional=('u_width', *args.optional))
         summary = summarize(results)
         print(json.dumps(summary, indent=1))
         if args.json:
@@ -709,6 +744,18 @@ def main():
             print('FAIL: the reference drew nothing in at least one case; the comparison proves nothing')
             return 1
         return 0 if not summary['failed'] else 1
+    if args.case == 'manifest':
+        sys.modules.setdefault('ab_harness', sys.modules[__name__])
+        import ab_cases
+        errors = ab_cases.check_manifest_against_driver(gl, args.generated)
+        for e in errors:
+            print('  ' + e)
+        print('manifest: ' + ('ok' if not errors else f'{len(errors)} problem(s)'))
+        return 1 if errors else 0
+    if args.case == 'programs':
+        sys.modules.setdefault('ab_harness', sys.modules[__name__])  # the cases import this module: one copy of its classes
+        import ab_cases
+        return ab_cases.run_programs(gl, args.generated, args.only, args.json)
     if args.case == 'skin':
         failed = False
         for rigged, program_id in ((True, 'bump__HAS_SKIN1'), (False, 'bump__HAS_SKIN0')):

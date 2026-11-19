@@ -81,7 +81,11 @@ jobs:
       - name: Install glslang
         run: |
           sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends glslang-tools
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends glslang-tools libboost-dev
+      - name: Manifest parse of the loader (programs.json, boost::json header-only)
+        run: |
+          g++ -std=c++20 -O1 -Wall -Wextra -Werror -I indra/llrender indra/llrender/tests/llgeneratedmanifest_test.cpp -o "$RUNNER_TEMP/generated-manifest-test"
+          "$RUNNER_TEMP/generated-manifest-test" indra/newview/app_settings/shaders/generated/programs.json
       - name: Fetch the pinned Slang (checksum and version checked)
         run: python3 scripts/shaders/slang_fetch.py
       - name: Slang pipeline tests (generator, checks, gate, drift)
