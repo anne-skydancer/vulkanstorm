@@ -79,6 +79,7 @@
 #include "llfloaterreg.h"
 #include "llvoavatarself.h"
 #include "llskinningutil.h"
+#include "lljointnumtable.h"
 
 #include "boost/iostreams/device/array.hpp"
 #include "boost/iostreams/stream.hpp"
@@ -2506,15 +2507,23 @@ EMeshProcessingResult LLMeshRepoThread::lodReceived(const LLVolumeParams& mesh_p
                     skin_info = iter->second;
                 }
             }
-            if (skin_info.notNull() && isAgentAvatarValid())
+            // <Vulkanstorm> never touches gAgentAvatarp from this thread (it can still be under construction on the
+            // main thread): the skin copy is initialised from the published joint number table. A copy that is not
+            // initialised yet is skipped, the main thread computes its rigging info on first use.
+            if (skin_info.notNull())
             {
-                for (S32 i = 0; i < num_faces; ++i)
+                // this thread's copy of the skin (see skinInfoReceived); a copy shared by two pool threads
+                // (two LODs of one mesh) is only read here, its numbers are set by the repo thread before it is stored
+                if (skin_info->mJointNumsInitialized)
                 {
-                    // NOTE: no need to lock gAgentAvatarp as the state being checked is not changed after initialization
-                    LLVolumeFace& face = volume->getVolumeFace(i);
-                    LLSkinningUtil::updateRiggingInfo(skin_info, gAgentAvatarp, face);
+                    for (S32 i = 0; i < num_faces; ++i)
+                    {
+                        LLVolumeFace& face = volume->getVolumeFace(i);
+                        LLSkinningUtil::updateRiggingInfo(skin_info, face);
+                    }
                 }
             }
+            // </Vulkanstorm>
 
             LoadedMesh mesh(volume, mesh_params, lod);
             {
@@ -2568,11 +2577,15 @@ bool LLMeshRepoThread::skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 dat
         LLPointer<LLMeshSkinInfo> info = nullptr;
         info = new LLMeshSkinInfo(mesh_id, skin);
 
-        if (isAgentAvatarValid() && gAgentAvatarp->mInitFlags != 0)
-        { // joint numbers are consistent inside LLVOAvatar and animations, but inconsistent inside meshes,
-            // generate a map of mesh joint numbers to LLVOAvatar joint numbers
-            LLSkinningUtil::initJointNums(info, gAgentAvatarp);
+        // <Vulkanstorm> joint numbers are consistent inside LLVOAvatar and animations, but inconsistent inside meshes,
+        // generate a map of mesh joint numbers to LLVOAvatar joint numbers. From the table the main thread publishes
+        // after the self avatar's joints are built; without it (not published yet, or a joint it does not know) the
+        // skin stays uninitialised and the main thread initialises it on first use. Never gAgentAvatarp from here.
+        if (const LLJointNumTable* joint_nums = LLSkinningUtil::jointNumTables().get())
+        {
+            LLSkinningUtil::initJointNumsFromTable(info, *joint_nums);
         }
+        // </Vulkanstorm>
 
         // copy the skin info for the background thread so we can use it
         // to calculate per-joint bounding boxes when volumes are loaded
