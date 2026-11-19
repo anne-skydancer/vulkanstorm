@@ -41,7 +41,7 @@ families converted with it (effects, post, G-buffer writers, skinning, the share
 | `scripts/shaders/slang_pin.json` | the pinned release: version, archive URL and SHA-256 per platform |
 | `scripts/shaders/slang_fetch.py` | fetches the pin into the tool cache (outside the tree), checks SHA-256 and `slangc -v` |
 | `scripts/shaders/slang_gen.py` | the generator; `--check` is the drift check |
-| `scripts/shaders/slang_check.py` | CI checks: manifest, interface, position gate, glslang compile and link |
+| `scripts/shaders/slang_check.py` | CI checks: manifest, interface, position gate, licence headers, glslang compile and link |
 | `scripts/shaders/ab_harness.py` | visual A/B harness |
 | `scripts/shaders/fixtures/` | a small program that exercises the pipeline in tests |
 | `indra/llrender/llgeneratedshader.h` | the loader's source format (header-only, tested on its own) |
@@ -233,8 +233,13 @@ programs (rigged and static) over four palettes and view angles, and compares th
 
 ## Licence
 
-Slang is Apache-2.0 WITH LLVM-exception, a build tool, not shipped (row in `doc/licensing.md`). Generated files carry the licence
-lines of their source. New files carry `SPDX-License-Identifier: GPL-3.0-or-later`.
+Slang is Apache-2.0 WITH LLVM-exception, a build tool, not shipped (row in `doc/licensing.md`). A `.slang` file converted from a Linden Lab or
+Firestorm GLSL shader keeps that shader's `$LicenseInfo` header (LGPL-2.1) unchanged, in comment syntax, with its `@file` line
+naming the GLSL file it comes from; a converted file whose original had only a third-party notice (the exo post shaders,
+Firestorm's snapshot frame) keeps that notice. New files (the shared position and G-buffer modules, the scripts, the fixture)
+carry `SPDX-License-Identifier: GPL-3.0-or-later` and the Vulkanstorm copyright line. The generator re-emits the source's header
+at the top of every generated file (never edit those by hand), and `slang_check.py licence` fails CI when any `.slang` source or
+generated file has neither a `$LicenseInfo` block nor an SPDX line.
 
 ## Not touched
 

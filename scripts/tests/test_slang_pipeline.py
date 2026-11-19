@@ -442,6 +442,16 @@ class CommittedTreeTest(unittest.TestCase):
             with self.subTest(path=str(path.relative_to(ROOT))):
                 head = path.read_text(encoding='utf-8')[:4000]
                 self.assertTrue('SPDX-License-Identifier' in head or 'LicenseInfo' in head)
+    def test_the_licence_check_accepts_the_tree_and_catches_a_missing_header(self):
+        self.assertEqual(check.check_licence(common.SLANG_SRC, common.GENERATED), [])
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            gen = Path(tmp) / 'gen'
+            src.mkdir()
+            gen.mkdir()
+            (src / 'a.slang').write_text('// SPDX-License-Identifier: GPL-3.0-or-later\nimport glsl;\n', encoding='utf-8')
+            (gen / 'a.frag.glsl').write_text('void main() {}\n', encoding='utf-8')
+            self.assertEqual(len(check.check_licence(src, gen)), 1)
 
 
 if __name__ == '__main__':

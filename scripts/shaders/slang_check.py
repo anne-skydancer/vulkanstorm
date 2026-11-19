@@ -320,16 +320,30 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
     return errors
 
 
+def check_licence(src_dir, generated):
+    """Every .slang source and every generated GLSL file carries a licence header: a Linden Lab or Firestorm
+    $LicenseInfo block (kept unchanged) or an SPDX-License-Identifier line, within the first 40 lines."""
+    errors = []
+    files = sorted(Path(src_dir).glob('*.slang')) + sorted(Path(generated).glob('*.glsl'))
+    if not files:
+        raise CheckError(f'no .slang or generated .glsl files under {src_dir} and {generated}')
+    for f in files:
+        head = ' '.join(f.read_text(encoding='utf-8').splitlines()[:40])
+        if 'SPDX-License-Identifier:' not in head and '$LicenseInfo' not in head:
+            errors.append(f'{f.name}: no licence header ($LicenseInfo block or SPDX-License-Identifier line)')
+    return errors
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('check', choices=['manifest', 'interface', 'compile', 'position', 'all'])
+    ap.add_argument('check', choices=['manifest', 'interface', 'compile', 'position', 'licence', 'all'])
     ap.add_argument('--generated', default=str(common.GENERATED))
     ap.add_argument('--src-dir', default=str(common.SLANG_SRC))
     ap.add_argument('--glslang')
     ap.add_argument('--glsl-root', default=str(common.LEGACY_SHADERS))
     ap.add_argument('--glsl-baseline', default=str(Path(__file__).resolve().with_name('glsl_position_baseline.txt')))
     args = ap.parse_args()
-    which = ['manifest', 'interface', 'position', 'compile'] if args.check == 'all' else [args.check]
+    which = ['manifest', 'interface', 'position', 'licence', 'compile'] if args.check == 'all' else [args.check]
     failed = False
     for name in which:
         try:
@@ -337,6 +351,8 @@ def main():
                 errs = check_manifest(args.generated)
             elif name == 'interface':
                 errs = check_interface(args.generated)
+            elif name == 'licence':
+                errs = check_licence(args.src_dir, args.generated)
             elif name == 'position':
                 errs = check_position(args.src_dir, args.generated, args.glsl_root, args.glsl_baseline)
             else:
