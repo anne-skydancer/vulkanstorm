@@ -7,7 +7,7 @@ pass's constant and the glTF blend shader; the light through one face, the tap a
 the same expressions (the reference is the depth lookup's); the lookup's samplers are arguments; an opaque-only lamp keeps the depth's
 value; every blend bind of the depth pass sets the flag before its draw and a rigged face keeps the depth rule; the caster pass is
 depth-tested against the pool's static depth with its own face rule and scissor; the caster programs exist only with the projector pool
-and have no rigged variant. The GPU gates are scripts/shadows/light_through_gate.py
+and have no rigged variant; the silhouette key carries a blended face's colour. The GPU gates are scripts/shadows/light_through_gate.py
 (the programs as the viewer links them, the caster pass, the lookup and the spot program bit for bit against the base, the layer's
 lookup against the CPU twin), the CPU twin's gates scripts/shadows/lamp_filter_twin.py --l3.
 
@@ -33,6 +33,8 @@ PIPELINE = ROOT / 'indra/newview/pipeline.cpp'
 MGR = ROOT / 'indra/newview/llviewershadermgr.cpp'
 POOL = ROOT / 'indra/newview/llprojectorshadows.cpp'
 LAYER = ROOT / 'indra/newview/lllightthroughgl.cpp'
+POOL_H = ROOT / 'indra/newview/llprojectorshadowpool.h'
+FEED = ROOT / 'indra/newview/llshadowdirtyfeed.cpp'
 
 
 def read(path):
@@ -257,6 +259,16 @@ class LightThroughTwin(unittest.TestCase):
             fail = mgr[mgr.index('if (!%s.createShader())' % prog):]
             fail = fail[:fail.index('}')]
             self.assertIn('llassert(false);', fail, prog)
+
+    def test_silhouette_key_carries_a_blended_faces_colour(self):
+        pool = read(POOL_H)
+        self.assertIn('uint8_t rgb[3] = { 255, 255, 255 };', pool)
+        self.assertIn('key = silhouetteKeyMix(mix(key, f.tint), f.rgb, sizeof(f.rgb));', pool)
+        feed = read(FEED)
+        self.assertIn('f.tint = LLPipeline::getPoolTypeFromTE(te, volume->getTEImage(i)) == LLDrawPool::POOL_ALPHA;', feed)
+        # the vertex colour as LLFace writes it: the face's tint, a glTF material's base colour over it
+        self.assertIn('LLColor4U rgb = te->getColor(); // the same conversions as LLFace\'s', feed)
+        self.assertIn('rgb = render_gltf->mBaseColor;', feed)
 
     def test_programs_only_with_the_pool_and_never_rigged(self):
         mgr = read(MGR)

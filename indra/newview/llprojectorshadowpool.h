@@ -1391,11 +1391,13 @@ inline bool rebuildDirties(uint32_t flags)
 }
 
 // A texture, material, bump, glow or colour change dirties a prim's tiles only when it changes what the prim's faces cut out of a depth
-// tile: its silhouette key (llshadowdirtyfeed.cpp: which faces are blended, alpha-masked or alpha-textured and, for each of them, its
-// alpha, texture, texture mapping and alpha mode; and which glTF faces are drawn from both sides). A face turned opaque closes a hole the
-// cached tile still has and an opaque face turned alpha cuts one: both change the key. Opaque-to-opaque texture swaps, animated textures,
-// fullbright, glow, shine, bump, an RGB-only tint, emissive, the PBR colour and the light's own colour do not (lamp shadows S2: a blinker
-// script that toggles them with its light every 0.1 s redraws no tile). `was_key` is what the feed last saw; the caller stores `now_key`
+// tile or let through it: its silhouette key (llshadowdirtyfeed.cpp: which faces are blended, alpha-masked or alpha-textured and, for each
+// of them, its alpha, texture, texture mapping and alpha mode, and the colour of one the blend pass draws; and which glTF faces are drawn
+// from both sides). A face turned opaque closes a hole the cached tile still has and an opaque face turned alpha cuts one: both change the
+// key. Opaque-to-opaque texture swaps, animated textures, fullbright, glow, shine, bump, emissive, the RGB of an opaque or alpha-masked
+// face and the light's own colour do not (lamp shadows S2: a blinker script that toggles them with its light every 0.1 s redraws no
+// tile). The RGB of a blended face does since lamp shadows L3: it colours the light the face lets through (a blinker that toggles it
+// redraws the tiles that see the face, one push a toggle). `was_key` is what the feed last saw; the caller stores `now_key`
 // after. `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
 // from Legacy) has an unknown key (one conservative push, after which it is known).
 inline bool texturedDirties(uint32_t was_key, uint32_t now_key, bool known)
@@ -1469,11 +1471,12 @@ inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
 }
 
 // The silhouette inputs of one face (llshadowdirtyfeed.cpp fills them from the face's texture entry, its texture and its materials): for
-// a blended, alpha-masked or alpha-textured face (`cutout`) what shapes the holes it cuts out of a depth tile, and for any face whether its
-// glTF material is drawn from both sides (the shadow pass culls back faces except for a double-sided material: lldrawpool.cpp, so the
-// flag decides which side casts). Nothing else of a face is an input, so fullbright, glow, shine, bump, an RGB-only tint, emissive, the
-// PBR colour and the light's own colour cannot change the key. An opaque single-sided face is no input at all, and an opaque double-sided
-// one only by that flag: its texture never shows in a depth tile.
+// a blended, alpha-masked or alpha-textured face (`cutout`) what shapes the holes it cuts out of a depth tile, with the colour its
+// vertices carry when the blend pass draws it (`tint`: lamp shadows L3's layer reads that colour), and for any face whether its glTF
+// material is drawn from both sides (the shadow pass culls back faces except for a double-sided material: lldrawpool.cpp, so the flag
+// decides which side casts). Nothing else of a face is an input, so fullbright, glow, shine, bump, emissive, the RGB of a face the blend
+// pass does not draw and the light's own colour cannot change the key. An opaque single-sided face is no input at all, and an opaque
+// double-sided one only by that flag: its texture never shows in a depth tile.
 struct SilhouetteFace
 {
     uint8_t index = 0;                // the face (texture entry) index
@@ -1497,6 +1500,8 @@ struct SilhouetteFace
     float gltf_offset[2] = { 0.f, 0.f };
     float gltf_scale[2] = { 1.f, 1.f };
     float gltf_rotation = 0.f;
+    bool tint = false;                  // the blend pass draws the face (LLPipeline::getPoolTypeFromTE: the alpha pool): its RGB is an input
+    uint8_t rgb[3] = { 255, 255, 255 }; // the vertex colour's RGB as LLFace writes it: the face's tint, or a glTF material's base colour
 };
 
 // folds one face into a prim's key, field by field (no padding bytes are read)
@@ -1527,6 +1532,10 @@ inline uint32_t silhouetteFaceMix(uint32_t key, const SilhouetteFace& f)
         key = mix(mix(mix(key, f.gltf_alpha_mode), f.gltf_cutoff), f.gltf_alpha);
         key = silhouetteKeyMix(key, f.gltf_texture, sizeof(f.gltf_texture));
         key = mix(mix(mix(mix(mix(key, f.gltf_offset[0]), f.gltf_offset[1]), f.gltf_scale[0]), f.gltf_scale[1]), f.gltf_rotation);
+    }
+    if (f.tint)
+    {
+        key = silhouetteKeyMix(mix(key, f.tint), f.rgb, sizeof(f.rgb)); // L3: the colour of the light a blended face lets through
     }
     return key;
 }

@@ -162,12 +162,13 @@ namespace
         return image && (image->getComponents() == 4 || image->getComponents() == 2); // not yet loaded: unknown, counted when it finishes (LLFace::dirtyTexture)
     }
 
-    // The prim's silhouette key (llprojectorpool::texturedDirties): what its faces cut out of a depth tile. An opaque face counts only as
-    // opaque (its texture never shows in a depth tile), and a double-sided glTF one by that flag (the shadow pass draws it from both
-    // sides); each blended, alpha-masked or alpha-textured face adds its silhouette inputs (llprojectorpool::SilhouetteFace: its index,
-    // alpha, texture and the texture's channel count, mapping, and the legacy or glTF material's alpha mode and cutoff, with the glTF base
-    // colour texture and transform). Fullbright, glow, shine, bump, an RGB-only tint, emissive, the PBR colour and the light's own colour
-    // are not inputs (lamp shadows S2: blinker scripts toggle them with the light).
+    // The prim's silhouette key (llprojectorpool::texturedDirties): what its faces cut out of a depth tile and let through it. An opaque
+    // face counts only as opaque (its texture never shows in a depth tile), and a double-sided glTF one by that flag (the shadow pass draws
+    // it from both sides); each blended, alpha-masked or alpha-textured face adds its silhouette inputs (llprojectorpool::SilhouetteFace:
+    // its index, alpha, texture and the texture's channel count, mapping, and the legacy or glTF material's alpha mode and cutoff, with the
+    // glTF base colour texture and transform) and, when the blend pass draws it, its vertex colour's RGB (lamp shadows L3: the layer
+    // colours a lamp's light by it). Fullbright, glow, shine, bump, emissive, the RGB of an opaque or alpha-masked face and the light's
+    // own colour are not inputs (lamp shadows S2: blinker scripts toggle them with the light).
     U32 silhouette_key(LLVOVolume* volume)
     {
         static_assert(sizeof(llprojectorpool::SilhouetteFace::texture) == size_t(UUID_BYTES), "a texture id is 16 bytes");
@@ -204,6 +205,21 @@ namespace
                 f.material = true;
                 f.alpha_mode = material->getDiffuseAlphaMode();
                 f.alpha_cutoff = material->getAlphaMaskCutoff();
+            }
+            // L3: the vertex colour's RGB of a face the blend pass draws (the alpha pool), as LLFace::getGeometryVolume writes it (the
+            // face's tint; a glTF material's base colour): the light-through layer reads it. The pool's own rule decides, so a face that
+            // goes to an opaque or mask pass keeps its colour out of the key (blinkers stay quiet there)
+            f.tint = LLPipeline::getPoolTypeFromTE(te, volume->getTEImage(i)) == LLDrawPool::POOL_ALPHA;
+            if (f.tint)
+            {
+                LLColor4U rgb = te->getColor(); // the same conversions as LLFace's
+                if (render_gltf)
+                {
+                    rgb = render_gltf->mBaseColor;
+                }
+                f.rgb[0] = rgb.mV[VRED];
+                f.rgb[1] = rgb.mV[VGREEN];
+                f.rgb[2] = rgb.mV[VBLUE];
             }
             if (render_gltf)
             {
