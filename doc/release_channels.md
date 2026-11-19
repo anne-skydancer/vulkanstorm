@@ -69,6 +69,43 @@ requests and on dispatch only. A FreeBSD build, `freebsd-latest` with
 `experimental-freebsd-latest` and `preview-freebsd-latest`, is planned. It
 will be one more entry in `build-platforms.json` and one more workflow.
 
+## PR readiness
+
+The `PR readiness` workflow (`pr-readiness.yaml`, `scripts/ci_pr_readiness.py`)
+sets a commit status named **PR readiness** on every open pull request's head
+and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
+place by the bot, never a new comment per run). It reruns on the events that
+can change the answer: PR open, push, reopen, ready for review and base
+change; reviews and review comments; the end of a Build Windows, Build Linux,
+Build Linux LTS, Check PR, CI lint, CodeQL, FreeBSD runner image or PR review event run; and a
+push to a `vkstorm-*` line, which can make an open PR conflict. One run per PR
+at a time.
+
+- `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a
+  skipped viewer job is not green), no other check is running or failed, and
+  no review thread is open. A PR that changes only CI files and documentation
+  (the build workflows' `paths-ignore`, read from the PR's base line) builds
+  no viewer and needs no builds.
+- `pending`: waiting for builds or other checks, open review threads (the
+  comment lists them with their P0-P3 badge), or GitHub's mergeability.
+- `failure`: a check failed (named in the status) or the PR conflicts with its
+  base. Only the newest run of each workflow counts, so a rerun or an edited
+  description replaces an older failure.
+- `error`: the readiness run itself failed; see its run.
+
+What it does not cover. GitHub has no workflow event for resolving a thread,
+so a resolve (and an unresolve) shows at the next event above; rerun the
+`PR readiness` workflow to refresh it. The `workflow_run` trigger is live only
+once the workflow is on `vkstorm-release`, the default branch. A PR that
+conflicts cannot start `pull_request` workflows, so a conflict is found only
+through the push to its base line. A fork PR's own events have a read-only
+token: its status is written by the Check PR `workflow_run`, and for a review or review comment by the `PR review event` workflow, an empty unprivileged job whose `workflow_run` re-evaluates the open PRs (no artifact, nothing from the fork is read). The readiness job itself skips every event of a fork PR, its own pull_request events included, so a read-only run never fails on a write for another PR. Every run evaluates all open PRs, so the single waiting run that the concurrency group keeps never drops another PR's update.
+
+Drafts get the status too. It is for reading, not a required check; no branch
+protection depends on it. The script only reads the PR through the API and
+never runs its code. `scripts/tests/ci_pr_readiness_test.py` tests the verdict
+and the GitHub plumbing offline and runs in CI lint.
+
 ## Tags
 
 | Tag | Source | When |
