@@ -18,7 +18,7 @@ def run(name, status="completed", conclusion="success", id_=1, workflow=1):
 GREEN = [run("windows", id_=1), run("linux", id_=2), run("linux-lts", id_=3), run("checks", id_=4)]
 CODEX_P1 = {"nodes": [{"isResolved": False, "comments": {"nodes": [{
     "author": {"login": "chatgpt-codex-connector"}, "path": "indra/newview/a.cpp", "line": 42,
-    "body": "![P1 Badge](https://img/p1.svg) **Guard the null face**\n\nDetails here.",
+    "body": "**<sub><sub>![P1 Badge](https://img/p1.svg)</sub></sub>  Guard the null face**\n\nDetails here.",
     "url": "https://github.com/o/r/pull/1#discussion_r1"}]}}]}
 
 
@@ -49,6 +49,10 @@ class Verdict(unittest.TestCase):
         runs = [run("windows", conclusion="failure"), run("linux"), run("linux-lts", "in_progress", None)]
         v = pr_readiness.evaluate(pr(check_runs=runs))
         self.assertEqual((v["state"], v["description"]), ("failure", "windows failed"))
+
+    def test_own_job_is_ignored(self):
+        v = pr_readiness.evaluate(pr(check_runs=GREEN + [run("readiness", conclusion="cancelled", id_=9)]))
+        self.assertEqual(v["state"], "success")
 
     def test_failed_other_check_and_rerun_wins(self):
         runs = GREEN + [run("ci-lint", conclusion="failure")]
