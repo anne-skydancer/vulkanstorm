@@ -27,6 +27,7 @@ BUILDS = ("windows", "linux", "linux-lts")
 BUILD_WORKFLOW = ".github/workflows/build-windows.yaml"  # test_ci_files.py keeps all three equal
 BAD_CONCLUSIONS = {"failure", "timed_out", "cancelled", "action_required", "startup_failure", "stale"}
 STATUS_MAX = 140
+OWN_JOB = "readiness"  # this workflow's job: never a build, and its own cancelled runs are not a failure
 
 
 # ---------------------------------------------------------------- pure logic
@@ -63,7 +64,10 @@ def thread_info(thread):
     """A review thread (GraphQL node) as {author, path, line, prio, title, url}."""
     comment = ((thread.get("comments") or {}).get("nodes") or [{}])[0] or {}
     body = " ".join((comment.get("body") or "").split())
-    title = body.split("**")[1] if body.count("**") >= 2 else body[:120]
+    plain = re.sub(r"</?sub>|!\[[^\]]*\]\([^)]*\)", "", body)  # Codex puts a badge image inside the bold title
+    plain = " ".join(plain.split())
+    bold = re.search(r"\*\*(.+?)\*\*", plain)
+    title = bold.group(1) if bold else plain[:120]
     badge = re.search(r"\bP([0-3]) Badge", body)
     return {
         "author": (comment.get("author") or {}).get("login", "?"),
@@ -80,6 +84,8 @@ def latest_runs(check_runs):
     Linux and Build Linux LTS each have a job named `checks`; a rerun keeps the run id)."""
     latest = {}
     for run in check_runs:
+        if run["name"] == OWN_JOB:
+            continue
         match = re.search(r"/actions/runs/(\d+)", run.get("details_url") or "")
         key = (match.group(1) if match else "", run["name"])
         if key not in latest or run.get("id", 0) > latest[key].get("id", 0):
