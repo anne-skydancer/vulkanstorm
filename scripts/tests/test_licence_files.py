@@ -138,7 +138,7 @@ class VivoxRemovedTest(unittest.TestCase):
 def tracked_text_files():
     names = subprocess.run(['git', '-C', str(ROOT), 'ls-files', '-z'], check=True,
                            capture_output=True).stdout.decode('utf-8').split('\0')
-    suffixes = {'.c', '.cpp', '.h', '.glsl', '.py', '.sh', '.cjs', '.js', '.cmake', '.rs', '.md', '.txt'}
+    suffixes = {'.c', '.cpp', '.h', '.glsl', '.slang', '.py', '.sh', '.cjs', '.js', '.cmake', '.rs', '.md', '.txt'}
     for name in names:
         path = ROOT / name
         if name and path.suffix in suffixes and path.is_file():
@@ -199,7 +199,7 @@ class SourceHeaderTest(unittest.TestCase):
         lgpl = re.compile(r'\b' + 'LG' + r'PL\b')
         upstream = re.compile('Linden ' + 'Lab|Linden ' + 'Research|Fire' + 'storm|Phoe' + 'nix')
         comment = re.compile(r'^\s*(//|#|/\*|\*)')
-        suffixes = {'.cpp', '.h', '.glsl', '.py', '.cmake', '.sh'}
+        suffixes = {'.cpp', '.h', '.glsl', '.slang', '.py', '.cmake', '.sh'}
         offenders = []
         for name, path in tracked_text_files():
             if path.suffix not in suffixes:

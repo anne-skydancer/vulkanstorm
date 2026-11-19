@@ -64,3 +64,31 @@ jobs:
       - run: python3 scripts/tests/test_glod_retired.py
         env:
           GLOD_DIFF_BASE: HEAD^1
+
+  slang-shaders:
+    # The Slang shader pipeline (doc/slang.md): the generated GLSL is committed, so it must be what the pinned slangc
+    # makes of the sources, it must compile and link as GLSL 4.60 with a real compiler, and its interfaces must agree.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/vulkanstorm-tools
+          key: slang-${{ hashFiles('scripts/shaders/slang_pin.json') }}
+      - name: Install glslang
+        run: |
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends glslang-tools
+      - name: Fetch the pinned Slang (checksum and version checked)
+        run: python3 scripts/shaders/slang_fetch.py
+      - name: Slang pipeline tests (generator, checks, gate, drift)
+        env:
+          SLANG_REQUIRED: '1'
+        run: python3 scripts/tests/test_slang_pipeline.py
+      - name: Generated shaders match their Slang sources
+        run: python3 scripts/shaders/slang_gen.py --check --strict
+      - name: Manifest, interface, position-module gate, and GLSL 4.60 compile and link
+        run: python3 scripts/shaders/slang_check.py all

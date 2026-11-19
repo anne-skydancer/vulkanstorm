@@ -36,6 +36,12 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_files.py
       shell: bash
+    - name: Check the Slang shader tooling (the pin, the generator's post steps, the loader format; the slangc tests run in Check PR)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llrender indra/llrender/tests/llgeneratedshader_test.cpp -o "$RUNNER_TEMP/generated-shader-test"
+        "$RUNNER_TEMP/generated-shader-test"
+        python3 scripts/tests/test_slang_pipeline.py
     - run: python3 scripts/tests/test_msaa_bench_model.py
       shell: bash
     - run: python3 scripts/tests/test_point_faces_model.py

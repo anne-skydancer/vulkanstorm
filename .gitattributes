@@ -40,3 +40,6 @@ FILES_ARE_UNICODE_UTF-16LE.txt text eol=crlf
 
 # The Russian dictionary (doc/licensing.md) is Hunspell data: no line-ending conversion
 indra/newview/dictionaries-ru/ru_ru.* binary
+
+# Generated from indra/newview/slang by scripts/shaders/slang_gen.py (doc/slang.md): folded in reviews, resolved by regenerating
+indra/newview/app_settings/shaders/generated/** linguist-generated=true
