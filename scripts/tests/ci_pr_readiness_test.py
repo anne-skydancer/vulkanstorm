@@ -198,29 +198,19 @@ def pull():
 
 
 class Plumbing(unittest.TestCase):
-    def test_workflow_run_maps_to_its_pull_requests(self):
-        ev = {"workflow_run": {"pull_requests": [{"number": 7}, {"number": 9}], "head_sha": "s"}}
-        self.assertEqual(pr_readiness.affected_prs(FakeGithub({}), "workflow_run", ev), [7, 9])
-
-    def test_workflow_run_falls_back_to_the_head_sha(self):
+    def test_every_event_evaluates_all_open_prs(self):
+        # A newer waiting run replaces an older one, so each run covers every open PR; nothing in the
+        # payload (a fork run's PR list or head commit) is used to find the PR.
         gh = FakeGithub({"/repos/o/r/pulls?state=open": [
             {"number": 3, "head": {"sha": "abc"}}, {"number": 4, "head": {"sha": "zzz"}}]})
-        ev = {"workflow_run": {"pull_requests": [], "head_sha": "abc"}}
-        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [3])
-
-    def test_fork_review_event_run_maps_by_head_sha_to_open_prs_only(self):
-        # A review on a fork PR: the unprivileged "PR review event" run has no PR list.
-        gh = FakeGithub({"/repos/o/r/pulls?state=open": [
-            {"number": 3, "head": {"sha": "f" * 40}}, {"number": 4, "head": {"sha": "e" * 40}}]})
-        ev = {"workflow_run": {"name": "PR review event", "event": "pull_request_review",
-                               "pull_requests": [], "head_sha": "f" * 40}}
-        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [3])
-        ev["workflow_run"]["head_sha"] = "d" * 40  # a closed or unknown PR maps to nothing
-        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [])
-
-    def test_push_lists_the_prs_on_that_base(self):
-        gh = FakeGithub({"/repos/o/r/pulls?state=open&base=vkstorm-devel": [{"number": 5, "head": {"sha": "x"}}]})
-        self.assertEqual(pr_readiness.affected_prs(gh, "push", {"ref": "refs/heads/vkstorm-devel"}), [5])
+        events = {
+            "pull_request": {"pull_request": {"number": 4}},
+            "pull_request_review": {"pull_request": {"number": 3}},
+            "workflow_run": {"workflow_run": {"name": "PR review event", "pull_requests": [], "head_sha": "d" * 40}},
+            "push": {"ref": "refs/heads/vkstorm-devel"},
+        }
+        for name, ev in events.items():
+            self.assertEqual(pr_readiness.affected_prs(gh, name, ev), [3, 4], name)
 
     def test_mergeable_retries_while_null(self):
         gh = FakeGithub({"pull": pull()}, mergeable=(None, None, True))
