@@ -28,6 +28,7 @@
 #include "llshadermgr.h"
 #include "llrender.h"
 #include "llfile.h"
+#include "llshadersource.h"
 #include "lldir.h"
 #include "llsdutil.h"
 #include "llsdserialize.h"
@@ -488,7 +489,7 @@ static std::string get_object_log(GLuint ret)
 }
 
 //dump shader source for debugging
-void LLShaderMgr::dumpShaderSource(U32 shader_code_count, GLchar** shader_code_text)
+void LLShaderMgr::dumpShaderSource(U32 shader_code_count, const GLchar* const* shader_code_text)
 {
     char num_str[16]; // U32 = max 10 digits
 
@@ -618,13 +619,9 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
         return 0;
     }
 
-    //we can't have any lines longer than 1024 characters
-    //or any shaders longer than 4096 lines... deal - DaveP
-    GLchar buff[1024];
-    GLchar *extra_code_text[1024];
-    GLchar *shader_code_text[4096 + LL_ARRAY_SIZE(extra_code_text)] = { NULL };
-    GLuint extra_code_count = 0, shader_code_count = 0;
-    BOOST_STATIC_ASSERT(LL_ARRAY_SIZE(extra_code_text) < LL_ARRAY_SIZE(shader_code_text));
+    // The file is read whole, whatever its length (see llshadersource.h).
+    std::string version;
+    std::vector<std::string> extra_code_text;
 
 
     // <Vulkanstorm> OpenGL 4.6 floor (newview/llglfloor.h): the viewer does not start below GL 4.6, which
@@ -632,46 +629,46 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     // (a later floor change moves both to 460).
     if (type == GL_COMPUTE_SHADER)
     {
-        shader_code_text[shader_code_count++] = strdup("#version 430\n");
+        version = "#version 430\n";
     }
     else
     {
-        shader_code_text[shader_code_count++] = strdup("#version 420\n");
+        version = "#version 420\n";
     }
 
     if (type == GL_FRAGMENT_SHADER)
     {
-        extra_code_text[extra_code_count++] = strdup("#define FRAGMENT_SHADER 1\n");
+        extra_code_text.emplace_back("#define FRAGMENT_SHADER 1\n");
     }
     else if (type == GL_COMPUTE_SHADER)
     {
-        extra_code_text[extra_code_count++] = strdup("#define COMPUTE_SHADER 1\n");
+        extra_code_text.emplace_back("#define COMPUTE_SHADER 1\n");
     }
     else
     {
-        extra_code_text[extra_code_count++] = strdup("#define VERTEX_SHADER 1\n");
+        extra_code_text.emplace_back("#define VERTEX_SHADER 1\n");
     }
 
     // Use alpha float to store bit flags
     // See: C++: addDeferredAttachment(), shader: frag_data[2]
-    extra_code_text[extra_code_count++] = strdup("#define GBUFFER_FLAG_SKIP_ATMOS   0.0 \n"); // atmo kill
-    extra_code_text[extra_code_count++] = strdup("#define GBUFFER_FLAG_HAS_ATMOS    0.34\n"); // bit 0
-    extra_code_text[extra_code_count++] = strdup("#define GBUFFER_FLAG_HAS_PBR      0.67\n"); // bit 1
-    extra_code_text[extra_code_count++] = strdup("#define GBUFFER_FLAG_HAS_HDRI      1.0\n");  // bit 2
-    extra_code_text[extra_code_count++] = strdup("#define GET_GBUFFER_FLAG(data, flag)    (abs(data-flag)< 0.1)\n");
+    extra_code_text.emplace_back("#define GBUFFER_FLAG_SKIP_ATMOS   0.0 \n"); // atmo kill
+    extra_code_text.emplace_back("#define GBUFFER_FLAG_HAS_ATMOS    0.34\n"); // bit 0
+    extra_code_text.emplace_back("#define GBUFFER_FLAG_HAS_PBR      0.67\n"); // bit 1
+    extra_code_text.emplace_back("#define GBUFFER_FLAG_HAS_HDRI      1.0\n");  // bit 2
+    extra_code_text.emplace_back("#define GET_GBUFFER_FLAG(data, flag)    (abs(data-flag)< 0.1)\n");
 
     if (defines)
     {
         for (auto iter = defines->begin(); iter != defines->end(); ++iter)
         {
             std::string define = "#define " + iter->first + " " + iter->second + "\n";
-            extra_code_text[extra_code_count++] = (GLchar *) strdup(define.c_str());
+            extra_code_text.push_back(std::move(define));
         }
     }
 
     if( gGLManager.mIsAMD )
     {
-        extra_code_text[extra_code_count++] = strdup( "#define IS_AMD_CARD 1\n" );
+        extra_code_text.emplace_back( "#define IS_AMD_CARD 1\n" );
     }
 
     if (texture_index_channels > 0 && type == GL_FRAGMENT_SHADER)
@@ -709,28 +706,28 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
         }
         */
 
-        extra_code_text[extra_code_count++] = strdup("#define HAS_DIFFUSE_LOOKUP\n");
+        extra_code_text.emplace_back("#define HAS_DIFFUSE_LOOKUP\n");
 
         //uniform declartion
         for (S32 i = 0; i < texture_index_channels; ++i)
         {
             std::string decl = llformat("uniform sampler2D tex%d;\n", i);
-            extra_code_text[extra_code_count++] = strdup(decl.c_str());
+            extra_code_text.emplace_back(decl.c_str());
         }
 
         if (texture_index_channels > 1)
         {
-            extra_code_text[extra_code_count++] = strdup("flat in int vary_texture_index;\n");
+            extra_code_text.emplace_back("flat in int vary_texture_index;\n");
         }
 
-        extra_code_text[extra_code_count++] = strdup("vec4 diffuseLookup(vec2 texcoord)\n");
-        extra_code_text[extra_code_count++] = strdup("{\n");
+        extra_code_text.emplace_back("vec4 diffuseLookup(vec2 texcoord)\n");
+        extra_code_text.emplace_back("{\n");
 
 
         if (texture_index_channels == 1)
         { //don't use flow control, that's silly
-            extra_code_text[extra_code_count++] = strdup("return texture(tex0, texcoord);\n");
-            extra_code_text[extra_code_count++] = strdup("}\n");
+            extra_code_text.emplace_back("return texture(tex0, texcoord);\n");
+            extra_code_text.emplace_back("}\n");
         }
         else
         {
@@ -739,135 +736,51 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
                 for (S32 i = 0; i < texture_index_channels; ++i)
                 {
                     std::string if_string = llformat("\t%sif (vary_texture_index == %d) { return texture(tex%d, texcoord); }\n", i > 0 ? "else " : "", i, i);
-                    extra_code_text[extra_code_count++] = strdup(if_string.c_str());
+                    extra_code_text.emplace_back(if_string.c_str());
                 }
-                extra_code_text[extra_code_count++] = strdup("\treturn vec4(1,0,1,1);\n");
-                extra_code_text[extra_code_count++] = strdup("}\n");
+                extra_code_text.emplace_back("\treturn vec4(1,0,1,1);\n");
+                extra_code_text.emplace_back("}\n");
             }
             else
             {
-                extra_code_text[extra_code_count++] = strdup("\tvec4 ret = vec4(1,0,1,1);\n");
-                extra_code_text[extra_code_count++] = strdup("\tswitch (vary_texture_index)\n");
-                extra_code_text[extra_code_count++] = strdup("\t{\n");
+                extra_code_text.emplace_back("\tvec4 ret = vec4(1,0,1,1);\n");
+                extra_code_text.emplace_back("\tswitch (vary_texture_index)\n");
+                extra_code_text.emplace_back("\t{\n");
 
                 //switch body
                 for (S32 i = 0; i < texture_index_channels; ++i)
                 {
                     std::string case_str = llformat("\t\tcase %d: return texture(tex%d, texcoord);\n", i, i);
-                    extra_code_text[extra_code_count++] = strdup(case_str.c_str());
+                    extra_code_text.emplace_back(case_str.c_str());
                 }
 
-                extra_code_text[extra_code_count++] = strdup("\t}\n");
-                extra_code_text[extra_code_count++] = strdup("\treturn ret;\n");
-                extra_code_text[extra_code_count++] = strdup("}\n");
+                extra_code_text.emplace_back("\t}\n");
+                extra_code_text.emplace_back("\treturn ret;\n");
+                extra_code_text.emplace_back("}\n");
             }
         }
     }
 
     // Master definition can be found in deferredUtil.glsl
-    extra_code_text[extra_code_count++] = strdup("struct GBufferInfo { vec4 albedo; vec4 specular; vec3 normal; vec4 emissive; float gbufferFlag; float envIntensity; };\n");
+    extra_code_text.emplace_back("struct GBufferInfo { vec4 albedo; vec4 specular; vec3 normal; vec4 emissive; float gbufferFlag; float envIntensity; };\n");
 
-    //copy file into memory
-    enum {
-          flag_write_to_out_of_extra_block_area = 0x01
-        , flag_extra_block_marker_was_found = 0x02
-    };
-
-    unsigned char flags = flag_write_to_out_of_extra_block_area;
-
-    GLuint out_of_extra_block_counter = 0, start_shader_code = shader_code_count, file_lines_count = 0;
-
-#define TOUCH_SHADERS 0
-
-#if TOUCH_SHADERS
-    const char* marker = "// touched";
-    bool touched = false;
-#endif
-
-    while(NULL != fgets((char *)buff, 1024, file)
-          && shader_code_count < (LL_ARRAY_SIZE(shader_code_text) - LL_ARRAY_SIZE(extra_code_text)))
-    {
-        file_lines_count++;
-
-        bool extra_block_area_found = NULL != strstr((const char*)buff, "[EXTRA_CODE_HERE]");
-
-#if TOUCH_SHADERS
-        if (NULL != strstr((const char*)buff, marker))
-        {
-            touched = true;
-        }
-#endif
-
-        if(extra_block_area_found && !(flag_extra_block_marker_was_found & flags))
-        {
-            if(!(flag_write_to_out_of_extra_block_area & flags))
-            {
-                //shift
-                for(GLuint to = start_shader_code, from = extra_code_count + start_shader_code;
-                    from < shader_code_count; ++to, ++from)
-                {
-                    shader_code_text[to] = shader_code_text[from];
-                }
-
-                shader_code_count -= extra_code_count;
-            }
-
-            //copy extra code
-            for(GLuint n = 0; n < extra_code_count
-                && shader_code_count < (LL_ARRAY_SIZE(shader_code_text) - LL_ARRAY_SIZE(extra_code_text)); ++n)
-            {
-                shader_code_text[shader_code_count++] = extra_code_text[n];
-            }
-
-            extra_code_count = 0;
-
-            flags &= ~flag_write_to_out_of_extra_block_area;
-            flags |= flag_extra_block_marker_was_found;
-        }
-        else
-        {
-            shader_code_text[shader_code_count] = (GLchar *)strdup((char *)buff);
-
-            if(flag_write_to_out_of_extra_block_area & flags)
-            {
-                shader_code_text[extra_code_count + start_shader_code + out_of_extra_block_counter]
-                    = shader_code_text[shader_code_count];
-                out_of_extra_block_counter++;
-
-                if(out_of_extra_block_counter == extra_code_count)
-                {
-                    shader_code_count += extra_code_count;
-                    flags &= ~flag_write_to_out_of_extra_block_area;
-                }
-            }
-
-            ++shader_code_count;
-        }
-    } //while
-
-    if(!(flag_extra_block_marker_was_found & flags))
-    {
-        for(GLuint n = start_shader_code; n < extra_code_count + start_shader_code; ++n)
-        {
-            shader_code_text[n] = extra_code_text[n - start_shader_code];
-        }
-
-        if (file_lines_count < extra_code_count)
-        {
-            shader_code_count += extra_code_count;
-        }
-
-        extra_code_count = 0;
-    }
-
-#if TOUCH_SHADERS
-    if (!touched)
-    {
-        fprintf(file, "\n%s\n", marker);
-    }
-#endif
-
+    std::vector<std::string> file_lines;
+    const bool file_read = ll_read_shader_lines(file, file_lines);
     fclose(file);
+    if (!file_read)
+    {
+        LL_WARNS("ShaderLoading") << "GLSL Shader file failed to read: " << open_file_name << LL_ENDL;
+        return 0;
+    }
+
+    const std::vector<std::string> shader_pieces = ll_assemble_shader_source(version, extra_code_text, file_lines);
+    std::vector<const GLchar*> shader_code_text;
+    shader_code_text.reserve(shader_pieces.size());
+    for (const std::string& piece : shader_pieces)
+    {
+        shader_code_text.push_back(piece.c_str());
+    }
+    const GLuint shader_code_count = (GLuint)shader_code_text.size();
 
     //create shader object
     GLuint ret = glCreateShader(type);
@@ -887,7 +800,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
     if (ret)
     {
         LL_DEBUGS("ShaderLoading") << "glCreateShader done" << LL_ENDL;
-        glShaderSource(ret, shader_code_count, (const GLchar**)shader_code_text, NULL);
+        glShaderSource(ret, shader_code_count, shader_code_text.data(), NULL);
 
         error = glGetError();
         if (error != GL_NO_ERROR)
@@ -926,7 +839,7 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
             //an error occured, print log
             LL_WARNS("ShaderLoading") << "GLSL Compilation Error:" << LL_ENDL;
             dumpObjectLog(ret, true, open_file_name);
-            dumpShaderSource(shader_code_count, shader_code_text);
+            dumpShaderSource(shader_code_count, shader_code_text.data());
             glDeleteShader(ret); //no longer need handle
             ret = 0;
         }
@@ -937,12 +850,6 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
         ret = 0;
     }
     stop_glerror();
-
-    //free memory
-    for (GLuint i = 0; i < shader_code_count; i++)
-    {
-        free(shader_code_text[i]);
-    }
 
     //successfully loaded, save results
     if (ret)

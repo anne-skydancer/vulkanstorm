@@ -48,6 +48,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_render_path_fixes.py
       shell: bash
+    - run: python3 scripts/tests/test_shader_source_read.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
