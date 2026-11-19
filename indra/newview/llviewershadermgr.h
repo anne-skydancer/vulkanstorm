@@ -286,6 +286,13 @@ constexpr int ATMOSPHERE_TABLE_PASSES = 6;
 constexpr int SKY_FILTER_PASSES = 3;
 extern LLGLSLShader         gAtmosphereTableProgram[ATMOSPHERE_TABLE_PASSES];
 extern LLGLSLShader         gSkyFilterProgram[SKY_FILTER_PASSES];
+// <Vulkanstorm> stage L7: the volumetric clouds (llvolumetricclouds.cpp)
+extern LLGLSLShader         gCloudsVolWeatherProgram;
+extern LLGLSLShader         gCloudsVolTraceProgram;
+extern LLGLSLShader         gCloudsVolStillProgram;
+extern LLGLSLShader         gCloudsVolReconProgram;
+extern LLGLSLShader         gCloudsVolCompositeProgram;
+extern LLGLSLShader         gCloudShadowVolProgram;
 // </Vulkanstorm>
 extern LLGLSLShader         gDeferredAvatarShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaShadowProgram;

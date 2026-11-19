@@ -734,7 +734,12 @@ void LLDrawPoolWLSky::renderDeferred(S32 pass)
 
         if (!gCubeSnapshot || gPipeline.mReflectionMapManager.isRadiancePass()) // don't draw clouds in irradiance maps to avoid popping
         {
-            renderSkyCloudsDeferred(origin, camHeightLocal, cloud_shader);
+            // <Vulkanstorm> stage L7: the main view and the photos draw the volumetric clouds instead (after the lighting)
+            if (gCubeSnapshot || !gPipeline.mVolumetricClouds.active())
+            {
+                renderSkyCloudsDeferred(origin, camHeightLocal, cloud_shader);
+            }
+            // </Vulkanstorm>
         }
     }
 }

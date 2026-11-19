@@ -43,6 +43,7 @@
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
 #include "llatmosphereluts.h" // <Vulkanstorm/> stage AT2-1
+#include "llvolumetricclouds.h" // <Vulkanstorm/>
 #include "llheroprobemanager.h"
 
 #include <stack>
@@ -328,6 +329,9 @@ public:
     void updateAtmosphere() { mAtmosphereLUTs.update(); }
     void ensureAtmosphereTables() { mAtmosphereLUTs.ensureTables(); }
     LLAtmosphereLUTs mAtmosphereLUTs;
+    // stage L7: the volumetric clouds (llvolumetricclouds.h), drawn over the lit sky in the main view and the photos;
+    // the sky's pool and the cloud shadow map ask it whether it draws this frame
+    LLVolumetricClouds mVolumetricClouds;
     // </Vulkanstorm>
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);

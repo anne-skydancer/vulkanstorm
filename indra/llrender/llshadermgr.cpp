@@ -1653,6 +1653,16 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("shadow_tile_origin");
     // </Vulkanstorm>
 
+    // <Vulkanstorm> the volumetric clouds' textures (stage L7)
+    mReservedUniforms.push_back("cloud_vol_base");
+    mReservedUniforms.push_back("cloud_vol_erosion");
+    mReservedUniforms.push_back("cloud_vol_curl");
+    mReservedUniforms.push_back("cloud_vol_weather");
+    mReservedUniforms.push_back("cloud_vol_trace");
+    mReservedUniforms.push_back("cloud_vol_tdepth");
+    mReservedUniforms.push_back("cloud_vol_history");
+    // </Vulkanstorm>
+
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
     std::set<std::string> dupe_check;

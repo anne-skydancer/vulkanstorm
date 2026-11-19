@@ -233,6 +233,14 @@ LLGLSLShader            gLuminanceProgram;
 LLGLSLShader            gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
 LLGLSLShader            gAtmosphereTableProgram[ATMOSPHERE_TABLE_PASSES]; // <Vulkanstorm/> stage AT2-1
 LLGLSLShader            gSkyFilterProgram[SKY_FILTER_PASSES]; // <Vulkanstorm/> stage AT2-1
+// <Vulkanstorm> stage L7: the volumetric clouds
+LLGLSLShader            gCloudsVolWeatherProgram;
+LLGLSLShader            gCloudsVolTraceProgram;
+LLGLSLShader            gCloudsVolStillProgram;
+LLGLSLShader            gCloudsVolReconProgram;
+LLGLSLShader            gCloudsVolCompositeProgram;
+LLGLSLShader            gCloudShadowVolProgram;
+// </Vulkanstorm>
 LLGLSLShader            gFXAAProgram[4];
 LLGLSLShader            gSMAAEdgeDetectProgram[4];
 LLGLSLShader            gSMAABlendWeightsProgram[4];
@@ -607,6 +615,8 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gDeferredWLSkyProgram);
     mShaderList.push_back(&gDeferredWLCloudProgram);
     mShaderList.push_back(&gCloudShadowMapProgram); // <Vulkanstorm/> L2: gets the sky uniforms like the clouds
+    mShaderList.push_back(&gCloudsVolTraceProgram); // <Vulkanstorm/> L7: the flat clouds' sky uniforms (light, haze)
+    mShaderList.push_back(&gCloudsVolStillProgram); // <Vulkanstorm/>
     mShaderList.push_back(&gDeferredWLMoonProgram);
     mShaderList.push_back(&gDeferredWLSunProgram);
     mShaderList.push_back(&gDeferredPBRAlphaProgram);
@@ -1475,6 +1485,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         {
             program.unload();
         }
+        // </Vulkanstorm>
+        // <Vulkanstorm> stage L7
+        gCloudsVolWeatherProgram.unload();
+        gCloudsVolTraceProgram.unload();
+        gCloudsVolStillProgram.unload();
+        gCloudsVolReconProgram.unload();
+        gCloudsVolCompositeProgram.unload();
+        gCloudShadowVolProgram.unload();
         // </Vulkanstorm>
         gDeferredPostGammaCorrectProgram.unload();
         gLegacyPostGammaCorrectProgram.unload();
@@ -2943,6 +2961,55 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         }
     }
     // </Vulkanstorm>
+
+    if (success)
+    {
+        // <Vulkanstorm> stage L7: the volumetric clouds (llvolumetricclouds.cpp, doc/light/volumetric-clouds.md). A
+        // program that does not build only means the flat clouds: the viewer runs without them
+        // (LLVolumetricClouds checks isComplete() on every one of them).
+        bool clouds_ok = true;
+        auto make = [&](LLGLSLShader& shader, const char* name, const char* vertex, const std::vector<std::string>& fragments,
+                        LLGLSLShader::eGroup group, const char* define)
+        {
+            shader.mName = name;
+            shader.mShaderFiles.clear();
+            shader.clearPermutations();
+            shader.mFeatures.hasSrgb = true;
+            shader.mShaderFiles.push_back(make_pair(vertex, GL_VERTEX_SHADER));
+            for (const std::string& fragment : fragments)
+            {
+                shader.mShaderFiles.push_back(make_pair(fragment, GL_FRAGMENT_SHADER));
+            }
+            if (define)
+            {
+                shader.addPermutation(define, "1");
+            }
+            shader.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+            shader.mShaderGroup = group;
+            if (!shader.createShader())
+            {
+                clouds_ok = false;
+            }
+        };
+        const std::string funcs = "deferred/cloudsVolFuncsF.glsl";
+        make(gCloudsVolWeatherProgram, "Volumetric Clouds Weather", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolWeatherF.glsl" },
+             LLGLSLShader::SG_DEFAULT, nullptr);
+        make(gCloudsVolTraceProgram, "Volumetric Clouds Trace", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolTraceF.glsl", funcs },
+             LLGLSLShader::SG_SKY, nullptr);
+        make(gCloudsVolStillProgram, "Volumetric Clouds Still", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolTraceF.glsl", funcs },
+             LLGLSLShader::SG_SKY, "CLOUDS_VOL_STILL");
+        make(gCloudsVolReconProgram, "Volumetric Clouds Reconstruction", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolReconF.glsl" },
+             LLGLSLShader::SG_DEFAULT, nullptr);
+        make(gCloudsVolCompositeProgram, "Volumetric Clouds Composite", "deferred/cloudsVolCompositeV.glsl", { "deferred/cloudsVolCompositeF.glsl" },
+             LLGLSLShader::SG_DEFAULT, nullptr);
+        make(gCloudShadowVolProgram, "Cloud Shadow Map (volumetric)", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudShadowVolF.glsl", funcs },
+             LLGLSLShader::SG_DEFAULT, nullptr);
+        if (!clouds_ok)
+        {
+            LL_WARNS("ShaderLoading") << "A volumetric cloud shader failed to load: the flat clouds are drawn" << LL_ENDL;
+        }
+        // </Vulkanstorm>
+    }
 
     if (success)
     {

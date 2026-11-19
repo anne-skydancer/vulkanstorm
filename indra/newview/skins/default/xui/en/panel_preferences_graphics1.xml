@@ -302,6 +302,20 @@
           <check_box.commit_callback
            function="Pref.RenderOptionUpdate" />
         </check_box>
+        <check_box
+         control_name="RenderVolumetricClouds"
+         height="16"
+         initial_value="false"
+         label="Volumetric clouds"
+         layout="topleft"
+         left_delta="0"
+         name="VolumetricClouds"
+         tool_tip="Draws the sky's clouds as volumes shaped by the sky's cloud settings, with the shadows they cast. Off: the flat cloud layer."
+         top_pad="1"
+         width="280">
+          <check_box.commit_callback
+           function="Pref.RenderOptionUpdate" />
+        </check_box>
         <text
          type="string"
          length="1"

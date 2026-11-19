@@ -880,6 +880,7 @@ set(viewer_SOURCE_FILES
     llvoicevisualizer.cpp
     llvoicewebrtc.cpp
     llvoinventorylistener.cpp
+    llvolumetricclouds.cpp
     llvopartgroup.cpp
     llvosky.cpp
     llvosurfacepatch.cpp
@@ -1158,6 +1159,7 @@ set(viewer_HEADER_FILES
     llclassifiedinfo.h
     llcloudnoise.h
     llcloudoptics.h
+    llcloudscape.h
     llcloudshadow.h
     llcloudshadowmap.h
     llcofwearables.h
@@ -1779,6 +1781,7 @@ set(viewer_HEADER_FILES
     llvoicevisualizer.h
     llvoicewebrtc.h
     llvoinventorylistener.h
+    llvolumetricclouds.h
     llvopartgroup.h
     llvosky.h
     llvosurfacepatch.h

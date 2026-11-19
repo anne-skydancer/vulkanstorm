@@ -880,6 +880,9 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Env Update");
             // update all the sky/atmospheric/water settings
             LLEnvironment::instance().update(&camera); // <FS:Ansariel> Factor out calls to getInstance
+            // <Vulkanstorm> stage L7: the volumetric clouds' frame (noise upload, bands, weather map), outside any pass
+            gPipeline.mVolumetricClouds.update();
+            // </Vulkanstorm>
         }
 
         // <Vulkanstorm> stage AT2-1: the physical atmosphere's block and tables follow this frame's sky (llatmosphereluts.h). The

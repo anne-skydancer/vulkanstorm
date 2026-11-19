@@ -76,11 +76,16 @@ void LLCloudShadowMap::update()
         return;
     }
 
+    // <Vulkanstorm> stage L7-3: while the volumetric clouds draw, they are the map's producer (the same map, layout and
+    // lookup), so the ground's shadows are the clouds seen in the sky
+    const bool volumetric = gPipeline.mVolumetricClouds.active() && gCloudShadowVolProgram.isComplete();
+    // </Vulkanstorm>
+
     // exactly the conditions under which the sky draws clouds (LLDrawPoolWLSky::renderSkyCloudsDeferred)
     LLSettingsSky::ptr_t psky = LLEnvironment::instance().getCurrentSky();
-    if (!psky || !gPipeline.canUseWindLightShaders() || !gPipeline.hasRenderType(LLPipeline::RENDER_TYPE_CLOUDS) ||
+    if (!psky || (!volumetric && (!gPipeline.canUseWindLightShaders() || !gPipeline.hasRenderType(LLPipeline::RENDER_TYPE_CLOUDS) ||
         !gSky.mVOSkyp || !gSky.mVOSkyp->getCloudNoiseTex() || LLDrawPoolWLSky::usesHDRISky() ||
-        psky->getCloudScale() < 0.001f || !gCloudShadowMapProgram.isComplete())
+        psky->getCloudScale() < 0.001f || !gCloudShadowMapProgram.isComplete())))
     {
         return;
     }
@@ -119,7 +124,38 @@ void LLCloudShadowMap::update()
     const LLCloudShadow::Vec2 tc0 = LLCloudShadow::layer_texcoord({ mLayout.origin.x + o.x, mLayout.origin.y + o.y }, cloud_scale);
     const F64 k = mLayout.extent / (2.0 * LLCloudShadow::DOME_RADIUS * cloud_scale);
 
+    // L2b: the optics of the layer (llcloudoptics.h), tau_v from the debug setting
+    const LLCloudOptics::ShaderParams optics = LLCloudOptics::shader_params(std::isfinite(optical_depth) ? llclamp((F64) optical_depth, 3.0, 30.0) : LLCloudOptics::DEFAULT_VISUAL_DEPTH);
+    static const LLStaticHashedString sOptics("ctm_optics");
+
     mTarget.bindTarget();
+    if (volumetric)
+    {
+        // <Vulkanstorm> stage L7-3: the light's ray of every ground point marched through the bands (cloudShadowVolF.glsl)
+        LLGLDepthTest depth(GL_FALSE, GL_FALSE);
+        LLGLDisable blend(GL_BLEND);
+        LLGLDisable cull(GL_CULL_FACE);
+        LLGLDisable scissor(GL_SCISSOR_TEST);
+
+        static const LLStaticHashedString sMap("cvs_map");
+        static const LLStaticHashedString sLight("cvs_light");
+        LLGLSLShader& shader = gCloudShadowVolProgram;
+        shader.bind();
+        gPipeline.mVolumetricClouds.bindBands(shader);
+        // the map's south-west corner from the camera, and its extent, in km (east, north); the light y up
+        shader.uniform4f(sMap, (F32) ((mLayout.origin.x - camera.mdV[VX]) / 1000.0), (F32) ((mLayout.origin.y - camera.mdV[VY]) / 1000.0),
+                         (F32) (mLayout.extent / 1000.0), 0.f);
+        shader.uniform4f(sLight, (F32) L.x, (F32) L.z, (F32) L.y, 0.f);
+        shader.uniform4f(sOptics, optics.visual_depth, optics.beam_coefficient, optics.total_coefficient, optics.alpha_step);
+
+        gPipeline.mScreenTriangleVB->setBuffer();
+        gPipeline.mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+
+        gPipeline.mVolumetricClouds.unbindNoise(shader);
+        shader.unbind();
+        // </Vulkanstorm>
+    }
+    else
     {
         LLGLDepthTest depth(GL_FALSE, GL_FALSE);
         LLGLDisable blend(GL_BLEND);
@@ -132,12 +168,9 @@ void LLCloudShadowMap::update()
         static const LLStaticHashedString sTc0("ctm_tc0");
         static const LLStaticHashedString sSpan("ctm_tc_span");
         static const LLStaticHashedString sAlt("ctm_altitude_blend");
-        static const LLStaticHashedString sOptics("ctm_optics");
         gCloudShadowMapProgram.uniform2f(sTc0, (F32) tc0.x, (F32) tc0.y);
         gCloudShadowMapProgram.uniform2f(sSpan, (F32) k, (F32) -k);
         gCloudShadowMapProgram.uniform1f(sAlt, (F32) LLCloudShadow::altitude_blend(L, psky->getMaxY()));
-        // stage L2b: the optics of the layer (llcloudoptics.h), tau_v from the debug setting
-        const LLCloudOptics::ShaderParams optics = LLCloudOptics::shader_params(std::isfinite(optical_depth) ? llclamp((F64) optical_depth, 3.0, 30.0) : LLCloudOptics::DEFAULT_VISUAL_DEPTH);
         gCloudShadowMapProgram.uniform4f(sOptics, optics.visual_depth, optics.beam_coefficient, optics.total_coefficient, optics.alpha_step);
 
         gPipeline.mScreenTriangleVB->setBuffer();

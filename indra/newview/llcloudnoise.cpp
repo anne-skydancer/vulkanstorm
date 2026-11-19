@@ -38,9 +38,10 @@ namespace
 
 namespace LLCloudNoise
 {
-bool loadAndVerify(std::string& path, std::string& error)
+bool loadInto(std::vector<uint8_t>& bytes, Parsed& parsed, std::string& path, std::string& error)
 {
-    release();
+    std::vector<uint8_t>().swap(bytes);
+    parsed = Parsed();
     path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, APP_SETTINGS_DIR, FILE_NAME);
 
     // A virus scanner or an installer can hold the file for a moment: log why an open failed and try once more.
@@ -76,15 +77,27 @@ bool loadAndVerify(std::string& path, std::string& error)
         error = "wrong file size " + std::to_string((long long)size);
         return false;
     }
-    sFile.resize((size_t)size);
-    file.read(reinterpret_cast<char*>(sFile.data()), size);
+    bytes.resize((size_t)size);
+    file.read(reinterpret_cast<char*>(bytes.data()), size);
     if (file.gcount() != size)
     {
         error = "short read (" + std::to_string((long long)file.gcount()) + " of " + std::to_string((long long)size) + " bytes)";
-        release();
+        std::vector<uint8_t>().swap(bytes);
         return false;
     }
-    if (!LLCloudNoise::verify(sFile.data(), sFile.size(), LL_CLOUD_NOISE_SHA256, sParsed, error))
+    if (!LLCloudNoise::verify(bytes.data(), bytes.size(), LL_CLOUD_NOISE_SHA256, parsed, error))
+    {
+        std::vector<uint8_t>().swap(bytes);
+        parsed = Parsed();
+        return false;
+    }
+    return true;
+}
+
+bool loadAndVerify(std::string& path, std::string& error)
+{
+    release();
+    if (!loadInto(sFile, sParsed, path, error))
     {
         release();
         return false;
