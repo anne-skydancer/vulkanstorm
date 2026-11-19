@@ -183,6 +183,53 @@ runs:
       shell: powershell
       run: choco install innosetup --yes --no-progress
 
+    # The compiler cache (ccache) is used ONLY by builds that publish nothing:
+    # pull requests and the RelWithDebInfo qualification builds. A Release or
+    # packaging build never sets VKSTORM_CCACHE: it configures with no
+    # launcher and builds every object from scratch, so the shipped binaries
+    # never come from cached objects. Linux only for now. The cache is
+    # restored from the same branch (or the pull request's base line) and
+    # saved under a key of its own per run; ccache's size cap keeps the lines
+    # and open pull requests inside GitHub's 10 GB per repository.
+    - name: Set the build job count
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = Linux ]; then jobs=4; else jobs=3; fi
+        echo "VKSTORM_JOBS=$jobs" >> "$GITHUB_ENV"
+
+    - name: Install ccache
+      id: ccache_use
+      if: runner.os == 'Linux' && env.VIEWER_BUILD_TYPE != 'Release' && env.VIEWER_PACKAGE != 'ON'
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get -o Acquire::Retries=3 install -y ccache
+        ccache --version | head -1
+        echo "VKSTORM_CCACHE=1" >> "$GITHUB_ENV"
+        echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache" >> "$GITHUB_ENV"
+        echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+        echo "CCACHE_MAXSIZE=3G" >> "$GITHUB_ENV"
+        echo "CCACHE_COMPILERCHECK=content" >> "$GITHUB_ENV"
+        echo "used=true" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the compiler cache
+      id: ccache_restore
+      if: steps.ccache_use.outputs.used == 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-${{ inputs.platform }}-${{ env.VIEWER_BUILD_TYPE }}-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
+        restore-keys: |
+          ccache-${{ runner.os }}-${{ inputs.platform }}-${{ env.VIEWER_BUILD_TYPE }}-${{ github.head_ref || github.ref_name }}-
+          ccache-${{ runner.os }}-${{ inputs.platform }}-${{ env.VIEWER_BUILD_TYPE }}-${{ github.base_ref }}-
+
+    - name: Reset the compiler cache statistics
+      if: steps.ccache_use.outputs.used == 'true'
+      shell: bash
+      run: |
+        ccache --zero-stats
+        echo "Compiler cache restored from: ${{ steps.ccache_restore.outputs.cache-matched-key || 'nothing (cold)' }}" >> "$GITHUB_STEP_SUMMARY"
+
     - uses: actions/cache@v6
       with:
         path: .autobuild-installables
@@ -216,6 +263,13 @@ runs:
           options+=(-G 'Visual Studio 18 2026' -A x64 -DUSE_MESAZINK:BOOL=OFF -DUSE_INNOSETUP:BOOL=ON)
         else
           options+=(-DUSE_MESAZINK:BOOL=OFF -DUSE_INNOSETUP:BOOL=OFF)
+        fi
+        # Only a build that publishes nothing (see "Install ccache") compiles
+        # through ccache. The precompiled header becomes a textual -include
+        # (indra/cmake/CompilerCacheHeaders.cmake), which ccache can hash;
+        # a binary PCH is not cacheable. Release: no launcher, today's flags.
+        if [[ "${VKSTORM_CCACHE:-}" == 1 ]]; then
+          options+=(-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_DISABLE_PRECOMPILE_HEADERS:BOOL=ON)
         fi
         {
           echo 'LL_BUILD<<VKSTORM_LL_BUILD'
@@ -251,6 +305,14 @@ runs:
           fi
           echo "::warning::a package download hit a server error; retrying the configure"
         done
+        # A Release or packaging build must hold no launcher; a cached build must hold one.
+        if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
+          if grep -qE '^CMAKE_(C|CXX)_COMPILER_LAUNCHER:[A-Z]+=.+|^CMAKE_DISABLE_PRECOMPILE_HEADERS:[A-Z]+=ON' "$BUILD_DIRECTORY/CMakeCache.txt"; then
+            echo "::error::a Release or packaging build must not use a compiler launcher or drop its precompiled header"; exit 1
+          fi
+        elif [[ "${VKSTORM_CCACHE:-}" == 1 ]]; then
+          grep -qx 'CMAKE_CXX_COMPILER_LAUNCHER:UNINITIALIZED=ccache' "$BUILD_DIRECTORY/CMakeCache.txt"             || grep -qx 'CMAKE_CXX_COMPILER_LAUNCHER:STRING=ccache' "$BUILD_DIRECTORY/CMakeCache.txt"             || { echo "::error::the cached build did not configure ccache"; exit 1; }
+        fi
         if [[ "$VIEWER_BUILD_TYPE" == Release ]]; then
           python scripts/ci_release_config.py "$BUILD_DIRECTORY/CMakeCache.txt" "$RUNNER_OS"
         fi
@@ -272,7 +334,7 @@ runs:
       shell: bash
       run: |
         cmake -S indra -B ${{ inputs.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
-        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
+        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel "$VKSTORM_JOBS"
 
     # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
     # $TMPDIR. On a 26.04 host /tmp is an 8 GiB tmpfs, which overran
@@ -308,7 +370,20 @@ runs:
 
     - name: Build viewer and stage runtime
       shell: bash
-      run: cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+      run: |
+        set -euo pipefail
+        if [ "$RUNNER_OS" = Linux ]; then
+          # Peak memory and swap of the build, for the job summary.
+          ( while true; do free -m | awk '/^Mem:/{m=$3} /^Swap:/{print m, $3}'; sleep 5; done > "$RUNNER_TEMP/mem.samples" ) &
+          sampler=$!
+          report_peak() {
+            kill "$sampler" 2>/dev/null || true
+            awk '{ if ($1 > m) m = $1; if ($2 > w) w = $2 } END { printf "Peak memory used %d MiB, peak swap used %d MiB
+", m, w }' "$RUNNER_TEMP/mem.samples" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+          trap report_peak EXIT
+        fi
+        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel "$VKSTORM_JOBS"
 
     # The exe's entry point (llcpucheck_win.cpp) must run on any x86-64 processor.
     - name: Check the CPU-check object holds no AVX2 code
@@ -424,16 +499,29 @@ runs:
       run: |
         set -euo pipefail
         cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
-        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel "$VKSTORM_JOBS" \
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
           llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
           INTEGRATION_TEST_llcorehttp INTEGRATION_TEST_llsimdkernels
         # The credential-store tests stub LLControlGroup and link llui,
         # which only MSVC's linker resolves; they have never linked on Linux.
         if [ "$RUNNER_OS" = Windows ]; then
-          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel "$VKSTORM_JOBS" \
             --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
         fi
+
+    - name: Compiler cache statistics
+      if: always() && steps.ccache_use.outputs.used == 'true'
+      shell: bash
+      run: |
+        ccache --show-stats --verbose | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Save the compiler cache
+      if: always() && steps.ccache_use.outputs.used == 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: .ccache
+        key: ccache-${{ runner.os }}-${{ inputs.platform }}-${{ env.VIEWER_BUILD_TYPE }}-${{ github.head_ref || github.ref_name }}-${{ github.run_id }}
 
     - name: Upload installer
       if: env.VIEWER_PACKAGE == 'ON'
