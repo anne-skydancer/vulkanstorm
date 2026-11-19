@@ -14,6 +14,7 @@
 #ifndef LL_LLSHADOWMETHOD_H
 #define LL_LLSHADOWMETHOD_H
 
+#include <cmath>
 #include <cstdint>
 
 namespace LLShadowMethod
@@ -95,6 +96,37 @@ namespace LLShadowMethod
             return { false, false };
         }
         return { new_is_default, true };
+    }
+
+    // The Shadow softness slider of Preferences (Graphics, Rendering 2): RenderShadowLightSize, 0 .. 1.0, how sharp shadow edges
+    // are: 0 the sharpest a shadow map can draw, 1.0 the softest. One curve over the slider's position p (0 .. 1),
+    //     v = c (r^(2p) - 1) / (r - 1),   c = the default 0.23,   r = SOFTNESS_MAX / c - 1,
+    // gives 0 at the left end, the default exactly at the centre (p = 0.5: r^1) and SOFTNESS_MAX at the right end (c (r + 1)).
+    // It is a logarithmic scale with an offset, p = log(1 + v / a) / (2 log r) with a = c / (r - 1), about 0.098: about linear below
+    // a, where a still narrower penumbra no longer shows (the lamps' filter floor, the sun's texels), logarithmic above, where a
+    // 0.01 step of the slider changes the value by 3.5 % at the centre down to 2.7 % at the top (the old logarithmic right half: 3.0 %
+    // everywhere; finer only above about 0.45). One smooth curve, so the slider has no kink at its centre. The setting keeps the real
+    // value; only the slider's position is mapped.
+    constexpr float SOFTNESS_MIN = 0.0f;
+    constexpr float SOFTNESS_CENTRE = 0.23f;   // the default of RenderShadowLightSize
+    constexpr float SOFTNESS_MAX = 1.0f;
+    constexpr float SOFTNESS_BASE = SOFTNESS_MAX / SOFTNESS_CENTRE - 1.0f; // r
+    static_assert(SOFTNESS_MIN == 0.0f && SOFTNESS_BASE > 1.0f, "the curve starts at 0 and needs a centre below half the top");
+
+    // slider position [0, 1] -> value (positions outside are clamped). r^(2p) - 1 is taken as expm1, which keeps the small values
+    // near 0 precise; at the centre it is r - 1 itself, so the default comes out exact
+    inline float softnessFromPosition(float pos)
+    {
+        pos = pos < 0.0f ? 0.0f : (pos > 1.0f ? 1.0f : pos);
+        const float grown = pos == 0.5f ? SOFTNESS_BASE - 1.0f : std::expm1(2.0f * pos * std::log(SOFTNESS_BASE));
+        return SOFTNESS_CENTRE * (grown / (SOFTNESS_BASE - 1.0f));
+    }
+
+    // value -> slider position [0, 1] (values outside the range are clamped to its ends); exactly 0.5 at the default
+    inline float softnessToPosition(float value)
+    {
+        value = value < SOFTNESS_MIN ? SOFTNESS_MIN : (value > SOFTNESS_MAX ? SOFTNESS_MAX : value);
+        return 0.5f * (std::log1p(value / SOFTNESS_CENTRE * (SOFTNESS_BASE - 1.0f)) / std::log1p(SOFTNESS_BASE - 1.0f));
     }
 
     struct PresetMapping

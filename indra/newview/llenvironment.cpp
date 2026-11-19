@@ -1942,6 +1942,7 @@ void LLEnvironment::updatePrimaryLight()
     if (!psky)
     {
         mPrimary = PrimaryLightState(); // not valid: getLightDirection() falls back to the default
+        mDarkShadowGate = LLDirectionalShadowGate::State(); // no sky, no gate: the cascades render
         return;
     }
 
@@ -2025,6 +2026,19 @@ void LLEnvironment::updatePrimaryLight()
     st.moon_halo_weight = (F32)llclamp(rig.moon_halo_weight, 0.0, 1.0);
     st.light_scale = (F32)rig.light_scale;
     st.shadow_visible = rig.shadow_visible;
+    // the Stochastic method's dark gate: the light the shading uses for the directional term (the primary light's colour
+    // times the sky sunlight scale, as the deferred pass has it; never the camera or the exposure)
+    {
+        static LLCachedControl<bool> hdr(gSavedSettings, "RenderHDREnabled");
+        static LLCachedControl<F32> sunlight_scale(gSavedSettings, "RenderSkySunlightScale", 1.5f);
+        static LLCachedControl<F32> sunlight_hdr_scale(gSavedSettings, "RenderHDRSkySunlightScale", 1.5f);
+        const double e = LLDirectionalShadowGate::decisionLight(st.color.mV[0], st.color.mV[1], st.color.mV[2],
+                                                                 hdr ? sunlight_hdr_scale() : sunlight_scale());
+        const LLDirectionalShadowGate::Decision d = LLDirectionalShadowGate::step(mDarkShadowGate, e);
+        st.direct_light = (F32)e;
+        st.dark_fade = (F32)d.strength;
+        st.dark_skip = d.skip;
+    }
     st.valid = true;
     mPrimary = st;
 }

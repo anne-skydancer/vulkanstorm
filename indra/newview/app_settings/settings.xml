@@ -12118,7 +12118,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderAlphaStochasticTemporal</key>
   <map>
     <key>Comment</key>
-    <string>Debug only, not in Preferences and not persisted: a value an older build saved is ignored. The accumulation is part of the method and on by default. Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in at one eighth. Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
+    <string>Debug only, not in Preferences and not persisted: a value an older build saved is ignored. The accumulation is part of the method and on by default. Stochastic transparency: accumulate the noise over the frames. The seeds change every frame and the last frame's colour, moved by the camera's motion and clamped to this frame's neighbourhood, is blended in, by a weight that comes from the pixel's measured grain (all of this frame where one layer covers the pixel, down to one eighth where the grain is large). Static views converge to a fine, steady image from 8 samples; moving objects can ghost a little.</string>
     <key>Persist</key>
     <integer>0</integer>
     <key>Type</key>
@@ -12587,13 +12587,13 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderShadowLightSize</key>
   <map>
     <key>Comment</key>
-    <string>Stochastic shadow method only: multiplier of the shadowing light's angular size, which is the physical sun (0.53 degrees) times the sky's sun scale; the moon uses the same size. Was RenderShadowPCSSLightSize.</string>
+    <string>Stochastic shadow method only: how sharp the edges of every shadow are, Shadow softness in Preferences (Graphics, Rendering 2; 0 to 1.0, 0 the sharpest, the default 0.23 at the slider's centre). It changes only the soft edge of sun, moon and lamp shadows: a higher value widens it, a lower one narrows it, and at 0 an edge is as sharp as the shadow map's texels can draw it (a lamp's edge stays at least 1.5 of its map's texels wide). The visible sun, moon and lights do not change. Was RenderShadowPCSSLightSize.</string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>F32</string>
     <key>Value</key>
-    <real>1.0</real>
+    <real>0.23</real>
   </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>

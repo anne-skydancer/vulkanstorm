@@ -52,6 +52,10 @@ audit is updated. Aurora is still a design reference first. The night sky
 (`indra/newview/llnightsky.*` and its data tools) is the owner's own work,
 relicensed by her from her Aurora fork.
 
+The stochastic transparency's grain-measuring resolve (the grain measure, the frame weight, the smooth and the non-finite
+guards in `alphaStochastic{Current,Resolve,Composite}F.glsl`, the smooth now in the composite, and `stochasticResolveUtilF.glsl`) is adapted from Aurora Viewer
+PR 3663 (Gaalrauch / Rohacan Hirons, GPL-3.0-or-later); see `doc/oit/stochastic-transparency.md`.
+
 ## Original Vulkanstorm files
 
 New source files carry the header

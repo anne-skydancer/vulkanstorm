@@ -41,18 +41,31 @@ class LLVector4a;
 //
 // Threads: every hook runs on the main thread (the render thread is the main thread in this viewer). A hook that runs elsewhere
 // changes nothing and flags the next frame "everything is stale", which is safe and costs one redraw of every tile. The
-// hooks are no-ops until a cache switches the feed on (setTracking); the classifier (noteServerUpdate) is the exception and
-// always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list;
-// nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
+// hooks are no-ops until a cache switches the feed on (setTracking, per owner); the classifier (noteServerUpdate) is the exception and
+// always runs, so the sticky bits are right when a cache starts. No GL, no frees, no shared state beyond this feed's own list, its
+// main-thread scope markers (TextureEntryRebuild, OwnRebuild: a drawable pointer each; BridgeMoves: a flag) and its record of quiet
+// bridges (noteMoved: drawable pointers, only compared, of bridges the pipeline's moved list holds until the bridge pass, where the record
+// ends); nothing here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass.
 class LLShadowDirtyFeed
 {
 public:
     using Cause = llprojectorpool::Cause;
 
     // ---- the consumers' side ----
-    // A cache that holds tiles switches the hooks on; off, they cost one relaxed load.
-    static void setTracking(bool on);
-    static bool tracking() { return sTracking.load(std::memory_order_relaxed); }
+    // The caches that use the feed. Tracking and the lamp roots are kept per owner (P4), so one cache releasing its tiles
+    // neither switches the hooks off nor drops the other's pending boxes or lamp roots.
+    enum class Owner : U32
+    {
+        Projectors = 1u << 0, // the projector pool (llprojectorshadows)
+        Points = 1u << 1      // the point-light face pool (a later stage)
+    };
+
+    // A cache that holds tiles switches the hooks on for itself; off, they cost one relaxed load. The hooks record while any
+    // owner tracks. The last owner to switch off drops every pending box (nobody is left to read them); an owner that switches
+    // off while another tracks drops only its own lamp roots. Main thread only (off it, nothing changes).
+    static void setTracking(Owner owner, bool on);
+    static bool tracking() { return sTracking.load(std::memory_order_relaxed) != 0; }
+    static bool tracking(Owner owner) { return (sTracking.load(std::memory_order_relaxed) & static_cast<U32>(owner)) != 0; }
 
     // Once per frame (idempotent within a frame, so two caches may call it): hands out the boxes pushed since the last frame.
     // The reference stays valid until the next frame's call.
@@ -78,12 +91,73 @@ public:
     // caster (avatars, attachments, animesh, HUD, flexi, client-spun, render types that cast no lamp shadow) and, while it is
     // active (bridged: the tile's cull drops it), a mover or physical object whose linkset is not a lamp's own. A mover at rest
     // is static and drawn, so it is a fixed caster: its changes push, and so does the edge where it becomes active or static.
+    // In the bridge pass (BridgeMoves) a bridge on the quiet record (noteMoved) moves without a push.
     static void noteDrawable(LLDrawable* drawable, Cause cause);
+
+    // LLPipeline::markMoved: the extents a drawable moves from (the partition's move pushes where it ends up). A bridge marked moved
+    // during the own rebuild of a prim inside it (OwnRebuild: the prim's octree move in LLVOVolume::genBBoxes reaches
+    // LLSpatialBridge::move, and nothing else moves in that rebuild) is that rebuild's push: the prim's rule (its texture-entry mark and
+    // silhouette key; the box is the bridge's either way). When the rule keeps it quiet the bridge goes on the quiet record, so its move in
+    // the bridge pass pushes nothing either (llprojectorpool::quietBridgeAfterMove); any other markMoved of it (the linkset's own move,
+    // LLDrawable::updateXform or updatePartition, another prim's move) takes it off.
+    static void noteMoved(LLDrawable* drawable);
     static void pushExtents(LLDrawable* drawable, Cause cause); // the drawable's extents, no skip test, no flag refresh
 
     // LLPipeline::markRebuild: only a rebuild that can change the picture counts (llprojectorpool::rebuildDirties: volume, rigged,
-    // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set).
+    // position alone; not texcoord, colour or the whole REBUILD_GEOMETRY set). Inside a TextureEntryRebuild it pushes nothing (below).
     static void noteRebuild(LLDrawable* drawable, U32 rebuild_flag);
+
+    // Around a texture-entry setter's own rebuild request (LLVOVolume::setTEColor's dirtyMesh; setTEMaterialID, setTEMaterialParams and
+    // setTEGLTFMaterialOverride with their markTextured): REBUILD_ALL, because the renderer rebuilds the whole prim for a tint or a material,
+    // not because its shape moved (lamp shadows S2: a script's tint, emissive or PBR colour toggled with its light). The setter's
+    // markTextured, inside the scope or before it, applies the silhouette rule (a change pushes once); the request itself pushes nothing,
+    // and it marks the object (POOL_TE_REBUILD, llprojectorpool::textureEntryMarkAfterRequest) so that the rebuild's own pushes apply the
+    // rule again (OwnRebuild). Main thread (off it, or while nothing tracks, it does nothing and the request is counted as before).
+    class TextureEntryRebuild
+    {
+    public:
+        explicit TextureEntryRebuild(LLDrawable* drawable);
+        ~TextureEntryRebuild();
+        TextureEntryRebuild(const TextureEntryRebuild&) = delete;
+        TextureEntryRebuild& operator=(const TextureEntryRebuild&) = delete;
+    private:
+        bool mActive = false;
+        const LLDrawable* mPrevDrawable = nullptr;
+        bool mPrevQueuedShape = false;
+    };
+
+    // LLPipeline::updateGeom, around one drawable's own rebuild (updateDrawableGeom): the pushes the rebuild makes for this drawable (its
+    // octree move in LLVOVolume::genBBoxes; in an active linkset the markMoved of its bridge, noteMoved; and completed()) follow what asked
+    // for it. With the texture-entry mark only a silhouette change pushes (llprojectorpool::ownRebuildPushes); otherwise they push as
+    // before. completed(): a rebuild that waited (a volume or rigged rebuild, or a mesh that loaded) changes the picture when it is done, so
+    // it pushes then; the mark ends. Main thread (updateGeom).
+    class OwnRebuild
+    {
+    public:
+        explicit OwnRebuild(LLDrawable* drawable);
+        ~OwnRebuild();
+        void completed();
+        OwnRebuild(const OwnRebuild&) = delete;
+        OwnRebuild& operator=(const OwnRebuild&) = delete;
+    private:
+        LLDrawable* mDrawable = nullptr;
+        LLDrawable* mPrev = nullptr;
+        bool mPush = false;
+    };
+
+    // LLPipeline::updateGeom, around its bridge pass (updateMovedList(mMovedBridge), after the rebuilds: each moved bridge, an active
+    // linkset's box, moves in the region's octree). A live bridge on the quiet record (noteMoved) moves without a push: neither its box nor
+    // anything a tile shows changed. Every bridge on the moved list moves in the pass, so the record ends with it. Main thread.
+    class BridgeMoves
+    {
+    public:
+        BridgeMoves();
+        ~BridgeMoves();
+        BridgeMoves(const BridgeMoves&) = delete;
+        BridgeMoves& operator=(const BridgeMoves&) = delete;
+    private:
+        bool mActive = false;
+    };
 
     // LLVOVolume::notifyMeshLoaded: a mesh arrived (it raises REBUILD_GEOMETRY, which markRebuild does not count): the extents are
     // pushed now and again when the rebuild it waits for completes (LLPipeline::updateGeom asks meshLoaded and clears it).
@@ -91,11 +165,14 @@ public:
     static bool meshLoaded(const LLDrawable* drawable);
     static void clearMeshLoaded(const LLDrawable* drawable);
 
-    // LLPipeline::markTextured: a texture, material, bump or glow change of a prim. Only a prim with a blended, alpha-masked or
-    // alpha-textured face counts (the silhouette of its shadow follows the texture); an opaque prim's texture changes and
-    // animated textures never push. A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any
-    // component count; its REBUILD_VOLUME for 4-component textures reaches noteRebuild as well). A prim the feed has not seen since
-    // tracking started (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like now.
+    // LLPipeline::markTextured: a texture, material, bump, glow or colour change of a prim. It pushes only when the prim's silhouette key
+    // changed (llprojectorpool::texturedDirties: its blended, alpha-masked or alpha-textured faces and what shapes their holes, and its
+    // double-sided glTF faces); an opaque prim's texture changes, animated textures, fullbright, glow, shine, bump, RGB tints, emissive, the
+    // PBR colour and the light's own colour never push (blinker scripts toggle them with the light). A key change pushes once and stores the
+    // new key, so a queued texture-entry rebuild's own pushes find it stored (llprojectorpool::textureEntryMarkAfterRequest says why one push
+    // is enough). A texture that finishes loading reaches this hook through LLFace::dirtyTexture's markTextured (any component count; its
+    // REBUILD_VOLUME for 4-component textures reaches noteRebuild as well). A prim the feed has not seen since tracking started
+    // (POOL_ALPHA_KNOWN unset) pushes once, whatever it looks like now.
     static void noteTextured(LLDrawable* drawable);
 
     // LLPipeline::shiftObjects moved agent space by `offset`: pending boxes move with it.
@@ -106,8 +183,9 @@ public:
     static void noteServerUpdate(LLViewerObject* object, bool pos_changed, bool rot_changed, bool velocity, bool omega);
 
     // The roots of the linksets that hold a lamp the pool draws a tile for (the lamp's own linkset is the fixture: its changes
-    // push whatever its flags). Set once a frame by the pool; the pointers are only compared. Main thread.
-    static void setLampRoots(std::vector<const LLViewerObject*>& roots);
+    // push whatever its flags). Set once a frame by each pool for its own lamps (the feed tests the union); the pointers are only
+    // compared. Main thread.
+    static void setLampRoots(Owner owner, std::vector<const LLViewerObject*>& roots);
     // How many agent-space shifts the feed has seen (a cache that keeps volumes in agent space rebuilds them when it changes).
     static U32 shifts();
     // Objects the classifier has flagged as movers since the feed started (stats).
@@ -123,10 +201,16 @@ public:
     static bool extentsOf(LLDrawable* drawable, llprojectorpool::Aabb& out);
 
 private:
+    // what noteDrawable's rule did with one push: skipped the drawable, kept it quiet (an own rebuild's push under the texture-entry mark
+    // that left the silhouette key alone), or pushed its extents
+    enum class Note { Skipped, Quiet, Pushed };
+    static Note note(LLDrawable* drawable, Cause cause);
     static void push(const llprojectorpool::Aabb& box, Cause cause);
-    static bool skipped(LLDrawable* drawable, LLViewerObject* object);
+    // true when the hooks skip the drawable; `edge` (optional) says it was not skipped because it just became active or static again,
+    // which must push whatever else the hook's rule says
+    static bool skipped(LLDrawable* drawable, LLViewerObject* object, bool* edge = nullptr);
 
-    static std::atomic<bool> sTracking;
+    static std::atomic<U32> sTracking; // the owners tracking, a mask of Owner
 };
 
 #endif // LL_LLSHADOWDIRTYFEED_H

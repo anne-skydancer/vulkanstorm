@@ -30,7 +30,10 @@
 // Gems 3 ch. 10 on caster culling), conservative box-against-plane culling (Assarsson and
 // Moller 2000). No code is taken from any of them.
 
+#include "llshadowmethod.h"
+
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -40,21 +43,25 @@
 #include <unordered_map>
 #include <vector>
 
+#ifndef llassert // the viewer's macro; the standalone test has none
+#define llassert(x) assert(x)
+#endif
+
 namespace llprojectorpool
 {
 
 // ---------------------------------------------------------------------------------------------
-// Tile size (section 4.2, D4) and atlas level (D3)
+// Tile size (section 4.2, D4; lamp shadows L2) and the atlas's budget (D3: the pressure valve, below)
 // ---------------------------------------------------------------------------------------------
 
 constexpr uint32_t kMinTile = 64;      // the floor: a tile never goes below it
 constexpr uint32_t kMinBase = 128;     // clamp of the light's base size
 constexpr uint32_t kMaxBase = 2048;
-constexpr int      kMaxLevel = 5;      // 2048 >> 5 = 64: below this nothing changes
+constexpr int      kMaxLevel = 5;      // 2048 >> 5 = 64: a tile shrinks by at most this many octaves
 
-constexpr float kShrinkAbove = 0.60f;  // demand above this: down by as many levels as it takes to get at or below it (one repack)
-constexpr float kGrowAtMost = 0.45f;   // demand of the next level up at or below this ...
-constexpr float kGrowHoldSeconds = 3.0f; // ... for this long: one level up
+constexpr float kShrinkAbove = 0.60f;  // demand above this: the pressure rises by as many steps as it takes to get at or below it
+constexpr float kGrowAtMost = 0.45f;   // demand one step down at or below this ...
+constexpr float kGrowHoldSeconds = 3.0f; // ... for this long: one step down
 
 inline uint32_t pow2Round(double v)
 {
@@ -67,16 +74,20 @@ inline uint32_t pow2Round(double v)
     return uint32_t(1) << uint32_t(l);
 }
 
-// d_ref  = min(1.5 * radius, 4 m)
-// N_base = clamp(pow2_round(2 * tan(fov / 2) * d_ref / 4 mm), 128, 2048)
-inline uint32_t baseSize(float radius, float fov_radians)
+// A tile's size comes from its lamp alone (lamp shadows L2): its texels are about 4 mm at the lamp's reference depth
+// d_ref = min(1.5 * radius, 4 m). No camera input: the camera's position enters only when the atlas is over its budget (the
+// pressure valve, LevelController below), never while the atlas has room.
+constexpr double kLampTexelM = 0.004;   // metres: the texel a tile aims for at d_ref
+constexpr double kRefMaxM = 4.0;        // the largest reference depth
+
+// N_base of one tile: its interior spans tan_w * d_ref metres at d_ref and wants kLampTexelM texels there, plus `guard` texels on
+// each side (a wide lamp's cell); a power of two in [kMinBase, kMaxBase]. tan_w: the tile's wider axis as a span of tangents (a lamp of
+// one tile: 2 tan(fov / 2) on its wider axis; a cell: its share of that).
+inline uint32_t tileBaseSize(double tan_w, double radius, uint32_t guard)
 {
-    const double d_ref = std::min(1.5 * double(radius), 4.0);
-    // tan() is non-monotone past pi: clamp the half angle to [0, 1.55] rad, far beyond any real fov
-    const double half = std::min(std::max(0.5 * double(fov_radians), 0.0), 1.55);
-    const double texels = 2.0 * std::tan(half) * d_ref / 0.004;
-    const uint32_t n = pow2Round(texels);
-    return std::min(std::max(n, kMinBase), kMaxBase);
+    const double d_ref = std::min(1.5 * std::max(radius, 0.0), kRefMaxM);
+    const double texels = tan_w * d_ref / kLampTexelM + 2.0 * double(guard); // NaN and anything up to one texel round to 1: the floor
+    return std::min(std::max(pow2Round(texels), kMinBase), kMaxBase);
 }
 
 // Atlas edge by video memory (spec 4.2, D20). vram_mb is gGLManager.mVRAM (MB, 0 = unknown), max_texture the driver's
@@ -110,31 +121,50 @@ inline uint32_t atlasTier(uint32_t vram_mb, uint32_t max_texture, bool dedicated
 // the memory of the two atlases of one tier (D32F, 4 bytes a texel), in bytes
 constexpr uint64_t atlasBytes(uint32_t size) { return 2ull * size * size * 4ull; }
 
-// The penumbra's size rules (P2b), the C++ twins of sampleProjectorShadow's (shadowStochasticUtil.glsl), per axis of the map
-// (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; w: the receiver's axial distance from the
-// projector's centre (m); n: the tile size (texels); c1: the depth term of the projector's matrix (z = c0 - c1 / w).
-constexpr float kRadiusMaxM = 0.04f;        // ST_SPOT_RADIUS_MAX_M: the largest radius of the search and filter, metres at the receiver
-constexpr float kKernelTexelsMin = 1.0f;    // ST_SPOT_KERNEL_MIN
-constexpr float kKernelTexelsMax = 12.0f;   // ST_SPOT_KERNEL_TEXELS_MAX
-constexpr float kEmitterMin = 0.02f;        // metres: the emitter extent's lower limit (a point has no edge to render)
-constexpr float kEmitterMax = 0.15f;        // metres: the upper limit, the constant of P2: no lamp is softer than before
-
-// clamp(ST_SPOT_RADIUS_MAX_M * k * N / w, 1, 12)
-inline float radiusCapTexels(float k, uint32_t n, float w)
+// The lamps' soft-shadow filter (lamp shadows L1): one filter for every lamp type (shadowStochasticUtil.glsl, stSpotFilterTile), with
+// built-in limits per type. The emitter is a disc of `emitter_m` metres times the Shadow softness (RenderShadowLightSize) at the
+// light's projection centre, whatever the prim: no script or build parameter carries a light size, so the lamp's own parameters
+// (pose, cone, reach) shape its shadow and the base is a constant. The light-size study (2026-11-18) puts it at 4.5 cm, the largest
+// size whose avatar shadows keep every body feature of 2.5 cm or more readable (1.0 cm at the default softness 0.23, 4.5 cm at the
+// slider's top, short of the 6 cm blobs). The blocker search and the filter run at the physical penumbra's radius, at least
+// `kernel_min` texels (a narrower penumbra would draw the tile's texels as squares) and at most `kernel_max` (the fixed 8 + 32
+// gathers cover the disc up to there; a wide lamp's cell guard is built for it). No edge reconstruction and no cap in metres: a
+// coarser tile gives a softer edge, never a blockier one. These are the C++ twins of the shader's numbers, per axis of the map
+// (u: k = k.x, v: k = k.y). k: uv per metre across the axis at unit axial distance; n: the tile size (texels); c1: the depth term
+// of the projector's matrix (z = c0 - c1 / w, w the axial distance from the projector's centre).
+struct LampFilter
 {
-    return std::min(std::max(kRadiusMaxM * k * (float)n / w, kKernelTexelsMin), kKernelTexelsMax);
+    float emitter_m;  // metres: the emitter's base size, times the softness
+    float kernel_min; // texels: the floor of the search and filter radius
+    float kernel_max; // texels: the cap of the search and filter radius
+};
+// projectors: ST_SPOT_KERNEL_MIN 1.5 and ST_SPOT_KERNEL_TEXELS_MAX 12 (scripts/tests/test_projector_lamp_filter.py checks the shader's)
+constexpr LampFilter kProjectorLamp{ 0.045f, 1.5f, 12.0f };
+// point lights (stage L4, six faces with a guard of 16 texels: the cap is the guard less the bilinear footprint): prepared, not used
+// yet. The same base: the same physical lamp built either way casts the same shadow.
+constexpr LampFilter kPointLamp{ 0.045f, 1.5f, 14.0f };
+constexpr float kSoftnessDefault = LLShadowMethod::SOFTNESS_CENTRE; // RenderShadowLightSize's default (one constant: llshadowmethod.h)
+
+// the emitter's extent across the beam, in metres: the type's base times the softness (RenderShadowLightSize), the same on both
+// axes and for every lamp of the type. Zero is accepted and gives a point emitter (the filter keeps its floor); a negative or
+// non-finite softness gets the default
+inline float emitterExtent(const LampFilter& lamp, float softness)
+{
+    return lamp.emitter_m * (std::isfinite(softness) && softness >= 0.0f ? softness : kSoftnessDefault);
 }
 
-// the emitter's extent across the beam: the prim's face, clamped (a bad value gets the lower limit)
-inline float emitterExtent(float face)
-{
-    return std::isfinite(face) ? std::min(std::max(face, kEmitterMin), kEmitterMax) : kEmitterMin;
-}
-
-// texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N
+// texels of filter radius per unit of map depth between receiver and blocker: (0.5 / c1) * light * k * N (a test twin: the viewer's
+// lookup is the shader's; the unit test checks the shader's numbers through it)
 inline float penumbraTexelsPerDepth(float light, float k, uint32_t n, float c1)
 {
     return (0.5f / c1) * light * k * (float)n;
+}
+
+// the radius the search and the filter run at, from the physical one (texels): clamp(physical, kernel_min, kernel_max), as the
+// shader's clamp(pen * depth, vec2(ST_SPOT_KERNEL_MIN), kmax); a NaN reads as the floor (a test twin, like penumbraTexelsPerDepth)
+inline float filterRadiusTexels(const LampFilter& lamp, float physical_texels)
+{
+    return std::isnan(physical_texels) ? lamp.kernel_min : std::min(std::max(physical_texels, lamp.kernel_min), lamp.kernel_max);
 }
 
 // N_i(s) = max(64, N_base >> s)
@@ -144,52 +174,170 @@ inline uint32_t levelSize(uint32_t base, int level)
     return std::max(kMinTile, base >> s);
 }
 
-// U(s) = sum N_i(s)^2 / A^2
-inline double demand(const std::vector<uint32_t>& bases, int level, uint32_t atlas)
+// The frame time a hold counts (the valve's 3 s, the blocked growth's): a timer glitch (NaN, negative) counts as no time, a long stall
+// (teleport, alt-tab) as one short frame, so a hold is that long of stable frames.
+inline float holdSeconds(float dt_seconds)
+{
+    return std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The pressure valve (lamp shadows L2): which tiles shrink when the atlas is over its budget
+// ---------------------------------------------------------------------------------------------
+//
+// While the lamps' tiles fit (demand at most kShrinkAbove), every tile has its lamp's size and nothing depends on the camera. Over the
+// budget the tiles shrink farthest first: each tile is in a distance band (the camera POSITION's distance to the tile's volume, never the
+// view direction: under 8 m, 8 to 16 m, 16 to 32 m, 32 to 64 m, 64 m and beyond), and a pressure P shifts the tiles of band b down by
+// P - (kMaxBand - b) octaves (none below that, at most kMaxLevel, never below kMinTile). One step of P halves the farthest shrinking band
+// once more and starts the next nearer one, so a tile one band farther ends one octave coarser: its texel grows with its distance, as
+// the screen's does. The near band starts at 8 m, where a lamp's 4 mm texel is still about half a pixel of a 1440p, 60 degree view (0.8 mm
+// a metre): every tile nearer than that matters alike, so a room is one band and shrinks evenly, with no size changes as the camera walks
+// in it (measured, scripts/shadows/projector_sizing_model.py: bands from 2 m changed 7.9 tile sizes a second in the model room and 28 in
+// the club, from 8 m 0.23 and 7.6, with the same floor texel in the room and a finer one in the club). P rises at once (as many steps as
+// it takes to be at or below kShrinkAbove) and falls one step after kGrowHoldSeconds at or below kGrowAtMost: the hysteresis of the
+// global level it replaces, which is the special case of every tile in the farthest band. P follows the demand alone: an arriving tile
+// that finds no room waits for the shrinks being drawn and moves no pressure (placement, below). A band changes only half an octave past
+// its bound (kBandHysteresis). A size change is drawn by the tile's own render (draw-then-swap).
+constexpr int kMaxBand = 4;                    // 64 m and beyond (the reach is at most 128 m)
+constexpr float kBandNearM = 8.0f;             // band 0: within 8 m of the camera position; band b in 1 .. 3: [8 * 2^(b-1), 8 * 2^b) m
+constexpr float kBandHysteresis = 1.41421356f; // 2^0.5
+
+// the bounds of band b: [bandLow, bandHigh), powers of two times kBandNearM (exact in float)
+inline float bandLow(int band) { return band <= 0 ? 0.f : kBandNearM * float(1u << unsigned(band - 1)); }
+inline float bandHigh(int band) { return band >= kMaxBand ? std::numeric_limits<float>::infinity() : kBandNearM * float(1u << unsigned(band)); }
+
+// the band that holds a distance, without hysteresis (NaN, infinite or huge: the farthest; negative: the nearest). Comparisons against
+// the bounds, no logarithm: every tile runs this every frame
+inline int bandOf(float distance_m)
+{
+    if (!(distance_m < 1.0e6f))
+    {
+        return kMaxBand;
+    }
+    int band = 0;
+    while (band < kMaxBand && distance_m >= bandHigh(band))
+    {
+        ++band;
+    }
+    return band;
+}
+
+// a tile's band after a frame at `distance_m`: it moves only past a bound by kBandHysteresis. The common case (still inside its bounds
+// widened by the hysteresis) is the same two comparisons bandOf would make
+inline int nextBand(int band, float distance_m)
+{
+    band = std::min(std::max(band, 0), kMaxBand);
+    const float nearer = distance_m / kBandHysteresis, farther = distance_m * kBandHysteresis;
+    if (nearer < bandHigh(band) && farther >= bandLow(band))
+    {
+        return band; // bandOf(nearer) <= band <= bandOf(farther)
+    }
+    const int up = bandOf(nearer), down = bandOf(farther);
+    if (up > band)
+    {
+        return up;
+    }
+    return down < band ? down : band;
+}
+
+// the octaves a tile of `band` is shifted down by at pressure P
+inline int valveShift(int pressure, int band)
+{
+    const int b = std::min(std::max(band, 0), kMaxBand);
+    return std::min(std::max(pressure - (kMaxBand - b), 0), kMaxLevel);
+}
+
+// One tile as the valve sees it.
+struct ValveTile
+{
+    uint32_t base = 0;   // the tile's size from its lamp (tileBaseSize)
+    int band = kMaxBand; // its distance band (nextBand): the farthest shrink first
+    uint32_t fixed = 0;  // nonzero: a tile the valve does not size (its lamp is switched off, or a lamp's old cells that serve until its
+                         // new ones are drawn); it counts at this size
+};
+
+inline uint32_t valveSize(const ValveTile& t, int pressure)
+{
+    return t.fixed ? t.fixed : levelSize(t.base, valveShift(pressure, t.band));
+}
+
+// U(P) = sum N_i(P)^2 / A^2
+inline double demand(const std::vector<ValveTile>& tiles, int pressure, uint32_t atlas)
 {
     double sum = 0.0;
-    for (uint32_t b : bases)
+    for (const ValveTile& t : tiles)
     {
-        const double n = double(levelSize(b, level));
+        const double n = double(valveSize(t, pressure));
         sum += n * n;
     }
     const double a = double(atlas);
     return sum / (a * a);
 }
 
-// The global level with its hysteresis. One instance per atlas.
+// The lowest pressure at which every tile the valve sizes is at its floor: no step past it changes a size. A tile of band b reaches
+// its floor (kMinTile, or kMaxLevel octaves down) at P = octaves + kMaxBand - b.
+inline int pressureCeiling(const std::vector<ValveTile>& tiles)
+{
+    int ceiling = 0;
+    for (const ValveTile& t : tiles)
+    {
+        if (t.fixed)
+        {
+            continue;
+        }
+        int octaves = 0;
+        while (octaves < kMaxLevel && levelSize(t.base, octaves) > kMinTile)
+        {
+            ++octaves;
+        }
+        if (octaves > 0)
+        {
+            ceiling = std::max(ceiling, octaves + kMaxBand - std::min(std::max(t.band, 0), kMaxBand));
+        }
+    }
+    return ceiling;
+}
+
+// The valve's pressure with its hysteresis (the global level of P2 when every tile is in the farthest band). One instance per atlas.
 class LevelController
 {
 public:
     int level() const { return mLevel; }
-    void reset() { mLevel = 0; mHold = 0.0f; }
+    int ceiling() const { return mCeiling; } // the last update's pressureCeiling: at it, every tile the valve sizes is at its floor
+    void reset() { mLevel = 0; mHold = 0.0f; mCeiling = 0; }
 
-    // Call once per frame. dt_seconds is the frame time; placement_failed asks for one more step
-    // down (a repack that did not fit after compaction). Returns true when the level changed.
-    bool update(const std::vector<uint32_t>& bases, uint32_t atlas, float dt_seconds, bool placement_failed)
+    // Call once per frame. dt_seconds is the frame time (holdSeconds: the 3 s hold is 3 s of stable frames). Returns true when the pressure
+    // changed. The pressure follows the tiles' demand alone: a tile that finds no room in the atlas waits for the shrinks being drawn
+    // (arrivalShortfall below), so placement is no input.
+    bool update(const std::vector<ValveTile>& tiles, uint32_t atlas, float dt_seconds)
     {
-        // a timer glitch (NaN, negative) counts as no time; a long stall (teleport, alt-tab) as one short frame, so the
-        // 3 s hold is 3 s of stable frames
-        dt_seconds = std::isfinite(dt_seconds) ? std::min(std::max(dt_seconds, 0.0f), 0.25f) : 0.0f;
+        dt_seconds = holdSeconds(dt_seconds);
+        // a step past the ceiling changes no size (the near tiles left, or are all at their floor): it is dropped at once, no hold to
+        // wait out
+        const int ceiling = pressureCeiling(tiles);
+        mCeiling = ceiling;
+        mLevel = std::min(mLevel, ceiling);
         const int before = mLevel;
-        while (mLevel < kMaxLevel && demand(bases, mLevel, atlas) > kShrinkAbove)
-        {
-            ++mLevel;
-            mHold = 0.0f;
-        }
-        if (placement_failed && mLevel < kMaxLevel && mLevel == before)
+        while (mLevel < ceiling && demand(tiles, mLevel, atlas) > kShrinkAbove)
         {
             ++mLevel;
             mHold = 0.0f;
         }
         if (mLevel == before && mLevel > 0)
         {
-            if (demand(bases, mLevel - 1, atlas) <= kGrowAtMost)
+            // one step down, past the steps that change nothing (a band that holds no tile)
+            int down = mLevel - 1;
+            const double at = demand(tiles, down, atlas);
+            while (down > 0 && demand(tiles, down - 1, atlas) == at)
+            {
+                --down;
+            }
+            if (at <= kGrowAtMost)
             {
                 mHold += dt_seconds;
                 if (mHold >= kGrowHoldSeconds)
                 {
-                    --mLevel;
+                    mLevel = down;
                     mHold = 0.0f;
                 }
             }
@@ -208,6 +356,7 @@ public:
 private:
     int   mLevel = 0;
     float mHold = 0.0f;
+    int   mCeiling = 0;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -224,6 +373,33 @@ inline bool inRange(bool was_in, float cam_dist, float reach)
         return cam_dist <= reach + std::max(2.0f, 0.1f * reach);
     }
     return cam_dist <= reach;
+}
+
+// A lamp that a script switches off, turns black or gives a radius of 0 (lamp shadows S2: blinkers and strobes toggle every 0.03 to 1 s,
+// a broken tube sleeps up to 2 s) keeps its tiles for kOffHoldSeconds: switched on again in that time it is shadowed at once and nothing
+// is drawn again, since a tile depends on neither the light's colour nor its intensity. While it is off nothing of it is drawn (the
+// lighting pass skips it, so no tile render is spent on it either), but its tiles keep collecting the scene's changes. A lamp that stays
+// off longer (a day and night switch) gives its tiles and their LOD pins back like a lamp out of range.
+constexpr double kOffHoldSeconds = 5.0;
+
+// true when a lamp switched off at `off_since` (seconds) is still held at `now` (a bad time ends the hold)
+inline bool offHeld(double off_since, double now)
+{
+    return now - off_since <= kOffHoldSeconds;
+}
+
+// One frame of a tile whose lamp is seen off (LLProjectorShadows::holdOff, once per tile and frame): `off` and `off_since` are the tile's
+// own; the first such frame starts the hold. Returns whether the tile stays in the light set: the hold lasts and the lamp is in range by
+// the reach it had when it was last on. A tile that does not stay is dropped with its lamp's other tiles; a frame the lamp is on again
+// ends the hold (`off` = false) and its tiles serve at once.
+inline bool holdOffFrame(bool& off, double& off_since, double now, bool in_range)
+{
+    if (!off)
+    {
+        off = true;
+        off_since = now;
+    }
+    return offHeld(off_since, now) && in_range;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -396,6 +572,43 @@ public:
         return 0;
     }
 
+    // The largest block an allocation gets once `held` (a block alloc returned, still allocated) is freed: it merges with its free
+    // buddies first. A tile's resize frees its rect and allocates the new size in the same render (draw-then-swap), so this is the
+    // largest size it can take.
+    uint32_t largestAfterFree(const Rect& held) const
+    {
+        if (!validSize(held.size))
+        {
+            return largestFree();
+        }
+        int o = order(held.size);
+        uint32_t x = held.x, y = held.y;
+        while (o < mOrders)
+        {
+            const uint32_t s = blockSize(o);
+            const uint32_t px = x & ~s, py = y & ~s;
+            const uint64_t k[4] = { key(px, py), key(px + s, py), key(px, py + s), key(px + s, py + s) };
+            const uint64_t self = key(x, y);
+            bool all = true;
+            for (uint64_t c : k)
+            {
+                if (c != self && mFree[o].find(c) == mFree[o].end())
+                {
+                    all = false;
+                    break;
+                }
+            }
+            if (!all)
+            {
+                break;
+            }
+            x = px;
+            y = py;
+            ++o;
+        }
+        return std::max(largestFree(), blockSize(o));
+    }
+
 private:
     static uint64_t key(uint32_t x, uint32_t y) { return (uint64_t(y) << 32) | x; }
     static uint32_t keyX(uint64_t k) { return uint32_t(k & 0xffffffffu); }
@@ -418,6 +631,69 @@ private:
     uint32_t mAtlas = 0;
     int mOrders = 0;
     std::vector<std::set<uint64_t>> mFree; // per order, ordered by (y, x): deterministic
+};
+
+// ---------------------------------------------------------------------------------------------
+// Room for arriving and growing tiles (lamp shadows L2, draw-then-swap)
+// ---------------------------------------------------------------------------------------------
+//
+// A tile changes its size only in its own render, so until then it holds its old rect: a shrinking tile holds more than the valve wants
+// of it. An arriving tile that finds no block (not even after a compaction) waits for those renders and changes no pressure. Below the
+// valve's ceiling there is always room once they are drawn: the pressure keeps the demand U at or below kShrinkAbove, and the free
+// texels plus what the pending shrinks give back exceed the waiting tiles by A^2 (1 - U) plus the growths not drawn yet, at least 0.4 of
+// the atlas (the tiles of a lamp switched off and a lamp's retiring cells count in U at the size they hold). A shortfall that no render
+// frees exists only when U > 1, which the pressure allows only at its ceiling (every tile at its floor): the atlas cannot hold them all.
+
+// texels a placed tile gives back once its shrink is drawn (0 for a tile that keeps or grows its size)
+inline uint64_t shrinkTexels(uint32_t rect_size, uint32_t want)
+{
+    return want < rect_size ? uint64_t(rect_size) * rect_size - uint64_t(want) * want : 0;
+}
+
+// true when the waiting tiles (`need` texels at their wanted sizes) do not fit even once every pending shrink is drawn: `shrinking` is
+// shrinkTexels summed over the placed tiles the valve sizes (not the tiles of a lamp switched off, nor a lamp's retiring cells: those
+// are freed only after the hold, or after the new cells are drawn, which may be what waits)
+inline bool arrivalShortfall(uint64_t free_texels, uint64_t shrinking, uint64_t need)
+{
+    return free_texels + shrinking < need;
+}
+
+// A growth that finds no block once its own rect is freed although the free texels alone hold its new size: fragmentation (tiles of
+// mixed sizes came, went and were resized). A compaction ends it: it allocates every tile afresh, the largest first, and an allocation
+// splits the smallest free block that holds it, so afterwards at most three free blocks of each size are left (the free texels written
+// in base 4) and a free block of size want exists whenever want^2 <= the free texels. Allocations keep that; only frees break it. Checked
+// first by size, so a tile that keeps its size costs one comparison.
+inline bool growthBlocked(const BuddyAtlas& buddy, const Rect& rect, uint32_t want)
+{
+    return want > rect.size && uint64_t(want) * want <= buddy.freeTexels() && buddy.largestAfterFree(rect) < want;
+}
+
+// The hold before a compaction for a blocked growth: a growth is never urgent (the tile keeps its last size, which the valve wanted a
+// moment ago, and the valve itself waits kGrowHoldSeconds before it lets tiles grow), and a compaction copies the whole atlas, so one
+// runs only after a growth has been blocked for kGrowHoldSeconds of stable frames, at most one per hold. update() once a frame; true
+// when the compaction is due (the hold then starts again).
+class GrowthHold
+{
+public:
+    void reset() { mHeld = 0.0f; }
+    bool update(bool blocked, float dt_seconds)
+    {
+        if (!blocked)
+        {
+            mHeld = 0.0f;
+            return false;
+        }
+        mHeld += holdSeconds(dt_seconds);
+        if (mHeld < kGrowHoldSeconds)
+        {
+            return false;
+        }
+        mHeld = 0.0f;
+        return true;
+    }
+
+private:
+    float mHeld = 0.0f;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -571,12 +847,10 @@ namespace detail
     }
 }
 
-// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
-// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
-// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
-// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
-inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
-                           float tan_x, float tan_y, float near_d, float far_d)
+// The general (off-axis) pyramid of a projector's frustum: x0 .. x1 and y0 .. y1 are the tangents of the side planes across the
+// right and up axes (a cell of a wide lamp's image plane, see the cell rules below); otherwise as makePyramid.
+inline Pyramid makeFrustumPyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
+                                  float x0, float x1, float y0, float y1, float near_d, float far_d)
 {
     Pyramid py;
     float c[8][3];
@@ -588,8 +862,8 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         {
             for (int xi = 0; xi < 2; ++xi)
             {
-                const float x = (xi ? 1.f : -1.f) * tan_x * z;
-                const float y = (yi ? 1.f : -1.f) * tan_y * z;
+                const float x = (xi ? x1 : x0) * z;
+                const float y = (yi ? y1 : y0) * z;
                 for (int i = 0; i < 3; ++i)
                 {
                     c[k][i] = origin[i] + fwd[i] * z + right[i] * x + up[i] * y;
@@ -599,10 +873,11 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         }
     }
     // corner index = zi * 4 + yi * 2 + xi
-    float inside[3];
+    float inside[3]; // the middle of the cell at half depth (for a symmetric pyramid: on the axis)
+    const float zm = 0.5f * (near_d + far_d);
     for (int i = 0; i < 3; ++i)
     {
-        inside[i] = origin[i] + fwd[i] * 0.5f * (near_d + far_d);
+        inside[i] = origin[i] + fwd[i] * zm + right[i] * 0.5f * (x0 + x1) * zm + up[i] * 0.5f * (y0 + y1) * zm;
     }
     using namespace detail;
     py.planes[0] = through(c[4], c[0 + 4 + 2], c[0], inside);          // x = -1 side
@@ -624,6 +899,16 @@ inline Pyramid makePyramid(const float origin[3], const float fwd[3], const floa
         }
     }
     return py;
+}
+
+// The rectangular pyramid of an SL projector. origin and the unit axes are in the same space as the boxes (agent space);
+// tan_x and tan_y are the tangents of the half angles across and along the axes (a square pyramid: both tan(fov / 2); the
+// tile's render frustum is perspective(fov, aspect): tan_y = tan(fov / 2), tan_x = tan_y * aspect); the planes run from
+// `near_d` (> 0) to `far_d` (the light's radius) along the forward axis.
+inline Pyramid makePyramid(const float origin[3], const float fwd[3], const float right[3], const float up[3],
+                           float tan_x, float tan_y, float near_d, float far_d)
+{
+    return makeFrustumPyramid(origin, fwd, right, up, -tan_x, tan_x, -tan_y, tan_y, near_d, far_d);
 }
 
 // the square pyramid of a full angle `fov` (radians)
@@ -669,8 +954,8 @@ enum class Cause : uint8_t
     Edit,       // a fixed object in the light was edited, rebuilt or moved by its owner
     Mover,      // an object turned into (or out of) a mover or a physical object
     Lamp,       // the lamp's own reach, angle, size or position changed
-    Avatar,     // the tile holds an avatar (drawn into S until P4), or the avatar just left
-    Lowres,     // the tile was down-sized by a layout change and is drawn again at its new size
+    Avatar,     // the tile holds an avatar (drawn into L over S, P4), or the avatar just left
+    Lowres,     // a resize: the tile's size changed (the valve, its lamp's cone or reach) and its render draws it at the new size (draw-then-swap)
     Other,      // anything else: a dirty list that overflowed, a hook off the main thread
     Count
 };
@@ -971,6 +1256,59 @@ private:
     bool mUseUnion = false;
 };
 
+// The avatar boxes that can touch one lamp's tiles: those that overlap the union of the tiles' bounds, in their order. intersects()
+// starts with the bounds test, so a box outside the union meets no tile of the lamp and the pairing loop can skip it; the loop's
+// result is the same, over fewer boxes. A non-finite bound (which overlaps() never rejects) turns the filter off, so every box still
+// gets the full test (the guard of ChangeIndex::mUseUnion).
+class BoxFilter
+{
+public:
+    void add(const Aabb& bounds)
+    {
+        if (!mUse)
+        {
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            if (!std::isfinite(bounds.lo[k]) || !std::isfinite(bounds.hi[k]))
+            {
+                mUse = false;
+                return;
+            }
+        }
+        if (!mAny)
+        {
+            mUnion = bounds;
+            mAny = true;
+            return;
+        }
+        for (int k = 0; k < 3; ++k)
+        {
+            mUnion.lo[k] = std::min(mUnion.lo[k], bounds.lo[k]);
+            mUnion.hi[k] = std::max(mUnion.hi[k], bounds.hi[k]);
+        }
+    }
+
+    void select(const std::vector<Aabb>& boxes, std::vector<Aabb>& out) const
+    {
+        out.clear();
+        const bool use = mUse && mAny;
+        for (const Aabb& b : boxes)
+        {
+            if (!use || overlaps(mUnion, b))
+            {
+                out.push_back(b);
+            }
+        }
+    }
+
+private:
+    Aabb mUnion;
+    bool mAny = false;
+    bool mUse = true;
+};
+
 // ---------------------------------------------------------------------------------------------
 // The mover classifier and the rules built on it (section 4.4, D9). The viewer reads its objects and fills these structs.
 // ---------------------------------------------------------------------------------------------
@@ -1051,15 +1389,145 @@ inline bool rebuildDirties(uint32_t flags)
     return (flags & kRebuildPosition) != 0 && !((flags & kRebuildTcoord) && (flags & kRebuildColor));
 }
 
-// A texture, material, bump or glow change dirties a prim's tiles when the prim had a silhouette-affecting face (blended,
-// alpha-masked, alpha-textured) before the change or has one after it: turning such a face opaque removes a hole from the
-// shadow, and an opaque face turning alpha cuts one. Opaque to opaque never does (the texture does not show in a depth tile),
-// so plain texture swaps and animated textures do not churn. `was` is what the feed last saw; the caller stores `now` after.
-// `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
-// from Legacy) has an unknown `was`, taken as possibly alpha (one conservative push, after which it is known).
-inline bool texturedDirties(bool was, bool now, bool known)
+// A texture, material, bump, glow or colour change dirties a prim's tiles only when it changes what the prim's faces cut out of a depth
+// tile: its silhouette key (llshadowdirtyfeed.cpp: which faces are blended, alpha-masked or alpha-textured and, for each of them, its
+// alpha, texture, texture mapping and alpha mode; and which glTF faces are drawn from both sides). A face turned opaque closes a hole the
+// cached tile still has and an opaque face turned alpha cuts one: both change the key. Opaque-to-opaque texture swaps, animated textures,
+// fullbright, glow, shine, bump, an RGB-only tint, emissive, the PBR colour and the light's own colour do not (lamp shadows S2: a blinker
+// script that toggles them with its light every 0.1 s redraws no tile). `was_key` is what the feed last saw; the caller stores `now_key`
+// after. `known` says the feed saw this prim since it started tracking: a prim that predates tracking (login with Stochastic, a switch
+// from Legacy) has an unknown key (one conservative push, after which it is known).
+inline bool texturedDirties(uint32_t was_key, uint32_t now_key, bool known)
 {
-    return !known || was || now;
+    return !known || was_key != now_key;
+}
+
+// The flags of a rebuild that can move or reshape a prim: a new volume, a position, rigging (REBUILD_GEOMETRY and REBUILD_ALL carry some).
+constexpr uint32_t kRebuildShape = kRebuildVolume | kRebuildPosition | kRebuildRigged;
+
+// Lamp shadows S2, texture-entry rebuilds. LLVOVolume::setTEColor (its dirtyMesh) and the material setters (a legacy material, its
+// parameters arriving, a glTF override) ask for REBUILD_ALL because the renderer rebuilds the whole prim for a tint or a material, not
+// because its shape moved. Counted as a shape change, a script's tint, emissive or PBR colour toggled with its light every 0.1 s pushed
+// the prim's extents at the request, at the rebuild's octree move (LLVOVolume::genBBoxes) and at its completion, so every tile that sees
+// the prim was redrawn at the blink rate. So the feed marks an object whose queued rebuild only such setters asked for (POOL_TE_REBUILD),
+// and the pushes of that rebuild apply the silhouette rule instead. The mark after a texture-entry setter's request: set, unless a rebuild
+// that carries a shape flag was already queued without the mark (that one pushes as it did).
+//
+// A silhouette change is pushed once, by the setter's markTextured, which also stores the new key, wherever that call runs: before the
+// setter's scope opens (LLViewerObject::setTEMaterialParams' normal and specular maps, a cached material's synchronous callback in
+// setTEMaterialID) or inside it. The rebuild's own pushes then find the key stored. One push is enough because of the frame's order: the
+// setters run in idle (the network, the idle callbacks, the main loop's work queue) or in the UI's events, before display's
+// LLPipeline::updateGeom, which completes every queued prim's rebuild (LLVOVolume::updateGeometry is complete at once for every prim but a
+// flexible one, which the feed skips); the pool takes the frame's boxes in generateSunShadow, after updateGeom, and a tile's render
+// rebuilds the groups it draws in its own stateSort and postSort. So a tile drawn for the push draws the faces in their new passes.
+inline bool textureEntryMarkAfterRequest(bool marked, bool queued_shape)
+{
+    return marked || !queued_shape;
+}
+
+// The mark after any other rebuild request: one with a shape flag (a new LOD, a move, a scale, rigging, makeActive or makeStatic,
+// markForUpdate's REBUILD_GEOMETRY) clears it; a texture-coordinate or colour rebuild (LLDrawable::updateTexture's REBUILD_MATERIAL, which
+// LLPipeline::updateMove raises later in the same idle for every markTextured of the setters) keeps it.
+inline bool textureEntryMarkAfterRebuild(bool marked, uint32_t flags)
+{
+    return marked && (flags & kRebuildShape) == 0;
+}
+
+// A push of the prim's own rebuild (its octree move, its completion in LLPipeline::updateGeom, and in an active linkset the markMoved of
+// its bridge that the move causes): with the mark only a silhouette change pushes; without it the push goes out as it always did. Every
+// other push (a move, a put or a remove, a counted rebuild, a mesh arriving) clears the mark, and so does the end of the rebuild.
+inline bool ownRebuildPushes(bool marked, uint32_t was_key, uint32_t now_key, bool known)
+{
+    return !marked || texturedDirties(was_key, now_key, known);
+}
+
+// Lamp shadows S2 in an active linkset. A blinker becomes active after its ninth colour or material update from the server
+// (LLVOVolume::onDrawableUpdateFromServer) and stays so; its prims then live in the octree of the linkset's bridge (LLSpatialBridge). A
+// prim's own octree move there marks the bridge moved (LLSpatialBridge::move -> LLPipeline::markMoved), and LLPipeline::updateGeom moves the
+// bridge in the region's octree after the rebuilds (its bridge pass, updateMovedList(mMovedBridge)): two more pushes of the linkset's box
+// per toggle. So the feed takes that markMoved as the own rebuild's push (the prim's mark and key; the box is the bridge's either way) and
+// keeps a record of the bridges whose pending move only such quiet pushes asked for: a bridge on it moves without a push. The record after
+// a markMoved of the bridge: `recorded`, the bridge was on it; `pending`, the bridge already waits to move (an earlier markMoved: the
+// linkset's own move in idle, LLDrawable::updateXform, or another prim's); `quiet`, this markMoved was an own rebuild's push the mark kept
+// quiet. Any other markMoved takes the bridge off, and the record ends with the bridge pass.
+inline bool quietBridgeAfterMove(bool recorded, bool pending, bool quiet)
+{
+    return quiet && (recorded || !pending);
+}
+
+// The key's hash (FNV-1a, 32 bits): the feed folds the silhouette inputs of a prim's alpha faces into it, byte by byte.
+constexpr uint32_t kSilhouetteKeySeed = 2166136261u; // a prim with no alpha face and no double-sided glTF face
+inline uint32_t silhouetteKeyMix(uint32_t key, const void* bytes, size_t n)
+{
+    const unsigned char* b = static_cast<const unsigned char*>(bytes);
+    for (size_t i = 0; i < n; ++i)
+    {
+        key = (key ^ b[i]) * 16777619u;
+    }
+    return key;
+}
+
+// The silhouette inputs of one face (llshadowdirtyfeed.cpp fills them from the face's texture entry, its texture and its materials): for
+// a blended, alpha-masked or alpha-textured face (`cutout`) what shapes the holes it cuts out of a depth tile, and for any face whether its
+// glTF material is drawn from both sides (the shadow pass culls back faces except for a double-sided material: lldrawpool.cpp, so the
+// flag decides which side casts). Nothing else of a face is an input, so fullbright, glow, shine, bump, an RGB-only tint, emissive, the
+// PBR colour and the light's own colour cannot change the key. An opaque single-sided face is no input at all, and an opaque double-sided
+// one only by that flag: its texture never shows in a depth tile.
+struct SilhouetteFace
+{
+    uint8_t index = 0;                // the face (texture entry) index
+    bool cutout = true;               // blended, alpha-masked or alpha-textured: the fields below `double_sided` are inputs
+    bool double_sided = false;        // a glTF material drawn from both sides
+    float alpha = 1.f;                // the tint's alpha
+    uint8_t texture[16] = {};         // the diffuse texture's id
+    float scale[2] = { 1.f, 1.f };    // its mapping: repeats, offset, rotation, default or planar
+    float offset[2] = { 0.f, 0.f };
+    float rotation = 0.f;
+    uint8_t texgen = 0;
+    int8_t components = -1;           // the texture's channel count (-1: not loaded yet)
+    bool material = false;            // a legacy material: its diffuse alpha mode and mask cutoff
+    uint8_t alpha_mode = 0;
+    uint8_t alpha_cutoff = 0;
+    bool gltf = false;                // a glTF material: its alpha mode, cutoff, base colour alpha, base colour texture and transform
+    uint32_t gltf_alpha_mode = 0;
+    float gltf_cutoff = 0.f;
+    float gltf_alpha = 1.f;
+    uint8_t gltf_texture[16] = {};
+    float gltf_offset[2] = { 0.f, 0.f };
+    float gltf_scale[2] = { 1.f, 1.f };
+    float gltf_rotation = 0.f;
+};
+
+// folds one face into a prim's key, field by field (no padding bytes are read)
+inline uint32_t silhouetteFaceMix(uint32_t key, const SilhouetteFace& f)
+{
+    if (!f.cutout && !f.double_sided)
+    {
+        return key; // an opaque single-sided face: no input at all
+    }
+    auto mix = [](uint32_t k, const auto& value) { return silhouetteKeyMix(k, &value, sizeof(value)); };
+    key = mix(mix(key, f.index), f.double_sided);
+    if (!f.cutout)
+    {
+        return key; // an opaque face: only which sides cast
+    }
+    key = mix(key, f.alpha);
+    key = silhouetteKeyMix(key, f.texture, sizeof(f.texture));
+    key = mix(mix(key, f.scale[0]), f.scale[1]);
+    key = mix(mix(key, f.offset[0]), f.offset[1]);
+    key = mix(mix(key, f.rotation), f.texgen);
+    key = mix(key, f.components);
+    if (f.material)
+    {
+        key = mix(mix(key, f.alpha_mode), f.alpha_cutoff);
+    }
+    if (f.gltf)
+    {
+        key = mix(mix(mix(key, f.gltf_alpha_mode), f.gltf_cutoff), f.gltf_alpha);
+        key = silhouetteKeyMix(key, f.gltf_texture, sizeof(f.gltf_texture));
+        key = mix(mix(mix(mix(mix(key, f.gltf_offset[0]), f.gltf_offset[1]), f.gltf_scale[0]), f.gltf_scale[1]), f.gltf_rotation);
+    }
+    return key;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1206,15 +1674,16 @@ struct TileFacts
     Cause pending_cause = Cause::Other;
     bool pose_stale = false;      // the lamp's pose differs from the pose the tile was drawn with
     bool lamp_moving = false;     // the lamp's pose changed since last frame (a moving lamp is a dynamic item, D10)
-    bool lowres = false;          // down-sized by a layout change, not yet drawn at the new size
-    bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame
-    bool drawn_with_avatar = false; // its last draw included an avatar (its picture has one baked in until P4)
+    bool lowres = false;          // a resize is due: the tile's wanted size is not its drawn one (and the atlas has the block for it)
+    bool holds_avatar = false;    // an avatar's extents intersect the light's volume this frame (position only, never the view)
+    bool avatar_in_layer = false; // the live atlas L holds an avatar of this tile (drawn over S): it is redrawn, or cleaned once it left
 };
 
 struct TileVerdict
 {
-    bool needs_render = false;
-    bool dynamic = false;         // scheduled with the dynamic items (a moving lamp or an avatar under it), else with the static ones
+    bool needs_render = false;    // the tile's fixed layer S is drawn again (and S is copied to L, with the avatars over it when one is in the light)
+    bool needs_layer = false;     // only the avatar layer: S -> L for the tile, then the avatars over it (the fixed layer is unchanged)
+    bool dynamic = false;         // scheduled with the dynamic items (a moving lamp, or the avatar layer), else with the static ones
     Cause cause = Cause::Other;
 };
 
@@ -1227,7 +1696,9 @@ inline TileVerdict classifyTile(const TileFacts& f)
         v.cause = Cause::New;
         return v; // the first fill is the static schedule's (nearest first), never the dynamic one
     }
-    v.dynamic = f.lamp_moving || f.holds_avatar;
+    // P4: the avatars are in the dynamic layer (over S, in L), so an avatar never makes the fixed layer stale. A moving lamp
+    // redraws the whole tile every frame (the dynamic schedule, D10); every other change is the static schedule's.
+    v.dynamic = f.lamp_moving;
     if (f.pose_stale || f.lamp_moving)
     {
         v.needs_render = true;
@@ -1243,9 +1714,12 @@ inline TileVerdict classifyTile(const TileFacts& f)
         v.needs_render = true;
         v.cause = Cause::Lowres;
     }
-    else if (f.holds_avatar || f.drawn_with_avatar)
+    else if (f.holds_avatar || f.avatar_in_layer)
     {
-        v.needs_render = true; // an avatar in the light is redrawn every frame; the frame after it left, once more to clean the picture
+        // an avatar in the light is drawn again every frame the tile is served (nearest first, the rest under the shared cap);
+        // the frame after it left, once more to restore L from S
+        v.needs_layer = true;
+        v.dynamic = true;
         v.cause = Cause::Avatar;
     }
     return v;
@@ -1256,6 +1730,12 @@ inline TileVerdict classifyTile(const TileFacts& f)
 // ---------------------------------------------------------------------------------------------
 
 constexpr uint32_t kDynamicDeadlineFrames = 4;
+// The cadence of the avatar layer under overload (own-avatar hotfix): the user's own avatar is drawn every frame; the other avatars'
+// faces by the camera POSITION's distance to their nearest avatar (never the view direction): within kNearAvatarM every
+// kNearDeadlineFrames frames, farther every kDynamicDeadlineFrames. When everything fits the budget every face runs every frame.
+constexpr float kNearAvatarM = 10.f;
+constexpr uint32_t kNearDeadlineFrames = 2;
+constexpr uint32_t kOwnDeadlineFrames = 1;
 
 // Prior for the cost of an item that has no history (never drawn) or a non-finite prediction.
 // A placeholder until S0 measures; it is also the floor, so a zero prediction cannot let a whole
@@ -1279,13 +1759,25 @@ struct StaticItem
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;    // prediction of the cost of rendering it
     uint32_t age_frames = 0;    // how long it has waited: frames since the first dirty box that touched it, else since it was drawn
+    uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
+    uint32_t avatar_draws = 0;  // avatars the render draws over the tile (min(avatars in the light, A_max)); charged against A_max
 };
 
 // Ordered picks for this frame: never-drawn nearest first, then the pending items oldest first (age in frames; the
 // distance only breaks a tie), until the CPU cap t_s_ms would be exceeded. The order is round-robin by staleness, so
 // no tile waits longer than ceil(N / tiles per frame) frames, whatever its distance. At least one item runs while
 // any is pending (progress), even when its predicted cost alone exceeds the cap.
-inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms)
+// `a_left` is what the dynamic picks left of A_max: a static item whose avatar draws do not fit waits (the order is kept), except the
+// first one, which runs for progress (selectFrame makes room for it).
+// The same selection as indices into `items` (the order of service); selectStatic maps them to keys. Only the items that can be
+// picked are ordered: every pick adds itemCost >= kDefaultItemMs to the spent time, so at most floor(t_s_ms / kDefaultItemMs) + 1 fit
+// the cap and the rest of the (possibly thousands of) pending items needs no order; K = floor(t_s_ms / kDefaultItemMs) + 2 are
+// ordered (all of them for a cap that is not a finite, non-negative number). Preconditions: the keys are unique within `items` (the
+// key breaks every tie, so the order is strict and total and a partial sort gives the same prefix as a full sort), and every cost is
+// floored at kDefaultItemMs (itemCost floors them all, NaN and inf included). The walk below therefore never passes the ordered
+// prefix: the float rounding of at most about 22 additions is far below the 0.05 ms slack of the extra item.
+inline std::vector<size_t> selectStaticIdx(const std::vector<StaticItem>& items, float t_s_ms,
+                                           uint32_t a_left = std::numeric_limits<uint32_t>::max())
 {
     std::vector<const StaticItem*> never, rest;
     for (const StaticItem& it : items)
@@ -1306,23 +1798,69 @@ inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, 
     auto byAgeThenDist = [&byDist](const StaticItem* a, const StaticItem* b) {
         return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : byDist(a, b);
     };
-    std::sort(never.begin(), never.end(), byDist);
-    std::sort(rest.begin(), rest.end(), byAgeThenDist);
-
-    std::vector<uint32_t> out;
-    float spent = 0.f;
-    for (const auto* list : { &never, &rest })
+    // how many picks at most: all of them for a cap that is not a finite, non-negative number
+    const size_t n = never.size() + rest.size();
+    size_t k = n;
+    if (std::isfinite(t_s_ms) && t_s_ms >= 0.f)
     {
-        for (const StaticItem* it : *list)
+        const double fit = std::floor(double(t_s_ms) / double(kDefaultItemMs)) + 2.0;
+        if (fit < double(n))
         {
-            const float cost = itemCost(it->last_cpu_ms);
-            if (!out.empty() && spent + cost > t_s_ms)
-            {
-                return out; // over the cap: the order is kept, the rest waits
-            }
-            out.push_back(it->key);
-            spent += cost;
+            k = size_t(fit);
         }
+    }
+    const StaticItem* const first = items.empty() ? nullptr : items.data();
+    const size_t kn = std::min(never.size(), k);
+    const size_t kr = std::min(rest.size(), k - kn);
+    if (kn == never.size())
+    {
+        std::sort(never.begin(), never.end(), byDist);
+    }
+    else if (kn > 0)
+    {
+        std::partial_sort(never.begin(), never.begin() + std::ptrdiff_t(kn), never.end(), byDist);
+    }
+    if (kr == rest.size())
+    {
+        std::sort(rest.begin(), rest.end(), byAgeThenDist);
+    }
+    else if (kr > 0)
+    {
+        std::partial_sort(rest.begin(), rest.begin() + std::ptrdiff_t(kr), rest.end(), byAgeThenDist);
+    }
+    std::vector<size_t> out;
+    float spent = 0.f;
+    uint32_t avatars = 0;
+    for (int l = 0; l < 2; ++l)
+    {
+        const std::vector<const StaticItem*>& list = l == 0 ? never : rest;
+        for (size_t i = 0; i < list.size(); ++i)
+        {
+            llassert(i < (l == 0 ? kn : kr)); // the walk never passes the ordered prefix (proof above)
+            const StaticItem* it = list[i];
+            const float cost = itemCost(it->last_cpu_ms);
+            if (!out.empty() && (spent + cost > t_s_ms || avatars + it->avatar_draws > a_left))
+            {
+                return out; // over the cap or A_max: the order is kept, the rest waits
+            }
+            out.push_back(size_t(it - first));
+            spent += cost;
+            avatars += it->avatar_draws;
+        }
+    }
+    return out;
+}
+
+// The keys of selectStaticIdx's picks, in the same order.
+inline std::vector<uint32_t> selectStatic(const std::vector<StaticItem>& items, float t_s_ms,
+                                          uint32_t a_left = std::numeric_limits<uint32_t>::max())
+{
+    const std::vector<size_t> idx = selectStaticIdx(items, t_s_ms, a_left);
+    std::vector<uint32_t> out;
+    out.reserve(idx.size());
+    for (size_t i : idx)
+    {
+        out.push_back(items[i].key);
     }
     return out;
 }
@@ -1335,33 +1873,62 @@ struct DynamicItem
     float cam_dist = 0.f;
     float last_cpu_ms = 0.f;
     uint32_t avatar_draws = 0;  // avatars this item draws
+    uint32_t pool = 0;          // which cache the item belongs to (keys are per pool); 0 is the projector pool
+    bool layer = false;         // an avatar layer face (the distance cadence applies); false for a moving lamp's whole tile
+    bool own = false;           // a layer face whose layer holds the user's own avatar: drawn every frame, exempt from the budget
 };
 
-// Dynamic picks: items older than the 4-frame deadline first (oldest first), then nearest first.
-// Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its
-// nearest a_max). No floor beyond that, with one exception that prevents permanent starvation:
-// when nothing has been picked yet, an item past the deadline runs even if its predicted cost
-// alone exceeds the cap (one such item per frame at most). Other items over budget keep their
-// last content.
-inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max)
+// How many frames an item may wait while the frame is over budget: 1 for the own avatar's face (every frame), kNearDeadlineFrames for
+// a layer face whose nearest other avatar is within kNearAvatarM of the camera position, else kDynamicDeadlineFrames (also the
+// moving lamps' tiles and a face that only restores L from S).
+inline uint32_t dynamicDeadline(const DynamicItem& it)
+{
+    if (it.own)
+    {
+        return kOwnDeadlineFrames;
+    }
+    if (it.layer && it.avatar_draws > 0 && it.cam_dist <= kNearAvatarM)
+    {
+        return kNearDeadlineFrames;
+    }
+    return kDynamicDeadlineFrames;
+}
+
+// Dynamic picks: the faces of the own avatar first (every frame, whatever they cost: they are exempt from the budget, but their cost is
+// spent from it and they count against A_max), then the items past their own deadline (dynamicDeadline: 2 frames for a near avatar's
+// face, 4 for the rest; the most overdue first), then nearest first (for an avatar face: the camera position's distance to its nearest
+// other avatar), then the one that has waited longest, so ties rotate instead of starving by key.
+// Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its nearest a_max). No floor beyond that,
+// with one exception that prevents permanent starvation, for the FIRST pick of a frame only (selectFrame keeps it only as the
+// progress pick, so it passes allow_over = false when the frame has spent): an item past its deadline runs even if its predicted cost
+// alone exceeds the cap. Other items over budget keep their last content. When everything fits, every item runs every frame.
+inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max, bool allow_over = true)
 {
     std::vector<const DynamicItem*> order;
     for (const DynamicItem& it : items)
     {
         order.push_back(&it);
     }
-    std::sort(order.begin(), order.end(), [](const DynamicItem* a, const DynamicItem* b) {
-        const bool da = a->age_frames >= kDynamicDeadlineFrames, db = b->age_frames >= kDynamicDeadlineFrames;
-        if (da != db)
+    auto late = [](const DynamicItem* it) { // frames past the deadline, 1 on the frame it is due (0 when not yet due)
+        const uint32_t d = dynamicDeadline(*it);
+        return it->age_frames >= d ? it->age_frames - d + 1 : 0u;
+    };
+    std::sort(order.begin(), order.end(), [&late](const DynamicItem* a, const DynamicItem* b) {
+        if (a->own != b->own)
         {
-            return da;
+            return a->own;
         }
-        if (da && a->age_frames != b->age_frames)
+        const uint32_t la = late(a), lb = late(b);
+        if (la != lb)
         {
-            return a->age_frames > b->age_frames;
+            return la > lb;
         }
         const float ca = sortDist(a->cam_dist), cb = sortDist(b->cam_dist);
-        return ca != cb ? ca < cb : a->key < b->key;
+        if (ca != cb)
+        {
+            return ca < cb;
+        }
+        return a->age_frames != b->age_frames ? a->age_frames > b->age_frames : a->key < b->key;
     });
     std::vector<uint32_t> out;
     float spent = 0.f;
@@ -1370,8 +1937,8 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     {
         const float cost = itemCost(it->last_cpu_ms);
         const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
-        const bool overdue = it->age_frames >= kDynamicDeadlineFrames && out.empty();
-        if ((spent + cost > t_d_ms && !overdue) || avatars + draws > a_max)
+        const bool may_over = allow_over && out.empty() && late(it) > 0;
+        if ((spent + cost > t_d_ms && !may_over && !it->own) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
         }
@@ -1382,24 +1949,655 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     return out;
 }
 
-// The static cap: a fixed CPU budget of the pool's static tile renders per frame, in milliseconds. 0.35 ms is 4.4 % of an 8 ms
-// frame (the basis is an assumed 8 ms frame, 125 fps, not a measured one): it fits four measured tiles (0.07 ms each,
-// owner session 2026-11-14) with a margin. The +5 % light and shadow budget is about 0.4 ms of that frame, so 0.05 ms
-// is left, and kDynamicCapMs below does not fit in it: the dynamic schedule (a moving lamp, an avatar in the light) draws tiles
-// from P3 on, so the two caps together can exceed the budget in a frame that has both; P4 must re-divide the cap between the
-// static and dynamic tiles (the sum is not claimed to fit today, and nothing in-world has measured it). The measured cost only
-// predicts what fits; it does not set the budget.
-constexpr float kStaticCapMs = 0.35f;
-// Placeholder until S0 measures (spec 4.5); a devel-only debug override may replace it
+// The smoothed prediction of an avatar face's CPU cost (an EMA, factor 0.25): one slow measurement (driver time lands in the CPU
+// measurement) does not push a face out of the frame. Each sample is clamped to kCostSampleMaxMs (2 x kFrameCapMs, asserted below the
+// cap) before it is blended, so one hitch cannot make a face "heavy" for dozens of frames. A zero prediction (a record that has not
+// drawn a layer yet; itemCost floors it at kDefaultItemMs) is seeded by the first real sample. A non-finite or negative sample leaves
+// the prediction as it was.
+constexpr float kCostSmoothing = 0.25f;
+constexpr float kCostSampleMaxMs = 1.0f;
+inline float smoothedCostMs(float previous, float sample)
+{
+    if (!std::isfinite(sample) || sample < 0.f)
+    {
+        return previous;
+    }
+    sample = std::min(sample, kCostSampleMaxMs);
+    if (!std::isfinite(previous) || previous <= 0.f)
+    {
+        return sample;
+    }
+    return previous + kCostSmoothing * (sample - previous);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The avatar layer's footprint (C3): the part of a tile the avatars cover
+// ---------------------------------------------------------------------------------------------
+//
+// L's tile is S's tile plus the avatars. A face copies S -> L and draws only inside the rectangle the avatars cover (their extents,
+// grown by a margin, projected through the tile's matrices), not over the whole tile. The invariant that makes it exact: outside the
+// rectangle the last pass drew (`layerRect`), L equals S bit for bit, because every avatar draw is scissored to the rectangle it was
+// computed for. The next face copies S -> L over the union of the old and the new rectangle (the old avatar's pixels are restored,
+// the new ones are drawn over) and the result equals a whole-tile copy followed by the same scissored draw. When the footprint is
+// unknown (a corner at or behind the eye plane, a non-finite matrix, an impostored avatar) or covers most of the tile, the
+// rectangle is the whole tile: the same rule, not a second method.
+
+struct TexelRect // [x0, x1) x [y0, y1) in tile texels
+{
+    int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+    bool empty() const { return x1 <= x0 || y1 <= y0; }
+    int64_t area() const { return empty() ? 0 : int64_t(x1 - x0) * int64_t(y1 - y0); }
+    bool operator==(const TexelRect& o) const { return (empty() && o.empty()) || (x0 == o.x0 && y0 == o.y0 && x1 == o.x1 && y1 == o.y1); }
+};
+
+// The margin around an avatar's extents. The extents are what can lag: LLVOAvatar refreshes them only every `period` frames (4 up to 5
+// avatars, 8 at 10, 20 at 25) and translates them by the pelvis in between, so a limb or a rigged attachment (inside the extents, with
+// no padding of its own) can leave the box by what it moved in that time. The margin therefore grows with the period, with the speed
+// (running, flying) and with the size of the box.
+constexpr float kFootprintMarginM = 0.3f;        // base, at the avatar, in metres
+constexpr float kFootprintStaleM = 0.04f;        // plus this many metres per frame of the extents' refresh period
+constexpr float kFootprintSpeedSeconds = 0.15f;  // plus this many seconds of the avatar's speed (running, flying)
+constexpr float kFootprintSizeFraction = 0.15f;  // plus this share of the box diagonal (a wing or a tail swings in proportion)
+constexpr int32_t kFootprintMarginTexels = 2;    // plus a rounding margin in the tile
+constexpr float kFootprintMaxFraction = 0.5f;    // above this share of the tile area the whole tile is copied
+
+inline TexelRect wholeTileRect(uint32_t n) { return TexelRect{ 0, 0, int32_t(n), int32_t(n) }; }
+
+inline TexelRect unionRect(const TexelRect& a, const TexelRect& b)
+{
+    if (a.empty())
+    {
+        return b.empty() ? TexelRect() : b;
+    }
+    if (b.empty())
+    {
+        return a;
+    }
+    return TexelRect{ std::min(a.x0, b.x0), std::min(a.y0, b.y0), std::max(a.x1, b.x1), std::max(a.y1, b.y1) };
+}
+
+inline TexelRect clampRect(const TexelRect& r, uint32_t n)
+{
+    TexelRect o{ std::max(r.x0, 0), std::max(r.y0, 0), std::min(r.x1, int32_t(n)), std::min(r.y1, int32_t(n)) };
+    return o.empty() ? TexelRect() : o;
+}
+
+// the distance from a point to a box (0 inside)
+inline float pointBoxDistance(const float p[3], const Aabb& b)
+{
+    float d2 = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float d = std::max(std::max(b.lo[i] - p[i], p[i] - b.hi[i]), 0.f);
+        d2 += d * d;
+    }
+    return std::sqrt(d2);
+}
+
+inline Aabb inflateBox(const Aabb& b, float m)
+{
+    Aabb o = b;
+    for (int i = 0; i < 3; ++i)
+    {
+        o.lo[i] -= m;
+        o.hi[i] += m;
+    }
+    return o;
+}
+
+// The margin (metres) around an avatar's extents `box` for its speed (m/s) and the frames between two refreshes of the extents.
+inline float footprintMarginM(float speed_mps, int32_t extent_period_frames, const Aabb& box)
+{
+    float diag2 = 0.f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float d = box.hi[i] - box.lo[i];
+        diag2 += d * d;
+    }
+    const float diag = std::isfinite(diag2) ? std::sqrt(diag2) : 0.f;
+    return kFootprintMarginM + float(std::max(extent_period_frames, 0)) * kFootprintStaleM +
+           (std::isfinite(speed_mps) ? std::max(speed_mps, 0.f) : 0.f) * kFootprintSpeedSeconds + diag * kFootprintSizeFraction;
+}
+
+// The tile rectangle one box covers through `m`, the column-major clip matrix (projection * view, agent space to clip space) of the
+// tile. False when it is unknown: a corner at or behind the eye plane, or a non-finite value.
+inline bool boxFootprint(const float m[16], const Aabb& box, uint32_t n, TexelRect& out)
+{
+    float lo_x = std::numeric_limits<float>::max(), lo_y = lo_x, hi_x = -lo_x, hi_y = -lo_x;
+    for (int c = 0; c < 8; ++c)
+    {
+        const float x = (c & 1) ? box.hi[0] : box.lo[0];
+        const float y = (c & 2) ? box.hi[1] : box.lo[1];
+        const float z = (c & 4) ? box.hi[2] : box.lo[2];
+        const float cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+        const float cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const float cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+        if (!std::isfinite(cx) || !std::isfinite(cy) || !std::isfinite(cw) || cw <= 1e-4f)
+        {
+            return false;
+        }
+        const float tx = (cx / cw * 0.5f + 0.5f) * float(n);
+        const float ty = (cy / cw * 0.5f + 0.5f) * float(n);
+        lo_x = std::min(lo_x, tx);
+        hi_x = std::max(hi_x, tx);
+        lo_y = std::min(lo_y, ty);
+        hi_y = std::max(hi_y, ty);
+    }
+    // out of the int range (a huge box close to the eye): unknown
+    const float lim = 1e7f;
+    if (lo_x < -lim || lo_y < -lim || hi_x > lim || hi_y > lim)
+    {
+        return false;
+    }
+    TexelRect r{ int32_t(std::floor(lo_x)) - kFootprintMarginTexels, int32_t(std::floor(lo_y)) - kFootprintMarginTexels,
+                 int32_t(std::ceil(hi_x)) + kFootprintMarginTexels, int32_t(std::ceil(hi_y)) + kFootprintMarginTexels };
+    out = clampRect(r, n);
+    return true;
+}
+
+// The footprint of a face: the union over its avatars' (already grown) boxes, or the whole tile when any is unknown or the union covers
+// more than kFootprintMaxFraction of the tile. No avatar: empty.
+inline TexelRect faceFootprint(const float m[16], const std::vector<Aabb>& boxes, uint32_t n)
+{
+    TexelRect u;
+    for (const Aabb& b : boxes)
+    {
+        TexelRect r;
+        if (!boxFootprint(m, b, n, r))
+        {
+            return wholeTileRect(n);
+        }
+        u = unionRect(u, r);
+    }
+    if (double(u.area()) > double(kFootprintMaxFraction) * double(n) * double(n))
+    {
+        return wholeTileRect(n);
+    }
+    return u;
+}
+
+// What a layer pass copies S -> L: the old rectangle (L holds avatar pixels there) and the new one; the whole tile when the old one is
+// not known (a fresh atlas, a repack).
+inline TexelRect layerCopyRect(bool prev_valid, const TexelRect& prev, const TexelRect& now, uint32_t n)
+{
+    return prev_valid ? clampRect(unionRect(prev, now), n) : wholeTileRect(n);
+}
+
+// The per-frame CPU budget of ALL the shadow caches' tile work together (P4), in milliseconds, and its split. One number, shared by
+// every pool through the frame ledger (below): the dynamic layer (a moving lamp's tile, the avatar layers) and the static tiles
+// (a dirty, first-fill or resized tile) are spent from it, never from two caps that add up (before P4: 0.35 + 0.30 ms).
+//   - The basis is the owner's frame-rate floor (AGENTS.md, since 2026-11-16): about 60 fps standing in a crowded room (about 60
+//     avatars) and never below 25 fps moving, at the default tier. It replaced the +5 % allowance on an assumed 8 ms frame (125 fps,
+//     never measured), which gave the former 0.35 ms (lamp shadows L2).
+//   - kFrameCapMs is kFloorShare of the standing floor's frame: 0.03 x 1000 / 60 = 0.5 ms. The 3 % is an engineering choice, not
+//     derived from a measurement: stage L0 of the lamp-shadow study (the owner's rooms measured) is to set it, and has not run. It is
+//     43 % more CPU a frame than 0.35 ms, unmeasured in-world. Spent in full by a frame that is CPU-bound exactly at the floor it takes
+//     that frame below the floor, 60 -> 58.3 fps standing (16.67 -> 17.17 ms) and 25 -> 24.7 fps moving (40 -> 40.5 ms): the floor
+//     holds only with that much headroom elsewhere. A static scene spends nothing, and a GPU-bound frame hides it. It fits seven
+//     measured tiles of 0.07 ms (owner session 2026-11-14), so a room of four lamps redraws every tile and its avatar layer every
+//     frame, and a cold start (login, teleport, a lamp-sized atlas) fills about 40 % faster than at 0.35 ms.
+//   - Priority: the dynamic layer first. An avatar or a moving lamp is seen to lag at once; a dirty static tile only shows a stale
+//     shadow of something that changed, and its wait is bounded by the age order of selectStatic. Two regimes (dynamicShareMs): while a
+//     static tile waits, the dynamic layer gets kDynamicCapMs 0.30 ms (6 faces at the 0.05 ms floor); while none waits it gets the whole
+//     remaining cap (up to 10 faces), since the other 0.20 ms would go unused.
+//   - The static tiles get what the dynamic layer left: at least kStaticCapMs = kFrameCapMs - kDynamicCapMs = 0.20 ms (two measured
+//     tiles of 0.07 ms and a cold one) while the dynamic layer takes its 0.30 ms, all 0.5 ms in a frame without dynamic work.
+//   - The sum of the predicted costs of a frame's picks never exceeds kFrameCapMs, except for one single item whose own prediction is
+//     above what is left, which runs alone when nothing else was spent in the frame (progress; selectFrame).
+// The measured cost only predicts what fits; it does not set the budget.
+constexpr float kFloorStandingFps = 60.f; // the owner's floor standing in a crowded room (25 fps moving)
+constexpr float kFloorShare = 0.03f;      // the share of the standing floor's frame the shadow caches' tile work may take (a choice, pending L0)
+constexpr float kFrameCapMs = 0.5f;
+static_assert(kFrameCapMs > kFloorShare * 1000.f / kFloorStandingFps - 1e-3f && kFrameCapMs < kFloorShare * 1000.f / kFloorStandingFps + 1e-3f,
+              "the cap is the floor's share of the standing floor's frame");
 constexpr float kDynamicCapMs = 0.30f;
+constexpr float kStaticCapMs = kFrameCapMs - kDynamicCapMs;
+static_assert(kCostSampleMaxMs == 2.f * kFrameCapMs, "a cost sample is clamped to twice the frame cap");
+// A_max: the avatar draws of a frame (one per avatar in a lamp's volume, at least one per avatar layer). The CPU share binds first
+// (0.30 ms / the 0.05 ms scheduler floor = 6 faces a frame while a static tile waits, 0.5 / 0.05 = 10 when none does); 24 is the
+// ceiling a cheaper face could reach.
 constexpr uint32_t kAvatarDrawsMax = 24;
+
+// The dynamic layer's share of the cap `left_ms`: kDynamicCapMs while a static tile waits (the static schedule keeps the rest), the
+// whole of what is left when none does (the unused 0.20 ms is no use to anyone else).
+inline float dynamicShareMs(bool statics_pending, float left_ms)
+{
+    const float left = std::max(left_ms, 0.f);
+    return statics_pending ? std::min(kDynamicCapMs, left) : left;
+}
+
+// Several pools share the selection: an item's key is packed with its pool so that the merged lists keep the scheduler's order
+// functions, and a pick is unpacked afterwards. Keys stay below 2^28: a projector record key is lamp << 4 | cell, so the lamp counter stays below 2^24.
+constexpr uint32_t kPoolKeyBits = 28;
+inline uint32_t packKey(uint32_t pool, uint32_t key) { return (pool << kPoolKeyBits) | (key & ((1u << kPoolKeyBits) - 1u)); }
+inline uint32_t unpackPool(uint32_t packed) { return packed >> kPoolKeyBits; }
+inline uint32_t unpackKey(uint32_t packed) { return packed & ((1u << kPoolKeyBits) - 1u); }
+
+struct FramePicks
+{
+    std::vector<uint32_t> dynamic; // packed keys, in the order of service
+    std::vector<uint32_t> fixed;   // packed keys of the static schedule
+    float predicted_ms = 0.f;      // the sum of the predicted costs of both lists
+};
+
+// The frame's merged selection under the shared cap `cap_ms` (the cap minus what earlier work of the frame already spent, kFrameCapMs
+// at the start): the dynamic items first (selectDynamic, up to dynamicShareMs and A_max), then the static ones in what is left.
+// The first static candidate always has its place if it fits the cap: the dynamic layer gives up its last faces for it. A first
+// static candidate that is above the whole cap runs alone as the progress pick once it has waited kDynamicDeadlineFrames frames (or was
+// never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
+// is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
+// without exception. An avatar face that is over its share runs alone, every frame, as the progress pick (the overrun is that one
+// item; a moving lamp's tile only once it is overdue); the dynamic share is the whole remaining cap when no static item waits
+// (dynamicShareMs).
+inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
+                              uint32_t a_max, bool progress_ok)
+{
+    FramePicks out;
+    std::map<uint32_t, float> dyn_cost; // the dynamic list's key space
+    std::map<uint32_t, uint32_t> dyn_draws;
+    std::vector<DynamicItem> d = dynamics;
+    for (DynamicItem& it : d)
+    {
+        it.key = packKey(it.pool, it.key);
+        dyn_cost[it.key] = itemCost(it.last_cpu_ms);
+        dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
+    }
+    std::vector<StaticItem> st = statics;
+    for (StaticItem& it : st)
+    {
+        it.key = packKey(it.pool, it.key);
+        it.avatar_draws = std::min(it.avatar_draws, a_max);
+    }
+    // a sum of float costs that equals the cap must fit it: the budgets carry a tolerance far below any cost (itemCost's floor is 0.05 ms)
+    constexpr float kEps = 1e-4f;
+    float left = cap_ms;
+    std::set<uint32_t> own_keys; // the own avatar's faces: never dropped (every frame, whatever the cap says)
+    for (const DynamicItem& it : d)
+    {
+        if (it.own)
+        {
+            own_keys.insert(it.key);
+        }
+    }
+    auto dropLastOther = [&](std::vector<uint32_t>& list) { // drops the last pick that is not an own face; false when only own faces remain
+        for (size_t i = list.size(); i > 0; --i)
+        {
+            if (!own_keys.count(list[i - 1]))
+            {
+                list.erase(list.begin() + (i - 1));
+                return true;
+            }
+        }
+        return false;
+    };
+    auto sumCost = [&](const std::vector<uint32_t>& list) {
+        float ms = 0.f;
+        for (uint32_t k : list)
+        {
+            ms += dyn_cost[k];
+        }
+        return ms;
+    };
+    if (left <= 0.f && !progress_ok)
+    {
+        out.dynamic = selectDynamic(d, 0.f, a_max, false); // only the own avatar's faces run past an exhausted cap
+        out.predicted_ms = sumCost(out.dynamic);
+        return out;
+    }
+    out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
+    float dyn_ms = sumCost(out.dynamic);
+    if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
+    {
+        // an over-cap item may only run alone, as the progress pick; the own avatar's faces stay (they are exempt)
+        while (dyn_ms > left + kEps && dropLastOther(out.dynamic))
+        {
+            dyn_ms = sumCost(out.dynamic);
+        }
+    }
+    left -= dyn_ms;
+    uint32_t dyn_avatars = 0;
+    for (uint32_t k : out.dynamic)
+    {
+        dyn_avatars += dyn_draws[k];
+    }
+    // the static schedule is never starved by the dynamic one: its first candidate (the order of selectStatic: never-drawn nearest,
+    // then oldest) is guaranteed a place every frame when it fits the cap at all; the dynamic layer gives up its last faces for it
+    // the head: the first static candidate (the same whatever the cap), an index into st
+    const std::vector<size_t> head = st.empty() ? std::vector<size_t>() : selectStaticIdx(st, 0.f);
+    if (!st.empty())
+    {
+        const float head_ms = head.empty() ? 0.f : itemCost(st[head[0]].last_cpu_ms);
+        const uint32_t head_draws = head.empty() ? 0u : st[head[0]].avatar_draws;
+        if (head_ms <= cap_ms + kEps)
+        {
+            while (head_ms > left + kEps && !out.dynamic.empty())
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && own_keys.count(out.dynamic[i - 1]))
+                {
+                    --i; // an own face is never given up
+                }
+                if (i == 0)
+                {
+                    break; // only own faces remain: the head waits for a frame with room
+                }
+                dyn_ms -= dyn_cost[out.dynamic[i - 1]];
+                dyn_avatars -= dyn_draws[out.dynamic[i - 1]];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
+        else if (progress_ok && !head.empty())
+        {
+            // the head alone is above the cap: it takes the progress pick once it has waited (or has never been drawn)
+            const StaticItem& h = st[head[0]];
+            if (h.never_drawn || h.age_frames >= kDynamicDeadlineFrames)
+            {
+                // the other dynamic picks give way; the own avatar's faces stay and the head runs beside them (a bounded overrun
+                // of that one item, so neither guarantee starves the other)
+                while (dropLastOther(out.dynamic))
+                {
+                }
+                dyn_ms = sumCost(out.dynamic);
+                dyn_avatars = 0;
+                for (uint32_t k : out.dynamic)
+                {
+                    dyn_avatars += dyn_draws[k];
+                }
+                left = out.dynamic.empty() ? cap_ms : 0.f;
+            }
+        }
+        // the head's avatar draws count against A_max too, but only where the head will be served (its CPU fits the cap, or it took the
+        // progress pick above): the dynamic layer gives up its last avatar faces for it (head_draws <= a_max); faces without avatar draws
+        // free nothing and stay
+        if (head_ms <= cap_ms + kEps || out.dynamic.empty())
+        {
+            while (head_draws + dyn_avatars > a_max && dyn_avatars > 0)
+            {
+                size_t i = out.dynamic.size();
+                while (i > 0 && (dyn_draws[out.dynamic[i - 1]] == 0 || own_keys.count(out.dynamic[i - 1])))
+                {
+                    --i;
+                }
+                if (i == 0)
+                {
+                    break; // only own faces hold the avatar draws: the head waits
+                }
+                const uint32_t k = out.dynamic[i - 1];
+                dyn_ms -= dyn_cost[k];
+                dyn_avatars -= dyn_draws[k];
+                out.dynamic.erase(out.dynamic.begin() + (i - 1));
+                left = cap_ms - dyn_ms;
+            }
+        }
+    }
+    // an overdue head that has no room beside the own avatar's faces runs beside them as the progress pick (one bounded overrun)
+    bool head_beside_own = false;
+    if (progress_ok && !st.empty() && !out.dynamic.empty())
+    {
+        if (!head.empty() && itemCost(st[head[0]].last_cpu_ms) > left + kEps)
+        {
+            const StaticItem& h = st[head[0]];
+            head_beside_own = h.never_drawn || h.age_frames >= kDynamicDeadlineFrames;
+        }
+    }
+    std::vector<size_t> fixed_pick = selectStaticIdx(st, std::max(left, 0.f) + kEps, a_max - dyn_avatars); // trimmed below with out.fixed
+    float st_ms = 0.f;
+    for (size_t i : fixed_pick)
+    {
+        st_ms += itemCost(st[i].last_cpu_ms);
+        out.fixed.push_back(st[i].key);
+    }
+    if (st_ms > left + kEps && !(progress_ok && (out.dynamic.empty() || head_beside_own) && out.fixed.size() == 1))
+    {
+        // over what is left: only the single progress pick may be; any other overrun is cut back to what fits
+        while (!out.fixed.empty() && st_ms > left + kEps)
+        {
+            st_ms -= itemCost(st[fixed_pick.back()].last_cpu_ms);
+            fixed_pick.pop_back();
+            out.fixed.pop_back();
+        }
+    }
+    out.predicted_ms = dyn_ms + st_ms;
+    return out;
+}
+
+// The frame's spending, shared by every pool that runs a tile render in it (main thread only): a pool reads what the pools before it
+// spent and takes its cap from the rest.
+struct FrameLedger
+{
+    uint32_t frame = 0;
+    bool have = false;
+    float spent_ms = 0.f;
+    void begin(uint32_t f)
+    {
+        if (!have || f != frame)
+        {
+            frame = f;
+            have = true;
+            spent_ms = 0.f;
+        }
+    }
+    void add(float ms) { spent_ms += ms; }
+    float left(float cap_ms) const { return cap_ms - spent_ms; }
+    bool untouched() const { return spent_ms <= 0.f; }
+};
+
+// The in-frame gate of one pick under the shared cap: it runs while the measured time left is positive. The one exemption is the first
+// static pick of a frame in which nothing else rendered (`alone`: ledger untouched and no dynamic picks): the selection kept it inside
+// the cap, or it is the progress pick. A first static pick behind spent dynamic work or an earlier cache is refused.
+inline bool mayRunPick(float left_ms, bool dynamic, bool first_pick, bool alone, bool own = false)
+{
+    return left_ms > 0.f || own || (!dynamic && first_pick && alone);
+}
+
+// the one ledger of the process (main thread only); a pool begins the frame with its frame count and adds what its renders measure
+inline FrameLedger& frameLedger()
+{
+    static FrameLedger ledger;
+    return ledger;
+}
+
+// The lag of the avatar layer (P4): how many avatar faces (a lamp's tile with an avatar in its light is one face) a frame can draw,
+// and so how long the last face of a set waits. A frame draws min(A_max left after the faces drawn every frame, the dynamic CPU
+// share / the cost of one face) faces (the share is kDynamicCapMs while a static tile waits, else the whole cap); the scheduler floors
+// the cost of an item at kDefaultItemMs.
+inline uint32_t layerFacesPerFrame(float dynamic_cap_ms, float per_face_ms, uint32_t a_max, uint32_t every_frame_draws)
+{
+    const uint32_t spare = a_max > every_frame_draws ? a_max - every_frame_draws : 0u;
+    const float cost = itemCost(per_face_ms);
+    const float by_cpu = std::floor(dynamic_cap_ms / cost + 1e-4f);
+    const uint32_t cpu_faces = by_cpu > 0.f ? uint32_t(by_cpu) : 1u; // the progress pick: at least one face runs
+    return std::min(spare, cpu_faces);
+}
+
+// Frames until every one of `faces` faces has been drawn once, at `per_frame` a frame.
+inline uint32_t layerLagFrames(uint32_t faces, uint32_t per_frame)
+{
+    return per_frame == 0 ? 0u : (faces + per_frame - 1) / per_frame;
+}
+
+// The change feed's owners (llshadowdirtyfeed.h): which caches track, and the lamp roots each keeps, merged for the lookup. GL-free
+// and viewer-free so the unit test checks the rules. Each owner is one bit; owner indices 0 and 1 today.
+constexpr uint32_t kOwnerBits = 2;
+
+enum class OwnerEdge { Neither, First, Last };
+
+// the mask after an owner switches on or off, and the edge the feed acts on: First (the first owner on: the hooks start recording),
+// Last (the last one off: nobody reads the pending boxes any more: drop them). Another owner leaving changes neither.
+inline OwnerEdge ownerEdge(uint32_t was, uint32_t now)
+{
+    return (was == 0 && now != 0) ? OwnerEdge::First : ((was != 0 && now == 0) ? OwnerEdge::Last : OwnerEdge::Neither);
+}
+
+inline uint32_t ownerMaskAfter(uint32_t mask, uint32_t owner_bit, bool on)
+{
+    return on ? (mask | owner_bit) : (mask & ~owner_bit);
+}
+
+template <class T>
+struct OwnerLists
+{
+    std::vector<T> by[kOwnerBits];
+    std::vector<T> merged; // the sorted union
+
+    // replaces one owner's list (sorted and de-duplicated in place); true when it changed
+    bool set(uint32_t owner, std::vector<T>& list)
+    {
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
+        if (by[owner] == list)
+        {
+            return false;
+        }
+        by[owner].swap(list);
+        rebuild();
+        return true;
+    }
+    void clear(uint32_t owner)
+    {
+        by[owner].clear();
+        rebuild();
+    }
+    void clearAll()
+    {
+        for (auto& v : by)
+        {
+            v.clear();
+        }
+        merged.clear();
+    }
+    bool contains(const T& v) const { return std::binary_search(merged.begin(), merged.end(), v); }
+
+private:
+    void rebuild()
+    {
+        merged.clear();
+        for (const auto& v : by)
+        {
+            merged.insert(merged.end(), v.begin(), v.end());
+        }
+        std::sort(merged.begin(), merged.end());
+        merged.erase(std::unique(merged.begin(), merged.end()), merged.end());
+    }
+};
+
+// The frame's one save and restore of the GL state the tile renders change: the first scope saves, the last restores (a second
+// pool's update inside the same frame scope neither saves nor restores again).
+struct ScopeCounter
+{
+    int depth = 0;
+    bool enter() { return depth++ == 0; }
+    bool leave() { return --depth == 0; }
+};
 
 // The prediction of a record that has never been drawn: the running average of tile renders, but at most a quarter of the
 // static cap, so that the first average (a placeholder above the cap) does not let a cold start (login, teleport) through
 // one tile per frame; the first timed render replaces it with the record's own cost.
 inline float coldItemMs(float cost_ema_ms)
 {
-    return std::min(itemCost(cost_ema_ms), kStaticCapMs / 4.f);
+    return std::min(itemCost(cost_ema_ms), kFrameCapMs / 4.f);
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// Cells of a wide lamp (projector tile resolution)
+// ---------------------------------------------------------------------------------------------
+//
+// A lamp wider than about 93 degrees (tan of the half-angle above 1.05) is split over its own image plane into g x g cells (per axis), each a tile of its own with a
+// sub-frustum off the same projection centre, near and far planes (so a cell's depth is the lamp's, and the lookup keeps the lamp's
+// matrix). Every cell carries a guard of kCellGuard texels on each side (its frustum widened by them), so the filter's taps at a
+// seam read the neighbour's content; a lamp with one cell keeps one tile and no guard. A cell's size comes from its lamp alone
+// (tileBaseSize, with the guard), like a one-tile lamp's; the camera's position only picks which tiles shrink when the atlas is over its
+// budget (the pressure valve). The image of a cell depends on the lamp, the scene and the cell's size only. Spec:
+// reports/projector-edges-2026-11-16/design.md section 5 and reports/lamp-shadow-method-2026-11-18 section 4.2 (kept on the owner's
+// machine, not in the repository: the rules and constants are here and in doc/shadows/projector-shadow-pool.md).
+
+constexpr uint32_t kCellGuard = 16;       // texels on each side of a cell's interior (wide lamps only)
+static_assert(kCellGuard >= uint32_t(kProjectorLamp.kernel_max) + 2, "a cell's guard covers the filter's widest tap plus the bilinear footprint");
+constexpr int      kMaxGrid = 4;          // cells per axis
+constexpr uint32_t kMaxCells = kMaxGrid * kMaxGrid;
+
+// Cells per axis for a half-angle tangent: 1 up to tan = 1.05 (a lamp up to about 93 degrees: ceil(tan - 0.05) is 1 there), then
+// ceil(tan - 0.05), at most kMaxGrid. (The early return keeps a NaN or a tiny tangent at 1.)
+inline int gridAxis(double tan_half)
+{
+    if (!(tan_half > 1.0))
+    {
+        return 1;
+    }
+    return std::min(std::max(int(std::ceil(tan_half - 0.05)), 1), kMaxGrid);
+}
+
+struct CellGrid
+{
+    int gu = 1; // cells across the lamp's right axis
+    int gv = 1; // cells along its up axis
+    bool cells() const { return gu * gv > 1; }
+    uint32_t guard() const { return cells() ? kCellGuard : 0u; }
+    int count() const { return gu * gv; }
+    bool operator==(const CellGrid& o) const { return gu == o.gu && gv == o.gv; }
+    bool operator!=(const CellGrid& o) const { return !(*this == o); }
+};
+
+inline CellGrid gridOf(double tan_x, double tan_y)
+{
+    CellGrid g;
+    g.gu = gridAxis(tan_x);
+    g.gv = gridAxis(tan_y);
+    return g;
+}
+
+// the cell index in the shader's array of 16 (stride kMaxGrid): column i along the right axis, row j along the up axis
+constexpr uint32_t cellIndex(int i, int j) { return uint32_t(j * kMaxGrid + i); }
+
+// The tangent rectangle of the cell (i, j) on the image plane, from the lamp's half-angle tangents (the cells divide
+// [-tan, tan] into equal parts on each axis), widened by `guard` texels of the cell's `interior` texels on every side.
+struct CellTan
+{
+    double x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+};
+
+inline CellTan cellTanRect(const CellGrid& grid, double tan_x, double tan_y, int i, int j, uint32_t interior, uint32_t guard)
+{
+    CellTan c;
+    const double wx = 2.0 * tan_x / grid.gu, wy = 2.0 * tan_y / grid.gv;
+    c.x0 = -tan_x + wx * i;
+    c.x1 = c.x0 + wx;
+    c.y0 = -tan_y + wy * j;
+    c.y1 = c.y0 + wy;
+    if (guard > 0 && interior > 0)
+    {
+        const double ex = wx * double(guard) / double(interior), ey = wy * double(guard) / double(interior);
+        c.x0 -= ex;
+        c.x1 += ex;
+        c.y0 -= ey;
+        c.y1 += ey;
+    }
+    return c;
+}
+
+// the interior of a tile of nc texels
+constexpr uint32_t cellInterior(uint32_t nc, uint32_t guard) { return nc > 2 * guard ? nc - 2 * guard : 1u; }
+
+// A lower bound of the distance from p to the pyramid (0 inside): the largest distance outside one plane. Exact outside a face,
+// never more than the true distance elsewhere, so the valve never puts a tile in a farther band than its true distance gives.
+inline float pyramidDistance(const Pyramid& py, const float p[3])
+{
+    float d = 0.f;
+    for (const Plane& pl : py.planes)
+    {
+        d = std::max(d, -(pl.n[0] * p[0] + pl.n[1] * p[1] + pl.n[2] * p[2] + pl.d));
+    }
+    return d;
+}
+
+// The cell that holds an own avatar for the every-frame rule: the one whose interior volume contains the centre of the avatar's box
+// (so one cell per box, not every cell the box's width crosses near the apex). The other cells the box overlaps are served by deadline.
+inline bool cellHoldsOwn(const Pyramid& core, const Aabb& box)
+{
+    const float c[3] = { 0.5f * (box.lo[0] + box.hi[0]), 0.5f * (box.lo[1] + box.hi[1]), 0.5f * (box.lo[2] + box.hi[2]) };
+    return pyramidDistance(core, c) <= 0.f;
 }
 
 } // namespace llprojectorpool

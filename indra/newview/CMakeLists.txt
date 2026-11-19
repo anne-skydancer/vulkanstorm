@@ -738,6 +738,7 @@ set(viewer_SOURCE_FILES
     llspatialpartition.cpp
     llstatslistener.cpp
     llstochastichistory.cpp
+    lllocalshadows.cpp
     llprojectorshadows.cpp
     llshadowdirtyfeed.cpp
     llspeakers.cpp
@@ -1166,6 +1167,7 @@ set(viewer_HEADER_FILES
     lldebugview.h
     lldeferredsounds.h
     lldelayedgestureerror.h
+    lldirectionalshadowgate.h
     lldirpicker.h
     lldonotdisturbnotificationstorage.h
     lldndbutton.h
@@ -1608,9 +1610,11 @@ set(viewer_HEADER_FILES
     llspatialpartition.h
     llstatslistener.h
     llstochastichistory.h
+    lllocalshadows.h
     llprojectorshadows.h
     llshadowdirtyfeed.h
     llprojectorshadowpool.h
+    llstochasticbluenoise.h
     llstochasticlayerrank.h
     llstochasticstate.h
     llspeakers.h

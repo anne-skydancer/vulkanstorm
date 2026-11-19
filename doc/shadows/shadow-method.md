@@ -77,8 +77,8 @@ M0 to M2 shipped as one PR.
   program binary cache hashes defines, not attached objects, so the method is part of the program hash
   (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy keeps its cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
   probe pass included.
-- Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`, as for the stochastic
-  transparency) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
+- Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`; the stochastic
+  transparency needs GLSL 4.20 on top, `transparencySupported`) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
   item and a stored 2 reads as Legacy (`LLShadowMethod::effective`, unit tested). The setting is never written, so the
   choice survives a GPU upgrade. This is a capability choice, not a run-time fallback.
 - The combo has the items "Legacy" and "Stochastic". `scripts/tests/test_shadow_method_tables.py`
@@ -98,12 +98,16 @@ receiver), or is still behind one at the end of the march. The pixel's value is 
 rays. The march reaches 4, 8, 16 and 32 m in cascades 0 to 3, and no farther than the cull guard's
 footprint at the disc's angular radius. The steps follow from the cascade's texel size. The receiver
 plane, the world-unit bias and the normal offset are S2's helpers. The cascade is drawn per pixel by the
-weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (a blocker
-search of 8 gathers, then a percentage-closer filter of 32 bilinear gathers whose radius follows the blockers' distance for a
-emitter of the projector prim's own face, 2 to 15 cm, and a largest radius of 4 cm at the receiver, 1 to 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's
-texel bias and per-texel receiver plane. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's
-width on the bench (within one map texel plus one pixel); the projector's penumbra is a PCSS width that the bench checks only to
-within a map texel. The projector lookup costs 8 + 32 gathers per pixel inside the projector's frustum. Under Stochastic with
+weights of the other methods' blend bands. A projector is not marched: it is a filtered lookup (lamp shadows L1: a blocker search of 8
+gathers on a disc plus one at the receiver's own texels, then a percentage-closer filter of 32 bilinear gathers at the physical
+penumbra radius from the nearest blocker, for an emitter of 4.5 cm times `RenderShadowLightSize`, whatever the prim, at least 1.5 and at
+most 12 map texels), at a fixed disc of offsets in the map's own uv, with S2's texel bias and per-texel receiver plane. No edge is
+reconstructed and no radius is capped in metres: a coarser tile gives a softer edge, never a blockier one (`doc/shadows/projector-shadow-pool.md`,
+"The filter"). At the default softness a head's edge on fine tiles widens from about 0.4 texel (the release) to about 1.8 to 1.9 texels:
+the default edge's physical width there and the 1.5-texel floor each give about that; see "The default edge against the release" there. The sun cascades' disc-edge profile converges to 0.84 to 0.87 of a disc light's width on the bench (within one map texel
+plus one pixel); the projector's straight edges are 0.82 to 0.90 of a disc light's where the radius lies between the floor and the cap
+(the CPU twin and the GL bench). The projector lookup costs 9 search gathers, plus 32 filter gathers on penumbra pixels. See the Cost table
+in `projector-shadow-pool.md`. Under Stochastic with
 detail 2 each projector reads its own tile of the projector shadow pool's atlas, in its own program (`spotLightF.glsl`,
 `doc/shadows/projector-shadow-pool.md`), not the two slots through the sun pass.
 
@@ -141,7 +145,7 @@ These are not gated by the method:
 
 - the light model: L2 cloud shadows, L3 `primary_light_dir` / `primary_shadow_strength`, the
   caster direction that follows the sun/moon handover, skipping the cascades while the shadow is
-  invisible;
+  invisible (Stochastic also skips them on a dark light, see "Dark gate");
 - three Vulkanstorm fixes made to the stock shadows: the sun-bias altitude term is gone, stock PCF
   has a receiver-plane bias (`pcfDepthGradient`), and the projector shadow fades with the
   Euclidean camera distance and `spot_shadow_reach`, not with the sun cascade splits.
@@ -187,8 +191,9 @@ alone as GLSL 1.50.
   Stochastic calls them, and so can any other method. Under Stochastic nothing reads `RenderShadowBias` and
   `RenderShadowOffset`: every program that links a shadow util (the sun and probe passes, and the forward
   `alphaF`, `pbralphaF`, `materialF`, `waterF` and `pbrmetallicroughnessF`) links Stochastic's util, which uses the
-  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. The projector shadows keep
-  `spot_shadow_offset` in both methods; `spot_shadow_bias` is Legacy's only (Stochastic uses S2's texel bias).
+  world-unit bias. Only Legacy's stock `pcfShadow` reads them, in those same programs. Legacy's projector shadows keep
+  `spot_shadow_offset`; the Stochastic projector lookup offsets by one tile texel along the geometric normal instead
+  (the sun's rule); `spot_shadow_bias` is Legacy's only (Stochastic uses S2's texel bias).
 
 What stage S2 changed in the image of the stable-cascade methods: no per-pixel bump pattern in the receiver
 plane (a normal-mapped wall no longer gets bias that follows its bumps), a bias and a normal offset that are
@@ -232,8 +237,11 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
   Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
   the quality slider and the recommended-settings re-applies like every graphics setting, and the
   user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the light size (`RenderShadowLightSize`, a debug setting) applies with Stochastic.
-- Graphic presets carry `RenderShadowMethod` (`graphic_preset_controls.xml`). A preset file written
+  feature are unavailable, and the Shadow softness slider (Rendering 2, below the
+  combo) is enabled with Stochastic. `RenderShadowLightSize` (0 to 1.0, 0 the sharpest) defaults to 0.23, the slider's
+  centre, and sets how sharp the edges of the sun's, the moon's and every projector lamp's shadows are (it scales only their
+  penumbra: a lamp's is that of a 4.5 cm emitter times it, so 1.035 cm at the default); see `projector-shadow-pool.md`.
+- Graphic presets carry `RenderShadowMethod` and `RenderShadowLightSize` (`graphic_preset_controls.xml`). A preset file written
   before the switch has `RenderShadowPCSS` and no `RenderShadowMethod`: on loading it, the method
   becomes Stochastic if the checkbox was on, Legacy if off (`LLPresetsManager::loadPreset`).
 - One-time migration (`RenderShadowMethodMigrated`): at startup, after the user settings are read and
@@ -259,6 +267,43 @@ How a semi-transparent texel casts depends on the method.
   Legacy: such texels used to cast nothing).
 - The avatar alpha shadow shaders (`avatarAlphaShadowF`, `avatarAlphaMaskShadowF`) carry the same branch, which is inert:
   the avatar shadow pass never sets `minimum_alpha`.
+
+## Dark gate (Stochastic only)
+
+The sun cascades (cull, sort and draw of four maps, with every avatar in each) are the largest single shadow cost, and a sky
+whose light is negligible gets nothing from them. Under Stochastic, `generateSunShadow` skips the cascade pass while the light
+that reaches the ground is too dim for a shadow to show; Legacy never does (it keeps Firestorm 7.2.5's code).
+
+- The decision light is `E = 3 x max(linear(primary light colour) channels) x sky sunlight scale` (`RenderSkySunlightScale`, or
+  the HDR one): the factor `pbrBaseLight` gives a white surface facing the light in its brightest channel (the shader lights
+  each channel on its own, so the largest channel is used, not the luminance). It depends on the sky and the light only,
+  never on the camera, the view or the exposure. The primary light is the sun/moon handover's, so a lit moon counts. The cloud
+  shadow map and the atmosphere's haze only lower the light. Classic-mode lighting multiplies `sunlit` by a further 1.35
+  (`softenLightF.glsl`); that is not included.
+- Skip below `E < 5e-6`; render again above `5.5e-6` (the hysteresis band, so a light at the threshold does not flicker the
+  pass). The shadow strength (`primary_shadow_strength`) is multiplied by a fade that is 0 up to `5.5e-6`, a smoothstep to 1
+  at `1e-5`, and 1 above: nothing pops, and above twice the threshold the shadow is unchanged. The strength also weights the
+  cloud shadow map, so the fade moves the cloud shadows to the map's mean while `E < 1e-5`: invisible at that light level.
+- Why `5e-6`: for a diffuse or rough surface a shadow changes a channel by at most `E` (albedo is at most 1; the BRDF's `1/pi`
+  is left out). One 8-bit step near black is `1/(255 x 12.92) = 3.0e-4` in linear light. The brightest exposure is
+  `RenderExposure`'s clamp (4) times the dynamic exposure's maximum (`2 x sqrt(gamma)`; the EEP validator allows gamma up to 20),
+  a gain of 35.8 (16 for gamma 4), so a shadow of the threshold light is at most `1.8e-4`, 0.6 of a step, even then. With the classic-mode 1.35 factor (not in `E`) it is `0.6 x 1.35 = 0.81` of a step, still under one. A smooth
+  specular peak can reach `10 x E` (the clamp in `pbrBaseLight`): a few highlight pixels of up to a few steps near black in that
+  extreme, which the threshold accepts. With `RenderUseExposureSkySettings` (off by default) the exposure maximum comes from the
+  sky and is not bounded by gamma.
+- Exactly zero light: the skipped frame has strength 0, and the shadow term multiplies a zero light (`sunlit` is 0, and
+  both sun terms of `pbrBaseLight` multiply it), so the image is the same with or without the cascades. This is an argument from
+  the shader text, not a pixel comparison.
+- Skipped frames have strength 0 exactly, so the maps are never read with weight. They are cleared once when the gate closes,
+  and the frame that opens it renders them before the shading reads them (the decision is one per main frame, in
+  `LLEnvironment::updatePrimaryLight`, read by both the pass and the uniform). The reflection probe renders call the same
+  `generateSunShadow` with the same decision, so they skip with the main view and are lit the same way.
+- A frame with strength 0 (skipped, or the resume band) also returns at the top of `sampleDirectionalShadow` in the Stochastic
+  shading passes, so the per-pixel ray march is skipped too (the result would be `mix(1, x, 0) = 1`). The GPU saving is not
+  measured yet. Legacy's `shadowUtil.glsl` is unchanged.
+- Projector and point-light shadows and the avatar shadow layers are separate and unaffected.
+- The renderer-free rule is `lldirectionalshadowgate.h`, tested by `indra/newview/tests/lldirectionalshadowgate_test.cpp`
+  (ci-checks). The in-world readout of the decision exists on `vkstorm-devel` only.
 
 ## Cost
 

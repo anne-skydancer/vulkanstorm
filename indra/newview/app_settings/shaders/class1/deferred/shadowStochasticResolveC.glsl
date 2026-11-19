@@ -9,7 +9,7 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-// GL 4.3 compute, as the transparency's resolve (alphaStochasticResolveC.glsl): the same resolve source
+// GL 4.3 compute, as the transparency's resolve was until 2026-11-14 (retired): the same resolve source
 // (shadowStochasticResolveUtilF.glsl and the engine's stochasticResolveUtilF.glsl are compiled as further
 // compute objects of the program), so the result is the fragment resolve's. The history written this
 // frame is an image, bound with glBindImageTexture (LLStochasticHistory::bindWriteImage).

@@ -431,7 +431,7 @@ public:
         ALPHA_ST_BUFFER_TRANS,      // red prod(1 - alpha), green the blended faces' glow
     };
     bool beginAlphaStochastic();     // targets sized and bound, cleared, opaque depth spread; false: the targets are missing
-    void spreadAlphaStochasticDepth(); // the opaque depth on every sample again (before an iteration)
+    void spreadAlphaStochasticDepth(); // the opaque depth on every sample
     void setAlphaStochasticBuffer(EAlphaStochasticBuffer buffer);
     void endAlphaStochastic();       // the scene target bound again
     void compositeAlphaStochastic(bool glow); // over mRT->screen; glow: the faces' glow into its alpha
@@ -442,12 +442,10 @@ public:
     void selectAlphaStochastic(bool stochastic);  // the method chosen in Preferences: targets made now, or freed
     void updateAlphaStochasticHistory();    // the history textures for the temporal accumulation: made or freed
     void releaseAlphaStochasticHistory();   // the history (and the fragment path's averaged-samples target) freed
-    void resolveAlphaStochasticTemporal();  // this frame's accumulation blended with the last frame's (the fragment pair; compute is never chosen in the OpenGL viewer)
-    void resolveAlphaStochasticTemporalFragment();
+    void resolveAlphaStochasticTemporal();  // this frame's accumulation measured for its grain, blended with the last frame's (the smooth is in the composite): two fragment passes, the measure and the blend
     bool alphaStochasticResolveReady() const; // the selected resolve's programs are built
-    U32  getAlphaStochasticPassSamples() const { return mAlphaSTPassSamples; }
-    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::SAMPLES; }
-    U32  getAlphaStochasticIterations() const { return mAlphaSTPassSamples ? LLStochasticEngine::SAMPLES / mAlphaSTPassSamples : 0; }
+    U32  getAlphaStochasticPassSamples() const { return LLStochasticEngine::TRANSPARENCY_SAMPLES; }   // one pass holds all S
+    U32  getAlphaStochasticSamples() const { return LLStochasticEngine::TRANSPARENCY_SAMPLES; }
     U32  getAlphaStochasticMasks() const { return LLStochasticEngine::getMasks(); }
     // the frame in the masks' seeds: 0 (a fixed field) unless the temporal accumulation runs
     U32  getAlphaStochasticFrame() const { return mAlphaSTHistory.seedFrame(); }
@@ -554,6 +552,7 @@ private:
     void hideDrawable( LLDrawable *pDrawable );
     void unhideDrawable( LLDrawable *pDrawable );
     void skipRenderingShadows();
+    bool mDirectionalShadowsDarkCleared = false; // <Vulkanstorm/> the cascade maps were cleared when the dark gate closed (main thread)
 
     // <FS:Ansariel> Reset VB during TP
     void initDeferredVB();
@@ -749,7 +748,7 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
-    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (GL 4.0+, its shaders built)
+    static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency's capability gate (GL 4.0, GLSL 4.20, 8 samples a pass)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;
     static bool             sRenderGlow;
@@ -819,7 +818,7 @@ public:
 
     // <Vulkanstorm> stochastic transparency's targets (raw GL names, 0 = none): one framebuffer
     // with the accumulation (COLOR0, RGBA16F), the transparency and glow (COLOR1, RG16F) and the
-    // stochastic depth (DEPTH_COMPONENT24), all at mAlphaSTPassSamples, S = 8 samples in all; the
+    // stochastic depth (DEPTH_COMPONENT24), all at S = 8 samples in one pass; the
     // engine's mask table is held (mAlphaSTMasksHeld) while they are. All counted in the texture memory.
     U32 mAlphaSTFBO = 0;
     U32 mAlphaSTAccum = 0;
@@ -828,13 +827,16 @@ public:
     bool mAlphaSTMasksHeld = false;
     U32 mAlphaSTWidth = 0;
     U32 mAlphaSTHeight = 0;
-    U32 mAlphaSTPassSamples = 0;
-    // the temporal accumulation: the transparency's history in the stochastic engine (two
-    // full-size RGBA16F colours, the frame counter of the seeds and the validity rules), and, on the
-    // fragment path only (the default on every device), the full-size RGBA32F target of this frame's averaged samples
-    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F };
+    // the temporal accumulation: the transparency's history in the stochastic engine (two full-size RGBA16F
+    // colours and two RG16F (last total alpha, part of the last frame left out), the frame counter of the seeds and the
+    // validity rules), and the measuring pass's two full-size RGBA16F targets: this frame's averaged accumulation
+    // (mAlphaSTCurrent, the averaged accumulation the blend reads; the composite reads the history, mAlphaSTAux, the extra pair and the mask, not it) and its
+    // grain, total alpha and depths (mAlphaSTAux)
+    LLStochasticHistory mAlphaSTHistory{ GL_RGBA16F, 1.f / 8.f, GL_RG16F };
     U32 mAlphaSTCurrent = 0;
-    U32 mAlphaSTCurrentFBO = 0;
+    U32 mAlphaSTAux = 0;
+    U32 mAlphaSTMask = 0;          // R8: 1 where anything transparent was drawn (the measuring pass third target)
+    U32 mAlphaSTCurrentFBO = 0;    // mAlphaSTCurrent, mAlphaSTAux, mAlphaSTMask
     F64 mAlphaSTRetryInterval = 0.0;    // seconds between the retries of a failed allocation (0: none pending)
     F64 mAlphaSTRetryTime = 0.0;
     // </Vulkanstorm>
@@ -1254,6 +1256,9 @@ public:
     // detail (the LOD pin, pinCasters). LOCAL_SHADOW_DYNAMIC is the avatar layer of stage P4.
     enum ELocalShadowPass : U8 { LOCAL_SHADOW_NONE = 0, LOCAL_SHADOW_STATIC = 1, LOCAL_SHADOW_DYNAMIC = 2 };
     static ELocalShadowPass sLocalShadowPass;
+    // the avatars the layer draws in this face (the nearest to the lamp, at most the pool's A_max); null outside the layer
+    static const std::vector<const LLVOAvatar*>* sLocalShadowAvatars;
+    static bool localShadowAvatarAllowed(const LLVOAvatar* avatar);
     // </Vulkanstorm>
     static F32 RenderEdgeDepthCutoff;
     static F32 RenderEdgeNormCutoff;

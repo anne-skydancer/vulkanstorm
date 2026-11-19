@@ -44,6 +44,7 @@
 #include "llviewerregion.h"
 #include "llvolume.h"
 #include "llvoavatar.h"
+#include "llviewercontrol.h"
 #include "llvovolume.h"
 #include "llvosurfacepatch.h" // for debugging
 #include "llworld.h"
@@ -1460,7 +1461,13 @@ void LLSpatialBridge::transformExtents(const LLVector4a* src, LLVector4a* dst)
 
 void LLDrawable::setVisible(LLCamera& camera, std::vector<LLDrawable*>* results, bool for_select)
 {
-    LLViewerOctreeEntryData::setVisible();
+    // <Vulkanstorm> the local shadows' avatar layer must not stamp the camera's visibility (the stamp is not per camera: an avatar
+    // behind the camera would count as visible to the animation, the impostor ranking and updateImpostors of the frame)
+    if (LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC)
+    {
+        LLViewerOctreeEntryData::setVisible();
+    }
+    // </Vulkanstorm>
 
 #if 0 && !LL_RELEASE_FOR_DOWNLOAD
     //crazy paranoid rules checking
@@ -1543,9 +1550,17 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
             if (objparent->isAvatar())
             {
                 LLVOAvatar* avatarp = (LLVOAvatar*) objparent;
-                if (avatarp->isVisible())
+                // <Vulkanstorm> the local shadows' avatar layer is chosen by the lamp's position: the camera's visibility of the
+                // avatar, its age and its impostor flag do not apply (an impostored avatar casts in full)
+                const bool layer = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC;
+                // the non-camera exclusions stay (the pairing and renderShadow apply them to the body): friends-only, and a jelly doll
+                // or invisible avatar (RLV silhouette, derendered, too complex)
+                static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
+                const bool layer_ok = layer && avatarp->getOverallAppearance() == LLVOAvatar::AOA_NORMAL && LLPipeline::localShadowAvatarAllowed(avatarp) &&
+                    (!friends_only() || avatarp->isControlAvatar() || avatarp->isSelf() || avatarp->isBuddy());
+                if (layer_ok || (!layer && avatarp->isVisible()))
                 {
-                    impostor = objparent->isAvatar() && !LLPipeline::sImpostorRender && ((LLVOAvatar*) objparent)->isImpostor();
+                    impostor = !layer && objparent->isAvatar() && !LLPipeline::sImpostorRender && ((LLVOAvatar*) objparent)->isImpostor();
                     loaded   = objparent->isAvatar() && ((LLVOAvatar*) objparent)->isFullyLoaded();
                 }
                 else
@@ -1555,12 +1570,13 @@ void LLSpatialBridge::setVisible(LLCamera& camera_in, std::vector<LLDrawable*>* 
             }
 
             if (!group ||
-                LLDrawable::getCurrentFrame() - av->getVisible() > 1 ||
+                (LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC && LLDrawable::getCurrentFrame() - av->getVisible() > 1) ||
                 impostor ||
                 !loaded)
             {
                 return;
             }
+            // </Vulkanstorm>
         }
     }
 
@@ -1632,7 +1648,7 @@ void LLSpatialBridge::updateDistance(LLCamera& camera_in, bool force_update)
     if (mDrawable->getVObj())
     {
         // Don't update if we are part of impostor, unles it's an impostor pass
-        if (!LLPipeline::sImpostorRender && mDrawable->getVObj()->isAttachment())
+        if (!LLPipeline::sImpostorRender && LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC && mDrawable->getVObj()->isAttachment()) // <Vulkanstorm/> the avatar layer draws an impostored avatar in full
         {
             LLDrawable* parent = mDrawable->getParent();
             if (parent && parent->getVObj())

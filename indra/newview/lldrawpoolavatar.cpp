@@ -386,9 +386,14 @@ void LLDrawPoolAvatar::renderShadow(S32 pass)
     }
 
     LLVOAvatar::AvatarOverallAppearance oa = avatarp->getOverallAppearance();
-    bool impostor = !LLPipeline::sImpostorRender && avatarp->isImpostor();
+    // <Vulkanstorm> the local shadows' avatar layer draws an impostored avatar in full (a jelly doll or an invisible one is not drawn)
+    bool impostor = !LLPipeline::sImpostorRender && LLPipeline::sLocalShadowPass != LLPipeline::LOCAL_SHADOW_DYNAMIC && avatarp->isImpostor();
+    // </Vulkanstorm>
     // no shadows if the shadows are causing this avatar to breach the limit.
-    if (avatarp->isTooSlow() || impostor || (oa == LLVOAvatar::AOA_INVISIBLE))
+    // <Vulkanstorm> the avatar layer draws normal avatars only (not a jelly doll, an RLV silhouette, a derendered or too complex one)
+    const bool layer_skip = LLPipeline::sLocalShadowPass == LLPipeline::LOCAL_SHADOW_DYNAMIC && (oa != LLVOAvatar::AOA_NORMAL || !LLPipeline::localShadowAvatarAllowed(avatarp));
+    // </Vulkanstorm>
+    if (avatarp->isTooSlow() || impostor || layer_skip || (oa == LLVOAvatar::AOA_INVISIBLE))
     {
         // No shadows for impostored (including jellydolled) or invisible avs.
         return;
