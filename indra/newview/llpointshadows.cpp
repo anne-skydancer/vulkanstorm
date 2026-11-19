@@ -29,6 +29,7 @@
 #include "llapp.h"
 #include "llface.h"
 #include "llframetimer.h"
+#include "llgl.h"
 #include "llglslshader.h"
 #include "llrendertarget.h"
 #include "llshadermgr.h"
@@ -37,11 +38,9 @@
 #include "llthread.h"
 #include "lltimer.h"
 #include "llviewercamera.h"
-#include "llviewerobjectlist.h"
 #include "llviewerregion.h"
 #include "llviewershadermgr.h"
 #include "llvoavatar.h"
-#include "llvotree.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
@@ -60,9 +59,10 @@ namespace
     constexpr U32 kTierSmall = kAtlasSmall;
     constexpr F32 kDeferredFalloff = 0.5f; // pipeline.cpp's DEFERRED_LIGHT_FALLOFF: the fudge the deferred pass reads the falloff with
 
-    // What the pool makes of a light. On: a point light it shadows (a light that is not a projector, with a radius and a colour, on a prim
-    // that is not worn: D11). Off: such a lamp switched off (its light parameters are not in use, so the radius reads 0), turned black or
-    // given a radius of 0, which the draw loop skips: its faces are held for a while (S2). Gone: not a lamp the pool shadows.
+    // What the pool makes of a light. On: a point light it shadows (a light that is not a projector, with a radius whose lit size reaches
+    // past the faces' near plane and a colour, on a prim that is not worn: D11). Off: such a lamp switched off (its light parameters are
+    // not in use, so the radius reads 0), turned black or given a radius too small to light anything past the near plane, which the draw
+    // loop skips or lights nothing with: its faces are held for a while (S2). Gone: not a lamp the pool shadows.
     enum class LampState
     {
         On,
@@ -86,9 +86,9 @@ namespace
             return LampState::Gone;
         }
         const F32 radius = volume->getLightRadius();
-        if (!(radius > 0.f) || volume->getLightLinearColor().magVecSquared() < 0.001f)
+        if (!(radius > 0.f) || !(faceFar(radius) > kNearM) || volume->getLightLinearColor().magVecSquared() < 0.001f)
         {
-            return LampState::Off;
+            return LampState::Off; // a lit size at or below the near plane would draw faces whose far plane is before their near one
         }
         if (!std::isfinite(radius) || !drawable->getPositionAgent().isFinite())
         {
@@ -103,8 +103,8 @@ namespace
     }
 
     // the pose of a lamp's faces (llpointpool::lampPose): its centre region-local with the region's handle, never agent space (a region
-    // crossing shifts agent space without moving the lamp), and its radius
-    Pose lamp_pose(LLDrawable* drawable, const LLVector3& centre, F32 radius)
+    // crossing shifts agent space without moving the lamp)
+    Pose lamp_pose(LLDrawable* drawable, const LLVector3& centre)
     {
         LLVOVolume* volume = drawable ? drawable->getVOVolume() : nullptr;
         LLViewerRegion* region = volume ? volume->getRegion() : nullptr;
@@ -116,7 +116,7 @@ namespace
             local -= region->getOriginGlobal();
         }
         const float l[3] = { (F32)local.mdV[VX], (F32)local.mdV[VY], (F32)local.mdV[VZ] };
-        return lampPose(handle, l, radius);
+        return lampPose(handle, l);
     }
 
     F32 luminance(const LLColor3& c)
@@ -149,6 +149,20 @@ namespace
             }
         }
     }
+
+    // a lamp is drawn whole or face by face once all six of its faces have room (never read with faces missing)
+    template <class F>
+    bool all_placed(const F (&faces)[kFaces])
+    {
+        for (const F& face : faces)
+        {
+            if (!face.placed)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 LLPointShadows::LLPointShadows()
@@ -164,7 +178,9 @@ LLPointShadows::~LLPointShadows()
 // static
 bool LLPointShadows::wanted()
 {
-    return LLProjectorShadows::wanted() && LLPipeline::RenderShadowPointLights;
+    // GL 4.6 (the floor of new work since 2026-11-15; the faces' copies are glCopyImageSubData, GL 4.3 core): an older context lights the
+    // point lights without their shadows, the method and every other pass unchanged
+    return LLProjectorShadows::wanted() && LLPipeline::RenderShadowPointLights && gGLManager.mGLVersion >= 4.59f;
 }
 
 bool LLPointShadows::allocateAtlases(U32 size)
@@ -252,11 +268,9 @@ bool LLPointShadows::ensureAllocated()
     {
         return true;
     }
-    // D3: 4096 from 3 GB of video memory, 2048 below, within GL_MAX_TEXTURE_SIZE (the projectors' tiers without their 8192 step: the face
-    // rects are packed for an atlas of at most 4096, llpointpool::packFaceRect); a failed allocation tries the one below, and the smallest
-    // failing leaves the lamps without a shadow (never another method)
-    U32 size = atlasTier(gGLManager.mVRAM, (U32)llmax(gGLManager.mGLMaxTextureSize, 0), false);
-    size = llmin(size, kPackAtlasMax);
+    // D3: 4096 from 3 GB of video memory, 2048 below, within GL_MAX_TEXTURE_SIZE and what the face rects pack (llpointpool::pointAtlasTier);
+    // a failed allocation tries the one below, and the smallest failing leaves the lamps without a shadow (never another method)
+    U32 size = pointAtlasTier(gGLManager.mVRAM, (U32)llmax(gGLManager.mGLMaxTextureSize, 0));
     const U32 chosen = size;
     for (; size >= kTierSmall; size >>= 1)
     {
@@ -300,12 +314,6 @@ void LLPointShadows::release()
     mLevel.reset();
     mGrowthHold.reset();
     mAllocFailed = false;
-    mFaceRenders = 0;
-    mLampRenders = 0;
-    mLayerRenders = 0;
-    mResizes = 0;
-    mCompactions = 0;
-    mCauses = CauseCounts();
 }
 
 void LLPointShadows::clear()
@@ -319,7 +327,6 @@ void LLPointShadows::clear()
     }
     mLamps.clear();
     mIdOf.clear();
-    mLampsWithoutFaces = 0;
 }
 
 void LLPointShadows::forget(const LLDrawable* drawable)
@@ -328,7 +335,7 @@ void LLPointShadows::forget(const LLDrawable* drawable)
     {
         return;
     }
-    forgetPinned(drawable);
+    LLLocalShadows::forgetPinned(mPins, drawable);
     auto id = mIdOf.find(drawable);
     if (id != mIdOf.end())
     {
@@ -365,22 +372,53 @@ void LLPointShadows::dropLamp(std::map<U32, Lamp>::iterator it)
     mLamps.erase(it);
 }
 
-// every face of the lamp is placed and drawn: the set the lookup can read (one pose: a lamp's faces are drawn from its drawn pose, or all
-// six at once from a new one)
+// A lamp gives its faces up (a nearer lamp takes the room, evictFor): their rects are freed, their pins given back, and the lamp waits for
+// room like an arrival, lit without a shadow until it is drawn again. The faces keep their cost predictions.
+void LLPointShadows::resetFaces(Lamp& lamp)
+{
+    for (U32 f = 0; f < kFaces; ++f)
+    {
+        Face& face = lamp.faces[f];
+        if (face.placed && active())
+        {
+            mBuddy.free(face.rect);
+        }
+        unpinFace(faceKey(lamp.id, f));
+        Face fresh;
+        fresh.lastCpuMs = face.lastCpuMs;
+        fresh.lastAvatarMs = face.lastAvatarMs;
+        face = fresh;
+    }
+    lamp.drawnValid = false;
+    lamp.volumesValid = false; // rebuilt at the faces' sizes once they are placed again
+}
+
+// every face of the lamp is placed and drawn for its set: the faces the lookup can read (one pose and one radius)
 bool LLPointShadows::lampDrawn(const Lamp& lamp) const
 {
-    if (!lamp.drawnValid)
+    if (!lamp.drawnValid || lamp.set == 0)
     {
         return false;
     }
     for (const Face& face : lamp.faces)
     {
-        if (!face.placed || face.drawnFrame == 0)
+        if (!face.placed || face.drawnFrame == 0 || face.set != lamp.set)
         {
             return false;
         }
     }
     return true;
+}
+
+// A new set of faces from this frame's pose and face radius: the lookup reads the lamp again once all six are drawn for it.
+void LLPointShadows::startSet(Lamp& lamp)
+{
+    lamp.set = lamp.set + 1 ? lamp.set + 1 : 1; // 0 is "none"
+    lamp.setPose = lamp.curPose;
+    lamp.setCentre = gAgent.getPosGlobalFromAgent(lamp.centre);
+    lamp.setRadius = lamp.faceRadius;
+    lamp.setStale = false;
+    lamp.drawnValid = false;
 }
 
 // a resize is due when a face's wanted size is not its drawn one and the atlas gives the new size once its own rect is freed (a shrink
@@ -394,7 +432,7 @@ bool LLPointShadows::resizeDue(const Face& face) const
 // S2: a lamp that is off keeps its faces while the hold lasts and it is in range by the reach it had when it was last on
 void LLPointShadows::holdOff(Lamp& lamp, const LLVector3& cam_pos, F32 reach, F64 now)
 {
-    if (holdOffFrame(lamp.off, lamp.offSince, now, inRange(true, camera_distance(lamp.drawable, cam_pos, lamp.curPose.radius), reach)))
+    if (holdOffFrame(lamp.off, lamp.offSince, now, inRange(true, camera_distance(lamp.drawable, cam_pos, lamp.radius), reach)))
     {
         lamp.seen = true;
     }
@@ -460,7 +498,7 @@ void LLPointShadows::updateLightSet(LLCamera& camera)
             fresh.drawable = drawable;
             for (Face& face : fresh.faces)
             {
-                face.lastCpuMs = coldItemMs(mCostEmaMs); // a never-drawn face's prediction leaves room for several per frame
+                face.lastCpuMs = coldItemMs(mCostEmaMs); // a never-drawn face's prediction: the measured average of a face render
             }
             mLamps[id] = fresh;
             mIdOf[drawable] = id;
@@ -497,48 +535,27 @@ void LLPointShadows::updateLightSet(LLCamera& camera)
     }
 }
 
+// a whole face rect between the atlases, bit for bit (both are D32F of one size)
 void LLPointShadows::copyTile(U32 from_tex, const Rect& src, U32 to_tex, const Rect& dst)
 {
     llassert(src.size == dst.size);
-    if (gGLManager.mGLVersion >= 4.29f)
-    {
-        glCopyImageSubData(from_tex, GL_TEXTURE_2D, 0, (GLint)src.x, (GLint)src.y, 0, to_tex, GL_TEXTURE_2D, 0, (GLint)dst.x,
-                           (GLint)dst.y, 0, (GLsizei)src.size, (GLsizei)src.size, 1);
-    }
-    else
-    {
-        LLGLDisable scissor(GL_SCISSOR_TEST);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, from_tex == mAtlasS ? mFboS : mFboL);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, to_tex == mAtlasS ? mFboS : mFboL);
-        glBlitFramebuffer((GLint)src.x, (GLint)src.y, (GLint)(src.x + src.size), (GLint)(src.y + src.size), (GLint)dst.x, (GLint)dst.y,
-                          (GLint)(dst.x + dst.size), (GLint)(dst.y + dst.size), GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-    }
+    LLLocalShadowGL::copyTexels(from_tex, (S32)src.x, (S32)src.y, to_tex, (S32)dst.x, (S32)dst.y, (S32)src.size, (S32)src.size);
 }
 
+// S -> L over a rectangle of a face (C3)
 void LLPointShadows::copyTileTexels(const Rect& tile, const TexelRect& texels)
 {
     if (texels.empty())
     {
         return;
     }
-    const GLint x = (GLint)tile.x + texels.x0, y = (GLint)tile.y + texels.y0;
-    const GLsizei w = texels.x1 - texels.x0, h = texels.y1 - texels.y0;
-    if (gGLManager.mGLVersion >= 4.29f)
-    {
-        glCopyImageSubData(mAtlasS, GL_TEXTURE_2D, 0, x, y, 0, mAtlasL, GL_TEXTURE_2D, 0, x, y, 0, w, h, 1);
-    }
-    else
-    {
-        LLGLDisable scissor(GL_SCISSOR_TEST);
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, mFboS);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, mFboL);
-        glBlitFramebuffer(x, y, x + w, y + h, x, y, x + w, y + h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
-    }
+    const S32 x = (S32)tile.x + texels.x0, y = (S32)tile.y + texels.y0;
+    LLLocalShadowGL::copyTexels(mAtlasS, x, y, mAtlasL, x, y, texels.x1 - texels.x0, texels.y1 - texels.y0);
 }
 
-// A compaction (the projectors' rule): every placed face at its own size in a fresh layout (descending sizes pack a buddy atlas without a
-// gap), the drawn ones moved by bit-exact copies S[old] -> L[new], then L -> S in full. Runs when an arriving lamp's faces find no block
-// although the free texels would hold them, or a growth has found none for a while.
+// A compaction (the projectors' rule, on the shared llprojectorpool::planRepack): every placed face at its own size in a fresh layout
+// (descending sizes pack a buddy atlas without a gap), the drawn ones moved by bit-exact copies S[old] -> L[new], then L -> S in full.
+// Runs when an arriving lamp's faces find no block although the free texels would hold them, or a growth has found none for a while.
 bool LLPointShadows::compact()
 {
     std::vector<LayoutRequest> requests;
@@ -566,7 +583,6 @@ bool LLPointShadows::compact()
         llassert(false); // they fitted before, and descending sizes leave no gap
         return false;
     }
-    const U32 saved_fbo = LLRenderTarget::sCurFBO;
     unbind_from_units(mAtlasL);
     if (!plan.moves.empty())
     {
@@ -597,8 +613,6 @@ bool LLPointShadows::compact()
             }
         }
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
-    LLRenderTarget::sCurFBO = saved_fbo;
     mBuddy = plan.buddy;
     for (size_t i = 0; i < requests.size(); ++i)
     {
@@ -610,14 +624,91 @@ bool LLPointShadows::compact()
             face.placed = true;
         }
     }
-    ++mCompactions;
     return true;
+}
+
+// The atlas is full even at the floor (every pending shrink drawn would still leave the waiting lamps without room): the waiting lamps
+// nearest the camera's position take the faces of the placed lamps farthest from it, one farther by the reach's hysteresis
+// (llpointpool::evicts), the farthest first. An evicted lamp waits like any arrival (lit without a shadow) and takes faces again when room
+// comes back or when it is the nearer one. `waiting` keeps the lamps that are still without room.
+void LLPointShadows::evictFor(std::vector<Lamp*>& waiting)
+{
+    std::sort(waiting.begin(), waiting.end(), [](const Lamp* a, const Lamp* b) {
+        return a->camDist != b->camDist ? sortDist(a->camDist) < sortDist(b->camDist) : a->id < b->id;
+    });
+    std::vector<Lamp*> placed;
+    for (auto& entry : mLamps)
+    {
+        if (all_placed(entry.second.faces))
+        {
+            placed.push_back(&entry.second);
+        }
+    }
+    std::sort(placed.begin(), placed.end(), [](const Lamp* a, const Lamp* b) {
+        return a->camDist != b->camDist ? sortDist(a->camDist) > sortDist(b->camDist) : a->id > b->id;
+    });
+    auto place = [this](Lamp& lamp) {
+        Rect got[kFaces];
+        U32 done = 0;
+        for (U32 f = 0; f < kFaces; ++f)
+        {
+            if (lamp.faces[f].placed)
+            {
+                continue;
+            }
+            if (!mBuddy.alloc(lamp.faces[f].want, got[f]))
+            {
+                for (U32 g = 0; g < f; ++g)
+                {
+                    if (done & (1u << g))
+                    {
+                        mBuddy.free(got[g]);
+                    }
+                }
+                return false;
+            }
+            done |= 1u << f;
+        }
+        for (U32 f = 0; f < kFaces; ++f)
+        {
+            if (done & (1u << f))
+            {
+                lamp.faces[f].rect = got[f];
+                lamp.faces[f].placed = true;
+            }
+        }
+        return true;
+    };
+    auto need = [](const Lamp& lamp) {
+        uint64_t sum = 0;
+        for (const Face& face : lamp.faces)
+        {
+            sum += face.placed ? 0 : uint64_t(face.want) * face.want;
+        }
+        return sum;
+    };
+    std::vector<Lamp*> left;
+    size_t next = 0;
+    for (Lamp* lamp : waiting)
+    {
+        bool done = place(*lamp);
+        while (!done && next < placed.size() && evicts(lamp->camDist, placed[next]->camDist))
+        {
+            resetFaces(*placed[next++]);
+            done = place(*lamp) || (mBuddy.freeTexels() >= need(*lamp) && compact() && place(*lamp));
+        }
+        if (!done)
+        {
+            left.push_back(lamp); // the lamps farther than this one evict no more than it did
+        }
+    }
+    waiting.swap(left);
 }
 
 // The faces' sizes and placement (the projectors' rules, llprojectorshadows.cpp layout): the valve's pressure from the faces' lamp sizes and
 // the lamps' distance bands (one band per lamp, floor 128), each face's wanted size, and the arriving lamps placed at theirs, all six faces
-// or none (a lamp is drawn whole: an arrival that does not fit whole waits for the shrinks the renders draw, nearest lamp first). A placed
-// face is never resized here: its own render draws the new size before it is swapped in.
+// or none (an arrival that does not fit whole waits for the shrinks the renders draw; when not even those make room, the nearer lamps take
+// the farther lamps' faces: evictFor). A placed face is never resized here: its own render draws the new size before it is swapped in.
 void LLPointShadows::layout(F32 dt_seconds)
 {
     mValveTiles.clear();
@@ -688,7 +779,7 @@ void LLPointShadows::layout(F32 dt_seconds)
             std::vector<Lamp*> left;
             for (Lamp* lamp : list)
             {
-                // all of the lamp's faces or none: a lamp is drawn whole, so faces placed alone would hold space nobody reads
+                // all of the lamp's faces or none: faces placed alone would hold space nobody reads
                 Rect got[kFaces];
                 bool ok = true;
                 U32 placed_now = 0;
@@ -762,7 +853,13 @@ void LLPointShadows::layout(F32 dt_seconds)
             }
             if (arrivalShortfall(mBuddy.freeTexels(), shrinking, texels(waiting)))
             {
-                LL_WARNS_ONCE("PointShadows") << "point light faces do not fit the atlas even at the smallest size; the farthest lamps have no shadow" << LL_ENDL;
+                // no render frees the room: the atlas cannot hold every lamp even at the floor
+                evictFor(waiting);
+                if (!waiting.empty())
+                {
+                    LL_WARNS_ONCE("PointShadows") << "point light faces do not fit the atlas even at the smallest size; the lamps farthest "
+                                                     "from the camera's position have no shadow" << LL_ENDL;
+                }
             }
         }
     }
@@ -808,10 +905,11 @@ void LLPointShadows::setFaceTarget(U32 fbo, const Rect& rect)
     LLLocalShadowGL::setTileOrigin((F32)rect.x, (F32)rect.y);
 }
 
-// One face from a pose (the lamp's centre and radius): the fixed objects into S (one cull and one submit with the face's frustum, the
+// One face from a pose (the lamp's centre and face radius): the fixed objects into S (one cull and one submit with the face's frustum, the
 // casters drawn from both sides, the emitter prim left out by identity), then S -> L for the face, then the avatars in its light over it in
-// L. A face whose wanted size differs is drawn at the new size into a new rect (draw-then-swap). Returns the CPU ms.
-F32 LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 radius, Cause cause)
+// L. A face whose wanted size differs is drawn at the new size into a new rect (draw-then-swap). The face then holds the lamp's set.
+// False when nothing was drawn.
+bool LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 radius, Cause cause)
 {
     Face& face = lamp.faces[f];
     const F64 cpu_start = LLTimer::getTotalSeconds();
@@ -820,18 +918,14 @@ F32 LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 r
         const Rect old = face.rect;
         mBuddy.free(old);
         Rect nr;
-        if (mBuddy.alloc(face.want, nr))
-        {
-            ++mResizes;
-        }
-        else
+        if (!mBuddy.alloc(face.want, nr))
         {
             llassert(false); // resizeDue found the block
             if (!mBuddy.alloc(old.size, nr))
             {
                 face.placed = false;
                 face.drawnFrame = 0;
-                return 0.f;
+                return false;
             }
         }
         face.rect = nr;
@@ -881,10 +975,7 @@ F32 LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 r
     LLPipeline::sLocalShadowTwoSided = false;
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
     mRenderingFace = nullptr;
-    for (const Id128& id : mPins.endRender(key))
-    {
-        unpinObject(id);
-    }
+    LLLocalShadows::unpinObjects(mPins.endRender(key));
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
     copyTile(mAtlasS, face.rect, mAtlasL, face.rect);
@@ -910,9 +1001,9 @@ F32 LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 r
     face.layerRectValid = true;
 
     face.drawnFrame = LLFrameTimer::getFrameCount();
+    face.set = lamp.set;
     face.pending = false;
     face.dirtyFrame = 0;
-    face.dirtyTime = 0.0;
     face.avatarInLayer = face.holdsAvatar;
     face.layerFrame = face.drawnFrame;
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
@@ -924,74 +1015,39 @@ F32 LLPointShadows::renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 r
     mCostEmaMs += 0.2f * (face.lastCpuMs - mCostEmaMs);
     mLastFrameRenderMs += ms;
     frameLedger().add(ms);
-    ++mLastFrameRenders;
-    ++mFaceRenders;
-    mCauses.add(cause);
-    return ms;
+    return true;
 }
 
-// A whole lamp: its six faces drawn from this frame's pose (its first fill, or a move), which the lookup then reads; until this render
-// completes the lookup reads the faces of the pose they were drawn with, so no lookup mixes two poses.
-void LLPointShadows::renderLamp(Lamp& lamp, Cause cause)
+// A whole lamp: a new set of its six faces drawn from this frame's pose and face radius (a lamp that moved, or one that moves while it has
+// no set), which the lookup then reads; until this render the lookup reads the faces of the set they hold, so no lookup mixes two poses.
+bool LLPointShadows::renderLamp(Lamp& lamp, Cause cause)
 {
-    if (!(lamp.radius > 0.f))
+    if (!(lamp.faceRadius > 0.f))
     {
-        return;
+        return false;
     }
-    const LLVector3 centre = lamp.centre;
-    const F32 radius = lamp.radius;
-    F32 total = 0.f;
+    if (!all_placed(lamp.faces))
+    {
+        return false; // layout places a lamp's faces all or none
+    }
+    startSet(lamp);
+    bool all = true;
     for (U32 f = 0; f < kFaces; ++f)
     {
-        if (!lamp.faces[f].placed)
-        {
-            return; // layout places a lamp's faces all or none
-        }
+        all = renderFace(lamp, (int)f, lamp.centre, lamp.setRadius, cause) && all;
     }
-    for (U32 f = 0; f < kFaces; ++f)
-    {
-        total += renderFace(lamp, (int)f, centre, radius, cause);
-    }
-    lamp.drawnCentre = gAgent.getPosGlobalFromAgent(centre);
-    lamp.drawnRadius = radius;
-    lamp.drawnPose = lamp.curPose;
-    lamp.drawnValid = true;
-    lamp.poseStale = false;
-    lamp.lastLampMs = total;
-    ++mLampRenders;
+    lamp.drawnValid = all; // a face that could not be drawn is drawn by the next frame's fill items
+    return true;
 }
 
-// The avatars a face draws, and the tile rectangle they cover (the projectors' rule): at most A_max, the nearest to the light; the
-// rectangle the avatars' grown extents cover through the face's matrices, the whole face when that is unknown, too large or an impostor.
+// The avatars a face draws, and the tile rectangle they cover (the projectors' rule, LLLocalShadows::tileAvatars).
 LLPointShadows::FaceAvatars LLPointShadows::faceAvatars(const Face& face, const float clip[16], const LLVector3& centre) const
 {
     FaceAvatars out;
-    if (!mCasters)
+    if (mCasters)
     {
-        return out;
+        LLLocalShadows::tileAvatars(*mCasters, face.volume, clip, centre, face.rect.size, out.avatars, out.rect);
     }
-    std::vector<std::pair<F32, const LLLocalShadowCaster*>> in_light;
-    for (const LLLocalShadowCaster& c : *mCasters)
-    {
-        if (intersects(face.volume, c.box))
-        {
-            const LLVector3 mid((c.box.lo[0] + c.box.hi[0]) * 0.5f, (c.box.lo[1] + c.box.hi[1]) * 0.5f, (c.box.lo[2] + c.box.hi[2]) * 0.5f);
-            in_light.emplace_back((mid - centre).magVecSquared(), &c);
-        }
-    }
-    std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    std::vector<Aabb> boxes;
-    const S32 period = LLVOAvatar::getExtentUpdatePeriod();
-    bool whole = false;
-    for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
-    {
-        const LLLocalShadowCaster& c = *in_light[i].second;
-        out.avatars.push_back(c.avatar);
-        whole = whole || c.avatar->isImpostor();
-        boxes.push_back(inflateBox(c.box, footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
-    }
-    const U32 n = face.rect.size;
-    out.rect = whole ? wholeTileRect(n) : faceFootprint(clip, boxes, n);
     return out;
 }
 
@@ -1039,17 +1095,17 @@ F32 LLPointShadows::drawAvatars(Lamp& lamp, int f, const FaceAvatars& avatars, c
 }
 
 // The avatar layer alone: the face's fixed layer is unchanged, so L's face is S's again where the last avatars were, and the avatars in
-// the light now are drawn over it, from the pose the face holds.
-void LLPointShadows::renderLayer(Lamp& lamp, int f)
+// the light now are drawn over it, from the set the face holds. False when nothing was drawn (no set).
+bool LLPointShadows::renderLayer(Lamp& lamp, int f)
 {
     if (!lamp.drawnValid)
     {
-        return;
+        return false;
     }
     Face& face = lamp.faces[f];
     const F64 cpu_start = LLTimer::getTotalSeconds();
-    const LLVector3 centre = gAgent.getPosAgentFromGlobal(lamp.drawnCentre);
-    const F32 radius = lamp.drawnRadius;
+    const LLVector3 centre = gAgent.getPosAgentFromGlobal(lamp.setCentre);
+    const F32 radius = lamp.setRadius;
     F32 avatar_ms = 0.f;
     FaceAvatars avatars;
     if (face.holdsAvatar)
@@ -1072,114 +1128,23 @@ void LLPointShadows::renderLayer(Lamp& lamp, int f)
     const F32 ms = (F32)((LLTimer::getTotalSeconds() - cpu_start) * 1000.0);
     mLastFrameRenderMs += ms;
     frameLedger().add(ms);
-    ++mLastFrameRenders;
-    ++mLayerRenders;
-    mCauses.add(Cause::Avatar);
-}
-
-void LLPointShadows::unpinObject(const Id128& id)
-{
-    LLUUID uuid;
-    memcpy(uuid.mData, &id, sizeof(id));
-    LLLocalShadows::lowerPin(gObjectList.findObject(uuid));
-}
-
-void LLPointShadows::forgetPinned(const LLDrawable* drawable)
-{
-    const LLViewerObject* object = drawable->getVObj();
-    if (!object || LLApp::isExiting())
-    {
-        return;
-    }
-    const uint32_t n = mPins.forget(LLLocalShadows::idOf(object->getID()));
-    if (n == 0)
-    {
-        return;
-    }
-    LLViewerObject* live = gObjectList.findObject(object->getID());
-    for (uint32_t i = 0; live && i < n; ++i)
-    {
-        LLLocalShadows::lowerPin(live);
-    }
+    return true;
 }
 
 void LLPointShadows::unpinFace(U32 key)
 {
-    const std::vector<Id128> held = mPins.releaseTile(key);
-    if (LLApp::isExiting())
-    {
-        return;
-    }
-    for (const Id128& id : held)
-    {
-        unpinObject(id);
-    }
+    LLLocalShadows::unpinObjects(mPins.releaseTile(key));
 }
 
-void LLPointShadows::pinDrawable(LLDrawable* drawable)
-{
-    LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
-    if (!object || object->isDead() || drawable == LLPipeline::RenderSpotLight)
-    {
-        return; // the emitter is not drawn into its own faces
-    }
-    LLVOVolume* volume = drawable->getVOVolume();
-    LLVOTree* tree = volume ? nullptr : dynamic_cast<LLVOTree*>(object);
-    if (!volume && !tree)
-    {
-        return;
-    }
-    if (volume && (volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment() || !LLLocalShadows::volumeCasts(volume)))
-    {
-        return;
-    }
-    Aabb box;
-    if (!LLShadowDirtyFeed::extentsOf(drawable, box) || !intersects(mRenderVolume, box))
-    {
-        return;
-    }
-    if (mPins.touch(mRenderingKey, LLLocalShadows::idOf(object->getID())))
-    {
-        if (volume)
-        {
-            volume->pinLampLOD();
-        }
-        else
-        {
-            tree->pinLampLOD();
-        }
-    }
-}
-
-// The LOD pin (the projectors' rule): every volume the face is about to draw, inside the face's volume, is held at full detail, so a camera
-// that moves changes no face's content.
+// The LOD pin (the projectors' rule, LLLocalShadows::pinCasters): every volume the face is about to draw, inside the face's volume, is held
+// at full detail, so a camera that moves changes no face's content. The emitter is not drawn into its own faces: it is not held for them.
 void LLPointShadows::pinCasters(LLCullResult& result)
 {
     if (!mRenderingFace || !on_main_thread())
     {
         return;
     }
-    auto pin_group = [this](LLSpatialGroup* group) {
-        if (!group || group->isDead())
-        {
-            return;
-        }
-        for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
-        {
-            if ((*i)->hasDrawable())
-            {
-                pinDrawable((LLDrawable*)(*i)->getDrawable());
-            }
-        }
-    };
-    for (LLCullResult::sg_iterator i = result.beginVisibleGroups(); i != result.endVisibleGroups(); ++i)
-    {
-        pin_group(*i);
-    }
-    for (LLCullResult::sg_iterator i = result.beginDrawableGroups(); i != result.endDrawableGroups(); ++i)
-    {
-        pin_group(*i);
-    }
+    LLLocalShadows::pinCasters(result, mPins, mRenderingKey, mRenderVolume, LLPipeline::RenderSpotLight);
 }
 
 // D4: the prim that emits the light casts nothing into its own faces (it is the light), the rest of its linkset does. The pipeline's
@@ -1239,7 +1204,6 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
         }
     }
     mLastFrameRenderMs = 0.f;
-    mLastFrameRenders = 0;
     frameLedger().begin(frame);
     mCasters = &casters; // until endFrame
 
@@ -1249,26 +1213,30 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
 
     updateLightSet(camera);
 
-    // The lamps' poses, this frame's: from the lamp alone (its centre and radius, never its rotation). The camera's POSITION enters here and
-    // nowhere else: its distance to the lamp's lit sphere is the valve's band (which lamps shrink first while the atlas is over its budget)
-    // and the order of a fill, never what a face holds nor, while the atlas has room, its size.
+    // The lamps' poses, this frame's: from the lamp alone (its centre and the radius its faces are drawn for, never its rotation). The
+    // camera's POSITION enters here and nowhere else: its distance to the lamp's lit sphere is the valve's band (which lamps shrink first
+    // while the atlas is over its budget), the order of a fill and of an eviction, never what a face holds nor, while the atlas has room,
+    // its size.
     const U32 shifts = LLShadowDirtyFeed::shifts();
     const bool shifted = shifts != mShiftsSeen;
     mShiftsSeen = shifts;
     const LLVector3 cam_origin = camera.getOrigin();
+    const F64 now = LLTimer::getTotalSeconds();
     std::vector<const LLViewerObject*> lamp_roots;
     for (auto& entry : mLamps)
     {
         Lamp& lamp = entry.second;
-        if (LLViewerObject* object = lamp.drawable.notNull() ? lamp.drawable->getVObj().get() : nullptr)
-        {
-            LLViewerObject* root = object->getRootEdit();
-            lamp_roots.push_back(root ? root : object);
-        }
+        LLViewerObject* object = lamp.drawable.notNull() ? lamp.drawable->getVObj().get() : nullptr;
+        LLViewerObject* root = object ? object->getRootEdit() : nullptr;
+        root = root ? root : object;
         LLVOVolume* volume = lamp.drawable.notNull() ? lamp.drawable->getVOVolume() : nullptr;
         const F32 radius = volume ? volume->getLightRadius() : 0.f;
         if (lamp.off || !(radius > 0.f) || !std::isfinite(radius))
         {
+            if (root)
+            {
+                lamp_roots.push_back(root); // S2: a held lamp's faces still collect its linkset's changes
+            }
             if (!lamp.off)
             {
                 lamp.prevPoseValid = false;
@@ -1278,28 +1246,37 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
         }
         lamp.centre = lamp.drawable->getPositionAgent();
         lamp.radius = radius;
-        lamp.curPose = lamp_pose(lamp.drawable, lamp.centre, radius);
+        lamp.curPose = lamp_pose(lamp.drawable, lamp.centre);
         lamp.lampMoving = lamp.prevPoseValid && poseChanged(lamp.prevPose, lamp.curPose);
         lamp.prevPose = lamp.curPose;
         lamp.prevPoseValid = true;
-        lamp.poseStale = lamp.drawnValid && poseChanged(lamp.drawnPose, lamp.curPose);
-        if (shifted || !lamp.volumesValid || poseChanged(lamp.volumePose, lamp.curPose))
+        // the lamp's own linkset is the fixture of its faces: its changes always push (llshadowdirtyfeed). Not while the lamp moves: it is
+        // drawn whole from its new pose anyway, and every other lamp leaves a moving linkset out of what it draws, so the pushes of a boat
+        // or a car carrying a lamp would only mark faces and tiles that nothing in them changed (the feed skips them as any mover's)
+        if (root && !lamp.lampMoving)
         {
-            lamp.base = faceBaseSize(radius); // the faces' size from the lamp alone: only its reach changes it
+            lamp_roots.push_back(root);
+        }
+        lamp.faceRadius = faceRadius(lamp.set != 0 ? lamp.setRadius : 0.f, radius, lamp.radiusBelowSince, now);
+        lamp.setStale = lamp.set != 0 && (poseChanged(lamp.setPose, lamp.curPose) || lamp.faceRadius != lamp.setRadius);
+        if (shifted || !lamp.volumesValid || poseChanged(lamp.volumePose, lamp.curPose) || lamp.volumeRadius != lamp.faceRadius)
+        {
+            lamp.base = faceBaseSize(lamp.faceRadius); // the faces' size from the lamp alone: only its reach changes it
             lamp.volumePose = lamp.curPose;
+            lamp.volumeRadius = lamp.faceRadius;
             lamp.volumesValid = true;
             for (Face& face : lamp.faces)
             {
                 face.volumeN = 0; // rebuilt below, at the face's size
             }
         }
-        lamp.camDist = lampDistance(cam_origin.mV, lamp.centre.mV, faceFar(radius));
+        lamp.camDist = lampDistance(cam_origin.mV, lamp.centre.mV, faceFar(lamp.faceRadius));
         lamp.band = nextBand(lamp.band, lamp.camDist);
     }
     LLShadowDirtyFeed::setLampRoots(LLShadowDirtyFeed::Owner::Points, lamp_roots);
 
     layout(gFrameIntervalSeconds.value());
-    // each face's volume at its size (the guard's width in metres follows it), from the lamp's current pose
+    // each face's volume at its size (the guard's width in metres follows it), from the lamp's current pose and face radius
     for (auto& entry : mLamps)
     {
         Lamp& lamp = entry.second;
@@ -1313,13 +1290,15 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
             const U32 n = face.placed ? face.rect.size : face.want;
             if (n >= kFaceMin && face.volumeN != n)
             {
-                face.volume = facePyramid(lamp.centre.mV, (int)f, (float)faceTanHalf(n), kNearM, faceFar(lamp.radius));
+                face.volume = facePyramid(lamp.centre.mV, (int)f, (float)faceTanHalf(n), kNearM, faceFar(lamp.faceRadius));
                 face.volumeN = n;
             }
         }
     }
 
-    // which drawn faces a change touched (the first cause that made a face stale is kept until it is drawn)
+    // which drawn faces a change touched (the first cause that made a face stale is kept until it is drawn); the changes of the lamp's own
+    // emitter leave its faces alone (TileVolume::ignore: they never draw it), so a LOD switch of the bulb as the camera walks or a
+    // blinker's alpha redraws nothing of its own lamp
     if (!boxes.empty() || everything)
     {
         std::vector<TileVolume> volumes;
@@ -1333,6 +1312,7 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
                     TileVolume tv;
                     tv.key = faceKey(entry.first, f);
                     tv.pyramid = face.volume;
+                    tv.ignore = entry.second.drawable.get();
                     volumes.push_back(tv);
                 }
             }
@@ -1353,13 +1333,13 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
                 face.pending = true;
                 face.pendingCause = hit.cause;
                 face.dirtyFrame = frame;
-                face.dirtyTime = LLTimer::getTotalSeconds();
             }
         }
     }
 
     // The avatars, by position alone: every avatar that casts is paired with every face whose volume its extents touch; the camera's
-    // POSITION only orders the faces. The own avatar's faces run every frame under the kOwnEveryFrameLamps lamps that light it most (P2).
+    // POSITION only orders the faces. The own avatar's faces run every frame under the kOwnEveryFrameLamps lamps that light it most (P2):
+    // every face of such a lamp its box meets, within kOwnAvatarDrawsMax avatar draws for all of them.
     const F32 camera_pos[3] = { cam_origin.mV[VX], cam_origin.mV[VY], cam_origin.mV[VZ] };
     std::vector<Aabb> avatar_boxes, own_boxes;
     for (const LLLocalShadowCaster& c : casters)
@@ -1370,6 +1350,7 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
     for (auto& entry : mLamps)
     {
         entry.second.ownEvery = false;
+        entry.second.ownRank = 0;
     }
     if (!own_boxes.empty())
     {
@@ -1391,50 +1372,42 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
             {
                 LLVOVolume* volume = lamp.drawable->getVOVolume();
                 const F32 e = volume ? lampIrradiance(luminance(volume->getLightLinearColor()), (own_mid - lamp.centre).length(),
-                                                      faceFar(lamp.radius), volume->getLightFalloff(kDeferredFalloff))
+                                                      faceFar(lamp.faceRadius), volume->getLightFalloff(kDeferredFalloff))
                                      : 0.f;
                 own_lamps.emplace_back(lamp.id, e);
             }
         }
     }
-    std::vector<uint32_t> own_rank;
-    const std::vector<bool> own_every = ownEveryFrame(own_lamps, &own_rank);
-    std::map<U32, U32> own_rank_of;
-    for (size_t i = 0; i < own_lamps.size(); ++i)
     {
-        auto it = mLamps.find(own_lamps[i].first);
-        if (it != mLamps.end())
+        std::vector<uint32_t> own_rank;
+        const std::vector<bool> own_every = ownEveryFrame(own_lamps, &own_rank);
+        for (size_t i = 0; i < own_lamps.size(); ++i)
         {
-            it->second.ownEvery = own_every[i];
+            auto it = mLamps.find(own_lamps[i].first);
+            if (it != mLamps.end())
+            {
+                it->second.ownEvery = own_every[i];
+                it->second.ownRank = own_rank[i];
+            }
         }
-        own_rank_of[own_lamps[i].first] = own_rank[i];
     }
 
-    mLampsWithoutFaces = 0;
-    mPendingFaces = 0;
-    mAvatarFaces = 0;
+    // Each lamp's faces this frame: the avatars in their light, and, for a lamp whose set is complete and still, each face's verdict. A
+    // lamp waits for room until all six faces are placed (it is drawn whole or face by face, never read with faces missing).
+    std::vector<OwnFace> own_faces; // the candidates of the own avatar's every-frame faces
     for (auto& entry : mLamps)
     {
         Lamp& lamp = entry.second;
         lamp.wholeItem = false;
-        if (!lampDrawn(lamp))
+        for (Face& face : lamp.faces)
         {
-            ++mLampsWithoutFaces;
+            face.needsRender = face.needsLayer = face.ownEvery = false;
         }
-        if (lamp.off || !lamp.volumesValid)
+        if (lamp.off || !lamp.volumesValid || !all_placed(lamp.faces))
         {
-            continue; // S2: a lamp that is off is not drawn: its changes wait until it is on again
+            continue; // S2: a lamp that is off is not drawn (its changes wait until it is on again); a lamp without room waits
         }
-        bool all_placed = true, any_never = false;
-        for (const Face& face : lamp.faces)
-        {
-            all_placed = all_placed && face.placed;
-            any_never = any_never || face.drawnFrame == 0 || !lamp.drawnValid;
-        }
-        if (!all_placed)
-        {
-            continue; // waits for room: a lamp is drawn whole
-        }
+        const bool still = lampDrawn(lamp) && !lamp.setStale && !lamp.lampMoving;
         // the avatars that can touch the lamp's faces (BoxFilter over its faces' bounds), then each face's
         BoxFilter filter;
         for (const Face& face : lamp.faces)
@@ -1444,34 +1417,19 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
         std::vector<Aabb> run_own, run_avatars;
         filter.select(own_boxes, run_own);
         filter.select(avatar_boxes, run_avatars);
-        U32 avatars_total = 0;
-        bool any_avatar = false;
-        F32 whole_ms = 0.f;
-        U32 oldest = frame;
         for (U32 f = 0; f < kFaces; ++f)
         {
             Face& face = lamp.faces[f];
             face.layerOnly = false;
             face.avatarCount = 0;
+            face.holdsOwn = false;
             face.avatarDist = std::numeric_limits<F32>::infinity();
-            bool holds_own = false;
             for (const Aabb& b : run_own)
             {
                 if (intersects(face.volume, b))
                 {
                     ++face.avatarCount;
-                    // the own avatar's face is the one its box's centre falls in; the others its box overlaps go by deadline
-                    const float d[3] = { 0.5f * (b.lo[0] + b.hi[0]) - lamp.centre.mV[VX], 0.5f * (b.lo[1] + b.hi[1]) - lamp.centre.mV[VY],
-                                         0.5f * (b.lo[2] + b.hi[2]) - lamp.centre.mV[VZ] };
-                    float xyw[3];
-                    if (pickFace(d, xyw) == (int)f)
-                    {
-                        holds_own = true;
-                    }
-                    else
-                    {
-                        face.avatarDist = std::min(face.avatarDist, pointBoxDistance(camera_pos, b));
-                    }
+                    face.holdsOwn = true;
                 }
             }
             for (const Aabb& b : run_avatars)
@@ -1482,30 +1440,11 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
                     face.avatarDist = std::min(face.avatarDist, pointBoxDistance(camera_pos, b));
                 }
             }
-            if (holds_own && !lamp.ownEvery)
-            {
-                // under a fainter lamp the own avatar's face goes by the near avatars' deadline, the strongest first
-                const auto rank = own_rank_of.find(lamp.id);
-                face.avatarDist = std::min(face.avatarDist, 0.001f * F32(rank != own_rank_of.end() ? rank->second : 0u));
-            }
-            if (face.avatarCount == 0)
-            {
-                face.avatarDist = 0.f; // the avatar left: this face only restores L from S, which is cheap and first
-            }
             face.holdsAvatar = face.avatarCount > 0;
-            mAvatarFaces += face.holdsAvatar ? 1 : 0;
-            mPendingFaces += face.pending ? 1 : 0;
-            avatars_total += face.avatarCount;
-            any_avatar = any_avatar || face.holdsAvatar;
-            whole_ms += face.lastCpuMs + (face.holdsAvatar ? face.lastAvatarMs : 0.f);
-            if (face.drawnFrame != 0)
-            {
-                oldest = std::min(oldest, face.drawnFrame);
-            }
             face.verdictCause = Cause::Other;
-            if (any_never || lamp.poseStale || lamp.lampMoving)
+            if (!still)
             {
-                continue; // the whole lamp is drawn below
+                continue; // drawn whole or filled face by face below
             }
             TileFacts facts;
             facts.pending = face.pending;
@@ -1514,48 +1453,70 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
             facts.holds_avatar = face.holdsAvatar;
             facts.avatar_in_layer = face.avatarInLayer;
             const TileVerdict verdict = classifyTile(facts);
-            if (!verdict.needs_render && !verdict.needs_layer)
-            {
-                continue;
-            }
             face.verdictCause = verdict.cause;
-            const U32 key = faceKey(lamp.id, f);
-            if (verdict.needs_layer)
+            face.needsRender = verdict.needs_render;
+            face.needsLayer = verdict.needs_layer;
+            if (face.needsLayer && face.holdsOwn && lamp.ownEvery)
             {
-                DynamicItem item;
-                item.key = key;
-                item.pool = kPoolPoints;
-                item.avatar = true;
-                item.age_frames = frame - face.layerFrame;
-                item.cam_dist = face.avatarDist;
-                item.last_cpu_ms = face.holdsAvatar ? face.lastAvatarMs : 0.f;
-                item.avatar_draws = face.avatarCount;
-                item.layer = true;
-                item.own = holds_own && lamp.ownEvery;
-                face.layerOnly = true;
-                dynamic_items.push_back(item);
-            }
-            else
-            {
-                StaticItem item;
-                item.key = key;
-                item.pool = kPoolPoints;
-                item.pending = true;
-                item.cam_dist = lamp.camDist;
-                item.last_cpu_ms = face.lastCpuMs + (face.holdsAvatar ? face.lastAvatarMs : 0.f);
-                item.avatar_draws = face.holdsAvatar ? std::min<U32>(face.avatarCount, kAvatarDrawsMax) : 0u;
-                item.age_frames = face.dirtyFrame && frame >= face.dirtyFrame ? frame - face.dirtyFrame
-                                  : (face.drawnFrame && frame >= face.drawnFrame ? frame - face.drawnFrame : 0u);
-                static_items.push_back(item);
+                OwnFace c;
+                c.rank = lamp.ownRank;
+                c.key = faceKey(lamp.id, f);
+                c.draws = face.avatarCount;
+                own_faces.push_back(c);
             }
         }
-        if (any_never || lamp.poseStale || lamp.lampMoving)
+    }
+    const std::vector<bool> own_within = ownFacesWithinBudget(own_faces);
+    for (size_t i = 0; i < own_faces.size(); ++i)
+    {
+        auto it = mLamps.find(lampOf(own_faces[i].key));
+        if (it != mLamps.end())
         {
-            // the whole lamp, from this frame's pose: a first fill and a moved lamp's redraw are the static schedule's (nearest first, then
-            // oldest), a lamp that moves every frame the dynamic one's
+            it->second.faces[faceOf(own_faces[i].key)].ownEvery = own_within[i];
+        }
+    }
+
+    // the work list
+    for (auto& entry : mLamps)
+    {
+        Lamp& lamp = entry.second;
+        if (lamp.off || !lamp.volumesValid || !all_placed(lamp.faces))
+        {
+            continue;
+        }
+        const bool complete = lampDrawn(lamp);
+        U32 avatars_total = 0;
+        bool any_avatar = false;
+        F32 whole_ms = 0.f;
+        U32 oldest = frame;
+        for (Face& face : lamp.faces)
+        {
+            if (face.holdsOwn && !face.ownEvery)
+            {
+                // under a fainter lamp, or past the own faces' draws, the own avatar's face goes by the near avatars' deadline, the
+                // strongest lamp first
+                face.avatarDist = std::min(face.avatarDist, 0.001f * F32(lamp.ownRank));
+            }
+            if (face.avatarCount == 0)
+            {
+                face.avatarDist = 0.f; // the avatar left: this face only restores L from S, which is cheap and first
+            }
+            avatars_total += face.avatarCount;
+            any_avatar = any_avatar || face.holdsAvatar;
+            whole_ms += face.lastCpuMs + (face.holdsAvatar ? face.lastAvatarMs : 0.f);
+            if (face.drawnFrame != 0)
+            {
+                oldest = std::min(oldest, face.drawnFrame);
+            }
+        }
+        if (lamp.lampMoving || (complete && lamp.setStale))
+        {
+            // the whole lamp, a new set from this frame's pose: a lamp that moves every frame is the dynamic schedule's, a lamp that moved
+            // (or whose radius grew past its faces) the static one's (oldest first), and a lamp moving before its first set is complete
+            // the static one's first fill (nearest first)
             lamp.wholeItem = true;
             const U32 key = faceKey(lamp.id, kLampItem);
-            if (lamp.lampMoving && !any_never)
+            if (lamp.lampMoving && complete)
             {
                 DynamicItem item;
                 item.key = key;
@@ -1572,12 +1533,79 @@ void LLPointShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCa
                 StaticItem item;
                 item.key = key;
                 item.pool = kPoolPoints;
-                item.never_drawn = any_never;
+                item.never_drawn = !complete;
                 item.pending = true;
                 item.cam_dist = lamp.camDist;
                 item.last_cpu_ms = whole_ms;
                 item.avatar_draws = std::min<U32>(avatars_total, kAvatarDrawsMax);
-                item.age_frames = any_never ? 0u : (frame >= oldest ? frame - oldest : 0u);
+                item.age_frames = !complete ? 0u : (frame >= oldest ? frame - oldest : 0u);
+                static_items.push_back(item);
+            }
+            continue;
+        }
+        if (!complete)
+        {
+            // The first fill (or a fill restarted: the lamp moved and stopped, or its radius grew past the set's, before the set was
+            // complete): one static item per face not yet drawn for the set, each a face's cost, nearest lamp first. A lamp's six faces as
+            // one item would cost six faces, above the dynamic layer's share and often the whole cap, and take the frame from the avatars.
+            // The lookup reads the lamp once its sixth face is drawn.
+            if (lamp.set == 0 || lamp.setStale)
+            {
+                startSet(lamp);
+            }
+            for (U32 f = 0; f < kFaces; ++f)
+            {
+                Face& face = lamp.faces[f];
+                if (face.drawnFrame != 0 && face.set == lamp.set)
+                {
+                    continue;
+                }
+                StaticItem item;
+                item.key = faceKey(lamp.id, f);
+                item.pool = kPoolPoints;
+                item.never_drawn = true;
+                item.pending = true;
+                item.cam_dist = lamp.camDist;
+                item.last_cpu_ms = face.lastCpuMs + (face.holdsAvatar ? face.lastAvatarMs : 0.f);
+                item.avatar_draws = face.holdsAvatar ? std::min<U32>(face.avatarCount, kAvatarDrawsMax) : 0u;
+                static_items.push_back(item);
+            }
+            continue;
+        }
+        for (U32 f = 0; f < kFaces; ++f)
+        {
+            Face& face = lamp.faces[f];
+            if (!face.needsRender && !face.needsLayer)
+            {
+                continue;
+            }
+            const U32 key = faceKey(lamp.id, f);
+            if (face.needsLayer)
+            {
+                DynamicItem item;
+                item.key = key;
+                item.pool = kPoolPoints;
+                item.avatar = true;
+                item.age_frames = frame - face.layerFrame;
+                item.cam_dist = face.avatarDist;
+                item.last_cpu_ms = face.holdsAvatar ? face.lastAvatarMs : 0.f;
+                item.avatar_draws = face.avatarCount;
+                item.layer = true;
+                item.own = face.ownEvery;
+                face.layerOnly = true;
+                dynamic_items.push_back(item);
+            }
+            else
+            {
+                StaticItem item;
+                item.key = key;
+                item.pool = kPoolPoints;
+                item.pending = true;
+                item.cam_dist = lamp.camDist;
+                item.last_cpu_ms = face.lastCpuMs + (face.holdsAvatar ? face.lastAvatarMs : 0.f);
+                item.avatar_draws = face.holdsAvatar ? std::min<U32>(face.avatarCount, kAvatarDrawsMax) : 0u;
+                item.age_frames = face.dirtyFrame && frame >= face.dirtyFrame ? frame - face.dirtyFrame
+                                  : (face.drawnFrame && frame >= face.drawnFrame ? frame - face.drawnFrame : 0u);
                 static_items.push_back(item);
             }
         }
@@ -1603,49 +1631,59 @@ bool LLPointShadows::renderPick(U32 key, bool /*dynamic: a lamp moving every fra
     Lamp& lamp = it->second;
     const U32 f = faceOf(key);
     const F32 before = mLastFrameRenderMs;
+    bool drawn = false;
     if (f == kLampItem)
     {
         if (!lamp.wholeItem)
         {
             return false;
         }
-        renderLamp(lamp, lampDrawn(lamp) ? Cause::Lamp : Cause::New);
+        drawn = renderLamp(lamp, lampDrawn(lamp) ? Cause::Lamp : Cause::New);
     }
     else if (f < kFaces)
     {
         Face& face = lamp.faces[f];
-        if (!face.placed || !lamp.drawnValid)
+        if (!face.placed || lamp.set == 0)
         {
             return false;
         }
-        if (face.layerOnly)
+        const LLVector3 set_centre = gAgent.getPosAgentFromGlobal(lamp.setCentre);
+        if (!lamp.drawnValid)
         {
-            renderLayer(lamp, (int)f);
+            // a fill: the face from the set's pose and radius; the set is complete, and the lookup reads it, once its sixth face is drawn
+            if (face.drawnFrame != 0 && face.set == lamp.set)
+            {
+                return false;
+            }
+            drawn = renderFace(lamp, (int)f, set_centre, lamp.setRadius, Cause::New);
+            bool complete = true;
+            for (const Face& other : lamp.faces)
+            {
+                complete = complete && other.placed && other.drawnFrame != 0 && other.set == lamp.set;
+            }
+            lamp.drawnValid = complete;
         }
-        else
+        else if (face.layerOnly)
+        {
+            drawn = renderLayer(lamp, (int)f);
+        }
+        else if (face.verdictCause == Cause::Lowres && !resizeDue(face))
         {
             // a pick whose only cause is a growth whose block an earlier resize of this frame took: nothing in the face changed; it grows
             // once a block is free (its avatar layer still runs)
-            if (face.verdictCause == Cause::Lowres && !resizeDue(face))
+            if (face.holdsAvatar || face.avatarInLayer)
             {
-                if (face.holdsAvatar || face.avatarInLayer)
-                {
-                    renderLayer(lamp, (int)f);
-                }
-            }
-            else
-            {
-                // one face from the pose the lamp's faces hold, so the set stays one pose
-                renderFace(lamp, (int)f, gAgent.getPosAgentFromGlobal(lamp.drawnCentre), lamp.drawnRadius, face.verdictCause);
+                drawn = renderLayer(lamp, (int)f);
             }
         }
-    }
-    else
-    {
-        return false;
+        else
+        {
+            // one face from the set the lamp's faces hold, so the set stays one pose
+            drawn = renderFace(lamp, (int)f, set_centre, lamp.setRadius, face.verdictCause);
+        }
     }
     ms = mLastFrameRenderMs - before;
-    return true;
+    return drawn;
 }
 
 void LLPointShadows::endFrame()
@@ -1653,8 +1691,8 @@ void LLPointShadows::endFrame()
     mCasters = nullptr; // no avatar pointer outlives the frame
 }
 
-// The lookup's uniforms of one lamp: xyz its centre in this frame's eye space (of the pose its faces were drawn with), w its faces' far plane
-// (0: no complete set of drawn faces, lit without a lookup); faces: the six packed rects (llpointpool::packFaceRect), two unused.
+// The lookup's uniforms of one lamp: xyz its centre in this frame's eye space (of the set its faces hold), w its faces' far plane (0: no
+// complete set of drawn faces, lit without a lookup); faces: the six packed rects (llpointpool::packFaceRect), two unused.
 void LLPointShadows::lookupUniforms(const LLDrawable* light, F32 lamp4[4], F32 faces[8]) const
 {
     for (int i = 0; i < 4; ++i)
@@ -1688,12 +1726,12 @@ void LLPointShadows::lookupUniforms(const LLDrawable* light, F32 lamp4[4], F32 f
             return; // never: a face of the point atlas packs (lamp4 stays 0: lit)
         }
     }
-    const LLVector3 c = gAgent.getPosAgentFromGlobal(lamp.drawnCentre);
+    const LLVector3 c = gAgent.getPosAgentFromGlobal(lamp.setCentre);
     const glm::vec4 eye = get_current_modelview() * glm::vec4(c.mV[VX], c.mV[VY], c.mV[VZ], 1.f);
     lamp4[0] = eye.x;
     lamp4[1] = eye.y;
     lamp4[2] = eye.z;
-    lamp4[3] = faceFar(lamp.drawnRadius);
+    lamp4[3] = faceFar(lamp.setRadius);
 }
 
 void LLPointShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
@@ -1737,27 +1775,4 @@ void LLPointShadows::bindAtlas(LLGLSLShader& shader)
     shader.uniformMatrix3fv(LLShaderMgr::POINT_SHADOW_VIEW_TO_AGENT, 1, GL_FALSE, glm::value_ptr(to_agent));
     // the emitter: the point lamp's base (4.5 cm) times RenderShadowLightSize (the Shadow softness), whatever its prim
     shader.uniform2f(LLShaderMgr::POINT_SHADOW_PARAMS, emitterExtent(kPointLamp, LLPipeline::RenderShadowLightSize), 1.f / (F32)mAtlasSize);
-}
-
-LLPointShadows::Stats LLPointShadows::getStats() const
-{
-    Stats st;
-    st.present = active();
-    st.level = mLevel.level();
-    st.atlasSize = mAtlasSize;
-    st.lamps = (U32)mLamps.size();
-    st.lampsWithoutFaces = mLampsWithoutFaces;
-    st.faceRenders = mFaceRenders;
-    st.lampRenders = mLampRenders;
-    st.layerRenders = mLayerRenders;
-    st.resizes = mResizes;
-    st.compactions = mCompactions;
-    st.costEmaMs = mCostEmaMs;
-    st.lastFrameRenderMs = mLastFrameRenderMs;
-    st.lastFrameRenders = mLastFrameRenders;
-    st.pendingFaces = mPendingFaces;
-    st.avatarFaces = mAvatarFaces;
-    st.pinnedObjects = (U32)mPins.pinnedObjects();
-    st.causes = mCauses;
-    return st;
 }

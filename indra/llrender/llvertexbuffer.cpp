@@ -983,9 +983,14 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
 }
 
 // <Vulkanstorm> lamp shadows L4: the parts of the draw outside this buffer's skipped index ranges, each drawn with the draw's vertex range
-// (its indices stay inside it). The skipped ranges are a prim's faces, whole triangles, so every part is whole triangles too.
+// (its indices stay inside it). The skipped ranges are a prim's faces, whole triangles, so every part of a triangle list is whole triangles
+// too; any other mode (a strip, lines, points) is drawn whole, since a split there would cut its primitives.
 bool LLVertexBuffer::drawSkipping(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
 {
+    if (mode != LLRender::TRIANGLES)
+    {
+        return false;
+    }
     static std::vector<llindexskip::Range> mine; // main thread only (sSkipRanges is set by the render thread alone)
     static std::vector<std::pair<U32, U32>> parts;
     mine.clear();

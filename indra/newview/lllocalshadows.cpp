@@ -1,6 +1,7 @@
 /**
  * @file lllocalshadows.cpp
- * @brief What the local shadow caches share: one save and restore of the GL state their tile renders change
+ * @brief What the local shadow caches share: the frame's one selection, the casting avatars, the LOD pin, the avatars of a tile, one
+ *        save and restore of the GL state their tile renders change
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -29,15 +30,19 @@
 #include "llprojectorshadows.h"
 #include "llrendertarget.h"
 #include "llshadermgr.h"
+#include "llshadowdirtyfeed.h"
+#include "llspatialpartition.h"
 #include "llthread.h"
 #include "llviewercamera.h"
 #include "llviewercontrol.h"
+#include "llviewerobjectlist.h"
 #include "llviewershadermgr.h"
 #include "llvoavatar.h"
 #include "llvotree.h"
 #include "llvovolume.h"
 #include "pipeline.h"
 
+#include <algorithm>
 #include <set>
 
 extern bool gCubeSnapshot; // a reflection probe render (pipeline.cpp)
@@ -130,6 +135,16 @@ void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
 }
 
 // static
+void LLLocalShadowGL::copyTexels(U32 from_tex, S32 from_x, S32 from_y, U32 to_tex, S32 to_x, S32 to_y, S32 w, S32 h)
+{
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+    glCopyImageSubData(from_tex, GL_TEXTURE_2D, 0, from_x, from_y, 0, to_tex, GL_TEXTURE_2D, 0, to_x, to_y, 0, w, h, 1);
+}
+
+// static
 void LLLocalShadows::collectCasters(std::vector<LLLocalShadowCaster>& out)
 {
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
@@ -180,6 +195,134 @@ void LLLocalShadows::lowerPin(LLViewerObject* object)
     {
         tree->unpinLampLOD();
     }
+}
+
+// static
+void LLLocalShadows::pinCasters(LLCullResult& result, llprojectorpool::PinBook& book, U32 key, const llprojectorpool::Pyramid& volume,
+                                const LLDrawable* skip)
+{
+    if (!on_main_thread())
+    {
+        return;
+    }
+    auto pin_drawable = [&](LLDrawable* drawable) {
+        LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
+        if (!object || object->isDead() || drawable == skip)
+        {
+            return;
+        }
+        LLVOVolume* vol = drawable->getVOVolume();
+        LLVOTree* tree = vol ? nullptr : dynamic_cast<LLVOTree*>(object);
+        if (!vol && !tree)
+        {
+            return;
+        }
+        if (vol && (vol->isRiggedMesh() || vol->getAvatar() || vol->isAttachment() || vol->isHUDAttachment() || !volumeCasts(vol)))
+        {
+            return;
+        }
+        llprojectorpool::Aabb box;
+        if (!LLShadowDirtyFeed::extentsOf(drawable, box) || !llprojectorpool::intersects(volume, box))
+        {
+            return; // not in this light's volume: the object's detail is the camera's business
+        }
+        if (book.touch(key, idOf(object->getID())))
+        {
+            // raises it to the full detail and rebuilds once; the tile is drawn again with it, then holds
+            if (vol)
+            {
+                vol->pinLampLOD();
+            }
+            else
+            {
+                tree->pinLampLOD();
+            }
+        }
+    };
+    auto pin_group = [&](LLSpatialGroup* group) {
+        if (!group || group->isDead())
+        {
+            return;
+        }
+        for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
+        {
+            if ((*i)->hasDrawable())
+            {
+                pin_drawable((LLDrawable*)(*i)->getDrawable());
+            }
+        }
+    };
+    for (LLCullResult::sg_iterator i = result.beginVisibleGroups(); i != result.endVisibleGroups(); ++i)
+    {
+        pin_group(*i);
+    }
+    for (LLCullResult::sg_iterator i = result.beginDrawableGroups(); i != result.endDrawableGroups(); ++i)
+    {
+        pin_group(*i);
+    }
+}
+
+// static
+void LLLocalShadows::unpinObjects(const std::vector<llprojectorpool::Id128>& ids)
+{
+    if (LLApp::isExiting())
+    {
+        return; // the objects are going with the world: nothing to give back
+    }
+    for (const llprojectorpool::Id128& id : ids)
+    {
+        LLUUID uuid;
+        memcpy(uuid.mData, &id, sizeof(id));
+        lowerPin(gObjectList.findObject(uuid));
+    }
+}
+
+// static
+void LLLocalShadows::forgetPinned(llprojectorpool::PinBook& book, const LLDrawable* drawable)
+{
+    const LLViewerObject* object = drawable ? drawable->getVObj() : nullptr;
+    if (!object || LLApp::isExiting())
+    {
+        return;
+    }
+    const uint32_t n = book.forget(idOf(object->getID()));
+    if (n == 0)
+    {
+        return;
+    }
+    LLViewerObject* live = gObjectList.findObject(object->getID());
+    for (uint32_t i = 0; live && i < n; ++i)
+    {
+        lowerPin(live);
+    }
+}
+
+// static
+void LLLocalShadows::tileAvatars(const std::vector<LLLocalShadowCaster>& casters, const llprojectorpool::Pyramid& volume, const float clip[16],
+                                 const LLVector3& origin, U32 n, std::vector<const LLVOAvatar*>& avatars, llprojectorpool::TexelRect& rect)
+{
+    avatars.clear();
+    std::vector<std::pair<F32, const LLLocalShadowCaster*>> in_light;
+    for (const LLLocalShadowCaster& c : casters)
+    {
+        if (llprojectorpool::intersects(volume, c.box))
+        {
+            const LLVector3 centre((c.box.lo[0] + c.box.hi[0]) * 0.5f, (c.box.lo[1] + c.box.hi[1]) * 0.5f, (c.box.lo[2] + c.box.hi[2]) * 0.5f);
+            in_light.emplace_back((centre - origin).magVecSquared(), &c);
+        }
+    }
+    std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<llprojectorpool::Aabb> boxes;
+    const S32 period = LLVOAvatar::getExtentUpdatePeriod(); // how stale the extents can be
+    bool whole = false;
+    for (size_t i = 0; i < in_light.size() && i < llprojectorpool::kAvatarDrawsMax; ++i)
+    {
+        const LLLocalShadowCaster& c = *in_light[i].second;
+        avatars.push_back(c.avatar);
+        whole = whole || c.avatar->isImpostor();
+        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
+    }
+    rect = whole ? llprojectorpool::wholeTileRect(n) : llprojectorpool::faceFootprint(clip, boxes, n);
 }
 
 // static

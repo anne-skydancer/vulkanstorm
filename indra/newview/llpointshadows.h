@@ -46,12 +46,14 @@ class LLVOAvatar;
 // budget (the projectors' pressure valve, one band per lamp, floor 128), and a size change is drawn before it is shown (draw-then-swap).
 // The machinery is the projector pool's (llprojectorshadowpool.h): the change feed and index, the LOD pin, the 5 s hold of a lamp switched
 // off, the valve, the verdict, the avatar layer and the shared scheduler (LLLocalShadows::updateFrame: one selection over both pools under
-// the one cap). What is point-specific is here: the faces, the whole-lamp item (a lamp's first fill and a move draw its six faces in one
-// render from one pose, so the lookup never mixes two poses), the emitter left out of its own faces by identity (D4: the rest of its
-// linkset casts), casters drawn from both sides, and the own avatar's every-frame lamps (P2). Doc: doc/shadows/point-light-shadows.md.
+// the one cap). What is point-specific is here: the faces, the set of a lamp's six faces the lookup reads (all drawn from one pose and one
+// radius: a lamp's first fill draws its faces one item each, a lamp that moved draws all six in one render), the emitter left out of its
+// own faces by identity (D4: the rest of its linkset casts), casters drawn from both sides, the own avatar's every-frame faces (P2), and a
+// lamp nearer the camera's position taking the faces of a farther one when the atlas is full at the floor.
+// Doc: doc/shadows/point-light-shadows.md.
 //
 // Faces are drawn one at a time (a tile render each: its own cull, its own submit). The instanced form of D7 (D', several faces per submit)
-// is a later step; it changes the cost of a fill, not a face's picture.
+// and one cull per lamp are a later step; they change the CPU cost of a whole lamp's render, not a face's picture.
 //
 // Main render thread only. Every entry point returns at once off it, or while the viewer exits; nothing here is reached from
 // LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which worker threads with shared contexts run (the sVBCache lesson,
@@ -63,8 +65,8 @@ public:
     LLPointShadows();
     ~LLPointShadows();
 
-    // The pool runs for the Stochastic method with shadow detail 2 (the projector pool's test) and the debug setting
-    // RenderShadowPointLights (on by default, no Preferences entry: decision D8); the same test the shader manager makes for the
+    // The pool runs for the Stochastic method with shadow detail 2 (the projector pool's test), on an OpenGL 4.6 context, with the debug
+    // setting RenderShadowPointLights (on by default, no Preferences entry: decision D8); the same test the shader manager makes for the
     // POINT_SHADOW_POOL permutation of the point light programs. Off, the point light passes are today's.
     static bool wanted();
 
@@ -79,7 +81,7 @@ public:
     void clear();
 
     // The frame's work (LLLocalShadows::updateFrame, as LLProjectorShadows): prepare appends this pool's work (kPoolPoints); renderPick
-    // renders one pick (a face, its avatar layer, or a whole lamp); endFrame lets go of the frame's lists.
+    // renders one pick (a face, its avatar layer, or a whole lamp) and says whether anything was drawn; endFrame lets go of the frame's lists.
     void prepare(LLCamera& camera, const std::vector<LLLocalShadowCaster>& casters, std::vector<llprojectorpool::StaticItem>& statics,
                  std::vector<llprojectorpool::DynamicItem>& dynamics);
     void beginRenders();
@@ -105,28 +107,6 @@ public:
     void pinCasters(LLCullResult& result);
     void skipEmitter();
 
-    struct Stats
-    {
-        bool present = false;
-        S32 level = 0;
-        U32 atlasSize = 0;
-        U32 lamps = 0;              // in range
-        U32 lampsWithoutFaces = 0;  // with no complete drawn set of faces (the lookup reads them as lit)
-        U64 faceRenders = 0;        // since the atlases were made
-        U64 lampRenders = 0;        // whole-lamp renders (first fills and moves)
-        U64 layerRenders = 0;       // avatar layers alone
-        U64 resizes = 0;
-        U64 compactions = 0;
-        F32 costEmaMs = 0.f;        // one face render's CPU ms (running average)
-        F32 lastFrameRenderMs = 0.f;
-        U32 lastFrameRenders = 0;
-        U32 pendingFaces = 0;
-        U32 avatarFaces = 0;
-        U32 pinnedObjects = 0;
-        llprojectorpool::CauseCounts causes;
-    };
-    Stats getStats() const;
-
 private:
     struct Face
     {
@@ -134,14 +114,16 @@ private:
         bool placed = false;
         U32 want = 0;              // this frame's size (the valve's)
         U32 drawnFrame = 0;        // 0: never drawn
-        llprojectorpool::Pyramid volume; // the face's render frustum (guard included) at volumeN, from the lamp's drawn or current pose
+        U32 set = 0;               // the lamp's set (Lamp::set) this face was drawn for: the lookup reads the lamp when all six hold its set
+        llprojectorpool::Pyramid volume; // the face's render frustum (guard included) at volumeN, from the lamp's pose and face radius
         U32 volumeN = 0;
         bool pending = false;      // a dirty box touched it since it was drawn
         llprojectorpool::Cause pendingCause = llprojectorpool::Cause::Other;
         llprojectorpool::Cause verdictCause = llprojectorpool::Cause::Other;
         U32 dirtyFrame = 0;
-        F64 dirtyTime = 0.0;
         bool holdsAvatar = false;
+        bool holdsOwn = false;     // this frame: the own avatar's box meets its volume
+        bool ownEvery = false;     // this frame: its avatar layer runs every frame (P2, within the own faces' draws)
         U32 avatarCount = 0;
         bool avatarInLayer = false; // L holds an avatar of this face over S
         F32 lastAvatarMs = 0.f;
@@ -151,6 +133,8 @@ private:
         U32 layerFrame = 0;
         F32 lastCpuMs = 0.f;
         bool layerOnly = false;    // this frame's item is its avatar layer alone
+        bool needsRender = false;  // this frame's verdict (a complete lamp): its fixed layer is drawn again
+        bool needsLayer = false;   // ... or its avatar layer alone
     };
 
     struct Lamp
@@ -158,17 +142,22 @@ private:
         U32 id = 0;
         LLPointer<LLDrawable> drawable;
         Face faces[llpointpool::kFaces];
-        // the pose the faces hold (their lookup is built from it): the centre in global coordinates (a region crossing does not move it)
-        LLVector3d drawnCentre;
-        F32 drawnRadius = 0.f;
+        // The set of faces: the pose and radius every face of the set is drawn from (a fill draws the faces one at a time, a moved lamp all
+        // six at once); `set` counts the sets. The lookup reads the lamp once all six faces hold the set (drawnValid), with this centre (global
+        // coordinates: a region crossing does not move it) and far plane.
+        U32 set = 0;               // 0: none started
+        LLVector3d setCentre;
+        F32 setRadius = 0.f;
+        llprojectorpool::Pose setPose;
         bool drawnValid = false;
-        llprojectorpool::Pose drawnPose;
         llprojectorpool::Pose curPose, prevPose;
         bool prevPoseValid = false;
-        bool lampMoving = false;
-        bool poseStale = false;
+        bool lampMoving = false;   // its centre moved since the last frame
+        bool setStale = false;     // its centre or face radius is not the set's
         LLVector3 centre;          // this frame's (agent)
         F32 radius = 0.f;          // this frame's
+        F32 faceRadius = 0.f;      // the radius its faces are drawn for (llpointpool::faceRadius: a drop waits, a candle never redraws)
+        F64 radiusBelowSince = -1.0;
         U32 base = llpointpool::kFaceMin; // the faces' size from the lamp
         int band = llprojectorpool::kMaxBand;
         F32 camDist = 0.f;         // the camera position's distance to the lamp's lit sphere
@@ -177,9 +166,10 @@ private:
         F64 offSince = 0.0;        // ... since then (llprojectorpool::kOffHoldSeconds)
         bool volumesValid = false;
         llprojectorpool::Pose volumePose;
-        F32 lastLampMs = 0.f;      // the last whole-lamp render's CPU ms
+        F32 volumeRadius = 0.f;
         bool wholeItem = false;    // this frame's item draws the whole lamp
-        bool ownEvery = false;     // this frame: its face holding the own avatar runs every frame (P2)
+        bool ownEvery = false;     // this frame: one of the kOwnEveryFrameLamps lamps that light the own avatar most (P2)
+        U32 ownRank = 0;           // its place in the strength order at the own avatar (0 the strongest), when it lights it
     };
 
     bool allocateAtlases(U32 size);
@@ -187,13 +177,16 @@ private:
     void updateLightSet(LLCamera& camera);
     void layout(F32 dt_seconds);
     bool compact();
+    void evictFor(std::vector<Lamp*>& waiting);
+    void resetFaces(Lamp& lamp);
     bool resizeDue(const Face& face) const;
     bool lampDrawn(const Lamp& lamp) const;
     void copyTile(U32 from_tex, const llprojectorpool::Rect& src, U32 to_tex, const llprojectorpool::Rect& dst);
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
-    void renderLamp(Lamp& lamp, llprojectorpool::Cause cause);
-    F32 renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 radius, llprojectorpool::Cause cause);
-    void renderLayer(Lamp& lamp, int f);
+    void startSet(Lamp& lamp);
+    bool renderLamp(Lamp& lamp, llprojectorpool::Cause cause);
+    bool renderFace(Lamp& lamp, int f, const LLVector3& centre, F32 radius, llprojectorpool::Cause cause);
+    bool renderLayer(Lamp& lamp, int f);
     struct FaceAvatars
     {
         std::vector<const LLVOAvatar*> avatars;
@@ -205,9 +198,6 @@ private:
     void dropLamp(std::map<U32, Lamp>::iterator it);
     void holdOff(Lamp& lamp, const LLVector3& cam_pos, F32 reach, F64 now);
     void unpinFace(U32 key);
-    void unpinObject(const llprojectorpool::Id128& id);
-    void forgetPinned(const LLDrawable* drawable);
-    void pinDrawable(LLDrawable* drawable);
     void lookupUniforms(const LLDrawable* light, F32 lamp[4], F32 faces[8]) const;
 
     U32 mAtlasS = 0;   // the faces as drawn: the fixed layer
@@ -226,22 +216,13 @@ private:
     U32 mNextId = 1;
     U32 mFrame = 0;
     U32 mShiftsSeen = 0;
-    F32 mCostEmaMs = 0.5f;
+    // one face render's CPU ms (running average), the prediction of a face never drawn: it starts at the scheduler's prior for an item
+    // without history (kDefaultItemMs); the frame's in-render check bounds what a low first guess can let through to one face over the cap
+    F32 mCostEmaMs = llprojectorpool::kDefaultItemMs;
     F64 mNextAllocTry = 0.0;
     bool mAllocFailed = false;
     F64 mAllocBackoff = 5.0;
-
-    U64 mFaceRenders = 0;
-    U64 mLampRenders = 0;
-    U64 mLayerRenders = 0;
-    U64 mResizes = 0;
-    U64 mCompactions = 0;
     F32 mLastFrameRenderMs = 0.f;
-    U32 mLastFrameRenders = 0;
-    U32 mLampsWithoutFaces = 0;
-    U32 mPendingFaces = 0;
-    U32 mAvatarFaces = 0;
-    llprojectorpool::CauseCounts mCauses;
 
     llprojectorpool::PinBook mPins;
     llprojectorpool::ChangeIndex mIndex;

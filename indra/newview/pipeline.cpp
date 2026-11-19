@@ -4734,7 +4734,10 @@ void LLPipeline::renderGeomShadow(LLCamera& camera)
     LL_PROFILE_GPU_ZONE("renderGeomShadow");
     U32 cur_type = 0;
 
-    LLGLEnable cull(GL_CULL_FACE);
+    // <Vulkanstorm> a point light's face draws both sides of its casters (sLocalShadowTwoSided, set around its renderShadow, the only
+    // caller): the pools' terrain, trees and avatar bodies too; every other shadow render culls back faces as before
+    LLGLEnable cull(sLocalShadowTwoSided ? 0 : GL_CULL_FACE);
+    // </Vulkanstorm>
 
     LLVertexBuffer::unbind();
 

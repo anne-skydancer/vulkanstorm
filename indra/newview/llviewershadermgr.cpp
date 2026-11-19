@@ -421,10 +421,10 @@ static bool use_projector_shadow_pool()
 }
 
 // the point lights' shadow faces shade the point lights in their own programs (pointLightF.glsl, multiPointLightF.glsl,
-// POINT_SHADOW_POOL); the same test as LLPointShadows::wanted() (lamp shadows L4)
+// POINT_SHADOW_POOL); the same test as LLPointShadows::wanted() (lamp shadows L4: an OpenGL 4.6 context)
 static bool use_point_shadow_pool()
 {
-    return use_projector_shadow_pool() && gSavedSettings.getBOOL("RenderShadowPointLights");
+    return use_projector_shadow_pool() && gSavedSettings.getBOOL("RenderShadowPointLights") && gGLManager.mGLVersion >= 4.59f;
 }
 // </Vulkanstorm>
 

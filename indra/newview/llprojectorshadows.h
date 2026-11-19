@@ -275,9 +275,6 @@ private:
     F32 drawAvatars(Record& rec, const FaceAvatars& face, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin, F32 far_clip);
     void renderLayer(Record& rec);
     void unpinTile(U32 key);
-    void forgetPinned(const LLDrawable* drawable);
-    void unpinObject(const llprojectorpool::Id128& id);
-    void pinDrawable(LLDrawable* drawable);
     void dropRecord(std::map<U32, Record>::iterator it);
     void dropLamp(U32 lamp, const LLDrawable* drawable);
     void retireLamp(U32 lamp, LLDrawable* drawable);

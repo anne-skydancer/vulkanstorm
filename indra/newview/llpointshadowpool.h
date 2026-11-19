@@ -238,6 +238,14 @@ static_assert(kLampItem >= kFaces && kLampItem < (1u << kFaceBits), "the whole-l
 
 constexpr uint32_t kPackAtlasMax = 4096;
 
+// The point atlas' edge (owner decision D3): 4096 from 3 GB of video memory, 2048 below, within GL_MAX_TEXTURE_SIZE: the projectors'
+// tiers without their 8192 step (atlasTier with no dedicated memory never gives it), and never past what the face rects pack (4096).
+inline uint32_t pointAtlasTier(uint32_t vram_mb, uint32_t max_texture)
+{
+    return std::min(llprojectorpool::atlasTier(vram_mb, max_texture, false), kPackAtlasMax);
+}
+static_assert(llprojectorpool::kAtlasDefault <= kPackAtlasMax, "the point atlas' default tier packs");
+
 inline float packFaceRect(const llprojectorpool::Rect& r)
 {
     if (r.size < kFaceMin || r.x % 64u || r.y % 64u || r.x + r.size > kPackAtlasMax || r.y + r.size > kPackAtlasMax || (r.size & (r.size - 1)))
@@ -271,11 +279,51 @@ inline bool unpackFaceRect(float packed, llprojectorpool::Rect& out)
 
 // ---------------------------------------------------------------------------------------------
 // The own avatar's faces (owner decision P2): drawn every frame, past the cap, only under the kOwnEveryFrameLamps lamps that light the
-// avatar most; its faces under the other lamps go by the near avatars' 2-frame deadline under the cap, the strongest first. The
-// projector rule (every face of the own avatar every frame) would take 55 to 110 faces a frame under a living room's lamps.
+// avatar most: every face of such a lamp that the avatar's box meets (its body in one face, its legs' floor shadow in the next); its faces
+// under the other lamps go by the near avatars' 2-frame deadline under the cap, the strongest first. The projector rule (every face of the
+// own avatar every frame) would take 55 to 110 faces a frame under a living room's lamps. A face redraws every avatar in it, so the
+// every-frame faces together draw at most kOwnAvatarDrawsMax avatars: the other avatars' layers keep the rest of the frame's avatar draws
+// (A_max), and a face with more avatars than that (a crowd under the lamp) goes by the deadline too.
 // ---------------------------------------------------------------------------------------------
 
 constexpr uint32_t kOwnEveryFrameLamps = 4;
+constexpr uint32_t kOwnAvatarDrawsMax = llprojectorpool::kAvatarDrawsMax / 2;
+
+// One candidate face of the own avatar under an every-frame lamp: its lamp's place in the strength order (0 the strongest), its key and
+// the avatars it draws.
+struct OwnFace
+{
+    uint32_t rank = 0;
+    uint32_t key = 0;
+    uint32_t draws = 0;
+};
+
+// Which candidates run every frame: in the order of their lamps' strength (then key), each while the draws so far and its own stay within
+// kOwnAvatarDrawsMax (one that does not fit is passed over: a face with fewer avatars further down may still fit). A face draws at least
+// the own avatar.
+inline std::vector<bool> ownFacesWithinBudget(const std::vector<OwnFace>& faces)
+{
+    std::vector<size_t> order(faces.size());
+    for (size_t i = 0; i < order.size(); ++i)
+    {
+        order[i] = i;
+    }
+    std::sort(order.begin(), order.end(), [&faces](size_t a, size_t b) {
+        return faces[a].rank != faces[b].rank ? faces[a].rank < faces[b].rank : faces[a].key < faces[b].key;
+    });
+    std::vector<bool> every(faces.size(), false);
+    uint32_t used = 0;
+    for (size_t i : order)
+    {
+        const uint32_t d = std::min(std::max(faces[i].draws, 1u), llprojectorpool::kAvatarDrawsMax);
+        if (used + d <= kOwnAvatarDrawsMax)
+        {
+            every[i] = true;
+            used += d;
+        }
+    }
+    return every;
+}
 
 // The light a lamp gives a point at `distance` (m): the deferred pass's attenuation, calcLegacyDistanceAttenuation(distance / size, falloff)
 // (deferredUtil.glsl), times the light's luminance; size is the lit size (radius x 1.5). 0 beyond the lit size.
@@ -324,10 +372,10 @@ inline std::vector<bool> ownEveryFrame(const std::vector<std::pair<uint32_t, flo
     return every;
 }
 
-// The pose of a lamp's faces: its centre and its radius (the far plane). The faces are aligned to the agent axes, so the lamp's rotation
-// never enters: a prim spinning about any axis keeps its faces. Kept in llprojectorpool::Pose (rotation identity, unit scale, no fov), so
-// poseChanged compares the centre (1 mm) and the radius (1 cm).
-inline llprojectorpool::Pose lampPose(uint64_t region, const float local[3], float radius)
+// The pose of a lamp's faces: its centre (its radius has its own rule, faceRadius). The faces are aligned to the agent axes, so the
+// lamp's rotation never enters: a prim spinning about any axis keeps its faces. Kept in llprojectorpool::Pose (rotation identity, unit
+// scale, no fov, radius 0), so poseChanged compares the region and the centre (1 mm).
+inline llprojectorpool::Pose lampPose(uint64_t region, const float local[3])
 {
     llprojectorpool::Pose p;
     p.region = region;
@@ -335,8 +383,47 @@ inline llprojectorpool::Pose lampPose(uint64_t region, const float local[3], flo
     {
         p.pos[i] = local[i];
     }
-    p.radius = radius;
     return p;
+}
+
+// The radius a lamp's faces are drawn for. The lookup decodes a face's depth with the far plane it was drawn with and reads nothing
+// beyond it, so a lamp whose radius drops needs no redraw: its light ends sooner, inside what the faces hold, and the scene's changes are
+// still tracked to the drawn far plane (the faces' volumes). A radius more than kRadiusStepM above the drawn one is redrawn at once (the
+// faces end before its light does); one more than kRadiusStepM below it is redrawn only once it has stayed below for kOffHoldSeconds (a
+// script that dims the lamp for good gets faces of its size; a candle that varies its radius never redraws). Returns the radius the faces
+// should have now; `below_since` (seconds, negative: not below) is the lamp's own state.
+constexpr float kRadiusStepM = 0.01f;
+
+inline float faceRadius(float drawn, float current, double& below_since, double now)
+{
+    if (!(drawn > 0.f))
+    {
+        below_since = -1.0;
+        return current; // no faces drawn yet: the lamp's own
+    }
+    if (!std::isfinite(current))
+    {
+        return drawn;
+    }
+    if (current > drawn - kRadiusStepM)
+    {
+        below_since = -1.0;
+        return current > drawn + kRadiusStepM ? current : drawn;
+    }
+    if (below_since < 0.0)
+    {
+        below_since = now; // the first frame below
+    }
+    return now - below_since >= llprojectorpool::kOffHoldSeconds ? current : drawn; // a bad time (NaN) keeps the drawn faces
+}
+
+// A lamp waiting for room while the atlas is full even at the floor (the valve at its ceiling) takes the faces of a placed lamp farther
+// from the camera's position: the farthest first, and only one farther by the reach's hysteresis (max(2 m, 10 %) of the waiting lamp's
+// distance), so two lamps at about the same distance never trade their faces back and forth. A NaN distance is the farthest.
+inline bool evicts(float waiting_dist, float placed_dist)
+{
+    const float w = llprojectorpool::sortDist(waiting_dist), p = llprojectorpool::sortDist(placed_dist);
+    return std::isfinite(w) && p > w + std::max(2.f, 0.1f * w);
 }
 
 } // namespace llpointpool

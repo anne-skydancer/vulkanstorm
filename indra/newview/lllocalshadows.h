@@ -27,7 +27,10 @@
 #include <vector>
 
 class LLCamera;
+class LLCullResult;
+class LLDrawable;
 class LLUUID;
+class LLVector3;
 class LLViewerObject;
 class LLVOAvatar;
 class LLVOVolume;
@@ -64,6 +67,25 @@ public:
     static llprojectorpool::Id128 idOf(const LLUUID& uuid);
     static void lowerPin(LLViewerObject* object);
     static bool volumeCasts(const LLVOVolume* volume);
+
+    // The LOD pin of one tile render (both pools, from LLPipeline::renderShadow after the render's cull and sort): every caster the render
+    // is about to draw (its cull's visible and drawable groups) inside `volume` is held at full detail under `key` in `book`, so a camera
+    // that moves changes no tile's content. Prims and trees only: not rigged, worn, on an avatar or invisible (volumeCasts), and never
+    // `skip` (the prim a point light's faces leave out, null for a projector). The counter on the object is shared by the pools.
+    static void pinCasters(LLCullResult& result, llprojectorpool::PinBook& book, U32 key, const llprojectorpool::Pyramid& volume,
+                           const LLDrawable* skip);
+    // the objects a tile no longer holds (PinBook::endRender, PinBook::releaseTile) are given back, unless the viewer exits (they go with
+    // the world)
+    static void unpinObjects(const std::vector<llprojectorpool::Id128>& ids);
+    // a drawable is going away: the book forgets its object (an object created later with the same id is new and pinned afresh), and the
+    // counters the book raised on it are lowered if it lives on (its drawable was rebuilt)
+    static void forgetPinned(llprojectorpool::PinBook& book, const LLDrawable* drawable);
+
+    // The avatars a tile or face draws (both pools, P4): the frame's casters whose extents meet `volume`, the nearest to the light's
+    // centre `origin` first, at most A_max; and the tile rectangle they cover (C3), their extents grown by the footprint margin through
+    // the tile's `clip` matrix, or the whole tile when one is an impostor (its extents are stale). `n`: the tile's size.
+    static void tileAvatars(const std::vector<LLLocalShadowCaster>& casters, const llprojectorpool::Pyramid& volume, const float clip[16],
+                            const LLVector3& origin, U32 n, std::vector<const LLVOAvatar*>& avatars, llprojectorpool::TexelRect& rect);
 };
 
 class LLLightThroughLayer;
@@ -112,6 +134,10 @@ public:
     static void setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect, unsigned key);
     static LLLightThroughTarget* throughTarget();
     static bool endThroughTarget();
+
+    // A bit-exact copy of a w x h texel rectangle between two depth atlases of one size (glCopyImageSubData, GL 4.3 core: the point
+    // lights' faces run on GL 4.6 only, LLPointShadows::wanted). Not clipped by the scissor test.
+    static void copyTexels(U32 from_tex, S32 from_x, S32 from_y, U32 to_tex, S32 to_x, S32 to_y, S32 w, S32 h);
 };
 
 #endif // LL_LLLOCALSHADOWS_H

@@ -383,7 +383,7 @@ void LLProjectorShadows::forget(const LLDrawable* drawable)
     {
         return;
     }
-    forgetPinned(drawable);
+    LLLocalShadows::forgetPinned(mPins, drawable);
     auto key = mKeyOf.find(drawable);
     if (key != mKeyOf.end())
     {
@@ -1088,10 +1088,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
     mRenderingRec = nullptr;
     // the objects the tile held and did not meet again (they left the light, or are gone) go back to the camera's LOD
-    for (const Id128& id : mPins.endRender(rec.key))
-    {
-        unpinObject(id);
-    }
+    LLLocalShadows::unpinObjects(mPins.endRender(rec.key));
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
@@ -1172,40 +1169,13 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
 LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const
 {
     FaceAvatars face;
-    std::vector<std::pair<F32, const LLLocalShadowCaster*>> in_light;
     if (!mCasters)
     {
         return face;
     }
-    for (const LLLocalShadowCaster& c : *mCasters)
-    {
-        if (intersects(rec.volume, c.box))
-        {
-            const LLVector3 centre((c.box.lo[0] + c.box.hi[0]) * 0.5f, (c.box.lo[1] + c.box.hi[1]) * 0.5f, (c.box.lo[2] + c.box.hi[2]) * 0.5f);
-            in_light.emplace_back((centre - origin).magVecSquared(), &c);
-        }
-    }
-    std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    std::vector<llprojectorpool::Aabb> boxes;
-    const S32 period = LLVOAvatar::getExtentUpdatePeriod(); // how stale the extents can be
-    bool whole = false;
-    for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
-    {
-        const LLLocalShadowCaster& c = *in_light[i].second;
-        face.avatars.push_back(c.avatar);
-        whole = whole || c.avatar->isImpostor();
-        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
-    }
-    const U32 n = rec.rect.size;
-    if (whole)
-    {
-        face.rect = llprojectorpool::wholeTileRect(n);
-    }
-    else
-    {
-        const glm::mat4 clip = proj * view;
-        face.rect = llprojectorpool::faceFootprint(glm::value_ptr(clip), boxes, n);
-    }
+    // the rule both pools share (LLLocalShadows::tileAvatars): the nearest to the light, at most A_max, and the rectangle they cover
+    const glm::mat4 clip = proj * view;
+    LLLocalShadows::tileAvatars(*mCasters, rec.volume, glm::value_ptr(clip), origin, rec.rect.size, face.avatars, face.rect);
     return face;
 }
 
@@ -1385,86 +1355,15 @@ namespace
     }
 }
 
-void LLProjectorShadows::unpinObject(const Id128& id)
-{
-    LLUUID uuid;
-    memcpy(uuid.mData, &id, sizeof(id));
-    LLLocalShadows::lowerPin(gObjectList.findObject(uuid));
-}
-
-// The object of a drawable that is going away is no longer held by any tile: an object created later with the same id is a new
-// object (its counter is zero) and must be pinned by its first render, not skipped as "already held". If the object lives on (its
-// drawable was rebuilt), the counters this pool raised on it are lowered.
-void LLProjectorShadows::forgetPinned(const LLDrawable* drawable)
-{
-    const LLViewerObject* object = drawable->getVObj();
-    if (!object || LLApp::isExiting())
-    {
-        return;
-    }
-    const uint32_t n = mPins.forget(LLLocalShadows::idOf(object->getID()));
-    if (n == 0)
-    {
-        return;
-    }
-    LLViewerObject* live = gObjectList.findObject(object->getID());
-    for (uint32_t i = 0; live && i < n; ++i)
-    {
-        LLLocalShadows::lowerPin(live);
-    }
-}
-
+// A tile goes: every object it held is given back (the objects are going with the world while the viewer exits: nothing to give back).
 void LLProjectorShadows::unpinTile(U32 key)
 {
-    const std::vector<Id128> held = mPins.releaseTile(key);
-    if (LLApp::isExiting())
-    {
-        return; // the objects are going with the world: nothing to give back
-    }
-    for (const Id128& id : held)
-    {
-        unpinObject(id);
-    }
-}
-
-void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
-{
-    LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
-    if (!object || object->isDead())
-    {
-        return;
-    }
-    LLVOVolume* volume = drawable->getVOVolume();
-    LLVOTree* tree = volume ? nullptr : dynamic_cast<LLVOTree*>(object);
-    if (!volume && !tree)
-    {
-        return;
-    }
-    if (volume && (volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment() || !LLLocalShadows::volumeCasts(volume)))
-    {
-        return;
-    }
-    Aabb box;
-    if (!LLShadowDirtyFeed::extentsOf(drawable, box) || !intersects(mRenderVolume, box))
-    {
-        return; // not in this light's volume: the object's detail is the camera's business
-    }
-    if (mPins.touch(mRenderingRec->key, LLLocalShadows::idOf(object->getID())))
-    {
-        // raises it to the full detail and rebuilds once; the tile is drawn again with it, then holds
-        if (volume)
-        {
-            volume->pinLampLOD();
-        }
-        else
-        {
-            tree->pinLampLOD();
-        }
-    }
+    LLLocalShadows::unpinObjects(mPins.releaseTile(key));
 }
 
 // The LOD pin (spec 4.4, D6): every volume the tile is about to draw, inside the light's volume, is held at full detail. Without
-// it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves.
+// it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves. The rule
+// is both pools' (LLLocalShadows::pinCasters).
 void LLProjectorShadows::pinCasters(LLCullResult& result)
 {
     if (!mRenderingRec || !on_main_thread())
@@ -1472,27 +1371,7 @@ void LLProjectorShadows::pinCasters(LLCullResult& result)
         return;
     }
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector pinCasters"); // <Vulkanstorm> multicore stage 1
-    auto pin_group = [this](LLSpatialGroup* group) {
-        if (!group || group->isDead())
-        {
-            return;
-        }
-        for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
-        {
-            if ((*i)->hasDrawable())
-            {
-                pinDrawable((LLDrawable*)(*i)->getDrawable());
-            }
-        }
-    };
-    for (LLCullResult::sg_iterator i = result.beginVisibleGroups(); i != result.endVisibleGroups(); ++i)
-    {
-        pin_group(*i);
-    }
-    for (LLCullResult::sg_iterator i = result.beginDrawableGroups(); i != result.endDrawableGroups(); ++i)
-    {
-        pin_group(*i);
-    }
+    LLLocalShadows::pinCasters(result, mPins, mRenderingRec->key, mRenderVolume, nullptr);
 }
 
 void LLProjectorShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCaster>& casters, std::vector<StaticItem>& static_items,

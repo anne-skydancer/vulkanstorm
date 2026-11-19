@@ -11,10 +11,15 @@
 //   P-4   capacity: 170 lamps at the floor fit the 4096 atlas; 59 lamps at the floor use 35 %
 //   P-5   draw-then-swap: a lamp's faces resized one at a time keep valid rects that never overlap, and the old rect serves until then
 //   P-8   the emitter's faces left out of a draw that batches them with other prims (llindexskip::split against a brute force)
-//   P-9   the pose of a lamp's faces: its centre and radius; a prim spinning about any axis keeps it
-//   P-10  the merged selection over the two pools: projector-only lists pick as before, the cap holds but for one progress pick, and
+//   P-9   the pose of a lamp's faces: its centre; a prim spinning about any axis keeps it; the radius the faces are drawn for (a growth
+//         redraws, a drop after 5 s, a candle never)
+//   P-10  the merged selection over the two pools: clashing raw keys stay two items, the cap holds but for one progress pick, and
 //         neither pool starves
 //   P-11  the own avatar's every-frame lamps: at most four, the strongest, none without light
+//   P-12  a waiting lamp takes a placed lamp's faces only when that one is farther by the reach's hysteresis, never back and forth
+//   P-13  the own avatar's every-frame faces within half of A_max
+//   P-14  a first fill (one item per face) leaves the avatar layers their share; a moving lamp runs beside the own avatar's faces
+//   P-15  the change index leaves a lamp's own emitter out of its faces (and only its own)
 //   Pack  the lookup's packed face rects round-trip exactly for every rect of the 4096 atlas
 
 #include "llpointshadowpool.h"
@@ -299,8 +304,21 @@ namespace
         }
         const double u = demand(tiles, 0, 4096);
         check(u > 0.34 && u < 0.36, "P-4 59 lamps at the floor use 35 % of the atlas", u);
-        check(atlasTier(4000, 16384, false) == 4096 && atlasTier(2048, 16384, false) == 2048 && atlasTier(24000, 32768, false) == 4096,
-              "P-4 the point atlas: 2048 below 3 GB, else 4096 (never 8192: the faces' packing holds up to 4096)");
+        // the point atlas' tier (llpointpool::pointAtlasTier, the function ensureAllocated calls): D3's two tiers, never past the packing
+        check(pointAtlasTier(4000, 16384) == 4096 && pointAtlasTier(2048, 16384) == 2048 && pointAtlasTier(0, 0) == 4096,
+              "P-4 the point atlas: 2048 below 3 GB, 4096 from 3 GB or unknown");
+        check(atlasTier(24000, 32768, true) == kAtlasLarge && pointAtlasTier(24000, 32768) == 4096,
+              "P-4 never 8192, where the projectors' atlas is (24 GB of dedicated memory): the faces' packing holds up to 4096");
+        check(pointAtlasTier(16000, 2048) == 2048 && pointAtlasTier(16000, 1024) == 2048,
+              "P-4 within GL_MAX_TEXTURE_SIZE, never below the smallest tier");
+        for (uint32_t vram : { 0u, 1024u, 3071u, 3072u, 8192u, 11264u, 24000u, 100000u })
+        {
+            for (uint32_t max_tex : { 0u, 2048u, 4096u, 8192u, 16384u, 32768u })
+            {
+                const uint32_t t = pointAtlasTier(vram, max_tex);
+                check((t == 2048 || t == 4096) && t <= kPackAtlasMax, "P-4 every point atlas packs its face rects", vram, t);
+            }
+        }
         check(atlasBytes(4096) == 128ull << 20, "P-4 the 4096 point atlases take 128 MiB");
     }
 
@@ -404,61 +422,138 @@ namespace
     void testPose()
     {
         const float c[3] = { 10.f, 20.f, 30.f };
-        const Pose a = lampPose(42, c, 3.f);
+        const Pose a = lampPose(42, c);
         for (int i = 0; i < 4; ++i)
         {
             check(a.rot[i] == (i == 3 ? 1.f : 0.f), "P-9 a lamp's faces have no rotation in their pose");
         }
-        check(!poseChanged(a, lampPose(42, c, 3.f)), "P-9 a prim spinning about any axis keeps its faces (its rotation is no input)");
+        check(a.radius == 0.f, "P-9 the radius is no part of the pose (faceRadius has its own rule)");
+        check(!poseChanged(a, lampPose(42, c)), "P-9 a prim spinning about any axis keeps its faces (its rotation is no input)");
         const float moved[3] = { 10.002f, 20.f, 30.f };
-        check(poseChanged(a, lampPose(42, moved, 3.f)), "P-9 a centre moved 2 mm redraws");
-        check(!poseChanged(a, lampPose(42, c, 3.005f)) && poseChanged(a, lampPose(42, c, 3.02f)), "P-9 the radius within 1 cm keeps the faces");
-        check(poseChanged(a, lampPose(43, c, 3.f)), "P-9 another region is another pose");
+        const float nudged[3] = { 10.0005f, 20.f, 30.f };
+        check(poseChanged(a, lampPose(42, moved)) && !poseChanged(a, lampPose(42, nudged)), "P-9 a centre moved 2 mm redraws, 0.5 mm does not");
+        check(poseChanged(a, lampPose(43, c)), "P-9 another region is another pose");
+
+        // the radius the faces are drawn for (llpointpool::faceRadius): a growth redraws at once, a drop only once it has held 5 s, a
+        // candle that varies its radius never redraws
+        double below = -1.0;
+        check(faceRadius(0.f, 3.f, below, 0.0) == 3.f, "P-9 no faces yet: the lamp's radius");
+        check(faceRadius(3.f, 3.005f, below, 0.0) == 3.f && faceRadius(3.f, 2.995f, below, 0.0) == 3.f, "P-9 within 1 cm: the drawn radius");
+        check(faceRadius(3.f, 3.2f, below, 0.0) == 3.2f, "P-9 a radius 20 cm larger: the faces end before the light, drawn again");
+        below = -1.0;
+        bool redrawn = false;
+        for (int k = 0; k < 600; ++k) // 10 s of a candle: 2.5 .. 3.0 m every frame at 60 fps, never below for 5 s in a row
+        {
+            const float r = 2.5f + 0.5f * float((k * 7919) % 101) / 100.f;
+            redrawn = redrawn || faceRadius(3.f, r, below, k / 60.0) != 3.f;
+        }
+        check(!redrawn, "P-9 a candle varying its radius inside the drawn one never redraws");
+        below = -1.0;
+        check(faceRadius(3.f, 1.f, below, 100.0) == 3.f && faceRadius(3.f, 1.f, below, 104.9) == 3.f, "P-9 a drop: the drawn faces serve for 5 s");
+        check(faceRadius(3.f, 1.f, below, 105.0) == 1.f, "P-9 ... then the faces of the smaller radius are drawn");
+        below = -1.0;
+        check(faceRadius(3.f, std::nan(""), below, 0.0) == 3.f, "P-9 a NaN radius keeps the drawn faces");
     }
 
-    // P-10: the merged selection. The selection itself is selectFrame's, unchanged; the pools only pack their keys.
+    // P-12: a waiting lamp takes the faces of a placed one only when that one is farther by the reach's hysteresis
+    void testEvict()
+    {
+        check(evicts(5.f, 30.f) && !evicts(5.f, 6.f) && !evicts(30.f, 32.f) && evicts(30.f, 33.1f), "P-12 farther by max(2 m, 10 %) only");
+        check(!evicts(std::nan(""), 100.f) && evicts(5.f, std::nan("")), "P-12 a NaN distance is the farthest: never evicts, always evicted");
+        // no pair trades back and forth: if a evicts b, b never evicts a
+        std::mt19937 rng(17);
+        std::uniform_real_distribution<float> d(0.f, 140.f);
+        int both = 0;
+        for (int k = 0; k < 100000; ++k)
+        {
+            const float a = d(rng), b = d(rng);
+            both += evicts(a, b) && evicts(b, a);
+        }
+        check(both == 0, "P-12 an eviction is never undone by the evicted lamp", both);
+    }
+
+    // P-13: the own avatar's every-frame faces within half of A_max
+    void testOwnBudget()
+    {
+        std::vector<OwnFace> faces = { { 0, faceKey(1, 0), 3 }, { 0, faceKey(1, 5), 2 }, { 1, faceKey(2, 0), 4 }, { 2, faceKey(3, 1), 6 },
+                                       { 3, faceKey(4, 0), 1 } };
+        std::vector<bool> every = ownFacesWithinBudget(faces);
+        check(every[0] && every[1] && every[2] && !every[3] && every[4], "P-13 the strongest lamps' faces while they fit 12 draws (3 + 2 + 4, 6 waits, 1 fits)");
+        uint32_t used = 0;
+        for (size_t i = 0; i < faces.size(); ++i)
+        {
+            used += every[i] ? std::max(faces[i].draws, 1u) : 0u;
+        }
+        check(used <= kOwnAvatarDrawsMax && kOwnAvatarDrawsMax == kAvatarDrawsMax / 2, "P-13 at most half of A_max", used);
+        // a crowd under the strongest lamp: its face (24 avatars) goes by the deadline, the other lamps' faces still run
+        std::vector<OwnFace> crowd = { { 0, faceKey(1, 5), 24 }, { 1, faceKey(2, 5), 2 } };
+        every = ownFacesWithinBudget(crowd);
+        check(!every[0] && every[1], "P-13 a face of 24 avatars is not an every-frame face; the others' still are");
+        // 4 lamps x 6 faces of the own avatar alone: 12 run
+        std::vector<OwnFace> alone;
+        for (uint32_t l = 0; l < 4; ++l)
+        {
+            for (uint32_t f = 0; f < 6; ++f)
+            {
+                alone.push_back({ l, faceKey(l + 1, f), 1 });
+            }
+        }
+        size_t n = 0;
+        for (bool b : ownFacesWithinBudget(alone))
+        {
+            n += b ? 1 : 0;
+        }
+        check(n == kOwnAvatarDrawsMax, "P-13 the own avatar alone: twelve faces every frame", double(n));
+    }
+
+    // P-10: the merged selection. The selection itself is selectFrame's; the pools only pack their keys.
     void testMerged()
     {
-        // (a) projector-only lists: the merged call is the projectors' own call (an empty point list adds nothing)
-        std::mt19937 rng(9);
-        int differ = 0;
-        for (int k = 0; k < 2000; ++k)
+        // (a) the two pools' raw keys clash (a projector's lamp 1, cell 0 and a point lamp 2, face 0 are both 16): packed with their pools
+        // they are two items, both picked, distinct, in a fixed order (the key breaks the tie), and each unpacks to its pool and key
         {
-            std::vector<StaticItem> st;
-            std::vector<DynamicItem> dy;
-            const int ns = int(rng() % 12), nd = int(rng() % 10);
-            for (int i = 0; i < ns; ++i)
+            check(faceKey(2, 0) == (1u << 4 | 0u), "P-10 the clash is real: point lamp 2, face 0 is the projectors' lamp 1, cell 0");
+            std::vector<StaticItem> st(2);
+            st[0].key = 16;
+            st[0].pool = kPoolProjectors;
+            st[1].key = faceKey(2, 0);
+            st[1].pool = kPoolPoints;
+            for (StaticItem& it : st)
             {
-                StaticItem it;
-                it.key = uint32_t(i * 16 + 1);
-                it.never_drawn = rng() % 3 == 0;
                 it.pending = true;
-                it.cam_dist = float(rng() % 50);
-                it.last_cpu_ms = 0.01f * float(rng() % 40);
-                it.age_frames = rng() % 8;
-                it.avatar_draws = rng() % 3;
-                st.push_back(it);
+                it.last_cpu_ms = 0.07f;
+                it.age_frames = 3;
+                it.cam_dist = 5.f;
             }
-            for (int i = 0; i < nd; ++i)
+            const FramePicks p = selectFrame(st, {}, kFrameCapMs, kAvatarDrawsMax, true);
+            std::vector<StaticItem> rev = { st[1], st[0] };
+            const FramePicks q = selectFrame(rev, {}, kFrameCapMs, kAvatarDrawsMax, true);
+            check(p.fixed.size() == 2 && p.fixed[0] != p.fixed[1], "P-10 clashing raw keys: both items picked, two packed keys", double(p.fixed.size()));
+            check(p.fixed == q.fixed, "P-10 ... in a fixed order, whatever the lists' order");
+            int pools = 0;
+            for (uint32_t k : p.fixed)
             {
-                DynamicItem it;
-                it.key = uint32_t(i * 16 + 2);
-                it.avatar = true;
-                it.layer = true;
-                it.avatar_draws = 1 + rng() % 2;
-                it.age_frames = rng() % 6;
-                it.cam_dist = float(rng() % 20);
-                it.last_cpu_ms = 0.01f * float(rng() % 20);
-                it.own = rng() % 7 == 0;
-                dy.push_back(it);
+                check(unpackKey(k) == 16u, "P-10 ... each unpacks to its raw key", unpackKey(k));
+                pools |= 1 << unpackPool(k);
             }
-            const FramePicks a = selectFrame(st, dy, kFrameCapMs, kAvatarDrawsMax, true);
-            std::vector<StaticItem> st2 = st;
-            std::vector<DynamicItem> dy2 = dy; // the coordinator's merged lists with no point item
-            const FramePicks b = selectFrame(st2, dy2, kFrameCapMs, kAvatarDrawsMax, true);
-            differ += a.fixed != b.fixed || a.dynamic != b.dynamic;
+            check(pools == 3, "P-10 ... and to its own pool", pools);
+            // the same in the dynamic list: two avatar layers with one raw key
+            std::vector<DynamicItem> dy(2);
+            dy[0].key = 16;
+            dy[0].pool = kPoolProjectors;
+            dy[1].key = faceKey(2, 0);
+            dy[1].pool = kPoolPoints;
+            for (DynamicItem& it : dy)
+            {
+                it.avatar = it.layer = true;
+                it.avatar_draws = 1;
+                it.age_frames = 1;
+                it.cam_dist = 4.f;
+                it.last_cpu_ms = 0.05f;
+            }
+            const FramePicks d = selectFrame({}, dy, kFrameCapMs, kAvatarDrawsMax, true);
+            check(d.dynamic.size() == 2 && d.dynamic[0] != d.dynamic[1], "P-10 clashing raw keys in the dynamic list: both run", double(d.dynamic.size()));
         }
-        check(differ == 0, "P-10 projector-only lists pick as before", differ);
 
         // (b) and (c): two pools of static work over frames: the predicted spend stays inside the cap but for one progress pick, and every
         // item of both pools is served within the age bound
@@ -513,6 +608,148 @@ namespace
         check(worst_wait <= (80 + 6) / 7 + 1, "P-10 neither pool starves: the age order serves all within ceil(N / per frame)", worst_wait);
         check(unpackPool(packKey(kPoolPoints, faceKey(kLampIds - 1, 5))) == kPoolPoints && unpackKey(packKey(kPoolPoints, faceKey(kLampIds - 1, 5))) == faceKey(kLampIds - 1, 5),
               "P-10 the largest face key packs and unpacks");
+    }
+
+    // P-14: the point lamps' work beside the avatar layers (review B1). A first fill is one item per face (a face's cost), never a lamp's
+    // six faces as one item, so the avatar layers keep their share; a lamp that moves runs as the overdue progress pick even beside the own
+    // avatar's every-frame faces.
+    void testFillAndMovers()
+    {
+        auto layers = [](uint32_t n, float ms) {
+            std::vector<DynamicItem> dy;
+            for (uint32_t i = 0; i < n; ++i)
+            {
+                DynamicItem it;
+                it.pool = kPoolProjectors;
+                it.key = i * 16 + 1;
+                it.avatar = it.layer = true;
+                it.avatar_draws = 1;
+                it.age_frames = 1;
+                it.cam_dist = 3.f;
+                it.last_cpu_ms = ms;
+                dy.push_back(it);
+            }
+            return dy;
+        };
+        // (a) a login fill: 55 lamps' faces, each its own item, beside six other avatars' layers (0.04 ms each)
+        for (float face_ms : { coldItemMs(kDefaultItemMs), 0.07f, 0.125f })
+        {
+            std::vector<StaticItem> fill;
+            for (uint32_t l = 1; l <= 55; ++l)
+            {
+                for (uint32_t f = 0; f < kFaces; ++f)
+                {
+                    StaticItem it;
+                    it.pool = kPoolPoints;
+                    it.key = faceKey(l, f);
+                    it.never_drawn = true;
+                    it.pending = true;
+                    it.cam_dist = 100.f + float(l);
+                    it.last_cpu_ms = face_ms;
+                    fill.push_back(it);
+                }
+            }
+            const FramePicks p = selectFrame(fill, layers(6, 0.04f), kFrameCapMs, kAvatarDrawsMax, true);
+            check(p.dynamic.size() == 6, "P-14 a fill leaves the six avatar layers their share", face_ms, double(p.dynamic.size()));
+            check(!p.fixed.empty() && p.predicted_ms <= kFrameCapMs + 1e-4f, "P-14 ... and draws faces in what is left, inside the cap",
+                  double(p.fixed.size()), p.predicted_ms);
+        }
+        // the cold prediction of a face is the scheduler's prior, not a placeholder above it
+        check(coldItemMs(kDefaultItemMs) == kDefaultItemMs, "P-14 a face never drawn is predicted at kDefaultItemMs");
+
+        // (b) a lamp moving every frame (six faces, 0.42 ms) next to the own avatar's every-frame faces and nothing static: it runs once it
+        // is overdue (the progress pick beside the own faces), not never
+        const float moving_ms = 6.f * 0.07f;
+        uint32_t age = 1, ran = 0, worst_gap = 0, gap = 0;
+        for (uint32_t frame = 0; frame < 120; ++frame)
+        {
+            std::vector<DynamicItem> dy = layers(2, 0.05f);
+            for (DynamicItem& it : dy)
+            {
+                it.own = true;
+            }
+            DynamicItem lamp;
+            lamp.pool = kPoolPoints;
+            lamp.key = faceKey(9, kLampItem);
+            lamp.age_frames = age;
+            lamp.cam_dist = 2.f;
+            lamp.last_cpu_ms = moving_ms;
+            dy.push_back(lamp);
+            const FramePicks p = selectFrame({}, dy, kFrameCapMs, kAvatarDrawsMax, true);
+            const bool run = std::find(p.dynamic.begin(), p.dynamic.end(), packKey(kPoolPoints, lamp.key)) != p.dynamic.end();
+            check(std::count_if(p.dynamic.begin(), p.dynamic.end(), [](uint32_t k) { return unpackPool(k) == kPoolProjectors; }) == 2,
+                  "P-14 the own faces run every frame beside it");
+            ran += run ? 1 : 0;
+            gap = run ? 0 : gap + 1;
+            worst_gap = std::max(worst_gap, gap);
+            age = run ? 1 : age + 1;
+        }
+        check(ran >= 120 / kDynamicDeadlineFrames - 1 && worst_gap < kDynamicDeadlineFrames, "P-14 a moving lamp beside the own faces runs every 4th frame at least",
+              ran, worst_gap);
+        // alone, it fits the cap: every frame
+        std::vector<DynamicItem> one(1);
+        one[0].pool = kPoolPoints;
+        one[0].key = faceKey(9, kLampItem);
+        one[0].age_frames = 1;
+        one[0].last_cpu_ms = moving_ms;
+        check(selectFrame({}, one, kFrameCapMs, kAvatarDrawsMax, true).dynamic.size() == 1, "P-14 a moving lamp alone runs every frame");
+        // once the frame has spent, the cap holds without exception: it waits
+        one[0].age_frames = 9;
+        check(selectFrame({}, one, 0.2f, kAvatarDrawsMax, false).dynamic.empty(), "P-14 no overrun once the frame has spent");
+    }
+
+    // P-15: the change index leaves a face's own emitter out (TileVolume::ignore): the bulb's LOD switch or alpha marks the other lamps'
+    // faces it lies in, never its own lamp's (which never draw it)
+    void testIgnoreSource()
+    {
+        int emitter_a = 1, emitter_b = 2, other = 3; // only their addresses: the sources
+        const float centre_a[3] = { 0.f, 0.f, 0.f }, centre_b[3] = { 1.5f, 0.f, 0.f };
+        std::vector<TileVolume> tiles;
+        for (int f = 0; f < 6; ++f)
+        {
+            TileVolume a, b;
+            a.key = faceKey(1, uint32_t(f));
+            a.pyramid = facePyramid(centre_a, f, float(faceTanHalf(256)), kNearM, 6.f);
+            a.ignore = &emitter_a;
+            b.key = faceKey(2, uint32_t(f));
+            b.pyramid = facePyramid(centre_b, f, float(faceTanHalf(256)), kNearM, 6.f);
+            b.ignore = &emitter_b;
+            tiles.push_back(a);
+            tiles.push_back(b);
+        }
+        ChangeIndex index;
+        index.rebuild(tiles);
+        DirtyList list;
+        Aabb bulb; // lamp 1's emitter: a 6 cm bulb around its centre
+        for (int i = 0; i < 3; ++i)
+        {
+            bulb.lo[i] = -0.03f;
+            bulb.hi[i] = 0.03f;
+        }
+        list.push(bulb, Cause::LodUp, &emitter_a);
+        std::vector<Hit> hits;
+        index.apply(list.swapForApply(), false, hits);
+        int own = 0, theirs = 0;
+        for (const Hit& h : hits)
+        {
+            (lampOf(h.key) == 1 ? own : theirs) += 1;
+        }
+        check(own == 0 && theirs >= 1, "P-15 the emitter's own change leaves its lamp's faces alone and marks the other lamp's", own, theirs);
+        // the same box from another prim (a shade around the bulb) marks every face it meets, its own lamp's included
+        list.push(bulb, Cause::LodUp, &other);
+        index.apply(list.swapForApply(), false, hits);
+        own = 0;
+        for (const Hit& h : hits)
+        {
+            own += lampOf(h.key) == 1 ? 1 : 0;
+        }
+        check(own == 6, "P-15 another prim's change marks all six faces it meets", own);
+        // an identical box of another source right after is kept (one tile may leave out one source and not the other)
+        list.push(bulb, Cause::Edit, &emitter_a);
+        list.push(bulb, Cause::Edit, &other);
+        list.push(bulb, Cause::Edit, &other);
+        check(list.pending() == 2, "P-15 the list keeps one box per source in a row", double(list.pending()));
+        (void)emitter_b;
     }
 
     void testOwn()
@@ -608,7 +845,11 @@ int main()
     testDrawThenSwap();
     testSkip();
     testPose();
+    testEvict();
+    testOwnBudget();
     testMerged();
+    testFillAndMovers();
+    testIgnoreSource();
     testOwn();
     testPack();
     testVolumes();

@@ -986,6 +986,10 @@ struct DirtyBox
 {
     Aabb box;
     Cause cause = Cause::Other;
+    // the drawable whose hook pushed the box (only compared, never followed; null: unknown). A tile can leave out the pushes of one
+    // source (TileVolume::ignore): a point light's faces never draw the prim that emits their light, so its own changes (a LOD switch
+    // as the camera walks, a blinker's alpha) leave them as they are
+    const void* source = nullptr;
 };
 
 // Dirty boxes, double buffered (T6): pushes go to the fill buffer; swapForApply() hands the
@@ -1000,24 +1004,25 @@ public:
     // that changes this much at once is a load or a teleport, which redraws every tile anyway)
     static constexpr size_t kMaxPending = 1u << 16;
 
-    void push(const Aabb& box, Cause cause = Cause::Other)
+    void push(const Aabb& box, Cause cause = Cause::Other, const void* source = nullptr)
     {
         if (mFill.size() >= kMaxPending)
         {
             mFillOverflow = true;
             return;
         }
-        // one drawable's hooks fire in a row (the move, the partition's move, the rebuild): an identical box right after the last
-        // adds nothing
+        // one drawable's hooks fire in a row (the move, the partition's move, the rebuild): an identical box of the same source right
+        // after the last adds nothing (another source's identical box is kept: a tile may leave out one source and not the other)
         if (!mFill.empty())
         {
             const DirtyBox& last = mFill.back();
-            if (last.cause == cause && std::equal(box.lo, box.lo + 3, last.box.lo) && std::equal(box.hi, box.hi + 3, last.box.hi))
+            if (last.cause == cause && last.source == source && std::equal(box.lo, box.lo + 3, last.box.lo) &&
+                std::equal(box.hi, box.hi + 3, last.box.hi))
             {
                 return;
             }
         }
-        mFill.push_back({ box, cause });
+        mFill.push_back({ box, cause, source });
     }
 
     // a change that cannot be given a box (a hook that ran off the main thread, a shift of the whole scene): every tile is stale
@@ -1165,6 +1170,7 @@ struct TileVolume
 {
     uint32_t key = 0;   // the caller's tile or face key
     Pyramid pyramid;    // the volume the tile's picture depends on (agent space, the dirty boxes' space)
+    const void* ignore = nullptr; // a source (DirtyBox::source) whose boxes never touch this tile: what the tile does not draw (null: none)
 };
 
 struct Hit
@@ -1241,7 +1247,7 @@ public:
             }
             for (size_t i = 0; i < n; ++i)
             {
-                if (!mHit[i] && overlaps(mBounds[i], b.box) && intersects(mTiles[i].pyramid, b.box))
+                if (!mHit[i] && (!b.source || b.source != mTiles[i].ignore) && overlaps(mBounds[i], b.box) && intersects(mTiles[i].pyramid, b.box))
                 {
                     mHit[i] = 1;
                     --remaining;
@@ -1911,9 +1917,10 @@ inline uint32_t dynamicDeadline(const DynamicItem& it)
 // face, 4 for the rest; the most overdue first), then nearest first (for an avatar face: the camera position's distance to its nearest
 // other avatar), then the one that has waited longest, so ties rotate instead of starving by key.
 // Budget: CPU cap t_d_ms and at most a_max avatar draws (an item with more avatars draws its nearest a_max). No floor beyond that,
-// with one exception that prevents permanent starvation, for the FIRST pick of a frame only (selectFrame keeps it only as the
-// progress pick, so it passes allow_over = false when the frame has spent): an item past its deadline runs even if its predicted cost
-// alone exceeds the cap. Other items over budget keep their last content. When everything fits, every item runs every frame.
+// with one exception that prevents permanent starvation, for the first pick of a frame that is not an own face (the own faces are
+// exempt and come first; selectFrame keeps it only as the progress pick, so it passes allow_over = false when the frame has spent): an
+// item past its deadline runs even if its predicted cost alone exceeds the cap. Other items over budget keep their last content. When
+// everything fits, every item runs every frame.
 inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items, float t_d_ms, uint32_t a_max, bool allow_over = true)
 {
     std::vector<const DynamicItem*> order;
@@ -1945,11 +1952,14 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
     std::vector<uint32_t> out;
     float spent = 0.f;
     uint32_t avatars = 0;
+    uint32_t others = 0; // the picks that are not own faces
     for (const DynamicItem* it : order)
     {
         const float cost = itemCost(it->last_cpu_ms);
         const uint32_t draws = it->avatar ? std::min(std::max(it->avatar_draws, 1u), a_max) : 0u;
-        const bool may_over = allow_over && out.empty() && late(it) > 0;
+        // the own faces (exempt, first) do not take the exception: an overdue item behind them is still the frame's first other pick (a
+        // moving point lamp's six faces are above the dynamic share; beside the own avatar's faces it would otherwise never run)
+        const bool may_over = allow_over && others == 0 && late(it) > 0;
         if ((spent + cost > t_d_ms && !may_over && !it->own) || avatars + draws > a_max)
         {
             continue; // skip this one; a cheaper one further down may still fit
@@ -1957,6 +1967,7 @@ inline std::vector<uint32_t> selectDynamic(const std::vector<DynamicItem>& items
         out.push_back(it->key);
         spent += cost;
         avatars += draws;
+        others += it->own ? 0u : 1u;
     }
     return out;
 }
@@ -2201,20 +2212,26 @@ struct FramePicks
 // never drawn), and the dynamic picks of that frame are dropped, so a large tile is never starved by a standing avatar and the overrun
 // is one item. `progress_ok` says nothing was spent yet in this frame: only then may an item above the cap run; otherwise the cap holds
 // without exception. An avatar face that is over its share runs alone, every frame, as the progress pick (the overrun is that one
-// item; a moving lamp's tile only once it is overdue); the dynamic share is the whole remaining cap when no static item waits
-// (dynamicShareMs).
+// item; a moving lamp's tile only once it is overdue), and beside the own avatar's faces when it is overdue (they are exempt: without
+// this an item above what they leave, such as a moving point lamp's six faces, would never run while the own avatar stands in a lit
+// room); the dynamic share is the whole remaining cap when no static item waits (dynamicShareMs).
 inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std::vector<DynamicItem>& dynamics, float cap_ms,
                               uint32_t a_max, bool progress_ok)
 {
     FramePicks out;
     std::map<uint32_t, float> dyn_cost; // the dynamic list's key space
     std::map<uint32_t, uint32_t> dyn_draws;
+    std::set<uint32_t> dyn_late; // past its deadline: the kind of item that may be the progress pick
     std::vector<DynamicItem> d = dynamics;
     for (DynamicItem& it : d)
     {
         it.key = packKey(it.pool, it.key);
         dyn_cost[it.key] = itemCost(it.last_cpu_ms);
         dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
+        if (it.age_frames >= dynamicDeadline(it))
+        {
+            dyn_late.insert(it.key);
+        }
     }
     std::vector<StaticItem> st = statics;
     for (StaticItem& it : st)
@@ -2258,12 +2275,27 @@ inline FramePicks selectFrame(const std::vector<StaticItem>& statics, const std:
         out.predicted_ms = sumCost(out.dynamic);
         return out;
     }
+    // the progress pick beside the own avatar's faces: the one pick that is not an own face is overdue (selectDynamic's exception)
+    auto progressBesideOwn = [&]() {
+        size_t others = 0;
+        bool late = false;
+        for (uint32_t k : out.dynamic)
+        {
+            if (!own_keys.count(k))
+            {
+                ++others;
+                late = dyn_late.count(k) > 0;
+            }
+        }
+        return others == 1 && late && out.dynamic.size() > 1;
+    };
     out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
     float dyn_ms = sumCost(out.dynamic);
     if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
     {
-        // an over-cap item may only run alone, as the progress pick; the own avatar's faces stay (they are exempt)
-        while (dyn_ms > left + kEps && dropLastOther(out.dynamic))
+        // an over-cap item may only run alone, as the progress pick, or beside the own avatar's faces (they are exempt and stay); the
+        // others are dropped from the end of the order (the most overdue is first)
+        while (dyn_ms > left + kEps && !(progress_ok && progressBesideOwn()) && dropLastOther(out.dynamic))
         {
             dyn_ms = sumCost(out.dynamic);
         }
