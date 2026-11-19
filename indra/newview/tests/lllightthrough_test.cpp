@@ -5,7 +5,7 @@
 //   g++ -std=c++20 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/lllightthrough_test.cpp
 //   Rule       the light through one face: 1 at a = 0, 0 at a = 1, 1 - a for a black face, 1 - a^2 for a white one, never above
 //              1, falling with the opacity and rising with the colour; the red pane and clear glass of the plan; the step at the solid
-//              switch (0.98) at most 0.04; the invisible limit
+//              switch (full opacity) a step of 0; the invisible limit
 //   Stack      stacked faces multiply, in any order
 //   Reference  the receiver's reference at a texel is the depth lookup's: lowered by the receiver plane, never raised, at most rp_max
 //   Tap        a footprint behind every caster and unblocked gets the casters' bilinear tau exactly, one in front of them all or with
@@ -81,10 +81,10 @@ namespace
         check(std::fabs(transmittance(0.6f, 1.f) - 0.64f) < 1e-6f, "red pane, red channel 0.64", transmittance(0.6f, 1.f));
         check(std::fabs(transmittance(0.6f, 0.f) - 0.40f) < 1e-6f, "red pane, green and blue 0.40", transmittance(0.6f, 0.f));
         check(std::fabs(transmittance(0.3f, 1.f) - 0.91f) < 1e-6f, "clear glass at 0.3 passes 0.91", transmittance(0.3f, 1.f));
-        // the switch to solid: just below 0.98 at most 0.04 gets through, so the step to the depth layer's 0 cannot be seen
+        // the switch to solid is at full opacity (no cut, #559): just below it next to nothing gets through, so the step to the depth layer's 0 cannot be seen
         const float below = std::nextafter(kSolidAlpha, 0.f);
-        check(transmittance(below, 1.f) < 0.04f, "the step at the solid switch is under 0.04", transmittance(below, 1.f));
-        check(isSolid(kSolidAlpha) && !isSolid(below), "solid from 0.98 up");
+        check(transmittance(below, 1.f) < 1e-6f, "the step at the solid switch is under 1e-6", transmittance(below, 1.f));
+        check(isSolid(kSolidAlpha) && !isSolid(below), "solid from 1.0 up");
         // invisible: one 8-bit step of alpha, whose light rounds to within one 8-bit step of 1
         check(isInvisible(0.f) && isInvisible(kInvisibleAlpha) && !isInvisible(2.f / 255.f), "invisible at or below 1/255");
         check(isInvisible(std::nanf("")), "NaN alpha is invisible");

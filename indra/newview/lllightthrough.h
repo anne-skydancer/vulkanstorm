@@ -49,12 +49,13 @@ namespace lllightthrough
 // The limits of a blended caster's opacity a (its texture's alpha times its face's alpha)
 // ---------------------------------------------------------------------------------------------
 
-// At or above it the texel is solid: it goes into the depth layer, as it does without the light-through layer (the 2026-11-14
-// decision). The light through a texel just below it is at most 1 - kSolidAlpha^2 < 0.04 (transmittance), so the switch is a step of
-// at most 0.04 of the lamp's light. One number in every text that draws a blend texel: shadowAlphaMaskF.glsl's shadow_solid_alpha
+// At or above it the texel is solid: it goes into the depth layer, as it does without the light-through layer. It is full opacity:
+// the owner removed the alpha cuts on 2026-11-18 (decision D4, #559: the Stochastic caster rule casts in proportion below 1.0 and is
+// solid at 1.0), and the light through a texel goes to 0 as a reaches 1 (transmittance: (1 - a)(1 + a C)), so the switch to the depth
+// layer is no step at all. One number in every text that draws a blend texel: shadowAlphaMaskF.glsl's shadow_solid_alpha
 // (pipeline.cpp's SHADOW_BLEND_SOLID_ALPHA) and pbrShadowAlphaBlendF.glsl draw it into depth from here, shadowLightThroughF.glsl
 // (LIGHT_THROUGH_SOLID) into the layer below it; test_light_through_twin.py fails when one of them moves alone.
-constexpr float kSolidAlpha = 0.98f;
+constexpr float kSolidAlpha = 1.0f;
 
 // At or below it the face is invisible: one 8-bit step of alpha, whose light through rounds to within one step of 1 in the layer's
 // 8 bits. It is left out of the layer, so it records no depth either (a receiver behind an invisible face and in front of real

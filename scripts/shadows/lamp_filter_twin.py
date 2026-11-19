@@ -167,7 +167,7 @@ SCENES = {'glass 0.5 + frame': scene_glass, 'lace mask + frame': scene_lace, 'op
 def ign_keep(n, alpha):  # today's hashed dither of a blended caster (shadowAlphaMaskF.glsl)
     y, x = np.mgrid[0:n, 0:n].astype(np.float64)
     ign = np.modf(52.9829189 * np.modf(0.06711056 * (x + 0.5) + 0.00583715 * (y + 0.5))[0])[0]
-    return (ign < alpha) & (alpha >= 0.05) | (alpha >= 0.98)
+    return (ign < alpha) | (alpha >= 1.0)
 
 
 def raster(scene, t):

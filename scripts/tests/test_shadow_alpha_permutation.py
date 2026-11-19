@@ -152,7 +152,11 @@ class ShadowAlphaPermutation(unittest.TestCase):
         # the blended-only shaders: the rule below full opacity, nothing else decides
         for name in ('pbrShadowAlphaBlendF', 'avatarAlphaShadowF'):
             on = code(evaluate(self.read(name), True))
-            self.assertIn('if (alpha < 1.0 && !' + RULE_CALL + ')', on, name)
+            if name == 'pbrShadowAlphaBlendF':   # lamp shadows L3: the layer's flag first, then the rule
+                self.assertIn('if (alpha < 1.0)', on, name)
+                self.assertIn('if (shadow_through != 0 || !' + RULE_CALL + ')', on, name)
+            else:
+                self.assertIn('if (alpha < 1.0 && !' + RULE_CALL + ')', on, name)
             self.assertNotIn('0.05', on, name)                  # D4: no floor
             self.assertNotIn('minimum_alpha)', on, name)        # no threshold but full opacity
         # the avatar's blended parts: texture alpha times the mesh colour's
@@ -191,7 +195,8 @@ class ShadowAlphaPermutation(unittest.TestCase):
         i_vtx = on.index('alpha *= vertex_color.a;')
         i_mask = on.index('if (shadow_solid_alpha <= 0.0)')
         i_cut = on.index('if (alpha < 0.05)')
-        i_rule = on.index('else if (alpha < shadow_solid_alpha && !' + RULE_CALL + ')')
+        i_rule = on.index('else if (alpha < shadow_solid_alpha)')
+        self.assertIn('if (shadow_through != 0 || !' + RULE_CALL + ')', on)   # lamp shadows L3
         self.assertLess(i_min, i_vtx)
         self.assertLess(i_vtx, i_mask)
         self.assertLess(i_mask, i_cut)

@@ -28,7 +28,7 @@
 
 /*[EXTRA_CODE_HERE]*/
 
-#define LIGHT_THROUGH_SOLID 0.98              // lllightthrough::kSolidAlpha
+#define LIGHT_THROUGH_SOLID 1.0               // lllightthrough::kSolidAlpha
 #define LIGHT_THROUGH_INVISIBLE (1.0 / 255.0) // lllightthrough::kInvisibleAlpha
 
 out vec4 frag_data[2];

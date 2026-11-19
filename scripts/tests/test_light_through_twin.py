@@ -2,7 +2,7 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Lamp shadows L3 (the light-through layer), no GL and no numpy: the GLSL lines are pinned to their C++ twins in
 indra/newview/lllightthrough.h (which indra/newview/tests/lllightthrough_test.cpp checks), and the plumbing is checked in the
-sources: the limits (solid 0.98, invisible 1/255, no caster 1) are the same numbers in the header, the caster shader, the depth
+sources: the limits (solid 1.0, invisible 1/255, no caster 1) are the same numbers in the header, the caster shader, the depth
 pass's constant and the glTF blend shader; the light through one face, the tap and its combine, the reference and the depth store are
 the same expressions (the reference is the depth lookup's); the lookup's samplers are arguments; an opaque-only lamp keeps the depth's
 value; every blend bind of the depth pass sets the flag before its draw and a rigged face keeps the depth rule; the caster pass is
@@ -47,7 +47,7 @@ def func(text, sig):
 
 
 def number(expr):
-    """'0.98', '0.98f', '1.0f / 255.0f', '(1.0 / 255.0)' -> an exact fraction"""
+    """'1.0', '1.0f', '1.0f / 255.0f', '(1.0 / 255.0)' -> an exact fraction"""
     expr = expr.strip().strip('()').replace('f', '')
     parts = [p.strip() for p in expr.split('/')]
     value = Fraction(parts[0])
@@ -80,7 +80,7 @@ class LightThroughTwin(unittest.TestCase):
 
     def test_limits_are_one_number_everywhere(self):
         solid = self.header_constant('kSolidAlpha')
-        self.assertEqual(solid, Fraction('0.98'))   # the 2026-11-14 decision
+        self.assertEqual(solid, Fraction(1))   # no alpha cut: the owner's 2026-11-18 decision D4 (#559)
         self.assertEqual(self.shader_define(self.caster, 'LIGHT_THROUGH_SOLID'), solid)
         self.assertEqual(self.header_constant('kInvisibleAlpha'), Fraction(1, 255))
         self.assertEqual(self.shader_define(self.caster, 'LIGHT_THROUGH_INVISIBLE'), Fraction(1, 255))
@@ -91,7 +91,7 @@ class LightThroughTwin(unittest.TestCase):
         # the depth pass draws a blend texel from the same cut: the shared mask/blend shader's uniform and the glTF shader's literal
         m = re.search(r'SHADOW_BLEND_SOLID_ALPHA = ([0-9.]+f);', read(PIPELINE))
         self.assertEqual(number(m.group(1)), solid)
-        self.assertIn('if (alpha < 0.98)', evaluate(read(BLEND), True))
+        self.assertIn('if (alpha < 1.0)', evaluate(read(BLEND), True))
 
     def test_rule_is_the_header_rule(self):
         cpp = re.search(r'inline float transmittance\(float a, float c\)\n\{(.*?)\n\}', self.header, re.S).group(1)
@@ -202,10 +202,12 @@ class LightThroughTwin(unittest.TestCase):
             text = read(path)
             self.assertNotIn('shadow_through', evaluate(text, False), path.name)   # Legacy: the stock text
             on = significant(evaluate(text, True).splitlines())
-            at = on.index('if (shadow_through != 0)')
-            dither = next(i for i, l in enumerate(on) if l.startswith('float ign = '))
-            self.assertLess(at, dither, path.name + ': the layer flag after the dither')
+            # devel's caster rule (#559) keeps the texels below full opacity; the layer flag comes first and discards them, so the rule
+            # is not called where the layer holds the texel
+            at = on.index('if (shadow_through != 0 || !shadow_caster_keeps(alpha))')
             self.assertEqual(on[at + 1:at + 4], ['{', 'discard;', '}'], path.name)
+            self.assertEqual(sum('shadow_caster_keeps(alpha)' in l for l in on), 1, path.name)
+            self.assertNotIn('52.9829189', chr(10).join(on), path.name)   # no dither of its own any more
 
     def test_pipeline_sets_the_flag_on_every_bind(self):
         pipe = read(PIPELINE)
@@ -224,7 +226,7 @@ class LightThroughTwin(unittest.TestCase):
         rig = body[body.index('        if (rigged)\n'):body.index('        else\n        {\n            if (pparams->mGLTFMaterial)')]
         self.assertEqual(rig.count('uniform1i(LLShaderMgr::SHADOW_THROUGH, 0);'), 2)   # a rigged face keeps the depth rule
         self.assertIn('renderAlphaObjects(rigged, light_through && !rigged);', pipe)
-        shadow = pipe[pipe.index('void LLPipeline::renderShadow('):]
+        shadow = pipe[pipe.index('void LLPipeline::renderShadowImpl('):]
         shadow = shadow[:shadow.index('\n}\n')]
         self.assertIn('LLLocalShadowGL::throughTarget() : nullptr;', shadow)
         self.assertIn('sLocalShadowPass == LOCAL_SHADOW_STATIC ? LLLocalShadowGL::throughTarget()', shadow)
