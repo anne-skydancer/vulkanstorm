@@ -295,7 +295,7 @@ class LightThroughTwin(unittest.TestCase):
         free_atlases = func(pool, 'void LLProjectorShadows::freeAtlases(')
         self.assertLess(free_atlases.index('mThrough.free();'), free_atlases.index('deleteTexture(mAtlasS)'))   # the layer before its depth attachment
         self.assertIn('mThrough.setAtlas(size, mAtlasS);', func(pool, 'bool LLProjectorShadows::allocateAtlases('))
-        self.assertIn('mThrough.freeStorage();', func(pool, 'void LLProjectorShadows::update('))   # an idle layer goes
+        self.assertIn('mThrough.freeStorage();', func(pool, 'void LLProjectorShadows::prepare('))   # an idle layer goes
         light = func(pool, 'void LLProjectorShadows::setupLight(')
         self.assertIn('shader.uniform1i(LLShaderMgr::PROJ_THROUGH, through && mThrough.allocated() ? 1 : 0);', light)
         self.assertIn('mThrough.bind(shader, LLShaderMgr::PROJ_THROUGH_ATLAS, LLShaderMgr::PROJ_THROUGH_DEPTH);', func(pool, 'void LLProjectorShadows::bindAtlas('))

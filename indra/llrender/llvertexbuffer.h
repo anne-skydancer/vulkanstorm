@@ -340,6 +340,22 @@ public:
     static U32 sGLRenderIndices;
     static U32 sLastMask;
     static U32 sVertexCount;
+
+    // <Vulkanstorm> lamp shadows L4: index ranges of buffers that drawRange leaves out. A point light's shadow faces leave out the prim
+    // that emits the light, by identity (owner decision D4), inside the draws that batch its faces with its spatial group's neighbours:
+    // drawRange draws what is left of such a draw (llindexskip::split). Main render thread; set only around a point light's face render
+    // (llpointshadows.cpp, after the render's cull and sort) and null otherwise, where it costs one test per draw.
+    struct SkipRange
+    {
+        const LLVertexBuffer* buffer = nullptr;
+        U32 begin = 0; // the first index left out
+        U32 end = 0;   // one past the last
+    };
+    static const std::vector<SkipRange>* sSkipRanges;
+private:
+    // drawRange's path while sSkipRanges is set: true when it drew the draw's parts (a range of this buffer met it), false to draw it whole
+    bool drawSkipping(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const;
+    // </Vulkanstorm>
 };
 
 #if LL_PROFILER_ENABLE_RENDER_DOC

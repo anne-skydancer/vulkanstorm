@@ -205,7 +205,8 @@ private:
     // that left the silhouette key alone), or pushed its extents
     enum class Note { Skipped, Quiet, Pushed };
     static Note note(LLDrawable* drawable, Cause cause);
-    static void push(const llprojectorpool::Aabb& box, Cause cause);
+    // `source`: the drawable whose hook pushed the box (llprojectorpool::DirtyBox::source; only compared)
+    static void push(const llprojectorpool::Aabb& box, Cause cause, const LLDrawable* source);
     // true when the hooks skip the drawable; `edge` (optional) says it was not skipped because it just became active or static again,
     // which must push whatever else the hook's rule says
     static bool skipped(LLDrawable* drawable, LLViewerObject* object, bool* edge = nullptr);

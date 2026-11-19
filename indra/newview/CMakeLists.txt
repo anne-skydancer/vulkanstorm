@@ -740,6 +740,7 @@ set(viewer_SOURCE_FILES
     llstochastichistory.cpp
     lllocalshadows.cpp
     lllightthroughgl.cpp
+    llpointshadows.cpp
     llprojectorshadows.cpp
     llshadowdirtyfeed.cpp
     llspeakers.cpp
@@ -1635,9 +1636,11 @@ set(viewer_HEADER_FILES
     lllocalshadows.h
     lllightthrough.h
     lllightthroughgl.h
+    llpointshadows.h
     llprojectorshadows.h
     llshadowdirtyfeed.h
     llprojectorshadowpool.h
+    llpointshadowpool.h
     llstochasticbluenoise.h
     llstochasticlayerrank.h
     llstochasticstate.h

@@ -88,7 +88,7 @@ Code: `llprojectorshadows.h/.cpp` (GL), `llprojectorshadowpool.h` (the rules, st
   (the lamp's anchor point; the uniform `proj_shadow_origin`, which the normal offset's direction to the lamp also uses). The
   penumbra's light size is the uniform `proj_shadow_light_size` = `emitterExtent(kProjectorLamp, RenderShadowLightSize)`, on both axes
   of the map (`llprojectorshadowpool.h`: one function, a `LampFilter` per lamp type with its base, floor and cap; `kProjectorLamp` is
-  used, `kPointLamp` is prepared for the point-light stage). No script or build parameter carries a light size, so the base is a
+  used, `kPointLamp` by the point lights since L4: `point-light-shadows.md`). No script or build parameter carries a light size, so the base is a
   constant (P2b took the prim's face, clamped 2 to 15 cm; P2 a fixed 1 cm). The base comes from the light-size study
   (`reports/lamp-light-size-2026-11-18`, kept on the owner's machine): the largest size whose avatar shadows keep every body feature of
   2.5 cm or more readable, so the default softness 0.23 gives 1.035 cm and the slider's top 4.5 cm, short of the 6 cm blobs.
@@ -423,6 +423,14 @@ Nothing in these is about projectors; they are keyed by a tile or face key and a
 
 What stays in `LLProjectorShadows`: the light set, the lamp's pose and volume, the lookup matrix and the atlas.
 
+Since L4 (`point-light-shadows.md`) the point lights' faces are that second cache. `LLProjectorShadows::update` became four steps,
+`prepare` (everything up to the frame's work lists, appended to the lists of both pools), `beginRenders`, `renderPick` (one pick) and
+`endFrame`, which `LLLocalShadows::updateFrame` runs for both pools around one `selectFrame` and one `LLLocalShadowGL::Scope`; the casting
+avatars are collected once for both (`LLLocalShadows::collectCasters`), and the LOD pin (`LLLocalShadows::pinCasters`) and the avatars
+of a tile (`LLLocalShadows::tileAvatars`) are one rule for both. The selection, the caps and the order of service are the same code: with
+no point item a frame's projector picks are those of the projector pool alone. A dirty box carries the drawable whose hook pushed it
+(`DirtyBox::source`); a projector tile leaves no source out (`TileVolume::ignore` null), so its hits are as before.
+
 ### Known limits of P3
 
 - A moving part inside a still linkset, client spin and flexi cast with the pose of the last render.
@@ -560,7 +568,9 @@ face runs every frame, as in C1.
   A_max, so the others get what is left), and runs past an exhausted cap. A heavy own face that alone exceeds the share runs alone
   (one bounded overrun). The static head keeps its place beside it when it fits; an overdue static head that has no room runs beside
   the own faces as the progress pick (a second bounded overrun), so neither guarantee starves the other. Other avatars' faces have no
-  such exemption: a heavy face runs over the share only once past its deadline.
+  such exemption: a heavy face runs over the share only once past its deadline, and since L4 also beside the own faces (the first pick
+  after them that is overdue is the frame's progress pick, `selectDynamic` and `selectFrame`): before, an item above what the own faces
+  left could not run at all while the own avatar stood in a lamp's light (a moving point lamp's six faces, `point-light-shadows.md`).
 - **Other avatars**, by the camera POSITION's distance to the nearest non-own avatar of the face (never the view direction): within
   `kNearAvatarM` = 10 m the deadline is 2 frames, farther it is 4 (`dynamicDeadline`). A face that only restores L from S, and the
   moving lamps' tiles, keep the 4-frame deadline (a moving lamp runs over the share only once overdue, as in C1).

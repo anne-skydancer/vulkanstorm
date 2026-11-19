@@ -2778,12 +2778,17 @@ static FramePicks oracleSelectFrame(const std::vector<StaticItem>& statics, cons
     FramePicks out;
     std::map<uint32_t, float> dyn_cost, st_cost; // the two lists have a key space each
     std::map<uint32_t, uint32_t> dyn_draws, st_draws;
+    std::set<uint32_t> dyn_late; // the dynamic progress pick beside the own faces (lamp shadows L4): the same rule as selectFrame's
     std::vector<DynamicItem> d = dynamics;
     for (DynamicItem& it : d)
     {
         it.key = packKey(it.pool, it.key);
         dyn_cost[it.key] = itemCost(it.last_cpu_ms);
         dyn_draws[it.key] = it.avatar ? std::min(std::max(it.avatar_draws, 1u), a_max) : 0u;
+        if (it.age_frames >= dynamicDeadline(it))
+        {
+            dyn_late.insert(it.key);
+        }
     }
     std::vector<StaticItem> st = statics;
     for (StaticItem& it : st)
@@ -2829,12 +2834,25 @@ static FramePicks oracleSelectFrame(const std::vector<StaticItem>& statics, cons
         out.predicted_ms = sumCost(out.dynamic);
         return out;
     }
+    auto progressBesideOwn = [&]() {
+        size_t others = 0;
+        bool late = false;
+        for (uint32_t k : out.dynamic)
+        {
+            if (!own_keys.count(k))
+            {
+                ++others;
+                late = dyn_late.count(k) > 0;
+            }
+        }
+        return others == 1 && late && out.dynamic.size() > 1;
+    };
     out.dynamic = selectDynamic(d, dynamicShareMs(!statics.empty(), left) + kEps, a_max, progress_ok);
     float dyn_ms = sumCost(out.dynamic);
     if (dyn_ms > left + kEps && !(progress_ok && out.dynamic.size() == 1))
     {
-        // an over-cap item may only run alone, as the progress pick; the own avatar's faces stay (they are exempt)
-        while (dyn_ms > left + kEps && dropLastOther(out.dynamic))
+        // an over-cap item may only run alone, as the progress pick, or beside the own avatar's faces (they are exempt and stay)
+        while (dyn_ms > left + kEps && !(progress_ok && progressBesideOwn()) && dropLastOther(out.dynamic))
         {
             dyn_ms = sumCost(out.dynamic);
         }

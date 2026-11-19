@@ -67,6 +67,14 @@ void pbrPunctual(vec3 diffuseColor, vec3 specularColor,
 
 GBufferInfo getGBuffer(vec2 screenpos);
 
+#if defined(POINT_SHADOW_POOL)
+// <Vulkanstorm> the point lights' shadow faces (shadowStochasticUtil.glsl, lamp shadows L4)
+uniform vec4 point_shadow_lamp[1];  // the light's centre (view space) of the pose its faces were drawn with; w: their far plane (0: no lookup)
+uniform vec4 point_shadow_faces[2]; // its six packed face rects
+float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 norm, vec2 pos_screen);
+// </Vulkanstorm>
+#endif
+
 void main()
 {
     vec3 final_color = vec3(0);
@@ -91,6 +99,18 @@ void main()
     }
     float dist = lightDist / size;
     float dist_atten = calcLegacyDistanceAttenuation(dist, falloff);
+
+#if defined(POINT_SHADOW_POOL)
+    // <Vulkanstorm> this light's shadow, looked up only where its light reaches the surface (a face turned away gets none, or the 0.1 % of
+    // a clamped N.L, which stays unshadowed as before); the light term below is multiplied by it, so two lamps give two shadows and the
+    // weaker lamp's is the fainter
+    float shadow = 1.0;
+    if (dot(n, lv) > 0.0)
+    {
+        shadow = samplePointShadow(point_shadow_lamp[0], point_shadow_faces[0], point_shadow_faces[1], pos, n, tc);
+    }
+    // </Vulkanstorm>
+#endif
 
     if (GET_GBUFFER_FLAG(gb.gbufferFlag, GBUFFER_FLAG_HAS_PBR))
     {
@@ -153,6 +173,9 @@ void main()
     float final_scale = 1.0;
     if (classic_mode > 0)
         final_scale = 0.9;
+#if defined(POINT_SHADOW_POOL)
+    final_color *= shadow; // <Vulkanstorm/> the light term (diffuse and specular) only: this shader adds nothing else
+#endif
     frag_color.rgb = max(final_color * final_scale, vec3(0));
     frag_color.a = 0.0;
 }

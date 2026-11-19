@@ -34,6 +34,7 @@
 #include "llglheaders.h"
 #include "llrender.h"
 #include "llvector4a.h"
+#include "llindexskip.h" // <Vulkanstorm/> lamp shadows L4
 #include "llshadermgr.h"
 #include "llglslshader.h"
 #include "llglsubmitstats.h"
@@ -727,6 +728,7 @@ U32 LLVertexBuffer::sGLRenderBuffer = 0;
 U32 LLVertexBuffer::sGLRenderIndices = 0;
 U32 LLVertexBuffer::sLastMask = 0;
 U32 LLVertexBuffer::sVertexCount = 0;
+const std::vector<LLVertexBuffer::SkipRange>* LLVertexBuffer::sSkipRanges = nullptr; // <Vulkanstorm/> lamp shadows L4
 
 
 //NOTE: each component must be AT LEAST 4 bytes in size to avoid a performance penalty on AMD hardware
@@ -970,10 +972,47 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
     STOP_GLERROR;
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
+    if (sSkipRanges && drawSkipping(mode, start, end, count, indices_offset)) // <Vulkanstorm/> lamp shadows L4: a point light's emitter
+    {
+        STOP_GLERROR;
+        return;
+    }
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
         (GLvoid*) (indices_offset * (size_t) mIndicesStride));
     STOP_GLERROR;
 }
+
+// <Vulkanstorm> lamp shadows L4: the parts of the draw outside this buffer's skipped index ranges, each drawn with the draw's vertex range
+// (its indices stay inside it). The skipped ranges are a prim's faces, whole triangles, so every part of a triangle list is whole triangles
+// too; any other mode (a strip, lines, points) is drawn whole, since a split there would cut its primitives.
+bool LLVertexBuffer::drawSkipping(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
+{
+    if (mode != LLRender::TRIANGLES)
+    {
+        return false;
+    }
+    static std::vector<llindexskip::Range> mine; // main thread only (sSkipRanges is set by the render thread alone)
+    static std::vector<std::pair<U32, U32>> parts;
+    mine.clear();
+    for (const SkipRange& r : *sSkipRanges)
+    {
+        if (r.buffer == this)
+        {
+            mine.push_back({ r.begin, r.end });
+        }
+    }
+    parts.clear();
+    if (mine.empty() || !llindexskip::split(indices_offset, count, mine, parts))
+    {
+        return false;
+    }
+    for (const auto& part : parts)
+    {
+        glDrawRangeElements(sGLMode[mode], start, end, part.second, mIndicesType, (GLvoid*)(part.first * (size_t)mIndicesStride));
+    }
+    return true;
+}
+// </Vulkanstorm>
 
 void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 indices_offset) const
 {

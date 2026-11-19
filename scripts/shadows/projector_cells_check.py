@@ -84,10 +84,10 @@ void main()
 }
 '''
 # the virtual tile: the whole virtual map is one tile; the gradient is per tile uv, which is the lamp's (g = 1 cell of the same texels)
-VIRT_BODY = '    oc = vec4(stSpotFilterTile(proj_shadow_tile, c, g * GRAD_SCALE, z_bias, z_tex, pen, proj_shadow_kernel_max));'
+VIRT_BODY = '    oc = vec4(stSpotFilterTile(proj_shadow_atlas, proj_shadow_tile, c, g * GRAD_SCALE, z_bias, z_tex, pen, proj_shadow_kernel_max));'
 CELL_BODY = '''    vec4 tile; vec2 uvt, gres, tscale;
     if (!stCellPick(c.xy, tile, uvt, gres, tscale)) { oc = vec4(-1.0); return; }
-    oc = vec4(stSpotFilterTile(tile, vec3(uvt, c.z), g * GRAD_SCALE / tscale, z_bias, z_tex, pen, proj_shadow_kernel_max));'''
+    oc = vec4(stSpotFilterTile(proj_shadow_atlas, tile, vec3(uvt, c.z), g * GRAD_SCALE / tscale, z_bias, z_tex, pen, proj_shadow_kernel_max));'''
 VS = '#version 400\nvoid main(){ vec2 p = vec2((gl_VertexID & 1) * 4 - 1, (gl_VertexID >> 1) * 4 - 1); gl_Position = vec4(p, 0.0, 1.0); }'
 
 glGenTextures = fn('glGenTextures', None, I, C.POINTER(U))

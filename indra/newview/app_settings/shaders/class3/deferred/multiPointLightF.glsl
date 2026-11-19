@@ -65,6 +65,15 @@ void pbrPunctual(vec3 diffuseColor, vec3 specularColor,
 
 GBufferInfo getGBuffer(vec2 screenpos);
 
+#if defined(POINT_SHADOW_POOL)
+// <Vulkanstorm> the point lights' shadow faces (shadowStochasticUtil.glsl, lamp shadows L4): per light of the batch, in the order of light[]
+uniform vec4 point_shadow_lamp[LIGHT_COUNT];      // the light's centre (view space) of its faces' pose; w: their far plane (0: no lookup)
+uniform vec4 point_shadow_faces[2 * LIGHT_COUNT]; // its six packed face rects, two vec4 per light
+vec3 stPointReceiverNormal(vec2 pos_screen, vec3 pos, vec3 norm);
+float samplePointShadowNg(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 ng);
+// </Vulkanstorm>
+#endif
+
 void main()
 {
     vec3 final_color = vec3(0, 0, 0);
@@ -84,6 +93,31 @@ void main()
 
     vec3  h, l, v = -normalize(pos);
     float nh, nv, vh, lightDist;
+
+#if defined(POINT_SHADOW_POOL)
+    // <Vulkanstorm> each light's shadow where its light reaches the surface (inside its lit size, facing it; elsewhere 1, which leaves the
+    // light term below as it was): the receiver plane once for the pixel (its four depth reads), then every light's visibility from this
+    // one call site, before the shading branches (one copy of the filter in the program, not one per branch). Each light is multiplied by
+    // its own visibility, so two lamps give two shadows and the weaker lamp's is the fainter. A pixel no light reaches reads no depth.
+    float point_vis[LIGHT_COUNT];
+    vec3 point_ng = vec3(0.0);
+    bool point_have_ng = false;
+    for (int i = 0; i < LIGHT_COUNT; ++i)
+    {
+        point_vis[i] = 1.0;
+        vec3 plv = light[i].xyz - pos;
+        if (length(plv) / light[i].w <= 1.0 && dot(n, plv) > 0.0)
+        {
+            if (!point_have_ng)
+            {
+                point_ng = stPointReceiverNormal(tc, pos, n);
+                point_have_ng = true;
+            }
+            point_vis[i] = samplePointShadowNg(point_shadow_lamp[i], point_shadow_faces[2 * i], point_shadow_faces[2 * i + 1], pos, point_ng);
+        }
+    }
+    // </Vulkanstorm>
+#endif
 
     if (GET_GBUFFER_FLAG(gb.gbufferFlag, GBUFFER_FLAG_HAS_PBR))
     {
@@ -116,6 +150,9 @@ void main()
                 float dist_atten = calcLegacyDistanceAttenuation(dist, falloff);
 
                 vec3 intensity = dist_atten * lightColor * 3.25;
+#if defined(POINT_SHADOW_POOL)
+                intensity *= point_vis[light_idx]; // <Vulkanstorm/> this light's shadow (1 where it does not face the light)
+#endif
                 float nl = 0;
                 vec3 diff = vec3(0);
                 vec3 specPunc = vec3(0);
@@ -165,6 +202,9 @@ void main()
                         }
                     }
 
+#if defined(POINT_SHADOW_POOL)
+                    col *= point_vis[i]; // <Vulkanstorm/> this light's shadow (nl > 0 here)
+#endif
                     final_color += col;
                 }
             }
@@ -183,5 +223,11 @@ void main()
     vec4 dummy2 = light_col[0];
     vec4 dummy3 = light[LIGHT_COUNT - 1];
     vec4 dummy4 = light_col[LIGHT_COUNT - 1];
+#if defined(POINT_SHADOW_POOL)
+    vec4 dummy5 = point_shadow_lamp[0];       // <Vulkanstorm> the point lights' arrays too
+    vec4 dummy6 = point_shadow_faces[0];
+    vec4 dummy7 = point_shadow_lamp[LIGHT_COUNT - 1];
+    vec4 dummy8 = point_shadow_faces[2 * LIGHT_COUNT - 1]; // </Vulkanstorm>
+#endif
 #endif
 }

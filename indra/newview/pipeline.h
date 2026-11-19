@@ -39,6 +39,7 @@
 #include "lldrawable.h"
 #include "llrendertarget.h"
 #include "llprojectorshadows.h" // <Vulkanstorm/> projector shadow pool
+#include "llpointshadows.h" // <Vulkanstorm/> the point lights' shadow faces (lamp shadows L4)
 #include "llstochastichistory.h"
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
@@ -98,6 +99,7 @@ extern LLTrace::BlockTimerStatHandle FTM_RENDER_UI_2D;
 class LLPipeline
 {
     friend class LLProjectorShadows; // <Vulkanstorm/> reads the nearby lights (the pool's light set)
+    friend class LLPointShadows; // <Vulkanstorm/> likewise (the point lights' light set)
 public:
     LLPipeline();
     ~LLPipeline();
@@ -939,6 +941,7 @@ public:
     // <Vulkanstorm> the Stochastic method's projector shadows: one tile per projector in a shared atlas, instead of the
     // two slots above (which then stay empty). Main render thread only.
     LLProjectorShadows      mProjectorShadows;
+    LLPointShadows          mPointShadows; // <Vulkanstorm/> the point lights' shadow faces (lamp shadows L4)
     // </Vulkanstorm>
 #if VKS_GL_STATS
     // development only (projector shadow pool, stage S0): what the projector shadow slots and the light set look like now.
@@ -1280,6 +1283,7 @@ public:
     static F32 RenderShadowBlurSize;
     static U32 RenderShadowMethod;         // <Vulkanstorm/> shadow method: 0 Legacy, 2 Stochastic
     static F32 RenderShadowLightSize;      // <Vulkanstorm/> light size multiplier (Stochastic)
+    static bool RenderShadowPointLights;   // <Vulkanstorm/> the point lights' shadow faces (Stochastic, detail 2; debug setting, D8)
     static F32 RenderSSAOScale;
     static U32 RenderSSAOMaxScale;
     static F32 RenderSSAOFactor;
@@ -1298,6 +1302,9 @@ public:
     static ELocalShadowPass sLocalShadowPass;
     // the avatars the layer draws in this face (the nearest to the lamp, at most the pool's A_max); null outside the layer
     static const std::vector<const LLVOAvatar*>* sLocalShadowAvatars;
+    // a point light's face is being drawn (LLPointShadows): renderShadow draws both sides of every caster (a light inside a room sees the
+    // back of a one-sided wall too); false for every other shadow render, whose back faces stay culled as before
+    static bool sLocalShadowTwoSided;
     static bool localShadowAvatarAllowed(const LLVOAvatar* avatar);
     // </Vulkanstorm>
     static F32 RenderEdgeDepthCutoff;

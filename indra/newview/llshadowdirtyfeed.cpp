@@ -343,9 +343,9 @@ void LLShadowDirtyFeed::reset()
 }
 
 // static
-void LLShadowDirtyFeed::push(const Aabb& box, Cause cause)
+void LLShadowDirtyFeed::push(const Aabb& box, Cause cause, const LLDrawable* source)
 {
-    sList.push(box, sForced ? sForcedCause : cause);
+    sList.push(box, sForced ? sForcedCause : cause, source);
 }
 
 // static
@@ -562,7 +562,7 @@ void LLShadowDirtyFeed::pushExtents(LLDrawable* drawable, Cause cause)
     Aabb box;
     if (extentsOf(drawable, box))
     {
-        push(box, cause);
+        push(box, cause, drawable); // the drawable whose hook fired: a tile that never draws it leaves the box out (TileVolume::ignore)
     }
 }
 
@@ -848,7 +848,7 @@ void LLShadowDirtyFeed::noteServerUpdate(LLViewerObject* object, bool pos_change
             Aabb box;
             if (extentsOf(source, box))
             {
-                push(box, Cause::Mover);
+                push(box, Cause::Mover, drawable);
             }
         }
     }

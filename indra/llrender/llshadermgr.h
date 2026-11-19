@@ -433,6 +433,13 @@ public:
         PROJ_THROUGH_DEPTH,                 //  "proj_through_depth"
         PROJ_THROUGH,                       //  "proj_through"
         // </Vulkanstorm>
+        // <Vulkanstorm> the point lights' shadow faces (llpointshadows.cpp, deferred/shadowStochasticUtil.glsl, lamp shadows L4)
+        POINT_SHADOW_ATLAS,                 //  "point_shadow_atlas"
+        POINT_SHADOW_VIEW_TO_AGENT,         //  "point_view_to_agent"
+        POINT_SHADOW_PARAMS,                //  "point_shadow_params"
+        POINT_SHADOW_LAMP,                  //  "point_shadow_lamp"
+        POINT_SHADOW_FACES,                 //  "point_shadow_faces"
+        // </Vulkanstorm>
         // <Vulkanstorm> the volumetric clouds (stage L7: deferred/cloudsVol*.glsl, deferred/cloudShadowVolF.glsl)
         CLOUD_VOL_BASE,                     //  "cloud_vol_base"
         CLOUD_VOL_EROSION,                  //  "cloud_vol_erosion"

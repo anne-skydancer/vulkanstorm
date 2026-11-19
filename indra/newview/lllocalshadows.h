@@ -1,8 +1,8 @@
 /**
  * @file lllocalshadows.h
- * @brief What the local shadow caches (the projector pool, later the point-light face pool) share: one save and restore of the GL
- *        state their tile renders change, the tile origin of the Stochastic caster rule's programs, and the light-through target
- *        of a static render
+ * @brief What the local shadow caches (the projector pool and the point lights' face pool) share: the frame's one selection of tile
+ *        work over both, the avatars that cast, the LOD pin's helpers, one save and restore of the GL state their tile renders change,
+ *        the tile origin of the Stochastic caster rule's programs, and the light-through target of a static render
  *
  * SPDX-License-Identifier: GPL-3.0-or-later
  * Vulkanstorm Viewer Source Code
@@ -23,6 +23,70 @@
 #define LL_LLLOCALSHADOWS_H
 
 #include "llprojectorshadowpool.h"
+
+#include <vector>
+
+class LLCamera;
+class LLCullResult;
+class LLDrawable;
+class LLUUID;
+class LLVector3;
+class LLViewerObject;
+class LLVOAvatar;
+class LLVOVolume;
+
+// An avatar that casts into the local shadow tiles this frame (LLLocalShadows::collectCasters): its extents (agent space) and whether it
+// is the user's own. Valid inside one LLLocalShadows::updateFrame only.
+struct LLLocalShadowCaster
+{
+    LLVOAvatar* avatar = nullptr;
+    llprojectorpool::Aabb box;
+    bool own = false;
+};
+
+class LLLocalShadows
+{
+public:
+    // Once a frame, from LLPipeline::generateSunShadow's Stochastic branch (not for probe renders): each pool prepares its frame (the
+    // light set, the sizes and the placement, the changes, the avatar pairing) and lists its work; one selection over both lists under
+    // the shared cap (llprojectorpool::selectFrame, the pools' keys packed with their pool ids); then each pick is rendered by its pool,
+    // in the selection's order, inside one save and restore of the GL state. With the point pool off (or idle) the projectors' lists, and
+    // so their picks, are those of the projector pool alone.
+    static void updateFrame(LLCamera& camera);
+
+    // The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow, a normal
+    // appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only a friend, the agent
+    // or a control avatar. Nothing here reads the camera. Built once a frame by updateFrame, before its first use (the pairing of avatars
+    // with the lamps, then every face's draw list); nothing moves or deletes an avatar during the frame's tile work, and the list is
+    // emptied before updateFrame returns, so no pointer outlives the frame.
+    static void collectCasters(std::vector<LLLocalShadowCaster>& out);
+
+    // The LOD pin's helpers, shared by the pools: an object's id in the books, a tile letting go of an object (a prim or a tree), and
+    // whether a volume casts into a tile at all (a volume whose every face is fully transparent, and none has a glTF material, casts
+    // nothing: holding it at full detail would only cost triangles).
+    static llprojectorpool::Id128 idOf(const LLUUID& uuid);
+    static void lowerPin(LLViewerObject* object);
+    static bool volumeCasts(const LLVOVolume* volume);
+
+    // The LOD pin of one tile render (both pools, from LLPipeline::renderShadow after the render's cull and sort): every caster the render
+    // is about to draw (its cull's visible and drawable groups) inside `volume` is held at full detail under `key` in `book`, so a camera
+    // that moves changes no tile's content. Prims and trees only: not rigged, worn, on an avatar or invisible (volumeCasts), and never
+    // `skip` (the prim a point light's faces leave out, null for a projector). The counter on the object is shared by the pools.
+    static void pinCasters(LLCullResult& result, llprojectorpool::PinBook& book, U32 key, const llprojectorpool::Pyramid& volume,
+                           const LLDrawable* skip);
+    // the objects a tile no longer holds (PinBook::endRender, PinBook::releaseTile) are given back, unless the viewer exits (they go with
+    // the world)
+    static void unpinObjects(const std::vector<llprojectorpool::Id128>& ids);
+    // a drawable is going away: the book forgets its object (an object created later with the same id is new and pinned afresh), and the
+    // counters the book raised on it are lowered if it lives on (its drawable was rebuilt)
+    static void forgetPinned(llprojectorpool::PinBook& book, const LLDrawable* drawable);
+
+    // The avatars a tile or face draws (both pools, P4): the frame's casters whose extents meet `volume`, the nearest to the light's
+    // centre `origin` first, at most A_max; and the tile rectangle they cover (C3), their extents grown by the footprint margin through
+    // the tile's `clip` matrix, or the whole tile when one is an impostor (its extents are stale). `n`: the tile's size.
+    static void tileAvatars(const std::vector<LLLocalShadowCaster>& casters, const llprojectorpool::Pyramid& volume, const float clip[16],
+                            const LLVector3& origin, U32 n, std::vector<const LLVOAvatar*>& avatars, llprojectorpool::TexelRect& rect);
+};
 
 class LLLightThroughLayer;
 
@@ -57,7 +121,7 @@ public:
     };
 
     // The programs of the semi-transparent casters' rule (Stochastic, shadowStochasticCasterF.glsl): the texel origin of its
-    // blocks, a projector tile's (not of the atlas) or a sun cascade's wrapped world-grid index
+    // blocks, a projector tile's or a point light face's (not of the atlas) or a sun cascade's wrapped world-grid index
     // (LLShadowCascadeFit::alphaDitherOrigin). (0, 0) puts it back.
     static void setTileOrigin(F32 x, F32 y);
 
@@ -70,6 +134,10 @@ public:
     static void setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect, unsigned key);
     static LLLightThroughTarget* throughTarget();
     static bool endThroughTarget();
+
+    // A bit-exact copy of a w x h texel rectangle between two depth atlases of one size (glCopyImageSubData, GL 4.3 core: the point
+    // lights' faces run on GL 4.6 only, LLPointShadows::wanted). Not clipped by the scissor test.
+    static void copyTexels(U32 from_tex, S32 from_x, S32 from_y, U32 to_tex, S32 to_x, S32 to_y, S32 w, S32 h);
 };
 
 #endif // LL_LLLOCALSHADOWS_H

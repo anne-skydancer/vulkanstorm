@@ -383,7 +383,7 @@ void LLProjectorShadows::forget(const LLDrawable* drawable)
     {
         return;
     }
-    forgetPinned(drawable);
+    LLLocalShadows::forgetPinned(mPins, drawable);
     auto key = mKeyOf.find(drawable);
     if (key != mKeyOf.end())
     {
@@ -1088,10 +1088,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
     mRenderingRec = nullptr;
     // the objects the tile held and did not meet again (they left the light, or are gone) go back to the camera's LOD
-    for (const Id128& id : mPins.endRender(rec.key))
-    {
-        unpinObject(id);
-    }
+    LLLocalShadows::unpinObjects(mPins.endRender(rec.key));
     // renderShadow must leave the framebuffer it was given (debug check of spec 4.8)
     llassert(LLRenderTarget::sCurFBO == mFboS);
 
@@ -1165,41 +1162,6 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
     }
 }
 
-// The avatars that cast into a light (as the avatar pool's renderShadow draws them): not dead, not a UI avatar, not too slow,
-// a normal appearance (no jelly doll, RLV silhouette, derendered or too complex avatar), and with RenderAvatarFriendsOnly only
-// a friend, the agent or a control avatar. Nothing here reads the camera. Built once a frame by update(), before its first use (the
-// pairing of avatars with lamps, then every face's draw list); nothing moves or deletes an avatar during the frame's tile work, and the
-// list is emptied before update() returns, so no pointer outlives the frame.
-void LLProjectorShadows::collectCasters()
-{
-    static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
-    mCasters.clear();
-    for (LLCharacter* character : LLCharacter::sInstances)
-    {
-        LLVOAvatar* avatar = static_cast<LLVOAvatar*>(character);
-        if (!avatar || avatar->isDead() || avatar->mDrawable.isNull() || avatar->isUIAvatar() || avatar->isTooSlow() ||
-            avatar->getOverallAppearance() != LLVOAvatar::AOA_NORMAL ||
-            (friends_only() && !avatar->isControlAvatar() && !avatar->isSelf() && !avatar->isBuddy()))
-        {
-            continue;
-        }
-        const LLVector4a* ext = avatar->mDrawable->getSpatialExtents();
-        if (!ext)
-        {
-            continue;
-        }
-        Caster c;
-        c.avatar = avatar;
-        c.own = avatar->isSelf();
-        for (int i = 0; i < 3; ++i)
-        {
-            c.box.lo[i] = ext[0].getF32ptr()[i];
-            c.box.hi[i] = ext[1].getF32ptr()[i];
-        }
-        mCasters.push_back(c);
-    }
-}
-
 // The avatars a face draws, and the tile rectangle they cover (C3). The face draws at most A_max avatars, the nearest to the lamp (the
 // scheduler counts min(avatars, A_max) draws for it). The rectangle is the avatars' extents, grown by a margin for the lag of the
 // extents and the avatar's speed, projected through the tile's matrices; the whole tile when that is unknown, too large, or an avatar
@@ -1207,36 +1169,13 @@ void LLProjectorShadows::collectCasters()
 LLProjectorShadows::FaceAvatars LLProjectorShadows::faceAvatars(const Record& rec, const glm::mat4& view, const glm::mat4& proj, const LLVector3& origin) const
 {
     FaceAvatars face;
-    std::vector<std::pair<F32, const Caster*>> in_light;
-    for (const Caster& c : mCasters)
+    if (!mCasters)
     {
-        if (intersects(rec.volume, c.box))
-        {
-            const LLVector3 centre((c.box.lo[0] + c.box.hi[0]) * 0.5f, (c.box.lo[1] + c.box.hi[1]) * 0.5f, (c.box.lo[2] + c.box.hi[2]) * 0.5f);
-            in_light.emplace_back((centre - origin).magVecSquared(), &c);
-        }
+        return face;
     }
-    std::sort(in_light.begin(), in_light.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-    std::vector<llprojectorpool::Aabb> boxes;
-    const S32 period = LLVOAvatar::getExtentUpdatePeriod(); // how stale the extents can be
-    bool whole = false;
-    for (size_t i = 0; i < in_light.size() && i < kAvatarDrawsMax; ++i)
-    {
-        const Caster& c = *in_light[i].second;
-        face.avatars.push_back(c.avatar);
-        whole = whole || c.avatar->isImpostor();
-        boxes.push_back(llprojectorpool::inflateBox(c.box, llprojectorpool::footprintMarginM(c.avatar->getVelocity().magVec(), period, c.box)));
-    }
-    const U32 n = rec.rect.size;
-    if (whole)
-    {
-        face.rect = llprojectorpool::wholeTileRect(n);
-    }
-    else
-    {
-        const glm::mat4 clip = proj * view;
-        face.rect = llprojectorpool::faceFootprint(glm::value_ptr(clip), boxes, n);
-    }
+    // the rule both pools share (LLLocalShadows::tileAvatars): the nearest to the light, at most A_max, and the rectangle they cover
+    const glm::mat4 clip = proj * view;
+    LLLocalShadows::tileAvatars(*mCasters, rec.volume, glm::value_ptr(clip), origin, rec.rect.size, face.avatars, face.rect);
     return face;
 }
 
@@ -1414,125 +1353,17 @@ namespace
         p.radius = g.radius;
         return p;
     }
-
-    Id128 id_of(const LLUUID& uuid)
-    {
-        Id128 id;
-        static_assert(sizeof(id) == UUID_BYTES, "an object id is 16 bytes");
-        memcpy(&id, uuid.mData, sizeof(id));
-        return id;
-    }
-
-    // one tile lets go of an object (a prim or a tree)
-    void lower_pin(LLViewerObject* object)
-    {
-        if (LLVOVolume* volume = object ? dynamic_cast<LLVOVolume*>(object) : nullptr)
-        {
-            volume->unpinLampLOD();
-        }
-        else if (LLVOTree* tree = object ? dynamic_cast<LLVOTree*>(object) : nullptr)
-        {
-            tree->unpinLampLOD();
-        }
-    }
-
-    // A volume casts nothing into a tile when every face is fully transparent (and none has a glTF material, whose alpha is its
-    // own): holding it at full detail would only cost triangles.
-    bool volume_casts(const LLVOVolume* volume)
-    {
-        const S32 faces = volume->getNumTEs();
-        for (S32 i = 0; i < faces; ++i)
-        {
-            const LLTextureEntry* te = volume->getTE((U8)i);
-            if (!te || te->getColor().mV[VALPHA] > 0.004f || te->getGLTFRenderMaterial())
-            {
-                return true;
-            }
-        }
-        return faces == 0;
-    }
 }
 
-void LLProjectorShadows::unpinObject(const Id128& id)
-{
-    LLUUID uuid;
-    memcpy(uuid.mData, &id, sizeof(id));
-    lower_pin(gObjectList.findObject(uuid));
-}
-
-// The object of a drawable that is going away is no longer held by any tile: an object created later with the same id is a new
-// object (its counter is zero) and must be pinned by its first render, not skipped as "already held". If the object lives on (its
-// drawable was rebuilt), the counters this pool raised on it are lowered.
-void LLProjectorShadows::forgetPinned(const LLDrawable* drawable)
-{
-    const LLViewerObject* object = drawable->getVObj();
-    if (!object || LLApp::isExiting())
-    {
-        return;
-    }
-    const uint32_t n = mPins.forget(id_of(object->getID()));
-    if (n == 0)
-    {
-        return;
-    }
-    LLViewerObject* live = gObjectList.findObject(object->getID());
-    for (uint32_t i = 0; live && i < n; ++i)
-    {
-        lower_pin(live);
-    }
-}
-
+// A tile goes: every object it held is given back (the objects are going with the world while the viewer exits: nothing to give back).
 void LLProjectorShadows::unpinTile(U32 key)
 {
-    const std::vector<Id128> held = mPins.releaseTile(key);
-    if (LLApp::isExiting())
-    {
-        return; // the objects are going with the world: nothing to give back
-    }
-    for (const Id128& id : held)
-    {
-        unpinObject(id);
-    }
-}
-
-void LLProjectorShadows::pinDrawable(LLDrawable* drawable)
-{
-    LLViewerObject* object = drawable && !drawable->isDead() ? drawable->getVObj().get() : nullptr;
-    if (!object || object->isDead())
-    {
-        return;
-    }
-    LLVOVolume* volume = drawable->getVOVolume();
-    LLVOTree* tree = volume ? nullptr : dynamic_cast<LLVOTree*>(object);
-    if (!volume && !tree)
-    {
-        return;
-    }
-    if (volume && (volume->isRiggedMesh() || volume->getAvatar() || volume->isAttachment() || volume->isHUDAttachment() || !volume_casts(volume)))
-    {
-        return;
-    }
-    Aabb box;
-    if (!LLShadowDirtyFeed::extentsOf(drawable, box) || !intersects(mRenderVolume, box))
-    {
-        return; // not in this light's volume: the object's detail is the camera's business
-    }
-    if (mPins.touch(mRenderingRec->key, id_of(object->getID())))
-    {
-        // raises it to the full detail and rebuilds once; the tile is drawn again with it, then holds
-        if (volume)
-        {
-            volume->pinLampLOD();
-        }
-        else
-        {
-            tree->pinLampLOD();
-        }
-    }
+    LLLocalShadows::unpinObjects(mPins.releaseTile(key));
 }
 
 // The LOD pin (spec 4.4, D6): every volume the tile is about to draw, inside the light's volume, is held at full detail. Without
-// it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves.
+// it, the caster's LOD follows the camera's distance (calcLOD) and the tile would have to be drawn again as the camera moves. The rule
+// is both pools' (LLLocalShadows::pinCasters).
 void LLProjectorShadows::pinCasters(LLCullResult& result)
 {
     if (!mRenderingRec || !on_main_thread())
@@ -1540,31 +1371,13 @@ void LLProjectorShadows::pinCasters(LLCullResult& result)
         return;
     }
     LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector pinCasters"); // <Vulkanstorm> multicore stage 1
-    auto pin_group = [this](LLSpatialGroup* group) {
-        if (!group || group->isDead())
-        {
-            return;
-        }
-        for (LLSpatialGroup::element_iter i = group->getDataBegin(); i != group->getDataEnd(); ++i)
-        {
-            if ((*i)->hasDrawable())
-            {
-                pinDrawable((LLDrawable*)(*i)->getDrawable());
-            }
-        }
-    };
-    for (LLCullResult::sg_iterator i = result.beginVisibleGroups(); i != result.endVisibleGroups(); ++i)
-    {
-        pin_group(*i);
-    }
-    for (LLCullResult::sg_iterator i = result.beginDrawableGroups(); i != result.endDrawableGroups(); ++i)
-    {
-        pin_group(*i);
-    }
+    LLLocalShadows::pinCasters(result, mPins, mRenderingRec->key, mRenderVolume, nullptr);
 }
 
-void LLProjectorShadows::update(LLCamera& camera)
+void LLProjectorShadows::prepare(LLCamera& camera, const std::vector<LLLocalShadowCaster>& casters, std::vector<StaticItem>& static_items,
+                                 std::vector<DynamicItem>& dynamic_items)
 {
+    mLayerOnly.clear();
     if (!on_main_thread() || LLApp::isExiting() || gCubeSnapshot)
     {
         return;
@@ -1595,6 +1408,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     mLastFrameLayer = 0;
     mLastFrameAvatarDraws = 0;
     frameLedger().begin(frame);
+    mCasters = &casters; // until endFrame
 
     // the scene's changes since the last frame (swapped before any render of this frame, so a change a render itself causes
     // lands in the next frame: F9)
@@ -1804,24 +1618,16 @@ void LLProjectorShadows::update(LLCamera& camera)
     // extents are stale, so it copies the whole tile). A jelly doll, an invisible or a too slow avatar and a UI avatar are not drawn by
     // the avatar pool either.
     const F32 camera_pos[3] = { camera.getOrigin().mV[VX], camera.getOrigin().mV[VY], camera.getOrigin().mV[VZ] };
-    // the frame's casting avatars, once (faceAvatars reads the same list for every face drawn below)
-    struct CastersOfFrame
-    {
-        LLProjectorShadows& pool;
-        ~CastersOfFrame() { pool.mCasters.clear(); } // no avatar pointer outlives update()
-    } casters_of_frame{ *this };
-    collectCasters();
+    // the frame's casting avatars (LLLocalShadows::collectCasters, once for both pools; faceAvatars reads the same list for every face
+    // drawn this frame)
     std::vector<Aabb> avatar_boxes, own_boxes;
-    for (const Caster& c : mCasters)
+    for (const LLLocalShadowCaster& c : casters)
     {
         (c.own ? own_boxes : avatar_boxes).push_back(c.box);
     }
 
-    // the work list: the verdict of every placed tile (llprojectorpool::classifyTile). A static scene has none.
-    std::vector<StaticItem> static_items;
-    std::vector<DynamicItem> dynamic_items;
-    std::set<U32> own_faces;  // the layer faces that hold the own avatar: they run every frame, past the cap
-    std::set<U32> layer_only; // the dynamic items that are an avatar layer alone (the others redraw the whole tile)
+    // the work list: the verdict of every placed tile (llprojectorpool::classifyTile), appended to the frame's lists of both pools (the
+    // items keep pool kPoolProjectors). A static scene has none.
     mLightsWithoutTile = 0;
     mPendingTiles = 0;
     mAvatarTiles = 0;
@@ -1929,13 +1735,9 @@ void LLProjectorShadows::update(LLCamera& camera)
                 item.last_cpu_ms = rec.holdsAvatar ? rec.lastAvatarMs : 0.f; // a face that only restores L from S costs the floor
                 item.avatar_draws = rec.avatarCount;
                 item.layer = true;
-                item.own = holds_own;
-                if (holds_own)
-                {
-                    own_faces.insert(rec.key);
-                }
+                item.own = holds_own; // LLLocalShadows::updateFrame runs it every frame, past the cap
                 dynamic_items.push_back(item);
-                layer_only.insert(rec.key);
+                mLayerOnly.insert(rec.key);
             }
             else if (verdict.dynamic)
             {
@@ -1966,23 +1768,14 @@ void LLProjectorShadows::update(LLCamera& camera)
             }
         }
     }
-    // The budget: one CPU cap for the frame's tile work of every cache together (llprojectorpool::kFrameCapMs, split by
-    // selectFrame: the dynamic layer first, up to kDynamicCapMs, the static tiles in what is left). The measured cost of a tile only
-    // predicts how many fit; it does not set the budget. What an earlier cache spent in this frame is already off the cap.
-    const FrameLedger& ledger = frameLedger();
-    FramePicks picks;
-    {
-        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("projector select"); // <Vulkanstorm> hotfix
-        picks = selectFrame(static_items, dynamic_items, ledger.left(kFrameCapMs), kAvatarDrawsMax, ledger.untouched());
-    }
-    if (picks.fixed.empty() && picks.dynamic.empty())
+}
+
+void LLProjectorShadows::beginRenders()
+{
+    if (!active())
     {
         return;
     }
-
-    // one save and one restore of the GL state for the frame's tile renders (the last scope of the frame restores it)
-    LLLocalShadowGL::Scope gl_scope;
-
     // L is a lighting unit's texture until the next lookup binds it again: not while it is written (nor is the light-through layer)
     for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
     {
@@ -1993,47 +1786,33 @@ void LLProjectorShadows::update(LLCamera& camera)
         }
     }
     mThrough.unbindUnits();
+}
 
-    // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap and, for the dynamic list,
-    // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
-    // no dynamic pick): the selection kept it inside the cap, or it is the progress pick (mayRunPick)
-    bool only_own = true; // the dynamic picks that ran before a static pick, if all are the own avatar's: the progress head runs beside them
-    for (U32 pk : picks.dynamic)
+bool LLProjectorShadows::renderPick(U32 key, bool dynamic, F32& ms)
+{
+    ms = 0.f;
+    auto it = mRecords.find(key);
+    if (!active() || it == mRecords.end() || !it->second.placed)
     {
-        only_own = only_own && own_faces.count(unpackKey(pk)) > 0;
+        return false;
     }
-    const bool alone = ledger.untouched() && only_own;
-    const F32 dynamic_share = dynamicShareMs(!static_items.empty(), kFrameCapMs); // the whole cap when no static tile waits
-    auto run = [&](const std::vector<U32>& packed, bool dynamic) {
-        F32 own_ms = 0.f;
-        bool first_pick = true;
-        for (U32 pk : packed)
-        {
-            const U32 key = unpackKey(pk);
-            const bool own = dynamic && own_faces.count(key) > 0; // the own avatar's face: exempt from the caps, drawn every frame
-            if (!mayRunPick(ledger.left(kFrameCapMs), dynamic, first_pick, alone, own) || (!first_pick && dynamic && !own && own_ms >= dynamic_share))
-            {
-                break;
-            }
-            auto it = mRecords.find(key);
-            if (it != mRecords.end() && it->second.placed)
-            {
-                const F32 before = mLastFrameRenderMs;
-                if (layer_only.count(key))
-                {
-                    renderLayer(it->second);
-                }
-                else
-                {
-                    renderTile(it->second, it->second.verdictCause, dynamic);
-                }
-                own_ms += mLastFrameRenderMs - before;
-                first_pick = false;
-            }
-        }
-    };
-    run(picks.dynamic, true);
-    run(picks.fixed, false);
+    const F32 before = mLastFrameRenderMs;
+    if (mLayerOnly.count(key))
+    {
+        renderLayer(it->second);
+    }
+    else
+    {
+        renderTile(it->second, it->second.verdictCause, dynamic);
+    }
+    ms = mLastFrameRenderMs - before;
+    return true;
+}
+
+void LLProjectorShadows::endFrame()
+{
+    mCasters = nullptr; // no avatar pointer outlives the frame
+    mLayerOnly.clear();
 }
 
 void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
