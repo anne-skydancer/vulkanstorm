@@ -58,6 +58,7 @@ set(llrender_HEADER_FILES
     llrendernavprim.h
     llrendersphere.h
     llshadermgr.h
+    llshadersource.h
     lltexture.h
     lltexturemanagerbridge.h
     lluiimage.h

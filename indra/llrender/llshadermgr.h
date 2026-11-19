@@ -436,7 +436,7 @@ public:
 
     bool attachShaderFeatures(LLGLSLShader * shader);
     void dumpObjectLog(GLuint ret, bool warns = true, const std::string& filename = "");
-    void dumpShaderSource(U32 shader_code_count, GLchar** shader_code_text);
+    void dumpShaderSource(U32 shader_code_count, const GLchar* const* shader_code_text);
     bool    linkProgramObject(GLuint obj, bool suppress_errors = false);
     bool    validateProgramObject(GLuint obj);
     GLuint loadShaderFile(const std::string& filename, S32 & shader_level, GLenum type, std::map<std::string, std::string>* defines = NULL, S32 texture_index_channels = -1);
