@@ -678,7 +678,6 @@ bool LLVOAvatar::sShowAnimationDebug = false;
 bool LLVOAvatar::sVisibleInFirstPerson = false;
 F32 LLVOAvatar::sLODFactor = 1.f;
 F32 LLVOAvatar::sPhysicsLODFactor = 1.f;
-bool LLVOAvatar::sJointDebug            = false;
 F32 LLVOAvatar::sUnbakedTime = 0.f;
 F32 LLVOAvatar::sUnbakedUpdateTime = 0.f;
 F32 LLVOAvatar::sGreyTime = 0.f;
@@ -3526,14 +3525,6 @@ static void override_bbox(LLDrawable* drawable, LLVector4a* extents)
 void LLVOAvatar::idleUpdateMisc(bool detailed_update)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
-    if (LLVOAvatar::sJointDebug)
-    {
-        LL_INFOS() << getDebugName() << ": joint touches: " << LLJoint::sNumTouches << " updates: " << LLJoint::sNumUpdates << LL_ENDL;
-    }
-
-    LLJoint::sNumUpdates = 0;
-    LLJoint::sNumTouches = 0;
-
     bool visible = isVisible() || mNeedsAnimUpdate;
 
     // update attachments positions

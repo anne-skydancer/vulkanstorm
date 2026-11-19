@@ -672,7 +672,6 @@
 			<menu_item_check label="Animations-Info" name="Animation Info"/>
 			<menu_item_check label="Kamerafokus anzeigen" name="Show Look At"/>
 			<menu_item_check label="Klickpunkt anzeigen" name="Show Point At"/>
-			<menu_item_check label="Landaktualisierung debuggen" name="Debug Joint Updates"/>
 			<menu_item_check label="LOD deaktivieren" name="Disable LOD"/>
 			<menu_item_check label="Sichtbare Agenten debuggen" name="Debug Character Vis"/>
 			<menu_item_check label="Charakter-Rez-Status debuggen" name="Debug Character Rez State"/>

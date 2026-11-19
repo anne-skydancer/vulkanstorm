@@ -638,7 +638,6 @@
 			<menu_item_check label="動畫資訊" name="Animation Info" />
 			<menu_item_check label="顯示注視目標" name="Show Look At" />
 			<menu_item_check label="顯示目標選擇指示" name="Show Point At" />
-			<menu_item_check label="旋軸的更新除錯" name="Debug Joint Updates" />
 			<menu_item_check label="停用細節層次" name="Disable LOD" />
 			<menu_item_check label="角色可見性除錯" name="Debug Character Vis" />
 			<menu_item_check label="除錯角色復位狀態" name="Debug Character Rez State" />

@@ -149,8 +149,6 @@ public:
     joints_t mChildren;
 
     // debug statics
-    static S32      sNumTouches;
-    static S32      sNumUpdates;
     typedef std::set<std::string> debug_joint_name_t;
     static debug_joint_name_t s_debugJointNames;
     static void setDebugJointNames(const debug_joint_name_t& names);
