@@ -236,6 +236,17 @@ class GeneratorTest(unittest.TestCase):
                 (src / 'tint.slang').write_text(text.replace(line, rogue), encoding='utf-8')
                 self.assertTrue(any('SV_Position field' in e for e in check.check_position(src, self.out)), rogue)
 
+    def test_gate_catches_a_position_built_by_an_initialiser_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            shutil.copytree(FIXTURES, src)
+            text = (src / 'tint.slang').read_text(encoding='utf-8')
+            line = 'o.pos = vkPositionClip(modelview_projection_matrix, v.position);'
+            self.assertIn(line, text)
+            rogue = line + ' Varyings p = { vec4(0), o.color };'
+            (src / 'tint.slang').write_text(text.replace(line, rogue), encoding='utf-8')
+            self.assertTrue(any('initialiser list' in e for e in check.check_position(src, self.out)))
+
     def test_interface_check_finds_block_and_attribute_problems(self):
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / 'generated'
@@ -391,7 +402,7 @@ class CommittedTreeTest(unittest.TestCase):
     def test_every_program_id_the_loader_asks_for_is_in_the_manifest(self):
         source = (ROOT / 'indra/newview/llviewershadermgr.cpp').read_text(encoding='utf-8')
         known = {p['id'] for p in check.load_manifest(common.GENERATED)['programs']}
-        ids = set(re.findall(r'interfaceStages\(\s*\w+\s*,\s*"([\w]+)"', source))
+        ids = set(re.findall(r'generatedStages\(\s*\w+\s*,\s*"([\w]+)"', source))
         ids |= set(re.findall(r'make_rigged_variant\(\s*[\w*]+\s*,\s*[\w*]+\s*,\s*"(\w+)"\s*\)', source))
         ids |= set(re.findall(r'"(glowextract__HAS_NOISE\d)"', source))
         for base, skin in re.findall(r'emissiveId\(\s*"(\w+)"(?:\s*,\s*"(\w+)")?\s*\)', source):

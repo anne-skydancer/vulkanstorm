@@ -409,9 +409,9 @@ void LLGLSLShader::unloadInternal()
 
     if (mBlockBuffer) // <Vulkanstorm/> a generated program's uniform block
     {
-        if (sBlockBound[mBlockBinding & 15] == mBlockBuffer)
+        if (sBlockBound[mBlockBinding] == mBlockBuffer)
         {
-            sBlockBound[mBlockBinding & 15] = 0;
+            sBlockBound[mBlockBinding] = 0;
         }
         glDeleteBuffers(1, &mBlockBuffer);
         mBlockBuffer = 0;
@@ -1467,7 +1467,7 @@ bool LLGLSLShader::mapGeneratedUniforms()
                 return false;
             }
         }
-        if (binding < 0 || binding >= 16)
+        if (binding < (S32) NUM_UNIFORM_BLOCKS || binding >= 16) // never a viewer UBO's binding (a stale baked binding would read it)
         {
             LL_SHADER_LOADING_WARNS() << "Generated shader " << mName << ": uniform block binding " << binding << " out of range" << LL_ENDL;
             return false;

@@ -291,6 +291,11 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
                 if m.group(1) or m.group(2) != '=' or not whole_call.match(m.group(3)):
                     errors.append(f'{rel}: {field}{m.group(1)} {m.group(2)} {m.group(3).strip()[:40]}: the SV_Position field '
                                   f'must be assigned whole from a {prefix}*() call')
+        # a struct with an SV_Position field is never built whole (`S o = { ... }`, `S(...)`): the field would bypass the call check
+        for struct in re.findall(r'\bstruct\s+(\w+)\s*\{[^}]*:\s*SV_Position\b[^}]*\}', text):
+            if re.search(r'\b' + struct + r'\s*\(|\b' + struct + r'\s+\w+\s*=\s*\{', text):
+                errors.append(f'{rel}: {struct} has an SV_Position field and is built by a constructor or an initialiser list; '
+                              f'assign the field from a {prefix}*() call')
     for prog in vertex_programs:
         main = src_dir / prog['source']
         files = _closure(src_dir, main)

@@ -2,18 +2,24 @@
 <!-- Copyright (C) 2026, Anne Skydancer (Vulkanstorm) -->
 # Slang shaders
 
-The viewer's shaders move from hand-written GLSL to Slang in **one switchover** (owner decisions D1 to D5, 2026-11-18; the
+The viewer's shaders move from hand-written GLSL to Slang (owner decisions D1 to D5, 2026-11-18, D1 replaced by decision A on
+2026-11-19; the
 study is in `reports/slang-shaders-2026-11-18/`). Slang is a **build tool**: the GLSL it writes is committed and is what
 the OpenGL viewer compiles. No Slang compiler or library is in the viewer or the installers. The same sources later
 compile to SPIR-V for the Vulkan line.
 
-This page describes the groundwork (stage S1) and the pilot (S2, the interface family and the binding model).
+This page describes the groundwork (stage S1), the pilot (S2, the interface family and the binding model) and the quiet
+families converted with it (effects, post, G-buffer writers, skinning, the shared position module).
 
 ## Decisions in force
 
-- **D1** One switchover, no mixed tree in any line. All conversion work is on `codex/slang-switchover`; its PR against
-  `vkstorm-devel` stays a draft until the light and shadow rebuild settles. The branch is rebased on devel, never merged
-  with it.
+- **D1 (decision A, 2026-11-19)** The PR with the loader, the quiet families and the shared position module lands on
+  `vkstorm-devel` first. Each hot family (alpha and material blend, stochastic transparency and casters, `shadowUtil`,
+  `shadowStochasticUtil` and the depth programs, deferred lights and BRDF, softenLight, probes, SSR, sky, atmosphere, water)
+  then converts in its **own PR against devel**, once its light and shadow rebuild stage has settled. Devel carries a mixed
+  tree meanwhile. The switchover is complete when the last hot family lands: `invariant` goes on for every generated program,
+  the hand-written-GLSL loader path of converted programs (`VKS_SLANG_PILOT`) is removed, and the position baseline holds only
+  the permanent exemptions (see "End state"). A PR branch is rebased on devel, never merged with it.
 - **Pin** The latest stable Slang release (`scripts/shaders/slang_pin.json`: 2026.22), fetched with a checksum, bumped only
   on purpose, in a PR of its own. Each bump regenerates every program and re-runs the bench and the visual A/B.
 - **D3** The Slang output is taken **as it is**: no hand fix to match today's GLSL bit for bit. Tiny float differences and
@@ -85,9 +91,10 @@ and hand-written stages is refused. The format is `LLGeneratedShader::assemble` 
 
 A generated program is bound the way slangc writes it; nothing is restored to loose uniforms.
 
-- **Uniforms are one std140 block**, `block_GlobalParams_0`, shared by both stages and pinned at binding 4
-  (`slangc -fvk-bind-globals <n> 0`, n = the viewer's UBO count, 5 today), above the viewer's own UBO bindings 0 to 4 (`LLGLSLShader::UniformBlock`); `slang_check.py
-  interface` fails a block below that. After the link `LLGLSLShader::mapGeneratedUniforms()` reads the block's size and binding
+- **Uniforms are one std140 block**, `block_GlobalParams_0`, shared by both stages and pinned at binding 5
+  (`slangc -fvk-bind-globals <n> 0`, n = the viewer's UBO count, `LLGLSLShader::UniformBlock`), above the viewer's own UBO bindings; `slang_check.py
+  interface` fails a block below that, and the loader refuses a program whose block binding is below the viewer's UBO count
+  (a new viewer UBO needs the generated tree regenerated, which the `slang-shaders` CI job reports as drift). After the link `LLGLSLShader::mapGeneratedUniforms()` reads the block's size and binding
   from the driver and the members' byte offsets from the manifest, makes one `GL_DYNAMIC_DRAW` buffer per program and a CPU copy
   of it (`mBlockData`). `mUniform` and `mUniformMap` hold the **member's byte offset** where a loose program holds its location,
   so every existing `uniform*()` call keeps working: the setters end in `slUniform*()`, which calls `glUniform*` for a hand-written
@@ -105,13 +112,13 @@ A generated program is bound the way slangc writes it; nothing is restored to lo
   not declared, so the mask is the one `glGetAttribLocation` gave the hand-written program.
 - **Hooks.** A hook takes the program's define, else the viewer-wide `sGlobalDefines` value, else 0 (a debug log line names a
   hook with no value). The binary-cache key (`LLGLSLShader::hash()`) includes the text of each generated file.
-- **Windows and Linux output.** The generated tree was written on Windows; the CI drift check runs on Linux. Run the job
-  once before the tree grows; if the two differ, fix the generator, not the check.
+- **Windows and Linux output.** The generated tree was written on Windows; the CI drift check (`slang-shaders`) runs on Linux and
+  passes on the pilot head, so the two agree. If they ever differ, fix the generator, not the check.
 
-## The pilot (S2): the interface family
+## The pilot (S2): the interface family and the quiet families
 
-Programs are registered by `interfaceStages()` in `llviewershadermgr.cpp` (`VKS_SLANG_PILOT=0` selects the hand-written GLSL for the A/B; both
-the switch and the GLSL of the converted programs go when the pilot is accepted). Converted: ui, alphamask, benchmark, clip, copy
+Programs are registered by `generatedStages()` in `llviewershadermgr.cpp` (`VKS_SLANG_PILOT=0` selects the hand-written GLSL for the A/B; both
+the switch and the hand-written GLSL path of the converted programs go when the last hot family lands). Converted: ui, alphamask, benchmark, clip, copy
 (+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
 (+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
 Left hand-written for now: `normaldebug` (it has a geometry stage) and `pbrTerrainBake`. The programs with a skinned variant moved with the skinning module (below).
@@ -234,3 +241,41 @@ lines of their source. New files carry `SPDX-License-Identifier: GPL-3.0-or-late
 The hot families stay hand-written GLSL while their rebuild stages run: alpha and material blend, stochastic transparency and
 casters, `shadowUtil`, `shadowStochasticUtil` and the depth programs, deferred lights and BRDF, `softenLight`, probes, SSR,
 sky, atmosphere and water.
+
+## Mixed tree: rules until the last hot family lands
+
+- **A hotfix to a converted program is made in its `.slang` source** (and the generated GLSL regenerated). The hand-written GLSL
+  of a converted program stays only as the A/B oracle (`VKS_SLANG_PILOT=0`); an edit to it alone changes nothing in the running
+  viewer. The same holds for helpers duplicated into a Slang module (`gbuffer.slang`'s packing, `mirrorClip`, the skin): change
+  both sides, the token check in `test_gbuffer_module_packs_like_the_hand_written_shaders` guards the G-buffer flags only.
+- **Locations of generated programs are byte offsets.** `getUniformLocation` returns a block member's offset (0 is valid, a sampler
+  returns -1). No code may test a location for 0, or a sampler's presence, on a generated program. `pipeline.cpp`'s
+  `!shader.getUniformLocation(MODELVIEW_MATRIX)` in `bindDeferredShader` and the `DIFFUSE_MAP != -1` tests in `lldrawpoolavatar.cpp`
+  must be changed in the PR that converts those programs (the converted programs here are all hand-written at those sites).
+- **Draw and dispatch sites flush the block.** Every `glDraw*` goes through `LLVertexBuffer` or `LLImageGL`, which call
+  `LLGLSLShader::flushBlock()`; a compute dispatch calls it itself (`pipeline.cpp`, the stochastic shadow resolve).
+- **Gate for the first hot family:** the RX 9070 XT position A/B (`ab_harness.py skin` and the `programs` depth rows) and the
+  small-upload bench (about 3000 draws with a 128 byte dirty range) run on both GPUs before the first hot family converts.
+  The AMD decal fix (`VK_POSITION_INVARIANT`) is off until the last hot family lands.
+
+## End state: every remaining program has a place
+
+| Program | Family | Converts in |
+|---|---|---|
+| alpha, material blend (`alpha*`, `pbralpha*`, `materialV/F`), `avatarAlphaShadow`, `pbrShadowAlphaMask` | alpha / blend | the alpha family PR |
+| stochastic transparency and casters, shadow, shadowStochastic and depth programs (`avatarShadow`, tree shadows, `pbrShadow*`), `normgen` | stochastic / shadow | the shadow family PR |
+| deferred lights, BRDF (`genbrdflut`), `blurLight`, softenLight | lights | the lights PR |
+| `cloudsV`, `cloudsVolComposite`, `moonV`, sky and atmosphere helpers | sky / atmosphere | the sky PR |
+| `water*`, `underWater`, `srgbF` | water | the water PR |
+| probes, SSR | probes | the probes PR |
+| glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake`) | glTF | the glTF PR (needs lighting, shadows and probes) |
+| indexed-texture diffuse family (`diffuse*`, `diffuseNoColor`, `emissive`, `fullbright*`, `bump*` non-skin variants), `terrain`, `rlv` | world surfaces | the surface PR (texture-index lookup design first) |
+| forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
+| `normaldebug` (geometry stage) | debug | stays hand-written unless Slang geometry output is accepted |
+| SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
+
+At the end `scripts/shaders/glsl_position_baseline.txt` is exactly the permanent exemptions (the SMAA vertex stages, `errorV`
+and, if kept, `normaldebug`), and `slang_check.py position` fails any other hand-written GLSL that writes `gl_Position`. "Invariant on
+for every program" means every generated program (`VK_POSITION_INVARIANT 1`); an exempted program keeps its own declaration,
+and SMAA and FXAA are post-process passes with no depth contract. The hand-written loader path is removed for every program that
+has a generated twin; the exempted programs keep loading their GLSL.

@@ -43,7 +43,7 @@ CORE_IN_460 = {
 }
 SLANGC_FLAGS = ['-target', 'glsl', '-profile', 'glsl_460', '-no-mangle', '-line-directive-mode', 'none',
                 '-matrix-layout-row-major',
-                # the program's one global uniform block sits above the viewer's own UBO bindings (0 to 3)
+                # the program's one global uniform block sits above the viewer's own UBO bindings (see GLOBALS_BINDING)
                 '-fvk-bind-globals', str(common.GLOBALS_BINDING), '0']
 # A hook is written `((NAME))` in the generated text (slangc wraps an intrinsic in one pair of parentheses, the Slang
 # source supplies the other). A hook written without the double parentheses is only caught by the glslang link.
