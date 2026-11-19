@@ -11,10 +11,8 @@
 #include "openjpeg.h"
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <string>
-#include <vector>
 
 namespace
 {

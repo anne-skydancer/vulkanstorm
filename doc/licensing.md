@@ -48,8 +48,9 @@ off in our configuration: Kakadu, Havok, FMOD, BugSplat, Discord, Mesa/Zink,
 OpenAL, Tracy, Velopack). SoLoud and the Zink notices are staged by their
 options. `licenses.txt` (`licenses-win32.txt`, `licenses-linux.txt`) carries
 the notices that need a full text beside the binary, among them OpenJPEG
-(BSD-2-Clause, clause 2) and libjpeg-turbo with the IJG credit line; it holds
-no text of a component we do not ship. `scripts/tests/test_licence_notices.py`
+(BSD-2-Clause, clause 2) and libjpeg-turbo with the IJG credit line; the Windows
+and Linux `licenses.txt` hold no text of a component we do not ship (the macOS
+file is not built or tested). `scripts/tests/test_licence_notices.py`
 (run by `ci-checks`) guards both.
 
 ## Status key
