@@ -738,13 +738,20 @@ bool LLViewerOctreeGroup::isRecentlyVisible() const
 
 void LLViewerOctreeGroup::setVisible()
 {
-    mVisible[LLViewerCamera::sCurCameraID] = LLViewerOctreeEntryData::getCurrentFrame();
+    setVisibleFor(LLViewerCamera::sCurCameraID); // <Vulkanstorm/> multi-core 5c-1
+}
 
-    if(LLViewerCamera::sCurCameraID < LLViewerCamera::CAMERA_WATER0)
+// <Vulkanstorm> multi-core 5c-1: the body of setVisible(), for a given camera
+void LLViewerOctreeGroup::setVisibleFor(LLViewerCamera::eCameraID id)
+{
+    mVisible[id] = LLViewerOctreeEntryData::getCurrentFrame();
+
+    if(id < LLViewerCamera::CAMERA_WATER0)
     {
         mAnyVisible = LLViewerOctreeEntryData::getCurrentFrame();
     }
 }
+// </Vulkanstorm>
 
 void LLViewerOctreeGroup::checkStates()
 {

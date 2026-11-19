@@ -2824,10 +2824,9 @@ bool LLPipeline::isWaterClip()
     return (gPipeline.mHeroProbeManager.isMirrorPass()) ? false : (!sRenderTransparentWater || gCubeSnapshot) && !sRenderingHUDs;
 }
 
-void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments)
+// <Vulkanstorm> multi-core 5c-1: the start of updateCull, as a function of its own (see pipeline.h)
+void LLPipeline::updateCullBegin(LLCamera& camera, LLCullResult& result)
 {
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_CULL);
-    LL_PROFILE_GPU_ZONE("updateCull"); // should always be zero GPU time, but drop a timer to flush stuff out
     LL_FRAME_COUNT_ADD(CullPasses, 1); // <Vulkanstorm> multicore stage 1
 
     bool water_clip = isWaterClip();
@@ -2863,6 +2862,34 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
     grabReferences(result);
 
     sCull->clear();
+}
+
+// the rule of updateCull's partition loop: true when the pass culls partition `i` (`part`, not null) of a region
+bool LLPipeline::cullsPartition(U32 i, LLSpatialPartition* part, bool hud_attachments)
+{
+    // <Vulkanstorm> the local shadow tiles split the scene in two layers: the fixed layer (static) has no avatar
+    // partitions, the avatar layer (dynamic) has only them and the bridges (the attachments are filtered in markVisible)
+    if (sLocalShadowPass == LOCAL_SHADOW_STATIC &&
+        (i == LLViewerRegion::PARTITION_AVATAR || i == LLViewerRegion::PARTITION_CONTROL_AV))
+    {
+        return false;
+    }
+    if (sLocalShadowPass == LOCAL_SHADOW_DYNAMIC &&
+        i != LLViewerRegion::PARTITION_AVATAR && i != LLViewerRegion::PARTITION_CONTROL_AV && i != LLViewerRegion::PARTITION_BRIDGE)
+    {
+        return false;
+    }
+    // </Vulkanstorm>
+    return !hud_attachments ? LLViewerRegion::PARTITION_BRIDGE == i || hasRenderType(part->mDrawableType) : hasRenderType(part->mDrawableType);
+}
+// </Vulkanstorm>
+
+void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_CULL);
+    LL_PROFILE_GPU_ZONE("updateCull"); // should always be zero GPU time, but drop a timer to flush stuff out
+
+    updateCullBegin(camera, result); // <Vulkanstorm/> multi-core 5c-1: the pass count, the water clip plane, `result` current and cleared
 
     for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
             iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
@@ -2874,20 +2901,7 @@ void LLPipeline::updateCull(LLCamera& camera, LLCullResult& result, bool hud_att
             LLSpatialPartition* part = region->getSpatialPartition(i);
             if (part)
             {
-                // <Vulkanstorm> the local shadow tiles split the scene in two layers: the fixed layer (static) has no avatar
-                // partitions, the avatar layer (dynamic) has only them and the bridges (the attachments are filtered in markVisible)
-                if (sLocalShadowPass == LOCAL_SHADOW_STATIC &&
-                    (i == LLViewerRegion::PARTITION_AVATAR || i == LLViewerRegion::PARTITION_CONTROL_AV))
-                {
-                    continue;
-                }
-                if (sLocalShadowPass == LOCAL_SHADOW_DYNAMIC &&
-                    i != LLViewerRegion::PARTITION_AVATAR && i != LLViewerRegion::PARTITION_CONTROL_AV && i != LLViewerRegion::PARTITION_BRIDGE)
-                {
-                    continue;
-                }
-                // </Vulkanstorm>
-                if (!hud_attachments ? LLViewerRegion::PARTITION_BRIDGE == i || hasRenderType(part->mDrawableType) : hasRenderType(part->mDrawableType))
+                if (cullsPartition(i, part, hud_attachments)) // <Vulkanstorm/> multi-core 5c-1: the same rule as before, shared
                 {
                     part->cull(camera);
                 }
@@ -11774,7 +11788,7 @@ static LLTrace::BlockTimerStatHandle FTM_SHADOW_FULLBRIGHT_ALPHA_MASKED("Fullbri
 
 // The identical-image check (development only) wraps the shadow render here, not at the call sites: the Legacy cascade code
 // must stay textually identical to upstream. The target is the one the caller bound and cleared; the second render clears it again.
-void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp, bool culled_ahead)
 {
 #if VKS_GL_STATS
     LLRenderTarget* target = LLRenderTarget::getCurrentBoundTarget();
@@ -11796,12 +11810,12 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
         {
             target->clear();
         }
-        renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+        renderShadowImpl(view, proj, shadow_cam, result, depth_clamp, culled_ahead);
         VKS_GLCMP_END()
         return;
     }
 #endif
-    renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
+    renderShadowImpl(view, proj, shadow_cam, result, depth_clamp, culled_ahead);
 }
 
 // <Vulkanstorm> multi-core 5c-0 (D5): a shadow render is "cull and sort" followed by "submit" (shadowCullAndSort,
@@ -11828,9 +11842,29 @@ namespace
 
         const S32 mSavedOcclusion;
     };
+
+#if VKS_FRAMEJOBS_COMPARE
+    // development only: adds the time of its scope to a counter of the sun cascades' frame jobs (nothing for a null counter)
+    struct LLSunCascadeTimer
+    {
+        explicit LLSunCascadeTimer(F64* sum) : mSum(sum), mStart(sum ? LLTimer::getTotalSeconds().value() : 0.0) { }
+        ~LLSunCascadeTimer()
+        {
+            if (mSum)
+            {
+                *mSum += LLTimer::getTotalSeconds().value() - mStart;
+            }
+        }
+        LLSunCascadeTimer(const LLSunCascadeTimer&) = delete;
+        LLSunCascadeTimer& operator=(const LLSunCascadeTimer&) = delete;
+
+        F64* const mSum;
+        const F64  mStart;
+    };
+#endif
 }
 
-void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp, bool culled_ahead)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_SHADOW_RENDER);
     LL_PROFILE_GPU_ZONE("renderShadow");
@@ -11838,7 +11872,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
     // the second render of a compared pass reuses the cull and sort of the first: only the submission repeats
     if (!VKS_GLCMP_REPLAY())
     {
-        shadowCullAndSort(shadow_cam, result);
+        shadowCullAndSort(shadow_cam, result, culled_ahead);
     }
 
     shadowSubmit(view, proj, shadow_cam, result, depth_clamp);
@@ -11846,12 +11880,34 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
 
 // The pass's lists: what the shadow camera sees (updateCull), then the sort, which leaves them in `result` and in the
 // draw pools for shadowSubmit.
-void LLPipeline::shadowCullAndSort(LLCamera& shadow_cam, LLCullResult& result)
+// culled_ahead (multi-core 5c-1): `result` already holds this pass's cull, made by updateCullSunCascades; only the sort runs.
+void LLPipeline::shadowCullAndSort(LLCamera& shadow_cam, LLCullResult& result, bool culled_ahead)
 {
     LLShadowPassFlags flags;
 
     VKS_GLSTAT_PASS("shadow cull and sort");
-    updateCull(shadow_cam, result);
+    if (!culled_ahead)
+    {
+#if VKS_FRAMEJOBS_COMPARE
+        LLSunCascadeTimer timer(mSunCascadePass >= 0 && !gCubeSnapshot ? &mSunCascadeJobsStats.cull_s : nullptr);
+#endif
+        updateCull(shadow_cam, result);
+    }
+#if VKS_FRAMEJOBS_COMPARE
+    else if (mSunCascadeCompare != 0 && mSunCascadePass >= 0)
+    {
+        // Compare mode: the former cull at its former place, after the sort and the submission of the cascades before
+        // this one, into a result of its own. It leaves what the jobs left (the same stamps, the same clip plane on the
+        // camera) except the node counter, which is put back, and one more counted cull pass; the sort below makes
+        // `result` current again.
+        static LLCullResult serial;
+        const S32 nodes = mNumVisibleNodes;
+        updateCull(shadow_cam, serial);
+        const S32 serial_nodes = mNumVisibleNodes - nodes;
+        mNumVisibleNodes = nodes;
+        compareSunCascadeCull(result, serial, mSunCascadeCullNodes[mSunCascadePass], serial_nodes, mSunCascadePass);
+    }
+#endif
 
     stateSort(shadow_cam, result);
 
@@ -11864,6 +11920,113 @@ void LLPipeline::shadowCullAndSort(LLCamera& shadow_cam, LLCullResult& result)
         mPointShadows.skipEmitter();
     }
     // </Vulkanstorm>
+}
+
+// Multi-core 5c-1: the culls of the sun cascades in one batch of frame jobs (reports/multicore-5a-2026-11-18/report.md
+// section 2.2). It changes who computes a cascade's visibility and when in the sun pass, not what is visible:
+//   - one item per cascade and partition, in updateCull's loop order and by its rule (cullsPartition);
+//   - before the batch, on the main thread, what updateCull does before its loop for each cascade (updateCullBegin) and
+//     the rebound of every partition root, so the jobs only read the octree;
+//   - a job traverses its partition with the shadow culler and its cascade's camera, and writes only its own fragment
+//     and the groups' stamps of its cascade (LLSpatialPartition::cullShadowJob); no GL call, no LLPointer copy, no
+//     occlusion state read or written (occlusion culling is off in a shadow pass);
+//   - after the batch the fragments are appended in item order with the cull result's own push functions.
+// The culls now all run before the first cascade's sort and submission instead of each before its own. Those write the
+// stamps of their own camera, the draw maps, buffers and GL state; a cull reads the octree's bounds and element counts and
+// the partitions' render types. RenderSunCascadeJobsCompare checks it in a running viewer.
+bool LLPipeline::updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* results, const bool* cascade_off, S32 cascade_count)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    llassert(cascade_count >= 0 && cascade_count <= 4);
+
+    // updateCull ends with the sky's drawables, which take the pass's camera id. The sun pass draws no sky; should its
+    // mask ever hold one, the cascades are culled by updateCull as before.
+    if (hasRenderType(LLPipeline::RENDER_TYPE_SKY) || hasRenderType(LLPipeline::RENDER_TYPE_WL_SKY))
+    {
+        return false;
+    }
+
+#if VKS_FRAMEJOBS_COMPARE
+    LLSunCascadeTimer timer(!gCubeSnapshot ? &mSunCascadeJobsStats.cull_s : nullptr);
+#endif
+    LLShadowPassFlags flags;
+
+    // the work list
+    mSunCascadeCullItems.clear();
+    size_t first_item[5] = { 0, 0, 0, 0, 0 };
+    for (S32 j = 0; j < cascade_count; ++j)
+    {
+        first_item[j] = mSunCascadeCullItems.size();
+        mSunCascadeCullNodes[j] = 0;
+        if (cascade_off[j])
+        {
+            continue;
+        }
+
+        updateCullBegin(shadow_cams[j], results[j]);
+
+        for (LLWorld::region_list_t::const_iterator iter = LLWorld::getInstance()->getRegionList().begin();
+                iter != LLWorld::getInstance()->getRegionList().end(); ++iter)
+        {
+            LLViewerRegion* region = *iter;
+
+            for (U32 i = 0; i < LLViewerRegion::NUM_PARTITIONS; i++)
+            {
+                LLSpatialPartition* part = region->getSpatialPartition(i);
+                if (part && cullsPartition(i, part, false))
+                {
+                    part->cullShadowPrepare();
+                    mSunCascadeCullItems.push_back({ part, j });
+                }
+            }
+            // the VO cache tree is not an item: its cull returns at once for any camera but the world's
+        }
+    }
+    first_item[cascade_count] = mSunCascadeCullItems.size();
+
+    // the batch: one item a chunk. A probe's cascades (gCubeSnapshot, outside the frame-work window) are one chunk, which
+    // runs here on the main thread and wakes no helper.
+    const size_t count = mSunCascadeCullItems.size();
+    const SunCascadeCullItem* items = mSunCascadeCullItems.data();
+    LLCullJobs::runItems(count, gCubeSnapshot ? count : 1, mSunCascadeCullFragments,
+        [items, shadow_cams](size_t i, LLCullJobs::CullFragment<LLSpatialGroup>& fragment)
+        {
+            const SunCascadeCullItem& item = items[i];
+            item.mPartition->cullShadowJob(shadow_cams[item.mCascade],
+                (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SUN_SHADOW0 + item.mCascade), fragment);
+        });
+
+    // the merge, in item order
+    for (S32 j = 0; j < cascade_count; ++j)
+    {
+        S32 nodes = 0;
+        for (size_t i = first_item[j]; i < first_item[j + 1]; ++i)
+        {
+            nodes += LLCullJobs::mergeCull(mSunCascadeCullFragments[i], results[j]);
+        }
+        mSunCascadeCullNodes[j] = nodes;
+        mNumVisibleNodes += nodes;
+#if VKS_FRAMEJOBS_COMPARE
+        if (!gCubeSnapshot)
+        {
+            mSunCascadeJobsStats.cull_groups += results[j].getVisibleGroupsSize() + results[j].getDrawableGroupsSize();
+        }
+#endif
+    }
+
+#if VKS_FRAMEJOBS_COMPARE
+    if (!gCubeSnapshot)
+    {
+        ++mSunCascadeJobsStats.jobs_passes;
+        mSunCascadeJobsStats.cull_items += (U32)count;
+    }
+    if (mSunCascadeCompare == 2 && cascade_count > 1 && results[1].getVisibleGroupsSize() > 1)
+    {
+        // the deliberate fault: two groups of cascade 1 change places, which the compare mode must report
+        std::swap(results[1].beginVisibleGroups()[0], results[1].beginVisibleGroups()[1]);
+    }
+#endif
+    return true;
 }
 
 // The submission of the lists shadowCullAndSort left (`result`, which is the pipeline's current cull result, and the draw
@@ -12966,7 +13129,7 @@ void LLPipeline::reportSunCascadeJobs()
         window_start = 0.0;
         return;
     }
-    const F64 now = LLTimer::getTotalSeconds();
+    const F64 now = LLTimer::getTotalSeconds().value();
     if (window_start == 0.0)
     {
         // the first pass after the setting was switched on opens the window
@@ -13158,6 +13321,16 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
     }
 
+    // multi-core 5c-1: the culls of all the cascades as one batch of frame jobs, ahead of the first render. The debug
+    // setting RenderSunCascadeJobs switches it off: each cascade is then culled by updateCull inside its render, as before.
+    static LLCullResult result[4];
+    static LLCachedControl<bool> cascade_jobs(gSavedSettings, "RenderSunCascadeJobs", true);
+#if VKS_FRAMEJOBS_COMPARE
+    static LLCachedControl<S32> cascade_compare(gSavedSettings, "RenderSunCascadeJobsCompare", 0);
+    mSunCascadeCompare = cascade_compare;
+#endif
+    const bool culled_ahead = cascade_jobs && updateCullSunCascades(shadow_cams, result, cascade_off, cascade_count);
+
     bool origin_set = false; // the origin of the blended casters' blocks was set for a cascade (reset after the loop)
     for (S32 j = 0; j < cascade_count; j++)
     {
@@ -13225,8 +13398,9 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
             origin_set = true;
         }
         {
-            static LLCullResult result[4];
-            renderShadow(view[j], proj[j], shadow_cam, result[j], true);
+            mSunCascadePass = j;
+            renderShadow(view[j], proj[j], shadow_cam, result[j], true, culled_ahead);
+            mSunCascadePass = -1;
         }
         // </Vulkanstorm>
 

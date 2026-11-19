@@ -1167,6 +1167,53 @@ public:
     }
 };
 
+// <Vulkanstorm> multi-core 5c-1: the shadow culler of a frame job (LLSpatialPartition::cullShadowJob). The traversal and
+// the frustum tests are LLOctreeCullShadow's, so a group is found exactly when the serial cull finds it. What differs is
+// where the result goes: processGroup is LLPipeline::markNotCulled for a shadow camera with occlusion culling off, with
+// the camera id given instead of read from LLViewerCamera::sCurCameraID and the group recorded in the job's fragment
+// instead of pushed into the pipeline's cull result. For such a camera markNotCulled does nothing else: updateDistance
+// runs only for the world camera, and markOccluder returns at once unless sUseOcclusion > 1. No occlusion state is read
+// or written, and no GL call is made.
+class LLOctreeCullShadowJob : public LLOctreeCullShadow
+{
+public:
+    LLOctreeCullShadowJob(LLCamera* camera, LLViewerCamera::eCameraID id, LLCullJobs::CullFragment<LLSpatialGroup>& out)
+        : LLOctreeCullShadow(camera), mCameraID(id), mOut(out) { }
+
+    // LLOctreeCull::earlyFail with sUseOcclusion 0: checkOcclusion returns at once and no group fails early
+    bool earlyFail(LLViewerOctreeGroup* base_group) override
+    {
+        return false;
+    }
+
+    void processGroup(LLViewerOctreeGroup* base_group) override
+    {
+        LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE;
+        LLSpatialGroup* group = (LLSpatialGroup*)base_group;
+        if (group->isEmpty())
+        {
+            return;
+        }
+
+        group->setVisibleFor(mCameraID);
+
+        if (!group->getSpatialPartition()->mRenderByGroup)
+        { //render by drawable
+            mOut.mDrawableGroups.push_back(group);
+        }
+        else
+        {   //render by group
+            mOut.mVisibleGroups.push_back(group);
+        }
+        ++mOut.mNodes;
+    }
+
+private:
+    const LLViewerCamera::eCameraID mCameraID;
+    LLCullJobs::CullFragment<LLSpatialGroup>& mOut;
+};
+// </Vulkanstorm>
+
 class LLOctreeCullVisExtents: public LLOctreeCullShadow
 {
 public:
@@ -1466,6 +1513,25 @@ S32 LLSpatialPartition::cull(LLCamera &camera, std::vector<LLDrawable *>* result
 }
 
 extern bool gCubeSnapshot;
+
+// <Vulkanstorm> multi-core 5c-1: see llspatialpartition.h
+void LLSpatialPartition::cullShadowPrepare()
+{
+    LLSpatialGroup* group = (LLSpatialGroup*) mOctree->getListener(0);
+    group->rebound();
+}
+
+void LLSpatialPartition::cullShadowJob(LLCamera& camera, LLViewerCamera::eCameraID id, LLCullJobs::CullFragment<LLSpatialGroup>& out)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_SPATIAL;
+    // cull() rebounds the root here; cullShadowPrepare did it before the batch, and nothing dirties a group during it
+    llassert(!((LLSpatialGroup*) mOctree->getListener(0))->isDirty());
+    llassert(LLPipeline::sUseOcclusion == 0);
+
+    LLOctreeCullShadowJob culler(&camera, id, out);
+    culler.traverse(mOctree);
+}
+// </Vulkanstorm>
 
 S32 LLSpatialPartition::cull(LLCamera &camera, bool do_occlusion)
 {

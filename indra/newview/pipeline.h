@@ -273,6 +273,16 @@ public:
 
     // Populate given LLCullResult with results of a frustum cull of the entire scene against the given LLCamera
     void updateCull(LLCamera& camera, LLCullResult& result, bool hud_attachments = false);
+    // <Vulkanstorm> multi-core 5c-1: two parts of updateCull, shared with updateCullSunCascades. updateCullBegin is what
+    // comes before the partitions (the pass count, the water clip plane on `camera`, `result` made current and cleared);
+    // cullsPartition is the rule for which of a region's partitions the pass culls.
+    void updateCullBegin(LLCamera& camera, LLCullResult& result);
+    bool cullsPartition(U32 i, LLSpatialPartition* part, bool hud_attachments);
+    // updateCull for the sun cascades that are not off, all at once: one cull job per cascade and partition on the frame
+    // job helpers, merged into each cascade's result in updateCull's order, so every list equals updateCull's. Main
+    // thread. Returns false, with nothing done, when the pass must be culled by updateCull instead.
+    bool updateCullSunCascades(LLCamera* shadow_cams, LLCullResult* results, const bool* cascade_off, S32 cascade_count);
+    // </Vulkanstorm>
     void createObjects(F32 max_dtime);
     void createObject(LLViewerObject* vobj);
     void processPartitionQ();
@@ -385,10 +395,11 @@ public:
 
     void renderHighlight(const LLViewerObject* obj, F32 fade);
 
-    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
-    void renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    // <Vulkanstorm/> multi-core 5c-1: culled_ahead = `result` already holds the pass's cull (updateCullSunCascades), so only the sort runs
+    void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp, bool culled_ahead = false);
+    void renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp, bool culled_ahead);
     // <Vulkanstorm> multi-core 5c-0 (D5): the two halves of a shadow render; only renderShadowImpl calls them
-    void shadowCullAndSort(LLCamera& camera, LLCullResult& result);
+    void shadowCullAndSort(LLCamera& camera, LLCullResult& result, bool culled_ahead);
     void shadowSubmit(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
     // </Vulkanstorm>
 #if VKS_FRAMEJOBS_COMPARE
@@ -780,6 +791,20 @@ public:
     S32                      mMatrixOpCount;
     S32                      mTextureMatrixOps;
     S32                      mNumVisibleNodes;
+
+    // <Vulkanstorm> multi-core 5c: the sun cascades' frame jobs (generateSunCascadesStable). The lists keep their capacity
+    // from frame to frame and are freed with the pipeline; they hold raw pointers for the length of one sun pass only.
+    struct SunCascadeCullItem
+    {
+        LLSpatialPartition* mPartition;
+        S32                 mCascade;
+    };
+    std::vector<SunCascadeCullItem>                       mSunCascadeCullItems;     // one per cascade and partition, in updateCull's order
+    std::vector<LLCullJobs::CullFragment<LLSpatialGroup>> mSunCascadeCullFragments; // one per item
+    S32                      mSunCascadeCullNodes[4] = { 0, 0, 0, 0 };              // nodes the jobs counted, per cascade
+    S32                      mSunCascadePass = -1;    // the cascade generateSunCascadesStable is rendering, -1 outside
+    S32                      mSunCascadeCompare = 0;  // RenderSunCascadeJobsCompare for this sun pass (0 without the compare mode)
+    // </Vulkanstorm>
 
     S32                      mDebugTextureUploadCost;
     S32                      mDebugSculptUploadCost;

@@ -39,6 +39,8 @@
 #include "lloctree.h"
 #include "llviewercamera.h"
 
+#include <atomic> // <Vulkanstorm/> LLRelaxedS32
+
 class LLViewerRegion;
 class LLViewerOctreeEntryData;
 class LLViewerOctreeGroup;
@@ -177,6 +179,26 @@ protected:
 
 
 //defines an octree group for an octree node, which contains multiple entries.
+// <Vulkanstorm> multi-core 5c-1: an S32 that several frame jobs may store the same value into at the same time (the cull
+// jobs of the sun cascades stamp a group they all see with the frame number). The order is relaxed, so a load or a store
+// is the plain instruction on x86; the value still copies like an S32.
+class LLRelaxedS32
+{
+public:
+    LLRelaxedS32(S32 value = 0) : mValue(value) { }
+    LLRelaxedS32(const LLRelaxedS32& rhs) : mValue(rhs.get()) { }
+    LLRelaxedS32& operator=(const LLRelaxedS32& rhs) { set(rhs.get()); return *this; }
+    LLRelaxedS32& operator=(S32 value) { set(value); return *this; }
+    operator S32() const { return get(); }
+
+private:
+    S32  get() const { return mValue.load(std::memory_order_relaxed); }
+    void set(S32 value) { mValue.store(value, std::memory_order_relaxed); }
+
+    std::atomic<S32> mValue;
+};
+// </Vulkanstorm>
+
 //LL_ALIGN_PREFIX(16)
 class LLViewerOctreeGroup
 :   public OctreeListener
@@ -216,6 +238,11 @@ public:
     bool isDead()                           { return hasState(DEAD); }
 
     void setVisible();
+    // <Vulkanstorm> multi-core 5c-1: setVisible() for the camera `id` instead of LLViewerCamera::sCurCameraID. A cull job
+    // of a sun cascade calls it with its cascade's id: one job per group and cascade writes mVisible[id], and several may
+    // store the same frame number into mAnyVisible.
+    void setVisibleFor(LLViewerCamera::eCameraID id);
+    // </Vulkanstorm>
     bool isVisible() const;
     virtual bool isRecentlyVisible() const;
     S32  getVisible(LLViewerCamera::eCameraID id) const {return mVisible[id];}
@@ -264,7 +291,7 @@ protected:
     LL_ALIGN_16(LLVector4a mExtents[2]);       // extents (min, max) of this node and all its children
     LL_ALIGN_16(LLVector4a mObjectExtents[2]); // extents (min, max) of objects in this node
 
-    S32         mAnyVisible; //latest visible to any camera
+    LLRelaxedS32 mAnyVisible; //latest visible to any camera <Vulkanstorm/> multi-core 5c-1: was S32
     S32         mVisible[LLViewerCamera::NUM_CAMERAS];
 
 };//LL_ALIGN_POSTFIX(16);
