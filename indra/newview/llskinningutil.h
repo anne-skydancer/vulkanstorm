@@ -36,6 +36,8 @@ class LLVOAvatar;
 class LLMeshSkinInfo;
 class LLVolumeFace;
 class LLJointRiggingInfoTab;
+class LLJointNumTable;
+class LLJointNumTablePublisher;
 
 namespace LLSkinningUtil
 {
@@ -68,6 +70,12 @@ namespace LLSkinningUtil
 
     void initJointNums(LLMeshSkinInfo* skin, LLVOAvatar *avatar);
     void updateRiggingInfo(const LLMeshSkinInfo* skin, LLVOAvatar *avatar, LLVolumeFace& vol_face);
+    // <Vulkanstorm> thread-safe pieces for the mesh repository threads (see lljointnumtable.h)
+    LLJointNumTablePublisher& jointNumTables();
+    bool initJointNumsFromTable(LLMeshSkinInfo* skin, const LLJointNumTable& table);
+    // joint numbers must be initialised (a skin that is not, is skipped)
+    void updateRiggingInfo(const LLMeshSkinInfo* skin, LLVolumeFace& vol_face);
+    // </Vulkanstorm>
     LLQuaternion getUnscaledQuaternion(const LLMatrix4& mat4);
 };
 
