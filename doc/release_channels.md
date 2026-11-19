@@ -43,10 +43,11 @@ The `PR readiness` workflow (`pr-readiness.yaml`, `scripts/ci_pr_readiness.py`)
 sets a commit status named **PR readiness** on every open pull request's head
 and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
 place, never a new comment per run). It reruns on the events that can change
-the answer: PR open, push, reopen, ready for review and base change; reviews,
-review comments and thread resolve or unresolve; the end of a Build Windows,
+the answer: PR open, push, reopen, ready for review and base change; reviews
+and review comments; the end of a Build Windows,
 Build Linux or Build Linux LTS run; and a push to a `vkstorm-*` line, which can
-make an open PR conflict.
+make an open PR conflict. GitHub has no workflow event for resolving a
+thread, so a resolve shows at the next of these events.
 
 - `success`: ready. The builds `windows`, `linux` and `linux-lts` are green and
   no review thread is open. A PR that changes only CI files and documentation
