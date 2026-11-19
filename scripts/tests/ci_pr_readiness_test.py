@@ -208,6 +208,16 @@ class Plumbing(unittest.TestCase):
         ev = {"workflow_run": {"pull_requests": [], "head_sha": "abc"}}
         self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [3])
 
+    def test_fork_review_event_run_maps_by_head_sha_to_open_prs_only(self):
+        # A review on a fork PR: the unprivileged "PR review event" run has no PR list.
+        gh = FakeGithub({"/repos/o/r/pulls?state=open": [
+            {"number": 3, "head": {"sha": "f" * 40}}, {"number": 4, "head": {"sha": "e" * 40}}]})
+        ev = {"workflow_run": {"name": "PR review event", "event": "pull_request_review",
+                               "pull_requests": [], "head_sha": "f" * 40}}
+        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [3])
+        ev["workflow_run"]["head_sha"] = "d" * 40  # a closed or unknown PR maps to nothing
+        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [])
+
     def test_push_lists_the_prs_on_that_base(self):
         gh = FakeGithub({"/repos/o/r/pulls?state=open&base=vkstorm-devel": [{"number": 5, "head": {"sha": "x"}}]})
         self.assertEqual(pr_readiness.affected_prs(gh, "push", {"ref": "refs/heads/vkstorm-devel"}), [5])
