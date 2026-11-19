@@ -5317,7 +5317,11 @@ U32 LLAppViewer::getTextureCacheVersion()
     // 2021-03-10 Bumping up by one to help obviate texture cache issues with
     //            Simple Cache Viewer - see SL-14985 for more information
     //const U32 TEXTURE_CACHE_VERSION = 8;
-    const U32 TEXTURE_CACHE_VERSION = 9;
+    // <Vulkanstorm> 2026-11-19: 10, once. The cache keeps the 16x16 preview that the first decode of each texture
+    //            produced, and the OpenJPEG package 2.5.4.44499299587 decodes cut downloads differently, so entries
+    //            from the old decoder are dropped. The whole texture cache (J2C data and previews) is purged once
+    //            at the next start.
+    const U32 TEXTURE_CACHE_VERSION = 10;
 
     return TEXTURE_CACHE_VERSION ;
 }
