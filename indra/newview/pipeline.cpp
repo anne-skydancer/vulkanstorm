@@ -10541,7 +10541,9 @@ void LLPipeline::renderDeferredLighting()
 
     mCloudShadowMap.update(); // <Vulkanstorm/> stage L2: once a frame, 0 with no clouds
     // <Vulkanstorm/> stage AT2-1: the atmosphere's tables exist before any view draws (the first view of a session may be a mirror or a
-    // hero probe ahead of the main frame's update; the photo paths render through here too). Built once; afterwards a few compares.
+    // hero probe ahead of the main frame's update; the photo paths render through here too). Built once; afterwards a few compares. The
+    // filter's need the sky's main-view uniforms: only a reflection probe's irradiance pass before the session's first main frame cannot
+    // build them (LLAtmosphereLUTs::ensureTables; isBuilt() says so).
     ensureAtmosphereTables();
 
     F32 light_scale = 1.f;

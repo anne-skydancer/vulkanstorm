@@ -607,12 +607,6 @@ void LLViewerShaderMgr::finalizeShaderList()
     mShaderList.push_back(&gDeferredWLSkyProgram);
     mShaderList.push_back(&gDeferredWLCloudProgram);
     mShaderList.push_back(&gCloudShadowMapProgram); // <Vulkanstorm/> L2: gets the sky uniforms like the clouds
-    // <Vulkanstorm> AT2-1: the EEP filter's passes get the sky uniforms the dome gets (skyV.glsl's, the lighting pass's decode)
-    for (LLGLSLShader& program : gSkyFilterProgram)
-    {
-        mShaderList.push_back(&program);
-    }
-    // </Vulkanstorm>
     mShaderList.push_back(&gDeferredWLMoonProgram);
     mShaderList.push_back(&gDeferredWLSunProgram);
     mShaderList.push_back(&gDeferredPBRAlphaProgram);
@@ -2895,11 +2889,20 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     }
 
     // <Vulkanstorm> stage AT2-1: the physical atmosphere's table passes and the EEP filter's (llatmosphereluts.cpp). Each is one fragment
-    // pass over a full-screen triangle; the pass is a permutation of one file. The table passes read the `Atmosphere` uniform block
-    // (atmosphereCommonF.glsl, linked as its own unit); the filter's passes are in the sky's group, so they get the dome's uniforms.
-    // Nothing draws with the tables yet: a pass that fails to load only leaves them unbuilt (logged), and the viewer runs as before.
+    // pass over a full-screen triangle; the pass is a permutation of one file, and the tables' sizes are defines from LLAtmosphereLUTs (the
+    // targets are allocated with the same constants). The table passes read the `Atmosphere` uniform block (atmosphereCommonF.glsl, linked
+    // as its own unit); the filter's passes get the dome's uniforms from LLAtmosphereLUTs (the values its key is formed from), not from a
+    // shader group. Nothing draws with the tables yet: a pass that fails to load only leaves them unbuilt (logged), and the viewer runs as
+    // before.
     if (success)
     {
+        using LUTs = LLAtmosphereLUTs;
+        const std::map<std::string, std::string> table_sizes = {
+            { "AT_T_W", std::to_string(LUTs::TRANS_W) }, { "AT_T_H", std::to_string(LUTs::TRANS_H) },
+            { "AT_MS_W", std::to_string(LUTs::MS_W) }, { "AT_MS_H", std::to_string(LUTs::MS_H) },
+            { "AT_E_W", std::to_string(LUTs::E_W) }, { "AT_E_H", std::to_string(LUTs::E_H) },
+            { "AT_DIRS", std::to_string(LUTs::DIRS) },
+            { "AT_SKY_W", std::to_string(LUTs::SKY_W) }, { "AT_SKY_H", std::to_string(LUTs::SKY_H) } };
         static const char* table_names[ATMOSPHERE_TABLE_PASSES] = { "Atmosphere Transmittance Table", "Atmosphere Multiple Scattering Split",
             "Atmosphere Multiple Scattering Table", "Atmosphere Sky Irradiance Split", "Atmosphere Sky Irradiance Table", "Atmosphere Sky View" };
         for (int i = 0; i < ATMOSPHERE_TABLE_PASSES; ++i)
@@ -2909,6 +2912,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             program.mShaderFiles.clear();
             program.clearPermutations();
             program.addPermutation("AT_PASS", std::to_string(i + 1));
+            program.addPermutations(table_sizes);
             program.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
             program.mShaderFiles.push_back(make_pair("windlight/atmosphereCommonF.glsl", GL_FRAGMENT_SHADER));
             program.mShaderFiles.push_back(make_pair("windlight/atmosphereTablesF.glsl", GL_FRAGMENT_SHADER));
@@ -2926,11 +2930,12 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             program.mShaderFiles.clear();
             program.clearPermutations();
             program.addPermutation("SF_PASS", std::to_string(i + 1));
+            program.addPermutation("SF_SKY_W", std::to_string(LUTs::SKY_W));
+            program.addPermutation("SF_SKY_H", std::to_string(LUTs::SKY_H));
             program.mFeatures.hasSrgb = true;
             program.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
             program.mShaderFiles.push_back(make_pair("windlight/skyFilterF.glsl", GL_FRAGMENT_SHADER));
             program.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-            program.mShaderGroup = LLGLSLShader::SG_SKY;
             if (!program.createShader())
             {
                 LL_WARNS("ShaderLoading") << program.mName << " failed to load: the sky filter's tables are not built" << LL_ENDL;

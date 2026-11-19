@@ -4,13 +4,16 @@
 // Standalone checks of the EEP filter's C++ twin, llskyfilter.h (stage AT2-1; no viewer libraries):
 //   g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llskyfilter_test.cpp
 //
-//   - the factored form is skyV.glsl's colour: A + B haze_glow equals the direct evaluation for every glow (1e-12 relative);
+//   - the factored form is skyV.glsl's colour: A + B haze_glow equals the direct evaluation for every glow (1e-12 relative), and A and
+//     B depend on the direction through its elevation only (the tables are one column, a row per elevation);
 //   - the GPU vectors (llskyfilter_vectors.inc, scripts/light/gen_sky_filter_vectors.py): skyV.glsl itself (today's dome colour, its own
-//     glow) and skyFilterF.glsl's A and B tables are the twin's to 1e-4 relative, its cast-light level to 1e-3; the .inc holds the
-//     SHA-256 of skyV.glsl, skyFilterF.glsl and srgbF.glsl and the test checks them;
+//     glow) and skyFilterF.glsl's A and B rows are the twin's to 1e-4 relative, its cast-light level to 1e-3, with a physical sky and
+//     with a black one (a night with the moon down: k undefined); the .inc holds the SHA-256 of skyV.glsl, skyFilterF.glsl and srgbF.glsl
+//     and the test checks them;
 //   - the sky-view grid: texel to direction and back; the cast-light weights integrate cos(zenith) over the hemisphere to pi;
-//   - a filter that is the physical sky has k = 1; a black sky has no k;
-//   - the change key moves with any input and holds still under 1e-3 of it.
+//   - a filter that is the physical sky has k = 1; a black filtered sky, or a black physical one, has no k;
+//   - the change keys: A and B's (table_key) moves with any change of what they read and with nothing else; k's (inputs_key) moves with any
+//     input and holds still under 1e-3 of it, and through a sunrise k moves by under 1 % between equal keys.
 
 #include "llskyfilter.h"
 
@@ -68,7 +71,7 @@ const double kHaze[][7] = {
 #undef SF_SHA
 };
 
-const double kAB[][9] = {
+const double kAB[][8] = {
 #define SF_SKY(...)
 #define SF_HAZE(...)
 #define SF_AB(...) { __VA_ARGS__ },
@@ -82,7 +85,7 @@ const double kAB[][9] = {
 #undef SF_SHA
 };
 
-const double kK[][5] = {
+const double kK[][6] = {
 #define SF_SKY(...)
 #define SF_HAZE(...)
 #define SF_AB(...)
@@ -324,7 +327,7 @@ int main()
         check(n >= 8 * nsky, "every sky has its skyV vectors", n);
     }
 
-    // 4. skyFilterF.glsl's A and B texels are the twin's
+    // 4. skyFilterF.glsl's A and B rows are the twin's
     {
         double worst = 0.0;
         int n = 0;
@@ -332,40 +335,49 @@ int main()
         {
             const Inputs in = inputs_of(kSky[static_cast<int>(v[0])]);
             Vec3 A, B;
-            haze_ab(in, sky_view_dir(static_cast<int>(v[1]), static_cast<int>(v[2])), A, B);
+            haze_ab(in, row_dir(static_cast<int>(v[1])), A, B);
             const double c[6] = { A.x, A.y, A.z, B.x, B.y, B.z };
             for (int k = 0; k < 6; ++k)
             {
-                worst = std::max(worst, std::fabs(c[k] - v[3 + k]) / (std::fabs(v[3 + k]) + 1e-2));
-                if (!near(c[k], v[3 + k], 1e-4, 1e-6))
+                worst = std::max(worst, std::fabs(c[k] - v[2 + k]) / (std::fabs(v[2 + k]) + 1e-2));
+                if (!near(c[k], v[2 + k], 1e-4, 1e-6))
                 {
-                    std::printf("  A/B texel (%d, %d) of sky %d, value %d: C++ %.9g GLSL %.9g\n", static_cast<int>(v[1]), static_cast<int>(v[2]), static_cast<int>(v[0]), k, c[k], v[3 + k]);
+                    std::printf("  A/B row %d of sky %d, value %d: C++ %.9g GLSL %.9g\n", static_cast<int>(v[1]), static_cast<int>(v[0]), k, c[k], v[2 + k]);
                     check(false, "skyFilterF.glsl's A and B are the twin's");
                 }
             }
             ++n;
         }
-        std::printf("skyFilterF.glsl A and B: %d texels, worst %.2g relative\n", n, worst);
+        std::printf("skyFilterF.glsl A and B: %d rows, worst %.2g relative\n", n, worst);
         check(n >= 8 * nsky, "every sky has its A/B vectors", n);
     }
 
-    // 5. the cast-light level on the GPU (passes 2 and 3 on the synthetic physical sky) is the twin's
+    // 5. the cast-light level on the GPU (passes 2 and 3; the physical sky the synthetic one, or black: a night with the moon down) is
+    //    the twin's
     {
         double worst = 0.0;
+        int black = 0;
         for (const auto& v : kK)
         {
             const Inputs in = inputs_of(kSky[static_cast<int>(v[0])]);
-            const CastLight c = cast_light_level(in, sf_p);
-            check(c.defined == (v[4] > 0.5), "the cast-light level is defined where the GPU's is", c.defined, v[4]);
-            check(near(c.irr_p, v[1], 1e-4, 1e-7), "the physical sky's irradiance is the GPU's", c.irr_p, v[1]);
-            check(near(c.irr_w, v[2], 1e-3, 1e-7), "the filtered sky's irradiance is the GPU's", c.irr_w, v[2]);
+            const bool dark = v[1] > 0.5;
+            const CastLight c = dark ? cast_light_level(in, [](int, int) { return Vec3{}; }) : cast_light_level(in, sf_p);
+            check(c.defined == (v[5] > 0.5), "the cast-light level is defined where the GPU's is", c.defined, v[5]);
+            check(near(c.irr_p, v[2], 1e-4, 1e-7), "the physical sky's irradiance is the GPU's", c.irr_p, v[2]);
+            check(near(c.irr_w, v[3], 1e-3, 1e-7), "the filtered sky's irradiance is the GPU's", c.irr_w, v[3]);
+            if (dark)
+            {
+                check(!c.defined, "a black physical sky (the moon down) has no cast-light level", c.irr_w);
+                ++black;
+            }
             if (c.defined)
             {
-                worst = std::max(worst, std::fabs(c.k - v[3]) / v[3]);
-                check(near(c.k, v[3], 1e-3, 1e-9), "the cast-light level k is the GPU's", c.k, v[3]);
+                worst = std::max(worst, std::fabs(c.k - v[4]) / v[4]);
+                check(near(c.k, v[4], 1e-3, 1e-9), "the cast-light level k is the GPU's", c.k, v[4]);
             }
         }
-        std::printf("cast-light level: %d skies, worst k %.2g relative\n", static_cast<int>(sizeof(kK) / sizeof(kK[0])), worst);
+        std::printf("cast-light level: %d cases (%d with a black physical sky), worst k %.2g relative\n", static_cast<int>(sizeof(kK) / sizeof(kK[0])), black, worst);
+        check(black >= nsky, "every sky has a black-physical-sky case", black);
     }
 
     // 6. the grid: texel to direction and back; the weights integrate cos(zenith) over the hemisphere to pi
@@ -394,7 +406,8 @@ int main()
         check(std::fabs(latitude(TABLE_H / 2)) < 0.01 * PI / 180.0 && std::fabs(latitude(TABLE_H - 1) - 0.5 * PI) < 1e-12, "the rows reach the horizon and the zenith");
     }
 
-    // 7. a filter that is the physical sky has k = 1; a black filtered sky has no k
+    // 7. a filter that is the physical sky has k = 1; a black filtered sky has no k, nor a physical sky under a millionth of it; A and B
+    //    depend on the direction through its elevation only (the tables' rows)
     {
         const Inputs in = inputs_of(kSky[0]);
         const CastLight self = cast_light_level(in, [&](int i, int j) {
@@ -408,6 +421,33 @@ int main()
         black.max_y = 0.0;
         const CastLight none = cast_light_level(black, sf_p);
         check(!none.defined && none.k == 0.0, "a black filtered sky has no cast-light level", none.irr_w);
+        const CastLight lit = cast_light_level(in, sf_p);
+        const double scale = 0.5 * K_MIN * lit.irr_w / lit.irr_p;
+        const CastLight faint = cast_light_level(in, [&](int i, int j) { return sf_p(i, j) * scale; });
+        check(!faint.defined && faint.irr_p > 0.0, "a physical sky under K_MIN of the filtered one has no cast-light level", faint.irr_p);
+        check(!cast_light_defined(NAN, 1.0) && !cast_light_defined(1.0, NAN) && cast_light_defined(1.0, 1.0), "not a number is not defined");
+        double worst = 0.0;
+        for (int s = 0; s < nsky; ++s)
+        {
+            const Inputs si = inputs_of(kSky[s]);
+            for (int j = 0; j < TABLE_H; ++j)
+            {
+                Vec3 Ar, Br;
+                haze_ab(si, row_dir(j), Ar, Br);
+                for (int i = 0; i < TABLE_W; i += 5)
+                {
+                    Vec3 A, B;
+                    haze_ab(si, sky_view_dir(i, j), A, B);
+                    const double a[6] = { A.x, A.y, A.z, B.x, B.y, B.z }, r[6] = { Ar.x, Ar.y, Ar.z, Br.x, Br.y, Br.z };
+                    for (int k = 0; k < 6; ++k)
+                    {
+                        worst = std::max(worst, std::fabs(a[k] - r[k]) / std::max(std::fabs(r[k]), 1e-12));
+                    }
+                }
+            }
+        }
+        std::printf("A and B along any azimuth against the row's: worst %.2g relative\n", worst);
+        check(worst < 1e-12, "A and B depend on the elevation only", worst);
     }
 
     // 8. the change key: a change of 1 % moves it, a change of 1e-5 does not
@@ -435,6 +475,93 @@ int main()
         check(moved > 0 && moved < 200, "the key holds still under 1e-3 of an input and moves beyond it", moved);
         check(quantise(NAN, 1e-3) != quantise(0.0, 1e-3) && quantise(INFINITY, 1e-3) != quantise(-INFINITY, 1e-3) && quantise(INFINITY, 1e-3) != quantise(1.0, 1e-3),
               "non-finite inputs have keys of their own");
+        // only the light's y is read (by A and B); its x and z move neither key
+        Inputs f = in;
+        f.lightnorm.y += 2e-3;
+        Inputs g = in;
+        g.lightnorm.x += 0.05;
+        g.lightnorm.z -= 0.05;
+        check(inputs_key(f) != k0 && inputs_key(g) == k0 && table_key(f) != table_key(in) && table_key(g) == table_key(in),
+              "the keys follow the light's y only");
+    }
+
+    // 9. S1: the sky's own tables follow their inputs exactly. A nudge of a part in 1e7 of any input A and B read moves table_key, and
+    //    nothing they do not read moves it (the glow, the sun's glow direction, the lighting pass's decode, the light's x and z): equal
+    //    table keys are the same A and B, so the tables never lag the sky (a quantised light of 1e-4 lagged a thin, bright sky by 11
+    //    display steps at sunset), at the price of one 1 x 108 pass whenever the sky moves.
+    {
+        const Inputs in = inputs_of(kSky[3]);
+        const uint64_t t0 = table_key(in);
+        auto bump = [](double& x) { x += 1e-7 * std::max(std::fabs(x), 1.0); };
+        void (*const edits[])(Inputs&) = {
+            [](Inputs& e) { e.lightnorm.y += 1e-7; },
+            [](Inputs& e) { e.sunlight_color.x += 1e-7; },
+            [](Inputs& e) { e.moonlight_color.y += 1e-7; },
+            [](Inputs& e) { e.ambient_color.z += 1e-7; },
+            [](Inputs& e) { e.blue_horizon.x += 1e-7; },
+            [](Inputs& e) { e.blue_density.y += 1e-7; },
+            [](Inputs& e) { e.haze_horizon += 1e-7; },
+            [](Inputs& e) { e.haze_density += 1e-7; },
+            [](Inputs& e) { e.cloud_shadow += 1e-7; },
+            [](Inputs& e) { e.density_multiplier *= 1.0 + 1e-7; },
+            [](Inputs& e) { e.max_y += 1e-4; },
+            [](Inputs& e) { e.sun_moon_blend += 1e-7; },
+        };
+        int moved = 0;
+        for (auto edit : edits)
+        {
+            Inputs e = in;
+            edit(e);
+            moved += table_key(e) != t0;
+        }
+        check(moved == static_cast<int>(sizeof(edits) / sizeof(edits[0])), "any change of what A and B read moves their key", moved);
+        Inputs o = in;
+        bump(o.glow.x);
+        bump(o.glow.z);
+        o.sun_glow_norm.x += 0.1;
+        o.sky_hdr_scale *= 2.0;
+        o.classic_mode = 1 - o.classic_mode;
+        o.lightnorm.x += 0.1;
+        check(table_key(o) == t0, "nothing A and B do not read moves their key");
+    }
+
+    // 10. k's quantised key through a sunrise. The light rises along its own azimuth (lightnorm and sun_glow_norm together, as a day sky
+    //     has them); k is evaluated every 1e-3 of the light's y, the key's step, from -0.1 (the clamp) to 0.1 (above it the slope falls
+    //     as 1 / y^2), with the physical sky held (sf_p; the base's sky view follows its own key). The change of k across one step bounds
+    //     its change between equal keys. Default and the thin, bright [TOR] DUSK - Fairytale glow (extinction 0.18 and 0.008).
+    {
+        double worst = 0.0, worst_y = 0.0;
+        int worst_sky = -1;
+        for (int si : { 0, 3 })
+        {
+            const Inputs in = inputs_of(kSky[si]);
+            const double az = std::atan2(in.lightnorm.z, in.lightnorm.x);
+            auto k_at = [&](double y) {
+                Inputs r = in;
+                const double c = std::sqrt(std::max(0.0, 1.0 - y * y));
+                r.lightnorm = { c * std::cos(az), y, c * std::sin(az) };
+                r.sun_glow_norm = r.lightnorm;
+                return cast_light_level(r, sf_p);
+            };
+            CastLight prev = k_at(-0.1);
+            for (int q = 1; q <= 200; ++q)
+            {
+                const double y = -0.1 + q * 1e-3;
+                const CastLight cur = k_at(y);
+                if (prev.defined && cur.defined && std::fabs(cur.k - prev.k) / prev.k > worst)
+                {
+                    worst = std::fabs(cur.k - prev.k) / prev.k;
+                    worst_y = y;
+                    worst_sky = si;
+                }
+                prev = cur;
+            }
+        }
+        // a 4-hour day cycle turns the sun 2 pi in 14400 s: its height changes by at most 4.4e-4 a second, near the horizon, so k's key
+        // changes about 0.44 times a second there (and A and B every frame)
+        std::printf("k through a sunrise (Default, Fairytale glow): worst change across one key step %.2g relative (sky %d, light y %.3f)\n", worst,
+                    worst_sky, worst_y);
+        check(worst < 0.01, "k moves by under 1 % between equal keys through a sunrise", worst);
     }
 
     if (failures)

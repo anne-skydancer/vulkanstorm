@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
+// A study record, kept as it produced doc/light/at2f-creator-grade.md: its skyV twin below is not maintained. The viewer's C++ twin of
+// skyV.glsl is indra/newview/llskyfilter.h (stage AT2-1), held to the shader on the GPU by llskyfilter_test.cpp.
+//
 // Stage AT2-F of the atmosphere redesign R (decided 2026-11-17, doc/light/atmosphere-study.md and doc/light/at2f-creator-grade.md):
 // "physics sets the light, the creator sets the look": each Windlight sky is a filter on the physical sky. The visible sky (the dome and
 // the haze on distant objects) is exactly today's look W; the light the sky casts (probes, shade) is physical in level, k x W, with the

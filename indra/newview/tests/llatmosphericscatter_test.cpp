@@ -360,7 +360,7 @@ int mirror_offset(const std::string& name)
         { "pa_lights.count", offsetof(B, light_count) }, { "pa_rayleigh_scat", offsetof(B, rayleigh_scat) }, { "pa_aerosol_scat", offsetof(B, aerosol_scat) },
         { "pa_ms_scale", offsetof(B, ms_scale) }, { "pa_slab_scat", offsetof(B, slab_scat) }, { "pa_glow_phase", offsetof(B, glow_phase) },
         { "pa_aniso", offsetof(B, aniso) }, { "pa_max_phase", offsetof(B, max_phase) }, { "pa_f_ms_max", offsetof(B, f_ms_max) },
-        { "pa_ground_albedo", offsetof(B, ground_albedo) }, { "pa_camera_km", offsetof(B, camera_km) }, { "pa_cuts[0]", offsetof(B, cuts) },
+        { "pa_ground_albedo", offsetof(B, ground_albedo) }, { "pa_cuts[0]", offsetof(B, cuts) },
     };
     for (const Pair& p : pairs)
     {
@@ -1184,7 +1184,7 @@ int main()
             check(mirror == e.offset, e.name, mirror, e.offset);
             ++layout_checked;
         }
-        check(layout_checked >= 30, "the block's layout lines cover its members", layout_checked);
+        check(layout_checked >= 29, "the block's layout lines cover its members", layout_checked);
         int cut_rows = 0;
         for (const CutsEntry& e : kScCuts)
         {
@@ -1195,7 +1195,7 @@ int main()
             {
                 check(near(a.cuts_km[k], e.km[k], 1e-12, 1e-12), "the block's cut altitude is LLAtmosphere's", a.cuts_km[k], e.km[k]);
             }
-            const AtmosphereBlock b = fill_atmosphere_block(row, 0.0);
+            const AtmosphereBlock b = fill_atmosphere_block(row);
             check(static_cast<int>(b.cut_count) == a.cut_count && b.cuts[0] == 0.0f, "fill_atmosphere_block carries the cuts", b.cut_count);
             ++cut_rows;
         }
@@ -1210,14 +1210,11 @@ int main()
     }
 
     // 10b. R2 (stage AT2-1): sky_radiance takes the slab-split march; at 64 steps it is within 1.5 % of a 4096-step march on Default, Foggy
-    //      and Sunset at their files' suns (the uniform march it replaced was up to 98 % low in Foggy at 32 steps), from the ground and 30 m
+    //      and Sunset at their files' suns (the uniform march it replaced was up to 98 % low in Foggy at 32 steps), and on the clear-day
+    //      base the viewer marches (llatmospherebase.h) with the sun at 2 to 70 degrees, from the ground and 30 m
     {
-        double worst = 0.0;
-        for (int sky : { SKY_DEFAULT, SKY_FOGGY, SKY_SUNSET })
-        {
-            LLScatter sc = scatter_of(kSkies[sky], sun_elevation_of(kSkies[sky]));
-            Tables tb;
-            bind_tables(sc, tb, 16, 16);
+        auto sky_error = [](const LLScatter& sc) {
+            double w = 0.0;
             for (double h : { 0.0, 0.03 })
             {
                 for (double el : { -2.0, 0.0, 0.5, 2.0, 5.0, 10.0, 30.0, 60.0, 90.0 })
@@ -1226,13 +1223,34 @@ int main()
                     {
                         const Vec3 a = sc.sky_radiance(dir_of(el, az), h, 64), r = sc.sky_radiance(dir_of(el, az), h, 4096);
                         const double m = std::max(detail::vmax(r), 1e-12);
-                        worst = std::max(worst, std::max(std::fabs(a.x - r.x), std::max(std::fabs(a.y - r.y), std::fabs(a.z - r.z))) / m);
+                        w = std::max(w, std::max(std::fabs(a.x - r.x), std::max(std::fabs(a.y - r.y), std::fabs(a.z - r.z))) / m);
                     }
                 }
             }
+            return w;
+        };
+        double worst_base = 0.0;
+        for (double sun_el : { 2.0, 10.0, 30.0, 70.0 })
+        {
+            LLScatter sc = clear_day_scatter();
+            const Vec3 sun = dir_of(sun_el, 0.0);
+            set_clear_day_lights(sc, sun, { -sun.x, -sun.y, -sun.z }, { 1.0, 1.0, 1.0 }, 1.5, 0.0);
+            Tables tb;
+            bind_tables(sc, tb, 16, 16);
+            worst_base = std::max(worst_base, sky_error(sc));
         }
-        std::printf("R2: the sky view's slab-split march at 64 steps against 4096: worst %.2f %% of the brightest channel\n", 100.0 * worst);
+        double worst = 0.0;
+        for (int sky : { SKY_DEFAULT, SKY_FOGGY, SKY_SUNSET })
+        {
+            LLScatter sc = scatter_of(kSkies[sky], sun_elevation_of(kSkies[sky]));
+            Tables tb;
+            bind_tables(sc, tb, 16, 16);
+            worst = std::max(worst, sky_error(sc));
+        }
+        std::printf("R2: the sky view's slab-split march at 64 steps against 4096: worst %.2f %% of the brightest channel (Default, Foggy, Sunset), "
+                    "%.2f %% on the clear-day base\n", 100.0 * worst, 100.0 * worst_base);
         check(worst < 0.015, "R2: the sky view's march at 64 steps is within 1.5 % of a converged one", worst);
+        check(worst_base < 0.015, "R2: on the clear-day base too", worst_base);
     }
 
     // 11. R-ACC: the 12-step march against a converged 256-step march, over the clouds' domain, with AT1's moon. The domain: observer

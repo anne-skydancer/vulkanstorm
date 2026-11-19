@@ -12,8 +12,11 @@ Needs Windows and a GPU (float; --check allows 1e-4 relative + 1e-6 absolute bet
 
   SF_SKY(index, the inputs of LLSkyFilter::Inputs in their order)
   SF_HAZE(sky, direction xyz, skyV's vary_HazeColor rgb)               skyV.glsl itself: rel_pos along the direction, its own glow
-  SF_AB(sky, i, j, A rgb, B rgb)                                         skyFilterF.glsl pass 1 at texel (i, j), RGBA32F
-  SF_K(sky, base irradiance, filtered irradiance, k, defined)           passes 2 and 3 on a synthetic physical sky (sf_p in the test)
+  SF_AB(sky, j, A rgb, B rgb)                                            skyFilterF.glsl pass 1 at row j (1 x 108), RGBA32F
+  SF_K(sky, black, base irradiance, filtered irradiance, k, defined)    passes 2 and 3 on a synthetic physical sky (sf_p in the test),
+                                                                         or (black 1) a black one: a night with the moon down
+
+The sizes are the viewer's defines (LLAtmosphereLUTs: SF_SKY_W, SF_SKY_H).
 """
 import math
 import struct
@@ -27,6 +30,7 @@ from atmosphere_gl import _loc  # noqa: E402
 OUT = ROOT / 'indra' / 'newview' / 'tests' / 'llskyfilter_vectors.inc'
 SKIES = ROOT / 'indra' / 'newview' / 'app_settings' / 'windlight' / 'skies'
 W, H = 192, 108
+SIZES = '#define SF_SKY_W %d\n#define SF_SKY_H %d\n' % (W, H)
 
 u4f = fn('glUniform4f', None, I, F, F, F, F)
 attrib_loc = fn('glGetAttribLocation', I, U, C.c_char_p)
@@ -141,22 +145,26 @@ class Grid:
 def evaluate():
     srgb = ATMOS_HEAD + shader_text('class1/environment/srgbF.glsl')
     skyv = program([(VERT, ATMOS_HEAD + shader_text('class1/deferred/skyV.glsl')), (FRAG, ATMOS_HEAD + SKYV_FRAG)])
-    passes = {n: program([(VERT, VERTEX), (FRAG, srgb), (FRAG, ATMOS_HEAD + '#define SF_PASS %d\n' % n + shader_text('class1/windlight/skyFilterF.glsl'))])
+    passes = {n: program([(VERT, VERTEX), (FRAG, srgb), (FRAG, ATMOS_HEAD + '#define SF_PASS %d\n' % n + SIZES + shader_text('class1/windlight/skyFilterF.glsl'))])
               for n in (1, 2, 3)}
     point = Target(1, 1)
-    ab = Grid(W, H, 2)
+    ab = Grid(1, H, 2)
     rows = Grid(1, H // 2)
     kt = Grid(1, 1)
-    # the synthetic physical sky
-    p_tex = U(); gentex(1, C.byref(p_tex)); bindtex(TEX2D, p_tex.value)
-    texstorage(TEX2D, 1, RGBA32F, W, H)
-    data = (F * (W * H * 4))()
-    for j in range(H):
-        for i in range(W):
-            c = sf_p(i, j)
-            data[(j * W + i) * 4:(j * W + i) * 4 + 4] = [c[0], c[1], c[2], 1.0]
-    texsub2(TEX2D, 0, 0, 0, W, H, 0x1908, FLOAT, C.cast(data, P))
-    texparam(TEX2D, 0x2801, 0x2600); texparam(TEX2D, 0x2800, 0x2600)
+
+    def physical(fill):
+        t = U(); gentex(1, C.byref(t)); bindtex(TEX2D, t.value)
+        texstorage(TEX2D, 1, RGBA32F, W, H)
+        data = (F * (W * H * 4))()
+        for j in range(H):
+            for i in range(W):
+                c = fill(i, j)
+                data[(j * W + i) * 4:(j * W + i) * 4 + 4] = [c[0], c[1], c[2], 1.0]
+        texsub2(TEX2D, 0, 0, 0, W, H, 0x1908, FLOAT, C.cast(data, P))
+        texparam(TEX2D, 0x2801, 0x2600); texparam(TEX2D, 0x2800, 0x2600)
+        return t.value
+    # the synthetic physical sky, and a black one (the clear-day base at night with the moon down)
+    p_skies = [(0, physical(sf_p)), (1, physical(lambda i, j: [0.0, 0.0, 0.0]))]
 
     loc = attrib_loc(skyv, b'position')
     ident = (F * 16)(*([0.0] * 15 + [1.0]))   # every vertex at the centre of the 1 x 1 target
@@ -172,23 +180,24 @@ def evaluate():
             vattrib3f(loc, 1000.0 * d[0], 1000.0 * d[1] - 50.0, 1000.0 * d[2])
             draw(0x0000, 0, 1)   # GL_POINTS
             haze.append((si, d, point.read(0)[0][:3]))
-        # pass 1: A and B
+        # pass 1: A and B, one row per elevation
         ab.bind(); use(passes[1]); set_inputs(passes[1], s)
         draw(0x0004, 0, 3)
         A, B = ab.read(0), ab.read(1)
-        for (i, j) in ((0, 0), (17, 30), (95, 53), (95, 54), (120, 60), (191, 80), (40, 100), (150, 107), (100, 70), (60, 90)):
-            o = (j * W + i) * 4
-            abv.append((si, i, j, list(A[o:o + 3]), list(B[o:o + 3])))
-        # passes 2 and 3 on the synthetic physical sky
-        rows.bind(); use(passes[2]); set_inputs(passes[2], s)
-        for unit, (name, tex) in enumerate((('sf_sky_view', p_tex.value), ('sf_table_a', ab.tex[0]), ('sf_table_b', ab.tex[1]))):
-            active(0x84C0 + unit); bindtex(TEX2D, tex); uniform(passes[2], name, unit)
-        draw(0x0004, 0, 3)
-        kt.bind(); use(passes[3]); set_inputs(passes[3], s)
-        active(0x84C0 + 3); bindtex(TEX2D, rows.tex[0]); uniform(passes[3], 'sf_rows', 3)
-        draw(0x0004, 0, 3)
-        active(0x84C0)
-        kv.append((si, list(kt.read(0)[0:4])))
+        for j in (0, 17, 30, 53, 54, 55, 58, 60, 70, 80, 90, 100, 107):
+            o = j * 4
+            abv.append((si, j, list(A[o:o + 3]), list(B[o:o + 3])))
+        # passes 2 and 3 on the synthetic physical sky and on a black one
+        for black, p_tex in p_skies:
+            rows.bind(); use(passes[2]); set_inputs(passes[2], s)
+            for unit, (name, tex) in enumerate((('sf_sky_view', p_tex), ('sf_table_a', ab.tex[0]), ('sf_table_b', ab.tex[1]))):
+                active(0x84C0 + unit); bindtex(TEX2D, tex); uniform(passes[2], name, unit)
+            draw(0x0004, 0, 3)
+            kt.bind(); use(passes[3]); set_inputs(passes[3], s)
+            active(0x84C0 + 3); bindtex(TEX2D, rows.tex[0]); uniform(passes[3], 'sf_rows', 3)
+            draw(0x0004, 0, 3)
+            active(0x84C0)
+            kv.append((si, black, list(kt.read(0)[0:4])))
     return sk, haze, abv, kv
 
 
@@ -214,7 +223,7 @@ def render(sk, haze, abv, kv):
     lines = ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)',
              '// Generated by scripts/light/gen_sky_filter_vectors.py from skyV.glsl and skyFilterF.glsl on the GPU; do not edit.',
              '// SF_SKY(index, ' + ', '.join(FIELDS) + ')',
-             '// SF_HAZE(sky, direction xyz, vary_HazeColor rgb)   SF_AB(sky, i, j, A rgb, B rgb)   SF_K(sky, irr_p, irr_w, k, defined)']
+             '// SF_HAZE(sky, direction xyz, vary_HazeColor rgb)   SF_AB(sky, row j, A rgb, B rgb)   SF_K(sky, black P, irr_p, irr_w, k, defined)']
     lines += sha_lines()
     for si, s in enumerate(sk):
         v = []
@@ -224,10 +233,10 @@ def render(sk, haze, abv, kv):
         lines.append('SF_SKY(%d, %s)  // %s' % (si, ', '.join(fmt(x) for x in v), s['name']))
     for si, d, c in haze:
         lines.append('SF_HAZE(%d, %s)' % (si, ', '.join(fmt(x) for x in list(d) + list(c))))
-    for si, i, j, a, b in abv:
-        lines.append('SF_AB(%d, %d, %d, %s)' % (si, i, j, ', '.join(fmt(x) for x in a + b)))
-    for si, k in kv:
-        lines.append('SF_K(%d, %s)' % (si, ', '.join(fmt(x) for x in k)))
+    for si, j, a, b in abv:
+        lines.append('SF_AB(%d, %d, %s)' % (si, j, ', '.join(fmt(x) for x in a + b)))
+    for si, black, k in kv:
+        lines.append('SF_K(%d, %d, %s)' % (si, black, ', '.join(fmt(x) for x in k)))
     return '\n'.join(lines) + '\n'
 
 
@@ -253,4 +262,4 @@ if '--check' in sys.argv:
     sys.exit(1 if bad or len(old) != len(new) else 0)
 with open(OUT, 'w', encoding='utf8', newline='\n') as f:
     f.write(text)
-print('wrote', OUT, len(sk), 'skies,', len(haze), 'skyV vectors,', len(abv), 'A/B texels,', len(kv), 'cast-light levels')
+print('wrote', OUT, len(sk), 'skies,', len(haze), 'skyV vectors,', len(abv), 'A/B rows,', len(kv), 'cast-light levels')

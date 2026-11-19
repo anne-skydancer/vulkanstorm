@@ -21,7 +21,6 @@
 
 #include "llatmosphereluts.h"
 
-#include "llagent.h"
 #include "llatmospherebase.h"
 #include "llenvironment.h"
 #include "llframetimer.h"
@@ -29,9 +28,7 @@
 #include "llrender.h"
 #include "llsettingssky.h"
 #include "llskyfilter.h"
-#include "llviewercamera.h"
 #include "llviewercontrol.h"
-#include "llviewerregion.h"
 #include "llviewershadermgr.h"
 #include "pipeline.h"
 
@@ -41,6 +38,11 @@
 extern bool gCubeSnapshot;
 
 namespace AL = LLAtmosphericLight;
+
+// the sizes the passes are built with are the C++ twin's, which the GPU tables are held to (scripts/light/check_atmosphere_tables.py)
+static_assert(LLAtmosphereLUTs::TRANS_W == AL::TransmittanceLUT::W && LLAtmosphereLUTs::TRANS_H == AL::TransmittanceLUT::H, "T: the twin's size");
+static_assert(LLAtmosphereLUTs::DIRS == AL::MS_DIRS_DEFAULT, "the split passes: the twin's directions per texel");
+static_assert(LLAtmosphereLUTs::SKY_W == LLSkyFilter::TABLE_W && LLAtmosphereLUTs::SKY_H == LLSkyFilter::TABLE_H, "the sky-view grid: the twin's");
 
 namespace
 {
@@ -60,6 +62,8 @@ enum FilterPass // gSkyFilterProgram, skyFilterF.glsl's SF_PASS - 1
     PASS_K_ROWS,
     PASS_K,
 };
+
+static_assert(PASS_SKY_VIEW + 1 == ATMOSPHERE_TABLE_PASSES && PASS_K + 1 == SKY_FILTER_PASSES, "one program per pass");
 
 // the passes' sampler units (their programs have no reserved samplers, so the units are theirs)
 const S32 UNIT_T = 0;
@@ -144,17 +148,8 @@ AL::Vec3 to_vec(const LLVector3& v)
     return { v.mV[0], v.mV[1], v.mV[2] };
 }
 
-// the camera's height above the sea, km, to the metre (the aerial perspective's observer, AT2-3)
-double camera_height_km()
-{
-    const LLViewerRegion* region = gAgent.getRegion();
-    const F64 water = region ? (F64)region->getWaterHeight() : 0.0;
-    const F64 z = (F64)LLViewerCamera::getInstance()->getOrigin().mV[VZ];
-    return std::round(llmax(z - water, 0.0)) * 1e-3;
-}
-
-// The base's lights from the sky: the sky's own sun (normalised as the deferred pass has it) and sunlight scale, AT1's moon gain, the
-// discs of the sky's sun and moon scales. Returns their key.
+// The base's lights from the sky: the sky's own sun (normalised as the deferred pass has it) and sunlight scale, AT1's moon gain; the
+// discs are the physical ones (set_clear_day_lights). Returns their key.
 uint64_t set_lights(AL::LLScatter& base)
 {
     static LLCachedControl<bool> hdr(gSavedSettings, "RenderHDREnabled");
@@ -168,9 +163,7 @@ uint64_t set_lights(AL::LLScatter& base)
     const F64 gain = env.getPrimaryLight().valid ? (F64)env.getPrimaryLight().moon_gain : 0.0;
     const AL::Vec3 sun = psky ? to_vec(psky->getSunDirection()) : AL::Vec3{ 0.0, 0.0, 1.0 };
     const AL::Vec3 moon = psky ? to_vec(psky->getMoonDirection()) : AL::Vec3{ 0.0, 0.0, -1.0 };
-    const F64 sun_disc = AL::body_disc_sin(psky ? psky->getSunScale() : 1.0);
-    const F64 moon_disc = AL::body_disc_sin(psky ? psky->getMoonScale() : 1.0);
-    AL::set_clear_day_lights(base, sun, moon, { source.mV[0], source.mV[1], source.mV[2] }, scale, gain, sun_disc, moon_disc);
+    AL::set_clear_day_lights(base, sun, moon, { source.mV[0], source.mV[1], source.mV[2] }, scale, gain);
 
     LLSkyFilter::KeyHasher h;
     for (int i = 0; i < 2; ++i)
@@ -190,12 +183,39 @@ uint64_t combine(uint64_t a, uint64_t b)
     h.add((int64_t)b);
     return h.value() | 1; // never 0 (0 is "not built")
 }
+
+// the filter's inputs as the passes' uniforms: the values the dome gets (doubles made from the lists' floats, so exact again in float)
+void set_filter_uniforms(LLGLSLShader& p, const LLSkyFilter::Inputs& in)
+{
+    auto v3 = [&](S32 index, const AL::Vec3& v) {
+        const F32 f[3] = { (F32)v.x, (F32)v.y, (F32)v.z };
+        p.uniform3fv(index, 1, f);
+    };
+    v3(LLShaderMgr::LIGHTNORM, in.lightnorm);
+    v3(LLShaderMgr::SUNLIGHT_COLOR, in.sunlight_color);
+    v3(LLShaderMgr::MOONLIGHT_COLOR, in.moonlight_color);
+    v3(LLShaderMgr::AMBIENT, in.ambient_color);
+    v3(LLShaderMgr::BLUE_HORIZON, in.blue_horizon);
+    v3(LLShaderMgr::BLUE_DENSITY, in.blue_density);
+    p.uniform1f(LLShaderMgr::HAZE_HORIZON, (F32)in.haze_horizon);
+    p.uniform1f(LLShaderMgr::HAZE_DENSITY, (F32)in.haze_density);
+    p.uniform1f(LLShaderMgr::CLOUD_SHADOW, (F32)in.cloud_shadow);
+    p.uniform1f(LLShaderMgr::DENSITY_MULTIPLIER, (F32)in.density_multiplier);
+    p.uniform1f(LLShaderMgr::MAX_Y, (F32)in.max_y);
+    v3(LLShaderMgr::GLOW, in.glow);
+    p.uniform1f(LLShaderMgr::SUN_MOON_BLEND, (F32)in.sun_moon_blend);
+    v3(LLShaderMgr::SUN_GLOW_NORM, in.sun_glow_norm);
+    p.uniform1f(LLShaderMgr::SKY_HDR_SCALE, (F32)in.sky_hdr_scale);
+    p.uniform1i(LLShaderMgr::CLASSIC_MODE, in.classic_mode);
+}
 } // namespace
 
 struct LLAtmosphereLUTs::State
 {
     AL::LLScatter base = AL::clear_day_scatter();
     AL::AtmosphereBlock block = {};
+    LLSkyFilter::Inputs inputs;                   // the filter's, as last read where the lists were the main view's
+    bool inputs_valid = false;
 };
 
 LLAtmosphereLUTs::LLAtmosphereLUTs()
@@ -205,6 +225,7 @@ LLAtmosphereLUTs::LLAtmosphereLUTs()
 
 LLAtmosphereLUTs::~LLAtmosphereLUTs() = default;
 
+// The GL objects; the filter's inputs are CPU values and stay (the next main frame reads them again).
 void LLAtmosphereLUTs::release()
 {
     if (mUBO)
@@ -238,14 +259,14 @@ bool LLAtmosphereLUTs::allocate()
     {
         return true;
     }
-    // T, Psi, E and the sky view are RGBA16F (doc/light/atmosphere-study.md section 4.1, D5 = c); the cast-light sums are RGBA32F (sums
-    // of many terms). The split passes' partials live only while the base is built (buildBase).
-    const bool ok = allocate_target(mTrans, 256, 64, GL_RGBA16F)
-                 && allocate_target(mMs, 32, 32, GL_RGBA16F)
-                 && allocate_target(mE, 64, 16, GL_RGBA16F)
-                 && allocate_target(mSkyView, LLSkyFilter::TABLE_W, LLSkyFilter::TABLE_H, GL_RGBA16F)
-                 && allocate_target(mFilter, LLSkyFilter::TABLE_W, LLSkyFilter::TABLE_H, GL_RGBA16F, 2)
-                 && allocate_target(mRows, 1, LLSkyFilter::TABLE_H / 2, GL_RGBA32F)
+    // T, Psi, E, the sky view and A and B are RGBA16F (doc/light/atmosphere-study.md section 4.1, D5 = c); the cast-light sums are
+    // RGBA32F (sums of many terms). The split passes' partials live only while the base is built (buildBase).
+    const bool ok = allocate_target(mTrans, TRANS_W, TRANS_H, GL_RGBA16F)
+                 && allocate_target(mMs, MS_W, MS_H, GL_RGBA16F)
+                 && allocate_target(mE, E_W, E_H, GL_RGBA16F)
+                 && allocate_target(mSkyView, SKY_W, SKY_H, GL_RGBA16F)
+                 && allocate_target(mFilter, 1, SKY_H, GL_RGBA16F, 2)
+                 && allocate_target(mRows, 1, SKY_H / 2, GL_RGBA32F)
                  && allocate_target(mCastLight, 1, 1, GL_RGBA32F);
     if (!ok)
     {
@@ -262,11 +283,12 @@ bool LLAtmosphereLUTs::allocate()
     return true;
 }
 
-// The block for the current lights and camera: uploaded (one glBufferSubData) only when it differs from the last upload.
+// The block for the current lights: uploaded (one glBufferSubData) only when it differs from the last upload. Nothing in it depends on
+// the camera or the view.
 bool LLAtmosphereLUTs::updateBlock(bool force)
 {
     mLightKey = set_lights(mState->base);
-    const AL::AtmosphereBlock block = AL::fill_atmosphere_block(mState->base, camera_height_km());
+    const AL::AtmosphereBlock block = AL::fill_atmosphere_block(mState->base);
     if (!force && mBlockValid && std::memcmp(&block, &mState->block, sizeof(block)) == 0)
     {
         return false;
@@ -279,12 +301,29 @@ bool LLAtmosphereLUTs::updateBlock(bool force)
     return true;
 }
 
-// T, then Psi from T, then E from T and Psi: once (the base is fixed), and again after a release. The split passes' partials (3 MB of
-// RGBA32F) exist only for this.
+// The filter's inputs from the dome's uniform lists, where those hold the main view's values: every view but a reflection probe's
+// irradiance pass (llsettingsvo.cpp zeroes the ambient, desaturates and leaves sky_hdr_scale unset there; hero probes render as radiance
+// passes). Kept until the next read, so a later view of the frame, or a probe before the next main frame, builds from the same values.
+void LLAtmosphereLUTs::refreshInputs()
+{
+    if (gCubeSnapshot && !gPipeline.mReflectionMapManager.isRadiancePass())
+    {
+        return;
+    }
+    LLSkyFilter::Inputs in;
+    if (LLSkyFilter::current_inputs(in))
+    {
+        mState->inputs = in;
+        mState->inputs_valid = true;
+    }
+}
+
+// T, then Psi from T, then E from T and Psi: once (the base is fixed, its discs included), and again after a release. The split passes'
+// partials (3 MB of RGBA32F) exist only for this.
 void LLAtmosphereLUTs::buildBase()
 {
     LL_PROFILE_GPU_ZONE("atmosphere base tables");
-    if (!allocate_target(mMsPart, 256, 256, GL_RGBA32F, 2) || !allocate_target(mEPart, 512, 128, GL_RGBA32F))
+    if (!allocate_target(mMsPart, MS_W * DIRS, MS_H * DIRS, GL_RGBA32F, 2) || !allocate_target(mEPart, E_W * DIRS, E_H * DIRS, GL_RGBA32F))
     {
         LL_WARNS("Atmosphere") << "The atmosphere's split passes could not be allocated: no tables" << LL_ENDL;
         mMsPart.release();
@@ -352,12 +391,13 @@ void LLAtmosphereLUTs::buildSkyView()
     p.unbind();
 }
 
-// the A and B tables: the program is in the sky's shader group, so binding it applies this frame's sky uniforms (the dome's)
+// A and B, one row per elevation, from the kept inputs
 void LLAtmosphereLUTs::buildFilter()
 {
     LL_PROFILE_GPU_ZONE("sky filter tables");
     LLGLSLShader& p = gSkyFilterProgram[PASS_AB];
     p.bind();
+    set_filter_uniforms(p, mState->inputs);
     draw_into(mFilter);
     p.unbind();
 }
@@ -367,6 +407,7 @@ void LLAtmosphereLUTs::buildCastLight()
     LL_PROFILE_GPU_ZONE("sky cast light");
     LLGLSLShader& rows = gSkyFilterProgram[PASS_K_ROWS];
     rows.bind();
+    set_filter_uniforms(rows, mState->inputs);
     rows.uniform1i(sSkyView, 0);
     rows.uniform1i(sTableA, 1);
     rows.uniform1i(sTableB, 2);
@@ -384,7 +425,9 @@ void LLAtmosphereLUTs::buildCastLight()
     k.unbind();
 }
 
-void LLAtmosphereLUTs::build(bool allow_filter)
+// Every table whose key changed. The filter's need the kept inputs; without them (before any view could read the lists) only the
+// base's are built.
+void LLAtmosphereLUTs::build()
 {
     if (mFailed)
     {
@@ -403,21 +446,16 @@ void LLAtmosphereLUTs::build(bool allow_filter)
     updateBlock(false);
     static LLCachedControl<S32> steps(gSavedSettings, "RenderAtmosphereSkyViewSteps", 64);
     const uint64_t sky_view_key = combine(mLightKey, (uint64_t)llclamp((S32)steps, 4, 512));
-
-    uint64_t filter_key = mFilterKey;
-    if (allow_filter)
-    {
-        LLSkyFilter::Inputs in;
-        filter_key = LLSkyFilter::current_inputs(in) ? combine(LLSkyFilter::inputs_key(in), 0) : 0;
-    }
+    // A and B follow their inputs exactly (one 1 x SKY_H pass); k, a hemisphere integral, the quantised key (llskyfilter.h)
+    const uint64_t filter_key = mState->inputs_valid ? combine(LLSkyFilter::table_key(mState->inputs), 0) : 0;
+    const uint64_t cast_key = mState->inputs_valid ? combine(sky_view_key, LLSkyFilter::inputs_key(mState->inputs)) : 0;
     const bool base = !mBaseBuilt;
     const bool sky_view = base || sky_view_key != mSkyViewKey;
-    const bool filter = allow_filter && filter_key != 0 && filter_key != mFilterKey;
-    const uint64_t cast_key = combine(sky_view_key, filter_key);
-    const bool cast = allow_filter && filter_key != 0 && cast_key != mCastLightKey;
+    const bool filter = filter_key != 0 && filter_key != mFilterKey;
+    const bool cast = cast_key != 0 && cast_key != mCastLightKey;
     if (!(base || sky_view || filter || cast))
     {
-        return; // the steady state: the key and the block compare only
+        return; // the steady state: the keys and the block compare only
     }
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
@@ -448,7 +486,7 @@ void LLAtmosphereLUTs::build(bool allow_filter)
         buildFilter();
         mFilterKey = filter_key;
     }
-    if (cast && mSkyViewKey != 0 && mFilterKey != 0)
+    if (cast)
     {
         buildCastLight();
         mCastLightKey = cast_key;
@@ -469,14 +507,19 @@ void LLAtmosphereLUTs::update()
     }
     mUpdatedFrame = frame;
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
-    build(true);
+    refreshInputs();
+    build();
 }
 
 void LLAtmosphereLUTs::ensureTables()
 {
-    if (mFailed || (mBaseBuilt && mSkyViewKey != 0 && (gCubeSnapshot || mFilterKey != 0)))
+    if (mFailed || isBuilt())
     {
         return;
     }
-    build(!gCubeSnapshot);
+    if (!mState->inputs_valid)
+    {
+        refreshInputs();
+    }
+    build();
 }

@@ -2,12 +2,13 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Offline accuracy check for the atmosphere refresh study (doc/light/atmosphere-study.md, refresh 2026-11-16): the sky view's march.
-// LLScatter::sky_radiance (and its GLSL twin pa_sky_radiance) marches UNIFORM midpoint steps from the observer to the top of the
-// atmosphere or the ground, with no split at the 0.25 km haze slab, unlike atmosphere_ap. This measures what that costs near the
-// horizon and in fog: sky_radiance at 24, 32 and 64 steps, and the slab-split atmosphere_ap march (to the same end point, plus the same
-// ground term) at the same counts, against the slab-split march at 4096 steps (the reference; a uniform march is not one, see the
-// AT2-0 doc's R-ACC). The uniform march at 4096 steps is reported against it too.
-// Not part of the build or CI.
+// Before stage AT2-1, LLScatter::sky_radiance (and its GLSL twin pa_sky_radiance) marched UNIFORM midpoint steps from the observer to
+// the top of the atmosphere or the ground, with no split at the 0.25 km haze slab, unlike atmosphere_ap; AT2-1 replaced it with the
+// slab-split march (finding R2, decision D1). This keeps the record of what the uniform march cost near the horizon and in fog: the
+// uniform march (a local copy of the old sky_radiance, uniform_sky below) at 24, 32 and 64 steps, and the slab-split march (today's
+// sky_radiance) at the same counts, against the slab-split march at 4096 steps (the reference; a uniform march is not one, see the
+// AT2-0 doc's R-ACC). The uniform march at 4096 steps is reported against it too. Today's gate on the shipped march is
+// llatmosphericscatter_test.cpp's test 10b. Not part of the build or CI.
 //
 //   g++ -std=c++20 -O2 -DNDEBUG -I indra/newview scripts/light/check_skyview_steps.cpp -o check_skyview_steps.exe
 
@@ -77,24 +78,35 @@ double rel_err(const Vec3& a, const Vec3& ref)
     return std::max({ e(a.x, ref.x), e(a.y, ref.y), e(a.z, ref.z) });
 }
 
-// the sky along d with the slab-split AP march instead of the uniform one: atmosphere_ap to the end of the ray, plus the same ground term
-Vec3 sky_split(const LLScatter& sc, const Vec3& d, double h0, int steps)
+// the old uniform sky march (LLScatter::sky_radiance before AT2-1): `steps` uniform midpoint steps to the ground or the top, plus the
+// ground at ground_albedo lit by the lights' T and the sky irradiance
+Vec3 uniform_sky(const LLScatter& sc, const Vec3& d, double h0, int steps)
 {
+    steps = std::min(std::max(steps, 1), AP_MAX_STEPS);
     const double tg = sc.ground_distance(h0, d);
     const double tmax = sc.ray_length(h0, d);
-    Vec3 Lin, T;
-    sc.atmosphere_ap(d, tmax, h0, steps, Lin, T);
+    Vec3 Lin, T = { 1.0, 1.0, 1.0 };
+    sc.march_seg(h0, d, 0.0, tmax, steps, 1.0, false, sc.lights, Lin, T);
     if (tg >= 0.0)
     {
-        // the ground term exactly as sky_radiance has it: the difference between sky_radiance at 4096 steps with and without it is the
-        // same for both marches, so add it from a 4096-step evaluation of the uniform march's ground part
-        const Vec3 full = sc.sky_radiance(d, h0, 4096);
-        Vec3 Lin_u, T_u;
-        sc.atmosphere_ap(d, tmax, h0, 4096, Lin_u, T_u);
-        Lin += (full - Lin_u) * 1.0; // ground part (T at the ground x E x albedo / pi), converged
-        (void)T;
+        const LLScatter::PathPoint p = sc.path_point(h0, d, tg);
+        const Vec3 n = p.x * (1.0 / detail::len(p.x));
+        Vec3 E;
+        for (int l = 0; l < std::min(std::max(sc.lights.count, 0), 2); ++l)
+        {
+            const double mu = detail::dot(n, sc.lights.dir[l]);
+            const Vec3 sky_e = sc.e_lut ? sc.e_lut->at(0.0, mu) : sc.sky_irradiance_texel(0.0, mu);
+            E += sc.lights.E[l] * (sc.light_T(p.x, 0.0, sc.lights, l) * std::max(mu, 0.0) + sky_e);
+        }
+        Lin += T * E * (sc.bounds.ground_albedo / detail::SC_PI);
     }
     return Lin;
+}
+
+// the slab-split march: since AT2-1 this is sky_radiance itself (atmosphere_ap to the end of the ray, plus the ground term)
+Vec3 sky_split(const LLScatter& sc, const Vec3& d, double h0, int steps)
+{
+    return sc.sky_radiance(d, h0, steps);
 }
 } // namespace
 
@@ -129,7 +141,7 @@ int main()
                     {
                         const Vec3 d = dir_of(e, a);
                         const Vec3 ref = sky_split(sc, d, h, 4096);
-                        const double eu = rel_err(sc.sky_radiance(d, h, steps), ref);
+                        const double eu = rel_err(uniform_sky(sc, d, h, steps), ref);
                         all_u.push_back(eu);
                         all_s.push_back(rel_err(sky_split(sc, d, h, steps), ref));
                         if (eu > worst_u)

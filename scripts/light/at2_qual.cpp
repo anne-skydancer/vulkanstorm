@@ -3,6 +3,9 @@
 //
 // AT2 qualification, phase 1 (offline, CPU only): can a table hold upstream Firestorm's sky pass?
 //
+// A study record, kept as it produced doc/light/at2-qualification-phase1.md. Its sky twin is upstream's (the reference creators tuned
+// against), not ours; the viewer's C++ twin of our skyV.glsl is indra/newview/llskyfilter.h (stage AT2-1).
+//
 // Owner decision (2026-11-17): "today's look would be the sky under PR #543 rules, after AT1 and AT2 land and EEP applied as filters on
 // top of the physical sky." The reference is UPSTREAM's sky pass (what creators tuned against), not our drifted skyV/skyF:
 //

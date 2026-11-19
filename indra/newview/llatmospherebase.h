@@ -5,12 +5,14 @@
  * @brief The physical base sky of stage AT2-1: one clear high-pressure day under every EEP sky, and the std140 mirror of the
  *        `Atmosphere` uniform block the table passes read. Renderer-free.
  *
- * The owner's model (2026-11-18): the physical render first, then post-production filters. The base sky is a clear, dry
- * high-pressure-dome day (clean air, minimal aerosol, long visibility); every EEP sky, the built-in ones included, is a filter on it
- * (doc/light/atmosphere-study.md section 8: the sky you see is today's look exactly, the light the sky casts is physical in level with
- * the creator's tint). So the physics is one atmosphere, not a translation per EEP: its transmittance, multiple-scattering and sky
+ * The owner's model (2026-11-18), the clear-day base: the physical render first, then post-production filters. The base sky is a
+ * clear, dry high-pressure-dome day (clean air, minimal aerosol, long visibility); every EEP sky, the built-in ones included, is a filter
+ * on it (doc/light/atmosphere-study.md section 8: the sky you see is today's look exactly, the light the sky casts is physical in level
+ * with the creator's tint). So the physics is one atmosphere, not a translation per EEP: its transmittance, multiple-scattering and sky
  * irradiance tables are built once, and only the sky view follows the lights. The sun's light on the ground stays AT1's
- * (LLEnvironment::updatePrimaryLight: the EEP's noon sunlight per channel with a physical airmass), the sun's part of the filter.
+ * (LLEnvironment::updatePrimaryLight: the EEP's noon sunlight per channel with a physical airmass), the sun's part of the filter; it
+ * goes through the EEP's own atmosphere (LLAtmosphere::fromLegacy), not through this one, so in a hazy sky the ground sun is dimmer than
+ * the base's (an open point for the owner, section 8 of the study).
  *
  * The base (constants, no settings; sources in the comments):
  *   - Rayleigh scattering at 680 / 550 / 440 nm: 5.802, 13.558, 33.1 x 1e-3 /km at sea level, scale height 8 km (E. Bruneton, "A
@@ -24,7 +26,10 @@
  *   - no ground haze slab: the subsidence inversion caps a dry, clean boundary layer;
  *   - the visibility that follows, Koschmieder's 3.912 / (beta_Rayleigh + beta_aerosol) at 550 nm on the ground: about 101 km;
  *   - ground albedo 0.1 (Bruneton); the multiple scattering as Hillaire's (scale 1, series bound 0.6);
- *   - Earth's radii, 6360 and 6420 km.
+ *   - Earth's radii, 6360 and 6420 km;
+ *   - the sun's and the moon's discs physical, 0.265 degrees in angular radius (AT1's disc at scale 1; Bruneton's precomputed model
+ *     likewise fixes the sun's angular radius in its atmosphere): the EEP's sun and moon scales size the discs you see, the filter's, and
+ *     the base's tables never follow them.
  */
 
 #ifndef LL_LLATMOSPHEREBASE_H
@@ -77,7 +82,8 @@ inline LLAtmosphere clear_day_atmosphere()
     return a;
 }
 
-// The base's scattering. The lights are the caller's (clear_day_lights): the sky is lit by the same sun as the ground.
+// The base's scattering. The lights are the caller's (set_clear_day_lights): the sky's own sun colour and sunlight scale, as the ground
+// light has them, through this clear atmosphere (AT1's ground light goes through the EEP's own; see the header).
 inline LLScatter clear_day_scatter()
 {
     LLScatter s;
@@ -99,13 +105,16 @@ inline LLScatter clear_day_scatter()
 }
 
 // The lights of the base: the sky's own sun (`source`, sunlight_color as the deferred pass receives it: normalised to a maximum of 1),
-// E = 3 x scale x lin(source) as LLScatter::fromLegacy; the moon E_sun x AT1's gain (moon_brightness x the moon's compensation);
-// directions unit, z up (LLSettingsSky's frame). Returns the bounds that applied (ScatterClamp bits).
+// E = 3 x scale x lin(source) as LLScatter::fromLegacy; the moon E_sun x AT1's gain (moon_brightness x the moon's compensation), not
+// marched when that is 0; both discs physical (body_disc_sin(1), 0.265 degrees: the tables built once hold for every EEP); directions
+// unit, z up (LLSettingsSky's frame). Returns the bounds that applied (ScatterClamp bits).
 inline unsigned set_clear_day_lights(LLScatter& s, const Vec3& sun_dir, const Vec3& moon_dir, const Vec3& source, double sunlight_scale,
-                                     double moon_gain, double sun_disc_sin, double moon_disc_sin)
+                                     double moon_gain)
 {
     unsigned clamped = 0;
-    s.lights = LLScatter::lights_of(source, sunlight_scale, moon_gain, sun_disc_sin, moon_disc_sin, s.bounds, clamped);
+    const double disc = body_disc_sin(1.0);
+    s.lights = LLScatter::lights_of(source, sunlight_scale, moon_gain, disc, disc, s.bounds, clamped);
+    s.lights.count = detail::vmax(s.lights.E[1]) > 0.0 ? 2 : 1;
     s.set_light_dirs(sun_dir, moon_dir);
     return clamped;
 }
@@ -159,7 +168,7 @@ struct AtmosphereBlock
     float max_phase;
     float f_ms_max;
     float ground_albedo;
-    float camera_km;
+    float unused2;               // std140 pads the cuts' vec4 array to 384 (AT2-3 gives the froxels their observer per view)
     float cuts[detail::MAX_ALTITUDES];
 };
 
@@ -172,7 +181,7 @@ static_assert(offsetof(AtmosphereBlock, light_dir) == 208 && offsetof(Atmosphere
 static_assert(offsetof(AtmosphereBlock, light_count) == 304 && offsetof(AtmosphereBlock, rayleigh_scat) == 320, "std140: pa_lights");
 static_assert(offsetof(AtmosphereBlock, aerosol_scat) == 332 && offsetof(AtmosphereBlock, ms_scale) == 336 && offsetof(AtmosphereBlock, slab_scat) == 348, "std140: scattering");
 static_assert(offsetof(AtmosphereBlock, glow_phase) == 352 && offsetof(AtmosphereBlock, aniso) == 364 && offsetof(AtmosphereBlock, max_phase) == 368, "std140: scattering");
-static_assert(offsetof(AtmosphereBlock, camera_km) == 380 && offsetof(AtmosphereBlock, cuts) == 384 && sizeof(AtmosphereBlock) == 512, "std140: cuts");
+static_assert(offsetof(AtmosphereBlock, unused2) == 380 && offsetof(AtmosphereBlock, cuts) == 384 && sizeof(AtmosphereBlock) == 512, "std140: cuts");
 
 namespace detail
 {
@@ -202,9 +211,9 @@ inline void put3(float* out, const Vec3& v)
 }
 } // namespace detail
 
-// The block for a finalized atmosphere's scattering `s` and an observer `camera_km` above the sea. The cut altitudes are the C++'s
+// The block for a finalized atmosphere's scattering `s`: nothing in it depends on the camera or the view. The cut altitudes are the C++'s
 // (LLAtmosphere::finalize), not searched per texel: an atmosphere that was not finalized has them computed here.
-inline AtmosphereBlock fill_atmosphere_block(const LLScatter& s, double camera_km)
+inline AtmosphereBlock fill_atmosphere_block(const LLScatter& s)
 {
     AtmosphereBlock b;
     std::memset(&b, 0, sizeof(b));
@@ -252,7 +261,6 @@ inline AtmosphereBlock fill_atmosphere_block(const LLScatter& s, double camera_k
     b.max_phase = float(s.max_phase);
     b.f_ms_max = float(s.bounds.max_f_ms);
     b.ground_albedo = float(s.bounds.ground_albedo);
-    b.camera_km = float(camera_km);
     return b;
 }
 } // namespace LLAtmosphericLight

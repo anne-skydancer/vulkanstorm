@@ -1442,28 +1442,8 @@ struct LLScatter
         s.bounds = sb;
         s.atm = LLAtmosphere::fromLegacy(sky, ab);
         unsigned c = 0;
-        // NaN -> fallback; +-infinity -> the largest finite value of that sign (so the bound below it applies, not 0)
-        auto fin = [&](double x, double fallback) {
-            if (std::isnan(x))
-            {
-                c |= SCLAMP_NON_FINITE;
-                return fallback;
-            }
-            if (std::isinf(x))
-            {
-                c |= SCLAMP_NON_FINITE;
-                return x > 0.0 ? 1e30 : -1e30;
-            }
-            return x;
-        };
-        auto bounded = [&](double x, double lo, double hi, unsigned bit) {
-            const double y = clampd(x, lo, hi);
-            if (y != x)
-            {
-                c |= bit;
-            }
-            return y;
-        };
+        auto fin = [&](double x, double fallback) { return finite_input(x, fallback, c); };
+        auto bounded = [&](double x, double lo, double hi, unsigned bit) { return bounded_input(x, lo, hi, bit, c); };
 
         // 1. albedos: blue_horizon tints the Rayleigh albedo, haze_horizon the aerosol's; both relative to Default's, never above their bounds
         const double bh[3] = { fin(f.blue_horizon.x, 0.0), fin(f.blue_horizon.y, 0.0), fin(f.blue_horizon.z, 0.0) };
@@ -1504,6 +1484,32 @@ struct LLScatter
         return s;
     }
 
+    // The input bounds of fromLegacy and lights_of. finite_input: NaN -> fallback; +-infinity -> the largest finite value of that sign (so
+    // the bound below it applies, not 0); either sets SCLAMP_NON_FINITE. bounded_input: x clamped to [lo, hi], `bit` set when it moved.
+    static double finite_input(double x, double fallback, unsigned& clamped)
+    {
+        if (std::isnan(x))
+        {
+            clamped |= SCLAMP_NON_FINITE;
+            return fallback;
+        }
+        if (std::isinf(x))
+        {
+            clamped |= SCLAMP_NON_FINITE;
+            return x > 0.0 ? 1e30 : -1e30;
+        }
+        return x;
+    }
+    static double bounded_input(double x, double lo, double hi, unsigned bit, unsigned& clamped)
+    {
+        const double y = detail::clampd(x, lo, hi);
+        if (y != x)
+        {
+            clamped |= bit;
+        }
+        return y;
+    }
+
     // The lights from the sky's source colour: E = 3 x scale x lin(source), the irradiance pbrBaseLight gives a sunlit surface; the moon's
     // is the sun's x gain (AT1's rig.gain). The directions are the zenith and the nadir until set_light_dirs. `clamped` collects the
     // ScatterClamp bits of the bounds that applied. Shared by fromLegacy and the clear-day base (llatmospherebase.h).
@@ -1511,27 +1517,8 @@ struct LLScatter
                                    const ScatterBounds& sb, unsigned& clamped)
     {
         using detail::clampd;
-        auto fin = [&](double x, double fallback) {
-            if (std::isnan(x))
-            {
-                clamped |= SCLAMP_NON_FINITE;
-                return fallback;
-            }
-            if (std::isinf(x))
-            {
-                clamped |= SCLAMP_NON_FINITE;
-                return x > 0.0 ? 1e30 : -1e30;
-            }
-            return x;
-        };
-        auto bounded = [&](double x, double lo, double hi, unsigned bit) {
-            const double y = clampd(x, lo, hi);
-            if (y != x)
-            {
-                clamped |= bit;
-            }
-            return y;
-        };
+        auto fin = [&](double x, double fallback) { return finite_input(x, fallback, clamped); };
+        auto bounded = [&](double x, double lo, double hi, unsigned bit) { return bounded_input(x, lo, hi, bit, clamped); };
         ScatterLights lt;
         const double scale = bounded(fin(sunlight_scale, 1.0), 0.0, sb.max_sunlight_scale, SCLAMP_SUNLIGHT_SCALE);
         const double src[3] = { bounded(fin(source.x, 0.0), 0.0, 1.0, SCLAMP_SOURCE), bounded(fin(source.y, 0.0), 0.0, 1.0, SCLAMP_SOURCE),
@@ -1949,8 +1936,8 @@ struct LLScatter
     //     the end of the ray, the ground or the top, in `steps` steps (at least AP_MIN_STEPS), plus the ground at ground_albedo where the
     //     ray meets it, lit by the lights' T and the sky irradiance E(0, mu) of the e_lut (or the exact texel). Stage AT2-1 (decision D1
     //     of doc/light/atmosphere-study.md, finding R2): the march is atmosphere_ap's, split where the ray leaves the 0.25 km haze slab; a
-    //     uniform march to the top skips the slab (up to 98 % low in fog at 32 steps). 64 steps are within 1.2 % of a converged march on
-    //     Default, Foggy and Sunset (scripts/light/check_skyview_steps.cpp).
+    //     uniform march to the top skips the slab (up to 98 % low in fog at 32 steps). At 64 steps it is within 0.50 % of a 4096-step march
+    //     on Default, Foggy and Sunset and 0.37 % on the clear-day base (llatmosphericscatter_test.cpp, test 10b, gate 1.5 %).
     Vec3 sky_radiance(const Vec3& d_in, double h_obs_km, int steps = 64) const
     {
         const Vec3 d = detail::sane_dir(d_in, { 0.0, 0.0, 1.0 });

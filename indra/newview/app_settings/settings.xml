@@ -11565,7 +11565,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderAtmosphereSkyViewSteps</key>
     <map>
       <key>Comment</key>
-      <string>Debug: steps of the march that fills the physical sky-view table (stage AT2-1; 4 to 512). 64 is within 1.2 % of a converged march. A structural setting for a slow GPU, not a quality tier.</string>
+      <string>Debug: steps of the march that fills the physical sky-view table (stage AT2-1; 4 to 512). 64 is within 0.5 % of a converged march (llatmosphericscatter_test.cpp, test 10b). A structural setting for a slow GPU, not a quality tier.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

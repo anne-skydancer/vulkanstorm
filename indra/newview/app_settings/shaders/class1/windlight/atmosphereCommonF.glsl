@@ -7,9 +7,10 @@
  * The physical atmosphere: the GLSL twin of llatmosphericlight.h's LLAtmosphere (the extinction and the transmittance, stage AT0)
  * and LLScatter (the scattering core, stage AT2-0). Functions only, one compilation unit: stage AT2-1 attaches it to the table passes
  * (atmosphereTablesF.glsl; LLAtmosphereLUTs, llatmosphereluts.cpp), and everything it reads comes from the `Atmosphere` uniform block
- * (std140; its C++ mirror is LLAtmosphericLight::AtmosphereBlock in llatmospherebase.h, filled once per frame with one
- * glBufferSubData and bound at LLGLSLShader::UB_ATMOSPHERE). The block replaced the pa_* uniforms of AT0 and AT2-0, which would have
- * been re-applied to every program on its first bind of every frame (doc/light/atmosphere-study.md, R10). The extinction and the
+ * (std140; its C++ mirror is LLAtmosphericLight::AtmosphereBlock in llatmospherebase.h, uploaded with one glBufferSubData when the
+ * lights change and bound at LLGLSLShader::UB_ATMOSPHERE; nothing in it depends on the camera or the view). The block replaced the pa_*
+ * uniforms of AT0 and AT2-0, which would have been re-applied to every program on its first bind of every frame
+ * (doc/light/atmosphere-study.md, R10). The extinction and the
  * scattering are in one file because the viewer compiles each file as its own unit and the block, and the structs it holds, can be
  * declared once only.
  *
@@ -96,7 +97,6 @@ layout(std140) uniform Atmosphere
     float pa_max_phase;
     float pa_f_ms_max;                       // 0.6 (ScatterBounds::max_f_ms)
     float pa_ground_albedo;
-    float pa_camera_km;                      // the camera's height above the sea, km (the aerial perspective's observer, AT2-3)
     vec4  pa_cuts[PA_MAX_ALT / 4];           // the cut altitudes of pa_transmittance (km), LLAtmosphere::finalize
 };
 

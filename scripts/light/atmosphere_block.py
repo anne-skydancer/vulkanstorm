@@ -3,7 +3,7 @@
 """The `Atmosphere` uniform block (stage AT2-1) for the GPU harnesses: atmosphereCommonF.glsl reads everything from it, as the viewer
 fills it (LLAtmosphericLight::fill_atmosphere_block, llatmospherebase.h).
 
-    pack(a, camera_km=0.0) -> bytes   the 512-byte std140 block for an atmosphere dict (the keys of gen_atmosphere_scatter_vectors.py's
+    pack(a) -> bytes                  the 512-byte std140 block for an atmosphere dict (the keys of gen_atmosphere_scatter_vectors.py's
                                       atmospheres(); gen_transmittance_vectors.py's carry no scattering, which is then 0)
     cut_altitudes(a) -> [km]          LLAtmosphere::cut_altitudes_km, ported (the GLSL takes the C++'s cuts; it no longer searches them)
     Block(prog)                       a uniform buffer bound at the block's binding for `prog`; .upload(bytes)
@@ -31,7 +31,7 @@ LAYOUT = {
     'pa_lights.dir[0]': 208, 'pa_lights.dir[1]': 224, 'pa_lights.E[0]': 240, 'pa_lights.E[1]': 256, 'pa_lights.disc[0]': 272,
     'pa_lights.disc[1]': 288, 'pa_lights.count': 304, 'pa_rayleigh_scat': 320, 'pa_aerosol_scat': 332, 'pa_ms_scale': 336,
     'pa_slab_scat': 348, 'pa_glow_phase': 352, 'pa_aniso': 364, 'pa_max_phase': 368, 'pa_f_ms_max': 372, 'pa_ground_albedo': 376,
-    'pa_camera_km': 380, 'pa_cuts[0]': 384,
+    'pa_cuts[0]': 384,
 }
 
 gen_buffers = fn('glGenBuffers', None, I, C.POINTER(U))
@@ -150,7 +150,7 @@ def _profile(p):
     return struct.pack('<12f', a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3], a[4], b[4], 2.0 if len(p) > 1 else 1.0, 0.0)
 
 
-def pack(a, camera_km=0.0):
+def pack(a):
     cuts = cut_altitudes(a)
     prof = profiles(a)
     lt = a.get('lights', dict(dir=[[0, 0, 1], [0, 0, -1]], E=[[0, 0, 0], [0, 0, 0]], disc=[0.0046, 0.0046], count=2))
@@ -167,7 +167,7 @@ def pack(a, camera_km=0.0):
     glow = a.get('glow', [0.0, 0.0, 0.0])
     out += struct.pack('<3ff3ff3ff4f', *a.get('rayleigh_scat', [0.0] * 3), a.get('aerosol_scat', 0.0), *a.get('ms_scale', [1.0] * 3),
                        a.get('slab_scat', 0.0), *glow, a.get('aniso', 0.8), a.get('max_phase', 1e4), a.get('f_ms_max', 0.6),
-                       a.get('ground_albedo', 0.2), camera_km)
+                       a.get('ground_albedo', 0.2), 0.0)   # the padding before the cuts (unused2)
     out += struct.pack('<32f', *(cuts + [0.0] * (MAX_ALT - len(cuts))))
     assert len(out) == SIZE, len(out)
     return out

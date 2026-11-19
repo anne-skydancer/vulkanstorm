@@ -1868,6 +1868,7 @@ void LLEnvironment::updateShaderUniforms(LLGLSLShader* shader)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
 
+    // <Vulkanstorm/> LLSkyFilter::current_inputs (llskyfilter.cpp, stage AT2-1) reads the sky group's values from these lists in this order
     // apply uniforms that should be applied to all shaders
     mSkyUniforms[LLGLSLShader::SG_ANY].apply(shader);
     mWaterUniforms[LLGLSLShader::SG_ANY].apply(shader);
