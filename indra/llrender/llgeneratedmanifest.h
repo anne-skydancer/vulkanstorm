@@ -12,6 +12,7 @@
 #include <boost/json.hpp>
 
 #include <exception>
+#include <stdexcept>
 #include <map>
 #include <string>
 #include <string_view>
@@ -26,9 +27,14 @@ namespace LLGeneratedShader
         out.clear();
         boost::system::error_code ec;
         boost::json::value root = boost::json::parse(text, ec);
-        if (ec || !root.is_object() || !root.as_object().if_contains("programs") || !root.at("programs").is_array())
+        if (ec)
         {
-            error = "not valid JSON, or no programs array";
+            error = "not valid JSON: " + ec.message();
+            return false;
+        }
+        if (!root.is_object() || !root.as_object().if_contains("programs") || !root.at("programs").is_array())
+        {
+            error = root.is_object() ? "no programs array" : "the root is not an object";
             return false;
         }
         try
@@ -48,8 +54,13 @@ namespace LLGeneratedShader
                     for (const boost::json::value& v : iface.at("uniforms").as_array())
                     {
                         const boost::json::object& o = v.as_object();
-                        si.uniforms.push_back({ std::string(o.at("name").as_string()), (unsigned) o.at("offset").to_number<int64_t>(),
-                                                (unsigned) o.at("size").to_number<int64_t>() });
+                        const int64_t offset = o.at("offset").to_number<int64_t>();
+                        const int64_t size = o.at("size").to_number<int64_t>();
+                        if (offset < 0 || size < 0)
+                        {
+                            throw std::out_of_range("negative uniform offset or size");   // caught below as a bad manifest
+                        }
+                        si.uniforms.push_back({ std::string(o.at("name").as_string()), (unsigned) offset, (unsigned) size });
                     }
                     for (const boost::json::value& v : iface.at("textures").as_array())
                     {

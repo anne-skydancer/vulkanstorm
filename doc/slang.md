@@ -140,7 +140,7 @@ The hand-written GLSL that still writes `gl_Position` is the list `scripts/shade
 **The AMD decal fix.** A tattoo or applier is drawn over the body by another program than the body, so the two positions must agree bit for bit.
 Two things give that. The skinned position is one text in each program's single compilation unit (the hand-written skinning was a separate shader
 object, which GLSL 4.60 section 4.8.1 gives no guarantee across). And every vertex program declares `invariant gl_Position;`, which the module
-emits through a prelude (`VK_POSITION_INVARIANT`, default 1; 0 removes it from every program at once). Slang's GLSL front end rejects `invariant
+emits through a prelude (`VK_POSITION_INVARIANT`; 0 removes it from every program at once. It is 0 until the switchover: with hand-written programs still drawing over generated ones, the invariant position moved the depth of the rigged bump by up to 2 ULP on NVIDIA against them (`ab_harness.py programs`, the `depth (info)` rows), and 0 makes it agree exactly. The switchover sets it to 1 for every program together). Slang's GLSL front end rejects `invariant
 gl_Position;` as source, and its `precise` is dropped from the GLSL whenever the temporary folds away, so the prelude is the one way that holds.
 `invariant` makes the driver multiply then add where it would fuse them: depth moves by a few steps on NVIDIA (invariance-audit.md 3.4), and the
 hand-written programs still outside the tree keep their fused form until the switchover, so the interim tree mixes the two. Not yet measured on AMD.
@@ -172,7 +172,7 @@ Not converted, and why:
 
 | Programs | Reason |
 |---|---|
-| forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar shader calls `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
+| forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
 | every deferred world program that calls `calcAtmospherics` (fullbright, emissive, terrain, alpha) and `rlv` (`getPositionWithDepth`, `deferredUtil`) | atmosphere and `deferredUtil` are hot |
 | diffuse, diffuse alpha mask, non-indexed variants | the texture-index lookup (`diffuseLookup`, `passTextureIndex`) is composed at run time from the device's texture unit count; needs its own design (a hook or a permutation per count) |
 | `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |

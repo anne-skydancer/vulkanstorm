@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     mat4x4 modelview_projection_matrix;
@@ -39,15 +38,8 @@ layout(std140) uniform block_GlobalParams_0
     float alpha_scale;
     float ambiance;
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionClip_0(mat4x4 mvp_0, vec3 p_0)
 {
-    vkInvariantPosition_0();
     return (((mvp_0) * (vec4(p_0, 1.0))));
 }
 
@@ -72,11 +64,10 @@ struct Varyings_0
 void main()
 {
     Varyings_0 o_0;
-    vec4 _S1 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
-    o_0.pos_0 = _S1;
+    o_0.pos_0 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
     o_0.vertex_color_0 = vec4(v_diffuse_color_0.xyz * globalParams_0.tint * clamp(max(dot(v_normal_0, vec3(-0.75, 1.0, 1.0) * 0.5), 0.0) + max(dot(v_normal_0, vec3(0.5, -0.60000002384185791, 0.40000000596046448) * 0.25), 0.0) + max(dot(v_normal_0, vec3(0.5, -0.80000001192092896, 0.30000001192092896) * 0.5), 0.0), globalParams_0.ambiance, 1.0), v_diffuse_color_0.w * globalParams_0.alpha_scale);
-    Varyings_0 _S2 = o_0;
+    Varyings_0 _S1 = o_0;
     gl_Position = o_0.pos_0;
-    entryPointParam_vsMain_vertex_color_0 = _S2.vertex_color_0;
+    entryPointParam_vsMain_vertex_color_0 = _S1.vertex_color_0;
     return;
 }

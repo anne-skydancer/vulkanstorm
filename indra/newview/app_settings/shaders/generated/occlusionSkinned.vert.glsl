@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     mat4x4 modelview_matrix;
@@ -37,15 +36,8 @@ layout(std140) uniform block_GlobalParams_0
     mat4x4 projection_matrix;
     mat3x4  matrixPalette[110];
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionRigged_0(mat4x4 projection_0, mat4x4 modelview_skin_0, vec3 p_0, out vec3 eye_0)
 {
-    vkInvariantPosition_0();
     vec3 e_0 = (((modelview_skin_0) * (vec4(p_0, 1.0)))).xyz;
     eye_0 = e_0;
     return (((projection_0) * (vec4(e_0, 1.0))));
@@ -85,8 +77,7 @@ void main()
 {
     Varyings_0 o_0;
     vec3 eye_1;
-    vec4 _S9 = vkPositionRigged_0(globalParams_0.projection_matrix, (((globalParams_0.modelview_matrix) * (vkSkinObject_0(v_weight4_0)))), v_position_0.xyz, eye_1);
-    o_0.pos_0 = _S9;
+    o_0.pos_0 = vkPositionRigged_0(globalParams_0.projection_matrix, (((globalParams_0.modelview_matrix) * (vkSkinObject_0(v_weight4_0)))), v_position_0.xyz, eye_1);
     gl_Position = o_0.pos_0;
     return;
 }

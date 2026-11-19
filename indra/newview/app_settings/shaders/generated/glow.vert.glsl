@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     float glowStrength;
@@ -35,15 +34,8 @@ layout(std140) uniform block_GlobalParams_0
     float glowStrength;
     vec2 glowDelta;
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionNdc_0(vec3 p_0)
 {
-    vkInvariantPosition_0();
     return vec4(p_0, 1.0);
 }
 
@@ -74,18 +66,17 @@ struct Varyings_0
 void main()
 {
     Varyings_0 o_0;
-    vec4 _S1 = vkPositionNdc_0(v_position_0);
-    o_0.pos_0 = _S1;
+    o_0.pos_0 = vkPositionNdc_0(v_position_0);
     vec2 texcoord_0 = v_position_0.xy * 0.5 + 0.5;
     o_0.vary_texcoord0_0 = vec4(texcoord_0 + globalParams_0.glowDelta * -3.5, texcoord_0 + globalParams_0.glowDelta * 0.5);
     o_0.vary_texcoord1_0 = vec4(texcoord_0 + globalParams_0.glowDelta * -2.5, texcoord_0 + globalParams_0.glowDelta * 1.5);
     o_0.vary_texcoord2_0 = vec4(texcoord_0 + globalParams_0.glowDelta * -1.5, texcoord_0 + globalParams_0.glowDelta * 2.5);
     o_0.vary_texcoord3_0 = vec4(texcoord_0 + globalParams_0.glowDelta * -0.5, texcoord_0 + globalParams_0.glowDelta * 3.5);
-    Varyings_0 _S2 = o_0;
+    Varyings_0 _S1 = o_0;
     gl_Position = o_0.pos_0;
-    entryPointParam_vsMain_vary_texcoord0_0 = _S2.vary_texcoord0_0;
-    entryPointParam_vsMain_vary_texcoord1_0 = _S2.vary_texcoord1_0;
-    entryPointParam_vsMain_vary_texcoord2_0 = _S2.vary_texcoord2_0;
-    entryPointParam_vsMain_vary_texcoord3_0 = _S2.vary_texcoord3_0;
+    entryPointParam_vsMain_vary_texcoord0_0 = _S1.vary_texcoord0_0;
+    entryPointParam_vsMain_vary_texcoord1_0 = _S1.vary_texcoord1_0;
+    entryPointParam_vsMain_vary_texcoord2_0 = _S1.vary_texcoord2_0;
+    entryPointParam_vsMain_vary_texcoord3_0 = _S1.vary_texcoord3_0;
     return;
 }

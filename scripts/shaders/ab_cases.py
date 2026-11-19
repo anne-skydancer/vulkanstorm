@@ -53,6 +53,9 @@ class Case:
     uniforms: dict = field(default_factory=dict)
     optional: tuple = ()         # uniforms the candidate may legitimately not take
     clip: bool = False           # also run with the mirror clip on (G-buffer programs)
+    depth_info: bool = False     # report (never fail) how far the generated depth is from the hand-written one: the generated vertex
+                                 # stage declares `invariant gl_Position`, the hand-written one does not
+    flat_ok: tuple = ()          # colour targets the program legitimately writes as one constant (colour writes off, zero specular)
     variants: tuple = ()         # extra override dicts: the case is drawn once per variant (a cube face, a source layer)
 
 
@@ -320,12 +323,21 @@ def run_case(gl, case, generated, rng_seed=7):
                      flat=bool(len(drawn) and float(np.ptp(drawn)) == 0.0))
             if unset or r['nonblack'] == 0:
                 r['pass'] = False
+            # a constant image proves nothing about its channel: only the listed ones (and the emissive target, which no
+            # program of these writes anything into) may be flat
+            if r['flat'] and i not in case.flat_ok and not (i == 3 and case.outputs == 4):
+                r['pass'] = False
             results.append(r)
         if case.depth:
             r = H.compare(images['ref'][1], images['cand'][1], mode='exact')
             r.update(case=f'{case.name} depth{suffix}', nonblack=int((images['ref'][1] < 1.0).sum()), unset_uniforms=unset)
             if r['nonblack'] == 0:
                 r['pass'] = False
+            results.append(r)
+        if case.depth_info and not case.depth:
+            r = H.compare(images['ref'][1], images['cand'][1], mode='exact')
+            r.update(case=f'{case.name} depth (info){suffix}', nonblack=int((images['ref'][1] < 1.0).sum()), unset_uniforms=unset, info=True)
+            r['pass'] = True
             results.append(r)
     return results
 
@@ -348,9 +360,9 @@ def cases():
     add('solidcolor', I + 'solidcolorV.glsl', I + 'solidcolorF.glsl', 'solidcolor')
     add('onetexturefilter', I + 'onetexturefilterV.glsl', I + 'onetexturefilterF.glsl', 'onetexturefilter')
     add('twotexturecompare', I + 'twotexturecompareV.glsl', I + 'twotexturecompareF.glsl', 'twotexturecompare')
-    add('occlusion', I + 'occlusionV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE0', outputs=3)
-    add('occlusion-cube', I + 'occlusionCubeV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE1', outputs=3)
-    add('occlusion-skinned', I + 'occlusionSkinnedV.glsl', I + 'occlusionF.glsl', 'occlusionSkinned', outputs=3, skin=True)
+    add('occlusion', I + 'occlusionV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE0', outputs=3, flat_ok=(0, 1))
+    add('occlusion-cube', I + 'occlusionCubeV.glsl', I + 'occlusionF.glsl', 'occlusion__CUBE1', outputs=3, flat_ok=(0, 1))
+    add('occlusion-skinned', I + 'occlusionSkinnedV.glsl', I + 'occlusionF.glsl', 'occlusionSkinned', outputs=3, skin=True, flat_ok=(0, 1))
     add('highlight-diffuse', I + 'highlightV.glsl', I + 'highlightF.glsl', 'highlightdiffuse__HAS_SKIN0')
     add('highlight-diffuse-rigged', I + 'highlightV.glsl', I + 'highlightF.glsl', 'highlightdiffuse__HAS_SKIN1', skin=True)
     add('highlight-normals', I + 'highlightNormV.glsl', I + 'highlightF.glsl', 'highlight__UVSET1')
@@ -380,10 +392,10 @@ def cases():
         e = {'HAS_EMISSIVE': '1'} if emissive else {}
         n = 4 if emissive else 3
         tag = '-emissive' if emissive else ''
-        add('deferred-bump' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN0', defines=e, outputs=n, clip=True)
-        add('deferred-bump-rigged' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN1', defines=e, outputs=n, skin=True, clip=True)
+        add('deferred-bump' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN0', defines=e, outputs=n, clip=True, depth_info=True)
+        add('deferred-bump-rigged' + tag, D + 'bumpV.glsl', D + 'bumpF.glsl', f'dbump__HAS_EMISSIVE{emissive}__HAS_SKIN1', defines=e, outputs=n, skin=True, clip=True, depth_info=True)
         add('deferred-impostor' + tag, D + 'impostorV.glsl', D + 'impostorF.glsl', f'dimpostor__HAS_EMISSIVE{emissive}', defines=e, outputs=n)
-        add('deferred-tree' + tag, D + 'treeV.glsl', D + 'treeF.glsl', f'dtree__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True)
+        add('deferred-tree' + tag, D + 'treeV.glsl', D + 'treeF.glsl', f'dtree__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True, flat_ok=(1, 3))
         add('avatar-eyes' + tag, D + 'avatarEyesV.glsl', D + 'diffuseF.glsl', f'avatareyes__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True)
     return c
 

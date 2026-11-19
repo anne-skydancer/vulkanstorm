@@ -34,7 +34,6 @@
 #include "llsdserialize.h"
 #include "hbxxh.h"
 #include "llgeneratedshader.h"
-#include <boost/json.hpp>
 #include "llgeneratedmanifest.h"
 
 #if LL_DARWIN

@@ -20,8 +20,11 @@
 module position;
 import glsl;
 
+// Off until the switchover: while hand-written programs (not invariant) draw over generated ones, an invariant position
+// moves depth by up to 2 ULP against them (rigged bump on NVIDIA, ab_harness.py programs "depth (info)"), so glow or
+// an applier over a generated body could z-fight. The switchover turns it on for every program at once.
 #ifndef VK_POSITION_INVARIANT
-#define VK_POSITION_INVARIANT 1
+#define VK_POSITION_INVARIANT 0
 #endif
 
 // LL_MAX_JOINTS_PER_MESH_OBJECT (indra/llcharacter/lljoint.h); test_slang_pipeline.py checks the two agree.

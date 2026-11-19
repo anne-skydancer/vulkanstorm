@@ -28,9 +28,8 @@ struct Varyings
 Varyings vsMain(VertexIn v)
 {
     Varyings o;
-    vec4 ndc = vec4(v.position.xyz, 1.0);
     o.pos = vkPositionNdc(v.position.xyz);
-    o.vary_fragcoord = (ndc.xy * 0.5 + 0.5);
+    o.vary_fragcoord = (v.position.xy * 0.5 + 0.5);
     return o;
 }
 

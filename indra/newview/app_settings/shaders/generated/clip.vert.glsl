@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     mat4x4 modelview_projection_matrix;
@@ -39,15 +38,8 @@ layout(std140) uniform block_GlobalParams_0
     vec4 color;
     vec4 clip_plane;
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionClip_0(mat4x4 mvp_0, vec3 p_0)
 {
-    vkInvariantPosition_0();
     return (((mvp_0) * (vec4(p_0, 1.0))));
 }
 
@@ -67,10 +59,9 @@ void main()
 {
     Varyings_0 o_0;
     o_0.vary_position_0 = (((globalParams_0.modelview_matrix) * (vec4(v_position_0.xyz, 1.0)))).xyz;
-    vec4 _S1 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
-    o_0.pos_0 = _S1;
-    Varyings_0 _S2 = o_0;
+    o_0.pos_0 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
+    Varyings_0 _S1 = o_0;
     gl_Position = o_0.pos_0;
-    entryPointParam_vsMain_vary_position_0 = _S2.vary_position_0;
+    entryPointParam_vsMain_vary_position_0 = _S1.vary_position_0;
     return;
 }

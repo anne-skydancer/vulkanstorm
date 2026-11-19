@@ -74,11 +74,6 @@ namespace LLGeneratedShader
     template <class Put>
     inline void putMatrix(int offset, unsigned count, bool transpose, const float* v, unsigned cols, unsigned rows, Put&& put)
     {
-        if (!transpose && count == 1 && cols == 4 && rows == 4)
-        {
-            put(offset, v, 64); // the four columns are the 64 bytes
-            return;
-        }
         if (!transpose && rows == 4)
         {
             put(offset, v, count * cols * 16); // every column is a vec4 and the matrices follow each other: one copy (the rigged palette)

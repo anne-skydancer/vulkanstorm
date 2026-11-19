@@ -300,6 +300,8 @@ static bool pilotGenerated()
     return generated;
 }
 
+// (Despite the name it registers every generated program: interface, effects, post and G-buffer. test_slang_pipeline.py checks
+// that each id the loader names exists in programs.json. Renamed with the switchover, when the legacy branch goes.)
 static void interfaceStages(LLGLSLShader& shader, const char* generated_id, const char* legacy_vertex, const char* legacy_fragment)
 {
     if (pilotGenerated())
@@ -1016,6 +1018,14 @@ void LLViewerShaderMgr::setShaders()
 
     llassert(loaded);
     loaded = loaded && loadShadersDeferred();
+    if (loaded)
+    {
+        LL_INFOS() << "Loaded deferred shaders." << LL_ENDL;
+    }
+    else
+    {
+        LL_WARNS() << "Failed to load deferred shaders." << LL_ENDL;
+    }
     llassert(loaded);
 
     if (!LLAppViewer::instance()->isSecondInstance())

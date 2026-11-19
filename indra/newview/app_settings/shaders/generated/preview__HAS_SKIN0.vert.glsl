@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     mat4x4 texture_matrix0;
@@ -45,15 +44,8 @@ layout(std140) uniform block_GlobalParams_0
     mat3x3 normal_matrix;
     mat4x4 modelview_projection_matrix;
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionClip_0(mat4x4 mvp_0, vec3 p_0)
 {
-    vkInvariantPosition_0();
     return (((mvp_0) * (vec4(p_0, 1.0))));
 }
 
@@ -87,8 +79,7 @@ struct Varyings_0
 void main()
 {
     Varyings_0 o_0;
-    vec4 _S1 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
-    o_0.pos_0 = _S1;
+    o_0.pos_0 = vkPositionClip_0(globalParams_0.modelview_projection_matrix, v_position_0.xyz);
     vec3 norm_0 = normalize((((globalParams_0.normal_matrix) * (v_normal_0))));
     o_0.vary_texcoord0_0 = (((globalParams_0.texture_matrix0) * (vec4(v_texcoord0_0, 0.0, 1.0)))).xy;
     vec4 col_0 = globalParams_0.ambient_color;
@@ -96,9 +87,9 @@ void main()
     col_0.xyz = col_0.xyz + globalParams_0.light_diffuse[2].xyz * calcDirectionalLight_0(norm_0, globalParams_0.light_position[2].xyz);
     col_0.xyz = col_0.xyz + globalParams_0.light_diffuse[3].xyz * calcDirectionalLight_0(norm_0, globalParams_0.light_position[3].xyz);
     o_0.vertex_color_0 = col_0 * globalParams_0.color;
-    Varyings_0 _S2 = o_0;
+    Varyings_0 _S1 = o_0;
     gl_Position = o_0.pos_0;
-    entryPointParam_vsMain_vertex_color_0 = _S2.vertex_color_0;
-    entryPointParam_vsMain_vary_texcoord0_0 = _S2.vary_texcoord0_0;
+    entryPointParam_vsMain_vertex_color_0 = _S1.vertex_color_0;
+    entryPointParam_vsMain_vary_texcoord0_0 = _S1.vary_texcoord0_0;
     return;
 }

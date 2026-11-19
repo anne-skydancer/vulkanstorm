@@ -678,7 +678,7 @@ def selftest_manifest(gl):
         prog['stages']['vertex']['interface']['inputs'][1]['location'] += 5
         (copy / 'programs.json').write_text(json.dumps(mf), encoding='utf-8')
         errors = ab_cases.check_manifest_against_driver(gl, copy)
-        wanted = ('GL_UNIFORM_OFFSET', 'by the driver', 'vertex input locations')
+        wanted = ('GL_UNIFORM_OFFSET', 'sampler', 'vertex input locations')
         print('manifest self-test: the wrong offset, unit and input are reported:', len(errors), 'problem(s)')
         return all(any(w in e for e in errors) for w in wanted)
 

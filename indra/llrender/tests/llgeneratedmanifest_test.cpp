@@ -47,6 +47,11 @@ int main(int argc, char** argv)
         broken.replace(broken.find("\"binding\":1"), 11, "\"bindin\":1");
         CHECK(!parseManifest(broken, out, error) && out.empty());   // the first stage parsed, the second failed: none kept
     }
+    {
+        std::string negative = kSmall;
+        negative.replace(negative.find("\"offset\":64"), 11, "\"offset\":-4");
+        CHECK(!parseManifest(negative, out, error) && out.empty());   // a negative offset would wrap to a huge unsigned
+    }
     CHECK(parseManifest("{\"programs\":[]}", out, error) && out.empty());
 
     // the committed manifest
@@ -56,7 +61,7 @@ int main(int argc, char** argv)
     std::stringstream text;
     text << in.rdbuf();
     CHECK(parseManifest(text.str(), out, error));
-    CHECK(out.size() >= 20);
+    CHECK(out.size() >= 20);   // a does-it-parse floor: the manifest holds well over 20 stage files; a truncated parse would fall far below
     size_t stages_with_block = 0;
     for (const auto& entry : out)
     {
@@ -87,7 +92,7 @@ int main(int argc, char** argv)
             CHECK(!s.inputs.empty());   // every vertex stage reads at least the position
         }
     }
-    CHECK(stages_with_block > 20);
+    CHECK(stages_with_block > 20);   // the same floor, for stages that carry a uniform block
     std::puts("llgeneratedmanifest_test: ok");
     return 0;
 }

@@ -22,7 +22,6 @@
 
 layout(column_major) uniform;
 layout(column_major) buffer;
-invariant gl_Position;
 struct GlobalParams_0
 {
     mat4x4 modelview_matrix;
@@ -43,15 +42,8 @@ layout(std140) uniform block_GlobalParams_0
     float mirror_flag;
     vec4 clipPlane;
 }globalParams_0;
-void vkInvariantPosition_0()
-{
-    ;
-    return;
-}
-
 vec4 vkPositionRigged_0(mat4x4 projection_0, mat4x4 modelview_skin_0, vec3 p_0, out vec3 eye_0)
 {
-    vkInvariantPosition_0();
     vec3 e_0 = (((modelview_skin_0) * (vec4(p_0, 1.0)))).xyz;
     eye_0 = e_0;
     return (((projection_0) * (vec4(e_0, 1.0))));

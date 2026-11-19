@@ -388,6 +388,28 @@ class CommittedTreeTest(unittest.TestCase):
         for path in stages:
             self.assertEqual('\ninvariant gl_Position;\n' in path.read_text(encoding='utf-8'), want, path.name)
 
+    def test_every_program_id_the_loader_asks_for_is_in_the_manifest(self):
+        source = (ROOT / 'indra/newview/llviewershadermgr.cpp').read_text(encoding='utf-8')
+        known = {p['id'] for p in check.load_manifest(common.GENERATED)['programs']}
+        ids = set(re.findall(r'interfaceStages\(\s*\w+\s*,\s*"([\w]+)"', source))
+        ids |= set(re.findall(r'make_rigged_variant\(\s*[\w*]+\s*,\s*[\w*]+\s*,\s*"(\w+)"\s*\)', source))
+        ids |= set(re.findall(r'"(glowextract__HAS_NOISE\d)"', source))
+        for base, skin in re.findall(r'emissiveId\(\s*"(\w+)"(?:\s*,\s*"(\w+)")?\s*\)', source):
+            ids |= {f'{base}__HAS_EMISSIVE{e}{skin}' for e in (0, 1)}
+        self.assertGreater(len(ids), 40)   # the scan itself found the calls
+        self.assertEqual(sorted(i for i in ids if i not in known), [])
+
+    def test_gbuffer_module_packs_like_the_hand_written_shaders(self):
+        module = (common.SLANG_SRC / 'gbuffer.slang').read_text(encoding='utf-8')
+        loader = (ROOT / 'indra/llrender/llshadermgr.cpp').read_text(encoding='utf-8')
+        glsl = (ROOT / 'indra/newview/app_settings/shaders/class1/deferred/globalF.glsl').read_text(encoding='utf-8')
+        for name in ('HAS_ATMOS', 'HAS_PBR'):
+            slang_value = float(re.search(rf'GBUFFER_FLAG_{name}\s*=\s*([\d.]+)', module).group(1))
+            loader_value = float(re.search(rf'#define GBUFFER_FLAG_{name}\s+([\d.]+)', loader).group(1))
+            self.assertEqual(slang_value, loader_value, name)
+        self.assertIn('sqrt(8 * n.z + 8)', module)
+        self.assertIn('sqrt(8 * n.z + 8)', glsl)
+
     def test_block_name_and_manifest_keys_match_the_loader(self):
         header = (ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
         name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)

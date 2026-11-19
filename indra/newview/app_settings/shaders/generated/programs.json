@@ -11,7 +11,7 @@
     "vertex": {
      "file": "alphamask.vert.glsl",
      "entry": "vsMain",
-     "sha256": "c1aeca3c06dcb3a32cb1dcbfec2c133abecd58c467dbd5b515e373d55970189d",
+     "sha256": "0543ab3c66ffaf02418abb5f7726cca00745ab0fbb842dbeebc0febc27f80d32",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -133,7 +133,7 @@
     "vertex": {
      "file": "avatareyes__HAS_EMISSIVE0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "300b11ea442d43553cb6d699f994848506f4441abb15632d40ca8be4bcb7ff93",
+     "sha256": "515190105ff3efec7145a06f29599cabeac192ef0e49d6b4eac7c7440f92a6b8",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -326,7 +326,7 @@
     "vertex": {
      "file": "avatareyes__HAS_EMISSIVE1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "0087f8a82ab0520eea81dd842bdd7da5940c79a5e04b154846826d621c768943",
+     "sha256": "30f2eda2418e6dcbb7c578a4a331a8d30299c469b346979339bd783f9055f53c",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -522,7 +522,7 @@
     "vertex": {
      "file": "benchmark.vert.glsl",
      "entry": "vsMain",
-     "sha256": "cfbbdc5471dea53730e80c6215187805a484f7a6c594d82eedf6e27da713fee4",
+     "sha256": "3d01f58b8bc850f2ecdf756cbd4f3a0f66472753274be328311372fb23f897a2",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -586,7 +586,7 @@
     "vertex": {
      "file": "bump__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "357bad49d32326b88607e8fe8fea1ff120521b9e002f61099d1e8ea85597c468",
+     "sha256": "bc903fab5b2aa49a89aefa5f18b5cbc0dbdfc69f78fd1795493268e27f8865b6",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -747,7 +747,7 @@
     "vertex": {
      "file": "bump__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "dabad048a400c63321665544606f706eb87449e1c06c2a0e1ad05bf0c456560e",
+     "sha256": "18aca284a3ca7b5b98f42c5533801456e657e82c23488fe6a65ac4fc7b5af33f",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -923,7 +923,7 @@
     "vertex": {
      "file": "clip.vert.glsl",
      "entry": "vsMain",
-     "sha256": "c8c7250386b26509c14ef00d0239d0ccd92683519efffcdf604b50822bc5653b",
+     "sha256": "3a3443d085199c0caff4030061c7450834b7327617ce6f789cf1eea5d63d8442",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1031,7 +1031,7 @@
     "vertex": {
      "file": "copy__COPY_DEPTH0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "8d6a2c4736fb2f8d86d38f73fefb657f262440e180082cfe761aad4a74d4c3d7",
+     "sha256": "bd28fbbf6733d9c43b1e194ac29eda178d25c9eabacdc5fe942e6ec6c294a201",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1095,7 +1095,7 @@
     "vertex": {
      "file": "copy__COPY_DEPTH1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "923052550338de810b7c3766361ea9b6e4ca4f632f7b3e24fc0ed7ba11c9df75",
+     "sha256": "79784710f0025ea178360553ffa4b7248872f906644a2e96f6892d29beae01df",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1165,7 +1165,7 @@
     "vertex": {
      "file": "dbump__HAS_EMISSIVE0__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5ad6bb124e71d51a532653f68360f46c056c17b9cd493aa74be52a32ddc173af",
+     "sha256": "3bfcbab110eb77465e0b893cce0de230b8780fe30a050f00d8b43d0d4a5cb5c1",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1401,7 +1401,7 @@
     "vertex": {
      "file": "dbump__HAS_EMISSIVE0__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "16617a4205502388b1f4c0542a7d6c2559eb5f4616cba7e483ea19e2f91869f1",
+     "sha256": "49173c9409c3a44eebf5c4f52276e919fa4481271943220e4cf61a1229f551db",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1642,7 +1642,7 @@
     "vertex": {
      "file": "dbump__HAS_EMISSIVE1__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "3bfd2d574eff2129704d039cb9d44e27b1bcb3307036eec32ea8548b618625d7",
+     "sha256": "e7f9fd23665039f51611afa4ab79a56235054d52af81d9a590606c9ee0a5ba29",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -1883,7 +1883,7 @@
     "vertex": {
      "file": "dbump__HAS_EMISSIVE1__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "1af1b0b6d2ed465960a3bdc32f4ead88a1beb51015f026c50efe2c657bc6ee04",
+     "sha256": "09b9946a7fc5fc6fe251379d8d908afa4e95a91cdb9c5d9d8623abcad7630920",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2128,7 +2128,7 @@
     "vertex": {
      "file": "debug__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "0aed25d60ec42c430d233c6d564a666997dfbc616b86248e5320070b113333ed",
+     "sha256": "342868e0a1801d0472228318555f17a26cb99a0e8a9dc7865c97faf83199f56e",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2200,7 +2200,7 @@
     "vertex": {
      "file": "debug__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "364fde85f8aefe937f4882e5442948254c05ea3e7e5f49d5f2b53fa43c605d49",
+     "sha256": "5edc382ef25fc67384930e6b52d9a1c9d869c6bbef407544ed0f18ae5ab9a8f5",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2301,7 +2301,7 @@
     "vertex": {
      "file": "dimpostor__HAS_EMISSIVE0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "d244a00004cbb0cacd32a5930d5cd7b07419cb7411e1111f4dafb800450a7fb3",
+     "sha256": "df8ce7c0b7318ec2ec2c462f62c08f9e7d637cc9a017972eeec0b323b2af5b50",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2428,7 +2428,7 @@
     "vertex": {
      "file": "dimpostor__HAS_EMISSIVE1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "388db2ceda4e842ed0d4c4e1a1aab02955780743d447bca29e2187db7fccbd7b",
+     "sha256": "afe3d1ce8e9b9061248b0742443b8ad405ee522976e29f4a3ca46fbb0505e50b",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2558,7 +2558,7 @@
     "vertex": {
      "file": "drawcolor.vert.glsl",
      "entry": "vsMain",
-     "sha256": "91181072f439a9078e21fbcbb16ac9ea0c91ea8848593f3031e6206e574cbf37",
+     "sha256": "bad4fea5d08ed273ac29bf476f9fd4d4e5548e3fa6e92fc2f746a3ec4edc9dd5",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2642,7 +2642,7 @@
     "vertex": {
      "file": "dtree__HAS_EMISSIVE0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5111ce6e1209928f53a0729a848af13afbeae443224529f06367fe3abccf3586",
+     "sha256": "4901e951968dfd30fab76e2a27d2f4556659c760cd4f59e0ceb38cac144f8b3e",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -2842,7 +2842,7 @@
     "vertex": {
      "file": "dtree__HAS_EMISSIVE1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "44c0d4de3c321a089815ff289f1eb99e7c93474819f082bae7d452f4e14d6105",
+     "sha256": "f0dcfda845cfdb7e9349545c1b76a8a8871d8745e01017478b6065cffcb46674",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3045,7 +3045,7 @@
     "vertex": {
      "file": "gaussian.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5211de1a32142c4793c4bc84c0f07257edfab34a7a76781f08d7e913b642deb3",
+     "sha256": "50545086e9f4f1d6ddd56ad334651e75581a603a2b40b09a944c6da7cf0bfbe6",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3145,7 +3145,7 @@
     "vertex": {
      "file": "genbrdflut.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5fd76dc381e33381a935015ee9d694f8cd97e532242f085ab78db05f2878ee65",
+     "sha256": "f43418a3cd086f1b494403b95382c08f94541e8947043c9f38006a289a80c864",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3201,7 +3201,7 @@
     "vertex": {
      "file": "glow.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5382a09f73aed945093c14bb802c19b0a46abec1150cf43752cc23e8b1fc4705",
+     "sha256": "5a27f39306c4f38882136db2874ec6e158dc83b7a5d917d696a74d389f3da173",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3319,7 +3319,7 @@
     "vertex": {
      "file": "glowcombine.vert.glsl",
      "entry": "vsMain",
-     "sha256": "8fb6103ad71ec942a8f502d97a45ac54addbc2bb5f45b2c8964b3c672a814656",
+     "sha256": "030d77fa2a685371a5f422a01f3170e18ca31af5393824b9737341b7bb54e1b6",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3386,7 +3386,7 @@
     "vertex": {
      "file": "glowcombineFXAA.vert.glsl",
      "entry": "vsMain",
-     "sha256": "ccfe880f4e6c31e19971e3351b649fce73b8347fe3591b66df4df1eabdb1e375",
+     "sha256": "11aecac0b2ef5411843ec44440e474089d71dea93b6ac6adfe568589ade2874d",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3450,7 +3450,7 @@
     "vertex": {
      "file": "glowextract__HAS_NOISE0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "251b5f86880686672f3d5a0d980b34f8b558da94b81b6d6f035ded0365c93ebe",
+     "sha256": "bd72e13f1c82c98c6e503f1a36818e7c471cc4134b09514dff12520191ee0a80",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3576,7 +3576,7 @@
     "vertex": {
      "file": "glowextract__HAS_NOISE1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "21511fb5c6f310d460689be8959f2235343ac2a587f7b573ceae1f3438abe7ed",
+     "sha256": "d4f497cc518f586d3af5c55a0a64ae8294598da0069b7957285337bb640b6ffc",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3719,7 +3719,7 @@
     "vertex": {
      "file": "highlight__UVSET1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "e19959c50cd4ff6e9748056f88ec44a96ee4798f45e755bc64bbcb9b508798d7",
+     "sha256": "bcc79675058c7adfe1c66f21b6278e8ab2c474b081bd1ce531e710b67b568eeb",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3826,7 +3826,7 @@
     "vertex": {
      "file": "highlight__UVSET2.vert.glsl",
      "entry": "vsMain",
-     "sha256": "105d610f848947e455792ee7313342a7804dd71e5b1b041567310cf86a5f5430",
+     "sha256": "c1f71ad28f230508b19ae11d97722e1425466357ad5bfd1ee4eaab5043dda924",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -3933,7 +3933,7 @@
     "vertex": {
      "file": "highlightdiffuse__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "0faa617257ac8aed46e0134cd6e4b457a5b4f450d544b3d61cfdee22e0ea438d",
+     "sha256": "b1089a684e41682c8a7bab896d5ce4a77179de60ea1b0b88fed716faebf93152",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4040,7 +4040,7 @@
     "vertex": {
      "file": "highlightdiffuse__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "721eba9ef36ffc3a8eeffeecb80b14d5a37260da16e5c5260139eabb1cb08e76",
+     "sha256": "0ee86712b3ab1f81f4becf2eea449c002ac964ac375dc857d5ffd03f9c55fc30",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4174,7 +4174,7 @@
     "vertex": {
      "file": "impostor.vert.glsl",
      "entry": "vsMain",
-     "sha256": "823524c837a8555bfefea4315d084b4d12d36a2fd011e34775db3928e0170ee3",
+     "sha256": "a7573f90394f80378843ce6277b718115a821df9dd5b117870a53a617bc2842a",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4279,7 +4279,7 @@
     "vertex": {
      "file": "irradianceGen.vert.glsl",
      "entry": "vsMain",
-     "sha256": "356b26a75fac8e1836bde36e9dc176b7ed28620fffb9127578c3fe25fcff3965",
+     "sha256": "737f9c930d157da2c894d0775be622a30b5361254409086d5e60731b7705467d",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4379,7 +4379,7 @@
     "vertex": {
      "file": "normgen.vert.glsl",
      "entry": "vsMain",
-     "sha256": "ee8ccc5da25de44822e7c5e6277669488ca8884897ed9f593f8c4624086a96e7",
+     "sha256": "a6906a415597e30d59c381e21aed7b61653947f324290cc77c20804e8968aafe",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4496,7 +4496,7 @@
     "vertex": {
      "file": "occlusionSkinned.vert.glsl",
      "entry": "vsMain",
-     "sha256": "b6f6a60fee663944aada2a0d3d83e5cbbc516660be0e05e30b87eda834ba21b4",
+     "sha256": "e948360fc5400fc1abcabb8bdf3cdaef188979d81c4ffbe474eaef4a10533820",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4595,7 +4595,7 @@
     "vertex": {
      "file": "occlusion__CUBE0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "7dab0167d8956f9b0e04b0019ecf205375c959bdab2ba57313e19aec98216470",
+     "sha256": "3458bab95dd9c783cb934d3746fdc01ab4857504a2ad635ef11e8657466bd13a",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4665,7 +4665,7 @@
     "vertex": {
      "file": "occlusion__CUBE1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "f83ac255d1d74fe2ff4b780bdd421470c0e43768c100ad2bbb422a3714e8f88d",
+     "sha256": "8377c6459dc73bb385867176364ca3940a9af443ae1680ffb1c9b2c71926b5b8",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4757,7 +4757,7 @@
     "vertex": {
      "file": "onetexturefilter.vert.glsl",
      "entry": "vsMain",
-     "sha256": "73f284609b15b14a08dfad61ef87493d8d594d04cedbd9b8ce4b0d03719083d6",
+     "sha256": "3792e31d1f183f95644c310e885a0259db4d0277fe3903a018f8a9e3100dd3b0",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4852,7 +4852,7 @@
     "vertex": {
      "file": "pathfinding__NORMALS0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "e0763a1278a091ca2d4c22b5792e5723f6f95eb549018269427fdf61aa1380e9",
+     "sha256": "3857f87f14652542cfd7c6b7c0ad38c5276d46bb4ec2a0ce0f9022bc7c3e8f56",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -4953,7 +4953,7 @@
     "vertex": {
      "file": "pathfinding__NORMALS1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "3953dad068ec4117e8de100445099302e4ee95120b9aa2f56821c084611309be",
+     "sha256": "c72a836b5981f7be312fbce3f3495000bf9495e8f5de6402cada7a850b6f93a4",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5069,7 +5069,7 @@
     "vertex": {
      "file": "previewPhysics.vert.glsl",
      "entry": "vsMain",
-     "sha256": "a14ff29012f786b7001ac1bdabb2c9f247624805eee9ccb6d207b8c422e3104c",
+     "sha256": "e2ca5f7bb4dbbd07963c2a58f436346eae048ca5958eac147bd41426d95374ad",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5176,7 +5176,7 @@
     "vertex": {
      "file": "preview__HAS_SKIN0.vert.glsl",
      "entry": "vsMain",
-     "sha256": "8927cb7564387831decba98471b99c59a219b330bb0d83893a2bb75a13805209",
+     "sha256": "c4a593b532dfadfa315a8b80124570995df97935f82f9a17b01d22d7aa54e6ba",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5346,7 +5346,7 @@
     "vertex": {
      "file": "preview__HAS_SKIN1.vert.glsl",
      "entry": "vsMain",
-     "sha256": "fea7ed12e0cae9271270baefb5f4e5ea82201288a27212d18c027c00affce65c",
+     "sha256": "8cfef2c40f3f3fd51499f57461d93bbc6b0a07449ab801ffb473f6aceddeb630",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5533,7 +5533,7 @@
     "vertex": {
      "file": "radianceGen__PROBE_FILTER_SAMPLES32.vert.glsl",
      "entry": "vsMain",
-     "sha256": "8c6d70f3c10e2f67fd23434660eddc8d371029aa3905cc07c15598a86617434b",
+     "sha256": "13a047acf85f36dac8926c2546513c03bcc4add47f329d525b81d56a3fbf8ae1",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5659,7 +5659,7 @@
     "vertex": {
      "file": "radianceGen__PROBE_FILTER_SAMPLES4.vert.glsl",
      "entry": "vsMain",
-     "sha256": "4c56eb8168ffb6e3e172c50c959e2f38b748cada51a5cef6e02ffa94241c576e",
+     "sha256": "db509838536a8036a366c483d49a942eb807a4ba2052ab2c0e3755f0cf120aaa",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5783,7 +5783,7 @@
     "vertex": {
      "file": "reflectionmip.vert.glsl",
      "entry": "vsMain",
-     "sha256": "e518901bf587a6e8e556b6922ddc254ce858be11567e943b88a0323423df66e7",
+     "sha256": "58af21c97ce2881b7115deb4ab74bc38a026f60a872bce000b026643fd50efb4",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5859,7 +5859,7 @@
     "vertex": {
      "file": "snapshotframe.vert.glsl",
      "entry": "vsMain",
-     "sha256": "af90c33dc1830177662a2ff0be905f73fd7b76e1e52091573fe2de6ae03400db",
+     "sha256": "14be1ceb173f1c57b8dfc12f669a47e3208fd0370a7e139743adcd58baec8091",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -5971,7 +5971,7 @@
     "vertex": {
      "file": "solidcolor.vert.glsl",
      "entry": "vsMain",
-     "sha256": "dfd01a1d957107618c9471e97c829c6174a568ca588e44126b3755e58cff0044",
+     "sha256": "80fdc0aaf1df96175190be02d7aa8ef0741bf38e0b994f1f3f84c0ccfac4988e",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -6064,7 +6064,7 @@
     "vertex": {
      "file": "twotexturecompare.vert.glsl",
      "entry": "vsMain",
-     "sha256": "5e8ab20a7bacdb4a2f9f872cf6712905c55ab0c057bdfa3dcc82644ff8992a6e",
+     "sha256": "5f5d81d2025bf1f501b842ae97993eea1ce3eb1c3fa7a736daf762849c029bb4",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -6206,7 +6206,7 @@
     "vertex": {
      "file": "ui.vert.glsl",
      "entry": "vsMain",
-     "sha256": "f2c9a6a62281bb6a42dd06d11ccedb82efa00786fb6a53275d01bf56804007f8",
+     "sha256": "3d5aa3723f612715fd84610fac948dc3d36669436c3b45b17294f2580c3c7860",
      "hooks": [],
      "interface": {
       "inputs": [
@@ -6314,7 +6314,7 @@
     "vertex": {
      "file": "vignette.vert.glsl",
      "entry": "vsMain",
-     "sha256": "9d99ef26886fe79635b811b13525b08d4fed9af0639ada1ee6eca50be2a8eaa2",
+     "sha256": "281db7f1d6f62d65b14c05696eb7c92bf2d85f577f5bd978a7bd7f0c85897f29",
      "hooks": [],
      "interface": {
       "inputs": [
