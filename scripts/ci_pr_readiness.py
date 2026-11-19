@@ -188,8 +188,9 @@ def evaluate(pr):
 
 
 def code_span(text):
-    """Reviewer-written text as inert inline code: no mention, link, image or HTML."""
-    return "`" + " ".join(text.replace("`", "'").split()) + "`"
+    """Untrusted text (review titles, paths, check names) as inert inline code: no mention, link,
+    image or HTML, and no table-breaking pipe."""
+    return "`" + " ".join(text.replace("`", "'").replace("|", "/").split()) + "`"
 
 
 def render_comment(pr, verdict, head_sha):
@@ -207,9 +208,9 @@ def render_comment(pr, verdict, head_sha):
         lines.append("| viewer builds | not needed: only CI files and documentation changed |")
     other = [n for n in verdict["failed"] if n not in BUILDS]
     if other:
-        lines.append(f"| other failed checks | {', '.join(other)} |")
+        lines.append(f"| other failed checks | {', '.join(code_span(n) for n in other)} |")
     if verdict.get("running"):
-        lines.append(f"| other checks running | {', '.join(verdict['running'])} |")
+        lines.append(f"| other checks running | {', '.join(code_span(n) for n in verdict['running'])} |")
     if verdict["conflict"]:
         lines.append(f"| merge | conflicts with {pr['base']} |")
     elif verdict["unknown"]:
@@ -222,7 +223,7 @@ def render_comment(pr, verdict, head_sha):
         for t in verdict["threads"]:
             where = f"{t['path']}:{t['line']}" if t["path"] else "(conversation)"
             badge = f"{t['prio']} " if t["prio"] else ""
-            lines.append(f"- [{badge}{where}]({t['url']}) {t['author']}: {code_span(t['title'])}")
+            lines.append(f"- [{badge}{code_span(where)}]({t['url']}) {t['author']}: {code_span(t['title'])}")
     lines += ["", "Ready means CI is green and no review thread is open "
                   "(doc/release_channels.md, PR readiness)."]
     return "\n".join(lines) + "\n"
@@ -397,21 +398,13 @@ def publish(gh, number, pr, verdict, head, target_url):
 
 
 def affected_prs(gh, event_name, event):
-    """Open PR numbers an event can change the readiness of."""
-    if event_name.startswith("pull_request"):
-        return [event["pull_request"]["number"]]
-    if event_name == "workflow_run":
-        run = event["workflow_run"]
-        numbers = [p["number"] for p in run.get("pull_requests") or []]
-        if numbers:
-            return numbers
-        # Fork and some same-repo runs carry no PR list: match the head commit.
-        return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open")
-                if p["head"]["sha"] == run["head_sha"]]
-    if event_name == "push":
-        base = event["ref"].removeprefix("refs/heads/")
-        return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open&base={base}")]
-    return []
+    """Open PR numbers to evaluate: all of them, for every event.
+
+    The runs share one concurrency group and a newer waiting run replaces an older waiting one, so
+    each run must cover everything the replaced one would have. No event payload (a fork run's
+    PR list, its head commit) is needed to find the PR, so none has to be trusted or matched.
+    Evaluating a PR is a few API calls."""
+    return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open")]
 
 
 def report_error(gh, number, target):
@@ -435,12 +428,13 @@ def main():
     target = f"{server}/{repo}/actions/runs/{run_id}" if run_id else f"{server}/{repo}"
     numbers = sorted(set(affected_prs(gh, event_name, event)))
     print(f"{event_name}: pull requests {numbers or 'none'}")
-    settle = event_name == "pull_request" and event.get("action") in (
-        "opened", "reopened", "synchronize", "ready_for_review")
+    # Wait for the checks to register only on the PR the event is about.
+    settle_number = event["pull_request"]["number"] if event_name == "pull_request" and event.get("action") in (
+        "opened", "reopened", "synchronize", "ready_for_review") else None
     cache, failures = {}, []
     for number in numbers:
         try:
-            result = evaluate_pr(gh, number, cache, settle)
+            result = evaluate_pr(gh, number, cache, number == settle_number)
             if result is None:
                 continue
             pr, verdict, head = result

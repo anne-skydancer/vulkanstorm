@@ -88,8 +88,9 @@ and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
 place by the bot, never a new comment per run). It reruns on the events that
 can change the answer: PR open, push, reopen, ready for review and base
 change; reviews and review comments; the end of a Build Windows, Build Linux,
-Build Linux LTS, Check PR, CI lint or CodeQL run; and a push to a `vkstorm-*`
-line, which can make an open PR conflict. One run per PR at a time.
+Build Linux LTS, Check PR, CI lint, CodeQL, FreeBSD runner image or PR review event run; and a
+push to a `vkstorm-*` line, which can make an open PR conflict. One run per PR
+at a time.
 
 - `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a
   skipped viewer job is not green), no other check is running or failed, and
@@ -109,7 +110,7 @@ so a resolve (and an unresolve) shows at the next event above; rerun the
 once the workflow is on `vkstorm-release`, the default branch. A PR that
 conflicts cannot start `pull_request` workflows, so a conflict is found only
 through the push to its base line. A fork PR's own events have a read-only
-token: its status is written by the Check PR `workflow_run`.
+token: its status is written by the Check PR `workflow_run`, and for a review or review comment by the `PR review event` workflow, an empty unprivileged job whose `workflow_run` re-evaluates the open PRs (no artifact, nothing from the fork is read). The readiness job itself skips every event of a fork PR, its own pull_request events included, so a read-only run never fails on a write for another PR. Every run evaluates all open PRs, so the single waiting run that the concurrency group keeps never drops another PR's update.
 
 Drafts get the status too. It is for reading, not a required check; no branch
 protection depends on it. The script only reads the PR through the API and

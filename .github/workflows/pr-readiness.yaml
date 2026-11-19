@@ -23,7 +23,9 @@ on:
   workflow_run:
     # Check PR runs on every PR, fork or not, so it is also the write path of a
     # PR that builds no viewer: workflow_run has a write token in the base context.
-    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL"]
+    # PR review event is the same path for reviews and review comments on fork PRs, whose own
+    # token is read-only.
+    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL", "FreeBSD runner image", "PR review event"]
     types: [completed]
   # A base line that moves can make open PRs on it conflict.
   push:
@@ -36,17 +38,25 @@ permissions:
   checks: read
   actions: read
 
-# One group per PR whatever the event, so two runs never write the same PR at once.
-# A run in progress finishes (cancelling it would leave a cancelled job on the PR);
-# a newer one waits, and only the newest waiting one is kept, since every run reads
-# the whole state. Events without a PR number group by branch.
+# One group for every run, so two runs never write the same PR (or create its sticky comment)
+# at once. A run in progress finishes (cancelling it would leave a cancelled job on the PR);
+# a newer one waits, and only the newest waiting one is kept. That is safe because every run
+# evaluates all open PRs (scripts/ci_pr_readiness.py, affected_prs). Runs take a few seconds.
 concurrency:
-  group: pr-readiness-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref }}
+  group: pr-readiness
   cancel-in-progress: false
 
 jobs:
   readiness:
     name: readiness
+    # Every pull_request* event of a fork PR (the PR itself, a review, a review comment) has a
+    # read-only token and could write nothing; it would fail on the first write for another PR,
+    # since every run evaluates all open PRs. Skipped here: Check PR's workflow_run covers a fork
+    # PR's own events and PR review event covers its reviews, both with a write token. A skipped
+    # run may still queue briefly in the concurrency group; it does nothing there.
+    if: >-
+      !startsWith(github.event_name, 'pull_request')
+      || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

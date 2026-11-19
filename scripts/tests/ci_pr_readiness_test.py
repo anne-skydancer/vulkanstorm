@@ -78,7 +78,7 @@ class Verdict(unittest.TestCase):
         v = pr_readiness.evaluate(pr(threads=threads))
         self.assertEqual((v["state"], v["description"]), ("pending", "waiting: 1 open thread"))
         text = pr_readiness.render_comment(pr(threads=threads), v, "a" * 40)
-        self.assertIn("[P1 indra/newview/a.cpp:42](https://github.com/o/r/pull/1#discussion_r1)", text)
+        self.assertIn("[P1 `indra/newview/a.cpp:42`](https://github.com/o/r/pull/1#discussion_r1)", text)
 
     def test_resolved_thread_is_not_counted(self):
         # open_threads() drops resolved nodes before thread_info; the verdict sees an empty list.
@@ -135,7 +135,17 @@ class StaleAndRunning(unittest.TestCase):
         runs = GREEN + [run("lint", "in_progress", None, id_=20, workflow=5)]
         v = pr_readiness.evaluate(pr(check_runs=runs))
         self.assertEqual((v["state"], v["description"]), ("pending", "waiting: checks running: lint"))
-        self.assertIn("other checks running | lint", pr_readiness.render_comment(pr(check_runs=runs), v, "d" * 40))
+        self.assertIn("other checks running | `lint`", pr_readiness.render_comment(pr(check_runs=runs), v, "d" * 40))
+
+    def test_hostile_check_name_and_path_are_inert_in_the_comment(self):
+        name = "[x](https://evil.example) @someone | y"
+        runs = GREEN + [run(name, "in_progress", None, id_=20, workflow=5)]
+        thread = {"path": "a](https://evil.example) [b", "line": 1, "prio": "", "url": "u",
+                  "author": "a", "title": "t"}
+        p = pr(check_runs=runs, threads=[thread])
+        text = pr_readiness.render_comment(p, pr_readiness.evaluate(p), "d" * 40)
+        self.assertIn("`[x](https://evil.example) @someone / y`", text)
+        self.assertIn("[`a](https://evil.example) [b:1`](u)", text)
 
     def test_later_failure_replaces_ready(self):
         runs = GREEN + [run("analyze", id_=20, workflow=5)]
@@ -188,19 +198,19 @@ def pull():
 
 
 class Plumbing(unittest.TestCase):
-    def test_workflow_run_maps_to_its_pull_requests(self):
-        ev = {"workflow_run": {"pull_requests": [{"number": 7}, {"number": 9}], "head_sha": "s"}}
-        self.assertEqual(pr_readiness.affected_prs(FakeGithub({}), "workflow_run", ev), [7, 9])
-
-    def test_workflow_run_falls_back_to_the_head_sha(self):
+    def test_every_event_evaluates_all_open_prs(self):
+        # A newer waiting run replaces an older one, so each run covers every open PR; nothing in the
+        # payload (a fork run's PR list or head commit) is used to find the PR.
         gh = FakeGithub({"/repos/o/r/pulls?state=open": [
             {"number": 3, "head": {"sha": "abc"}}, {"number": 4, "head": {"sha": "zzz"}}]})
-        ev = {"workflow_run": {"pull_requests": [], "head_sha": "abc"}}
-        self.assertEqual(pr_readiness.affected_prs(gh, "workflow_run", ev), [3])
-
-    def test_push_lists_the_prs_on_that_base(self):
-        gh = FakeGithub({"/repos/o/r/pulls?state=open&base=vkstorm-devel": [{"number": 5, "head": {"sha": "x"}}]})
-        self.assertEqual(pr_readiness.affected_prs(gh, "push", {"ref": "refs/heads/vkstorm-devel"}), [5])
+        events = {
+            "pull_request": {"pull_request": {"number": 4}},
+            "pull_request_review": {"pull_request": {"number": 3}},
+            "workflow_run": {"workflow_run": {"name": "PR review event", "pull_requests": [], "head_sha": "d" * 40}},
+            "push": {"ref": "refs/heads/vkstorm-devel"},
+        }
+        for name, ev in events.items():
+            self.assertEqual(pr_readiness.affected_prs(gh, name, ev), [3, 4], name)
 
     def test_mergeable_retries_while_null(self):
         gh = FakeGithub({"pull": pull()}, mergeable=(None, None, True))
