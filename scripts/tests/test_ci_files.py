@@ -177,6 +177,11 @@ def main():
             for wanted in (raw_triggers(workflow).get("workflow_run") or {}).get("workflows", []):
                 if wanted not in names:
                     errors.append(f"{path.name}: workflow_run watches '{wanted}', which no workflow is named")
+            # a fork PR's pull_request* events have a read-only token: the job must skip them (the
+            # workflow_run paths write for them), or the first write for another PR fails the run
+            guard = " ".join(str((workflow.get("jobs") or {}).get("readiness", {}).get("if", "")).split())
+            if "!startsWith(github.event_name, 'pull_request')" not in guard or                     "github.event.pull_request.head.repo.full_name == github.repository" not in guard:
+                errors.append(f"{path.name}: the readiness job must skip every pull_request* event of a fork PR")
     if errors:
         sys.exit("\n".join(errors))
     print(f"{len(documents)} YAML file(s) parse; {len(actions)} composite action(s) consistent with their callers")
