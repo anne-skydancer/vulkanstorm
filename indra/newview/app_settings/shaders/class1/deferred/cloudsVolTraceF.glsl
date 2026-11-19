@@ -10,21 +10,25 @@
  * checkerboard; cloudsVolReconF.glsl rebuilds the half-resolution image from it and the history. Only pixels near the
  * sky are traced: the deferred depth at the far plane (the sky's pool clears the depth after the dome).
  *
- * CLOUDS_VOL_STILL (a photo, a tile of one): every pixel of the frame, twice the steps, cv_frame.w sub-samples whose
- * jitter is keyed on the pixel's place in the whole photo (cv_frame.yz is the tile's first pixel), so that the tiles
- * of a photo agree along their borders. No history: the photo shows the clouds of the screen, traced in full.
+ * CLOUDS_VOL_STILL (a photo, a tile of one): every sky pixel of the frame, twice the steps, cv_frame.w sub-samples
+ * whose jitter is keyed on the pixel's place in the whole photo (cv_frame.yz is the tile's first pixel), so that the
+ * tiles of a photo agree along their borders. No history: the photo shows the clouds of the screen, traced in full.
+ * It is drawn straight onto the lit image as the composite is (cloudsVolCompositeV.glsl's screen triangle at the far
+ * plane, LEQUAL against the deferred depth, blended dst * T + L), in strips of rows (LLVolumetricClouds), so the
+ * depth test passes the sky's pixels alone.
  */
 
 /*[EXTRA_CODE_HERE]*/
 
 #ifdef CLOUDS_VOL_STILL
-out vec4 frag_color;
+out vec4 frag_color; // rgb the clouds' radiance (linear, hazed), a their transmittance: blended dst * a + rgb
 #else
 layout(location = 0) out vec4 frag_trace; // rgb the clouds' radiance (linear, hazed), a their transmittance
 layout(location = 1) out vec4 frag_depth; // r the clouds' distance (km)
-#endif
 
 uniform sampler2D depthMap;  // the deferred depth: 1 where only the sky was drawn
+#endif
+
 uniform mat4 cv_inv_vp;      // clip -> world direction (rotation only, z up)
 uniform vec4 cv_sizes;       // the full target's width and height, the half-resolution width and height
 uniform vec4 cv_frame;       // x the frame (checkerboard, jitter); still: yz the tile's first pixel in the photo, w sub-samples
@@ -40,11 +44,6 @@ vec3 cv_view_dir(vec2 px)
     return vec3(d.x, d.z, d.y);
 }
 
-bool cv_is_sky(ivec2 px)
-{
-    return texelFetch(depthMap, clamp(px, ivec2(0), ivec2(cv_sizes.xy) - 1), 0).r >= 1.0;
-}
-
 // interleaved gradient noise
 float cv_ign(vec2 p)
 {
@@ -54,21 +53,8 @@ float cv_ign(vec2 p)
 #ifdef CLOUDS_VOL_STILL
 void main()
 {
+    // the depth test let only the sky's pixels through; the still is full size, so no fringe is needed
     ivec2 px = ivec2(gl_FragCoord.xy);
-    // a pixel takes clouds when it or one of its 3x3 neighbours is sky (the silhouette's fringe)
-    bool sky = false;
-    for (int dy = -1; dy <= 1; ++dy)
-    {
-        for (int dx = -1; dx <= 1; ++dx)
-        {
-            sky = sky || cv_is_sky(px + ivec2(dx, dy));
-        }
-    }
-    if (!sky)
-    {
-        frag_color = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
     vec3 dir = cv_view_dir(gl_FragCoord.xy);
     vec2 g = vec2(px) + cv_frame.yz;
     int n = max(int(cv_frame.w), 1);
@@ -86,6 +72,11 @@ void main()
     frag_color = vec4(col / float(n), t / float(n));
 }
 #else
+bool cv_is_sky(ivec2 px)
+{
+    return texelFetch(depthMap, clamp(px, ivec2(0), ivec2(cv_sizes.xy) - 1), 0).r >= 1.0;
+}
+
 uvec2 cv_checker(uint frame)
 {
     uint k = frame % 4u;

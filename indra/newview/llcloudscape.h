@@ -18,18 +18,21 @@
  * - Coverage picks the type in the band (the owner's Aurora ladder: cumulus -> stratocumulus -> stratus; aloft
  *   altocumulus -> altostratus, cirrocumulus -> cirrostratus); Density D sets how far heaps grow (humilis and
  *   mediocris, congestus, cumulonimbus with an anvil; sheets thicken to nimbostratus);
- * - two generated bands join it: altocumulus cells when Detail D is high, and cirrus (a veil, cirrostratus, as it
- *   thickens) with cloud_variance, the flat layer's streaks;
+ * - two generated bands join it: altocumulus cells over a low layer (a structural debug setting: EEP has no lever
+ *   for it, Detail D's EEP default being its maximum), and cirrus (a veil, cirrostratus, as it thickens) with
+ *   cloud_variance, the flat layer's streaks. The bands never overlap in height: a band that would reach into the
+ *   one below it stands on its top instead, and fades out at the ceiling of its etage;
  * - variability: a mean-preserving modulation of each band's cover by a mesoscale patch field and by a slow
  *   growth and decay field (cells live about 20 minutes), and a wind shear: higher bands drift faster;
- * - the light the clouds get: the flat layer's own terms (cloudsV.glsl), the creator's look (the EEP filter on the
- *   clouds' light), linear for the volumetric trace.
+ * - the light the clouds get: the flat layer's own terms (cloudsV.glsl, softenLightF.glsl), the creator's look (the
+ *   EEP filter on the clouds' light), linear for the volumetric trace.
  *
  * Extinction per genus (km^-1 at 550 nm, at the noise's density 1): the OPAC cloud models (Hess, Koepke and Schult
  * 1998, BAMS 79, Table 1a and 1b) through beta = 3 L / (2 rho r_eff) (geometric optics, Q_ext = 2; Stephens 1978),
  * scaled by one fill factor that keeps the owner's tuned cumulus of the Aurora Viewer (SIGMA 110 km^-1).
  *
- * Heights are above the camera's ground (the sky is fixed for the observer, #439), temperate latitudes.
+ * Heights are above the observer, temperate latitudes: like the flat dome, the cloud layer keeps its height above the
+ * camera (the sky is fixed for the observer, #439), so a skybox or a flight does not reach it.
  * Doubles throughout; indra/newview/tests/llcloudscape_test.cpp checks it. The GLSL side is
  * app_settings/shaders/class1/deferred/cloudsVolWeatherF.glsl and cloudsVolFuncsF.glsl.
  */
@@ -45,6 +48,7 @@
 namespace LLCloudscape
 {
 constexpr int MAX_BANDS = 3;
+constexpr double BAND_GAP_KM = 0.1; // the least clear air between two bands (they never overlap in height)
 
 // Two offsets place a band: the weather map's, wrapped in the map's own period (it is periodic), and the noises',
 // wrapped in WRAP_KM, a multiple of every noise period the trace reads (the base noise 10.5 km and its halves and
@@ -78,25 +82,26 @@ inline const char* genus_name(Genus g)
     return (g >= NONE && g < GENUS_COUNT) ? NAMES[g] : "?";
 }
 
-// The EEP cloud sliders (panel_settings_sky_clouds.xml ranges).
+// The EEP cloud sliders (panel_settings_sky_clouds.xml ranges); the defaults are LLSettingsSky::defaults(), the sky
+// every new EEP sky starts from in the editor.
 struct Sliders
 {
-    double coverage = 0.27; // cloud_shadow, 0..1
-    double scale = 0.42;    // cloud_scale, 0.01..3
-    double variance = 0.0;  // cloud_variance, 0..1
-    double density = 1.0;   // cloud_pos_density1.z, "Density D", 0..3
-    double detail = 0.12;   // cloud_pos_density2.z, "Detail D", 0..1
+    double coverage = 0.2699; // cloud_shadow, 0..1
+    double scale = 0.4199;    // cloud_scale, 0.01..3
+    double variance = 0.0;    // cloud_variance, 0..1
+    double density = 1.0;     // cloud_pos_density1.z, "Density D", 0..3
+    double detail = 1.0;      // cloud_pos_density2.z, "Detail D", 0..1 (the weight of the flat layer's detail tap)
 };
 
 // The structural constants, as debug settings (RenderCloudscape*, settings.xml); these are their defaults.
 struct Tuning
 {
-    double middle_scale = 0.15;        // below this cloud_scale the creator's layer stands in the middle etage (Ac, As)
-    double high_scale = 0.05;          // below this, in the high etage (Cc, Cs)
+    double middle_scale = 0.15;        // below this cloud_scale the creator's layer stands in the middle etage (Ac, As); 0 never
+    double high_scale = 0.05;          // below this, in the high etage (Cc, Cs); 0 never; at most middle_scale
     double congestus_density = 1.0;    // Density D from which heaps grow into congestus (sheets thicken)
     double cumulonimbus_density = 2.0; // Density D from which heaps become cumulonimbus
-    double altocumulus_detail = 0.25;  // Detail D from which a middle band of altocumulus forms
-    double altocumulus_cover = 0.6;    // its cover at Detail D 1
+    double altocumulus_cover = 0.0;    // the mean cover of a band of altocumulus cells over a low creator's layer; 0 none
+                                       // (no EEP lever drives it: which one, or new EEP keys, is the owner's decision D2)
     double cirrus_base = 0.0;          // the cirrus band's cover at cloud_variance 0
     double cirrus_variance = 0.8;      // and per unit of cloud_variance
     double patch_base = 0.3;           // the patch field's amplitude at cloud_variance 0
@@ -117,6 +122,8 @@ struct Band
     double erosion = 0.3;     // how much the detail noise eats the edges
     double anvil = 0.0;       // 0..1: the cover spreads again under the top (cumulonimbus)
     double noise_scale = 1.0; // the base noise's tile, relative to BASE_KM (1, 1/2, 1/4)
+    double noise_blend = 0.0; // 0..1 (below 1): the share of the next finer tile (noise_scale / 2), so that a layer
+                              // rising into the next etage changes its elements' size smoothly
     double stretch = 1.0;     // fibres: the noise stretched along the wind (cirrus)
     double cover = 0.0;       // the band's mean cover (generated bands) or its gain (the creator's band); 0 = absent
     double sheet = 0.0;       // 0 heaps with gaps .. 1 a closed sheet (the Aurora ladder's second channel)
@@ -124,7 +131,9 @@ struct Band
     double far_km = 45.0;     // how far along a ray the band is traced
     int steps = 64;           // march steps
     int step_cap = 64;        // the most steps a long (grazing) path through the band may take: 96 for a low creator's
-                              // band (no step longer than 0.3 km, the Aurora Viewer's rule), the steps for the others
+                              // band (the Aurora Viewer's rule: no step longer than 0.3 km on paths up to 96 x 0.3 =
+                              // 28.8 km through it), easing to the steps as the band rises from 2 to 3 km; the steps for
+                              // the others
     int light_steps = 5;      // light march taps (plus one far tap)
 
     bool present() const { return genus != NONE && cover > 0.0; }
@@ -149,6 +158,10 @@ struct Scape
 
 inline double smoothstep(double e0, double e1, double x)
 {
+    if (e0 == e1)
+    {
+        return x < e0 ? 0.0 : 1.0; // a step (GLSL leaves it undefined; the callers here never rely on it)
+    }
     const double t = std::clamp((x - e0) / (e1 - e0), 0.0, 1.0);
     return t * t * (3.0 - 2.0 * t);
 }
@@ -247,10 +260,15 @@ inline double sigma_of(Genus g)
 // ---- the creator's band
 
 // The etage of the creator's layer from its element size: 0 low, 1 middle, 2 high, continuous so that a day cycle that
-// blends cloud_scale across a threshold lifts the layer smoothly.
+// blends cloud_scale across a threshold lifts the layer smoothly (from 1.25 to 0.8 times the threshold). A threshold of 0
+// never lifts the layer; the high one is at most the middle one.
 inline double altitude_of(double cloud_scale, const Tuning& t)
 {
-    return smoothstep(t.middle_scale * 1.25, t.middle_scale * 0.8, cloud_scale) + smoothstep(t.high_scale * 1.25, t.high_scale * 0.8, cloud_scale);
+    const double middle = std::max(t.middle_scale, 0.0);
+    const double high = std::clamp(t.high_scale, 0.0, middle);
+    const double to_middle = middle > 0.0 ? smoothstep(middle * 1.25, middle * 0.8, cloud_scale) : 0.0;
+    const double to_high = high > 0.0 ? smoothstep(high * 1.25, high * 0.8, cloud_scale) : 0.0;
+    return to_middle + to_high;
 }
 
 namespace detail
@@ -266,7 +284,7 @@ inline double ladder(double type, double sheet_value, double middle_value, doubl
 struct Etage
 {
     Genus genus;
-    double base, top, shape, sigma, erosion, anvil, noise_scale;
+    double base, top, shape, sigma, erosion, anvil, noise_scale, noise_blend;
 };
 
 // the low etage: the Aurora ladder, grown by Density D
@@ -337,7 +355,9 @@ inline Etage high_etage(double type)
 }
 
 // Between two etages the layer rises continuously; its genus is the one of the etage its base stands in (WMO: the
-// middle etage from 2 km, the high one from 5 km, temperate latitudes).
+// middle etage from 2 km, the high one from 5 km, temperate latitudes). The noise's tile stays one of 1, 1/2, 1/4 of
+// BASE_KM (the wrap period holds whole tiles of each); the elements' size cross-fades from a's tile to b's (half of it)
+// in the middle of the rise, where the genus changes, so that no day cycle changes every cloud's shape at once.
 inline Etage blend(const Etage& a, const Etage& b, double x)
 {
     const double base = lerp(a.base, b.base, x);
@@ -349,8 +369,13 @@ inline Etage blend(const Etage& a, const Etage& b, double x)
     e.sigma = lerp(a.sigma, b.sigma, x);
     e.erosion = lerp(a.erosion, b.erosion, x);
     e.anvil = lerp(a.anvil, b.anvil, x);
-    // the noise scale stays one of 1, 1/2, 1/4 (the wrap period holds whole tiles of each)
-    e.noise_scale = base < boundary ? a.noise_scale : b.noise_scale;
+    e.noise_scale = a.noise_scale;
+    e.noise_blend = smoothstep(0.35, 0.65, x);
+    if (e.noise_blend >= 1.0)
+    {
+        e.noise_scale = b.noise_scale;
+        e.noise_blend = 0.0;
+    }
     return e;
 }
 } // namespace detail
@@ -404,18 +429,28 @@ inline Scape make(const Sliders& s, const Tuning& t, bool has_texture = true)
         b.erosion = e.erosion;
         b.anvil = e.anvil;
         b.noise_scale = e.noise_scale;
+        b.noise_blend = e.noise_blend;
         b.cover = 1.0;
         b.sheet = sheet;
         b.drift = 1.0;
-        b.far_km = e.base < 2.5 ? 45.0 : 120.0;
-        b.steps = 64;
-        b.step_cap = e.base < 2.5 ? 96 : 64;
-        b.light_steps = 5;
+        // The march budget follows the etage, as the generated bands of the same etages have it (the altocumulus band 32
+        // steps and 3 light taps, the cirrus band 16 and 2): a sheet aloft is thin, so the trace never stops early in
+        // it, and its smooth long paths need fewer steps (64 steps cost 0.7-0.8 ms at 1080p for an altostratus sheet and
+        // 2.1-2.4 ms for a cirrostratus veil on the RTX 5070 Ti). A low band is traced 45 km out with up to 96 steps on
+        // its long grazing paths, a band aloft 120 km with its steps. All eased with the layer's rise, so that a day
+        // cycle lifting the layer changes none of them at once.
+        const double aloft = smoothstep(2.0, 3.0, e.base);
+        const double up = std::clamp(sc.altitude, 0.0, 2.0);
+        const double steps = up <= 1.0 ? detail::lerp(64.0, 32.0, up) : detail::lerp(32.0, 16.0, up - 1.0);
+        b.far_km = detail::lerp(45.0, 120.0, aloft);
+        b.steps = (int) std::lround(steps);
+        b.step_cap = (int) std::lround(detail::lerp(96.0, steps, aloft));
+        b.light_steps = (int) std::lround(up <= 1.0 ? detail::lerp(5.0, 3.0, up) : detail::lerp(3.0, 2.0, up - 1.0));
     }
 
-    // altocumulus cells with a high Detail D, under a creator's band that is low
+    // altocumulus cells over a creator's band that is low: a structural debug setting (no EEP lever drives it)
     const double mid_weight = 1.0 - std::clamp(sc.altitude * 2.0, 0.0, 1.0);
-    const double ac = std::clamp((s.detail - t.altocumulus_detail) / std::max(1.0 - t.altocumulus_detail, 1e-6), 0.0, 1.0) * t.altocumulus_cover * mid_weight;
+    const double ac = std::clamp(t.altocumulus_cover, 0.0, 1.0) * mid_weight;
     if (ac > 0.0)
     {
         const detail::Etage e = detail::middle_etage(1.0);
@@ -460,20 +495,50 @@ inline Scape make(const Sliders& s, const Tuning& t, bool has_texture = true)
         b.light_steps = 2;
     }
 
-    // wind shear against the creator's band, taken at its lower part (a tower's scroll is its lower body's)
-    const double h0 = std::min(0.5 * (bands[0].base_km + bands[0].top_km), bands[0].base_km + 1.0);
-    for (int i = 1; i < n; ++i)
-    {
-        bands[i].drift = wind_ratio(0.5 * (bands[i].base_km + bands[i].top_km), h0, t.shear_height_km);
-    }
-
-    // sorted by base height (front to back for a camera below the clouds)
+    // sorted by base height (front to back for a camera below the clouds; the creator's band is the lowest)
     std::sort(bands, bands + n, [](const Band& a, const Band& b) { return a.base_km < b.base_km; });
+
+    // The bands never overlap in height, so that the trace composites them front to back and each band's light can
+    // pass through the ones above it: a generated band that would reach into the band below (towers, nimbostratus)
+    // stands on that band's top instead, and fades out as its base reaches the ceiling of its etage (WMO, temperate:
+    // the middle etage up to 7 km, the high one up to 13 km).
+    int kept = 0;
     for (int i = 0; i < n; ++i)
     {
-        sc.bands[i] = bands[i];
+        Band b = bands[i];
+        if (kept > 0)
+        {
+            const double lift = std::max(sc.bands[kept - 1].top_km + BAND_GAP_KM - b.base_km, 0.0);
+            b.base_km += lift;
+            b.top_km += lift;
+            const double ceiling = b.channel == 1 ? 7.0 : 13.0;
+            b.cover *= 1.0 - smoothstep(ceiling - 1.0, ceiling, b.base_km);
+            if (b.cover <= 0.0)
+            {
+                continue;
+            }
+        }
+        sc.bands[kept++] = b;
     }
-    sc.count = n;
+    sc.count = kept;
+
+    // wind shear against the creator's band, taken at its lower part (a tower's scroll is its lower body's)
+    const Band* creator = &sc.bands[0];
+    for (int i = 0; i < sc.count; ++i)
+    {
+        if (sc.bands[i].channel == 0)
+        {
+            creator = &sc.bands[i];
+        }
+    }
+    const double h0 = std::min(0.5 * (creator->base_km + creator->top_km), creator->base_km + 1.0);
+    for (int i = 0; i < sc.count; ++i)
+    {
+        if (sc.bands[i].channel != 0)
+        {
+            sc.bands[i].drift = wind_ratio(0.5 * (sc.bands[i].base_km + sc.bands[i].top_km), h0, t.shear_height_km);
+        }
+    }
 
     // the modulation: patch + growth <= 1 keeps every cover in [0, 1]
     double patch = std::max(t.patch_base + t.patch_variance * variance, 0.0);
@@ -530,8 +595,9 @@ inline double centred(double v, double mean)
     return std::clamp((v - mean) / span, -1.0, 1.0);
 }
 
-// The patch field: a few low plane waves over the weather map, periodic in it, mean exactly 0.5 over whole periods,
-// in [0, 1]. (x, y) in map units (0..1); `phase` seeds the band.
+// The patch field: a few low plane waves, periodic every creator's tile, mean exactly 0.5 over whole periods, in [0, 1].
+// (x, y) in tiles (the weather pass reads it at the map's coordinate times its tiles: whole periods over the map in
+// both of its sizes, so a map of 16 tiles has patches of the same size as a map of one); `phase` seeds the band.
 inline double patch_field(double x, double y, double phase)
 {
     constexpr double TAU = 6.283185307179586;
@@ -598,6 +664,7 @@ struct SkyLight
     double cloud_shadow = 0.27;
     double moon_blend = 0.0; // cloud_moon_blend (L3: 0 the sun, 1 the moon or night)
     double hdr_scale = 1.0;  // sky_hdr_scale
+    bool classic = false;    // classic_mode (a legacy sky drawn the pre-7.0 way, llsettingsvo.cpp)
 };
 
 struct CloudLight
@@ -606,19 +673,24 @@ struct CloudLight
     Vec3 ambient; // linear radiance of the sky light on a cloud
 };
 
+// softenLightF.glsl scales every pixel it writes, the flat clouds' sky pixels included, by this in classic mode
+constexpr double CLASSIC_SCALE = 1.1;
+
 // cloudsV.glsl's vary_CloudColorSun without the glow's angular shape (the trace's phase function replaces it) and
 // vary_CloudColorAmbient without the haze (the trace adds the haze for the cloud's own distance); both doubled,
-// clamped and made linear as softenLightF.glsl makes the flat clouds (srgb_to_linear(min(2 c, 2)) * sky_hdr_scale).
+// clamped and made linear as softenLightF.glsl makes the flat clouds (srgb_to_linear(min(2 c, 2)) * sky_hdr_scale, and
+// CLASSIC_SCALE in classic mode).
 inline CloudLight cloud_light(const SkyLight& s)
 {
-    auto channel = [&s](double sun, double amb, double cloud, double T, double& sun_out, double& amb_out)
+    const double final_scale = s.hdr_scale * (s.classic ? CLASSIC_SCALE : 1.0);
+    auto channel = [&s, final_scale](double sun, double amb, double cloud, double T, double& sun_out, double& amb_out)
     {
         const double sun_cloud = linear_to_srgb(srgb_to_linear(std::max(sun, 0.0)) * T); // cloudsV: the sun at the cloud layer
         const double sun_srgb = sun_cloud * (1.0 - s.moon_blend) * cloud;                 // the glow's handover, the cloud's tint
         const double tmp_ambient = amb + (1.0 - amb) * s.cloud_shadow * 0.5;              // more clouds, more ambient
         const double amb_srgb = tmp_ambient * cloud;
-        sun_out = srgb_to_linear(std::clamp(sun_srgb * 2.0, 0.0, 2.0)) * s.hdr_scale;
-        amb_out = srgb_to_linear(std::clamp(amb_srgb * 2.0, 0.0, 2.0)) * s.hdr_scale;
+        sun_out = srgb_to_linear(std::clamp(sun_srgb * 2.0, 0.0, 2.0)) * final_scale;
+        amb_out = srgb_to_linear(std::clamp(amb_srgb * 2.0, 0.0, 2.0)) * final_scale;
     };
     CloudLight l;
     channel(s.sunlight.r, s.ambient.r, s.cloud_color.r, s.cloud_T.r, l.sun.r, l.ambient.r);
@@ -664,6 +736,43 @@ inline double wrap_km(double v, double period = WRAP_KM)
 {
     const double r = std::fmod(v, period);
     return r < 0.0 ? r + period : r;
+}
+
+// ---- where a band reads its noises
+
+// A band's noise offset (km) for its origin (east, north): the camera's place in the world less the band's drift, in
+// double. A band without fibres reads the noises in the world's frame (x east, y north). Cirrus fibres (stretch above 1)
+// read them in the wind's frame: x along the wind (unit (wind_x, wind_y)) compressed by the stretch, y across it. The
+// stretch is applied here to the unwrapped origin, so wrapping each axis in WRAP_KM moves the noises' coordinate by
+// whole periods of their own axes and never shows; the trace adds the camera-relative point in the same frame
+// (noise_point, the twin of cloudsVolFuncsF.glsl cv_noise_pos).
+inline void noise_offset(double east, double north, double stretch, double wind_x, double wind_y, double& ox, double& oy)
+{
+    if (stretch > 1.0)
+    {
+        ox = wrap_km((east * wind_x + north * wind_y) / stretch);
+        oy = wrap_km(north * wind_x - east * wind_y);
+    }
+    else
+    {
+        ox = wrap_km(east);
+        oy = wrap_km(north);
+    }
+}
+
+// The noises' horizontal coordinate of a camera-relative point (px east, pz north, km) of a band with offset (ox, oy).
+inline void noise_point(double px, double pz, double stretch, double wind_x, double wind_y, double ox, double oy, double& qx, double& qz)
+{
+    if (stretch > 1.0)
+    {
+        qx = (px * wind_x + pz * wind_y) / stretch + ox;
+        qz = pz * wind_x - px * wind_y + oy;
+    }
+    else
+    {
+        qx = px + ox;
+        qz = pz + oy;
+    }
 }
 } // namespace LLCloudscape
 

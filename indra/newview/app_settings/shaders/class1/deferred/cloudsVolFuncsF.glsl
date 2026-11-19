@@ -14,11 +14,13 @@
  * noise; Hillaire's energy-conserving integration (Frostbite, SIGGRAPH 2016) with Wrenninge's multiple-scattering
  * octaves; the approximate Mie phase of Jendersie and d'Eon (SIGGRAPH 2023). Extended to the bands of the cloud
  * kind and variability layer (llcloudscape.h): each band has its own genus, height range, extinction, erosion, noise
- * scale, offset and drift.
+ * scale, offset and drift. The bands never overlap in height, so they are marched one after the other, front to back,
+ * and the light reaching a band passes through the bands above it.
  *
  * Frame: kilometres, y up, x east, z north, the camera at the origin; the clouds' light cv_light in the same frame.
- * The light inputs and the haze are the flat layer's own terms (cloudsV.glsl), read from the sky's uniforms (the
- * programs are in the sky shader group): the EEP filter on the clouds is the creator's look of today's clouds.
+ * The light inputs and the haze are the flat layer's own terms (cloudsV.glsl, softenLightF.glsl), read from the sky's
+ * uniforms (the programs are in the sky shader group): the EEP filter on the clouds is the creator's look of today's
+ * clouds.
  */
 
 uniform sampler3D cloud_vol_base;    // 128^3 RGBA8: R Perlin-Worley, G B A Worley FBMs (TileableVolumeNoise, MIT)
@@ -30,8 +32,8 @@ uniform sampler2D cloud_vol_weather; // the weather map (cloudsVolWeatherF.glsl)
 uniform vec4 cv_layer[3];  // x base km, y top km, z profile (0 sheet .. 1 heap), w cover gain
 uniform vec4 cv_shape[3];  // x extinction km^-1 at density 1, y erosion, z anvil, w the base noise's tile (km)
 uniform vec4 cv_place[3];  // xy the band's offset in the weather map (km), z sheet, w the weather channel
-uniform vec4 cv_noise[3];  // xy the band's offset in the noises (km), z fibre stretch along the wind, w far (km)
-uniform vec4 cv_march[3];  // x steps, y light steps, z the step count's cap, w unused
+uniform vec4 cv_noise[3];  // xy the band's offset in the noises' frame (km), z fibre stretch along the wind, w far (km)
+uniform vec4 cv_march[3];  // x steps, y light steps, z the step count's cap, w the base noise's cross-fade to half its tile
 uniform vec4 cv_map;       // x the weather map's period (km), yz the wind's direction (east, north; unit), w band count
 uniform vec4 cv_light;     // xyz the clouds' light (y up, unit)
 uniform vec4 cv_gain;      // x sun gain, y sky light gain (the Aurora Viewer's, fitted side by side with the flat layer)
@@ -51,6 +53,7 @@ uniform vec3 cloud_color;
 uniform vec3 cloud_light_transmittance; // AT1: the sun's transmittance at the cloud layer (linear)
 uniform float cloud_moon_blend;         // L3: the clouds' own handover, 0 the sun, 1 the moon or night
 uniform float sky_hdr_scale;
+uniform int classic_mode;               // a legacy sky drawn the pre-7.0 way (llsettingsvo.cpp)
 
 vec3 srgb_to_linear(vec3 c);
 vec3 linear_to_srgb_unclamped(vec3 c);
@@ -63,6 +66,14 @@ const float CV_CURL_KM = 3.0;      // the curl noise's tile
 const float CV_STEP_WARP = 1.6;
 const float CV_STEP_MAX_KM = 0.3;
 const float CV_DENSITY_MIN = 0.002;
+const float CV_CLASSIC_SCALE = 1.1; // softenLightF.glsl's final scale in classic mode (LLCloudscape::CLASSIC_SCALE)
+const float CV_LIGHT_Y_MIN = 0.05;  // the lowest light the taps through other bands follow (about 2.9 degrees up)
+
+// what softenLightF.glsl makes of a sky pixel, the flat clouds' included: sky_hdr_scale, and 1.1 in classic mode
+float cv_final_scale()
+{
+    return sky_hdr_scale * (classic_mode > 0 ? CV_CLASSIC_SCALE : 1.0);
+}
 
 float cv_remap(float v, float lo, float hi, float nlo, float nhi)
 {
@@ -84,24 +95,42 @@ float cv_height_grad(float hf, float t, float top, float anvil)
     return base_ramp * top_fall;
 }
 
-// The noises' position of a point of band b: its offset, and the fibres of cirrus stretched along the wind.
+// The noises' position of a point of band b: the camera-relative point in the noises' frame plus the band's offset in
+// it (cv_noise.xy, computed in double on the CPU: LLCloudscape::noise_offset). The frame is the world's (x east,
+// z north), or for the fibres of cirrus the wind's: along the wind compressed by the stretch, across it unchanged
+// (LLCloudscape::noise_point), so a wrap of the offset moves the noises by whole periods and never shows.
 vec3 cv_noise_pos(vec3 p, float h, int b)
 {
-    vec2 q = p.xz + cv_noise[b].xy;
+    vec2 q = p.xz;
     float stretch = cv_noise[b].z;
     if (stretch > 1.0)
     {
         vec2 w = cv_map.yz;
-        vec2 n = vec2(-w.y, w.x);
-        q = w * (dot(q, w) / stretch) + n * dot(q, n);
+        q = vec2(dot(q, w) / stretch, q.y * w.x - q.x * w.y);
     }
+    q += cv_noise[b].xy;
     return vec3(q.x, h, q.y);
 }
 
-// The density of band b at p (0..1); `full` adds the erosion (the cheap density is for the light, the sky light,
-// the edge search and the shadow map).
-float cv_density(vec3 p, int b, bool full)
+// The base noise of band b at its noise position q: at the band's tile, cross-faded towards half of it while the
+// layer rises into the next etage (cv_march.w, LLCloudscape::Band::noise_blend), so the elements shrink smoothly.
+vec4 cv_base_noise(vec3 q, int b)
 {
+    vec3 uvw = vec3(q.x, q.y * CV_BASE_Y, q.z) / cv_shape[b].w;
+    vec4 n = textureLod(cloud_vol_base, uvw, 0.0);
+    float f = cv_march[b].w;
+    if (f > 0.0)
+    {
+        n = mix(n, textureLod(cloud_vol_base, uvw * 2.0, 0.0), f);
+    }
+    return n;
+}
+
+// The density of band b at p (0..1); `full` adds the erosion (the cheap density is for the light, the sky light,
+// the edge search and the shadow map). `ng` is the base noise's Worley FBM there (the sheets' shading), 0 outside.
+float cv_density_g(vec3 p, int b, bool full, out float ng)
+{
+    ng = 0.0;
     vec4 L = cv_layer[b];
     float h = cv_height(p);
     float hf = (h - L.x) / (L.y - L.x);
@@ -120,7 +149,8 @@ float cv_density(vec3 p, int b, bool full)
     float sheet = cv_place[b].z;
     float anvil = cv_shape[b].z;
     vec3 q = cv_noise_pos(p, h, b);
-    vec4 n = textureLod(cloud_vol_base, vec3(q.x, q.y * CV_BASE_Y, q.z) / cv_shape[b].w, 0.0);
+    vec4 n = cv_base_noise(q, b);
+    ng = n.g;
     float low = n.g * 0.625 + n.b * 0.25 + n.a * 0.125;
     float base = clamp(cv_remap(n.r, low - 1.0, 1.0, 0.0, 1.0), 0.0, 1.0);
     // a sheet is thicker and thinner from place to place; a heap's base and top rise and sink with the noise's cells
@@ -148,6 +178,48 @@ float cv_density(vec3 p, int b, bool full)
     float df = d.r * 0.625 + d.g * 0.25 + d.b * 0.125;
     float m = mix(df, 1.0 - df, clamp(hf * 4.0, 0.0, 1.0));
     return clamp(cv_remap(base, m * cv_shape[b].y, 1.0, 0.0, 1.0), 0.0, 1.0);
+}
+
+float cv_density(vec3 p, int b, bool full)
+{
+    float ng;
+    return cv_density_g(p, b, full, ng);
+}
+
+// The distance along the unit d from p, below that height, to the sphere at height h.
+float cv_to_height(vec3 p, vec3 d, float h)
+{
+    vec3 c = p + vec3(0.0, CV_R_PLANET, 0.0);
+    float b = dot(c, d);
+    float r = CV_R_PLANET + h;
+    return -b + sqrt(max(b * b - dot(c, c) + r * r, 0.0));
+}
+
+// The optical depth the bands above band b put on a ray from p (in band b) along the unit direction d: one cheap
+// tap where the ray crosses each one's middle height, times its path through the band there. The bands never overlap
+// in height (LLCloudscape::make) and are sorted, so those above b are b + 1 .. count - 1. A light lower than
+// CV_LIGHT_Y_MIN is followed as if at it (the cloud shadow map does the same).
+float cv_od_above(vec3 p, vec3 d, int b)
+{
+    float od = 0.0;
+    int count = int(cv_map.w);
+    if (b + 1 >= count)
+    {
+        return od;
+    }
+    vec3 dc = d.y >= CV_LIGHT_Y_MIN ? d : normalize(vec3(d.x, CV_LIGHT_Y_MIN, d.z));
+    for (int k = b + 1; k < 3; ++k)
+    {
+        if (k >= count)
+        {
+            break;
+        }
+        vec4 L = cv_layer[k];
+        vec3 x = p + dc * cv_to_height(p, dc, 0.5 * (L.x + L.y));
+        float sin_e = max(dot(normalize(x + vec3(0.0, CV_R_PLANET, 0.0)), dc), CV_LIGHT_Y_MIN);
+        od += cv_density(x, k, false) * cv_shape[k].x * (L.y - L.x) / sin_e;
+    }
+    return od;
 }
 
 float cv_hg(float c, float g)
@@ -180,15 +252,16 @@ float cv_sphere_far(vec3 d, float r)
 // The light on a cloud, the flat layer's terms (cloudsV.glsl): the sun at the cloud layer (AT1's transmittance) tinted
 // by the cloud colour, without the glow's angular shape (the phase function draws it), fading with the clouds' own
 // handover; the ambient, lifted by the cloud cover. Doubled, clamped and made linear as the flat clouds are in
-// softenLightF.glsl. The C++ twin is LLCloudscape::cloud_light().
+// softenLightF.glsl, with its classic-mode scale (cv_final_scale). The C++ twin is LLCloudscape::cloud_light().
 void cv_light_inputs(out vec3 sun_col, out vec3 amb_col)
 {
     vec3 sun_cloud = linear_to_srgb_unclamped(srgb_to_linear(max(sunlight_color, vec3(0.0))) * cloud_light_transmittance);
     vec3 sun_srgb = sun_cloud * (1.0 - cloud_moon_blend) * cloud_color;
     vec3 tmp_ambient = ambient_color + (1.0 - ambient_color) * cloud_shadow * 0.5;
     vec3 amb_srgb = tmp_ambient * cloud_color;
-    sun_col = srgb_to_linear(clamp(sun_srgb * 2.0, vec3(0.0), vec3(2.0))) * sky_hdr_scale;
-    amb_col = srgb_to_linear(clamp(amb_srgb * 2.0, vec3(0.0), vec3(2.0))) * sky_hdr_scale;
+    float final_scale = cv_final_scale();
+    sun_col = srgb_to_linear(clamp(sun_srgb * 2.0, vec3(0.0), vec3(2.0))) * final_scale;
+    amb_col = srgb_to_linear(clamp(amb_srgb * 2.0, vec3(0.0), vec3(2.0))) * final_scale;
 }
 
 // The haze between the eye and a cloud dist_km away along dir: cloudsV.glsl's haze below the clouds, at the cloud's
@@ -210,7 +283,7 @@ vec3 cv_haze(vec3 dir, float dist_km, vec3 col, float T)
     vec3 tmp_ambient = ambient_color + (1.0 - ambient_color) * cloud_shadow * 0.5;
     sunlight *= (1.0 - cloud_shadow);
     vec3 below = blue_horizon * blue_weight * (sunlight + tmp_ambient) + (haze_horizon * haze_weight) * (sunlight * haze_glow + tmp_ambient);
-    vec3 below_lin = srgb_to_linear(clamp(below * 2.0, vec3(0.0), vec3(2.0))) * sky_hdr_scale;
+    vec3 below_lin = srgb_to_linear(clamp(below * 2.0, vec3(0.0), vec3(2.0))) * cv_final_scale();
     // the flat layer attenuates in its sRGB-like space: as a linear factor that is the power 2.2
     vec3 tr = pow(clamp(transparency, vec3(0.0), vec3(1.0)), vec3(2.2));
     return col * tr + (1.0 - T) * below_lin * (1.0 - tr);
@@ -243,7 +316,8 @@ void cv_march_band(int b, vec3 dir, int steps, int lsteps, float jitter, float c
         float tt = t0 + len * pow(x, warp);
         float ds = len * warp * pow(x, warp - 1.0) / float(n);
         vec3 p = dir * tt;
-        float dens = cv_density(p, b, true);
+        float ng;
+        float dens = cv_density_g(p, b, true, ng);
         // the step that enters a cloud: the edge is found by bisection, so that it does not sit on the step grid
         if (dens > CV_DENSITY_MIN && !prev_in && i > 0)
         {
@@ -264,14 +338,14 @@ void cv_march_band(int b, vec3 dir, int steps, int lsteps, float jitter, float c
             ds = min(ds, tt - hi + 0.5 * (hi - lo));
             tt = 0.5 * (hi + tt);
             p = dir * tt;
-            dens = cv_density(p, b, true);
+            dens = cv_density_g(p, b, true, ng);
         }
         prev_t = t0 + len * pow(x, warp);
         prev_in = dens > CV_DENSITY_MIN;
         if (dens > CV_DENSITY_MIN)
         {
             float sigma = dens * sigma0;
-            // the light march: a cone of growing taps on the cheap density, and one far tap
+            // the light march: a cone of growing taps on the cheap density, and one far tap; then the bands above
             float od = 0.0;
             float ls = 0.05;
             vec3 lp = p;
@@ -282,7 +356,7 @@ void cv_march_band(int b, vec3 dir, int steps, int lsteps, float jitter, float c
                 ls *= 1.7;
             }
             od += cv_density(lp + sun * 1.2, b, false);
-            od *= sigma0;
+            od = od * sigma0 + cv_od_above(p, sun, b);
             // each octave scatters more evenly (multiple scattering)
             float s = 0.0;
             float oa = 1.0;
@@ -298,16 +372,14 @@ void cv_march_band(int b, vec3 dir, int steps, int lsteps, float jitter, float c
             float powder = 1.0 - 0.6 * exp(-sigma * 0.15);
             float h = cv_height(p);
             float hf = clamp((h - L.x) / (L.y - L.x), 0.0, 1.0);
-            // the sky light reaches a point through the cloud above it
+            // the sky light reaches a point through the cloud above it, the bands above included
             vec3 up = normalize(p + vec3(0.0, CV_R_PLANET, 0.0));
             float sky_od = (cv_density(p + up * 0.3, b, false) * 0.3 + cv_density(p + up * 0.6, b, false) * 0.4
-                            + cv_density(p + up * 1.0, b, false) * 0.4) * sigma0;
+                            + cv_density(p + up * 1.0, b, false) * 0.4) * sigma0 + cv_od_above(p, up, b);
             float sky_vis = mix(0.25, 1.0, exp(-sky_od * 0.012));
             vec3 ls_rad = sun_col * cv_gain.x * s * 4.0 * CV_PI * powder + amb_col * cv_gain.y * mix(0.5, 1.0, hf) * sky_vis;
-            // a sheet is lit unevenly where it is thick or thin
-            vec3 q = cv_noise_pos(p, h, b);
-            float nb = textureLod(cloud_vol_base, vec3(q.x, q.y * CV_BASE_Y, q.z) / cv_shape[b].w, 0.0).g;
-            float sheet_shade = mix(mix(0.55, 1.0, clamp(nb * 1.8, 0.0, 1.0)), 1.0, L.z);
+            // a sheet is lit unevenly where it is thick or thin (the base noise the density read, ng)
+            float sheet_shade = mix(mix(0.55, 1.0, clamp(ng * 1.8, 0.0, 1.0)), 1.0, L.z);
             float ext = exp(-sigma * ds);
             float absorbed = T * (1.0 - ext);
             col += ls_rad * sheet_shade * absorbed;

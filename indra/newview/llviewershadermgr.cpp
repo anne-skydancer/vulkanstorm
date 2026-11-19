@@ -2996,7 +2996,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
              LLGLSLShader::SG_DEFAULT, nullptr);
         make(gCloudsVolTraceProgram, "Volumetric Clouds Trace", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolTraceF.glsl", funcs },
              LLGLSLShader::SG_SKY, nullptr);
-        make(gCloudsVolStillProgram, "Volumetric Clouds Still", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolTraceF.glsl", funcs },
+        // a photo's still trace is drawn straight onto the sky's pixels, as the composite is: its screen triangle
+        make(gCloudsVolStillProgram, "Volumetric Clouds Still", "deferred/cloudsVolCompositeV.glsl", { "deferred/cloudsVolTraceF.glsl", funcs },
              LLGLSLShader::SG_SKY, "CLOUDS_VOL_STILL");
         make(gCloudsVolReconProgram, "Volumetric Clouds Reconstruction", "deferred/postDeferredNoTCV.glsl", { "deferred/cloudsVolReconF.glsl" },
              LLGLSLShader::SG_DEFAULT, nullptr);

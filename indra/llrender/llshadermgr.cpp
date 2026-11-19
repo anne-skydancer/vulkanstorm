@@ -1665,6 +1665,22 @@ void LLShaderMgr::initAttribsAndUniforms()
 
     llassert(mReservedUniforms.size() == END_RESERVED_UNIFORMS);
 
+    // <Vulkanstorm> the enum and this list are kept in step by hand, and the count alone does not catch a merge that
+    // puts a block at a different place in each: the volumetric clouds' names check their own places
+#ifdef SHOW_ASSERT
+    {
+        const std::pair<U32, const char*> placed[] = { { CLOUD_VOL_BASE, "cloud_vol_base" },       { CLOUD_VOL_EROSION, "cloud_vol_erosion" },
+                                                       { CLOUD_VOL_CURL, "cloud_vol_curl" },       { CLOUD_VOL_WEATHER, "cloud_vol_weather" },
+                                                       { CLOUD_VOL_TRACE, "cloud_vol_trace" },     { CLOUD_VOL_TDEPTH, "cloud_vol_tdepth" },
+                                                       { CLOUD_VOL_HISTORY, "cloud_vol_history" } };
+        for (const auto& [index, name] : placed)
+        {
+            llassert(index < mReservedUniforms.size() && mReservedUniforms[index] == name);
+        }
+    }
+#endif
+    // </Vulkanstorm>
+
     std::set<std::string> dupe_check;
 
     for (U32 i = 0; i < mReservedUniforms.size(); ++i)

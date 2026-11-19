@@ -7,16 +7,20 @@
 //   - the Aurora Viewer's ladder as ported (coverage, type, layer heights, tile), against clouds.rs's own values;
 //   - the extinction per genus from OPAC (Hess, Koepke and Schult 1998) and the fill factor that keeps the Aurora
 //     cumulus at 110 km^-1;
-//   - the cloud types at the EEP slider ranges: the default sky is fair-weather cumulus alone; coverage walks the
-//     ladder to stratus; Density D grows congestus, cumulonimbus with an anvil, nimbostratus; a small cloud_scale
-//     lifts the layer to altocumulus/altostratus and cirrocumulus/cirrostratus; Detail D adds altocumulus,
-//     cloud_variance cirrus;
-//   - over a grid of every slider: bands sorted, inside their WMO etage, sane parameters, the wrap period a multiple
-//     of every period, the heights continuous in cloud_scale (no jump at the thresholds);
+//   - the cloud types at the EEP slider ranges: the default sky (LLSettingsSky::defaults(), and the legacy Default.xml)
+//     is fair-weather cumulus alone; coverage walks the ladder to stratus; Density D grows congestus, cumulonimbus with
+//     an anvil, nimbostratus; a small cloud_scale lifts the layer to altocumulus/altostratus and
+//     cirrocumulus/cirrostratus; the altocumulus band comes only from its debug setting, never from Detail D;
+//     cloud_variance adds cirrus; a threshold of 0 never lifts the layer;
+//   - over a grid of every slider (and the altocumulus setting): bands sorted and never overlapping in height, inside
+//     their WMO etage, sane parameters, the wrap period a multiple of every period; every band parameter continuous in
+//     cloud_scale (no jump at the thresholds: heights, profile, extinction, the noise's tile, the trace's reach and
+//     step cap);
 //   - the variability: the modulation keeps the mean cover exactly and stays in [0, 1]; the patch field has mean 0.5
-//     over the map; the growth field's mean follows the noise slices as the texture unit filters them, and its clock
-//     wraps; the creator's pattern is periodic over the map (16 tiles with cloud_variance);
-//   - the clouds' light: the flat layer's terms (night: no sun; the clamp; the ambient lift);
+//     over the map with one tile and with 16; the growth field's mean follows the noise slices as the texture unit
+//     filters them, and its clock wraps; the creator's pattern is periodic over the map (16 tiles with cloud_variance);
+//   - the noises' offset: a wrap moves every band's noise coordinate by whole periods, cirrus fibres included;
+//   - the clouds' light: the flat layer's terms (night: no sun; the clamp; the ambient lift; classic mode's scale);
 //   - the weather map's key follows every input it is drawn from.
 
 #include "llcloudscape.h"
@@ -47,7 +51,14 @@ using namespace LLCloudscape;
 
 const Tuning TUNING;
 
-Scape scape(double coverage, double scale, double variance, double density, double detail)
+Tuning with_altocumulus(double cover)
+{
+    Tuning t;
+    t.altocumulus_cover = cover;
+    return t;
+}
+
+Scape scape(double coverage, double scale, double variance, double density, double detail, const Tuning& t = TUNING)
 {
     Sliders s;
     s.coverage = coverage;
@@ -55,7 +66,13 @@ Scape scape(double coverage, double scale, double variance, double density, doub
     s.variance = variance;
     s.density = density;
     s.detail = detail;
-    return make(s, TUNING);
+    return make(s, t);
+}
+
+// the base noise's tile a band reads, its cross-fade included (relative to BASE_KM)
+double noise_tile(const Band& b)
+{
+    return b.noise_scale * (1.0 - 0.5 * b.noise_blend);
 }
 
 const Band* find(const Scape& sc, int channel)
@@ -113,16 +130,25 @@ void test_extinction()
 
 void test_types()
 {
-    // the default sky (LLSettingsSky defaults): fair-weather cumulus, one band, the Aurora heights
+    // the default sky: LLSettingsSky::defaults() (llsettingssky.cpp: cloud_shadow 0.2699, cloud_scale 0.4199,
+    // cloud_variance 0, cloud_pos_density1.z 1, cloud_pos_density2.z 1: Detail D at its maximum, the value every sky
+    // made in the EEP editor starts from), which is Sliders{}; and the legacy Default.xml (Detail D 0.12):
+    // fair-weather cumulus, one band, the Aurora heights
     {
-        const Scape sc = scape(0.27, 0.42, 0.0, 1.0, 0.12);
-        check(sc.count == 1, "default: one band", sc.count);
-        const Band& b = sc.bands[0];
-        check(b.genus == CUMULUS && b.channel == 0, "default: cumulus from the creator's pattern", b.genus);
-        check(near(b.base_km, 1.2, 1e-12) && near(b.top_km, 2.0, 1e-12), "default: 1.2-2 km", b.base_km, b.top_km);
-        check(near(b.sigma, 110.0, 1e-9), "default: Aurora's extinction", b.sigma);
-        check(b.sheet == 0.0 && b.anvil == 0.0, "default: heaps, no anvil");
-        check(sc.tiles_per_map == 1 && sc.map_size == 512 && near(sc.map_km, 12.6, 1e-12), "default: one tile, Aurora's map size");
+        const Sliders defaults;
+        check(defaults.coverage == 0.2699 && defaults.scale == 0.4199 && defaults.variance == 0.0 && defaults.density == 1.0 && defaults.detail == 1.0,
+              "Sliders{} are LLSettingsSky::defaults()");
+        for (const Scape& sc : { make(defaults, TUNING), scape(0.27, 0.42, 0.0, 1.0, 0.12) })
+        {
+            check(sc.count == 1, "default: one band", sc.count);
+            const Band& b = sc.bands[0];
+            check(b.genus == CUMULUS && b.channel == 0, "default: cumulus from the creator's pattern", b.genus);
+            check(near(b.base_km, 1.2, 1e-12) && near(b.top_km, 2.0, 1e-12), "default: 1.2-2 km", b.base_km, b.top_km);
+            check(near(b.sigma, 110.0, 1e-9), "default: Aurora's extinction", b.sigma);
+            check(b.sheet == 0.0 && b.anvil == 0.0 && b.noise_blend == 0.0, "default: heaps, no anvil, the base tile");
+            check(b.far_km == 45.0 && b.step_cap == 96, "default: the low band's reach and step cap", b.far_km, b.step_cap);
+            check(sc.tiles_per_map == 1 && sc.map_size == 512 && near(sc.map_km, 2.0 * 15.0 * 0.42, 0.01), "default: one tile, Aurora's map size");
+        }
     }
     // coverage walks the ladder
     check(scape(0.45, 0.42, 0.0, 1.0, 0.12).bands[0].genus == STRATOCUMULUS, "0.45: stratocumulus");
@@ -158,16 +184,63 @@ void test_types()
         check(sc.bands[0].base_km >= 5.0 && sc.bands[0].top_km <= 13.0, "cirrocumulus in the high etage");
     }
     check(scape(0.62, 0.03, 0.0, 1.0, 0.12).bands[0].genus == CIRROSTRATUS, "scale 0.03, overcast: cirrostratus");
-    // Detail D adds altocumulus cells over a low layer; not over a layer that is already aloft
+    // the march budget follows the etage, as the generated bands of each etage have it: low 64 steps and 5 light taps
+    // (up to 96 on grazing paths), middle 32 and 3, high 16 and 2
     {
-        const Scape sc = scape(0.27, 0.42, 0.0, 1.0, 0.8);
-        const Band* ac = find(sc, 1);
-        check(sc.count == 2 && ac && ac->genus == ALTOCUMULUS, "detail 0.8: altocumulus band", sc.count);
-        check(ac && near(ac->cover, (0.8 - 0.25) / 0.75 * 0.6, 1e-12), "detail 0.8: its cover", ac ? ac->cover : -1.0);
-        check(ac && ac->drift > 1.0, "the middle band drifts faster", ac ? ac->drift : 0.0);
-        check(find(scape(0.27, 0.12, 0.0, 1.0, 0.8), 1) == nullptr, "no altocumulus band over an altocumulus layer");
+        const Band low = scape(0.62, 0.42, 0.0, 1.0, 1.0).bands[0], mid = scape(0.62, 0.12, 0.0, 1.0, 1.0).bands[0], high = scape(0.62, 0.03, 0.0, 1.0, 1.0).bands[0];
+        check(low.steps == 64 && low.light_steps == 5 && low.step_cap == 96, "low etage: the full march", low.steps, low.step_cap);
+        check(mid.steps == 32 && mid.light_steps == 3 && mid.step_cap == 32, "middle etage: the altocumulus band's march", mid.steps, mid.step_cap);
+        check(high.steps == 16 && high.light_steps == 2 && high.step_cap == 16, "high etage: the cirrus band's march", high.steps, high.step_cap);
     }
-    check(find(scape(0.27, 0.42, 0.0, 1.0, 0.12), 1) == nullptr, "default detail: no altocumulus band");
+    // the thresholds: 0 never lifts the layer; the high one is at most the middle one
+    {
+        Tuning never = TUNING;
+        never.middle_scale = 0.0;
+        never.high_scale = 0.0;
+        check(altitude_of(0.01, never) == 0.0 && altitude_of(0.42, never) == 0.0 && scape(0.27, 0.01, 0.0, 1.0, 1.0, never).bands[0].genus == CUMULUS,
+              "thresholds 0: the layer stays low");
+        Tuning no_high = TUNING;
+        no_high.high_scale = 0.0;
+        check(near(altitude_of(0.01, no_high), 1.0, 1e-12), "high threshold 0: at most the middle etage", altitude_of(0.01, no_high));
+        Tuning inverted = TUNING;
+        inverted.high_scale = 0.3; // above the middle one (0.15): taken as the middle one
+        check(near(altitude_of(0.2, inverted), 0.0, 1e-12) && near(altitude_of(0.1, inverted), 2.0, 1e-12), "high threshold clamped to the middle one",
+              altitude_of(0.2, inverted), altitude_of(0.1, inverted));
+    }
+    // altocumulus cells over a low layer come from their debug setting alone, never from Detail D (its EEP default is
+    // its maximum); not over a layer that is already aloft
+    {
+        for (double detail : { 0.0, 0.12, 0.5, 1.0 })
+        {
+            check(find(scape(0.27, 0.42, 0.0, 1.0, detail), 1) == nullptr, "no altocumulus band by default, whatever Detail D", detail);
+        }
+        const Tuning ac_on = with_altocumulus(0.6);
+        const Scape sc = scape(0.27, 0.42, 0.0, 1.0, 1.0, ac_on);
+        const Band* ac = find(sc, 1);
+        check(sc.count == 2 && ac && ac->genus == ALTOCUMULUS, "the setting: an altocumulus band", sc.count);
+        check(ac && near(ac->cover, 0.6, 1e-12), "the setting: its cover", ac ? ac->cover : -1.0);
+        check(ac && near(ac->base_km, 3.0, 1e-12) && near(ac->top_km, 3.6, 1e-12), "the setting: at 3-3.6 km over the cumulus", ac ? ac->base_km : -1.0);
+        check(ac && ac->drift > 1.0, "the middle band drifts faster", ac ? ac->drift : 0.0);
+        check(find(scape(0.27, 0.12, 0.0, 1.0, 1.0, ac_on), 1) == nullptr, "no altocumulus band over an altocumulus layer");
+    }
+    // bands never overlap: a generated band stands on the towers' top, and fades out at its etage's ceiling
+    {
+        const Tuning ac_on = with_altocumulus(0.6);
+        const Scape con = scape(0.27, 0.42, 0.0, 1.6, 1.0, ac_on);
+        const Band* ac = find(con, 1);
+        check(con.bands[0].genus == CUMULUS_CONGESTUS && ac && near(ac->base_km, con.bands[0].top_km + BAND_GAP_KM, 1e-12) && near(ac->top_km - ac->base_km, 0.6, 1e-12),
+              "altocumulus over congestus: on its top", ac ? ac->base_km : -1.0, con.bands[0].top_km);
+        check(ac && ac->cover > 0.0 && ac->cover <= 0.6 && ac->base_km < 7.0, "altocumulus over congestus: in the middle etage", ac ? ac->cover : -1.0);
+        const Scape cb = scape(0.27, 0.42, 0.0, 2.6, 1.0, ac_on);
+        check(cb.bands[0].genus == CUMULONIMBUS && find(cb, 1) == nullptr, "no altocumulus band above a cumulonimbus (past the middle etage)");
+        const Scape cb_ci = scape(0.27, 0.42, 1.0, 2.6, 1.0);
+        const Band* ci = find(cb_ci, 2);
+        check(ci && near(ci->base_km, 11.0 + BAND_GAP_KM, 1e-12) && ci->top_km <= 13.0 && near(ci->cover, 0.8, 1e-12),
+              "cirrus above a cumulonimbus: on the anvil's top, its cover kept", ci ? ci->base_km : -1.0, ci ? ci->cover : -1.0);
+        const Scape ns = scape(0.62, 0.42, 0.0, 2.0, 1.0, ac_on);
+        const Band* ac_ns = find(ns, 1);
+        check(ns.bands[0].genus == NIMBOSTRATUS && ac_ns && ac_ns->base_km >= ns.bands[0].top_km + BAND_GAP_KM - 1e-12, "altocumulus over nimbostratus: above it");
+    }
     // cloud_variance adds cirrus, a veil as it thickens
     {
         const Scape sc = scape(0.27, 0.42, 0.5, 1.0, 0.12);
@@ -194,21 +267,41 @@ void test_types()
 
 void test_slider_ranges()
 {
-    // continuity in cloud_scale (a day cycle blends it): the creator's band's heights move by little for a small step,
-    // also across the etage thresholds (they blend over a quarter of their value)
+    // continuity in cloud_scale (a day cycle blends it): every parameter of the creator's band moves by little for a
+    // small step, also across the etage thresholds (they blend from 1.25 to 0.8 times their value), so that nothing
+    // changes at once: heights, profile, extinction, erosion, the noise's tile (cross-faded), the reach and the step cap
+    for (double cov : { 0.27, 0.45, 0.62 })
     {
-        double prev_base = -1.0, prev_top = -1.0, worst = 0.0;
-        for (double scale = 0.01; scale <= 0.4; scale += 0.0001)
+        for (double dens : { 0.7, 1.6, 2.6 })
         {
-            const Scape c = scape(0.27, scale, 0.0, 1.0, 0.12);
-            if (prev_base >= 0.0)
+            Band prev;
+            bool have = false;
+            double worst_km = 0.0, worst_shape = 0.0, worst_sigma = 0.0, worst_tile = 0.0, worst_far = 0.0;
+            int worst_cap = 0;
+            for (double scale = 0.01; scale <= 0.4; scale += 0.0001)
             {
-                worst = std::max(worst, std::max(std::fabs(c.bands[0].base_km - prev_base), std::fabs(c.bands[0].top_km - prev_top)));
+                const Band b = scape(cov, scale, 0.0, dens, 1.0).bands[0];
+                if (have)
+                {
+                    worst_km = std::max({ worst_km, std::fabs(b.base_km - prev.base_km), std::fabs(b.top_km - prev.top_km) });
+                    worst_shape = std::max({ worst_shape, std::fabs(b.shape - prev.shape), std::fabs(b.erosion - prev.erosion), std::fabs(b.anvil - prev.anvil),
+                                             std::fabs(b.sheet - prev.sheet) });
+                    worst_sigma = std::max(worst_sigma, std::fabs(b.sigma - prev.sigma) / (1.5 * AURORA_SIGMA)); // of its range
+                    worst_tile = std::max(worst_tile, std::fabs(noise_tile(b) - noise_tile(prev)));
+                    worst_far = std::max(worst_far, std::fabs(b.far_km - prev.far_km));
+                    worst_cap = std::max(worst_cap, std::abs(b.step_cap - prev.step_cap));
+                }
+                check(b.noise_blend >= 0.0 && b.noise_blend < 1.0, "the noise cross-fade below 1", b.noise_blend);
+                prev = b;
+                have = true;
             }
-            prev_base = c.bands[0].base_km;
-            prev_top = c.bands[0].top_km;
+            check(worst_km < 0.05, "the creator's band rises continuously with cloud_scale", worst_km, cov);
+            check(worst_shape < 0.02, "its profile, erosion, anvil and sheet are continuous", worst_shape, cov);
+            check(worst_sigma < 0.01, "its extinction is continuous", worst_sigma, cov);
+            check(worst_tile < 0.01, "its noise tile cross-fades (no shape changes at once)", worst_tile, cov);
+            check(worst_far < 1.0, "its reach is continuous", worst_far, cov);
+            check(worst_cap <= 1, "its step cap moves a step at a time", worst_cap, cov);
         }
-        check(worst < 0.05, "the creator's band rises continuously with cloud_scale", worst);
     }
 
     int scapes = 0;
@@ -220,31 +313,38 @@ void test_slider_ranges()
             {
                 for (double dens = 0.01; dens <= 3.0001; dens += 0.25)
                 {
-                    for (double det = 0.0; det <= 1.0001; det += 0.25)
+                    for (double ac = 0.0; ac <= 1.0001; ac += 0.5)
                     {
-                        const Scape sc = scape(cov, scale, var, dens, det);
+                        const Scape sc = scape(cov, scale, var, dens, 1.0, with_altocumulus(ac));
                         ++scapes;
                         check(sc.count >= 1 && sc.count <= MAX_BANDS, "band count", sc.count);
                         check(sc.patch >= 0.0 && sc.growth >= 0.0 && sc.patch + sc.growth <= 1.0 + 1e-12, "modulation bounded", sc.patch, sc.growth);
                         check(near(sc.map_km, sc.tile_km * sc.tiles_per_map, 1e-12), "the map holds whole tiles", sc.map_km);
+                        check(sc.bands[0].channel == 0, "the creator's band is the lowest", sc.bands[0].channel);
                         for (int i = 0; i < sc.count; ++i)
                         {
                             const Band& b = sc.bands[i];
                             check(b.present(), "present bands first", i);
-                            check(b.base_km > 0.0 && b.top_km > b.base_km + 0.2 && b.top_km <= 12.0, "heights", b.base_km, b.top_km);
+                            check(b.base_km > 0.0 && b.top_km > b.base_km + 0.2 && b.top_km <= 13.0, "heights", b.base_km, b.top_km);
                             check(b.sigma > 0.0 && b.sigma <= 1.5 * AURORA_SIGMA + 1e-9, "extinction", b.sigma);
                             check(b.cover > 0.0 && b.cover <= 1.0, "cover", b.cover);
                             check(b.shape >= 0.0 && b.shape <= 1.0 && b.sheet >= 0.0 && b.sheet <= 1.0 && b.anvil >= 0.0 && b.anvil <= 1.0, "shape");
                             check(b.erosion > 0.0 && b.erosion < 1.0, "erosion", b.erosion);
                             check(b.noise_scale == 1.0 || b.noise_scale == 0.5 || b.noise_scale == 0.25, "noise scale", b.noise_scale);
-                            const double base_tiles = WRAP_KM / (BASE_KM * b.noise_scale);
-                            check(near(base_tiles, std::round(base_tiles), 1e-9), "the wrap holds whole noise tiles", b.noise_scale);
+                            check(b.noise_blend >= 0.0 && b.noise_blend < 1.0 && (b.noise_blend == 0.0 || b.noise_scale > 0.25), "noise cross-fade", b.noise_blend);
+                            for (double tile : { b.noise_scale, b.noise_scale * 0.5 }) // both tiles a cross-fade reads
+                            {
+                                const double base_tiles = WRAP_KM / (BASE_KM * tile);
+                                check(near(base_tiles, std::round(base_tiles), 1e-9), "the wrap holds whole noise tiles", tile);
+                            }
                             check(b.steps >= 16 && b.steps <= 64 && b.light_steps >= 1 && b.light_steps <= 6, "steps", b.steps);
-                            check(b.step_cap >= b.steps && b.step_cap <= 96 && (b.step_cap == b.steps || b.base_km < 2.5), "step cap", b.step_cap);
+                            check(b.step_cap >= b.steps && b.step_cap <= 96 && (b.step_cap == b.steps || b.base_km < 3.0), "step cap", b.step_cap);
+                            check(b.far_km >= 45.0 && b.far_km <= 160.0, "reach", b.far_km);
                             check(b.drift >= 1.0 - 1e-12, "higher bands drift no slower", b.drift);
                             if (i > 0)
                             {
                                 check(b.base_km >= sc.bands[i - 1].base_km, "sorted by height", sc.bands[i - 1].base_km, b.base_km);
+                                check(b.base_km >= sc.bands[i - 1].top_km + BAND_GAP_KM - 1e-12, "bands never overlap in height", sc.bands[i - 1].top_km, b.base_km);
                             }
                             // the etages (WMO, temperate): low bases under 2 km, middle 2-7 km, high 5-13 km
                             if (b.genus == STRATUS || b.genus == STRATOCUMULUS || b.genus == CUMULUS || b.genus == CUMULUS_CONGESTUS
@@ -284,6 +384,23 @@ void test_variability()
         }
         // a zero-mean M: the centred patch field over a whole period
         const int N = 64;
+        // the weather pass reads it at the map's coordinate times the map's tiles: its mean over the map is 0.5 for a
+        // map of one tile (512 texels) and one of 16 (2048 texels, cloud_variance), and its patches are a tile across
+        for (const int tiles : { 1, 16 })
+        {
+            const int size = tiles == 1 ? 512 : 2048;
+            double map_mean = 0.0;
+            for (int y = 0; y < size; ++y)
+            {
+                for (int x = 0; x < size; ++x)
+                {
+                    map_mean += patch_field((x + 0.5) / size * tiles, (y + 0.5) / size * tiles, 0.71);
+                }
+            }
+            map_mean /= (double) size * size;
+            check(near(map_mean, 0.5, 1e-9), "the patch field's mean over the map is 0.5", tiles, map_mean);
+        }
+        check(near(patch_field(0.3, 0.6, 0.37), patch_field(1.3, 2.6, 0.37), 1e-12), "the patch field repeats every tile");
         double field_mean = 0.0;
         for (int y = 0; y < N; ++y)
         {
@@ -414,6 +531,64 @@ void test_light()
     l = cloud_light(s);
     check(l.sun.r < l.sun.g && l.sun.g < l.sun.b, "a reddened sun at the cloud layer is reddish on the clouds");
     check(near(l.sun.r, srgb_to_linear(2.0 * linear_to_srgb(srgb_to_linear(0.5) * 0.25)), 1e-12), "the transmittance in linear light", l.sun.r);
+    // classic mode: softenLightF.glsl scales every pixel, the flat clouds' too, by 1.1; so do the volumetric ones
+    {
+        SkyLight c = s;
+        c.classic = true;
+        const CloudLight lc = cloud_light(c);
+        check(near(lc.sun.g, l.sun.g * 1.1, 1e-12) && near(lc.ambient.b, l.ambient.b * 1.1, 1e-12), "classic mode: the flat layer's 1.1", lc.sun.g, l.sun.g);
+    }
+}
+
+void test_noise_offset()
+{
+    // A world point seen from two places far apart (the camera's offset wraps in WRAP_KM between them): every band's
+    // noise coordinate differs by whole WRAP_KM along each of the noises' axes, the cirrus fibres' wind frame included,
+    // so a wrap never shows. The old way (the stretch applied to the wrapped offset in the shader) fails it.
+    double worst = 0.0, worst_old = 0.0;
+    for (double stretch : { 1.0, 2.0, 4.0 })
+    {
+        for (double angle : { 0.05, 0.7, 2.3, 4.1 })
+        {
+            const double wx = std::cos(angle), wy = std::sin(angle);
+            for (int i = 0; i < 50; ++i)
+            {
+                const double east1 = 256.0 + 37.3 * i, north1 = 1203.7 - 41.9 * i; // the band's origin (km)
+                const double east2 = east1 + WRAP_KM * 0.73 + 1.1, north2 = north1 - WRAP_KM * 1.37 - 0.4;
+                const double xe = east1 + 3.21, xn = north1 - 7.65; // the world point
+                double o1x, o1y, o2x, o2y, q1x, q1z, q2x, q2z;
+                noise_offset(east1, north1, stretch, wx, wy, o1x, o1y);
+                noise_offset(east2, north2, stretch, wx, wy, o2x, o2y);
+                noise_point(xe - east1, xn - north1, stretch, wx, wy, o1x, o1y, q1x, q1z);
+                noise_point(xe - east2, xn - north2, stretch, wx, wy, o2x, o2y, q2x, q2z);
+                const double dx = (q1x - q2x) / WRAP_KM, dz = (q1z - q2z) / WRAP_KM;
+                worst = std::max({ worst, std::fabs(dx - std::round(dx)) * WRAP_KM, std::fabs(dz - std::round(dz)) * WRAP_KM });
+                if (stretch > 1.0)
+                {
+                    // the old shader: q = p + wrap(origin), then stretched
+                    auto old = [&](double px, double pz, double ex, double en, double& ox, double& oz)
+                    {
+                        const double ux = px + wrap_km(ex), uz = pz + wrap_km(en);
+                        const double a = (ux * wx + uz * wy) / stretch, b = uz * wx - ux * wy;
+                        ox = wx * a - wy * b;
+                        oz = wy * a + wx * b;
+                    };
+                    double a1x, a1z, a2x, a2z;
+                    old(xe - east1, xn - north1, east1, north1, a1x, a1z);
+                    old(xe - east2, xn - north2, east2, north2, a2x, a2z);
+                    const double ex = (a1x - a2x) / (BASE_KM * 0.25), ez = (a1z - a2z) / (BASE_KM * 0.25);
+                    worst_old = std::max({ worst_old, std::fabs(ex - std::round(ex)) * BASE_KM * 0.25, std::fabs(ez - std::round(ez)) * BASE_KM * 0.25 });
+                }
+            }
+        }
+    }
+    check(worst < 1e-6, "a wrap moves the noises by whole periods (km off)", worst);
+    check(worst_old > 0.1, "the old stretched offset did not (the cirrus pop)", worst_old);
+    // the unstretched bands keep the world frame
+    double ox, oy, qx, qz;
+    noise_offset(-1.0, 1681.0, 1.0, 0.6, 0.8, ox, oy);
+    noise_point(2.0, 3.0, 1.0, 0.6, 0.8, ox, oy, qx, qz);
+    check(near(ox, WRAP_KM - 1.0, 1e-9) && near(oy, 1.0, 1e-9) && near(qx, WRAP_KM + 1.0, 1e-9) && near(qz, 4.0, 1e-9), "world frame without fibres");
 }
 
 void test_key()
@@ -459,6 +634,7 @@ int main()
     test_slider_ranges();
     test_variability();
     test_light();
+    test_noise_offset();
     test_key();
     if (failures)
     {

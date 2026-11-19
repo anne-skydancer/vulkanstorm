@@ -11499,7 +11499,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderVolumetricClouds</key>
     <map>
       <key>Comment</key>
-      <string>Volumetric clouds (Preferences &gt; Graphics): the main view and photos draw automatically generated volumetric clouds, shaped by the sky&apos;s cloud sliders (llcloudscape.h), instead of the flat cloud layer; they also cast the ground&apos;s cloud shadows. Recommended by GPU class through the feature tables (on from the High graphics level up). Off, or when the noise file is damaged: the flat cloud layer.</string>
+      <string>Volumetric clouds (Preferences &gt; Graphics): the main view and photos draw automatically generated volumetric clouds, shaped by the sky&apos;s cloud sliders (llcloudscape.h), instead of the flat cloud layer; they also cast the ground&apos;s cloud shadows. Recommended by GPU class through the feature tables (on from the High Ultra graphics level up). Off, or when the noise file is damaged (the policy for that is pending, doc/light/volumetric-clouds.md): the flat cloud layer.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -11532,7 +11532,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderCloudscapeMiddleScale</key>
     <map>
       <key>Comment</key>
-      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the middle etage (altocumulus, altostratus): smaller elements, the WMO&apos;s criterion (llcloudscape.h). It rises smoothly over a quarter of the value.</string>
+      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the middle etage (altocumulus, altostratus): smaller elements, the WMO&apos;s criterion (llcloudscape.h). It rises smoothly as the scale falls from 1.25 to 0.8 times this value. 0: never.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -11543,7 +11543,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderCloudscapeHighScale</key>
     <map>
       <key>Comment</key>
-      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the high etage (cirrocumulus, cirrostratus).</string>
+      <string>Debug: below this cloud scale the sky&apos;s cloud layer stands in the high etage (cirrocumulus, cirrostratus), rising from 1.25 to 0.8 times this value. 0: never; at most RenderCloudscapeMiddleScale.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -11573,27 +11573,16 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <real>2.0</real>
     </map>
-    <key>RenderCloudscapeAltocumulusDetail</key>
-    <map>
-      <key>Comment</key>
-      <string>Debug: the cloud Detail D from which a middle band of altocumulus cells forms over a low cloud layer.</string>
-      <key>Persist</key>
-      <integer>1</integer>
-      <key>Type</key>
-      <string>F32</string>
-      <key>Value</key>
-      <real>0.25</real>
-    </map>
     <key>RenderCloudscapeAltocumulusCover</key>
     <map>
       <key>Comment</key>
-      <string>Debug: the altocumulus band&apos;s mean cover at Detail D 1.</string>
+      <string>Debug: the mean cover of a generated band of altocumulus cells (3 to 3.6 km) over a low cloud layer; 0, the default, draws none. No EEP lever drives it (Detail D, its first lever, defaults to its maximum in EEP); which lever, or new EEP keys, is the owner&apos;s decision.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
       <string>F32</string>
       <key>Value</key>
-      <real>0.6</real>
+      <real>0.0</real>
     </map>
     <key>RenderCloudscapeCirrusBase</key>
     <map>
@@ -11620,7 +11609,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderCloudscapePatchBase</key>
     <map>
       <key>Comment</key>
-      <string>Debug: the amplitude of the clouds&apos; patches and gaps at cloud variance 0 (the modulation keeps every band&apos;s mean cover).</string>
+      <string>Debug: the amplitude of the patches and gaps of the sky&apos;s own cloud layer at cloud variance 0 (the modulation keeps every band&apos;s mean cover; the generated bands, which have no pattern of their own, take all the amplitude the growth leaves).</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
@@ -11631,7 +11620,7 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>RenderCloudscapePatchVariance</key>
     <map>
       <key>Comment</key>
-      <string>Debug: the patches&apos; amplitude per unit of cloud variance.</string>
+      <string>Debug: the patches&apos; amplitude in the sky&apos;s own cloud layer per unit of cloud variance.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

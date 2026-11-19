@@ -39,7 +39,8 @@ class LLGLSLShader;
 // file is loaded (a worker thread) and uploaded (8 slices a frame), the main view and the photos draw these clouds and
 // the sky's pool skips the flat layer there; cube snapshots (reflection probes, mirrors) keep the flat layer. The cloud
 // shadow map takes its producer from here while active (llcloudshadowmap.cpp). A damaged or missing noise file means
-// the flat layer, with a notice once per session.
+// the flat layer, with a notice once per session (the policy is pending the owner's decision,
+// doc/light/volumetric-clouds.md); so does a target that cannot be allocated.
 //
 // Main (GL) thread only. GL objects are made on first use and released by release() (LLPipeline::releaseGLBuffers).
 class LLVolumetricClouds
@@ -49,17 +50,18 @@ public:
     ~LLVolumetricClouds();
 
     // Once a frame (the first call of the frame does the work): whether the clouds draw this frame, the noise's load
-    // and upload, the bands from the sky's sliders and the weather map's refresh. It follows the agent's camera (not
-    // the view being rendered), like the cloud shadow map.
+    // and upload, the bands from the sky's sliders, the weather map's refresh and the main view's targets. It follows
+    // the agent's camera (not the view being rendered), like the cloud shadow map. display() calls it outside any pass
+    // (before the mirrors' hero probes on a frame that draws them, else after the environment's update).
     void update();
 
     // Whether the main view and the photos draw the volumetric clouds this frame (then the flat layer is skipped there).
     bool active();
 
-    // The trace (live: a quarter of the half-resolution pixels a frame, then the reconstruction; a photo, gSnapshot: the
-    // whole frame in one still pass) and the composite onto the sky's pixels of the bound HDR target (`width` x
-    // `height`, its depth the deferred depth). `deferred` holds the deferred depth the trace reads. Not in cube
-    // snapshots (it does nothing there).
+    // The clouds over the sky's pixels of the bound HDR target (`width` x `height`, its depth the deferred depth).
+    // Live: a quarter of the half-resolution pixels traced a frame, the reconstruction, then the composite. A photo
+    // (gSnapshot): the full-resolution still trace drawn straight onto the target in strips of rows. `deferred` holds
+    // the deferred depth the live trace reads. Not in cube snapshots (it does nothing there).
     void render(LLRenderTarget& deferred, U32 width, U32 height);
 
     // The cloud shadow map's producer: the bands and the noise for `shader` (a program linked with
@@ -87,9 +89,11 @@ private:
     void uploadNoise();
     void bindNoise(LLGLSLShader& shader);
     void setBandUniforms(LLGLSLShader& shader);
-    void drawWeather(LLRenderTarget& target, U32 first_row, U32 rows);
+    void drawWeather(U32 first_row, U32 rows);
     bool refreshWeather();
     bool allocateLive(U32 width, U32 height);
+    void renderStill(const glm::mat4& inv_vp, U32 width, U32 height);
+    void composite(LLRenderTarget& image, U32 width, U32 height);
     void releaseTargets();
 
     NoiseState mNoiseState = NoiseState::NONE;
@@ -100,26 +104,19 @@ private:
     U32 mCurlTex = 0;
     double mSliceMean[LLCloudscape::NOISE_SLICES] = {}; // the base noise's G channel, per z slice
 
-    // the weather map, redrawn in strips, double-buffered: the trace reads the front; a new size or period (cloud
-    // variance turned on or off) is built in the back a strip a frame and swapped in, so nothing flashes and no frame
-    // draws a whole 2048^2 map
-    LLRenderTarget mWeather[2];
-    U32 mWeatherFront = 0;
-    bool mFrontValid = false;   // the front holds a whole map
-    U32 mFrontSize = 0;         // its side in texels
-    S32 mFrontTiles = 0;        // its period in the creator's tiles
-    bool mBackBuilding = false; // the back is being built
-    U64 mBackKey = 0;           // what the back's first strip was made of
-    U64 mWeatherKey = 0;        // what the front's last cycle of strips started from
+    // the weather map: drawn whole when its side or period changes (the first map, cloud variance turned on or off),
+    // then refreshed in strips, one a frame, when what it is made of changes or the growth clock steps
+    LLRenderTarget mWeather;
+    S32 mWeatherTiles = 0;      // its period in the creator's tiles (0: no map)
+    U64 mWeatherKey = 0;        // what the map's last cycle of strips started from
     U64 mWeatherNextKey = 0;    // what the map is made of now
-    U32 mWeatherRow = 0;        // the next strip of the cycle (front) or of the build (back)
+    U32 mWeatherRow = 0;        // the next strip of the cycle
     bool mWeatherCycle = false;
     F64 mWeatherGrowthStep = -1.0;
 
-    // live: the trace (RGBA16F + R16F, W/4 x H/4) and the half-resolution history (ping-pong); photos: the still target
+    // live: the trace (RGBA16F + R16F, W/4 x H/4) and the half-resolution history (ping-pong); a photo needs no target
     LLRenderTarget mTrace;
     LLRenderTarget mHistory[2];
-    LLRenderTarget mStill;
     U32 mLiveWidth = 0;
     U32 mLiveHeight = 0;
     U32 mHistoryIndex = 0;
@@ -128,6 +125,7 @@ private:
     U64 mLastLiveFrame = U64(-1);
     glm::mat4 mPrevVP = glm::mat4(1.f);
     F64 mPrevCamera[2] = { 0.0, 0.0 };
+    F64 mPrevDrift[2] = { 0.0, 0.0 };
 
     // this frame's bands and their uniforms (cloudsVolFuncsF.glsl)
     LLCloudscape::Scape mScape;
@@ -141,6 +139,7 @@ private:
     F32 mLight[4] = {};
     F32 mGain[4] = {};
     F64 mCamera[2] = { 0.0, 0.0 }; // the agent camera (global, km east and north)
+    F64 mDrift[2] = { 0.0, 0.0 };  // how far the wind has carried the creator's band (km east and north)
 
     // the weather pass's uniforms
     F32 mWeatherSky[4] = {};

@@ -15,7 +15,10 @@ viewer launch. Windows, an OpenGL 4.6 driver.
    modulation (the patch and growth fields must not change a band's mean cover).
 4. Times every pass (GL_TIME_ELAPSED medians of the draw alone, its uniforms and bindings set before the query, so a
    busy CPU does not stretch the interval): the per-frame cost against the light and shadow budget.
-5. Checks the shader's light inputs (cv_light_inputs) against their C++ twin (LLCloudscape::cloud_light), 24 skies.
+5. Checks the shader's light inputs (cv_light_inputs) against their C++ twin (LLCloudscape::cloud_light), 24 skies,
+   classic mode's scale included.
+6. Checks that a low sun keeps the shadow of a closed deck on the ground (the shadow map follows a sun under about 2.9
+   degrees as if at that elevation, so its samples stay inside the band).
 
 Environment: CLOUD_CHECK_NOISE (path), CLOUD_CHECK_SIZES (default "1920x1080,2560x1440"), CLOUD_CHECK_FRAMES (20).
 """
@@ -144,7 +147,7 @@ progs = {}
 for name, vertex, fragments, defines in [
         ('weather', 'deferred/postDeferredNoTCV.glsl', ['deferred/cloudsVolWeatherF.glsl'], ()),
         ('trace', 'deferred/postDeferredNoTCV.glsl', ['deferred/cloudsVolTraceF.glsl', FUNCS], ()),
-        ('still', 'deferred/postDeferredNoTCV.glsl', ['deferred/cloudsVolTraceF.glsl', FUNCS], (('CLOUDS_VOL_STILL', '1'),)),
+        ('still', 'deferred/cloudsVolCompositeV.glsl', ['deferred/cloudsVolTraceF.glsl', FUNCS], (('CLOUDS_VOL_STILL', '1'),)),
         ('recon', 'deferred/postDeferredNoTCV.glsl', ['deferred/cloudsVolReconF.glsl'], ()),
         ('composite', 'deferred/cloudsVolCompositeV.glsl', ['deferred/cloudsVolCompositeF.glsl'], ()),
         ('shadow', 'deferred/postDeferredNoTCV.glsl', ['deferred/cloudShadowVolF.glsl', FUNCS], ())]:
@@ -163,13 +166,15 @@ expected = {
     'weather': {'cvw_sky', 'cvw_density1', 'cvw_density2', 'cvw_cover', 'cvw_growth', 'cvw_mean', 'cloud_noise_texture', 'cloud_noise_texture_next',
                 'blend_factor', 'cloud_vol_base'},
     'trace': BANDS | {'depthMap', 'cv_inv_vp', 'cv_sizes', 'cv_frame', 'sunlight_color', 'ambient_color', 'cloud_color', 'cloud_light_transmittance',
-                      'cloud_moon_blend', 'sky_hdr_scale', 'blue_horizon', 'blue_density', 'haze_horizon', 'haze_density', 'density_multiplier',
-                      'max_y', 'glow', 'cloud_shadow'},
+                      'cloud_moon_blend', 'sky_hdr_scale', 'classic_mode', 'blue_horizon', 'blue_density', 'haze_horizon', 'haze_density',
+                      'density_multiplier', 'max_y', 'glow', 'cloud_shadow'},
     'recon': {'depthMap', 'cloud_vol_trace', 'cloud_vol_tdepth', 'cloud_vol_history', 'cv_inv_vp', 'cv_prev_vp', 'cv_sizes', 'cv_frame', 'cv_delta'},
     'composite': {'cloud_vol_history', 'cv_sizes'},
-    'shadow': (BANDS - {'cv_light', 'cv_gain', 'cv_march'}) | {'cvs_map', 'cvs_light', 'ctm_optics'},
+    # the shadow map reads the cheap density (cv_march.w is the base noise's cross-fade)
+    'shadow': (BANDS - {'cv_light', 'cv_gain'}) | {'cvs_map', 'cvs_light', 'ctm_optics'},
 }
-expected['still'] = expected['trace']
+# a photo's still trace is drawn straight onto the sky's pixels, which the depth test picks: it reads no depth
+expected['still'] = expected['trace'] - {'depthMap'}
 for name, names in expected.items():
     missing = names - uniforms_of(progs[name])
     check(not missing, f'{name}: uniforms not live: {sorted(missing)}')
@@ -244,12 +249,13 @@ DUMP = r'''
 #include <cstdlib>
 int main(int argc, char** argv)
 {
-    if (argc == 16)
+    if (argc == 17)
     {
-        // the clouds' light: sunlight, ambient, cloud colour, the transmittance (3 each), cloud_shadow, moon blend, HDR scale
+        // the clouds' light: sunlight, ambient, cloud colour, the transmittance (3 each), cloud_shadow, moon blend, HDR
+        // scale, classic mode
         LLCloudscape::SkyLight k;
-        double v[15];
-        for (int i = 0; i < 15; ++i)
+        double v[16];
+        for (int i = 0; i < 16; ++i)
         {
             v[i] = atof(argv[i + 1]);
         }
@@ -260,22 +266,26 @@ int main(int argc, char** argv)
         k.cloud_shadow = v[12];
         k.moon_blend = v[13];
         k.hdr_scale = v[14];
+        k.classic = v[15] > 0.5;
         const LLCloudscape::CloudLight l = LLCloudscape::cloud_light(k);
         std::printf("[%.9g,%.9g,%.9g,%.9g,%.9g,%.9g]\n", l.sun.r, l.sun.g, l.sun.b, l.ambient.r, l.ambient.g, l.ambient.b);
         return 0;
     }
     LLCloudscape::Sliders s;
     s.coverage = atof(argv[1]); s.scale = atof(argv[2]); s.variance = atof(argv[3]); s.density = atof(argv[4]); s.detail = atof(argv[5]);
-    const LLCloudscape::Scape sc = LLCloudscape::make(s, LLCloudscape::Tuning());
+    LLCloudscape::Tuning t;
+    t.altocumulus_cover = argc > 6 ? atof(argv[6]) : 0.0; // the altocumulus band's debug setting (default 0: none)
+    const LLCloudscape::Scape sc = LLCloudscape::make(s, t);
     std::printf("{\"count\":%d,\"tile_km\":%.9g,\"tiles\":%d,\"map_km\":%.9g,\"map_size\":%d,\"patch\":%.9g,\"growth\":%.9g,\"rate\":%.9g,\"bands\":[",
                 sc.count, sc.tile_km, sc.tiles_per_map, sc.map_km, sc.map_size, sc.patch, sc.growth, sc.growth_rate);
     for (int i = 0; i < sc.count; ++i)
     {
         const LLCloudscape::Band& b = sc.bands[i];
         std::printf("%s{\"genus\":\"%s\",\"channel\":%d,\"base\":%.9g,\"top\":%.9g,\"shape\":%.9g,\"sigma\":%.9g,\"erosion\":%.9g,\"anvil\":%.9g,"
-                    "\"noise_scale\":%.9g,\"stretch\":%.9g,\"cover\":%.9g,\"sheet\":%.9g,\"drift\":%.9g,\"far\":%.9g,\"steps\":%d,\"cap\":%d,\"lsteps\":%d}",
+                    "\"noise_scale\":%.9g,\"noise_blend\":%.9g,\"stretch\":%.9g,\"cover\":%.9g,\"sheet\":%.9g,\"drift\":%.9g,\"far\":%.9g,"
+                    "\"steps\":%d,\"cap\":%d,\"lsteps\":%d}",
                     i ? "," : "", LLCloudscape::genus_name(b.genus), b.channel, b.base_km, b.top_km, b.shape, b.sigma, b.erosion, b.anvil,
-                    b.noise_scale, b.stretch, b.cover, b.sheet, b.drift, b.far_km, b.steps, b.step_cap, b.light_steps);
+                    b.noise_scale, b.noise_blend, b.stretch, b.cover, b.sheet, b.drift, b.far_km, b.steps, b.step_cap, b.light_steps);
     }
     std::printf("]}\n");
     return 0;
@@ -288,20 +298,24 @@ work = Path(tempfile.mkdtemp())
 exe = work / 'dump.exe'
 subprocess.run([compiler, '-std=c++20', '-O1', '-I', str(REPO / 'indra' / 'newview'), str(work / 'dump.cpp'), '-o', str(exe)], check=True)
 
-PRESETS = [  # name, coverage, scale, variance, density D, detail D
-    ('fair Cu', 0.27, 0.42, 0.0, 1.0, 0.12),
-    ('broken Cu', 0.38, 0.42, 0.0, 1.0, 0.12),
-    ('Sc', 0.45, 0.42, 0.0, 1.0, 0.12),
-    ('overcast St', 0.62, 0.42, 0.0, 1.0, 0.12),
-    ('Cu con', 0.30, 0.42, 0.0, 1.6, 0.12),
-    ('Cb', 0.30, 0.42, 0.0, 2.6, 0.12),
-    ('Ac layer', 0.30, 0.12, 0.0, 1.0, 0.12),
-    ('Cu+Ac+Ci', 0.27, 0.42, 0.6, 1.0, 0.8),
+PRESETS = [  # name, coverage, scale, variance, density D, detail D (LLSettingsSky::defaults(): 1), the altocumulus setting
+    ('fair Cu', 0.27, 0.42, 0.0, 1.0, 1.0, 0.0),
+    ('broken Cu', 0.38, 0.42, 0.0, 1.0, 1.0, 0.0),
+    ('Sc', 0.45, 0.42, 0.0, 1.0, 1.0, 0.0),
+    ('overcast St', 0.62, 0.42, 0.0, 1.0, 1.0, 0.0),
+    ('Cu con', 0.30, 0.42, 0.0, 1.6, 1.0, 0.0),
+    ('Cb', 0.30, 0.42, 0.0, 2.6, 1.0, 0.0),
+    ('rising Ac', 0.30, 0.15, 0.0, 1.0, 1.0, 0.0),  # half way into the middle etage: two base-noise tiles cross-faded
+    ('Ac layer', 0.30, 0.12, 0.0, 1.0, 1.0, 0.0),
+    ('Cu+Ac+Ci', 0.27, 0.42, 0.6, 1.0, 1.0, 0.6),
 ]
 scapes = {}
 for name, *sliders in PRESETS:
     out = subprocess.run([str(exe)] + [str(v) for v in sliders], check=True, capture_output=True, text=True).stdout
     scapes[name] = json.loads(out)
+check(len(scapes['fair Cu']['bands']) == 1, 'the default sky (Detail D 1) is one band of cumulus')
+check(len(scapes['Cu+Ac+Ci']['bands']) == 3, 'the altocumulus setting adds its band')
+check(0.0 < scapes['rising Ac']['bands'][0]['noise_blend'] < 1.0, 'the rising layer cross-fades its noise tile')
 
 
 # --- uniforms ------------------------------------------------------------------------------------------------------
@@ -327,7 +341,7 @@ def band_uniforms(prog, sc):
             shape += [b['sigma'], b['erosion'], b['anvil'], 10.5 * b['noise_scale']]
             place += [3.7 % sc['map_km'], 5.1 % sc['map_km'], b['sheet'], b['channel']]
             noise += [3.7, 5.1, b['stretch'], b['far']]
-            march += [b['steps'], b['lsteps'], b['cap'], 0]
+            march += [b['steps'], b['lsteps'], b['cap'], b['noise_blend']]
         else:
             layer += [0, 1, 0, 0]; shape += [0, 0.3, 0, 10.5]; place += [0, 0, 0, 0]; noise += [0, 0, 1, 0]; march += [0, 0, 0, 0]
     for name, v in (('cv_layer', layer), ('cv_shape', shape), ('cv_place', place), ('cv_noise', noise), ('cv_march', march),
@@ -348,6 +362,8 @@ def sky_uniforms(prog, coverage):
                     ('cloud_moon_blend', 0.0), ('sky_hdr_scale', 1.0)):
         l = L(prog, name)
         if l >= 0: u1f(l, v)
+    l = L(prog, 'classic_mode')
+    if l >= 0: u1i(l, 0)
 
 
 def bind(unit, target, t):
@@ -455,25 +471,25 @@ worst_light = 0.0
 for case in range(24):
     sun = [rng.uniform(0.0, 1.6) for _ in range(3)]; amb = [rng.uniform(0.0, 1.2) for _ in range(3)]
     cloud = [rng.uniform(0.0, 1.0) for _ in range(3)]; trans = [rng.uniform(0.05, 1.0) for _ in range(3)]
-    shadow = rng.uniform(0.0, 1.0); moon = rng.choice([0.0, 0.0, 0.3, 1.0]); hdr = rng.choice([1.0, 2.0, 1.414])
-    ref = json.loads(subprocess.run([str(exe)] + [str(v) for v in sun + amb + cloud + trans + [shadow, moon, hdr]], check=True,
+    shadow = rng.uniform(0.0, 1.0); moon = rng.choice([0.0, 0.0, 0.3, 1.0]); hdr = rng.choice([1.0, 2.0, 1.414]); classic = case % 2
+    ref = json.loads(subprocess.run([str(exe)] + [str(v) for v in sun + amb + cloud + trans + [shadow, moon, hdr, classic]], check=True,
                                     capture_output=True, text=True).stdout)
     use(light_prog); bindfbo(FB, probe_fbo); viewport(0, 0, 1, 1)
     u3f(L(light_prog, 'sunlight_color'), *sun); u3f(L(light_prog, 'ambient_color'), *amb); u3f(L(light_prog, 'cloud_color'), *cloud)
     u3f(L(light_prog, 'cloud_light_transmittance'), *trans); u1f(L(light_prog, 'cloud_shadow'), shadow)
-    u1f(L(light_prog, 'cloud_moon_blend'), moon); u1f(L(light_prog, 'sky_hdr_scale'), hdr)
+    u1f(L(light_prog, 'cloud_moon_blend'), moon); u1f(L(light_prog, 'sky_hdr_scale'), hdr); u1i(L(light_prog, 'classic_mode'), classic)
     got = []
     for which in (0, 1):
         u1i(L(light_prog, 'which'), which); draw(4, 0, 3); got += list(read(probe_tex, 1, 1))[:3]
     for g, r in zip(got, ref):
         worst_light = max(worst_light, abs(g - r) / max(abs(r), 1e-3))
 check(worst_light < 2e-4, f"the clouds' light inputs: GLSL against the C++ twin, worst relative error {worst_light:.2e}")
-print(f'light inputs, GLSL against LLCloudscape::cloud_light, 24 skies: worst relative error {worst_light:.2e}', flush=True)
+print(f'light inputs, GLSL against LLCloudscape::cloud_light, 24 skies (half in classic mode): worst relative error {worst_light:.2e}', flush=True)
 shutil.rmtree(work, ignore_errors=True)
 
 print(f'\nGL volumetric clouds check; median of {FRAMES} frames after {WARMUP} warm-up (ms); every pixel sky', flush=True)
 results = []
-for name, cov, scale, var, dens, det in PRESETS:
+for name, cov, scale, var, dens, det, _ac in PRESETS:
     sc = scapes[name]
     genera = '+'.join(b['genus'] for b in sc['bands'])
     wtex, wfbo, t_weather, (mid, high) = weather_for(sc, cov, scale, var, det, growth_t=731.0)
@@ -523,10 +539,13 @@ for name, cov, scale, var, dens, det in PRESETS:
         if (W, H) == SIZES[0]:
             # the still (a photo): every pixel, twice the steps, 4 sub-samples
             def still(i):
+                # blended straight onto the target as the viewer draws it (dst * T + L); every pixel is sky here, so the
+                # viewer's depth test would pass them all
                 p = progs['still']; use(p); bindfbo(FB, full_fbo); viewport(0, 0, W, H)
-                band_uniforms(p, sc); sky_uniforms(p, cov); bind_noise(wtex); bind(4, TEX2D, depth); u1i(L(p, 'depthMap'), 4)
+                band_uniforms(p, sc); sky_uniforms(p, cov); bind_noise(wtex)
                 umat4(L(p, 'cv_inv_vp'), 1, 0, (F * 16)(*inverse(view_projection(30.0, W, H)))); u4f(L(p, 'cv_sizes'), W, H, 0, 0)
-                u4f(L(p, 'cv_frame'), 0, 0, 0, 4); return timed_draw()
+                u4f(L(p, 'cv_frame'), 0, 0, 0, 4)
+                enable(0x0BE2); fn('glBlendFunc', None, U, U)(1, 0x0302); t = timed_draw(); disable(0x0BE2); return t
             ts_still = median(still, frames=3)
             print(f'{W}x{H} {name:<12}still (a photo, once): {ts_still:7.2f} ms', flush=True)
     # the shadow map, 512^2 over 4 km, the sun as above
@@ -537,6 +556,15 @@ for name, cov, scale, var, dens, det in PRESETS:
         u4f(L(p, 'cvs_map'), -2.048, -2.048, 4.096, 0); u4f(L(p, 'cvs_light'), *SUN, 0); u4f(L(p, 'ctm_optics'), 7.6, 1 - 0.85 ** 2, 0.75 * 0.15, 1 / 255.0)
         return timed_draw()
     t_shadow = median(shadow)
+    if name == 'overcast St':
+        for elevation in (5.0, 2.0, 1.0, 0.5):
+            el = math.radians(elevation); low = (math.cos(el), math.sin(el), 0.0)
+            p = progs['shadow']; use(p); bindfbo(FB, sfbo); viewport(0, 0, 512, 512); band_uniforms(p, sc); bind_noise(wtex)
+            u4f(L(p, 'cvs_map'), -2.048, -2.048, 4.096, 0); u4f(L(p, 'cvs_light'), *low, 0); u4f(L(p, 'ctm_optics'), 7.6, 1 - 0.85 ** 2, 0.75 * 0.15, 1 / 255.0)
+            draw(4, 0, 3); finish()
+            lp = read(smap, 512, 512); mean_beam = sum(lp[i] for i in range(0, 512 * 512 * 4, 4)) / (512 * 512)
+            check(mean_beam < 0.5, f'overcast, the sun {elevation} degrees up: the deck still shadows the ground (mean beam {mean_beam:.3f})')
+            print(f'shadow map, overcast, sun {elevation:4.1f} degrees up: mean beam {mean_beam:.3f}', flush=True)
     sp = read(smap, 512, 512); r = [sp[i] for i in range(0, 512 * 512 * 4, 4)]; g = [sp[i + 1] for i in range(0, 512 * 512 * 4, 4)]
     check(all(0.0 <= v <= 1.0 for v in r) and all(v >= 0.0 for v in g) and all(a + b <= 1.0 + 2.0 / 255 for a, b in zip(r, g)),
           f'{name}: the shadow map adds no light')

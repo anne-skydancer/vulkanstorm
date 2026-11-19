@@ -854,6 +854,10 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         // This ensures the scene state in the hero probes are exactly the same as the rest of the scene before we render it.
         if (gPipeline.RenderMirrors && !gSnapshot)
         {
+            // <Vulkanstorm> stage L7: the volumetric clouds' frame (noise upload, bands, weather map, targets) outside any
+            // pass, before the probes' cloud shadow map asks for it; like the probes, it reads the last frame's environment
+            gPipeline.mVolumetricClouds.update();
+            // </Vulkanstorm>
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Update hero probes");
             LL_PROFILE_GPU_ZONE("hero manager")
             gPipeline.mHeroProbeManager.update();
@@ -880,7 +884,8 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Env Update");
             // update all the sky/atmospheric/water settings
             LLEnvironment::instance().update(&camera); // <FS:Ansariel> Factor out calls to getInstance
-            // <Vulkanstorm> stage L7: the volumetric clouds' frame (noise upload, bands, weather map), outside any pass
+            // <Vulkanstorm> stage L7: the volumetric clouds' frame (noise upload, bands, weather map, targets), outside any
+            // pass; once a frame, so on a frame that drew the mirrors it was done before their probes (above)
             gPipeline.mVolumetricClouds.update();
             // </Vulkanstorm>
         }

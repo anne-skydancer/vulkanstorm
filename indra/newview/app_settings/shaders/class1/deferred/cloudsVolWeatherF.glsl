@@ -15,9 +15,12 @@
  *    Viewer's weather (env.wgsl fs_cloud_weather: heaps with a knee, a sheet over one half of cover);
  * G  the middle band's cover (generated altocumulus); B the high band's (generated cirrus);
  * A  the detail tap: a heap's top follows it.
- * The three covers are modulated by c (1 + (1 - c) M), with M a zero-mean field: a mesoscale patch field (plane waves,
- * mean 0.5 over the map exactly) and a growth and decay field (the base noise's Worley FBM, moving through its third
- * axis with time; its mean over the map is the slice's, cvw_growth), so that every band keeps its mean cover.
+ * The three covers are modulated by c (1 + (1 - c) M), with M a zero-mean field: a mesoscale patch field (plane waves
+ * repeating every creator's tile, so the patches keep their size whether the map holds one tile or 16, mean 0.5 over
+ * the map exactly) and a growth and decay field (the base noise's Worley FBM, moving through its third axis with time;
+ * its mean over the map is the slice's, cvw_mean), so that every band keeps its mean cover. The creator's band takes
+ * the patches at the amplitude cvw_cover.z (RenderCloudscapePatch*); the generated bands, which have no pattern of
+ * their own, at all the amplitude the growth leaves (1 - cvw_cover.w).
  */
 
 /*[EXTRA_CODE_HERE]*/
@@ -47,7 +50,7 @@ float cvw_centred(float v, float mean)
     return clamp((v - mean) / max(max(mean, 1.0 - mean), 1e-6), -1.0, 1.0);
 }
 
-// plane waves over the map, mean 0.5 over it exactly (llcloudscape.h patch_field())
+// plane waves repeating every tile (x in tiles), mean 0.5 over whole tiles exactly (llcloudscape.h patch_field())
 float cvw_patch(vec2 x, float phase)
 {
     const float TAU = 6.283185307179586;
@@ -95,17 +98,18 @@ void main()
     float heaps = mix(min(wc0, 0.4) + max(wc0 - 0.4, 0.0) * 0.2, wc0, sheet);
     float primary = mix(heaps, wc1, sheet);
 
-    // the variability: patches and gaps, growth and decay (a + g <= 1, the C++ side)
+    // the variability: patches and gaps, growth and decay (a + g <= 1, the C++ side); the patches repeat every tile
     float a = cvw_cover.z;
     float g = cvw_cover.w;
     vec2 cells = x * cvw_growth.w;
+    vec2 xt = x * tiles;
     float q0 = textureLod(cloud_vol_base, vec3(cells, cvw_growth.x), 0.0).g;
     float q1 = textureLod(cloud_vol_base, vec3(cells + vec2(0.31, 0.57), cvw_growth.y), 0.0).g;
     float q2 = textureLod(cloud_vol_base, vec3(cells + vec2(0.73, 0.19), cvw_growth.z), 0.0).g;
-    float m0 = a * cvw_centred(cvw_patch(x, 0.0), 0.5) + g * cvw_centred(q0, cvw_mean.x);
-    // the generated bands have no pattern of their own: their patches take what the growth leaves
-    float m1 = (1.0 - g) * cvw_centred(cvw_patch(x, 0.37), 0.5) + g * cvw_centred(q1, cvw_mean.y);
-    float m2 = (1.0 - g) * cvw_centred(cvw_patch(x, 0.71), 0.5) + g * cvw_centred(q2, cvw_mean.z);
+    float m0 = a * cvw_centred(cvw_patch(xt, 0.0), 0.5) + g * cvw_centred(q0, cvw_mean.x);
+    // the generated bands have no pattern of their own: their patches take all the amplitude the growth leaves
+    float m1 = (1.0 - g) * cvw_centred(cvw_patch(xt, 0.37), 0.5) + g * cvw_centred(q1, cvw_mean.y);
+    float m2 = (1.0 - g) * cvw_centred(cvw_patch(xt, 0.71), 0.5) + g * cvw_centred(q2, cvw_mean.z);
 
     frag_color = vec4(cvw_modulate(primary, m0), cvw_modulate(cvw_cover.x, m1), cvw_modulate(cvw_cover.y, m2), detail);
 }
