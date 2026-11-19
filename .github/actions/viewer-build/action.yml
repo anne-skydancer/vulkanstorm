@@ -378,8 +378,7 @@ runs:
           sampler=$!
           report_peak() {
             kill "$sampler" 2>/dev/null || true
-            awk '{ if ($1 > m) m = $1; if ($2 > w) w = $2 } END { printf "Peak memory used %d MiB, peak swap used %d MiB
-", m, w }' "$RUNNER_TEMP/mem.samples" | tee -a "$GITHUB_STEP_SUMMARY"
+            awk '{ if ($1 > m) m = $1; if ($2 > w) w = $2 } END { printf "Peak memory used %d MiB, peak swap used %d MiB\n", m, w }' "$RUNNER_TEMP/mem.samples" | tee -a "$GITHUB_STEP_SUMMARY"
           }
           trap report_peak EXIT
         fi
