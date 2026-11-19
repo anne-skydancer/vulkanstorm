@@ -18,6 +18,7 @@ set(llimagej2coj_HEADER_FILES
     CMakeLists.txt
 
     llimagej2coj.h
+    llj2cdecodeguard.h
     llj2creduce.h
     )
 
