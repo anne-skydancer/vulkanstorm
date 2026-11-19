@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Reads every line of the stream, each with its newline, however long the file or the line is.
