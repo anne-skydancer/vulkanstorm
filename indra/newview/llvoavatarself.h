@@ -122,7 +122,7 @@ private:
     //bool setParamWeight(const LLViewerVisualParam *param, F32 weight);
     bool setParamWeight(const LLViewerVisualParam *param, F32 weight, bool upload_bake = false);
 
-    std::mutex          mJointMapMutex; // getJoint gets used from mesh thread
+    std::mutex          mJointMapMutex; // serialises main-thread access to the joint map (the cache write in getJoint against renderJoints and initInstance)
 
 /********************************************************************************
  **                                                                            **

@@ -1405,10 +1405,10 @@ set(viewer_HEADER_FILES
     llkeyconflict.h
     lllandmarkactions.h
     lllandmarklist.h
+    lljointnumtable.h
     lllightconstants.h
     lllistcontextmenu.h
     lllistview.h
-    lljointnumtable.h
     lllocalbitmaps.h
     lllocalgltfmaterials.h
     lllocationhistory.h

@@ -353,8 +353,8 @@ private:
     public:
 
         // Threads:  Ttf
-        DecodeResponder(LLTextureFetch* fetcher, const LLUUID& id, LLTextureFetchWorker* worker)
-            : mFetcher(fetcher), mID(id), mWorker(worker)
+        explicit DecodeResponder(LLTextureFetchWorker* worker)
+            : mWorker(worker)
         {
             mWorker->mDecodesInFlight.fetch_add(1, std::memory_order_acq_rel);
         }
@@ -382,8 +382,6 @@ private:
             }
         }
     private:
-        LLTextureFetch* mFetcher;
-        LLUUID mID;
         LLTextureFetchWorker* mWorker;
     };
     // </Vulkanstorm>
@@ -2029,7 +2027,7 @@ bool LLTextureFetchWorker::doWork(S32 param)
         mDecodeHandle = LLAppViewer::getImageDecodeThread()->decodeImage(mFormattedImage,
                                                                        discard,
                                                                        mNeedsAux,
-                                                                       new DecodeResponder(mFetcher, mID, this));
+                                                                       new DecodeResponder(this));
         if (mDecodeHandle == 0)
         {
             // Abort, failed to put into queue.
