@@ -1044,6 +1044,16 @@ bool LLImageJ2COJ::getMetadata(LLImageJ2C &base)
         return false;
     }
 
+    // <Vulkanstorm> LLImageBase keeps the component count in a signed byte, where 260 components read as 4: refuse
+    // a count the viewer does not take (1 to MAX_IMAGE_COMPONENTS, llj2cdecodeguard.h) before anything is stored,
+    // as a header that does not read is, instead of letting it wrap.
+    if (!LLJ2CDecodeGuard::componentsSupported(components, MAX_IMAGE_COMPONENTS))
+    {
+        LL_WARNS("Texture") << "J2C header declares " << components << " components, refusing it" << LL_ENDL;
+        base.setLastError("Unsupported number of image components");
+        return false;
+    }
+
     base.mDiscardLevel = discard_level;
     base.mNumResolutions = resolutions; // <Vulkanstorm> for decodeImpl's reduce factor
     base.setSize(width, height, components);
