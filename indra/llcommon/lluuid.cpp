@@ -35,6 +35,8 @@
 #include "lldefs.h"
 #include "llerror.h"
 
+#include <cstring>
+
 #include "lluuid.h"
 #include "llerror.h"
 #include "llrand.h"
@@ -857,7 +859,7 @@ void LLUUID::generate(const std::string& hash_string)
 
 U32 LLUUID::getRandomSeed()
 {
-    static unsigned char seed[16];      /* Flawfinder: ignore */
+    unsigned char seed[16] = {};        /* Flawfinder: ignore */
 
     getNodeID(&seed[0]);
 
@@ -868,7 +870,10 @@ U32 LLUUID::getRandomSeed()
 
     seed[6] = (unsigned char)(pid >> 8);
     seed[7] = (unsigned char)(pid);
-    getSystemTime((uuid_time_t*)(&seed[8]));
+    uuid_time_t timestamp;
+    getSystemTime(&timestamp);
+    std::memcpy(&seed[8], &timestamp.high, sizeof(timestamp.high));
+    std::memcpy(&seed[12], &timestamp.low, sizeof(timestamp.low));
 
    U64 seed64 = HBXXH64::digest((const void*)seed, 16);
    return U32(seed64) ^ U32(seed64 >> 32);
