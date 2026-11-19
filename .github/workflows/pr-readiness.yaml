@@ -18,8 +18,8 @@ on:
     types: [submitted, dismissed]
   pull_request_review_comment:
     types: [created, edited, deleted]
-  pull_request_review_thread:
-    types: [resolved, unresolved]
+  # GitHub has no workflow event for resolving a thread: a resolve shows at the
+  # next event (a push, a review, a build ending).
   workflow_run:
     workflows: ["Build Windows", "Build Linux", "Build Linux LTS"]
     types: [completed]
@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # workflow_run, push and the thread events run the base's own copy of
+      # workflow_run and push run the base's own copy of
       # the script; the pull_request events run the PR's merge ref, whose
       # token GitHub makes read-only for forks.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
