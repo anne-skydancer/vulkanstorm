@@ -30,6 +30,7 @@
 #include "lllocalshadows.h" // <Vulkanstorm/> setTileOrigin for the sun cascades
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
+#include "llocclusionqueue.h" // <Vulkanstorm/> markOccluder rule
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's change hooks
 
@@ -2898,28 +2899,33 @@ void LLPipeline::markNotCulled(LLSpatialGroup* group, LLCamera& camera)
 
 void LLPipeline::markOccluder(LLSpatialGroup* group)
 {
-    if (sUseOcclusion > 1 && group && !group->isOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION))
+    if (sUseOcclusion > 1 && group)
     {
+        // <Vulkanstorm> the rule is in llocclusionqueue.h: the partition root is never queued or flagged (it is
+        // never re-tested, so one 0-sample result would hide the whole partition for good), and an empty non-root
+        // parent whose flag is set is queued too, so doOcclusion clears the flag
         LLSpatialGroup* parent = group->getParent();
-
-        if (!parent || !parent->isOcclusionState(LLSpatialGroup::OCCLUDED))
-        { //only mark top most occluders as active occlusion
+        LLOcclusionQueue::GroupFlags g{ parent != nullptr, group->isOcclusionState(LLSpatialGroup::OCCLUDED),
+            group->isOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION), false, false };
+        LLOcclusionQueue::GroupFlags p{ false, false, false, false, false };
+        if (parent)
+        {
+            p = { parent->getParent() != nullptr, parent->isOcclusionState(LLSpatialGroup::OCCLUDED),
+                parent->isOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION), parent->getElementCount() == 0,
+                parent->needsUpdate() };
+        }
+        const LLOcclusionQueue::Plan plan = LLOcclusionQueue::plan(true, g, p);
+        if (plan.queueGroup)
+        {
             sCull->pushOcclusionGroup(group);
             group->setOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION);
-
-            if (parent &&
-                !parent->isOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION) &&
-                parent->getElementCount() == 0 &&
-                parent->needsUpdate())
+            if (plan.queueParent)
             {
-                // <Vulkanstorm> queue the parent whose flag is set below; pushing the child a second time left the
-                // parent's ACTIVE_OCCLUSION set forever (only pushed groups are cleared in doOcclusion), so the
-                // parent was never occlusion-tested again
                 sCull->pushOcclusionGroup(parent);
-                // </Vulkanstorm>
                 parent->setOcclusionState(LLSpatialGroup::ACTIVE_OCCLUSION);
             }
         }
+        // </Vulkanstorm>
     }
 }
 
