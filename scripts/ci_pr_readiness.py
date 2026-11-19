@@ -398,21 +398,13 @@ def publish(gh, number, pr, verdict, head, target_url):
 
 
 def affected_prs(gh, event_name, event):
-    """Open PR numbers an event can change the readiness of."""
-    if event_name.startswith("pull_request"):
-        return [event["pull_request"]["number"]]
-    if event_name == "workflow_run":
-        run = event["workflow_run"]
-        numbers = [p["number"] for p in run.get("pull_requests") or []]
-        if numbers:
-            return numbers
-        # Fork and some same-repo runs carry no PR list: match the head commit.
-        return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open")
-                if p["head"]["sha"] == run["head_sha"]]
-    if event_name == "push":
-        base = event["ref"].removeprefix("refs/heads/")
-        return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open&base={base}")]
-    return []
+    """Open PR numbers to evaluate: all of them, for every event.
+
+    The runs share one concurrency group and a newer waiting run replaces an older waiting one, so
+    each run must cover everything the replaced one would have. No event payload (a fork run's
+    PR list, its head commit) is needed to find the PR, so none has to be trusted or matched.
+    Evaluating a PR is a few API calls."""
+    return [p["number"] for p in gh.pages(f"/repos/{gh.repo}/pulls?state=open")]
 
 
 def report_error(gh, number, target):
@@ -436,12 +428,13 @@ def main():
     target = f"{server}/{repo}/actions/runs/{run_id}" if run_id else f"{server}/{repo}"
     numbers = sorted(set(affected_prs(gh, event_name, event)))
     print(f"{event_name}: pull requests {numbers or 'none'}")
-    settle = event_name == "pull_request" and event.get("action") in (
-        "opened", "reopened", "synchronize", "ready_for_review")
+    # Wait for the checks to register only on the PR the event is about.
+    settle_number = event["pull_request"]["number"] if event_name == "pull_request" and event.get("action") in (
+        "opened", "reopened", "synchronize", "ready_for_review") else None
     cache, failures = {}, []
     for number in numbers:
         try:
-            result = evaluate_pr(gh, number, cache, settle)
+            result = evaluate_pr(gh, number, cache, number == settle_number)
             if result is None:
                 continue
             pr, verdict, head = result
