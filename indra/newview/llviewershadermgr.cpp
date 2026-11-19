@@ -294,7 +294,8 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
 // gl_PrimitiveID in the fragment shader (GLSL 4.00) and multisample textures, and the temporal
 // resolve is two fragment passes and the smooth in the composite on every device (GL compute stalls the frame in motion; the transparency has no compute
 // resolve since 2026-11-14, the Vulkan renderer takes Aurora Viewer PR 3663's compute steps). The
-// device gate is GL 4.0 (LLStochasticEngine::deviceSupported). Like PPLL before it, a Windows and Linux feature.
+// device gate is GL 4.0 with GLSL 4.20, for the composite's packHalf2x16 (LLStochasticEngine::transparencySupported).
+// Like PPLL before it, a Windows and Linux feature.
 static const std::string ALPHA_STOCHASTIC_HELPER = "deferred/alphaStochasticF.glsl";
 static const std::string STOCH_SAMPLE_HELPER = STOCH_SAMPLE_OBJECT;     // the engine's sampling, under it
 static const std::string STOCH_RESOLVE_HELPER = STOCH_RESOLVE_OBJECT;   // the engine's resolve, for the fragment path
@@ -312,15 +313,15 @@ static bool stochastic_shadow_resolve_shaders()
 static bool stochastic_transparency_shaders()
 {
 #if LL_WINDOWS || LL_LINUX
-    return LLStochasticEngine::deviceSupported();
+    return LLStochasticEngine::transparencySupported();
 #else
     return false;
 #endif
 }
 
 // The alpha-only variant of an alpha program (ALPHA_STOCHASTIC: the shader returns once its
-// alpha is known). A variant that fails to build leaves the method not ready (the blended faces
-// are not drawn, never another method) and never the viewer without its shaders (the error is
+// alpha is known). A variant that fails to build leaves the method not ready (the plain alpha pass
+// draws the blended faces, never another method) and never the viewer without its shaders (the error is
 // logged, and the next shader reload tries again).
 // Returns false only when a variant was due and did not build; true when it was built or is not due
 // (an unsupported device, or the helper objects missing, which loadBasicShaders logged).
@@ -1156,8 +1157,8 @@ std::string LLViewerShaderMgr::loadBasicShaders()
 
     // <Vulkanstorm> the stochastic engine's sampling and the transparency's coverage masks, attached
     // to the alpha programs' alpha-only variants (LLShaderMgr::attachShaderFeatures). Optional:
-    // without them the variants are not built, the method is not ready (logged) and the blended
-    // faces are not drawn until a shader reload builds them (a broken shader set, never another
+    // without them the variants are not built, the method is not ready (logged) and the plain alpha
+    // pass draws the blended faces until a shader reload builds them (a broken shader set, never another
     // method); the viewer starts either way. The engine's resolve object is the fragment resolve's: it is
     // attached to the transparency's temporal resolve and composite programs and to the Stochastic shadows' fragment resolve (whose compute resolve, kept for the Vulkan renderer, compiles its own objects).
     for (const std::string* helper : { &STOCH_SAMPLE_HELPER, &STOCH_RESOLVE_HELPER, &ALPHA_STOCHASTIC_HELPER })
@@ -3450,8 +3451,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     }
 
     // <Vulkanstorm> stochastic transparency: the opaque depth spread over the passes' samples and
-    // the composite. Like the variants, a failure is an error that is logged (the blended faces
-    // are not drawn until the shaders build; the next shader reload tries again), never another method.
+    // the composite. Like the variants, a failure is an error that is logged (the plain alpha pass draws
+    // the blended faces until the shaders build; the next shader reload tries again), never another method.
     if (success && stochastic_transparency_shaders())
     {
         gAlphaStochasticExpandProgram.mName = "Alpha Stochastic Depth Spread";

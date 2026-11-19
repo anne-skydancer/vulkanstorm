@@ -151,6 +151,23 @@ bool deviceSupported()
     return ok;
 }
 
+bool transparencySupported()
+{
+    if (!deviceSupported())
+    {
+        return false;   // logged there
+    }
+    // the condition under which LLShaderMgr::loadShaderFile compiles at #version 420 (packHalf2x16 is core there)
+    const bool ok = gGLManager.mGLSLVersionMajor >= 4 && gGLManager.mGLSLVersionMinor >= 20;
+    if (!ok)
+    {
+        LL_INFOS_ONCE("Pipeline") << "Stochastic transparency needs GLSL 4.20; this device reports GLSL " << gGLManager.mGLSLVersionMajor
+                                  << "." << gGLManager.mGLSLVersionMinor << ": stochastic transparency is off (sorted alpha is used),"
+                                  << " the Stochastic shadows are not affected" << LL_ENDL;
+    }
+    return ok;
+}
+
 bool computeResolve()
 {
     // The OpenGL viewer always runs the fragment resolve: an OpenGL compute dispatch and the

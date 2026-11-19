@@ -8203,9 +8203,10 @@ void LLPipeline::copyScreenSpaceReflections(LLRenderTarget* src, LLRenderTarget*
 //   4. composite (under the mask): the scene dimmed by the pixel's transparency, the accumulated colour added
 //      times total alpha over accumulated alpha, smoothed where grain is left; the glow then added to the scene alpha.
 // Two different things keep the passes from running:
-//   - The capability gate (sRenderAlphaStochasticSupported, LLStochasticEngine::deviceSupported):
-//     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is fragment passes on every device). Below it sorted
-//     alpha runs: a device that cannot run the method, not a fallback.
+//   - The capability gate (sRenderAlphaStochasticSupported, LLStochasticEngine::transparencySupported):
+//     GL 4.0 (gl_SampleMask, multisample textures; the temporal resolve is fragment passes on every device), GLSL 4.20
+//     (the composite's packHalf2x16) and 8 samples a pass. Below it sorted alpha runs: a device that cannot run the
+//     method, not a fallback.
 //   - Not ready (alphaStochasticReady), on a supported device: the targets are missing or of another
 //     size (an allocation that failed, or a screen buffer resized without them), or an alpha program's
 //     alpha-only variant did not build (gAlphaStochasticShadersReady). It is logged once, and
@@ -8234,9 +8235,9 @@ namespace
 void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 {
 #if LL_WINDOWS || LL_LINUX
-    // the device only (GL 4.0, enough samples): a shader set that did not build does not clear this
+    // the device only (GL 4.0, GLSL 4.20, enough samples): a shader set that did not build does not clear this
     // flag; LLDrawPoolAlpha draws the plain alpha pass until alphaStochasticReady (a shader reload retries it).
-    sRenderAlphaStochasticSupported = LLStochasticEngine::deviceSupported();
+    sRenderAlphaStochasticSupported = LLStochasticEngine::transparencySupported();
 #else
     sRenderAlphaStochasticSupported = false;
 #endif
@@ -8246,7 +8247,7 @@ void LLPipeline::allocateAlphaStochastic(U32 w, U32 h)
 
     // The transparency's S = 8 samples (Enderton et al. 2010: S = the multisample samples of the stochastic targets; the
     // Stochastic shadows' 8 rays are theirs) in one pass: the GL 4.6 base takes 8 for all three formats. A device that
-    // takes fewer is below the floor like one below GL 4.0 (sorted alpha is drawn); lanes are never summed across passes.
+    // takes fewer is below the floor like one below GL 4.0 or GLSL 4.20 (sorted alpha is drawn); lanes are never summed across passes.
     const U32 pass = LLStochasticEngine::TRANSPARENCY_SAMPLES;
     const S32 device = llmin(gGLManager.mMaxColorTextureSamples, llmin(gGLManager.mMaxDepthTextureSamples, gGLManager.mMaxSamples));
     if (sRenderAlphaStochasticSupported && device < (S32)pass)

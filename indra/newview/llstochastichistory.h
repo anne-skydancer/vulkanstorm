@@ -42,16 +42,22 @@ namespace LLStochasticEngine
     // SAMPLES (8: the shadows' rays), TRANSPARENCY_SAMPLES (8), SEEDS (2048), maskTable() and transparencyTable() are in
     // llstochasticstate.h (GL-free, unit tested)
 
-    // The device runs stochastic transparency: GL 4.0 (gl_SampleMask, multisample textures) and GLSL 4.00.
+    // The device runs the stochastic engine: GL 4.0 (gl_SampleMask, multisample textures) and GLSL 4.00.
     // One definition for the pipeline's allocation and the shader manager; logs once when a device
     // below it cannot (sorted alpha is used there: a capability gate, not a run-time fallback).
     bool deviceSupported();
+
+    // Stochastic transparency's gate: deviceSupported() and GLSL 4.20. Its composite rounds to half floats with
+    // packHalf2x16 (GLSL 4.20), and LLShaderMgr::loadShaderFile compiles at #version 400 below GLSL 4.20. A GL 4.0
+    // or 4.1 device has sorted alpha, by capability, and keeps the Stochastic shadows. Logs once, as deviceSupported.
+    bool transparencySupported();
 
     // No run-time fallback (owner decision Q8, 2026-11-13, replacing the 2026-11-12 exception): a stochastic
     // method never switches to another one on failure. A failed target allocation or shader build is logged,
     // the selected method stays, and the next natural point retries (LLPipeline::retryAlphaStochastic, the
     // next shader reload); meanwhile the pass that cannot run does no harm. Only a device below GL 4.0
-    // (deviceSupported() false) runs Legacy and sorted alpha, by capability, as always.
+    // (deviceSupported() false) runs Legacy, and only one below it or below GLSL 4.20 (transparencySupported()
+    // false) sorted alpha, by capability, as always.
     inline bool usable() { return deviceSupported(); }
 
     // Which resolve the Stochastic shadows run: the fragment resolve on every device, never changed at run

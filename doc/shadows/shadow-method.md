@@ -77,8 +77,8 @@ M0 to M2 shipped as one PR.
   program binary cache hashes defines, not attached objects, so the method is part of the program hash
   (`LLGLSLShader::sShadowUtilVariant`, hashed only when not 0: Legacy keeps its cached binaries). `bindDeferredShader` sends `shadow_light_size` to every program, the
   probe pass included.
-- Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`, as for the stochastic
-  transparency) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
+- Capability gate, decided at load: below OpenGL 4.0 (`LLStochasticEngine::deviceSupported`; the stochastic
+  transparency needs GLSL 4.20 on top, `transparencySupported`) a device that cannot run Stochastic has no Stochastic: the combo drops the "Stochastic"
   item and a stored 2 reads as Legacy (`LLShadowMethod::effective`, unit tested). The setting is never written, so the
   choice survives a GPU upgrade. This is a capability choice, not a run-time fallback.
 - The combo has the items "Legacy" and "Stochastic". `scripts/tests/test_shadow_method_tables.py`
