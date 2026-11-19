@@ -825,9 +825,9 @@ of a prim (offline about 18 ns per alpha face).
 ## The light let through see-through casters (lamp shadows L3)
 
 Owner decision D11 (a light-let-through layer in lamp tiles), with D4 (a) coloured. Plan: `reports/light-through-l3-2026-11-18/plan.md`
-(kept on the owner's machine). Before L3 a lamp shadow was all or nothing: a blended caster below 0.98 alpha was a hashed per-texel
-dither in the depth tile, frozen grain in a cached tile with no history to average it, and stacked sheers passed the most opaque layer's
-light instead of the product. L3 lets light through such casters in proportion and coloured by them, deterministically.
+(kept on the owner's machine). Before L3 a lamp shadow was all or nothing: a blended caster below full opacity was a stochastic cover in the depth tile (a hashed dither, since #559 the Aurora caster rule), frozen
+grain in a cached tile with no history to average it, and stacked sheers passed the most opaque layer's light instead of the product
+(the caster rule's layers multiply, but its grain stays). L3 lets light through such casters in proportion and coloured by them, deterministically.
 
 ### The method
 
@@ -845,7 +845,8 @@ alpha times face alpha), `C` its linear colour (classic: texture times face colo
 colour texture in linear times the factor, as `pbralphaF.glsl`). It is McGuire & Enderton's `rho = a (1 - t)` with `t = C (1 - a)`, the
 lowest-order `t` that keeps a faint face a pure filter of its colour and an `a = 1` face opaque, as SL draws it. It lies between `1 - a`
 (a black or neutral face) and `1 - a^2` (white): a red pane at 0.6 lets (0.64, 0.40, 0.40) through, clear glass at 0.3 lets 0.91. A texel
-at 0.98 or more stays solid in the depth (the 2026-11-14 decision), where the layer would pass under 0.04: the switch cannot be seen. A
+at full opacity (1.0) is solid in the depth, where the layer passes 0: there is no cut, as the owner removed the 0.05 and 0.98 cuts on
+2026-11-18 (D4, #559), so the switch is no step at all. A
 face at or below 1/255 is left out (invisible), so it records no depth either.
 
 ### The layer (`lllightthroughgl.h`, `LLLightThroughLayer`)
@@ -977,21 +978,18 @@ L3 is the projector's alone except its uniforms. What the point pool adds, and w
 ### Meeting #559 (devel's caster rule)
 
 Devel's #559 (902cde39ac, merged as 4f077cdb73; owner decision D4 of 2026-11-18) replaces the blend faces' dither in these same two
-shaders (`shadowAlphaMaskF.glsl`, `pbrShadowAlphaBlendF.glsl`, their vertex shaders, `lllocalshadows.{h,cpp}` and
-`test_shadow_alpha_permutation.py`) with the Aurora Viewer's caster rule, drops the 0.98 cut and the 0.05 floor for blend faces
-(`SHADOW_BLEND_SOLID_ALPHA` 1.0, `alpha < 1.0`), and says lamps use the same rule. When this branch meets it:
+shaders (`shadowAlphaMaskF.glsl`, `pbrShadowAlphaBlendF.glsl`) with the Aurora Viewer's caster rule and drops the 0.98 cut and the 0.05
+floor for blend faces (`SHADOW_BLEND_SOLID_ALPHA` 1.0, `alpha < 1.0`); lamps use the same rule where no layer holds the texel. This
+branch is re-cut onto devel with it:
 
-- **The order**: in a static lamp tile with a layer the `shadow_through` discard comes first, before `shadow_caster_keeps` (the layer
-  holds every texel below the cut; the caster rule stays for every other pass: the sun's cascades, the avatars' layer, a tile without a
-  layer).
-- **The cut is one number** in `kSolidAlpha`, `LIGHT_THROUGH_SOLID`, `SHADOW_BLEND_SOLID_ALPHA` and the glTF blend shader's literal;
-  `test_light_through_twin.py` fails when one moves alone. A mechanical merge that puts the discard in #559's `alpha < 1.0` branch while
-  the layer keeps 0.98 would leave faces between 0.98 and 1.0 casting nothing on lamps, so they move together.
-- **For the owner, two decisions conflict**: the 2026-11-14 decision keeps a texel solid from 0.98 (the brief for L3), D4 drops every cut
-  (a 98 % pane lets 2 % through). With the layer the cut is invisible either way (under 0.04 of the lamp's light), so D4's 1.0 costs
-  nothing but the decision. And the sun and the lamps then use different transmittances: #559's coverage passes `1 - a` (grey: a white
-  pane at 0.5 passes 0.5), L3 passes `(1 - a)(1 + a C)` (coloured: the same pane passes 0.75 of a lamp's light). One rule for both is the
-  owner's call; L3 follows the brief here.
+- **The order**: in a static lamp tile with a layer the `shadow_through` discard comes first (`shadow_through != 0 ||
+  !shadow_caster_keeps(alpha)`), so the layer holds every texel below full opacity; the caster rule stays for every other pass: the
+  sun's cascades, the avatars' layer, a rigged face, a tile without a layer.
+- **The cut is one number**, 1.0, in `kSolidAlpha`, `LIGHT_THROUGH_SOLID`, `SHADOW_BLEND_SOLID_ALPHA` and the glTF blend shader's
+  literal; `test_light_through_twin.py` fails when one moves alone. The transmission rule `(1 - a)(1 + a C)` goes to 0 as a reaches
+  1, so the layer needs no cut: the switch to the depth is continuous.
+- **For the owner**: the sun and the lamps use different transmittances: #559's coverage passes `1 - a` (grey: a white pane at 0.5 passes
+  0.5), L3 passes `(1 - a)(1 + a C)` (coloured: the same pane passes 0.75 of a lamp's light). One rule for both is the owner's call.
 
 ### Mask faces (the plan's stage L3.3: not built)
 
@@ -1008,7 +1006,7 @@ question goes back to the plan.
 
 | gate | result |
 |---|---|
-| `indra/newview/tests/lllightthrough_test.cpp` (ci-checks; g++ 13.2 -O0/-O2 with -Wshadow, clang, MSVC) | the rule's limits and bounds, the plan's examples, the step under 0.04 at the solid cut, stacking; the reference (lowered, never raised, capped); the tap: behind every caster the bilinear tau, in front of them all or with none exactly its open weight, a frame with no pane under it exact over the open texels (the penumbra passes the pane's 0.5, not 0.75), the combine within [0, 1], an empty filter multiplying a visibility bit for bit; the memory figures; the carry (swap, chain, cycle; a resized tile cleared, never copied; 200 random repacks of the pool's planner with a quarter of the tiles shrinking): PASS |
+| `indra/newview/tests/lllightthrough_test.cpp` (ci-checks; g++ 13.2 -O0/-O2 with -Wshadow, clang, MSVC) | the rule's limits and bounds, the plan's examples, the step at the solid switch (under 1e-6), stacking; the reference (lowered, never raised, capped); the tap: behind every caster the bilinear tau, in front of them all or with none exactly its open weight, a frame with no pane under it exact over the open texels (the penumbra passes the pane's 0.5, not 0.75), the combine within [0, 1], an empty filter multiplying a visibility bit for bit; the memory figures; the carry (swap, chain, cycle; a resized tile cleared, never copied; 200 random repacks of the pool's planner with a quarter of the tiles shrinking): PASS |
 | `llprojectorshadowpool_test` (ci-checks) | the RGB of a face the blend pass draws moves the silhouette key, that of a masked or opaque face does not; a tint blinker on a blended face pushes once a toggle (600 in a minute of 0.1 s toggles, static, active child, active root); every S2 check as before: PASS |
 | `scripts/tests/test_light_through_twin.py` (ci-checks) | the GLSL pinned to its C++ twins (the rule, the tap, the combine, the reference against `stSpotQuadTile`'s, the plane cap against `stSpotFilterTile`'s), the limits one number everywhere, the samplers arguments, the caster pass's state (S attached, `GL_LEQUAL` without writes, the cull, the scissor, the viewport asserted), the carry's size guard, the pipeline's flag on every blend bind before its draw, rigged faces on the depth rule, the programs only with the pool and stopping a development build, the feed's colour input: 13/13 |
 | `scripts/shadows/lamp_filter_twin.py --l3` (CPU) | uniform glass at 0.5: one value over the patch (spread 0, the dither's 0.33 to 0.83); glass behind its frame, RMS against the truth: 0.127 / 0.095 / 0.059 / 0.034 / 0.016 at 8 to 0.5 cm texels and the default softness (the dither 0.150 / 0.119 / 0.091 / 0.075 / 0.068), 0.116 to 0.007 at the top; painted leading: the same (the first build 0.135 / 0.115 / 0.074 / 0.045 / 0.026); two stacked panes: the product within 0.001; a receiver in front of both: exactly 1; a pane hidden under the floor: the front pane's 0.624 (truth 0.625; the first build 0.40 / 0.25 / 0.25), a glass globe over it 0.890 (truth 0.889); a red pane's edge: 0.85 to 0.91 of a uniform disc's 10-90 % width where the radius is physical; a window flush in a wall at 30 to 60 degrees: no tint on the wall (the flat reference 0.017 to 0.21) |
