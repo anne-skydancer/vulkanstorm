@@ -974,6 +974,7 @@ public:
     // Map of LLMeshSkinInfo::mHash to MatrixPaletteCache
     typedef std::unordered_map<U64, MatrixPaletteCache> matrix_palette_cache_t;
     matrix_palette_cache_t mMatrixPaletteCache;
+    U32 mMatrixPalettePruneFrame = 0; // <Vulkanstorm/> the last pass of idleUpdate over the cache (llskinpalettecache.h)
 
 protected:
     void            releaseMeshData();

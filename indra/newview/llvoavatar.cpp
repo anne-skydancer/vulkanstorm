@@ -118,6 +118,7 @@
 #include "llsdserialize.h"
 #include "llrendersphere.h"
 #include "llskinningutil.h"
+#include "llskinpalettecache.h" // <Vulkanstorm/>
 
 #include "llperfstats.h"
 
@@ -3207,6 +3208,14 @@ void LLVOAvatar::idleUpdate(LLAgent &agent, const F64 &time)
         LL_INFOS() << "Warning!  Idle on dead avatar" << LL_ENDL;
         return;
     }
+
+    // <Vulkanstorm> drop the skin palettes no draw has asked for lately: the cache kept every skin the avatar ever drew
+    if (LLSkinPaletteCache::pruneDue(gFrameCount, mMatrixPalettePruneFrame))
+    {
+        mMatrixPalettePruneFrame = gFrameCount;
+        LLSkinPaletteCache::prune(mMatrixPaletteCache, gFrameCount);
+    }
+    // </Vulkanstorm>
 
     static LLCachedControl<bool> friends_only(gSavedSettings, "RenderAvatarFriendsOnly", false);
     if (friends_only()

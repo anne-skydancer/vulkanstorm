@@ -1615,6 +1615,7 @@ set(viewer_HEADER_FILES
     llsidepaneltaskinfo.h
     llsidetraypanelcontainer.h
     llskinningutil.h
+    llskinpalettecache.h
     llsky.h
     llslurl.h
     llsnapshotlivepreview.h
