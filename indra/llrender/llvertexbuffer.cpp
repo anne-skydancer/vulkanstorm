@@ -41,6 +41,34 @@
 #include "llmemory.h"
 #include <glm/gtc/type_ptr.hpp>
 
+// <Vulkanstorm> PILOT MEASUREMENT (S2), see llglslshader.cpp
+void vksPilotDraw(unsigned long long ticks);
+bool vksPilotEnabled();
+struct VksPilotDrawScope
+{
+    unsigned long long start = 0;
+    VksPilotDrawScope()
+    {
+        if (vksPilotEnabled())
+        {
+            LARGE_INTEGER now;
+            QueryPerformanceCounter(&now);
+            start = (unsigned long long) now.QuadPart;
+        }
+    }
+    ~VksPilotDrawScope()
+    {
+        if (vksPilotEnabled())
+        {
+            LARGE_INTEGER now;
+            QueryPerformanceCounter(&now);
+            vksPilotDraw((unsigned long long) now.QuadPart - start);
+        }
+    }
+};
+// </Vulkanstorm>
+
+
 //Next Highest Power Of Two
 //helper function, returns first number > v that is a power of 2, or v if v is already a power of 2
 U32 nhpo2(U32 v)
@@ -978,8 +1006,11 @@ void LLVertexBuffer::drawRange(U32 mode, U32 start, U32 end, U32 count, U32 indi
         STOP_GLERROR;
         return;
     }
+    {
+        VksPilotDrawScope pilot_draw;
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
-        (GLvoid*) (indices_offset * (size_t) mIndicesStride));
+            (GLvoid*) (indices_offset * (size_t) mIndicesStride));
+    }
     STOP_GLERROR;
 }
 
@@ -1020,8 +1051,11 @@ void LLVertexBuffer::drawRangeFast(U32 mode, U32 start, U32 end, U32 count, U32 
     LLGLSLShader::flushBlock(); // <Vulkanstorm/> a generated program's uniform block
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
+    {
+        VksPilotDrawScope pilot_draw;
     glDrawRangeElements(sGLMode[mode], start, end, count, mIndicesType,
-        (GLvoid*)(indices_offset * (size_t)mIndicesStride));
+            (GLvoid*)(indices_offset * (size_t)mIndicesStride));
+    }
 }
 
 
@@ -1043,7 +1077,10 @@ void LLVertexBuffer::drawArrays(U32 mode, U32 first, U32 count) const
     VKS_GLSTAT_DRAW(count);
     VKS_GLSTAT_INC(drawArraysCalls);
     VKS_GLSTAT(drawTriangles, mode == LLRender::TRIANGLES ? count / 3 : 0);
+    {
+        VksPilotDrawScope pilot_draw;
     glDrawArrays(sGLMode[mode], first, count);
+    }
     STOP_GLERROR;
 }
 

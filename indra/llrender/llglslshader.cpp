@@ -27,6 +27,8 @@
 #include "linden_common.h"
 
 #include "llglslshader.h"
+#include <atomic>
+#include <cstdlib>
 
 #include "llshadermgr.h"
 #include "llgeneratedshader.h"
@@ -1356,6 +1358,88 @@ S32 LLGLSLShader::disableTexture(S32 uniform, LLTexUnit::eTextureType mode)
     return index;
 }
 
+// <Vulkanstorm> PILOT MEASUREMENT (S2): CPU time in the uniform path and in the draw calls, written to the file named by
+// VKS_SLANG_PILOT_STATS when the viewer exits. Removed when the pilot is accepted.
+#include "llframetimer.h"
+namespace
+{
+    struct PilotStats
+    {
+        std::atomic<unsigned long long> setTicks{ 0 }, flushTicks{ 0 }, drawTicks{ 0 };
+        std::atomic<unsigned long long> sets{ 0 }, flushes{ 0 }, draws{ 0 };
+        std::string path;
+        bool enabled = false;
+        PilotStats()
+        {
+            const char* value = std::getenv("VKS_SLANG_PILOT_STATS");
+            if (value && value[0])
+            {
+                path = value;
+                enabled = true;
+            }
+        }
+        ~PilotStats()
+        {
+            if (!enabled)
+            {
+                return;
+            }
+            LARGE_INTEGER freq;
+            QueryPerformanceFrequency(&freq);
+            const double ns = 1e9 / (double) freq.QuadPart;
+            FILE* f = fopen(path.c_str(), "wb");
+            if (f)
+            {
+                const unsigned long long frames = LLFrameTimer::getFrameCount();
+                fprintf(f, "frames %llu\ndraws %llu\nuniform_calls %llu\nuploads %llu\nset_ns %.0f\nflush_ns %.0f\ndraw_ns %.0f\n",
+                        frames, (unsigned long long) draws, (unsigned long long) sets, (unsigned long long) flushes,
+                        setTicks * ns, flushTicks * ns, drawTicks * ns);
+                fclose(f);
+            }
+        }
+    };
+    PilotStats sPilot;
+
+    struct PilotScope
+    {
+        std::atomic<unsigned long long>& total;
+        unsigned long long start = 0;
+        PilotScope(std::atomic<unsigned long long>& t) : total(t)
+        {
+            if (sPilot.enabled)
+            {
+                LARGE_INTEGER now;
+                QueryPerformanceCounter(&now);
+                start = (unsigned long long) now.QuadPart;
+                ++sPilot.sets;
+            }
+        }
+        ~PilotScope()
+        {
+            if (sPilot.enabled)
+            {
+                LARGE_INTEGER now;
+                QueryPerformanceCounter(&now);
+                total += (unsigned long long) now.QuadPart - start;
+            }
+        }
+    };
+}
+// the draw calls of llvertexbuffer.cpp report here
+void vksPilotDraw(unsigned long long ticks)
+{
+    if (sPilot.enabled)
+    {
+        ++sPilot.draws;
+        sPilot.drawTicks += ticks;
+    }
+}
+bool vksPilotEnabled()
+{
+    return sPilot.enabled;
+}
+// </Vulkanstorm>
+
 // <Vulkanstorm> Generated (Slang) programs: the uniform block (doc/slang.md, D4).
 GLuint LLGLSLShader::sBlockBound[16] = {};
 
@@ -1567,24 +1651,30 @@ void LLGLSLShader::blockPutMatrix(GLint offset, U32 count, GLboolean transpose, 
 void LLGLSLShader::uploadBlock()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
+    PilotScope pilot_scope(sPilot.flushTicks);
+    --sPilot.sets; // not a uniform call
+    ++sPilot.flushes;
     glNamedBufferSubData(mBlockBuffer, 0, (GLsizeiptr) mBlockData.size(), mBlockData.data());
     mBlockDirty = false;
 }
 
 void LLGLSLShader::slUniform1i(GLint location, GLint x)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform1i(location, x); return; }
     blockPut(location, &x, 4);
 }
 
 void LLGLSLShader::slUniform1f(GLint location, GLfloat x)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform1f(location, x); return; }
     blockPut(location, &x, 4);
 }
 
 void LLGLSLShader::slUniform2f(GLint location, GLfloat x, GLfloat y)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform2f(location, x, y); return; }
     const GLfloat v[2] = { x, y };
     blockPut(location, v, 8);
@@ -1592,6 +1682,7 @@ void LLGLSLShader::slUniform2f(GLint location, GLfloat x, GLfloat y)
 
 void LLGLSLShader::slUniform3f(GLint location, GLfloat x, GLfloat y, GLfloat z)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform3f(location, x, y, z); return; }
     const GLfloat v[3] = { x, y, z };
     blockPut(location, v, 12);
@@ -1599,6 +1690,7 @@ void LLGLSLShader::slUniform3f(GLint location, GLfloat x, GLfloat y, GLfloat z)
 
 void LLGLSLShader::slUniform4f(GLint location, GLfloat x, GLfloat y, GLfloat z, GLfloat w)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform4f(location, x, y, z, w); return; }
     const GLfloat v[4] = { x, y, z, w };
     blockPut(location, v, 16);
@@ -1606,6 +1698,7 @@ void LLGLSLShader::slUniform4f(GLint location, GLfloat x, GLfloat y, GLfloat z, 
 
 void LLGLSLShader::slUniform2i(GLint location, GLint x, GLint y)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform2i(location, x, y); return; }
     const GLint v[2] = { x, y };
     blockPut(location, v, 8);
@@ -1613,66 +1706,77 @@ void LLGLSLShader::slUniform2i(GLint location, GLint x, GLint y)
 
 void LLGLSLShader::slUniform1iv(GLint location, U32 count, const GLint* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform1iv(location, count, v); return; }
     blockPutArray(location, v, 4, count);
 }
 
 void LLGLSLShader::slUniform4iv(GLint location, U32 count, const GLint* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform4iv(location, count, v); return; }
     blockPutArray(location, v, 16, count);
 }
 
 void LLGLSLShader::slUniform1fv(GLint location, U32 count, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform1fv(location, count, v); return; }
     blockPutArray(location, v, 4, count);
 }
 
 void LLGLSLShader::slUniform2fv(GLint location, U32 count, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform2fv(location, count, v); return; }
     blockPutArray(location, v, 8, count);
 }
 
 void LLGLSLShader::slUniform3fv(GLint location, U32 count, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform3fv(location, count, v); return; }
     blockPutArray(location, v, 12, count);
 }
 
 void LLGLSLShader::slUniform4fv(GLint location, U32 count, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform4fv(location, count, v); return; }
     blockPutArray(location, v, 16, count);
 }
 
 void LLGLSLShader::slUniform4uiv(GLint location, U32 count, const GLuint* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniform4uiv(location, count, v); return; }
     blockPutArray(location, v, 16, count);
 }
 
 void LLGLSLShader::slUniformMatrix2fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniformMatrix2fv(location, count, transpose, v); return; }
     blockPutMatrix(location, count, transpose, v, 2, 2);
 }
 
 void LLGLSLShader::slUniformMatrix3fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniformMatrix3fv(location, count, transpose, v); return; }
     blockPutMatrix(location, count, transpose, v, 3, 3);
 }
 
 void LLGLSLShader::slUniformMatrix3x4fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniformMatrix3x4fv(location, count, transpose, v); return; }
     blockPutMatrix(location, count, transpose, v, 3, 4);
 }
 
 void LLGLSLShader::slUniformMatrix4fv(GLint location, U32 count, GLboolean transpose, const GLfloat* v)
 {
+    PilotScope pilot_scope(sPilot.setTicks);
     if (!mGenerated) { glUniformMatrix4fv(location, count, transpose, v); return; }
     blockPutMatrix(location, count, transpose, v, 4, 4);
 }
