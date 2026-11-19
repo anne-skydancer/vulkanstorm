@@ -15,6 +15,7 @@
 #include "llgl.h"
 #include "llglslshader.h"
 #include "llglheaders.h"
+#include "llrender.h"
 
 namespace
 {
@@ -52,18 +53,88 @@ namespace
     std::vector<GLuint> sFreeQueries;       // timestamp queries (target GL_TIMESTAMP)
     std::vector<GLuint> sFreeSampleQueries; // GL_SAMPLES_PASSED queries: a query object keeps the target of its first use, so the two pools must never mix
 
-    // The mergeable-run tracker.
+    // The mergeable-run trackers: every change that reached GL, and the same without uniforms, palettes and model
+    // matrices (the runs per-draw records would leave, G6r-0).
     LLGLSubmitMath::RunTracker sRun;
+    LLGLSubmitMath::RunTracker sRunNoUniform;
+
+    LLGLSubmitStats::Record* recordOf(const void* rec)
+    {
+        return const_cast<LLGLSubmitStats::Record*>(static_cast<const LLGLSubmitStats::Record*>(rec));
+    }
 
     void creditRun(const LLGLSubmitMath::RunTracker::Closed& c)
     {
         if (c.rec && c.len)
         {
-            auto* r = const_cast<LLGLSubmitStats::Record*>(static_cast<const LLGLSubmitStats::Record*>(c.rec));
+            LLGLSubmitStats::Record* r = recordOf(c.rec);
             r->c.runHist[LLGLSubmitMath::runBucket(c.len)]++;
             r->c.runs++;
             r->c.mergeableDraws += c.len - 1;
         }
+    }
+
+    void creditRunNoUniform(const LLGLSubmitMath::RunTracker::Closed& c)
+    {
+        if (c.rec && c.len)
+        {
+            LLGLSubmitStats::Record* r = recordOf(c.rec);
+            r->c.runHistNoUniform[LLGLSubmitMath::runBucket(c.len)]++;
+            r->c.runsNoUniform++;
+            r->c.mergeableDrawsNoUniform += c.len - 1;
+        }
+    }
+
+    // The vertex streams of the last buffer set: a buffer with other streams ends a run (G5's pages hold one format).
+    uint32_t sLastFormat = 0;
+
+    // The copy census's runs of one template, and the last face's policy-P0 status in its scope.
+    LLGLSubmitMath::CensusRunTracker sCensusRun;
+    const LLGLSubmitStats::Record* sCensusLastRec = nullptr;
+    bool sCensusLastInstanced = false;
+
+    void creditCensusRun(const LLGLSubmitMath::CensusRunTracker::Closed& c)
+    {
+        if (c.rec && c.len)
+        {
+            recordOf(c.rec)->census.runHist[LLGLSubmitMath::censusSizeClass(c.vertices)][LLGLSubmitMath::censusRunBucket(c.len)]++;
+        }
+    }
+
+    // What a draw's state key holds besides what it reads at the draw: the last skin palette and the caps toggled
+    // since the frame began (an XOR of each toggled cap, so equal sets give equal signatures in any order).
+    uint64_t sPaletteKey = 0;
+    uint64_t sCapSignature = 0;
+
+    uint64_t mixMatrix(uint64_t h, const glm::mat4& m)
+    {
+        uint32_t bits[16];
+        std::memcpy(bits, &m[0][0], sizeof(bits));
+        for (uint32_t b : bits)
+        {
+            h = LLGLSubmitMath::mix64(h, b);
+        }
+        return h;
+    }
+
+    // The state a draw is issued with, as a by-state sort would bucket it: the program, the textures on its channels,
+    // the transforms, the palette and the caps. Other uniform values (alpha cutoff, material factors) are not in it, so
+    // the count of distinct keys is a lower bound of the buckets.
+    uint64_t drawStateKey()
+    {
+        uint64_t h = LLGLSubmitMath::mix64(0x73746174656b6579ull, LLGLSLShader::sCurBoundShader);
+        if (const LLGLSLShader* shader = LLGLSLShader::sCurBoundShaderPtr)
+        {
+            for (S32 i = 0; i < shader->mActiveTextureChannels; ++i)
+            {
+                LLTexUnit* unit = gGL.getTexUnit(i);
+                h = LLGLSubmitMath::mix64(h, ((uint64_t)unit->getCurrType() << 32) | unit->getCurrTexture());
+            }
+        }
+        h = mixMatrix(h, gGL.getModelviewMatrix());
+        h = mixMatrix(h, gGL.getProjectionMatrix());
+        h = LLGLSubmitMath::mix64(h, sPaletteKey);
+        return LLGLSubmitMath::mix64(h, sCapSignature);
     }
 
     // The window aggregate: sums over the frames of a window, in order of first appearance.
@@ -149,6 +220,7 @@ namespace
         if (cpu)
         {
             dst.c.add(src.c);
+            dst.census.add(src.census);
             dst.calls += src.calls;
             dst.cpuMs += src.cpuMs;
         }
@@ -193,20 +265,102 @@ namespace
         if (!only_nonzero || c.name) { out.emplace(#name, number(LLGLSubmitMath::perFrameMean((double)c.name, div), integral)); }
         VKS_GLSTAT_COUNTER_LIST(VKS_GLSTAT_EMIT)
 #undef VKS_GLSTAT_EMIT
-        bool any = false;
-        for (uint64_t h : c.runHist)
+        auto hist = [&](const char* key, const uint64_t (&h)[6])
         {
-            any = any || h;
-        }
-        if (any || !only_nonzero)
-        {
-            boost::json::array hist;
-            for (uint64_t h : c.runHist)
+            bool any = false;
+            for (uint64_t v : h)
             {
-                hist.emplace_back(number(LLGLSubmitMath::perFrameMean((double)h, div), integral));
+                any = any || v;
             }
-            out.emplace("run_hist", std::move(hist));
+            if (any || !only_nonzero)
+            {
+                boost::json::array arr;
+                for (uint64_t v : h)
+                {
+                    arr.emplace_back(number(LLGLSubmitMath::perFrameMean((double)v, div), integral));
+                }
+                out.emplace(key, std::move(arr));
+            }
+        };
+        hist("run_hist", c.runHist);
+        hist("run_hist_no_uniform", c.runHistNoUniform);
+    }
+
+    const char* const kCensusSizeNames[LLGLSubmitMath::kCensusSizeClasses] = {"under_64", "64_255", "256_575", "576_up"};
+
+    // The copy census of a scope as JSON (nothing when the scope drew no face with a census record). div as countersJson.
+    void censusJson(boost::json::object& out, const LLGLSubmitCensus& c, double div)
+    {
+        if (!c.faces)
+        {
+            return;
         }
+        const bool integral = div == 1.0;
+        auto n = [&](uint64_t v) { return number(LLGLSubmitMath::perFrameMean((double)v, div), integral); };
+        auto ms = [&](uint64_t ns) { return number(LLGLSubmitMath::perFrameMean((double)ns, div) / 1.0e6, false); };
+        auto hist = [&](const uint64_t (&h)[LLGLSubmitCensus::kRuns])
+        {
+            boost::json::array arr;
+            for (uint64_t v : h)
+            {
+                arr.emplace_back(n(v));
+            }
+            return arr;
+        };
+
+        boost::json::object o;
+        o.emplace("faces", n(c.faces));
+        o.emplace("vertices", n(c.vertices));
+        boost::json::object reasons;
+        for (int r = 0; r < LLGLSubmitCensus::kReasons; ++r)
+        {
+            if (c.reasonFaces[r])
+            {
+                boost::json::object e;
+                e.emplace("faces", n(c.reasonFaces[r]));
+                e.emplace("vertices", n(c.reasonVertices[r]));
+                reasons.emplace(LLGLSubmitMath::censusExclusionName(r), std::move(e));
+            }
+        }
+        o.emplace("by_reason", std::move(reasons));
+        boost::json::object sizes, runs, relaxed;
+        for (int s = 0; s < LLGLSubmitCensus::kSizes; ++s)
+        {
+            if (c.sizeFaces[s])
+            {
+                boost::json::object e;
+                e.emplace("faces", n(c.sizeFaces[s]));
+                e.emplace("vertices", n(c.sizeVertices[s]));
+                e.emplace("bytes", n(c.sizeBytes[s]));
+                e.emplace("bake_ms", ms(c.sizeBakeNs[s]));
+                sizes.emplace(kCensusSizeNames[s], std::move(e));
+            }
+            bool any_run = false, any_relaxed = false;
+            for (int b = 0; b < LLGLSubmitCensus::kRuns; ++b)
+            {
+                any_run = any_run || c.runHist[s][b];
+                any_relaxed = any_relaxed || c.relaxedHist[s][b];
+            }
+            if (any_run)
+            {
+                runs.emplace(kCensusSizeNames[s], hist(c.runHist[s]));
+            }
+            if (any_relaxed)
+            {
+                relaxed.emplace(kCensusSizeNames[s], hist(c.relaxedHist[s]));
+            }
+        }
+        o.emplace("eligible_by_size", std::move(sizes));
+        o.emplace("items", n(c.items));
+        o.emplace("instanced_items", n(c.instancedItems));
+        o.emplace("mixed_items", n(c.mixedItems));
+        o.emplace("sets", n(c.sets));
+        o.emplace("p0_extra_calls", n(c.p0ExtraCalls));
+        o.emplace("p0_switches", n(c.p0Switches));
+        o.emplace("p1_lost_vertices", n(c.p1LostVertices));
+        o.emplace("run_hist", std::move(runs));        // buckets 1, 2, 3-4, 5-8, 9-16, 17-32, 33-64, 65+
+        o.emplace("relaxed_hist", std::move(relaxed));
+        out.emplace("census", std::move(o));
     }
 
     // records: in render order. div_cpu scales counters and CPU time, div_gpu GPU time (0: not available).
@@ -217,10 +371,12 @@ namespace
         const bool gpu_ok = div_gpu > 0.0;
 
         LLGLSubmitCounters total;
+        LLGLSubmitCensus total_census;
         double frame_cpu = 0.0, frame_gpu = 0.0;
         for (const auto* r : recs)
         {
             total.add(r->c);
+            total_census.add(r->census);
             if (r->view == "frame" && r->pass.empty())
             {
                 frame_cpu = r->cpuMs;
@@ -229,6 +385,7 @@ namespace
         }
         boost::json::object totals;
         countersJson(totals, total, div_cpu, false);
+        censusJson(totals, total_census, div_cpu);
         totals.emplace("cpu_ms", number(frame_cpu / div_cpu, false));
         if (gpu_ok)
         {
@@ -245,6 +402,7 @@ namespace
         // views: counters summed over their passes, times from the view scope itself
         std::vector<std::string> view_order;
         std::map<std::string, LLGLSubmitCounters> view_counters;
+        std::map<std::string, LLGLSubmitCensus> view_census;
         std::map<std::string, const LLGLSubmitStats::Record*> view_scope;
         for (const auto* r : recs)
         {
@@ -253,6 +411,7 @@ namespace
                 view_order.push_back(r->view);
             }
             view_counters[r->view].add(r->c);
+            view_census[r->view].add(r->census);
             if (r->pass.empty())
             {
                 view_scope[r->view] = r;
@@ -274,6 +433,7 @@ namespace
                 }
             }
             countersJson(v, view_counters[name], div_cpu, true);
+            censusJson(v, view_census[name], div_cpu);
             views.emplace_back(std::move(v));
         }
         root.emplace("views", std::move(views));
@@ -297,6 +457,7 @@ namespace
                     }
                 }
                 countersJson(p, r->c, div_cpu, true);
+                censusJson(p, r->census, div_cpu);
                 passes.emplace_back(std::move(p));
             }
             root.emplace("passes", std::move(passes));
@@ -306,12 +467,13 @@ namespace
 }
 
 std::atomic<LLGLSubmitStats::Record*> LLGLSubmitStats::sCurRec{nullptr};
-uint32_t LLGLSubmitStats::sEpoch = 0;
+LLGLSubmitMath::RunEpochs LLGLSubmitStats::sEpochs;
 std::shared_ptr<LLGLSubmitStats::Frame> LLGLSubmitStats::sLast;
 uint32_t LLGLSubmitStats::sWindowTarget = 0;
 uint32_t LLGLSubmitStats::sWindowCollected = 0;
 uint32_t LLGLSubmitStats::sWindowGpuFrames = 0;
 bool LLGLSubmitStats::sWindowGpu = true;
+bool LLGLSubmitStats::sWindowCensus = false;
 
 void LLGLSubmitCounters::add(const LLGLSubmitCounters& o)
 {
@@ -321,12 +483,46 @@ void LLGLSubmitCounters::add(const LLGLSubmitCounters& o)
     for (int i = 0; i < 6; ++i)
     {
         runHist[i] += o.runHist[i];
+        runHistNoUniform[i] += o.runHistNoUniform[i];
     }
+}
+
+void LLGLSubmitCensus::add(const LLGLSubmitCensus& o)
+{
+    faces += o.faces;
+    vertices += o.vertices;
+    for (int r = 0; r < kReasons; ++r)
+    {
+        reasonFaces[r] += o.reasonFaces[r];
+        reasonVertices[r] += o.reasonVertices[r];
+    }
+    for (int s = 0; s < kSizes; ++s)
+    {
+        sizeFaces[s] += o.sizeFaces[s];
+        sizeVertices[s] += o.sizeVertices[s];
+        sizeBytes[s] += o.sizeBytes[s];
+        sizeBakeNs[s] += o.sizeBakeNs[s];
+        for (int b = 0; b < kRuns; ++b)
+        {
+            runHist[s][b] += o.runHist[s][b];
+            relaxedHist[s][b] += o.relaxedHist[s][b];
+        }
+    }
+    items += o.items;
+    instancedItems += o.instancedItems;
+    mixedItems += o.mixedItems;
+    sets += o.sets;
+    p0ExtraCalls += o.p0ExtraCalls;
+    p0Switches += o.p0Switches;
+    p1LostVertices += o.p1LostVertices;
 }
 
 void LLGLSubmitStats::closeRun()
 {
     creditRun(sRun.close());
+    creditRunNoUniform(sRunNoUniform.close());
+    creditCensusRun(sCensusRun.close());
+    sCensusLastRec = nullptr;
 }
 
 bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
@@ -350,7 +546,13 @@ bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
     sFrameT0 = Clock::now();
     sStack.clear();
     sRun = LLGLSubmitMath::RunTracker();
-    sEpoch = 0;
+    sRunNoUniform = LLGLSubmitMath::RunTracker();
+    sCensusRun = LLGLSubmitMath::CensusRunTracker();
+    sCensusLastRec = nullptr;
+    sEpochs = LLGLSubmitMath::RunEpochs();
+    sLastFormat = 0;
+    sPaletteKey = 0;
+    sCapSignature = 0;
     enterView("frame", -1);
     return true;
 }
@@ -376,8 +578,16 @@ void LLGLSubmitStats::endFrame()
     {
         r->c.paletteDistinct = r->palettes.size();
         r->c.vbosDistinct = r->vbos.size();
+        r->c.stateKeysDistinct = r->stateKeys.size();
+        for (const auto& key : r->censusKeys)
+        {
+            // relaxed order: every copy of a key in the scope could be one set
+            r->census.relaxedHist[LLGLSubmitMath::censusSizeClass(key.second.second)][LLGLSubmitMath::censusRunBucket(key.second.first)]++;
+        }
         r->palettes = {};
         r->vbos = {};
+        r->stateKeys = {};
+        r->censusKeys = {};
     }
     f->palettesAll = {};
 
@@ -642,7 +852,12 @@ void LLGLSubmitStats::noteDraw(uint32_t indices)
     }
     rec->c.draws++;
     rec->c.drawIndices += indices;
-    creditRun(sRun.draw(rec, sEpoch));
+    creditRun(sRun.draw(rec, sEpochs.all));
+    creditRunNoUniform(sRunNoUniform.draw(rec, sEpochs.noUniform));
+    if (sWindowCensus && windowActive())
+    {
+        rec->stateKeys.insert(drawStateKey());
+    }
 }
 
 void LLGLSubmitStats::notePalette(const void* avatar, uint64_t skinHash, uint32_t bytes)
@@ -660,10 +875,11 @@ void LLGLSubmitStats::notePalette(const void* avatar, uint64_t skinHash, uint32_
     {
         sFrame->palettesAll.insert(key);
     }
-    ++sEpoch;
+    sPaletteKey = key;
+    sEpochs.uniform(); // a palette is a uniform upload, which per-draw records would carry
 }
 
-void LLGLSubmitStats::noteVBO(uint32_t name)
+void LLGLSubmitStats::noteVBO(uint32_t name, uint32_t format)
 {
     Record* const sCur = cur();
     if (!sCur || !onMain())
@@ -671,6 +887,79 @@ void LLGLSubmitStats::noteVBO(uint32_t name)
         return;
     }
     sCur->vbos.insert(name);
+    if (format != sLastFormat)
+    {
+        if (sLastFormat != 0)
+        {
+            // other vertex streams: setupVertexBuffer re-points every attribute, and G5's pages hold one format each
+            sCur->c.vbFormatChanges++;
+            sEpochs.stateChange();
+        }
+        sLastFormat = format;
+    }
+}
+
+void LLGLSubmitStats::noteCapToggle(uint32_t cap)
+{
+    if (!active())
+    {
+        return;
+    }
+    sEpochs.stateChange();
+    sCapSignature ^= LLGLSubmitMath::mix64(0x636170ull, cap);
+}
+
+void LLGLSubmitStats::noteCensusDraw(const LLGLSubmitMath::CensusFace* faces, size_t count)
+{
+    using namespace LLGLSubmitMath;
+    Record* const rec = cur();
+    if (!rec || !onMain() || !count)
+    {
+        return;
+    }
+    LLGLSubmitCensus& c = rec->census;
+    const CensusItem item = censusItem(faces, count);
+    c.items++;
+    c.p0ExtraCalls += item.segments ? item.segments - 1 : 0;
+    if (item.instancedVertices)
+    {
+        c.instancedItems++;
+        c.sets += item.sets;
+    }
+    if (item.mixed)
+    {
+        c.mixedItems++;
+        c.p1LostVertices += item.instancedVertices;
+    }
+    for (size_t i = 0; i < count; ++i)
+    {
+        const CensusFace& f = faces[i];
+        const uint8_t reason = f.exclusion < CENSUS_EXCLUSIONS ? f.exclusion : (uint8_t)CENSUS_NO_KEY;
+        c.faces++;
+        c.vertices += f.vertices;
+        c.reasonFaces[reason]++;
+        c.reasonVertices[reason] += f.vertices;
+        if (reason == CENSUS_ELIGIBLE)
+        {
+            const int size = censusSizeClass(f.vertices);
+            c.sizeFaces[size]++;
+            c.sizeVertices[size] += f.vertices;
+            c.sizeBytes[size] += f.bytes;
+            c.sizeBakeNs[size] += f.bakeNs;
+            auto& copies = rec->censusKeys[f.key];
+            copies.first++;
+            copies.second = f.vertices;
+        }
+        // P0 changes program and record binding wherever list order goes from baked to instanced faces or back
+        const bool instanced = f.instanced();
+        if (sCensusLastRec == rec && instanced != sCensusLastInstanced)
+        {
+            c.p0Switches++;
+        }
+        sCensusLastRec = rec;
+        sCensusLastInstanced = instanced;
+        creditCensusRun(sCensusRun.face(rec, f));
+    }
 }
 
 void LLGLSubmitStats::noteUniform(uint32_t bytes, uint32_t count, bool matrix)
@@ -690,10 +979,10 @@ void LLGLSubmitStats::noteUniform(uint32_t bytes, uint32_t count, bool matrix)
     {
         sCur->c.uniformMatrixGL++;
     }
-    ++sEpoch; // a uniform that reached GL separates draws that could otherwise be merged
+    sEpochs.uniform(); // a uniform that reached GL separates draws that could otherwise be merged
 }
 
-void LLGLSubmitStats::windowBegin(uint32_t frames, bool gpu)
+void LLGLSubmitStats::windowBegin(uint32_t frames, bool gpu, bool census)
 {
     sAgg.clear();
     sAggOrder.clear();
@@ -705,6 +994,7 @@ void LLGLSubmitStats::windowBegin(uint32_t frames, bool gpu)
     sWindowCollected = 0;
     sWindowGpuFrames = 0;
     sWindowGpu = gpu;
+    sWindowCensus = census;
     sWindowTarget = frames;
 }
 
@@ -746,6 +1036,7 @@ boost::json::object LLGLSubmitStats::windowToJson()
     o.emplace("scale", "per_frame_mean");
     o.emplace("frames", sWindowCollected);
     o.emplace("gpu_frames", sWindowGpuFrames);
+    o.emplace("census_window", sWindowCensus); // the census and the draw-state keys were counted
     return o;
 }
 

@@ -11084,8 +11084,8 @@ void LLPipeline::renderDeferredLighting()
                           END_RENDER_TYPES);
 
         // Sorted alpha only: the stochastic engine keeps history between frames, so a second render would differ.
-        // Not with highlight faces pending either: the pass consumes that list and the second render would lack them.
-        VKS_GLCMP_BEGIN(LLGLSubmitCompare::PASS_POST_DEFERRED, (mAlphaSTFBO || !mHighlightFaces.empty()) ? nullptr : screen_target, true)
+        // Nor when the pass's tail cannot repeat (highlight faces pending, a selection, a debug display).
+        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_POST_DEFERRED, mAlphaSTFBO ? nullptr : screen_target, true, LLGLSubmitCompare::tailNotRepeatable())
         renderGeomPostDeferred(*LLViewerCamera::getInstance());
         VKS_GLCMP_END()
         popRenderTypeMask();
@@ -13377,6 +13377,8 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
     }
     LL_DEBUGS_ONCE("AvatarRenderPipeline") << "Avatar " << avatar->getID() << " is drawable" << LL_ENDL;
 
+    VKS_GLSTAT_VIEW(preview_avatar ? "avatar preview" : for_profile ? "avatar profile" : "impostor");
+
     assertInitialized();
 
     // previews can't be muted or impostered
@@ -13650,6 +13652,12 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
     }
     else
     {
+        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_IMPOSTOR, &avatar->mImpostor, false, LLGLSubmitCompare::tailNotRepeatable())
+        if (VKS_GLCMP_REPLAY())
+        {
+            glClearColor(0.f, 0.f, 0.f, 0.f); // the block's inputs as the first render found them
+            gGL.setColorMask(true, true);
+        }
         avatar->mImpostor.clear();
         renderGeomDeferred(camera);
 
@@ -13670,6 +13678,7 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
         renderGeomPostDeferred(camera);
 
         sImpostorRenderAlphaDepthPass = false;
+        VKS_GLCMP_END()
 
     }
 

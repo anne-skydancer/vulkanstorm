@@ -77,6 +77,7 @@
 #include "lltracethreadrecorder.h"
 #include "llviewerwindow.h"
 #include "llviewerdisplay.h"
+#include "llglsubmitstatsapi.h" // <Vulkanstorm/> the main loop's statistics frame (development builds)
 #include "llviewermedia.h"
 #include "llviewerparcelaskplay.h"
 #include "llviewerparcelmedia.h"
@@ -1794,6 +1795,7 @@ bool LLAppViewer::doFrame()
                 pingMainloopTimeout("Main:Display");
                 gGLActive = true;
 
+                VKS_GLSTAT_MAIN_LOOP_FRAME(); // <Vulkanstorm/> one statistics frame for display() and the reflection probe update
                 display();
 
                 if (LLStartUp::getStartupState() == STATE_STARTED) // <FS:Beq/> FIRE-34590 - Bugsplat caused by updating maps before world is loaded.
@@ -1802,6 +1804,7 @@ bool LLAppViewer::doFrame()
                     LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df Snapshot");
                     pingMainloopTimeout("Main:Snapshot");
                     gPipeline.mReflectionMapManager.update();
+                    VKS_GLSTAT_MAIN_LOOP_FRAME_END(); // <Vulkanstorm/> the snapshot floaters' display() calls get frames of their own
                     LLFloaterSnapshot::update(); // take snapshots
                     LLFloaterSimpleSnapshot::update();
                     LLFloaterFlickr::update(); // <FS:Beq/> FIRE-35002 - Flickr preview not updating whne opened directly from tool tray icon

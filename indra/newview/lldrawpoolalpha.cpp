@@ -48,6 +48,7 @@
 #include "llviewerregion.h"
 #include "lldrawpoolwater.h"
 #include "llspatialpartition.h"
+#include "llglsubmitstats.h"
 #include "llglcommonfunc.h"
 #include "llvoavatar.h"
 #include "gltfscenemanager.h"
@@ -876,6 +877,7 @@ void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
     // OIT residual replay can queue this face without drawing its normal batch.
     // Establish its transform here instead of inheriting the previous batch's.
     LLRenderPass::applyModelMatrix(*draw);
+    VKS_GLSTAT_CENSUS_DRAW(*draw);
     draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
@@ -908,6 +910,7 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
         }
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
+        VKS_GLSTAT_CENSUS_DRAW(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
@@ -960,6 +963,7 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
         }
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
+        VKS_GLSTAT_CENSUS_DRAW(*draw);
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
@@ -1307,6 +1311,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     }
 
                     params.mVertexBuffer->setBuffer();
+                    VKS_GLSTAT_CENSUS_DRAW(params);
                     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
                     stop_glerror();
 

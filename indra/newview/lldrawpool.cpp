@@ -626,6 +626,7 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textur
     }
     // </FS:Beq>
     params.mVertexBuffer->setBuffer();
+    VKS_GLSTAT_CENSUS_DRAW(params);
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
     if (tex_setup)
     {
@@ -655,6 +656,7 @@ void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
     applyModelMatrix(params);
 
     params.mVertexBuffer->setBuffer();
+    VKS_GLSTAT_CENSUS_DRAW(params);
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 }
 
@@ -849,6 +851,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params)
     applyModelMatrix(params);
 
     params.mVertexBuffer->setBuffer();
+    VKS_GLSTAT_CENSUS_DRAW(params);
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     teardown_texture_matrix(params);
@@ -872,6 +875,7 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
     applyModelMatrix(params);
 
     params.mVertexBuffer->setBuffer();
+    VKS_GLSTAT_CENSUS_DRAW(params);
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 }
 

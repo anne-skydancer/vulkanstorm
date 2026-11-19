@@ -464,6 +464,7 @@ void LLTexUnit::unbind(eTextureType type)
     // Disabled caching of binding state.
     if (mCurrTexType == type)
     {
+        VKS_GLSTAT_TEX_UNBIND();
         mCurrTexture = 0;
 
         if (type == LLTexUnit::TT_TEXTURE)
@@ -485,6 +486,7 @@ void LLTexUnit::unbindFast(eTextureType type)
     // Disabled caching of binding state.
     if (mCurrTexType == type)
     {
+        VKS_GLSTAT_TEX_UNBIND();
         mCurrTexture = 0;
 
         if (type == LLTexUnit::TT_TEXTURE)
@@ -1283,6 +1285,12 @@ void LLRender::loadMatrix(const GLfloat* m)
         mMatrix[mMatrixMode][mMatIdx[mMatrixMode]] = glm::make_mat4((GLfloat*) m);
         mMatHash[mMatrixMode]++;
     }
+#if VKS_GL_STATS
+    if (mMatrixMode >= MM_TEXTURE0 && mMatrixMode <= MM_TEXTURE3)
+    {
+        VKS_GLSTAT_INC(texMatrixLoads); // an animated texture's matrix: a run breaker the uniform counters hide (G5c-0)
+    }
+#endif
 }
 
 void LLRender::multMatrix(const GLfloat* m)

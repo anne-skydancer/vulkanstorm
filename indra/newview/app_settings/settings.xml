@@ -12074,7 +12074,7 @@ Change of this parameter will affect the layout of buttons in notification toast
   <key>RenderGLSubmitCompare</key>
   <map>
     <key>Comment</key>
-    <string>Debug only, development builds with VKS_GL_STATS: the identical-image check. Set to a pass for ONE frame (it returns to 0): the pass is rendered twice and the attachments compared bit for bit. -1 all, 1 G-buffer, 2-5 sun cascades, 6-7 spot shadows, 8 post-deferred (sorted alpha). The result is in the log (GLSubmitCompare) and over LEAP (GLSubmitStats.compareResults).</string>
+    <string>Debug only, development builds with VKS_GL_STATS: the identical-image check. Set to a pass for ONE frame (it returns to 0): the pass is rendered twice and the attachments compared bit for bit. -1 all, 1 G-buffer, 2-5 sun cascades, 6-7 spot shadows, 8 post-deferred (sorted alpha), 13 probe face, 14 HUD, 15 impostor. The result is in the log (GLSubmitCompare) and over LEAP (GLSubmitStats.compareResults).</string>
     <key>Persist</key>
     <integer>0</integer>
     <key>Type</key>
