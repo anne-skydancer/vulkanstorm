@@ -49,10 +49,13 @@ concurrency:
 jobs:
   readiness:
     name: readiness
-    # A review event on a fork PR has a read-only token and writes nothing: PR review event
-    # covers it. Skipped here, so it does not take the concurrency group either.
+    # Every pull_request* event of a fork PR (the PR itself, a review, a review comment) has a
+    # read-only token and could write nothing; it would fail on the first write for another PR,
+    # since every run evaluates all open PRs. Skipped here: Check PR's workflow_run covers a fork
+    # PR's own events and PR review event covers its reviews, both with a write token. A skipped
+    # run may still queue briefly in the concurrency group; it does nothing there.
     if: >-
-      !startsWith(github.event_name, 'pull_request_review')
+      !startsWith(github.event_name, 'pull_request')
       || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
