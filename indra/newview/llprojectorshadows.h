@@ -62,9 +62,10 @@ class LLVOVolume;
 // pin's books). What is projector-specific stays in this class: the light set, the pose, the lookup matrix.
 //
 // Lamp shadows L3: beside the depth atlases a light-through layer (lllightthroughgl.h, the same texels as S) holds, per tile, the share of
-// the lamp's light its see-through casters let through, per colour channel, and the nearest one's depth: drawn with the fixed layer
-// (renderTile names it to LLPipeline::renderShadow through LLLocalShadowGL::setThroughTarget), carried through a repack (applyPlan), read
-// by the lookup only for a lamp whose tiles hold such a caster (setupLight: proj_through). The avatars' layer keeps the dither.
+// the lamp's light its see-through casters in front of S let through, per colour channel, and the nearest one's depth: drawn with the
+// fixed layer (renderTile names it to LLPipeline::renderShadow through LLLocalShadowGL::setThroughTarget), carried through a repack
+// (applyPlan), read by the lookup only for a lamp whose tiles hold such a caster (setupLight: proj_through), freed once no tile has held
+// one for a while (update). The avatars' layer keeps the dither.
 //
 // Main render thread only. Every entry point asserts it and returns at once off it, or while the viewer exits; nothing
 // here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which worker threads with shared
@@ -288,6 +289,8 @@ private:
     U32 mAtlasSize = 0;
     LLLightThroughLayer mThrough;  // L3: the light-through layer, at the atlas' edge (made when a tile first meets a see-through caster)
     bool mLightThroughSeen = true; // RenderShadowLightThrough at the last update (a change draws every tile again)
+    F64 mThroughHeldTime = 0.0;    // L3: the last check that found a tile holding a see-through caster (0: none since the layer was made)
+    F64 mThroughCheckTime = 0.0;   // L3: the next check, once a second while the layer exists
 
     llprojectorpool::BuddyAtlas mBuddy;
     llprojectorpool::LevelController mLevel;  // the pressure valve (L2)

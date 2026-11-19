@@ -2764,6 +2764,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         {
             LL_WARNS("ShaderLoading") << "the light-through caster program did not build: lamps dither see-through casters as before" << LL_ENDL;
             gDeferredShadowLightThroughProgram.unload();
+            llassert(false); // a development build stops here: the program builds wherever the pool runs (a Release build logs and goes on)
         }
     }
 
@@ -2781,6 +2782,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         {
             LL_WARNS("ShaderLoading") << "the glTF light-through caster program did not build: lamps dither see-through casters as before" << LL_ENDL;
             gDeferredShadowGLTFLightThroughProgram.unload();
+            llassert(false); // as above
         }
     }
     // </Vulkanstorm>

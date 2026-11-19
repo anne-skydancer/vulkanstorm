@@ -23,17 +23,24 @@ Gates (exit code 1 when one fails):
               times the penumbra radius) wherever the physical radius lies between the floor and the cap (the filter's weights draw it
               about 16 % narrower; at the floor it is wider by design, at the cap narrower: both reported)
 
-Lamp shadows L3 (the light-through layer, lllightthrough.h; reports/light-through-l3-2026-11-18/plan.md, section 8), the same tile
-texels and emitters. The glass goes into the layer (tau = (1 - a)(1 + a C) per channel, RGBA8, and the nearest caster's depth in 16
-bits, stored one step farther), the frame stays depth, and the lookup is stThroughFilter (a search of 8 gathers plus the receiver's own
-texels for the nearest caster in front of the receiver, then 8 taps at its physical radius, weighted as the depth filter) times the
-L1 depth lookup:
-  grain       uniform glass between the bars: no grain (the largest neighbour step inside it is 0) and closer to the truth than the
-              dither (RMSE), at every tile texel
+Lamp shadows L3 (the light-through layer, lllightthrough.h), the same tile texels and emitters. The glass goes into the layer (tau =
+(1 - a)(1 + a C) per channel, RGBA8, and the nearest caster's window depth in R32F, as it is), drawn only where it lies in front of the
+tile's opaque depth (the depth test), the frame stays depth, and the lookup is stThroughFilter (a search of 8 gathers plus the
+receiver's own texels for the nearest caster in front of the receiver, then 16 taps at its physical radius, weighted as the depth filter
+and by the share of each tap the depth does not block; the reference lowered by the receiver plane, as the depth filter's) times the L1
+depth lookup:
+  grain       uniform glass between the bars: no grain (the largest neighbour step inside it is 0)
+  frame       glass behind a window frame and glass with painted leading: closer to the truth than the dither, and no farther than the
+              first L3 build (no depth test, no open weight; RMSE), at every tile texel; the largest step where the truth is smooth is
+              printed beside it (L1's search misses a thin bar: reported, not gated)
   stack       two panes one behind the other: the product of the two, within the layer's 8 bits (2/255)
   in front    a receiver between the lamp and the window (an avatar): exactly 1 from the layer everywhere, no tinted rim
+  hidden      a pane under the floor (glass in the room below), behind a pane or a glass globe in front of the floor: the floor gets the
+              front one's light alone, within 2/255 (the first build multiplied the hidden pane in)
   tint edge   the edge of a red pane: the 10-90 % width of the green channel's step within 20 % of the uniform disc's where the
-              physical radius lies between the floor and the cap (8 taps draw a coarser ramp than the depth's 32: reported)
+              physical radius lies between the floor and the cap
+  tilted      a window flush in a wall lit at 30, 45 and 60 degrees: the wall next to the glass gets no tint (exactly 1; a flat
+              reference tints a fringe, printed); a sheer 5 cm in front of such a wall: its light on the wall, printed (not gated)
   mask        not gated (L3.3 is not built): the lace's mean under the plan's sharpened-coverage rule and under the creator's cutoff,
               against its open share, printed as the evidence for the mask stage's open question
 
@@ -280,6 +287,7 @@ def save_sheet(rows, path):
 
 # ---- lamp shadows L3: the light-through layer (lllightthrough.h, shadowLightThroughF.glsl, shadowStochasticUtil.glsl stThroughFilter)
 HEADER = ROOT / 'indra/newview/lllightthrough.h'
+FIT = ROOT / 'indra/newview/llshadowcascadefit.h'
 
 
 def header_float(name):
@@ -289,7 +297,9 @@ def header_float(name):
 
 SOLID = header_float('kSolidAlpha')
 INVISIBLE = header_float('kInvisibleAlpha')
-DEPTH_STEP = header_float('kDepthStep')
+NO_LAYER = header_float('kNoLayer')
+PLANE_SLOPE = define('ST_SPOT_PLANE_SLOPE')
+PLANE_BIAS_MAX = float(re.search(r'SHADOW_PLANE_BIAS_MAX_TEXELS = ([0-9.]+)f;', FIT.read_text(encoding='utf-8')).group(1))
 THROUGH_TAPS = int(define('ST_THROUGH_TAPS'))
 DISC_T = vogel(THROUGH_TAPS)
 W_T = 1.0 - 0.9 * (np.arange(THROUGH_TAPS) + 0.5) / THROUGH_TAPS
@@ -304,6 +314,7 @@ def map_depth(w):
 
 
 Z_WINDOW, Z_FLOOR = map_depth(3.0), map_depth(4.5)   # the scenes above: a window 3 m from the lamp, the floor 4.5 m
+Z_FRAME = map_depth(2.95)                            # a window frame 5 cm in front of its pane
 assert abs(SEARCH_RATIO - Z_FLOOR / (Z_FLOOR - Z_WINDOW)) < 1.0
 
 
@@ -317,72 +328,123 @@ def q8(v):
     return np.round(np.clip(v, 0.0, 1.0) * 255.0) / 255.0
 
 
-def q16_stored(z):
-    """the layer's 16-bit depth: one step farther than the caster, then rounded (the worst case of either neighbour is tested in C++)"""
-    return np.round(np.minimum(np.clip(z, 0.0, 1.0) + DEPTH_STEP, 1.0) * 65535.0) / 65535.0
+def f32(v):
+    return np.asarray(v, np.float32).astype(np.float64)
 
 
 class Layer:
-    """the light-through layer of one tile as the casters draw it: tau (n x n x 3, RGBA8, cleared to 1, multiplied by each caster)
-    and zt (n x n, 16 bits, cleared to the far plane, the nearest caster's stored depth). The casters are drawn with no depth test
-    against the tile's opaque depth (shadowLightThroughF.glsl's pass): a pane that runs on under its frame keeps its tau there, so the
-    lookup's product does not brighten the inside of the frame's penumbra. opaque_depth (optional) models the test, for the comparison."""
+    """the light-through layer of one tile as the casters draw it (shadowLightThroughF.glsl in LLLightThroughLayer::DrawScope): tau
+    (n x n x 3, RGBA8, cleared to 1, multiplied by each caster) and zt (n x n, R32F, cleared to 1, the nearest caster's window depth as
+    it is). A caster is drawn only where it lies in front of the tile's opaque depth (the depth atlas S, LEQUAL); depth_test False draws
+    every caster, as the first L3 build did (kept for the comparison)."""
 
     def __init__(self, n):
         self.tau = np.ones((n, n, 3))
         self.zt = np.ones((n, n))
 
-    def draw(self, cover, alpha, colour, z, opaque_depth=None):
-        a = np.broadcast_to(alpha, cover.shape)
+    def draw(self, cover, alpha, colour, z, opaque=None, depth_test=True):
+        a = np.broadcast_to(np.asarray(alpha, float), cover.shape)
+        z = np.broadcast_to(np.asarray(z, float), cover.shape)
         keep = cover & (a > INVISIBLE) & (a < SOLID)
-        if opaque_depth is not None:
-            keep &= z < opaque_depth
+        if opaque is not None and depth_test:
+            keep &= z <= opaque
         t = tau_of(a[..., None], np.broadcast_to(np.asarray(colour, float), cover.shape + (3,)))
         self.tau = np.where(keep[..., None], q8(self.tau * t), self.tau)
-        self.zt = np.where(keep, np.minimum(self.zt, q16_stored(z)), self.zt)
+        self.zt = np.where(keep, np.minimum(self.zt, f32(z)), self.zt)
 
 
-def through_quad(layer, u, v):
+def through_quad(n, u, v):
     """stThroughTap's footprint: the sample point clamped half a texel inside the tile (CLAMP_TO_EDGE of the tile, no read of a
-    neighbour tile), its four texels and bilinear weights (gather order)"""
-    n = layer.zt.shape[0]
+    neighbour tile), its quad's lower left texel, its four texels and bilinear weights (gather order)"""
     px, py = np.clip(u * n, 0.5, n - 0.5), np.clip(v * n, 0.5, n - 0.5)
     tx, ty = px - 0.5, py - 0.5
     bx, by = np.minimum(np.floor(tx), n - 2), np.minimum(np.floor(ty), n - 2)
     fx, fy = tx - bx, ty - by
-    bx, by = bx.astype(np.int64), by.astype(np.int64)
-    idx = ((bx, by + 1), (bx + 1, by + 1), (bx + 1, by), (bx, by))
+    ix, iy = bx.astype(np.int64), by.astype(np.int64)
+    idx = ((ix, iy + 1), (ix + 1, iy + 1), (ix + 1, iy), (ix, iy))
     w = ((1 - fx) * fy, fx * fy, fx * (1 - fy), (1 - fx) * (1 - fy))
-    return idx, w
+    return bx, by, idx, w
 
 
-def through_tap(layer, u, v, ref):
-    idx, w = through_quad(layer, u, v)
+def through_ref(bx, by, n, cx, cy, cz, g, z_bias, rp_max, eps=0.0):
+    """stThroughRef (stSpotQuadTile's reference): the receiver's depth less the bias, lowered (never raised) by the receiver plane g over
+    each texel's offset, at most rp_max, at the quad's four texels in gather order (eps: a shift of every reference, for the GPU gate's
+    test of a receiver on a decision's edge)"""
+    ox, oy = (bx + 0.5) / n - cx, (by + 0.5) / n - cy
+    e = 1.0 / n
+    return [cz - z_bias + eps + np.clip(g[0] * dx + g[1] * dy, -rp_max, 0.0)
+            for dx, dy in ((ox, oy + e), (ox + e, oy + e), (ox + e, oy), (ox, oy))]
+
+
+def through_tap(layer, depth, u, v, c, g, z_bias, rp_max, eps=0.0):
+    """stThroughTap: (lit per channel, open)"""
+    n = layer.zt.shape[0]
+    bx, by, idx, w = through_quad(n, u, v)
     z = [layer.zt[y, x] for x, y in idx]
+    s = [depth[y, x] for x, y in idx]
+    ref = through_ref(bx, by, n, c[0], c[1], c[2], g, z_bias, rp_max, eps)
     tb = sum(ww[..., None] * layer.tau[y, x] for (x, y), ww in zip(idx, w))   # the hardware's bilinear tau
-    has = [zz < 1.0 for zz in z]
+    has = [zz < NO_LAYER for zz in z]
+    opn = [ss >= rr for ss, rr in zip(s, ref)]
     w_all = sum(ww * hh for ww, hh in zip(w, has))
-    w_front = sum(ww * hh * (zz < ref) for ww, hh, zz in zip(w, has, z))
-    f = np.where(w_all > 0.0, w_front / np.maximum(w_all, 1e-30), 0.0)
-    return 1.0 + f[..., None] * (tb - 1.0)
+    w_open = sum(ww * oo for ww, oo in zip(w, opn))
+    w_front = sum(ww * oo * hh * (zz < rr) for ww, oo, hh, zz, rr in zip(w, opn, has, z, ref))
+    r = np.where(w_all > 0.0, w_front / np.maximum(w_all, 1e-30), 0.0)
+    return w_open[..., None] + r[..., None] * (tb - 1.0), w_open
 
 
-def through_filter(layer, cx, cy, cz, pen, z_bias):
+def through_filter(layer, depth, cx, cy, cz, pen, z_bias, z_tex, g=(0.0, 0.0), want_open=False, eps=0.0):
     """stThroughFilter: the nearest caster in front of the receiver over the search (the depth search's disc and radius, plus the
-    receiver's own texels; none: exactly 1), then THROUGH_TAPS taps at the physical radius from it, weighted as the depth filter"""
+    receiver's own texels; none: exactly 1), then THROUGH_TAPS taps at the physical radius from it, weighted as the depth filter and by
+    their open share: the light through the part of the disc the depth atlas does not block (1 where every tap is blocked). want_open:
+    also the open share of the disc's weight (1 where no caster is in front: the value is exact there)"""
+    n = layer.zt.shape[0]
+    shape = np.shape(cx)
+    rs = np.clip(pen * cz, KERNEL_MIN, KERNEL_MAX)
+    rp_max = z_tex * np.maximum(PLANE_BIAS_MAX, PLANE_SLOPE * (rs + 1.0))
+    z_near = np.full(shape, -1.0)
+    for dx, dy in list(DISC_S) + [(0.0, 0.0)]:
+        bx, by, idx, _ = through_quad(n, cx + dx * rs / n, cy + dy * rs / n)
+        for (x, y), rr in zip(idx, through_ref(bx, by, n, cx, cy, cz, g, z_bias, rp_max, eps)):
+            zz = layer.zt[y, x]
+            z_near = np.maximum(z_near, np.where(zz < rr, zz, -1.0))
+    rf = np.clip(pen * (cz - z_near), KERNEL_MIN, KERNEL_MAX)
+    lit = np.zeros(shape + (3,))
+    opn = np.zeros(shape)
+    for k, (dx, dy) in enumerate(DISC_T):
+        tl, to = through_tap(layer, depth, cx + dx * rf / n, cy + dy * rf / n, (cx, cy, cz), g, z_bias, rp_max, eps)
+        lit += W_T[k] * tl
+        opn += W_T[k] * to
+    out = np.where(opn[..., None] > 0.0, np.clip(lit / np.maximum(opn, 1e-30)[..., None], 0.0, 1.0), 1.0)
+    out[z_near < 0.0] = 1.0
+    if want_open:
+        return out, np.where(z_near < 0.0, 1.0, opn / W_T.sum())
+    return out
+
+
+def through_filter_first(layer, cx, cy, cz, pen, z_bias):
+    """the first L3 build's lookup, for the comparison: a flat reference (no receiver plane) and every tap counted whole (no open
+    weight), on a layer drawn without the depth test"""
     n = layer.zt.shape[0]
     ref = cz - z_bias
     rs = np.clip(pen * cz, KERNEL_MIN, KERNEL_MAX)
-    z_near = np.full(cx.shape, -1.0)
+    z_near = np.full(np.shape(cx), -1.0)
     for dx, dy in list(DISC_S) + [(0.0, 0.0)]:
-        idx, _ = through_quad(layer, cx + dx * rs / n, cy + dy * rs / n)
+        _, _, idx, _ = through_quad(n, cx + dx * rs / n, cy + dy * rs / n)
         for x, y in idx:
             zz = layer.zt[y, x]
             z_near = np.maximum(z_near, np.where(zz < ref, zz, -1.0))
     rf = np.clip(pen * (cz - z_near), KERNEL_MIN, KERNEL_MAX)
-    acc = np.zeros(cx.shape + (3,))
+    acc = np.zeros(np.shape(cx) + (3,))
     for k, (dx, dy) in enumerate(DISC_T):
-        acc += W_T[k] * through_tap(layer, cx + dx * rf / n, cy + dy * rf / n, ref)
+        _, _, idx, w = through_quad(n, cx + dx * rf / n, cy + dy * rf / n)
+        z = [layer.zt[y, x] for x, y in idx]
+        tb = sum(ww[..., None] * layer.tau[y, x] for (x, y), ww in zip(idx, w))
+        has = [zz < NO_LAYER for zz in z]
+        w_all = sum(ww * hh for ww, hh in zip(w, has))
+        w_front = sum(ww * hh * (zz < ref) for ww, hh, zz in zip(w, has, z))
+        f = np.where(w_all > 0.0, w_front / np.maximum(w_all, 1e-30), 0.0)
+        acc += W_T[k] * (1.0 + f[..., None] * (tb - 1.0))
     out = acc / W_T.sum()
     out[z_near < 0.0] = 1.0
     return out
@@ -394,56 +456,66 @@ def receivers(m=None):
     return np.meshgrid(c, c)
 
 
-def z_bias_at(t, w=4.5):
-    return C1 / (w * w) * t   # SHADOW_BIAS_TEXELS (1) texels of depth at the receiver: dz/dw times the texel
+def z_tex_at(t, w=4.5):
+    return C1 / (w * w) * t   # one texel of map depth at the receiver: dz/dw times the texel; SHADOW_BIAS_TEXELS (1) of them is the bias
+
+
+def floor_depth(n):
+    return np.full((n, n), Z_FLOOR)
 
 
 def l3_glass(texels, emitters):
-    """uniform glass at 0.5 (no grain: one value everywhere), then the window cross with its glass at 0.5 running on under the frame:
-    RMSE against the truth, the layer against the dither (and against a layer drawn with a depth test against the frame, which keeps
-    the pane out from under it)"""
+    """uniform glass at 0.5 (no grain: one value everywhere), then the window cross with glass at 0.5 in two builds: the pane behind its
+    frame (5 cm behind the bars: the depth test keeps it out from under them) and painted leading (the bars are the pane's own solid
+    texels: no pane under them). RMSE against the truth and the largest neighbour step where the truth is smooth: this build | the first
+    L3 build (no depth test, no open weight) | the dither"""
     fails = 0
     cx, cy = receivers()
     print('\n== L3 uniform glass 0.5: the spread of the result over the patch (layer | dither)')
     for t in texels:
         n = int(round(WINDOW_M / t))
         layer = Layer(n)
-        layer.draw(np.ones((n, n), bool), 0.5, (0.0, 0.0, 0.0), np.full((n, n), Z_WINDOW))
+        layer.draw(np.ones((n, n), bool), 0.5, (0.0, 0.0, 0.0), Z_WINDOW, floor_depth(n))
         line = ' texel %4.1f cm (%3d px):' % (t * 100, n)
         for label, emitter in emitters:
             rphys = 0.5 * emitter * GAP / t
             pen = rphys / (Z_FLOOR - Z_WINDOW)
-            vis = through_filter(layer, cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_bias_at(t))[..., 1]
+            vis = through_filter(layer, floor_depth(n), cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_tex_at(t), z_tex_at(t))[..., 1]
             old = lookup(ign_keep(n, np.full((n, n), 0.5)), cx, cy, rphys)
             bad = float(np.ptp(vis)) > 1e-9   # one value everywhere (to the float sum of the weights)
             fails += bad
             line += '  %s %.4f at %.4f | %.3f%s' % (label, float(np.ptp(vis)), float(vis.mean()), float(np.ptp(old)), '  FAIL' if bad else '')
         print(line)
-    print('\n== L3 glass 0.5 + frame: RMSE against the truth: layer | layer drawn with a depth test | dither; the largest step where the truth is smooth (layer | dither)')
-    for t in texels:
-        n = int(round(WINDOW_M / t))
-        c = (np.arange(n) + 0.5) * t
-        x, y = np.meshgrid(c, c)
-        opaque, alpha, _ = scene_glass(x, y)
-        layer = Layer(n)
-        layer.draw(np.ones(opaque.shape, bool), alpha, (0.0, 0.0, 0.0), np.full(opaque.shape, Z_WINDOW))
-        tested = Layer(n)
-        tested.draw(np.ones(opaque.shape, bool), alpha, (0.0, 0.0, 0.0), np.full(opaque.shape, Z_WINDOW), np.where(opaque, Z_WINDOW, 1.0))
-        dither = raster(scene_glass, t)
-        line = ' texel %4.1f cm (%3d px):' % (t * 100, n)
-        for label, emitter in emitters:
-            rphys = 0.5 * emitter * GAP / t
-            pen = rphys / (Z_FLOOR - Z_WINDOW)
-            ref = truth(scene_glass, 0.5 * emitter * GAP)
-            depth = lookup(opaque, cx, cy, rphys)
-            vis = depth * through_filter(layer, cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_bias_at(t))[..., 1]
-            vis_t = depth * through_filter(tested, cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_bias_at(t))[..., 1]
-            old = lookup(dither, cx, cy, rphys)
-            (rm, _, _, jm), rt, (ro, _, _, jo) = metrics(vis, ref), metrics(vis_t, ref)[0], metrics(old, ref)
-            bad = rm > ro
-            fails += bad
-            line += '  %s %.3f | %.3f | %.3f, %.2f | %.2f%s' % (label, rm, rt, ro, jm, jo, '  FAIL' if bad else '')
-        print(line)
+    for build in ('pane behind its frame', 'painted leading'):
+        print('\n== L3 glass 0.5 + frame, %s: RMSE against the truth (this build | first L3 build | dither), the largest step where the truth is smooth (same order)' % build)
+        for t in texels:
+            n = int(round(WINDOW_M / t))
+            c = (np.arange(n) + 0.5) * t
+            x, y = np.meshgrid(c, c)
+            opaque, alpha, _ = scene_glass(x, y)
+            # the depth atlas: the bars (in front of the pane, or the pane's own solid texels), the floor elsewhere
+            depth = np.where(opaque, Z_FRAME if build == 'pane behind its frame' else Z_WINDOW, Z_FLOOR)
+            cover = np.ones(opaque.shape, bool) if build == 'pane behind its frame' else ~opaque
+            layer = Layer(n)
+            layer.draw(cover, alpha, (0.0, 0.0, 0.0), Z_WINDOW, depth)
+            first = Layer(n)
+            first.draw(cover, alpha, (0.0, 0.0, 0.0), Z_WINDOW, depth, depth_test=False)
+            dither = raster(scene_glass, t)
+            line = ' texel %4.1f cm (%3d px):' % (t * 100, n)
+            for label, emitter in emitters:
+                rphys = 0.5 * emitter * GAP / t
+                pen = rphys / (Z_FLOOR - Z_WINDOW)
+                ref = truth(scene_glass, 0.5 * emitter * GAP)
+                dep = lookup(opaque, cx, cy, rphys)
+                cz = np.full(cx.shape, Z_FLOOR)
+                vis = dep * through_filter(layer, depth, cx, cy, cz, pen, z_tex_at(t), z_tex_at(t))[..., 1]
+                vis_f = dep * through_filter_first(first, cx, cy, cz, pen, z_tex_at(t))[..., 1]
+                old = lookup(dither, cx, cy, rphys)
+                (rm, _, _, jm), (rf_, _, _, jf), (ro, _, _, jo) = metrics(vis, ref), metrics(vis_f, ref), metrics(old, ref)
+                bad = rm > ro or rm > rf_ + 1e-3
+                fails += bad
+                line += '  %s %.3f | %.3f | %.3f, %.2f | %.2f | %.2f%s' % (label, rm, rf_, ro, jm, jf, jo, '  FAIL' if bad else '')
+            print(line)
     return fails
 
 
@@ -457,16 +529,16 @@ def l3_stack_and_front(texels):
         cc = (np.arange(n) + 0.5) / n
         x, _ = np.meshgrid(cc, cc)
         layer = Layer(n)
-        layer.draw(x < 2 / 3, 0.5, (0.5, 0.5, 0.5), np.full(x.shape, map_depth(2.5)))
-        layer.draw(x > 1 / 3, 0.6, (1.0, 0.0, 0.0), np.full(x.shape, Z_WINDOW))
+        layer.draw(x < 2 / 3, 0.5, (0.5, 0.5, 0.5), map_depth(2.5), floor_depth(n))
+        layer.draw(x > 1 / 3, 0.6, (1.0, 0.0, 0.0), Z_WINDOW, floor_depth(n))
         cx, cy = receivers(96)
         rphys = 0.5 * EMITTER_M * GAP / t
         pen = rphys / (Z_FLOOR - Z_WINDOW)
-        behind = through_filter(layer, cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_bias_at(t))
+        behind = through_filter(layer, floor_depth(n), cx, cy, np.full(cx.shape, Z_FLOOR), pen, z_tex_at(t), z_tex_at(t))
         # where both panes cover every tap: farther from the overlap's edges than the filter's reach (its radius and a texel)
         reach = (min(max(rphys, KERNEL_MIN), KERNEL_MAX) + 1.0) / n
         mid = (cx > 1 / 3 + reach) & (cx < 2 / 3 - reach)
-        front = through_filter(layer, cx, cy, np.full(cx.shape, map_depth(2.0)), pen, z_bias_at(t, 2.0))
+        front = through_filter(layer, floor_depth(n), cx, cy, np.full(cx.shape, map_depth(2.0)), pen, z_tex_at(t, 2.0), z_tex_at(t, 2.0))
         exact = bool(np.all(front == 1.0))
         if not mid.any():
             fails += not exact
@@ -478,6 +550,48 @@ def l3_stack_and_front(texels):
         fails += bad
         print(' texel %4.1f cm: both panes %s, product %s, largest error %.4f; in front of both: %s%s' % (
             t * 100, np.round(behind[mid].mean(axis=0), 3), np.round(tA * tB, 3), err, 'exactly 1' if exact else 'NOT 1', '  FAIL' if bad else ''))
+    return fails
+
+
+def l3_hidden(texels):
+    """a see-through caster hidden behind the receiver (the auditor's 1): a pane in front of the floor (0.5 grey at 2.5 m) and a red pane
+    under the floor (0.6 at 5 m, glass in the room below), and a glass globe round the lamp (0.3 at 0.3 m) over a red pane under the
+    floor. The floor gets the front pane's light alone; the first L3 build (no depth test) multiplied the hidden pane in too"""
+    fails = 0
+    print('\n== L3 a pane hidden under the floor: the floor\'s light where a pane in front and the hidden one overlap (this build | first L3 build | truth)')
+    tA, tB, tG = tau_of(0.5, np.array([0.5, 0.5, 0.5])), tau_of(0.6, np.array([1.0, 0.0, 0.0])), tau_of(0.3, np.array([0.9, 0.9, 0.9]))
+    for t in texels:
+        n = int(round(WINDOW_M / t))
+        cc = (np.arange(n) + 0.5) / n
+        x, _ = np.meshgrid(cc, cc)
+        cx, cy = receivers(96)
+        rphys = 0.5 * EMITTER_M * GAP / t
+        pen = rphys / (Z_FLOOR - Z_WINDOW)
+        reach = (min(max(rphys, KERNEL_MIN), KERNEL_MAX) + 1.0) / n
+        mid = (cx > 1 / 3 + reach) & (cx < 2 / 3 - reach)
+        if not mid.any():
+            print(' texel %4.1f cm: the overlap (%d texels) is narrower than the filter: no interior' % (t * 100, n // 3))
+            continue
+        cz = np.full(cx.shape, Z_FLOOR)
+        line = ' texel %4.1f cm:' % (t * 100)
+        for label, front_cover, front_z, front_a, front_c, want in (
+                ('pane', x < 2 / 3, map_depth(2.5), 0.5, (0.5, 0.5, 0.5), tA),
+                ('globe', np.ones(x.shape, bool), map_depth(0.3), 0.3, (0.9, 0.9, 0.9), tG)):
+            got = []
+            for depth_test in (True, False):
+                layer = Layer(n)
+                layer.draw(front_cover, front_a, front_c, front_z, floor_depth(n), depth_test)
+                layer.draw(x > 1 / 3, 0.6, (1.0, 0.0, 0.0), map_depth(5.0), floor_depth(n), depth_test)
+                if depth_test:
+                    v = through_filter(layer, floor_depth(n), cx, cy, cz, pen, z_tex_at(t), z_tex_at(t))
+                else:
+                    v = through_filter_first(layer, cx, cy, cz, pen, z_tex_at(t))
+                got.append(v[mid].mean(axis=0))
+            err = float(np.abs(got[0] - want).max())
+            bad = err > 2.0 / 255.0
+            fails += bad
+            line += '  %s %s | %s | %s%s' % (label, np.round(got[0], 3), np.round(got[1], 3), np.round(want, 3), '  FAIL' if bad else '')
+        print(line)
     return fails
 
 
@@ -499,13 +613,13 @@ def l3_tint_edge(angles):
             nx, ny = -math.sin(a), math.cos(a)
             cover = ((X - 48.31) * nx + (Y - 48.17) * ny) < 0
             layer = Layer(n)
-            layer.draw(cover, 0.6, (1.0, 0.0, 0.0), np.full(cover.shape, Z_WINDOW))
+            layer.draw(cover, 0.6, (1.0, 0.0, 0.0), Z_WINDOW, floor_depth(n))
             ds = np.arange(-20.0, 20.0, 0.05)
             widths = []
             for s in np.linspace(-15, 15, 30):
                 px, py = 48.31 + s * math.cos(a), 48.17 + s * math.sin(a)
                 u, v = (px + ds * nx) / n, (py + ds * ny) / n
-                vals = through_filter(layer, u, v, np.full(u.shape, Z_FLOOR), pen, z_bias_at(t))[..., 1]
+                vals = through_filter(layer, floor_depth(n), u, v, np.full(u.shape, Z_FLOOR), pen, z_tex_at(t), z_tex_at(t))[..., 1]
                 lvl = (vals - g) / (1.0 - g)
                 def cross(level):
                     i = np.where((lvl[:-1] < level) & (lvl[1:] >= level))[0]
@@ -522,6 +636,73 @@ def l3_tint_edge(angles):
             bad = regime == 'physical' and abs(w / physics - 1.0) > 0.20
             fails += bad
             print('| %.2f cm | %2d deg | %.2f | %.2f | %.2f | %.2f | %s%s |' % (emitter * 100, ang, rho, w, physics, w / physics, regime, '  FAIL' if bad else ''))
+    return fails
+
+
+def tilted_wall(n, t, theta_deg, sign):
+    """a wall tilted theta to the tile's plane, its depth affine in the tile's uv (a plane's window depth is): z(u) = z0 + gz (u - 0.5),
+    gz = sign tan(theta) texels of depth per texel; returns the depth over the tile, gz and one texel of depth"""
+    z_tex = z_tex_at(t)
+    gz = sign * math.tan(math.radians(theta_deg)) * z_tex * n
+    u = (np.arange(n) + 0.5) / n
+    U, _ = np.meshgrid(u, u)
+    return Z_FLOOR + gz * (U - 0.5), gz, z_tex
+
+
+def l3_tilted(texels):
+    """the receiver plane (the auditor's 6 and the review's Q1). A window flush in a wall lit obliquely: the glass lies in the wall's plane
+    over u > 0.5 (the room far behind it), the wall's receivers next to it must get no tint (exactly 1); with a flat reference the glass
+    texels nearer the lamp read as in front of them (a tinted fringe). And a sheer 5 cm in front of a wall lit obliquely, parallel to it:
+    the wall behind it gets the sheer's light, 0.5 (the reference is lowered toward the lamp, never raised, as the depth filter's: on the
+    far side of each receiver a sheer closer to the wall than the plane's rise reads as behind it, reported)"""
+    fails = 0
+    print('\n== L3 a window flush in a wall lit obliquely: the wall\'s largest tint (1 - light) within 6 texels of the glass (this build | flat reference)')
+    print('== and a sheer 5 cm in front of the wall: the wall\'s mean light behind it and its largest error from 0.5 (this build | flat reference)')
+    pen_t = 0.5 * EMITTER_M * 0.23 * GAP
+    for t in texels:
+        n = int(round(WINDOW_M / t))
+        line = ' texel %4.1f cm:' % (t * 100)
+        for theta in (30, 45, 60):
+            worst_new = worst_flat = 0.0
+            sheer = []
+            for sign in (-1.0, 1.0):
+                wall, gz, z_tex = tilted_wall(n, t, theta, sign)
+                u = (np.arange(n) + 0.5) / n
+                U, _ = np.meshgrid(u, u)
+                glass = U > 0.5
+                depth = np.where(glass, map_depth(8.0), wall)   # the room far behind the window
+                layer = Layer(n)
+                layer.draw(glass, 0.5, (0.0, 0.0, 0.0), wall, depth)
+                # receivers on the wall within 6 texels of the glass, at sub-texel spacing
+                m = 64
+                cu = 0.5 - (np.arange(m) + 0.5) / m * 6.0 / n
+                cv = np.linspace(0.3, 0.7, 16)
+                CU, CV = np.meshgrid(cu, cv)
+                CZ = Z_FLOOR + gz * (CU - 0.5)
+                pen = pen_t / t / (Z_FLOOR - Z_WINDOW)
+                new = through_filter(layer, depth, CU, CV, CZ, pen, z_tex, z_tex, (gz, 0.0))
+                flat = through_filter(layer, depth, CU, CV, CZ, pen, z_tex, z_tex, (0.0, 0.0))
+                worst_new = max(worst_new, float((1.0 - new).max()))
+                worst_flat = max(worst_flat, float((1.0 - flat).max()))
+                # the sheer: 5 cm in front of the wall along its normal, parallel to it, over the middle of the tile
+                dz = C1 / (4.5 * 4.5) * 0.05 / math.cos(math.radians(theta))
+                cover = (U > 0.2) & (U < 0.8)
+                sh = Layer(n)
+                sh.draw(cover, 0.5, (0.0, 0.0, 0.0), wall - dz, wall)
+                reach = (KERNEL_MAX + 2.0) / n
+                ru = np.linspace(0.2 + reach, 0.8 - reach, 32)
+                RU, RV = np.meshgrid(ru, np.linspace(0.3, 0.7, 8))
+                RZ = Z_FLOOR + gz * (RU - 0.5)
+                for g in ((gz, 0.0), (0.0, 0.0)):
+                    v = through_filter(sh, wall, RU, RV, RZ, pen, z_tex, z_tex, g)[..., 1]
+                    sheer.append((float(v.mean()), float(np.abs(v - 0.5).max())))
+            bad = worst_new > 1e-6
+            fails += bad
+            sn = max(sheer[0][1], sheer[2][1])
+            sf = max(sheer[1][1], sheer[3][1])
+            line += '  %d deg: flush %.4f | %.4f, sheer %.3f %.3f | %.3f %.3f%s' % (
+                theta, worst_new, worst_flat, 0.5 * (sheer[0][0] + sheer[2][0]), sn, 0.5 * (sheer[1][0] + sheer[3][0]), sf, '  FAIL' if bad else '')
+        print(line)
     return fails
 
 
@@ -551,11 +732,13 @@ def l3_mask_evidence(texels):
 def l3_main():
     texels = [0.04, 0.01] if opts.quick else [0.08, 0.04, 0.02, 0.01, 0.005]
     emitters = [('default 0.23', EMITTER_M * 0.23), ('top 1.0', EMITTER_M * 1.0)]
-    print('\nL3 light-through twin: solid from %.2f, invisible at or below %.5f, %d taps after a search of %d + 1 gathers; depth step %.3g' % (
-        SOLID, INVISIBLE, THROUGH_TAPS, SEARCH, DEPTH_STEP))
+    print('\nL3 light-through twin: solid from %.2f, invisible at or below %.5f, %d taps after a search of %d + 1 gathers; the depth as it is (R32F)' % (
+        SOLID, INVISIBLE, THROUGH_TAPS, SEARCH))
     fails = l3_glass(texels, emitters)
     fails += l3_stack_and_front(texels)
+    fails += l3_hidden(texels)
     fails += l3_tint_edge([2, 10] if opts.quick else [2, 10, 30, 45])
+    fails += l3_tilted(texels)
     l3_mask_evidence(texels)
     print('\nL3 twin', 'PASS' if fails == 0 else 'FAIL (%d)' % fails)
     return fails

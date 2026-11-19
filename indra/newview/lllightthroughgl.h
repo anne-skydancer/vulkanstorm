@@ -32,12 +32,12 @@ class LLGLSLShader;
 // One per lamp pool, at its atlas' edge and with the atlas' texels (a tile's rect is the same in both): the projector pool owns one,
 // and so will the point-light faces' pool, which calls the same members from its own allocate, free, release, repack and face-render
 // paths. Two textures: tau (RGBA8, LINEAR, the share of the light let through per colour channel, 1 where no see-through caster is)
-// and the nearest see-through caster's depth (R16, NEAREST, 1 where none is), and a framebuffer with them as its two colour targets
-// (no depth attachment: the casters are drawn whatever opaque caster is in front of them, so a pane running on under its frame keeps
-// its tint there and the lookup's product does not brighten the inside of the frame's penumbra). Made the first time a tile of the
-// pool meets a see-through caster (ensure, from LLPipeline::renderShadow inside the tile's static render), freed with the pool's
-// atlases. Once made it holds every drawn tile's rect: the pool clears a tile's rect before each static render and carries it through
-// a repack.
+// and the nearest see-through caster's depth (R32F, NEAREST, 1 where none is), and a framebuffer with them as its two colour targets
+// and the pool's static depth atlas (the tiles' opaque casters) as its depth attachment, read only: a see-through caster is recorded
+// only where it lies in front of the tile's opaque depth, so a pane hidden behind a wall or a floor tints nothing in front of it. Made
+// the first time a tile of the pool meets a see-through caster (ensure, from LLPipeline::renderShadow inside the tile's static
+// render), freed with the pool's atlases or when no tile has held a caster for a while (freeStorage). Once made it holds every drawn
+// tile's rect: the pool clears a tile's rect before each static render and carries it through a repack.
 //
 // Main render thread only, like the pools: no call comes from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which
 // worker threads with shared contexts run (the sVBCache lesson, #403). The destructor makes no GL call: the owner frees the layer with
@@ -50,42 +50,55 @@ public:
     LLLightThroughLayer(const LLLightThroughLayer&) = delete;
     LLLightThroughLayer& operator=(const LLLightThroughLayer&) = delete;
 
-    // the pool's atlas edge, when its atlases are made (no GL: the layer is made by ensure, at this edge)
-    void setEdge(U32 edge);
+    // The pool's atlas edge and its static depth texture (D32F, the tiles' opaque casters: the caster pass's depth test reads it), when
+    // its atlases are made. No GL: the layer is made by ensure, at this edge.
+    void setAtlas(U32 edge, U32 depth_atlas);
     U32 edge() const { return mEdge; }
     bool allocated() const { return mFbo != 0; }
 
     // Makes the textures and the framebuffer at the edge, cleared to "no caster"; true when they exist. False when they could not be
     // made (logged once, nothing kept; not tried again until the pool's atlases are made again), on a device below OpenGL 4.4
-    // (glClearTexImage) and before setEdge: the caller then draws the see-through casters into the depth as without the layer.
+    // (glClearTexImage) and before setAtlas: the caller then draws the see-through casters into the depth as without the layer.
     bool ensure();
 
-    // Frees the textures and the framebuffer and forgets the edge. Context alive, main thread.
+    // Frees the textures and the framebuffer and forgets the atlas (with the pool's atlases, before the depth atlas goes). Context alive,
+    // main thread.
     void free();
+
+    // Frees the textures and the framebuffer only: ensure makes them again at the same atlas (the pool's release of an idle layer, once
+    // no tile has held a see-through caster for a while). Context alive, main thread.
+    void freeStorage();
 
     // A tile's rect back to "no caster" (glClearTexSubImage: no framebuffer, scissor or colour mask involved). No-op without a layer.
     void clearRect(const llprojectorpool::Rect& rect);
 
     // The carry through a repack (lllightthrough::planCarry): every copy's source into a transient texture pair, then the clears, then
-    // the copies to their new rects. Returns the keys of the tiles whose transient could not be made: their new rect is cleared, and the
-    // caller draws them again.
+    // the copies to their new rects. Returns the keys of the tiles whose transient could not be made, or whose move changes the size
+    // (planCarry never lists one; refused here too, so no copy runs over a neighbour): their new rect is cleared, and the caller draws
+    // them again. The transients of one carry hold every copied tile at once: at most one more layer, for the length of the repack.
     std::vector<U32> carry(const lllightthrough::CarryPlan& plan);
 
-    // The lookup's samplers (proj_through_atlas, proj_through_depth), when the layer exists.
-    void bind(LLGLSLShader& shader) const;
+    // The lookup's samplers, when the layer exists: tau and the depth to the pool's own two uniforms (the projector pool's are
+    // LLShaderMgr::PROJ_THROUGH_ATLAS and PROJ_THROUGH_DEPTH; the point-light faces name theirs).
+    void bind(LLGLSLShader& shader, S32 tau_uniform, S32 depth_uniform) const;
 
     // No texture unit keeps the layer's textures as its current one (before the layer is written; LLTexUnit's cache stays right).
     void unbindUnits() const;
 
-    // The caster pass (LLPipeline::renderLightThroughObjects), as a scope: the layer's framebuffer with both targets drawn, the tau
-    // target multiplying (glBlendFunc(GL_ZERO, GL_SRC_COLOR): the product of the casters, in any order) and the depth target keeping the
-    // nearest (glBlendEquationi(1, GL_MIN)), no depth test or depth writes, colour writes on. The destructor puts back the framebuffer it
-    // found, the blend equation (GL_FUNC_ADD) and function (LLRender's, BT_ALPHA), the colour mask the caller names (the shadow pass's)
-    // and, through its members, the blend and depth states LLGLState knew.
+    // The caster pass (LLPipeline::renderLightThroughObjects), as a scope over one tile: the layer's framebuffer with both targets drawn,
+    // the tau target multiplying (glBlendFunc(GL_ZERO, GL_SRC_COLOR): the product of the casters, in any order) and the depth target
+    // keeping the nearest (glBlendEquationi(1, GL_MIN)); the depth test against the pool's static depth (GL_LEQUAL, no depth writes);
+    // back faces culled (the side a camera at the lamp would see: a one-sided pane lets light through once, as it shows its alpha once;
+    // a double-sided glTF material is drawn from both sides by its own batch, LLRenderPass::pushGLTFBatch), whatever face rule the
+    // caller's depth pass uses; colour writes on; the scissor at the tile's rect. The tile's rect must be the caller's viewport (the
+    // tile render's: the same texels in the depth atlas and the layer; asserted). The destructor puts back the framebuffer it found,
+    // the blend equation (GL_FUNC_ADD) and function (LLRender's, BT_ALPHA), the colour mask the caller names (the shadow pass's) and,
+    // through its members, the blend, depth, cull and scissor states LLGLState knew; the scissor box stays at the rect, the box every
+    // static tile render sets.
     class DrawScope
     {
     public:
-        DrawScope(const LLLightThroughLayer& layer, bool color_writes_after);
+        DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after);
         ~DrawScope();
         DrawScope(const DrawScope&) = delete;
         DrawScope& operator=(const DrawScope&) = delete;
@@ -93,16 +106,19 @@ public:
     private:
         LLGLEnable mBlend;
         LLGLDepthTest mDepth;
+        LLGLEnable mCull;
+        LLGLEnable mScissor;
         U32 mSavedFbo;
         bool mColorAfter;
     };
 
 private:
     U32 mEdge = 0;
+    U32 mDepthAtlas = 0; // the pool's static depth atlas: the framebuffer's depth attachment (not owned)
     U32 mTau = 0;
     U32 mDepth = 0;
     U32 mFbo = 0;
-    bool mFailed = false; // ensure() failed at this edge: not tried again until setEdge or free
+    bool mFailed = false; // ensure() failed at this atlas: not tried again until setAtlas or free
 };
 
 #endif // LL_LLLIGHTTHROUGHGL_H

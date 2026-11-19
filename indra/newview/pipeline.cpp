@@ -7770,8 +7770,9 @@ void LLPipeline::renderGLTFObjects(U32 type, bool texture, bool rigged)
 
 // Currently only used for shadows -Cosmic,2023-04-19
 // <Vulkanstorm> through (lamp shadows L3): a static lamp tile with a light-through layer; its blend faces leave every texel below the
-// solid cut to the layer (renderLightThroughObjects) instead of dithering it into the depth. Every bind sets the flag, so no pass
-// inherits it. </Vulkanstorm>
+// solid cut to the layer (renderLightThroughObjects) instead of dithering it into the depth. Every blend bind here sets the flag, so no
+// blend draw inherits it; the mask passes bind the same classic program without setting it and may inherit a 1, which they never read
+// (shadow_solid_alpha 0 keeps them out of the branch that tests it, shadowAlphaMaskF.glsl). </Vulkanstorm>
 void LLPipeline::renderAlphaObjects(bool rigged, bool through)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
@@ -7905,17 +7906,18 @@ bool LLPipeline::hasLightThroughCasters()
 
 // The see-through casters of a static lamp tile into its light-through layer (shadowLightThroughF.glsl): this cull's blend faces that
 // are not rigged, the classic ones as renderAlphaObjects draws them (indexed textures) and the glTF ones with their material. The
-// depth pass (renderAlphaObjects with through) has drawn their solid texels; the layer takes the ones below the solid cut, multiplying
-// what they let through and keeping the nearest depth, whatever opaque caster lies in front of them. color_writes_after: the colour
+// depth pass (renderAlphaObjects with through) has drawn their solid texels; the layer takes the ones below the solid cut that lie in
+// front of the tile's opaque depth, multiplying what they let through and keeping the nearest depth (LLLightThroughLayer::DrawScope:
+// the depth test, the face rule and the scissor at the tile's rect). rect: the tile's, the viewport; color_writes_after: the colour
 // mask the shadow pass had.
-void LLPipeline::renderLightThroughObjects(LLLightThroughLayer& layer, bool color_writes_after)
+void LLPipeline::renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
     gGL.loadMatrix(gGLModelView);
     gGLLastMatrix = NULL;
     {
-        LLLightThroughLayer::DrawScope scope(layer, color_writes_after);
+        LLLightThroughLayer::DrawScope scope(layer, rect, color_writes_after);
         const LLGLSLShader* bound = nullptr;
         auto* end = endRenderMap(LLRenderPass::PASS_ALPHA);
         for (LLCullResult::drawinfo_iterator i = beginRenderMap(LLRenderPass::PASS_ALPHA); i != end; )
@@ -11970,7 +11972,7 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow light through");
             LL_PROFILE_GPU_ZONE("shadow light through");
-            renderLightThroughObjects(*through_target->layer, RenderShadowDetail > 2);
+            renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2);
             through_target->drawn = true;
         }
         // </Vulkanstorm>

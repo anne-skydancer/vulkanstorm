@@ -17,19 +17,19 @@
  * NOTICE.md in the source tree.
  *
  * The share of the lamp's light a see-through face lets through goes into the layer's first target, multiplied into what the casters
- * drawn before it let through (glBlendFunc(GL_ZERO, GL_SRC_COLOR): stacked faces multiply, in any order), and its depth into the
- * second, which keeps the nearest (GL_MIN). The rule and its derivation are lllightthrough.h's (transmittance): McGuire & Enderton's
- * rho = a (1 - t) with t = C (1 - a), so tau = (1 - a)(1 + a C). A texel at or below the invisible limit is left out (it records no
- * depth either), and one at or above the solid limit is the depth pass's (shadowAlphaMaskF.glsl and pbrShadowAlphaBlendF.glsl draw it
- * there with shadow_through set). Vertex shaders: shadowAlphaMaskV.glsl for the classic faces (indexed textures),
- * pbrShadowAlphaMaskV.glsl for glTF (LIGHT_THROUGH_GLTF).
+ * drawn before it let through (glBlendFunc(GL_ZERO, GL_SRC_COLOR): stacked faces multiply, in any order), and its window depth into the
+ * second (R32F, as it is), which keeps the nearest (GL_MIN). Only the fragments in front of the tile's opaque depth reach it (the
+ * pass is depth-tested against the pool's static depth atlas, LLLightThroughLayer::DrawScope). The rule and its derivation are
+ * lllightthrough.h's (transmittance): McGuire & Enderton's rho = a (1 - t) with t = C (1 - a), so tau = (1 - a)(1 + a C). A texel at
+ * or below the invisible limit is left out (it records no depth either), and one at or above the solid limit is the depth pass's
+ * (shadowAlphaMaskF.glsl and pbrShadowAlphaBlendF.glsl draw it there with shadow_through set). Vertex shaders: shadowAlphaMaskV.glsl
+ * for the classic faces (indexed textures), pbrShadowAlphaMaskV.glsl for glTF (LIGHT_THROUGH_GLTF).
  */
 
 /*[EXTRA_CODE_HERE]*/
 
-#define LIGHT_THROUGH_SOLID 0.98                 // lllightthrough::kSolidAlpha
-#define LIGHT_THROUGH_INVISIBLE (1.0 / 255.0)    // lllightthrough::kInvisibleAlpha
-#define LIGHT_THROUGH_DEPTH_STEP (1.0 / 65535.0) // lllightthrough::kDepthStep: the 16-bit store is never nearer than the caster
+#define LIGHT_THROUGH_SOLID 0.98              // lllightthrough::kSolidAlpha
+#define LIGHT_THROUGH_INVISIBLE (1.0 / 255.0) // lllightthrough::kInvisibleAlpha
 
 out vec4 frag_data[2];
 
@@ -63,5 +63,5 @@ void main()
 
     vec3 c = clamp(colour, vec3(0.0), vec3(1.0));
     frag_data[0] = vec4((1.0 - alpha) * (1.0 + alpha * c), 1.0);
-    frag_data[1] = vec4(min(gl_FragCoord.z + LIGHT_THROUGH_DEPTH_STEP, 1.0), 0.0, 0.0, 1.0);
+    frag_data[1] = vec4(gl_FragCoord.z, 0.0, 0.0, 1.0);
 }

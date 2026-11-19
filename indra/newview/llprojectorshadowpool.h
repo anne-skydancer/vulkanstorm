@@ -956,7 +956,8 @@ enum class Cause : uint8_t
     Lamp,       // the lamp's own reach, angle, size or position changed
     Avatar,     // the tile holds an avatar (drawn into L over S, P4), or the avatar just left
     Lowres,     // a resize: the tile's size changed (the valve, its lamp's cone or reach) and its render draws it at the new size (draw-then-swap)
-    Other,      // anything else: a dirty list that overflowed, a hook off the main thread
+    Other,      // anything else: a dirty list that overflowed, a hook off the main thread, the RenderShadowLightThrough debug toggle, a
+                // light-through tile a repack could not carry (L3)
     Count
 };
 constexpr size_t kCauseCount = size_t(Cause::Count);

@@ -32,14 +32,14 @@ namespace
 {
     // "no caster": tau 1 in every channel, the depth at the far plane (lllightthrough::kNoLayer)
     const GLubyte kTauClear[4] = { 255, 255, 255, 255 };
-    const GLushort kDepthClear = 0xFFFF;
+    const GLfloat kDepthClear = lllightthrough::kNoLayer;
 
     // the two textures of one rect size: the layer's or a transient of the carry. NEAREST, no mips (newTexture2D); counted in the
-    // viewer's texture memory at their real size (R16 is counted as R16F, the same two bytes: LLImageGL does not know R16)
+    // viewer's texture memory at their real size
     bool new_pair(U32 size, U32& tau, U32& depth)
     {
         tau = LLStochasticEngine::newTexture2D(GL_RGBA8, size, size, GL_RGBA8, nullptr, GL_RGBA, GL_UNSIGNED_BYTE);
-        depth = tau ? LLStochasticEngine::newTexture2D(GL_R16, size, size, GL_R16F, nullptr, GL_RED, GL_UNSIGNED_SHORT) : 0;
+        depth = tau ? LLStochasticEngine::newTexture2D(GL_R32F, size, size, GL_R32F, nullptr, GL_RED, GL_FLOAT) : 0;
         if (!depth)
         {
             LLStochasticEngine::deleteTexture(tau);
@@ -61,10 +61,11 @@ LLLightThroughLayer::~LLLightThroughLayer()
     llassert(mTau == 0 && mDepth == 0 && mFbo == 0);
 }
 
-void LLLightThroughLayer::setEdge(U32 edge)
+void LLLightThroughLayer::setAtlas(U32 edge, U32 depth_atlas)
 {
-    llassert(!allocated() || edge == mEdge);
+    llassert(!allocated() || (edge == mEdge && depth_atlas == mDepthAtlas));
     mEdge = edge;
+    mDepthAtlas = depth_atlas;
     mFailed = false;
 }
 
@@ -75,7 +76,7 @@ bool LLLightThroughLayer::ensure()
         return true;
     }
     // glClearTexImage and glClearTexSubImage are OpenGL 4.4, glCopyImageSubData 4.3 (llgl.cpp loads them from those versions)
-    if (mFailed || mEdge == 0 || !on_main_thread() || gGLManager.mGLVersion < 4.39f)
+    if (mFailed || mEdge == 0 || mDepthAtlas == 0 || !on_main_thread() || gGLManager.mGLVersion < 4.39f)
     {
         return false;
     }
@@ -98,11 +99,13 @@ bool LLLightThroughLayer::ensure()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     gGL.getTexUnit(0)->unbind(LLTexUnit::TT_TEXTURE);
 
+    // the two targets and, read only, the pool's static depth: the casters are tested against it (DrawScope)
     const U32 saved_fbo = LLRenderTarget::sCurFBO;
     glGenFramebuffers(1, &mFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, mFbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, mTau, 0);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, mDepth, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, mDepthAtlas, 0);
     const GLenum targets[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
     glDrawBuffers(2, targets);
     glReadBuffer(GL_NONE);
@@ -115,20 +118,18 @@ bool LLLightThroughLayer::ensure()
                                      << (complete ? "complete" : "incomplete") << ", GL error " << error << "): see-through casters "
                                      << "shadow lamps as before" << LL_ENDL;
         while (glGetError() != GL_NO_ERROR) {}
-        const U32 edge = mEdge;
-        free();
-        mEdge = edge;
+        freeStorage();
         mFailed = true;
         return false;
     }
     glClearTexImage(mTau, 0, GL_RGBA, GL_UNSIGNED_BYTE, kTauClear);
-    glClearTexImage(mDepth, 0, GL_RED, GL_UNSIGNED_SHORT, &kDepthClear);
+    glClearTexImage(mDepth, 0, GL_RED, GL_FLOAT, &kDepthClear);
     LL_INFOS("ProjectorShadows") << "light-through layer: " << mEdge << "x" << mEdge << " (" << (lllightthrough::layerBytes(mEdge) >> 20)
                                  << " MiB), made for the first tile that met a see-through caster" << LL_ENDL;
     return true;
 }
 
-void LLLightThroughLayer::free()
+void LLLightThroughLayer::freeStorage()
 {
     if (mFbo)
     {
@@ -144,7 +145,13 @@ void LLLightThroughLayer::free()
     // deleteTexture unbinds the name from every texture unit first and uncounts it
     LLStochasticEngine::deleteTexture(mTau);
     LLStochasticEngine::deleteTexture(mDepth);
+}
+
+void LLLightThroughLayer::free()
+{
+    freeStorage();
     mEdge = 0;
+    mDepthAtlas = 0;
     mFailed = false;
 }
 
@@ -156,7 +163,7 @@ void LLLightThroughLayer::clearRect(const llprojectorpool::Rect& rect)
     }
     llassert(rect.x + rect.size <= mEdge && rect.y + rect.size <= mEdge);
     glClearTexSubImage(mTau, 0, (GLint)rect.x, (GLint)rect.y, 0, (GLsizei)rect.size, (GLsizei)rect.size, 1, GL_RGBA, GL_UNSIGNED_BYTE, kTauClear);
-    glClearTexSubImage(mDepth, 0, (GLint)rect.x, (GLint)rect.y, 0, (GLsizei)rect.size, (GLsizei)rect.size, 1, GL_RED, GL_UNSIGNED_SHORT, &kDepthClear);
+    glClearTexSubImage(mDepth, 0, (GLint)rect.x, (GLint)rect.y, 0, (GLsizei)rect.size, (GLsizei)rect.size, 1, GL_RED, GL_FLOAT, &kDepthClear);
 }
 
 std::vector<U32> LLLightThroughLayer::carry(const lllightthrough::CarryPlan& plan)
@@ -172,12 +179,13 @@ std::vector<U32> LLLightThroughLayer::carry(const lllightthrough::CarryPlan& pla
         U32 depth = 0;
     };
     std::vector<Held> held(plan.copies.size());
-    // every source first: a move's new rect may be another move's old one
+    // every source first: a move's new rect may be another move's old one. A move that changes the size is never copied (planCarry
+    // lists none; a copy of the larger source would run over the smaller rect's neighbours): it is lost, below
     for (size_t i = 0; i < plan.copies.size(); ++i)
     {
         const llprojectorpool::Move& move = plan.copies[i];
         llassert(move.src.size == move.dst.size);
-        if (new_pair(move.src.size, held[i].tau, held[i].depth))
+        if (move.src.size == move.dst.size && new_pair(move.src.size, held[i].tau, held[i].depth))
         {
             copy_rect(mTau, move.src, held[i].tau, 0, 0);
             copy_rect(mDepth, move.src, held[i].depth, 0, 0);
@@ -210,18 +218,18 @@ std::vector<U32> LLLightThroughLayer::carry(const lllightthrough::CarryPlan& pla
     return lost;
 }
 
-void LLLightThroughLayer::bind(LLGLSLShader& shader) const
+void LLLightThroughLayer::bind(LLGLSLShader& shader, S32 tau_uniform, S32 depth_uniform) const
 {
     if (!allocated())
     {
         return;
     }
-    const S32 tau = shader.enableTexture(LLShaderMgr::PROJ_THROUGH_ATLAS, LLTexUnit::TT_TEXTURE);
+    const S32 tau = shader.enableTexture(tau_uniform, LLTexUnit::TT_TEXTURE);
     if (tau > -1)
     {
         gGL.getTexUnit(tau)->bindManual(LLTexUnit::TT_TEXTURE, mTau);
     }
-    const S32 depth = shader.enableTexture(LLShaderMgr::PROJ_THROUGH_DEPTH, LLTexUnit::TT_TEXTURE);
+    const S32 depth = shader.enableTexture(depth_uniform, LLTexUnit::TT_TEXTURE);
     if (depth > -1)
     {
         gGL.getTexUnit(depth)->bindManual(LLTexUnit::TT_TEXTURE, mDepth);
@@ -244,13 +252,19 @@ void LLLightThroughLayer::unbindUnits() const
     }
 }
 
-LLLightThroughLayer::DrawScope::DrawScope(const LLLightThroughLayer& layer, bool color_writes_after)
-    : mBlend(GL_BLEND), mDepth(GL_FALSE, GL_FALSE), mSavedFbo(LLRenderTarget::sCurFBO), mColorAfter(color_writes_after)
+LLLightThroughLayer::DrawScope::DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after)
+    : mBlend(GL_BLEND), mDepth(GL_TRUE, GL_FALSE, GL_LEQUAL), mCull(GL_CULL_FACE), mScissor(GL_SCISSOR_TEST),
+      mSavedFbo(LLRenderTarget::sCurFBO), mColorAfter(color_writes_after)
 {
     llassert(layer.allocated());
+    // the tile's rect is the caller's viewport: the casters land on the same texels in the depth atlas and in the layer
+    llassert(gGLViewport[0] == (S32)rect.x && gGLViewport[1] == (S32)rect.y && gGLViewport[2] == (S32)rect.size &&
+             gGLViewport[3] == (S32)rect.size);
+    llassert(rect.x + rect.size <= layer.mEdge && rect.y + rect.size <= layer.mEdge);
     gGL.flush();
     glBindFramebuffer(GL_FRAMEBUFFER, layer.mFbo);
     LLRenderTarget::sCurFBO = layer.mFbo;
+    glScissor((GLint)rect.x, (GLint)rect.y, (GLsizei)rect.size, (GLsizei)rect.size);
     gGL.setColorMask(true, true);
     gGL.blendFunc(LLRender::BF_ZERO, LLRender::BF_SOURCE_COLOR); // tau: the product (both targets get it; GL_MIN ignores it)
     glBlendEquationi(1, GL_MIN);                                 // the depth: the nearest
