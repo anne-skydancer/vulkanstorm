@@ -172,6 +172,12 @@ def main():
                         errors.append(f"{path.name} {job_name}: passes undeclared inputs "
                                       f"{sorted(set(step['with']) - actions[uses])} to {uses}")
     errors += check_path_lists(documents)
+    names = {w.get("name") for p, w in documents.items() if p.parent.name == "workflows" and isinstance(w, dict)}
+    for path, workflow in documents.items():
+        if path.name == "pr-readiness.yaml":  # workflow_run names a workflow by its `name:`; a rename must not silence it
+            for wanted in (raw_triggers(workflow).get("workflow_run") or {}).get("workflows", []):
+                if wanted not in names:
+                    errors.append(f"{path.name}: workflow_run watches '{wanted}', which no workflow is named")
     if errors:
         sys.exit("\n".join(errors))
     print(f"{len(documents)} YAML file(s) parse; {len(actions)} composite action(s) consistent with their callers")
