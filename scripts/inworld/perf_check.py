@@ -673,8 +673,8 @@ class Run:
         Records index["gate"]; True when met (or nothing is required)."""
         cmp = self.sc["compare"]
         required = [int(p) for p in cmp.get("require_passes") or []]
-        if not required or not cmp.get("enabled"):
-            return True
+        if not required or not cmp.get("enabled") or self.args.no_glstats or self.fps_log:
+            return True     # nothing is compared in a frame-rate-only run (--no-glstats, the log's frame rate)
         why = []
         prove = cmp.get("prove_with_injection") and not self.args.no_glstats
         for p in required:

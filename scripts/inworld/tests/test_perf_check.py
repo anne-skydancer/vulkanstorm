@@ -425,6 +425,17 @@ class CensusAndProofsTest(unittest.TestCase):
             index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
             self.assertEqual(index["gate"]["why"], ["14 HUD: never compared in any run (not run in current)"])
 
+    def test_a_frame_rate_only_run_has_no_gate(self):
+        # --no-glstats compares nothing: the census scenario's gate does not apply (it is neither met nor failed)
+        compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 14], "frames": 30,
+                   "require_passes": [13, 14, 15]}
+        with tempfile.TemporaryDirectory() as tmp:
+            fv = FakeViewer(gl_stats=True, logs_dir=tmp)
+            code, run = run_main(fv, tmp, extra=["--no-glstats"], presets=self.ONE, compare=compare)
+            self.assertEqual(code, 0)
+            index = json.loads((run / "perf.json").read_text(encoding="utf-8"))
+            self.assertNotIn("gate", index)
+
     def test_an_unproven_pass_is_proven_in_a_later_run(self):
         # the impostor does not regenerate in the start proof's armed frames, then does: proven after the first run
         compare = {"enabled": True, "passes": [-1], "prove_with_injection": True, "prove_passes": [1, 15], "frames": 30,
