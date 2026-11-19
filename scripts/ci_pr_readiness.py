@@ -188,8 +188,9 @@ def evaluate(pr):
 
 
 def code_span(text):
-    """Reviewer-written text as inert inline code: no mention, link, image or HTML."""
-    return "`" + " ".join(text.replace("`", "'").split()) + "`"
+    """Untrusted text (review titles, paths, check names) as inert inline code: no mention, link,
+    image or HTML, and no table-breaking pipe."""
+    return "`" + " ".join(text.replace("`", "'").replace("|", "/").split()) + "`"
 
 
 def render_comment(pr, verdict, head_sha):
@@ -207,9 +208,9 @@ def render_comment(pr, verdict, head_sha):
         lines.append("| viewer builds | not needed: only CI files and documentation changed |")
     other = [n for n in verdict["failed"] if n not in BUILDS]
     if other:
-        lines.append(f"| other failed checks | {', '.join(other)} |")
+        lines.append(f"| other failed checks | {', '.join(code_span(n) for n in other)} |")
     if verdict.get("running"):
-        lines.append(f"| other checks running | {', '.join(verdict['running'])} |")
+        lines.append(f"| other checks running | {', '.join(code_span(n) for n in verdict['running'])} |")
     if verdict["conflict"]:
         lines.append(f"| merge | conflicts with {pr['base']} |")
     elif verdict["unknown"]:
@@ -222,7 +223,7 @@ def render_comment(pr, verdict, head_sha):
         for t in verdict["threads"]:
             where = f"{t['path']}:{t['line']}" if t["path"] else "(conversation)"
             badge = f"{t['prio']} " if t["prio"] else ""
-            lines.append(f"- [{badge}{where}]({t['url']}) {t['author']}: {code_span(t['title'])}")
+            lines.append(f"- [{badge}{code_span(where)}]({t['url']}) {t['author']}: {code_span(t['title'])}")
     lines += ["", "Ready means CI is green and no review thread is open "
                   "(doc/release_channels.md, PR readiness)."]
     return "\n".join(lines) + "\n"

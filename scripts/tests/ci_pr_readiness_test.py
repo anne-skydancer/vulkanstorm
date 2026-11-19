@@ -78,7 +78,7 @@ class Verdict(unittest.TestCase):
         v = pr_readiness.evaluate(pr(threads=threads))
         self.assertEqual((v["state"], v["description"]), ("pending", "waiting: 1 open thread"))
         text = pr_readiness.render_comment(pr(threads=threads), v, "a" * 40)
-        self.assertIn("[P1 indra/newview/a.cpp:42](https://github.com/o/r/pull/1#discussion_r1)", text)
+        self.assertIn("[P1 `indra/newview/a.cpp:42`](https://github.com/o/r/pull/1#discussion_r1)", text)
 
     def test_resolved_thread_is_not_counted(self):
         # open_threads() drops resolved nodes before thread_info; the verdict sees an empty list.
@@ -135,7 +135,17 @@ class StaleAndRunning(unittest.TestCase):
         runs = GREEN + [run("lint", "in_progress", None, id_=20, workflow=5)]
         v = pr_readiness.evaluate(pr(check_runs=runs))
         self.assertEqual((v["state"], v["description"]), ("pending", "waiting: checks running: lint"))
-        self.assertIn("other checks running | lint", pr_readiness.render_comment(pr(check_runs=runs), v, "d" * 40))
+        self.assertIn("other checks running | `lint`", pr_readiness.render_comment(pr(check_runs=runs), v, "d" * 40))
+
+    def test_hostile_check_name_and_path_are_inert_in_the_comment(self):
+        name = "[x](https://evil.example) @someone | y"
+        runs = GREEN + [run(name, "in_progress", None, id_=20, workflow=5)]
+        thread = {"path": "a](https://evil.example) [b", "line": 1, "prio": "", "url": "u",
+                  "author": "a", "title": "t"}
+        p = pr(check_runs=runs, threads=[thread])
+        text = pr_readiness.render_comment(p, pr_readiness.evaluate(p), "d" * 40)
+        self.assertIn("`[x](https://evil.example) @someone / y`", text)
+        self.assertIn("[`a](https://evil.example) [b:1`](u)", text)
 
     def test_later_failure_replaces_ready(self):
         runs = GREEN + [run("analyze", id_=20, workflow=5)]
