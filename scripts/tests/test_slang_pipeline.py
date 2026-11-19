@@ -97,7 +97,8 @@ class LoaderFormatTest(unittest.TestCase):
 
 
 class LoaderSourceTest(unittest.TestCase):
-    """What the loader must not do (read from the source: it is compiled by the viewer build, not here)."""
+    """A tripwire, not a behaviour test: what the loader must not do and must keep, read from the source (the viewer
+    build compiles it, not this suite)."""
 
     def test_generated_path_has_no_fallback_or_limits(self):
         mgr = (ROOT / 'indra/llrender/llshadermgr.cpp').read_text(encoding='utf-8')
@@ -109,6 +110,9 @@ class LoaderSourceTest(unittest.TestCase):
         shader = (ROOT / 'indra/llrender/llglslshader.cpp').read_text(encoding='utf-8')
         self.assertIn('!generated && !LLShaderMgr::instance()->attachShaderFeatures(this)', shader)
         self.assertIn('!generated && mShaderLevel > 0', shader)
+        # the binary-cache key follows the file's text, and a hook sees the viewer-wide defines
+        self.assertIn('readGeneratedShaderText(shdr_pair.first', shader)
+        self.assertIn('LLGLSLShader::sGlobalDefines', body)
 
 
 @needs_slangc
@@ -203,6 +207,47 @@ class GeneratorTest(unittest.TestCase):
                                              encoding='utf-8')
             errors = check.check_position(src, self.out)
             self.assertTrue(any('rogue.slang' in e and 'writes gl_Position' in e for e in errors), errors)
+
+    def test_gate_catches_a_program_that_imports_the_module_but_computes_the_position(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            shutil.copytree(FIXTURES, src)
+            text = (src / 'tint.slang').read_text(encoding='utf-8')
+            line = 'o.pos = vkPositionClip(modelview_projection_matrix, v.position);'
+            self.assertIn(line, text)
+            for rogue in ('o.pos = modelview_projection_matrix * vec4(v.position, 1.0);',
+                          'o.pos = vkPositionClip(modelview_projection_matrix, v.position); o.pos.z = 0.0;',
+                          'o.pos = vkPositionClip(modelview_projection_matrix, v.position); o.pos *= 2.0;'):
+                (src / 'tint.slang').write_text(text.replace(line, rogue), encoding='utf-8')
+                errors = check.check_position(src, self.out)
+                self.assertTrue(any('SV_Position field' in e for e in errors), (rogue, errors))
+            (src / 'tint.slang').write_text(text.replace('Varyings vsMain(VertexIn v)', 'vec4 vsMain(VertexIn v) : SV_Position'),
+                                            encoding='utf-8')
+            self.assertTrue(any('straight from a function' in e for e in check.check_position(src, self.out)))
+
+    def test_interface_check_finds_block_and_attribute_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / 'generated'
+            shutil.copytree(self.out, copy)
+            vert = copy / 'tint__DOUBLE0.vert.glsl'
+            vert.write_text(vert.read_text(encoding='utf-8').replace('binding = 4', 'binding = 0'), encoding='utf-8')
+            errors = check.check_interface(copy)
+            self.assertTrue(any('inside the viewer' in e for e in errors), errors)
+            shutil.copy(self.out / 'tint__DOUBLE0.vert.glsl', vert)
+            frag = copy / 'tint__DOUBLE0.frag.glsl'
+            frag.write_text(frag.read_text(encoding='utf-8').replace('vec4 tint;', 'vec4 tint2;'), encoding='utf-8')
+            self.assertTrue(any('different uniform blocks' in e for e in check.check_interface(copy)))
+            shutil.copy(self.out / 'tint__DOUBLE0.frag.glsl', frag)
+            mf = json.loads((copy / 'programs.json').read_text(encoding='utf-8'))
+            for prog in mf['programs']:
+                prog['stages']['vertex']['interface']['inputs'][1]['location'] = 3
+            (copy / 'programs.json').write_text(json.dumps(mf), encoding='utf-8')
+            self.assertTrue(any('reserved table' in e for e in check.check_interface(copy)))
+
+    def test_generated_block_clears_the_viewers_own_bindings(self):
+        self.assertEqual(common.GLOBALS_BINDING, common.reserved_block_count())
+        vert = (self.out / 'tint__DOUBLE0.vert.glsl').read_text(encoding='utf-8')
+        self.assertEqual(check.block_of(vert)[0], common.GLOBALS_BINDING)
 
     def test_gate_is_allowed_empty_until_programs_exist(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -442,6 +442,7 @@ bool LLGLSLShader::createShader()
         if (generated && generated_files != mShaderFiles.size())
         {
             LL_SHADER_LOADING_WARNS() << "Shader " << mName << " mixes generated and hand-written stages" << LL_ENDL;
+            unloadInternal();
             return false;
         }
     }
@@ -2161,6 +2162,14 @@ LLUUID LLGLSLShader::hash()
     {
         hash_obj.update(shdr_pair.first);
         hash_obj.update(&shdr_pair.second, sizeof(GLenum));
+        if (LLGeneratedShader::isGeneratedFile(shdr_pair.first)) // <Vulkanstorm> a regenerated file under the same name must not load a stale binary
+        {
+            std::string text, path;
+            if (LLShaderMgr::readGeneratedShaderText(shdr_pair.first, text, path))
+            {
+                hash_obj.update(text);
+            }
+        }
     }
     for (const auto& define_pair : mDefines)
     {

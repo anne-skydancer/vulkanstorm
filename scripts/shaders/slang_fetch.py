@@ -10,6 +10,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -48,6 +49,20 @@ def safe_extract(archive, dest):
         t.extractall(dest, filter='data')
 
 
+def download(url, dest, tries=3, timeout=60):
+    last = None
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp, open(dest, 'wb') as out:
+                shutil.copyfileobj(resp, out)
+            return
+        except OSError as e:
+            last = e
+            print(f'download attempt {attempt + 1} of {tries} failed: {e}', flush=True)
+            time.sleep(2 * (attempt + 1))
+    raise SystemExit(f'could not download {url}: {last}')
+
+
 def fetch(pin, key=None, force=False):
     key = key or common.platform_key()
     entry = pin['platforms'][key]
@@ -57,18 +72,18 @@ def fetch(pin, key=None, force=False):
             return common.find_slangc(pin)
         except SystemExit:
             pass
-    shutil.rmtree(target, ignore_errors=True)
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=target.parent) as tmp:
         archive = Path(tmp) / Path(entry['url']).name
         print(f'fetching {entry["url"]}', flush=True)
-        urllib.request.urlretrieve(entry['url'], archive)
+        download(entry['url'], archive)
         got = sha256_of(archive)
         if got != entry['sha256']:
             raise SystemExit(f'SHA-256 mismatch for {archive.name}: got {got}, pinned {entry["sha256"]}')
         staging = Path(tmp) / 'unpacked'
         staging.mkdir()
         safe_extract(archive, staging)
+        shutil.rmtree(target, ignore_errors=True)  # only now: the download is verified and unpacked
         staging.rename(target)
     slangc = common.find_slangc(pin)
     print(f'slangc {common.slangc_version(slangc)} ready at {slangc}')

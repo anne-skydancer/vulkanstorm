@@ -467,6 +467,8 @@ public:
     // <Vulkanstorm> A generated (Slang) shader stage: one whole file under app_settings/shaders/generated/, compiled
     // as `#version 460`, the hook defines, then the file (llgeneratedshader.h). No class search, no helper objects, no
     // fallback to hand-written GLSL. Returns the shader object, or 0 after logging why.
+    // the whole text of a generated stage (also read by LLGLSLShader::hash(), which keys the binary cache on it)
+    static bool readGeneratedShaderText(const std::string& filename, std::string& text, std::string& path);
     GLuint loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines = NULL);
     // </Vulkanstorm>
 

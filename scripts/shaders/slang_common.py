@@ -83,3 +83,22 @@ def header_hooks(text):
         if line.startswith('// hooks:'):
             return line[len('// hooks:'):].split()
     return []
+
+
+# The first uniform-block binding point a generated program's global block may use: the viewer's own UBOs
+# (LLGLSLShader::UniformBlock: ReflectionProbes, GLTFJoints, GLTFNodes, GLTFMaterials) hold bindings 0 to 3.
+GLOBALS_BINDING = 4
+
+
+def reserved_attribs():
+    """The viewer's vertex attribute table, in slot order, read from LLShaderMgr (the one place that defines it)."""
+    text = (ROOT / 'indra/llrender/llshadermgr.cpp').read_text(encoding='utf-8')
+    return re.findall(r'mReservedAttribs\.push_back\("(\w+)"\)', text)
+
+
+def reserved_block_count():
+    """NUM_UNIFORM_BLOCKS of LLGLSLShader::UniformBlock, counted from the header."""
+    text = (ROOT / 'indra/llrender/llglslshader.h').read_text(encoding='utf-8')
+    body = re.search(r'enum UniformBlock[^{]*\{(.*?)\};', text, re.S).group(1)
+    body = re.sub(r'//[^\n]*', '', body)
+    return len([x for x in re.findall(r'(?m)^\s*(\w+)\s*,', body) if x != 'NUM_UNIFORM_BLOCKS'])

@@ -82,15 +82,30 @@ hand-written GLSL. A stage that does not compile fails the program with the driv
 and hand-written stages is refused. The format is `LLGeneratedShader::assemble` and, for the checks, `assemble_source()` in
 `slang_check.py`; both are tested against one literal.
 
-Not done yet (pilot, S2): binding a program's uniform block from reflection and the per-draw CPU cost of it. Until then no
-generated program is registered in `llviewershadermgr.cpp`.
+Not done yet (pilot, S2), all consequences of the binding model (D4); until S2 no generated program is registered in
+`llviewershadermgr.cpp`:
+
+- **The program's uniform block.** Binding it from reflection and the per-draw CPU cost of it (measured first). The block is
+  pinned at binding 4 (`slangc -fvk-bind-globals 4 0`), above the viewer's own UBO bindings 0 to 3
+  (`LLGLSLShader::UniformBlock`); `slang_check.py interface` fails a block below that. S2 reads the binding from the manifest.
+- **Vertex attributes.** `mapAttributes()` binds and reads attributes by the reserved names (`position`, `texcoord0`, ...),
+  but slangc renames the inputs (`v_position_0`), so a generated vertex stage would get an empty attribute mask. S2 builds
+  `mAttribute` and `mAttributeMask` from the manifest's vertex `inputs` (location is the reserved slot) and does not use
+  `glGetAttribLocation` for generated programs. CI already fails a vertex input whose name and `[[vk::location]]` differ from
+  the slot in `mReservedAttribs`.
+- **Hooks.** A hook takes the program's define, else the viewer-wide `sGlobalDefines` value, else 0 (a debug log line names a
+  hook with no value). The binary-cache key (`LLGLSLShader::hash()`) includes the text of each generated file.
+- **Windows and Linux output.** The generated tree was written on Windows; the CI drift check runs on Linux. Run the job
+  once before the tree grows; if the two differ, fix the generator, not the check.
 
 ## The position module
 
 Every program takes its position (skinning included) from **one shared module**, written before the families convert. The
-gate in `slang_check.py position` fails when any `.slang` file other than the module writes `gl_Position`, when a
-program's vertex source does not import the module, or when a generated vertex stage does not write `gl_Position` exactly
-once. The gate is wired and **allowed empty**: it passes while no program has a vertex stage, and fails once one does if
+gate in `slang_check.py position` fails when any `.slang` file other than the module writes `gl_Position`, returns
+`SV_Position` straight from a function, or assigns an `SV_Position` field from anything but a call of the module's
+`vkPosition*` functions (whole, with plain `=`); when a program's vertex source does not import the module or never calls
+it; or when a generated vertex stage does not write `gl_Position` exactly once. The generated text cannot show where the
+value came from (slangc copies the field to `gl_Position`), so the source check is the guard. The gate is wired and **allowed empty**: it passes while no program has a vertex stage, and fails once one does if
 `indra/newview/slang/position.slang` is missing. The AMD decal `invariant`/`precise` goes into that module when needed.
 
 ## CI

@@ -880,49 +880,73 @@ GLuint LLShaderMgr::loadShaderFile(const std::string& filename, S32 & shader_lev
 }
 
 // <Vulkanstorm> Generated (Slang) shader stages. See llgeneratedshader.h for the exact text the driver gets.
-GLuint LLShaderMgr::loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines)
+bool LLShaderMgr::readGeneratedShaderText(const std::string& filename, std::string& text, std::string& path)
 {
     if (!LLGeneratedShader::isGeneratedFile(filename))
     {
         LL_WARNS("ShaderLoading") << "Not a generated shader file: " << filename << LL_ENDL;
-        return 0;
+        return false;
     }
 
     const std::string relative = filename.substr(LLGeneratedShader::kDirectory.size());
-    const std::string path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "generated", relative);
+    path = gDirUtilp->getExpandedFilename(LL_PATH_APP_SETTINGS, "shaders", "generated", relative);
 
     // the whole file: there is no line or piece limit on this path
-    std::string text;
+    text.clear();
+    LLFILE* file = LLFile::fopen(path, "rb");
+    if (!file)
     {
-        LLFILE* file = LLFile::fopen(path, "rb");
-        if (!file)
+        LL_WARNS("ShaderLoading") << "Generated shader file not found: " << path << LL_ENDL;
+        return false;
+    }
+    char buffer[1 << 16];
+    size_t got;
+    while ((got = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        text.append(buffer, got);
+        if (text.size() > (64u << 20))
         {
-            LL_WARNS("ShaderLoading") << "Generated shader file not found: " << path << LL_ENDL;
-            return 0;
-        }
-        char buffer[1 << 16];
-        size_t got;
-        while ((got = fread(buffer, 1, sizeof(buffer), file)) > 0)
-        {
-            text.append(buffer, got);
-            if (text.size() > (64u << 20))
-            {
-                LL_WARNS("ShaderLoading") << "Generated shader file is larger than 64 MiB: " << path << LL_ENDL;
-                fclose(file);
-                return 0;
-            }
-        }
-        const bool read_error = ferror(file) != 0;
-        fclose(file);
-        if (read_error)
-        {
-            LL_WARNS("ShaderLoading") << "Generated shader file could not be read: " << path << LL_ENDL;
-            return 0;
+            LL_WARNS("ShaderLoading") << "Generated shader file is larger than 64 MiB: " << path << LL_ENDL;
+            fclose(file);
+            return false;
         }
     }
+    const bool read_error = ferror(file) != 0;
+    fclose(file);
+    if (read_error)
+    {
+        LL_WARNS("ShaderLoading") << "Generated shader file could not be read: " << path << LL_ENDL;
+        return false;
+    }
+    return true;
+}
 
-    static const std::map<std::string, std::string> no_defines;
-    const std::string source = LLGeneratedShader::assemble(text, defines ? *defines : no_defines, gGLManager.mIsAMD);
+GLuint LLShaderMgr::loadGeneratedShaderFile(const std::string& filename, GLenum type, const std::map<std::string, std::string>* defines)
+{
+    std::string text, path;
+    if (!readGeneratedShaderText(filename, text, path))
+    {
+        return 0;
+    }
+
+    // A hook takes the program's own define, else the viewer-wide one (the settings the hand-written helper objects
+    // read through sGlobalDefines), else 0.
+    std::map<std::string, std::string> values = LLGLSLShader::sGlobalDefines;
+    if (defines)
+    {
+        for (const auto& define : *defines)
+        {
+            values[define.first] = define.second;
+        }
+    }
+    for (const std::string& hook : LLGeneratedShader::hooksOf(text))
+    {
+        if (values.find(hook) == values.end() && !(hook == "IS_AMD_CARD" && gGLManager.mIsAMD))
+        {
+            LL_DEBUGS("ShaderLoading") << "Generated shader " << filename << ": hook " << hook << " has no value, using 0" << LL_ENDL;
+        }
+    }
+    const std::string source = LLGeneratedShader::assemble(text, values, gGLManager.mIsAMD);
 
     glGetError();
     GLuint ret = glCreateShader(type);

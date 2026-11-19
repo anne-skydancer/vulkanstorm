@@ -3,11 +3,14 @@
 """CI checks on the generated shaders (they need no GPU).
 
   interface   the manifest's interface, from slangc's reflection: every fragment input matches a vertex output by
-              location, type and name; locations and texture bindings are unique; both stages share one uniform block
+              location and type (names are informational); locations and texture bindings are unique; both stages declare
+              the same uniform block members (parsed from the generated text), above the viewer's own UBO bindings;
+              every vertex input sits at the slot and name of the viewer's reserved attribute table
   compile     every generated stage compiled and every program linked with glslang as GLSL 4.60 for OpenGL, with the
               loader's define block (see assemble_source) once with every hook 0 and once with every hook 1
-  position    the position-module gate: every program takes its position from the one shared module; no other Slang
-              source writes gl_Position. Allowed empty (it passes with no vertex program) until programs exist.
+  position    the position-module gate: every program takes its position from the one shared module (its vertex
+              source imports it and calls its `prefix` functions, the SV_Position field is assigned whole from such a
+              call, no other Slang source writes gl_Position). Allowed empty (it passes with no vertex program) until programs exist.
   manifest    the manifest agrees with the files: hashes, hook lists, header
 
   python scripts/shaders/slang_check.py all [--generated DIR] [--src-dir DIR] [--glslang PATH]
@@ -79,13 +82,39 @@ def check_manifest(generated):
     return errors
 
 
+BLOCK = re.compile(r'layout\(binding\s*=\s*(\d+)\)\s*layout\(std140\)\s*uniform\s+(\w+)\s*\{(.*?)\}\s*\w*\s*;', re.S)
+
+
+def block_of(text):
+    """(binding, block name, member declarations) of a generated stage's uniform block, or None when it has none."""
+    m = BLOCK.search(text)
+    if not m:
+        return None
+    members = [' '.join(x.split()) for x in m.group(3).split(';') if x.strip()]
+    return int(m.group(1)), m.group(2), members
+
+
 def check_interface(generated):
     errors = []
     manifest = load_manifest(generated)
+    reserved = common.reserved_attribs()
+    first_free = common.reserved_block_count()
     for prog in manifest['programs']:
         pid, stages = prog['id'], prog['stages']
+        blocks = {}
         for stage, info in stages.items():
             iface = info['interface']
+            if stage == 'vertex':
+                for a in iface['inputs']:
+                    if a['name'] not in reserved or reserved.index(a['name']) != a['location']:
+                        slot = reserved.index(a['name']) if a['name'] in reserved else None
+                        errors.append(f'{pid}.vertex: input {a["name"]} at location {a["location"]}, but the viewer reads '
+                                      f'attributes by its reserved table (slot {slot})')
+            text = (Path(generated) / info['file']).read_text(encoding='utf-8')
+            blocks[stage] = block_of(text)
+            if blocks[stage] and blocks[stage][0] < first_free:
+                errors.append(f'{pid}.{stage}: uniform block at binding {blocks[stage][0]}, inside the viewer own '
+                              f'UBO bindings 0 to {first_free - 1}')
             for kind in ('inputs', 'outputs'):
                 locs = [i['location'] for i in iface[kind]]
                 if len(locs) != len(set(locs)):
@@ -99,9 +128,9 @@ def check_interface(generated):
                     errors.append(f'{pid}.{stage}: uniform {u["name"]} overlaps the one before it')
                 end = u['offset'] + u['size']
         if len(stages) > 1:
-            blocks = {s: json.dumps(i['interface']['uniforms'], sort_keys=True) for s, i in stages.items()}
-            if len(set(blocks.values())) != 1:
-                errors.append(f'{pid}: the stages disagree on the uniform block (one program, one block)')
+            present = {s: b for s, b in blocks.items() if b}
+            if len({json.dumps(b) for b in present.values()}) > 1:
+                errors.append(f'{pid}: the stages declare different uniform blocks (one program, one block)')
             tex = {}
             for s, i in stages.items():
                 for t in i['interface']['textures']:
@@ -113,9 +142,9 @@ def check_interface(generated):
                 o = outs.get(i['location'])
                 if o is None:
                     errors.append(f'{pid}: fragment input {i["name"]} (location {i["location"]}) has no vertex output')
-                elif o['type'] != i['type'] or o['name'] != i['name']:
+                elif o['type'] != i['type']:
                     errors.append(f'{pid}: location {i["location"]}: vertex writes {o["name"]} {o["type"]}, '
-                                  f'fragment reads {i["name"]} {i["type"]}')
+                                  f'fragment reads {i["name"]} {i["type"]}')  # names may differ: GL links by location
     return errors
 
 
@@ -158,7 +187,7 @@ def check_compile(generated, glslang):
     return errors
 
 
-IMPORT = re.compile(r'(?m)^\s*(?:__)?import\s+([A-Za-z0-9_.]+)\s*;')
+IMPORT = re.compile(r'(?m)^\s*(?:__)?(?:import|include|implementing)\s+([A-Za-z0-9_.]+)\s*;')
 
 
 def _module_file(src_dir, name):
@@ -204,22 +233,39 @@ def check_position(src_dir, generated):
     if module is None:
         return [f'the position module {position["module"]}.slang does not exist, yet {len(vertex_programs)} program(s) '
                 'have a vertex stage']
+    prefix = position.get('prefix', 'vkPosition')
+    call = re.compile(r'\b' + re.escape(prefix) + r'\w*\s*\(')
     for slang in sorted(src_dir.rglob('*.slang')):
         if slang.resolve() == module.resolve():
             continue
-        if re.search(r'\bgl_Position\b', _strip_comments(slang.read_text(encoding='utf-8'))):
-            errors.append(f'{slang.relative_to(src_dir)}: writes gl_Position; the position comes from {position["module"]} only')
+        text = _strip_comments(slang.read_text(encoding='utf-8'))
+        rel = slang.relative_to(src_dir)
+        if re.search(r'\bgl_Position\b', text):
+            errors.append(f'{rel}: writes gl_Position; the position comes from {position["module"]} only')
+        if re.search(r'\)\s*:\s*SV_Position\b', text):
+            errors.append(f'{rel}: returns SV_Position straight from a function; return a struct whose field is '
+                          f'assigned from {prefix}*()')
+        # an SV_Position field may only be assigned from a call of the module's functions, whole and with plain `=`
+        for field in set(re.findall(r'\b(\w+)\s*:\s*SV_Position\b', text)):
+            for m in re.finditer(r'\b' + re.escape(field) + r'((?:\.\w+)*)\s*([-+*/%&|^]?=)(?!=)([^;]*);', text):
+                if m.group(1) or m.group(2) != '=' or not re.match(r'\s*' + call.pattern, m.group(3)):
+                    errors.append(f'{rel}: {field}{m.group(1)} {m.group(2)} {m.group(3).strip()[:40]}: the SV_Position field '
+                                  f'must be assigned whole from a {prefix}*() call')
     for prog in vertex_programs:
         main = src_dir / prog['source']
-        if module.resolve() not in {p.resolve() for p in _closure(src_dir, main)}:
+        files = _closure(src_dir, main)
+        if module.resolve() not in {p.resolve() for p in files}:
             errors.append(f'{prog["name"]}: its vertex stage does not take its position from {position["module"]}')
+        elif not any(call.search(_strip_comments(p.read_text(encoding='utf-8')))
+                     for p in files if p.resolve() != module.resolve()):
+            errors.append(f'{prog["name"]}: imports {position["module"]} but never calls {prefix}*()')
     manifest = load_manifest(generated)
     for prog in manifest['programs']:
         info = prog['stages'].get('vertex')
         if not info:
             continue
         text = (Path(generated) / info['file']).read_text(encoding='utf-8')
-        if len(re.findall(r'\bgl_Position\s*=', text)) != 1:
+        if len(re.findall(r'\bgl_Position(?:\.\w+)?\s*[-+*/]?=(?!=)', text)) != 1:
             errors.append(f'{info["file"]}: gl_Position must be written exactly once')
     return errors
 

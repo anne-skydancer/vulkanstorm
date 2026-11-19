@@ -81,12 +81,13 @@ class GL:
         legacy = g.wglCreateContext(hdc)
         g.wglMakeCurrent(hdc, legacy)
         attribs_fn = C.WINFUNCTYPE(C.c_void_p, W.HDC, C.c_void_p, C.POINTER(C.c_int))(g.wglGetProcAddress(b'wglCreateContextAttribsARB'))
-        attribs = (C.c_int * 9)(0x2091, 4, 0x2092, 6, 0x9126, 1, 0x2094, 0x2, 0)  # 4.6, core, forward-compatible bit off
+        attribs = (C.c_int * 9)(0x2091, 4, 0x2092, 6, 0x9126, 1, 0x2094, 0x2, 0)  # 4.6, core, forward-compatible bit set
         ctx = attribs_fn(hdc, None, attribs)
         if not ctx:
             raise RuntimeError('no OpenGL 4.6 core context')
         g.wglMakeCurrent(hdc, ctx)
         self.f = {}
+        self.ubos = {}
         gs = self.fn('glGetString', C.c_char_p, C.c_uint)
         self.info = {'renderer': gs(0x1F01).decode(), 'version': gs(0x1F02).decode(), 'glsl': gs(0x8B8C).decode()}
 
@@ -197,6 +198,9 @@ class GL:
                 else:
                     buf[u['offset']:u['offset'] + len(data)] = data
             done.add(key)
+        old = self.ubos.pop(prog, [])  # the buffers this program got on the last call are finished with
+        if old:
+            g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(len(old), (C.c_uint * len(old))(*old))
         for index, buf in buffers.items():
             ubo = C.c_uint()
             g('glGenBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(ubo))
@@ -204,6 +208,7 @@ class GL:
             raw = bytes(buf)
             g('glBufferData', None, C.c_uint, C.c_ssize_t, C.c_void_p, C.c_uint)(GL_UNIFORM_BUFFER, len(raw), raw, GL_STATIC_DRAW)
             g('glBindBufferBase', None, C.c_uint, C.c_uint, C.c_uint)(GL_UNIFORM_BUFFER, blocks[index]['binding'], ubo.value)
+            self.ubos.setdefault(prog, []).append(ubo.value)
         return done
 
     def sampler_units(self, prog, names, assign):
@@ -360,8 +365,10 @@ FACE_MATRICES = {
 TRIANGLE = [(-1, -1, 0.5), (3, -1, 0.5), (-1, 3, 0.5)]
 
 
-def run_radiance(gl, reference, candidate, size=32, mips=(0, 1, 3, 5)):
-    """Draw the radiance filter for several faces, mip levels and source layers with both programs; compare each."""
+def run_radiance(gl, reference, candidate, size=32, mips=(0, 1, 3, 5), mode='tolerance', optional=('u_width',)):  # u_width is declared in radianceGenF.glsl but never read
+    """Draw the radiance filter for several faces, mip levels and source layers with both programs; compare each.
+    `optional` names the uniforms the candidate may legitimately not have (the optimiser dropped them); any other name
+    that the candidate does not take is a failed case, so a renamed uniform cannot pass as two identical black images."""
     data, levels = fixed_probe_cube()
     cube = upload_cube(gl, data, levels)
     target = Target(gl, size, size)
@@ -375,13 +382,18 @@ def run_radiance(gl, reference, candidate, size=32, mips=(0, 1, 3, 5)):
                           'max_probe_lod': float(levels - 1), 'probe_strength': 0.75}
                 images = {}
                 for name, prog in (('ref', reference), ('cand', candidate)):
-                    gl.set_uniforms(prog, values)
+                    done = gl.set_uniforms(prog, values)
+                    if name == 'cand':
+                        unset = sorted(set(values) - done - set(optional))
                     gl.fn('glActiveTexture', None, C.c_uint)(GL_TEXTURE0 + units[name].get('reflectionProbes', 0))
                     gl.fn('glBindTexture', None, C.c_uint, C.c_uint)(GL_TEXTURE_CUBE_MAP_ARRAY, cube)
                     images[name] = target.draw_triangle(prog, TRIANGLE)
-                r = compare(images['ref'], images['cand'])
+                r = compare(images['ref'], images['cand'], mode=mode)
                 r.update(case=f'face {face} mip {mip} layer {layer}')
                 r['nonblack'] = int((images['ref'][..., :3] > 0).sum())
+                r['unset_uniforms'] = unset
+                if unset:
+                    r['pass'] = False
                 results.append(r)
     return results
 
@@ -415,6 +427,7 @@ def summarize(results):
         'max_abs': max(r['max_abs'] for r in results),
         'values_differing': sum(r['values_differing'] for r in results),
         'nonblack_min': min(r['nonblack'] for r in results),
+        'unset_uniforms': sorted({n for r in results for n in r.get('unset_uniforms', [])}),
     }
 
 
@@ -458,7 +471,8 @@ def selftest_block_path(gl):
                 g('glTexParameteri', None, C.c_uint, C.c_uint, C.c_int)(GL_TEXTURE_2D, p, v)
     gl.sampler_units(ref, ['diffuseMap'], assign=True)
     print('block path: candidate sampler units', gl.sampler_units(cand, ['diffuseMap'], assign=False))
-    values = {'modelview_projection_matrix': [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'tint': [0.9, 0.8, 0.7, 1.0]}
+    # not symmetric and not the identity, so a row-major / column-major mix-up shows
+    values = {'modelview_projection_matrix': [0.8, 0.1, 0, 0, 0.2, 0.9, 0, 0, 0, 0, 1, 0, 0.1, -0.15, 0, 1], 'tint': [0.9, 0.8, 0.7, 1.0]}
     images = {}
     for name, prog in (('ref', ref), ('cand', cand)):
         done = gl.set_uniforms(prog, values)
@@ -482,11 +496,19 @@ def selftest(gl):
     ref = radiance_reference(gl)
     same = summarize(run_radiance(gl, ref, radiance_reference(gl)))
     changed = summarize(run_radiance(gl, ref, radiance_reference(gl, tweak=lambda fs: fs.replace('+ 0.0001;', '+ 0.01;', 1))))
-    exact_ref = run_radiance(gl, ref, radiance_reference(gl), size=8, mips=(2,))
+    exact = summarize(run_radiance(gl, ref, radiance_reference(gl), size=8, mips=(2,), mode='exact'))
+    base = np.linspace(0.1, 1.0, 64, dtype='<f4').reshape(8, 8)
+    bumped = np.nextafter(base, np.float32(2.0))  # every value one ULP up
+    one_ulp_fails_exact = (not compare(base, bumped, mode='exact')['pass']) and compare(base, bumped)['pass']
+    # a candidate that does not take a uniform the case sets (here probe_strength is hard-coded) fails, never passes
+    lacking = summarize(run_radiance(gl, ref, radiance_reference(gl, tweak=lambda fs: fs.replace('frag_color.a *= probe_strength;', 'frag_color.a *= 0.75;')),
+                                     size=8, mips=(2,)))
+    unset_caught = lacking['unset_uniforms'] == ['probe_strength'] and bool(lacking['failed'])
     block_ok = selftest_block_path(gl) if common.slangc_path(common.read_pin()) else True
     ok = (not same['failed'] and same['values_differing'] == 0 and same['nonblack_min'] > 0
-          and changed['failed'] and changed['values_differing'] > 0 and block_ok)
-    print(json.dumps({'identity': same, 'one_constant_changed': changed, 'exact_mode_identity_pass': all(r['pass'] for r in exact_ref)}, indent=1))
+          and changed['failed'] and changed['values_differing'] > 0 and block_ok
+          and not exact['failed'] and exact['values_differing'] == 0 and one_ulp_fails_exact and unset_caught)
+    print(json.dumps({'identity': same, 'one_constant_changed': changed, 'exact_mode_identity': exact, 'one_ulp_fails_exact_passes_tolerance': one_ulp_fails_exact, 'unset_uniform_caught': unset_caught}, indent=1))
     return ok
 
 
@@ -497,6 +519,7 @@ def main():
     ap.add_argument('--selftest', action='store_true')
     ap.add_argument('--generated', default=str(common.GENERATED))
     ap.add_argument('--program', default='radianceGen__PROBE_FILTER_SAMPLES32', help='generated program id of the candidate')
+    ap.add_argument('--optional', nargs='*', default=[], help='uniform names the candidate may legitimately lack')
     ap.add_argument('--json', help='write the per-case results here')
     args = ap.parse_args()
     if args.list:
@@ -513,11 +536,15 @@ def main():
         if cand is None:
             print(f'candidate {args.program} is not generated yet; nothing compared')
             return 2
-        results = run_radiance(gl, radiance_reference(gl), cand)
-        print(json.dumps(summarize(results), indent=1))
+        results = run_radiance(gl, radiance_reference(gl), cand, optional=('u_width', *args.optional))
+        summary = summarize(results)
+        print(json.dumps(summary, indent=1))
         if args.json:
             Path(args.json).write_text(json.dumps(results, indent=1), encoding='utf-8')
-        return 0 if not [r for r in results if not r['pass']] else 1
+        if summary['nonblack_min'] == 0:
+            print('FAIL: the reference drew nothing in at least one case; the comparison proves nothing')
+            return 1
+        return 0 if not summary['failed'] else 1
     ap.print_help()
     return 0
 
