@@ -134,6 +134,13 @@ runs:
           g++ -std=c++20 "$opt" -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudoptics_test.cpp -o "$RUNNER_TEMP/cloud-optics-test"
           "$RUNNER_TEMP/cloud-optics-test"
         done
+    - name: Check the cloud kind and variability layer (genera from the EEP sliders, mean-preserving variability)
+      shell: bash
+      run: |
+        for opt in -O0 -O2; do
+          g++ -std=c++20 "$opt" -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llcloudscape_test.cpp -o "$RUNNER_TEMP/cloudscape-test"
+          "$RUNNER_TEMP/cloudscape-test"
+        done
     - name: Check the cloud noise container reader
       shell: bash
       run: |
