@@ -1405,6 +1405,7 @@ set(viewer_HEADER_FILES
     lllightconstants.h
     lllistcontextmenu.h
     lllistview.h
+    lljointnumtable.h
     lllocalbitmaps.h
     lllocalgltfmaterials.h
     lllocationhistory.h
