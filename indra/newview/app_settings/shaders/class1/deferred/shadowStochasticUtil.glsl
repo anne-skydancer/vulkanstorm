@@ -20,7 +20,8 @@
  * other program keeps shadow_st_frame at 0, which fixes each pixel's rays.
  * A projector is not marched and not looked up in the sun pass: spotLightF.glsl calls sampleProjectorShadow (the projector
  * shadow pool, PROJECTOR_SHADOW_POOL): a filtered lookup in the light's own tile of the pool's atlas (a blocker search, then a
- * percentage-closer filter on bilinear gathers, at a fixed disc in the tile's uv, so the value depends on the tile alone).
+ * percentage-closer filter on bilinear gathers, at a fixed disc in the tile's uv, so the value depends on the tile alone), times the
+ * light its see-through casters let through, per colour channel (lamp shadows L3, stThroughFilter), so it returns a vec3.
  * sampleSpotShadow, which the sun programs still call for their b and a channels, returns 1.
  */
 
@@ -34,6 +35,7 @@
 #define ST_SPOT_TAPS 32            // bilinear gathers of the filter (penumbra pixels only)
 #define ST_SPOT_KERNEL_MIN 1.5     // map texels: the floor of the search and filter radius (a narrower penumbra would draw the tile's texels as squares)
 #define ST_SPOT_PLANE_SLOPE 8.0    // texels of depth per texel of offset the receiver plane may lower a tap's reference by
+#define ST_THROUGH_TAPS 16         // lamp shadows L3: taps of the light-through filter (stThroughFilter): 16 draw its edge as wide as the depth filter's at any angle (8 left gaps)
 
 uniform sampler2D shadowMap0; // plain depth: the method sets the maps' compare mode off
 uniform sampler2D shadowMap1;
@@ -274,6 +276,11 @@ uniform vec2 proj_shadow_light_size;  // metres: the emitter's extent across the
 uniform vec3 proj_shadow_origin;      // view space: the projection centre of the pose the tile was drawn with, where the emitter is (the lamp's anchor)
 uniform vec4 proj_shadow_grid;        // a wide lamp's cells: across u, across v (1 and 1: one tile, proj_shadow_tile), guard texels, unused
 uniform vec4 proj_shadow_cells[16];   // per cell (index = row * 4 + column): atlas texel origin x, y, tile size Nc, interior Ni (Nc 0: not drawn)
+// lamp shadows L3: the pool's light-through layer (lllightthroughgl.h), the same texels as the atlas; the lookup passes them to
+// stThroughFilter as arguments
+uniform sampler2D proj_through_atlas; // RGBA8, LINEAR, CLAMP_TO_EDGE: the share of the light the see-through casters let through, per channel (1: none)
+uniform sampler2D proj_through_depth; // R16, NEAREST: the depth of the nearest see-through caster, stored one step farther (1: none)
+uniform int proj_through;             // this lamp's tiles hold a see-through caster (0: the layer is not read)
 
 // The tile of a wide lamp's cell that holds the lamp-image position uv (the lamp's matrix: [0,1]^2 over the whole image plane), and the
 // position in it: the cell is floor(uv g); its interior of Ni texels spans 1 / g of the image, behind a guard of G texels, so
@@ -419,11 +426,71 @@ float stSpotFilterTile(vec4 tile, vec3 c, vec2 g, float z_bias, float z_tex, vec
     vec2 rf = clamp(pen * (c.z - z_near), vec2(ST_SPOT_KERNEL_MIN), kmax);
     return stSpotPCF(tile, c, g, z_bias, rp_max, rf, edge);
 }
+
+// ---- lamp shadows L3: the light the see-through casters let through. The light-through layer beside the depth tile holds, per
+// texel, the share of the lamp's light they let through per colour channel (tau: the product of (1 - a)(1 + a C) over them, 1 where
+// none is) and the depth of the nearest of them (zt, 1 where none is). The samplers are arguments, so every lamp pool reads its own
+// layer through the same two functions (a point-light face passes its pool's). lllightthrough.h has the C++ twins of these lines.
+
+// One tap at tile uv (tile as stSpotQuadTile's: atlas origin, size, 1 / atlas): the bilinear tau of the four texels around uv, read at
+// uv clamped half a texel inside the tile (the tile's CLAMP_TO_EDGE: no texel of a neighbour tile enters), applied to the share of
+// their bilinear weight, among the texels that hold a caster, whose caster lies in front of the receiver (zt < ref): exact where the
+// receiver is behind every caster of the footprint, 1 where it is in front of them all or none is there (frontShare, throughTap).
+vec3 stThroughTap(sampler2D tau, sampler2D zt, vec4 tile, vec2 uv, float ref)
+{
+    float n = tile.z;
+    vec2 p = clamp(uv * n, vec2(0.5), vec2(n - 0.5));
+    vec2 t = p - 0.5;
+    vec2 b = min(floor(t), vec2(n - 2.0));
+    vec2 f = t - b;
+    vec4 z = textureGather(zt, (tile.xy + b + 1.0) * tile.w); // (0,1) (1,1) (1,0) (0,0) from the quad's lower left texel
+    vec4 bw = vec4((1.0 - f.x) * f.y, f.x * f.y, f.x * (1.0 - f.y), (1.0 - f.x) * (1.0 - f.y));
+    vec4 has = vec4(lessThan(z, vec4(1.0)));
+    float w_all = dot(has, bw);
+    float w_front = dot(has * vec4(lessThan(z, vec4(ref))), bw);
+    float share = w_all > 0.0 ? w_front / w_all : 0.0;
+    vec3 tb = textureLod(tau, (tile.xy + p) * tile.w, 0.0).rgb;
+    return 1.0 + share * (tb - 1.0);
+}
+
+// The light let through to receiver c (tile uv and depth), per colour channel. First the nearest see-through caster in front of the
+// receiver over the depth search's disc and radius and the receiver's own texels: none is exactly 1 (a receiver in front of a window,
+// an avatar between the lamp and the glass, gets no tinted rim). Then ST_THROUGH_TAPS taps on the Vogel disc at the physical radius
+// from that caster's depth (the depth filter's rule: the penumbra of the layer's own edge, between the floor and kmax), weighted
+// 1 - 0.9 r^2 as the depth filter's taps. pen, kmax: as stSpotFilterTile's; z_bias: the receiver's constant bias (the depth lookup's).
+vec3 stThroughFilter(sampler2D tau, sampler2D zt, vec4 tile, vec3 c, vec2 pen, vec2 kmax, float z_bias)
+{
+    float n = tile.z;
+    vec2 res = vec2(n);
+    float ref = c.z - z_bias;
+    vec2 rs = clamp(pen * c.z, vec2(ST_SPOT_KERNEL_MIN), kmax);
+    float z_near = -1.0; // the caster nearest the receiver in front of it: the largest stored depth below ref
+    for (int k = 0; k <= ST_SPOT_SEARCH; ++k)
+    {
+        vec2 o = k < ST_SPOT_SEARCH ? stSpotDisc(k, ST_SPOT_SEARCH) * rs / res : vec2(0.0);
+        vec2 b = min(floor(clamp((c.xy + o) * n, vec2(0.5), vec2(n - 0.5)) - 0.5), vec2(n - 2.0));
+        vec4 z = textureGather(zt, (tile.xy + b + 1.0) * tile.w);
+        vec4 zf = mix(vec4(-1.0), z, lessThan(z, vec4(ref)));
+        z_near = max(z_near, max(max(zf.x, zf.y), max(zf.z, zf.w)));
+    }
+    if (z_near < 0.0)
+    {
+        return vec3(1.0);
+    }
+    vec2 rf = clamp(pen * (c.z - z_near), vec2(ST_SPOT_KERNEL_MIN), kmax);
+    vec3 lit = vec3(0.0);
+    for (int k = 0; k < ST_THROUGH_TAPS; ++k)
+    {
+        lit += (1.0 - 0.9 * (float(k) + 0.5) / float(ST_THROUGH_TAPS)) * stThroughTap(tau, zt, tile, c.xy + stSpotDisc(k, ST_THROUGH_TAPS) * rf / res, ref);
+    }
+    return lit / (0.55 * float(ST_THROUGH_TAPS)); // the weights' sum
+}
 // <G1-END>
 
-// The visibility of this projector at the pixel (spotLightF.glsl, PROJECTOR_SHADOW_POOL). pos: view space; norm: the
-// G-buffer normal; pos_screen: the pixel's screen uv. 1 outside the light's frustum and beyond the shadows' reach.
-float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
+// The visibility of this projector at the pixel (spotLightF.glsl, PROJECTOR_SHADOW_POOL), per colour channel: the depth's, times the
+// light the tile's see-through casters let through (L3). pos: view space; norm: the G-buffer normal; pos_screen: the pixel's screen
+// uv. 1 outside the light's frustum and beyond the shadows' reach.
+vec3 sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
 {
     vec3 pos_px = pos; // the pixel's own position, for its geometric normal below
     // fades out with the camera distance, over the last 20 % of spot_shadow_reach
@@ -431,13 +498,13 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     float fade = clamp((reach - length(pos)) / (0.2 * reach), 0.0, 1.0);
     if (fade <= 0.0)
     {
-        return 1.0;
+        return vec3(1.0);
     }
     mat4 m = proj_shadow_matrix;
     vec4 sr = m * vec4(pos, 1.0);
     if (sr.w <= 0.0)
     {
-        return 1.0;
+        return vec3(1.0);
     }
     StSpot sp = stSpotSetup(m);
     // the map's texel grid: one tile (N per axis), or a wide lamp's cells (g Ni: the cell's interior, over the whole image)
@@ -448,7 +515,7 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     vec2 tscale = vec2(1.0);
     if (cells && !stCellPick(sr.xy / sr.w, tile, uv_tile, res, tscale))
     {
-        return 1.0; // the cell has no tile yet: lit without a shadow, as a lamp without a tile
+        return vec3(1.0); // the cell has no tile yet: lit without a shadow, as a lamp without a tile
     }
     // one texel of the map at the receiver, in metres (the map's coarser axis) and in map depth: the constant bias
     // (S2's SHADOW_BIAS_TEXELS) and the unit of the plane bias's cap; dz/dw = c1 / w^2 times the texel's width w / (k N)
@@ -465,7 +532,7 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // outside the projector's frustum it lights nothing: no lookup
     if (s0.w <= 0.0 || any(greaterThan(abs(s0.xyz / s0.w - 0.5), vec3(0.5))))
     {
-        return 1.0;
+        return vec3(1.0);
     }
     vec3 c = s0.xyz / s0.w;
     vec3 c_tile = c; // the receiver in the tile's own uv (the lamp's, for one tile)
@@ -474,7 +541,7 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
         // the offset receiver may be in the neighbour cell: its own tile, size and texel
         if (!stCellPick(c.xy, tile, uv_tile, res, tscale))
         {
-            return 1.0;
+            return vec3(1.0);
         }
         c_tile = vec3(uv_tile, c.z);
         kn = min(sp.k.x * res.x, sp.k.y * res.y);
@@ -491,7 +558,14 @@ float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen)
     // the radius is the physical one between the floor and the cap, both in texels of this tile (the cap bounds the fixed taps'
     // spacing; a coarser tile draws a softer edge, never a blockier one)
     float shadow = stSpotFilterTile(tile, c_tile, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, vec2(ST_SPOT_KERNEL_TEXELS_MAX));
-    return mix(1.0, shadow, fade);
+    vec3 vis = vec3(shadow);
+    // L3: the light the tile's see-through casters let through, with the same tile, receiver, penumbra rule and cap. Not read in the
+    // umbra, nor for a lamp whose tiles hold no see-through caster (proj_through 0): its value is the depth's, bit for bit
+    if (proj_through != 0 && shadow > 0.0)
+    {
+        vis *= stThroughFilter(proj_through_atlas, proj_through_depth, tile, c_tile, pen, vec2(ST_SPOT_KERNEL_TEXELS_MAX), SHADOW_BIAS_TEXELS * z_tex);
+    }
+    return mix(vec3(1.0), vis, fade);
 }
 
 // The sun pass's b and a channels: unlit by the projectors (they shade themselves in spotLightF.glsl), so 1 exactly.

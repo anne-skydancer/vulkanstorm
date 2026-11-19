@@ -1558,6 +1558,11 @@ void LLShaderMgr::initAttribsAndUniforms()
     mReservedUniforms.push_back("proj_shadow_grid");
     mReservedUniforms.push_back("proj_shadow_cells");
     mReservedUniforms.push_back("shadow_tile_origin");
+    // lamp shadows L3: the light-through layer
+    mReservedUniforms.push_back("shadow_through");
+    mReservedUniforms.push_back("proj_through_atlas");
+    mReservedUniforms.push_back("proj_through_depth");
+    mReservedUniforms.push_back("proj_through");
     // </Vulkanstorm>
 
     // <Vulkanstorm> the volumetric clouds' textures (stage L7)

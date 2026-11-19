@@ -12760,6 +12760,17 @@ Change of this parameter will affect the layout of buttons in notification toast
     <key>Value</key>
     <real>0.23</real>
   </map>
+  <key>RenderShadowLightThrough</key>
+  <map>
+    <key>Comment</key>
+    <string>Stochastic shadow method, lamp shadows only: see-through casters (tinted or clear glass, sheer, any alpha-blended face below 98 % opacity) let a lamp's light through in proportion to their transparency and coloured by them, stacked ones multiplying; off, they are dithered into the lamp's shadow map as before. For A/B comparison; a change draws every lamp's shadow again. Debug setting only (no Preferences entry).</string>
+    <key>Persist</key>
+    <integer>1</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>1</integer>
+  </map>
   <key>RenderShadowPCSSLightSize</key>
   <map>
     <key>Comment</key>

@@ -34,6 +34,7 @@ in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 
 #if defined(STOCHASTIC_SHADOW_ALPHA)
+uniform int shadow_through; // <Vulkanstorm/> lamp shadows L3: 1 in a static lamp tile with a light-through layer, else 0
 bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
@@ -46,9 +47,13 @@ void main()
 #if defined(STOCHASTIC_SHADOW_ALPHA)
     // <Vulkanstorm/> Stochastic shadows: in proportion to the opacity with no cut, solid at full opacity (the caster rule,
     // see shadowAlphaMaskF.glsl). Legacy keeps the stock floor and the 0.88 stipple.
-    if (alpha < 1.0 && !shadow_caster_keeps(alpha))
+    if (alpha < 1.0)
     {
-        discard;
+        // <Vulkanstorm/> Lamp shadows L3: the light-through layer holds this texel, not the depth (see shadowAlphaMaskF.glsl)
+        if (shadow_through != 0 || !shadow_caster_keeps(alpha))
+        {
+            discard;
+        }
     }
 #else
     if (alpha < 0.05) // treat as totally transparent

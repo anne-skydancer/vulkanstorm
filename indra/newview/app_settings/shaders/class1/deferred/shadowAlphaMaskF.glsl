@@ -34,6 +34,7 @@ in vec2 vary_texcoord0;
 uniform float minimum_alpha;
 #if defined(STOCHASTIC_SHADOW_ALPHA)
 uniform float shadow_solid_alpha; // <Vulkanstorm/> 1.0 for blend faces (the caster rule below full opacity); 0.0 for mask faces
+uniform int shadow_through;       // <Vulkanstorm/> lamp shadows L3: 1 in a static lamp tile with a light-through layer, else 0
 bool shadow_caster_keeps(float alpha);   // <Vulkanstorm/> the caster rule (shadowStochasticCasterF.glsl)
 #endif
 
@@ -63,9 +64,14 @@ void main()
             discard;
         }
     }
-    else if (alpha < shadow_solid_alpha && !shadow_caster_keeps(alpha))
+    else if (alpha < shadow_solid_alpha)
     {
-        discard;
+        // <Vulkanstorm/> Lamp shadows L3: in a static lamp tile that has a light-through layer the layer holds this texel
+        // (shadowLightThroughF.glsl: the share of the light it lets through, coloured), so the depth does not; elsewhere the rule
+        if (shadow_through != 0 || !shadow_caster_keeps(alpha))
+        {
+            discard;
+        }
     }
 #else
     if (alpha < 0.05) // treat as totally transparent

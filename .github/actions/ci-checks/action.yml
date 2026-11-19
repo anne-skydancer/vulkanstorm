@@ -56,6 +56,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_vertexbuffer_free_delay.py
       shell: bash
+    - run: python3 scripts/tests/test_light_through_twin.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |

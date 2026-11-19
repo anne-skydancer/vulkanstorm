@@ -296,7 +296,12 @@ public:
     void renderObjects(U32 type, bool texture = true, bool batch_texture = false, bool rigged = false);
     void renderGLTFObjects(U32 type, bool texture = true, bool rigged = false);
 
-    void renderAlphaObjects(bool rigged = false);
+    // <Vulkanstorm> through: a static lamp tile with a light-through layer (lamp shadows L3): the blend faces leave the texels below
+    // the solid cut to the layer (renderLightThroughObjects) instead of dithering them into the depth
+    void renderAlphaObjects(bool rigged = false, bool through = false);
+    bool hasLightThroughCasters();
+    void renderLightThroughObjects(LLLightThroughLayer& layer, bool color_writes_after);
+    // </Vulkanstorm>
     void renderFocusPoint(); // <FS:Beq/> FIRE-32023 Add focus point rendering
     void renderMaskedObjects(U32 type, bool texture = true, bool batch_texture = false, bool rigged = false);
     void renderFullbrightMaskedObjects(U32 type, bool texture = true, bool batch_texture = false, bool rigged = false);

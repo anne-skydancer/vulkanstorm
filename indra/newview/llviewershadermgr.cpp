@@ -199,6 +199,8 @@ LLGLSLShader            gDeferredShadowGLTFAlphaBlendProgram;
 LLGLSLShader            gDeferredSkinnedShadowGLTFAlphaBlendProgram;
 LLGLSLShader            gDeferredShadowFullbrightAlphaMaskProgram;
 LLGLSLShader            gDeferredSkinnedShadowFullbrightAlphaMaskProgram;
+LLGLSLShader            gDeferredShadowLightThroughProgram;     // <Vulkanstorm/> lamp shadows L3: the see-through casters into a light-through layer
+LLGLSLShader            gDeferredShadowGLTFLightThroughProgram; // <Vulkanstorm/> ... their glTF variant
 LLGLSLShader            gDeferredAvatarShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaShadowProgram;
 LLGLSLShader            gDeferredAvatarAlphaMaskShadowProgram;
@@ -1452,6 +1454,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredSkinnedShadowGLTFAlphaMaskProgram.unload();
         gDeferredShadowFullbrightAlphaMaskProgram.unload();
         gDeferredSkinnedShadowFullbrightAlphaMaskProgram.unload();
+        gDeferredShadowLightThroughProgram.unload();     // <Vulkanstorm/>
+        gDeferredShadowGLTFLightThroughProgram.unload(); // <Vulkanstorm/>
         gDeferredAvatarShadowProgram.unload();
         gDeferredAvatarAlphaShadowProgram.unload();
         gDeferredAvatarAlphaMaskShadowProgram.unload();
@@ -2739,6 +2743,47 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         success = success && gDeferredShadowGLTFAlphaBlendProgram.createShader();
         llassert(success);
     }
+
+    // <Vulkanstorm> lamp shadows L3: the see-through casters of a static lamp tile into its light-through layer
+    // (LLPipeline::renderLightThroughObjects): the classic blend faces with the alpha mask shadow's vertex shader and indexed textures,
+    // the glTF blend faces with the glTF one. Only with the projector pool, whose static tiles are the one pass that draws them; no
+    // rigged variant (a rigged face keeps the depth rule). A program that does not build is logged and left unloaded, and does not
+    // fail the shader set: without both, the lamps' see-through casters are dithered into the depth as before the layer
+    // (LLPipeline::renderShadow tests mProgramObject).
+    if (success && use_projector_shadow_pool())
+    {
+        gDeferredShadowLightThroughProgram.mName = "Deferred Shadow Light Through Shader";
+        gDeferredShadowLightThroughProgram.mFeatures.hasSrgb = true;
+        gDeferredShadowLightThroughProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
+        gDeferredShadowLightThroughProgram.mShaderFiles.clear();
+        gDeferredShadowLightThroughProgram.mShaderFiles.push_back(make_pair("deferred/shadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
+        gDeferredShadowLightThroughProgram.mShaderFiles.push_back(make_pair("deferred/shadowLightThroughF.glsl", GL_FRAGMENT_SHADER));
+        gDeferredShadowLightThroughProgram.clearPermutations();
+        gDeferredShadowLightThroughProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (!gDeferredShadowLightThroughProgram.createShader())
+        {
+            LL_WARNS("ShaderLoading") << "the light-through caster program did not build: lamps dither see-through casters as before" << LL_ENDL;
+            gDeferredShadowLightThroughProgram.unload();
+        }
+    }
+
+    if (success && use_projector_shadow_pool())
+    {
+        gDeferredShadowGLTFLightThroughProgram.mName = "Deferred GLTF Shadow Light Through Shader";
+        gDeferredShadowGLTFLightThroughProgram.mFeatures.hasSrgb = true;
+        gDeferredShadowGLTFLightThroughProgram.mShaderFiles.clear();
+        gDeferredShadowGLTFLightThroughProgram.mShaderFiles.push_back(make_pair("deferred/pbrShadowAlphaMaskV.glsl", GL_VERTEX_SHADER));
+        gDeferredShadowGLTFLightThroughProgram.mShaderFiles.push_back(make_pair("deferred/shadowLightThroughF.glsl", GL_FRAGMENT_SHADER));
+        gDeferredShadowGLTFLightThroughProgram.clearPermutations();
+        gDeferredShadowGLTFLightThroughProgram.addPermutation("LIGHT_THROUGH_GLTF", "1");
+        gDeferredShadowGLTFLightThroughProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+        if (!gDeferredShadowGLTFLightThroughProgram.createShader())
+        {
+            LL_WARNS("ShaderLoading") << "the glTF light-through caster program did not build: lamps dither see-through casters as before" << LL_ENDL;
+            gDeferredShadowGLTFLightThroughProgram.unload();
+        }
+    }
+    // </Vulkanstorm>
 
     if (success)
     {

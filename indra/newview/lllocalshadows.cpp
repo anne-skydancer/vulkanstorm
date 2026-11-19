@@ -45,6 +45,7 @@ namespace
     // main-thread state: the scopes only open and close on the render thread (a scope off it is inactive and does nothing)
     llprojectorpool::ScopeCounter sScopes;
     SavedState sSaved;
+    LLLightThroughTarget sThrough; // L3: the light-through target of the static render in progress (layer null: none)
 }
 
 LLLocalShadowGL::Scope::Scope() : mActive(on_main_thread() && !LLApp::isExiting())
@@ -114,4 +115,35 @@ void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
             }
         }
     }
+}
+
+// static
+void LLLocalShadowGL::setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect)
+{
+    if (!on_main_thread())
+    {
+        llassert(false);
+        return;
+    }
+    sThrough = LLLightThroughTarget();
+    sThrough.layer = layer;
+    sThrough.rect = rect;
+}
+
+// static
+LLLightThroughTarget* LLLocalShadowGL::throughTarget()
+{
+    return sThrough.layer && on_main_thread() ? &sThrough : nullptr;
+}
+
+// static
+bool LLLocalShadowGL::endThroughTarget()
+{
+    if (!on_main_thread())
+    {
+        return false;
+    }
+    const bool drawn = sThrough.layer && sThrough.drawn;
+    sThrough = LLLightThroughTarget();
+    return drawn;
 }

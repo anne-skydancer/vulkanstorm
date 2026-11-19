@@ -242,6 +242,7 @@ bool LLProjectorShadows::allocateAtlases(U32 size)
     mBuddy.reset(size);
     mLevel.reset();
     mGrowthHold.reset();
+    mThrough.setEdge(size); // L3: made at this edge when a tile first meets a see-through caster (LLPipeline::renderShadow)
     return true;
 }
 
@@ -264,6 +265,7 @@ void LLProjectorShadows::freeAtlases()
     // deleteTexture unbinds the name from every texture unit first
     LLStochasticEngine::deleteTexture(mAtlasS);
     LLStochasticEngine::deleteTexture(mAtlasL);
+    mThrough.free(); // L3: the light-through layer goes with the atlases (main thread, context alive: release and allocateAtlases)
     mAtlasSize = 0;
 }
 
@@ -723,6 +725,26 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
     }
     glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo);
 
+    // L3: the light-through layer follows the moved tiles (it has no twin: lllightthrough::planCarry reads every source first); a tile
+    // whose copy could not be made reads no caster at its new rect and is drawn again
+    if (mThrough.allocated() && !plan.moves.empty())
+    {
+        mThrough.unbindUnits();
+        const lllightthrough::CarryPlan carry = lllightthrough::planCarry(plan.moves, [this](U32 key) {
+            auto it = mRecords.find(key);
+            return it != mRecords.end() && it->second.through;
+        });
+        for (U32 key : mThrough.carry(carry))
+        {
+            auto it = mRecords.find(key);
+            if (it != mRecords.end())
+            {
+                it->second.through = false;
+                markStale(it->second, Cause::Other);
+            }
+        }
+    }
+
     // L's tiles were rewritten (or moved): the avatar footprints of the old layout say nothing about the new one, the next layer pass of
     // each tile copies it whole (C3)
     if (!plan.moves.empty())
@@ -742,6 +764,19 @@ void LLProjectorShadows::applyPlan(const std::vector<LayoutRequest>& requests, c
         rec.placed = true;
     }
     ++mRepacks;
+}
+
+// A drawn tile goes on the static schedule as if a dirty box had touched it (the first cause that made it stale is kept until it is drawn)
+void LLProjectorShadows::markStale(Record& rec, Cause cause)
+{
+    if (rec.pending)
+    {
+        return;
+    }
+    rec.pending = true;
+    rec.pendingCause = cause;
+    rec.dirtyFrame = LLFrameTimer::getFrameCount();
+    rec.dirtyTime = LLTimer::getTotalSeconds();
 }
 
 // A compaction: every placed tile at its own size in a fresh layout (sizes in descending order pack a buddy atlas without a gap, so
@@ -1020,6 +1055,16 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         shadow_cam.setOrigin(g.origin);
         LLViewerCamera::updateFrustumPlanes(shadow_cam, false, false, true);
 
+        // L3: the tile's rect in the light-through layer back to no caster (once the layer exists it holds every drawn tile's rect),
+        // then renderShadow draws the see-through casters it meets into it (and makes the layer the first time a tile meets one).
+        // RenderShadowLightThrough off (a debug setting, for A/B): no target, the blend faces dither into the depth as before
+        static LLCachedControl<bool> light_through(gSavedSettings, "RenderShadowLightThrough", true);
+        mThrough.clearRect(rec.rect);
+        if (light_through)
+        {
+            LLLocalShadowGL::setThroughTarget(&mThrough, rec.rect);
+        }
+
         static LLCullResult result;
         LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_SPOT_SHADOW0;
         LLPipeline::RenderSpotLight = rec.drawable;
@@ -1027,6 +1072,7 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         gPipeline.renderShadow(view, proj, shadow_cam, result, false);
         LLPipeline::RenderSpotLight = nullptr;
         gGL.flush(); // what the immediate-mode batch holds goes to the tile before the framebuffer changes
+        rec.through = LLLocalShadowGL::endThroughTarget();
     }
     LLPipeline::sLocalShadowPass = LLPipeline::LOCAL_SHADOW_NONE;
     mRenderingRec = nullptr;
@@ -1547,6 +1593,21 @@ void LLProjectorShadows::update(LLCamera& camera)
 
     updateLightSet(camera);
 
+    // L3: RenderShadowLightThrough (a debug setting, for A/B) changed: every drawn tile is drawn again with the new rule (until then each
+    // tile's lookup follows the rule it was drawn with: Record::through)
+    static LLCachedControl<bool> light_through(gSavedSettings, "RenderShadowLightThrough", true);
+    if (light_through != mLightThroughSeen)
+    {
+        mLightThroughSeen = light_through;
+        for (auto& entry : mRecords)
+        {
+            if (entry.second.placed && entry.second.drawnFrame != 0)
+            {
+                markStale(entry.second, Cause::Other);
+            }
+        }
+    }
+
     // The lamps' poses, this frame's: from the lamp alone (never the camera). This is what a static scene still costs per frame:
     // one read of every lamp's spot parameters and pose (the pose-change detection). A tile's interior volume and its size from the lamp
     // are built only when its lamp's pose changed (or agent space was shifted, which moves every volume), and the change index is
@@ -1873,7 +1934,7 @@ void LLProjectorShadows::update(LLCamera& camera)
     // one save and one restore of the GL state for the frame's tile renders (the last scope of the frame restores it)
     LLLocalShadowGL::Scope gl_scope;
 
-    // L is a lighting unit's texture until the next lookup binds it again: not while it is written
+    // L is a lighting unit's texture until the next lookup binds it again: not while it is written (nor is the light-through layer)
     for (U32 unit = 0; unit < LL_NUM_TEXTURE_LAYERS; ++unit)
     {
         LLTexUnit* tex_unit = gGL.getTexUnit(unit);
@@ -1882,6 +1943,7 @@ void LLProjectorShadows::update(LLCamera& camera)
             tex_unit->unbind(tex_unit->getCurrType());
         }
     }
+    mThrough.unbindUnits();
 
     // the in-frame caps: a pick runs only while the measured time of the frame is inside the shared cap and, for the dynamic list,
     // inside its own share. The one exemption: the first pick of the frame when nothing else rendered this frame (no earlier cache,
@@ -1969,6 +2031,14 @@ void LLProjectorShadows::setupLight(LLGLSLShader& shader, LLDrawable* light)
     {
         return;
     }
+    // L3: the light-through layer is read for a lamp whose tiles hold a see-through caster; for the others the lookup is the depth's
+    // alone, bit for bit. The layer holds every drawn tile's rect, so a cell without a caster reads 1 there.
+    bool through = false;
+    for (const Record* r : cell_rec)
+    {
+        through = through || (r && r->through && !poseChanged(ref->drawnPose, r->drawnPose));
+    }
+    shader.uniform1i(LLShaderMgr::PROJ_THROUGH, through && mThrough.allocated() ? 1 : 0);
     // the lookup matrix is the one of the pose the tile was drawn with (a lamp that moved since keeps a coherent shadow
     // until its tile is drawn again), taken into this frame's eye space: tile-local [0,1], so the shader's filter needs no
     // atlas term
@@ -2033,6 +2103,7 @@ void LLProjectorShadows::bindAtlas(LLGLSLShader& shader)
     {
         gGL.getTexUnit(channel)->bindManual(LLTexUnit::TT_TEXTURE, mAtlasL);
     }
+    mThrough.bind(shader); // L3: its two samplers, when the layer exists
 }
 
 LLProjectorShadows::Stats LLProjectorShadows::getStats() const

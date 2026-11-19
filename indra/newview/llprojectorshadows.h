@@ -29,6 +29,7 @@
 #include "v3math.h"
 #include "v3dmath.h"
 #include "lldrawable.h"
+#include "lllightthroughgl.h"
 #include "llprojectorshadowpool.h"
 #include "llglheaders.h"
 #include "llrender.h"
@@ -59,6 +60,11 @@ class LLVOVolume;
 // llshadowdirtyfeed.h (the hooks and the per-frame boxes), llprojectorpool::ChangeIndex (boxes against volumes),
 // llprojectorpool::classifyTile (the verdict of one tile), selectStatic/selectDynamic (the order of work) and PinBook (the LOD
 // pin's books). What is projector-specific stays in this class: the light set, the pose, the lookup matrix.
+//
+// Lamp shadows L3: beside the depth atlases a light-through layer (lllightthroughgl.h, the same texels as S) holds, per tile, the share of
+// the lamp's light its see-through casters let through, per colour channel, and the nearest one's depth: drawn with the fixed layer
+// (renderTile names it to LLPipeline::renderShadow through LLLocalShadowGL::setThroughTarget), carried through a repack (applyPlan), read
+// by the lookup only for a lamp whose tiles hold such a caster (setupLight: proj_through). The avatars' layer keeps the dither.
 //
 // Main render thread only. Every entry point asserts it and returns at once off it, or while the viewer exits; nothing
 // here is reached from LLRender::shutdown, LLImageGL or LLVertexBuffer::cleanupClass, which worker threads with shared
@@ -229,6 +235,7 @@ private:
         llprojectorpool::TexelRect layerRect;
         bool layerRectValid = false;
         U32 layerFrame = 0;                // the frame its avatar layer was last drawn or restored (the lag of the dynamic layer)
+        bool through = false;              // L3: its last static render drew a see-through caster into the light-through layer
     };
 
     bool allocateAtlases(U32 size);
@@ -238,6 +245,7 @@ private:
     bool compact();
     bool resizeDue(const Record& rec) const;
     void applyPlan(const std::vector<llprojectorpool::LayoutRequest>& requests, const llprojectorpool::RepackPlan& plan);
+    void markStale(Record& rec, llprojectorpool::Cause cause); // drawn again by the static schedule, as a dirty box would make it
     void copyTile(U32 from_tex, const llprojectorpool::Rect& src, U32 to_tex, const llprojectorpool::Rect& dst);
     // S -> L over a rectangle of the tile (tile texels), the same texels of both atlases
     void copyTileTexels(const llprojectorpool::Rect& tile, const llprojectorpool::TexelRect& texels);
@@ -278,6 +286,8 @@ private:
     U32 mFboS = 0;
     U32 mFboL = 0;
     U32 mAtlasSize = 0;
+    LLLightThroughLayer mThrough;  // L3: the light-through layer, at the atlas' edge (made when a tile first meets a see-through caster)
+    bool mLightThroughSeen = true; // RenderShadowLightThrough at the last update (a change draws every tile again)
 
     llprojectorpool::BuddyAtlas mBuddy;
     llprojectorpool::LevelController mLevel;  // the pressure valve (L2)

@@ -315,7 +315,9 @@ class ShadowAlphaPermutation(unittest.TestCase):
         binds = list(re.finditer(r'gDeferredShadowAlphaMaskProgram\.bind\(rigged\);', body))
         self.assertEqual(len(binds), 2)
         for m in binds:
-            tail = body[m.end():m.end() + 900]
+            tail = body[m.end():m.end() + 1200]
+            nxt = re.search(r'\.bind\(', tail)   # up to the next bind: this bind's uniforms and draw
+            tail = tail[:nxt.start()] if nxt else tail
             self.assertIn('setMinimumAlpha(blend_minimum_alpha)', tail[:tail.index('pushBatch')])
         self.assertEqual(body.count('setMinimumAlpha(ALPHA_BLEND_CUTOFF)'), 0)
         self.assertEqual(body.count('setMinimumAlpha(blend_minimum_alpha)'), 2)

@@ -77,8 +77,9 @@ vec4 texture2DLodSpecular(vec2 tc, float lod);
 vec4 getPosition(vec2 pos_screen);
 
 #if defined(PROJECTOR_SHADOW_POOL)
-// <Vulkanstorm> projector shadow pool (shadowStochasticUtil.glsl)
-float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen);
+// <Vulkanstorm> projector shadow pool (shadowStochasticUtil.glsl): the visibility per colour channel (lamp shadows L3: the light the
+// see-through casters let through is coloured)
+vec3 sampleProjectorShadow(vec3 pos, vec3 norm, vec2 pos_screen);
 // </Vulkanstorm>
 #endif
 
@@ -130,7 +131,7 @@ void main()
 
     vec3 n = gb.normal;
 
-    float shadow = 1.0;
+    vec3 shadow = vec3(1.0); // per colour channel (L3); every use below multiplies a colour
 
     if (proj_shadow_idx >= 0 && all(greaterThan(proj_tc.xy, vec2(0.0))) && all(lessThan(proj_tc.xy, vec2(1.0))))
     {

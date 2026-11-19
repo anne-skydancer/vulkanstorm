@@ -290,7 +290,13 @@ real_defines = '\n'.join(l for l in real_util.splitlines() if re.match(r'#define
 real_g1 = section(real_util, '// <G1-BEGIN>', '// <G1-END>')
 real_st_fns = ''.join(func(real_util, s) for s in (
     'float stIGN(', 'vec2 stNoise()', 'vec2 stSpotGradient(', 'float stReference(', 'float stMarch('))
-real_sample = func(real_util, 'float sampleProjectorShadow(')
+# sampleProjectorShadow as a float: since lamp shadows L3 it returns a colour (the light through see-through casters); this bench has
+# none, so its red channel is the depth's value, bit for bit
+if 'vec3 sampleProjectorShadow(' in real_util:
+    real_sample = (func(real_util, 'vec3 sampleProjectorShadow(').replace('vec3 sampleProjectorShadow(', 'vec3 sampleProjectorShadowRGB(', 1) +
+                   'float sampleProjectorShadow(vec3 pos, vec3 norm, vec2 ps) { return sampleProjectorShadowRGB(pos, norm, ps).r; }\n')
+else:
+    real_sample = func(real_util, 'float sampleProjectorShadow(')
 
 
 def build(variant, timing=False, inset=False, inset_variant_id=None):
