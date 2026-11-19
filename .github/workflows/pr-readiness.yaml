@@ -23,7 +23,7 @@ on:
   workflow_run:
     # Check PR runs on every PR, fork or not, so it is also the write path of a
     # PR that builds no viewer: workflow_run has a write token in the base context.
-    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR"]
+    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR", "CI lint", "CodeQL"]
     types: [completed]
   # A base line that moves can make open PRs on it conflict.
   push:
@@ -36,11 +36,13 @@ permissions:
   checks: read
   actions: read
 
-# One run per PR; a newer event replaces the one still running, since every run
-# reads the whole state. Events without a PR number group by branch.
+# One group per PR whatever the event, so two runs never write the same PR at once.
+# A run in progress finishes (cancelling it would leave a cancelled job on the PR);
+# a newer one waits, and only the newest waiting one is kept, since every run reads
+# the whole state. Events without a PR number group by branch.
 concurrency:
-  group: pr-readiness-${{ github.event.pull_request.number || github.event.workflow_run.head_branch || github.ref }}
-  cancel-in-progress: true
+  group: pr-readiness-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   readiness:
@@ -48,14 +50,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # workflow_run and push run the base's own copy of
-      # the script; the pull_request events run the PR's merge ref, whose
-      # token GitHub makes read-only for forks.
+      # workflow_run and push run the base's own copy of the script; the
+      # pull_request events run the PR's merge ref, whose token GitHub makes
+      # read-only for forks.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: PyYAML
-        run: python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user pyyaml
+        run: python3 -c 'import yaml'  # shipped on the runner image; fail loudly if it is not
       - name: Evaluate
         env:
           GITHUB_TOKEN: ${{ github.token }}

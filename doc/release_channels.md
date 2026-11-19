@@ -37,32 +37,6 @@ or `autobuild.xml` (actionlint, the scripts' tests, the package list check,
 that changes only CI files and documentation; a vkstorm-release push or a
 dispatch always builds.
 
-## PR readiness
-
-The `PR readiness` workflow (`pr-readiness.yaml`, `scripts/ci_pr_readiness.py`)
-sets a commit status named **PR readiness** on every open pull request's head
-and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
-place, never a new comment per run). It reruns on the events that can change
-the answer: PR open, push, reopen, ready for review and base change; reviews
-and review comments; the end of a Build Windows,
-Build Linux, Build Linux LTS or Check PR run; and a push to a `vkstorm-*` line, which can
-make an open PR conflict. GitHub has no workflow event for resolving a
-thread, so a resolve shows at the next of these events.
-
-- `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a skipped
-  viewer job is not green) and
-  no review thread is open. A PR that changes only CI files and documentation
-  (the build workflows' `paths-ignore`) builds no viewer and needs no builds.
-- `pending`: waiting for builds, open review threads (the comment lists them
-  with their P0-P3 badge), or GitHub's mergeability.
-- `failure`: a check failed (named in the status) or the PR conflicts with its
-  base.
-
-Drafts get the status too. It is for reading, not a required check; no branch
-protection depends on it. The script only reads the PR through the API and
-never runs its code. `scripts/tests/ci_pr_readiness_test.py` tests the verdict
-offline and runs in CI lint.
-
 `linux-lts` builds with the line's `scripts/linux_lts_packages.json`. A line
 gets that list with its first package update that has linux64-lts archives;
 until then the `linux-lts` job stops at its first step ("this line has no
@@ -94,6 +68,42 @@ Pushes run Build Windows and Build Linux; Build Linux LTS runs on pull
 requests and on dispatch only. A FreeBSD build, `freebsd-latest` with
 `experimental-freebsd-latest` and `preview-freebsd-latest`, is planned. It
 will be one more entry in `build-platforms.json` and one more workflow.
+
+## PR readiness
+
+The `PR readiness` workflow (`pr-readiness.yaml`, `scripts/ci_pr_readiness.py`)
+sets a commit status named **PR readiness** on every open pull request's head
+and keeps one sticky comment on it (marker `<!-- pr-readiness -->`, edited in
+place by the bot, never a new comment per run). It reruns on the events that
+can change the answer: PR open, push, reopen, ready for review and base
+change; reviews and review comments; the end of a Build Windows, Build Linux,
+Build Linux LTS, Check PR, CI lint or CodeQL run; and a push to a `vkstorm-*`
+line, which can make an open PR conflict. One run per PR at a time.
+
+- `success`: ready. The builds `windows`, `linux` and `linux-lts` are green (a
+  skipped viewer job is not green), no other check is running or failed, and
+  no review thread is open. A PR that changes only CI files and documentation
+  (the build workflows' `paths-ignore`, read from the PR's base line) builds
+  no viewer and needs no builds.
+- `pending`: waiting for builds or other checks, open review threads (the
+  comment lists them with their P0-P3 badge), or GitHub's mergeability.
+- `failure`: a check failed (named in the status) or the PR conflicts with its
+  base. Only the newest run of each workflow counts, so a rerun or an edited
+  description replaces an older failure.
+- `error`: the readiness run itself failed; see its run.
+
+What it does not cover. GitHub has no workflow event for resolving a thread,
+so a resolve (and an unresolve) shows at the next event above; rerun the
+`PR readiness` workflow to refresh it. The `workflow_run` trigger is live only
+once the workflow is on `vkstorm-release`, the default branch. A PR that
+conflicts cannot start `pull_request` workflows, so a conflict is found only
+through the push to its base line. A fork PR's own events have a read-only
+token: its status is written by the Check PR `workflow_run`.
+
+Drafts get the status too. It is for reading, not a required check; no branch
+protection depends on it. The script only reads the PR through the API and
+never runs its code. `scripts/tests/ci_pr_readiness_test.py` tests the verdict
+and the GitHub plumbing offline and runs in CI lint.
 
 ## Tags
 
