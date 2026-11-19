@@ -2149,7 +2149,6 @@ file_extensions[] =
     { "bmp", IMG_CODEC_BMP },
     { "tga", IMG_CODEC_TGA },
     { "j2c", IMG_CODEC_J2C },
-    { "jp2", IMG_CODEC_J2C },
     { "texture", IMG_CODEC_J2C },
     { "jpg", IMG_CODEC_JPEG },
     { "jpeg", IMG_CODEC_JPEG },
