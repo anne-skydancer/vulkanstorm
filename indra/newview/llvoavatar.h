@@ -526,6 +526,12 @@ public:
 public:
     U32         renderImpostor(LLColor4U color = LLColor4U(255,255,255,255), S32 diffuse_channel = 0);
     bool        isVisuallyMuted();
+    // <Vulkanstorm> multi-core C8 (H3): the area this avatar's worn textures are ranked by in one texture list pass
+    // (its pixel area while it is drawn, otherwise 0), taken at the pass's first face of it instead of once a face
+    // (LLViewerTextureList::wornAvatarArea). mWornRankPass names the pass; 0: none.
+    U32         mWornRankPass = 0;
+    F32         mWornRankArea = 0.f;
+    // </Vulkanstorm>
     bool        isInMuteList() const;
 // [RLVa:KB] - Checked: RLVa-2.2 (@setcam_avdist)
     bool        isRlvSilhouette() const;

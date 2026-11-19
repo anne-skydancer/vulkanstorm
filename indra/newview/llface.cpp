@@ -28,6 +28,7 @@
 
 #include "lldrawable.h" // lldrawable needs to be included before llface
 #include "llface.h"
+#include "llfacepixelarea.h" // <Vulkanstorm/> multi-core C8
 #include "llviewertextureanim.h"
 
 #include "llviewercontrol.h"
@@ -2413,20 +2414,65 @@ F32 LLFace::getTextureVirtualSize()
     return face_area;
 }
 
-bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
+// <Vulkanstorm> multi-core C8: calcPixelArea in two steps (llfacepixelarea.h). computePixelArea is its former body up to
+// the values it found, written to a Result instead of the face; applyPixelArea is its former writes. With `read_only` the
+// first step may run on a frame job helper (LLViewerTextureList::precomputePixelAreas): it then holds to the job rules of
+// llframejobs.h (no LLPointer copy, no GL, no first use of a setting, no log line) and writes nothing but the Result.
+constexpr F32 PIXEL_AREA_UPDATE_PERIOD = 0.1f;
+
+bool LLFace::pixelAreaIsCurrent(F32 frame_time) const
 {
-    constexpr F32 PIXEL_AREA_UPDATE_PERIOD = 0.1f;
     // this is an expensive operation and the result is valid (enough) for several frames
     // don't update every frame
-    if (gFrameTimeSeconds - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD)
+    return frame_time - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD;
+}
+
+//static
+LLFacePixelArea::View LLFace::pixelAreaView()
+{
+    LLViewerCamera* camera = LLViewerCamera::getInstance();
+
+    LLFacePixelArea::View view;
+    view.origin.load3(camera->getOrigin().mV);
+    view.x_axis.load3(camera->getXAxis().mV);
+    view.camera = camera;
+    view.cos_half_fov = camera->getCosHalfFov();
+    view.average_speed = camera->getAverageSpeed();
+    view.average_angular_speed = camera->getAverageAngularSpeed();
+    view.pixel_angle = LLDrawable::sCurPixelAngle;
+    view.frame_time = gFrameTimeSeconds;
+    return view;
+}
+
+bool LLFace::lastPixelArea(F32& cos_angle_to_view_dir, F32& radius) const
+{
+    // <Vulkanstorm> the last update's outputs and result: this returned true and left both outputs unwritten,
+    // which getTextureVirtualSize then read (adjustPartialOverlapPixelArea), and a media face out of the frustum
+    // read as in it
+    cos_angle_to_view_dir = mLastCosAngleToViewDir;
+    radius = mLastPixelRadius;
+    return mLastInFrustum;
+}
+
+bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
+{
+    if (pixelAreaIsCurrent(gFrameTimeSeconds))
     {
-        // <Vulkanstorm> the last update's outputs and result: this returned true and left both outputs unwritten,
-        // which getTextureVirtualSize then read (adjustPartialOverlapPixelArea), and a media face out of the frustum
-        // read as in it
-        cos_angle_to_view_dir = mLastCosAngleToViewDir;
-        radius = mLastPixelRadius;
-        return mLastInFrustum;
+        return lastPixelArea(cos_angle_to_view_dir, radius);
     }
+    LLFacePixelArea::Result result;
+    computePixelArea(pixelAreaView(), false, result);
+    return applyPixelArea(result, cos_angle_to_view_dir, radius);
+}
+
+void LLFace::computePixelArea(const LLFacePixelArea::View& view, bool read_only, LLFacePixelArea::Result& result)
+{
+    if (pixelAreaIsCurrent(view.frame_time))
+    {
+        result.clear(LLFacePixelArea::CACHED);
+        return;
+    }
+    result.clear(LLFacePixelArea::COMPUTED);
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_FACE;
 
@@ -2441,9 +2487,19 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
         LLVOAvatar* avatar = mVObjp.notNull() ? mVObjp->getAvatar() : nullptr;
         bool hasRiggedExtents = false;
 
+        // calculate the world space bounding box of the face by combining the bounding boxes of all the joints
+        LLVector4a& minp = result.rigged_extents[0];
+        LLVector4a& maxp = result.rigged_extents[1];
+
         if (avatar && avatar->mDrawable)
         {
             LLVolume* volume = mVObjp->getVolume();
+            if (read_only && volume && !(mTEOffset >= 0 && mTEOffset < volume->getNumVolumeFaces()))
+            {
+                // te_has_volume_face reports this face: the main thread's call does
+                result.clear(LLFacePixelArea::NEEDS_SERIAL);
+                return;
+            }
             if (te_has_volume_face(volume, mTEOffset))
             {
                 LLVolumeFace& face = volume->getVolumeFace(mTEOffset);
@@ -2452,6 +2508,12 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
 
                 if (rigInfo.needsUpdate())
                 {
+                    if (read_only)
+                    {
+                        // updateRiggingInfo writes the volume face and the skin, which every wearer of the mesh shares
+                        result.clear(LLFacePixelArea::NEEDS_SERIAL);
+                        return;
+                    }
                     LLVOVolume* vo_volume = (LLVOVolume*)mVObjp.get();
                     const LLMeshSkinInfo* skin = vo_volume->getSkinInfo();
                     if (skin)
@@ -2460,9 +2522,6 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
                     }
                 }
 
-                // calculate the world space bounding box of the face by combining the bounding boxes of all the joints
-                LLVector4a& minp = mRiggedExtents[0];
-                LLVector4a& maxp = mRiggedExtents[1];
                 minp = LLVector4a(FLT_MAX, FLT_MAX, FLT_MAX);
                 maxp = LLVector4a(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
@@ -2475,15 +2534,16 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
 
                         if (joint)
                         {
+                            if (read_only && joint->isWorldMatrixDirty())
+                            {
+                                // getWorldMatrix would bring the joint and its parents up to date
+                                result.clear(LLFacePixelArea::NEEDS_SERIAL);
+                                return;
+                            }
                             LLMatrix4a worldMat;
-                            worldMat.loadu((F32*)&joint->getWorldMatrix().mMatrix[0][0]);
+                            worldMat.loadu((F32*)&(read_only ? joint->getWorldMatrixNoUpdate() : joint->getWorldMatrix()).mMatrix[0][0]);
 
-                            LLVector4a extents[2];
-
-                            matMulBoundBox(worldMat, jointInfo.getRiggedExtents(), extents);
-
-                            minp.setMin(minp, extents[0]);
-                            maxp.setMax(maxp, extents[1]);
+                            LLFacePixelArea::addJointBox(worldMat, jointInfo.getRiggedExtents(), minp, maxp);
                             hasRiggedExtents = true;
                         }
                     }
@@ -2494,14 +2554,14 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
         if (!hasRiggedExtents)
         {
             // no rigged extents, zero out bounding box and skip update
-            mRiggedExtents[0] = mRiggedExtents[1] = LLVector4a(0.f, 0.f, 0.f);
-
-            return false;
+            result.clear(LLFacePixelArea::NO_EXTENTS);
+            return;
         }
 
-        center.setAdd(mRiggedExtents[1], mRiggedExtents[0]);
+        result.rigged = true;
+        center.setAdd(maxp, minp);
         center.mul(0.5f);
-        size.setSub(mRiggedExtents[1], mRiggedExtents[0]);
+        size.setSub(maxp, minp);
     }
     else if (mDrawablep && mVObjp.notNull() && mVObjp->getPartitionType() == LLViewerRegion::PARTITION_PARTICLE && mDrawablep->getSpatialGroup())
     { // use box of spatial group for particles (over approximates size, but we don't actually have a good size per particle)
@@ -2518,75 +2578,55 @@ bool LLFace::calcPixelArea(F32& cos_angle_to_view_dir, F32& radius)
     }
     size.mul(0.5f);
 
-    LLViewerCamera* camera = LLViewerCamera::getInstance();
+    LLFacePixelArea::project(view, center, size, hasMedia(), mBoundingSphereRadius, result);
+}
 
-    F32 size_squared = size.dot3(size).getF32();
-    LLVector4a lookAt;
-    LLVector4a t;
-    t.load3(camera->getOrigin().mV);
-    lookAt.setSub(center, t);
+bool LLFace::applyPixelArea(const LLFacePixelArea::Result& result, F32& cos_angle_to_view_dir, F32& radius)
+{
+    switch (result.status)
+    {
+    case LLFacePixelArea::CACHED:
+        return lastPixelArea(cos_angle_to_view_dir, radius);
 
-    F32 dist = lookAt.getLength3().getF32();
-    dist = llmax(dist-size.getLength3().getF32(), 0.001f);
+    case LLFacePixelArea::NO_EXTENTS:
+        // no rigged extents, zero out bounding box and skip update: the period is not armed and no jitter is drawn, so
+        // the next call computes again; neither caller reads the outputs of a false return
+        mRiggedExtents[0] = mRiggedExtents[1] = LLVector4a(0.f, 0.f, 0.f);
+        return false;
 
-    lookAt.normalize3fast() ;
+    case LLFacePixelArea::COMPUTED:
+        break;
 
-    //get area of circle around node
-    F32 app_angle = atanf((F32) sqrt(size_squared) / dist);
-    radius = app_angle*LLDrawable::sCurPixelAngle;
-    mPixelArea = radius*radius * 3.14159f;
+    case LLFacePixelArea::NEEDS_SERIAL:
+        // never applied: the caller runs calcPixelArea for such a face
+        llassert(false);
+        return false;
+    }
+
+    if (result.rigged)
+    {
+        mRiggedExtents[0] = result.rigged_extents[0];
+        mRiggedExtents[1] = result.rigged_extents[1];
+    }
+
+    mPixelArea = result.pixel_area;
 
     // remember last update time, add 10% noise to avoid all faces updating at the same time
+    // (drawn here, on the main thread and in the order the faces are applied: ll_frand has a generator per thread)
     mLastPixelAreaUpdate = gFrameTimeSeconds + ll_frand() * PIXEL_AREA_UPDATE_PERIOD * 0.1f;
 
-    LLVector4a x_axis;
-    x_axis.load3(camera->getXAxis().mV);
-    cos_angle_to_view_dir = lookAt.dot3(x_axis).getF32();
+    mImportanceToCamera = result.importance;
 
-    //if has media, check if the face is out of the view frustum.
-    if(hasMedia())
-    {
-        if(!camera->AABBInFrustum(center, size))
-        {
-            mImportanceToCamera = 0.f ;
-            // <Vulkanstorm> kept for the throttled calls until the next update
-            mLastCosAngleToViewDir = cos_angle_to_view_dir;
-            mLastPixelRadius = radius;
-            mLastInFrustum = false;
-            return false ;
-        }
-        if(cos_angle_to_view_dir > camera->getCosHalfFov()) //the center is within the view frustum
-        {
-            cos_angle_to_view_dir = 1.0f ;
-        }
-        else
-        {
-            LLVector4a d;
-            d.setSub(lookAt, x_axis);
-
-            if(dist * dist * d.dot3(d) < size_squared)
-            {
-                cos_angle_to_view_dir = 1.0f ;
-            }
-        }
-    }
-
-    if(dist < mBoundingSphereRadius) //camera is very close
-    {
-        cos_angle_to_view_dir = 1.0f ;
-        mImportanceToCamera = 1.0f ;
-    }
-    else
-    {
-        mImportanceToCamera = LLFace::calcImportanceToCamera(cos_angle_to_view_dir, dist) ;
-    }
+    cos_angle_to_view_dir = result.cos_angle_to_view_dir;
+    radius = result.radius;
 
     // <Vulkanstorm> kept for the throttled calls until the next update
     mLastCosAngleToViewDir = cos_angle_to_view_dir;
     mLastPixelRadius = radius;
-    mLastInFrustum = true;
-    return true ;
+    mLastInFrustum = result.in_frustum;
+    return result.in_frustum;
 }
+// </Vulkanstorm>
 
 //the projection of the face partially overlaps with the screen
 F32 LLFace::adjustPartialOverlapPixelArea(F32 cos_angle_to_view_dir, F32 radius )
@@ -2621,42 +2661,14 @@ F32 LLFace::adjustPartialOverlapPixelArea(F32 cos_angle_to_view_dir, F32 radius 
     return 1.0f ;
 }
 
-const S8 FACE_IMPORTANCE_LEVEL = 4 ;
-const F32 FACE_IMPORTANCE_TO_CAMERA_OVER_DISTANCE[FACE_IMPORTANCE_LEVEL][2] = //{distance, importance_weight}
-    {{16.1f, 1.0f}, {32.1f, 0.5f}, {48.1f, 0.2f}, {96.1f, 0.05f} } ;
-const F32 FACE_IMPORTANCE_TO_CAMERA_OVER_ANGLE[FACE_IMPORTANCE_LEVEL][2] =    //{cos(angle), importance_weight}
-    {{0.985f /*cos(10 degrees)*/, 1.0f}, {0.94f /*cos(20 degrees)*/, 0.8f}, {0.866f /*cos(30 degrees)*/, 0.64f}, {0.0f, 0.36f}} ;
-
 //static
 F32 LLFace::calcImportanceToCamera(F32 cos_angle_to_view_dir, F32 dist)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_FACE;
-    F32 importance = 0.f ;
-
-    if(cos_angle_to_view_dir > LLViewerCamera::getInstance()->getCosHalfFov() &&
-        dist < FACE_IMPORTANCE_TO_CAMERA_OVER_DISTANCE[FACE_IMPORTANCE_LEVEL - 1][0])
-    {
-        LLViewerCamera* camera = LLViewerCamera::getInstance();
-        F32 camera_moving_speed = camera->getAverageSpeed() ;
-        F32 camera_angular_speed = camera->getAverageAngularSpeed();
-
-        if(camera_moving_speed > 10.0f || camera_angular_speed > 1.0f)
-        {
-            //if camera moves or rotates too fast, ignore the importance factor
-            return 0.f ;
-        }
-
-        S32 i = 0 ;
-        for(i = 0; i < FACE_IMPORTANCE_LEVEL && dist > FACE_IMPORTANCE_TO_CAMERA_OVER_DISTANCE[i][0]; ++i);
-        i = llmin(i, FACE_IMPORTANCE_LEVEL - 1) ;
-        F32 dist_factor = FACE_IMPORTANCE_TO_CAMERA_OVER_DISTANCE[i][1] ;
-
-        for(i = 0; i < FACE_IMPORTANCE_LEVEL && cos_angle_to_view_dir < FACE_IMPORTANCE_TO_CAMERA_OVER_ANGLE[i][0] ; ++i) ;
-        i = llmin(i, FACE_IMPORTANCE_LEVEL - 1) ;
-        importance = dist_factor * FACE_IMPORTANCE_TO_CAMERA_OVER_ANGLE[i][1] ;
-    }
-
-    return importance ;
+    // <Vulkanstorm/> multi-core C8: the tables and the arithmetic are in llfacepixelarea.h
+    LLViewerCamera* camera = LLViewerCamera::getInstance();
+    return LLFacePixelArea::importanceToCamera(cos_angle_to_view_dir, dist, camera->getCosHalfFov(),
+                                               camera->getAverageSpeed(), camera->getAverageAngularSpeed());
 }
 
 //static

@@ -265,6 +265,12 @@ public:
 
     const LLMatrix4a& getWorldMatrix4a();
 
+    // <Vulkanstorm> multi-core C8: getWorldMatrix() without its lazy update, for readers that must not write (frame jobs).
+    // The matrix is the one getWorldMatrix() returns exactly when isWorldMatrixDirty() is false.
+    bool isWorldMatrixDirty() const { return (mDirtyFlags & MATRIX_DIRTY) != 0; }
+    const LLMatrix4& getWorldMatrixNoUpdate() const { return mXform.getWorldMatrix(); }
+    // </Vulkanstorm>
+
     void updateWorldMatrixChildren();
     void updateWorldMatrixParent();
 

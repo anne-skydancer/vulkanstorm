@@ -52,6 +52,7 @@ class LLVertexProgram;
 class LLViewerTexture;
 class LLGeometryManager;
 class LLDrawInfo;
+namespace LLFacePixelArea { struct View; struct Result; } // <Vulkanstorm/> llfacepixelarea.h
 // class LLMeshSkinInfo;// <FS:Beq/> be defensive about UAF with skinInfo during LocalMesh
 
 const F32 MIN_ALPHA_SIZE = 1024.f;
@@ -263,6 +264,17 @@ private:
     friend class LLViewerTextureList;
     F32         adjustPartialOverlapPixelArea(F32 cos_angle_to_view_dir, F32 radius );
     bool        calcPixelArea(F32& cos_angle_to_view_dir, F32& radius) ;
+    // <Vulkanstorm> multi-core C8 (llfacepixelarea.h): calcPixelArea is computePixelArea, then applyPixelArea.
+    // computePixelArea writes `result` only when `read_only` is set, and may then run on a frame job helper: where it would
+    // have to write (rigging info to build, a joint matrix to bring up to date, a missing volume face to report) it gives
+    // NEEDS_SERIAL instead. Without `read_only` (main thread) it does those writes, as calcPixelArea always did.
+    // applyPixelArea stores a result in the face (main thread; never NEEDS_SERIAL) and draws the update jitter.
+    bool        pixelAreaIsCurrent(F32 frame_time) const;
+    bool        lastPixelArea(F32& cos_angle_to_view_dir, F32& radius) const;
+    void        computePixelArea(const LLFacePixelArea::View& view, bool read_only, LLFacePixelArea::Result& result);
+    bool        applyPixelArea(const LLFacePixelArea::Result& result, F32& cos_angle_to_view_dir, F32& radius);
+    static LLFacePixelArea::View pixelAreaView();
+    // </Vulkanstorm>
 public:
     static F32 calcImportanceToCamera(F32 to_view_dir, F32 dist);
     static F32 adjustPixelArea(F32 importance, F32 pixel_area) ;
@@ -294,6 +306,10 @@ public:
     bool mInFrustum = false;
     // value of gFrameCount the last time the face was touched by LLViewerTextureList::updateImageDecodePriority
     U32 mLastTextureUpdate = 0;
+    // <Vulkanstorm> multi-core C8: the texture list pass that computed this face's pixel area ahead (0: none) and the
+    // face's place in that pass's results (LLViewerTextureList::precomputePixelAreas)
+    U32 mPixelAreaPass = 0;
+    U32 mPixelAreaSlot = 0;
 
 private:
     LLPointer<LLVertexBuffer> mVertexBuffer;

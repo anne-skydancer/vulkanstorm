@@ -16392,6 +16392,39 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Backup</key>
       <integer>0</integer>
     </map>
+    <key>TexturePixelAreaCompare</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core debugging: compute each pixel area of the texture list pass again on the main thread and count the values that differ from the ones computed on the frame job helpers (TexturePixelAreaStats shows the count as mismatch; it must stay 0).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
+    <key>TexturePixelAreaJobs</key>
+    <map>
+      <key>Comment</key>
+      <string>Compute the pixel areas of the faces the texture list ranks on the frame job helpers (multi-core). Off: every face is measured in the list&apos;s loop on the main thread, as before.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>1</integer>
+    </map>
+    <key>TexturePixelAreaStats</key>
+    <map>
+      <key>Comment</key>
+      <string>Multi-core measuring: write one TexturePixelArea line a second to the log (textures the texture list pass may visit and did visit, passes cut by the time box, faces computed ahead and on the main thread, pass time).</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>Boolean</string>
+      <key>Value</key>
+      <integer>0</integer>
+    </map>
     <key>TextureReverseByteRange</key>
     <map>
       <key>Comment</key>

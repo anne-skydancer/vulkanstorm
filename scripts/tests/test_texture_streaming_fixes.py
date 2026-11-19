@@ -51,6 +51,8 @@ POLICY = (ROOT / 'indra/newview/lltexturefetchpolicy.h').read_text(encoding='utf
 FETCH = (ROOT / 'indra/newview/lltexturefetch.cpp').read_text(encoding='utf-8', errors='replace')
 FACE = (ROOT / 'indra/newview/llface.cpp').read_text(encoding='utf-8', errors='replace')
 FACE_H = (ROOT / 'indra/newview/llface.h').read_text(encoding='utf-8', errors='replace')
+JOINT_H = (ROOT / 'indra/llcharacter/lljoint.h').read_text(encoding='utf-8', errors='replace')
+PIXEL_AREA_H = (ROOT / 'indra/newview/llfacepixelarea.h').read_text(encoding='utf-8', errors='replace')
 J2COJ = (ROOT / 'indra/llimagej2coj/llimagej2coj.cpp').read_text(encoding='utf-8', errors='replace')
 J2C_H = (ROOT / 'indra/llimage/llimagej2c.h').read_text(encoding='utf-8', errors='replace')
 J2C_GUARD = (ROOT / 'indra/llimagej2coj/llj2cdecodeguard.h').read_text(encoding='utf-8', errors='replace')
@@ -217,16 +219,29 @@ class PrioritySnapshots(unittest.TestCase):
 
 
 class PixelAreaThrottle(unittest.TestCase):
-    RETURN = re.compile(r'\breturn\s+(\w+)\s*;')
+    """calcPixelArea is computePixelArea (the values, written to a Result) and applyPixelArea (the writes to the face)
+    since multi-core C8; the throttle's outputs are kept and handed back by applyPixelArea."""
+    RETURN = re.compile(r'\breturn\s+([\w.]+)\s*;')
 
     def setUp(self):
         self.calc = code(body(FACE, 'bool LLFace::calcPixelArea('))
-        self.throttle_start = self.calc.index('if (gFrameTimeSeconds - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD)')
-        self.throttle_end = self.calc.index('\n    }\n', self.throttle_start)
-        self.arm = self.calc.index('mLastPixelAreaUpdate = gFrameTimeSeconds')
+        self.current = code(body(FACE, 'bool LLFace::pixelAreaIsCurrent('))
+        self.compute = code(body(FACE, 'void LLFace::computePixelArea('))
+        self.apply = code(body(FACE, 'bool LLFace::applyPixelArea('))
+        self.arm = self.apply.index('mLastPixelAreaUpdate = gFrameTimeSeconds')
+
+    def case(self, status):
+        start = self.apply.index('case LLFacePixelArea::%s:' % status)
+        return self.apply[start:self.apply.index('case LLFacePixelArea::', start + 1)]
 
     def test_throttled_call_returns_the_last_update(self):
-        throttled = self.calc[self.throttle_start:self.throttle_end]
+        self.assertIn('return frame_time - mLastPixelAreaUpdate < PIXEL_AREA_UPDATE_PERIOD;', self.current)
+        # the serial call and the computation ask the same question, each of its own clock
+        self.assertRegex(self.calc, r'if \(pixelAreaIsCurrent\(gFrameTimeSeconds\)\)\s*\{\s*return lastPixelArea\(cos_angle_to_view_dir, radius\);')
+        self.assertRegex(self.compute, r'if \(pixelAreaIsCurrent\(view\.frame_time\)\)\s*\{\s*result\.clear\(LLFacePixelArea::CACHED\);\s*return;')
+        self.assertEqual(self.RETURN.findall(self.case('CACHED')), [])
+        self.assertIn('return lastPixelArea(cos_angle_to_view_dir, radius);', self.case('CACHED'))
+        throttled = code(body(FACE, 'bool LLFace::lastPixelArea('))
         self.assertIn('cos_angle_to_view_dir = mLastCosAngleToViewDir;', throttled)
         self.assertIn('radius = mLastPixelRadius;', throttled)
         self.assertEqual(self.RETURN.findall(throttled), ['mLastInFrustum'])
@@ -234,22 +249,31 @@ class PixelAreaThrottle(unittest.TestCase):
     def test_every_update_that_arms_the_throttle_keeps_its_outputs(self):
         # before the throttle is armed, only a rigged face without extents returns, with false: the next call
         # updates again, and neither caller reads the outputs of a false return
-        self.assertEqual(self.RETURN.findall(self.calc[self.throttle_end:self.arm]), ['false'])
-        self.assertLess(self.calc.index('if (!hasRiggedExtents)'), self.calc.index('return false', self.throttle_end))
-        # after it, every return keeps the outputs it hands back and its result, as they are at the return
-        after = self.calc[self.arm:]
-        returns = list(self.RETURN.finditer(after))
-        self.assertEqual([r.group(1) for r in returns], ['false', 'true'])  # a media face out of the frustum, the rest
-        last = 0
-        for r in returns:
-            segment = after[last:r.start()]
-            store = segment.rfind('mLastCosAngleToViewDir = cos_angle_to_view_dir;')
-            self.assertGreaterEqual(store, 0, 'the return of %s keeps no outputs' % r.group(1))
-            kept = segment[store:]
-            self.assertIn('mLastPixelRadius = radius;', kept)
-            self.assertIn('mLastInFrustum = %s;' % r.group(1), kept)
-            self.assertNotRegex(kept, r'\b(cos_angle_to_view_dir|radius)\s*=[^=]', 'an output changes after it is kept')
-            last = r.end()
+        self.assertRegex(self.compute, r'if \(!hasRiggedExtents\)\s*\{\s*result\.clear\(LLFacePixelArea::NO_EXTENTS\);\s*return;')
+        no_extents = self.case('NO_EXTENTS')
+        self.assertEqual(self.RETURN.findall(no_extents), ['false'])
+        self.assertNotIn('mLastPixelAreaUpdate', no_extents)
+        self.assertNotIn('ll_frand', no_extents)
+        self.assertLess(self.apply.index('case LLFacePixelArea::NO_EXTENTS:'), self.arm)
+        # after it, the one return keeps the outputs it hands back and its result, as they are at the return: a media
+        # face out of the frustum (in_frustum false) and the rest
+        after = self.apply[self.arm:]
+        self.assertEqual(self.RETURN.findall(after), ['result.in_frustum'])
+        store = after.index('mLastCosAngleToViewDir = cos_angle_to_view_dir;')
+        kept = after[store:]
+        self.assertIn('mLastPixelRadius = radius;', kept)
+        self.assertIn('mLastInFrustum = result.in_frustum;', kept)
+        self.assertNotRegex(kept, r'\b(cos_angle_to_view_dir|radius)\s*=[^=]', 'an output changes after it is kept')
+        self.assertLess(after.index('cos_angle_to_view_dir = result.cos_angle_to_view_dir;'), store)
+        self.assertLess(after.index('radius = result.radius;'), store)
+
+    def test_a_media_face_out_of_the_frustum_is_not_in_it(self):
+        project = code(member(PIXEL_AREA_H, 'inline void project('))
+        out = project[project.index('if (!view.camera->AABBInFrustum(center, size))'):]
+        out = out[:out.index('return;')]
+        self.assertIn('result.importance = 0.f;', out)
+        self.assertIn('result.in_frustum = false;', out)
+        self.assertEqual(project.count('result.in_frustum = true;'), 1)
 
     def test_before_the_first_update(self):
         # no partial-overlap scaling (adjustPartialOverlapPixelArea gives 1 for cos 1, radius 0), in the frustum as before
@@ -269,8 +293,9 @@ class PixelAreaThrottle(unittest.TestCase):
 class WornFetchRank(unittest.TestCase):
     FETCH_PRIORITY = 'const F32 fetch_priority = LLTextureFetchPolicy::fetchPriority(decode_priority, mWornVirtualSize, F_ALMOST_ZERO);'
     AVATAR = 'LLVOAvatar* avatar = (vsize > 0.f && !objp->isAvatar()) ? objp->getRootEdit()->getAvatar() : nullptr;'
-    DRAWN = 'const bool drawn = avatar && avatar->isVisible() && !avatar->isVisuallyMuted();'
-    WORN_AREA = 'F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, drawn ? avatar->getPixelArea() : 0.f);'
+    DRAWN = 'const bool drawn = avatar->isVisible() && !avatar->isVisuallyMuted();'
+    DRAWN_AREA = 'const F32 area = drawn ? avatar->getPixelArea() : 0.f;'
+    WORN_AREA = 'F32 worn_vsize = LLTextureFetchPolicy::wornFetchArea(vsize, avatar ? wornAvatarArea(avatar) : 0.f);'
     STORE = 'imagep->mWornVirtualSize = llmin(max_worn_vsize, LLViewerFetchedTexture::sMaxVirtualSize);'
 
     def decode_priority(self):
@@ -298,9 +323,14 @@ class WornFetchRank(unittest.TestCase):
         area = loop.index('F32 vsize = face->getPixelArea();')
         # the avatar the object is drawn with, counted only while it is drawn (out of view, hidden or a jelly doll: no area)
         self.assertLess(area, loop.index(self.AVATAR))
-        self.assertLess(loop.index(self.AVATAR), loop.index(self.DRAWN))
-        self.assertLess(loop.index(self.DRAWN), loop.index(self.WORN_AREA))
-        self.assertEqual(loop.count('getPixelArea()'), 2)
+        self.assertLess(loop.index(self.AVATAR), loop.index(self.WORN_AREA))
+        self.assertEqual(loop.count('getPixelArea()'), 1)
+        # (wornAvatarArea: once an avatar a pass since multi-core C8, the same tests in the same order)
+        worn = code(body(TEXTURE_LIST, 'F32 LLViewerTextureList::wornAvatarArea('))
+        self.assertLess(worn.index(self.DRAWN), worn.index(self.DRAWN_AREA))
+        self.assertEqual(worn.count('getPixelArea()'), 1)
+        self.assertEqual(worn.count('isVisible()'), 1)
+        self.assertEqual(worn.count('isVisuallyMuted()'), 1)
         # each factor of the face's own size, in its order, and the same factor of its worn size right after it
         own = re.findall(r'(?<![\w.])vsize ([*/]=) (\w+);', loop)
         self.assertEqual(own, [('/=', 'min_scale'), ('/=', 'bias'), ('*=', 'camera_boost')])
@@ -407,6 +437,94 @@ class J2CDecodeGuard(unittest.TestCase):
         self.assertIn('constexpr unsigned long long MAX_DECODE_DIMENSION = 16384;', guard)
         self.assertIn('constexpr unsigned long long MAX_DECODE_BYTES = 1ull << 30;', guard)
         self.assertIn('constexpr unsigned long long BYTES_PER_SAMPLE = 4;', guard)
+
+
+class PixelAreaJobs(unittest.TestCase):
+    """Multi-core C8: the texture list computes its faces' pixel areas ahead on the frame job helpers. What a job may
+    run writes nothing but its result, and the serial loop stores each value at the face's turn."""
+
+    def setUp(self):
+        self.compute = code(body(FACE, 'void LLFace::computePixelArea('))
+        self.apply = code(body(FACE, 'bool LLFace::applyPixelArea('))
+        self.ahead = code(body(TEXTURE_LIST, 'void LLViewerTextureList::precomputePixelAreas('))
+        self.turn = code(body(TEXTURE_LIST, 'bool LLViewerTextureList::calcFacePixelArea('))
+        self.decode = code(body(TEXTURE_LIST, 'void LLViewerTextureList::updateImageDecodePriority('))
+        self.fetch = code(body(TEXTURE_LIST, 'F32 LLViewerTextureList::updateImagesFetchTextures('))
+
+    def test_the_jitter_is_drawn_when_a_value_is_applied(self):
+        # ll_frand has a generator per thread: one draw, on the main thread, where calcPixelArea drew it
+        self.assertEqual(code(FACE).count('ll_frand()'), 1)
+        self.assertEqual(self.apply.count('ll_frand()'), 1)
+        self.assertNotIn('ll_frand', code(PIXEL_AREA_H))
+        self.assertNotIn('ll_rand', code(PIXEL_AREA_H))
+
+    def test_a_job_writes_nothing_but_its_result(self):
+        # no member of the face is assigned in the computation
+        self.assertNotRegex(self.compute, r'(?<![\w.>])m[A-Z]\w*(\[\d\])?\s*=[^=]')
+        self.assertNotIn('const_cast', self.compute)
+        # each lazy write of the serial path is behind a test that hands the face back to the main thread
+        update = self.compute.index('LLSkinningUtil::updateRiggingInfo(')
+        needs = self.compute.index('if (rigInfo.needsUpdate())')
+        self.assertRegex(self.compute[needs:update], r'if \(read_only\)\s*\{\s*result\.clear\(LLFacePixelArea::NEEDS_SERIAL\);\s*return;')
+        self.assertRegex(self.compute, r'if \(read_only && joint->isWorldMatrixDirty\(\)\)\s*\{\s*result\.clear\(LLFacePixelArea::NEEDS_SERIAL\);\s*return;')
+        self.assertIn('read_only ? joint->getWorldMatrixNoUpdate() : joint->getWorldMatrix()', self.compute)
+        self.assertEqual(self.compute.count('getWorldMatrix()'), 1)
+        # the volume face's range test (F1), without the log line of te_has_volume_face
+        guard = self.compute.index('if (read_only && volume && !(mTEOffset >= 0 && mTEOffset < volume->getNumVolumeFaces()))')
+        self.assertLess(guard, self.compute.index('te_has_volume_face(volume, mTEOffset)'))
+        self.assertNotRegex(self.compute, r'LL_(WARNS|INFOS|DEBUGS|ERRS)')
+        self.assertNotIn('LLCachedControl', self.compute)
+        self.assertNotIn('LLPointer<', self.compute)
+        self.assertNotIn('LLViewerCamera::getInstance', self.compute)
+        self.assertNotIn('gFrameTimeSeconds', self.compute)
+        # the joint accessors read only
+        self.assertIn('bool isWorldMatrixDirty() const { return (mDirtyFlags & MATRIX_DIRTY) != 0; }', JOINT_H)
+        self.assertIn('const LLMatrix4& getWorldMatrixNoUpdate() const { return mXform.getWorldMatrix(); }', JOINT_H)
+
+    def test_the_job_body_is_the_read_only_computation(self):
+        batch = self.ahead[self.ahead.index('LL::FrameJobs::parallelFor('):]
+        self.assertIn('faces[i]->computePixelArea(view, true, results[i]);', batch)
+        self.assertNotIn('applyPixelArea', self.ahead)
+        self.assertNotIn('calcPixelArea', self.ahead)
+        self.assertNotRegex(batch, r'LLPointer|LL_(WARNS|INFOS)|gSavedSettings|delete ')
+
+    def test_the_face_set_follows_the_loop(self):
+        # the boost skip, the cumulative face cap and the frame gate, shared with updateImageDecodePriority
+        self.assertIn('imagep->getNumRefs() <= 1 || imagep->getBoostLevel() >= LLViewerFetchedTexture::BOOST_HIGH', self.ahead)
+        cap = 'S32 faces_to_check = (face_count > %s) ? 0 : imagep->getNumFaces(i);'
+        self.assertIn(cap % 'MAX_FACES_TO_CHECK', self.ahead)
+        self.assertIn(cap % 'max_faces_to_check', self.decode)
+        self.assertIn('U32 max_faces_to_check = MAX_FACES_TO_CHECK;', self.decode)
+        gate = '(gFrameCount - face->mLastTextureUpdate) > FACE_UPDATE_FRAMES'
+        self.assertIn(gate, self.ahead)
+        self.assertIn('if (%s)' % gate, self.decode)
+        self.assertIn('constexpr U32 FACE_UPDATE_FRAMES = 10;', TEXTURE_LIST)
+        self.assertIn('constexpr U32 MAX_FACES_TO_CHECK = 1024;', TEXTURE_LIST)
+        # a face under several textures is listed once
+        self.assertIn('face->mPixelAreaPass != mPixelAreaPass', self.ahead)
+
+    def test_a_value_is_stored_at_the_face_turn_in_the_loop(self):
+        self.assertIn('face->mInFrustum = calcFacePixelArea(face, cos_angle_to_view_dir, radius);', self.decode)
+        self.assertNotIn('->calcPixelArea(', self.decode)
+        # only this pass's value for this very face, never one that had to write, and only while the face is where the
+        # job saw it; everything else is the serial call
+        self.assertIn('mPixelAreaPass != 0 && face->mPixelAreaPass == mPixelAreaPass', self.turn)
+        self.assertIn('slot < mPixelAreaFaces.size() && mPixelAreaFaces[slot] == face', self.turn)
+        self.assertIn('result.status != LLFacePixelArea::NEEDS_SERIAL', self.turn)
+        self.assertIn('(result.status == LLFacePixelArea::CACHED) == face->pixelAreaIsCurrent(gFrameTimeSeconds)', self.turn)
+        self.assertEqual(self.turn.count('return face->applyPixelArea(result, cos_angle_to_view_dir, radius);'), 1)
+        self.assertEqual(self.turn.count('return face->calcPixelArea(cos_angle_to_view_dir, radius);'), 1)
+
+    def test_the_pass_ends_with_the_loop(self):
+        # outside updateImagesFetchTextures (the low-memory purge of LLViewerTexture::updateClass) faces run calcPixelArea
+        ahead = self.fetch.index('precomputePixelAreas(entries, mPixelAreaCompare);')
+        loop = self.fetch.index('for (auto& imagep : entries)')
+        end = self.fetch.index('mPixelAreaPass = 0;')
+        self.assertLess(self.fetch.index('LLTimer timer;'), ahead)  # inside the pass's time box
+        self.assertLess(ahead, loop)
+        self.assertLess(loop, end)
+        self.assertLess(end, self.fetch.index('return timer.getElapsedTimeF32();'))
+        self.assertEqual(self.fetch.count('return '), 1)
 
 
 if __name__ == '__main__':

@@ -35,6 +35,7 @@
 #include <list>
 #include <unordered_set>
 #include "lluiimage.h"
+#include "llfacepixelarea.h" // <Vulkanstorm/> multi-core C8
 
 const U32 LL_IMAGE_REZ_LOSSLESS_CUTOFF = 128;
 
@@ -50,6 +51,8 @@ const bool IMMEDIATE_NO = false;
 class LLImageJ2C;
 class LLMessageSystem;
 class LLTextureView;
+class LLFace;
+class LLVOAvatar;
 
 typedef void (*LLImageCallback)(bool success,
                                 LLViewerFetchedTexture *src_vi,
@@ -247,6 +250,23 @@ private:
 
     bool mInitialized ;
     LLFrameTimer mForceDecodeTimer;
+
+    // <Vulkanstorm> multi-core C8: the pixel areas of a pass's faces, computed ahead on the frame job helpers
+    // (updateImagesFetchTextures). The serial loop then stores each one at the place where it called
+    // LLFace::calcPixelArea, and still calls it for a face that has no value or whose value could not be computed
+    // without writing.
+    void precomputePixelAreas(const std::vector<LLPointer<LLViewerFetchedTexture> >& entries, bool compare);
+    bool calcFacePixelArea(LLFace* face, F32& cos_angle_to_view_dir, F32& radius);
+    F32  wornAvatarArea(LLVOAvatar* avatar);
+
+    std::vector<LLFace*> mPixelAreaFaces;                    // the pass's faces, in the loop's order, each once
+    std::vector<LLFacePixelArea::Result> mPixelAreaResults;  // their values, by the same index
+    U32  mPixelAreaPass = 0;       // the running pass (never 0), or 0 outside updateImagesFetchTextures and when switched off
+    bool mPixelAreaCompare = false;
+    U32  mPixelAreaApplied = 0;    // the pass's faces that took a value computed ahead
+    U32  mPixelAreaSerial = 0;     // and those that ran calcPixelArea
+    U32  mPixelAreaMismatches = 0; // compare mode: values that differ from the main thread's
+    // </Vulkanstorm>
 
 private:
     static S32 sNumImages;
