@@ -375,7 +375,7 @@ namespace
             for (int i = 0; i < n; ++i)
             {
                 const uint32_t b = 3 * (rng() % 150);
-                skip.push_back({ b, b + 3 * (rng() % 30) });
+                skip.push_back({ b, uint32_t(b + 3 * (rng() % 30)) });
             }
             std::vector<char> want(600, 0), got(600, 0);
             bool any = false;
