@@ -32,6 +32,7 @@
 #include "llnotificationsutil.h"
 #include "llshadowcascadefit.h" // <Vulkanstorm/> stable sun cascades
 #include "llocclusionqueue.h" // <Vulkanstorm/> markOccluder rule
+#include "llframejobs.h" // <Vulkanstorm/> multi-core 5c
 #include "llshadowmethod.h" // <Vulkanstorm/> shadow method
 #include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's change hooks
 
@@ -11803,16 +11804,74 @@ void LLPipeline::renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCa
     renderShadowImpl(view, proj, shadow_cam, result, depth_clamp);
 }
 
+// <Vulkanstorm> multi-core 5c-0 (D5): a shadow render is "cull and sort" followed by "submit" (shadowCullAndSort,
+// shadowSubmit). Each holds the shadow pass's two flags for its own duration, as renderShadowImpl held them for the whole
+// render: sShadowRender set, and occlusion culling off.
+namespace
+{
+    struct LLShadowPassFlags
+    {
+        LLShadowPassFlags() : mSavedOcclusion(LLPipeline::sUseOcclusion)
+        {
+            LLPipeline::sShadowRender = true;
+            // disable occlusion culling during shadow render
+            LLPipeline::sUseOcclusion = 0;
+        }
+        ~LLShadowPassFlags()
+        {
+            // reset occlusion culling flag
+            LLPipeline::sUseOcclusion = mSavedOcclusion;
+            LLPipeline::sShadowRender = false;
+        }
+        LLShadowPassFlags(const LLShadowPassFlags&) = delete;
+        LLShadowPassFlags& operator=(const LLShadowPassFlags&) = delete;
+
+        const S32 mSavedOcclusion;
+    };
+}
+
 void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE; //LL_RECORD_BLOCK_TIME(FTM_SHADOW_RENDER);
     LL_PROFILE_GPU_ZONE("renderShadow");
 
-    LLPipeline::sShadowRender = true;
+    // the second render of a compared pass reuses the cull and sort of the first: only the submission repeats
+    if (!VKS_GLCMP_REPLAY())
+    {
+        shadowCullAndSort(shadow_cam, result);
+    }
 
-    // disable occlusion culling during shadow render
-    U32 saved_occlusion = sUseOcclusion;
-    sUseOcclusion = 0;
+    shadowSubmit(view, proj, shadow_cam, result, depth_clamp);
+}
+
+// The pass's lists: what the shadow camera sees (updateCull), then the sort, which leaves them in `result` and in the
+// draw pools for shadowSubmit.
+void LLPipeline::shadowCullAndSort(LLCamera& shadow_cam, LLCullResult& result)
+{
+    LLShadowPassFlags flags;
+
+    VKS_GLSTAT_PASS("shadow cull and sort");
+    updateCull(shadow_cam, result);
+
+    stateSort(shadow_cam, result);
+
+    // <Vulkanstorm> a projector tile or a point light's face: hold the casters it draws at full detail (the LOD pin, spec 4.4; each
+    // pool returns at once unless it is drawing), and a point light's face leaves out the prim that emits the light (D4)
+    if (sLocalShadowPass == LOCAL_SHADOW_STATIC)
+    {
+        mProjectorShadows.pinCasters(result);
+        mPointShadows.pinCasters(result);
+        mPointShadows.skipEmitter();
+    }
+    // </Vulkanstorm>
+}
+
+// The submission of the lists shadowCullAndSort left (`result`, which is the pipeline's current cull result, and the draw
+// pools) into the bound target. It can run again for the same lists (the identical-image check).
+void LLPipeline::shadowSubmit(const glm::mat4& view, const glm::mat4& proj, LLCamera& shadow_cam, LLCullResult& result, bool depth_clamp)
+{
+    LLShadowPassFlags flags;
+// </Vulkanstorm>
 
     // List of render pass types that use the prim volume as the shadow,
     // ignoring textures.
@@ -11841,25 +11900,6 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
     LLGLEnable clamp_depth(depth_clamp ? GL_DEPTH_CLAMP : 0);
 
     LLGLDepthTest depth_test(GL_TRUE, GL_TRUE, GL_LESS);
-
-    // the second render of a compared pass reuses the cull and sort of the first: only the submission repeats
-    if (!VKS_GLCMP_REPLAY())
-    {
-        VKS_GLSTAT_PASS("shadow cull and sort");
-        updateCull(shadow_cam, result);
-
-        stateSort(shadow_cam, result);
-
-        // <Vulkanstorm> a projector tile or a point light's face: hold the casters it draws at full detail (the LOD pin, spec 4.4; each
-        // pool returns at once unless it is drawing), and a point light's face leaves out the prim that emits the light (D4)
-        if (sLocalShadowPass == LOCAL_SHADOW_STATIC)
-        {
-            mProjectorShadows.pinCasters(result);
-            mPointShadows.pinCasters(result);
-            mPointShadows.skipEmitter();
-        }
-        // </Vulkanstorm>
-    }
 
     //generate shadow map
     gGL.matrixMode(LLRender::MM_PROJECTION);
@@ -11916,12 +11956,8 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
     }
 
-    if (LLPipeline::sUseOcclusion > 1)
-    { // do occlusion culling against non-masked only to take advantage of hierarchical Z
-        VKS_GLSTAT_PASS("shadow occlusion");
-        doOcclusion(shadow_cam);
-    }
-
+    // <Vulkanstorm/> multi-core 5c-0 (D12): the occlusion pass that stood here ran only for sUseOcclusion > 1, and the
+    // shadow pass holds sUseOcclusion at 0 (also upstream), so it never ran
 
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow geom");
@@ -12049,10 +12085,6 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
     gGL.matrixMode(LLRender::MM_MODELVIEW);
     gGL.popMatrix();
     gGLLastMatrix = NULL;
-
-    // reset occlusion culling flag
-    sUseOcclusion = saved_occlusion;
-    LLPipeline::sShadowRender = false;
 }
 
 bool LLPipeline::getVisiblePointCloud(LLCamera& camera, LLVector3& min, LLVector3& max, std::vector<LLVector3>& fp, LLVector3 light_dir)
@@ -12784,13 +12816,209 @@ static const char* sun_cascade_gpu_zone(S32 j)
 // </Vulkanstorm>
 #endif
 
+#if VKS_FRAMEJOBS_COMPARE
+// <Vulkanstorm> multi-core 5c, development only (not for vkstorm-release): the compare mode's list checks and the counters
+namespace
+{
+    constexpr U32 SUN_CASCADE_MISMATCH_LOG_LIMIT = 20;
+
+    std::string sun_cascade_group_text(LLSpatialGroup* group)
+    {
+        if (!group)
+        {
+            return "none";
+        }
+        const LLVector4a* bounds = group->getBounds();
+        const F32* c = bounds[0].getF32ptr();
+        const F32* r = bounds[1].getF32ptr();
+        return llformat("%p centre (%.3f %.3f %.3f) size (%.3f %.3f %.3f)", (void*)group, c[0], c[1], c[2], r[0], r[1], r[2]);
+    }
+
+    // the first index at which two lists differ (the shorter list's length when one is a prefix of the other), -1 when equal
+    template <typename T>
+    S32 sun_cascade_first_difference(T** a, T** a_end, T** b, T** b_end)
+    {
+        const size_t a_size = a_end - a;
+        const size_t b_size = b_end - b;
+        const size_t common = llmin(a_size, b_size);
+        for (size_t i = 0; i < common; ++i)
+        {
+            if (a[i] != b[i])
+            {
+                return (S32)i;
+            }
+        }
+        return a_size == b_size ? -1 : (S32)common;
+    }
+}
+
+bool LLPipeline::compareSunCascadeCull(LLCullResult& jobs, LLCullResult& serial, S32 jobs_nodes, S32 serial_nodes, S32 cascade)
+{
+    ++mSunCascadeJobsStats.culls_compared;
+
+    struct GroupList
+    {
+        const char* name;
+        LLCullResult::sg_iterator a, a_end, b, b_end;
+    };
+    const GroupList lists[] = {
+        { "visible groups", jobs.beginVisibleGroups(), jobs.endVisibleGroups(), serial.beginVisibleGroups(), serial.endVisibleGroups() },
+        { "drawable groups", jobs.beginDrawableGroups(), jobs.endDrawableGroups(), serial.beginDrawableGroups(), serial.endDrawableGroups() },
+        { "occlusion groups", jobs.beginOcclusionGroups(), jobs.endOcclusionGroups(), serial.beginOcclusionGroups(), serial.endOcclusionGroups() },
+        { "alpha groups", jobs.beginAlphaGroups(), jobs.endAlphaGroups(), serial.beginAlphaGroups(), serial.endAlphaGroups() },
+        { "rigged alpha groups", jobs.beginRiggedAlphaGroups(), jobs.endRiggedAlphaGroups(), serial.beginRiggedAlphaGroups(), serial.endRiggedAlphaGroups() },
+    };
+
+    std::string what;
+    for (const GroupList& list : lists)
+    {
+        const S32 at = sun_cascade_first_difference(list.a, list.a_end, list.b, list.b_end);
+        if (at >= 0)
+        {
+            const size_t a_size = list.a_end - list.a;
+            const size_t b_size = list.b_end - list.b;
+            what = llformat("%s differ at %d (jobs %d, serial %d): jobs ", list.name, at, (S32)a_size, (S32)b_size)
+                + sun_cascade_group_text((size_t)at < a_size ? list.a[at] : nullptr)
+                + ", serial " + sun_cascade_group_text((size_t)at < b_size ? list.b[at] : nullptr);
+            break;
+        }
+    }
+    if (what.empty() && (jobs.getVisibleListSize() != serial.getVisibleListSize() || jobs.getVisibleBridgeSize() != serial.getVisibleBridgeSize()))
+    {
+        what = llformat("drawables %d / %d, bridges %d / %d (jobs / serial)", (S32)jobs.getVisibleListSize(),
+            (S32)serial.getVisibleListSize(), (S32)jobs.getVisibleBridgeSize(), (S32)serial.getVisibleBridgeSize());
+    }
+    if (what.empty() && jobs_nodes != serial_nodes)
+    {
+        what = llformat("node counts differ: jobs %d, serial %d", jobs_nodes, serial_nodes);
+    }
+    if (what.empty())
+    {
+        return true;
+    }
+
+    ++mSunCascadeJobsStats.cull_mismatches;
+    if (++mSunCascadeCullMismatchTotal <= SUN_CASCADE_MISMATCH_LOG_LIMIT)
+    {
+        LL_WARNS("SunCascadeJobs") << "cull mismatch, frame " << LLDrawable::getCurrentFrame() << ", cascade " << cascade << ": "
+            << what << LL_ENDL;
+    }
+    return false;
+}
+
+bool LLPipeline::compareSunCascadeRenderMap(LLCullResult& jobs, LLCullResult& serial, S32 cascade)
+{
+    ++mSunCascadeJobsStats.maps_compared;
+
+    std::string what;
+    for (U32 type = 0; type < LLRenderPass::NUM_RENDER_TYPES && what.empty(); ++type)
+    {
+        const S32 at = sun_cascade_first_difference(jobs.beginRenderMap(type), jobs.endRenderMap(type),
+            serial.beginRenderMap(type), serial.endRenderMap(type));
+        if (at >= 0)
+        {
+            what = llformat("render map of type %u differs at %d (jobs %u, serial %u)", type, at, jobs.getRenderMapSize(type),
+                serial.getRenderMapSize(type));
+        }
+    }
+    if (what.empty())
+    {
+        const S32 at = sun_cascade_first_difference(jobs.beginAlphaGroups(), jobs.endAlphaGroups(), serial.beginAlphaGroups(),
+            serial.endAlphaGroups());
+        if (at >= 0)
+        {
+            what = llformat("alpha groups differ at %d (jobs %u, serial %u)", at, jobs.getAlphaGroupsSize(), serial.getAlphaGroupsSize());
+        }
+    }
+    if (what.empty())
+    {
+        const S32 at = sun_cascade_first_difference(jobs.beginRiggedAlphaGroups(), jobs.endRiggedAlphaGroups(),
+            serial.beginRiggedAlphaGroups(), serial.endRiggedAlphaGroups());
+        if (at >= 0)
+        {
+            what = llformat("rigged alpha groups differ at %d (jobs %u, serial %u)", at, jobs.getRiggedAlphaGroupsSize(),
+                serial.getRiggedAlphaGroupsSize());
+        }
+    }
+    if (what.empty())
+    {
+        return true;
+    }
+
+    ++mSunCascadeJobsStats.map_mismatches;
+    if (++mSunCascadeMapMismatchTotal <= SUN_CASCADE_MISMATCH_LOG_LIMIT)
+    {
+        LL_WARNS("SunCascadeJobs") << "render-map mismatch, frame " << LLDrawable::getCurrentFrame() << ", cascade " << cascade
+            << ": " << what << LL_ENDL;
+    }
+    return false;
+}
+
+void LLPipeline::reportSunCascadeJobs()
+{
+    static LLCachedControl<bool> stats_on(gSavedSettings, "RenderSunCascadeJobsStats", false);
+    static F64 window_start = 0.0;
+    SunCascadeJobsStats& stats = mSunCascadeJobsStats;
+    ++stats.passes;
+    if (!stats_on)
+    {
+        stats = SunCascadeJobsStats();
+        window_start = 0.0;
+        return;
+    }
+    const F64 now = LLTimer::getTotalSeconds();
+    if (window_start == 0.0)
+    {
+        // the first pass after the setting was switched on opens the window
+        stats = SunCascadeJobsStats();
+        window_start = now;
+        return;
+    }
+    if (now - window_start < 1.0)
+    {
+        return;
+    }
+    const F64 per_pass_ms = 1000.0 / (F64)stats.passes;
+    LL_INFOS("SunCascadeJobs") << "SunCascadeJobs: passes " << stats.passes
+        << " jobs_passes " << stats.jobs_passes
+        << " helpers " << LL::FrameJobs::helperCount()
+        << " serial " << (LL::FrameJobs::isSerial() ? 1 : 0)
+        << " cull_ms " << llformat("%.4f", stats.cull_s * per_pass_ms)
+        << " map_ms " << llformat("%.4f", stats.map_s * per_pass_ms)
+        << " cull_items " << stats.cull_items
+        << " cull_groups " << stats.cull_groups
+        << " map_builds " << stats.map_builds
+        << " map_chunks " << stats.map_chunks
+        << " culls_compared " << stats.culls_compared
+        << " cull_mismatch " << stats.cull_mismatches
+        << " maps_compared " << stats.maps_compared
+        << " map_mismatch " << stats.map_mismatches
+        << " cull_mismatch_total " << mSunCascadeCullMismatchTotal
+        << " map_mismatch_total " << mSunCascadeMapMismatchTotal
+        << LL_ENDL;
+    stats = SunCascadeJobsStats();
+    window_start = now;
+}
+// </Vulkanstorm>
+#endif
+
 // <Vulkanstorm> shadow method Stochastic: the stable sun cascades (stage S1)
 void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& lightDir, const LLVector3& up, const F32 (&dist)[5],
     const LLPlane& shadow_near_clip, const glm::mat4& saved_view, const glm::mat4& saved_proj, const glm::mat4& inv_view,
     glm::mat4 (&view)[6], glm::mat4 (&proj)[6])
 {
-    bool origin_set = false; // the origin of the blended casters' blocks was set for a cascade (reset after the loop)
-    for (S32 j = 0; j < (gCubeSnapshot ? 2 : 4); j++)
+    // <Vulkanstorm> multi-core 5c-0: the cameras of all the cascades first, then the renders, cascade by cascade in the
+    // same order as before. A cascade's camera depends only on the view, the light, the split distances and its target's
+    // size (LLViewerCamera::updateFrustumPlanes also reads gGLViewport, but only to unproject the viewport's own corners,
+    // which gives the same planes for any viewport), so nothing it needs comes from the render of an earlier cascade.
+    // What the draws and the temporal history read (the current and "last" matrices, mShadowModelview / mShadowProjection,
+    // mSunShadowMatrix, the camera id, the viewport) is set in the second loop, where it was relative to the draws.
+    const S32 cascade_count = gCubeSnapshot ? 2 : 4;
+    LLCamera shadow_cams[4];                 //camera used for shadow cull/render
+    bool cascade_off[4] = { false, false, false, false };
+    LLShadowCascadeFit::Rect boxes[4] = {};
+
+    for (S32 j = 0; j < cascade_count; j++)
     {
         if (!hasRenderDebugMask(RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
         {
@@ -12806,8 +13034,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         LLVector3 eye = camera.getOrigin();
         llassert(eye.isFinite());
 
-        //camera used for shadow cull/render
-        LLCamera shadow_cam;
+        LLCamera& shadow_cam = shadow_cams[j];
 
         //create world space camera frustum for this split
         shadow_cam = camera;
@@ -12849,19 +13076,12 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
             {
                 mShadowExtents[j][0] = LLVector3();
                 mShadowExtents[j][1] = LLVector3();
-                mShadowCamera[j+4] = shadow_cam;
             }
-
-            mRT->shadow[j].bindTarget();
-            {
-                LLGLDepthTest depth(GL_TRUE);
-                mRT->shadow[j].clear();
-            }
-            mRT->shadow[j].flush();
 
             mShadowError.mV[j] = 0.f;
             mShadowFOV.mV[j] = 0.f;
 
+            cascade_off[j] = true; // its target is cleared in the second loop, at the cascade's turn
             continue;
         }
 
@@ -12881,6 +13101,7 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         const glm::vec3 anchor = mul_mat4_vec3(view[j], glm::vec3(0.f));
         const LLShadowCascadeFit::Rect box = LLShadowCascadeFit::snappedSquare(c.x, c.y, radius,
             (F32)mRT->shadow[j].getWidth(), (F32)mRT->shadow[j].getHeight(), anchor.x, anchor.y);
+        boxes[j] = box;
         const LLShadowCascadeFit::DepthRange depth = LLShadowCascadeFit::depthRange(c.z, radius);
 
         mShadowError.mV[j] = -1.f; // orthographic (the perspective warp is gone)
@@ -12935,6 +13156,38 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
 
         //shadow_cam.ignoreAgentFrustumPlane(LLCamera::AGENT_PLANE_NEAR);
         shadow_cam.getAgentPlane(LLCamera::AGENT_PLANE_NEAR).set(shadow_near_clip);
+    }
+
+    bool origin_set = false; // the origin of the blended casters' blocks was set for a cascade (reset after the loop)
+    for (S32 j = 0; j < cascade_count; j++)
+    {
+        LLCamera& shadow_cam = shadow_cams[j];
+
+        LLViewerCamera::sCurCameraID = (LLViewerCamera::eCameraID)(LLViewerCamera::CAMERA_SUN_SHADOW0+j);
+
+        if (cascade_off[j])
+        { // cascade turned off by RenderShadowSplits
+            //restore render matrices
+            set_current_modelview(saved_view);
+            set_current_projection(saved_proj);
+
+            if (!gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA) && !gCubeSnapshot)
+            {
+                mShadowCamera[j+4] = shadow_cam;
+            }
+
+            mRT->shadow[j].bindTarget();
+            {
+                LLGLDepthTest depth(GL_TRUE);
+                mRT->shadow[j].clear();
+            }
+            mRT->shadow[j].flush();
+
+            continue;
+        }
+
+        const LLShadowCascadeFit::Rect& box = boxes[j];
+        // </Vulkanstorm>
 
         //translate and scale to from [-1, 1] to [0, 1]
         glm::mat4 trans(0.5f, 0.0f, 0.0f, 0.0f,
@@ -12991,6 +13244,12 @@ void LLPipeline::generateSunCascadesStable(LLCamera& camera, const LLVector3& li
         LLLocalShadowGL::setTileOrigin(0.f, 0.f);
         gDeferredShadowCubeProgram.bind();
     }
+#if VKS_FRAMEJOBS_COMPARE
+    if (!gCubeSnapshot)
+    {
+        reportSunCascadeJobs();
+    }
+#endif
 }
 // </Vulkanstorm>
 

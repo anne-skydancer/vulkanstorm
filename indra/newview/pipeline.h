@@ -387,6 +387,40 @@ public:
 
     void renderShadow(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
     void renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    // <Vulkanstorm> multi-core 5c-0 (D5): the two halves of a shadow render; only renderShadowImpl calls them
+    void shadowCullAndSort(LLCamera& camera, LLCullResult& result);
+    void shadowSubmit(const glm::mat4& view, const glm::mat4& proj, LLCamera& camera, LLCullResult& result, bool depth_clamp);
+    // </Vulkanstorm>
+#if VKS_FRAMEJOBS_COMPARE
+    // <Vulkanstorm> multi-core 5c, development only (not for vkstorm-release): the compare mode's list checks and the
+    // counters of the sun cascades' frame jobs, written as one "SunCascadeJobs:" log line a second with the debug setting
+    // RenderSunCascadeJobsStats. The counters are sums since the last line; the mismatch totals are for the session.
+    struct SunCascadeJobsStats
+    {
+        U32 passes = 0;          // sun passes of the main view (generateSunCascadesStable)
+        U32 jobs_passes = 0;     // those whose culls ran as frame jobs
+        U32 cull_items = 0;      // cull jobs: one per cascade and partition
+        U32 cull_groups = 0;     // groups those jobs found
+        U32 map_builds = 0;      // render maps built in chunks
+        U32 map_chunks = 0;      // their chunks
+        U32 culls_compared = 0;  // compare mode: cascades culled again on the main thread
+        U32 cull_mismatches = 0; // those whose lists differed
+        U32 maps_compared = 0;   // compare mode: render maps built again in the former loop
+        U32 map_mismatches = 0;  // those that differed
+        F64 cull_s = 0.0;        // main-thread time of the cascades' culls (either path; the compare mode's own time is left out)
+        F64 map_s = 0.0;         // main-thread time of the cascades' render-map builds (the same)
+    };
+    SunCascadeJobsStats mSunCascadeJobsStats;
+    U32 mSunCascadeCullMismatchTotal = 0;
+    U32 mSunCascadeMapMismatchTotal = 0;
+    // The lists a cull leaves (visible and drawable groups; the lists the sort fills must be empty in both) and the node
+    // counts. Logs the first difference of the first 20 mismatches, counts all of them, and returns true when equal.
+    bool compareSunCascadeCull(LLCullResult& jobs, LLCullResult& serial, S32 jobs_nodes, S32 serial_nodes, S32 cascade);
+    // The render map of every type and the blended groups' lists; as above.
+    bool compareSunCascadeRenderMap(LLCullResult& jobs, LLCullResult& serial, S32 cascade);
+    void reportSunCascadeJobs();
+    // </Vulkanstorm>
+#endif
     void renderSelectedFaces(const LLColor4& color);
     void renderHighlights();
     bool renderVignette(LLRenderTarget* src, LLRenderTarget* dst);

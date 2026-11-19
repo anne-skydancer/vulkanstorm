@@ -512,11 +512,11 @@ void LLViewerOctreeGroup::unbound()
 //virtual
 void LLViewerOctreeGroup::rebound()
 {
-    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE;
     if (!isDirty())
     {
         return;
     }
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE; // <Vulkanstorm/> multi-core 5c-0: after the early return, so a clean node costs no zone
 
     if (mOctreeNode->getChildCount() == 1 && mOctreeNode->getElementCount() == 0)
     {
@@ -1318,7 +1318,7 @@ bool LLViewerOctreeCull::earlyFail(LLViewerOctreeGroup* group)
 //virtual
 void LLViewerOctreeCull::traverse(const OctreeNode* n)
 {
-    LL_PROFILE_ZONE_SCOPED;
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_OCTREE; // <Vulkanstorm/> multi-core 5c-0: the per-node cull zones are in the OCTREE category
     LLViewerOctreeGroup* group = (LLViewerOctreeGroup*) n->getListener(0);
 
     if (earlyFail(group))

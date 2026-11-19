@@ -226,7 +226,8 @@ class LightThroughTwin(unittest.TestCase):
         rig = body[body.index('        if (rigged)\n'):body.index('        else\n        {\n            if (pparams->mGLTFMaterial)')]
         self.assertEqual(rig.count('uniform1i(LLShaderMgr::SHADOW_THROUGH, 0);'), 2)   # a rigged face keeps the depth rule
         self.assertIn('renderAlphaObjects(rigged, light_through && !rigged);', pipe)
-        shadow = pipe[pipe.index('void LLPipeline::renderShadowImpl('):]
+        # the submission half of renderShadowImpl (multi-core 5c-0 split it into shadowCullAndSort and shadowSubmit)
+        shadow = pipe[pipe.index('void LLPipeline::shadowSubmit('):]
         shadow = shadow[:shadow.index('\n}\n')]
         self.assertIn('LLLocalShadowGL::throughTarget() : nullptr;', shadow)
         self.assertIn('sLocalShadowPass == LOCAL_SHADOW_STATIC ? LLLocalShadowGL::throughTarget()', shadow)
