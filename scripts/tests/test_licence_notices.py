@@ -93,7 +93,7 @@ class ManifestListTest(unittest.TestCase):
 
     def test_manifest_stages_the_package_notices_on_every_platform(self):
         manifest = (NEWVIEW / 'viewer_manifest.py').read_text(encoding='utf-8')
-        # ViewerManifest.construct is common to Windows, macOS and Linux.
+        # Text check: the loop is called once, in ViewerManifest.construct (common to all platforms).
         self.assertEqual(manifest.count('package_licence_files('), 1)
         self.assertIn('PACKAGE_ROOT_LICENCES', manifest)
 
@@ -125,7 +125,8 @@ class StagedTest(unittest.TestCase):
     def test_staged_licenses(self):
         lic = Path(STAGED) / 'licenses'
         have = {p.name for p in lic.iterdir()}
-        for banned in PACKAGE_LICENCES_NOT_SHIPPED - {'soloud.txt', 'soloud-miniaudio.txt'}:
+        # soloud*: staged by option; the Russian dictionary name is the manifest's own LibreOffice licence
+        for banned in PACKAGE_LICENCES_NOT_SHIPPED - {'soloud.txt', 'soloud-miniaudio.txt', 'ru_ru-dictionary-license.txt'}:
             self.assertNotIn(banned, have)
         for needed in ('openjpeg.txt', 'libjpeg-turbo.txt', 'openssl.txt', 'zlib-ng.txt', 'curl.txt',
                        'mikktspace.txt', 'vulkan_gltf.txt'):

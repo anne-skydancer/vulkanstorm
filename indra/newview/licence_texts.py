@@ -33,6 +33,7 @@ PACKAGE_LICENCES_NOT_SHIPPED = frozenset({
     "discord-rpc.txt",           # USE_DISCORD, off
     "llappearanceutility.txt",   # Linden Lab proprietary
     "llphysicsextensions.txt",
+    "ru_ru-dictionary-license.txt",  # non-free Russian dictionary text; the manifest stages the LibreOffice one under this name
     "mesa.txt",                  # Mesa / Zink, not shipped
     "mesazink.txt",              # staged by the manifest when USE_MESAZINK is on
     "openal-soft.txt",           # USE_OPENAL, off
