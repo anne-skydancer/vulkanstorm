@@ -544,15 +544,15 @@ namespace
         }
     }
 
-    // LLViewerTextureList::precomputePixelAreas: every listed face, on the helpers.
-    void computeAhead(Scene& scene, size_t grain, std::vector<LLFacePixelArea::Result>& results)
+    // LLViewerTextureList::precomputePixelAreas: one batch of listed faces, [first, last), on the helpers.
+    void computeAhead(Scene& scene, size_t grain, std::vector<LLFacePixelArea::Result>& results, size_t first, size_t last)
     {
         results.resize(scene.mFaces.size());
         const LLFacePixelArea::View view = scene.view();
-        const Face* faces = scene.mFaces.data();
+        const Face* faces = scene.mFaces.data() + first;
         const Joint* joints = scene.mJoints.data();
-        LLFacePixelArea::Result* out = results.data();
-        FrameJobs::parallelFor(scene.mFaces.size(), grain,
+        LLFacePixelArea::Result* out = results.data() + first;
+        FrameJobs::parallelFor(last - first, grain,
             [&view, faces, joints, out](size_t begin, size_t end, size_t /*chunk*/)
             {
                 for (size_t i = begin; i < end; ++i)
@@ -562,11 +562,17 @@ namespace
             });
     }
 
-    // LLViewerTextureList::calcFacePixelArea in the loop's order, for the first `count` faces: the value computed ahead,
-    // or the main thread's own computation for a face that needs it.
-    void applyPass(Scene& scene, size_t count, const std::vector<LLFacePixelArea::Result>& results, Lcg& frand)
+    // Every face in one batch.
+    void computeAhead(Scene& scene, size_t grain, std::vector<LLFacePixelArea::Result>& results)
     {
-        for (size_t i = 0; i < count; ++i)
+        computeAhead(scene, grain, results, 0, scene.mFaces.size());
+    }
+
+    // LLViewerTextureList::calcFacePixelArea in the loop's order, for the faces [first, last): the value computed ahead,
+    // or the main thread's own computation for a face that needs it.
+    void applyPass(Scene& scene, size_t first, size_t last, const std::vector<LLFacePixelArea::Result>& results, Lcg& frand)
+    {
+        for (size_t i = first; i < last; ++i)
         {
             Face& f = scene.mFaces[i];
             const LLFacePixelArea::Result& result = results[i];
@@ -582,6 +588,31 @@ namespace
                 f.mInFrustum = apply(scene.mFrameTime, f, own, frand, f.mOutCos, f.mOutRadius);
             }
         }
+    }
+
+    void applyPass(Scene& scene, size_t count, const std::vector<LLFacePixelArea::Result>& results, Lcg& frand)
+    {
+        applyPass(scene, 0, count, results, frand);
+    }
+
+    // The pass as updateImagesFetchTextures runs it: a batch computed ahead when the loop gets to its first face, the
+    // loop over that batch, then the next batch, until the loop ends at `count` (which may fall inside a batch: the rest
+    // of that batch is computed and dropped). Returns the faces that went back to the main thread.
+    U32 batchedPass(Scene& scene, size_t count, size_t batch, size_t grain, std::vector<LLFacePixelArea::Result>& results,
+                    Lcg& frand)
+    {
+        U32 needs_serial = 0;
+        for (size_t first = 0; first < count; first += batch)
+        {
+            const size_t last = llmin(first + batch, scene.mFaces.size());
+            computeAhead(scene, grain, results, first, last);
+            for (size_t i = first; i < last; ++i)
+            {
+                needs_serial += (results[i].status == LLFacePixelArea::NEEDS_SERIAL);
+            }
+            applyPass(scene, first, llmin(last, count), results, frand);
+        }
+        return needs_serial;
     }
 
     size_t firstDifference(const Scene& a, const Scene& b)
@@ -667,6 +698,7 @@ namespace tut
         const size_t COUNT = 3000;      // the faces the loop reaches before its time box ends it: the fixed count
         const size_t helper_counts[] = { 0, 1, 2, 3, 5, 7 };
         const size_t grains[] = { 1, 64, 1000 };
+        const size_t batches[] = { NUM_FACES, 1024, 700 }; // all at once; the viewer's batch; one the count falls inside
 
         for (size_t helpers : helper_counts)
         {
@@ -676,34 +708,32 @@ namespace tut
                 FrameJobs::setSerial(serial_mode != 0);
                 for (size_t grain : grains)
                 {
-                    std::unique_ptr<Scene> serial(new Scene);
-                    std::unique_ptr<Scene> ahead(new Scene);
-                    buildScene(*serial, (U32)NUM_FACES, 9, 4133u, true);
-                    buildScene(*ahead, (U32)NUM_FACES, 9, 4133u, true);
-                    Lcg frand_serial(5u);
-                    Lcg frand_ahead(5u);
-                    std::vector<LLFacePixelArea::Result> results;
-                    U32 needs_serial = 0;
-
-                    for (U32 frame = 0; frame < 8; ++frame)
+                    for (size_t batch : batches)
                     {
-                        serialPass(*serial, COUNT, frand_serial);
+                        std::unique_ptr<Scene> serial(new Scene);
+                        std::unique_ptr<Scene> ahead(new Scene);
+                        buildScene(*serial, (U32)NUM_FACES, 9, 4133u, true);
+                        buildScene(*ahead, (U32)NUM_FACES, 9, 4133u, true);
+                        Lcg frand_serial(5u);
+                        Lcg frand_ahead(5u);
+                        std::vector<LLFacePixelArea::Result> results;
+                        U32 needs_serial = 0;
 
-                        computeAhead(*ahead, grain, results);
-                        for (const LLFacePixelArea::Result& result : results)
+                        for (U32 frame = 0; frame < 8; ++frame)
                         {
-                            needs_serial += (result.status == LLFacePixelArea::NEEDS_SERIAL);
+                            serialPass(*serial, COUNT, frand_serial);
+
+                            needs_serial += batchedPass(*ahead, COUNT, batch, grain, results, frand_ahead);
+
+                            const size_t diff = firstDifference(*serial, *ahead);
+                            ensure(at("face", helpers, grain, frame, diff), diff == NUM_FACES);
+                            ensure_equals(at("random numbers", helpers, grain, frame, 0), frand_ahead.mState, frand_serial.mState);
+
+                            nextFrame(*serial, frame);
+                            nextFrame(*ahead, frame);
                         }
-                        applyPass(*ahead, COUNT, results, frand_ahead);
-
-                        const size_t diff = firstDifference(*serial, *ahead);
-                        ensure(at("face", helpers, grain, frame, diff), diff == NUM_FACES);
-                        ensure_equals(at("random numbers", helpers, grain, frame, 0), frand_ahead.mState, frand_serial.mState);
-
-                        nextFrame(*serial, frame);
-                        nextFrame(*ahead, frame);
+                        ensure("some faces went back to the main thread", needs_serial > 100);
                     }
-                    ensure("some faces went back to the main thread", needs_serial > 100);
                 }
             }
         }

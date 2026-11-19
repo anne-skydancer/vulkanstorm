@@ -938,18 +938,23 @@ namespace
     constexpr U32 FACE_UPDATE_FRAMES = 10;
     // Faces a chunk: about 40 microseconds of rigged faces.
     constexpr size_t PIXEL_AREA_GRAIN = 64;
+    // Faces computed ahead at a time. The loop's time box is tested between two batches, so a pass it ends has computed at
+    // most one batch (and the faces of the entry that completed it) for entries the loop does not reach.
+    constexpr size_t PIXEL_AREA_BATCH_FACES = 1024;
 
     // Probe R0, development only (not for vkstorm-release): what the pass did, as Tracy plots and, with the debug setting
     // TexturePixelAreaStats, as one "TexturePixelArea:" log line a second. Sums over the second's passes unless named
     // otherwise: quota = textures the pass may visit, entries = those with a GL texture, processed = entries the loop
-    // reached, cut = passes ended by the time box before the last entry, listed = faces computed ahead, applied = faces
-    // that took such a value, serial = faces that ran calcPixelArea, mismatch = compare-mode differences.
+    // reached, cut = passes ended by the time box before the last entry, batches = batches of faces computed ahead,
+    // listed = those faces, applied = faces that took such a value, serial = faces that ran calcPixelArea, mismatch =
+    // compare-mode differences. ahead_ms is the time for listing and computing ahead, inside pass_ms.
     struct PixelAreaPassStats
     {
         U32 quota = 0;
         U32 entries = 0;
         U32 processed = 0;
         U32 cut = 0;
+        U32 batches = 0;
         U32 listed = 0;
         U32 applied = 0;
         U32 serial = 0;
@@ -971,6 +976,7 @@ namespace
         static PixelAreaPassStats sum;
         static U32 passes = 0;
         static F32 max_pass_ms = 0.f;
+        static F32 max_ahead_ms = 0.f;
         static F64 window_start = 0.0;
         if (!stats_on)
         {
@@ -982,6 +988,7 @@ namespace
         {
             sum = PixelAreaPassStats();
             max_pass_ms = 0.f;
+            max_ahead_ms = 0.f;
             window_start = now;
         }
         ++passes;
@@ -989,6 +996,7 @@ namespace
         sum.entries += pass.entries;
         sum.processed += pass.processed;
         sum.cut += pass.cut;
+        sum.batches += pass.batches;
         sum.listed += pass.listed;
         sum.applied += pass.applied;
         sum.serial += pass.serial;
@@ -996,6 +1004,7 @@ namespace
         sum.ahead_ms += pass.ahead_ms;
         sum.pass_ms += pass.pass_ms;
         max_pass_ms = llmax(max_pass_ms, pass.pass_ms);
+        max_ahead_ms = llmax(max_ahead_ms, pass.ahead_ms);
         if (now - window_start >= 1.0)
         {
             LL_INFOS("TexturePixelArea") << "TexturePixelArea: passes=" << passes
@@ -1004,37 +1013,56 @@ namespace
                 << " entries=" << sum.entries
                 << " processed=" << sum.processed
                 << " cut=" << sum.cut
+                << " batches=" << sum.batches
                 << " listed=" << sum.listed
                 << " applied=" << sum.applied
                 << " serial=" << sum.serial
                 << " mismatch=" << sum.mismatches
                 << " ahead_ms_mean=" << sum.ahead_ms / (F32)passes
+                << " ahead_ms_max=" << max_ahead_ms
                 << " pass_ms_mean=" << sum.pass_ms / (F32)passes
                 << " pass_ms_max=" << max_pass_ms << LL_ENDL;
             passes = 0;
         }
     }
+
+    // Compare mode: true for the first 20 differences, which are logged; all of them are counted.
+    bool reportPixelAreaMismatch()
+    {
+        static U32 reported = 0;
+        if (reported >= 20)
+        {
+            return false;
+        }
+        ++reported;
+        return true;
+    }
 }
 
-// Lists the faces the loop of updateImagesFetchTextures can reach through updateImageDecodePriority, each once and in the
-// loop's order, and computes their pixel areas on the frame job helpers. The list follows the loop's own rules (textures
-// still referenced, not boosted, at most MAX_FACES_TO_CHECK faces, a face not measured in the last FACE_UPDATE_FRAMES
-// frames); it may hold faces the loop then leaves out (its early exits, the time box), whose values are dropped, and a
-// face it misses is measured by the loop as before. A job reads faces, objects, avatars and joints and writes its own
-// slot of mPixelAreaResults; the main thread takes part in the batch and deletes nothing meanwhile.
-void LLViewerTextureList::precomputePixelAreas(const std::vector<LLPointer<LLViewerFetchedTexture> >& entries, bool compare)
+// One batch of the pass's pixel areas: lists the faces the loop of updateImagesFetchTextures can reach through
+// updateImageDecodePriority, each once and in the loop's order, from the entry `first` on until PIXEL_AREA_BATCH_FACES
+// faces are listed, and computes them on the frame job helpers. Returns the entry the next batch starts at; the loop asks
+// for that batch when it gets there, so its time box bounds the work done ahead. The list follows the loop's own rules
+// (textures still referenced, not boosted, at most MAX_FACES_TO_CHECK faces, a face not measured in the last
+// FACE_UPDATE_FRAMES frames); it may hold faces the loop then leaves out (its early exits, the time box), whose values are
+// dropped, and a face it misses is measured by the loop as before. A job reads faces, objects, avatars and joints and
+// writes its own slot of mPixelAreaResults; the main thread takes part in the batch and deletes nothing meanwhile. The
+// faces of earlier batches stay listed (a face is found by its slot) and are not read again here.
+size_t LLViewerTextureList::precomputePixelAreas(const std::vector<LLPointer<LLViewerFetchedTexture> >& entries, size_t first, bool compare)
 {
     LL_PROFILE_ZONE_NAMED_CATEGORY_TEXTURE("vtluift - pixel areas");
 
-    mPixelAreaFaces.clear();
-    if (LL::FrameJobs::helperCount() == 0 && !compare)
+    if ((LL::FrameJobs::helperCount() == 0 || LL::FrameJobs::isSerial()) && !compare)
     {
-        return; // no helpers: nothing to gain from a second walk over the faces
+        // no helpers, or every batch on this thread: nothing to gain from a second walk over the faces
+        return entries.size();
     }
 
-    for (const auto& entry : entries)
+    const size_t batch_begin = mPixelAreaFaces.size();
+    size_t next = first;
+    for (; next < entries.size() && mPixelAreaFaces.size() - batch_begin < PIXEL_AREA_BATCH_FACES; ++next)
     {
-        LLViewerFetchedTexture* imagep = entry.get(); // no LLPointer copy: the loop's deletion rules count references
+        LLViewerFetchedTexture* imagep = entries[next].get(); // no LLPointer copy: the loop's deletion rules count references
         if (imagep->getNumRefs() <= 1 || imagep->getBoostLevel() >= LLViewerFetchedTexture::BOOST_HIGH)
         {
             continue;
@@ -1062,16 +1090,16 @@ void LLViewerTextureList::precomputePixelAreas(const std::vector<LLPointer<LLVie
         }
     }
 
-    const size_t count = mPixelAreaFaces.size();
-    mPixelAreaResults.resize(count);
+    const size_t count = mPixelAreaFaces.size() - batch_begin;
+    mPixelAreaResults.resize(mPixelAreaFaces.size());
     if (count == 0)
     {
-        return;
+        return next;
     }
 
     const LLFacePixelArea::View view = LLFace::pixelAreaView();
-    LLFace* const* faces = mPixelAreaFaces.data();
-    LLFacePixelArea::Result* results = mPixelAreaResults.data();
+    LLFace* const* faces = mPixelAreaFaces.data() + batch_begin;
+    LLFacePixelArea::Result* results = mPixelAreaResults.data() + batch_begin;
     LL::FrameJobs::parallelFor(count, PIXEL_AREA_GRAIN,
         [&view, faces, results](size_t begin, size_t end, size_t /*chunk*/)
         {
@@ -1080,6 +1108,7 @@ void LLViewerTextureList::precomputePixelAreas(const std::vector<LLPointer<LLVie
                 faces[i]->computePixelArea(view, true, results[i]);
             }
         });
+    return next;
 }
 
 // LLFace::calcPixelArea for the loop of updateImageDecodePriority: the value computed ahead for this face, stored here, at
@@ -1104,10 +1133,8 @@ bool LLViewerTextureList::calcFacePixelArea(LLFace* face, F32& cos_angle_to_view
                 if (!LLFacePixelArea::identical(check, result))
                 {
                     ++mPixelAreaMismatches;
-                    static U32 reported = 0;
-                    if (reported < 20)
+                    if (reportPixelAreaMismatch())
                     {
-                        ++reported;
                         LL_WARNS("TexturePixelArea") << "Pixel area computed ahead differs from the main thread's: status "
                         << (S32)result.status << " / " << (S32)check.status
                         << ", area " << result.pixel_area << " / " << check.pixel_area
@@ -1137,13 +1164,13 @@ F32 LLViewerTextureList::wornAvatarArea(LLVOAvatar* avatar)
     }
     const bool drawn = avatar->isVisible() && !avatar->isVisuallyMuted();
     const F32 area = drawn ? avatar->getPixelArea() : 0.f;
-    if (mPixelAreaCompare && avatar->mWornRankPass == mPixelAreaPass && area != avatar->mWornRankArea)
+    // (bit for bit, as the faces' values are: an area that is not a number does not differ from itself)
+    if (mPixelAreaCompare && avatar->mWornRankPass == mPixelAreaPass
+        && memcmp(&area, &avatar->mWornRankArea, sizeof(area)) != 0)
     {
         ++mPixelAreaMismatches;
-        static U32 reported = 0;
-        if (reported < 20)
+        if (reportPixelAreaMismatch())
         {
-            ++reported;
             LL_WARNS("TexturePixelArea") << "An avatar's worn rank area changed inside a pass: " << avatar->mWornRankArea
                                          << " / " << area << LL_ENDL;
         }
@@ -1581,8 +1608,9 @@ F32 LLViewerTextureList::updateImagesFetchTextures(F32 max_time)
 
     LLTimer timer;
 
-    // <Vulkanstorm> multi-core C8: the pixel areas of the pass's faces, computed ahead on the frame job helpers, inside
-    // the pass's time box. TexturePixelAreaJobs off: the pass as it was, every face measured in the loop.
+    // <Vulkanstorm> multi-core C8: the pixel areas of the pass's faces, computed ahead on the frame job helpers, a batch
+    // at a time as the loop gets to its entries, so the pass's time box bounds that work too. TexturePixelAreaJobs off:
+    // the pass as it was, every face measured in the loop.
     static LLCachedControl<bool> pixel_area_jobs(gSavedSettings, "TexturePixelAreaJobs", true);
     static LLCachedControl<bool> pixel_area_compare(gSavedSettings, "TexturePixelAreaCompare", false);
     mPixelAreaApplied = mPixelAreaSerial = mPixelAreaMismatches = 0;
@@ -1596,15 +1624,26 @@ F32 LLViewerTextureList::updateImagesFetchTextures(F32 max_time)
         }
         mPixelAreaPass = last_pass;
         mPixelAreaCompare = pixel_area_compare;
-        precomputePixelAreas(entries, mPixelAreaCompare);
     }
     pass_stats.entries = (U32)entries.size();
-    pass_stats.listed = (U32)mPixelAreaFaces.size();
-    pass_stats.ahead_ms = timer.getElapsedTimeF32() * 1000.f;
+    size_t entry_index = 0;                                       // the loop's place in entries
+    size_t ahead_end = mPixelAreaPass != 0 ? 0 : entries.size(); // the first entry whose faces are not listed yet
     // </Vulkanstorm>
 
     for (auto& imagep : entries)
     {
+        // <Vulkanstorm> multi-core C8: the next batch, when the loop gets to its first entry (the time box was tested
+        // just before)
+        if (entry_index++ == ahead_end)
+        {
+            const F32 ahead_start = timer.getElapsedTimeF32();
+            const size_t listed = mPixelAreaFaces.size();
+            ahead_end = precomputePixelAreas(entries, ahead_end, mPixelAreaCompare);
+            pass_stats.batches += mPixelAreaFaces.size() > listed ? 1 : 0;
+            pass_stats.ahead_ms += (timer.getElapsedTimeF32() - ahead_start) * 1000.f;
+        }
+        // </Vulkanstorm>
+
         mLastUpdateKey = LLTextureKey(imagep->getID(), (ETexListType)imagep->getTextureListType());
 
         if (imagep->getNumRefs() > 1) // make sure this image hasn't been deleted before attempting to update (may happen as a side effect of some other image updating)
@@ -1624,6 +1663,7 @@ F32 LLViewerTextureList::updateImagesFetchTextures(F32 max_time)
     // <Vulkanstorm> multi-core C8: the pass is over; a face measured outside it runs calcPixelArea. Probe R0.
     mPixelAreaPass = 0;
     mPixelAreaCompare = false;
+    pass_stats.listed = (U32)mPixelAreaFaces.size();
     mPixelAreaFaces.clear(); // the faces may be deleted from here on
     pass_stats.cut = pass_stats.processed < pass_stats.entries ? 1 : 0;
     pass_stats.applied = mPixelAreaApplied;

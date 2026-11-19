@@ -255,11 +255,11 @@ private:
     // (updateImagesFetchTextures). The serial loop then stores each one at the place where it called
     // LLFace::calcPixelArea, and still calls it for a face that has no value or whose value could not be computed
     // without writing.
-    void precomputePixelAreas(const std::vector<LLPointer<LLViewerFetchedTexture> >& entries, bool compare);
+    size_t precomputePixelAreas(const std::vector<LLPointer<LLViewerFetchedTexture> >& entries, size_t first, bool compare);
     bool calcFacePixelArea(LLFace* face, F32& cos_angle_to_view_dir, F32& radius);
     F32  wornAvatarArea(LLVOAvatar* avatar);
 
-    std::vector<LLFace*> mPixelAreaFaces;                    // the pass's faces, in the loop's order, each once
+    std::vector<LLFace*> mPixelAreaFaces;                    // the pass's faces so far, in the loop's order, each once
     std::vector<LLFacePixelArea::Result> mPixelAreaResults;  // their values, by the same index
     U32  mPixelAreaPass = 0;       // the running pass (never 0), or 0 outside updateImagesFetchTextures and when switched off
     bool mPixelAreaCompare = false;

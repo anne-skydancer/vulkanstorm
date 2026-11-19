@@ -446,7 +446,7 @@ class PixelAreaJobs(unittest.TestCase):
     def setUp(self):
         self.compute = code(body(FACE, 'void LLFace::computePixelArea('))
         self.apply = code(body(FACE, 'bool LLFace::applyPixelArea('))
-        self.ahead = code(body(TEXTURE_LIST, 'void LLViewerTextureList::precomputePixelAreas('))
+        self.ahead = code(body(TEXTURE_LIST, 'size_t LLViewerTextureList::precomputePixelAreas('))
         self.turn = code(body(TEXTURE_LIST, 'bool LLViewerTextureList::calcFacePixelArea('))
         self.decode = code(body(TEXTURE_LIST, 'void LLViewerTextureList::updateImageDecodePriority('))
         self.fetch = code(body(TEXTURE_LIST, 'F32 LLViewerTextureList::updateImagesFetchTextures('))
@@ -515,14 +515,36 @@ class PixelAreaJobs(unittest.TestCase):
         self.assertEqual(self.turn.count('return face->applyPixelArea(result, cos_angle_to_view_dir, radius);'), 1)
         self.assertEqual(self.turn.count('return face->calcPixelArea(cos_angle_to_view_dir, radius);'), 1)
 
+    def test_the_time_box_bounds_the_work_done_ahead(self):
+        # a batch at a time, asked for inside the loop when it gets to the batch's first entry: the loop's time test
+        # (after every entry) comes before every batch but the first
+        self.assertIn('constexpr size_t PIXEL_AREA_BATCH_FACES = 1024;', TEXTURE_LIST)
+        self.assertIn('for (; next < entries.size() && mPixelAreaFaces.size() - batch_begin < PIXEL_AREA_BATCH_FACES; ++next)', self.ahead)
+        # only the batch's own faces are computed; the earlier ones stay listed for calcFacePixelArea
+        self.assertNotIn('mPixelAreaFaces.clear()', self.ahead)
+        self.assertIn('LLFace* const* faces = mPixelAreaFaces.data() + batch_begin;', self.ahead)
+        self.assertIn('LLFacePixelArea::Result* results = mPixelAreaResults.data() + batch_begin;', self.ahead)
+        self.assertIn('LL::FrameJobs::parallelFor(count, PIXEL_AREA_GRAIN,', self.ahead)
+        # nothing ahead where the batch would run on the main thread anyway (no helpers, serial mode)
+        self.assertIn('if ((LL::FrameJobs::helperCount() == 0 || LL::FrameJobs::isSerial()) && !compare)', self.ahead)
+        loop = self.fetch.index('for (auto& imagep : entries)')
+        ahead = self.fetch.index('ahead_end = precomputePixelAreas(entries, ahead_end, mPixelAreaCompare);')
+        self.assertEqual(self.fetch.count('precomputePixelAreas('), 1)
+        self.assertLess(loop, self.fetch.index('if (entry_index++ == ahead_end)'))
+        self.assertLess(self.fetch.index('if (entry_index++ == ahead_end)'), ahead)
+        self.assertLess(ahead, self.fetch.index('updateImageDecodePriority(imagep);'))
+        self.assertLess(self.fetch.index('updateImageDecodePriority(imagep);'), self.fetch.index('if (timer.getElapsedTimeF32() > max_time)'))
+        # switched off: no batch is ever asked for
+        self.assertIn('size_t ahead_end = mPixelAreaPass != 0 ? 0 : entries.size();', self.fetch)
+
     def test_the_pass_ends_with_the_loop(self):
         # outside updateImagesFetchTextures (the low-memory purge of LLViewerTexture::updateClass) faces run calcPixelArea
-        ahead = self.fetch.index('precomputePixelAreas(entries, mPixelAreaCompare);')
+        ahead = self.fetch.index('ahead_end = precomputePixelAreas(entries, ahead_end, mPixelAreaCompare);')
         loop = self.fetch.index('for (auto& imagep : entries)')
         end = self.fetch.index('mPixelAreaPass = 0;')
         self.assertLess(self.fetch.index('LLTimer timer;'), ahead)  # inside the pass's time box
-        self.assertLess(ahead, loop)
-        self.assertLess(loop, end)
+        self.assertLess(loop, ahead)
+        self.assertLess(ahead, end)
         self.assertLess(end, self.fetch.index('return timer.getElapsedTimeF32();'))
         self.assertEqual(self.fetch.count('return '), 1)
 
