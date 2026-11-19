@@ -17,7 +17,7 @@ class FaceVolumeFaceGuardTest(unittest.TestCase):
                  and not line.lstrip().startswith(('//', 'const LLVolumeFace& vol_face = rigged'))]
         self.assertGreaterEqual(len(reads), 3)
         for i in reads:
-            window = '\n'.join(lines[max(0, i - 8):i + 1])
+            window = '\n'.join(lines[max(0, i - 6):i + 1])
             self.assertRegex(window, r'te_has_volume_face\(|getNumVolumeFaces\(\)\s*<=?\s*mTEOffset|mTEOffset\s*<\s*volume->getNumVolumeFaces',
                              'unguarded getVolumeFace at llface.cpp:%d' % (i + 1))
 
