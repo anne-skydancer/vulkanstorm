@@ -10,11 +10,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import ci_pr_readiness as pr_readiness  # noqa: E402
 
 
-def run(name, status="completed", conclusion="success", id_=1):
-    return {"name": name, "status": status, "conclusion": conclusion, "id": id_}
+def run(name, status="completed", conclusion="success", id_=1, workflow=1):
+    return {"name": name, "status": status, "conclusion": conclusion, "id": id_,
+            "details_url": f"https://github.com/o/r/actions/runs/{workflow}/job/{id_}"}
 
 
-GREEN = [run("windows"), run("linux"), run("linux-lts"), run("checks")]
+GREEN = [run("windows", id_=1), run("linux", id_=2), run("linux-lts", id_=3), run("checks", id_=4)]
 CODEX_P1 = {"nodes": [{"isResolved": False, "comments": {"nodes": [{
     "author": {"login": "chatgpt-codex-connector"}, "path": "indra/newview/a.cpp", "line": 42,
     "body": "![P1 Badge](https://img/p1.svg) **Guard the null face**\n\nDetails here.",
@@ -52,8 +53,18 @@ class Verdict(unittest.TestCase):
     def test_failed_other_check_and_rerun_wins(self):
         runs = GREEN + [run("ci-lint", conclusion="failure")]
         self.assertEqual(pr_readiness.evaluate(pr(check_runs=runs))["description"], "ci-lint failed")
-        rerun = [run("windows", conclusion="failure", id_=1), run("windows", id_=2), run("linux"), run("linux-lts")]
+        rerun = [run("windows", conclusion="failure", id_=1), run("windows", id_=2), run("linux", id_=3), run("linux-lts", id_=4)]
         self.assertEqual(pr_readiness.evaluate(pr(check_runs=rerun))["state"], "success")
+
+    def test_skipped_viewer_job_is_not_green(self):
+        # Windows' prerequisite failed, so its viewer job was skipped; another workflow's later,
+        # successful `checks` job must not hide that.
+        runs = [run("checks", conclusion="failure", id_=1, workflow=10), run("windows", conclusion="skipped", id_=2, workflow=10),
+                run("checks", id_=3, workflow=11), run("linux", id_=4, workflow=11), run("linux-lts", id_=5, workflow=12)]
+        v = pr_readiness.evaluate(pr(check_runs=runs))
+        self.assertEqual((v["state"], v["description"]), ("failure", "checks, windows failed"))
+        lone = pr_readiness.evaluate(pr(check_runs=[run("windows", conclusion="skipped"), run("linux", id_=2), run("linux-lts", id_=3)]))
+        self.assertEqual((lone["state"], lone["description"]), ("failure", "windows failed"))
 
     def test_open_codex_thread(self):
         threads = [pr_readiness.thread_info(t) for t in CODEX_P1["nodes"]]

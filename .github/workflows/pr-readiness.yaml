@@ -21,7 +21,9 @@ on:
   # GitHub has no workflow event for resolving a thread: a resolve shows at the
   # next event (a push, a review, a build ending).
   workflow_run:
-    workflows: ["Build Windows", "Build Linux", "Build Linux LTS"]
+    # Check PR runs on every PR, fork or not, so it is also the write path of a
+    # PR that builds no viewer: workflow_run has a write token in the base context.
+    workflows: ["Build Windows", "Build Linux", "Build Linux LTS", "Check PR"]
     types: [completed]
   # A base line that moves can make open PRs on it conflict.
   push:
