@@ -170,6 +170,23 @@ runs:
         else
           echo "::notice title=OpenJPEG checks skipped::the runner has no libopenjp2; llj2creduce_openjpeg_test.cpp and llj2cdecodeguard_openjpeg_test.cpp did not run"
         fi
+    - name: Check the SL decoder limits against the pinned OpenJPEG package
+      shell: bash
+      run: |
+        # The limits API is in the fork's package, not in the runner's libopenjp2: fetch the pinned linux64 package
+        # (the version and hash autobuild.xml pins) and build the test against its header and static library.
+        # A skip is a failure here: the test must run.
+        version=2.5.4.44499299587
+        sha256=a1f16d88c30539c877e40bb4babcf6997a2c0f99d8e84cb2881fee36f413dc4e
+        pkg="$RUNNER_TEMP/openjpeg-limits-package"
+        mkdir -p "$pkg"
+        curl -fsSL -o "$pkg/package.tar.zst" "https://github.com/anne-skydancer/3p-openjpeg/releases/download/v2.5.4-cpu-avx2.4/openjpeg-$version-linux64-${version##*.}.tar.zst"
+        echo "$sha256  $pkg/package.tar.zst" | sha256sum -c -
+        mkdir -p "$pkg/x"
+        tar --zstd -xf "$pkg/package.tar.zst" -C "$pkg/x"
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj -I "$pkg/x/include/openjpeg" indra/llimagej2coj/tests/llj2cdecoderlimits_openjpeg_test.cpp -o "$RUNNER_TEMP/j2c-decoder-limits-openjpeg-test" "$pkg/x/lib/release/libopenjp2.a" -lm -lpthread
+        "$RUNNER_TEMP/j2c-decoder-limits-openjpeg-test" | tee "$RUNNER_TEMP/j2c-decoder-limits.log"
+        grep -q "all checks passed" "$RUNNER_TEMP/j2c-decoder-limits.log"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
