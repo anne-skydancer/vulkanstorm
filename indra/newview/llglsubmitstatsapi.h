@@ -20,6 +20,7 @@
 class LLRenderTarget;
 class LLDrawInfo;
 class LLFace;
+class LLUUID;
 
 namespace LLGLSubmitStatsApi
 {
@@ -36,7 +37,8 @@ namespace LLGLSubmitStatsApi
     // The main loop's frame (llappviewer.cpp): the statistics frame and the compare arming that display() begins stay open
     // until end(), after the reflection probe update that follows display(), so windows count the probe face and its
     // cascades and compare 13 reaches a reflection face. The snapshot floaters' display() calls come after end() and get
-    // frames of their own. When display() began no frame (not rendering), end() has nothing to end.
+    // statistics frames of their own; only the main loop's display() begins or carries a compare arming
+    // (LLGLSubmitMath::CompareFrames). When display() began no frame (not rendering), end() has nothing to end.
     struct MainLoopFrame
     {
         MainLoopFrame();
@@ -50,18 +52,28 @@ namespace LLGLSubmitStatsApi
     // Called from display() when a Frame Profile is written: adds the "submit" section.
     void addToProfile(boost::json::object& stats);
 
-    // The copy census (G5b-0, X1-0). registerFace records what each face of a draw item would be as a copy (its geometry
-    // cache key, why it stays baked, its size, bytes and last bake time); the draws credit it in census windows; the
-    // LEAP operation "census" sums the resident faces. Main thread only (registerFace and the draws are).
+    // The copy census (G5b-0, X1-0). While it records (LEAP "censusRecord", which also rebuilds every draw item so that
+    // each has its record), registerFace records what each face of a draw item would be as a copy (its geometry cache
+    // key, why it stays baked, its size, bytes and last bake time); the draws credit it in census windows; the LEAP
+    // operation "census" sums the resident faces. Off (the default), registerFace and the bake pay one test each. Main
+    // thread only (registerFace, the bake and the draws are).
+    extern bool sCensusRecording;
+    inline bool censusRecording() { return sCensusRecording; }
     void censusFace(LLDrawInfo& info, LLFace* face, U32 pass_type);
+    // One face's record as censusFace makes it (selfBench times it on faces of the scene).
+    LLGLSubmitMath::CensusFace makeCensusFace(LLFace* face, const LLUUID& material_id, U32 pass_type);
+    // Drops the bake time waiting for the next record (when the census stops, and after selfBench's timer).
+    void forgetCensusBake();
 
     // Times one face's bake (getGeometryVolume) for the census record that registerFace makes next.
     struct CensusBake
     {
-        explicit CensusBake(const LLFace* face);
-        ~CensusBake();
+        explicit CensusBake(const LLFace* face) : mFace(face), mStart(censusRecording() ? start() : 0) {}
+        ~CensusBake() { if (mStart) { finish(); } }
         CensusBake(const CensusBake&) = delete;
         CensusBake& operator=(const CensusBake&) = delete;
+        static U64 start();     // 0 off the main thread
+        void finish();
         const LLFace* mFace;
         U64 mStart;
     };
@@ -89,8 +101,10 @@ namespace LLGLSubmitCompare
 
     // Why a pass that ends with renderGeomPostDeferred's tail (highlights, debug displays) cannot be rendered twice
     // alike this frame, or nullptr: the tail clears the highlight faces, rebuilds and redraws selected faces, and draws
-    // debug displays and update blips that age (b-28 F9). Passes 8, 14 and 15 are not compared then.
+    // debug displays and update blips that age (b-28 F9). Passes 8, 14 and 15 are not compared then. The compare sites
+    // pass it as a function (NotRun): it is asked only when the pass is armed.
     const char* tailNotRepeatable();
+    using NotRun = const char* (*)();
 
     // True during the second render of a compared pass: code that must not repeat (culling, sorting,
     // occlusion queries) tests it.
@@ -112,20 +126,22 @@ namespace LLGLSubmitCompare
     // Normally the body runs once. When the check is armed for the pass (RenderGLSubmitCompare), it runs twice:
     // the target's attachments are read back after each run and compared bit for bit; with 'restore_inputs'
     // the target's colour and depth are put back before the second run (passes that draw over existing content).
-    // 'not_run' non-null: the pass is not compared this frame, for that reason (it is rendered once, as normally).
-    // The back buffer is read with glReadPixels and restored from a copy made by a blit of the same formats.
+    // 'not_run' (asked only when the pass is armed) returning non-null: the pass is not compared this frame, for that
+    // reason. The back buffer is read with glReadPixels and restored from a copy made by a blit of the same formats.
+    // A first readback that fails, or inputs that cannot be put back, end the run as not run without a second render:
+    // the target keeps the first render, as it would normally.
     class Run
     {
     public:
-        Run(S32 pass, LLRenderTarget* target, bool restore_inputs = false, const char* not_run = nullptr);
-        Run(S32 pass, BackBuffer, bool restore_inputs, const char* not_run = nullptr);
+        Run(S32 pass, LLRenderTarget* target, bool restore_inputs = false, NotRun not_run = nullptr);
+        Run(S32 pass, BackBuffer, bool restore_inputs, NotRun not_run = nullptr);
         ~Run();
         Run(const Run&) = delete;
         Run& operator=(const Run&) = delete;
         bool next();
     private:
         struct Impl;
-        bool arm(S32 pass, const char* not_run);
+        bool arm(S32 pass, NotRun not_run);
         int mStep = 0;
         std::unique_ptr<Impl> mImpl;   // only when the pass is armed and has a target
     };
@@ -135,7 +151,7 @@ namespace LLGLSubmitCompare
 #define VKS_GLSTAT_MAIN_LOOP_FRAME() LLGLSubmitStatsApi::MainLoopFrame vks_glstat_main_loop_frame_
 #define VKS_GLSTAT_MAIN_LOOP_FRAME_END() vks_glstat_main_loop_frame_.end()
 #define VKS_GLSTAT_PROFILE(stats) LLGLSubmitStatsApi::addToProfile(stats)
-#define VKS_GLSTAT_CENSUS_FACE(info, face, type) LLGLSubmitStatsApi::censusFace((info), (face), (type))
+#define VKS_GLSTAT_CENSUS_FACE(info, face, type) do { if (LLGLSubmitStatsApi::censusRecording()) { LLGLSubmitStatsApi::censusFace((info), (face), (type)); } } while (0)
 #define VKS_GLSTAT_CENSUS_BAKE(face) LLGLSubmitStatsApi::CensusBake vks_glstat_census_bake_(face)
 #define VKS_GLCMP_REPLAY() LLGLSubmitCompare::replaying()
 #define VKS_GLCMP_LIGHT_FADE(fade, advance) ((fade) = LLGLSubmitCompare::lightFade((fade), (advance)))

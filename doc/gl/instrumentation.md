@@ -44,8 +44,11 @@ them, so sums of times over a view's passes are not the view's time (the view's 
 
 **The frame.** The main loop's statistics frame begins in `display()` (as before: frames that do not render are not counted)
 and ends after the reflection probe update that follows it (`llappviewer.cpp`), so the probe face and its two sun cascades
-are in every window (b-8 F2). The snapshot floaters' `display()` calls come after that and get frames of their own. Windows
-from before this change (mc1b) lack the probe update: their frame times and totals are smaller by it.
+are in every window (b-8 F2). The snapshot floaters' `display()` calls come after that and get statistics frames of their
+own; they, and `display_startup()` from the startup code, neither begin nor carry an identical-image check's arming (see
+"Arming"). Windows from before phase 2b's step 1 (mc1b) differ from today's in three ways: they lack the probe update (their
+frame times and totals are smaller by it), their runs end at fewer breakers (no vertex format changes or texture unbinds, so
+their `runs` are lower bounds of today's), and their hook cost was measured over a mix of 20 sites, not 24 (see "Overhead").
 
 | Counter | Counts |
 |---|---|
@@ -65,11 +68,12 @@ from before this change (mc1b) lack the probe update: their frame times and tota
 | `occIssued`, `occPolled`, `occBlocking` | occlusion queries issued, polled, and read with a **blocking** `GL_QUERY_RESULT` (the timeout path: the only stall source in occlusion) |
 | `gltfBinds`, `gltfSameAsLast` | `LLFetchedGLTFMaterial::bind` calls and those for the same material, media override, shader and shadow state as the call before (G1) |
 | `vbFormatChanges` | `setBuffer` of a buffer whose vertex streams (type mask) differ from the previous buffer's: `setupVertexBuffer` re-points every attribute, and a G5 page holds one format, so it ends a run |
-| `texUnbinds` | `LLTexUnit::unbind` and `unbindFast` calls that rebound the unit (a texture change that ends a run) |
+| `texUnbinds` | `LLTexUnit::unbind` and `unbindFast` calls that changed the unit's binding: a texture was on the unit (a texture change that ends a run). An unbind of a unit that holds nothing changes nothing and is not counted, as a redundant bind is not |
 | `texMatrixLoads` | texture matrices loaded (an animated texture's matrix; it reaches GL as a uniform, so `uniformMatrixGL` hid it) |
+| `censusFaces` | copy census records made (`registerFace` while the census records, see "The copy census"): 0 outside the census steps |
 | `runs`, `mergeableDraws`, `run_hist` | the **mergeable runs**: a draw continues the previous draw's run when nothing separates them but the vertex buffer: no program change, no texture bind or unbind (a redundant bind does not count), no uniform that reached GL (the model matrix included), no `LLGLState` toggle, no change of vertex format. `mergeableDraws = draws - runs`; `run_hist` counts runs of 1, 2, 3-4, 5-8, 9-16, 17+ draws. It is the upper bound of what one `glMultiDrawElements*` per run (G5c) could merge over the arenas of G5. Format changes and unbinds end runs since phase 2b's step 1 (b-8 F3): `runs` of earlier windows are lower bounds of today's |
 | `runsNoUniform`, `mergeableDrawsNoUniform`, `run_hist_no_uniform` | the same runs if uniforms, skin palettes and model matrices came from per-draw records (G6r-0): only program, texture, cap and format changes end them. `runsNoUniform <= runs` in every scope; the ratio decides G6r-c and any reopening of G7 (b-10) |
-| `stateKeysDistinct` | census windows only: distinct draw-state keys in the scope, the buckets a by-state sort would form (b-8's bucket count, for the record). A key is the program, the textures on its channels, the modelview and projection, the last palette and the `LLGLState` caps toggled since the frame began; other uniform values (alpha cutoff, material factors) are not in it, so it is a lower bound |
+| `stateKeysDistinct` | census windows only (left out of every other window and frame, not shown as 0): distinct draw-state keys in the scope, the buckets a by-state sort would form (b-8's bucket count, for the record). A key is the program, the textures on its channels, the modelview and projection, the last palette and the `LLGLState` caps toggled since the frame began; other uniform values (alpha cutoff, material factors) are not in it, so it is a lower bound |
 
 A frame in which the identical-image check runs renders its passes twice, so its counts and times are about doubled: **do not
 collect a window across it** (`perf_check.py` runs the check after the window).
@@ -117,13 +121,14 @@ Replies are small on purpose (see `scripts/inworld/README.md`, "Big replies"); t
 | Operation | Does |
 |---|---|
 | `status` | collection and compare state, `frame_count` |
-| `windowBegin {frames, gpu, census}` / `windowStop` | collect N frames, averaged per frame; poll `status` (`window_active`, `window_gpu_frames`, `window_census`). `census` true also counts the copy census and the draw-state keys (a window of its own: they cost about a hash and a set insertion per draw and per face) |
+| `windowBegin {frames, gpu, census}` / `windowStop` | collect N frames, averaged per frame; poll `status` (`window_active`, `window_gpu_frames`, `window_census`, `census_recording`). `census` true also counts the copy census and the draw-state keys (a window of its own, after `censusRecord`: they cost about a hash and a set insertion per draw and per face) |
 | `summary {kind}` | headline totals and per-view draws and times of the window (`window`) or the last frame (`frame`) |
 | `dump {kind, path}` | the full JSON (`totals`, `views`, `passes`, run histograms, compare results) to `path`: an absolute `.json` path under the viewer's log folder or a `.captures` folder, no `..`, no UNC paths (a LEAP client cannot truncate other files) |
-| `compareArm {pass, inject, frames}` / `compareResults` | arm the check for the next frame, or with `frames` (1-600) for up to that many frames until every pass asked for has run (an impostor regenerates now and then); read its results |
-| `census {path}` | the resident copy census of the scene to `path` (rules as `dump`); the reply has its headline (faces, the instancing ratio) |
+| `compareArm {pass, inject, frames}` / `compareResults` | arm the check for the next main-loop frame, or with `frames` (1-600) for up to that many main-loop frames until every pass asked for has run (an impostor regenerates now and then); read its results. Every pass asked for gets a result: one that did not run in the armed frames says so |
+| `censusRecord {on}` | `true`: the copy census records at every draw item's build, and every draw item of the volume, bridge, avatar, animesh and HUD partitions is marked for a rebuild, which the next frame does (each item gets its record); `false`: recording stops. Off is the default |
+| `census {path}` | the resident copy census of the scene to `path` (rules as `dump`); the reply has its headline (faces, draw items and those without a record, the instancing ratio) |
 | `profileFrame` | request a Frame Profile; the reply names the log folder |
-| `selfBench {iterations}` | the cost of the hooks in this binary (see "Overhead") |
+| `selfBench {iterations}` | the cost of the hooks in this binary, and the copy census's per recorded face (see "Overhead") |
 
 `scripts/inworld/perf_check.py` drives all of it (scenario `scenarios/gl_submit_g0.json`); `analyze_perf_check.py` turns the
 run folder into `report.txt`, and puts one run against another (`--compare`).
@@ -134,7 +139,7 @@ The question every stage must answer is "does the new path draw the same image".
 (animation, streaming, water and particles move), so the check renders **the same pass twice in one frame** with the same
 inputs and compares the attachments **bit for bit**:
 
-1. `RenderGLSubmitCompare` (or `compareArm`) arms the next frame.
+1. `RenderGLSubmitCompare` (or `compareArm`) arms the next main-loop frame.
 2. The pass runs. Its attachments are read back (`glGetTexImage`: 8 bit RGBA as bytes, anything wider as float RGBA, depth
    as float; lossless for the formats the renderer uses).
 3. The pass runs again with `activePath()` returning `RenderGLSubmitPath` (the first run used 0, today's path); for a pass that
@@ -168,7 +173,10 @@ flipped, and requires DIFFERENT. A run where that is not caught fails.
   the pass as not run. The sorted-alpha method is checked.
 - Multisampled targets (the check reads plain 2D textures).
 - Post-deferred, HUD and impostor renders whose tail cannot repeat (see "Compares 13-15"); reported as not run.
-- Passes that are not drawn in the frame (no spot light, no cascades with shadows off) report "did not run".
+- Passes that are not drawn in the armed frames (no spot light, no cascades with shadows off, no worn HUD) report "did not
+  run in the N armed frames": every pass an arming asks for gets a result, so a missing pass cannot pass for a compared one.
+- A first readback that fails, or inputs that cannot be put back, end the run as not run without a second render: the target
+  (and for 14 the presented frame) keeps the first render, as without the check.
 - GL state that a replay leaves different (it should not) would show as a difference: that is a harness bug and the first
   thing to rule out when a pass reports DIFFERENT with both renders on today's path.
 
@@ -180,25 +188,29 @@ geometry, so each gets its own compare.
 
 | Id | View | Compared | The replay |
 |---|---|---|---|
-| 13 | the first probe face rendered while armed: a reflection probe's (`probe face`, in the reflection probe update, now inside the frame) or a mirror's (`hero face`, inside `display()`) | the face's G-buffer (`mRT->deferredScreen`: the auxiliary set, or the hero set) after `renderGeomDeferred` in `display_cube_face` | clears the target again with the colour mask on (the first render left alpha writes off); occlusion is off in cube snapshots and the probe buffers are re-uploaded with the same data |
-| 14 | the HUD's geometry | the **back buffer** (colour and depth) after `renderGeomPostDeferred` in `render_hud_attachments`: read with `glReadPixels`, the inputs put back by a blit from a copy in textures of the back buffer's own formats (8 bit or 10 bit RGB, 16-bit float; depth 16, 24 or 32F, with or without stencil). A format the copy cannot match, or a blit the driver refuses, reports not run and the HUD is drawn once | the back buffer as the first render found it |
+| 13 | the first probe face rendered while armed: a reflection probe's (`probe face`, in the reflection probe update, now inside the frame) or a mirror's (`hero face`, inside `display()`); the result's `view` names which, so a session shows whether hero faces were covered (b-28 §4.3 a) | the face's G-buffer (`mRT->deferredScreen`: the auxiliary set, or the hero set) after `renderGeomDeferred` in `display_cube_face` | clears the target again with the colour mask on (the first render left alpha writes off); occlusion is off in cube snapshots and the probe buffers are re-uploaded with the same data |
+| 14 | the HUD's geometry | the **back buffer** (colour and depth) after `renderGeomPostDeferred` in `render_hud_attachments`: read with `glReadPixels`, the inputs put back by a blit from a copy in textures of the back buffer's own formats (8 bit or 10 bit RGB, 16-bit float; depth 16, 24 or 32F, with or without stencil). A format the copy cannot match, or a blit the driver refuses (the save or the restore), reports not run and the HUD is drawn once | the back buffer as the first render found it |
 | 15 | the first impostor regenerated while armed (not previews or profiles) | `avatar->mImpostor` after the whole block of `generateImpostor`: the clear, the G-buffer render and both post-deferred renders | the clear colour and the colour mask as the block found them (the depth-only render left colour writes off), and `sImpostorRenderAlphaDepthPass` as the block sets it |
 
 **The tail rule** (b-28 F9). `renderGeomPostDeferred` ends with `renderHighlights` and `renderDebug` in every non-probe view: they
 clear the highlight faces, rebuild and redraw selected faces (a rebuild frees draw items the second render would read) and draw
 debug displays and update blips that age. Compares 8, 14 and 15 report **not run** while highlight faces are pending, faces are
-selected in the edit tools' face mode, a debug display (`RenderDebugMask`) is on, or object update blips are shown
-(`LLGLSubmitCompare::tailNotRepeatable`).
+selected in the edit tools' face mode, a debug display (`RenderDebugMask`) is on, or object update blips are shown or still
+fading (they age for 2 s after the option is turned off) (`LLGLSubmitCompare::tailNotRepeatable`, asked only when the pass is
+armed).
 The pathfinding console's world drawing is not detected: keep it closed in a compare session.
 
-**Impostors until H28.** On devel before the impostor hotfix (H28: each item's full material, blended parts sorted and blended
-once) a PBR-dressed avatar's impostor reads texture units and factors left by whatever ran before, and the second render starts
-from the first one's end state: compare 15 can report DIFFERENT with no code change. Read 15 on avatars without PBR items until
-H28 is on devel; afterwards on all, and the compare also proves H28.
+**Impostors and H28.** Before the impostor hotfix (H28: each item's full material, blended parts sorted and blended once) a
+PBR-dressed avatar's impostor reads texture units and factors left by whatever ran before, and the second render starts from the
+first one's end state: compare 15 can report DIFFERENT with no code change. H28 is on devel since 2026-11-19 (bc152f351d): a devel
+build has it and 15 reads every avatar (the compare also proves H28); a build of this branch alone, cut before it, does not.
 
 **Arming.** A probe face is rendered in every frame with reflection probes on; the HUD needs a worn HUD; an impostor is
-regenerated only now and then. `compareArm {frames: N}` keeps the arming open for up to N frames, each pass compared once in
-the first frame that renders it; `perf_check.py` arms for the scenario's `compare.frames`. The light fades of a replayed
+regenerated only now and then. `compareArm {frames: N}` keeps the arming open for up to N main-loop frames, each pass compared
+once in the first frame that renders it; `perf_check.py` arms for the scenario's `compare.frames`. Only the main loop's
+`display()` begins or carries an arming, and a pass is compared only while such a frame owns it (from `display()` to the end
+of the reflection probe update): a snapshot floater's refresh or a 360 capture between frames compares nothing and does not
+use up the arming (`LLGLSubmitMath::CompareFrames`, unit-tested in `llglsubmitimage_test.cpp`). The light fades of a replayed
 post-deferred render follow the first render's log, as for 8; a light that finishes fading out between the two renders of an
 impostor would leave the set and show as a difference (rare, as for 8).
 
@@ -207,20 +219,30 @@ impostor would leave the set and show as a difference (rare, as for 8).
 Counts what instancing (one object-space copy per repeated face, a record per placement) and vertex pulling (smaller copies)
 could take over from the bake, in the viewer's real draw order, before either is built. Nothing here draws or changes a pixel.
 
-**Recorded at registerFace** (every group rebuild, development builds, main thread): for each face that joins a draw item, in
-draw order, a record (`LLDrawInfo::mGLSubmitCensus`): its **geometry cache key** (`LLGLSubmitMath::censusKey`: the shared
-volume and face, the vertex and index counts, the buffer's streams, the texture transform, colour, glow and the material's
+**Recorded at registerFace** while the census records (`censusRecord {on: true}`, which also has every draw item rebuilt so
+that each gets its record; development builds, main thread; off, `registerFace` and the bake pay one flag test each): for each
+face that joins a draw item, in draw order, a record (`LLDrawInfo::mGLSubmitCensus`): its **geometry cache key**
+(`LLGLSubmitMath::censusKey`: the shared volume, by its parameters and detail level, and face, the vertex and index counts, the
+buffer's streams, the texture entry's transform (not for a glTF face: the bake leaves it out of its texture coordinates), the
+colour and glow bytes the bake writes (b-11 §3.2's streamHash: the texture entry's colour or the glTF base colour, with the
+legacy shininess in the alpha byte where the bake puts it, `censusBakedColor`; 0 without such a stream) and the material's
 hash, which carries the normal, specular and glTF texture transforms; a rigged face adds its skin and texture index), the
 **first rule that keeps it baked** (`censusExclusion`, b-11 §3.3: no key, HUD, flexible, glTF asset, rigged, blended pass,
 invisiprim, texture animation, planar mapping, media, legacy bump without a normal map, selected, a transform entry outside the
-exactness guard), its vertices, its bytes and its last bake time (`getGeometryVolume`, timed around the call). The guard is
+exactness guard), its vertices, its vertex and index bytes, its identity (its object and face, so a face is counted once over
+its passes, and an address reused while a draw item waits for its rebuild cannot merge two faces) and its last bake time
+(`getGeometryVolume`, timed around the call). The guard is
 checked on the position and normal matrices; the vertices are not (a nonzero value under 2^-50 in a mesh is not expected). A
-debug display that reads face geometry is not a rule here (no census session has one on). The cost is a hash and a vector
-entry per face per pass at every rebuild, in development builds only: the key, the exclusion and the guard take 56-59 ns per
-face in a standalone bench of these functions (Ryzen 9 9950X3D, MinGW g++ -O2, a viewer build running beside it), the viewer's
-getters, the bake timer (two clock reads per face) and the vector entry come on top. Nothing per draw unless a census window
-runs; in one, the crediting takes 15-17 ns per drawn face in the same bench, plus the draw-state key (a hash of the program,
-the textures and two matrices, and a set insertion) per draw.
+debug display that reads face geometry is not a rule here (no census session has one on). While it records, the cost is a
+hash and a vector entry per face per pass at every rebuild: the first version of the key, the exclusion and the guard took
+56-59 ns per face in a standalone bench of these functions (Ryzen 9 9950X3D, MinGW g++ -O2, a viewer build running beside it);
+the viewer's getters, the volume's parameters in the key, the bake timer (two clock reads per face) and the vector entry come on
+top. `selfBench` measures the whole record and the bake timer
+in place, on up to 1,024 faces of the scene (`ns_per_census_record`, `ns_per_census_bake_timer`), and census windows count the
+records made (`censusFaces`): their product is the census's own cost per frame, which `analyze_perf_check.py` reports. Timed
+windows record nothing (`perf_check.py` switches the records on only for the census step). Nothing per draw unless a census
+window runs; in one, the crediting takes 15-17 ns per drawn face in the same bench, plus the draw-state key (a hash of the
+program, the textures and two matrices, and a set insertion) per draw.
 
 **Credited at the draw** (census windows only): the batch recipes (`pushBatch`, `pushUntexturedBatch`, the two glTF ones,
 `pushBumpBatch`, the bump group draw, the materials pool, the alpha pool's draws and emissives) note each draw item. Per view and
@@ -234,18 +256,21 @@ pass, `census` holds:
 | `items`, `instanced_items`, `mixed_items`, `sets` | draw items; those with an instanced face (eligible, 64 vertices or more, the floor of research `size-floor.md`); those with a baked face too; instanced sets (runs of one key inside items: one command each) |
 | `p0_extra_calls`, `p0_switches` | policy P0 (per face): calls over today's one per item, and baked/instanced changes in list order (program and record switches) |
 | `p1_lost_vertices` | policy P1 (an item is instanced only when all its faces are): the instanced vertices of mixed items, which stay baked |
-| `run_hist` | strict order (N-SF1): runs of one key in list order among eligible faces, by size class, of 1, 2, 3-4, 5-8, 9-16, 17-32, 33-64, 65+ copies. Runs over 16 copies under 576 vertices are the replica rule's trigger |
+| `run_hist`, `run_vertices` | strict order (N-SF1): runs of one key in list order among eligible faces, by size class, of 1, 2, 3-4, 5-8, 9-16, 17-32, 33-64, 65+ copies, and the vertices those runs draw. Runs over 16 copies of templates under 576 vertices are the replica rule's trigger when they hold a measurable share of a pass's vertices: `analyze_perf_check.py` reports that share per pass and size class (64-255, 256-575; faces under 64 stay baked below the floor, X1-P2's remedy at most) |
 | `relaxed_hist` | relaxed order, for the record (strict order is the rule everywhere, audit C7): copies of one key per scope and frame, same buckets |
 
-b-11's decision rule reads `p0_extra_calls` (P0 under 200 extra calls a frame at Rooftops, else P1); N-SF1's reads `run_hist`.
+b-11's decision rule reads `p0_extra_calls` (P0 under 200 extra calls a frame at Rooftops, else P1); N-SF1's reads `run_hist`
+and `run_vertices`.
 
-**The resident census** (`GLSubmitStats.census`, `census_resident_<run>.json`): every face of every draw item the scene holds
-now (volume, bridge, avatar and animesh partitions), each face once (it is in a draw item per pass it is drawn in; it can become
-a copy only when every pass allows it, so the first reason seen keeps it baked): faces, vertices, bytes and bake ms by reason;
-eligible faces by size class with **baked bytes** (every copy) against **unique bytes** (one per key), the bake ms of the copies
-past each key's first (what a cache hit skips) and keys by copies; the instancing ratio (64 vertices and more), the measured
-counterpart of the census's 4.98x; and rigged sharing (rigged, non-blended faces: total against unique bytes, G5b-1).
-`items_without_record` counts draw items built before the viewer recorded censuses (none after a fresh start).
+**The resident census** (`GLSubmitStats.census`, `census_resident_<run>.json`, schema 2): every face of every draw item the
+scene holds now (volume, bridge, avatar, animesh and HUD partitions), each face once (it is in a draw item per pass it is drawn
+in; it can become a copy only when every pass allows it, so the first reason seen keeps it baked): faces, vertices, bytes,
+vertex bytes and bake ms by reason; eligible faces by size class with **baked bytes** (every copy) against **unique bytes** (one
+per key), both also as vertex bytes alone, the vertex bytes of repeated keys (2 copies or more, every copy: X1-P2's trigger
+reads them for faces under 64 vertices against all baked vertex bytes), the bake ms of the copies past each key's first (what a
+cache hit skips) and keys by copies; the instancing ratio (64 vertices and more), the measured counterpart of the census's
+4.98x; and rigged sharing (rigged, non-blended faces: total against unique bytes, G5b-1). `items_without_record` counts draw
+items not rebuilt since the records were switched on (0 expected once `censusRecord`'s rebuild has run).
 
 **Not in this census:** clusters (X1-0 (b): triangles in clusterable faces and the share fixed-128 clusters would cull) and
 particles (X1-0 (c), with particles stage 0).
@@ -260,16 +285,27 @@ without waiting; nothing in the statistics ever blocks on the GPU except Frame P
 ## Overhead
 
 Measured in the staged RelWithDebInfo + LTO viewer (Ryzen 9 9950X3D, RTX 5070 Ti, driver 621.14) with
-`GLSubmitStats.selfBench`, which times the hooks of this very binary: one "draw" is the mix of 20 hook sites a real draw
-runs (buffer and attribute counters, texture binds, matrix sync, three uniform uploads, the run tracker). A compiler barrier
+`GLSubmitStats.selfBench`, which times the hooks of this very binary: one "draw" is the mix of hook sites a real draw runs
+(buffer and attribute counters, texture binds, matrix sync, three uniform uploads, the run tracker; since phase 2b's step 1 also
+a texture unbind, a cap toggle, `setBuffer`'s vertex format check and the census draw's test: 24 sites, so per-draw figures of
+earlier windows are not comparable one to one). A compiler barrier
 after each site forces the collection pointer to be reloaded at every site, as it is in the renderer where GL calls sit
 between the sites (without it the 20 tests collapse into one and the figure is too good).
 
-| | per site | per draw (20 sites) |
+| | per site | per draw (20 sites, before phase 2b's step 1) |
 |---|---|---|
 | compiled out (`VKS_GL_STATS` off) | 0 (the macro is empty) | 0 |
 | compiled in, not collecting | 0.14-0.15 ns (a load and a predictable branch) | 2.8-3.1 ns |
 | collecting | 0.50 ns | 10.0-10.3 ns |
+
+**Re-measured 2026-11-19** (phase 2b's step 1, this binary: MSVC 14.51, RelWithDebInfo `/Ob1` + LTO, at the login screen
+while other builds ran): 18.6-19.7 ns per draw of 24 sites not collecting (0.78-0.82 ns per site), 31.5-32.6 ns collecting, a
+pass scope 123-124 ns. The disassembly shows why the per-site figure is five times the table's: every site's relaxed load of the
+collection pointer (`LLGLSubmitStats::cur()`) calls the STL helper `std::_Atomic_address_as` out of line, which this build does
+not inline; a standalone `/O2 /Ob1 /GL /LTCG` build of the same header inlines it and gives 0.12-0.17 ns per site for both the
+20- and the 24-site mix under the same load (the four new sites cost what the others do). `cur()` is unchanged since G0;
+which compiler or setting made the table's build inline the helper is not known. A session's `hook_bench` reads the cost of
+the binary it runs.
 
 | | per scope |
 |---|---|
@@ -304,16 +340,20 @@ $run = "$py $scripts/perf_check.py --scenario $scripts/scenarios/gl_census.json 
 ```
 
 Log in, wear a HUD, stand where the scene is worth measuring (in the crowd; near a mirror for the `mirrors` run), leave the viewer
-alone; about 10 minutes. It proves compares 1, 13, 14 and 15 with one flipped bit, then measures `still` (sun shadows, all
-shadows, few non-impostors, mirrors on) and `moving` (turning at 10 deg/s; sun, all): per run a timed window, every compare armed
-for up to 120 frames, a census window and the resident census.
+alone; about 10 minutes. It proves compares 1, 13, 14 and 15 with one flipped bit (a pass that does not run is tried again after
+each run), then measures `still` (sun shadows, all shadows, few non-impostors, mirrors on) and `moving` (turning at 10 deg/s;
+sun, all): per run a timed window, every compare armed for up to 120 frames, then the census records switched on (every draw
+item rebuilt; 30 frames to settle), a census window, the resident census, and the records off again. **The gate** (G4-0b):
+13, 14 and 15 proven and IDENTICAL in at least one run, DIFFERENT in none; otherwise the run fails (exit 4) and `report.txt`
+says which pass is missing and why (`compare.require_passes`).
 
 What it settles: the probe face's and its cascades' cost in the window (b-8 F2); `runsNoUniform` against `runs` per pass (G6r-c,
 G7); the bucket count (G5c); the `impostor` and `hero face` views' draws (28-0's gate); compares 13-15 IDENTICAL with both renders
-on path 0 and the injection caught in each (G4-0b's gate); the eligible share of repeated content and the instancing ratio
-(D5, against 4.98x); P0's extra calls against P1's lost vertices (the policy); the run lengths of small templates (N-SF1's
-replicas); small repeated faces' share of baked bytes and bake ms (X1-P2's trigger: 10 % of baked vertex bytes or 20 ms of bake
-per teleport); rigged sharing in a crowd (G5b-1).
+on path 0 and the injection caught in each (G4-0b's gate; 13's results name the probe or hero face they compared); the eligible
+share of repeated content and the instancing ratio (D5, against 4.98x); P0's extra calls against P1's lost vertices (the
+policy); the share of each pass's eligible vertices in long runs of templates of 64-575 vertices (N-SF1's replicas); small
+repeated faces' share of baked vertex bytes and bake ms (X1-P2's trigger: 10 % of baked vertex bytes or 20 ms of bake per
+teleport); rigged sharing in a crowd (G5b-1).
 
 ## Owner's capture steps
 
@@ -330,8 +370,10 @@ per teleport); rigged sharing in a crowd (G5b-1).
 ## What was not verified here
 
 Phase 2b's step 1 was built and its pure parts tested (`llglsubmitimage_test.cpp`: the epochs of `runsNoUniform`, the census's
-size classes, run buckets, exclusion order, exactness guard, key, item policies and template runs; `test_perf_check.py`: the
-census and proof flow against the fake viewer). Not run in the viewer: the compares 13-15 on real targets (whether the
+size classes, run buckets, exclusion order, exactness guard, key with the baked colour and glow bytes and glTF faces, item
+policies and template runs, and the arming's frames: N-frame armings, the main loop's hold over the probe update, snapshot and
+360 frames outside it, a Frame Profile's early end, the reserved ids; `test_perf_check.py`: the census and proof flow against
+the fake viewer, passes without a result, the gate, proofs retried in later runs). Not run in the viewer: the compares 13-15 on real targets (whether the
 back-buffer blits are exact on the owner's GPU, and whether a probe face, the HUD and an impostor replay IDENTICAL), the main
 loop frame with the probe update, the census on a real scene and its cost. The census session answers them.
 

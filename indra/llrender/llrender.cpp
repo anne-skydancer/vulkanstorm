@@ -464,7 +464,7 @@ void LLTexUnit::unbind(eTextureType type)
     // Disabled caching of binding state.
     if (mCurrTexType == type)
     {
-        VKS_GLSTAT_TEX_UNBIND();
+        VKS_GLSTAT_TEX_UNBIND(mCurrTexture != 0);
         mCurrTexture = 0;
 
         if (type == LLTexUnit::TT_TEXTURE)
@@ -486,7 +486,7 @@ void LLTexUnit::unbindFast(eTextureType type)
     // Disabled caching of binding state.
     if (mCurrTexType == type)
     {
-        VKS_GLSTAT_TEX_UNBIND();
+        VKS_GLSTAT_TEX_UNBIND(mCurrTexture != 0);
         mCurrTexture = 0;
 
         if (type == LLTexUnit::TT_TEXTURE)

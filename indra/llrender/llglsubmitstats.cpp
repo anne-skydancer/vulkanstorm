@@ -97,7 +97,11 @@ namespace
     {
         if (c.rec && c.len)
         {
-            recordOf(c.rec)->census.runHist[LLGLSubmitMath::censusSizeClass(c.vertices)][LLGLSubmitMath::censusRunBucket(c.len)]++;
+            LLGLSubmitCensus& census = recordOf(c.rec)->census;
+            const int size = LLGLSubmitMath::censusSizeClass(c.vertices);
+            const int bucket = LLGLSubmitMath::censusRunBucket(c.len);
+            census.runHist[size][bucket]++;
+            census.runVertices[size][bucket] += (uint64_t)c.len * c.vertices; // N-SF1 reads them as a share of the pass's vertices
         }
     }
 
@@ -257,14 +261,19 @@ namespace
         return boost::json::value(std::round(v * 1000.0) / 1000.0);
     }
 
-    // Counters as JSON. div scales to per-frame means (div > 1); only_nonzero drops zero entries.
-    void countersJson(boost::json::object& out, const LLGLSubmitCounters& c, double div, bool only_nonzero)
+    // Counters as JSON. div scales to per-frame means (div > 1); only_nonzero drops zero entries; census: a census window
+    // or frame (the draw-state keys are counted only there, so elsewhere they are left out rather than shown as 0).
+    void countersJson(boost::json::object& out, const LLGLSubmitCounters& c, double div, bool only_nonzero, bool census)
     {
         const bool integral = div == 1.0;
 #define VKS_GLSTAT_EMIT(name) \
         if (!only_nonzero || c.name) { out.emplace(#name, number(LLGLSubmitMath::perFrameMean((double)c.name, div), integral)); }
         VKS_GLSTAT_COUNTER_LIST(VKS_GLSTAT_EMIT)
 #undef VKS_GLSTAT_EMIT
+        if (!census)
+        {
+            out.erase("stateKeysDistinct");
+        }
         auto hist = [&](const char* key, const uint64_t (&h)[6])
         {
             bool any = false;
@@ -323,7 +332,7 @@ namespace
             }
         }
         o.emplace("by_reason", std::move(reasons));
-        boost::json::object sizes, runs, relaxed;
+        boost::json::object sizes, runs, run_vertices, relaxed;
         for (int s = 0; s < LLGLSubmitCensus::kSizes; ++s)
         {
             if (c.sizeFaces[s])
@@ -344,6 +353,7 @@ namespace
             if (any_run)
             {
                 runs.emplace(kCensusSizeNames[s], hist(c.runHist[s]));
+                run_vertices.emplace(kCensusSizeNames[s], hist(c.runVertices[s]));
             }
             if (any_relaxed)
             {
@@ -359,13 +369,14 @@ namespace
         o.emplace("p0_switches", n(c.p0Switches));
         o.emplace("p1_lost_vertices", n(c.p1LostVertices));
         o.emplace("run_hist", std::move(runs));        // buckets 1, 2, 3-4, 5-8, 9-16, 17-32, 33-64, 65+
+        o.emplace("run_vertices", std::move(run_vertices)); // the vertices those runs draw, same buckets
         o.emplace("relaxed_hist", std::move(relaxed));
         out.emplace("census", std::move(o));
     }
 
     // records: in render order. div_cpu scales counters and CPU time, div_gpu GPU time (0: not available).
     boost::json::object recordsToJson(const std::vector<const LLGLSubmitStats::Record*>& recs, double div_cpu, double div_gpu,
-                                      bool with_passes)
+                                      bool with_passes, bool census)
     {
         boost::json::object root;
         const bool gpu_ok = div_gpu > 0.0;
@@ -384,7 +395,7 @@ namespace
             }
         }
         boost::json::object totals;
-        countersJson(totals, total, div_cpu, false);
+        countersJson(totals, total, div_cpu, false, census);
         censusJson(totals, total_census, div_cpu);
         totals.emplace("cpu_ms", number(frame_cpu / div_cpu, false));
         if (gpu_ok)
@@ -432,7 +443,7 @@ namespace
                     v.emplace("gpu_ms", number(it->second->gpuMs / div_gpu, false));
                 }
             }
-            countersJson(v, view_counters[name], div_cpu, true);
+            countersJson(v, view_counters[name], div_cpu, true, census);
             censusJson(v, view_census[name], div_cpu);
             views.emplace_back(std::move(v));
         }
@@ -456,7 +467,7 @@ namespace
                         p.emplace("samples", number((double)r->samples / div_gpu, false));
                     }
                 }
-                countersJson(p, r->c, div_cpu, true);
+                countersJson(p, r->c, div_cpu, true, census);
                 censusJson(p, r->census, div_cpu);
                 passes.emplace_back(std::move(p));
             }
@@ -505,6 +516,7 @@ void LLGLSubmitCensus::add(const LLGLSubmitCensus& o)
         for (int b = 0; b < kRuns; ++b)
         {
             runHist[s][b] += o.runHist[s][b];
+            runVertices[s][b] += o.runVertices[s][b];
             relaxedHist[s][b] += o.relaxedHist[s][b];
         }
     }
@@ -541,6 +553,7 @@ bool LLGLSubmitStats::beginFrame(bool collect, bool gpu)
 
     sFrame = std::make_shared<Frame>();
     sFrame->number = ++sFrameNo;
+    sFrame->census = sWindowCensus && windowActive(); // the frame is counted into a census window
     sGpuThisFrame = gpu && glQueryCounter && glGetQueryObjectui64v;
     sFrame->gpuTimed = sGpuThisFrame;
     sFrameT0 = Clock::now();
@@ -854,7 +867,7 @@ void LLGLSubmitStats::noteDraw(uint32_t indices)
     rec->c.drawIndices += indices;
     creditRun(sRun.draw(rec, sEpochs.all));
     creditRunNoUniform(sRunNoUniform.draw(rec, sEpochs.noUniform));
-    if (sWindowCensus && windowActive())
+    if (sFrame && sFrame->census)
     {
         rec->stateKeys.insert(drawStateKey());
     }
@@ -944,7 +957,7 @@ void LLGLSubmitStats::noteCensusDraw(const LLGLSubmitMath::CensusFace* faces, si
             const int size = censusSizeClass(f.vertices);
             c.sizeFaces[size]++;
             c.sizeVertices[size] += f.vertices;
-            c.sizeBytes[size] += f.bytes;
+            c.sizeBytes[size] += (uint64_t)f.vertexBytes + f.indexBytes;
             c.sizeBakeNs[size] += f.bakeNs;
             auto& copies = rec->censusKeys[f.key];
             copies.first++;
@@ -1010,7 +1023,7 @@ boost::json::object LLGLSubmitStats::frameToJson(const Frame& f)
     {
         recs.push_back(r.get());
     }
-    boost::json::object o = recordsToJson(recs, 1.0, f.gpuResolved ? 1.0 : 0.0, true);
+    boost::json::object o = recordsToJson(recs, 1.0, f.gpuResolved ? 1.0 : 0.0, true, f.census);
     o.emplace("schema", 1);
     o.emplace("kind", "frame");
     o.emplace("frame_number", f.number);
@@ -1030,7 +1043,7 @@ boost::json::object LLGLSubmitStats::windowToJson()
     }
     const double frames = std::max<double>(1.0, (double)sWindowCollected);
     const double gpu_frames = (double)sWindowGpuFrames;
-    boost::json::object o = recordsToJson(recs, frames, gpu_frames, true);
+    boost::json::object o = recordsToJson(recs, frames, gpu_frames, true, sWindowCensus);
     o.emplace("schema", 1);
     o.emplace("kind", "window");
     o.emplace("scale", "per_frame_mean");
@@ -1047,7 +1060,7 @@ boost::json::object LLGLSubmitStats::summaryOfFrame(const Frame& f)
     {
         recs.push_back(r.get());
     }
-    boost::json::object o = recordsToJson(recs, 1.0, f.gpuResolved ? 1.0 : 0.0, false);
+    boost::json::object o = recordsToJson(recs, 1.0, f.gpuResolved ? 1.0 : 0.0, false, f.census);
     o.emplace("frame_number", f.number);
     o.emplace("gpu_resolved", f.gpuResolved);
     return o;
@@ -1061,7 +1074,7 @@ boost::json::object LLGLSubmitStats::summaryOfWindow()
         recs.push_back(&sAgg[key]);
     }
     const double frames = std::max<double>(1.0, (double)sWindowCollected);
-    boost::json::object o = recordsToJson(recs, frames, (double)sWindowGpuFrames, false);
+    boost::json::object o = recordsToJson(recs, frames, (double)sWindowGpuFrames, false, sWindowCensus);
     o.emplace("frames", sWindowCollected);
     o.emplace("gpu_frames", sWindowGpuFrames);
     return o;

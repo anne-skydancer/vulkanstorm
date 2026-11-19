@@ -12,8 +12,9 @@
 // draw-state keys. See doc/gl/instrumentation.md.
 //
 // Off (the default, and always on release): every macro below expands to nothing. On but not collecting:
-// one pointer test per hook site. Counters are exclusive (attributed to the innermost scope); CPU and GPU
-// times are inclusive of nested scopes.
+// one pointer test per hook site, and one flag test where the copy census records a face and times its bake (it
+// records only when switched on, LLGLSubmitStatsApi::censusRecording). Counters are exclusive (attributed to the
+// innermost scope); CPU and GPU times are inclusive of nested scopes.
 #pragma once
 
 #include <cstdint>
@@ -271,10 +272,35 @@ namespace LLGLSubmitMath
         return mix64(h, bits);
     }
 
-    // What decides a face's object-space streams (b-11's LLGeomCacheKey): the shared volume and face, the counts the bake
-    // uses, the streams of its buffer, and what else the bake writes into them (texture transform, colour, glow, and the
-    // transforms of the material, legacy or glTF, through its hash). A rigged face adds its skin and its texture index
-    // (the bake puts it in position.w); a static face's texture index goes in its per-copy record instead.
+    // The colour bytes the bake writes into a face's colour stream (LLFace::getGeometryVolume): the texture entry's colour,
+    // or a glTF material's base colour when the face has one (both already converted to bytes, as the bake converts them);
+    // outside the alpha pool, without a glTF material and without a specular map, the alpha byte carries the legacy
+    // shininess instead (the bake's SHININESS_TO_ALPHA). Packed as r | g << 8 | b << 16 | a << 24.
+    inline uint32_t censusBakedColor(const uint8_t te[4], const uint8_t* gltfBase, bool alphaPool, bool specularMap, uint8_t shiny)
+    {
+        static const float kShinyToAlpha[4] = {0.0000f, 0.25f, 0.5f, 0.75f};
+        uint8_t c[4];
+        std::memcpy(c, gltfBase ? gltfBase : te, 4);
+        if (!alphaPool && !gltfBase && !specularMap)
+        {
+            c[3] = (uint8_t)(kShinyToAlpha[shiny & 3] * 255);
+        }
+        return (uint32_t)c[0] | (uint32_t)c[1] << 8 | (uint32_t)c[2] << 16 | (uint32_t)c[3] << 24;
+    }
+
+    // The glow byte the bake writes into a face's emissive stream.
+    inline uint8_t censusGlowByte(float glow)
+    {
+        const int32_t g = (int32_t)(glow * 255);
+        return (uint8_t)(g < 0 ? 0 : g > 255 ? 255 : g);
+    }
+
+    // What decides a face's object-space streams (b-11's LLGeomCacheKey): the shared volume (its parameters and detail
+    // level, not its address) and face, the counts the bake uses, the streams of its buffer, and what else the bake writes
+    // into them: the texture entry's transform (not for a glTF face: its texture coordinates are untransformed, the
+    // material's transforms apply in the shader), the colour and glow bytes (b-11 §3.2's streamHash: 0 when the buffer has
+    // no such stream), and the transforms of the material, legacy or glTF, through its hash. A rigged face adds its skin
+    // and its texture index (the bake puts it in position.w); a static face's texture index goes in its per-copy record.
     struct CensusKeyInputs
     {
         uint64_t volume = 0;
@@ -282,10 +308,11 @@ namespace LLGLSubmitMath
         uint32_t vertices = 0;
         uint32_t indices = 0;
         uint32_t formatMask = 0;
+        bool gltf = false;                  // a glTF face: the texture entry's transform is not in its streams
         float scaleS = 0.f, scaleT = 0.f, offsetS = 0.f, offsetT = 0.f, rotation = 0.f;
-        float color[4] = {0.f, 0.f, 0.f, 0.f};
-        float glow = 0.f;
-        uint64_t material[2] = {0, 0};     // the material's 128-bit hash (glTF or legacy; 0 for none)
+        uint32_t color = 0;                 // censusBakedColor
+        uint8_t glow = 0;                   // censusGlowByte
+        uint64_t material[2] = {0, 0};      // the material's 128-bit hash (glTF or legacy; 0 for none)
         bool rigged = false;
         uint64_t skinHash = 0;
         uint32_t textureIndex = 0;
@@ -297,16 +324,19 @@ namespace LLGLSubmitMath
         uint64_t h = mix64(0x6c6c67656f6d6b79ull, k.volume);
         h = mix64(h, ((uint64_t)k.face << 32) | k.formatMask);
         h = mix64(h, ((uint64_t)k.vertices << 32) | k.indices);
-        h = mixFloat(h, k.scaleS);
-        h = mixFloat(h, k.scaleT);
-        h = mixFloat(h, k.offsetS);
-        h = mixFloat(h, k.offsetT);
-        h = mixFloat(h, k.rotation);
-        for (float c : k.color)
+        if (k.gltf)
         {
-            h = mixFloat(h, c);
+            h = mix64(h, 0x676c7466ull);
         }
-        h = mixFloat(h, k.glow);
+        else
+        {
+            h = mixFloat(h, k.scaleS);
+            h = mixFloat(h, k.scaleT);
+            h = mixFloat(h, k.offsetS);
+            h = mixFloat(h, k.offsetT);
+            h = mixFloat(h, k.rotation);
+        }
+        h = mix64(h, ((uint64_t)k.glow << 32) | k.color);
         h = mix64(mix64(h, k.material[0]), k.material[1]);
         if (k.rigged)
         {
@@ -320,9 +350,10 @@ namespace LLGLSubmitMath
     struct CensusFace
     {
         uint64_t key = 0;           // the geometry cache key; 0 when the face has none
-        uint64_t face = 0;          // the face's identity, to count resident bytes once over the passes it is in
+        uint64_t face = 0;          // the face's identity (its object and face), to count resident bytes once over its passes
         uint32_t vertices = 0;
-        uint32_t bytes = 0;         // vertex bytes (the vertices at the buffer's vertex size) and index bytes
+        uint32_t vertexBytes = 0;   // the vertices at the buffer's vertex size
+        uint32_t indexBytes = 0;
         uint32_t bakeNs = 0;        // its last bake (getGeometryVolume) in ns; 0 when it was not timed
         uint8_t  exclusion = CENSUS_ELIGIBLE;
         bool     blended = false;   // registered in the blended pass (rigged blended faces share no buffer, b-11 §3.6)
@@ -404,6 +435,144 @@ namespace LLGLSubmitMath
             return closed;
         }
     };
+
+    // ---- The identical-image check's arming and the frames that own it (LLGLSubmitStatsApi's frame glue drives it) ----
+
+    // Compare ids (LLGLSubmitCompare::PASS_*): 1-8 and 13-15 have a site; 9-12 are reserved for G0b.
+    constexpr int kCompareIds = 16;
+    inline bool compareImplemented(int pass)
+    {
+        return (pass >= 1 && pass <= 8) || (pass >= 13 && pass <= 15);
+    }
+
+    // An arming begins in the main loop's display() frame and stays open for up to N such frames (compareArm "frames")
+    // until every pass it asked for has run; a pass is compared only while a frame owns the arming, each pass once. The
+    // main loop's frame holds the end of display()'s frame until after the reflection probe update, so compare 13 reaches
+    // a reflection face. A display() outside it (the snapshot floaters' after its end, display_startup() from the startup
+    // code, a 360 capture's) gets a statistics frame of its own but neither begins, carries nor counts toward an arming,
+    // and nothing is compared outside an owning frame (a 360 capture's cube faces).
+    struct CompareFrames
+    {
+        int armed = 0;              // 0 off, -1 every pass, else one compare id
+        int frames = 0;             // the open arming's frames
+        int framesLeft = 0;
+        int pendingFrames = 1;      // the frames of the next arming (compareArm "frames"; the debug setting arms for 1)
+        bool owned = false;         // a frame that owns the arming is open
+        bool done[kCompareIds] = {};
+        bool mainLoopOpen = false;  // the main loop's frame is open ...
+        bool mainLoopHolds = false; // ... and holds the ends of the frame its display() began
+        bool heldStats = false;
+        bool heldCompare = false;
+
+        enum Begin { BEGIN_NONE, BEGIN_NEW, BEGIN_CARRIED };
+
+        // The open arming asked for this pass.
+        bool asked(int pass) const
+        {
+            return armed != 0 && compareImplemented(pass) && (armed == -1 || armed == pass);
+        }
+
+        // The pass may be compared now: asked for, not compared yet in this arming, and a frame owns the arming.
+        bool wants(int pass) const { return owned && asked(pass) && !done[pass]; }
+
+        bool allDone() const
+        {
+            for (int p = 1; p < kCompareIds; ++p)
+            {
+                if (asked(p) && !done[p])
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // MainLoopFrame's constructor: true when it opened the main loop's frame (false: nested, it leaves it alone).
+        bool mainLoopBegin()
+        {
+            if (mainLoopOpen)
+            {
+                return false;
+            }
+            mainLoopOpen = true;
+            mainLoopHolds = false;
+            return true;
+        }
+
+        // DisplayFrame's constructor. want: the RenderGLSubmitCompare setting (0: none); snapshot: gSnapshot. BEGIN_NEW: this
+        // frame began an arming (the caller clears the results and the setting); BEGIN_CARRIED: it carries an open arming
+        // on. Either way the frame owns the arming until compareEnd().
+        Begin displayBegin(int want, bool snapshot)
+        {
+            if (!mainLoopOpen || mainLoopHolds || snapshot)
+            {
+                return BEGIN_NONE;
+            }
+            if (want != 0 && armed == 0)
+            {
+                armed = want;
+                frames = framesLeft = pendingFrames > 1 ? pendingFrames : 1;
+                pendingFrames = 1;
+                owned = true;
+                for (bool& d : done)
+                {
+                    d = false;
+                }
+                return BEGIN_NEW;
+            }
+            if (armed != 0 && !owned)
+            {
+                owned = true;
+                return BEGIN_CARRIED;
+            }
+            return BEGIN_NONE;
+        }
+
+        // DisplayFrame's destructor: true when the main loop's frame takes over the ends this frame owns (mainLoopEnd hands
+        // them back after the reflection probe update); false: the caller ends them now.
+        bool displayEnd(bool ownsStats, bool ownsCompare)
+        {
+            if (!mainLoopOpen || mainLoopHolds || !(ownsStats || ownsCompare))
+            {
+                return false;
+            }
+            mainLoopHolds = true;
+            heldStats = ownsStats;
+            heldCompare = ownsCompare;
+            return true;
+        }
+
+        // MainLoopFrame::end of the frame mainLoopBegin opened: the ends it held, to end now (none: false).
+        bool mainLoopEnd(bool& ownsStats, bool& ownsCompare)
+        {
+            ownsStats = ownsCompare = false;
+            mainLoopOpen = false;
+            if (!mainLoopHolds)
+            {
+                return false;
+            }
+            mainLoopHolds = false;
+            ownsStats = heldStats;
+            ownsCompare = heldCompare;
+            heldStats = heldCompare = false;
+            return true;
+        }
+
+        // The end of a frame that owned the arming: true when the arming is over (every pass it asked for has run, or its
+        // frames are used up). The caller then reports the passes still missing (asked, not done) and calls disarm().
+        bool compareEnd()
+        {
+            owned = false;
+            return --framesLeft <= 0 || allDone();
+        }
+
+        void disarm()
+        {
+            armed = 0;
+            framesLeft = 0;
+            owned = false;
+        }
+    };
 }
 
 #if VKS_GL_STATS
@@ -465,8 +634,9 @@ namespace LLGLSubmitMath
     X(gltfBinds)          /* LLFetchedGLTFMaterial::bind calls */ \
     X(gltfSameAsLast)     /* ... for the same material as the previous call */ \
     X(vbFormatChanges)    /* setBuffer of a buffer with other vertex streams than the previous one (a run breaker) */ \
-    X(texUnbinds)         /* LLTexUnit::unbind / unbindFast calls that rebound the unit (a run breaker) */ \
+    X(texUnbinds)         /* LLTexUnit::unbind / unbindFast calls that changed the unit's binding (a run breaker) */ \
     X(texMatrixLoads)     /* texture matrices loaded (an animated texture's matrix) */ \
+    X(censusFaces)        /* copy census records made (registerFace while the census records) */ \
     X(runs)               /* mergeable runs: draws separated by no shader, texture, uniform or state change */ \
     X(mergeableDraws)     /* draws - runs: draws that could join the previous draw's run */ \
     X(runsNoUniform)      /* runs if uniforms, palettes and model matrices came from per-draw records (G6r-0) */ \
@@ -507,6 +677,7 @@ struct LLGLSubmitCensus
     uint64_t p0Switches = 0;                    // P0: baked/instanced changes in list order (program and record switches)
     uint64_t p1LostVertices = 0;                // policy P1: instanced vertices of mixed items, which stay baked
     uint64_t runHist[kSizes][kRuns] = {};       // strict order: runs of one key in list order, by size class and length
+    uint64_t runVertices[kSizes][kRuns] = {};   // ... the vertices those runs draw (copies times vertices per copy)
     uint64_t relaxedHist[kSizes][kRuns] = {};   // relaxed order (depth-only views): copies of one key per scope and frame
     void add(const LLGLSubmitCensus& o);
 };
@@ -538,6 +709,7 @@ public:
         bool gpuResolved = false;
         bool gpuTruncated = false;
         bool inWindow = false;      // counted into the current window
+        bool census = false;        // ... a census window: the copy census and the draw-state keys are counted
         std::vector<std::unique_ptr<Record>> records;
         std::unordered_map<std::string, Record*> byKey;
         struct Inst { Record* rec; uint32_t begin; uint32_t end; };
@@ -650,8 +822,9 @@ private:
 #define VKS_GLSTAT_UNIFORM(bytes, count, matrix) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::noteUniform((uint32_t)(bytes), (uint32_t)(count), (matrix)); } } while (0)
 // An LLGLState toggle that reached GL: ends a run, and enters the census's cap signature.
 #define VKS_GLSTAT_CAP_TOGGLE(cap) do { if (LLGLSubmitStats::active()) { LLGLSubmitStats::noteCapToggle((uint32_t)(cap)); } } while (0)
-// A texture unit rebound to nothing (unbind, unbindFast): ends a run, as a bind does.
-#define VKS_GLSTAT_TEX_UNBIND() do { if (LLGLSubmitStats::active()) { VKS_GLSTAT_INC(texUnbinds); LLGLSubmitStats::noteStateChange(); } } while (0)
+// A texture unit rebound to nothing (unbind, unbindFast) while a texture was on it: ends a run, as a bind does. An unbind
+// of a unit that holds nothing changes nothing and is not counted, as a redundant bind is not.
+#define VKS_GLSTAT_TEX_UNBIND(was_bound) do { if ((was_bound) && LLGLSubmitStats::active()) { VKS_GLSTAT_INC(texUnbinds); LLGLSubmitStats::noteStateChange(); } } while (0)
 // A draw of an item with census records (an LLDrawInfo's mGLSubmitCensus): credited in census windows only.
 #define VKS_GLSTAT_CENSUS_DRAW(info) do { if (LLGLSubmitStats::censusActive()) { LLGLSubmitStats::noteCensusDraw((info).mGLSubmitCensus.data(), (info).mGLSubmitCensus.size()); } } while (0)
 #define VKS_GLSTAT_ACTIVE() (LLGLSubmitStats::active())
@@ -669,7 +842,7 @@ private:
 #define VKS_GLSTAT_VBO(name, format) do { } while (0)
 #define VKS_GLSTAT_UNIFORM(bytes, count, matrix) do { } while (0)
 #define VKS_GLSTAT_CAP_TOGGLE(cap) do { } while (0)
-#define VKS_GLSTAT_TEX_UNBIND() do { } while (0)
+#define VKS_GLSTAT_TEX_UNBIND(was_bound) do { } while (0)
 #define VKS_GLSTAT_CENSUS_DRAW(info) do { } while (0)
 #define VKS_GLSTAT_ACTIVE() (false)
 #define VKS_GLSTAT_RESET_GL(valid) do { } while (0)

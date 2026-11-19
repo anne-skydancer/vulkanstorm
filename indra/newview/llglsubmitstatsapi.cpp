@@ -46,21 +46,21 @@
 
 extern bool gShaderProfileFrame; // llviewerdisplay.cpp
 extern bool gCubeSnapshot;       // llviewerdisplay.cpp: a reflection probe face is being rendered
+extern bool gSnapshot;           // llviewerdisplay.cpp: display() renders a snapshot
 
 namespace
 {
     // ---- the compare check -------------------------------------------------------------------------------
 
-    S32 sArmed = LLGLSubmitCompare::PASS_OFF;   // the pass(es) to compare this frame
-    S32 sArmFramesLeft = 0;                     // frames the arming stays open until its passes have run (compareArm "frames")
-    S32 sPendingFrames = 1;                     // the "frames" of the next arming
-    bool sCompareOwned = false;                 // an open frame owns the arming (ends it, or passes it on to the next frame)
+    static_assert(LLGLSubmitCompare::PASS_COUNT == LLGLSubmitMath::kCompareIds, "the compare ids of the pure arming");
+    // The arming (the pass or passes to compare, for how many frames, which are done) and the frames that own it: the main
+    // loop's frame, display()'s, and the ends the main loop holds (pure, llglsubmitstats.h; unit-tested).
+    LLGLSubmitMath::CompareFrames sFrames;
     bool sInRun = false;                        // a compared pass is being rendered (no nesting)
     bool sReplay = false;                       // ... for the second time
     S32 sInject = 0;
     U64 sFramesSeen = 0;                        // display() and display_startup() frames, collected or not
     U64 sArmSerial = 0;                         // counts the armings, so a client can tell a fresh result from a stale one
-    bool sPassDone[LLGLSubmitCompare::PASS_COUNT] = {}; // a pass is compared once per arming
     std::vector<F32> sFadeLog;                  // the light fades the first render used, in the order it asked
     size_t sFadeCursor = 0;
 
@@ -93,6 +93,7 @@ namespace
     {
         S32 pass = 0;
         bool ran = false;
+        std::string view;       // the view the pass was compared in, when it can be more than one (13: probe or hero face)
         std::string note;
         std::vector<AttachmentResult> attachments;
         bool identical() const
@@ -120,29 +121,23 @@ namespace
         return pass >= 0 && pass < LLGLSubmitCompare::PASS_COUNT ? labels[pass] : "?";
     }
 
-    // Each pass once per arming, never nested. The probe face compare is the only one a cube snapshot reaches: every
-    // other pass is the main view's (a probe face reaches their sites with other targets).
+    // Each pass once per arming, only while a frame owns the arming (the main loop's), never nested. The probe face compare
+    // is the only one a cube snapshot reaches: every other pass is the main view's (a probe face reaches their sites with
+    // other targets).
     bool armedFor(S32 pass)
     {
-        return sArmed != LLGLSubmitCompare::PASS_OFF && !sInRun && LLGLSubmitCompare::implemented(pass) && !sPassDone[pass] &&
-               (sArmed == LLGLSubmitCompare::PASS_ALL || sArmed == pass) && (pass == LLGLSubmitCompare::PASS_PROBE_FACE) == gCubeSnapshot;
+        return sFrames.wants(pass) && !sInRun && (pass == LLGLSubmitCompare::PASS_PROBE_FACE) == gCubeSnapshot;
     }
 
-    // Every pass the arming asked for has been compared (or reported as not run).
-    bool armingDone()
+    // The view a compare result belongs to, when a pass can be compared in more than one: 13 compares the first probe face
+    // rendered while armed, a mirror's (hero face, inside display()) or a reflection probe's (probe face, the probe update).
+    std::string compareView(S32 pass)
     {
-        if (sArmed != LLGLSubmitCompare::PASS_ALL)
+        if (pass == LLGLSubmitCompare::PASS_PROBE_FACE)
         {
-            return sArmed <= 0 || sArmed >= LLGLSubmitCompare::PASS_COUNT || sPassDone[sArmed];
+            return gPipeline.mHeroProbeManager.isMirrorPass() ? "hero face" : "probe face";
         }
-        for (S32 p = 1; p < LLGLSubmitCompare::PASS_COUNT; ++p)
-        {
-            if (LLGLSubmitCompare::implemented(p) && !sPassDone[p])
-            {
-                return false;
-            }
-        }
-        return true;
+        return std::string();
     }
 
     // Errors that were pending before the check touched GL: reported once, not drained silently.
@@ -580,9 +575,9 @@ namespace
 struct LLGLSubmitCompare::Run::Impl
 {
     S32 pass = 0;
+    std::string view;                   // compareView(pass), taken when the run was armed
     LLRenderTarget* target = nullptr;   // null: the back buffer
     bool restore = false;
-    bool restoreFailed = false; // the second render did not start from the first one's inputs: no valid comparison
     std::vector<Capture> inputs;
     std::vector<Capture> first;
     BackBufferCopy back;        // the back buffer: its formats, and its inputs with 'restore'
@@ -590,32 +585,47 @@ struct LLGLSubmitCompare::Run::Impl
 
 namespace
 {
-    void reportNotRun(S32 pass, const std::string& note)
+    void reportNotRun(S32 pass, const std::string& view, const std::string& note)
     {
         PassResult skipped;
         skipped.pass = pass;
+        skipped.view = view;
         skipped.note = note;
-        LL_INFOS(kTag) << passLabel(pass) << ": " << skipped.note << LL_ENDL;
+        LL_INFOS(kTag) << passLabel(pass) << (view.empty() ? "" : " (" + view + ")") << ": " << skipped.note << LL_ENDL;
         sResults.push_back(std::move(skipped));
+    }
+
+    // Puts the first render's output back into the attachments a failed restore already overwrote with the inputs
+    // (matched by texture), so that the frame keeps the first render when the second one is skipped.
+    void putBackFirst(const std::vector<Capture>& first, const std::vector<const Capture*>& overwritten)
+    {
+        for (const Capture* o : overwritten)
+        {
+            const auto it = std::find_if(first.begin(), first.end(), [&](const Capture& f) { return f.texture == o->texture; });
+            if (it == first.end() || !writeTexture(*it))
+            {
+                LL_WARNS(kTag) << "could not put the first render's " << o->name << " back: this frame shows the pass's inputs there" << LL_ENDL;
+            }
+        }
     }
 }
 
-bool LLGLSubmitCompare::Run::arm(S32 pass, const char* not_run)
+bool LLGLSubmitCompare::Run::arm(S32 pass, NotRun not_run)
 {
     if (!armedFor(pass))
     {
         return false;
     }
-    sPassDone[pass] = true;
-    if (not_run)
+    sFrames.done[pass] = true;
+    if (const char* why = not_run ? not_run() : nullptr)
     {
-        reportNotRun(pass, not_run);
+        reportNotRun(pass, compareView(pass), why);
         return false;
     }
     return true;
 }
 
-LLGLSubmitCompare::Run::Run(S32 pass, LLRenderTarget* target, bool restore_inputs, const char* not_run)
+LLGLSubmitCompare::Run::Run(S32 pass, LLRenderTarget* target, bool restore_inputs, NotRun not_run)
 {
     if (!arm(pass, not_run))
     {
@@ -623,11 +633,12 @@ LLGLSubmitCompare::Run::Run(S32 pass, LLRenderTarget* target, bool restore_input
     }
     if (!target || target->getUsage() != LLTexUnit::TT_TEXTURE)
     {
-        reportNotRun(pass, "not run: no plain 2D target this frame (missing, multisampled, or stochastic transparency in use)");
+        reportNotRun(pass, compareView(pass), "not run: no plain 2D target this frame (missing, multisampled, or stochastic transparency in use)");
         return;
     }
     mImpl = std::make_unique<Impl>();
     mImpl->pass = pass;
+    mImpl->view = compareView(pass);
     mImpl->target = target;
     mImpl->restore = restore_inputs;
     sInRun = true;
@@ -635,7 +646,7 @@ LLGLSubmitCompare::Run::Run(S32 pass, LLRenderTarget* target, bool restore_input
     sFadeCursor = 0;
 }
 
-LLGLSubmitCompare::Run::Run(S32 pass, BackBuffer, bool restore_inputs, const char* not_run)
+LLGLSubmitCompare::Run::Run(S32 pass, BackBuffer, bool restore_inputs, NotRun not_run)
 {
     if (!arm(pass, not_run))
     {
@@ -644,17 +655,18 @@ LLGLSubmitCompare::Run::Run(S32 pass, BackBuffer, bool restore_inputs, const cha
     auto impl = std::make_unique<Impl>();
     if (const char* why = impl->back.make(restore_inputs))
     {
-        reportNotRun(pass, why);
+        reportNotRun(pass, compareView(pass), why);
         return;
     }
     if (restore_inputs && !impl->back.save())
     {
         // rendered once, as normally: a second render over the first would not be the same render
-        reportNotRun(pass, "not run: the back buffer could not be copied (its depth or stencil format refuses the blit)");
+        reportNotRun(pass, compareView(pass), "not run: the back buffer could not be copied (its depth or stencil format refuses the blit)");
         return;
     }
     mImpl = std::move(impl);
     mImpl->pass = pass;
+    mImpl->view = compareView(pass);
     mImpl->restore = restore_inputs;
     sInRun = true;
     sFadeLog.clear();
@@ -687,27 +699,51 @@ bool LLGLSubmitCompare::Run::next()
         }
         return true;
     case 1:
+    {
         m.first = m.target ? captureTarget(*m.target) : captureBackBuffer(m.back.width, m.back.height, m.back.floatColor, m.back.hasDepth);
-        sReplay = true;
-        sFadeCursor = 0;
-        if (m.restore && m.target)
+        // Without the whole first readback there is nothing to compare; without all the inputs put back the second render
+        // would draw over the first (the HUD twice into the presented frame). Either way the pass is not rendered again.
+        const size_t attachments = m.target ? attachmentsOf(*m.target).size() : m.first.size();
+        const char* stop = m.first.empty() || m.first.size() != attachments ? "not run: the first render could not be read back" : nullptr;
+        if (!stop && m.restore && m.target && m.inputs.size() != attachments)
         {
+            stop = "not run: the inputs could not be read back for a second render";
+        }
+        else if (!stop && m.restore && m.target)
+        {
+            std::vector<const Capture*> overwritten;
             for (const Capture& c : m.inputs)
             {
                 if (!writeTexture(c))
                 {
                     LL_WARNS(kTag) << "could not restore " << c.name << " for the second render" << LL_ENDL;
-                    m.restoreFailed = true;
+                    putBackFirst(m.first, overwritten);
+                    stop = "not run: the inputs could not be put back for a second render";
+                    break;
                 }
+                overwritten.push_back(&c);
             }
             std::vector<Capture>().swap(m.inputs);
         }
-        else if (m.restore && !m.back.restore())
+        else if (!stop && m.restore && !m.back.restore())
         {
+            // a blit that fails changes nothing: the back buffer still holds the first render
             LL_WARNS(kTag) << "could not restore the back buffer for the second render" << LL_ENDL;
-            m.restoreFailed = true;
+            stop = "not run: the inputs could not be put back for a second render";
         }
+        if (stop)
+        {
+            m.back.release();
+            reportNotRun(m.pass, m.view, stop);
+            sInRun = false;
+            sFadeLog.clear();
+            mImpl.reset();
+            return false;
+        }
+        sReplay = true;
+        sFadeCursor = 0;
         return true;
+    }
     default:
         break;
     }
@@ -717,22 +753,18 @@ bool LLGLSubmitCompare::Run::next()
     sReplay = false;
     PassResult res;
     res.pass = m.pass;
+    res.view = m.view;
     res.ran = true;
     PixelStore store;
     const std::vector<Attach> list = m.target ? attachmentsOf(*m.target) : std::vector<Attach>();
     std::vector<Capture> back_second;
-    if (!m.target && !m.restoreFailed && !m.first.empty())
+    if (!m.target)
     {
         back_second = captureBackBuffer(m.back.width, m.back.height, m.back.floatColor, m.back.hasDepth);
     }
     const size_t count = m.target ? list.size() : back_second.size();
     m.back.release();
-    if (m.restoreFailed)
-    {
-        res.ran = false;
-        res.note = "the inputs could not be restored for the second render";
-    }
-    else if (count != m.first.size() || m.first.empty())
+    if (count != m.first.size() || m.first.empty())
     {
         res.ran = false;
         res.note = "attachments could not be read back";
@@ -765,7 +797,8 @@ bool LLGLSubmitCompare::Run::next()
             res.attachments.push_back(std::move(ar));
         }
     }
-    LL_INFOS(kTag) << passLabel(m.pass) << ": " << (res.ran ? (res.identical() ? "IDENTICAL" : "DIFFERENT") : res.note) << LL_ENDL;
+    LL_INFOS(kTag) << passLabel(m.pass) << (m.view.empty() ? "" : " (" + m.view + ")") << ": "
+                   << (res.ran ? (res.identical() ? "IDENTICAL" : "DIFFERENT") : res.note) << LL_ENDL;
     for (const auto& a : res.attachments)
     {
         LL_INFOS(kTag) << "  " << a.name << ": " << a.diff.mismatchedPixels << " of " << a.diff.pixels << " pixels differ"
@@ -784,7 +817,7 @@ bool LLGLSubmitCompare::Run::next()
 
 bool LLGLSubmitCompare::implemented(S32 pass)
 {
-    return (pass >= PASS_GBUFFER && pass <= PASS_POST_DEFERRED) || (pass >= PASS_PROBE_FACE && pass <= PASS_IMPOSTOR);
+    return LLGLSubmitMath::compareImplemented(pass);
 }
 
 const char* LLGLSubmitCompare::tailNotRepeatable()
@@ -802,9 +835,10 @@ const char* LLGLSubmitCompare::tailNotRepeatable()
     {
         return "not run: a debug display is on (the pass's tail draws it)";
     }
-    if (gShowObjectUpdates)
+    // blips keep ageing (and moving) in every non-HUD view's tail for 2 s after they are turned off
+    if (gShowObjectUpdates || gPipeline.hasDebugBlips())
     {
-        return "not run: object update blips are on (they age in the pass's tail)";
+        return "not run: object update blips are on or still fading (they age in the pass's tail)";
     }
     return nullptr;
 }
@@ -851,6 +885,10 @@ namespace
             boost::json::object o;
             o.emplace("pass", (int64_t)r.pass);
             o.emplace("label", passLabel(r.pass));
+            if (!r.view.empty())
+            {
+                o.emplace("view", r.view); // 13: "probe face" (a reflection probe's) or "hero face" (a mirror's)
+            }
             o.emplace("ran", r.ran);
             o.emplace("identical", r.identical());
             if (!r.note.empty())
@@ -891,7 +929,8 @@ namespace
         static const char* const keys[] = {"draws", "drawTriangles", "vbChanges", "attribRespecs", "iboBinds", "shaderBinds",
                                            "texBindFast", "texBindFastRedundant", "texGLBind", "uniformGL", "uniformBytes",
                                            "paletteUploads", "paletteDistinct", "mdvSyncs", "bufSubData", "flushBuffers",
-                                           "stateToggles", "occBlocking", "runs", "mergeableDraws", "cpu_ms", "gpu_ms"};
+                                           "stateToggles", "occBlocking", "runs", "mergeableDraws", "runsNoUniform",
+                                           "mergeableDrawsNoUniform", "censusFaces", "cpu_ms", "gpu_ms"};
         if (const boost::json::value* totals = summary.if_contains("totals"))
         {
             const boost::json::object& t = totals->as_object();
@@ -1015,7 +1054,8 @@ namespace
         r["window_gpu_frames"] = (S32)LLGLSubmitStats::windowGpuResolved();
         r["window_active"] = LLGLSubmitStats::windowActive();
         r["window_census"] = LLGLSubmitStats::windowCensus();
-        r["compare_armed"] = (S32)sArmed;
+        r["census_recording"] = LLGLSubmitStatsApi::censusRecording();
+        r["compare_armed"] = (S32)sFrames.armed;
         r["compare_results"] = (S32)sResults.size();
         r["arm_serial"] = (F64)sArmSerial;
         r["frame_count"] = (F64)sFramesSeen;
@@ -1038,6 +1078,8 @@ namespace
         LLGLSubmitStats::windowBegin((uint32_t)frames, req.has("gpu") ? req["gpu"].asBoolean() : true, census);
         r["frames"] = frames;
         r["census"] = census;
+        // a census window credits only the draw items that have census records: censusRecord makes them
+        r["census_recording"] = LLGLSubmitStatsApi::censusRecording();
     }
 
     void api_window_stop(const LLSD& req)
@@ -1128,7 +1170,7 @@ namespace
         {
             gSavedSettings.setS32("RenderGLSubmitCompareInject", req["inject"].asInteger());
         }
-        sPendingFrames = frames;
+        sFrames.pendingFrames = frames;
         gSavedSettings.setS32("RenderGLSubmitCompare", pass);
         r["armed"] = pass;
         r["frames"] = frames;
@@ -1137,16 +1179,59 @@ namespace
     void api_compare_results(const LLSD& req)
     {
         LLEventAPI::Response r(LLSD(), req);
-        r["armed"] = (S32)sArmed;
+        r["armed"] = (S32)sFrames.armed;
         r["pending"] = gSavedSettings.getS32("RenderGLSubmitCompare");
         r["frame"] = (F64)sResultsFrame;
         r["arm_serial"] = (F64)sArmSerial;
         r["results"] = LlsdFromJson(resultsToJson());
     }
 
-    // The cost of the hooks in this very binary, measured in place: the mix of hooks one draw runs (about 20 macro
-    // sites), with the statistics not collecting (the cost every dev build pays: a pointer test per site), collecting,
-    // and the cost of one pass scope with and without GPU timers.
+    // Up to 'limit' faces of the scene's draw items (volume partitions), for the census record's benchmark.
+    class FaceSampler : public OctreeTraveler
+    {
+    public:
+        explicit FaceSampler(size_t limit) : mLimit(limit) {}
+        std::vector<LLFace*> mFaces;
+
+        void visit(const OctreeNode* node) override
+        {
+            LLSpatialGroup* group = (LLSpatialGroup*)node->getListener(0);
+            if (!group)
+            {
+                return;
+            }
+            for (LLSpatialGroup::element_iter it = group->getDataBegin(); it != group->getDataEnd() && mFaces.size() < mLimit; ++it)
+            {
+                LLDrawable* drawable = (LLDrawable*)(*it)->getDrawable();
+                if (!drawable || drawable->isDead() || !drawable->getVOVolume())
+                {
+                    continue;
+                }
+                for (S32 i = 0; i < drawable->getNumFaces() && mFaces.size() < mLimit; ++i)
+                {
+                    if (LLFace* face = drawable->getFace(i))
+                    {
+                        mFaces.push_back(face);
+                    }
+                }
+            }
+            for (LLSpatialBridge* bridge : group->mBridgeList)
+            {
+                if (mFaces.size() < mLimit)
+                {
+                    traverse(bridge->mOctree);
+                }
+            }
+        }
+
+    private:
+        size_t mLimit;
+    };
+
+    // The cost of the hooks in this very binary, measured in place: the mix of hooks one draw runs (24 macro sites),
+    // with the statistics not collecting (the cost every dev build pays: a pointer test per site), collecting, the cost
+    // of one pass scope with and without GPU timers, and the copy census's cost per face it records (the record on real
+    // faces of the scene, and the timer around the face's bake), which a census frame pays censusFaces times.
     void api_self_bench(const LLSD& req)
     {
         LLEventAPI::Response r(LLSD(), req);
@@ -1156,14 +1241,22 @@ namespace
         }
         using Clock = std::chrono::steady_clock;
         const S32 n = llclamp(req.has("iterations") ? req["iterations"].asInteger() : 1000000, 1000, 100000000);
-        constexpr int kHooksPerDraw = 20;
+        constexpr int kHooksPerDraw = 24;
+        // an item with census records for the census draw hook (credited in census windows only: here its test)
+        struct BenchItem { std::vector<LLGLSubmitMath::CensusFace> mGLSubmitCensus = std::vector<LLGLSubmitMath::CensusFace>(2); };
+        const BenchItem bench_item;
         // The barrier after each hook makes the compiler reload the collection pointer at every site, as it must in the
         // renderer where GL calls sit between the hooks (without it a loop of hooks collapses to one test).
-        auto draw_mix = [](S32 count)
+        auto draw_mix = [&bench_item](S32 count)
         {
 #define VKS_BENCH_HOOK(hook) do { hook; std::atomic_signal_fence(std::memory_order_seq_cst); } while (0)
             for (S32 i = 0; i < count; ++i)
             {
+                // phase 2b's step 1: a texture unbind, a cap toggle, setBuffer's vertex format check, the census draw's test
+                VKS_BENCH_HOOK(VKS_GLSTAT_TEX_UNBIND(true));
+                VKS_BENCH_HOOK(VKS_GLSTAT_CAP_TOGGLE(GL_BLEND));
+                VKS_BENCH_HOOK(VKS_GLSTAT_VBO(1, LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_NORMAL | LLVertexBuffer::MAP_TEXCOORD0));
+                VKS_BENCH_HOOK(VKS_GLSTAT_CENSUS_DRAW(bench_item));
                 VKS_BENCH_HOOK(VKS_GLSTAT_INC(vbSetBuffer));
                 VKS_BENCH_HOOK(VKS_GLSTAT_INC(vbChanges));
                 VKS_BENCH_HOOK(VKS_GLSTAT_INC(attribRespecs));
@@ -1211,6 +1304,52 @@ namespace
         LLGLSubmitStats::resolveGpu(true);
         LLGLSubmitStats::restoreLast(saved_last);
 
+        // The copy census per recorded face: the record (key, exclusion rules, exactness guard) on up to 1024 real faces,
+        // and the timer around a face's bake (two clock reads), as a census frame pays them for each face it rebuilds.
+        FaceSampler sampler(1024);
+        for (LLViewerRegion* region : LLWorld::getInstance()->getRegionList())
+        {
+            for (U32 type : {LLViewerRegion::PARTITION_VOLUME, LLViewerRegion::PARTITION_BRIDGE})
+            {
+                LLSpatialPartition* part = region->getSpatialPartition(type);
+                if (part && part->mOctree && sampler.mFaces.size() < 1024)
+                {
+                    sampler.traverse(part->mOctree);
+                }
+            }
+        }
+        double record_ns = 0.0, bake_timer_ns = 0.0;
+        S32 records = 0;
+        if (!sampler.mFaces.empty())
+        {
+            const S32 rounds = std::max<S32>(1, 50000 / (S32)sampler.mFaces.size());
+            records = rounds * (S32)sampler.mFaces.size();
+            U64 sink = 0;
+            record_ns = time_ns([&]
+            {
+                for (S32 k = 0; k < rounds; ++k)
+                {
+                    for (LLFace* face : sampler.mFaces)
+                    {
+                        sink ^= LLGLSubmitStatsApi::makeCensusFace(face, LLUUID::null, LLRenderPass::PASS_SIMPLE).key;
+                    }
+                }
+            }) / records;
+            const bool recording = LLGLSubmitStatsApi::sCensusRecording;
+            LLGLSubmitStatsApi::sCensusRecording = true; // the timer runs only while the census records
+            bake_timer_ns = time_ns([&]
+            {
+                for (S32 k = 0; k < records; ++k)
+                {
+                    LLGLSubmitStatsApi::CensusBake bake(sampler.mFaces[k % sampler.mFaces.size()]);
+                    std::atomic_signal_fence(std::memory_order_seq_cst);
+                }
+            }) / records;
+            LLGLSubmitStatsApi::sCensusRecording = recording;
+            LLGLSubmitStatsApi::forgetCensusBake(); // no record may take a benchmark's bake time
+            r["census_bench_sink"] = (F64)(sink & 0xffff); // keeps the records from being optimised away
+        }
+
         r["iterations"] = n;
         r["hooks_per_draw"] = kHooksPerDraw;
         r["ns_per_draw_not_collecting"] = off_ns / n;
@@ -1219,17 +1358,28 @@ namespace
         r["ns_per_hook_collecting"] = on_ns / n / kHooksPerDraw;
         r["ns_per_scope_cpu_only"] = scope_cpu_ns / scopes;
         r["ns_per_scope_with_gpu_timers"] = scope_gpu_ns / scopes;
+        r["census_faces_sampled"] = (S32)sampler.mFaces.size();
+        r["ns_per_census_record"] = record_ns;
+        r["ns_per_census_bake_timer"] = bake_timer_ns;
         LL_INFOS(kTag) << "hook cost: " << off_ns / n << " ns per draw's hooks not collecting, " << on_ns / n << " collecting; scope "
-                       << scope_cpu_ns / scopes << " ns, with GPU timers " << scope_gpu_ns / scopes << " ns" << LL_ENDL;
+                       << scope_cpu_ns / scopes << " ns, with GPU timers " << scope_gpu_ns / scopes << " ns; census record "
+                       << record_ns << " ns and bake timer " << bake_timer_ns << " ns per face (" << sampler.mFaces.size()
+                       << " faces sampled)" << LL_ENDL;
     }
 
     // ---- the resident copy census: every face of every draw item the scene holds now ----
+
+    // The partitions whose draw items LLVolumeGeometryManager builds (registerFace records their faces): volumes, their
+    // bridges, avatars' and animesh attachments, and HUD attachments.
+    const U32 kCensusPartitions[] = {LLViewerRegion::PARTITION_VOLUME, LLViewerRegion::PARTITION_BRIDGE, LLViewerRegion::PARTITION_AVATAR,
+                                     LLViewerRegion::PARTITION_CONTROL_AV, LLViewerRegion::PARTITION_HUD};
 
     struct ResidentFace
     {
         uint64_t key = 0;
         uint32_t vertices = 0;
-        uint32_t bytes = 0;
+        uint32_t vertexBytes = 0;
+        uint32_t indexBytes = 0;
         uint32_t bakeNs = 0;
         uint8_t exclusion = LLGLSubmitMath::CENSUS_ELIGIBLE;
         bool blended = false;
@@ -1272,7 +1422,8 @@ namespace
                             ResidentFace& r = mFaces[f.face];
                             r.key = f.key;
                             r.vertices = f.vertices;
-                            r.bytes = f.bytes;
+                            r.vertexBytes = f.vertexBytes;
+                            r.indexBytes = f.indexBytes;
                             r.bakeNs = f.bakeNs;
                             r.exclusion = f.exclusion;
                             r.blended = f.blended;
@@ -1300,28 +1451,34 @@ namespace
         using namespace LLGLSubmitMath;
         constexpr int kSizes = kCensusSizeClasses;
         static const char* const size_names[kSizes] = {"under_64", "64_255", "256_575", "576_up"};
-        struct Key { uint32_t copies = 0; uint32_t vertices = 0; uint32_t bytes = 0; uint64_t bakeNs = 0; };
+        // the faces of one key have one vertex count and one buffer format, so one copy's bytes are every copy's
+        struct Key { uint32_t copies = 0; uint32_t vertices = 0; uint32_t vertexBytes = 0; uint32_t indexBytes = 0; uint64_t bakeNs = 0; };
         std::unordered_map<uint64_t, Key> keys, rigged_keys;
-        uint64_t faces = 0, vertices = 0, bytes = 0, bake_ns = 0;
+        uint64_t faces = 0, vertices = 0, vertex_bytes = 0, index_bytes = 0, bake_ns = 0;
         uint64_t reason_faces[CENSUS_EXCLUSIONS] = {}, reason_vertices[CENSUS_EXCLUSIONS] = {}, reason_bytes[CENSUS_EXCLUSIONS] = {};
+        uint64_t reason_vertex_bytes[CENSUS_EXCLUSIONS] = {};
         uint64_t rigged_faces = 0, rigged_bytes = 0;
         for (const auto& entry : c.mFaces)
         {
             const ResidentFace& f = entry.second;
             const uint8_t reason = f.exclusion < CENSUS_EXCLUSIONS ? f.exclusion : (uint8_t)CENSUS_NO_KEY;
+            const uint64_t bytes = (uint64_t)f.vertexBytes + f.indexBytes;
             ++faces;
             vertices += f.vertices;
-            bytes += f.bytes;
+            vertex_bytes += f.vertexBytes;
+            index_bytes += f.indexBytes;
             bake_ns += f.bakeNs;
             reason_faces[reason]++;
             reason_vertices[reason] += f.vertices;
-            reason_bytes[reason] += f.bytes;
+            reason_bytes[reason] += bytes;
+            reason_vertex_bytes[reason] += f.vertexBytes;
             if (reason == CENSUS_ELIGIBLE)
             {
                 Key& k = keys[f.key];
                 k.copies++;
                 k.vertices = f.vertices;
-                k.bytes = f.bytes;
+                k.vertexBytes = f.vertexBytes;
+                k.indexBytes = f.indexBytes;
                 k.bakeNs += f.bakeNs;
             }
             else if (reason == CENSUS_RIGGED && !f.blended && f.key)
@@ -1329,21 +1486,25 @@ namespace
                 // rigged buffer sharing (G5b-1): a rigged, non-blended face's bake depends on the volume face, the skin
                 // and the texture entry only, so equal keys could share one buffer between avatars
                 ++rigged_faces;
-                rigged_bytes += f.bytes;
+                rigged_bytes += bytes;
                 Key& k = rigged_keys[f.key];
                 k.copies++;
-                k.bytes = f.bytes;
+                k.vertexBytes = f.vertexBytes;
+                k.indexBytes = f.indexBytes;
             }
         }
 
         boost::json::object o;
-        o.emplace("schema", 1);
+        o.emplace("schema", 2);
         o.emplace("kind", "resident_census");
+        o.emplace("recording", LLGLSubmitStatsApi::censusRecording());
         o.emplace("items", c.mItems);
         o.emplace("items_without_record", c.mItemsWithoutRecord);
         o.emplace("faces", faces);
         o.emplace("vertices", vertices);
-        o.emplace("bytes", bytes);
+        o.emplace("bytes", vertex_bytes + index_bytes);
+        o.emplace("vertex_bytes", vertex_bytes);
+        o.emplace("index_bytes", index_bytes);
         o.emplace("bake_ms", (double)bake_ns / 1.0e6);
         boost::json::object reasons;
         for (int r = 0; r < CENSUS_EXCLUSIONS; ++r)
@@ -1354,24 +1515,36 @@ namespace
                 e.emplace("faces", reason_faces[r]);
                 e.emplace("vertices", reason_vertices[r]);
                 e.emplace("bytes", reason_bytes[r]);
+                e.emplace("vertex_bytes", reason_vertex_bytes[r]);
                 reasons.emplace(censusExclusionName(r), std::move(e));
             }
         }
         o.emplace("by_reason", std::move(reasons));
 
-        // eligible faces by size class: baked bytes (one bake per copy) against unique bytes (one per key), and the bake
-        // time of the copies past the first of each key (what a cache hit skips)
+        // Eligible faces by size class: baked bytes (one bake per copy) against unique bytes (one per key), vertex and
+        // index bytes together and the vertex bytes alone; the vertex bytes of repeated keys (2 copies or more, every
+        // copy: what X1-P2's trigger reads for faces under 64 vertices); the bake time of the copies past the first of
+        // each key (what a cache hit skips).
         uint64_t s_faces[kSizes] = {}, s_vertices[kSizes] = {}, s_keys[kSizes] = {}, s_baked[kSizes] = {}, s_unique[kSizes] = {};
+        uint64_t s_baked_vb[kSizes] = {}, s_unique_vb[kSizes] = {}, s_repeated_vb[kSizes] = {}, s_repeated_faces[kSizes] = {};
         uint64_t s_bake_ns[kSizes] = {}, s_repeat_bake_ns[kSizes] = {}, s_copies_hist[kSizes][kCensusRunBuckets] = {};
         for (const auto& entry : keys)
         {
             const Key& k = entry.second;
             const int s = censusSizeClass(k.vertices);
+            const uint64_t bytes = (uint64_t)k.vertexBytes + k.indexBytes;
             s_faces[s] += k.copies;
             s_vertices[s] += (uint64_t)k.vertices * k.copies;
             s_keys[s]++;
-            s_baked[s] += (uint64_t)k.bytes * k.copies;
-            s_unique[s] += k.bytes;
+            s_baked[s] += bytes * k.copies;
+            s_unique[s] += bytes;
+            s_baked_vb[s] += (uint64_t)k.vertexBytes * k.copies;
+            s_unique_vb[s] += k.vertexBytes;
+            if (k.copies > 1)
+            {
+                s_repeated_vb[s] += (uint64_t)k.vertexBytes * k.copies;
+                s_repeated_faces[s] += k.copies;
+            }
             s_bake_ns[s] += k.bakeNs;
             s_repeat_bake_ns[s] += k.copies > 1 ? k.bakeNs - k.bakeNs / k.copies : 0;
             s_copies_hist[s][censusRunBucket(k.copies)]++;
@@ -1386,6 +1559,10 @@ namespace
             e.emplace("keys", s_keys[s]);
             e.emplace("baked_bytes", s_baked[s]);
             e.emplace("unique_bytes", s_unique[s]);
+            e.emplace("baked_vertex_bytes", s_baked_vb[s]);
+            e.emplace("unique_vertex_bytes", s_unique_vb[s]);
+            e.emplace("repeated_faces", s_repeated_faces[s]);
+            e.emplace("repeated_vertex_bytes", s_repeated_vb[s]);
             e.emplace("bake_ms", (double)s_bake_ns[s] / 1.0e6);
             e.emplace("repeat_bake_ms", (double)s_repeat_bake_ns[s] / 1.0e6);
             boost::json::array hist;
@@ -1411,7 +1588,7 @@ namespace
         uint64_t rigged_unique = 0;
         for (const auto& entry : rigged_keys)
         {
-            rigged_unique += entry.second.bytes;
+            rigged_unique += (uint64_t)entry.second.vertexBytes + entry.second.indexBytes;
         }
         boost::json::object rig;
         rig.emplace("faces", rigged_faces);
@@ -1426,11 +1603,9 @@ namespace
     {
         LLEventAPI::Response r(LLSD(), req);
         CensusCollector collector;
-        const U32 partitions[] = {LLViewerRegion::PARTITION_VOLUME, LLViewerRegion::PARTITION_BRIDGE, LLViewerRegion::PARTITION_AVATAR,
-                                  LLViewerRegion::PARTITION_CONTROL_AV};
         for (LLViewerRegion* region : LLWorld::getInstance()->getRegionList())
         {
-            for (U32 type : partitions)
+            for (U32 type : kCensusPartitions)
             {
                 LLSpatialPartition* part = region->getSpatialPartition(type);
                 if (part && part->mOctree)
@@ -1454,12 +1629,79 @@ namespace
         out << doc;
         out.close();
         r["path"] = path;
+        r["recording"] = LLGLSubmitStatsApi::censusRecording();
         r["faces"] = (F64)doc.at("faces").to_number<double>();
+        r["items"] = (F64)collector.mItems;
         r["items_without_record"] = (F64)collector.mItemsWithoutRecord;
         const boost::json::object& inst = doc.at("instancing").as_object();
         r["instancing_baked_bytes"] = inst.at("baked_bytes").to_number<double>();
         r["instancing_unique_bytes"] = inst.at("unique_bytes").to_number<double>();
         r["instancing_ratio"] = inst.at("ratio").to_number<double>();
+    }
+
+    // Marks every draw item of the census partitions for a rebuild (LLPipeline::rebuildDrawInfo's traversal over all of
+    // them): the next frame's rebuildPriorityGroups rebuilds the whole queue, visible or not, so each item gets its record.
+    class CensusRebuild : public OctreeTraveler
+    {
+    public:
+        S32 mGroups = 0;
+
+        void visit(const OctreeNode* node) override
+        {
+            LLSpatialGroup* group = (LLSpatialGroup*)node->getListener(0);
+            if (!group)
+            {
+                return;
+            }
+            if (!group->isDead() && group->getSpatialPartition() && group->getSpatialPartition()->mRenderByGroup)
+            {
+                group->setState(LLSpatialGroup::GEOM_DIRTY);
+                gPipeline.markRebuild(group);
+                ++mGroups;
+            }
+            for (LLSpatialBridge* bridge : group->mBridgeList)
+            {
+                traverse(bridge->mOctree);
+            }
+        }
+    };
+
+    void api_census_record(const LLSD& req)
+    {
+        LLEventAPI::Response r(LLSD(), req);
+        if (!req.has("on"))
+        {
+            return r.error("[\"on\"] is required: true records the census (and rebuilds every draw item), false stops");
+        }
+        const bool on = req["on"].asBoolean();
+        S32 groups = 0;
+        if (on && !LLGLSubmitStatsApi::sCensusRecording)
+        {
+            LLGLSubmitStatsApi::sCensusRecording = true;
+            CensusRebuild rebuild;
+            for (LLViewerRegion* region : LLWorld::getInstance()->getRegionList())
+            {
+                for (U32 type : kCensusPartitions)
+                {
+                    LLSpatialPartition* part = region->getSpatialPartition(type);
+                    if (part && part->mOctree)
+                    {
+                        rebuild.traverse(part->mOctree);
+                    }
+                }
+            }
+            groups = rebuild.mGroups;
+            LL_INFOS(kTag) << "copy census recording on: " << groups << " groups marked for rebuild" << LL_ENDL;
+        }
+        else if (!on && LLGLSubmitStatsApi::sCensusRecording)
+        {
+            // the records stay with their draw items until those are rebuilt; census windows only credit them
+            LLGLSubmitStatsApi::sCensusRecording = false;
+            LLGLSubmitStatsApi::forgetCensusBake();
+            LL_INFOS(kTag) << "copy census recording off" << LL_ENDL;
+        }
+        r["recording"] = LLGLSubmitStatsApi::sCensusRecording;
+        r["groups_rebuilt"] = groups;
     }
 
     void api_profile_frame(const LLSD& req)
@@ -1478,7 +1720,8 @@ namespace
             add("status", "State of the collection and of the compare check, on [\"reply\"].", &api_status, llsd::map("reply", LLSD()));
             add("windowBegin",
                 "Collect [\"frames\"] frames (default 60), GPU timers on unless [\"gpu\"] is false; the window is averaged per frame. "
-                "[\"census\"] true also counts the copy census and the draw-state keys (dearer: use a window of its own).",
+                "[\"census\"] true also counts the copy census and the draw-state keys (dearer: use a window of its own, after "
+                "censusRecord has given every draw item its record).",
                 &api_window_begin, llsd::map("reply", LLSD()));
             add("windowStop", "Stop collecting; what was collected stays readable.", &api_window_stop, llsd::map("reply", LLSD()));
             add("summary",
@@ -1488,10 +1731,15 @@ namespace
                 "Write the full JSON of the window or last frame ([\"kind\"]) to [\"path\"] (default: the viewer log folder); the path is in the reply.",
                 &api_dump, llsd::map("reply", LLSD()));
             add("compareArm",
-                "Arm the identical-image check for the next frame: [\"pass\"] -1 all, 1 G-buffer, 2..5 sun cascades, 6..7 spot shadows, 8 post-deferred, "
-                "13 probe face, 14 HUD, 15 impostor. [\"frames\"] (default 1, up to 600) keeps it armed until the passes have run. "
+                "Arm the identical-image check for the next main-loop frame: [\"pass\"] -1 all, 1 G-buffer, 2..5 sun cascades, 6..7 spot "
+                "shadows, 8 post-deferred, 13 probe face, 14 HUD, 15 impostor. [\"frames\"] (default 1, up to 600) keeps it armed for up "
+                "to that many main-loop frames until the passes have run; a pass that did not run in them gets a result saying so. "
                 "[\"inject\"] 1 flips one bit of the second readback to prove the check catches it.",
                 &api_compare_arm, llsd::map("reply", LLSD()));
+            add("censusRecord",
+                "[\"on\"] true: record the copy census at every draw item's build, and rebuild every draw item now (the next frame) "
+                "so that each has its record; false: stop recording (off, registerFace and the bake pay one test each).",
+                &api_census_record, llsd::map("reply", LLSD()));
             add("census",
                 "Write the resident copy census (every face of every draw item the scene holds: why it stays baked, by size class "
                 "baked against unique bytes and bake time, rigged sharing) to [\"path\"] (default: the viewer log folder); headline in the reply.",
@@ -1499,7 +1747,8 @@ namespace
             add("compareResults", "Results of the last compared frame, on [\"reply\"].", &api_compare_results, llsd::map("reply", LLSD()));
             add("selfBench",
                 "Measure the cost of the instrumentation hooks in this binary: ns per draw's worth of hooks not collecting and collecting, "
-                "ns per pass scope. [\"iterations\"] default 1000000. Refused while collecting.",
+                "ns per pass scope, ns per copy census record and bake timer (on faces of the scene). [\"iterations\"] default 1000000. "
+                "Refused while collecting.",
                 &api_self_bench, llsd::map("reply", LLSD()));
             add("profileFrame",
                 "Write a Frame Profile (per-shader GPU time, binds, samples, triangles, plus the \"submit\" section) for the next frame; "
@@ -1513,12 +1762,8 @@ namespace
 
 namespace
 {
-    // The main loop's frame (MainLoopFrame): open, and the ends it holds for the frame display() began.
-    bool sMainLoopOpen = false;
-    bool sMainLoopHolds = false;
-    bool sMainLoopHeldStats = false;
-    bool sMainLoopHeldCompare = false;
-
+    // The end of a frame: its statistics and, when it owned the arming, the arming's frame. An arming that is over gives
+    // every pass it asked for and that did not run a result saying so, so that no pass is missing from the results.
     void finishFrame(bool owns_stats, bool owns_compare)
     {
         if (owns_stats)
@@ -1527,31 +1772,28 @@ namespace
         }
         if (owns_compare)
         {
-            sCompareOwned = false;
             sInRun = false;
             sReplay = false;
-            if (--sArmFramesLeft > 0 && !armingDone())
+            if (!sFrames.compareEnd())
             {
-                return; // the next frame takes the arming over
+                return; // the next main-loop frame carries the arming on
             }
-            if (sResults.empty())
+            for (S32 p = 1; p < LLGLSubmitCompare::PASS_COUNT; ++p)
             {
-                LL_INFOS(kTag) << "the armed pass did not run in the armed frames" << LL_ENDL;
+                if (sFrames.asked(p) && !sFrames.done[p])
+                {
+                    reportNotRun(p, std::string(), "not run: did not run in the " + std::to_string(sFrames.frames) +
+                                                   (sFrames.frames == 1 ? " armed frame" : " armed frames"));
+                }
             }
-            sArmed = LLGLSubmitCompare::PASS_OFF;
-            sArmFramesLeft = 0;
+            sFrames.disarm();
         }
     }
 }
 
 LLGLSubmitStatsApi::MainLoopFrame::MainLoopFrame()
 {
-    if (!sMainLoopOpen)
-    {
-        sMainLoopOpen = true;
-        sMainLoopHolds = false;
-        mOpen = true;
-    }
+    mOpen = sFrames.mainLoopBegin();
 }
 
 void LLGLSubmitStatsApi::MainLoopFrame::end()
@@ -1561,11 +1803,10 @@ void LLGLSubmitStatsApi::MainLoopFrame::end()
         return;
     }
     mOpen = false;
-    sMainLoopOpen = false;
-    if (sMainLoopHolds)
+    bool stats = false, compare = false;
+    if (sFrames.mainLoopEnd(stats, compare))
     {
-        sMainLoopHolds = false;
-        finishFrame(sMainLoopHeldStats, sMainLoopHeldCompare);
+        finishFrame(stats, compare);
     }
 }
 
@@ -1581,42 +1822,38 @@ LLGLSubmitStatsApi::DisplayFrame::DisplayFrame(bool profile_frame)
 
     sInject = gSavedSettings.getS32("RenderGLSubmitCompareInject");
     const S32 want = gSavedSettings.getS32("RenderGLSubmitCompare");
-    if (want != LLGLSubmitCompare::PASS_OFF && sArmed == LLGLSubmitCompare::PASS_OFF)
+    // only the main loop's display() begins or carries an arming (not a snapshot's, not display_startup() from the startup
+    // code); the setting stays set until such a frame takes it
+    switch (sFrames.displayBegin(want, gSnapshot))
     {
+    case LLGLSubmitMath::CompareFrames::BEGIN_NEW:
         mOwnsCompare = true;
-        sCompareOwned = true;
-        // armed for sPendingFrames frames at most (compareArm "frames", 1 from the setting), then the setting returns to 0
-        sArmed = want;
-        sArmFramesLeft = std::max<S32>(1, sPendingFrames);
-        sPendingFrames = 1;
+        // armed for up to sFrames.frames main-loop frames (compareArm "frames", 1 from the setting); the setting returns to 0
         sResults.clear();
         sResultsFrame = gFrameCount;
         ++sArmSerial;
-        std::fill(std::begin(sPassDone), std::end(sPassDone), false);
         gSavedSettings.setS32("RenderGLSubmitCompare", 0);
         LL_INFOS(kTag) << "armed for " << (want == LLGLSubmitCompare::PASS_ALL ? "all passes" : passLabel(want))
-                       << " in frame " << gFrameCount << " for up to " << sArmFramesLeft << " frames" << LL_ENDL;
-    }
-    else if (sArmed != LLGLSubmitCompare::PASS_OFF && !sCompareOwned)
-    {
-        // an arming of several frames whose passes have not all run: this frame carries it on
-        mOwnsCompare = true;
-        sCompareOwned = true;
+                       << " in frame " << gFrameCount << " for up to " << sFrames.frames << " frames" << LL_ENDL;
+        break;
+    case LLGLSubmitMath::CompareFrames::BEGIN_CARRIED:
+        mOwnsCompare = true; // an arming of several frames whose passes have not all run
+        break;
+    default:
+        break;
     }
 }
 
 LLGLSubmitStatsApi::DisplayFrame::~DisplayFrame()
 {
-    if (sMainLoopOpen && !sMainLoopHolds && (mOwnsStats || mOwnsCompare))
+    // display() inside the main loop's frame: its ends come after the reflection probe update (MainLoopFrame::end)
+    if (!sFrames.displayEnd(mOwnsStats, mOwnsCompare))
     {
-        // display() inside the main loop's frame: the frame ends after the reflection probe update
-        sMainLoopHolds = true;
-        sMainLoopHeldStats = mOwnsStats;
-        sMainLoopHeldCompare = mOwnsCompare;
-        return;
+        finishFrame(mOwnsStats, mOwnsCompare);
     }
-    finishFrame(mOwnsStats, mOwnsCompare);
 }
+
+bool LLGLSubmitStatsApi::sCensusRecording = false;
 
 namespace
 {
@@ -1628,29 +1865,74 @@ namespace
     {
         return (U64)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
-}
 
-LLGLSubmitStatsApi::CensusBake::CensusBake(const LLFace* face)
-    : mFace(face), mStart(LLGLSubmitStats::onMain() ? nowNs() : 0)
-{
-}
-
-LLGLSubmitStatsApi::CensusBake::~CensusBake()
-{
-    if (mStart)
+    // A volume's identity in the census key: its parameters and detail level, by which LLVolumeMgr shares one volume
+    // between objects (its address could be reused by another volume while a draw item not rebuilt yet still holds a
+    // record of the first).
+    uint64_t volumeIdentity(const LLVolume& volume)
     {
-        sBakeFace = mFace;
-        sBakeNs = (U32)std::min<U64>(nowNs() - mStart, 0xffffffffull);
+        using LLGLSubmitMath::mix64;
+        using LLGLSubmitMath::mixFloat;
+        const LLVolumeParams& params = volume.getParams();
+        const LLProfileParams& profile = params.getProfileParams();
+        const LLPathParams& path = params.getPathParams();
+        uint64_t h = mix64(0x766f6c756d65ull, ((uint64_t)profile.getCurveType() << 8) | path.getCurveType());
+        for (F32 v : {profile.getBegin(), profile.getEnd(), profile.getHollow(), path.getBegin(), path.getEnd(), path.getScaleX(),
+                      path.getScaleY(), path.getShearX(), path.getShearY(), path.getTwistBegin(), path.getTwistEnd(),
+                      path.getRadiusOffset(), path.getTaperX(), path.getTaperY(), path.getRevolutions(), path.getSkew()})
+        {
+            h = mixFloat(h, v);
+        }
+        uint64_t id[2];
+        std::memcpy(id, params.getSculptID().mData, sizeof(id));
+        h = mix64(mix64(mix64(h, id[0]), id[1]), params.getSculptType());
+        return mixFloat(h, volume.getDetail());
     }
+
+    // A face's identity in the resident census: its object and face (an address could be reused by another face while a
+    // draw item not rebuilt yet still holds the record of the first).
+    uint64_t faceIdentity(const LLFace* facep, const LLViewerObject* obj)
+    {
+        if (!obj)
+        {
+            return LLGLSubmitMath::mix64(0x66616365ull, (uint64_t)(uintptr_t)facep);
+        }
+        uint64_t id[2];
+        std::memcpy(id, obj->getID().mData, sizeof(id));
+        return LLGLSubmitMath::mix64(LLGLSubmitMath::mix64(LLGLSubmitMath::mix64(0x66616365ull, id[0]), id[1]), (uint32_t)facep->getTEOffset());
+    }
+}
+
+U64 LLGLSubmitStatsApi::CensusBake::start()
+{
+    return LLGLSubmitStats::onMain() ? nowNs() : 0;
+}
+
+void LLGLSubmitStatsApi::CensusBake::finish()
+{
+    sBakeFace = mFace;
+    sBakeNs = (U32)std::min<U64>(nowNs() - mStart, 0xffffffffull);
+}
+
+void LLGLSubmitStatsApi::forgetCensusBake()
+{
+    sBakeFace = nullptr;
+    sBakeNs = 0;
 }
 
 void LLGLSubmitStatsApi::censusFace(LLDrawInfo& info, LLFace* facep, U32 pass_type)
 {
-    using namespace LLGLSubmitMath;
     if (!facep || !LLGLSubmitStats::onMain())
     {
         return;
     }
+    VKS_GLSTAT_INC(censusFaces);
+    info.mGLSubmitCensus.push_back(makeCensusFace(facep, info.mMaterialID, pass_type));
+}
+
+LLGLSubmitMath::CensusFace LLGLSubmitStatsApi::makeCensusFace(LLFace* facep, const LLUUID& material_id, U32 pass_type)
+{
+    using namespace LLGLSubmitMath;
     LLDrawable* drawable = facep->getDrawable();
     LLVOVolume* vobj = drawable ? drawable->getVOVolume() : nullptr;
     LLViewerObject* obj = facep->getViewerObject();
@@ -1672,6 +1954,7 @@ void LLGLSubmitStatsApi::censusFace(LLDrawInfo& info, LLFace* facep, U32 pass_ty
     f.media = facep->hasMedia();
     const LLGLTFMaterial* gltf = te ? te->getGLTFRenderMaterial() : nullptr;
     const LLMaterial* mat = te ? te->getMaterialParams().get() : nullptr;
+    // genDrawInfo's use_legacy_bump (llvovolume.cpp): bump codes 1-17 are the legacy bump maps, without a normal map
     f.legacyBump = te && !gltf && te->getBumpmap() && te->getBumpmap() < 18 && (!mat || mat->getNormalID().isNull());
     f.selected = obj && obj->isSelected();
     if (vobj && !f.rigged)
@@ -1699,23 +1982,39 @@ void LLGLSubmitStatsApi::censusFace(LLDrawInfo& info, LLFace* facep, U32 pass_ty
     if (f.hasKey)
     {
         CensusKeyInputs k;
-        k.volume = (uint64_t)(uintptr_t)volume;
+        k.volume = volumeIdentity(*volume);
         k.face = (uint32_t)facep->getTEOffset();
         k.vertices = facep->getGeomCount();
         k.indices = facep->getIndicesCount();
         k.formatMask = buffer->getTypeMask();
-        te->getScale(&k.scaleS, &k.scaleT);
-        te->getOffset(&k.offsetS, &k.offsetT);
-        k.rotation = te->getRotation();
-        const LLColor4& color = te->getColor();
-        for (U32 c = 0; c < 4; ++c)
+        // the texture entry's transform reaches the texture coordinates of a face without a glTF material only
+        k.gltf = gltf != nullptr;
+        if (!k.gltf)
         {
-            k.color[c] = color.mV[c];
+            te->getScale(&k.scaleS, &k.scaleT);
+            te->getOffset(&k.offsetS, &k.offsetT);
+            k.rotation = te->getRotation();
         }
-        k.glow = te->getGlow();
+        // the colour and glow bytes the bake writes (getGeometryVolume), when the buffer has those streams
+        if (buffer->hasDataType(LLVertexBuffer::TYPE_COLOR))
+        {
+            // LLColor4's conversion to bytes, as the bake converts (getGeometryVolume assigns the LLColor4 to an LLColor4U)
+            LLColor4U te_color, base_color;
+            te_color = te->getColor();
+            if (gltf)
+            {
+                base_color = gltf->mBaseColor;
+            }
+            k.color = censusBakedColor(te_color.mV, gltf ? base_color.mV : nullptr, facep->isInAlphaPool(),
+                                       mat && mat->getSpecularID().notNull(), te->getShiny());
+        }
+        if (buffer->hasDataType(LLVertexBuffer::TYPE_EMISSIVE))
+        {
+            k.glow = censusGlowByte(te->getGlow());
+        }
         // the material's hash (glTF or legacy), as registerFace keyed the item on it: it carries the normal and specular
         // maps' and the glTF textures' transforms that the bake writes into the extra texture coordinates
-        std::memcpy(k.material, info.mMaterialID.mData, sizeof(k.material));
+        std::memcpy(k.material, material_id.mData, sizeof(k.material));
         k.rigged = f.rigged;
         if (f.rigged)
         {
@@ -1724,15 +2023,17 @@ void LLGLSubmitStatsApi::censusFace(LLDrawInfo& info, LLFace* facep, U32 pass_ty
         }
         face.key = censusKey(k);
     }
-    face.face = (uint64_t)(uintptr_t)facep;
+    face.face = faceIdentity(facep, obj);
     face.vertices = facep->getGeomCount();
-    face.bytes = buffer ? (uint32_t)(LLVertexBuffer::calcVertexSize(buffer->getTypeMask()) * facep->getGeomCount() +
-                                     facep->getIndicesCount() * sizeof(U16))
-                        : 0;
+    if (buffer)
+    {
+        face.vertexBytes = (uint32_t)(LLVertexBuffer::calcVertexSize(buffer->getTypeMask()) * facep->getGeomCount());
+        face.indexBytes = (uint32_t)(facep->getIndicesCount() * sizeof(U16));
+    }
     face.bakeNs = sBakeFace == facep ? sBakeNs : 0;
     face.exclusion = censusExclusion(f);
     face.blended = f.blended;
-    info.mGLSubmitCensus.push_back(face);
+    return face;
 }
 
 void LLGLSubmitStatsApi::addToProfile(boost::json::object& stats)

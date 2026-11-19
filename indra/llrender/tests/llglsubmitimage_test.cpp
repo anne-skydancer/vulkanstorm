@@ -235,10 +235,10 @@ int main()
         a.indices = 900;
         a.formatMask = 0x3f;
         a.scaleS = a.scaleT = 1.f;
-        a.color[3] = 1.f;
+        a.color = 0xff000000u;
         const uint64_t base = censusKey(a);
         check(base != 0 && censusKey(a) == base, "a key is stable and not 0");
-        std::vector<CensusKeyInputs> variants(15, a);
+        std::vector<CensusKeyInputs> variants(17, a);
         variants[0].volume++;
         variants[1].face++;
         variants[2].vertices++;
@@ -249,17 +249,31 @@ int main()
         variants[7].offsetS = 0.5f;
         variants[8].offsetT = 0.5f;
         variants[9].rotation = 1.f;
-        variants[10].color[0] = 0.5f;
-        variants[11].glow = 0.1f;
+        variants[10].color ^= 0x80u;
+        variants[11].glow = 25;
         variants[12].material[1] = 7;
         variants[13].rigged = true;
         variants[14].offsetS = -0.0f; // -0 and +0 are kept apart (an offset of -0 can keep a -0 coordinate)
+        variants[15].color ^= 0x3f000000u; // the alpha byte alone (where the bake puts the shininess)
+        variants[16].gltf = true;
         bool all_differ = true;
         for (const CensusKeyInputs& v : variants)
         {
             all_differ = all_differ && censusKey(v) != base;
         }
         check(all_differ, "every input the bake reads changes the key");
+
+        // a glTF face: the texture entry's transform is not in its streams, its colour (the base colour) is
+        CensusKeyInputs g = a;
+        g.gltf = true;
+        const uint64_t gltf_key = censusKey(g);
+        CensusKeyInputs g2 = g;
+        g2.scaleS = 3.f;
+        g2.offsetT = 0.25f;
+        g2.rotation = 2.f;
+        check(censusKey(g2) == gltf_key, "a glTF face's key ignores the texture entry's transform");
+        g2.color ^= 1u;
+        check(censusKey(g2) != gltf_key, "but not its baked colour");
         CensusKeyInputs s = a;
         s.skinHash = 99;
         s.textureIndex = 3;
@@ -270,6 +284,47 @@ int main()
         CensusKeyInputs r3 = r1;
         r3.textureIndex = 1;
         check(censusKey(r1) != censusKey(r2) && censusKey(r1) != censusKey(r3), "a rigged face's key holds its skin and texture index");
+    }
+
+    // the colour and glow bytes the bake writes (LLFace::getGeometryVolume), which the key holds instead of the texture
+    // entry's colour (audit of PR 562, finding 2)
+    {
+        using namespace LLGLSubmitMath;
+        const uint8_t te[4] = {10, 20, 30, 255};
+        const uint8_t te_other[4] = {200, 100, 50, 128};
+        const uint8_t base[4] = {1, 2, 3, 4};
+        auto rgba = [](uint32_t r, uint32_t g, uint32_t b, uint32_t a) { return r | g << 8 | b << 16 | a << 24; };
+        check(censusBakedColor(te, nullptr, false, false, 0) == rgba(10, 20, 30, 0), "shininess none: alpha 0 in an opaque pool");
+        check(censusBakedColor(te, nullptr, false, false, 1) == rgba(10, 20, 30, 63) &&
+              censusBakedColor(te, nullptr, false, false, 2) == rgba(10, 20, 30, 127) &&
+              censusBakedColor(te, nullptr, false, false, 3) == rgba(10, 20, 30, 191),
+              "shininess low, medium, high: 63, 127, 191 in the alpha byte (SHININESS_TO_ALPHA times 255)");
+        check(censusBakedColor(te, nullptr, true, false, 2) == rgba(10, 20, 30, 255), "the alpha pool keeps the colour's alpha");
+        check(censusBakedColor(te, nullptr, false, true, 2) == rgba(10, 20, 30, 255), "a specular map keeps the colour's alpha");
+        check(censusBakedColor(te, base, false, false, 3) == rgba(1, 2, 3, 4), "a glTF face bakes its base colour, alpha kept");
+        check(censusBakedColor(te, base, false, false, 1) == censusBakedColor(te_other, base, false, false, 0),
+              "glTF copies that differ only in their unused texture-entry colour or shininess bake alike");
+
+        // two copies of one face, one of them shiny: one key before, two now (their colour streams differ)
+        CensusKeyInputs plain;
+        plain.volume = 9;
+        plain.vertices = 100;
+        plain.indices = 300;
+        plain.formatMask = 0x7f;
+        plain.color = censusBakedColor(te, nullptr, false, false, 0);
+        CensusKeyInputs shiny = plain;
+        shiny.color = censusBakedColor(te, nullptr, false, false, 1);
+        check(censusKey(plain) != censusKey(shiny), "a shiny copy is another key");
+        CensusKeyInputs gltf_a = plain, gltf_b = plain;
+        gltf_a.gltf = gltf_b.gltf = true;
+        gltf_a.color = censusBakedColor(te, base, false, false, 0);
+        gltf_b.color = censusBakedColor(te_other, base, false, false, 0);
+        gltf_b.scaleS = 4.f;
+        check(censusKey(gltf_a) == censusKey(gltf_b), "glTF copies with other texture-entry colours and transforms are one key");
+
+        check(censusGlowByte(0.f) == 0 && censusGlowByte(1.f) == 255 && censusGlowByte(0.5f) == 127 && censusGlowByte(0.1f) == 25,
+              "glow bytes: truncated, as the bake truncates");
+        check(censusGlowByte(-1.f) == 0 && censusGlowByte(2.f) == 255, "and clamped");
     }
 
     // one draw item under the two policies: instanced = eligible with 64 vertices or more
@@ -328,6 +383,141 @@ int main()
         check(c.rec == &scopeA && c.len == 1, "a scope change closes the run");
         c = t.close();
         check(c.rec == &scopeB && c.len == 1 && t.close().len == 0, "close returns the open run once");
+    }
+
+    // the identical-image check's arming and the frames that own it (LLGLSubmitStatsApi's frame glue)
+    {
+        using namespace LLGLSubmitMath;
+        using Begin = CompareFrames::Begin;
+        // one main-loop frame as llappviewer.cpp runs it: MainLoopFrame, display() (DisplayFrame), the reflection probe
+        // update (between display()'s end and MainLoopFrame::end), MainLoopFrame::end; returns whether the arming ended
+        struct Loop
+        {
+            CompareFrames cf;
+            bool ended = false;     // the last frame ended the arming
+            int compareEnds = 0;    // frames whose end counted toward an arming
+            Begin frame(int want, bool owns_stats = true, const int* compared = nullptr, const int* probe_compared = nullptr)
+            {
+                const bool opened = cf.mainLoopBegin();
+                const Begin b = cf.displayBegin(want, false);
+                const bool owns_compare = b != CompareFrames::BEGIN_NONE;
+                if (compared && cf.wants(*compared))
+                {
+                    cf.done[*compared] = true;  // a site inside display() compared the pass
+                }
+                const bool held = cf.displayEnd(owns_stats, owns_compare);
+                if (!held)
+                {
+                    end(owns_compare);
+                }
+                if (probe_compared && cf.wants(*probe_compared))
+                {
+                    cf.done[*probe_compared] = true; // the reflection probe update, after display()
+                }
+                bool stats = false, compare = false;
+                if (opened && cf.mainLoopEnd(stats, compare))
+                {
+                    end(compare);
+                }
+                return b;
+            }
+            void end(bool owns_compare)
+            {
+                ended = false;
+                if (owns_compare)
+                {
+                    ++compareEnds;
+                    if (cf.compareEnd())
+                    {
+                        ended = true;
+                        cf.disarm();
+                    }
+                }
+            }
+        };
+
+        {
+            Loop l;
+            l.cf.pendingFrames = 3;
+            check(l.frame(15) == CompareFrames::BEGIN_NEW && l.cf.armed == 15 && !l.ended, "an arming of 3 frames begins");
+            check(l.frame(0) == CompareFrames::BEGIN_CARRIED && !l.ended, "the next main-loop frame carries it");
+            check(l.frame(0) == CompareFrames::BEGIN_CARRIED && l.ended && l.cf.armed == 0, "and it ends after its 3 frames");
+            check(l.cf.pendingFrames == 1 && l.compareEnds == 3, "three frames counted; the next arming is of 1 frame again");
+            check(l.cf.asked(15) == false && l.frame(0) == CompareFrames::BEGIN_NONE, "then nothing is armed");
+        }
+        {
+            Loop l;
+            l.cf.pendingFrames = 120;
+            const int hud = 14;
+            check(l.frame(14, true, &hud) == CompareFrames::BEGIN_NEW && l.ended && l.compareEnds == 1,
+                  "an arming ends as soon as its passes have run");
+        }
+        {
+            Loop l;
+            const int probe = 13;
+            l.frame(13, true, nullptr, &probe);
+            check(l.cf.armed == 0 && l.ended && l.cf.done[13], "display()'s frame is held until after the probe update: 13 is compared there");
+        }
+        {
+            // the snapshot floaters' display() after MainLoopFrame::end, and a 360 capture outside any frame
+            CompareFrames cf;
+            cf.pendingFrames = 5;
+            const bool opened = cf.mainLoopBegin();
+            check(cf.displayBegin(-1, false) == CompareFrames::BEGIN_NEW, "the main loop's display() arms every pass");
+            check(cf.displayEnd(true, true), "its ends are held");
+            bool stats = false, compare = false;
+            check(opened && cf.mainLoopEnd(stats, compare) && stats && compare, "and handed back at the main loop's end");
+            check(!cf.compareEnd(), "one frame of five used");
+            check(!cf.wants(13) && !cf.wants(1), "between frames nothing is compared (a 360 capture's cube faces)");
+            check(cf.displayBegin(0, true) == CompareFrames::BEGIN_NONE && !cf.owned, "a snapshot's display() does not carry the arming");
+            check(!cf.displayEnd(true, false), "and ends its own statistics frame at once");
+            check(!cf.wants(14) && !cf.wants(6) && cf.framesLeft == 4, "it compares nothing and does not count toward the frames");
+            check(cf.displayBegin(14, false) == CompareFrames::BEGIN_NONE, "outside the main loop's frame nothing begins either");
+            check(cf.mainLoopBegin() && cf.displayBegin(0, false) == CompareFrames::BEGIN_CARRIED && cf.wants(6),
+                  "the next main-loop frame carries it on");
+        }
+        {
+            // nested main loop frames and a display() that owns nothing
+            CompareFrames cf;
+            check(cf.mainLoopBegin() && !cf.mainLoopBegin(), "a nested main loop frame leaves the open one alone");
+            check(cf.displayBegin(0, false) == CompareFrames::BEGIN_NONE && !cf.displayEnd(false, false),
+                  "a display() that owns no frame hands nothing over");
+            bool stats = true, compare = true;
+            check(!cf.mainLoopEnd(stats, compare) && !stats && !compare, "so the main loop's end has nothing to end");
+        }
+        {
+            // a Frame Profile ends display()'s statistics frame early (addToProfile); the held ends come afterwards as
+            // usual (LLGLSubmitStats::endFrame is idempotent) and the arming is not touched by it
+            Loop l;
+            l.cf.pendingFrames = 2;
+            const bool opened = l.cf.mainLoopBegin();
+            check(l.cf.displayBegin(8, false) == CompareFrames::BEGIN_NEW, "armed for the post-deferred pass");
+            // ... addToProfile ends the statistics frame here ...
+            check(l.cf.displayEnd(true, true) && l.cf.owned && l.cf.wants(8), "the arming stays owned through the profile's end");
+            bool stats = false, compare = false;
+            check(opened && l.cf.mainLoopEnd(stats, compare) && stats && compare, "the held ends come at the main loop's end");
+        }
+        {
+            // -1 asks for every pass with a site; the reserved ids 9-12 are neither asked for nor awaited
+            CompareFrames cf;
+            cf.mainLoopBegin();
+            cf.displayBegin(-1, false);
+            bool asked_ok = true;
+            for (int p = 0; p < kCompareIds; ++p)
+            {
+                asked_ok = asked_ok && cf.asked(p) == compareImplemented(p);
+            }
+            check(asked_ok && !cf.asked(9) && !cf.asked(12) && cf.asked(13) && !cf.asked(0) && !cf.asked(16), "-1 asks for 1-8 and 13-15");
+            for (int p = 1; p < kCompareIds; ++p)
+            {
+                if (compareImplemented(p))
+                {
+                    cf.done[p] = true;
+                }
+            }
+            check(cf.allDone(), "and is done when they have run, without 9-12");
+            check(!cf.wants(1) && !cf.wants(10), "a pass is compared once per arming");
+        }
     }
 
     // window averaging

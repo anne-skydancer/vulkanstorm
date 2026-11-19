@@ -1542,7 +1542,7 @@ void render_hud_attachments()
         {
             VKS_GLSTAT_VIEW("hud");
             VKS_GLSTAT_PASS("geom post-deferred");
-            VKS_GLCMP_BEGIN_BACK_BUFFER(LLGLSubmitCompare::PASS_HUD, true, LLGLSubmitCompare::tailNotRepeatable())
+            VKS_GLCMP_BEGIN_BACK_BUFFER(LLGLSubmitCompare::PASS_HUD, true, &LLGLSubmitCompare::tailNotRepeatable)
             gPipeline.renderGeomPostDeferred(hud_cam);
             VKS_GLCMP_END()
         }

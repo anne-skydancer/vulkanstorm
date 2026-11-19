@@ -11085,7 +11085,7 @@ void LLPipeline::renderDeferredLighting()
 
         // Sorted alpha only: the stochastic engine keeps history between frames, so a second render would differ.
         // Nor when the pass's tail cannot repeat (highlight faces pending, a selection, a debug display).
-        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_POST_DEFERRED, mAlphaSTFBO ? nullptr : screen_target, true, LLGLSubmitCompare::tailNotRepeatable())
+        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_POST_DEFERRED, mAlphaSTFBO ? nullptr : screen_target, true, &LLGLSubmitCompare::tailNotRepeatable)
         renderGeomPostDeferred(*LLViewerCamera::getInstance());
         VKS_GLCMP_END()
         popRenderTypeMask();
@@ -13652,7 +13652,7 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
     }
     else
     {
-        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_IMPOSTOR, &avatar->mImpostor, false, LLGLSubmitCompare::tailNotRepeatable())
+        VKS_GLCMP_BEGIN_IF(LLGLSubmitCompare::PASS_IMPOSTOR, &avatar->mImpostor, false, &LLGLSubmitCompare::tailNotRepeatable)
         if (VKS_GLCMP_REPLAY())
         {
             glClearColor(0.f, 0.f, 0.f, 0.f); // the block's inputs as the first render found them
