@@ -52,6 +52,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_uuid_seed_local.py
       shell: bash
+    - run: python3 scripts/tests/test_face_volume_face_guard.py
+      shell: bash
     - name: Check update version parsing
       shell: bash
       run: |
