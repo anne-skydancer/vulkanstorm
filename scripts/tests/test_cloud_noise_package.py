@@ -136,9 +136,10 @@ class CloudNoisePackageWiringTest(unittest.TestCase):
         self.assertIn("dst='app_settings/clouds'", text)
         # The licences ship through the manifest's rule for every package notice.
         self.assertIn('package_licence_files(', text)
-        licence_texts = (ROOT / 'indra/newview/licence_texts.py').read_text(encoding='utf-8')
+        sys.path.insert(0, str(ROOT / 'indra/newview'))
+        from licence_texts import PACKAGE_LICENCES_NOT_SHIPPED
         for name in chk.LICENCES:
-            self.assertNotIn(f'"{name}"', licence_texts)  # not on the unshipped list
+            self.assertNotIn(name, PACKAGE_LICENCES_NOT_SHIPPED)  # staged by the *.txt rule
         self.assertIn('Attribs: readonly', text)
         self.assertIn('0o444', text)
         self.assertNotIn('isfile(noise_file)', text)  # a missing file is an error, not a skip
