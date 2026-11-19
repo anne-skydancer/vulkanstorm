@@ -1868,6 +1868,7 @@ void LLEnvironment::updateShaderUniforms(LLGLSLShader* shader)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
 
+    // <Vulkanstorm/> LLSkyFilter::current_inputs (llskyfilter.cpp, stage AT2-1) reads the sky group's values from these lists in this order
     // apply uniforms that should be applied to all shaders
     mSkyUniforms[LLGLSLShader::SG_ANY].apply(shader);
     mWaterUniforms[LLGLSLShader::SG_ANY].apply(shader);
@@ -2025,6 +2026,7 @@ void LLEnvironment::updatePrimaryLight()
     st.moon_glow_factor = (F32)llclamp(rig.moon_glow_factor, 0.0, 1.0);
     st.moon_halo_weight = (F32)llclamp(rig.moon_halo_weight, 0.0, 1.0);
     st.light_scale = (F32)rig.light_scale;
+    st.moon_gain = (F32)rig.gain;
     st.shadow_visible = rig.shadow_visible;
     // the Stochastic method's dark gate: the light the shading uses for the directional term (the primary light's colour
     // times the sky sunlight scale, as the deferred pass has it; never the camera or the exposure)

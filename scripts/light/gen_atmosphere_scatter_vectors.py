@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Evaluate the viewer's class1/windlight/atmosphereCommonF.glsl (the scattering core of the physical atmosphere, stage AT2-0 of the
-item-4 plan; physicalAtmosphereF.glsl before it) on the GPU for fixed pseudo-random atmospheres and write
+"""Evaluate the viewer's class1/windlight/atmosphereCommonF.glsl (the physical atmosphere: the extinction of stage AT0 and the
+scattering core of stage AT2-0) on the GPU for fixed pseudo-random atmospheres and write
 indra/newview/tests/llatmosphere_scatter_vectors.inc, the vectors that llatmosphericscatter_test.cpp holds
-LLScatter (llatmosphericlight.h) to. CI runs only the C++ test; this script is what ties the vectors to the GLSL; the .inc also holds the SHA-256 of both GLSL files, which the test checks.
+LLScatter (llatmosphericlight.h) to. CI runs only the C++ test; this script is what ties the vectors to the GLSL; the .inc also holds the
+SHA-256 of the GLSL file, which the test checks, the std140 offsets of the `Atmosphere` uniform block as the driver lays it out (the
+test checks the C++ mirror, llatmospherebase.h AtmosphereBlock, against them) and the cut altitudes the block carries for each atmosphere
+(atmosphere_block.py's port of LLAtmosphere::cut_altitudes_km; the test checks them against the C++).
 
     python scripts/light/gen_atmosphere_scatter_vectors.py            # rewrite the .inc file
     python scripts/light/gen_atmosphere_scatter_vectors.py --check    # fail if the GLSL no longer produces it
@@ -11,9 +14,9 @@ LLScatter (llatmosphericlight.h) to. CI runs only the C++ test; this script is w
 Needs Windows and a GPU. The GLSL is float, so --check allows 1e-3 relative + 1e-6 absolute between two runs on the same GPU (the test then holds the C++ to these numbers
 at 1e-4 to 1e-3, see llatmosphericscatter_test.cpp).
 
-The light transmittance is the exact pa_transmittance here (PA_LIGHT_T_EXACT) and the multiple scattering a smooth stand-in
-(PA_MS_OVERRIDE): the vectors hold the arithmetic of the march and the reference integrals, not a table lookup. AT2-1 holds the passes
-that fill the tables to the C++ texels.
+The light transmittance is the exact pa_transmittance here (PA_LIGHT_T_EXACT), the ground's sky irradiance in the sky radiance the exact
+texel (PA_E_EXACT) and the multiple scattering a smooth stand-in (PA_MS_OVERRIDE): the vectors hold the arithmetic of the march and the
+reference integrals, not a table lookup. scripts/light/check_atmosphere_tables.py holds the table passes to the C++ texels.
 """
 import math
 import random
@@ -23,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from atmosphere_gl import *  # noqa: E402,F401,F403
 from atmosphere_gl import _loc  # noqa: E402
+import atmosphere_block  # noqa: E402
 
 OUT = ROOT / 'indra' / 'newview' / 'tests' / 'llatmosphere_scatter_vectors.inc'
 N_ATM = 14
@@ -32,7 +36,7 @@ u4f = fn('glUniform4f', None, I, F, F, F, F)
 # Bruneton's ozone (two linear layers): layer = (width m, exp_term, exp_scale 1/m, linear 1/m, constant)
 OZONE = [(25000.0, 0.0, 0.0, 1.0 / 15000.0, -2.0 / 3.0), (0.0, 0.0, 0.0, -1.0 / 15000.0, 8.0 / 3.0)]
 
-# the stand-in for the multiple-scattering table; llatmosphericscatter_test.cpp has the same formula
+# the stand-in for the multiple-scattering table, after the common file (which declares it); llatmosphericscatter_test.cpp has the same formula
 MS_STUB = """
 vec3 pa_ms_at(float h_km, float mu_s)
 {
@@ -125,53 +129,6 @@ def atmospheres():
     return out
 
 
-def setf(prog, name, v):
-    l = _loc(prog, name.encode())
-    if l >= 0:
-        u1f(l, float(v))
-
-
-def seti(prog, name, v):
-    l = _loc(prog, name.encode())
-    if l >= 0:
-        u1i(l, int(v))
-
-
-def set3(prog, name, v):
-    l = _loc(prog, name.encode())
-    if l >= 0:
-        u3f(l, float(v[0]), float(v[1]), float(v[2]))
-
-
-def set_atmosphere(prog, a):
-    set3(prog, 'pa_atm.rayleigh_ext', a['rayleigh_ext'])
-    set3(prog, 'pa_atm.ozone_ext', a['ozone_ext'])
-    set3(prog, 'pa_atm.excess', a['excess'])
-    for name in ('aerosol_ext', 'slab_ext', 'slab_top_km', 'planet_radius_km', 'top_radius_km'):
-        setf(prog, 'pa_atm.' + name, a[name])
-    layers = [[(0.0, 1.0, a['rayleigh_scale'], 0.0, 0.0)], [(0.0, 1.0, a['mie_scale'], 0.0, 0.0)], OZONE]
-    for pname, ls in zip(('rayleigh', 'mie', 'absorption'), layers):
-        seti(prog, 'pa_atm.%s.count' % pname, len(ls))
-        for j, (width, exp_term, exp_scale, linear, constant) in enumerate(ls):
-            for key, val in (('width', width), ('exp_term', exp_term), ('exp_scale', exp_scale), ('linear_term', linear), ('constant_term', constant)):
-                setf(prog, 'pa_atm.%s.%s[%d]' % (pname, key, j), val)
-    set3(prog, 'pa_rayleigh_scat', a['rayleigh_scat'])
-    setf(prog, 'pa_aerosol_scat', a['aerosol_scat'])
-    setf(prog, 'pa_slab_scat', a['slab_scat'])
-    set3(prog, 'pa_ms_scale', a['ms_scale'])
-    set3(prog, 'pa_glow_phase', a['glow'])
-    setf(prog, 'pa_aniso', a['aniso'])
-    setf(prog, 'pa_max_phase', 1e4)
-    setf(prog, 'pa_f_ms_max', 0.6)
-    setf(prog, 'pa_ground_albedo', 0.2)
-    lt = a['lights']
-    for i in range(2):
-        set3(prog, 'pa_lights.dir[%d]' % i, lt['dir'][i])
-        set3(prog, 'pa_lights.E[%d]' % i, lt['E'][i])
-        setf(prog, 'pa_lights.disc[%d]' % i, lt['disc'][i])
-    seti(prog, 'pa_lights.count', lt['count'])
-
-
 def requests(a, rnd):
     """The evaluations for one atmosphere: (kind, in0, in1)."""
     u = rnd.random
@@ -213,32 +170,37 @@ def requests(a, rnd):
 
 def evaluate():
     rnd = random.Random(7)
-    frag_head = ATMOS_HEAD + '#define PA_LIGHT_T_EXACT\n#define PA_MS_OVERRIDE\n'
-    common = shader_text('class1/windlight/physicalAtmosphereF.glsl') + MS_STUB + shader_text('class1/windlight/atmosphereCommonF.glsl')
+    frag_head = ATMOS_HEAD + '#define PA_LIGHT_T_EXACT\n#define PA_E_EXACT\n#define PA_MS_OVERRIDE\n'
+    common = shader_text('class1/windlight/atmosphereCommonF.glsl') + MS_STUB
     progs = {k: program([(VERT, VERTEX), (FRAG, frag_head + common + MAIN_HEAD + body + '\n}\n')]) for k, body in MAINS.items()}
+    for prog in progs.values():
+        atmosphere_block.Block.attach(prog)
+    layout = atmosphere_block.verify_layout(progs[8])
+    block = atmosphere_block.Block()
     tgt = Target(1, 2)
     atms = atmospheres()
     rows = []
     for ai, a in enumerate(atms):
+        packed = atmosphere_block.pack(a)
         for kind, in0, in1 in requests(a, rnd):
             prog = progs[kind]
             tgt.bind()
             use(prog)
-            set_atmosphere(prog, a)
+            block.upload(packed)
             l0, l1 = _loc(prog, b't_in0'), _loc(prog, b't_in1')
             u4f(l0, *[float(x) for x in in0])
             u4f(l1, *[float(x) for x in in1])
             draw(0x0004, 0, 3)
             ra, rb = tgt.read(0)[0], tgt.read(1)[0]
             rows.append((ai, kind, in0, in1, list(ra), list(rb)))
-    return atms, rows
+    return atms, rows, layout
 
 
 def sha_lines():
-    """SHA-256 of the two GLSL files with the line ends normalised (the test recomputes them: a changed shader needs new vectors)."""
+    """SHA-256 of the GLSL file with the line ends normalised (the test recomputes it: a changed shader needs new vectors)."""
     import hashlib
     out = []
-    for rel in ('class1/windlight/physicalAtmosphereF.glsl', 'class1/windlight/atmosphereCommonF.glsl'):
+    for rel in ('class1/windlight/atmosphereCommonF.glsl',):
         data = shader_text(rel).replace('\r\n', '\n').replace('\r', '\n').encode('utf8')
         out.append('SC_SHA("%s", "%s")' % (rel.split('/')[-1], hashlib.sha256(data).hexdigest()))
     return out
@@ -248,21 +210,27 @@ def fmt(x):
     return repr(float(x))
 
 
-def render(atms, rows):
+def render(atms, rows, layout):
     lines = ['// SPDX-License-Identifier: GPL-3.0-or-later', '// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)',
              '// Generated by scripts/light/gen_atmosphere_scatter_vectors.py from atmosphereCommonF.glsl on the GPU; do not edit.',
              '// SC_ATM(rayleigh_ext rgb, aerosol_ext, slab_ext, slab_top_km, ozone_ext rgb, rayleigh exp_scale, mie exp_scale, planet radius km, top radius km,',
              '//        excess rgb, rayleigh_scat rgb, aerosol_scat, slab_scat, ms_scale rgb, glow.x, glow.z, glow_norm, aniso,',
              '//        sun dir xyz, moon dir xyz, E_sun rgb, E_moon rgb, sun disc, moon disc, light count)',
              '// SC_VEC(atmosphere index, kind, in0[4], in1[4], out_a[4], out_b[4])   kinds: 0 uv/rmu, 1 table texel, 2 AP, 3 MS texel, 4 sky irradiance,',
-             '//        5 sky radiance, 6 phase, 7 medium, 8 light T']
+             '//        5 sky radiance, 6 phase, 7 medium, 8 light T',
+             '// SC_LAYOUT(member, std140 offset as the driver lays out the Atmosphere block)',
+             '// SC_CUTS(atmosphere index, count, the cut altitudes km the block carries)']
     lines += sha_lines()
+    lines += ['SC_LAYOUT("%s", %d)' % (n, o) for n, o in layout]
     for a in atms:
         lt = a['lights']
         v = (a['rayleigh_ext'] + [a['aerosol_ext'], a['slab_ext'], a['slab_top_km']] + a['ozone_ext'] + [a['rayleigh_scale'], a['mie_scale'], a['planet_radius_km'], a['top_radius_km']]
              + a['excess'] + a['rayleigh_scat'] + [a['aerosol_scat'], a['slab_scat']] + a['ms_scale'] + a['glow'] + [a['aniso']]
              + lt['dir'][0] + lt['dir'][1] + lt['E'][0] + lt['E'][1] + lt['disc'] + [lt['count']])
         lines.append('SC_ATM(' + ', '.join(fmt(x) for x in v) + ')')
+    for ai, a in enumerate(atms):
+        cuts = atmosphere_block.cut_altitudes(a)
+        lines.append('SC_CUTS(%d, %d, %s)' % (ai, len(cuts), ', '.join(fmt(x) for x in cuts)))
     for ai, kind, in0, in1, ra, rb in rows:
         lines.append('SC_VEC(%d, %d, %s)' % (ai, kind, ', '.join(fmt(x) for x in list(in0) + list(in1) + ra + rb)))
     return '\n'.join(lines) + '\n'
@@ -271,13 +239,13 @@ def render(atms, rows):
 def numbers(text):
     out = []
     for line in text.splitlines():
-        if line.startswith('SC_') and not line.startswith('SC_SHA'):
+        if line.startswith('SC_') and not line.startswith('SC_SHA') and not line.startswith('SC_LAYOUT'):
             out += [float(x) for x in line[line.index('(') + 1:line.rindex(')')].split(',')]
     return out
 
 
-atms, rows = evaluate()
-text = render(atms, rows)
+atms, rows, layout = evaluate()
+text = render(atms, rows, layout)
 if '--check' in sys.argv:
     old_text = OUT.read_text()
     old_sha = [l for l in old_text.splitlines() if l.startswith('SC_SHA')]

@@ -240,6 +240,7 @@ set(viewer_SOURCE_FILES
     llappearancemgr.cpp
     llappviewer.cpp
     llappviewerlistener.cpp
+    llatmosphereluts.cpp
     llattachmentsmgr.cpp
     llaudiosourcevo.cpp
     llautoreplace.cpp
@@ -731,6 +732,7 @@ set(viewer_SOURCE_FILES
     llsidetraypanelcontainer.cpp
     llskinningutil.cpp
     llsky.cpp
+    llskyfilter.cpp
     #llslurl.cpp #<FS:AW optional opensim support>
     llsnapshotlivepreview.cpp
     llspatialpartition.cpp
@@ -1127,6 +1129,8 @@ set(viewer_HEADER_FILES
     llappearancemgr.h
     llappviewer.h
     llappviewerlistener.h
+    llatmospherebase.h
+    llatmosphereluts.h
     llatmosphericlight.h
     llattachmentsmgr.h
     llaudiosourcevo.h
@@ -1617,6 +1621,7 @@ set(viewer_HEADER_FILES
     llskinningutil.h
     llskinpalettecache.h
     llsky.h
+    llskyfilter.h
     llslurl.h
     llsnapshotlivepreview.h
     llsnapshotmodel.h

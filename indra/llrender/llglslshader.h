@@ -154,6 +154,7 @@ public:
         UB_GLTF_JOINTS,         // "GLTFJoints"
         UB_GLTF_NODES,          // "GLTFNodes"
         UB_GLTF_MATERIALS,      // "GLTFMaterials"
+        UB_ATMOSPHERE,          // "Atmosphere" <Vulkanstorm/> stage AT2-1: the physical atmosphere (llatmospherebase.h AtmosphereBlock)
         NUM_UNIFORM_BLOCKS
     };
 

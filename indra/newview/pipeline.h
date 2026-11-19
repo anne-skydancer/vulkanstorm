@@ -42,6 +42,7 @@
 #include "llstochastichistory.h"
 #include "llreflectionmapmanager.h"
 #include "llcloudshadowmap.h" // <Vulkanstorm/>
+#include "llatmosphereluts.h" // <Vulkanstorm/> stage AT2-1
 #include "llheroprobemanager.h"
 
 #include <stack>
@@ -322,6 +323,11 @@ public:
     // <Vulkanstorm> stage L2: the cloud transmittance map (llcloudshadowmap.h)
     void bindCloudShadow(LLGLSLShader& shader) { mCloudShadowMap.bind(shader); }
     LLCloudShadowMap mCloudShadowMap;
+    // stage AT2-1 (llatmosphereluts.h): the physical atmosphere's and the EEP filter's tables. updateAtmosphere() once per main frame
+    // right after Env Update; ensureAtmosphereTables() from every view before it could need them (renderDeferredLighting)
+    void updateAtmosphere() { mAtmosphereLUTs.update(); }
+    void ensureAtmosphereTables() { mAtmosphereLUTs.ensureTables(); }
+    LLAtmosphereLUTs mAtmosphereLUTs;
     // </Vulkanstorm>
     void bindDeferredShaderFast(LLGLSLShader& shader);
     void bindDeferredShader(LLGLSLShader& shader, LLRenderTarget* light_target = nullptr, LLRenderTarget* depth_target = nullptr);

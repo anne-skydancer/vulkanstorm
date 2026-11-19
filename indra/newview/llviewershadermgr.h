@@ -280,6 +280,13 @@ extern LLGLSLShader         gExposureProgram;
 extern LLGLSLShader         gExposureProgramNoFade;
 extern LLGLSLShader         gLuminanceProgram;
 extern LLGLSLShader         gCloudShadowMapProgram; // <Vulkanstorm/> stage L2
+// <Vulkanstorm> stage AT2-1: the physical atmosphere's tables (atmosphereTablesF.glsl: T, Psi split, Psi, E split, E, sky view) and
+// the EEP filter's (skyFilterF.glsl: A and B, the cast-light rows, the cast-light level); LLAtmosphereLUTs runs them
+constexpr int ATMOSPHERE_TABLE_PASSES = 6;
+constexpr int SKY_FILTER_PASSES = 3;
+extern LLGLSLShader         gAtmosphereTableProgram[ATMOSPHERE_TABLE_PASSES];
+extern LLGLSLShader         gSkyFilterProgram[SKY_FILTER_PASSES];
+// </Vulkanstorm>
 extern LLGLSLShader         gDeferredAvatarShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaShadowProgram;
 extern LLGLSLShader         gDeferredAvatarAlphaMaskShadowProgram;

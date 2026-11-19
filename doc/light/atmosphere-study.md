@@ -355,7 +355,8 @@ The AT2 survey's design stands where it is not changed here; the decisions it to
 
 - The `Atmosphere` std140 block holds `pa_atm`, the scattering values, the lights, the cut altitudes and the camera height.
 - It is filled once per main frame, and per probe or mirror view only for the camera height, in a small second block or as a push of
-  one float.
+  one float. (As built in AT2-1, section 7.1, the block holds no camera height: nothing in AT2-1 reads it, and the froxels' observer is
+  per view, so AT2-3 adds it with its reader.)
 - Programs that do not declare the block pay nothing.
 - `atmosphereCommonF.glsl` and `physicalAtmosphereF.glsl` read the block instead of `uniform` declarations. The GPU vectors' harness
   sets the block the same way. The test's SHA lines change.
@@ -526,6 +527,57 @@ Common gates for every stage:
 - AT2-1 can run now. It touches no shader that renders today, and no shadow file.
 - **Release integration waits for L6** ([decided]). L6 is not started.
 
+### 7.1 AT2-1 as built (2026-11-19, branch `codex/sky-at2-1-base-and-filter`)
+
+**The physics is one clear high-pressure day under every EEP sky: the clear-day base** (the owner's model of 2026-11-18, section 8,
+Decided). Every EEP sky, the built-in ones included, is a filter on one base, not a per-EEP translation (`LLScatter::fromLegacy` stays
+for the tests and the library check; AT1's `LLAtmosphere::fromLegacy` stays the sun's part of the filter, unchanged). The visible sky
+is the same either way (section 8).
+
+| Part | Where | What |
+|---|---|---|
+| The base | `indra/newview/llatmospherebase.h` | Rayleigh 5.802 / 13.558 / 33.1 e-3 /km (8 km), Bruneton's ozone, a clean aerosol of optical depth 0.03 at 550 nm (1.2 km, albedo 0.95, Cornette-Shanks g 0.75), no slab, ground albedo 0.1, the sun's and the moon's discs physical (0.265 degrees; the EEP's sun and moon scales size the discs you see, the filter's). Ground visibility 101.5 km; noon T 0.92 / 0.85 / 0.74. The core's aerosol is grey (an Angstrom exponent of 1.3 would move the 440 / 680 nm depths by +0.01 / -0.007). The lights are the sky's own sun colour and sunlight scale and AT1's moon gain, through this atmosphere; the moon is not marched when its gain is 0 |
+| R2 | `LLScatter::sky_radiance`, `pa_sky_radiance` | `atmosphere_ap` to the end of the ray (slab-split), 64 steps by default; the ground's sky irradiance from E (GLSL: `pa_E_lut`; `PA_E_EXACT` for the vectors). At 64 steps within 0.50 % of 4096 on Default, Foggy and Sunset and 0.37 % on the base (`llatmosphericscatter_test.cpp` test 10b, gate 1.5 %) |
+| R10 | `atmosphereCommonF.glsl`, `llglslshader.{h,cpp}` (`UB_ATMOSPHERE`, "Atmosphere") | One std140 block of 512 bytes: the atmosphere, the lights, the scattering values and the C++'s cut altitudes (`LLAtmosphere::finalize`), so the GLSL no longer searches them per texel. Nothing in it depends on the camera or the view (AT2-3 gives the froxels their observer per view); it is uploaded when the lights change. `physicalAtmosphereF.glsl` is merged into `atmosphereCommonF.glsl`: the viewer compiles each file as its own unit and the block can be declared once. The C++ mirror `AtmosphereBlock` is checked against the driver's offsets |
+| Base tables | `llatmosphereluts.{h,cpp}` (`LLAtmosphereLUTs`), `atmosphereTablesF.glsl` | T 256x64, Psi 32x32 (split 256x256 + reduce), E 64x16 (split 512x128 + reduce): RGBA16F, built once (and after a release): with the discs physical nothing in them follows the sky. The split passes' RGBA32F partials (3 MB) exist only while they are built. The sky view 192x108 RGBA16F, from the ground, `RenderAtmosphereSkyViewSteps` (64, debug), rebuilt on a change of the lights' quantised key (directions 1e-3, irradiance 1e-3 relative). The sizes are `LLAtmosphereLUTs` constants, held to the C++ twin's by `static_assert` and passed to the passes as defines. The tables hold about 0.32 MB of VRAM |
+| Filter tables | `llskyfilter.{h,cpp}`, `skyFilterF.glsl` | A and B: one column each, 1x108 RGBA16F (MRT), skyV's colour at haze_glow 0 and its slope; they depend on the elevation of skyV's `rel_pos` only, so row j is at the sky-view grid's row j (the rows the phase-1 qualification interpolated between). Their inputs are the dome's own uniforms, read from `LLEnvironment`'s uniform lists in the order the dome's program receives them (`LLSkyFilter::current_inputs`, not a second copy of `llsettingsvo.cpp`'s branches), taken in every view but a reflection probe's irradiance pass, kept, and set as the filter passes' uniforms: the key and the GPU have one source, and any view can build the tables. A and B follow their inputs exactly (any change rebuilds the 1x108 pass): quantised at 1e-4, the light's height still moved a thin, bright sky near the sun by 11 display steps at sunset ([TOR] DUSK - Fairytale glow) |
+| Cast-light level k | `skyFilterF.glsl` passes 2 and 3 | 1x1 RGBA32F: the base's irradiance and the filtered sky's (cosine-weighted luminance on the same grid) and k = their ratio, on a quantised key (it moves by under 0.7 % across one step through a sunrise). Defined (w 1) only where both skies cast light: the filtered sky's irradiance above 1e-6 and the base's above 1e-6 of it; elsewhere the cast light is today's (a creator's black sky; the base under a lit night sky late in twilight: its light falls to 5e-5 of the -2 degree level by -10 degrees, 2e-7 by -15 and 3e-8 by -18, with no airglow or starlight) |
+| The hook | `LLPipeline::updateAtmosphere()` after Env Update (`llviewerdisplay.cpp`, not in a cube snapshot); `ensureAtmosphereTables()` at the start of `renderDeferredLighting` (every view, the photo paths included); `releaseLUTBuffers` | Main thread only. The reflection probes, after `display()`, reuse the frame's tables; the hero probes, rendered before the frame's update, read the previous frame's and on the session's first frame build them. Only a reflection probe's irradiance pass before the session's first main frame cannot build the filter's tables (`isBuilt()` says so). A program that fails to load leaves the tables unbuilt and logs once |
+
+**Gates [measured, RTX 5070 Ti, driver 621.14]:**
+
+- the GPU tables against the C++ (`scripts/light/check_atmosphere_tables.py`, the viewer's passes, formats, sizes, order, block and
+  filter uniforms; Default.xml's filter under each case's own lights): T 4.9e-4 absolute (gate 1e-3), Psi 0.13 %, E 0.14 %, sky view
+  0.18 % (gate 1 %), A and B in RGBA16F 9.5e-4 at most (gate 2e-3: one fp16 step is 9.8e-4, and this GPU truncates to half floats),
+  k 1.2e-4 relative (gate 1 %, its defined flag equal), on three light cases (sun 60, sun 3 with the moon, night with the moon at 40);
+- skyV.glsl itself on the GPU against the twin: 2.3e-6 relative over 11 skies; the A / B pass 2.3e-6; k 1e-5, with a physical sky and
+  with a black one, k undefined (`llskyfilter_test.cpp`);
+- the scatter and transmittance vectors regenerated (`gen_atmosphere_scatter_vectors.py`, `gen_transmittance_vectors.py`): worst
+  1e-5 (the march) and below; the transmittance vectors reproduced the old ones to 1e-4 with the uploaded cuts (0 of 4608 numbers off);
+- the library check with the 64-step slab-split march: 0 whiteouts; the aureole list changed as the study measured (D2 = a): "Phototools-
+  Hospital Light 01" entered at 1.248x, "[TOR] SCIFI - Arrakissed 2" left;
+- **the froxel step count, chosen: 12** (`llatmospherebase_test.cpp`; 10962 rays, observer 0 to 4 km, -10 to 90 degrees, 32 m to
+  10 km, the sun at -4, 0, 2, 5, 30 and 70 degrees, against a 256-step march within 0.001 % of 4096): worst 1.12 / 0.39 / 0.19 % at 8 /
+  12 / 16 steps. 8 miss the 1 % gate with a high sun looking up past the draw distance (sun 70, the zenith, 10 km), so the count is 12,
+  the study's figure, gated in the test; AT2-3 adds `RenderAtmosphereFroxelSteps` (12) with its reader. The filter scales this physical
+  haze and adds to it, so a march error stays relative to the physical haze. The library's per-EEP `--acc` measures translations the
+  viewer no longer marches (informational);
+- GPU time [measured, one draw per query, the median of 40]: built once, T 0.038 + Psi 0.046 + E 0.035 = 0.118 ms; A and B 0.0026 ms on
+  any change of their inputs; the sky view 0.050 and k 0.030 on a change of the lights or of the sky's quantised key. Section 6.1's T was
+  0.071 with the per-texel cut search;
+- steady state: no pass; per frame the main thread reads the 16 inputs from the uniform lists, forms the keys and compares the 512-byte
+  block. While a day cycle moves the sun, A and B are rebuilt every frame (0.0026 ms GPU, about 10-20 us of main thread [estimate]) and
+  the sky view and k on their quantised keys, about once a second in a 4-hour day cycle near the horizon [estimate: directions in steps
+  of 1e-3, moving by up to 4.4e-4 a second].
+
+**Not verified (needs the viewer running; owner-assisted):** a 1 h soak without GL errors; `ensureAtmosphereTables()` reached from a
+mirror or a hero probe on frame 1; the tables existing in every photo path (they are built in `renderDeferredLighting`, which every
+view and capture renders through); the main-thread cost in a frame capture; the passes on AMD and Intel compilers.
+
+**For AT2-2.** The filter's tables are the main view's: a reflection probe's irradiance pass, which today draws a desaturated sky with no
+ambient, needs its own answer when the probes capture the filtered sky. The cast light hands over from k x W to today's as k falls at
+night: AT2-2 designs that handover from the pass's irr_p, irr_w and k. Haze and the sky light is open for the owner (section 8).
+
 ---
 
 ## 8. Decisions for the owner (new ones only; the recommended option first)
@@ -550,9 +602,11 @@ Decided on the decisions page, option by option. The options below are kept as t
 Replaces the restated "[decided]" item "the drawn sky physical, with L6 compensating". The principle is creator intent for every EEP.
 
 - **Controls unchanged.** People use the EEP settings, personal lighting and the rest of today's controls exactly as now. Those controls
-  drive a filter that applies them to the physical sky (AT2-0's `LLScatter`, with D1's march).
+  drive a filter that applies them to the physical sky (since 2026-11-18 the clear-day base, below; until then AT2-0's `LLScatter`
+  translated from each EEP; with D1's march).
 - **The sky you see is the same as today.** The filter is fully determined by the EEP: per direction, it multiplies the physical sky by
-  today's Windlight sky over the physical sky, both computed from that EEP (today's formula, `skyV.glsl`, is kept as the reference that
+  today's Windlight sky over the physical sky, today's sky computed from that EEP (the physical sky was computed from it too until the
+  clear-day base made it one sky for every EEP; today's formula, `skyV.glsl`, is kept as the reference that
   produces the filter; it is never drawn). Where the physical sky has no light, or none in a channel, a multiplier cannot reproduce today,
   so the filter also adds light there: multiply, plus add where physics has nothing, still computed from the EEP alone. It applies to the
   drawn dome and to the haze on distant objects, including the sky's brightness relative to the sun. Creator intent wins over the
@@ -595,6 +649,32 @@ keyframe; the physical sky and the additive part for the haze on objects) next t
 them (visible sky filtered in full, cast light physical in level with the creator's tint, today's cast light where physics has none) and
 adds the capture-path checks. **AT2-3** applies the filter to the aerial perspective with its additive part. **AT2-5** keeps the Windlight
 formula as the filter's reference instead of deleting it. L6 no longer compensates the drawn sky; it still handles night and exposure.
+
+#### The clear-day base: one physical sky under every EEP (owner, 2026-11-18)
+
+The owner's model, 2026-11-18: "Default sky is as clear as a high-pressure dome day, with the clouds that are automatically generated.
+Atmospherics are set by the EEP postproduction filter (i know it has those levers)." The physical render first, then post-production
+filters.
+
+- **The physical sky is one clear high-pressure day for every EEP sky**, the built-in ones included (`llatmospherebase.h`, section
+  7.1): clean, dry air, a thin aerosol, visibility about 100 km. Every EEP lever is the filter's. `LLScatter::fromLegacy`, the per-EEP
+  translation, stays for the tests and the library check only.
+- **What changes against the creator's-look rule above.** The visible sky does not change: the filter's tables hold today's look
+  whatever P is. The cast light's level follows the clear day: P is never black by day, so the 15 skies "where W is lit and P is black"
+  no longer occur; at night with the moon down the base's twilight falls as a real one does, and k becomes undefined (today's cast
+  light) late in twilight. T, Psi and E are built once.
+- **Open for the owner: haze and the sky light** (raised by the AT2-1 review; it becomes visible when AT2-2 applies k). k brings every
+  EEP's cast sky light to the clear day's level, while the direct sun keeps AT1's per-EEP extinction (`LLAtmosphere::fromLegacy` of the
+  EEP: its haze, density, max_y and profiles). So a hazy or foggy EEP dims the sun but casts clear-day sky light, and the light the haze
+  takes from the beam does not come back as sky light. The auditor measured AT1's ground-sun transmittance over the base's (green):
+  Default-like 0.93 at a 60 degree sun and 0.52 at 5; [TOR] FOGGY - Das fog 0.67, 0.37 and 0.02 at 60, 20 and 5; haze_density 4 about 0.
+  At a Default sunset the shade is lit as if by a sun 1.9 times the one on the ground; in fog the total light falls below both today's
+  look and a physical haze, which moves direct light into the sky.
+  - (a) **Recommended:** the filter adds to the cast light what its haze takes from the sun (the scattered part of AT1's extra
+    extinction over the base's), so a hazy sky moves light from the beam to the sky as a real haze does, and the sun stays AT1's.
+  - (b) Keep it: the haze dims the sun only, the sky light stays the clear day's.
+  - (c) AT1's sun through the base's transmittance, with the EEP's colour as its tint: the sun physical too, a visible change to the
+    direct light of every hazy EEP.
 
 ### Options as offered
 

@@ -4,8 +4,9 @@
 (doc/light/atmosphere-study.md, refresh of 2026-11-16). Not part of the build or CI.
 
 Unlike the 2026-11-09 study bench (codex/atmosphere-study, scripts/light/bench_atmosphere.py), which marched the study's own GLSL,
-every pass here runs the viewer's AT2-0 scattering core unmodified: class1/windlight/physicalAtmosphereF.glsl then
-atmosphereCommonF.glsl (the GLSL twin of LLScatter, held to the C++ by gen_atmosphere_scatter_vectors.py). Only the pass mains,
+every pass here runs the viewer's AT2-0 scattering core unmodified: class1/windlight/atmosphereCommonF.glsl (the GLSL twin of
+LLAtmosphere and LLScatter, held to the C++ by the vector generators; since AT2-1 it reads the `Atmosphere` uniform block, filled here
+by atmosphere_block.py, and takes the cut altitudes from the C++ instead of searching them per texel). Only the pass mains,
 the sky-view/froxel parameterisations and the split multiple-scattering fragment are bench code (fragment passes, no compute).
 
 The atmosphere is the viewer's own translation of Default.xml, Foggy.xml and Sunset.xml (LLScatter::fromLegacy), read from
@@ -29,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from atmosphere_gl import *  # noqa: E402,F401,F403  (opens the hidden context)
 from atmosphere_gl import _loc  # noqa: E402
+import atmosphere_block  # noqa: E402
 
 
 def arg(name, default):
@@ -118,27 +120,12 @@ def dir_of(el_deg, az_deg):
 
 
 def set_atmosphere(prog, a, sun_el, moon_on):
-    set3(prog, 'pa_atm.rayleigh_ext', a['rayleigh_ext']); set3(prog, 'pa_atm.ozone_ext', a['ozone_ext'])
-    set3(prog, 'pa_atm.excess', a['excess'])
-    for name in ('aerosol_ext', 'slab_ext', 'slab_top_km', 'planet_radius_km', 'top_radius_km'):
-        setf(prog, 'pa_atm.' + name, a[name])
-    for pname in ('rayleigh', 'mie', 'absorption'):
-        ls = a[pname]
-        seti(prog, 'pa_atm.%s.count' % pname, len(ls))
-        for j, (width, exp_term, exp_scale, linear, constant) in enumerate(ls):
-            for key, val in (('width', width), ('exp_term', exp_term), ('exp_scale', exp_scale), ('linear_term', linear),
-                             ('constant_term', constant)):
-                setf(prog, 'pa_atm.%s.%s[%d]' % (pname, key, j), val)
-    set3(prog, 'pa_rayleigh_scat', a['rayleigh_scat']); setf(prog, 'pa_aerosol_scat', a['aerosol_scat'])
-    setf(prog, 'pa_slab_scat', a['slab_scat']); set3(prog, 'pa_ms_scale', a['ms_scale']); set3(prog, 'pa_glow_phase', a['glow'])
-    setf(prog, 'pa_aniso', a['aniso']); setf(prog, 'pa_max_phase', a['max_phase']); setf(prog, 'pa_f_ms_max', 0.6)
-    setf(prog, 'pa_ground_albedo', 0.2)
+    """the `Atmosphere` block of the translated sky `a` with the sun at sun_el (azimuth 30) and the moon opposite (AT2-1: one upload)"""
     sun = dir_of(sun_el, 30.0)
     moon = [-c for c in sun]
-    set3(prog, 'pa_lights.dir[0]', sun); set3(prog, 'pa_lights.dir[1]', moon)
-    set3(prog, 'pa_lights.E[0]', a['E_sun']); set3(prog, 'pa_lights.E[1]', [c * 0.0625 for c in a['E_sun']])
-    setf(prog, 'pa_lights.disc[0]', 0.0046); setf(prog, 'pa_lights.disc[1]', 0.0045)
-    seti(prog, 'pa_lights.count', 2 if moon_on else 1)
+    b = dict(a, profiles=[a['rayleigh'], a['mie'], a['absorption']], f_ms_max=0.6, ground_albedo=0.2,
+             lights=dict(dir=[sun, moon], E=[a['E_sun'], [c * 0.0625 for c in a['E_sun']]], disc=[0.0046, 0.0045], count=2 if moon_on else 1))
+    BLOCK.upload(atmosphere_block.pack(b))
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -146,7 +133,8 @@ def set_atmosphere(prog, a, sun_el, moon_on):
 # ---------------------------------------------------------------------------------------------------------------------------
 
 HEAD = '#version 460 compatibility\n'
-CORE = shader_text('class1/windlight/physicalAtmosphereF.glsl') + shader_text('class1/windlight/atmosphereCommonF.glsl')
+CORE = shader_text('class1/windlight/atmosphereCommonF.glsl')
+BLOCK = atmosphere_block.Block()
 
 PASSES = {}
 
@@ -435,7 +423,9 @@ void main() {
 
 
 def compile_pass(body):
-    return program([(VERT, VERTEX), (FRAG, HEAD + CORE + body)])
+    prog = program([(VERT, VERTEX), (FRAG, HEAD + CORE + body)])
+    atmosphere_block.Block.attach(prog)
+    return prog
 
 
 # ---------------------------------------------------------------------------------------------------------------------------

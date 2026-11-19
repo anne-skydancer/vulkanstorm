@@ -109,6 +109,16 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmosphericscatter_test.cpp -o "$RUNNER_TEMP/atmospheric-scatter-test"
         "$RUNNER_TEMP/atmospheric-scatter-test"
+    - name: Check the clear-day base sky and the Atmosphere block (AT2-1)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llatmospherebase_test.cpp -o "$RUNNER_TEMP/atmosphere-base-test"
+        "$RUNNER_TEMP/atmosphere-base-test"
+    - name: Check the EEP filter's twin against skyV.glsl and its tables (AT2-1)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llskyfilter_test.cpp -o "$RUNNER_TEMP/sky-filter-test"
+        "$RUNNER_TEMP/sky-filter-test"
     - name: Check the shipped skies against the physical atmosphere's bounds (no whiteout outside the aureole; every 8th sky)
       shell: bash
       run: python3 scripts/light/check_atmosphere_library.py --quick

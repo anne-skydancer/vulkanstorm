@@ -21,9 +21,10 @@
  * parts). Stage AT1/L3 puts them to use: LLEnvironment::updatePrimaryLight calls compute_primary_light()
  * once per frame, and the ground light (sunlit) is that result, not the GLSL's old sun-or-moon pick and
  * airmass. class1/windlight/
- * physicalAtmosphereF.glsl is the GLSL twin of LLAtmosphere::transmittance (the physical part
- * and the excess factor of the capped columns), held equal by the vectors of
- * scripts/light/gen_transmittance_vectors.py.
+ * atmosphereCommonF.glsl's pa_transmittance is the GLSL twin of LLAtmosphere::transmittance (the physical
+ * part and the excess factor of the capped columns), held equal by the vectors of
+ * scripts/light/gen_transmittance_vectors.py (stage AT2-1 merged physicalAtmosphereF.glsl into it: the
+ * viewer compiles each file as its own unit, and the uniform block both read can be declared once only).
  *
  * Stage AT2-0 (the end of this file) adds the scattering core on top of LLAtmosphere's extinction: LLScatter (albedos, phase
  * functions, multiple-scattering scale, the lights' irradiance, all bounded), the transmittance / multiple-scattering / sky
@@ -212,7 +213,8 @@ struct DensityProfile
     // The h in (lo, hi) (metres) where a layer's unclamped expression crosses density 0 or 1, for a layer with an
     // exponential term. f = exp_term e^(exp_scale h) + linear h + constant has f'' of the sign of exp_term, so at most one
     // stationary point (linear = -exp_term exp_scale e^(exp_scale h)); split there, each part is monotone, so a sign change
-    // of f - level across it holds exactly one crossing, found by 32 bisections (physicalAtmosphereF.glsl does the same).
+    // of f - level across it holds exactly one crossing, found by 32 bisections. The GLSL takes these crossings from the C++ (the
+    // cut altitudes in the `Atmosphere` block, fill_atmosphere_block); it no longer searches them.
     static int layer_crossings(const DensityLayer& l, double lo, double hi, double* out, int max_count)
     {
         double br[3];
@@ -680,7 +682,7 @@ struct LLAtmosphere
     // Transmittance from altitude h_km above the ground, towards a body at zenith cosine mu, to the top of the
     // atmosphere (the ground is not an occluder here), times the body's visible part over the horizon:
     // smoothstep(mu_h - disc_sin, mu_h + disc_sin, mu), mu_h = -sqrt(1 - (Rg/(Rg+h))^2). This is what lights call
-    // (physicalAtmosphereF.glsl's pa_transmittance is its twin); physical_transmittance() is the part without the excess.
+    // (atmosphereCommonF.glsl's pa_transmittance is its twin); physical_transmittance() is the part without the excess.
     //
     //   T = physical_transmittance(h, mu, disc) x exp(-excess x path_factor / max(mu - mu_h, 1e-6))
     //
@@ -1059,14 +1061,18 @@ struct PrimaryLightRig
     bool   shadow_visible = true;
 };
 
+// the sine of a body's angular radius for its EEP scale (sun_scale, moon_scale): 0.265 degrees at scale 1, bounded
+inline double body_disc_sin(double scale)
+{
+    constexpr double DEG = 3.14159265358979323846 / 180.0;
+    return std::min(std::max(std::sin(0.265 * DEG * std::min(std::max(detail::finite_or(scale, 1.0), 0.0), 100.0)), 1e-5), 0.2);
+}
+
 inline PrimaryLightRig compute_primary_light(const PrimaryLightSetup& s)
 {
     using detail::finite_or;
     constexpr double DEG = 3.14159265358979323846 / 180.0;
-    auto disc_sin = [&](double scale) {
-        return std::min(std::max(std::sin(0.265 * DEG * std::min(std::max(finite_or(scale, 1.0), 0.0), 100.0)), 1e-5), 0.2);
-    };
-    const double sun_disc = disc_sin(s.sun_scale), moon_disc = disc_sin(s.moon_scale);
+    const double sun_disc = body_disc_sin(s.sun_scale), moon_disc = body_disc_sin(s.moon_scale);
     const double sun_z = finite_or(s.sun_dir.z, 1.0), moon_z = finite_or(s.moon_dir.z, -1.0);
 
     LegacySky cloud_sky = s.sky; // the clouds' light is made of the colour their shader has
@@ -1241,7 +1247,8 @@ struct ScatterBounds
     double max_aerosol_albedo = 0.95;
     double aerosol_albedo_at_ref = 0.9;   // the aerosol albedo of a sky whose haze_horizon is Default's
     // The multiple scattering is scaled by ms_scale and summed as 1 / (1 - f_ms): the product is at most max_ms_scale / (1 - max_f_ms) =
-    // 4 / 0.4 = 10 (a scale of 4 with a series of 10 let a legal synthetic sky reach 1.43 x the white card across the open sky). No
+    // 4 / 0.4 = 10 (a scale of 4 with a series of 10 let a legal synthetic sky reach 1.43 x the white card across the open sky under the
+    // uniform sky march that skipped the haze slab; 0.70 under the slab-split march of AT2-1). No
     // shipped sky is on the scale bound (the largest ambient / Default's is 2.86, the library check reports it); only a very thick fog
     // reaches f_ms 0.6, where Hillaire's series is weak anyway.
     double max_ms_scale = 4.0;            // per channel
@@ -1435,28 +1442,8 @@ struct LLScatter
         s.bounds = sb;
         s.atm = LLAtmosphere::fromLegacy(sky, ab);
         unsigned c = 0;
-        // NaN -> fallback; +-infinity -> the largest finite value of that sign (so the bound below it applies, not 0)
-        auto fin = [&](double x, double fallback) {
-            if (std::isnan(x))
-            {
-                c |= SCLAMP_NON_FINITE;
-                return fallback;
-            }
-            if (std::isinf(x))
-            {
-                c |= SCLAMP_NON_FINITE;
-                return x > 0.0 ? 1e30 : -1e30;
-            }
-            return x;
-        };
-        auto bounded = [&](double x, double lo, double hi, unsigned bit) {
-            const double y = clampd(x, lo, hi);
-            if (y != x)
-            {
-                c |= bit;
-            }
-            return y;
-        };
+        auto fin = [&](double x, double fallback) { return finite_input(x, fallback, c); };
+        auto bounded = [&](double x, double lo, double hi, unsigned bit) { return bounded_input(x, lo, hi, bit, c); };
 
         // 1. albedos: blue_horizon tints the Rayleigh albedo, haze_horizon the aerosol's; both relative to Default's, never above their bounds
         const double bh[3] = { fin(f.blue_horizon.x, 0.0), fin(f.blue_horizon.y, 0.0), fin(f.blue_horizon.z, 0.0) };
@@ -1491,18 +1478,58 @@ struct LLScatter
             c |= SCLAMP_PHASE_PEAK;
         }
 
-        // 4. the lights: E = 3 x scale x lin(source), the irradiance pbrBaseLight gives a sunlit surface; the moon's is the sun's x gain
-        const double scale = bounded(fin(f.sky_sunlight_scale, 1.0), 0.0, sb.max_sunlight_scale, SCLAMP_SUNLIGHT_SCALE);
-        const double src[3] = { bounded(fin(sky.source.x, 0.0), 0.0, 1.0, SCLAMP_SOURCE), bounded(fin(sky.source.y, 0.0), 0.0, 1.0, SCLAMP_SOURCE),
-                                bounded(fin(sky.source.z, 0.0), 0.0, 1.0, SCLAMP_SOURCE) };
-        s.lights.E[0] = srgb_to_linear(Vec3{ src[0], src[1], src[2] }) * (3.0 * scale);
-        s.lights.E[1] = s.lights.E[0] * bounded(fin(moon_gain, 0.0), 0.0, sb.max_moon_gain, SCLAMP_MOON_GAIN);
-        s.lights.disc_sin[0] = clampd(fin(f.sun_disc_sin, 0.0046), 1e-5, 0.2);
-        s.lights.disc_sin[1] = clampd(fin(f.moon_disc_sin, 0.0046), 1e-5, 0.2);
-        s.lights.dir[0] = { 0.0, 0.0, 1.0 };
-        s.lights.dir[1] = { 0.0, 0.0, -1.0 };
+        // 4. the lights
+        s.lights = lights_of(sky.source, f.sky_sunlight_scale, moon_gain, f.sun_disc_sin, f.moon_disc_sin, sb, c);
         s.scatter_clamped = c;
         return s;
+    }
+
+    // The input bounds of fromLegacy and lights_of. finite_input: NaN -> fallback; +-infinity -> the largest finite value of that sign (so
+    // the bound below it applies, not 0); either sets SCLAMP_NON_FINITE. bounded_input: x clamped to [lo, hi], `bit` set when it moved.
+    static double finite_input(double x, double fallback, unsigned& clamped)
+    {
+        if (std::isnan(x))
+        {
+            clamped |= SCLAMP_NON_FINITE;
+            return fallback;
+        }
+        if (std::isinf(x))
+        {
+            clamped |= SCLAMP_NON_FINITE;
+            return x > 0.0 ? 1e30 : -1e30;
+        }
+        return x;
+    }
+    static double bounded_input(double x, double lo, double hi, unsigned bit, unsigned& clamped)
+    {
+        const double y = detail::clampd(x, lo, hi);
+        if (y != x)
+        {
+            clamped |= bit;
+        }
+        return y;
+    }
+
+    // The lights from the sky's source colour: E = 3 x scale x lin(source), the irradiance pbrBaseLight gives a sunlit surface; the moon's
+    // is the sun's x gain (AT1's rig.gain). The directions are the zenith and the nadir until set_light_dirs. `clamped` collects the
+    // ScatterClamp bits of the bounds that applied. Shared by fromLegacy and the clear-day base (llatmospherebase.h).
+    static ScatterLights lights_of(const Vec3& source, double sunlight_scale, double moon_gain, double sun_disc_sin, double moon_disc_sin,
+                                   const ScatterBounds& sb, unsigned& clamped)
+    {
+        using detail::clampd;
+        auto fin = [&](double x, double fallback) { return finite_input(x, fallback, clamped); };
+        auto bounded = [&](double x, double lo, double hi, unsigned bit) { return bounded_input(x, lo, hi, bit, clamped); };
+        ScatterLights lt;
+        const double scale = bounded(fin(sunlight_scale, 1.0), 0.0, sb.max_sunlight_scale, SCLAMP_SUNLIGHT_SCALE);
+        const double src[3] = { bounded(fin(source.x, 0.0), 0.0, 1.0, SCLAMP_SOURCE), bounded(fin(source.y, 0.0), 0.0, 1.0, SCLAMP_SOURCE),
+                                bounded(fin(source.z, 0.0), 0.0, 1.0, SCLAMP_SOURCE) };
+        lt.E[0] = srgb_to_linear(Vec3{ src[0], src[1], src[2] }) * (3.0 * scale);
+        lt.E[1] = lt.E[0] * bounded(fin(moon_gain, 0.0), 0.0, sb.max_moon_gain, SCLAMP_MOON_GAIN);
+        lt.disc_sin[0] = clampd(fin(sun_disc_sin, 0.0046), 1e-5, 0.2);
+        lt.disc_sin[1] = clampd(fin(moon_disc_sin, 0.0046), 1e-5, 0.2);
+        lt.dir[0] = { 0.0, 0.0, 1.0 };
+        lt.dir[1] = { 0.0, 0.0, -1.0 };
+        return lt;
     }
 
     // the integral over the sphere of the glow lobe (max(1 - cos, 0.001) glow_x)^glow_z + 0.25, closed form
@@ -1905,18 +1932,20 @@ struct LLScatter
         }
     }
 
-    // --- the sky: radiance along d (unit, z up) from an observer at h_obs_km, `steps` uniform midpoint steps to the ground or the top
-    //     (the sky-view LUT's texel), plus the ground at ground_albedo where the ray meets it, lit by the lights' T and the sky
-    //     irradiance E(0, mu) of the e_lut (or the exact texel).
-    Vec3 sky_radiance(const Vec3& d_in, double h_obs_km, int steps = 32) const
+    // --- the sky: radiance along d (unit, z up) from an observer at h_obs_km (the sky-view table's texel): the aerial perspective to
+    //     the end of the ray, the ground or the top, in `steps` steps (at least AP_MIN_STEPS), plus the ground at ground_albedo where the
+    //     ray meets it, lit by the lights' T and the sky irradiance E(0, mu) of the e_lut (or the exact texel). Stage AT2-1 (decision D1
+    //     of doc/light/atmosphere-study.md, finding R2): the march is atmosphere_ap's, split where the ray leaves the 0.25 km haze slab; a
+    //     uniform march to the top skips the slab (up to 98 % low in fog at 32 steps). At 64 steps it is within 0.50 % of a 4096-step march
+    //     on Default, Foggy and Sunset and 0.37 % on the clear-day base (llatmosphericscatter_test.cpp, test 10b, gate 1.5 %).
+    Vec3 sky_radiance(const Vec3& d_in, double h_obs_km, int steps = 64) const
     {
         const Vec3 d = detail::sane_dir(d_in, { 0.0, 0.0, 1.0 });
         const double h0 = detail::clampd(h_obs_km, 0.0, atm.top_radius_km - atm.planet_radius_km);
-        steps = std::min(std::max(steps, 1), AP_MAX_STEPS);
         const double tg = ground_distance(h0, d);
         const double tmax = ray_length(h0, d);
-        Vec3 Lin, T = { 1.0, 1.0, 1.0 };
-        march_seg(h0, d, 0.0, tmax, steps, 1.0, false, lights, Lin, T);
+        Vec3 Lin, T;
+        atmosphere_ap(d, tmax, h0, steps, lights, Lin, T);
         if (tg >= 0.0)
         {
             const PathPoint p = path_point(h0, d, tg);

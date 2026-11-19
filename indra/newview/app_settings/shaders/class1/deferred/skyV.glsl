@@ -78,6 +78,8 @@ uniform int cube_snapshot;
 //       indra\newview\app_settings\shaders\class1\deferred\skyV.glsl
 //       indra\newview\app_settings\shaders\class1\deferred\cloudsV.glsl
 //       indra\newview\lllegacyatmospherics.cpp
+// <Vulkanstorm/> and indra\newview\app_settings\shaders\class1\windlight\skyFilterF.glsl with its C++ twin indra\newview\llskyfilter.h
+//       (stage AT2-1: the EEP filter's tables hold this colour; indra\newview\tests\llskyfilter_test.cpp pins this file's SHA-256)
 void main()
 {
     // World / view / projection

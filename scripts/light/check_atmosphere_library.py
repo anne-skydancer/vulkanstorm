@@ -28,9 +28,12 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[2]
 SKIES = ROOT / 'indra' / 'newview' / 'app_settings' / 'windlight' / 'skies'
 
-# The skies whose aureole exceeds the white card, at the bounds of ScatterBounds (a full run of the 768 shipped skies).
+# The skies whose aureole exceeds the white card, at the bounds of ScatterBounds (a full run of the 768 shipped skies), with the sky
+# view's slab-split march at 64 steps (stage AT2-1, decision D1 of doc/light/atmosphere-study.md). The march fix changed the list as the
+# study measured (decision D2 = a, owner 2026-11-17): "Phototools- Hospital Light 01" (a light rig) entered at 1.25x, 10 to 20 degrees
+# from the light, and "[TOR] SCIFI - Arrakissed 2" left.
 EXPECTED_AUREOLE = {
-    '[TOR] SCIFI - Arrakissed 2',
+    'Phototools- Hospital Light 01',
     '[TOR] SCIFI - Awesome atmo 2',
     '[TOR] SCIFI - Awesome atmo 3',
     'Surreal - Summer (Paulina)',
