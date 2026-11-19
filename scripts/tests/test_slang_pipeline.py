@@ -241,7 +241,7 @@ class GeneratorTest(unittest.TestCase):
             copy = Path(tmp) / 'generated'
             shutil.copytree(self.out, copy)
             vert = copy / 'tint__DOUBLE0.vert.glsl'
-            vert.write_text(vert.read_text(encoding='utf-8').replace('binding = 4', 'binding = 0'), encoding='utf-8')
+            vert.write_text(vert.read_text(encoding='utf-8').replace(f'binding = {common.GLOBALS_BINDING}', 'binding = 0'), encoding='utf-8')
             errors = check.check_interface(copy)
             self.assertTrue(any('inside the viewer' in e for e in errors), errors)
             shutil.copy(self.out / 'tint__DOUBLE0.vert.glsl', vert)

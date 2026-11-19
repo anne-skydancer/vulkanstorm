@@ -86,8 +86,8 @@ def header_hooks(text):
 
 
 # The first uniform-block binding point a generated program's global block may use: the viewer's own UBOs
-# (LLGLSLShader::UniformBlock: ReflectionProbes, GLTFJoints, GLTFNodes, GLTFMaterials) hold bindings 0 to 3.
-GLOBALS_BINDING = 4
+# (LLGLSLShader::UniformBlock: ReflectionProbes, GLTFJoints, GLTFNodes, GLTFMaterials, Atmosphere) hold bindings 0 to
+# NUM_UNIFORM_BLOCKS - 1, so the global block starts at NUM_UNIFORM_BLOCKS (counted from the header: a new viewer UBO moves it).
 
 
 def reserved_attribs():
@@ -102,3 +102,6 @@ def reserved_block_count():
     body = re.search(r'enum UniformBlock[^{]*\{(.*?)\};', text, re.S).group(1)
     body = re.sub(r'//[^\n]*', '', body)
     return len([x for x in re.findall(r'(?m)^\s*(\w+)\s*,', body) if x != 'NUM_UNIFORM_BLOCKS'])
+
+
+GLOBALS_BINDING = reserved_block_count()

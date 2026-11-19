@@ -12,6 +12,7 @@ class1/deferred/avatarV.glsl
 class1/deferred/blurLightV.glsl
 class1/deferred/bumpV.glsl
 class1/deferred/cloudsV.glsl
+class1/deferred/cloudsVolCompositeV.glsl
 class1/deferred/diffuseNoColorV.glsl
 class1/deferred/diffuseV.glsl
 class1/deferred/emissiveV.glsl

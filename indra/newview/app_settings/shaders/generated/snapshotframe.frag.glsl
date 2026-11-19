@@ -18,7 +18,7 @@ struct GlobalParams_0
     float border_thickness;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     vec2 screen_res;

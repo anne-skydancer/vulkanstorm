@@ -33,7 +33,7 @@ struct GlobalParams_0
     int bump_code;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     float stepX;

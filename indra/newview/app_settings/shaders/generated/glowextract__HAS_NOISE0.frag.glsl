@@ -34,7 +34,7 @@ struct GlobalParams_0
     float warmthAmount;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     float minLuminance;

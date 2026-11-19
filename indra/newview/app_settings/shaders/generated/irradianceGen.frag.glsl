@@ -32,7 +32,7 @@ struct GlobalParams_0
     float max_probe_lod;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     mat4x4 modelview_matrix;

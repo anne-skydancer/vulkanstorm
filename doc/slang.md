@@ -86,7 +86,7 @@ and hand-written stages is refused. The format is `LLGeneratedShader::assemble` 
 A generated program is bound the way slangc writes it; nothing is restored to loose uniforms.
 
 - **Uniforms are one std140 block**, `block_GlobalParams_0`, shared by both stages and pinned at binding 4
-  (`slangc -fvk-bind-globals 4 0`), above the viewer's own UBO bindings 0 to 3 (`LLGLSLShader::UniformBlock`); `slang_check.py
+  (`slangc -fvk-bind-globals <n> 0`, n = the viewer's UBO count, 5 today), above the viewer's own UBO bindings 0 to 4 (`LLGLSLShader::UniformBlock`); `slang_check.py
   interface` fails a block below that. After the link `LLGLSLShader::mapGeneratedUniforms()` reads the block's size and binding
   from the driver and the members' byte offsets from the manifest, makes one `GL_DYNAMIC_DRAW` buffer per program and a CPU copy
   of it (`mBlockData`). `mUniform` and `mUniformMap` hold the **member's byte offset** where a loose program holds its location,

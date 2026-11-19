@@ -32,7 +32,7 @@ struct GlobalParams_0
     vec4 clipPlane;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     mat3x3 normal_matrix;

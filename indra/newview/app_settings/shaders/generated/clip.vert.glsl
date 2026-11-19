@@ -30,7 +30,7 @@ struct GlobalParams_0
     vec4 clip_plane;
 };
 
-layout(binding = 4)
+layout(binding = 5)
 layout(std140) uniform block_GlobalParams_0
 {
     mat4x4 modelview_projection_matrix;
