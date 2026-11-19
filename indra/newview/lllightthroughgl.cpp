@@ -129,8 +129,62 @@ bool LLLightThroughLayer::ensure()
     return true;
 }
 
+U32 LLLightThroughLayer::beginQuery(U32 key)
+{
+    cancelQuery(key);
+    if (!allocated())
+    {
+        return 0;
+    }
+    U32 id = 0;
+    if (!mQueryFree.empty())
+    {
+        id = mQueryFree.back();
+        mQueryFree.pop_back();
+    }
+    else
+    {
+        glGenQueries(1, &id);
+    }
+    if (id)
+    {
+        std::vector<U32> none;
+        mQueries.begin(key, id, none);
+    }
+    return id;
+}
+
+void LLLightThroughLayer::cancelQuery(U32 key)
+{
+    mQueries.cancel(key, mQueryFree);
+}
+
+std::vector<U32> LLLightThroughLayer::resolveQueries()
+{
+    return mQueries.resolve(
+        [](U32 id)
+        {
+            GLuint available = 0;
+            glGetQueryObjectuiv(id, GL_QUERY_RESULT_AVAILABLE, &available);
+            if (!available)
+            {
+                return -1;
+            }
+            GLuint any = 1;
+            glGetQueryObjectuiv(id, GL_QUERY_RESULT, &any);
+            return any ? 1 : 0;
+        },
+        mQueryFree);
+}
+
 void LLLightThroughLayer::freeStorage()
 {
+    mQueries.clear(mQueryFree);
+    if (!mQueryFree.empty())
+    {
+        glDeleteQueries((GLsizei)mQueryFree.size(), mQueryFree.data());
+        mQueryFree.clear();
+    }
     if (mFbo)
     {
         // a framebuffer that is the current one must not stay so (LLRenderTarget::release does the same)
@@ -252,9 +306,9 @@ void LLLightThroughLayer::unbindUnits() const
     }
 }
 
-LLLightThroughLayer::DrawScope::DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after)
+LLLightThroughLayer::DrawScope::DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after, U32 query)
     : mBlend(GL_BLEND), mDepth(GL_TRUE, GL_FALSE, GL_LEQUAL), mCull(GL_CULL_FACE), mScissor(GL_SCISSOR_TEST),
-      mSavedFbo(LLRenderTarget::sCurFBO), mColorAfter(color_writes_after)
+      mSavedFbo(LLRenderTarget::sCurFBO), mColorAfter(color_writes_after), mQuery(query)
 {
     llassert(layer.allocated());
     // the tile's rect is the caller's viewport: the casters land on the same texels in the depth atlas and in the layer
@@ -268,11 +322,19 @@ LLLightThroughLayer::DrawScope::DrawScope(const LLLightThroughLayer& layer, cons
     gGL.setColorMask(true, true);
     gGL.blendFunc(LLRender::BF_ZERO, LLRender::BF_SOURCE_COLOR); // tau: the product (both targets get it; GL_MIN ignores it)
     glBlendEquationi(1, GL_MIN);                                 // the depth: the nearest
+    if (mQuery)
+    {
+        glBeginQuery(GL_ANY_SAMPLES_PASSED, mQuery); // did any caster fragment survive the discard and the depth test
+    }
 }
 
 LLLightThroughLayer::DrawScope::~DrawScope()
 {
     gGL.flush();
+    if (mQuery)
+    {
+        glEndQuery(GL_ANY_SAMPLES_PASSED);
+    }
     glBlendEquationi(1, GL_FUNC_ADD);
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
     gGL.setColorMask(mColorAfter, mColorAfter);

@@ -860,7 +860,11 @@ face at or below 1/255 is left out (invisible), so it records no depth either.
   caster (`ensure`, from `LLPipeline::renderShadow` inside the tile's static render); freed with the atlases (`freeAtlases`: `release` and
   a failed `allocateAtlases`, before S, its framebuffer's depth attachment), and once no tile has held a see-through caster for 30 s
   (`kThroughIdleSeconds`, checked once a second in `update` while the layer exists: the lamps' glass is gone, or the debug setting was
-  turned off and every tile drawn again; a tile of a lamp that is off keeps its flag, so its layer stays). OpenGL 4.4 (`glClearTexImage`);
+  turned off and every tile drawn again; a tile of a lamp that is off keeps its flag, so its layer stays). The caster pass runs inside a `GL_ANY_SAMPLES_PASSED` query (`LLLightThroughLayer::beginQuery`, one per static tile render); once the
+  GPU has its result (`resolveQueries` in `update`, never waited for) a tile whose pass wrote no sample (every fragment discarded, or behind the
+  tile's opaque depth) loses its flag, so a fully transparent face or a pane behind a wall neither holds the layer nor turns the lamp's lookup
+  on; until then the flag stays (the image is the same either way: an empty layer reads "no caster"). `lllightthrough::PendingQueries` keeps
+  which tile each query belongs to (tested in `lllightthrough_test.cpp`). OpenGL 4.4 (`glClearTexImage`);
   below it, or when the textures cannot be made (logged once, not tried again until the atlases are made again), the tile's blend faces
   dither into the depth as before.
 - **The depth as it is.** zt holds the caster's window depth in 32-bit float (`gl_FragCoord.z`, no conversion, no rounding), as the depth

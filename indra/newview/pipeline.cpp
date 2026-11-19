@@ -7909,15 +7909,15 @@ bool LLPipeline::hasLightThroughCasters()
 // depth pass (renderAlphaObjects with through) has drawn their solid texels; the layer takes the ones below the solid cut that lie in
 // front of the tile's opaque depth, multiplying what they let through and keeping the nearest depth (LLLightThroughLayer::DrawScope:
 // the depth test, the face rule and the scissor at the tile's rect). rect: the tile's, the viewport; color_writes_after: the colour
-// mask the shadow pass had.
-void LLPipeline::renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after)
+// mask the shadow pass had; query: the layer's query of the pass (0: none), which tells whether any caster fragment was written.
+void LLPipeline::renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after, U32 query)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
     assertInitialized();
     gGL.loadMatrix(gGLModelView);
     gGLLastMatrix = NULL;
     {
-        LLLightThroughLayer::DrawScope scope(layer, rect, color_writes_after);
+        LLLightThroughLayer::DrawScope scope(layer, rect, color_writes_after, query);
         const LLGLSLShader* bound = nullptr;
         auto* end = endRenderMap(LLRenderPass::PASS_ALPHA);
         for (LLCullResult::drawinfo_iterator i = beginRenderMap(LLRenderPass::PASS_ALPHA); i != end; )
@@ -11972,7 +11972,8 @@ void LLPipeline::renderShadowImpl(const glm::mat4& view, const glm::mat4& proj, 
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow light through");
             LL_PROFILE_GPU_ZONE("shadow light through");
-            renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2);
+            renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2,
+                                      through_target->layer->beginQuery(through_target->key));
             through_target->drawn = true;
         }
         // </Vulkanstorm>

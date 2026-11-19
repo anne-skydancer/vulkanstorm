@@ -1070,9 +1070,10 @@ void LLProjectorShadows::renderTile(Record& rec, Cause cause, bool dynamic)
         // RenderShadowLightThrough off (a debug setting, for A/B): no target, the blend faces dither into the depth as before
         static LLCachedControl<bool> light_through(gSavedSettings, "RenderShadowLightThrough", true);
         mThrough.clearRect(rec.rect);
+        mThrough.cancelQuery(rec.key); // an earlier render's result is of a picture that is gone
         if (light_through)
         {
-            LLLocalShadowGL::setThroughTarget(&mThrough, rec.rect);
+            LLLocalShadowGL::setThroughTarget(&mThrough, rec.rect, rec.key);
         }
 
         static LLCullResult result;
@@ -1622,6 +1623,16 @@ void LLProjectorShadows::update(LLCamera& camera)
     // tile of a lamp that is off keeps its flag, so its layer stays. The next tile that meets a caster makes it again.
     if (mThrough.allocated())
     {
+        // a tile whose caster pass wrote no sample (every fragment discarded or behind the tile's opaque depth) holds no caster: its
+        // flag goes, so it neither keeps the layer nor turns the lamp's lookup on (the layer reads "no caster" there either way)
+        for (U32 key : mThrough.resolveQueries())
+        {
+            auto it = mRecords.find(key);
+            if (it != mRecords.end())
+            {
+                it->second.through = false;
+            }
+        }
         const F64 now = LLTimer::getTotalSeconds();
         if (now >= mThroughCheckTime)
         {

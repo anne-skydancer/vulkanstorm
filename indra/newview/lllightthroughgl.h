@@ -85,6 +85,13 @@ public:
     // No texture unit keeps the layer's textures as its current one (before the layer is written; LLTexUnit's cache stays right).
     void unbindUnits() const;
 
+    // The caster pass's query: a GL_ANY_SAMPLES_PASSED query for the tile `key`, begun by the DrawScope that is given its id and
+    // ended with it; 0 when none could be made (the tile keeps its flag). A new one drops the tile's earlier one. The result is read
+    // by resolveQueries, never waited for: the keys of the tiles whose pass wrote no sample (their layer rect is "no caster").
+    U32 beginQuery(U32 key);
+    void cancelQuery(U32 key);
+    std::vector<U32> resolveQueries();
+
     // The caster pass (LLPipeline::renderLightThroughObjects), as a scope over one tile: the layer's framebuffer with both targets drawn,
     // the tau target multiplying (glBlendFunc(GL_ZERO, GL_SRC_COLOR): the product of the casters, in any order) and the depth target
     // keeping the nearest (glBlendEquationi(1, GL_MIN)); the depth test against the pool's static depth (GL_LEQUAL, no depth writes);
@@ -98,7 +105,8 @@ public:
     class DrawScope
     {
     public:
-        DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after);
+        // query: the id beginQuery returned for this tile (0: none)
+        DrawScope(const LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after, U32 query = 0);
         ~DrawScope();
         DrawScope(const DrawScope&) = delete;
         DrawScope& operator=(const DrawScope&) = delete;
@@ -110,6 +118,7 @@ public:
         LLGLEnable mScissor;
         U32 mSavedFbo;
         bool mColorAfter;
+        U32 mQuery;
     };
 
 private:
@@ -118,6 +127,8 @@ private:
     U32 mTau = 0;
     U32 mDepth = 0;
     U32 mFbo = 0;
+    lllightthrough::PendingQueries mQueries;
+    std::vector<U32> mQueryFree; // query objects not in use (reused; deleted with the layer)
     bool mFailed = false; // ensure() failed at this atlas: not tried again until setAtlas or free
 };
 

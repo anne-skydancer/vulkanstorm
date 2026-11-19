@@ -177,6 +177,86 @@ constexpr uint64_t layerBytes(uint32_t edge)
 }
 
 // ---------------------------------------------------------------------------------------------
+// Which tiles drew nothing
+// ---------------------------------------------------------------------------------------------
+
+// A tile whose caster pass wrote no sample (every fragment discarded, or failed the depth test against the tile's opaque depth: a
+// fully transparent or opaque-in-effect face, a pane behind a wall) holds "no caster" in the layer, so its flag must go: it would keep
+// the layer from its idle release and switch the lamp's lookup on for nothing. The pass runs inside a GL_ANY_SAMPLES_PASSED query;
+// its result is read once the GPU has it (never waited for), and until then the flag stays set (the image is the same either way:
+// an empty layer reads "no caster"). One query per tile; a new render of the tile drops the earlier one, whose result is of a
+// picture that is gone. The ids are GL query objects the caller owns; this holds only which tile each belongs to.
+class PendingQueries
+{
+public:
+    // A tile's caster pass begins with query `id`: the tile's earlier pending query, if any, is dropped (its id goes to `dropped`).
+    void begin(uint32_t key, uint32_t id, std::vector<uint32_t>& dropped)
+    {
+        cancel(key, dropped);
+        mPending.push_back({ key, id });
+    }
+
+    // The tile is drawn again without a caster pass, or gone: its pending query's result means nothing.
+    void cancel(uint32_t key, std::vector<uint32_t>& dropped)
+    {
+        for (size_t i = 0; i < mPending.size(); ++i)
+        {
+            if (mPending[i].key == key)
+            {
+                dropped.push_back(mPending[i].id);
+                mPending.erase(mPending.begin() + i);
+                return;
+            }
+        }
+    }
+
+    // Every pending query the GPU has finished: poll(id) returns -1 while it is not available, else 0 (no sample passed) or 1
+    // (some did). Finished ids go to `done` (to be reused); the keys of the tiles that wrote nothing are returned.
+    template <class Poll>
+    std::vector<uint32_t> resolve(Poll poll, std::vector<uint32_t>& done)
+    {
+        std::vector<uint32_t> empty;
+        size_t out = 0;
+        for (size_t i = 0; i < mPending.size(); ++i)
+        {
+            const int result = poll(mPending[i].id);
+            if (result < 0)
+            {
+                mPending[out++] = mPending[i];
+                continue;
+            }
+            done.push_back(mPending[i].id);
+            if (result == 0)
+            {
+                empty.push_back(mPending[i].key);
+            }
+        }
+        mPending.resize(out);
+        return empty;
+    }
+
+    // Every pending id goes to `dropped` (the layer is freed).
+    void clear(std::vector<uint32_t>& dropped)
+    {
+        for (const Entry& e : mPending)
+        {
+            dropped.push_back(e.id);
+        }
+        mPending.clear();
+    }
+
+    size_t size() const { return mPending.size(); }
+
+private:
+    struct Entry
+    {
+        uint32_t key;
+        uint32_t id;
+    };
+    std::vector<Entry> mPending;
+};
+
+// ---------------------------------------------------------------------------------------------
 // The carry through a repack
 // ---------------------------------------------------------------------------------------------
 

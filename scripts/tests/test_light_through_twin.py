@@ -232,7 +232,7 @@ class LightThroughTwin(unittest.TestCase):
         self.assertIn('sLocalShadowPass == LOCAL_SHADOW_STATIC ? LLLocalShadowGL::throughTarget()', shadow)
         # the layer is drawn after every depth caster (the last glTF mask batches), the colour mask going back to the pass's
         self.assertLess(shadow.index('mAlphaMaskPool->pushGLTFBatches(type);'), shadow.index('renderLightThroughObjects('))
-        self.assertIn('renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2);', shadow)
+        self.assertIn('renderLightThroughObjects(*through_target->layer, through_target->rect, RenderShadowDetail > 2,', shadow)
         # the layer's casters are the depth pass's blend faces that are not rigged
         through = pipe[pipe.index('void LLPipeline::renderLightThroughObjects('):]
         through = through[:through.index('\n}\n')]
@@ -288,7 +288,7 @@ class LightThroughTwin(unittest.TestCase):
         tile = func(pool, 'void LLProjectorShadows::renderTile(')
         # cleared before the static render, named to it, read after it
         self.assertLess(tile.index('mThrough.clearRect(rec.rect);'), tile.index('gPipeline.renderShadow('))
-        self.assertLess(tile.index('LLLocalShadowGL::setThroughTarget(&mThrough, rec.rect);'), tile.index('gPipeline.renderShadow('))
+        self.assertLess(tile.index('LLLocalShadowGL::setThroughTarget(&mThrough, rec.rect, rec.key);'), tile.index('gPipeline.renderShadow('))
         self.assertLess(tile.index('gPipeline.renderShadow('), tile.index('rec.through = LLLocalShadowGL::endThroughTarget();'))
         plan = func(pool, 'void LLProjectorShadows::applyPlan(')
         self.assertIn('lllightthrough::planCarry(plan.moves', plan)

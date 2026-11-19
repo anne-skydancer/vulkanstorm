@@ -413,6 +413,35 @@ namespace
     }
 }
 
+void testQueries()
+{
+    using namespace lllightthrough;
+    PendingQueries q;
+    std::vector<uint32_t> dropped, done;
+    q.begin(1, 100, dropped);
+    q.begin(2, 101, dropped);
+    q.begin(3, 102, dropped);
+    check(dropped.empty() && q.size() == 3, "three tiles, three pending queries");
+    // a new render of tile 2 drops its earlier query
+    q.begin(2, 103, dropped);
+    check(dropped.size() == 1 && dropped[0] == 101 && q.size() == 3, "a new render drops the tile's earlier query");
+    // a tile drawn again without a caster pass
+    q.cancel(3, dropped);
+    check(dropped.size() == 2 && dropped[1] == 102 && q.size() == 2, "cancel drops the query");
+    q.cancel(9, dropped);
+    check(dropped.size() == 2, "cancel of a tile with none does nothing");
+    // 100 not available yet, 103 wrote nothing
+    std::vector<uint32_t> empty = q.resolve([](uint32_t id) { return id == 103 ? 0 : -1; }, done);
+    check(empty.size() == 1 && empty[0] == 2, "the tile that wrote nothing is reported");
+    check(done.size() == 1 && done[0] == 103 && q.size() == 1, "a finished query is released, an unavailable one stays");
+    // 100 wrote samples: finished, tile 1 not reported
+    empty = q.resolve([](uint32_t) { return 1; }, done);
+    check(empty.empty() && done.size() == 2 && q.size() == 0, "a tile that wrote samples keeps its flag");
+    q.begin(5, 200, dropped);
+    q.clear(dropped);
+    check(q.size() == 0 && dropped.back() == 200, "clear drops every pending id");
+}
+
 int main()
 {
     testRule();
@@ -421,6 +450,7 @@ int main()
     testTap();
     testMemory();
     testCarry();
+    testQueries();
     if (failures)
     {
         std::printf("%d check(s) failed\n", failures);

@@ -34,6 +34,7 @@ struct LLLightThroughTarget
 {
     LLLightThroughLayer* layer = nullptr;
     llprojectorpool::Rect rect;
+    unsigned key = 0;   // the tile's key (the layer's query of its caster pass)
     bool drawn = false; // the render ran the caster pass into the rect (set by renderShadow)
 };
 
@@ -66,7 +67,7 @@ public:
     // against the pool's static depth atlas (LLLightThroughLayer::setAtlas) and with its own face rule (LLLightThroughLayer::DrawScope),
     // whatever the render's own. throughTarget() is null when none is set; endThroughTarget() clears it and returns whether the render
     // ran the caster pass into it. Main render thread only.
-    static void setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect);
+    static void setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect, unsigned key);
     static LLLightThroughTarget* throughTarget();
     static bool endThroughTarget();
 };

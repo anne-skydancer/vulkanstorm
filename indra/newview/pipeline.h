@@ -300,7 +300,7 @@ public:
     // the solid cut to the layer (renderLightThroughObjects) instead of dithering them into the depth
     void renderAlphaObjects(bool rigged = false, bool through = false);
     bool hasLightThroughCasters();
-    void renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after);
+    void renderLightThroughObjects(LLLightThroughLayer& layer, const llprojectorpool::Rect& rect, bool color_writes_after, U32 query);
     // </Vulkanstorm>
     void renderFocusPoint(); // <FS:Beq/> FIRE-32023 Add focus point rendering
     void renderMaskedObjects(U32 type, bool texture = true, bool batch_texture = false, bool rigged = false);

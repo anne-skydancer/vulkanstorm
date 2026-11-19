@@ -118,7 +118,7 @@ void LLLocalShadowGL::setTileOrigin(F32 x, F32 y)
 }
 
 // static
-void LLLocalShadowGL::setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect)
+void LLLocalShadowGL::setThroughTarget(LLLightThroughLayer* layer, const llprojectorpool::Rect& rect, unsigned key)
 {
     if (!on_main_thread())
     {
@@ -128,6 +128,7 @@ void LLLocalShadowGL::setThroughTarget(LLLightThroughLayer* layer, const llproje
     sThrough = LLLightThroughTarget();
     sThrough.layer = layer;
     sThrough.rect = rect;
+    sThrough.key = key;
 }
 
 // static
