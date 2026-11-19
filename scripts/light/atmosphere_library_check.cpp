@@ -213,7 +213,7 @@ int main(int argc, char** argv)
                     {
                         continue;
                     }
-                    const Vec3 L = sc.sky_radiance(d, 0.0, 24);
+                    const Vec3 L = sc.sky_radiance(d, 0.0, 64); // the sky view's march (AT2-1: slab-split, 64 steps)
                     if (!std::isfinite(L.x + L.y + L.z) || L.x < 0.0 || L.y < 0.0 || L.z < 0.0)
                     {
                         ++nonfinite;

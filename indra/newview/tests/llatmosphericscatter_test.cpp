@@ -17,16 +17,21 @@
 //     light rigs stay dark;
 //   - the GPU vectors: llatmosphere_scatter_vectors.inc, from class1/windlight/atmosphereCommonF.glsl run on a GPU
 //     (scripts/light/gen_atmosphere_scatter_vectors.py), are reproduced to 1e-4 (the short functions) to 1e-3 relative (the sums) and
-//     5e-4 for the march (see the vectors section); the .inc holds the SHA-256 of both GLSL files and the test checks it;
+//     5e-4 for the march (see the vectors section); the .inc holds the SHA-256 of the GLSL file and the test checks it;
+//   - stage AT2-1: the `Atmosphere` uniform block's C++ mirror (llatmospherebase.h AtmosphereBlock) has the std140 offsets the driver
+//     gave the GLSL block, and the cut altitudes the generator put in the block are LLAtmosphere's; the sky view's march (sky_radiance)
+//     sees the 0.25 km haze slab (R2: the slab-split march at 64 steps is within 1.5 % of a converged one);
 //   - R-ACC: the aerial-perspective march at 12 steps is within 1 % of a converged 256-step march over the clouds' domain: observer
 //     heights 0 to 6 km, elevations -2 to 90 degrees including every 0.1 degree of 0.1 to 3, 2, 10 and 40 km, Default, Foggy, Sunset,
 //     Bangko 1 and the moonlit cases, with AT1's moon.
 
 #include "llatmosphericlight.h"
+#include "llatmospherebase.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstddef>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -247,20 +252,28 @@ const double kScAtm[][43] = {
 #define SC_ATM(...) { __VA_ARGS__ },
 #define SC_VEC(...)
 #define SC_SHA(...)
+#define SC_LAYOUT(...)
+#define SC_CUTS(...)
 #include "llatmosphere_scatter_vectors.inc"
 #undef SC_ATM
 #undef SC_VEC
 #undef SC_SHA
+#undef SC_LAYOUT
+#undef SC_CUTS
 };
 
 const double kScVec[][18] = {
 #define SC_ATM(...)
 #define SC_VEC(...) { __VA_ARGS__ },
 #define SC_SHA(...)
+#define SC_LAYOUT(...)
+#define SC_CUTS(...)
 #include "llatmosphere_scatter_vectors.inc"
 #undef SC_ATM
 #undef SC_VEC
 #undef SC_SHA
+#undef SC_LAYOUT
+#undef SC_CUTS
 };
 
 // the SHA-256 of the GLSL files the vectors were made from (line ends normalised)
@@ -273,11 +286,91 @@ const ShaEntry kScSha[] = {
 #define SC_ATM(...)
 #define SC_VEC(...)
 #define SC_SHA(name, hex) { name, hex },
+#define SC_LAYOUT(...)
+#define SC_CUTS(...)
 #include "llatmosphere_scatter_vectors.inc"
 #undef SC_ATM
 #undef SC_VEC
 #undef SC_SHA
+#undef SC_LAYOUT
+#undef SC_CUTS
 };
+
+// the std140 offsets the driver gave the GLSL block's members (stage AT2-1)
+struct LayoutEntry
+{
+    const char* name;
+    int offset;
+};
+const LayoutEntry kScLayout[] = {
+#define SC_ATM(...)
+#define SC_VEC(...)
+#define SC_SHA(...)
+#define SC_LAYOUT(name, offset) { name, offset },
+#define SC_CUTS(...)
+#include "llatmosphere_scatter_vectors.inc"
+#undef SC_ATM
+#undef SC_VEC
+#undef SC_SHA
+#undef SC_LAYOUT
+#undef SC_CUTS
+};
+
+// the cut altitudes the generator put in each atmosphere's block
+struct CutsEntry
+{
+    int atm;
+    int count;
+    double km[detail::MAX_ALTITUDES];
+};
+const CutsEntry kScCuts[] = {
+#define SC_ATM(...)
+#define SC_VEC(...)
+#define SC_SHA(...)
+#define SC_LAYOUT(...)
+#define SC_CUTS(atm, count, ...) { atm, count, { __VA_ARGS__ } },
+#include "llatmosphere_scatter_vectors.inc"
+#undef SC_ATM
+#undef SC_VEC
+#undef SC_SHA
+#undef SC_LAYOUT
+#undef SC_CUTS
+};
+
+// the C++ mirror's offset of a GLSL member of the block, -1 if the name is not one of the checked members
+int mirror_offset(const std::string& name)
+{
+    using B = AtmosphereBlock;
+    struct Pair
+    {
+        const char* name;
+        size_t offset;
+    };
+    static const Pair pairs[] = {
+        { "pa_atm.rayleigh_ext", offsetof(B, rayleigh_ext) }, { "pa_atm.aerosol_ext", offsetof(B, aerosol_ext) },
+        { "pa_atm.ozone_ext", offsetof(B, ozone_ext) }, { "pa_atm.slab_ext", offsetof(B, slab_ext) }, { "pa_atm.excess", offsetof(B, excess) },
+        { "pa_atm.slab_top_km", offsetof(B, slab_top_km) }, { "pa_atm.planet_radius_km", offsetof(B, planet_radius_km) },
+        { "pa_atm.top_radius_km", offsetof(B, top_radius_km) }, { "pa_atm.cut_count", offsetof(B, cut_count) },
+        { "pa_atm.rayleigh.layer0", offsetof(B, rayleigh) + offsetof(B::Profile, layer0) },
+        { "pa_atm.rayleigh.layer1", offsetof(B, rayleigh) + offsetof(B::Profile, layer1) },
+        { "pa_atm.rayleigh.constants", offsetof(B, rayleigh) + offsetof(B::Profile, constants) },
+        { "pa_atm.mie.layer0", offsetof(B, mie) }, { "pa_atm.absorption.layer0", offsetof(B, absorption) },
+        { "pa_atm.absorption.constants", offsetof(B, absorption) + offsetof(B::Profile, constants) },
+        { "pa_lights.dir[0]", offsetof(B, light_dir) }, { "pa_lights.E[0]", offsetof(B, light_E) }, { "pa_lights.disc[0]", offsetof(B, light_disc) },
+        { "pa_lights.count", offsetof(B, light_count) }, { "pa_rayleigh_scat", offsetof(B, rayleigh_scat) }, { "pa_aerosol_scat", offsetof(B, aerosol_scat) },
+        { "pa_ms_scale", offsetof(B, ms_scale) }, { "pa_slab_scat", offsetof(B, slab_scat) }, { "pa_glow_phase", offsetof(B, glow_phase) },
+        { "pa_aniso", offsetof(B, aniso) }, { "pa_max_phase", offsetof(B, max_phase) }, { "pa_f_ms_max", offsetof(B, f_ms_max) },
+        { "pa_ground_albedo", offsetof(B, ground_albedo) }, { "pa_camera_km", offsetof(B, camera_km) }, { "pa_cuts[0]", offsetof(B, cuts) },
+    };
+    for (const Pair& p : pairs)
+    {
+        if (name == p.name)
+        {
+            return static_cast<int>(p.offset);
+        }
+    }
+    return -1;
+}
 
 // the multiple-scattering stand-in the vectors use (the generator's MS_STUB)
 Vec3 ms_stand_in(double top, double h_km, double mu_s)
@@ -886,7 +979,8 @@ int main()
         check(worst <= 1.0, "sky radiance stays under the white-card limit", worst);
 
         // the synthetic worst case: every value at its bound at once (Rayleigh albedo 1, aerosol albedo 0.95, ambient far above Default's, a heavy
-        // fog); with the first bounds (a multiple-scattering scale of 4 and a series of 10) this reached 1.43 x the card across the open sky
+        // fog); with the first bounds (a multiple-scattering scale of 4 and a series of 10) this reached 1.43 x the card across the open sky under
+        // the uniform sky march that skipped the haze slab (0.70 under the slab-split march of AT2-1, R2)
         {
             SkyEx w = kSkies[SKY_FOGGY];
             w.hh = 100.0;
@@ -911,10 +1005,12 @@ int main()
             }
             std::printf("no whiteout: synthetic sky at every bound, largest ratio %.3f\n", synth);
             check(synth <= 1.0, "the synthetic worst-case sky stays under the white card", synth);
-            // the test has teeth: with the first bounds (series up to 10 on top of a scale of 4) the same sky is over the card
+            // the test has teeth: a series of up to 10 on a scale of 8 puts the same sky over the card. (The first bounds, a series of 10
+            // on a scale of 4, gave 1.43 under the uniform march that skipped the haze slab; the slab-split march of AT2-1 gives 0.70.)
             {
                 ScatterBounds first;
                 first.max_f_ms = 0.9;
+                first.max_ms_scale = 8.0;
                 double over = 0.0;
                 for (double sun_el : { 10.0, 40.0, 80.0 })
                 {
@@ -925,8 +1021,8 @@ int main()
                     bind_tables(sc, tb, 16, 16);
                     over = std::max(over, worst_ratio(sc, sun_el, false));
                 }
-                std::printf("  (with a series of up to 10 on a scale of 4 the same sky reaches %.3f)\n", over);
-                check(over > 1.0, "the synthetic sky is over the card with the first bounds (the test can fail)", over);
+                std::printf("  (with a series of up to 10 on a scale of 8 the same sky reaches %.3f)\n", over);
+                check(over > 1.0, "the synthetic sky is over the card with looser bounds (the test can fail)", over);
             }
         }
 
@@ -961,7 +1057,7 @@ int main()
             const std::string h = glsl_hash(e.name);
             check(!h.empty() && h == e.hex, "the GLSL file is the one the GPU vectors were made from (run scripts/light/gen_atmosphere_scatter_vectors.py)", h.empty() ? 1.0 : 0.0);
         }
-        check(sizeof(kScSha) / sizeof(kScSha[0]) == 2, "the vectors name both GLSL files");
+        check(sizeof(kScSha) / sizeof(kScSha[0]) == 1, "the vectors name the GLSL file");
         const double AP_TOL = 1e-4; // the march in float with altitudes taken camera-relative (with positions at 6360 km it was 2e-3)
         std::vector<LLScatter> scs;
         for (int i = 0; i < natm; ++i)
@@ -1079,12 +1175,64 @@ int main()
         {
             check(counts[k] > 0, "every scatter vector kind is present", k);
         }
+
+        // stage AT2-1: the block's C++ mirror has the driver's std140 offsets, and the block's cut altitudes are the C++'s
+        int layout_checked = 0;
+        for (const LayoutEntry& e : kScLayout)
+        {
+            const int mirror = mirror_offset(e.name);
+            check(mirror == e.offset, e.name, mirror, e.offset);
+            ++layout_checked;
+        }
+        check(layout_checked >= 30, "the block's layout lines cover its members", layout_checked);
+        int cut_rows = 0;
+        for (const CutsEntry& e : kScCuts)
+        {
+            const LLScatter row = scatter_of_row(kScAtm[e.atm]);
+            const LLAtmosphere& a = row.atm;
+            check(a.cut_count == e.count, "the block's cut count is LLAtmosphere's", a.cut_count, e.count);
+            for (int k = 0; k < std::min(e.count, a.cut_count); ++k)
+            {
+                check(near(a.cuts_km[k], e.km[k], 1e-12, 1e-12), "the block's cut altitude is LLAtmosphere's", a.cuts_km[k], e.km[k]);
+            }
+            const AtmosphereBlock b = fill_atmosphere_block(row, 0.0);
+            check(static_cast<int>(b.cut_count) == a.cut_count && b.cuts[0] == 0.0f, "fill_atmosphere_block carries the cuts", b.cut_count);
+            ++cut_rows;
+        }
+        check(cut_rows == natm, "every atmosphere has its cut altitudes", cut_rows, natm);
+        std::printf("Atmosphere block: %d std140 offsets as the driver's, %d atmospheres' cut altitudes as LLAtmosphere's\n", layout_checked, cut_rows);
         std::printf("scatter vectors: %d atmospheres, %d GPU vectors; worst relative |C++ - GLSL| by kind (uv 0, texel 1, AP 2, MS 3, E 4, sky 5, phase 6, medium 7, light T 8):", natm, nvec);
         for (int k = 0; k < 9; ++k)
         {
             std::printf(" %.2g", worst[k]);
         }
         std::printf("\n");
+    }
+
+    // 10b. R2 (stage AT2-1): sky_radiance takes the slab-split march; at 64 steps it is within 1.5 % of a 4096-step march on Default, Foggy
+    //      and Sunset at their files' suns (the uniform march it replaced was up to 98 % low in Foggy at 32 steps), from the ground and 30 m
+    {
+        double worst = 0.0;
+        for (int sky : { SKY_DEFAULT, SKY_FOGGY, SKY_SUNSET })
+        {
+            LLScatter sc = scatter_of(kSkies[sky], sun_elevation_of(kSkies[sky]));
+            Tables tb;
+            bind_tables(sc, tb, 16, 16);
+            for (double h : { 0.0, 0.03 })
+            {
+                for (double el : { -2.0, 0.0, 0.5, 2.0, 5.0, 10.0, 30.0, 60.0, 90.0 })
+                {
+                    for (double az : { 0.0, 90.0, 180.0 })
+                    {
+                        const Vec3 a = sc.sky_radiance(dir_of(el, az), h, 64), r = sc.sky_radiance(dir_of(el, az), h, 4096);
+                        const double m = std::max(detail::vmax(r), 1e-12);
+                        worst = std::max(worst, std::max(std::fabs(a.x - r.x), std::max(std::fabs(a.y - r.y), std::fabs(a.z - r.z))) / m);
+                    }
+                }
+            }
+        }
+        std::printf("R2: the sky view's slab-split march at 64 steps against 4096: worst %.2f %% of the brightest channel\n", 100.0 * worst);
+        check(worst < 0.015, "R2: the sky view's march at 64 steps is within 1.5 % of a converged one", worst);
     }
 
     // 11. R-ACC: the 12-step march against a converged 256-step march, over the clouds' domain, with AT1's moon. The domain: observer

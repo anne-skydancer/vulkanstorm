@@ -205,6 +205,7 @@ public:
         F32 moon_glow_factor = 0.f;       // MOON_GLOW_FACTOR: the moon's share of haze_glow_factor (the glow at the moon's direction)
         F32 moon_halo_weight = 0.f;       // MOON_HALO_WEIGHT: the weight of the halo and rainbow around the moon
         F32 light_scale = 1.f;            // mix(sun_scale, moon_scale, t): shadow light size and the cloud shadow penumbra
+        F32 moon_gain = 0.f;              // the moon's irradiance over the sun's: moon_brightness x the moon's compensation (AT2-1's base sky)
         bool shadow_visible = true;       // the sun shadow pass has something to show
         // the Stochastic method's dark gate (lldirectionalshadowgate.h): the decision light, the factor for the shadow strength
         // (1 above twice the threshold, 0 skipped) and whether the cascade pass is skipped this frame

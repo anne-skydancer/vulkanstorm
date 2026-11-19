@@ -8,7 +8,7 @@ CPU, except where a GPU is named (RTX 5070 Ti, driver 621.14).
 | Piece | File |
 |---|---|
 | Translation, bounds, tables, reference integrals (C++, double) | `indra/newview/llatmosphericlight.h` (`LLScatter`, end of the file) |
-| GLSL twin (not registered, no viewer shader includes it) | `indra/newview/app_settings/shaders/class1/windlight/atmosphereCommonF.glsl` (after `physicalAtmosphereF.glsl`) |
+| GLSL twin (since AT2-1 one file with the extinction, linked into the table passes of `atmosphereTablesF.glsl`; it reads the `Atmosphere` uniform block, `llatmospherebase.h` `AtmosphereBlock`) | `indra/newview/app_settings/shaders/class1/windlight/atmosphereCommonF.glsl` (AT2-1 merged `physicalAtmosphereF.glsl` into it) |
 | Test (CI, no GPU) | `indra/newview/tests/llatmosphericscatter_test.cpp` |
 | GPU vectors | `scripts/light/gen_atmosphere_scatter_vectors.py` writes `indra/newview/tests/llatmosphere_scatter_vectors.inc` |
 | Library check (the 768 shipped skies, no GPU) | `scripts/light/check_atmosphere_library.py` and `atmosphere_library_check.cpp` |
@@ -114,7 +114,7 @@ the sky including the ground (the first two from the ground)). The light transmi
 arithmetic, not a table. Worst relative |C++ - GLSL|: parameterisation 4e-7, texel 1e-6, phase and medium 2e-6, light T 1e-6, march **1e-5**, multiple-scattering texel 1.5e-6, sky irradiance 4e-6,
 sky 7e-6; the test holds all of them to 1e-4. (The march was 2.3e-3 with positions taken at the planet's radius.)
 
-The `.inc` also holds the SHA-256 of `physicalAtmosphereF.glsl` and `atmosphereCommonF.glsl` (line ends normalised); the test recomputes them, so a changed shader fails CI until the vectors are regenerated
+The `.inc` also holds the SHA-256 of `atmosphereCommonF.glsl` (line ends normalised; before AT2-1 also of `physicalAtmosphereF.glsl`, now merged into it), the block's std140 offsets as the driver lays them out and each atmosphere's cut altitudes; the test recomputes the hash and checks the C++ block mirror and `LLAtmosphere`'s cuts against them, so a changed shader fails CI until the vectors are regenerated
 (`gen_atmosphere_scatter_vectors.py`, then `--check`, which also compares the numbers to the committed ones).
 
 ### Sun disc and sky irradiance

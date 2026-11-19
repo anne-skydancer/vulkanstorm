@@ -526,6 +526,49 @@ Common gates for every stage:
 - AT2-1 can run now. It touches no shader that renders today, and no shadow file.
 - **Release integration waits for L6** ([decided]). L6 is not started.
 
+### 7.1 AT2-1 as built (2026-11-19, branch `codex/sky-at2-1-base-and-filter`)
+
+**The physics is one clear high-pressure day under every EEP sky.** The owner's model of 2026-11-18: the physical render first, then
+post-production filters; the base sky is a clear, dry high-pressure-dome day, and all atmospherics come from the EEP filter. This is
+decision D1 (a) of the sky-base plan (`reports/sky-base-clouds-2026-11-18/plan.md`, not on this branch): every EEP sky, the built-in ones
+included, is a filter on one base, not a per-EEP translation (`LLScatter::fromLegacy` stays for the tests and the library check; AT1's
+`LLAtmosphere::fromLegacy` stays the sun's part of the filter, unchanged). The visible sky is the same either way (section 8).
+
+| Part | Where | What |
+|---|---|---|
+| The base | `indra/newview/llatmospherebase.h` | Rayleigh 5.802 / 13.558 / 33.1 e-3 /km (8 km), Bruneton's ozone, a clean aerosol of optical depth 0.03 at 550 nm (1.2 km, albedo 0.95, Cornette-Shanks g 0.75), no slab, ground albedo 0.1. Ground visibility 101.5 km; noon T 0.92 / 0.85 / 0.74. The core's aerosol is grey (an Angstrom exponent of 1.3 would move the 440 / 680 nm depths by +0.01 / -0.007) |
+| R2 | `LLScatter::sky_radiance`, `pa_sky_radiance` | `atmosphere_ap` to the end of the ray (slab-split), 64 steps by default; the ground's sky irradiance from E (GLSL: `pa_E_lut`; `PA_E_EXACT` for the vectors). At 64 steps within 0.5 % of 4096 on Default, Foggy and Sunset |
+| R10 | `atmosphereCommonF.glsl`, `llglslshader.{h,cpp}` (`UB_ATMOSPHERE`, "Atmosphere") | One std140 block of 512 bytes: the atmosphere, the lights, the scattering values, the camera height (km above the sea, for AT2-3) and the C++'s cut altitudes (`LLAtmosphere::finalize`), so the GLSL no longer searches them per texel. `physicalAtmosphereF.glsl` is merged into `atmosphereCommonF.glsl`: the viewer compiles each file as its own unit and the block can be declared once. The C++ mirror `AtmosphereBlock` is checked against the driver's offsets |
+| Base tables | `llatmosphereluts.{h,cpp}` (`LLAtmosphereLUTs`), `atmosphereTablesF.glsl` | T 256x64, Psi 32x32 (split 256x256 + reduce), E 64x16 (split 512x128 + reduce): RGBA16F, built once (and after a release); the split passes' RGBA32F partials (3 MB) exist only while they are built, so the tables hold about 0.65 MB of VRAM. The sky view 192x108 RGBA16F, from the ground, `RenderAtmosphereSkyViewSteps` (64, debug), rebuilt on a change of the lights' quantised key (directions 1e-3, irradiance 1e-3 relative) |
+| Filter tables | `llskyfilter.{h,cpp}`, `skyFilterF.glsl` | A and B (192x108 RGBA16F, MRT): skyV's colour at haze_glow 0 and its slope, for the direction of skyV's `rel_pos` in the dome's frame; the program is in the sky's shader group, so it reads the dome's own uniforms. Rebuilt on a change of the quantised key of those inputs (`LLSkyFilter::current_inputs` mirrors `llsettingsvo.cpp`) |
+| Cast-light level k | `skyFilterF.glsl` passes 2 and 3 | 1x1 RGBA32F: the base's irradiance and the filtered sky's (cosine-weighted luminance on the same grid) and k = their ratio; undefined (w 0) where the filtered sky casts nothing |
+| The hook | `LLPipeline::updateAtmosphere()` after Env Update (`llviewerdisplay.cpp`, not in a cube snapshot); `ensureAtmosphereTables()` at the start of `renderDeferredLighting` (every view, the photo paths included); `releaseLUTBuffers` | Main thread only. Inside a cube snapshot only the base tables may be built (the filter's need the main view's uniforms). A program that fails to load leaves the tables unbuilt and logs once |
+
+**Gates [measured, RTX 5070 Ti, driver 621.14]:**
+
+- the GPU tables against the C++ (`scripts/light/check_atmosphere_tables.py`, the viewer's passes, formats, order and block): T 4.9e-4
+  absolute (gate 1e-3), Psi 0.13 %, E 0.14 %, sky view 0.18 % (gate 1 %), on three light cases (sun 60, sun 3 with the moon, night);
+- skyV.glsl itself on the GPU against the twin: 2.3e-6 relative over 11 skies; the A / B pass 2.3e-6; k 1e-5 (`llskyfilter_test.cpp`);
+- the scatter and transmittance vectors regenerated (`gen_atmosphere_scatter_vectors.py`, `gen_transmittance_vectors.py`): worst
+  1e-5 (the march) and below; the transmittance vectors reproduced the old ones to 1e-4 with the uploaded cuts (0 of 4608 numbers off);
+- the library check with the 64-step slab-split march: 0 whiteouts; the aureole list changed as the study measured (D2 = a): "Phototools-
+  Hospital Light 01" entered at 1.248x, "[TOR] SCIFI - Arrakissed 2" left;
+- the froxel domain of the base (`llatmospherebase_test.cpp`; 3654 rays, observer 0 to 4 km, -10 to 90 degrees, 32 m to 10 km): worst
+  0.61 / 0.21 / 0.10 % at 8 / 12 / 16 steps. So 8 steps meet the 1 % gate on the base (12 is the study's figure); AT2-3 sets
+  `RenderAtmosphereFroxelSteps` with its reader. The library's own `--acc` (per-EEP translations) is reported in the PR;
+- GPU time [measured, one draw per query, the median of 40]: built once, T 0.038 + Psi 0.046 + E 0.035 = 0.118 ms; on a change of the
+  lights or the sky, sky view 0.050 + A and B 0.003 + k 0.033 = 0.086 ms. Section 6.1's T was 0.071 with the per-texel cut search;
+- steady state: no pass; per frame the main thread forms two keys and compares the 512-byte block (an upload when the camera's height
+  changes by a metre).
+
+**Not verified (needs the viewer running; owner-assisted):** a 1 h soak without GL errors; `ensureAtmosphereTables()` reached from a
+mirror or a hero probe on frame 1; the tables existing in every photo path (they are built in `renderDeferredLighting`, which every
+view and capture renders through); the main-thread cost in a frame capture.
+
+**A finding for AT2-2.** skyV's A and B depend on the elevation of `rel_pos` only (the azimuth enters through the glow, which the draw
+evaluates exactly). The 192x108 tables hold that on the shared sky-view grid; a 1D table with more rows would hold it finer for the
+same memory, which could be one of the phase-2 tweaks for the five low-gamma skies.
+
 ---
 
 ## 8. Decisions for the owner (new ones only; the recommended option first)

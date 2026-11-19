@@ -11562,6 +11562,17 @@ Change of this parameter will affect the layout of buttons in notification toast
       <key>Value</key>
       <integer>1</integer>
     </map>
+    <key>RenderAtmosphereSkyViewSteps</key>
+    <map>
+      <key>Comment</key>
+      <string>Debug: steps of the march that fills the physical sky-view table (stage AT2-1; 4 to 512). 64 is within 1.2 % of a converged march. A structural setting for a slow GPU, not a quality tier.</string>
+      <key>Persist</key>
+      <integer>1</integer>
+      <key>Type</key>
+      <string>S32</string>
+      <key>Value</key>
+      <integer>64</integer>
+    </map>
     <key>RenderDesaturateIrradiance</key>
     <map>
       <key>Comment</key>

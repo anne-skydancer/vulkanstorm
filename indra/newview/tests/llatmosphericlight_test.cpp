@@ -14,7 +14,7 @@
 //
 // Stage AT0 (the physical atmosphere, llatmosphericlight.h's LLAtmosphere and primary_light):
 //   - LLAtmosphere::transmittance (the physical model and the excess factor of the capped columns) equals
-//     physicalAtmosphereF.glsl on the GPU (llatmosphere_vectors.inc, from scripts/light/gen_transmittance_vectors.py)
+//     atmosphereCommonF.glsl on the GPU (llatmosphere_vectors.inc, from scripts/light/gen_transmittance_vectors.py)
 //     to 1e-4 relative, and a 200000-step integral to 1e-6;
 //   - noon identity: lin(source) T(0, 1) = lin(source e^-tau) for the embedded Windlight skies, the light rigs included;
 //   - the cap on the column (max_column): T is continuous in it at every altitude, partial caps act per channel;
@@ -87,7 +87,7 @@ LLAtmosphericLight::Inputs reference()
 
 // {rayleigh_ext rgb, aerosol_ext, slab_ext, slab_top_km, ozone_ext rgb, rayleigh exp_scale, mie exp_scale,
 //  absorption variant, planet radius km, top radius km, h km, mu, disc_sin, excess rgb, path_factor, expected transmittance rgb}
-// from physicalAtmosphereF.glsl on the GPU (scripts/light/gen_transmittance_vectors.py)
+// from atmosphereCommonF.glsl on the GPU (scripts/light/gen_transmittance_vectors.py)
 const double kTransmittanceVectors[][24] = {
 #include "llatmosphere_vectors.inc"
 };
@@ -463,7 +463,7 @@ int main()
 
     // ================= stage AT0 =================
 
-    // 1. GLSL vectors: LLAtmosphere::transmittance equals physicalAtmosphereF.glsl on the GPU (float) to 1e-4 relative
+    // 1. GLSL vectors: LLAtmosphere::transmittance equals atmosphereCommonF.glsl on the GPU (float) to 1e-4 relative
     //    + 1e-9 absolute; 2. and the brute-force integral to 1e-6 absolute
     const int tcount = static_cast<int>(sizeof(kTransmittanceVectors) / sizeof(kTransmittanceVectors[0]));
     check(tcount >= 128, "enough transmittance vectors", tcount);

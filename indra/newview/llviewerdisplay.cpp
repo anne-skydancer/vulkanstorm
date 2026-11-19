@@ -882,6 +882,15 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
             LLEnvironment::instance().update(&camera); // <FS:Ansariel> Factor out calls to getInstance
         }
 
+        // <Vulkanstorm> stage AT2-1: the physical atmosphere's block and tables follow this frame's sky (llatmosphereluts.h); the cube
+        // snapshots of the frame reuse them
+        if (!gCubeSnapshot)
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Atmosphere Update");
+            gPipeline.updateAtmosphere();
+        }
+        // </Vulkanstorm>
+
         // *TODO: merge these two methods
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("HUD Update");
