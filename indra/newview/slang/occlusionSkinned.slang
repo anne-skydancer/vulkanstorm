@@ -24,14 +24,12 @@
  */
 import glsl;
 import position;
+import gbuffer;
 
 // The occlusion program for rigged meshes: occlusion.slang's fragment stage under the skinned position
 uniform mat4 modelview_matrix;
 uniform mat4 projection_matrix;
 uniform mat3x4 matrixPalette[VK_MAX_JOINTS];
-
-// the G-buffer flag of a PBR material (the value of GBUFFER_FLAG_HAS_PBR in the hand-written helper code)
-static const float GBUFFER_FLAG_HAS_PBR = 0.67;
 
 struct VertexIn
 {

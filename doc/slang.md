@@ -139,7 +139,7 @@ The hand-written GLSL that still writes `gl_Position` is the list `scripts/shade
 
 **The AMD decal fix.** A tattoo or applier is drawn over the body by another program than the body, so the two positions must agree bit for bit.
 Two things give that. The skinned position is one text in each program's single compilation unit (the hand-written skinning was a separate shader
-object, which GLSL 4.20 section 4.8.1 gives no guarantee across). And every vertex program declares `invariant gl_Position;`, which the module
+object, which GLSL 4.60 section 4.8.1 gives no guarantee across). And every vertex program declares `invariant gl_Position;`, which the module
 emits through a prelude (`VK_POSITION_INVARIANT`, default 1; 0 removes it from every program at once). Slang's GLSL front end rejects `invariant
 gl_Position;` as source, and its `precise` is dropped from the GLSL whenever the temporary folds away, so the prelude is the one way that holds.
 `invariant` makes the driver multiply then add where it would fuse them: depth moves by a few steps on NVIDIA (invariance-audit.md 3.4), and the

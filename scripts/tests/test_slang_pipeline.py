@@ -225,6 +225,17 @@ class GeneratorTest(unittest.TestCase):
                                             encoding='utf-8')
             self.assertTrue(any('straight from a function' in e for e in check.check_position(src, self.out)))
 
+    def test_gate_catches_a_position_altered_after_the_module_call(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            shutil.copytree(FIXTURES, src)
+            text = (src / 'tint.slang').read_text(encoding='utf-8')
+            line = 'o.pos = vkPositionClip(modelview_projection_matrix, v.position);'
+            for rogue in ('o.pos = vkPositionClip(modelview_projection_matrix, v.position) * 2.0;',
+                          'o.pos = vkPositionClip(modelview_projection_matrix, v.position) + vec4(1);'):
+                (src / 'tint.slang').write_text(text.replace(line, rogue), encoding='utf-8')
+                self.assertTrue(any('SV_Position field' in e for e in check.check_position(src, self.out)), rogue)
+
     def test_interface_check_finds_block_and_attribute_problems(self):
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / 'generated'
@@ -322,6 +333,23 @@ class CommittedTreeTest(unittest.TestCase):
         baseline = ROOT / 'scripts/shaders/glsl_position_baseline.txt'
         self.assertEqual(check.check_position(common.SLANG_SRC, common.GENERATED, common.LEGACY_SHADERS, baseline), [])
 
+    def test_the_command_line_runs_the_glsl_ratchet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glsl = Path(tmp) / 'glsl'
+            glsl.mkdir()
+            (glsl / 'rogue.glsl').write_text('void main() { gl_Position = vec4(0); }\n', encoding='utf-8')
+            baseline = Path(tmp) / 'baseline.txt'
+            baseline.write_text('', encoding='utf-8')
+            argv = ['slang_check.py', 'position', '--glsl-root', str(glsl), '--glsl-baseline', str(baseline)]
+            old = sys.argv
+            sys.argv = argv
+            try:
+                with self.assertRaises(SystemExit) as cm:
+                    check.main()
+            finally:
+                sys.argv = old
+            self.assertEqual(cm.exception.code, 1)
+
     def test_the_position_module_agrees_with_the_viewers_joint_limit(self):
         limit = re.search(r'LL_MAX_JOINTS_PER_MESH_OBJECT\s*=\s*(\d+)',
                           (ROOT / 'indra/llcharacter/lljoint.h').read_text(encoding='utf-8')).group(1)
@@ -330,11 +358,12 @@ class CommittedTreeTest(unittest.TestCase):
 
     def test_the_module_makes_the_position_invariant_and_every_vertex_stage_says_so(self):
         module = (common.SLANG_SRC / 'position.slang').read_text(encoding='utf-8')
-        self.assertIn('#define VK_POSITION_INVARIANT 1', module)
+        default = re.search(r'(?m)^#define\s+VK_POSITION_INVARIANT\s+(\d)', module).group(1)
+        want = default == '1'
         stages = list(common.GENERATED.glob('*.vert.glsl'))
         self.assertTrue(stages)
         for path in stages:
-            self.assertIn('\ninvariant gl_Position;\n', path.read_text(encoding='utf-8'), path.name)
+            self.assertEqual('\ninvariant gl_Position;\n' in path.read_text(encoding='utf-8'), want, path.name)
 
     def test_every_slang_source_carries_the_licence_line(self):
         for path in common.SLANG_SRC.rglob('*.slang'):

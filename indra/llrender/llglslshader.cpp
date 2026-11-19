@@ -1558,6 +1558,11 @@ void LLGLSLShader::blockPutMatrix(GLint offset, U32 count, GLboolean transpose, 
         blockPut(offset, v, 64); // the four columns are the 64 bytes
         return;
     }
+    if (!transpose && rows == 4)
+    {
+        blockPut(offset, v, count * cols * 16); // every column is a vec4 and the matrices follow each other: one copy (the rigged palette)
+        return;
+    }
     for (U32 m = 0; m < count; ++m)
     {
         const GLfloat* mat = v + (size_t) m * cols * rows;

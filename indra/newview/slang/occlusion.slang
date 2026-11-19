@@ -24,6 +24,7 @@
  */
 import glsl;
 import position;
+import gbuffer;
 
 // CUBE 1 is occlusionCubeV (a unit box scaled and moved by box_size and box_center), 0 is occlusionV
 uniform mat4 modelview_projection_matrix;
@@ -31,9 +32,6 @@ uniform mat4 modelview_projection_matrix;
 uniform vec3 box_center;
 uniform vec3 box_size;
 #endif
-
-// the G-buffer flag of a PBR material (the value of GBUFFER_FLAG_HAS_PBR in the hand-written helper code)
-static const float GBUFFER_FLAG_HAS_PBR = 0.67;
 
 struct VertexIn
 {

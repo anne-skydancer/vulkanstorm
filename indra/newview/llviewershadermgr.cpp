@@ -329,6 +329,7 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
         riggedShader.mShaderFiles.clear();
         riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".vert.glsl", GL_VERTEX_SHADER));
         riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".frag.glsl", GL_FRAGMENT_SHADER));
+        riggedShader.mRiggedVariant = &riggedShader; // attachShaderFeatures does this for hand-written programs, and is skipped here
     }
     else
     {
@@ -3873,7 +3874,7 @@ bool LLViewerShaderMgr::loadShadersObject()
         interfaceStages(gObjectPreviewProgram, "preview__HAS_SKIN0", "objects/previewV.glsl", "objects/previewF.glsl");
         gObjectPreviewProgram.mShaderLevel = mShaderLevel[SHADER_OBJECT];
         success = make_rigged_variant(gObjectPreviewProgram, gSkinnedObjectPreviewProgram, "preview__HAS_SKIN1");
-        success = gObjectPreviewProgram.createShader();
+        success = success && gObjectPreviewProgram.createShader();
         gObjectPreviewProgram.mFeatures.hasLighting = true;
         gSkinnedObjectPreviewProgram.mFeatures.hasLighting = true;
     }
@@ -4096,6 +4097,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
     {
         gSkinnedOcclusionProgram.mName = "Skinned Occlusion Shader";
         gSkinnedOcclusionProgram.mFeatures.hasObjectSkinning = true;
+        gSkinnedOcclusionProgram.mRiggedVariant = &gSkinnedOcclusionProgram; // as attachShaderFeatures does for hand-written programs
         gSkinnedOcclusionProgram.mShaderFiles.clear();
         interfaceStages(gSkinnedOcclusionProgram, "occlusionSkinned", "interface/occlusionSkinnedV.glsl", "interface/occlusionF.glsl");
         gSkinnedOcclusionProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];

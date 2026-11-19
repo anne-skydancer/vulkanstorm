@@ -8,7 +8,7 @@
 // The AMD decal fix. A tattoo or applier is drawn over the body by another program than the body, so the two positions
 // must come out bit for bit alike. Two things give that: every program gets the position from the functions below (one
 // text, in one compilation unit, where the hand-written GLSL had the skinning in a separate object), and every vertex
-// program declares `invariant gl_Position;` (GLSL 4.60 4.8.1: the same expression of the same inputs gives the same
+// program declares `invariant gl_Position;` (GLSL 4.60 section 4.8.1: the same expression of the same inputs gives the same
 // value in every program, whatever the optimiser does with the rest of the shader). Slang emits `invariant` only from
 // the prelude below; its `precise` is dropped from the GLSL when the temporary folds away, so it is not used.
 // invariant makes the compiler write multiply then add where it would fuse them, which moves depth by a few steps on
@@ -36,6 +36,8 @@ void vkInvariantPosition()
         __requirePrelude("invariant gl_Position;");
     default:
     }
+    // SPIR-V: the Invariant decoration on the Position output replaces this prelude; add it when the SPIR-V line starts,
+    // or the AMD fix is silently gone there.
 #endif
 }
 

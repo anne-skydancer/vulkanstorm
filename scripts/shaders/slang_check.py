@@ -261,6 +261,8 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
         return errors + [f'the position module {position["module"]}.slang does not exist']
     prefix = position.get('prefix', 'vkPosition')
     call = re.compile(r'\b' + re.escape(prefix) + r'\w*\s*\(')
+    # the whole right-hand side is one call of the module (arguments may nest calls, nothing follows the closing paren)
+    whole_call = re.compile(r'\s*' + re.escape(prefix) + r'\w*\s*\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\s*$')
     for slang in sorted(src_dir.rglob('*.slang')):
         if slang.resolve() == module.resolve():
             continue
@@ -274,7 +276,7 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
         # an SV_Position field may only be assigned from a call of the module's functions, whole and with plain `=`
         for field in set(re.findall(r'\b(\w+)\s*:\s*SV_Position\b', text)):
             for m in re.finditer(r'\b' + re.escape(field) + r'((?:\.\w+)*)\s*([-+*/%&|^]?=)(?!=)([^;]*);', text):
-                if m.group(1) or m.group(2) != '=' or not re.match(r'\s*' + call.pattern, m.group(3)):
+                if m.group(1) or m.group(2) != '=' or not whole_call.match(m.group(3)):
                     errors.append(f'{rel}: {field}{m.group(1)} {m.group(2)} {m.group(3).strip()[:40]}: the SV_Position field '
                                   f'must be assigned whole from a {prefix}*() call')
     for prog in vertex_programs:
@@ -319,7 +321,7 @@ def main():
             elif name == 'interface':
                 errs = check_interface(args.generated)
             elif name == 'position':
-                errs = check_position(args.src_dir, args.generated)
+                errs = check_position(args.src_dir, args.generated, args.glsl_root, args.glsl_baseline)
             else:
                 errs = check_compile(args.generated, find_glslang(args.glslang))
         except CheckError as e:
