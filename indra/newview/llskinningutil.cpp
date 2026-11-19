@@ -335,6 +335,7 @@ void LLSkinningUtil::initJointNums(LLMeshSkinInfo* skin, LLVOAvatar *avatar)
 // table), so a mesh worker thread can run this without the avatar
 void LLSkinningUtil::updateRiggingInfo(const LLMeshSkinInfo* skin, LLVOAvatar *avatar, LLVolumeFace& vol_face)
 {
+    // the pre-check only avoids calling initJointNums for a face the overload below would skip
     if (vol_face.mJointRiggingInfoTab.needsUpdate() &&
         vol_face.mNumVertices > 0 && vol_face.mWeights && !skin->mJointNames.empty())
     {
@@ -349,6 +350,7 @@ bool LLSkinningUtil::initJointNumsFromTable(LLMeshSkinInfo* skin, const LLJointN
     {
         return true;
     }
+    // every entry of mJointNums is -1 here (skinInfoReceived); the table result replaces them all by name
     std::vector<int32_t> nums;
     if (!table.lookupAll(skin->mJointNames, nums))
     {

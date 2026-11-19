@@ -127,6 +127,15 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llstochastichistory_test.cpp -o "$RUNNER_TEMP/stochastic-history-test"
         "$RUNNER_TEMP/stochastic-history-test"
+    - name: Check the joint number table and the decode in-flight protocol (O0 and O2, threaded)
+      shell: bash
+      run: |
+        for opt in -O0 -O2; do
+          g++ -std=c++20 $opt -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/lljointnumtable_test.cpp -o "$RUNNER_TEMP/jointnum-test"
+          "$RUNNER_TEMP/jointnum-test"
+          g++ -std=c++20 $opt -Wall -Wextra -Werror -pthread -I indra/newview indra/newview/tests/lltexturefetch_decode_inflight_test.cpp -o "$RUNNER_TEMP/decode-inflight-test"
+          "$RUNNER_TEMP/decode-inflight-test"
+        done
     - name: Check the stochastic layer rank (coincident blended faces in face order, sorted alpha untouched)
       shell: bash
       run: |
