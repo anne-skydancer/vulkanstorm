@@ -36,6 +36,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_notices.py
       shell: bash
+    - run: python3 scripts/tests/test_jp2_extension.py
+      shell: bash
     - run: python3 scripts/tests/test_cloud_noise_package.py
       shell: bash
     - run: python3 scripts/tests/test_projector_edge_lookup.py
@@ -190,6 +192,10 @@ runs:
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/llimagej2coj -I "$pkg/x/include/openjpeg" indra/llimagej2coj/tests/llj2cdecoderlimits_openjpeg_test.cpp -o "$RUNNER_TEMP/j2c-decoder-limits-openjpeg-test" "$pkg/x/lib/release/libopenjp2.a" -lm -lpthread
         "$RUNNER_TEMP/j2c-decoder-limits-openjpeg-test" | tee "$RUNNER_TEMP/j2c-decoder-limits.log"
         grep -q "all checks passed" "$RUNNER_TEMP/j2c-decoder-limits.log"
+        # The viewer reads raw J2C codestreams only: the J2K decoder must refuse a real JP2 file ("jp2" is not a codec extension)
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I "$pkg/x/include/openjpeg" indra/llimagej2coj/tests/llj2c_jp2_file_openjpeg_test.cpp -o "$RUNNER_TEMP/j2c-jp2-file-test" "$pkg/x/lib/release/libopenjp2.a" -lm -lpthread
+        "$RUNNER_TEMP/j2c-jp2-file-test" "$RUNNER_TEMP" | tee "$RUNNER_TEMP/j2c-jp2-file.log"
+        grep -q "all checks passed" "$RUNNER_TEMP/j2c-jp2-file.log"
     - name: Keep development hooks out of release
       shell: bash
       if: github.ref == 'refs/heads/vkstorm-release' || github.base_ref == 'vkstorm-release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/vkstorm-canary' && inputs.publish == 'true')
