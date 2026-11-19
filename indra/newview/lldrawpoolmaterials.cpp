@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 
 #include "lldrawpoolmaterials.h"
 #include "llviewershadermgr.h"
@@ -279,6 +280,7 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
 
         params.mVertexBuffer->setBuffer();
         VKS_GLSTAT_CENSUS_DRAW(params);
+        VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
         params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
         if (tex_setup)

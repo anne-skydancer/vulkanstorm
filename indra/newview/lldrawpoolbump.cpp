@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 
 #include "lldrawpoolbump.h"
 
@@ -418,6 +419,7 @@ void LLDrawPoolBump::renderGroup(LLSpatialGroup* group, U32 type, bool texture =
 
         params.mVertexBuffer->setBuffer();
         VKS_GLSTAT_CENSUS_DRAW(params);
+        VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
         params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
     }
 }
@@ -1072,6 +1074,7 @@ void LLRenderPass::pushBumpBatch(LLDrawInfo& params, bool texture, bool batch_te
 
     params.mVertexBuffer->setBuffer();
     VKS_GLSTAT_CENSUS_DRAW(params);
+    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     if (tex_setup)

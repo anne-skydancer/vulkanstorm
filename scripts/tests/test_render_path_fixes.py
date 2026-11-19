@@ -197,8 +197,10 @@ class AllocationFallbacks(unittest.TestCase):
 class Impostors(unittest.TestCase):
     def test_impostor_items_bind_their_full_material(self):
         bind = body(GLTF_MATERIAL, 'void LLFetchedGLTFMaterial::bind(')
-        self.assertIn('const bool shadow_pass = LLPipeline::sShadowRender && !LLPipeline::sImpostorRender;', bind)
-        self.assertIn('const bool pool_cutoff = LLPipeline::sImpostorRender && '
+        # measuring build: the fix sits behind RenderImpostorFullPBR (LLPipeline::sImpostorFullPBR)
+        self.assertIn('const bool impostor_full = LLPipeline::sImpostorRender && LLPipeline::sImpostorFullPBR;', bind)
+        self.assertIn('const bool shadow_pass = LLPipeline::sShadowRender && !impostor_full;', bind)
+        self.assertIn('const bool pool_cutoff = impostor_full && '
                       'mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;', bind)
         self.assertRegex(bind, r'if \(\(!shadow_pass \|\| \(mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK\)\) '
                                r'&& !pool_cutoff\)\s*\{\s*if \(mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK\)')
@@ -239,13 +241,13 @@ class Impostors(unittest.TestCase):
         post = body(PIPELINE, 'void LLPipeline::renderGeomPostDeferred(LLCamera& camera)')
         masks = guarded_colour_masks(post)
         self.assertEqual(len(masks), 1)
-        self.assertIn('if (!sImpostorRenderAlphaDepthPass)', masks[0][1])
+        self.assertIn('if (!impostorDepthOnly())', masks[0][1])
         functions = ((POOL_SIMPLE, 'void LLDrawPoolGlow::renderPostDeferred(S32 pass)', 2),
                      (POOL_PBR, 'void LLDrawPoolGLTFPBR::renderPostDeferred(S32 pass)', 2),
                      (POOL_ALPHA, 'void LLDrawPoolAlpha::forwardRender(', 2))
         for text, signature, count in functions:
             function = body(text, signature)
-            self.assertIn('const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;', function, signature)
+            self.assertIn('const bool own_mask = !LLPipeline::impostorDepthOnly();', function, signature)
             masks = guarded_colour_masks(function)
             self.assertEqual(len(masks), count, signature)
             for _, context in masks:

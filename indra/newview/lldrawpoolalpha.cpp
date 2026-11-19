@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 
 #include "lldrawpoolalpha.h"
 #include "llstochasticlayerrank.h" // <Vulkanstorm/>
@@ -312,7 +313,7 @@ void LLDrawPoolAlpha::forwardRender(bool rigged, EAlphaOITPhase oit_phase)
     //enable writing to alpha for emissive effects
     // <Vulkanstorm> except in an impostor's second render, which keeps colour off: it writes the blended faces' depth
     // for the impostor's alpha mask only (LLPipeline::generateImpostor), so they are blended into the impostor once
-    const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;
+    const bool own_mask = !LLPipeline::impostorDepthOnly();
     if (own_mask)
     {
         gGL.setColorMask(true, true);
@@ -771,6 +772,7 @@ inline void Draw(LLDrawInfo* draw, U32 mask)
 {
     draw->mVertexBuffer->setBuffer();
     LLRenderPass::applyModelMatrix(*draw);
+    VKS_IMPOSTOR_PROOF_DRAW(*draw); // MEASURING BUILD
     draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
@@ -878,6 +880,7 @@ void LLDrawPoolAlpha::drawEmissive(LLDrawInfo* draw)
     // Establish its transform here instead of inheriting the previous batch's.
     LLRenderPass::applyModelMatrix(*draw);
     VKS_GLSTAT_CENSUS_DRAW(*draw);
+    VKS_IMPOSTOR_PROOF_DRAW(*draw); // MEASURING BUILD
     draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
@@ -911,6 +914,7 @@ void LLDrawPoolAlpha::renderPbrEmissives(std::vector<LLDrawInfo*>& emissives)
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
         VKS_GLSTAT_CENSUS_DRAW(*draw);
+        VKS_IMPOSTOR_PROOF_DRAW(*draw); // MEASURING BUILD
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
@@ -964,6 +968,7 @@ void LLDrawPoolAlpha::renderRiggedPbrEmissives(std::vector<LLDrawInfo*>& emissiv
         draw->mVertexBuffer->setBuffer();
         LLRenderPass::applyModelMatrix(*draw);
         VKS_GLSTAT_CENSUS_DRAW(*draw);
+        VKS_IMPOSTOR_PROOF_DRAW(*draw); // MEASURING BUILD
         draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
     }
 }
@@ -1312,6 +1317,7 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
 
                     params.mVertexBuffer->setBuffer();
                     VKS_GLSTAT_CENSUS_DRAW(params);
+                    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
                     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
                     stop_glerror();
 

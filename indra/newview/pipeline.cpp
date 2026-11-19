@@ -27,6 +27,7 @@
 #include "llviewerprecompiledheaders.h"
 
 #include "pipeline.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 #include "llframecounters.h"
 #include "lllocalshadows.h" // <Vulkanstorm/> setTileOrigin for the sun cascades
 #include "llnotificationsutil.h"
@@ -376,6 +377,7 @@ bool    LLPipeline::sReflectionRender = false;
 bool    LLPipeline::sDistortionRender = false;
 bool    LLPipeline::sImpostorRender = false;
 bool    LLPipeline::sImpostorRenderAlphaDepthPass = false;
+bool    LLPipeline::sImpostorFullPBR = true; // MEASURING BUILD: set per generateImpostor from RenderImpostorFullPBR
 bool    LLPipeline::sRenderAlphaStochasticSupported = false; // <Vulkanstorm/> stochastic transparency, set in allocateAlphaStochastic
 bool    LLPipeline::sShowJellyDollAsImpostor = true;
 bool    LLPipeline::sUnderWaterRender = false;
@@ -4622,7 +4624,7 @@ void LLPipeline::renderGeomPostDeferred(LLCamera& camera)
     setupHWLights();
 
     gGL.setSceneBlendType(LLRender::BT_ALPHA);
-    if (!sImpostorRenderAlphaDepthPass) // <Vulkanstorm/> an impostor's second render keeps colour off: depth only (generateImpostor)
+    if (!impostorDepthOnly()) // <Vulkanstorm/> an impostor's second render keeps colour off: depth only (generateImpostor)
     {
         gGL.setColorMask(true, false);
     }
@@ -13767,10 +13769,15 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
         }
     }
 
+    // MEASURING BUILD: which behaviour this generation uses, and the proof records (impostors of real avatars only)
+    sImpostorFullPBR = LLImpostorProof::fullPBR();
+    LLImpostorProof::beginGeneration((preview_avatar || for_profile) ? nullptr : avatar);
+
     // <Vulkanstorm> Blend the impostor's semi-transparent groups back to front for its own camera, and its rigged ones
     // in attachment order, as the main view does for its camera. postSort sorts neither under sShadowRender (which an
     // impostor sets for its other shadow-pass rules), and its depth keys are the viewer camera's. The impostor's keys
     // stay local, so no group's state changes.
+    if (sImpostorFullPBR) // MEASURING BUILD: FALSE = today's cull order
     {
         std::vector<std::pair<F32, LLSpatialGroup*>> keyed;
         keyed.reserve(result.getAlphaGroupsSize());
@@ -13915,6 +13922,7 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar, bool 
 
     if (!preview_avatar && !for_profile)
     {
+        LLImpostorProof::endGeneration(avatar, avatar->mImpostor.getWidth(), avatar->mImpostor.getHeight()); // MEASURING BUILD
         avatar->mImpostor.flush();
         avatar->setImpostorDim(tdim);
     }

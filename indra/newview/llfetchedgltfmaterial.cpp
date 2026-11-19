@@ -98,8 +98,10 @@ void LLFetchedGLTFMaterial::bind(LLViewerTexture* media_tex)
     // rules, is a picture of the avatar: each item gets its full material, its own cut-off and its current values. A
     // blended item keeps the cut-off of its pool (LLDrawPoolAlpha's MINIMUM_IMPOSTOR_ALPHA), which keeps nearly
     // invisible fragments out of the impostor's depth and so out of its alpha mask.
-    const bool shadow_pass = LLPipeline::sShadowRender && !LLPipeline::sImpostorRender;
-    const bool pool_cutoff = LLPipeline::sImpostorRender && mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;
+    // MEASURING BUILD: RenderImpostorFullPBR = FALSE restores the binding from before the fix
+    const bool impostor_full = LLPipeline::sImpostorRender && LLPipeline::sImpostorFullPBR;
+    const bool shadow_pass = LLPipeline::sShadowRender && !impostor_full;
+    const bool pool_cutoff = impostor_full && mAlphaMode == LLGLTFMaterial::ALPHA_MODE_BLEND;
 
     if ((!shadow_pass || (mAlphaMode == LLGLTFMaterial::ALPHA_MODE_MASK)) && !pool_cutoff)
     // </Vulkanstorm>

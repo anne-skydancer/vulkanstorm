@@ -56,7 +56,7 @@ void LLDrawPoolGlow::renderPostDeferred(S32 pass)
 
     LLGLDepthTest depth(GL_TRUE, GL_FALSE);
     // <Vulkanstorm> an impostor's second render keeps colour off: depth only (LLPipeline::generateImpostor)
-    const bool own_mask = !LLPipeline::sImpostorRenderAlphaDepthPass;
+    const bool own_mask = !LLPipeline::impostorDepthOnly();
     if (own_mask)
     {
         gGL.setColorMask(false, true);

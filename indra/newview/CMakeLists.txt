@@ -945,6 +945,9 @@ set(viewer_GLTF_SOURCE_FILES
 source_group("Source Files\\GLTF" FILES ${viewer_GLTF_SOURCE_FILES})
 list(APPEND viewer_SOURCE_FILES ${viewer_GLTF_SOURCE_FILES})
 
+# MEASURING BUILD ONLY (branch codex/impostor-pbr-proof): the impostor proof records
+list(APPEND viewer_SOURCE_FILES llimpostorproof.cpp)
+
 # development only (OpenGL submission statistics): no empty object file when the option is off
 if (VKS_GL_STATS)
   list(APPEND viewer_SOURCE_FILES llglsubmitstatsapi.cpp llprojectorshadowstatsapi.cpp)
@@ -1120,6 +1123,7 @@ set(viewer_HEADER_FILES
     llagentlanguage.h
     llagentlistener.h
     llglsubmitstatsapi.h
+    llimpostorproof.h
     llprojectorshadowstatsapi.h
     llagentpicksinfo.h
     llagentpilot.h

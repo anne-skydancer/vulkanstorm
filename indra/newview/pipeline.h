@@ -773,6 +773,10 @@ public:
     static bool             sDistortionRender;
     static bool             sImpostorRender;
     static bool             sImpostorRenderAlphaDepthPass;
+    // MEASURING BUILD: RenderImpostorFullPBR for the impostor being generated (TRUE: the fix, FALSE: the behaviour before it)
+    static bool             sImpostorFullPBR;
+    // an impostor's second render keeps the colour mask off (MEASURING BUILD: only with the fix; FALSE = colour written again)
+    static bool             impostorDepthOnly() { return sImpostorRenderAlphaDepthPass && sImpostorFullPBR; }
     static bool             sRenderAlphaStochasticSupported; // <Vulkanstorm/> stochastic transparency available (the device takes 8 samples per pass)
     static bool             sShowJellyDollAsImpostor;
     static bool             sUnderWaterRender;

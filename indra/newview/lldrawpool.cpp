@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 
 #include "lldrawpool.h"
 #include "llrender.h"
@@ -627,6 +628,7 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, bool texture, bool batch_textur
     // </FS:Beq>
     params.mVertexBuffer->setBuffer();
     VKS_GLSTAT_CENSUS_DRAW(params);
+    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
     if (tex_setup)
     {
@@ -657,6 +659,7 @@ void LLRenderPass::pushUntexturedBatch(LLDrawInfo& params)
 
     params.mVertexBuffer->setBuffer();
     VKS_GLSTAT_CENSUS_DRAW(params);
+    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 }
 
@@ -852,6 +855,7 @@ void LLRenderPass::pushGLTFBatch(LLDrawInfo& params)
 
     params.mVertexBuffer->setBuffer();
     VKS_GLSTAT_CENSUS_DRAW(params);
+    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     teardown_texture_matrix(params);
@@ -876,6 +880,7 @@ void LLRenderPass::pushUntexturedGLTFBatch(LLDrawInfo& params)
 
     params.mVertexBuffer->setBuffer();
     VKS_GLSTAT_CENSUS_DRAW(params);
+    VKS_IMPOSTOR_PROOF_DRAW(params); // MEASURING BUILD
     params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 }
 

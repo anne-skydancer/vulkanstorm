@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llimpostorproof.h" // MEASURING BUILD
 
 #include "llvoavatar.h"
 
@@ -12327,9 +12328,16 @@ void LLVOAvatar::updateImpostors()
 {
     LLViewerCamera::sCurCameraID = LLViewerCamera::CAMERA_WORLD;
 
+    // MEASURING BUILD: a change of RenderImpostorFullPBR regenerates every impostor
+    const bool proof_regenerate = LLImpostorProof::settingChanged();
+
     for (LLCharacter* character : LLCharacter::sInstances)
     {
         LLVOAvatar* avatar = (LLVOAvatar*)character;
+        if (proof_regenerate)
+        {
+            avatar->mNeedsImpostorUpdate = true;
+        }
         if (!avatar->isDead()
             && avatar->isVisible()
             && avatar->isImpostor()
