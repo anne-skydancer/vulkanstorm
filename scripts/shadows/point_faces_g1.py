@@ -4,21 +4,26 @@
 """G1-P of the point lights' shadow faces (lamp shadows L4): the shader's twins of llpointshadowpool.h and the lookup on a known scene.
 
 Offline, no viewer, Windows with an OpenGL 4 driver (scripts/perf/gl_test_context.py). The code under test is compiled from
-shadowStochasticUtil.glsl itself (its G1 and P1 blocks, stPointGradient and samplePointShadow) with the method-neutral helpers of
-shadowUtil.glsl (SHADOW_COMMON_NO_DEPTH: the shading normal is the receiver plane).
+shadowStochasticUtil.glsl itself (its G1 and P1 blocks, stPointGradient, stPointReceiverNormal, samplePointShadowNg and
+samplePointShadow) with the method-neutral helpers of shadowUtil.glsl (SHADOW_COMMON_NO_DEPTH for (c) and (d): the shading normal is the
+receiver plane; the timing also runs the viewer's variant, which rebuilds the plane from the depth buffer).
 
   (a) pick: stPointPick, stPointFace and stPointCoord against the C++ rules' twin (llpointpool::pickFace and faceTexCoord, here in
-      numpy) on 10^6 directions, ties and signed zeros included: the face exactly, uv and depth within 4 ulp;
+      numpy) on 10^6 directions, ties and signed zeros included: the face exactly, uv within 16 ulp of 1 (1.9e-6) and depth within 4 ulp
+      of 1 (4.8e-7) of the double-precision twin;
   (b) rects: stPointFaceTile against llpointpool::unpackFaceRect for every face rect of the 4096 atlas (exact);
   (c) wall: a lamp whose six faces are ray-cast here (a 1 m x 1 m wall 1 m from the light on +X, nothing else), looked up by the real
       samplePointShadow at every face size: behind the wall's middle 0, in front of it and beside it 1, a penumbra across its shadow's
       edge that widens with the distance behind the wall (the receivers' visibility against the analytic disc emitter is reported);
-      and no receiver reads past its face's tile (the other tiles of the atlas hold blockers everywhere);
+      and no receiver reads past its face's tile (each tile has a 64-texel border of blockers at the near plane, so a read past a face's
+      edge shows as a shadow on the open receivers);
   (d) camera: the same receivers from four camera poses (view-space positions, point_view_to_agent and the lamp's centre transformed)
       give the same visibility to within the float rounding of the view transform: no screen, frame or view term;
   --time: the lookup's GPU cost, ms per 2560 x 1440 pass with every pixel a receiver in a lamp's light (a third of them behind the
       wall, in its umbra and penumbra; neighbouring pixels on neighbouring points, as a frame reads the faces), per face size: the cost
-      per lit megapixel per lamp.
+      per lit megapixel per lamp, for the shading-normal variant and for the viewer's (the receiver plane from four position reads, as
+      getPosition reads the depth buffer); and a batch of 16 lights (multiPointLightF.glsl's form: the plane once, one call site), with
+      the compile and link time of that program against the same batch with two call sites.
 
     python scripts/shadows/point_faces_g1.py [--sizes 128,256,512,1024] [--grid 512] [--time]
 
@@ -64,8 +69,11 @@ NEAR = float(re.search(r'#define ST_POINT_NEAR ([0-9.]+)', util).group(1))
 defines = '\n'.join(l for l in util.splitlines() if re.match(r'#define ST_', l))
 g1 = section(util, '// <G1-BEGIN>', '// <G1-END>')
 p1 = section(util, '// <P1-BEGIN>', '// <P1-END>')
-lookup = func(util, 'vec2 stPointGradient(') + func(util, 'float samplePointShadow(')
+lookup = ''.join(func(util, sig) for sig in ('vec2 stPointGradient(', 'vec3 stPointReceiverNormal(', 'float samplePointShadowNg(',
+                                               'float samplePointShadow('))
 helpers = ''.join(func(common, s) for s in ('vec3 shadowNormalOffsetPos(', 'vec3 shadowReceiverGeometry('))
+# the viewer's variant (the receiver plane from the depth buffer): shadowUtil.glsl's depth block, with getPosition defined by the test
+depth_block = section(common, '#if !defined(SHADOW_COMMON_NO_DEPTH)', '#endif // !SHADOW_COMMON_NO_DEPTH')
 
 PREAMBLE = '''#version 400
 #define SHADOW_COMMON_NO_DEPTH 1
@@ -120,6 +128,92 @@ void main()
 }
 '''
 
+# the viewer's variant of the lookup: the receiver plane from four neighbour positions (getPosition reads the depth buffer in the viewer;
+# here the receivers' position texture, one fetch each), for the timing
+DEPTH_PREAMBLE = PREAMBLE.replace('#define SHADOW_COMMON_NO_DEPTH 1\n', '') + '''
+uniform vec2 screen_res;
+uniform sampler2D recv_pos;  // agent space (xyz), w > 0: a receiver
+uniform mat4 view;           // agent -> view (a rigid transform)
+'''
+GET_POSITION = '''
+vec4 getPosition(vec2 pos_screen)
+{
+    return vec4((view * vec4(texture(recv_pos, pos_screen).xyz, 1.0)).xyz, 1.0);
+}
+'''
+LOOKUP_DEPTH_FS = DEPTH_PREAMBLE + g1 + p1 + depth_block + helpers + lookup + '''
+uniform sampler2D recv_norm;
+uniform vec4 lamp_agent;
+uniform vec4 faces_a;
+uniform vec4 faces_b;
+out vec4 oc;
+void main()
+{
+    vec2 tc = gl_FragCoord.xy / screen_res;
+    vec4 rp = texelFetch(recv_pos, ivec2(gl_FragCoord.xy), 0);
+    vec3 rn = texelFetch(recv_norm, ivec2(gl_FragCoord.xy), 0).xyz;
+    vec3 pos = (view * vec4(rp.xyz, 1.0)).xyz;
+    vec3 n = mat3(view) * rn;
+    vec4 lamp = vec4((view * vec4(lamp_agent.xyz, 1.0)).xyz, lamp_agent.w);
+    oc = vec4(rp.w > 0.0 ? samplePointShadow(lamp, faces_a, faces_b, pos, n, tc) : -1.0);
+}
+''' + GET_POSITION
+
+BATCH_LOOP = '''
+        for (int i = 0; i < LIGHT_COUNT; ++i)
+        {
+            vis[i] = INIT;
+            vec4 lamp = vec4((view * vec4(lamps_agent[i].xyz, 1.0)).xyz, lamps_agent[i].w);
+            vec3 plv = lamp.xyz - pos;
+            if (length(plv) / lamp.w <= 1.0 && dot(n, plv) > 0.0)
+            {
+                if (!have)
+                {
+                    ng = stPointReceiverNormal(tc, pos, n);
+                    have = true;
+                }
+                vis[i] = samplePointShadowNg(lamp, faces_a, faces_b, pos, ng);
+            }
+        }
+'''
+
+
+def batch_fs(sites, nonce):
+    """multiPointLightF.glsl's form for 16 lights (the plane once, then each light's visibility); sites = 2 repeats the loop in two
+    branches, as the batch did before (one call site per shading branch). `nonce` keeps the driver's shader cache out of the timing."""
+    if sites == 1:
+        body = BATCH_LOOP.replace('INIT', '1.0')
+    else:
+        body = ('    if (branch_f < 0.5)\n    {' + BATCH_LOOP.replace('INIT', '1.0') + '    }\n    else\n    {' +
+                BATCH_LOOP.replace('INIT', '1.0 + 0.0 * branch_f') + '    }\n')
+    return DEPTH_PREAMBLE + '#define LIGHT_COUNT 16\n// nonce %d\n' % nonce + g1 + p1 + depth_block + helpers + lookup + '''
+uniform sampler2D recv_norm;
+uniform vec4 lamps_agent[LIGHT_COUNT];
+uniform vec4 faces_a;
+uniform vec4 faces_b;
+uniform float branch_f;
+out vec4 oc;
+void main()
+{
+    vec2 tc = gl_FragCoord.xy / screen_res;
+    vec4 rp = texelFetch(recv_pos, ivec2(gl_FragCoord.xy), 0);
+    vec3 rn = texelFetch(recv_norm, ivec2(gl_FragCoord.xy), 0).xyz;
+    vec3 pos = (view * vec4(rp.xyz, 1.0)).xyz;
+    vec3 n = mat3(view) * rn;
+    float vis[LIGHT_COUNT];
+    vec3 ng = vec3(0.0);
+    bool have = false;
+''' + body + '''
+    float sum = 0.0;
+    for (int i = 0; i < LIGHT_COUNT; ++i)
+    {
+        sum += vis[i];
+    }
+    oc = vec4(sum / float(LIGHT_COUNT));
+}
+''' + GET_POSITION
+
+
 glGenTextures = fn('glGenTextures', None, I, C.POINTER(U))
 glBindTexture = fn('glBindTexture', None, U, U)
 glTexImage2D = fn('glTexImage2D', None, U, I, I, I, I, I, U, U, P)
@@ -138,6 +232,7 @@ glUniform2f = fn('glUniform2f', None, I, C.c_float, C.c_float)
 glUniform4f = fn('glUniform4f', None, I, C.c_float, C.c_float, C.c_float, C.c_float)
 glUniformMatrix4fv = fn('glUniformMatrix4fv', None, I, I, U, P)
 glUniformMatrix3fv = fn('glUniformMatrix3fv', None, I, I, U, P)
+glUniform4fv = fn('glUniform4fv', None, I, I, P)
 glGetTexImage = fn('glGetTexImage', None, U, I, U, U, P)
 glGenVertexArrays = fn('glGenVertexArrays', None, I, C.POINTER(U))
 glBindVertexArray = fn('glBindVertexArray', None, U)
@@ -193,6 +288,8 @@ def draw(prog, fb, w, h, textures, uniforms):
             glUniformMatrix3fv(loc, 1, 0, np.ascontiguousarray(v.reshape(3, 3).T).ctypes.data)
         elif v.size == 16:
             glUniformMatrix4fv(loc, 1, 0, np.ascontiguousarray(v.reshape(4, 4).T).ctypes.data)  # row-major numpy -> column-major GL
+        elif v.size > 16 and v.size % 4 == 0:
+            glUniform4fv(loc, v.size // 4, np.ascontiguousarray(v).ctypes.data)  # a vec4 array
     glDrawArrays(4, 0, 3)
     glFinish()
 
@@ -401,10 +498,12 @@ def check_wall(failures, timing):
     light = 0.045 * 0.23  # the point lamp's emitter at the default softness (m)
     for n in [int(s) for s in opts.sizes.split(',')]:
         tiles = face_tile(n, FAR)
-        atlas = np.zeros((A, A), np.float32)  # blockers everywhere outside the faces' tiles: a read past a tile shows
+        atlas = np.zeros((A, A), np.float32)  # blockers at the near plane everywhere outside the faces' tiles: a read past a tile shows
         rects = []
         for f in range(6):
-            x, y = (f % 3) * n + 1024, (f // 3) * n + 2048
+            # each tile with a 64-texel border of blockers (rects stay multiples of 64, as packFaceRect wants): a read past any edge of a
+            # face lands in the border, not in a neighbouring face's tile
+            x, y = 64 + (f % 3) * (n + 64), 64 + (f // 3) * (n + 64)
             atlas[y:y + n, x:x + n] = tiles[f]
             rects.append(x // 64 + 64 * (y // 64) + 4096 * int(np.log2(n // 64)))
         atlas_tex = texture(GL_DEPTH32F, A, A, atlas, GL_DEPTH)
@@ -471,36 +570,64 @@ def coherent_receivers(W, H):
     return pos, nrm
 
 
-def time_lookup(prog, atlas_tex, uniforms, n):
-    """GPU ms of one full 2560 x 1440 pass of the lookup, every pixel a receiver in the light (a third behind the wall), the receivers
-    coherent across the screen as in a frame"""
+def gpu_ms(prog, textures, uniforms, W, H, rounds=10, draws=20):
+    """the median GPU ms of one full W x H pass of `prog` (a time-elapsed query over `draws` passes, the first round a warm-up)"""
     import statistics
-    W, H = 2560, 1440
-    big_pos, big_nrm = coherent_receivers(W, H)
-    pt = texture(GL_RGBA32F, W, H, big_pos, GL_RGBA)
-    nt = texture(GL_RGBA32F, W, H, big_nrm, GL_RGBA)
     out, fb = target(W, H)
-    u = dict(uniforms)
-    view = view_matrix(0.3, 0.1, (-3.0, 1.0, 1.5))
-    u['view'] = view
-    u['point_view_to_agent'] = view[:3, :3].T.copy()
     q = U()
     fn('glGenQueries', None, I, C.POINTER(U))(1, C.byref(q))
     begin, end = fn('glBeginQuery', None, U, U), fn('glEndQuery', None, U)
     get64 = fn('glGetQueryObjectui64v', None, U, U, C.POINTER(C.c_uint64))
     samples = []
-    for rnd in range(10):
-        draw(prog, fb, W, H, [('point_shadow_atlas', atlas_tex), ('recv_pos', pt), ('recv_norm', nt)], u)
+    for rnd in range(rounds):
+        draw(prog, fb, W, H, textures, uniforms)
         begin(0x88BF, q.value)
-        for _ in range(20):
+        for _ in range(draws):
             glDrawArrays(4, 0, 3)
         end(0x88BF)
         v = C.c_uint64()
         get64(q.value, 0x8866, C.byref(v))
         if rnd:
-            samples.append(v.value / 1e6 / 20)
-    ms = statistics.median(samples)
-    print('  --time N=%-4d lookup: %.3f ms per 2560x1440 pass, %.4f ms per lit megapixel per lamp' % (n, ms, ms / (W * H / 1e6)))
+            samples.append(v.value / 1e6 / draws)
+    glDeleteTextures(1, C.byref(U(out)))
+    return statistics.median(samples)
+
+
+def time_lookup(prog, atlas_tex, uniforms, n):
+    """GPU ms of one full 2560 x 1440 pass of the lookup, every pixel a receiver in the light (a third behind the wall), the receivers
+    coherent across the screen as in a frame: the shading-normal variant (prog), the viewer's (the plane from four position reads), and a
+    batch of 16 lights at every pixel in multiPointLightF.glsl's form (an upper bound: in a frame a pixel is inside a few lamps' light)"""
+    import time
+    W, H = 2560, 1440
+    big_pos, big_nrm = coherent_receivers(W, H)
+    pt = texture(GL_RGBA32F, W, H, big_pos, GL_RGBA)
+    nt = texture(GL_RGBA32F, W, H, big_nrm, GL_RGBA)
+    u = dict(uniforms)
+    view = view_matrix(0.3, 0.1, (-3.0, 1.0, 1.5))
+    u['view'] = view
+    u['point_view_to_agent'] = view[:3, :3].T.copy()
+    textures = [('point_shadow_atlas', atlas_tex), ('recv_pos', pt), ('recv_norm', nt)]
+    mpx = W * H / 1e6
+    plain = gpu_ms(prog, textures, u, W, H)
+    ud = dict(u)
+    ud['screen_res'] = (float(W), float(H))
+    depth_prog = program([(0x8B31, VS), (0x8B30, LOOKUP_DEPTH_FS)])
+    depth = gpu_ms(depth_prog, textures, ud, W, H)
+    print('  --time N=%-4d lookup: %.3f ms per 2560x1440 pass (%.4f ms per lit megapixel per lamp); with the receiver plane from the '
+          'depth buffer (the viewer\'s variant) %.3f ms (%.4f)' % (n, plain, plain / mpx, depth, depth / mpx))
+    ub = dict(ud)
+    ub['lamps_agent'] = np.tile(np.array(uniforms['lamp_agent'], np.float32), 16)
+    ub['branch_f'] = 0.0
+    nonce = time.time_ns()  # a source the driver's shader cache has not seen: the compile is timed, not a cache hit
+    t0 = time.perf_counter()
+    one = program([(0x8B31, VS), (0x8B30, batch_fs(1, nonce))])
+    link_one = (time.perf_counter() - t0) * 1000.0
+    t0 = time.perf_counter()
+    program([(0x8B31, VS), (0x8B30, batch_fs(2, nonce + 1))])
+    link_two = (time.perf_counter() - t0) * 1000.0
+    batch = gpu_ms(one, textures, ub, W, H, rounds=6, draws=4)
+    print('  --time N=%-4d a batch of 16 lights at every pixel (multiPointLightF.glsl\'s form): %.3f ms per pass, %.4f ms per lit megapixel '
+          'per lamp; compile and link %.0f ms with one call site, %.0f ms with two' % (n, batch, batch / mpx / 16, link_one, link_two))
     glDeleteTextures(1, C.byref(U(pt)))
     glDeleteTextures(1, C.byref(U(nt)))
 

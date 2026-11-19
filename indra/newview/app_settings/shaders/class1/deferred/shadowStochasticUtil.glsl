@@ -672,7 +672,8 @@ vec4 stPointFaceTile(vec4 faces_a, vec4 faces_b, int f)
     float rest = p - 4096.0 * code;
     float row = floor(rest / 64.0);
     float col = rest - 64.0 * row;
-    return vec4(col * 64.0, row * 64.0, code >= 1.0 ? exp2(code) * 64.0 : 0.0, point_shadow_params.y);
+    // the size by an integer shift (exact on every device; exp2 may be off by a few ulp, GLSL 4.60 section 4.7.1)
+    return vec4(col * 64.0, row * 64.0, code >= 1.0 ? float(64 << int(code)) : 0.0, point_shadow_params.y);
 }
 
 // The tangent of a face's half angle at size n: the interior spans 90 degrees, the guards widen it (llpointpool::faceTanHalf)
@@ -710,11 +711,19 @@ vec2 stPointGradient(vec3 pos, vec3 norm, vec3 centre, int f, float t, float c0,
     return clamp(vec2(d1.z * d2.y - d1.y * d2.z, d1.x * d2.z - d1.z * d2.x) / det, vec2(-1.0e4), vec2(1.0e4));
 }
 
-// The visibility of one point light at the pixel (pointLightF.glsl, multiPointLightF.glsl: POINT_SHADOW_POOL). lamp: xyz the light's
-// centre in view space, of the pose its faces were drawn with; w the faces' far plane (m), 0 for a lamp without a complete set of drawn
-// faces (lit, no lookup). faces_a, faces_b: its six packed face rects (stPointFaceTile). pos: view space; norm: the G-buffer normal;
-// pos_screen: the pixel's screen uv. 1 beyond the shadows' reach of the camera (the projectors' fade, sampleProjectorShadow).
-float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 norm, vec2 pos_screen)
+// The receiver plane's normal at the pixel (S2: the geometric normal from the depth buffer, four depth reads), the same for every light:
+// a program that looks up several lights (multiPointLightF.glsl) computes it once and passes it to samplePointShadowNg.
+vec3 stPointReceiverNormal(vec2 pos_screen, vec3 pos, vec3 norm)
+{
+    float unused;
+    return shadowReceiverGeometry(pos_screen, pos, norm, vec3(0.0, 0.0, 1.0), unused); // the plane does not depend on the light
+}
+
+// The visibility of one point light at the pixel, with the receiver plane's normal ng (stPointReceiverNormal). lamp: xyz the light's
+// centre in view space, of the set its faces were drawn for; w the faces' far plane (m), 0 for a lamp without a complete set of drawn
+// faces (lit, no lookup). faces_a, faces_b: its six packed face rects (stPointFaceTile). pos: view space. 1 beyond the shadows' reach of
+// the camera (the projectors' fade, sampleProjectorShadow).
+float samplePointShadowNg(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 ng)
 {
     if (lamp.w <= 0.0)
     {
@@ -726,9 +735,9 @@ float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 no
     {
         return 1.0;
     }
-    // the receiver plane: the geometric normal from the depth buffer (S2), and the sine of its angle to the light's centre
-    float sin_theta;
-    vec3 ng = shadowReceiverGeometry(pos_screen, pos, norm, normalize(lamp.xyz - pos), sin_theta);
+    // the sine of the receiver plane's angle to the light's centre (shadowReceiverGeometry's, for this light)
+    float dp = clamp(dot(ng, normalize(lamp.xyz - pos)), 0.0, 1.0);
+    float sin_theta = sqrt(max(1.0 - dp * dp, 0.0));
     // one texel of the receiver's face at the receiver (2 w t / N metres), the normal offset's unit, as the projectors' lookup
     vec3 d0 = point_view_to_agent * (pos - lamp.xyz);
     int f0 = stPointPick(d0);
@@ -763,6 +772,17 @@ float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 no
     vec2 grad = stPointGradient(p, ng, lamp.xyz, f, t, c0, c1, c, xyw.z);
     float shadow = stSpotFilterTile(point_shadow_atlas, tile, c, grad, SHADOW_BIAS_TEXELS * z_tex, z_tex, pen, vec2(ST_POINT_KERNEL_TEXELS_MAX));
     return mix(1.0, shadow, fade);
+}
+
+// The visibility of one point light at the pixel (pointLightF.glsl: one light a pass): norm the G-buffer normal, pos_screen the pixel's
+// screen uv; the rest as samplePointShadowNg. A lamp without faces reads no depth.
+float samplePointShadow(vec4 lamp, vec4 faces_a, vec4 faces_b, vec3 pos, vec3 norm, vec2 pos_screen)
+{
+    if (lamp.w <= 0.0)
+    {
+        return 1.0;
+    }
+    return samplePointShadowNg(lamp, faces_a, faces_b, pos, stPointReceiverNormal(pos_screen, pos, norm));
 }
 
 // The sun pass's b and a channels: unlit by the projectors (they shade themselves in spotLightF.glsl), so 1 exactly.

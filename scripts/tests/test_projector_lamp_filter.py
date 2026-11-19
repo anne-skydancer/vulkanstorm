@@ -51,9 +51,12 @@ class ProjectorLampFilter(unittest.TestCase):
 
     def test_point_lookup_passes_the_point_cap_and_atlas(self):
         util = UTIL.read_text(encoding='utf-8')
-        sample = util[util.index('float samplePointShadow('):]
+        # the lookup proper (samplePointShadowNg; samplePointShadow and the batch's call site reach it)
+        sample = util[util.index('float samplePointShadowNg('):]
         self.assertIn('stSpotFilterTile(point_shadow_atlas, tile, c, grad,', sample)
         self.assertIn('pen, vec2(ST_POINT_KERNEL_TEXELS_MAX))', sample)
+        one = util[util.index('float samplePointShadow('):]
+        self.assertIn('samplePointShadowNg(lamp, faces_a, faces_b, pos, stPointReceiverNormal(pos_screen, pos, norm))', one)
 
     def test_no_reconstruction_and_no_metric_cap(self):
         for path in (UTIL, G1_REF):
