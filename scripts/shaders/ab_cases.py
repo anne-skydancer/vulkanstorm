@@ -908,7 +908,14 @@ def fullbright_emissive_mesh(rng):
     return attributes, count
 
 
-def fullbright_emissive_cases():
+FULLBRIGHT_VERTEX_HELPERS = ('windlight/atmosphericsVarsV.glsl', 'windlight/atmosphericsHelpersV.glsl',
+                             'environment/srgbF.glsl', 'windlight/atmosphericsFuncs.glsl',
+                             'windlight/atmosphericsV.glsl')
+# The vertex helpers assign atmospheric varyings that these fragments do not read.
+UNUSED_FULLBRIGHT_ATMOSPHERE = ('max_y', 'moon_glow_factor', 'primary_light_dir')
+
+
+def fullbright_textures():
     axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
     s, t = np.meshgrid(axis, axis)
     # Broad alpha bands cross the legacy cutoffs even with bilinear filtering.
@@ -921,14 +928,13 @@ def fullbright_emissive_cases():
                           0.023 + 0.66 * (1 - s) * t + 0.04 * index,
                           alpha[bands]), axis=-1)
         textures[f'tex{index}'] = (image,)
-    # The vertex helpers assign atmospheric varyings that neither fragment reads.
-    unused_atmosphere = ('max_y', 'moon_glow_factor', 'primary_light_dir')
+    return textures
+
+
+def fullbright_emissive_cases():
     feature_inputs = dict(
-        indexed_texture_channels=4, texture_levels=textures, depth=True, coverage=True,
-        mesh_builder=fullbright_emissive_mesh,
-        vertex_helpers=('windlight/atmosphericsVarsV.glsl', 'windlight/atmosphericsHelpersV.glsl',
-                        'environment/srgbF.glsl', 'windlight/atmosphericsFuncs.glsl',
-                        'windlight/atmosphericsV.glsl'))
+        indexed_texture_channels=4, texture_levels=fullbright_textures(), depth=True, coverage=True,
+        mesh_builder=fullbright_emissive_mesh, vertex_helpers=FULLBRIGHT_VERTEX_HELPERS)
     plane = [0.75, -0.25, 0.30, 0.92]
     mirrors = ({}, {'mirror_flag': 1.0, 'clipPlane': plane},
                {'mirror_flag': 1.0, 'clipPlane': [-component for component in plane]})
@@ -949,7 +955,8 @@ def fullbright_emissive_cases():
             cuts = (0.0, 0.004, 0.10, 0.33) if samples == 1 else (0.33,)
             draws = tuple({**mirror, 'minimum_alpha': cutoff} for mirror in draws for cutoff in cuts)
         return Case(name, 'deferred/fullbrightV.glsl', 'deferred/fullbrightF.glsl', program,
-                    defines=defines, skin=bool(skin), samples=samples, variants=draws, optional=unused_atmosphere,
+                    defines=defines, skin=bool(skin), samples=samples, variants=draws,
+                    optional=UNUSED_FULLBRIGHT_ATMOSPHERE,
                     fragment_helpers=('environment/srgbF.glsl',), **feature_inputs)
 
     for samples in (1, 4):
@@ -958,10 +965,66 @@ def fullbright_emissive_cases():
             for skin in (0, 1):
                 yield fullbright_case(False, skin, mask, samples)
         for skin in (0, 1):
+            optional = UNUSED_FULLBRIGHT_ATMOSPHERE if skin else (*UNUSED_FULLBRIGHT_ATMOSPHERE, 'modelview_matrix')
             yield Case(f'fullbright-emissive-s{skin}', 'deferred/emissiveV.glsl', 'deferred/emissiveF.glsl',
                        f'fullbrightEmissive__HAS_SKIN{skin}__IS_EMISSIVE1', skin=bool(skin), samples=samples,
-                       optional=unused_atmosphere if skin else (*unused_atmosphere, 'modelview_matrix'),
-                       **feature_inputs)
+                       optional=optional, **feature_inputs)
+
+
+def hud_water_mesh(rng):
+    attributes, count = fullbright_emissive_mesh(rng)
+    x = attributes[0][:, 0]
+    # The middle band is exactly on the water plane, with geometry on both sides.
+    attributes[0][:, 2] = np.sign(x) * np.maximum(np.abs(x) - 0.24, 0) * 0.38
+    return attributes, count
+
+
+def hud_material_cases():
+    indexed_inputs = dict(indexed_texture_channels=4, texture_levels=fullbright_textures(),
+                          vertex_helpers=FULLBRIGHT_VERTEX_HELPERS, depth=True, coverage=True,
+                          optional=UNUSED_FULLBRIGHT_ATMOSPHERE)
+    hud_indexed = {'IS_HUD': '1', 'HAS_DIFFUSE_LOOKUP': '1'}
+    mirror_plane = [0.75, -0.25, 0.30, 0.92]
+    shiny_draws = ({}, {'mirror_flag': 1.0, 'clipPlane': mirror_plane},
+                   {'mirror_flag': 1.0, 'clipPlane': [-component for component in mirror_plane]})
+    identity = np.eye(4, dtype='f4').reshape(-1).tolist()
+    # Keep the same projection for each water sign. Identity modelview puts the grid across eye Z=0.
+    water = {'modelview_matrix': identity, 'waterPlane': [0, 0, -1, 0], 'minimum_alpha': 0.004}
+    water_draws = ({'waterSign': 1.0}, {'waterSign': -1.0}, {'waterSign': 1.0, 'minimum_alpha': 0.0},
+                   {'waterSign': 1.0, 'mirror_flag': 1.0, 'clipPlane': [0.25, 0.91, 0.05, 0.01]})
+
+    axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
+    s, t = np.meshgrid(axis, axis)
+    bands = np.floor(8 * (s + 0.19 * t)).astype(np.int32) % 4
+    base_alpha = np.take(np.array([0.0, 0.003, 0.24, 0.76], dtype='f4'), bands)
+    base = np.stack((0.005 + 0.85 * s**2, 0.016 + 0.74 * t, 0.023 + 0.69 * s * t, base_alpha), axis=-1)
+    emissive = np.stack((0.017 + 0.92 * t**2, 0.021 + 0.79 * s**2, 0.012 + 0.88 * s * t,
+                         0.14 + 0.71 * s), axis=-1)
+    pbr_params = {
+        'texture_base_color_transform': H.Vec4Array(((0.83, 0.71, 0.37, 0), (0.08, 0.24, 0, 0))),
+        'texture_emissive_transform': H.Vec4Array(((-0.76, 0.92, -0.21, 0), (0.81, 0.02, 0, 0))),
+        'emissiveColor': [1.75, 0.58, 1.1],
+    }
+    # Column-major texture animation has its own rotation, scale and offset.
+    angle = 0.27
+    animated = [0.82 * np.cos(angle), 0.82 * np.sin(angle), 0, 0,
+                -0.74 * np.sin(angle), 0.74 * np.cos(angle), 0, 0,
+                0, 0, 1, 0, 0.11, 0.08, 0, 1]
+    for samples in (1, 4):
+        yield Case('hud-fullbright-shiny', 'deferred/fullbrightShinyV.glsl', '../class3/deferred/fullbrightShinyF.glsl',
+                   'fullbrightShinyHud__IS_HUD1__IS_SHINY1', defines=hud_indexed, samples=samples,
+                   variants=shiny_draws, mesh_builder=fullbright_emissive_mesh, **indexed_inputs)
+        yield Case('hud-fullbright-mask-blend', 'deferred/fullbrightV.glsl', 'deferred/fullbrightF.glsl',
+                   'fullbrightMaskBlendHud__IS_ALPHA1__IS_HUD1__MASK1', samples=samples,
+                   defines={**hud_indexed, 'IS_ALPHA': '1', 'HAS_ALPHA_MASK': '1'},
+                   fragment_helpers=('deferred/deferredUtil.glsl',),
+                   uniforms=water, variants=water_draws, mesh_builder=hud_water_mesh, **indexed_inputs)
+        yield Case('hud-pbr-blend', 'deferred/pbralphaV.glsl', '../class2/deferred/pbralphaF.glsl',
+                   'pbrHudBlend__IS_ALPHA1__IS_HUD1', defines={'IS_HUD': '1'}, samples=samples,
+                   vertex_helpers=('deferred/textureUtilV.glsl',), fragment_helpers=('environment/srgbF.glsl',),
+                   uniforms=pbr_params, variants=({'texture_matrix0': animated}, {'texture_matrix0': identity}),
+                   texture_levels={'diffuseMap': (base,), 'emissiveMap': (emissive,)},
+                   depth=True, coverage=True, mesh_builder=pbr_mesh)
 
 
 def cases():
@@ -1030,6 +1093,7 @@ def cases():
     c.extend(pbr_opaque_glow_cases())
     c.extend(legacy_terrain_cases())
     c.extend(fullbright_emissive_cases())
+    c.extend(hud_material_cases())
     return c
 
 

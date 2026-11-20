@@ -289,6 +289,43 @@
       }
     },
     {
+      "name": "fullbrightMaskBlendHud",
+      "family": "hud-materials",
+      "source": "fullbrightSurface.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "IS_ALPHA": [
+          1
+        ],
+        "IS_HUD": [
+          1
+        ],
+        "MASK": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "fullbrightShinyHud",
+      "family": "hud-materials",
+      "source": "fullbrightSurface.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "IS_HUD": [
+          1
+        ],
+        "IS_SHINY": [
+          1
+        ]
+      }
+    },
+    {
       "name": "fullbrightSurface",
       "family": "fullbright-emissive",
       "source": "fullbrightSurface.slang",
@@ -557,6 +594,23 @@
         "fragment": "fsMain"
       },
       "permutations": {
+        "IS_HUD": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "pbrHudBlend",
+      "family": "hud-materials",
+      "source": "pbrOpaque.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "IS_ALPHA": [
+          1
+        ],
         "IS_HUD": [
           1
         ]

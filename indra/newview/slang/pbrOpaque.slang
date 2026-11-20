@@ -26,7 +26,12 @@ import glsl;
 import position;
 import pbrTexture;
 import gbuffer;
+#ifndef IS_ALPHA
+#define IS_ALPHA 0
+#endif
+#if !IS_ALPHA
 import mirrorclip;
+#endif
 import postcolor;
 
 #ifndef IS_HUD
@@ -37,6 +42,17 @@ import postcolor;
 #endif
 #ifndef HAS_SKIN
 #define HAS_SKIN 0
+#endif
+
+#if IS_ALPHA && !IS_HUD
+#error This blended PBR variant is for HUD rendering.
+#endif
+
+// The class2 pbralphaF.glsl HUD path uses centroid interpolation.
+#if IS_ALPHA
+#define PBR_INTERPOLATION centroid
+#else
+#define PBR_INTERPOLATION
 #endif
 
 #if !IS_HUD
@@ -63,7 +79,9 @@ uniform vec4 texture_emissive_transform[2];
 #endif
 
 uniform sampler2D diffuseMap;
+#if !IS_ALPHA
 uniform float minimum_alpha;
+#endif
 #if !IS_HUD
 uniform sampler2D bumpMap;
 uniform sampler2D specularMap;
@@ -94,8 +112,8 @@ struct VertexIn
 struct Varyings
 {
     vec4 pos : SV_Position;
-    [[vk::location(0)]] vec2 base_color_texcoord : BASE_COLOR_TEXCOORD;
-    [[vk::location(1)]] vec4 vertex_color : VERTEX_COLOR;
+    [[vk::location(0)]] PBR_INTERPOLATION vec2 base_color_texcoord : BASE_COLOR_TEXCOORD;
+    [[vk::location(1)]] PBR_INTERPOLATION vec4 vertex_color : VERTEX_COLOR;
 #if !IS_HUD
     [[vk::location(2)]] vec2 normal_texcoord : NORMAL_TEXCOORD;
     [[vk::location(3)]] vec2 metallic_roughness_texcoord : METALLIC_ROUGHNESS_TEXCOORD;
@@ -105,7 +123,7 @@ struct Varyings
     [[vk::location(7)]] nointerpolation float vary_sign : VARY_SIGN;
 #endif
 #if IS_HUD || HAS_EMISSIVE
-    [[vk::location(8)]] vec2 emissive_texcoord : EMISSIVE_TEXCOORD;
+    [[vk::location(8)]] PBR_INTERPOLATION vec2 emissive_texcoord : EMISSIVE_TEXCOORD;
 #endif
 };
 
@@ -152,6 +170,10 @@ Varyings vsMain(VertexIn v)
 vec4 fsMain(Varyings i) : SV_Target0
 {
     vec4 basecolor = texture(diffuseMap, i.base_color_texcoord);
+#if IS_ALPHA
+    basecolor.rgb = srgb_to_linear(basecolor.rgb);
+    vec3 col = i.vertex_color.rgb * basecolor.rgb;
+#else
     basecolor.a *= i.vertex_color.a;
     if (basecolor.a < minimum_alpha)
     {
@@ -159,12 +181,17 @@ vec4 fsMain(Varyings i) : SV_Target0
     }
 
     vec3 col = i.vertex_color.rgb * srgb_to_linear(basecolor.rgb);
+#endif
     vec3 emissive = emissiveColor;
     emissive *= srgb_to_linear(texture(emissiveMap, i.emissive_texcoord).rgb);
     col += emissive;
 
     // HUDs are drawn after gamma correction.
+#if IS_ALPHA
+    return max(vec4(linear_to_srgb(col), basecolor.a * i.vertex_color.a), vec4(0));
+#else
     return vec4(linear_to_srgb(col), 0.0);
+#endif
 }
 #else
 struct GBufferOut

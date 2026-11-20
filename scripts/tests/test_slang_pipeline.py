@@ -486,6 +486,8 @@ class CommittedTreeTest(unittest.TestCase):
             'ddiffuseSingle': [('diffuseMap', 0)],
             'fullbrightEmissive': indexed_units,
             'fullbrightHud': indexed_units,
+            'fullbrightMaskBlendHud': indexed_units,
+            'fullbrightShinyHud': indexed_units,
             'fullbrightSurface': indexed_units,
         }
         manifest = check.load_manifest(common.GENERATED)

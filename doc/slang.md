@@ -246,6 +246,12 @@ cutout and back-face normal behavior and the optional emissive attachment. The H
 and glow keeps its green and alpha outputs. The glTF scene and PBR terrain have separate dependencies
 and remain on their respective conversion paths.
 
+The shiny HUD draw uses the indexed fullbright textures, smooth interpolation, and opaque output
+alpha. PBR HUD blend uses the base and emissive texture transforms with centroid interpolation and
+keeps the texture and vertex alpha product for blending. The blended fullbright cutout retains its
+sampled alpha cutoff and the eye-space near clip plane set by the HUD draw pool. The A/B cases use
+the viewer's class 3 shiny and class 2 PBR blend fragments.
+
 ## Terrain paint-map baking and legacy terrain
 
 The terrain bake uses the ramp-weight calculation independently of terrain lighting. It preserves the original

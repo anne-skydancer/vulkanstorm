@@ -1988,8 +1988,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         shader->mFeatures.hasSrgb = true;
 
         shader->mShaderFiles.clear();
-        shader->mShaderFiles.push_back(make_pair("deferred/pbralphaV.glsl", GL_VERTEX_SHADER));
-        shader->mShaderFiles.push_back(make_pair("deferred/pbralphaF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(*shader, "pbrHudBlend__IS_ALPHA1__IS_HUD1",
+                        "deferred/pbralphaV.glsl", "deferred/pbralphaF.glsl");
 
         shader->clearPermutations();
 
@@ -2554,8 +2554,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.isDeferred = true;
         gHUDFullbrightAlphaMaskAlphaProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gHUDFullbrightAlphaMaskAlphaProgram.mShaderFiles.clear();
-        gHUDFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightV.glsl", GL_VERTEX_SHADER));
-        gHUDFullbrightAlphaMaskAlphaProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gHUDFullbrightAlphaMaskAlphaProgram, "fullbrightMaskBlendHud__IS_ALPHA1__IS_HUD1__MASK1",
+                        "deferred/fullbrightV.glsl", "deferred/fullbrightF.glsl");
         gHUDFullbrightAlphaMaskAlphaProgram.clearPermutations();
         gHUDFullbrightAlphaMaskAlphaProgram.addPermutation("HAS_ALPHA_MASK", "1");
         gHUDFullbrightAlphaMaskAlphaProgram.addPermutation("IS_ALPHA", "1");
@@ -2598,8 +2598,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDFullbrightShinyProgram.mFeatures.hasSrgb = true;
         gHUDFullbrightShinyProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gHUDFullbrightShinyProgram.mShaderFiles.clear();
-        gHUDFullbrightShinyProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightShinyV.glsl", GL_VERTEX_SHADER));
-        gHUDFullbrightShinyProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightShinyF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gHUDFullbrightShinyProgram, "fullbrightShinyHud__IS_HUD1__IS_SHINY1",
+                        "deferred/fullbrightShinyV.glsl", "deferred/fullbrightShinyF.glsl");
         gHUDFullbrightShinyProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gHUDFullbrightShinyProgram.mFeatures.hasReflectionProbes = true;
         gHUDFullbrightShinyProgram.clearPermutations();
