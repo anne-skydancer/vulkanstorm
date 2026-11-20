@@ -911,7 +911,7 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   (`point-light-shadows-plan.md:215`). **Done by 5c-0 (2026-11-19):** `LLPipeline::shadowCullAndSort` and
   `LLPipeline::shadowSubmit`; the point-light plan builds on them.
 - **5c core as built (2026-11-19, `codex/mc-5c-core`): the sun cascades' culls and render maps on `LL::FrameJobs`**, as
-  designed in `reports/multicore-5a-2026-11-18/report.md` section 2. It covers the Stochastic and PCSS cascades
+  designed in `reports/multicore-5a-2026-11-18/report.md` section 2. It covers the Stochastic cascades
   (`generateSunCascadesStable`); the Legacy cascades, the world pass, the projector tiles and the point-light faces are
   unchanged. Lists, draws and image are meant to be identical; the compare mode below checks it in a running viewer.
   - **5c-0, serial.** `renderShadowImpl` is `shadowCullAndSort` followed by `shadowSubmit` (decision D5; each holds the

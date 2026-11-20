@@ -17,7 +17,7 @@ original sequence, the designs and the kernel benchmarks. [Multicore and SIMD st
 | 5a | Thread-safety audit | The local synthesis records the caller and lifetime audit and the revised order. The occlusion-parent, random seed, face-index, mesh joint table and decode-worker fixes are on devel. Runtime checks carry into the candidate stages. |
 | C8 | Multicore texture priority | Frame jobs compute ahead in read-only batches. The main thread applies the results in texture order inside the existing time box and handles faces that require serial work. Fixture comparisons passed. Live comparison, timings and settle remain open. [PR #575](https://github.com/anne-skydancer/vulkanstorm/pull/575) |
 | 5c core | Multicore sun cascades | The 5c-0 split is serial. 5c-1 batches the Stable cascade culls, and 5c-2 batches render-map construction for cascades 1–3. GL submission stays on the main thread. Tests cover model culls and maps. The live equivalence and performance gates remain open, including whether 5c-2 earns its place. [PR #576](https://github.com/anne-skydancer/vulkanstorm/pull/576) |
-| C6 | Multicore avatar animation | The open PR batches the animation cores of other avatars and eligible animated objects. The viewer user's avatar stays on the main thread. Synthetic character comparisons and the Windows, Linux and Linux LTS CI builds passed at the recorded head. The object walk and timing still need an in-world run. [PR #577](https://github.com/anne-skydancer/vulkanstorm/pull/577) |
+| C6 | Multicore avatar animation | The animation cores of other avatars and eligible animated objects run as frame jobs. The viewer user's avatar stays on the main thread. Synthetic character comparisons and the Windows, Linux and Linux LTS CI builds passed at the recorded head, which matches the source tree merged as `5da54d3ab6`. The object walk and timing still need an in-world run. [PR #577](https://github.com/anne-skydancer/vulkanstorm/pull/577) |
 
 ## What stage 1b measured
 
@@ -63,8 +63,9 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
    Compare main-thread time, the moving 1% low, package power, driver-thread CPU time and settle. The plan selects the
    smallest width within noise of the best and calls for a 4-core affinity run. [C8 procedure](https://github.com/anne-skydancer/vulkanstorm/pull/575), [Stage 2 design](multicore-simd-study.md#62-stage-2-llframejobs-and-the-width-rule)
 2. **5c core.** Enable `RenderSunCascadeJobsStats` and compare mode `1` for ten minutes each at Risk and Rooftops.
-   Exercise both Stochastic and PCSS. Check cull and map comparisons are nonzero and mismatch totals are zero through
-   standing, movement, a teleport and reduced split counts. For mode `2`, enable cascade 1 and aim at enough geometry
+   Use Stochastic (`RenderShadowMethod=2`) in an active sun view with `RenderShadowDetail=1` and `RenderShadowSplits=3`.
+   Legacy has its own cascade path and can be checked separately. Check for nonzero cull and map comparisons and
+   zero mismatches through standing, movement, a teleport and reduced split counts. For mode `2`, enable cascade 1 and aim at enough geometry
    that the cascade contains two distinct visible groups and two distinct draw infos of one render type. Both mismatch
    counters must rise on that view. Start a fresh process for a later clean run because the totals are cumulative.
    With compare off, alternate `RenderSunCascadeJobs` off/on. Require active helpers, compare combined `cull_ms` and
