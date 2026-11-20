@@ -19,6 +19,7 @@ The mirror and reflection clip is run on and off for the G-buffer programs.
 import ctypes as C
 import re
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +36,10 @@ GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_DEPTH_ATTACHMENT = 0x8CAC, 0x1902,
 GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8513, 0x8515
 GL_DEPTH_TEST, GL_ALWAYS, GL_REPEAT = 0x0B71, 0x0207, 0x2901
 GL_NEAREST = 0x2600
+GL_TEXTURE_2D_MULTISAMPLE, GL_MULTISAMPLE = 0x9100, 0x809D
+GL_SAMPLE_SHADING, GL_SAMPLE_ALPHA_TO_COVERAGE = 0x8C36, 0x809E
+GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER = 0x8CA8, 0x8CA9
+GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT = 0x4000, 0x0100
 SAMPLER2D, SAMPLERCUBE, SAMPLERCUBEARRAY = 0x8B5E, 0x8B60, 0x900C
 GL_FLOAT_T, VEC2, VEC3, VEC4, INT_T, IVEC2, IVEC3, IVEC4, MAT3, MAT4 = 0x1406, 0x8B50, 0x8B51, 0x8B52, 0x1404, 0x8B53, 0x8B54, 0x8B55, 0x8B5B, 0x8B5C
 COMPONENTS = {GL_FLOAT_T: 1, VEC2: 2, VEC3: 3, VEC4: 4, INT_T: 1, IVEC2: 2, IVEC3: 3, IVEC4: 4}
@@ -69,6 +74,9 @@ class Case:
     texcoord1_s_scale: float = 1.0
     geometry: str = ''           # optional legacy geometry shader under class1/
     required_colours: tuple = ()  # RGBA values that must appear in attachment zero in both paths
+    samples: int = 1             # four samples compare resolved color and exact per-sample depth
+    coverage: bool = False      # compare depth-derived coverage exactly; requires a nontrivial footprint
+    mesh_builder: Callable | None = None
 
 
 def _hash01(name, salt=0):
@@ -195,34 +203,123 @@ def texture_for(gl, kind, name, levels=(), point=False):
 class MRT:
     """`n` RGBA32F colour attachments and a 32 bit float depth, cleared to -1 and 1."""
 
-    def __init__(self, gl, w, h, n):
-        g = gl.fn
-        self.gl, self.w, self.h, self.n = gl, w, h, n
-        self.colour = []
+    def __init__(self, gl, w, h, n, samples=1):
+        if samples not in (1, 4):
+            raise ValueError('MRT supports single-sample and 4× MSAA cases')
+        self.gl, self.w, self.h, self.n, self.samples = gl, w, h, n, samples
+        self.framebuffers, self.textures = [], []
+        self.depth_reader = None
+        try:
+            self.fbo = self._new_framebuffer()
+            for i in range(n):
+                self._attach(H.GL_COLOR_ATTACHMENT0 + i, H.GL_RGBA32F, H.GL_RGBA, samples)
+            self.depth = self._attach(GL_DEPTH_ATTACHMENT, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, samples)
+            self._complete_framebuffer(n)
+            if samples == 4:
+                self.resolve_fbo = self._new_framebuffer()
+                self._attach(H.GL_COLOR_ATTACHMENT0, H.GL_RGBA32F, H.GL_RGBA, 1)
+                self._complete_framebuffer(1)
+                self.depth_reader = gl.program('''#version 460 core
+void main()
+{
+    vec2 corner = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+    gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
+}
+''', '''#version 460 core
+layout(binding = 0) uniform sampler2DMS depth_samples;
+layout(location = 0) out vec4 depth_by_sample;
+void main()
+{
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    for (int sample_idx = 0; sample_idx < 4; ++sample_idx)
+        depth_by_sample[sample_idx] = texelFetch(depth_samples, pixel, sample_idx).r;
+}
+''', attribs=())
+        except Exception:
+            self.close()
+            raise
+
+    def _new_framebuffer(self):
+        g = self.gl.fn
         fbo = C.c_uint()
         g('glGenFramebuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(fbo))
+        self.framebuffers.append(fbo.value)
         g('glBindFramebuffer', None, C.c_uint, C.c_uint)(H.GL_FRAMEBUFFER, fbo.value)
-        for i in range(n):
-            tex = C.c_uint()
-            g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(tex))
-            g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, tex.value)
+        return fbo.value
+
+    def _attach(self, attachment, internal_format, pixel_format, samples):
+        g = self.gl.fn
+        tex = C.c_uint()
+        g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(tex))
+        self.textures.append(tex.value)
+        target = H.GL_TEXTURE_2D if samples == 1 else GL_TEXTURE_2D_MULTISAMPLE
+        g('glBindTexture', None, C.c_uint, C.c_uint)(target, tex.value)
+        if samples == 1:
             g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
-                H.GL_TEXTURE_2D, 0, H.GL_RGBA32F, w, h, 0, H.GL_RGBA, H.GL_FLOAT, None)
-            g('glFramebufferTexture2D', None, C.c_uint, C.c_uint, C.c_uint, C.c_uint, C.c_int)(
-                H.GL_FRAMEBUFFER, H.GL_COLOR_ATTACHMENT0 + i, H.GL_TEXTURE_2D, tex.value, 0)
-            self.colour.append(tex.value)
-        depth = C.c_uint()
-        g('glGenTextures', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(depth))
-        g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, depth.value)
-        g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
-            H.GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, w, h, 0, GL_DEPTH_COMPONENT, H.GL_FLOAT, None)
+                target, 0, internal_format, self.w, self.h, 0, pixel_format, H.GL_FLOAT, None)
+        else:
+            g('glTexImage2DMultisample', None, C.c_uint, C.c_int, C.c_uint, C.c_int, C.c_int, C.c_ubyte)(
+                target, samples, internal_format, self.w, self.h, 1)
         g('glFramebufferTexture2D', None, C.c_uint, C.c_uint, C.c_uint, C.c_uint, C.c_int)(
-            H.GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, H.GL_TEXTURE_2D, depth.value, 0)
+            H.GL_FRAMEBUFFER, attachment, target, tex.value, 0)
+        return tex.value
+
+    def _complete_framebuffer(self, n):
+        g = self.gl.fn
         bufs = (C.c_uint * n)(*[H.GL_COLOR_ATTACHMENT0 + i for i in range(n)])
         g('glDrawBuffers', None, C.c_int, C.c_void_p)(n, bufs)
         if g('glCheckFramebufferStatus', C.c_uint, C.c_uint)(H.GL_FRAMEBUFFER) != H.GL_FRAMEBUFFER_COMPLETE:
-            raise RuntimeError('MRT framebuffer incomplete')
-        self.fbo = fbo.value
+            raise RuntimeError(f'MRT framebuffer incomplete for {self.samples} sample(s)')
+
+    def close(self):
+        g = self.gl.fn
+        if self.depth_reader is not None:
+            g('glDeleteProgram', None, C.c_uint)(self.depth_reader)
+        for delete, ids in (('glDeleteFramebuffers', self.framebuffers), ('glDeleteTextures', self.textures)):
+            if ids:
+                g(delete, None, C.c_int, C.POINTER(C.c_uint))(len(ids), (C.c_uint * len(ids))(*ids))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def _read_pixels(self, pixel_format, channels):
+        out = (C.c_float * (self.w * self.h * channels))()
+        self.gl.fn('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+            0, 0, self.w, self.h, pixel_format, H.GL_FLOAT, out)
+        shape = (self.h, self.w, channels) if channels > 1 else (self.h, self.w)
+        return np.frombuffer(out, dtype='<f4').reshape(shape).copy()
+
+    def _read(self):
+        g = self.gl.fn
+        bind_framebuffer = g('glBindFramebuffer', None, C.c_uint, C.c_uint)
+        read_buffer = g('glReadBuffer', None, C.c_uint)
+        images = []
+        if self.samples == 1:
+            for i in range(self.n):
+                read_buffer(H.GL_COLOR_ATTACHMENT0 + i)
+                images.append(self._read_pixels(H.GL_RGBA, 4))
+            return images, self._read_pixels(GL_DEPTH_COMPONENT, 1)
+
+        bind_framebuffer(GL_DRAW_FRAMEBUFFER, self.resolve_fbo)
+        blit = g('glBlitFramebuffer', None, *([C.c_int] * 8), C.c_uint, C.c_uint)
+        for i in range(self.n):
+            bind_framebuffer(GL_READ_FRAMEBUFFER, self.fbo)
+            read_buffer(H.GL_COLOR_ATTACHMENT0 + i)
+            blit(0, 0, self.w, self.h, 0, 0, self.w, self.h, GL_COLOR_BUFFER_BIT, GL_NEAREST)
+            bind_framebuffer(GL_READ_FRAMEBUFFER, self.resolve_fbo)
+            read_buffer(H.GL_COLOR_ATTACHMENT0)
+            images.append(self._read_pixels(H.GL_RGBA, 4))
+
+        # A depth blit would pick one sample. Pack all sample depths into RGBA instead.
+        g('glDisable', None, C.c_uint)(GL_DEPTH_TEST)
+        g('glUseProgram', None, C.c_uint)(self.depth_reader)
+        g('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0)
+        g('glBindTexture', None, C.c_uint, C.c_uint)(GL_TEXTURE_2D_MULTISAMPLE, self.depth)
+        g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, 3)
+        return images, self._read_pixels(H.GL_RGBA, 4)
 
     def draw(self, prog, attribs, count, bind_textures):
         g = self.gl.fn
@@ -255,25 +352,26 @@ class MRT:
         bind_textures()
         g('glClearColor', None, C.c_float, C.c_float, C.c_float, C.c_float)(-1.0, -1.0, -1.0, -1.0)
         g('glClearDepth', None, C.c_double)(1.0)
-        g('glClear', None, C.c_uint)(0x4000 | 0x100)
-        g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, count)
-        g('glFinish', None)()
-        images = []
-        for i in range(self.n):
-            g('glReadBuffer', None, C.c_uint)(H.GL_COLOR_ATTACHMENT0 + i)
-            out = (C.c_float * (self.w * self.h * 4))()
-            g('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
-                0, 0, self.w, self.h, H.GL_RGBA, H.GL_FLOAT, out)
-            images.append(np.frombuffer(out, dtype='<f4').reshape(self.h, self.w, 4).copy())
-        dout = (C.c_float * (self.w * self.h))()
-        g('glReadPixels', None, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
-            0, 0, self.w, self.h, GL_DEPTH_COMPONENT, H.GL_FLOAT, dout)
-        depth = np.frombuffer(dout, dtype='<f4').reshape(self.h, self.w).copy()
-        for vbo in vbos:
-            g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
-        g('glDeleteVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
-        g('glDisable', None, C.c_uint)(GL_DEPTH_TEST)
-        return images, depth
+        g('glClear', None, C.c_uint)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        restore = []
+        if self.samples == 4:
+            is_enabled = g('glIsEnabled', C.c_ubyte, C.c_uint)
+            for capability, enabled in ((GL_MULTISAMPLE, True), (GL_SAMPLE_SHADING, False),
+                                        (GL_SAMPLE_ALPHA_TO_COVERAGE, False)):
+                if bool(is_enabled(capability)) != enabled:
+                    g('glEnable' if enabled else 'glDisable', None, C.c_uint)(capability)
+                    restore.append((capability, not enabled))
+        try:
+            g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, count)
+            g('glFinish', None)()
+            return self._read()
+        finally:
+            for capability, enabled in restore:
+                g('glEnable' if enabled else 'glDisable', None, C.c_uint)(capability)
+            for vbo in vbos:
+                g('glDeleteBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
+            g('glDeleteVertexArrays', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vao))
+            g('glDisable', None, C.c_uint)(GL_DEPTH_TEST)
 
 
 def legacy_indexed_texture_code(channels):
@@ -347,7 +445,9 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
     runs = [(clip, i, v) for clip in ([False, True] if case.clip else [False]) for i, v in enumerate(case.variants or ({},))]
     for clip, variant_index, variant in runs:
         rng = np.random.default_rng(rng_seed)
-        if case.fullscreen:
+        if case.mesh_builder is not None:
+            attribs, count = case.mesh_builder(rng)
+        elif case.fullscreen:
             attribs, count = {0: SCREEN_TRIANGLE}, len(SCREEN_TRIANGLE)
         else:
             attribs, count = grid_mesh(rng, indexed_texture_channels=case.indexed_texture_channels,
@@ -356,25 +456,31 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
         if case.skin:
             values['matrixPalette'] = palette_values(np.random.default_rng(rng_seed + 1))
         units = {'ref': gl.sampler_units(ref, names, assign=True), 'cand': gl.sampler_units(cand, names, assign=False)}
-        target = MRT(gl, case.size, case.size, max(case.outputs, 1))
         images = {}
         unset = []
-        for label, prog in (('ref', ref), ('cand', cand)):
-            done = gl.set_uniforms(prog, values)
-            if label == 'cand':
-                unset = sorted(set(values) - done - set(case.optional))
+        with MRT(gl, case.size, case.size, max(case.outputs, 1), case.samples) as target:
+            for label, prog in (('ref', ref), ('cand', cand)):
+                done = gl.set_uniforms(prog, values)
+                if label == 'cand':
+                    unset = sorted(set(values) - done - set(case.optional))
 
-            def bind(units=units[label]):
-                for n, unit in units.items():
-                    if n in textures:
-                        tex, tgt = textures[n]
-                        gl.fn('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0 + unit)
-                        gl.fn('glBindTexture', None, C.c_uint, C.c_uint)(tgt, tex)
-            images[label] = target.draw(prog, attribs, count, bind)
+                def bind(units=units[label]):
+                    for n, unit in units.items():
+                        if n in textures:
+                            tex, tgt = textures[n]
+                            gl.fn('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0 + unit)
+                            gl.fn('glBindTexture', None, C.c_uint, C.c_uint)(tgt, tex)
+                images[label] = target.draw(prog, attribs, count, bind)
         suffix = (' mirror clip on' if clip else '') + (f' variant {variant_index}' if case.variants else '')
+        multisample = case.samples > 1
+        if multisample:
+            suffix += f' ({case.samples}× MSAA)'
+        # These fixtures keep their geometry inside the far plane, so depth 1 is the clear value.
+        ref_coverage = images['ref'][1] < 1.0
         for i in range(case.outputs):
             r = H.compare(images['ref'][0][i], images['cand'][0][i])
-            drawn = images['ref'][0][i][images['ref'][0][i][..., 3] >= 0][:, :3]
+            drawn_pixels = ref_coverage.any(axis=-1) if multisample else images['ref'][0][i][..., 3] >= 0
+            drawn = images['ref'][0][i][drawn_pixels][:, :3]
             r.update(case=f'{case.name} colour {i}{suffix}', nonblack=int(len(drawn)), unset_uniforms=unset,
                      flat=bool(len(drawn) and float(np.ptp(drawn)) == 0.0))
             if unset or r['nonblack'] == 0:
@@ -390,13 +496,28 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
                 r['colour_counts'] = counts
                 r['pass'] &= all(count['ref'] > 0 and count['cand'] > 0 for count in counts)
             results.append(r)
-        if case.depth or case.depth_info:
-            advisory = case.depth_info and not case.depth and not strict_depth
+        if case.depth or case.depth_info or multisample:
+            advisory = case.depth_info and not (case.depth or strict_depth or multisample)
             label = 'depth (info)' if advisory else 'depth'
+            if multisample:
+                label = 'per-sample depth'
             r = H.compare(images['ref'][1], images['cand'][1], mode='exact')
-            r.update(case=f'{case.name} {label}{suffix}', nonblack=int((images['ref'][1] < 1.0).sum()),
+            r.update(case=f'{case.name} {label}{suffix}', nonblack=int(ref_coverage.sum()),
                      unset_uniforms=unset, info=advisory)
             r['pass'] = advisory or (r['pass'] and r['nonblack'] > 0 and (case.outputs or not unset))
+            results.append(r)
+        if case.coverage:
+            cand_coverage = images['cand'][1] < 1.0
+            r = H.compare(ref_coverage, cand_coverage, mode='exact')
+            covered = int(ref_coverage.sum())
+            label = 'per-sample coverage' if multisample else 'coverage'
+            r.update(case=f'{case.name} {label}{suffix}', nonblack=covered, unset_uniforms=unset)
+            r['pass'] &= not unset and 0 < covered < ref_coverage.size
+            if multisample:
+                samples_per_pixel = ref_coverage.sum(axis=-1)
+                partial = int(np.count_nonzero((samples_per_pixel > 0) & (samples_per_pixel < case.samples)))
+                r['partial_pixels'] = partial
+                r['pass'] &= partial > 0
             results.append(r)
     return results
 
@@ -627,6 +748,61 @@ def normal_debug_cases():
                        required_colours=(normal, tangent) if tangents else (normal,))
 
 
+def material_mesh(rng):
+    attributes, count = grid_mesh(rng)
+    attributes[0][:, :2] += (0.013, -0.021)  # Move triangle edges away from whole-pixel alignment.
+    uv = attributes[2]
+    attributes[4] = np.column_stack((1.0 - 0.85 * uv[:, 0], 0.13 + 0.72 * uv[:, 1]))
+    # A cell's tangent sign is flat, and both signs occur across the material.
+    attributes[8][:, 3] = np.where((np.arange(count) // 6) % 2, -1.0, 1.0)
+    return attributes, count
+
+
+def material_gbuffer_cases():
+    axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
+    s, t = np.meshgrid(axis, axis)
+    cutoff = 128 / 255
+    # Include bands just below and just inside the 1/512 bias, with diagonal boundaries for MSAA.
+    bands = np.floor(8 * (s + 0.19 * t)).astype(np.int32) % 4
+    alpha = np.take(np.array([cutoff - 3 / 512, cutoff - 0.75 / 512, cutoff, 0.92], dtype='f4'), bands)
+    albedo = np.stack((0.17 + 0.72 * s, 0.23 + 0.63 * t, 0.12 + 0.66 * s * t, alpha), axis=-1)
+    normals = np.stack((0.52 + 0.22 * np.sin(2 * np.pi * s), 0.49 + 0.25 * np.cos(2 * np.pi * t),
+                        0.72 + 0.23 * t, 0.30 + 0.62 * s), axis=-1)
+    specular = np.stack((0.1 + 0.78 * s, 0.18 + 0.67 * t, 0.90 - 0.68 * s, 0.16 + 0.75 * s * t), axis=-1)
+    textures = {'diffuseMap': (albedo,), 'bumpMap': (normals,), 'specularMap': (specular,)}
+
+    def material_case(emissive, normal, skin, spec, mode, samples=1):
+        defines = {'DIFFUSE_ALPHA_MODE': str(mode)}
+        for flag, active in (('HAS_EMISSIVE', emissive), ('HAS_NORMAL_MAP', normal), ('HAS_SPECULAR_MAP', spec)):
+            if active:
+                defines[flag] = '1'
+        uniforms = {
+            'emissive_brightness': 0.57 if mode == 3 else 0.22,
+            'env_intensity': 0.63 if spec else 0.28,
+            'specular_color': [0.78, 0.28, 0.48, 0.74] if normal else [0.23, 0.69, 0.37, 0.41],
+        }
+        if mode == 2:
+            uniforms['minimum_alpha'] = cutoff
+        name = f'material-gbuffer-e{emissive}-n{normal}-s{skin}-p{spec}-m{mode}'
+        if samples > 1:
+            name += f'-{samples}x-msaa'
+        return Case(name, 'deferred/materialV.glsl', '../class3/deferred/materialF.glsl',
+                    f'materialGbuffer__HAS_EMISSIVE{emissive}__HAS_NORMAL_MAP{normal}__HAS_SKIN{skin}'
+                    f'__HAS_SPECULAR_MAP{spec}__MODE{mode}',
+                    defines=defines, outputs=3 + emissive, depth=True, coverage=True,
+                    skin=bool(skin), clip=True, uniforms=uniforms, texture_levels=textures,
+                    samples=samples, mesh_builder=material_mesh)
+
+    for emissive in (0, 1):
+        for normal in (0, 1):
+            for skin in (0, 1):
+                for spec in (0, 1):
+                    for mode in (0, 2, 3):
+                        yield material_case(emissive, normal, skin, spec, mode)
+    for skin in (0, 1):
+        yield material_case(skin, 1, skin, 1, 2, samples=4)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -689,6 +865,7 @@ def cases():
     c.extend(terrain_bake_cases())
     c.extend(rlv_sphere_cases())
     c.extend(normal_debug_cases())
+    c.extend(material_gbuffer_cases())
     return c
 
 

@@ -360,6 +360,38 @@
       }
     },
     {
+      "name": "materialGbuffer",
+      "family": "material-gbuffer",
+      "source": "materialGbuffer.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "HAS_NORMAL_MAP": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "HAS_SPECULAR_MAP": [
+          0,
+          1
+        ],
+        "MODE": [
+          0,
+          2,
+          3
+        ]
+      }
+    },
+    {
       "name": "normaldebug",
       "family": "normal-debug",
       "source": "normaldebug.slang",

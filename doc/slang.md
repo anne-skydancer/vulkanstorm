@@ -104,7 +104,7 @@ A generated program is bound the way slangc writes it; nothing is restored to lo
 - **One upload per draw.** `LLGLSLShader::flushBlock()` runs in the draw calls (`LLVertexBuffer::drawRange`, `drawRangeFast`,
   `drawArrays`, the downscale draw in `llimagegl.cpp`): if the bound program's block is dirty it is sent with one
   `glNamedBufferSubData`. `bind()` rebinds the program's buffer at the block binding when another generated program changed it.
-  Code that calls `glUniform*` itself with `getUniformLocation()` (the materials pool does) cannot be used on a generated program.
+  Draw code uses the shader setters so reflected offsets are written to the block before the draw.
 - **Samplers have explicit units** (`layout(binding = N)`, N from 0, declaration order): `mTexture[]` takes the unit from the
   manifest, `mUniform[]` stays -1, so `uniform1i(sampler, unit)` is a no-op and `bindTexture()` binds the declared unit. Declare
   the sampler the viewer binds first (`diffuseMap`) first.
@@ -220,6 +220,14 @@ four batch texture units. The single-texture paths keep `diffuseMap` on unit 0. 
 from Slang reflection, and a pipeline test ties the generated texture units to the viewer's configured count.
 The A/B cases cover static and rigged geometry, all four indexed textures, cutouts, mirror clipping, and both
 emissive-buffer layouts.
+
+## Legacy material G-buffer
+
+The opaque, cutout, and emissive material modes use the shared position, mirror-clip, and G-buffer modules.
+The fragment inputs keep centroid interpolation and the tangent sign stays flat. The materials draw pool
+uses the shader setters for environment intensity, emissive brightness, the alpha cutoff, and specular color.
+The GLSL blend and stochastic paths continue to use their current registration. The A/B fixtures cover the 48
+generated permutations and exercise centroid sampling with partially covered pixels in a multisample target.
 
 ## Terrain paint-map baking
 

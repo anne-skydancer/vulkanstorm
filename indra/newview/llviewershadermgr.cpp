@@ -1739,16 +1739,29 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             }
 
             U32 alpha_mode = i & 0x3;
-
-            gDeferredMaterialProgram[i].mShaderFiles.clear();
-            gDeferredMaterialProgram[i].mShaderFiles.push_back(make_pair("deferred/materialV.glsl", GL_VERTEX_SHADER));
-            gDeferredMaterialProgram[i].mShaderFiles.push_back(make_pair("deferred/materialF.glsl", GL_FRAGMENT_SHADER));
-            gDeferredMaterialProgram[i].mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-
-            gDeferredMaterialProgram[i].clearPermutations();
-
             bool has_normal_map   = (i & 0x8) > 0;
             bool has_specular_map = (i & 0x4) > 0;
+            LLGLSLShader& material_shader = gDeferredMaterialProgram[i];
+
+            material_shader.mShaderFiles.clear();
+            if (alpha_mode == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND)
+            {
+                material_shader.mShaderFiles.push_back(make_pair("deferred/materialV.glsl", GL_VERTEX_SHADER));
+                material_shader.mShaderFiles.push_back(make_pair("deferred/materialF.glsl", GL_FRAGMENT_SHADER));
+            }
+            else
+            {
+                const std::string axes = llformat("__HAS_NORMAL_MAP%d__HAS_SKIN%d__HAS_SPECULAR_MAP%d__MODE%u",
+                                                 has_normal_map, has_skin, has_specular_map, alpha_mode);
+                generatedStages(material_shader, emissiveId("materialGbuffer", axes.c_str()).c_str(),
+                                "deferred/materialV.glsl", "deferred/materialF.glsl");
+                if (has_skin && pilotGenerated())
+                {
+                    material_shader.mRiggedVariant = &material_shader;
+                }
+            }
+            material_shader.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+            material_shader.clearPermutations();
 
             if (has_normal_map)
             {
