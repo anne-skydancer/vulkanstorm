@@ -1,5 +1,7 @@
 {
-  "hooks": {},
+  "hooks": {
+    "TERRAIN_PAINT_PRECISION": "Maximum channel value for the selected TerrainPaintBitDepth (1 to 8 bits)"
+  },
   "position": {
     "module": "position",
     "prefix": "vkPosition"
@@ -514,6 +516,15 @@
     {
       "name": "solidcolor",
       "source": "solidcolor.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "terrainBake",
+      "family": "terrain-bake",
+      "source": "terrainBake.slang",
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"

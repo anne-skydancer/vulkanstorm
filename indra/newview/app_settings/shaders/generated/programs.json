@@ -10491,6 +10491,109 @@
    }
   },
   {
+   "id": "terrainBake",
+   "program": "terrainBake",
+   "permutation": {},
+   "source": "slang/terrainBake.slang",
+   "stages": {
+    "vertex": {
+     "file": "terrainBake.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "37690fcdf1160baa9c39534880fbcdab486d5373f3a03f9a2732191a38b6d3cb",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord1",
+        "location": 3,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "ramp1",
+        "location": 0,
+        "type": "float32x2"
+       },
+       {
+        "name": "ramp2",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "rampFinal",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "terrainBake.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "3a2be0d836db410b5ea8ab9aa2e27a2ae1a281d17228b86190af768ccb588019",
+     "hooks": [
+      "TERRAIN_PAINT_PRECISION"
+     ],
+     "interface": {
+      "inputs": [
+       {
+        "name": "ramp1",
+        "location": 0,
+        "type": "float32x2"
+       },
+       {
+        "name": "ramp2",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "rampFinal",
+        "location": 2,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "alpha_ramp",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "twotexturecompare",
    "program": "twotexturecompare",
    "permutation": {},

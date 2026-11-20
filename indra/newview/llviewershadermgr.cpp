@@ -4235,8 +4235,8 @@ bool LLViewerShaderMgr::loadShadersInterface()
             shader->mFeatures.isPBRTerrain = true;
 
             shader->mShaderFiles.clear();
-            shader->mShaderFiles.push_back(make_pair("interface/pbrTerrainBakeV.glsl", GL_VERTEX_SHADER));
-            shader->mShaderFiles.push_back(make_pair("interface/pbrTerrainBakeF.glsl", GL_FRAGMENT_SHADER));
+            generatedStages(gPBRTerrainBakeProgram, "terrainBake",
+                            "interface/pbrTerrainBakeV.glsl", "interface/pbrTerrainBakeF.glsl");
             shader->mShaderLevel = mShaderLevel[SHADER_INTERFACE];
             const U32 value_range = (1 << bit_depth) - 1;
             shader->addPermutation("TERRAIN_PAINT_PRECISION", llformat("%d", value_range));

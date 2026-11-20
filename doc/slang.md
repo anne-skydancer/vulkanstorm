@@ -122,7 +122,7 @@ Programs are registered by `generatedStages()` in `llviewershadermgr.cpp` (`VKS_
 the switch and the hand-written GLSL path of the converted programs go when the last hot family lands). Converted: ui, alphamask, benchmark, clip, copy
 (+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
 (+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
-Left hand-written for now: `normaldebug` (it has a geometry stage) and `pbrTerrainBake`. The programs with a skinned variant moved with the skinning module (below).
+The programs with a skinned variant moved with the skinning module (below). The later terrain bake conversion is described below.
 
 ## The position module
 
@@ -182,7 +182,7 @@ Not converted, and why:
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
 | every deferred world program that calls `calcAtmospherics` (fullbright, emissive, terrain, alpha) and `rlv` (`getPositionWithDepth`, `deferredUtil`) | atmosphere and `deferredUtil` are hot |
-| `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
+| `pbropaque`, `pbrglow`, `pbrterrain` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
 | `normaldebug` | has a geometry stage |
@@ -220,6 +220,13 @@ four batch texture units. The single-texture paths keep `diffuseMap` on unit 0. 
 from Slang reflection, and a pipeline test ties the generated texture units to the viewer's configured count.
 The A/B cases cover static and rigged geometry, all four indexed textures, cutouts, mirror clipping, and both
 emissive-buffer layouts.
+
+## Terrain paint-map baking
+
+The terrain bake uses the ramp-weight calculation independently of terrain lighting. It preserves the original
+three ramp coordinates, weight threshold, and RGB weight encoding. The `TERRAIN_PAINT_PRECISION` hook receives
+the existing value from `TerrainPaintBitDepth` on shader reload. One generated program covers all eight
+precisions. Run `ab_harness.py programs --family terrain-bake --strict-depth` to compare them.
 
 ## The test gaps of the pilot, closed
 
@@ -345,7 +352,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `cloudsV`, `cloudsVolComposite`, `moonV`, sky and atmosphere helpers | sky / atmosphere | the sky PR |
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
-| glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake`) | glTF | the glTF PR (needs lighting, shadows and probes) |
+| glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
 | `emissive`, `fullbright*`, `terrain`, `rlv` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | `normaldebug` (geometry stage) | debug | stays hand-written unless Slang geometry output is accepted |

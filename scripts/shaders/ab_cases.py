@@ -66,6 +66,7 @@ class Case:
     point_textures: tuple = ()
     hooks: dict = field(default_factory=dict)  # candidate loader defines for this A/B
     indexed_texture_channels: int = 0
+    texcoord1_s_scale: float = 1.0
 
 
 def _hash01(name, salt=0):
@@ -123,7 +124,7 @@ def palette_values(rng, joints=6):
     return H.Mat3x4Array(palette)
 
 
-def grid_mesh(rng, cells=10, joints=6, indexed_texture_channels=0):
+def grid_mesh(rng, cells=10, joints=6, indexed_texture_channels=0, texcoord1_s_scale=1.0):
     """A wavy grid (two triangles a cell) covering the viewport, with every attribute the viewer's programs read."""
     xs = np.linspace(-1, 1, cells + 1, dtype='f4')
     pos, nrm, uv0, uv1, col, tan, wgt = [], [], [], [], [], [], []
@@ -135,7 +136,7 @@ def grid_mesh(rng, cells=10, joints=6, indexed_texture_channels=0):
                 n = np.array([0.4 * np.cos(3 * x), 0.3 * np.sin(2 * y), 1.0], 'f4')
                 nrm.append(n / np.linalg.norm(n))
                 uv0.append((ci / cells, cj / cells))
-                uv1.append((cj / cells, ci / cells))
+                uv1.append((texcoord1_s_scale * cj / cells, ci / cells))
                 col.append(rng.uniform(0.2, 1.0, 4))
                 tan.append((1.0, 0.1 * x, 0.0, 1.0))
                 wgt.append(rng.integers(0, joints, size=4) + rng.uniform(0.05, 0.95, size=4))
@@ -345,7 +346,8 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
         if case.fullscreen:
             attribs, count = {0: SCREEN_TRIANGLE}, len(SCREEN_TRIANGLE)
         else:
-            attribs, count = grid_mesh(rng, indexed_texture_channels=case.indexed_texture_channels)
+            attribs, count = grid_mesh(rng, indexed_texture_channels=case.indexed_texture_channels,
+                                       texcoord1_s_scale=case.texcoord1_s_scale)
         values = fill_uniforms(gl, ref, {**case.uniforms, **variant}, clip)
         if case.skin:
             values['matrixPalette'] = palette_values(np.random.default_rng(rng_seed + 1))
@@ -535,6 +537,34 @@ def deferred_diffuse_cases():
                        defines=defines, outputs=3 + emissive, depth=True, clip=not no_color, flat_ok=(1,))
 
 
+def terrain_bake_cases():
+    # The viewer's alpha-only texture descends in S, with a noisy transition in T.
+    axis = (np.arange(256, dtype='f4') + 0.5) / 256
+    s, t = np.meshgrid(axis, axis)
+    noisy_ramp = 1 - s + 0.2 * np.sin(np.pi * s) * np.sin(2 * np.pi * (3 * t + s))
+    mips = []
+    for size in (256, 128, 64, 32, 16, 8, 4, 2, 1):
+        rgba = np.zeros((size, size, 4), dtype='<f4')
+        alpha = np.rint(np.clip(noisy_ramp, 0, 1) * 255) / 255
+        rgba[..., 3] = alpha
+        mips.append(rgba)
+        if size > 1:
+            half = size // 2
+            noisy_ramp = alpha.reshape(half, 2, half, 2).mean(axis=(1, 3))
+    texture = {'alpha_ramp': tuple(mips)}
+
+    # Draw an orthographic terrain patch and cover all three composition transitions in texcoord1.s.
+    mvp = [0.96, 0, 0, 0, 0, 0.91, 0, 0, 0, 0, 0.45, 0, 0.03, -0.02, 0, 1]
+    terrain_defaults = {'TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT': '3',
+                        'TERRAIN_TRIPLANAR_BLEND_FACTOR': '8.0', 'TERRAIN_PBR_DETAIL': '0'}
+    for bit_depth in range(1, 9):
+        precision = {'TERRAIN_PAINT_PRECISION': str((1 << bit_depth) - 1)}
+        yield Case(f'terrain-bake-rgb{bit_depth}', 'interface/pbrTerrainBakeV.glsl', 'interface/pbrTerrainBakeF.glsl',
+                   'terrainBake', defines={**terrain_defaults, **precision}, hooks=precision, depth=True,
+                   uniforms={'modelview_projection_matrix': mvp}, texture_levels=texture,
+                   texcoord1_s_scale=3.0, fragment_helpers=('deferred/pbrterrainUtilF.glsl',))
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -594,6 +624,7 @@ def cases():
     c.extend(depth_of_field_cases())
     c.extend(render_diagnostics_cases())
     c.extend(deferred_diffuse_cases())
+    c.extend(terrain_bake_cases())
     return c
 
 
