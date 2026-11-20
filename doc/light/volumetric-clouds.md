@@ -215,10 +215,10 @@ everything in `LLPipeline::releaseGLBuffers`.
 ### The toggle
 
 **Preferences > Graphics > Volumetric clouds** (`RenderVolumetricClouds`, the one Preferences entry decided for L7). The
-feature tables recommend it from the **High Ultra** graphics level up (GPU class 5: a benchmarked memory bandwidth above
-384 GB/s, such as RTX 3060 Ti, 3070, 4070 and up) and off below; the setting's own default is off, so an existing install
-keeps the flat layer until the checkbox is ticked or a graphics level is picked. Turning it off frees the noise (8.5 MB
-of VRAM) and the targets.
+hardware recommendation enables it at **High** (GPU class 5: a benchmarked memory bandwidth above 384 GB/s) and disables it
+below. The setting's own default is off. Selecting Low, Medium, or High in Preferences or Performance keeps the current
+cloud renderer, so a sky such as the built-in Midday no longer changes cloud models on a tier switch. The checkbox still
+controls the cloud renderer directly. Turning it off frees the noise (8.5 MB of VRAM) and the targets.
 
 The plan's line (D3 (a): on from RTX 3060-class up) cannot be drawn by the GPU classes: a class is a benchmarked memory
 bandwidth (`LLFeatureManager::loadGPUClass`: class 4, the High level, is 192-384 GB/s), and the RTX 3060 (360 GB/s) shares

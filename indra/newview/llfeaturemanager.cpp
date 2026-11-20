@@ -280,6 +280,9 @@ bool LLFeatureManager::loadFeatureTables()
     mSkippedFeatures.insert("RenderGamma");
     mSkippedFeatures.insert("RenderVBOEnable");
     mSkippedFeatures.insert("RenderFogRatio");
+    // Switching quality tiers must keep the chosen cloud renderer. Replacing the
+    // flat EEP layer also changes the visible sky and the cloud shadows on the ground.
+    mSkippedFeatures.insert("RenderVolumetricClouds");
 
     // first table is install with app
     std::string app_path = gDirUtilp->getAppRODataDir();
