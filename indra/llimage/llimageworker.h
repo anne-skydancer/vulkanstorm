@@ -31,6 +31,8 @@
 #include "llpointer.h"
 #include "threadpool_fwd.h"
 
+#include <atomic>
+
 class LLImageDecodeThread
 {
 public:
@@ -56,12 +58,31 @@ public:
     S32 getTotalDecodeCount() { return mDecodeCount; }
     void shutdown();
 
+    // <Vulkanstorm> Cores for one image's own threads (the J2C codec lends them to neo-j2k, USE_NEOJ2K). Busy or
+    // idle is decided for each decode: the pool is idle when fewer decode requests wait in its queue than it has
+    // workers. Then a decode may split its stages over the pool; otherwise it runs on its own thread.
+    typedef void (*job_fn)(void* job_ctx, U32 index);
+    // The pool whose decode request the calling thread is running, or null on every other thread (the main
+    // thread, the mesh upload thread, a bake). Only a pool thread inside a request may borrow the pool, so the
+    // pool outlives every borrower: shutdown() joins the workers.
+    static LLImageDecodeThread* getCurrent();
+    // True when fewer decode requests wait than the pool has workers. One atomic load, no lock.
+    bool isIdle() const;
+    // How many jobs the pool runs at once, the calling thread included.
+    U32 getWorkerCount() const;
+    // Runs job(job_ctx, i) once for every i < count, on the calling thread and on idle workers, and returns
+    // when every job has returned. The calling thread claims jobs itself, so it finishes the loop alone when
+    // every worker is busy or the pool is closed: it waits only for jobs a worker has already started. Jobs
+    // never wait for one another. They run with C code's floating-point state (llimagefpstate.h).
+    void parallelFor(U32 count, job_fn job, void* job_ctx);
+
 private:
     // As of SL-17483, LLImageDecodeThread is no longer itself an
     // LLQueuedThread - instead this is the API by which we submit work to the
     // "ImageDecode" ThreadPool.
     std::unique_ptr<LL::ThreadPool> mThreadPool;
     LLAtomicU32 mDecodeCount;
+    std::atomic<U32> mWaiting{0}; // <Vulkanstorm> decode requests posted and not yet started
 };
 
 #endif

@@ -71,6 +71,7 @@ jobs:
       entry: ${{ steps.plan.outputs.entry }}
       release: ${{ steps.plan.outputs.release }}
       tag: ${{ steps.plan.outputs.tag }}
+      neoj2k_ready: ${{ steps.neoj2k.outputs.neoj2k_ready }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -114,6 +115,14 @@ jobs:
             core.setOutput('release', String(result.release));
             core.setOutput('tag', result.tag);
             core.info(JSON.stringify(result, null, 2));
+      # The USE_NEOJ2K build below needs the released 3p-neoj2k package (scripts/ci_neoj2k_pin.py): until
+      # autobuild.xml names one, it is skipped with a notice.
+      - id: neoj2k
+        run: |
+          python scripts/ci_neoj2k_pin.py --output
+          if ! grep -qx 'neoj2k_ready=true' "$GITHUB_OUTPUT"; then
+            echo "::notice title=USE_NEOJ2K build skipped::autobuild.xml has no released neoj2k package yet (placeholder entry)"
+          fi
 
   windows:
     name: windows
@@ -146,6 +155,44 @@ jobs:
           fi
       - uses: ./.github/actions/viewer-build
         with:
+          platform: windows
+          directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
+
+  windows-neoj2k:
+    name: windows (neo-j2k)
+    needs: checks
+    # The same build with USE_NEOJ2K=ON (neo-j2k as the J2C codec, cmake/NeoJ2K.cmake): the two codec options are
+    # both built on every pull request and every qualification build. Never a release.
+    if: needs.checks.outputs.neoj2k_ready == 'true' && needs.checks.outputs.release != 'true'
+    runs-on: ${{ fromJSON(needs.checks.outputs.entry).os }}
+    env:
+      VIEWER_BUILD_TYPE: ${{ needs.checks.outputs.release == 'true' && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ needs.checks.outputs.release == 'true' && 'ON' || 'OFF' }}
+      AUTOBUILD_ADDRSIZE: 64
+      AUTOBUILD_CONFIGURATION: ReleaseFS_open
+      AUTOBUILD_VSVER: "180"
+      LL_SKIP_REQUIRE_SYSROOT: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Merge the pull request into its base
+        # The same base commit the checks job merged.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          BASE_SHA: ${{ needs.checks.outputs.base_sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
+            echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
+            exit 1
+          fi
+      - uses: ./.github/actions/viewer-build
+        with:
+          neoj2k: 'true'
           platform: windows
           directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
 

@@ -2072,6 +2072,54 @@
         <key>description</key>
         <string>NanoSVG is a simple single-header-file SVG parser and rasterizer</string>
       </map>
+      <key>neoj2k</key>
+      <map>
+        <key>platforms</key>
+        <map>
+          <key>linux64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>0000000000000000000000000000000000000000000000000000000000000000</string>
+              <key>hash_algorithm</key>
+              <string>sha256</string>
+              <key>url</key>
+              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.0.0-0/neoj2k-0.0.0.0-linux64-0.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>linux64</string>
+          </map>
+          <key>windows64</key>
+          <map>
+            <key>archive</key>
+            <map>
+              <key>hash</key>
+              <string>0000000000000000000000000000000000000000000000000000000000000000</string>
+              <key>hash_algorithm</key>
+              <string>sha256</string>
+              <key>url</key>
+              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.0.0-0/neoj2k-0.0.0.0-windows64-0.tar.zst</string>
+            </map>
+            <key>name</key>
+            <string>windows64</string>
+          </map>
+        </map>
+        <key>license</key>
+        <string>BSD</string>
+        <key>license_file</key>
+        <string>LICENSES/neoj2k.txt</string>
+        <key>copyright</key>
+        <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2002-2012 the OpenJPEG authors, see LICENSES/openjpeg.txt</string>
+        <key>version</key>
+        <string>0.0.0.0</string>
+        <key>name</key>
+        <string>neoj2k</string>
+        <key>canonical_repo</key>
+        <string>https://github.com/anne-skydancer/3p-neoj2k</string>
+        <key>description</key>
+        <string>neo-j2k, a JPEG 2000 codec as a shared library (USE_NEOJ2K builds). Not released yet: an all-zero hash marks this entry as a placeholder (scripts/ci_neoj2k_pin.py).</string>
+      </map>
       <key>nghttp2</key>
       <map>
         <key>platforms</key>

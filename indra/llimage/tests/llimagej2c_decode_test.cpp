@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file llimagej2c_decode_test.cpp
- * @brief Characterisation tests for LLImageJ2COJ::decodeImpl on malformed codestreams
+ * @brief Characterisation tests for LLImageJ2COJ::decodeImpl on malformed codestreams (and, built with
+ *        LL_J2C_NEOJ2K, for LLImageJ2CNeo::decodeImpl: the same tests, fixtures patched where neo-j2k's encoder
+ *        takes no such image)
  *        (short comment blocks, oversized images).
  */
 
@@ -40,6 +42,32 @@ namespace tut
                 return std::vector<U8>();
             }
             return std::vector<U8>(j2c->getData(), j2c->getData() + j2c->getDataSize());
+        }
+
+        // A codestream whose header declares a w x 64 image with 3 components. OpenJPEG's encoder makes one; the
+        // viewer's own limits (a side of 4096 at most) are those of neo-j2k's encoder, so a build with USE_NEOJ2K
+        // takes a small image's codestream and patches the size in SIZ: the decode is refused from the header,
+        // before any sample is read, as it is for a real codestream of that size.
+        static std::vector<U8> encode_wide(U32 w)
+        {
+#ifdef LL_J2C_NEOJ2K
+            std::vector<U8> bytes = encode(64, 64, 3);
+            if (bytes.size() < 40 || bytes[2] != 0xff || bytes[3] != 0x51)
+            {
+                return std::vector<U8>();
+            }
+            // SOC, SIZ marker, Lsiz, Rsiz, then Xsiz (offset 8), Ysiz, XOsiz, YOsiz, XTsiz (offset 24), YTsiz
+            for (int off : { 8, 24 })
+            {
+                bytes[off] = static_cast<U8>(w >> 24);
+                bytes[off + 1] = static_cast<U8>(w >> 16);
+                bytes[off + 2] = static_cast<U8>(w >> 8);
+                bytes[off + 3] = static_cast<U8>(w);
+            }
+            return bytes;
+#else
+            return encode(static_cast<U16>(w), 64, 3);
+#endif
         }
 
         // Runs a full decode; returns the raw image (width 0 when the decode was refused).
@@ -104,7 +132,7 @@ namespace tut
         LLPointer<LLImageRaw> raw = decode(bytes);
         ensure_equals("width", raw->getWidth(), 2048);
         ensure_equals("height", raw->getHeight(), 64);
-        std::vector<U8> wide = encode(5000, 64, 3);
+        std::vector<U8> wide = encode_wide(5000);
         ensure("encoded wide", !wide.empty());
         LLPointer<LLImageRaw> refused = decode(wide);
         ensure_equals("nothing decoded", refused->getWidth(), 0);
@@ -114,7 +142,7 @@ namespace tut
     void llimagej2c_decode_test_object_t::test<4>()
     {
         set_test_name("a header declaring more than 16384 is refused");
-        std::vector<U8> bytes = encode(17000, 64, 3);
+        std::vector<U8> bytes = encode_wide(17000);
         ensure("encoded", !bytes.empty());
         LLPointer<LLImageRaw> raw = decode(bytes);
         ensure_equals("nothing decoded", raw->getWidth(), 0);
@@ -125,6 +153,37 @@ namespace tut
     static std::vector<U8> encode_subsampled()
     {
         std::vector<U8> out;
+#ifdef LL_J2C_NEOJ2K
+        // neo-j2k's encoder takes no subsampled component: a 32 x 32 codestream, patched so that its SIZ gives
+        // components 1 and 2 a separation of 2 and its COD no colour transform. The header is then the one the
+        // OpenJPEG encoder writes for this image, and the decode is refused at the components' sizes.
+        out = llimagej2c_decode_test::encode(32, 32, 3);
+        if (out.size() < 60 || out[2] != 0xff || out[3] != 0x51)
+        {
+            return std::vector<U8>();
+        }
+        // SIZ: Csiz at offset 40, then Ssiz, XRsiz, YRsiz of each component
+        for (int c = 1; c < 3; ++c)
+        {
+            out[42 + 3 * c + 1] = 2;
+            out[42 + 3 * c + 2] = 2;
+        }
+        size_t cod = 0;
+        for (size_t i = 4; i + 10 < out.size(); ++i)
+        {
+            if (out[i] == 0xff && out[i + 1] == 0x52)
+            {
+                cod = i;
+                break;
+            }
+        }
+        if (cod == 0)
+        {
+            return std::vector<U8>();
+        }
+        out[cod + 9] = 0; // SGcod: the multiple component transform
+        return out;
+#else
         opj_image_cmptparm_t cp[3];
         memset(cp, 0, sizeof(cp));
         for (int c = 0; c < 3; ++c)
@@ -170,6 +229,7 @@ namespace tut
             remove(path.c_str());
         }
         return out;
+#endif
     }
 
     template<> template<>
