@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Multi-core everywhere, SIMD where it pays (study, refreshed 2026-11-15; stage-1 measurements 2026-11-16)
 
+The [2026-11-20 qualification checkpoint](multicore-qualification.md) records the later stage-1b GPU measurements,
+implementation through C6, and the remaining in-world gates. The stage-1 tables below retain their original capture scope.
+
 Status: study and implementation plan. Nothing here changes the viewer. The branch `codex/multicore-simd-study-2026-11-15`
 (written on `origin/vkstorm-devel` 670593308b, rebased onto 191c9985b9 on 2026-11-16) carries:
 
@@ -69,7 +72,8 @@ the installer's `MinVersion=10.0` and AVX2 check, and the Linux wrapper check, w
 
 1. Stage 1, **done**: Tracy measuring build and the Second Life session (§4.8–4.10). The projector pool's per-frame cost, which it
    found, is **largely solved by the change-index hotfix** (§2).
-2. A **GPU-time capture before any FJ fps gate** (Rooftops waits in `Swap`; the exports hold no GPU zones).
+2. **GPU-time capture before any FJ fps gate.** Stage 1b measured Rooftops with GPU timer queries. The November 16
+   stage-1 exports have CPU timings only. [Stage-1b results](multicore-qualification.md#what-stage-1b-measured)
 3. `LL::FrameJobs`, our own fork-join job system (main thread takes part), and a width rule: `clamp(cores − 3, 2, 7)`, that is 5
    helpers on 8 cores, chosen to leave cores for the GL driver, decode and window threads (§6.2). **Built in stage 2 (#553), with
    no user yet; what was built differs in a few points, listed in §6.2 "Stage 2 as built".** The bench does **not** pick
@@ -1007,7 +1011,7 @@ estimate. Order: 0 ✓, 1 ✓, 1a ✓ (hotfix), 1b, 2, 3, 4 ✓, 5a, 5c, 5b.
 | 0 | CPU check | — | — | — | — | **done** (estimated 2–3 d; landed in about 12 h on release, all lines the next day) | — |
 | 1 | Tracy measuring build, zones and counters, the Second Life session, baseline report | `llprojectorshadows.cpp` (ours), `llframecounters.h`, zones in `llvoavatar.cpp` and others | none | **met**: ranked zones and the §3.2 table measured; noise under 3 % for the frame mean and blocks above 3 ms, not for small blocks or the 1 % low (§4.8) | the session, done | **done** (#529, #538) | — |
 | 1a | projector pool per-frame cost (the stage-1 finding: 1.8 ms Risk, 6.4 ms Rooftops, 5.4 of it unzoned self time) | `llprojectorshadowpool.h` and the change index (ours) | none | the pool's own time about 0.3 ms [Rooftops split] | — | **largely solved** by hotfixes `13b7d28981` and `e74e5c85be`. What is left is a tile rendered nearly every frame (about 1.0 ms, 1 tile in 97 % of Rooftops frames, cause not captured: `projector_stats` was null) and `pinCasters` 0.4 ms inside every tile | — |
-| 1b | **GPU-time capture** (GPU zones or a GL timer-query capture) at Rooftops and Isle of Repose | Tracy GPU context / `llglsubmitstats.h` (G0) | none | GPU ms of the shadow passes and the frame; settles whether Rooftops is CPU- or GPU-limited | — | small [inferred] | low. **Comes before FJ's fps gates** (§6.7) |
+| 1b | **GPU-time capture** at Rooftops and Isle of Repose | Tracy GPU context / `llglsubmitstats.h` (G0) | none | GPU ms of the shadow passes and the frame | — | Rooftops measured in [the November 17 session](multicore-qualification.md#what-stage-1b-measured) | low. Repeat on the candidate for FJ's fps gates (§6.7) |
 | 2 | `LL::FrameJobs`, width rule, pool widths, dev guards, unit and stress tests. **Built (#553), without the pool widths and with no user: see §6.2 "Stage 2 as built"; the gates wait for the first user** | new `llcommon/llframejobs.*`; `llappviewer.cpp` `initThreads` (179) a few lines; `threadpool.cpp` (0); `llviewerdisplay.cpp` (32) the `beginFrameWork` / `endFrameWork` hooks; dev guards in `llrefcount.h` (1), `llvertexbuffer.cpp` (6), `gGL` | low–medium (small hunks in two busy files, `llappviewer.cpp` and `llviewerdisplay.cpp`) | no fps loss on S1; settle not slower; width sweep; spin-window power and driver-thread check; 4-core affinity run. **FJ's first users: the cascade cull + sort and the decode-priority / `calcPixelArea` pass; then `updateCharacter`** | sanity run | **1–1.5 d** | **low–medium**: thread start and shutdown order, hooks in `display()`, spin window |
 | 3 | K1, K2, K5 + bit-for-bit tests + FMA-count CI gate (K4 stays low: at most 0.27 ms). **Built: see §6.3 "Stage 3 as built"; K5 has no viewer caller until 5c** | new `llmath` kernel file and test (`llmath/CMakeLists.txt` (3): the header and the test); `llface.cpp` (18) three loops and a zone; `llcamera.cpp` / `llcamera.h` (0) the eight-box entry points; `llvieweroctree.cpp` (2) the sphere test moved to llmath; the viewer-build action and Check PR | low–medium | bit-for-bit tests on Windows and Linux (**met** in CI on Windows, Linux and linux-lts); kernel zones faster (**waits** for a Tracy capture); FMA count unchanged (**met**: exactly the baselines) | — | **0.5–1 d** | low |
 | 4 | FMA memo | this document §9 | none | — | accepted with this study | **done** | — |
@@ -1152,8 +1156,9 @@ Threading bugs that show only in-world are the main way this could run over; tha
 - **The frame shares of §3.2 are now measured** (stage 1, Risk and Rooftops Ultra, Tracy attached, before the change-index hotfix),
   but only for two crowded Second Life places on the dev machine's 8C/8T configuration, still cameras; the moving floor at Rooftops
   is not checked and the Tracy-attached ms are upper bounds (+30 % at Risk).
-- **GPU time is not measured** (no GPU zones): whether Rooftops is CPU- or GPU-limited is inferred from `Swap` (10 % of the
-  frame, a stall in about one frame in seven). The Rooftops 6-wide bound (about 36 fps) may be unreachable.
+- The November 16 stage-1 exports have CPU timings only. The later stage-1b timer queries found the measured Rooftops
+  Ultra variants GPU-bound. The 6-wide figure (about 36 fps) remains the original conditional CPU estimate.
+  [Stage-1b results and limits](multicore-qualification.md#what-stage-1b-measured)
 - The Amdahl bounds (§4.9) are best cases with a uniformly scaled profiler cost, a guess; the animation split's exactness is not studied.
 - The Rooftops split (§4.10) is a local report, not committed; its moving captures are invalid (the camera was frozen), and the
   cause of the tile that is stale every frame is not captured (`projector_stats` null).
