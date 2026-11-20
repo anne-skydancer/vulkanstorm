@@ -6,6 +6,18 @@ The stage-5a synthesis and the stage-1b capture analysis are local records under
 `reports/multicore-5a-2026-11-18/report.md` and `reports/mc1b-2026-11-17/analysis.md`. The tracked study describes the
 original sequence, the designs and the kernel benchmarks. [Multicore and SIMD study](multicore-simd-study.md)
 
+## Qualification objective
+
+The current multicore stage targets CPU efficiency and smoother delivery. Compare the main thread's elapsed time for
+each block and the work completed. When measuring CPU efficiency, sum CPU time across the main and helper threads for
+matched work, including dispatch and join costs. A shorter main-thread block establishes headroom. Work per CPU
+millisecond measures efficiency.
+
+Measure frame-time tails and hitches during matched movement and loading, and record texture and mesh settle times.
+Use p99 frame time in milliseconds and the baseline's hitch definition of a frame interval above twice the capture
+median. Report the median of three matched moving captures. Average FPS figures below are historical context. The
+OpenGL programme continues to measure rendered FPS against its renderer baseline.
+
 ## Implementation status
 
 | Stage | Area | Evidence and remaining qualification |
@@ -15,9 +27,9 @@ original sequence, the designs and the kernel benchmarks. [Multicore and SIMD st
 | 2 | Multicore scheduling | `LL::FrameJobs` runs CPU batches on a fixed helper pool with the main thread participating. The tests cover its batch protocol. The in-world width, contention and settle checks belong to C8, its first user. [PR #553](https://github.com/anne-skydancer/vulkanstorm/pull/553) |
 | 3 and 4 | SIMD and FMA | AVX2 K1 and K2 batch vertex transforms in geometry fill. K5 has a tested eight-box frustum kernel and a camera API. Viewer traversal still uses the single-box tests. CI checks bit equivalence and the existing FMA instruction count. The stage-4 decision keeps contraction disabled. The kernel timings leave the in-viewer gain to measure. [PR #558](https://github.com/anne-skydancer/vulkanstorm/pull/558) |
 | 5a | Thread-safety audit | The local synthesis records the caller and lifetime audit and the revised order. The occlusion-parent, random seed, face-index, mesh joint table and decode-worker fixes are on devel. Runtime checks carry into the candidate stages. |
-| C8 | Multicore texture priority | Frame jobs compute ahead in read-only batches. The main thread applies the results in texture order inside the existing time box and handles faces that require serial work. Fixture comparisons passed. Live comparison, timings and settle remain open. [PR #575](https://github.com/anne-skydancer/vulkanstorm/pull/575) |
-| 5c core | Multicore sun cascades | The 5c-0 split is serial. 5c-1 batches the Stable cascade culls, and 5c-2 batches render-map construction for cascades 1–3. GL submission stays on the main thread. Tests cover model culls and maps. The live equivalence and performance gates remain open, including whether 5c-2 earns its place. [PR #576](https://github.com/anne-skydancer/vulkanstorm/pull/576) |
-| C6 | Multicore avatar animation | The animation cores of other avatars and eligible animated objects run as frame jobs. The viewer user's avatar stays on the main thread. Synthetic character comparisons and the Windows, Linux and Linux LTS CI builds passed at the recorded head, which matches the source tree merged as `5da54d3ab6`. The object walk and timing still need an in-world run. [PR #577](https://github.com/anne-skydancer/vulkanstorm/pull/577) |
+| C8 | Multicore texture priority | Frame jobs compute ahead in read-only batches. The main thread applies the results in texture order inside the existing time box and handles faces that require serial work. Fixtures and the stationary Rooftops comparison passed. Movement, settling, and the width sweep remain open. [PR #575](https://github.com/anne-skydancer/vulkanstorm/pull/575) |
+| 5c core | Multicore sun cascades | The 5c-0 split is serial. 5c-1 batches the Stable cascade culls, and 5c-2 batches render-map construction for cascades 1–3. GL submission stays on the main thread. Model tests passed and a partial Rooftops compare recorded zero mismatches. The full comparisons and CPU/GPU timing remain open. [PR #576](https://github.com/anne-skydancer/vulkanstorm/pull/576) |
+| C6 | Multicore avatar animation | Other avatars and eligible animated objects run their animation cores as frame jobs. The viewer user's avatar stays on the main thread. Synthetic comparisons and CI passed on the source tree merged as `5da54d3ab6`. The stationary Rooftops run exercised the jobs and detected a deliberate fault. Walking, teleport and Release world-entry checks remain open. [PR #577](https://github.com/anne-skydancer/vulkanstorm/pull/577) |
 
 ## What stage 1b measured
 
@@ -34,9 +46,25 @@ The reflection-probe update runs outside the timed frame. The FPS and moving 1% 
 | Moving, sun and projector shadows | 19.83 | 23.61 | 39.78 | 24.6 |
 
 Those Rooftops windows were GPU-bound. The stage-5a estimates of about 1.0 ms for C8, 0.5 ms for 5c and 2.1 ms for C6
-are projected main-thread savings. Each needs a viewer A/B. The 25 FPS moving floor with collection off remains
-unverified. The reports use different builds and capture conditions, so the November 16 Risk baseline and the November 17
-Rooftops run each retain their own scope. [Stage 1 baseline](multicore-baseline-2026-11.md), [GPU timing procedure](../../scripts/inworld/README.md#second-life-session-for-the-multicore-baseline-mc1_sljson-mc1_sl_launchps1)
+are projected main-thread savings. The November 16 Risk baseline and the November 17 Rooftops run used different
+builds and capture conditions. [Stage 1 baseline](multicore-baseline-2026-11.md), [GPU timing procedure](../../scripts/inworld/README.md#second-life-session-for-the-multicore-baseline-mc1_sljson-mc1_sl_launchps1)
+
+## November 20 Rooftops checks
+
+The guarded Windows viewer `1.0.1.82791` ran at the stationary Rooftops Ultra view with five helpers.
+
+- **C8.** Jobs-on texture passes took 1.599 and 1.606 ms against 2.139 ms with jobs off. Both jobs-on windows
+  processed 28–30% more entries per pass. The compare logged zero mismatches across 1,992,618 applied face results.
+  [C8 capture](https://github.com/anne-skydancer/vulkanstorm/pull/579#issuecomment-7028652981)
+- **C6.** Jobs-on object-update loops took 2.675 and 2.757 ms against 4.870 ms with jobs off. The clean compare
+  found zero new mismatches across 3,152,073 joint comparisons and 48,067 isolation checks. Mode 2 detected the
+  deliberate fault. [C6 capture](https://github.com/anne-skydancer/vulkanstorm/pull/579#issuecomment-7028747359)
+- **5c.** With local shadows enabled, the viewer recorded 69,116 cull and 34,560 render-map comparisons with zero
+  mismatches in 6 minutes 8 seconds. It shut down during the clean compare, before fault injection or timing.
+  [5c capture](https://github.com/anne-skydancer/vulkanstorm/pull/579#issuecomment-7028993600)
+
+These captures establish main-thread block savings for C8 and C6. Summed CPU use, frame-time tails, and streaming
+settle remain open.
 
 ## In-world qualification
 
@@ -44,9 +72,8 @@ Use the staged Windows Autobuild `RelWithDebInfoFS_open` build with LTO and AVX2
 build can add `--tracy` and `-DVKS_GL_STATS:BOOL=ON` for the separate GPU window. Build with `-DVKS_FRAMEJOBS_GUARDS:BOOL=ON`
 for the worker guard run. Record the commit, resolution, tier, avatar count, process affinity, and settings alongside
 the captures. Use the same location, camera path and settings in each arm of a comparison. Turn compare modes off for
-timings, verify that the moving camera actually moved, and report the median of three moving captures for the 1% low.
-Report CPU ms, GPU ms and FPS against about 60 FPS standing in a crowd of about 60 avatars and the 25 FPS moving floor
-at the default tier. The login-screen dry run in a fresh scratch profile verifies startup and the LEAP API. The live
+timings and verify that the moving camera actually moved. Record directional cascade GPU time when qualifying 5c.
+The login-screen dry run in a fresh scratch profile verifies startup and the LEAP API. The live
 checks below require an owner-assisted session. Rendering, shutdown or login changes require a Release + LTO build that
 reaches the world before they are called safe. [Development conventions](../../AGENTS.md), [GL instrumentation](../gl/instrumentation.md)
 
@@ -57,11 +84,13 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
 
 1. **C8 and FrameJobs width.** At Rooftops, enable `TexturePixelAreaStats`, then run `TexturePixelAreaCompare` with
    `TexturePixelAreaJobs` enabled. Move and teleport once. `mismatch` must stay zero and the log must show batches and
-   applied results. With compare off, use jobs off/on to measure `pass_ms_mean`, `cut`, `applied` and the serial fallback.
+   applied results. With compare off, use jobs off/on to measure `pass_ms_mean`, `processed`, `cut`, `applied` and the
+   serial fallback. Report entries processed per pass with the timing so the comparison accounts for the amount of work.
    Compare the same teleport and its texture settle in both arms. Sweep 3–7 helpers, restarting for each
    `FrameJobsHelpers` value. Zero selects the computed width, normally five helpers on the 8-core test machine.
-   Compare main-thread time, the moving 1% low, package power, driver-thread CPU time and settle. The plan selects the
-   smallest width within noise of the best and calls for a 4-core affinity run. [C8 procedure](https://github.com/anne-skydancer/vulkanstorm/pull/575), [Stage 2 design](multicore-simd-study.md#62-stage-2-llframejobs-and-the-width-rule)
+   Compare main-thread time, the moving frame-time tail, package power, driver-thread CPU time and settle. Choose the
+   smallest width within measurement noise of the best moving frame-time tail. Repeat with 4-core affinity.
+   [C8 procedure](https://github.com/anne-skydancer/vulkanstorm/pull/575), [Stage 2 design](multicore-simd-study.md#62-stage-2-llframejobs-and-the-width-rule)
 2. **5c core.** Enable `RenderSunCascadeJobsStats` and compare mode `1` for ten minutes each at Risk and Rooftops.
    Use Stochastic (`RenderShadowMethod=2`) in an active sun view with `RenderShadowDetail=1` and `RenderShadowSplits=3`.
    Legacy has its own cascade path and can be checked separately. Check for nonzero cull and map comparisons and
@@ -69,10 +98,11 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
    that the cascade contains two distinct visible groups and two distinct draw infos of one render type. Both mismatch
    counters must rise on that view. Start a fresh process for a later clean run because the totals are cumulative.
    With compare off, alternate `RenderSunCascadeJobs` off/on. Require active helpers, compare combined `cull_ms` and
-   `map_ms` on the same scene across three paired windows, and verify cascade GPU ms and the moving 1% low do not regress.
-   The 5a plan targets at least 0.4 ms less main-thread time per sun pass at Rooftops. The PR sets a separate retention
-   gate for 5c-2 of at least 0.1 ms less `map_ms` per sun pass. Compare bytes in a still scene. With `FrameJobsSerial`
-   on, the 5a plan allows about 0.05 ms overhead against the pre-5c build. This also compares the 5c-0 restructure,
+   `map_ms` on the same scene across three paired windows. Check that cascade GPU time stays within capture noise and
+   that moving p99 frame time holds or improves. The 5a plan targets at least 0.4 ms less main-thread time per sun
+   pass at Rooftops. The PR sets a retention gate for 5c-2 of at least 0.1 ms less median `map_ms` per sun pass.
+   Compare bytes in a still scene. With `FrameJobsSerial` on, the 5a plan allows about 0.05 ms overhead against the
+   pre-5c build. This also compares the 5c-0 restructure,
    since `RenderSunCascadeJobs` switches only 5c-1 and 5c-2. [5c procedure](https://github.com/anne-skydancer/vulkanstorm/pull/576)
 3. **C6.** Enable `AvatarAnimationJobsStats` and compare mode `1` in a crowd. Require active job frames and nonzero joint
    and isolation checks with zero mismatches. Walk, teleport, and inspect seated avatars, attachments and animesh.
@@ -93,7 +123,7 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
 - **D-D, background decode scheduling.** C8 keeps the current `ImageDecode` width. The below-normal priority result
   in #575 used synthetic busy threads. A viewer priority comparison needs an experimental switch for that pool. Record
   the width and teleport settle with the current policy first. Hold `FSImageDecodeThreads` and the actual pool width
-  fixed for a later priority A/B, then measure the texture pass, settle and moving lows at the same helper count.
+  fixed for a later priority A/B, then measure the texture pass, settle and moving frame-time tail at the same helper count.
   This is background multithreading with a separate queue.
   [C8 contention measurements](https://github.com/anne-skydancer/vulkanstorm/pull/575)
 - **D6, serial mesh publication.** The draft from `886b58b16f` moves mesh publication to the start of the display

@@ -2,7 +2,8 @@
 # Multi-core everywhere, SIMD where it pays (study, refreshed 2026-11-15; stage-1 measurements 2026-11-16)
 
 The [2026-11-20 qualification checkpoint](multicore-qualification.md) records the later stage-1b GPU measurements,
-implementation through C6, and the remaining in-world gates. The stage-1 tables below retain their original capture scope.
+implementation through C6, and the remaining in-world gates. Its CPU efficiency and frame-pacing criteria supersede
+the FPS criteria in this study for the current multicore stage. The stage-1 tables retain their original capture scope.
 
 Status: study and implementation plan. Nothing here changes the viewer. The branch `codex/multicore-simd-study-2026-11-15`
 (written on `origin/vkstorm-devel` 670593308b, rebased onto 191c9985b9 on 2026-11-16) carries:
