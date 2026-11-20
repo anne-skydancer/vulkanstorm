@@ -152,6 +152,8 @@ public:
     // the stop requests to the character (LLCharacter::requestStopMotion), the emote a keyframe motion starts when it
     // activates, and the deletion of deprecated motion instances. applyDeferredEffects() replays them in the order they
     // were recorded and ends the deferral. Both calls are for the thread that owns the character, outside jobs.
+    // Without a deferral, a motion removed during an update (between its addMotion and the blend) is recorded the same
+    // way and deleted at the end of updateMotionsCore, so that the blender's plain pointers stay valid for the blend.
     void beginDeferredEffects();
     void applyDeferredEffects();
     bool isDeferringEffects() const { return mDeferEffects; }

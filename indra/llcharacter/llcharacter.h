@@ -165,7 +165,8 @@ public:
     // The random numbers of this character's motions (eye jitter, look-away and blink times): one stream a character,
     // seeded from its id, so that the motions draw the same numbers whichever thread animates the character and in
     // whatever order the characters are animated (decision D-C of the stage-5a report). motionRandom() is in [0, 1);
-    // motionRandom(val) follows ll_frand(val): in [0, val), or (val, 0] for a negative val.
+    // motionRandom(val) follows ll_frand(val): in [0, val), or (val, 0] for a negative val. Characters with the same id
+    // draw the same numbers: those whose id is null at their first draw (a UI or preview avatar whose id is not set yet) blink in step.
     F32 motionRandom();
     F32 motionRandom(F32 val);
     // </Vulkanstorm>

@@ -635,6 +635,7 @@ bool LLVOAvatar::sLimitNonImpostors = false; // True unless RenderAvatarMaxNonIm
 F32 LLVOAvatar::sRenderDistance = 256.f;
 S32 LLVOAvatar::sNumVisibleAvatars = 0;
 S32 LLVOAvatar::sNumLODChangesThisFrame = 0;
+F32 LLVOAvatar::sAnimationJobCameraNear = 0.f; // <Vulkanstorm/> multi-core C6
 
 // const LLUUID LLVOAvatar::sStepSoundOnLand("e8af4a28-aa83-4310-a7c4-c047e15ea0df"); - <FS:PP> Commented out for FIRE-3169: Option to change the default footsteps sound
 const LLUUID LLVOAvatar::sStepSounds[LL_MCODE_END] =
@@ -6043,8 +6044,13 @@ bool LLVOAvatar::animationCoreJobSafe()
         return false;
     }
     // a pending change of sex: updateVisualParams restarts the sit motion, and motions are created on the main thread
-    const ESex avatar_sex = (getVisualParamWeight("male") > 0.5f) ? SEX_MALE : SEX_FEMALE;
-    return getSex() == avatar_sex;
+    return getSex() == visualParamSex();
+}
+
+// The sex the "male" visual param gives: updateVisualParams sets it when it differs from getSex().
+ESex LLVOAvatar::visualParamSex()
+{
+    return (getVisualParamWeight("male") > 0.5f) ? SEX_MALE : SEX_FEMALE;
 }
 // </Vulkanstorm>
 
@@ -6056,7 +6062,12 @@ void LLVOAvatar::updateHeadOffset()
     // since we only care about Z, just grab one of the eyes
     LLVector3 midEyePt = mEyeLeftp->getWorldPosition();
     midEyePt -= mDrawable.notNull() ? mDrawable->getWorldPosition() : mRoot->getWorldPosition();
-    midEyePt.mV[VZ] = llmax(-mPelvisToFoot + LLViewerCamera::getInstance()->getNear(), midEyePt.mV[VZ]);
+    // <Vulkanstorm> multi-core C6: a core on a helper (updateVisualParams comes here) reads the walk's copy of the near
+    // clip, the same value, instead of locking the camera singleton
+    const F32 camera_near = mMotionController.isDeferringEffects() ? sAnimationJobCameraNear
+                                                                    : LLViewerCamera::getInstance()->getNear();
+    midEyePt.mV[VZ] = llmax(-mPelvisToFoot + camera_near, midEyePt.mV[VZ]);
+    // </Vulkanstorm>
 
     if (mDrawable.notNull())
     {
@@ -8448,7 +8459,7 @@ void LLVOAvatar::initAttachmentPoints(bool ignore_hud_joints)
 //-----------------------------------------------------------------------------
 void LLVOAvatar::updateVisualParams()
 {
-    ESex avatar_sex = (getVisualParamWeight("male") > 0.5f) ? SEX_MALE : SEX_FEMALE;
+    ESex avatar_sex = visualParamSex(); // <Vulkanstorm/> multi-core C6: one test, shared with animationCoreJobSafe
     if (getSex() != avatar_sex)
     {
         if (mIsSitting && findMotion(avatar_sex == SEX_MALE ? ANIM_AGENT_SIT_FEMALE : ANIM_AGENT_SIT) != NULL)
@@ -8473,11 +8484,11 @@ void LLVOAvatar::updateVisualParams()
             }
             else
             {
+                stopMotion(ANIM_AGENT_SIT);
+                setSex(avatar_sex);
+                startMotion(ANIM_AGENT_SIT);
+            }
             // </Vulkanstorm>
-            stopMotion(ANIM_AGENT_SIT);
-            setSex(avatar_sex);
-            startMotion(ANIM_AGENT_SIT);
-            } // <Vulkanstorm/>
         }
         else
         {

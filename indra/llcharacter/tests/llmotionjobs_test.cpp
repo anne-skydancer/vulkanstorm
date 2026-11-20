@@ -80,7 +80,7 @@ namespace
         return id;
     }
 
-    enum { ID_CHARACTER = 1, ID_KEYFRAME = 2, ID_HEAD = 3, ID_EYE = 4, ID_STOP = 5, ID_EMOTE = 6 };
+    enum { ID_CHARACTER = 1, ID_KEYFRAME = 2, ID_HEAD = 3, ID_EYE = 4, ID_STOP = 5, ID_EMOTE = 6, ID_REMOVER = 7 };
 
     const U32 NUM_ANIMS = 6; // synthetic keyframe animations
     const S32 MESH_SIZE = 8;
@@ -353,6 +353,51 @@ namespace
         LLPointer<LLJointState> mState;
     };
 
+    // a motion that, when asked, removes the stop motion during its own update, after the stop motion was added to the
+    // blend (H6: the removed motion's joint states must last until the blend)
+    bool sRemoveStopMotion = false;
+    S32  sStopMotionsAliveAfterRemove = -1;
+
+    class TestRemoverMotion : public LLMotion
+    {
+    public:
+        explicit TestRemoverMotion(const LLUUID& id) : LLMotion(id) { mName = "test_remover"; }
+        static LLMotion* create(const LLUUID& id) { return new TestRemoverMotion(id); }
+
+        bool getLoop() override { return true; }
+        F32 getDuration() override { return 0.f; }
+        F32 getEaseInDuration() override { return 0.f; }
+        F32 getEaseOutDuration() override { return 0.f; }
+        LLJoint::JointPriority getPriority() override { return LLJoint::LOW_PRIORITY; }
+        LLMotionBlendType getBlendType() override { return NORMAL_BLEND; }
+        F32 getMinPixelArea() override { return 20.f; }
+        LLMotionInitStatus onInitialize(LLCharacter* character) override
+        {
+            mCharacter = static_cast<TestCharacter*>(character);
+            mState = new LLJointState;
+            mState->setJoint(character->getJoint("mWristLeft"));
+            mState->setUsage(LLJointState::ROT);
+            addJointState(mState);
+            return STATUS_SUCCESS;
+        }
+        bool onActivate() override { return true; }
+        bool onUpdate(F32 time, U8*) override
+        {
+            mState->setRotation(LLQuaternion(0.1f * time, LLVector3(0.f, 0.f, 1.f)));
+            if (sRemoveStopMotion)
+            {
+                sRemoveStopMotion = false;
+                mCharacter->removeMotion(test_id(ID_STOP, 0));
+                sStopMotionsAliveAfterRemove = sStopMotionsAlive;
+            }
+            return true;
+        }
+        void onDeactivate() override { }
+
+        TestCharacter*          mCharacter = nullptr;
+        LLPointer<LLJointState> mState;
+    };
+
     //-------------------------------------------------------------------------
     // synthetic keyframe animations, put into the keyframe cache so that LLKeyframeMotion needs no asset
     //-------------------------------------------------------------------------
@@ -473,6 +518,7 @@ namespace
             registry_access.registerMotion(test_id(ID_EYE, 0), LLEyeMotion::create);
             registry_access.registerMotion(test_id(ID_STOP, 0), TestStopMotion::create);
             registry_access.registerMotion(test_id(ID_EMOTE, 0), TestEmoteMotion::create);
+            registry_access.registerMotion(test_id(ID_REMOVER, 0), TestRemoverMotion::create);
             for (U32 anim = 0; anim < NUM_ANIMS; ++anim)
             {
                 registry_access.registerMotion(test_id(ID_KEYFRAME, anim), LLKeyframeMotion::create);
@@ -873,6 +919,38 @@ namespace tut
             character->stopMotion(test_id(ID_KEYFRAME, 4), true);
             character->startMotion(test_id(ID_KEYFRAME, 4));
             ensure("the emote starts at once outside a deferral", character->isMotionActive(test_id(ID_EMOTE, 0)));
+        }
+
+        // outside a job, a motion removed during the update, after its joint states went into the blend, is deleted after
+        // the blend and not before (H6: the blender's plain pointers)
+        {
+            const S32 alive_before = sStopMotionsAlive;
+            World world(1, TEST_JOINTS);
+            TestCharacter* character = world.mCharacters[0].get();
+            LLMotionController& controller = character->getMotionController();
+            for (U32 frame = 0; frame < 3; ++frame)
+            {
+                if (frame < 2)
+                {
+                    // the stop motion activates a frame later: ahead of the remover in the active list, updated first
+                    character->startMotion(test_id(frame == 0 ? ID_REMOVER : ID_STOP, 0));
+                }
+                TestClock::advance(1.0 / 45.0);
+                LLSmoothInterpolation::updateInterpolants();
+                character->updateMotions(LLCharacter::NORMAL_UPDATE);
+            }
+            ensure_equals("the stop motion lives", sStopMotionsAlive, alive_before + 1);
+            ensure("the stop motion is active", character->isMotionActive(test_id(ID_STOP, 0)));
+            sRemoveStopMotion = true;
+            sStopMotionsAliveAfterRemove = -1;
+            TestClock::advance(1.0 / 45.0);
+            LLSmoothInterpolation::updateInterpolants();
+            character->updateMotions(LLCharacter::NORMAL_UPDATE);
+            ensure("the remover ran", !sRemoveStopMotion);
+            ensure_equals("the removed motion outlives the blend", sStopMotionsAliveAfterRemove, alive_before + 1);
+            ensure_equals("and goes at the end of the update", sStopMotionsAlive, alive_before);
+            ensure("the blender is empty after the update", controller.blendersEmpty());
+            ensure("no deferral is left", !controller.isDeferringEffects());
         }
 
         // inside a job the interpolant cache is read, never grown, and gives the cache's value

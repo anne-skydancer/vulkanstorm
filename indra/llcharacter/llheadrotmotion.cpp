@@ -31,7 +31,6 @@
 
 #include "llheadrotmotion.h"
 #include "llcharacter.h"
-#include "llrand.h"
 #include "m3math.h"
 #include "v3dmath.h"
 #include "llcriticaldamp.h"

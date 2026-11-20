@@ -89,7 +89,8 @@ protected:
     // this update (LLPose::mJointMap holds the references) and stay alive until the blend: blendJointStates() empties the
     // slots, so nothing is held between updates and the blender takes no reference counts (a frame job must not).
     // LLPoseBlender::isEmpty() is the check; whoever keeps slots across updates (blendAndCache) clears them before a
-    // motion or a joint state goes (LLMotionController::removeMotionInstance, deleteAllMotions).
+    // motion or a joint state goes (LLMotionController::removeMotionInstance, deleteAllMotions); a motion removed during
+    // an update is deleted after the blend (removeMotionInstance defers it while the blender is not empty).
     LLJointState*   mJointStates[JSB_NUM_JOINT_STATES];
     // </Vulkanstorm>
     S32             mPriorities[JSB_NUM_JOINT_STATES];

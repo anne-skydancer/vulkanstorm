@@ -300,10 +300,14 @@ public:
     virtual bool    idleUpdateSplits() const { return !isSelf() && !isUIAvatar(); }
     // updateCharacterCore may run as a frame job this frame; asked after idleUpdateBegin
     bool            animationCoreJobSafe();
+    ESex            visualParamSex(); // the sex the "male" param gives (updateVisualParams, animationCoreJobSafe)
     // the core is about to run as a frame job: what it must not do there is recorded and done in idleUpdateEnd
     void            beginAnimationJob() { mMotionController.beginDeferredEffects(); }
-    // the job did not run after all (the avatar died in between): nothing was recorded, the deferral ends
+    // the End will not run (the avatar died since its Begin, or an exception left the walk): what the core recorded, if
+    // it ran, is done now and the deferral ends
     void            cancelAnimationJob() { mMotionController.applyDeferredEffects(); }
+    // the camera's near clip for updateHeadOffset in a core run as a frame job, taken on the main thread by the walk
+    static F32      sAnimationJobCameraNear;
     // the last updateCharacterCore refreshed the joints' world matrices (a full update, not a hidden one)
     bool            animationCoreRefreshesJoints() const { return mAnimStep == ANIM_STEP_FULL; }
     // an animated object's avatar: the root of the linkset it follows (the wearer for an attached one); null otherwise

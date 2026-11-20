@@ -13,6 +13,7 @@
 #include "lljoint.h"
 #include "llphysicsmotion.h"
 #include "lltimer.h"
+#include "llviewercamera.h"
 #include "llviewercontrol.h"
 #include "llviewerobject.h"
 #include "llvoavatar.h"
@@ -119,6 +120,21 @@ namespace
     {
         return avatar->mDrawable.notNull() && avatar->isSitting()
             && seat->mDrawable.notNull() && !seat->mDrawable->isState(LLDrawable::EARLY_MOVE);
+    }
+
+    // A seat on a pending avatar's attachment (that avatar may sit on a linkset in turn, which is then the seat's root):
+    // that avatar's End moves the attachment's drawable, which this avatar's root joint hangs on.
+    bool sits_on_pending_avatar(const LLVOAvatar* avatar)
+    {
+        for (const LLViewerObject* parent = static_cast<const LLViewerObject*>(avatar->getParent()); parent;
+             parent = static_cast<const LLViewerObject*>(parent->getParent()))
+        {
+            if (parent->isAvatar() && marks(parent) != 0)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // The cores of `count` avatars: one avatar a chunk, on the frame job helpers when the batch is worth a dispatch.
@@ -364,6 +380,34 @@ namespace
             sStamp = 1;
         }
     }
+
+    // Leaves nothing behind when an exception leaves the walk (a core's, rethrown by parallelFor once every job is done,
+    // or an idleUpdate's): every pending avatar's deferral ends here, with what its core recorded done on this thread,
+    // before the frame loop's handler runs and while every held avatar is still alive (dead objects are deleted after
+    // the list's loop). An avatar whose End already ran has no deferral left; ending it again does nothing.
+    struct WalkUnwind
+    {
+        ~WalkUnwind()
+        {
+            if (sHeld.empty())
+            {
+                return; // the walk finished: its last flush emptied the list
+            }
+            for (const Held& held : sHeld)
+            {
+                if (held.mInBatch)
+                {
+                    held.mAvatar->cancelAnimationJob();
+                }
+            }
+            sHeld.clear();
+            sBatch.clear();
+            if (++sStamp == 0)
+            {
+                sStamp = 1;
+            }
+        }
+    };
 }
 
 bool LLAvatarAnimationJobs::idleUpdateObjects(LLViewerObject* const* objects, U32 count, LLAgent& agent, const F64& frame_time)
@@ -389,16 +433,12 @@ bool LLAvatarAnimationJobs::idleUpdateObjects(LLViewerObject* const* objects, U3
         LLPhysicsMotionController::prepareForJobs();
     }
 
-    // nothing is left from a walk that did not finish (an exception on its way out), marks included
-    if (!sHeld.empty())
-    {
-        sHeld.clear();
-        sBatch.clear();
-        if (++sStamp == 0)
-        {
-            sStamp = 1;
-        }
-    }
+    // every walk ends with its list empty, by its last flush or by WalkUnwind
+    llassert(sHeld.empty() && sBatch.empty());
+    WalkUnwind unwind;
+
+    // the near clip updateHeadOffset reads, taken here so that a core on a helper looks up no singleton
+    LLVOAvatar::sAnimationJobCameraNear = LLViewerCamera::getInstance()->getNear();
 
     for (U32 i = 0; i < count; ++i)
     {
@@ -441,6 +481,7 @@ bool LLAvatarAnimationJobs::idleUpdateObjects(LLViewerObject* const* objects, U3
             && (marks(avatar) != 0
                 || (seat && (marks(seat) & (MARK_HELD | MARK_ANIMATED_ROOT)) != 0)
                 || (seat && marks(seat) != 0 && begin_moves_seat(avatar, seat))
+                || (seat && sits_on_pending_avatar(avatar))
                 || (volume_root && marks(volume_root) != 0)))
         {
             // its Begin must see them finished

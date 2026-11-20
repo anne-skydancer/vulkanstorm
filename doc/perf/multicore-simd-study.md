@@ -590,7 +590,7 @@ attached, a best-case share of the frame and not a prediction (the Amdahl bound 
 | C3 | Projector tile culls (and the avatar-layer culls) | data-parallel across the frame's chosen tiles | all tiles share `CAMERA_SPOT_SHADOW0`, `static LLCullResult`, the LOD pin book (`mPins`, main thread) | visibility slot and pin writes must become per-job records applied serially; submit stays serial | **measured: the tiles' cull + sort is 0.08 / 0.26 ms a frame** [stage 1]: **the tiles can wait**. A tile costs about 1.0 ms whole, mostly its draw and `pinCasters` (0.4 ms) [Rooftops split]; more tiles in the same cap remains [inferred]; #539's cell splitting raises the tiles per wide lamp; the point-light faces get the same | identical tile contents (cull lists) |
 | C4 | Geometry fill (`getGeometryVolume` per group) | data-parallel, one job per spatial group | buffers belong to one group; static `sSimpleFaces`; `sMappedBuffers` | `getMaterialParams` by value, lazy `genTangents`, GLTF selection path allocates buffers | **measured: fill is 0.33 / 0.13 ms settled (0.1–0.3 ms) and 2.3 ms only while a scene loads** [stage 1]: a loading cost, no steady-state fps. 4.8× on the fill share [measured shape, §4.5, bench]. After GL 4.6 (#537) persistent mapped buffers are guaranteed, so a worker could fill vertex data (§6.6) | same bytes in the buffers (compare mode) |
 | C5 | State sort, pure part | data-parallel then serial apply | `markRebuild`, pool enqueue, LOD timestamps, `markVisible` | many globals; render-type masks | **measured: the sort over every pass is 4.0 / 4.4 ms (12.5–16 %), three quarters of it in the cascades**; the world pass is 3–4 %, not 8–15 % [stage 1]. Part of C1 | Phase B |
-| C6 | Avatar animation (`updateMotions` + skeleton) | data-parallel per avatar | keyframe cache (`LLKeyframeMotion` shared data), attachments call `gPipeline.markMoved` | motion callbacks, sound triggers, `LLPointer` in motions | **measured: `updateCharacter` 2.4 / 2.8 ms (8–10 %), the whole avatar `idleUpdate` 3.5 / 4.0 ms (11–14 %)** [stage 1]: a bigger block than all the culls; **next after the cascades**; the exactness of the split is not studied | Phase B; **built 2026-11-19: §6.5 "C6 as built"** |
+| C6 | Avatar animation (`updateMotions` + skeleton) | data-parallel per avatar | keyframe cache (`LLKeyframeMotion` shared data), attachments call `gPipeline.markMoved` | motion callbacks, sound triggers, `LLPointer` in motions | **measured: `updateCharacter` 2.4 / 2.8 ms (8–10 %), the whole avatar `idleUpdate` 3.5 / 4.0 ms (11–14 %)** [stage 1]: a bigger block than all the culls; **next after the cascades**; the split and its exactness: §6.5a | Phase B; **built 2026-11-19: §6.5a** |
 | C7 | Prim volume generation (`LLVolume::generate`, `llvolume.cpp:2051`; faces `:5146`) | background per volume | `LLVolumeMgr` has a mutex (33 uses in `llvolumemgr.cpp`); faces written once | LOD switches wait for the result | settle and teleports [inferred] | same code on another thread with the same MXCSR: identical |
 | C8 | Texture priority pass (`llviewertexturelist.cpp:1290-1344`) | data-parallel compute + serial apply | `LLPointer` entries, fetch state | refcounts, `updateFetch` side effects | **measured: `updateImages` is a flat 2.1 ms (6–8.5 %) in every crowd, `updateImageDecodePriority` 1.95 ms of it, about 1.6 ms of that `calcPixelArea` (mostly rigged faces); the idle path adds 0.35 ms** [stage 1]. As big as all the culls, data-parallel and probably cacheable per frame; a per-frame cache must cover both callers. **Joins FJ's first users** (this study had it as low) | Phase B |
 | C9 | VO cache read on region arrival (`llviewerregion.cpp:847`) | background | region's cache map | region deletion while reading | teleport hitch [inferred] | Phase B |
@@ -960,74 +960,88 @@ As in #448, with two updates (the width rule, and the spin window's risks).
   - **Cascades turned off** (`RenderShadowSplits` below 3) have no cull item, are left out of `cull_groups`, and the
     deliberate fault of compare mode 2 needs cascade 1 on.
 
-- **C6 as built (2026-11-19, `codex/mc-c6-avatar-animation`): the avatars' animation cores on `LL::FrameJobs`**, as the
-  stage-5a report designed it (section 3 row 1; decisions D-B, D-C, D-E; F4, H6; verify's correction C6-1), with two
-  points where the code decided otherwise (below).
-  - **Serial work first.** F4: `LLJoint::sNumTouches` / `sNumUpdates` are gone, with their only reader (the "Debug Joint
-    Updates" log line, its toggle and its menu entry). H6: `LLJointStateBlender` holds plain pointers; `blendAndApply`
-    asserts that every blender is emptied. A bug found on the way: `LLMotionController::mJointSignature` was read before
-    its first reset by a motion started before the first update (a keyframe constraint tests it); the constructor
-    clears it now.
-  - **llcharacter.** `LLMotionController::updateMotions` (and `updateMotionsMinimal`) is `updateMotionsBegin` (the
-    clock, `purgeExcessMotions`, `updateLoadingMotions`: main thread) followed by `updateMotionsCore` (the active
-    motions and the blend: one character). While a controller defers effects, the stop requests
-    (`LLCharacter::requestStopMotion`), a keyframe motion's emote start and the deletion of deprecated instances are
-    recorded and replayed by `applyDeferredEffects()` in the recorded order. `LLCharacter::motionRandom()` is one
-    xoshiro256++ stream a character, seeded from its id; `LLEyeMotion` draws its jitter, look-away and blink times from
-    it (D-C). `LLSmoothInterpolation::getInterpolant` reads its cache inside a job and never adds to it.
-  - **newview.** `LLVOAvatar::idleUpdate` is `idleUpdateBegin`, `updateCharacterCore`, `idleUpdateEnd`. The core is the
-    motions' update, the ground-sit fix-up and `mRoot->updateWorldMatrixChildren()`; the world-matrix refresh moved
-    ahead of the head offset and the footsteps (same values). `LLAvatarAnimationJobs::idleUpdateObjects`
-    (`llavataranimationjobs.h`, which states the rules in full) replaces the loop of `LLViewerObjectList::update`: it
-    runs every Begin and every unrelated object at its place in the list, holds back each avatar's core and End, holds
-    back behind them the objects of that avatar's trees (its attachments, the linkset it sits on, the linkset its
-    animated object is), and at a flush runs the held cores as one batch (one avatar a chunk, on the helpers from four
-    avatars up) and then the Ends and the held objects in list order.
-  - **Exactness (verify's C6-1).** No non-avatar `idleUpdate` reads an avatar's joints (`LLViewerObject`, grass and
-    tree; the others are empty). What an End reads or moves beyond its avatar is its attachments (their `updateMove`)
-    and its seat, and those objects keep their place relative to it by being held. Every Begin, core and End therefore
-    sees its avatar, its attachments, its seat and the agent as the serial loop showed them. A later avatar's Begin
-    and an unrelated later object now run before an earlier avatar's End: they share no value, only the pipeline's
-    queues (moved list, rebuild queues, octree moves), where unrelated drawables can stand in another order.
-  - **Where the code decided otherwise.**
-    - *Wearer and attached animated object are not one job; a flush separates them.* The animated object's avatar
-      reads its wearer in its Begin: the attachment joint (`matchVolumeTransform`) and `mNeedsImpostorUpdate`, which
-      the wearer's End sets (`idleUpdateMisc`). One job cannot put the wearer's End before that Begin, so the walk
-      flushes before the second of the two, whichever comes second in the list. Same effect on safety (never two jobs
-      on one tree), exact order, one more batch per such pair.
-    - *The compare mode does not run a core twice.* The update changes the avatar (motions, timers, random stream), so
-      there is no second run of the same frame to compare with; the parallelizer's report said so. The mode checks what
-      a running viewer can: the joints' world transforms computed again on the main thread from the joints' local
-      transforms and compared bit for bit, and isolation (the batch runs as two halves by a coin; the joints of the
-      still half must keep their bits). That a core equals the serial update is the llcharacter test's proof.
-  - **Kept on the main thread:** your own avatar (always, at its place: a flush before it), UI avatars, an avatar on an
-    early way out of `idleUpdate` (dead, hidden as not a friend, render type off), an avatar with the poser's motion
-    active or a pending change of sex (its core runs at its End's turn). An avatar that died between its Begin and the
-    flush is skipped. D-E: nothing changed in which avatars animate in full (those only a sun cascade sees still do).
-  - **Tests.** `INTEGRATION_TEST_llmotionjobs` (`indra/llcharacter/tests/llmotionjobs_test.cpp`): the random stream;
-    the deferred effects; two crowds of 24 synthetic characters (real `LLKeyframeMotion` with a ground constraint and an
-    emote, `LLHeadRotMotion`, `LLEyeMotion`; restarts, stops, self-stopping motions, pauses, hidden and forced updates,
-    LOD fades), one on `updateMotions()`, one on Begin / Core as jobs / deferred effects, equal bit for bit (joints,
-    world matrices, visual params, motion counts, stop requests) over 1,200 frames on 0, 1, 2, 3, 5 and 7 helpers and
-    in serial mode; two deliberate breaks (`ll_frand` in a motion, the wrong replay order) are caught. The walk of
-    `LLAvatarAnimationJobs` has no unit test (it needs the viewer's objects): its rules rest on the code reading and on
-    the in-world check.
-  - **Offline bench** (`LL_MOTION_JOBS_BENCH=1`; dev machine, 8 cores, other builds running; 52 model characters of 133
-    joints with 12 keyframe motions of 40 joints, head and eyes; 1 ms of main-thread work before each batch so the
-    helpers have parked; median of 300 frames): the serial update 4.7 ms, the batch 2.3 / 1.6 / 1.2 / 0.99 / 0.85 /
-    0.73 ms with 1 to 6 helpers (5.4x at the rule's 5); two repeats under heavier load gave 5.2 to 6.1 ms serial and
-    2.5 and 1.3 ms at 5 helpers. Begin and the deferred effects cost 3 and 0.3 microseconds for the crowd. A model
-    character costs about 90 microseconds against 61 measured at Rooftops, so the ratio carries over, not the times.
-  - **Debug settings:** `AvatarAnimationJobs` (on; off is the former loop, each avatar animated inside its own
-    `idleUpdate`). Used only where helpers run (`helperCount() > 0`, not serial mode) or the compare mode asks.
-    Development only (`VKS_FRAMEJOBS_COMPARE`, rejected on `vkstorm-release` by `check_release_hooks.py`):
-    `AvatarAnimationJobsCompare` (1: the two checks above every frame; 2: the same with one deliberate fault a batch)
-    and `AvatarAnimationJobsStats` (one `AvatarAnimJobs:` log line a second: the time of the active objects' loop with
-    the jobs on or off, the batches' time, avatars batched and on the main thread, objects held, batches and early
-    flushes, and the compare counts with session totals).
-  - **Still open (in world):** the compare counts at 0 in a crowd, walking and across a teleport; `loop_ms` with
-    `AvatarAnimationJobs` on and off at Rooftops against the expected -2.1 ms; a Release build that reaches the world;
-    a `VKS_FRAMEJOBS_GUARDS` build and a TSan run of the test on Linux (not run here).
+### 6.5a Stage C6: the avatars' animation cores (as built)
+
+Built 2026-11-19 on `codex/mc-c6-avatar-animation` (PR #577): the avatars' animation cores on `LL::FrameJobs`, as the
+stage-5a report designed it (section 3 row 1; decisions D-B, D-C, D-E; F4, H6; verify's correction C6-1), with two
+points where the code decided otherwise (below).
+
+- **Serial work first.** F4: `LLJoint::sNumTouches` / `sNumUpdates` are gone, with their only reader (the "Debug Joint
+  Updates" log line, its toggle and its menu entry). H6: `LLJointStateBlender` holds plain pointers; `blendAndApply`
+  asserts that every blender is emptied; a motion removed during an update, after its joint states went into the
+  blend, is deleted after the blend (what the blender's references gave before). A bug found on the way: `LLMotionController::mJointSignature` was read before
+  its first reset by a motion started before the first update (a keyframe constraint tests it); the constructor
+  clears it now.
+- **llcharacter.** `LLMotionController::updateMotions` (and `updateMotionsMinimal`) is `updateMotionsBegin` (the
+  clock, `purgeExcessMotions`, `updateLoadingMotions`: main thread) followed by `updateMotionsCore` (the active
+  motions and the blend: one character). While a controller defers effects, the stop requests
+  (`LLCharacter::requestStopMotion`), a keyframe motion's emote start and the deletion of deprecated instances are
+  recorded and replayed by `applyDeferredEffects()` in the recorded order. `LLCharacter::motionRandom()` is one
+  xoshiro256++ stream a character, seeded from its id; `LLEyeMotion` draws its jitter, look-away and blink times from
+  it (D-C), on the job path and with the jobs off alike: the off path gives the same animation as the job path, not
+  the draws of the viewers before C6 (they took `ll_frand`, the thread's generator). `LLSmoothInterpolation::getInterpolant` reads its cache inside a job and never adds to it.
+- **newview.** `LLVOAvatar::idleUpdate` is `idleUpdateBegin`, `updateCharacterCore`, `idleUpdateEnd`. The core is the
+  motions' update, the ground-sit fix-up and `mRoot->updateWorldMatrixChildren()`; the world-matrix refresh moved
+  ahead of the head offset and the footsteps (same values). `LLAvatarAnimationJobs::idleUpdateObjects`
+  (`llavataranimationjobs.h`, which states the rules in full) replaces the loop of `LLViewerObjectList::update`: it
+  runs every Begin and every unrelated object at its place in the list, holds back each avatar's core and End, holds
+  back behind them the objects of that avatar's trees (its attachments, the linkset it sits on, the linkset its
+  animated object is), and at a flush runs the held cores as one batch (one avatar a chunk, on the helpers from four
+  avatars up) and then the Ends and the held objects in list order.
+- **Exactness (verify's C6-1).** No non-avatar `idleUpdate` reads an avatar's joints (`LLViewerObject`, grass and
+  tree; the others are empty). What an End reads or moves beyond its avatar is its attachments (their `updateMove`)
+  and its seat, and those objects keep their place relative to it by being held. Every Begin, core and End therefore
+  sees its avatar, its attachments, its seat and the agent as the serial loop showed them. A later avatar's Begin
+  and an unrelated later object now run before an earlier avatar's End: they share no value, only the pipeline's
+  queues (moved list, rebuild queues, octree moves), where unrelated drawables can stand in another order.
+- **Where the code decided otherwise.**
+  - *Wearer and attached animated object are not one job; a flush separates them.* The animated object's avatar
+    reads its wearer in its Begin: the attachment joint (`matchVolumeTransform`) and `mNeedsImpostorUpdate`, which
+    the wearer's End sets (`idleUpdateMisc`). One job cannot put the wearer's End before that Begin, so the walk
+    flushes before the second of the two, whichever comes second in the list. Same effect on safety (never two jobs
+    on one tree), exact order, one more batch per such pair.
+  - *The compare mode does not run a core twice.* The update changes the avatar (motions, timers, random stream), so
+    there is no second run of the same frame to compare with; the parallelizer's report said so. The mode checks what
+    a running viewer can: the joints' world transforms computed again on the main thread from the joints' local
+    transforms and compared bit for bit, and isolation (the batch runs as two halves by a coin; the joints of the
+    still half must keep their bits). That a core equals the serial update is the llcharacter test's proof.
+- **Review round (2026-11-20).** A sitter on a pending avatar's attachment (directly, or with that avatar sitting in
+  turn) flushes first: that avatar's End moves the attachment's drawable. An exception that leaves the walk ends every
+  pending avatar's deferral on its way out (`WalkUnwind`), with the recorded effects done. A core reads the camera's
+  near clip from the walk's copy (`LLVOAvatar::sAnimationJobCameraNear`) instead of locking the camera singleton in
+  `updateHeadOffset`; `LLPhysicsMotion` reads its shared default map without inserting. One helper,
+  `LLVOAvatar::visualParamSex`, gives the sex test to both `updateVisualParams` and `animationCoreJobSafe`.
+- **Kept on the main thread:** your own avatar (always, at its place: a flush before it), UI avatars, an avatar on an
+  early way out of `idleUpdate` (dead, hidden as not a friend, render type off), an avatar with the poser's motion
+  active or a pending change of sex (its core runs at its End's turn). An avatar that died between its Begin and the
+  flush is skipped. D-E: nothing changed in which avatars animate in full (those only a sun cascade sees still do).
+- **Tests.** `INTEGRATION_TEST_llmotionjobs` (`indra/llcharacter/tests/llmotionjobs_test.cpp`): the random stream;
+  the deferred effects; two crowds of 24 synthetic characters (real `LLKeyframeMotion` with a ground constraint and an
+  emote, `LLHeadRotMotion`, `LLEyeMotion`; restarts, stops, self-stopping motions, pauses, hidden and forced updates,
+  LOD fades), one on `updateMotions()`, one on Begin / Core as jobs / deferred effects, equal bit for bit (joints,
+  world matrices, visual params, motion counts, stop requests) over 1,200 frames on 0, 1, 2, 3, 5 and 7 helpers and
+  in serial mode; two deliberate breaks (`ll_frand` in a motion, the wrong replay order) are caught. The walk of
+  `LLAvatarAnimationJobs` has no unit test (it needs the viewer's objects): its rules rest on the code reading and on
+  the in-world check.
+- **Offline bench** (`LL_MOTION_JOBS_BENCH=1`; dev machine, 8 cores, other builds running; 52 model characters of 133
+  joints with 12 keyframe motions of 40 joints, head and eyes; 1 ms of main-thread work before each batch so the
+  helpers have parked; median of 300 frames): the serial update 4.7 ms, the batch 2.3 / 1.6 / 1.2 / 0.99 / 0.85 /
+  0.73 ms with 1 to 6 helpers (5.4x at the rule's 5); two repeats under heavier load gave 5.2 to 6.1 ms serial and
+  2.5 and 1.3 ms at 5 helpers. Begin and the deferred effects cost 3 and 0.3 microseconds for the crowd. A model
+  character costs about 90 microseconds against 61 measured at Rooftops, so the ratio carries over, not the times.
+- **Debug settings:** `AvatarAnimationJobs` (on; off is the former loop, each avatar animated inside its own
+  `idleUpdate`). Used only where helpers run (`helperCount() > 0`, not serial mode) or the compare mode asks.
+  Development only (`VKS_FRAMEJOBS_COMPARE`, rejected on `vkstorm-release` by `check_release_hooks.py`):
+  `AvatarAnimationJobsCompare` (1: the two checks above every frame; 2: the same with one deliberate fault a batch)
+  and `AvatarAnimationJobsStats` (one `AvatarAnimJobs:` log line a second: the time of the active objects' loop with
+  the jobs on or off, the batches' time, avatars batched and on the main thread, objects held, batches and early
+  flushes, and the compare counts with session totals).
+- **Still open (in world):** the compare counts at 0 in a crowd, walking and across a teleport; `loop_ms` with
+  `AvatarAnimationJobs` on and off at Rooftops against the expected -2.1 ms; a Release build that reaches the world;
+  a `VKS_FRAMEJOBS_GUARDS` build and a TSan run of the test on Linux (not run here). The integration into `vkstorm-release` carries
+  the job path (`AvatarAnimationJobs`, on) without the compare mode and the stats, and leaves out the two development
+  settings' `settings.xml` entries too: that build needs its own in-world check (look and `AvatarAnimationJobs` on/off
+  frame times), since its walk cannot count mismatches.
 
 ### 6.6 Stage 5b: plan / fill / flush geometry, after G5
 

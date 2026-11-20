@@ -2150,7 +2150,7 @@
     <key>AvatarAnimationJobs</key>
     <map>
       <key>Comment</key>
-      <string>Animate the other avatars and animated objects on the frame job helpers (multi-core): each one&apos;s motions, pose blend and joint transforms are one job; your own avatar stays on the main thread. Used only when frame job helpers run (4 fast cores or more, not in serial mode) or AvatarAnimationJobsCompare is set. Off: every avatar is animated inside its own idle update on the main thread, in the former loop. The animation is the same either way.</string>
+      <string>Animate the other avatars and animated objects on the frame job helpers (multi-core): each one&apos;s motions, pose blend and joint transforms are one job; your own avatar stays on the main thread. Used only when frame job helpers run (4 fast cores or more, not in serial mode) or AvatarAnimationJobsCompare is set. Off: every avatar is animated inside its own idle update on the main thread, in the former loop. The animation is the same either way: both draw the eyes&apos; random numbers (jitter, look-away, blinks) from each avatar&apos;s own stream, seeded from its id, where the viewers before C6 used the thread&apos;s generator.</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>

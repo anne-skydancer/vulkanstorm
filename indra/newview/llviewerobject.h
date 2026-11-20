@@ -154,12 +154,6 @@ public:
 
     virtual void markDead();                // Mark this object as dead, and clean up its references
     bool isDead() const                                 {return mDead;}
-
-    // <Vulkanstorm> multi-core C6 (llavataranimationjobs.cpp): how this object relates to the avatars whose animation is
-    // pending in the current walk over the active objects; the flags count while the stamp is that batch's number
-    U32 mAnimBatchStamp = 0;
-    U8  mAnimBatchFlags = 0;
-    // </Vulkanstorm>
     bool isOrphaned() const                             { return mOrphaned; }
     bool isParticleSource() const;
 
@@ -835,6 +829,12 @@ public:
 
     // last index data for mIndexAndLocalIDToUUID
     U32             mRegionIndex;
+
+    // <Vulkanstorm> multi-core C6 (llavataranimationjobs.cpp): how this object relates to the avatars whose animation is
+    // pending in the current walk over the active objects; the flags count while the stamp is that batch's number
+    U32             mAnimBatchStamp = 0;
+    U8              mAnimBatchFlags = 0;
+    // </Vulkanstorm>
 
     LLPointer<LLViewerTexture> *mTEImages;
     LLPointer<LLViewerTexture> *mTENormalMaps;

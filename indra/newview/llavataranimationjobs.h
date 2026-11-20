@@ -2,7 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 //
 // Multi-core stage C6: the avatars' animation cores as frame jobs (reports/multicore-5a-2026-11-18, section 3 row 1;
-// doc/perf/multicore-simd-study.md, "C6 as built").
+// doc/perf/multicore-simd-study.md, section 6.5a).
 //
 // LLViewerObjectList::update calls every active object's idleUpdate in list order. An avatar's idleUpdate is three
 // steps (llvoavatar.h): Begin (everything up to the motions' update), the animation core (the motions, the blend onto
@@ -19,9 +19,11 @@
 // A flush comes before: the agent's own avatar (always animated on the main thread, at its place), a UI avatar, an
 // avatar whose idleUpdate takes an early way out, an animated object's avatar whose linkset or wearer is pending or
 // held, the wearer of a pending attached animated object, and an avatar that sits on a linkset with a held object, on
-// an animated object's, or on one a pending avatar sits on whose root drawable this avatar's Begin would still move
-// (the pending core reads it: a sitting avatar's root joint hangs on the seat's drawable). An avatar whose core is not fit for a job this frame (LLVOAvatar::animationCoreJobSafe: the
-// poser's motion, a pending change of sex) stays pending and has its core run on the main thread at its End's turn.
+// an animated object's, on one a pending avatar sits on whose root drawable this avatar's Begin would still move (the
+// pending core reads it: a sitting avatar's root joint hangs on the seat's drawable), or on a pending avatar's
+// attachment (that avatar's End moves the attachment's drawable).
+// An avatar whose core is not fit for a job this frame (LLVOAvatar::animationCoreJobSafe: the poser's motion, a pending
+// change of sex) stays pending and has its core run on the main thread at its End's turn.
 //
 // What is equal to the serial loop: every avatar's Begin, core and End see the avatar, its attachments, its seat and
 // the agent as the serial loop showed them, and every non-avatar idleUpdate sees its own tree as before (none of them
@@ -32,7 +34,10 @@
 // stand in another order.
 //
 // Job rules (llframejobs.h): the core copies no LLPointer, calls no GL, deletes nothing (the motion controller defers
-// its deletions and stop requests to the End) and draws its random numbers from the avatar's own stream.
+// its deletions and stop requests to the End), draws its random numbers from the avatar's own stream and reads the
+// camera's near clip from the walk's copy (LLVOAvatar::sAnimationJobCameraNear), not the camera singleton; the one
+// singleton a core still reaches, LLWorld (a ground constraint's getGround), exists before any avatar. An exception
+// that leaves the walk ends every pending avatar's deferral on its way out.
 //
 // Debug settings: AvatarAnimationJobs (on; off is the former loop), and in development builds (VKS_FRAMEJOBS_COMPARE)
 // AvatarAnimationJobsCompare and AvatarAnimationJobsStats.

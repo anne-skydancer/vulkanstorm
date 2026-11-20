@@ -356,9 +356,11 @@ void LLMotionController::removeMotionInstance(LLMotion* motionp)
             // the time-step quantum keeps joint states in the blender between updates (blendAndCache), by plain pointer (H6)
             mPoseBlender.clearBlenders();
         }
-        if (mDeferEffects)
+        if (mDeferEffects || !mPoseBlender.isEmpty())
         {
-            // a frame job deletes nothing: applyDeferredEffects() does, on the owner's thread
+            // A frame job deletes nothing: applyDeferredEffects() does, on the owner's thread. And a motion removed during
+            // an update, between its addMotion and the blend, keeps its joint states for that blend, as the blender's
+            // references did (H6): updateMotionsCore deletes it after the blend.
             mDeferredEffects.push_back({ DeferredEffect::DELETE_MOTION, motionp, LLUUID::null });
             return;
         }
@@ -1029,6 +1031,14 @@ void LLMotionController::updateMotionsCore(bool force_update)
             mPoseBlender.blendAndApply();
         }
     }
+
+    // <Vulkanstorm> multi-core C6 (H6): outside a frame job, a motion removed during this update goes now that the blend
+    // is done (removeMotionInstance); nothing else is recorded outside a deferral
+    if (!mDeferEffects && !mDeferredEffects.empty())
+    {
+        applyDeferredEffects();
+    }
+    // </Vulkanstorm>
 
     mHasRunOnce = true;
 //  LL_INFOS() << "Motion controller time " << motionTimer.getElapsedTimeF32() << LL_ENDL;
