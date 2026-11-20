@@ -33,6 +33,8 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <memory>
+#include <new>
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
@@ -6356,9 +6358,38 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     F32 depth_conversion_factor_1 = (LLViewerCamera::getInstance()->getFar() + LLViewerCamera::getInstance()->getNear()) / (2.f * LLViewerCamera::getInstance()->getFar() * LLViewerCamera::getInstance()->getNear());
     F32 depth_conversion_factor_2 = (LLViewerCamera::getInstance()->getFar() - LLViewerCamera::getInstance()->getNear()) / (2.f * LLViewerCamera::getInstance()->getFar() * LLViewerCamera::getInstance()->getNear());
 
+    const S32 output_width = raw->getWidth();
+    const S32 output_stride = output_width * raw->getComponents();
+    const bool read_color = type == LLSnapshotModel::SNAPSHOT_TYPE_COLOR;
+    const bool depth24 = type == LLSnapshotModel::SNAPSHOT_TYPE_DEPTH24;
+    // Reuse depth storage across tiles. A 4K UHD tile fits in one read;
+    // larger tiles are read in strips to bound the extra memory.
+    constexpr size_t MAX_DEPTH_PIXELS = (32 * 1024 * 1024) / sizeof(GLfloat);
+    const S32 max_tile_width = llmin(window_width, output_width);
+    const S32 max_tile_height = llmin(window_height, (S32)raw->getHeight());
+    size_t depth_capacity = 0;
+    std::unique_ptr<GLfloat[]> depth_buffer;
+    bool ret = true;
+    if (!read_color && !LLRender::sNsightDebugSupport && max_tile_width > 0 && max_tile_height > 0)
+    {
+        depth_capacity = llmin(static_cast<size_t>(max_tile_width) * max_tile_height, MAX_DEPTH_PIXELS);
+        depth_buffer.reset(new (std::nothrow) GLfloat[depth_capacity]);
+        if (!depth_buffer)
+        {
+            // Keep the scanline read available if the strip allocation fails.
+            depth_capacity = max_tile_width;
+            depth_buffer.reset(new (std::nothrow) GLfloat[depth_capacity]);
+        }
+        if (!depth_buffer)
+        {
+            LL_WARNS() << "Could not allocate snapshot depth readback buffer" << LL_ENDL;
+            ret = false;
+        }
+    }
+
     // Subimages are in fact partial rendering of the final view. This happens when the final view is bigger than the screen.
     // In most common cases, scale_factor is 1 and there's no more than 1 iteration on x and y
-    for (int subimage_y = 0; subimage_y < scale_factor; ++subimage_y)
+    for (int subimage_y = 0; ret && subimage_y < scale_factor; ++subimage_y)
     {
         S32 subimage_y_offset = llclamp(buffer_y_offset - (subimage_y * window_height), 0, window_height);;
         // handle fractional columns
@@ -6390,92 +6421,64 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
                     swap();
                 }
 
-                for (U32 out_y = 0; out_y < read_height ; out_y++)
+                LLAppViewer::instance()->pingMainloopTimeout("LLViewerWindow::rawSnapshot");
+                // Nsight debugging disables all client readback.
+                if (!LLRender::sNsightDebugSupport)
                 {
-                    S32 output_buffer_offset = (
-                                                (out_y * (raw->getWidth())) // ...plus iterated y...
-                                                + (window_width * subimage_x) // ...plus subimage start in x...
-                                                + (raw->getWidth() * window_height * subimage_y) // ...plus subimage start in y...
-                                                - output_buffer_offset_x // ...minus buffer padding x...
-                                                - (output_buffer_offset_y * (raw->getWidth()))  // ...minus buffer padding y...
-                                                ) * raw->getComponents();
+                    const S32 output_x = window_width * subimage_x - output_buffer_offset_x;
+                    const S32 output_y = window_height * subimage_y - output_buffer_offset_y;
+                    U8* tile = raw->getData() + output_y * output_stride + output_x * raw->getComponents();
 
-                    // Ping the watchdog thread every 100 lines to keep us alive (arbitrary number, feel free to change)
-                    if (out_y % 100 == 0)
+                    // LLRender sets pack alignment to 1, so RGB rows can have any pixel width.
+                    GLint pack_row_length = 0;
+                    glGetIntegerv(GL_PACK_ROW_LENGTH, &pack_row_length);
+                    glPixelStorei(GL_PACK_ROW_LENGTH, read_color ? output_width : 0);
+                    if (read_color)
                     {
-                        LLAppViewer::instance()->pingMainloopTimeout("LLViewerWindow::rawSnapshot");
+                        glReadPixels(subimage_x_offset, subimage_y_offset, read_width, read_height,
+                                     GL_RGB, GL_UNSIGNED_BYTE, tile);
                     }
-                    // disable use of glReadPixels when doing nVidia nSight graphics debugging
-                    if (!LLRender::sNsightDebugSupport)
+                    else
                     {
-                        if (type == LLSnapshotModel::SNAPSHOT_TYPE_COLOR)
+                        const F32 near_plane = LLViewerCamera::getInstance()->getNear();
+                        const F32 far_plane = LLViewerCamera::getInstance()->getFar();
+                        const U32 rows_per_read = static_cast<U32>(depth_capacity / read_width);
+                        for (U32 first_row = 0; first_row < read_height; first_row += rows_per_read)
                         {
-                            glReadPixels(
-                                     subimage_x_offset, out_y + subimage_y_offset,
-                                     read_width, 1,
-                                     GL_RGB, GL_UNSIGNED_BYTE,
-                                     raw->getData() + output_buffer_offset
-                                     );
-                        }
-                        // <FS:Ansariel> FIRE-15667: 24bit depth maps
-                        else if (type == LLSnapshotModel::SNAPSHOT_TYPE_DEPTH24)
-                        {
-                            LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GLfloat)); // need to store floating point values
-                            glReadPixels(
-                                         subimage_x_offset, out_y + subimage_y_offset,
-                                         read_width, 1,
-                                         GL_DEPTH_COMPONENT, GL_FLOAT,
-                                         depth_line_buffer->getData()// current output pixel is beginning of buffer...
-                                         );
-
-                            for (S32 i = 0; i < (S32)read_width; i++)
+                            const U32 rows = llmin(rows_per_read, read_height - first_row);
+                            glReadPixels(subimage_x_offset, subimage_y_offset + first_row, read_width, rows,
+                                         GL_DEPTH_COMPONENT, GL_FLOAT, depth_buffer.get());
+                            for (U32 row = 0; row < rows; ++row)
                             {
-                                F32 depth_float = *(F32*)(depth_line_buffer->getData() + (i * sizeof(F32)));
-
-                                F32 linear_depth_float = 1.f / (depth_conversion_factor_1 - (depth_float * depth_conversion_factor_2));
-                                U32 RGB24 = F32_to_U32(linear_depth_float, LLViewerCamera::getInstance()->getNear(), LLViewerCamera::getInstance()->getFar());
-                                //A max value of 16777215 for RGB24 evaluates to black when it shold be white.  The clamp assures that the divisions do not somehow become >=256.
-                                U8 depth_byteR = (U8)(llclamp(llfloor(RGB24 / 65536.f), 0, 255));
-                                U8 depth_byteG = (U8)(llclamp(llfloor((RGB24 - depth_byteR * 65536) / 256.f), 0, 255));
-                                U8 depth_byteB = (U8)(llclamp((RGB24 - depth_byteR * 65536 - depth_byteG * 256), 0u, 255u));
-                                // write converted scanline out to result image
-                                *(raw->getData() + output_buffer_offset + (i * raw->getComponents())) = depth_byteR;
-                                *(raw->getData() + output_buffer_offset + (i * raw->getComponents()) + 1) = depth_byteG;
-                                *(raw->getData() + output_buffer_offset + (i * raw->getComponents()) + 2) = depth_byteB;
-                                for (S32 j = 3; j < raw->getComponents(); j++)
+                                const U32 output_row = first_row + row;
+                                if (output_row % 100 == 0)
                                 {
-                                    *(raw->getData() + output_buffer_offset + (i * raw->getComponents()) + j) = depth_byteR;
+                                    LLAppViewer::instance()->pingMainloopTimeout("LLViewerWindow::rawSnapshot");
                                 }
-                            }
-                        }
-                        // </FS:Ansariel>
-                        else // LLSnapshotModel::SNAPSHOT_TYPE_DEPTH
-                        {
-                            // <FS> Fix buffer creation using the wrong type
-                            //LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GL_FLOAT)); // need to store floating point values
-                            LLPointer<LLImageRaw> depth_line_buffer = new LLImageRaw(read_width, 1, sizeof(GLfloat)); // need to store floating point values
-                            // </FS>
-                            glReadPixels(
-                                         subimage_x_offset, out_y + subimage_y_offset,
-                                         read_width, 1,
-                                         GL_DEPTH_COMPONENT, GL_FLOAT,
-                                         depth_line_buffer->getData()// current output pixel is beginning of buffer...
-                                         );
-
-                            for (S32 i = 0; i < (S32)read_width; i++)
-                            {
-                                F32 depth_float = *(F32*)(depth_line_buffer->getData() + (i * sizeof(F32)));
-
-                                F32 linear_depth_float = 1.f / (depth_conversion_factor_1 - (depth_float * depth_conversion_factor_2));
-                                U8 depth_byte = F32_to_U8(linear_depth_float, LLViewerCamera::getInstance()->getNear(), LLViewerCamera::getInstance()->getFar());
-                                // write converted scanline out to result image
-                                for (S32 j = 0; j < raw->getComponents(); j++)
+                                const GLfloat* depth = depth_buffer.get() + row * read_width;
+                                U8* pixel = tile + output_row * output_stride;
+                                for (U32 x = 0; x < read_width; ++x, pixel += 3)
                                 {
-                                    *(raw->getData() + output_buffer_offset + (i * raw->getComponents()) + j) = depth_byte;
+                                    const F32 linear_depth = 1.f / (depth_conversion_factor_1 - (depth[x] * depth_conversion_factor_2));
+                                    // <FS:Ansariel> FIRE-15667: 24bit depth maps
+                                    if (depth24)
+                                    {
+                                        const U32 rgb24 = F32_to_U32(linear_depth, near_plane, far_plane);
+                                        // Keep far-plane rounding from overflowing an 8-bit channel.
+                                        pixel[0] = (U8)llclamp(llfloor(rgb24 / 65536.f), 0, 255);
+                                        pixel[1] = (U8)llclamp(llfloor((rgb24 - pixel[0] * 65536) / 256.f), 0, 255);
+                                        pixel[2] = (U8)llclamp(rgb24 - pixel[0] * 65536 - pixel[1] * 256, 0u, 255u);
+                                    }
+                                    else
+                                    {
+                                        const U8 value = F32_to_U8(linear_depth, near_plane, far_plane);
+                                        pixel[0] = pixel[1] = pixel[2] = value;
+                                    }
                                 }
                             }
                         }
                     }
+                    glPixelStorei(GL_PACK_ROW_LENGTH, pack_row_length);
                 }
             }
             output_buffer_offset_x += subimage_x_offset;
@@ -6483,6 +6486,8 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
         }
         output_buffer_offset_y += subimage_y_offset;
     }
+    // Image scaling can allocate a second output buffer.
+    depth_buffer.reset();
 
     gDisplaySwapBuffers = false;
     gSnapshotNoPost = false;
@@ -6509,13 +6514,12 @@ bool LLViewerWindow::rawSnapshot(LLImageRaw *raw, S32 image_width, S32 image_hei
     // Note: this formula depends on the number of components being 3.  Not obvious, but it's correct.
     image_width += (image_width * 3) % 4;
 
-    bool ret = true ;
     // Resize image
-    if(llabs(image_width - image_buffer_x) > 4 || llabs(image_height - image_buffer_y) > 4)
+    if (ret && (llabs(image_width - image_buffer_x) > 4 || llabs(image_height - image_buffer_y) > 4))
     {
         ret = raw->scale( image_width, image_height );
     }
-    else if(image_width != image_buffer_x || image_height != image_buffer_y)
+    else if (ret && (image_width != image_buffer_x || image_height != image_buffer_y))
     {
         ret = raw->scale( image_width, image_height, false );
     }
