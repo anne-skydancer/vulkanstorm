@@ -2382,6 +2382,12 @@ else (OPENSIM)
 endif (OPENSIM)
 
 if (WINDOWS)
+    # <Vulkanstorm> the J2C codec's DLL, delay-loaded like openjp2.dll (neoj2k.dll with USE_NEOJ2K; see below)
+    if (USE_NEOJ2K)
+        set(J2C_CODEC_DLL neoj2k.dll)
+    else ()
+        set(J2C_CODEC_DLL openjp2.dll)
+    endif ()
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
         # *TODO -reenable this once we get server usage sorted out
@@ -2391,7 +2397,7 @@ if (WINDOWS)
         # /ENTRY:vkstormEntry is that CPU check (llcpucheck_win.cpp), which runs
         # before the C runtime starts. A failed delay-load is reported by the
         # hook in llappviewerwin32.cpp.
-        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /DELAYLOAD:openjp2.dll /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
+        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /DELAYLOAD:${J2C_CODEC_DLL} /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
         LINK_FLAGS_DEBUG "/NODEFAULTLIB:\"LIBCMT;LIBCMTD;MSVCRT\" /INCREMENTAL:NO /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         LINK_FLAGS_RELEASE "/FORCE:MULTIPLE /MAP\"secondlife-bin.MAP\" /OPT:REF /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         )
@@ -2431,11 +2437,16 @@ if (WINDOWS)
       )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
+    # <Vulkanstorm> neo-j2k's DLL instead with USE_NEOJ2K
+    if (USE_NEOJ2K)
+        list(APPEND COPY_INPUT_DEPENDENCIES
+            ${SHARED_LIB_STAGING_DIR}/neoj2k.dll
+            )
+    elseif (NOT USE_KDU)
         list(APPEND COPY_INPUT_DEPENDENCIES
             ${SHARED_LIB_STAGING_DIR}/openjp2.dll
             )
-    endif (NOT USE_KDU)
+    endif ()
     # </FS:Ansariel>
 
 

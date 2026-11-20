@@ -47,6 +47,7 @@ set(cmake_SOURCE_FILES
         MesaZink.cmake           # <VulkanStorm> Mesa Zink GL-over-Vulkan runtime
         Meshoptimizer.cmake
         NDOF.cmake
+        NeoJ2K.cmake             # <Vulkanstorm> the neo-j2k J2C codec (USE_NEOJ2K)
         OPENAL.cmake
         OpenGL.cmake
         OpenJPEG.cmake

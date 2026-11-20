@@ -29,6 +29,10 @@
 #include "llimageworker.h"
 #include "llimagedxt.h"
 #include "threadpool.h"
+#include "llimagefpstate.h"
+
+#include <algorithm>
+#include <memory>
 
 /*--------------------------------------------------------------------------*/
 class ImageRequest
@@ -62,6 +66,54 @@ private:
 
 
 //----------------------------------------------------------------------------
+
+namespace
+{
+    // The pool whose decode request this thread is running (LLImageDecodeThread::getCurrent).
+    thread_local LLImageDecodeThread* sCurrentPool = nullptr;
+
+    // One parallelFor call's fork-join, shared by the caller and by the helper tasks it posts. A helper task
+    // that starts after the caller has returned finds no job left and touches only this block, which the task
+    // keeps alive.
+    struct ForkJoin
+    {
+        ForkJoin(U32 count, LLImageDecodeThread::job_fn job, void* ctx) : mCount(count), mJob(job), mCtx(ctx) {}
+
+        // Claims and runs jobs until none is left. Each run takes the floating-point state C code expects: the
+        // main thread has flush-to-zero on (LLVector4a::initClass) and a pool thread is not trusted to have
+        // anything in particular.
+        void run()
+        {
+            LLImageFPScope fp;
+            for (U32 i = mNext.fetch_add(1, std::memory_order_relaxed); i < mCount;
+                 i = mNext.fetch_add(1, std::memory_order_relaxed))
+            {
+                mJob(mCtx, i);
+                // release: whoever sees this count sees the job's writes
+                if (mDone.fetch_add(1, std::memory_order_acq_rel) + 1 == mCount)
+                {
+                    mDone.notify_all();
+                }
+            }
+        }
+
+        // Returns when every job has returned, those that other threads claimed included.
+        void wait()
+        {
+            for (U32 done = mDone.load(std::memory_order_acquire); done < mCount;
+                 done = mDone.load(std::memory_order_acquire))
+            {
+                mDone.wait(done, std::memory_order_acquire);
+            }
+        }
+
+        const U32 mCount;
+        LLImageDecodeThread::job_fn const mJob;
+        void* const mCtx;
+        std::atomic<U32> mNext{0};
+        std::atomic<U32> mDone{0};
+    };
+}
 
 // MAIN THREAD
 LLImageDecodeThread::LLImageDecodeThread(bool /*threaded*/)
@@ -101,15 +153,20 @@ LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
         decode_id = ++mDecodeCount;
 
     // Instantiate the ImageRequest right in the lambda, why not?
+    mWaiting.fetch_add(1, std::memory_order_relaxed);
     bool posted = mThreadPool->getQueue().post(
-        [req = ImageRequest(image, discard, needs_aux, responder, decode_id)]
+        [this, req = ImageRequest(image, discard, needs_aux, responder, decode_id)]
         () mutable
         {
+            mWaiting.fetch_sub(1, std::memory_order_relaxed); // started: no longer waiting
+            sCurrentPool = this;
             auto done = req.processRequest();
             req.finishRequest(done);
+            sCurrentPool = nullptr;
         });
     if (! posted)
     {
+        mWaiting.fetch_sub(1, std::memory_order_relaxed);
         LL_DEBUGS() << "Tried to start decoding on shutdown" << LL_ENDL;
         return 0;
     }
@@ -120,6 +177,44 @@ LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
 void LLImageDecodeThread::shutdown()
 {
     mThreadPool->close();
+}
+
+// static
+LLImageDecodeThread* LLImageDecodeThread::getCurrent()
+{
+    return sCurrentPool;
+}
+
+bool LLImageDecodeThread::isIdle() const
+{
+    return mWaiting.load(std::memory_order_relaxed) < getWorkerCount();
+}
+
+U32 LLImageDecodeThread::getWorkerCount() const
+{
+    return (U32)mThreadPool->getWidth();
+}
+
+void LLImageDecodeThread::parallelFor(U32 count, job_fn job, void* job_ctx)
+{
+    if (count == 0)
+    {
+        return;
+    }
+    auto state = std::make_shared<ForkJoin>(count, job, job_ctx);
+    // One helper task for each job the calling thread cannot take, and at most one for each other worker. A task
+    // that the closed queue refuses, or that no worker gets to, costs nothing: the caller claims what is left.
+    const U32 workers = getWorkerCount();
+    const U32 helpers = std::min<U32>(count - 1, workers > 0 ? workers - 1 : 0);
+    for (U32 i = 0; i < helpers; ++i)
+    {
+        if (!mThreadPool->getQueue().post([state]() { state->run(); }))
+        {
+            break;
+        }
+    }
+    state->run();
+    state->wait();
 }
 
 LLImageDecodeThread::Responder::~Responder()

@@ -149,6 +149,7 @@ add_subdirectory(${LIBS_OPEN_PREFIX}llcorehttp)
 add_subdirectory(${LIBS_OPEN_PREFIX}llimage)
 add_subdirectory(${LIBS_OPEN_PREFIX}llkdu)
 add_subdirectory(${LIBS_OPEN_PREFIX}llimagej2coj)
+add_subdirectory(${LIBS_OPEN_PREFIX}llimagej2cneo) # <Vulkanstorm> built only with USE_NEOJ2K
 add_subdirectory(${LIBS_OPEN_PREFIX}llinventory)
 add_subdirectory(${LIBS_OPEN_PREFIX}llmath)
 add_subdirectory(${LIBS_OPEN_PREFIX}llmeshoptimizer)

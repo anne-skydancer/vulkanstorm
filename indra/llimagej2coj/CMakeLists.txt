@@ -3,7 +3,8 @@
 project(llimagej2coj)
 
 # <FS:ND> when using KDU, why compile the OpenJPEG library?
-if (NOT USE_KDU)
+# <Vulkanstorm> neither when the codec is neo-j2k (USE_NEOJ2K, llimagej2cneo)
+if (NOT USE_KDU AND NOT USE_NEOJ2K)
 
 include(00-Common)
 include(LLCommon)

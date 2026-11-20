@@ -272,6 +272,7 @@ namespace
         std::vector<unsigned char> out;
         opj_cparameters_t params;
         opj_set_default_encoder_parameters(&params);
+        params.prog_order = OPJ_RLCP; // the viewer's setting (neo-j2k's encoder takes no other)
         params.tcp_numlayers = 1;
         params.cp_disto_alloc = 1;
         params.tcp_rates[0] = 0; // lossless

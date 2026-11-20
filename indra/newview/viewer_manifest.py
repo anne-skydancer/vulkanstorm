@@ -798,6 +798,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
             # For textures
             self.path_optional("openjp2.dll")
+            self.path_optional("neoj2k.dll") # <Vulkanstorm> USE_NEOJ2K (cmake/NeoJ2K.cmake): the J2C codec's shared library
 
             # These need to be installed as a SxS assembly, currently a 'private' assembly.
             # See http://msdn.microsoft.com/en-us/library/ms235291(VS.80).aspx
@@ -2476,6 +2477,7 @@ class LinuxManifest(ViewerManifest):
             self.path_optional("libfusion*.so*")
             self.path_optional("libdirect*.so*")
             self.path_optional("libopenjpeg.so*")
+            self.path_optional("libneoj2k.so*") # <Vulkanstorm> USE_NEOJ2K (cmake/NeoJ2K.cmake): the J2C codec's shared library
             self.path("libalut.so*")
             #self.path("libpng15.so.15") #use provided libpng to workaround incompatible system versions on some distros
             #self.path("libpng15.so.15.13.0") #use provided libpng to workaround incompatible system versions on some distros
