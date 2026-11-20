@@ -10286,6 +10286,171 @@
    }
   },
   {
+   "id": "rlvSphere",
+   "program": "rlvSphere",
+   "permutation": {},
+   "source": "slang/rlvSphere.slang",
+   "stages": {
+    "vertex": {
+     "file": "rlvSphere.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "3a830e75adb9b2b0d46b454f1b6eade5486709593b2f6de4b9cffe8c8090245f",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "inv_proj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "screen_res",
+        "offset": 64,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "rlvEffectMode",
+        "offset": 72,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "rlvEffectParam1",
+        "offset": 80,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam2",
+        "offset": 96,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam3",
+        "offset": 112,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "rlvEffectParam4",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam5",
+        "offset": 144,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "rlvSphere.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "bdec38e5e20c1ea7c5e6e41cddc7265544930fd07dae8ba27486c75864e5bd11",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "inv_proj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "screen_res",
+        "offset": 64,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "rlvEffectMode",
+        "offset": 72,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "rlvEffectParam1",
+        "offset": 80,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam2",
+        "offset": 96,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam3",
+        "offset": 112,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "rlvEffectParam4",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "rlvEffectParam5",
+        "offset": 144,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "depthMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "snapshotframe",
    "program": "snapshotframe",
    "permutation": {},

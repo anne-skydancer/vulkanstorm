@@ -506,6 +506,15 @@
       }
     },
     {
+      "name": "rlvSphere",
+      "family": "rlv-sphere",
+      "source": "rlvSphere.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "snapshotframe",
       "source": "snapshotframe.slang",
       "entries": {

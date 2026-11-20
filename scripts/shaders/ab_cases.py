@@ -565,6 +565,44 @@ def terrain_bake_cases():
                    texcoord1_s_scale=3.0, fragment_helpers=('deferred/pbrterrainUtilF.glsl',))
 
 
+def rlv_sphere_cases():
+    # Vary the depth at subpixel offsets so point and linear filtering exercise different reconstructions.
+    s, t = np.meshgrid(np.linspace(0, 1, 47, dtype='f4'), np.linspace(0, 1, 29, dtype='f4'))
+    projection = H._perspective(55.0, 1.0, 0.1, 100.0)
+    distance = 2.5 + 0.8 * s + 0.35 * np.sin(3 * np.pi * t) + 0.55 * (s > 0.66)
+    ndc_z = (-distance * projection[2, 2] + projection[2, 3]) / distance
+    depth = np.repeat((ndc_z * 0.5 + 0.5)[..., None], 4, axis=-1).astype('<f4')
+    scene = {'depthMap': (depth,)}
+    inv_proj = np.linalg.inv(projection).T.reshape(-1).tolist()
+    base = {
+        'inv_proj': inv_proj,
+        'rlvEffectParam1': [0.15, -0.1, -3.0, 1.0],
+        'rlvEffectParam2': [0.2, 0.42, 0.85, 1.45],
+        'rlvEffectParam3': [2.0, 1.0],  # C++ uploads the nonzero min and max mask bits as floats.
+    }
+    extend_variants = tuple({'rlvEffectParam3': [near, far]} for near, far in
+                            ((0.0, 0.0), (2.0, 0.0), (0.0, 1.0), (2.0, 1.0)))
+    directions = ([1.0, 0.0], [0.0, 1.0])
+    fixed_blur_variants = tuple({'rlvEffectParam5': direction} for direction in directions)
+    variable_blur_variants = tuple({'rlvEffectParam5': direction, 'rlvEffectParam4': [kernel, 0.0, 0.0, 0.0]}
+                                   for kernel in (11.0, 10000.0) for direction in directions)
+    modes = (
+        ('blend', {'rlvEffectParam4': [0.93, 0.12, 0.52, 1.0]}, extend_variants),
+        ('fixed-blur', {'rlvEffectParam2': [0.4, 0.42, 2.8, 1.45]}, fixed_blur_variants),
+        ('variable-blur', {'rlvEffectParam2': [8.0, 0.42, 26.0, 1.45], 'rlvEffectParam3': [0.0, 0.0]},
+         variable_blur_variants),
+        ('chromatic-aberration', {'rlvEffectParam4': [-2.0, 0.6, 1.6, -0.2]}, ()),
+        ('pixelate', {'rlvEffectParam4': [5.0, 7.0, 0.0, 0.0]}, ()),
+    )
+    for filter_name, point_textures in (('point', ('depthMap',)), ('linear', ())):
+        for mode, (name, overrides, variants) in enumerate(modes):
+            yield Case(f'rlv-sphere-{name}-{filter_name}', 'deferred/rlvV.glsl', 'deferred/rlvF.glsl',
+                       'rlvSphere', fullscreen=True, depth=True, variants=variants,
+                       uniforms={**base, **overrides, 'rlvEffectMode': mode},
+                       fragment_helpers=('deferred/deferredUtil.glsl',), texture_levels=scene,
+                       point_textures=point_textures)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -625,6 +663,7 @@ def cases():
     c.extend(render_diagnostics_cases())
     c.extend(deferred_diffuse_cases())
     c.extend(terrain_bake_cases())
+    c.extend(rlv_sphere_cases())
     return c
 
 

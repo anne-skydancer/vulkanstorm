@@ -116,10 +116,10 @@ def source_header(source_path):
         else:
             break
     out = [line for line in out if line]
+    if any('LicenseInfo' in line or line == 'SPDX-License-Identifier: LGPL-2.1-only' for line in out):
+        return out  # Carry the original LGPL notices with the generated source.
     if any('SPDX-License-Identifier' in line for line in out):
         return [line for line in out if 'SPDX-License-Identifier' in line or 'Copyright' in line]
-    if any('LicenseInfo' in line for line in out):
-        return out  # Linden Lab and Firestorm headers travel whole, unchanged
     raise GenError(f'{source_path}: no SPDX-License-Identifier or $LicenseInfo in its leading comment')
 
 

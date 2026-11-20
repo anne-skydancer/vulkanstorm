@@ -181,7 +181,7 @@ Not converted, and why:
 | Programs | Reason |
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
-| every deferred world program that calls `calcAtmospherics` (fullbright, emissive, terrain, alpha) and `rlv` (`getPositionWithDepth`, `deferredUtil`) | atmosphere and `deferredUtil` are hot |
+| deferred world programs that call `calcAtmospherics` (fullbright, emissive, terrain, alpha) | atmosphere and `deferredUtil` are hot |
 | `pbropaque`, `pbrglow`, `pbrterrain` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
@@ -227,6 +227,13 @@ The terrain bake uses the ramp-weight calculation independently of terrain light
 three ramp coordinates, weight threshold, and RGB weight encoding. The `TERRAIN_PAINT_PRECISION` hook receives
 the existing value from `TerrainPaintBitDepth` on shader reload. One generated program covers all eight
 precisions. Run `ab_harness.py programs --family terrain-bake --strict-depth` to compare them.
+
+## RLVa sphere effect
+
+The sphere effect uses the shared full-screen vertex stage and the original inverse-projection calculation
+from sampled depth. The five runtime modes keep their existing parameters. The generated block stores the
+two distance-extension flags as floats to match the viewer's uploader, then interprets nonzero values as true.
+The A/B cases exercise both blur directions, the kernel cap, and samples inside and outside the effect range.
 
 ## The test gaps of the pilot, closed
 
@@ -353,7 +360,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
 | glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
-| `emissive`, `fullbright*`, `terrain`, `rlv` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
+| `emissive`, `fullbright*`, `terrain` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | `normaldebug` (geometry stage) | debug | stays hand-written unless Slang geometry output is accepted |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |

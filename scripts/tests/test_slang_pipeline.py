@@ -437,6 +437,14 @@ class CommittedTreeTest(unittest.TestCase):
                 self.assertEqual([(t['name'], t['binding']) for t in textures], bindings[name], program['id'])
         self.assertEqual(seen, set(bindings))
 
+    def test_rlva_license_notice_is_kept_in_generated_stages(self):
+        for stage in ('vert', 'frag'):
+            text = (common.GENERATED / f'rlvSphere.{stage}.glsl').read_text(encoding='utf-8')
+            self.assertIn('SPDX-License-Identifier: LGPL-2.1-only', text)
+            self.assertIn('Copyright (c) 2018-2020, Kitty Barnett', text)
+            self.assertIn('Copyright (c) 2018, Kitty Barnett', text)
+            self.assertIn('GNU Lesser General Public License, version 2.1, but WITHOUT ANY WARRANTY', text)
+
     def test_block_name_and_manifest_keys_match_the_loader(self):
         header = (ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
         name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)

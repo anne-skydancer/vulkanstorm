@@ -3814,8 +3814,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gRlvSphereProgram.mName = "RLVa Sphere Post Processing Shader";
         gRlvSphereProgram.mFeatures.isDeferred = true;
         gRlvSphereProgram.mShaderFiles.clear();
-        gRlvSphereProgram.mShaderFiles.push_back(make_pair("deferred/rlvV.glsl", GL_VERTEX_SHADER));
-        gRlvSphereProgram.mShaderFiles.push_back(make_pair("deferred/rlvF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gRlvSphereProgram, "rlvSphere", "deferred/rlvV.glsl", "deferred/rlvF.glsl");
         gRlvSphereProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gRlvSphereProgram.createShader();
     }
