@@ -2106,11 +2106,11 @@
           </map>
         </map>
         <key>license</key>
-        <string>BSD</string>
+        <string>BSD-2-Clause</string>
         <key>license_file</key>
         <string>LICENSES/neoj2k.txt</string>
         <key>copyright</key>
-        <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2002-2012 the OpenJPEG authors, see LICENSES/openjpeg.txt</string>
+        <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2002-2014 the OpenJPEG authors (Universite catholique de Louvain, Professor Benoit Macq, Antonin Descampe, Francois-Olivier Devaux, Herve Drolon, Yannick Verschueren, David Janssens, CNES, CS Systemes d'Information, and others), see LICENSES/neoj2k.txt</string>
         <key>version</key>
         <string>0.0.0.0</string>
         <key>name</key>
@@ -2118,7 +2118,7 @@
         <key>canonical_repo</key>
         <string>https://github.com/anne-skydancer/3p-neoj2k</string>
         <key>description</key>
-        <string>neo-j2k, a JPEG 2000 codec as a shared library (USE_NEOJ2K builds). Not released yet: an all-zero hash marks this entry as a placeholder (scripts/ci_neoj2k_pin.py).</string>
+        <string>neo-j2k: a JPEG 2000 Part 1 codec for texture-sized images (decoder, and the encoder of the viewer's uploads, bakes and snapshots), as a shared library (neoj2k.dll, libneoj2k.so) with an nj2k_* C API; starts no threads (the host lends an executor). Contains code ported from OpenJPEG. NOT RELEASED YET: version 0.0.0.0 and the zero hashes mark this entry as a placeholder (scripts/ci_neoj2k_pin.py); the release fills version (the neo-j2k tag), URLs and hashes.</string>
       </map>
       <key>nghttp2</key>
       <map>
