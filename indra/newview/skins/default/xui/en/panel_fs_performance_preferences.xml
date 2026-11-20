@@ -67,7 +67,6 @@
 </text>
   <graphics_quality_group
    control_name="RenderQualityPerformance"
-   draw_border="false"
    follows="left|top"
    height="29"
    layout="topleft"
