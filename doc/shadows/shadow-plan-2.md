@@ -29,15 +29,17 @@ footprint covers most of its map.
 
 ## Local light anchors
 
-Use the emitting prim's UUID and current world transform as the local light's anchor. For a scripted light, the script
-selects the emitter by setting light properties on that prim. When a root script sets a child's light properties, the
-child supplies the anchor. The viewer gets the per-prim light state in object updates. Lights set in the Build tools use
-the same rule.
+**Accepted decision, 2026-11-20.** Anchor each local light's shadow projection at its point of origin in world space.
+For a point light, use the emitting prim's world position. For a projector, derive the optical origin and axis from
+the emitting prim's world transform and projector parameters. Camera movement leaves the origin and projection fixed.
 
-Build the projector's optical origin and axis from the emitting prim's transform and projector parameters. Center a
-point light's faces on its emitter. Use the same emitter state in lighting and shadows. Once the viewer applies a
-scripted move or projection change, publish the new light transform and affected maps together. A scripted off/on
-cycle can reuse cached maps if their projection and caster inputs are still valid.
+Use the emitting prim's UUID to identify the light. A script selects the emitter by setting light properties on the
+target prim. When a root script sets a child's light properties, the child's light origin applies. The viewer gets the
+per-prim light state in object updates. Lights set in the Build tools use the same rule.
+
+Use the same light origin and projection for lighting and shadows. In the first frame that uses a changed emitter pose
+or projection, publish the light transform and affected shadow maps together. A scripted off/on cycle can reuse cached
+maps if their projection and caster inputs are still valid.
 
 Select casters by overlap with the light's volume. The emitter's own geometry is excluded from its shadow pass.
 Other members of the fixture, including a glass shade, can still cast or transmit, as can unlinked objects and avatars.
