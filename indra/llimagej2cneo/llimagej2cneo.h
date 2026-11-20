@@ -1,16 +1,38 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-//
-// The viewer's J2C implementation on neo-j2k (USE_NEOJ2K, cmake/NeoJ2K.cmake): the decoder and the encoder of
-// llimagej2coj, on neo-j2k's C API. One codec per binary: this class is what fallbackCreateLLImageJ2CImpl()
-// makes in a build with USE_NEOJ2K, and llimagej2coj is not built then.
+/**
+ * @file llimagej2cneo.h
+ * @brief The viewer's J2C implementation on neo-j2k (USE_NEOJ2K, cmake/NeoJ2K.cmake): the decoder and the encoder of
+ *        llimagej2coj on neo-j2k's C API. One codec per binary: fallbackCreateLLImageJ2CImpl() makes this class in a
+ *        build with USE_NEOJ2K, and llimagej2coj is not built then.
+ *
+ * Derived from llimagej2coj.h (Linden Research, Inc.; Phoenix Firestorm Project and Catznip changes): it keeps their
+ * licence. The additions are Vulkanstorm's, under the same licence as the rest of the viewer, GPL-3.0-or-later.
+ *
+ * $LicenseInfo:firstyear=2006&license=viewerlgpl$
+ * Second Life Viewer Source Code
+ * Copyright (C) 2010, Linden Research, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License only.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
+ * $/LicenseInfo$
+ */
 
 #ifndef LL_LLIMAGEJ2CNEO_H
 #define LL_LLIMAGEJ2CNEO_H
 
 #include "llimagej2c.h"
-
-const F32 LAST_TCP_RATE = 1.f/DEFAULT_COMPRESSION_RATE; // should be 8, giving a 1:8 ratio
 
 class LLImageJ2CNeo : public LLImageJ2CImpl
 {

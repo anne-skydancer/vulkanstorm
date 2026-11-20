@@ -28,8 +28,7 @@
 #define LL_LLIMAGEJ2COJ_H
 
 #include "llimagej2c.h"
-
-const F32 LAST_TCP_RATE = 1.f/DEFAULT_COMPRESSION_RATE; // should be 8, giving a 1:8 ratio
+#include "llj2ccommon.h" // <Vulkanstorm> LAST_TCP_RATE and the policy shared with llimagej2cneo
 
 class LLImageJ2COJ : public LLImageJ2CImpl
 {

@@ -11,6 +11,11 @@
 //   llimagej2c_corpus_tool bench <dir> [reps]    the decode (header pass and decode) of every file at level 0, on this
 //                                                thread (no pool: neo-j2k gets no executor), in microseconds, by
 //                                                size class
+//   llimagej2c_corpus_tool encode                 the viewer's encode (LLImageJ2C::encode) of a generated set of images
+//                                                (sizes 4 to 512, 1 to 4 components, lossless and lossy, with and
+//                                                without a comment): one line each with the codestream's size and hash.
+//                                                The two codecs' encoders are byte for byte alike for the viewer's
+//                                                settings: run it in both builds and diff.
 //   llimagej2c_corpus_tool pool <dir> <sparse|saturated> [reps]
 //                                                the same through the viewer's ImageDecode pool: sparse posts one
 //                                                request at a time (the pool is idle, so neo-j2k is lent it),
@@ -150,6 +155,50 @@ namespace
         return 0;
     }
 
+    // A deterministic image with smooth and detailed parts
+    LLPointer<LLImageRaw> generated(S32 w, S32 h, S32 comps, U32 seed)
+    {
+        LLPointer<LLImageRaw> raw = new LLImageRaw((U16)w, (U16)h, (S8)comps);
+        U8* p = raw->getData();
+        U32 state = seed * 2654435761u + 12345u;
+        for (S32 y = 0; p && y < h; ++y)
+        {
+            for (S32 x = 0; x < w; ++x)
+            {
+                for (S32 c = 0; c < comps; ++c)
+                {
+                    state = state * 1664525u + 1013904223u;
+                    const S32 base = (x * 255 / std::max(w - 1, 1) + y * 255 / std::max(h - 1, 1) * (c + 1)) / 2;
+                    const S32 detail = ((x / 8 + y / 8) & 1) ? ((state >> 24) & 31) : 0;
+                    p[(y * w + x) * comps + c] = (U8)(base + detail + c * 11);
+                }
+            }
+        }
+        return raw;
+    }
+
+    int runEncode()
+    {
+        int n = 0;
+        for (S32 side : { 4, 7, 16, 31, 32, 33, 63, 64, 65, 100, 128, 256, 512 })
+        {
+            for (S32 comps : { 1, 2, 3, 4 })
+            {
+                for (int mode = 0; mode < 3; ++mode) // 0 lossless, 1 lossy, 2 lossy with a comment
+                {
+                    const S32 w = side, h = (side == 100 ? 37 : side + (comps == 2 ? 5 : 0));
+                    LLPointer<LLImageRaw> raw = generated(w, h, comps, (U32)(++n));
+                    LLPointer<LLImageJ2C> j2c = new LLImageJ2C();
+                    j2c->setReversible(mode == 0);
+                    const bool ok = j2c->encode(raw, mode == 2 ? "a comment for the A/B" : nullptr, 0.f) && j2c->getDataSize() > 0;
+                    std::printf("%dx%dx%d %s %s %d %016llx\n", w, h, comps, mode == 0 ? "lossless" : "lossy", mode == 2 ? "comment" : "default",
+                                ok ? (int)j2c->getDataSize() : -1, ok ? (unsigned long long)fnv1a(j2c->getData(), (size_t)j2c->getDataSize()) : 0ull);
+                }
+            }
+        }
+        return 0;
+    }
+
     std::string sizeClass(const Texture& t)
     {
         LLPointer<LLImageJ2C> j2c = makeImage(t.bytes.data(), t.bytes.size());
@@ -193,8 +242,7 @@ namespace
             {
                 if (i % 200 == 0)
                 {
-                    std::fprintf(stderr, "bench pass %d: %zu / %zu
-", rep, i, corpus.size());
+                    std::fprintf(stderr, "bench pass %d: %zu / %zu\n", rep, i, corpus.size());
                 }
                 const auto t0 = Clock::now();
                 const Result r = decodeOne(corpus[i].bytes.data(), corpus[i].bytes.size(), 0);
@@ -281,9 +329,17 @@ namespace
 
 int main(int argc, char** argv)
 {
+    if (argc == 2 && std::string(argv[1]) == "encode")
+    {
+        ll_init_apr();
+        LLImage::initClass();
+        const int rc = runEncode();
+        LLImage::cleanupClass();
+        return rc;
+    }
     if (argc < 3)
     {
-        std::fprintf(stderr, "usage: llimagej2c_corpus_tool hash <dir> | bench <dir> [reps] | pool <dir> <sparse|saturated> [reps]\n");
+        std::fprintf(stderr, "usage: llimagej2c_corpus_tool encode | hash <dir> | bench <dir> [reps] | pool <dir> <sparse|saturated> [reps]\n");
         return 2;
     }
     ll_init_apr();

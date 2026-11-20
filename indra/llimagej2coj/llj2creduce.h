@@ -4,7 +4,8 @@
  * @file llj2creduce.h
  * @brief The reduce factor (discard level) a J2C codestream can be decoded at.
  *
- * Free of viewer headers: LLImageJ2COJ::decodeImpl (llimagej2coj.cpp) applies the rule,
+ * Free of viewer headers: LLImageJ2COJ::decodeImpl (llimagej2coj.cpp) and LLImageJ2CNeo::decodeImpl
+ * (llimagej2cneo/llimagej2cneo.cpp, USE_NEOJ2K) apply the rule,
  * indra/llimagej2coj/tests/llj2creduce_test.cpp checks it standalone, and
  * indra/llimagej2coj/tests/llj2creduce_openjpeg_test.cpp checks it against OpenJPEG.
  *

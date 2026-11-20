@@ -797,8 +797,12 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # </VulkanStorm>
 
             # For textures
-            self.path_optional("openjp2.dll")
-            self.path_optional("neoj2k.dll") # <Vulkanstorm> USE_NEOJ2K (cmake/NeoJ2K.cmake): the J2C codec's shared library
+            # <Vulkanstorm> the J2C codec's DLL: neoj2k.dll is required in a USE_NEOJ2K build and staged in no other
+            # (a build directory shared between the two options may still hold the other's file); openjp2.dll otherwise
+            if self.args.get('neoj2k', 'OFF').lower() == 'on':
+                self.path("neoj2k.dll")
+            else:
+                self.path_optional("openjp2.dll")
 
             # These need to be installed as a SxS assembly, currently a 'private' assembly.
             # See http://msdn.microsoft.com/en-us/library/ms235291(VS.80).aspx
@@ -841,6 +845,10 @@ class Windows_x86_64_Manifest(ViewerManifest):
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('soloud.txt')
                 self.path('soloud-miniaudio.txt')
+        # <Vulkanstorm> neo-j2k's licence file (with OpenJPEG's notices) only in a USE_NEOJ2K build
+        if self.args.get('neoj2k', 'OFF').lower() == 'on':
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('neoj2k.txt')
         self.path("featuretable.txt")
         self.path("cube.dae")
 
@@ -2372,6 +2380,10 @@ class LinuxManifest(ViewerManifest):
                 self.path('mesazink.txt')
         self.path("licenses-linux.txt","licenses.txt")
         self.path_licence_texts()
+        # <Vulkanstorm> neo-j2k's licence file (with OpenJPEG's notices) only in a USE_NEOJ2K build
+        if self.args.get('neoj2k', 'OFF').lower() == 'on':
+            with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
+                self.path('neoj2k.txt')
         self.path(os.path.join(self.icon_path(), "firestorm_512.png"), "firestorm_icon.png")
         with self.prefix("linux_tools"):
             self.path("client-readme.txt","README-linux.txt")
@@ -2473,8 +2485,11 @@ class LinuxManifest(ViewerManifest):
             self.path_optional("libdirectfb*.so*")
             self.path_optional("libfusion*.so*")
             self.path_optional("libdirect*.so*")
-            self.path_optional("libopenjpeg.so*")
-            self.path_optional("libneoj2k.so*") # <Vulkanstorm> USE_NEOJ2K (cmake/NeoJ2K.cmake): the J2C codec's shared library
+            # <Vulkanstorm> the J2C codec's shared library: libneoj2k.so* is required in a USE_NEOJ2K build and staged in no other
+            if self.args.get('neoj2k', 'OFF').lower() == 'on':
+                self.path("libneoj2k.so*")
+            else:
+                self.path_optional("libopenjpeg.so*")
             self.path("libalut.so*")
             #self.path("libpng15.so.15") #use provided libpng to workaround incompatible system versions on some distros
             #self.path("libpng15.so.15.13.0") #use provided libpng to workaround incompatible system versions on some distros
@@ -2722,6 +2737,7 @@ if __name__ == "__main__":
         dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
+        dict(name='neoj2k', description="""Indication neo-j2k (USE_NEOJ2K) is the J2C codec: its library and licence are bundled""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
         dict(name='inno', description="Use Inno Setup for Windows installers", default='OFF'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),

@@ -2360,7 +2360,8 @@ if (WINDOWS)
         # *TODO -reenable this once we get server usage sorted out
         # <Vulkanstorm> Link flags: /DELAYLOAD for opengl32 and glu32 (so
         # selectGLBackend() runs before the first GL import), and for llwebrtc
-        # and openjp2 (so no code of theirs runs before the CPU check);
+        # and the J2C codec's DLL (openjp2.dll, or neoj2k.dll with USE_NEOJ2K), so that no code of theirs runs before
+        # the CPU check;
         # /ENTRY:vkstormEntry is that CPU check (llcpucheck_win.cpp), which runs
         # before the C runtime starts. A failed delay-load is reported by the
         # hook in llappviewerwin32.cpp.
@@ -2466,6 +2467,7 @@ if (WINDOWS)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
+        "--neoj2k=${USE_NEOJ2K}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
@@ -2511,6 +2513,7 @@ if (WINDOWS)
             "--fmodstudio=${USE_FMODSTUDIO}"
             "--openal=${USE_OPENAL}"
             "--soloud=${USE_SOLOUD}"
+            "--neoj2k=${USE_NEOJ2K}"
             "--tracy=${USE_TRACY}"
             "--avx2=${USE_AVX2_OPTIMIZATION}"
             --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2581,6 +2584,7 @@ if (WINDOWS)
               "--fmodstudio=${USE_FMODSTUDIO}"
               "--openal=${USE_OPENAL}"
               "--soloud=${USE_SOLOUD}"
+              "--neoj2k=${USE_NEOJ2K}"
               "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
               "--inno=${USE_INNOSETUP}"
@@ -2822,6 +2826,7 @@ if (LINUX)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
+        "--neoj2k=${USE_NEOJ2K}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
@@ -2854,6 +2859,7 @@ if (LINUX)
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
+      "--neoj2k=${USE_NEOJ2K}"
         "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
@@ -2958,6 +2964,7 @@ if (DARWIN)
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
+      "--neoj2k=${USE_NEOJ2K}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2996,6 +3003,7 @@ if (DARWIN)
           "--fmodstudio=${USE_FMODSTUDIO}"
           "--openal=${USE_OPENAL}"
           "--soloud=${USE_SOLOUD}"
+          "--neoj2k=${USE_NEOJ2K}"
           "--tracy=${USE_TRACY}"
           "--avx2=${USE_AVX2_OPTIMIZATION}"          
           --build=${CMAKE_CURRENT_BINARY_DIR}

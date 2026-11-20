@@ -406,12 +406,18 @@ runs:
         cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
           llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
-          INTEGRATION_TEST_llcorehttp PROJECT_llimage_TEST_llimageworker
-        # The USE_NEOJ2K build: the decode test through the viewer's J2C interface (llimagej2c_decode), and the
-        # codec-independent rules (reduce factor, decode guard, SL decoder limits, the J2K-only decoder) checked
-        # against neo-j2k itself, through its OpenJPEG-compatible headers (indra/llimagej2cneo/CMakeLists.txt).
+          INTEGRATION_TEST_llcorehttp \
+          PROJECT_llimage_TEST_llimageworker INTEGRATION_TEST_llimagej2c_decode
+        # Building a unit or integration test target runs it (LL_ADD_PROJECT_UNIT_TESTS, LL_ADD_INTEGRATION_TEST: a
+        # post-build step that fails the build): llimageworker_test (the decode pool and its parallelFor) and
+        # llimagej2c_decode_test (the viewer's J2C interface through this build's codec, OpenJPEG or neo-j2k).
+        # The USE_NEOJ2K build also checks the codec-independent rules (reduce factor, decode guard, SL decoder limits,
+        # the J2K-only decoder) against neo-j2k itself, through its OpenJPEG-compatible headers
+        # (indra/llimagej2cneo/CMakeLists.txt).
         if [ "${{ inputs.neoj2k }}" = true ]; then
-          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3             --target INTEGRATION_TEST_llimagej2c_decode llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test             llj2c_decoderlimits_neoj2k_test llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test llimagej2c_corpus_tool
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+            --target llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test \
+            llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test llimagej2c_corpus_tool
           for test in llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test; do
             exe="$(find "${{ inputs.directory }}" -name "$test" -o -name "$test.exe" | head -n 1)"
             [ -n "$exe" ] || { echo "::error::$test was not built"; exit 1; }

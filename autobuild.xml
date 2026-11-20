@@ -2110,7 +2110,7 @@
         <key>license_file</key>
         <string>LICENSES/neoj2k.txt</string>
         <key>copyright</key>
-        <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2002-2014 the OpenJPEG authors (Universite catholique de Louvain, Professor Benoit Macq, Antonin Descampe, Francois-Olivier Devaux, Herve Drolon, Yannick Verschueren, David Janssens, CNES, CS Systemes d'Information, and others), see LICENSES/neoj2k.txt</string>
+        <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2001-2017 the OpenJPEG authors: Universite catholique de Louvain (UCL), Belgium; Professor Benoit Macq; Antonin Descampe; Francois-Olivier Devaux; Herve Drolon, FreeImage Team; Yannick Verschueren; David Janssens; Centre National d'Etudes Spatiales (CNES), France; CS Systemes d'Information, France; Parvatha Elangovan; Jerome Fimes, Communications &amp; Systemes; Kaori Hagihara; IntoPIX SA; Callum Lerwick; Jonathan Ballard; Carl Hetherington (see LICENSES/neoj2k.txt)</string>
         <key>version</key>
         <string>0.0.0.0</string>
         <key>name</key>
