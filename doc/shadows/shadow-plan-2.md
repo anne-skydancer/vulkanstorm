@@ -131,9 +131,12 @@ transforms and generations together before the first consumer. Keep current-fram
 cache work. Reuse in-place live storage only when the previously published group cannot be sampled during repair
 and the whole repair can finish before lighting. Where partial failure can leave a live group incomplete, stage
 the replacement and keep the previous complete generation until commit. Exercise allocation failure and a failed
-group member explicitly. A previous generation is a diagnostic fallback and a same-frame test failure if the
-light or caster moved. If no complete valid generation or qualified fresh fallback exists, record the failure
-for the whole affected light. If same-frame work consistently exhausts the budget, reduce measured work or
+group member explicitly. When a group fails and the light or caster moved, the consumer outcome is explicit:
+lighting keeps the previous complete generation for that light for that frame (a one-frame lag), never a mix of
+generations, and the frame counts as a missed same-frame deadline in the light's statistics and fails the
+same-frame test. Withholding the light's shadow instead was rejected: a shadow that vanishes for a frame is a
+worse artefact than one that trails by a frame (the owner's no-disappearing rule). If no complete valid
+generation or qualified fresh fallback exists, record the failure for the whole affected light. If same-frame work consistently exhausts the budget, reduce measured work or
 restrict the tested scene by the documented camera-free capacity policy before enabling the method.
 
 [Local shadow entry](../../indra/newview/lllocalshadows.cpp#L345), [C6 animation and attachment ordering](../../indra/newview/llavataranimationjobs.h#L7), [display geometry update](../../indra/newview/llviewerdisplay.cpp#L911), [current live restore](../../indra/newview/llprojectorshadows.cpp#L1239), [current tile binding](../../indra/newview/llprojectorshadows.cpp#L1843).
@@ -157,7 +160,12 @@ thin bars and sparse alpha before enabling any early-out. A transition from no b
 needs an image test even at high density.
 
 Keep the authored MASK cutoff and the existing world-anchored stochastic BLEND coverage in the depth paths that
-use it. The light-space sample footprint and texture residency must agree across guards. Keep the existing RGB
+use it. The light-space sample footprint and texture residency must agree across guards, and so must the
+stochastic sample identity: the coverage hash must take its block coordinates from the projector's shared texel
+lattice, not from the tile's atlas rectangle. Today `shadowStochasticCasterF.glsl` hashes
+`gl_FragCoord - shadow_tile_origin`, and each projector tile sets that origin to its own atlas rectangle, so two
+guarded copies of one projector texel can draw different coverage and a receiver would jump between transparency
+patterns at the seam. Test it with a blended caster across a cell boundary: both copies must store identical depth. Keep the existing RGB
 transmission for applicable static blended casters. Compare stochastic depth and deterministic transmission only
 with their respective material rules. The current one-depth transmission approximation can apply both layers to
 a receiver between panes, so test and document that scope before enabling that case by default. Measure spatial
