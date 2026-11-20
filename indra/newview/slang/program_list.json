@@ -16,6 +16,21 @@
       }
     },
     {
+      "name": "avatarDeferred",
+      "family": "deferred-avatar",
+      "source": "avatarDeferred.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "avatareyes",
       "source": "avatareyes.slang",
       "entries": {

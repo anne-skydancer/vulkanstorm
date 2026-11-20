@@ -2950,8 +2950,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredAvatarProgram.mName = "Deferred Avatar Shader";
         gDeferredAvatarProgram.mFeatures.hasSkinning = true;
         gDeferredAvatarProgram.mShaderFiles.clear();
-        gDeferredAvatarProgram.mShaderFiles.push_back(make_pair("deferred/avatarV.glsl", GL_VERTEX_SHADER));
-        gDeferredAvatarProgram.mShaderFiles.push_back(make_pair("deferred/avatarF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredAvatarProgram, emissiveId("avatarDeferred").c_str(),
+                        "deferred/avatarV.glsl", "deferred/avatarF.glsl");
         gDeferredAvatarProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         gDeferredAvatarProgram.clearPermutations();

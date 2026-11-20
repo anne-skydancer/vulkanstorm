@@ -1027,6 +1027,49 @@ def hud_material_cases():
                    depth=True, coverage=True, mesh_builder=pbr_mesh)
 
 
+def deferred_avatar_mesh(rng):
+    attributes, count = grid_mesh(rng)
+    uv = attributes[2]
+    s, t = uv.T
+    # The viewer supplies one float in slot 9, with joint index and interpolation packed in it.
+    weight = 0.15 + s * (12.0 + 1.65 * t)
+    weight = np.where(s > 0.95, 15.25, np.where(s >= 0.85, 14.625, weight))
+    clothing = np.column_stack((0.10 * (2 * s - 1), 0.06 + 0.10 * t, 0.12 * (1 - t),
+                                np.where(t > 0.22, 0.35 + 0.60 * s, 0.0)))
+    return {0: attributes[0], 1: attributes[1], 2: uv, 9: weight[:, None], 11: clothing}, count
+
+
+def deferred_avatar_cases():
+    # LLViewerJointMesh::uploadJointMatrices packs all 15 joint rows for each axis together.
+    joints = np.empty((15, 3, 4), dtype='f4')
+    for joint in range(15):
+        angle = 0.29 * np.sin(0.71 * joint)
+        sine, cosine = np.sin(angle), np.cos(angle)
+        joints[joint] = ((cosine, 0, sine, 0.13 * np.cos(0.51 * joint)),
+                         (0, 1, 0, 0.12 * np.sin(0.84 * joint)),
+                         (-sine, 0, cosine, -2.85 + 0.24 * np.sin(1.07 * joint)))
+    palette = H.Vec4Array(joints.transpose(1, 0, 2).reshape(45, 4))
+    uniforms = {'matrixPalette': palette, 'minimum_alpha': 0.20,
+                'clipPlane': [0.79, 0.18, 0.28, 0.72]}
+    zero = [0.0] * 4
+    no_wind = {'gWindDir': zero, 'gSinWaveParams': zero, 'gGravity': zero}
+    cloth = {'gWindDir': [0.33, -0.21, 0.69, 0.37], 'gGravity': [0.07, -0.33, -0.60, 0.0]}
+    wind = tuple({**cloth, 'gSinWaveParams': [6.5, 6.5, 6.5, phase]} for phase in (-4.67, -2.15))
+    textures = {'diffuseMap': fullbright_textures()['tex0']}
+    for emissive in (0, 1):
+        for cloth_enabled in (0, 1):
+            # Both literal viewer defines enter the legacy #ifdef; cloth off leaves the uniforms at zero.
+            defines = {'AVATAR_CLOTH': str(cloth_enabled)}
+            if emissive:
+                defines['HAS_EMISSIVE'] = '1'
+            yield Case(f'deferred-avatar-e{emissive}-cloth{cloth_enabled}',
+                       'deferred/avatarV.glsl', 'deferred/avatarF.glsl', f'avatarDeferred__HAS_EMISSIVE{emissive}',
+                       defines=defines, outputs=3 + emissive, depth=True, coverage=True, clip=True,
+                       flat_ok=(1,), uniforms=uniforms, variants=wind if cloth_enabled else (no_wind,),
+                       vertex_helpers=('avatar/avatarSkinV.glsl',), mesh_builder=deferred_avatar_mesh,
+                       texture_levels=textures)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -1094,6 +1137,7 @@ def cases():
     c.extend(legacy_terrain_cases())
     c.extend(fullbright_emissive_cases())
     c.extend(hud_material_cases())
+    c.extend(deferred_avatar_cases())
     return c
 
 

@@ -153,8 +153,11 @@ gl_Position;` as source, and its `precise` is dropped from the GLSL whenever the
 `invariant` makes the driver multiply then add where it would fuse them: depth moves by a few steps on NVIDIA (invariance-audit.md 3.4), and the
 hand-written programs still outside the tree keep their fused form until the switchover, so the interim tree mixes the two. Not yet measured on AMD.
 
-The system avatar's own skin (`avatarV.glsl`, the 45-row eye-space palette) joins the module with its program, which waits for the forward
-lighting and atmospherics.
+The system avatar's deferred G-buffer program uses the separate 45-row eye-space palette uploaded
+by the avatar draw path. It shares the projection helper and keeps the original weighted row dots and cloth
+deformation. Both legacy cloth settings compile the cloth block. With cloth disabled the renderer
+reloads the program and leaves its cloth uniforms at zero, so both settings use the same generated
+program for each emissive layout. The forward and blended avatars also use lighting and atmospherics.
 
 ## Objects family (S3, first part)
 
@@ -185,7 +188,6 @@ Not converted, and why:
 | `pbrterrain` | terrain texture transforms, terrain mixing, and the world terrain shading path |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
-| `normaldebug` | has a geometry stage |
 | SMAA, FXAA, CAS | third-party code, stays hand-written (planner) |
 
 The pilot's radianceGen, irradianceGen, copy-depth and alphamask conversions stay (the owner asked for the radiance filter A/B first);
@@ -398,14 +400,14 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | Program | Family | Converts in |
 |---|---|---|
 | alpha, material blend (`alpha*`, `pbralpha*`, `materialV/F`), `avatarAlphaShadow`, `pbrShadowAlphaMask` | alpha / blend | the alpha family PR |
-| stochastic transparency and casters, shadow, shadowStochastic and depth programs (`avatarShadow`, tree shadows, `pbrShadow*`), `normgen` | stochastic / shadow | the shadow family PR |
-| deferred lights, BRDF (`genbrdflut`), `blurLight`, softenLight | lights | the lights PR |
+| stochastic transparency and casters, shadow, shadowStochastic and depth programs (`avatarShadow`, tree shadows, `pbrShadow*`) | stochastic / shadow | the shadow family PR |
+| deferred lights, BRDF, `blurLight`, softenLight | lights | the lights PR |
 | `cloudsV`, `cloudsVolComposite`, `moonV`, sky and atmosphere helpers | sky / atmosphere | the sky PR |
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
 | glTF (`pbrmetallicroughness`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
 | blended fullbright, `fullbrightShiny*` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
-| forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
+| forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred avatar blend | avatar | the avatar PR |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
 
 At the end `scripts/shaders/glsl_position_baseline.txt` contains the permanent position-writing exemptions (the SMAA vertex

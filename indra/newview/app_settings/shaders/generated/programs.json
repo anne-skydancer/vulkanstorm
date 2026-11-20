@@ -123,6 +123,435 @@
    }
   },
   {
+   "id": "avatarDeferred__HAS_EMISSIVE0",
+   "program": "avatarDeferred",
+   "permutation": {
+    "HAS_EMISSIVE": "0"
+   },
+   "source": "slang/avatarDeferred.slang",
+   "stages": {
+    "vertex": {
+     "file": "avatarDeferred__HAS_EMISSIVE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "2ee279140b0af40132667ffbb892aea03904f1c04a9cf5ff67b134d9d8d02333",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "weight",
+        "location": 9,
+        "type": "float32"
+       },
+       {
+        "name": "clothing",
+        "location": 11,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 2,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 64,
+        "size": 720,
+        "type": "float32x4[45]"
+       },
+       {
+        "name": "gWindDir",
+        "offset": 784,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gSinWaveParams",
+        "offset": 800,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gGravity",
+        "offset": 816,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 832,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 836,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 848,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "avatarDeferred__HAS_EMISSIVE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "25391c673d9e5bace710f933c05c1514bf200cc3af7ebc69b4623c6b07aea41a",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 2,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 64,
+        "size": 720,
+        "type": "float32x4[45]"
+       },
+       {
+        "name": "gWindDir",
+        "offset": 784,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gSinWaveParams",
+        "offset": 800,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gGravity",
+        "offset": 816,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 832,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 836,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 848,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "avatarDeferred__HAS_EMISSIVE1",
+   "program": "avatarDeferred",
+   "permutation": {
+    "HAS_EMISSIVE": "1"
+   },
+   "source": "slang/avatarDeferred.slang",
+   "stages": {
+    "vertex": {
+     "file": "avatarDeferred__HAS_EMISSIVE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "aa3fb2b074c6a45b62c71d79aa900735873d93df0ac1d371f163f1112d9a0f2f",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "weight",
+        "location": 9,
+        "type": "float32"
+       },
+       {
+        "name": "clothing",
+        "location": 11,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 2,
+        "type": "float32x3"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 64,
+        "size": 720,
+        "type": "float32x4[45]"
+       },
+       {
+        "name": "gWindDir",
+        "offset": 784,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gSinWaveParams",
+        "offset": 800,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gGravity",
+        "offset": 816,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 832,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 836,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 848,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "avatarDeferred__HAS_EMISSIVE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "28b120a4bb6a32292b9fd76b5498049f13452f995e142e5ad4b9799186267298",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "vary_normal",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vary_position",
+        "location": 2,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 64,
+        "size": 720,
+        "type": "float32x4[45]"
+       },
+       {
+        "name": "gWindDir",
+        "offset": 784,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gSinWaveParams",
+        "offset": 800,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "gGravity",
+        "offset": 816,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 832,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 836,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 848,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "avatareyes__HAS_EMISSIVE0",
    "program": "avatareyes",
    "permutation": {

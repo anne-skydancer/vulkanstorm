@@ -445,6 +445,19 @@ class CommittedTreeTest(unittest.TestCase):
         module = (common.SLANG_SRC / 'position.slang').read_text(encoding='utf-8')
         self.assertEqual(re.search(r'VK_MAX_JOINTS\s*=\s*(\d+)', module).group(1), limit)
 
+    def test_deferred_avatar_palette_matches_the_viewer(self):
+        header = (ROOT / 'indra/llcharacter/lljoint.h').read_text(encoding='utf-8')
+        joint_limit = int(re.search(r'LL_CHARACTER_MAX_JOINTS_PER_MESH\s*=\s*(\d+)', header).group(1))
+        row_count = 3 * joint_limit
+        manifest = check.load_manifest(common.GENERATED)
+        programs = [program for program in manifest['programs'] if program['program'] == 'avatarDeferred']
+        self.assertEqual(len(programs), 2)
+        for program in programs:
+            uniforms = program['stages']['vertex']['interface']['uniforms']
+            palette = next(uniform for uniform in uniforms if uniform['name'] == 'matrixPalette')
+            self.assertEqual(palette['type'], f'float32x4[{row_count}]', program['id'])
+            self.assertEqual(palette['size'], 16 * row_count, program['id'])
+
     def test_the_module_makes_the_position_invariant_and_every_vertex_stage_says_so(self):
         module = (common.SLANG_SRC / 'position.slang').read_text(encoding='utf-8')
         default = re.search(r'(?m)^#define\s+VK_POSITION_INVARIANT\s+(\d)', module).group(1)
