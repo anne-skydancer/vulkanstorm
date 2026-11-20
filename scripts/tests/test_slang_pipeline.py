@@ -188,7 +188,8 @@ class GeneratorTest(unittest.TestCase):
             self.assertEqual(check.check_manifest(out), [])
             self.assertEqual(check.check_interface(out), [])
             self.assertEqual(check.check_position(src, out), [])
-            if glslang := check.find_glslang():
+            glslang = check.find_glslang()
+            if glslang:
                 self.assertEqual(check.check_compile(out, glslang), [])
 
             geom['inputs'][0]['type'] = 'float32x3'
@@ -206,6 +207,12 @@ class GeneratorTest(unittest.TestCase):
             geometry_file.write_text(text, encoding='utf-8')
             errors = check.check_position(src, out)
             self.assertTrue(any('lines.geom.glsl' in e and 'before each emitted vertex' in e for e in errors), errors)
+
+            module = src / 'position_mod.slang'
+            module.write_text(module.read_text(encoding='utf-8') + '\n#define VK_POSITION_INVARIANT 1\n', encoding='utf-8')
+            errors = check.check_position(src, out)
+            for stage in ('vert', 'geom'):
+                self.assertTrue(any(f'lines.{stage}.glsl' in e and 'invariant' in e for e in errors), errors)
 
     def test_glslang_catches_a_broken_stage(self):
         glslang = check.find_glslang()

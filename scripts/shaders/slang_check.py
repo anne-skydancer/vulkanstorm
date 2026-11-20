@@ -274,7 +274,8 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
     src_dir = Path(src_dir)
     plist = json.loads((src_dir / 'program_list.json').read_text(encoding='utf-8'))
     position = plist.get('position')
-    vertex_programs = [p for p in plist.get('programs', []) if 'vertex' in p['entries']]
+    position_stages = ('vertex', 'geometry')
+    position_programs = [p for p in plist.get('programs', []) if any(s in p['entries'] for s in position_stages)]
     if glsl_root is not None and baseline is not None:
         errors += check_glsl_baseline(glsl_root, baseline)
     if not position:
@@ -307,11 +308,11 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
             if re.search(r'\b' + struct + r'\s*\(|\b' + struct + r'\s+\w+\s*=\s*\{', text):
                 errors.append(f'{rel}: {struct} has an SV_Position field and is built by a constructor or an initialiser list; '
                               f'assign the field from a {prefix}*() call')
-    for prog in vertex_programs:
+    for prog in position_programs:
         main = src_dir / prog['source']
         files = _closure(src_dir, main)
         if module.resolve() not in {p.resolve() for p in files}:
-            errors.append(f'{prog["name"]}: its vertex stage does not take its position from {position["module"]}')
+            errors.append(f'{prog["name"]}: the program does not take its position from {position["module"]}')
         elif not any(call.search(_strip_comments(p.read_text(encoding='utf-8')))
                      for p in files if p.resolve() != module.resolve()):
             errors.append(f'{prog["name"]}: imports {position["module"]} but never calls {prefix}*()')
@@ -320,7 +321,7 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
     invariant = bool(default and default.group(1) == '1')
     manifest = load_manifest(generated)
     for prog in manifest['programs']:
-        for stage in ('vertex', 'geometry'):
+        for stage in position_stages:
             info = prog['stages'].get(stage)
             if not info:
                 continue
