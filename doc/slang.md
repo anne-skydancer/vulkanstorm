@@ -122,6 +122,7 @@ Programs are registered by `generatedStages()` in `llviewershadermgr.cpp` (`VKS_
 the switch and the hand-written GLSL path of the converted programs go when the last hot family lands). Converted: ui, alphamask, benchmark, clip, copy
 (+ depth), glowcombine, glowcombineFXAA, gaussian, reflectionmip, solidcolor, onetexturefilter, twotexturecompare, occlusion
 (+ cube), highlight normals and specular, pathfinding (with and without normals), radianceGen (probes and hero), irradianceGen.
+The GPU bandwidth benchmark uses the same shader selection during early hardware probing and normal interface setup.
 The programs with a skinned variant moved with the skinning module (below). The later terrain bake conversion is described below.
 
 ## The position module

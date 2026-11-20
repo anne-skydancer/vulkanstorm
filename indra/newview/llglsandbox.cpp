@@ -1047,15 +1047,11 @@ F32 gpu_benchmark()
 {
     if (gBenchmarkProgram.mProgramObject == 0)
     {
-        LLViewerShaderMgr::instance()->initAttribsAndUniforms();
+        LLViewerShaderMgr* shader_mgr = LLViewerShaderMgr::instance();
+        shader_mgr->initAttribsAndUniforms();
 
-        gBenchmarkProgram.mName = "Benchmark Shader";
         gBenchmarkProgram.mFeatures.attachNothing = true;
-        gBenchmarkProgram.mShaderFiles.clear();
-        gBenchmarkProgram.mShaderFiles.push_back(std::make_pair("interface/benchmarkV.glsl", GL_VERTEX_SHADER));
-        gBenchmarkProgram.mShaderFiles.push_back(std::make_pair("interface/benchmarkF.glsl", GL_FRAGMENT_SHADER));
-        gBenchmarkProgram.mShaderLevel = 1;
-        if (!gBenchmarkProgram.createShader())
+        if (!shader_mgr->loadBenchmarkShader(1))
         {
             return -1.f;
         }

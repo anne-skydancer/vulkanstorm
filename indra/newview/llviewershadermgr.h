@@ -64,6 +64,7 @@ public:
     bool loadShadersAvatar();
     bool loadShadersWater();
     bool loadShadersInterface();
+    bool loadBenchmarkShader(S32 shader_level);
 
     std::vector<S32> mShaderLevel;
     S32 mMaxAvatarShaderLevel;

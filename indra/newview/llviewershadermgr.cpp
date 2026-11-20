@@ -3983,6 +3983,16 @@ bool LLViewerShaderMgr::loadShadersAvatar()
     return true;
 }
 
+bool LLViewerShaderMgr::loadBenchmarkShader(S32 shader_level)
+{
+    gBenchmarkProgram.mName = "Benchmark Shader";
+    gBenchmarkProgram.mShaderFiles.clear();
+    generatedStages(gBenchmarkProgram, "benchmark", "interface/benchmarkV.glsl", "interface/benchmarkF.glsl");
+    gBenchmarkProgram.mShaderLevel = shader_level;
+    LL_DEBUGS("Benchmark") << "Benchmark shader vertex stage: " << gBenchmarkProgram.mShaderFiles.front().first << LL_ENDL;
+    return gBenchmarkProgram.createShader();
+}
+
 bool LLViewerShaderMgr::loadShadersInterface()
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -4199,11 +4209,7 @@ bool LLViewerShaderMgr::loadShadersInterface()
 
     if (success)
     {
-        gBenchmarkProgram.mName = "Benchmark Shader";
-        gBenchmarkProgram.mShaderFiles.clear();
-        generatedStages(gBenchmarkProgram, "benchmark", "interface/benchmarkV.glsl", "interface/benchmarkF.glsl");
-        gBenchmarkProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
-        success = gBenchmarkProgram.createShader();
+        success = loadBenchmarkShader(mShaderLevel[SHADER_INTERFACE]);
     }
 
     if (success)
