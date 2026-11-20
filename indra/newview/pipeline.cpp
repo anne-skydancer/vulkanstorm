@@ -77,7 +77,6 @@
 #include "llhudnametag.h"
 #include "llhudtext.h"
 #include "lllightconstants.h"
-#include "llmeshrepository.h"
 #include "llpipelinelistener.h"
 #include "llresmgr.h"
 #include "llselectmgr.h"
@@ -3218,8 +3217,6 @@ void LLPipeline::rebuildPriorityGroups()
 
     LLTimer update_timer;
     assertInitialized();
-
-    gMeshRepo.notifyLoadedMeshes();
 
     mGroupQ1Locked = true;
     // Iterate through all drawables on the priority build queue,

@@ -54,6 +54,7 @@
 #include "llimagepng.h"
 #include "llmachineid.h"
 #include "llmemory.h"
+#include "llmeshrepository.h"
 #include "llparcel.h"
 #include "llperfstats.h"
 #include "llpostprocess.h"
@@ -911,6 +912,9 @@ void display(bool rebuild, F32 zoom_factor, int subfield, bool for_snapshot)
         {
             LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("Update Geom");
             VKS_GLSTAT_PASS("update geom");
+            // <Vulkanstorm> Multi-core D6: apply mesh arrivals before geometry updates and the world and sun passes.
+            gMeshRepo.notifyLoadedMeshes();
+            // </Vulkanstorm>
             const F32 max_geom_update_time = 0.005f*10.f*gFrameIntervalSeconds.value(); // 50 ms/second update time
             gPipeline.createObjects(max_geom_update_time);
             gPipeline.processPartitionQ();
