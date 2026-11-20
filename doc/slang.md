@@ -20,6 +20,7 @@ conversions of objects, effects, post-processing and G-buffer writers.
   tree meanwhile. The switchover is complete when the last hot family lands: `invariant` goes on for every generated program,
   the hand-written-GLSL loader path of converted programs (`VKS_SLANG_PILOT`) is removed, and the position baseline holds only
   the permanent exemptions (see "End state"). A PR branch is rebased on devel, never merged with it.
+- **Drafts** Keep all Slang conversion PRs in draft until every shader in scope has been converted.
 - **Pin** The latest stable Slang release (`scripts/shaders/slang_pin.json`: 2026.22), fetched with a checksum, bumped only
   on purpose, in a PR of its own. Each bump regenerates every program and re-runs the bench and the visual A/B.
 - **D3** The Slang output is taken **as it is**: no hand fix to match today's GLSL bit for bit. Tiny float differences and
