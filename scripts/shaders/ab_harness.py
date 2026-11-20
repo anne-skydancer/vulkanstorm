@@ -15,11 +15,13 @@ radiance filter (class1/interface/radianceGen{V,F}.glsl).
   python scripts/shaders/ab_harness.py --selftest                  the harness proves itself (identity, detects a change)
   python scripts/shaders/ab_harness.py radiance                    reference against generated radianceGen
   python scripts/shaders/ab_harness.py manifest                    programs.json against the driver (offsets, block, units, inputs)
-  python scripts/shaders/ab_harness.py programs [--only TEXT]      every other converted program (ab_cases.py)
+  python scripts/shaders/ab_harness.py programs [--only TEXT | --family NAME]    converted programs (ab_cases.py)
+  --expect-renderer TEXT verifies the OpenGL renderer. --report PATH records the GPU and qualification results.
 Exit codes: 0 pass, 1 fail, 2 candidate not generated yet (nothing compared).
 """
 import argparse
 import ctypes as C
+import hashlib
 import json
 import re
 import struct
@@ -33,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import slang_check as check  # noqa: E402
 import slang_common as common  # noqa: E402
 
-GL_VERTEX_SHADER, GL_FRAGMENT_SHADER = 0x8B31, 0x8B30
+GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COMPUTE_SHADER = 0x8B31, 0x8B30, 0x91B9
 GL_COMPILE_STATUS, GL_LINK_STATUS = 0x8B81, 0x8B82
 GL_UNIFORM, GL_UNIFORM_BLOCK = 0x92E1, 0x92E2
 GL_ACTIVE_RESOURCES = 0x92F5
@@ -91,7 +93,10 @@ class GL:
         g.wglGetProcAddress.restype = C.c_void_p
         legacy = g.wglCreateContext(hdc)
         g.wglMakeCurrent(hdc, legacy)
-        attribs_fn = C.WINFUNCTYPE(C.c_void_p, W.HDC, C.c_void_p, C.POINTER(C.c_int))(g.wglGetProcAddress(b'wglCreateContextAttribsARB'))
+        create_context = g.wglGetProcAddress(b'wglCreateContextAttribsARB')
+        if not create_context:
+            raise RuntimeError('WGL cannot create an OpenGL 4.6 core context')
+        attribs_fn = C.WINFUNCTYPE(C.c_void_p, W.HDC, C.c_void_p, C.POINTER(C.c_int))(create_context)
         attribs = (C.c_int * 9)(0x2091, 4, 0x2092, 6, 0x9126, 1, 0x2094, 0x2, 0)  # 4.6, core, forward-compatible bit set
         ctx = attribs_fn(hdc, None, attribs)
         if not ctx:
@@ -100,7 +105,8 @@ class GL:
         self.f = {}
         self.ubos = {}
         gs = self.fn('glGetString', C.c_char_p, C.c_uint)
-        self.info = {'renderer': gs(0x1F01).decode(), 'version': gs(0x1F02).decode(), 'glsl': gs(0x8B8C).decode()}
+        self.info = {'vendor': gs(0x1F00).decode(), 'renderer': gs(0x1F01).decode(),
+                     'version': gs(0x1F02).decode(), 'glsl': gs(0x8B8C).decode()}
 
     def fn(self, name, restype, *argtypes):
         if name in self.f:
@@ -129,10 +135,15 @@ class GL:
             raise RuntimeError('compile failed:\n' + log.value.decode(errors='replace'))
         return sh
 
-    def program(self, vs_source, fs_source, attribs=('position',)):
+    def program(self, vs_source, fs_source, attribs=('position',), fragment_helpers=()):
+        stages = [(GL_VERTEX_SHADER, vs_source), (GL_FRAGMENT_SHADER, fs_source)]
+        stages.extend((GL_FRAGMENT_SHADER, text) for text in fragment_helpers)
+        return self.link(stages, attribs)
+
+    def link(self, stages, attribs=()):
         g = self.fn
         prog = g('glCreateProgram', C.c_uint)()
-        for kind, text in ((GL_VERTEX_SHADER, vs_source), (GL_FRAGMENT_SHADER, fs_source)):
+        for kind, text in stages:
             sh = self.compile(kind, text)
             g('glAttachShader', None, C.c_uint, C.c_uint)(prog, sh)
             g('glDeleteShader', None, C.c_uint)(sh)
@@ -709,64 +720,118 @@ def selftest(gl):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('case', nargs='?', choices=['radiance', 'skin', 'programs', 'manifest'])
-    ap.add_argument('--list', action='store_true')
-    ap.add_argument('--selftest', action='store_true')
+    action = ap.add_mutually_exclusive_group()
+    action.add_argument('--list', action='store_true')
+    action.add_argument('--selftest', action='store_true')
     ap.add_argument('--generated', default=str(common.GENERATED))
     ap.add_argument('--program', default='radianceGen__PROBE_FILTER_SAMPLES32', help='generated program id of the candidate')
     ap.add_argument('--optional', nargs='*', default=[], help='uniform names the candidate may legitimately lack')
     ap.add_argument('--json', help='write the per-case results here')
-    ap.add_argument('--only', help='programs: run only the cases whose name contains this text')
+    subset = ap.add_mutually_exclusive_group()
+    subset.add_argument('--only', help='programs: run only the cases whose name contains this text')
+    subset.add_argument('--family', help='programs: require A/B coverage of every generated permutation in this family')
+    ap.add_argument('--strict-depth', action='store_true', help='programs: enforce exact agreement on advisory depth comparisons')
+    ap.add_argument('--expect-renderer', help='fail unless the OpenGL renderer contains this text (case-insensitive)')
+    ap.add_argument('--report', help='write GPU identity, selection and results to this JSON file')
     args = ap.parse_args()
+    if args.case is not None and (args.list or args.selftest):
+        ap.error('--list and --selftest cannot be combined with a command')
+    if args.case != 'programs' and (args.only is not None or args.family is not None or args.strict_depth):
+        ap.error('--only, --family and --strict-depth require programs')
+    if args.only == '' or args.family == '' or args.expect_renderer == '':
+        ap.error('--only, --family and --expect-renderer require non-empty text')
+    if args.json and args.report and Path(args.json).resolve() == Path(args.report).resolve():
+        ap.error('--json and --report must name different files')
     if args.list:
         print('radiance: class1/interface/radianceGen{V,F}.glsl against the generated program (tolerance mode)')
         print('skin: class1/objects/bumpV.glsl with class1/avatar/objectSkinV.glsl (rigged) and without (static) against the '
               'generated bump programs: the eye position per pixel (tolerance mode)')
+        print('programs: visual comparisons, with optional --family or --only selection')
+        print('manifest: link the generated programs and verify their interfaces on the driver')
         return 0
-    gl = GL()
+    gpu = None
+    selection = {'command': 'selftest' if args.selftest else args.case, 'generated': str(Path(args.generated).resolve()),
+                 'family': args.family, 'only': args.only, 'strict_depth': args.strict_depth,
+                 'expected_renderer': args.expect_renderer}
+    if args.case == 'radiance':
+        selection['program'] = args.program
+
+    def finish(status, results=(), errors=()):
+        if args.report:
+            manifest = Path(args.generated) / 'programs.json'
+            try:
+                manifest_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+            except OSError:
+                manifest_sha256 = None
+            report = {'gpu': gpu, 'selection': selection, 'manifest_sha256': manifest_sha256,
+                      'status': status, 'results': results, 'errors': errors}
+            Path(args.report).write_text(json.dumps(report, indent=1) + '\n', encoding='utf-8')
+        if args.json and args.case in ('radiance', 'programs'):
+            Path(args.json).write_text(json.dumps(results, indent=1), encoding='utf-8')
+        return status
+
+    def fail(message, status=1, results=()):
+        print(message)
+        return finish(status, results, [message])
+
+    try:
+        gl = GL()
+    except RuntimeError as e:
+        return fail(str(e))
+    gpu = gl.info
     print(f'GL: {gl.info["renderer"]} | {gl.info["version"]} | GLSL {gl.info["glsl"]}')
+    if args.expect_renderer and args.expect_renderer.casefold() not in gpu['renderer'].casefold():
+        return fail(f'expected OpenGL renderer containing {args.expect_renderer!r}, got {gpu["renderer"]!r}')
     if args.selftest:
         ok = selftest(gl)
         print('selftest: ' + ('pass' if ok else 'FAIL'))
-        return 0 if ok else 1
+        return finish(0 if ok else 1)
     if args.case == 'radiance':
         cand = radiance_candidate(gl, args.generated, args.program)
         if cand is None:
-            print(f'candidate {args.program} is not generated yet; nothing compared')
-            return 2
+            return fail(f'candidate {args.program} is not generated yet; nothing compared', status=2)
         samples = re.search(r'SAMPLES(\d+)$', args.program)  # the 4-sample hero filter is its own program
         reference = radiance_reference(gl, {'PROBE_FILTER_SAMPLES': samples.group(1)} if samples else None)
         results = run_radiance(gl, reference, cand, optional=('u_width', *args.optional))
         summary = summarize(results)
         print(json.dumps(summary, indent=1))
-        if args.json:
-            Path(args.json).write_text(json.dumps(results, indent=1), encoding='utf-8')
         if summary['nonblack_min'] == 0:
-            print('FAIL: the reference drew nothing in at least one case; the comparison proves nothing')
-            return 1
-        return 0 if not summary['failed'] else 1
+            return fail('FAIL: the reference drew nothing in at least one case', results=results)
+        return finish(1 if summary['failed'] else 0, results)
     if args.case == 'manifest':
         sys.modules.setdefault('ab_harness', sys.modules[__name__])
         import ab_cases
-        errors = ab_cases.check_manifest_against_driver(gl, args.generated)
+        results = []
+        try:
+            errors = ab_cases.check_manifest_against_driver(gl, args.generated, results=results)
+        except (check.CheckError, OSError, ValueError) as e:
+            return fail(str(e), results=results)
         for e in errors:
             print('  ' + e)
         print('manifest: ' + ('ok' if not errors else f'{len(errors)} problem(s)'))
-        return 1 if errors else 0
+        return finish(1 if errors else 0, results, errors)
     if args.case == 'programs':
         sys.modules.setdefault('ab_harness', sys.modules[__name__])  # the cases import this module: one copy of its classes
         import ab_cases
-        return ab_cases.run_programs(gl, args.generated, args.only, args.json)
+        try:
+            status, results, errors = ab_cases.run_programs(gl, args.generated, only=args.only, family=args.family,
+                                                          strict_depth=args.strict_depth)
+        except (check.CheckError, OSError, ValueError) as e:
+            return fail(str(e))
+        return finish(status, results, errors)
     if args.case == 'skin':
-        failed = False
+        results = []
         for rigged, program_id in ((True, 'bump__HAS_SKIN1'), (False, 'bump__HAS_SKIN0')):
-            cand = skin_candidate(gl, args.generated, program_id)
+            try:
+                cand = skin_candidate(gl, args.generated, program_id)
+                summary = summarize(run_skin(gl, rigged, cand)) if cand is not None else None
+            except (RuntimeError, check.CheckError, OSError, ValueError) as e:
+                return fail(f'{program_id}: {e}', results=results)
             if cand is None:
-                print(f'candidate {program_id} is not generated yet; nothing compared')
-                return 2
-            summary = summarize(run_skin(gl, rigged, cand))
+                return fail(f'candidate {program_id} is not generated yet', status=2, results=results)
             print(program_id, json.dumps(summary, indent=1))
-            failed |= bool(summary['failed']) or summary['nonblack_min'] == 0
-        return 1 if failed else 0
+            results.append({'program': program_id, 'pass': not summary['failed'] and summary['nonblack_min'] > 0, **summary})
+        return finish(int(any(not r['pass'] for r in results)), results)
     ap.print_help()
     return 0
 

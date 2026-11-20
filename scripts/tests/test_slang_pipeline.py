@@ -414,7 +414,7 @@ class CommittedTreeTest(unittest.TestCase):
         module = (common.SLANG_SRC / 'gbuffer.slang').read_text(encoding='utf-8')
         loader = (ROOT / 'indra/llrender/llshadermgr.cpp').read_text(encoding='utf-8')
         glsl = (ROOT / 'indra/newview/app_settings/shaders/class1/deferred/globalF.glsl').read_text(encoding='utf-8')
-        for name in ('HAS_ATMOS', 'HAS_PBR'):
+        for name in ('HAS_ATMOS', 'HAS_PBR', 'SKIP_ATMOS', 'HAS_HDRI'):
             slang_value = float(re.search(rf'GBUFFER_FLAG_{name}\s*=\s*([\d.]+)', module).group(1))
             loader_value = float(re.search(rf'#define GBUFFER_FLAG_{name}\s+([\d.]+)', loader).group(1))
             self.assertEqual(slang_value, loader_value, name)

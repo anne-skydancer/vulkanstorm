@@ -3037,6 +3037,191 @@
    }
   },
   {
+   "id": "exposure__USE_LAST_EXPOSURE0",
+   "program": "exposure",
+   "permutation": {
+    "USE_LAST_EXPOSURE": "0"
+   },
+   "source": "slang/exposure.slang",
+   "stages": {
+    "vertex": {
+     "file": "exposure__USE_LAST_EXPOSURE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "595bfd5777c4e19711e0b20a5a8b0e89306e4766658bb5cdc0c0f44dbff2a7a6",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "dt",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dynamic_exposure_params",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "exposure__USE_LAST_EXPOSURE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "aa8d62c75ac24292d08f1c5393a25d58bdf7b84ba745757b13d262e1ad81da66",
+     "hooks": [],
+     "interface": {
+      "inputs": [],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "dt",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dynamic_exposure_params",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "emissiveRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "exposure__USE_LAST_EXPOSURE1",
+   "program": "exposure",
+   "permutation": {
+    "USE_LAST_EXPOSURE": "1"
+   },
+   "source": "slang/exposure.slang",
+   "stages": {
+    "vertex": {
+     "file": "exposure__USE_LAST_EXPOSURE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "51811285b80f29f9fae061c67b5089bc99233f14c7d3355ba6ec0d3e4d62616b",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "dt",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dynamic_exposure_params",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "dynamic_exposure_params2",
+        "offset": 32,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "exposure__USE_LAST_EXPOSURE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "8aa487b6aff4a2d32160c7ee7425e2fa8dcdc1ad9f96a108414b4aa75aee00f7",
+     "hooks": [],
+     "interface": {
+      "inputs": [],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "dt",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dynamic_exposure_params",
+        "offset": 16,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "dynamic_exposure_params2",
+        "offset": 32,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "emissiveRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "exposureMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "gaussian",
    "program": "gaussian",
    "permutation": {},
@@ -4371,6 +4556,92 @@
    }
   },
   {
+   "id": "luminance",
+   "program": "luminance",
+   "permutation": {},
+   "source": "slang/luminance.slang",
+   "stages": {
+    "vertex": {
+     "file": "luminance.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "b6dd9e7a3d6d95ed9e2e4ef8ea0dcccc32248349f955678839d5ee2fefc9c1a2",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "diffuse_luminance_scale",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "luminance.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "4d9d23c53d80a3c1f487886dd26ab209ccd5e27ce5eaacdb4d69148dc7f20ec0",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "diffuse_luminance_scale",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "emissiveRect",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "normalMap",
+        "binding": 2,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "normgen",
    "program": "normgen",
    "permutation": {},
@@ -5056,6 +5327,693 @@
        }
       ],
       "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "postGammaCorrect__LEGACY_GAMMA0",
+   "program": "postGammaCorrect",
+   "permutation": {
+    "LEGACY_GAMMA": "0"
+   },
+   "source": "slang/postGammaCorrect.slang",
+   "stages": {
+    "vertex": {
+     "file": "postGammaCorrect__LEGACY_GAMMA0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "10c8698dce1c0317e0328186fe3f7744899234e4b7f431a4f8bae26ab2b76de1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postGammaCorrect__LEGACY_GAMMA0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "ea14d074c5a5d27a2836fdded9c36cb2e7310d744ee7de2dd68de7a610d1e884",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postGammaCorrect__LEGACY_GAMMA1",
+   "program": "postGammaCorrect",
+   "permutation": {
+    "LEGACY_GAMMA": "1"
+   },
+   "source": "slang/postGammaCorrect.slang",
+   "stages": {
+    "vertex": {
+     "file": "postGammaCorrect__LEGACY_GAMMA1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "4ab07b7afb03cac616b92ee8a910c32d41936f227017cae1626f55c0263c856b",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postGammaCorrect__LEGACY_GAMMA1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "53f4855eb768cc18b88e5e448869bd8cfa299dcfcf9769b52b990299f8ba3148",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE0__NO_POST0",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "0",
+    "NO_POST": "0"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE0__NO_POST0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "d7f92efd158a07fadba49cc789c541599d5ef18e118834c26b30b0f5bd08bd19",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "exposure",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE0__NO_POST0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "0396b708a1fee690699c526c553b0f15dd39af45578c18b514fcfd74b0796733",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "exposure",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "exposureMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE0__NO_POST1",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "0",
+    "NO_POST": "1"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE0__NO_POST1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "523cbd17f65201cc16a66151b764516e302bcba052fae8eee2d64718a2022f68",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE0__NO_POST1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "222b8bb0b0124d567f732a9bc798f7a06170c0ea1a612100d4921f0414a8f2e3",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE1__NO_POST0",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "1",
+    "NO_POST": "0"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE1__NO_POST0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "37629a2619d518d654558ad02948a938f215d35df2d005bd0340e95f2fe3fc7e",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "exposure",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE1__NO_POST0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "5e79a2ddd681fc224d8c960f781c9310025e74477d83640294fabfd82250332a",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "exposure",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "exposureMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE1__NO_POST1",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "1",
+    "NO_POST": "1"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE1__NO_POST1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "f570f7151647827a98fcdd24485634b7d3d70065f9d34d8ec1f3693d6137a127",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE1__NO_POST1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "d0948733e256ddd923b110472060e1bc9fbbfe7b7dc4570c1d88a0e4c4ac5d35",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE2__NO_POST0",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "2",
+    "NO_POST": "0"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE2__NO_POST0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "a287d1e57e24ee427685f2988712e1b6295db6ffa2f8ca6713838565bedb24e2",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "exposure",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE2__NO_POST0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "dbb5ce1bd10251386943df5e87398ee962e54a62742c8467aaa508fecc16f687",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "exposure",
+        "offset": 4,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_mix",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tonemap_type",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "exposureMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "postTonemap__GAMMA_MODE2__NO_POST1",
+   "program": "postTonemap",
+   "permutation": {
+    "GAMMA_MODE": "2",
+    "NO_POST": "1"
+   },
+   "source": "slang/postTonemap.slang",
+   "stages": {
+    "vertex": {
+     "file": "postTonemap__GAMMA_MODE2__NO_POST1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "9f5c0097a82bf8dd5758b4a4add85126d65e6286155e31230f84e358be8c8555",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "postTonemap__GAMMA_MODE2__NO_POST1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "cc2d641546be21252d658c6d7949f0f6954a33ee5744f4b4ca2bc021eed344ce",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "gamma",
+        "offset": 0,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
      }
     }
    }

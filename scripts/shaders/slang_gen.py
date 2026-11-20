@@ -81,7 +81,8 @@ def load_program_list(src_dir):
             if pid in ids:
                 raise GenError(f'duplicate program id {pid}')
             ids.add(pid)
-            tasks.append({'id': pid, 'program': name, 'source': prog['source'], 'entries': entries, 'permutation': perm})
+            tasks.append({'id': pid, 'program': name, 'family': prog.get('family'), 'source': prog['source'],
+                          'entries': entries, 'permutation': perm})
     return {'hooks': hooks, 'tasks': tasks, 'position': data.get('position')}
 
 

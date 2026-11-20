@@ -8,8 +8,8 @@ study is in `reports/slang-shaders-2026-11-18/`). Slang is a **build tool**: the
 the OpenGL viewer compiles. No Slang compiler or library is in the viewer or the installers. The same sources later
 compile to SPIR-V for the Vulkan line.
 
-This page describes the groundwork (stage S1), the pilot (S2, the interface family and the binding model) and the quiet
-families converted with it (effects, post, G-buffer writers, skinning, the shared position module).
+This page describes the groundwork (stage S1), the pilot (S2, the interface family and the binding model), and the
+conversions of objects, effects, post-processing and G-buffer writers.
 
 ## Decisions in force
 
@@ -56,9 +56,9 @@ python scripts/shaders/slang_check.py all    manifest, interface, position gate,
 
 Edit the `.slang` files only. A conflict in a generated file is resolved by regenerating, never by hand.
 
-`program_list.json` names each program: its `source`, its `entries` (stage to entry point; vertex, fragment or compute), and
-optional `permutations`, an object of axes to value lists. Every combination is one program id
-(`name__AXIS0_OTHER1`) compiled with `-DAXIS=0 -DOTHER=1`. Permutations are for inputs that change a declaration. Settings
+`program_list.json` names each program: its `source`, its `entries` (stage to entry point; vertex, fragment or compute),
+an optional qualification `family`, and optional `permutations`, an object of axes to value lists. Every combination is one program id
+(`name__AXIS0__OTHER1`) compiled with `-DAXIS=0 -DOTHER=1`. Permutations are for inputs that change a declaration. Settings
 and device values are **hooks**.
 
 slangc prints every entry point of one compile to standard output (its `-o` per entry point does not work for GLSL in
@@ -191,6 +191,18 @@ Not converted, and why:
 The pilot's radianceGen, irradianceGen, copy-depth and alphamask conversions stay (the owner asked for the radiance filter A/B first);
 like every converted program they are regenerated at the switchover from the settled code.
 
+## Deferred post-processing
+
+Luminance, exposure (with and without history), gamma correction (sRGB and legacy), and tone mapping use generated
+programs. The six tone-mapping permutations combine three gamma modes (none, sRGB, legacy) with post-processing on
+or off. The ACES and Khronos Neutral curves, exposure, and blend factor remain uniform-driven in the post-processing
+permutations. All four programs share the full-screen vertex stage in `postfullscreen.slang`, which takes its position
+from `position.slang`.
+
+The A/B harness exercises luminance across G-buffer flags, exposure from a mip chain with and without the history texture,
+and both tone-mapping curves on HDR inputs. The hand-written full-screen vertex and fragment helpers still serve the
+GLSL comparison path and other passes that link them.
+
 ## The test gaps of the pilot, closed
 
 - **std140 packing** (`LLGeneratedShader::putArray` and `putMatrix` in `llgeneratedshader.h`, used by `LLGLSLShader::blockPutArray` and
@@ -227,7 +239,7 @@ builds and runs the manifest parse test.
 same fixed inputs (a procedural environment cube array; three faces, four mip levels, two layers), reads both back as float32 and
 compares them. `--selftest` proves the harness: identity gives zero differing values, one changed constant is caught, and the
 generated-program path (uniforms packed into a std140 block from introspection, a sampler with `layout(binding)`) renders
-the fixture program bit for bit like a loose-uniform twin. Windows and NVIDIA now; the RX 9070 XT run comes later. `python scripts/shaders/ab_harness.py skin` draws a wavy skinned grid with the hand-written `bumpV.glsl` plus `objectSkinV.glsl` and with the generated bump
+the fixture program bit for bit like a loose-uniform twin. `python scripts/shaders/ab_harness.py skin` draws a wavy skinned grid with the hand-written `bumpV.glsl` plus `objectSkinV.glsl` and with the generated bump
 programs (rigged and static) over four palettes and view angles, and compares the eye position per pixel. Exit code
 2 means the candidate is not generated yet.
 
@@ -259,9 +271,51 @@ sky, atmosphere and water.
   must be changed in the PR that converts those programs (the converted programs here are all hand-written at those sites).
 - **Draw and dispatch sites flush the block.** Every `glDraw*` goes through `LLVertexBuffer` or `LLImageGL`, which call
   `LLGLSLShader::flushBlock()`; a compute dispatch calls it itself (`pipeline.cpp`, the stochastic shadow resolve).
-- **Gate for the first hot family:** the RX 9070 XT position A/B (`ab_harness.py skin` and the `programs` depth rows) and the
-  small-upload bench (about 3000 draws with a 128 byte dirty range) run on both GPUs before the first hot family converts.
-  The AMD decal fix (`VK_POSITION_INVARIANT`) is off until the last hot family lands.
+- **Gate for the first hot family:** run the skin/position A/B and the 3,000-draw, 128-byte upload benchmark on the local
+  qualification GPU (NVIDIA GeForce RTX 5070 Ti). `VK_POSITION_INVARIANT` is off until the last hot family lands.
+
+## Hot-family qualification on Windows
+
+The RTX 5070 Ti is the qualification GPU for every hot-family conversion. Save the OpenGL renderer, driver, and comparison
+results with the feature revision. Conclusions apply to the measured GPU and driver. The RX 9070 XT decal behavior remains
+a separate cross-vendor check.
+
+Run the shader pipeline tests, strict generation drift check and `slang_check.py all` for each conversion. Use the local
+driver to check the linked manifest and run the shared position and upload tests before the first hot family:
+
+```powershell
+python scripts/shaders/ab_harness.py manifest --expect-renderer 'RTX 5070 Ti' --report manifest.json
+python scripts/shaders/ab_harness.py skin --expect-renderer 'RTX 5070 Ti' --report skin.json
+python scripts/shaders/ab_harness.py programs --only deferred-bump --strict-depth --expect-renderer 'RTX 5070 Ti' --report depth.json
+python scripts/perf/bench_palette_block.py --small-uploads --expect-renderer 'RTX 5070 Ti'
+```
+
+Set the `family` of each converted program in `program_list.json` and add legacy/candidate cases for its permutations. For
+example, the deferred post family can be qualified with the same command used by later conversions:
+
+```powershell
+python scripts/shaders/ab_harness.py programs --family deferred-post --strict-depth --expect-renderer 'RTX 5070 Ti' --report deferred-post.json
+```
+
+Family selection requires A/B coverage for every registered permutation. Cases that write depth or depend on depth ordering
+compare it exactly. For alpha tests, casters and overlays, compare coverage exactly as well. Add the inputs and runtime hook
+values that exercise the family. For a compute resolve, also dispatch both implementations with the same input and compare
+the outputs and history over successive frames.
+
+| Family | Cases to exercise |
+|---|---|
+| Alpha, material blend, and stochastic transparency | Static and rigged cutouts, per-sample coverage, opaque occlusion, and seeded history with disocclusion |
+| Shadows and depth | Exact caster depth and masks, cascade and projector edges, static and skinned casters, and fragment/compute resolve parity |
+| Deferred lights, BRDF, and softenLight | Legacy and PBR branches, roughness extremes, point and projector lights, and light-volume boundaries |
+| Probes and SSR | Both probe filters, mip and layer selection, SSR hits and misses, and history and depth rejection |
+| Sky and atmosphere | Legacy and physical sky, sun and moon coverage, LUT outputs, and clouds in still and moving views |
+| Water | Above and below the waterline, reflection and refraction, and shoreline and clip-plane coverage |
+| glTF and world surfaces | Texture transforms and texture-count permutations, terrain layer weights, and alpha-mask coverage |
+| Avatars | Native avatar and rigged-object palettes, lighting and atmospherics, and overlay/decal coverage and depth |
+
+Use the staged viewer for driver startup checks. The owner's in-world Release check is the frame-level gate for rendering
+changes. For light and shadow work, compare the legacy and generated paths at the same scene and default tier, and report
+the pass cost and frame rate against the standing and moving floors in `AGENTS.md`.
 
 ## End state: every remaining program has a place
 

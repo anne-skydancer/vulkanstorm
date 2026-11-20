@@ -140,6 +140,21 @@
       }
     },
     {
+      "name": "exposure",
+      "family": "deferred-post",
+      "source": "exposure.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "USE_LAST_EXPOSURE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "gaussian",
       "source": "gaussian.slang",
       "entries": {
@@ -238,6 +253,15 @@
       }
     },
     {
+      "name": "luminance",
+      "family": "deferred-post",
+      "source": "luminance.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "normgen",
       "source": "normgen.slang",
       "entries": {
@@ -284,6 +308,41 @@
       },
       "permutations": {
         "NORMALS": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "postGammaCorrect",
+      "family": "deferred-post",
+      "source": "postGammaCorrect.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "LEGACY_GAMMA": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "postTonemap",
+      "family": "deferred-post",
+      "source": "postTonemap.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "GAMMA_MODE": [
+          0,
+          1,
+          2
+        ],
+        "NO_POST": [
           0,
           1
         ]
