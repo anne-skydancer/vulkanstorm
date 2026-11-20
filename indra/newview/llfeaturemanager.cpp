@@ -31,7 +31,6 @@
 #include <iterator>
 
 #include <boost/regex.hpp>
-#include <boost/scope/scope_exit.hpp>
 
 #include "llfeaturemanager.h"
 #include "llgraphicsidentity.h"
@@ -787,10 +786,13 @@ LLSD LLFeatureManager::getRecommendedSettingsMap()
     const U32 level = isSafe() ? 0 : canonicalGraphicsLevel(gpu_level);
     LL_INFOS("RenderInit") << "Getting the map of recommended settings for level " << level << LL_ENDL;
 
-    auto restore_features = boost::scope::scope_exit([this, active = std::move(mFeatures)]() mutable
+    struct RestoreFeatures
     {
-        mFeatures = std::move(active);
-    });
+        feature_map_t& active;
+        feature_map_t saved;
+        ~RestoreFeatures() { active.swap(saved); }
+    } restore_features{mFeatures, std::move(mFeatures)};
+
     applyBaseMasks();
     maskFeatures(getNameForGraphicsLevel(level));
 
