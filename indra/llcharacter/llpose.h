@@ -85,16 +85,24 @@ class LLJointStateBlender
 {
     LL_ALIGN_NEW
 protected:
-    LLPointer<LLJointState> mJointStates[JSB_NUM_JOINT_STATES];
+    // <Vulkanstorm> multi-core C6 (H6): plain pointers. The states belong to the poses of the motions that were added
+    // this update (LLPose::mJointMap holds the references) and stay alive until the blend: blendJointStates() empties the
+    // slots, so nothing is held between updates and the blender takes no reference counts (a frame job must not).
+    // LLPoseBlender::isEmpty() is the check; whoever keeps slots across updates (blendAndCache) clears them before a
+    // motion or a joint state goes (LLMotionController::removeMotionInstance, deleteAllMotions); a motion removed during
+    // an update is deleted after the blend (removeMotionInstance defers it while the blender is not empty).
+    LLJointState*   mJointStates[JSB_NUM_JOINT_STATES];
+    // </Vulkanstorm>
     S32             mPriorities[JSB_NUM_JOINT_STATES];
     bool            mAdditiveBlends[JSB_NUM_JOINT_STATES];
 public:
     LLJointStateBlender();
     ~LLJointStateBlender();
     void blendJointStates(bool apply_now = true);
-    bool addJointState(const LLPointer<LLJointState>& joint_state, S32 priority, bool additive_blend);
+    bool addJointState(LLJointState* joint_state, S32 priority, bool additive_blend);
     void interpolate(F32 u);
     void clear();
+    bool isEmpty() const { return mJointStates[0] == nullptr; } // <Vulkanstorm/> slot 0 is filled first
     void resetCachedJoint();
 
 public:
@@ -133,6 +141,9 @@ public:
 
     // interpolate all joints towards cached values
     void interpolate(F32 u);
+
+    // <Vulkanstorm/> multi-core C6 (H6): no blender is active and none holds a joint state (true after blendAndApply)
+    bool isEmpty() const;
 
     LLPose* getBlendedPose() { return &mBlendedPose; }
 };

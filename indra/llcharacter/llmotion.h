@@ -151,6 +151,10 @@ public:
     // called when a motion is deactivated
     virtual void onDeactivate() = 0;
 
+    // <Vulkanstorm/> multi-core C6: false for a motion whose onUpdate / onDeactivate must stay on the main thread (it copies
+    // LLPointers, deletes, or reaches shared state); a character with such a motion active is animated serially
+    virtual bool canUpdateInJob() const { return true; }
+
     // can we crossfade this motion with a new instance when restarted?
     // should ultimately always be true, but lack of emote blending, etc
     // requires this

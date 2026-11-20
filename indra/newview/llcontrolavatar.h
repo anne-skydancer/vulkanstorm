@@ -61,7 +61,10 @@ public:
 
     virtual void idleUpdate(LLAgent &agent, const F64 &time);
     virtual bool computeNeedsUpdate();
-    virtual bool updateCharacter(LLAgent &agent);
+    // <Vulkanstorm> multi-core C6 (llvoavatar.h): its idleUpdate adds the delayed kill only
+    bool idleUpdateSplits() const override { return !mMarkedForDeath; }
+    LLViewerObject* getAnimationVolumeRoot() const override;
+    // </Vulkanstorm>
 
     void getAnimatedVolumes(std::vector<LLVOVolume*>& volumes);
     void updateAnimations();

@@ -62,6 +62,9 @@ public:
 
     virtual LLMotionBlendType getBlendType() { return NORMAL_BLEND; }
 
+    // <Vulkanstorm/> multi-core C6: onUpdate and onDeactivate copy FSJointPose (LLPointers): the main thread only
+    bool canUpdateInJob() const override { return false; }
+
     // called to determine when a motion should be activated/deactivated based on avatar pixel coverage
     virtual F32 getMinPixelArea() { return MIN_REQUIRED_PIXEL_AREA_POSING; }
 

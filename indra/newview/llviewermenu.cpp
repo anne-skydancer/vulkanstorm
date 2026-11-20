@@ -2426,30 +2426,6 @@ class LLAdvancedCheckPrivateLookPointAt : public view_listener_t
     }
 };
 
-/////////////////////////
-// DEBUG JOINT UPDATES //
-/////////////////////////
-
-
-class LLAdvancedToggleDebugJointUpdates : public view_listener_t
-{
-    bool handleEvent(const LLSD& userdata)
-    {
-        LLVOAvatar::sJointDebug = !(LLVOAvatar::sJointDebug);
-        return true;
-    }
-};
-
-class LLAdvancedCheckDebugJointUpdates : public view_listener_t
-{
-    bool handleEvent(const LLSD& userdata)
-    {
-        bool new_value = LLVOAvatar::sJointDebug;
-        return new_value;
-    }
-};
-
-
 
 /////////////////
 // DISABLE LOD //
@@ -13241,8 +13217,6 @@ void initialize_menus()
     view_listener_t::addMenu(new LLAdvancedCheckShowPointAt(), "Advanced.CheckShowPointAt");
     view_listener_t::addMenu(new LLAdvancedTogglePrivateLookPointAt(), "Advanced.TogglePrivateLookPointAt");
     view_listener_t::addMenu(new LLAdvancedCheckPrivateLookPointAt(), "Advanced.CheckPrivateLookPointAt");
-    view_listener_t::addMenu(new LLAdvancedToggleDebugJointUpdates(), "Advanced.ToggleDebugJointUpdates");
-    view_listener_t::addMenu(new LLAdvancedCheckDebugJointUpdates(), "Advanced.CheckDebugJointUpdates");
     view_listener_t::addMenu(new LLAdvancedToggleDisableLOD(), "Advanced.ToggleDisableLOD");
     view_listener_t::addMenu(new LLAdvancedCheckDisableLOD(), "Advanced.CheckDisableLOD");
     view_listener_t::addMenu(new LLAdvancedToggleDebugCharacterVis(), "Advanced.ToggleDebugCharacterVis");

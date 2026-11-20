@@ -656,7 +656,6 @@
 			<menu_item_check label="Informações de animação" name="Animation Info"/>
 			<menu_item_check label="Mostrar foco da câmera" name="Show Look At"/>
 			<menu_item_check label="Mostrar ponto de clique" name="Show Point At"/>
-			<menu_item_check label="Depurar atualização de terreno" name="Debug Joint Updates"/>
 			<menu_item_check label="Desativar LOD" name="Disable LOD"/>
 			<menu_item_check label="Depurar agentes visíveis" name="Debug Character Vis"/>
 			<menu_item_check label="Depurar estado de rez do personagem" name="Debug Character Rez State"/>

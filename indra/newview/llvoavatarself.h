@@ -136,7 +136,7 @@ public:
     // Updates
     //--------------------------------------------------------------------
 public:
-    /*virtual*/ bool    updateCharacter(LLAgent &agent);
+    /*virtual*/ void    updateCharacterBegin(LLAgent &agent); // <Vulkanstorm/> multi-core C6: the former updateCharacter
     /*virtual*/ void    idleUpdateTractorBeam();
     bool                checkStuckAppearance();
 

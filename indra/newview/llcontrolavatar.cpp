@@ -406,10 +406,12 @@ bool LLControlAvatar::computeNeedsUpdate()
     return LLVOAvatar::computeNeedsUpdate();
 }
 
-bool LLControlAvatar::updateCharacter(LLAgent &agent)
+// <Vulkanstorm> multi-core C6: the root of the linkset this avatar follows; the wearer for an attached animated object
+LLViewerObject* LLControlAvatar::getAnimationVolumeRoot() const
 {
-    return LLVOAvatar::updateCharacter(agent);
+    return mRootVolp ? static_cast<LLViewerObject*>(mRootVolp->getRoot()) : nullptr;
 }
+// </Vulkanstorm>
 
 //virtual
 void LLControlAvatar::updateDebugText()

@@ -616,7 +616,6 @@
 			<menu_item_check label="Animasiya məlumatları" name="Animation Info"/>
 			<menu_item_check label="Baxış göstər" name="Show Look At"/>
 			<menu_item_check label="Baxış göstəricisini göstər" name="Show Point At"/>
-			<menu_item_check label="Birləşmə yerlərin yeniləmələrinin sazlaması" name="Debug Joint Updates"/>
 			<menu_item_check label="Detalların (LOD) söndürülməsi" name="Disable LOD"/>
 			<menu_item_check label="Personaj görünürlüyünün sazlaması" name="Debug Character Vis"/>
 			<menu_item_check label="Skeleti göstər" name="Show Collision Skeleton"/>

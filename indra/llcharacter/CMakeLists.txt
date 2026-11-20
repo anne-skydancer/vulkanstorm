@@ -66,3 +66,11 @@ target_link_libraries(
         llfilesystem
         llxml
     )
+
+# <Vulkanstorm> multi-core C6: the two-step motion update on LL::FrameJobs, serial against jobs bit for bit
+if (LL_TESTS)
+  include(LLAddBuildTest)
+  set(test_libs llcharacter)
+  LL_ADD_INTEGRATION_TEST(llmotionjobs "" "${test_libs}")
+endif (LL_TESTS)
+# </Vulkanstorm>

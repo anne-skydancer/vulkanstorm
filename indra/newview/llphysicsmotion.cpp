@@ -151,7 +151,7 @@ protected:
                 const controller_map_t::const_iterator& entry = mParamControllers.find(controller_key[param]);
                 if (entry == mParamControllers.end())
                 {
-                        return sDefaultController[controller_key[param]];
+                        return getDefaultParamValue(controller_key[param]); // <Vulkanstorm/> multi-core C6
                 }
                 const std::string& param_name = (*entry).second.c_str();
                 mParamCache[param] = mCharacter->getVisualParam(param_name.c_str());
@@ -163,7 +163,7 @@ protected:
             }
             else
             {
-                return sDefaultController[controller_key[param]];
+                return getDefaultParamValue(controller_key[param]); // <Vulkanstorm/> multi-core C6
             }
         }
 
@@ -200,6 +200,15 @@ private:
         LLVisualParam* mParamCache[NUM_PARAMS];
 
         static default_controller_map_t sDefaultController;
+
+        // <Vulkanstorm> multi-core C6: a lookup that never inserts (operator[] would), since a core reads the shared map
+        // from several threads at once; a key without a default gives 0, as the inserted value did
+        static F32 getDefaultParamValue(const std::string& key)
+        {
+            const default_controller_map_t::const_iterator it = sDefaultController.find(key);
+            return it != sDefaultController.end() ? it->second : 0.f;
+        }
+        // </Vulkanstorm>
 };
 
 default_controller_map_t initDefaultController()
@@ -451,12 +460,24 @@ F32 LLPhysicsMotion::calculateAcceleration_local(const F32 velocity_local, const
         return smoothed_acceleration_local;
 }
 
+// <Vulkanstorm> multi-core C6: the setting of onUpdate, in one place so that prepareForJobs can make its first use
+static bool avatar_physics_enabled()
+{
+    static LLCachedControl<bool> av_physics(gSavedSettings, "AvatarPhysics");
+    return av_physics;
+}
+
+void LLPhysicsMotionController::prepareForJobs()
+{
+    avatar_physics_enabled();
+}
+// </Vulkanstorm>
+
 bool LLPhysicsMotionController::onUpdate(F32 time, U8* joint_mask)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
     // Skip if disabled globally.
-    static LLCachedControl<bool> av_physics(gSavedSettings, "AvatarPhysics");
-    if (!av_physics)
+    if (!avatar_physics_enabled())
     {
             return true;
     }

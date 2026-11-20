@@ -1024,7 +1024,7 @@ LLVOAvatarSelf::~LLVOAvatarSelf()
  *********************************************************************************/
 
 // virtual
-bool LLVOAvatarSelf::updateCharacter(LLAgent &agent)
+void LLVOAvatarSelf::updateCharacterBegin(LLAgent &agent) // <Vulkanstorm/> multi-core C6: was updateCharacter
 {
     // update screen joint size
     if (mScreenp)
@@ -1036,7 +1036,7 @@ bool LLVOAvatarSelf::updateCharacter(LLAgent &agent)
         resetHUDAttachments();
     }
 
-    return LLVOAvatar::updateCharacter(agent);
+    LLVOAvatar::updateCharacterBegin(agent);
 }
 
 // virtual

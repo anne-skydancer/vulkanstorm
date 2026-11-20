@@ -173,23 +173,100 @@ void LLCharacter::requestStopMotion( LLMotion* motion)
 void LLCharacter::updateMotions(e_update_t update_type)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_AVATAR;
+    // <Vulkanstorm> multi-core C6: in two steps (llcharacter.h)
+    if (updateMotionsBegin(update_type))
+    {
+        updateMotionsCore(update_type);
+    }
+}
+
+bool LLCharacter::updateMotionsBegin(e_update_t update_type)
+{
     if (update_type == HIDDEN_UPDATE)
     {
-        mMotionController.updateMotionsMinimal();
+        mMotionController.updateMotionsMinimalBegin();
+        return true;
+    }
+    // unpause if the number of outstanding pause requests has dropped to the initial one
+    if (mMotionController.isPaused() && mPauseRequest->getNumRefs() == 1)
+    {
+        mMotionController.unpauseAllMotions();
+    }
+    return mMotionController.updateMotionsBegin(update_type == FORCE_UPDATE);
+}
+
+void LLCharacter::updateMotionsCore(e_update_t update_type)
+{
+    if (update_type == HIDDEN_UPDATE)
+    {
+        mMotionController.updateMotionsMinimalCore();
     }
     else
     {
-        // unpause if the number of outstanding pause requests has dropped to the initial one
-        if (mMotionController.isPaused() && mPauseRequest->getNumRefs() == 1)
-        {
-            mMotionController.unpauseAllMotions();
-        }
-        bool force_update = (update_type == FORCE_UPDATE);
-        {
-            mMotionController.updateMotions(force_update);
-        }
+        mMotionController.updateMotionsCore(update_type == FORCE_UPDATE);
     }
 }
+
+namespace
+{
+    inline U64 motion_random_rotl(U64 x, int k)
+    {
+        return (x << k) | (x >> (64 - k));
+    }
+
+    inline U64 motion_random_splitmix(U64& x)
+    {
+        U64 z = (x += 0x9E3779B97F4A7C15ULL);
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+        return z ^ (z >> 31);
+    }
+}
+
+F32 LLCharacter::motionRandom()
+{
+    U64* s = mMotionRandomState;
+    if (!mMotionRandomSeeded)
+    {
+        // the id's 128 bits, spread over the state (splitmix64, the seeding its authors recommend)
+        const LLUUID& id = getID();
+        U64 halves[2];
+        memcpy(halves, id.mData, sizeof(halves));
+        U64 seed = halves[0] ^ motion_random_rotl(halves[1], 32);
+        s[0] = motion_random_splitmix(seed);
+        s[1] = motion_random_splitmix(seed) ^ halves[1];
+        s[2] = motion_random_splitmix(seed);
+        s[3] = motion_random_splitmix(seed) | 1; // never all zero
+        mMotionRandomSeeded = true;
+    }
+    // xoshiro256++ (Blackman and Vigna, public domain)
+    const U64 result = motion_random_rotl(s[0] + s[3], 23) + s[0];
+    const U64 t = s[1] << 17;
+    s[2] ^= s[0];
+    s[3] ^= s[1];
+    s[1] ^= s[2];
+    s[0] ^= s[3];
+    s[2] ^= t;
+    s[3] = motion_random_rotl(s[3], 45);
+    // the top 24 bits: every value is exact in an F32 and below 1
+    return (F32)(result >> 40) * (1.f / 16777216.f);
+}
+
+F32 LLCharacter::motionRandom(F32 val)
+{
+    // the clamping of ll_frand(val) (llrand.cpp)
+    F32 rv = motionRandom() * val;
+    if (val > 0)
+    {
+        if (rv >= val) return 0.f;
+    }
+    else
+    {
+        if (rv <= val) return 0.f;
+    }
+    return rv;
+}
+// </Vulkanstorm>
 
 
 //-----------------------------------------------------------------------------

@@ -156,6 +156,20 @@ public:
     // periodic update function, steps the motion controller
     enum e_update_t { NORMAL_UPDATE, HIDDEN_UPDATE, FORCE_UPDATE };
     void updateMotions(e_update_t update_type);
+    // <Vulkanstorm> multi-core C6: updateMotions in two steps (LLMotionController::updateMotionsBegin / Core).
+    // updateMotions(t) is updateMotionsBegin(t) followed, when that returns true, by updateMotionsCore(t). The first step is
+    // for the main thread; the second touches this character only and may run as a frame job.
+    bool updateMotionsBegin(e_update_t update_type);
+    void updateMotionsCore(e_update_t update_type);
+
+    // The random numbers of this character's motions (eye jitter, look-away and blink times): one stream a character,
+    // seeded from its id, so that the motions draw the same numbers whichever thread animates the character and in
+    // whatever order the characters are animated (decision D-C of the stage-5a report). motionRandom() is in [0, 1);
+    // motionRandom(val) follows ll_frand(val): in [0, val), or (val, 0] for a negative val. Characters with the same id
+    // draw the same numbers: those whose id is null at their first draw (a UI or preview avatar whose id is not set yet) blink in step.
+    F32 motionRandom();
+    F32 motionRandom(F32 val);
+    // </Vulkanstorm>
 
     LLAnimPauseRequest requestPause();
     bool areAnimationsPaused() const { return mMotionController.isPaused(); }
@@ -292,6 +306,11 @@ public:
 
 protected:
     LLMotionController  mMotionController;
+
+    // <Vulkanstorm> multi-core C6: the state of motionRandom() (xoshiro256++), seeded at the first draw
+    U64                 mMotionRandomState[4] = { 0, 0, 0, 0 };
+    bool                mMotionRandomSeeded = false;
+    // </Vulkanstorm>
 
     typedef std::map<std::string, void *> animation_data_map_t;
     animation_data_map_t mAnimationData;

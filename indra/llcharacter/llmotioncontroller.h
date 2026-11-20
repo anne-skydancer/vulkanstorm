@@ -33,6 +33,7 @@
 #include <string>
 #include <map>
 #include <deque>
+#include <vector>
 
 #include "llmotion.h"
 #include "llpose.h"
@@ -134,6 +135,37 @@ public:
     // minimal update (e.g. while hidden)
     void updateMotionsMinimal();
 
+    // <Vulkanstorm> multi-core C6: the two updates above in two steps, so that the second can run as a frame job.
+    // updateMotions(f) is updateMotionsBegin(f) followed, when that returns true, by updateMotionsCore(f);
+    // updateMotionsMinimal() is updateMotionsMinimalBegin() followed by updateMotionsMinimalCore(): the same statements in
+    // the same order as before the split.
+    //   Begin: the clock, the cap on loaded motions (it deletes) and the loading motions (they initialise from the asset
+    //          system and the shared keyframe cache, and activate): main thread only.
+    //   Core:  the active motions' updates and the blend onto the joints. It touches this character only.
+    // updateMotionsBegin returns false when the update is already complete (the time-step quantum's interpolation).
+    bool updateMotionsBegin(bool force_update = false);
+    void updateMotionsCore(bool force_update = false);
+    void updateMotionsMinimalBegin();
+    void updateMotionsMinimalCore();
+
+    // While effects are deferred, the core records what must not happen in a job and leaves it to applyDeferredEffects():
+    // the stop requests to the character (LLCharacter::requestStopMotion), the emote a keyframe motion starts when it
+    // activates, and the deletion of deprecated motion instances. applyDeferredEffects() replays them in the order they
+    // were recorded and ends the deferral. Both calls are for the thread that owns the character, outside jobs.
+    // Without a deferral, a motion removed during an update (between its addMotion and the blend) is recorded the same
+    // way and deleted at the end of updateMotionsCore, so that the blender's plain pointers stay valid for the blend.
+    void beginDeferredEffects();
+    void applyDeferredEffects();
+    bool isDeferringEffects() const { return mDeferEffects; }
+    void deferEmoteStart(const LLUUID& emote_id);
+
+    // no joint state is left in the blender (H6: true after every update unless the time-step quantum is on)
+    bool blendersEmpty() const { return mPoseBlender.isEmpty(); }
+
+    // every active motion may run in a frame job (LLMotion::canUpdateInJob) and the time-step quantum is off
+    bool canUpdateInJob() const;
+    // </Vulkanstorm>
+
     void clearBlenders() { mPoseBlender.clearBlenders(); }
 
     // flush motions
@@ -193,6 +225,7 @@ protected:
     void updateIdleActiveMotions();
     void purgeExcessMotions();
     void deactivateStoppedMotions();
+    void requestStop(LLMotion* motion); // <Vulkanstorm/> LLCharacter::requestStopMotion, now or deferred
 
 protected:
     F32                 mTimeFactor;            // 1.f for normal speed
@@ -233,6 +266,18 @@ protected:
     U8                  mJointSignature[2][LL_CHARACTER_MAX_ANIMATED_JOINTS];
 private:
     U32                 mLastCountAfterPurge; //for logging and debugging purposes
+
+    // <Vulkanstorm> multi-core C6: see beginDeferredEffects()
+    struct DeferredEffect
+    {
+        enum EKind { STOP_REQUEST, EMOTE_START, DELETE_MOTION };
+        EKind       mKind;
+        LLMotion*   mMotion;
+        LLUUID      mID;
+    };
+    std::vector<DeferredEffect> mDeferredEffects;
+    bool                        mDeferEffects = false;
+    // </Vulkanstorm>
 };
 
 //-----------------------------------------------------------------------------

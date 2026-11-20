@@ -526,7 +526,6 @@
 			<menu_item_check label="Información de animaciones" name="Animation Info"/>
 			<menu_item_check label="Mostrar puntos de mira de foco" name="Show Look At"/>
 			<menu_item_check label="Mostrar puntos de mira de ratón" name="Show Point At"/>
-			<menu_item_check label="Depurar actualizaciones de articulación" name="Debug Joint Updates"/>
 			<menu_item_check label="Desactivar nivel de detalle (LOD)" name="Disable LOD"/>
 			<menu_item_check label="Depurar visibilidad del personaje" name="Debug Character Vis"/>
 			<menu_item_check label="Mostrar armazón de colisión" name="Show Collision Skeleton"/>

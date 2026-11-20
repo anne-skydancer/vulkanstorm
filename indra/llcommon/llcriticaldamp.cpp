@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llcriticaldamp.h"
+#include "llframejobsguard.h" // <Vulkanstorm/> multi-core C6
 #include <algorithm>
 
 //-----------------------------------------------------------------------------
@@ -95,6 +96,13 @@ F32 LLSmoothInterpolation::getInterpolant(F32SecondsImplicit time_constant, bool
         {
             return find_it->mInterpolant;
         }
+        // <Vulkanstorm> multi-core C6: a frame job reads the cache and never adds to it (avatar animation asks from
+        // several threads at once); the value is the one the cache would hold
+        else if (LL::FrameJobsGuard::tInJob)
+        {
+            return calcInterpolant(time_constant.value());
+        }
+        // </Vulkanstorm>
         else
         {
             Interpolant interp;

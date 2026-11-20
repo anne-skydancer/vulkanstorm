@@ -631,7 +631,6 @@
 			<menu_item_check label="Info animazione" name="Animation Info"/>
 			<menu_item_check label="Mostra sguardo" name="Show Look At"/>
 			<menu_item_check label="Mostra selezione" name="Show Point At"/>
-			<menu_item_check label="Debug aggiornamenti joint" name="Debug Joint Updates"/>
 			<menu_item_check label="Disabilita LOD" name="Disable LOD"/>
 			<menu_item_check label="Debug Vis personaggi" name="Debug Character Vis"/>
 			<menu_item_check label="Debug stato caricamento personaggi" name="Debug Character Rez State" />
