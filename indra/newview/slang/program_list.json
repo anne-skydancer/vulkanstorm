@@ -99,6 +99,51 @@
       }
     },
     {
+      "name": "ddiffuseIndexed",
+      "family": "deferred-diffuse",
+      "source": "ddiffuse.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "MASK": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "ddiffuseSingle",
+      "family": "deferred-diffuse",
+      "source": "ddiffuse.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "INDEXED": [
+          0
+        ],
+        "NO_COLOR": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "debug",
       "source": "debug.slang",
       "entries": {

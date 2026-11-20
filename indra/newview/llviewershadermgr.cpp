@@ -1638,12 +1638,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredDiffuseProgram.mName = "Deferred Diffuse Shader";
         gDeferredDiffuseProgram.mFeatures.hasSrgb = true;
         gDeferredDiffuseProgram.mShaderFiles.clear();
-        gDeferredDiffuseProgram.mShaderFiles.push_back(make_pair("deferred/diffuseV.glsl", GL_VERTEX_SHADER));
-        gDeferredDiffuseProgram.mShaderFiles.push_back(make_pair("deferred/diffuseIndexedF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredDiffuseProgram, emissiveId("ddiffuseIndexed", "__HAS_SKIN0__MASK0").c_str(),
+                        "deferred/diffuseV.glsl", "deferred/diffuseIndexedF.glsl");
         gDeferredDiffuseProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gDeferredDiffuseProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gDeferredDiffuseProgram);
-        success = make_rigged_variant(gDeferredDiffuseProgram, gDeferredSkinnedDiffuseProgram);
+        success = make_rigged_variant(gDeferredDiffuseProgram, gDeferredSkinnedDiffuseProgram,
+                                      emissiveId("ddiffuseIndexed", "__HAS_SKIN1__MASK0").c_str());
         success = success && gDeferredDiffuseProgram.createShader();
     }
 
@@ -1651,12 +1652,13 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredDiffuseAlphaMaskProgram.mName = "Deferred Diffuse Alpha Mask Shader";
         gDeferredDiffuseAlphaMaskProgram.mShaderFiles.clear();
-        gDeferredDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/diffuseV.glsl", GL_VERTEX_SHADER));
-        gDeferredDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/diffuseAlphaMaskIndexedF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredDiffuseAlphaMaskProgram, emissiveId("ddiffuseIndexed", "__HAS_SKIN0__MASK1").c_str(),
+                        "deferred/diffuseV.glsl", "deferred/diffuseAlphaMaskIndexedF.glsl");
         gDeferredDiffuseAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gDeferredDiffuseAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gDeferredDiffuseAlphaMaskProgram);
-        success = make_rigged_variant(gDeferredDiffuseAlphaMaskProgram, gDeferredSkinnedDiffuseAlphaMaskProgram);
+        success = make_rigged_variant(gDeferredDiffuseAlphaMaskProgram, gDeferredSkinnedDiffuseAlphaMaskProgram,
+                                      emissiveId("ddiffuseIndexed", "__HAS_SKIN1__MASK1").c_str());
         success = success && gDeferredDiffuseAlphaMaskProgram.createShader();
     }
 
@@ -1664,8 +1666,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredNonIndexedDiffuseAlphaMaskProgram.mName = "Deferred Diffuse Non-Indexed Alpha Mask Shader";
         gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderFiles.clear();
-        gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/diffuseV.glsl", GL_VERTEX_SHADER));
-        gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/diffuseAlphaMaskF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredNonIndexedDiffuseAlphaMaskProgram, emissiveId("ddiffuseSingle", "__INDEXED0__NO_COLOR0").c_str(),
+                        "deferred/diffuseV.glsl", "deferred/diffuseAlphaMaskF.glsl");
         gDeferredNonIndexedDiffuseAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gDeferredNonIndexedDiffuseAlphaMaskProgram);
         success = gDeferredNonIndexedDiffuseAlphaMaskProgram.createShader();
@@ -1676,8 +1678,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mName = "Deferred Diffuse Non-Indexed Alpha Mask No Color Shader";
         gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderFiles.clear();
-        gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair("deferred/diffuseNoColorV.glsl", GL_VERTEX_SHADER));
-        gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderFiles.push_back(make_pair("deferred/diffuseAlphaMaskNoColorF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram, emissiveId("ddiffuseSingle", "__INDEXED0__NO_COLOR1").c_str(),
+                        "deferred/diffuseNoColorV.glsl", "deferred/diffuseAlphaMaskNoColorF.glsl");
         gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         add_common_permutations(&gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram);
         success = gDeferredNonIndexedDiffuseAlphaMaskNoColorProgram.createShader();

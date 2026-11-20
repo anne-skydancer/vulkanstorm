@@ -544,7 +544,7 @@ bool LLGLSLShader::createShader()
             unloadInternal();
         }
     }
-    else if (mFeatures.mIndexedTextureChannels > 0)
+    else if (!generated && mFeatures.mIndexedTextureChannels > 0)
     { //override texture channels for indexed texture rendering
         llassert(mFeatures.mIndexedTextureChannels == LLGLSLShader::sIndexedTextureChannels); // these numbers must always match
         bind();
@@ -1443,6 +1443,7 @@ bool LLGLSLShader::mapGeneratedUniforms()
         for (const auto& texture : iface->textures)
         {
             textures[texture.name] = texture.binding;
+            mActiveTextureChannels = llmax(mActiveTextureChannels, texture.binding + 1);
         }
     }
 
@@ -1508,7 +1509,6 @@ bool LLGLSLShader::mapGeneratedUniforms()
         {
             // an explicit unit in the source: bindTexture() finds it in mTexture, nothing is set on the program
             mTexture[i] = texture->second;
-            mActiveTextureChannels = llmax(mActiveTextureChannels, texture->second + 1);
         }
     }
     return true;

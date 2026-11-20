@@ -510,7 +510,7 @@ layout(location = 0) out vec4 frag_color;
 void main() { frag_color = vec4(vary_position, vary_texcoord0.x + 2.0 * vary_texcoord1.y); }
 """
 ATTRIB_SLOTS = ('position', 'normal', 'texcoord0', 'texcoord1', 'texcoord2', 'texcoord3', 'diffuse_color', 'emissive',
-                'tangent', 'weight', 'weight4')
+                'tangent', 'weight', 'weight4', 'clothing', 'joint', 'texture_index')
 
 
 def skin_reference(gl, rigged):

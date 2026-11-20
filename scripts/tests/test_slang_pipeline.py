@@ -421,6 +421,22 @@ class CommittedTreeTest(unittest.TestCase):
         self.assertIn('sqrt(8 * n.z + 8)', module)
         self.assertIn('sqrt(8 * n.z + 8)', glsl)
 
+    def test_deferred_diffuse_texture_bindings_match_the_viewer(self):
+        source = (ROOT / 'indra/newview/llviewershadermgr.cpp').read_text(encoding='utf-8')
+        assignment = re.findall(r'^\s*LLGLSLShader::sIndexedTextureChannels\s*=\s*(\d+)\s*;', source, re.M)
+        self.assertEqual(len(assignment), 1)
+        indexed_units = [(f'tex{i}', i) for i in range(int(assignment[0]))]
+        bindings = {'ddiffuseIndexed': indexed_units, 'ddiffuseSingle': [('diffuseMap', 0)]}
+        manifest = check.load_manifest(common.GENERATED)
+        seen = set()
+        for program in manifest['programs']:
+            name = program['program']
+            if name in bindings:
+                seen.add(name)
+                textures = program['stages']['fragment']['interface']['textures']
+                self.assertEqual([(t['name'], t['binding']) for t in textures], bindings[name], program['id'])
+        self.assertEqual(seen, set(bindings))
+
     def test_block_name_and_manifest_keys_match_the_loader(self):
         header = (ROOT / 'indra/llrender/llgeneratedshader.h').read_text(encoding='utf-8')
         name = re.search(r'kBlockName\s*=\s*"(\w+)"', header).group(1)

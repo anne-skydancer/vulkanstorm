@@ -182,7 +182,6 @@ Not converted, and why:
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
 | every deferred world program that calls `calcAtmospherics` (fullbright, emissive, terrain, alpha) and `rlv` (`getPositionWithDepth`, `deferredUtil`) | atmosphere and `deferredUtil` are hot |
-| diffuse, diffuse alpha mask, non-indexed variants | the texture-index lookup (`diffuseLookup`, `passTextureIndex`) is composed at run time from the device's texture unit count; needs its own design (a hook or a permutation per count) |
 | `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
@@ -212,6 +211,15 @@ Run `ab_harness.py programs --family depth-of-field --strict-depth` to compare t
 The buffer visualizer samples mip 0 or mip 8, including the 1×1 luminance image. The parcel ownership overlay
 writes its original G-buffer values with three or four color attachments and keeps the overlay texture on unit 0.
 Run `ab_harness.py programs --family render-diagnostics --strict-depth` for both diagnostics.
+
+## Deferred diffuse and cutouts
+
+The deferred opaque diffuse and alpha-cutout paths use the shared position, object skin, mirror clip, and G-buffer
+modules. The indexed paths read the integer texture index from vertex attribute 13 and select one of the viewer's
+four batch texture units. The single-texture paths keep `diffuseMap` on unit 0. The loader takes these bindings
+from Slang reflection, and a pipeline test ties the generated texture units to the viewer's configured count.
+The A/B cases cover static and rigged geometry, all four indexed textures, cutouts, mirror clipping, and both
+emissive-buffer layouts.
 
 ## The test gaps of the pilot, closed
 
@@ -338,7 +346,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
 | glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`, `pbrTerrainBake`) | glTF | the glTF PR (needs lighting, shadows and probes) |
-| indexed-texture diffuse family (`diffuse*`, `diffuseNoColor`, `emissive`, `fullbright*`, `bump*` non-skin variants), `terrain`, `rlv` | world surfaces | the surface PR (texture-index lookup design first) |
+| `emissive`, `fullbright*`, `terrain`, `rlv` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | `normaldebug` (geometry stage) | debug | stays hand-written unless Slang geometry output is accepted |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |

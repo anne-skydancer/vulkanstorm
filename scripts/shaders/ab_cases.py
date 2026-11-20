@@ -65,6 +65,7 @@ class Case:
     texture_levels: dict = field(default_factory=dict)  # RGBA arrays per sampler, from level zero up
     point_textures: tuple = ()
     hooks: dict = field(default_factory=dict)  # candidate loader defines for this A/B
+    indexed_texture_channels: int = 0
 
 
 def _hash01(name, salt=0):
@@ -122,7 +123,7 @@ def palette_values(rng, joints=6):
     return H.Mat3x4Array(palette)
 
 
-def grid_mesh(rng, cells=10, joints=6):
+def grid_mesh(rng, cells=10, joints=6, indexed_texture_channels=0):
     """A wavy grid (two triangles a cell) covering the viewport, with every attribute the viewer's programs read."""
     xs = np.linspace(-1, 1, cells + 1, dtype='f4')
     pos, nrm, uv0, uv1, col, tan, wgt = [], [], [], [], [], [], []
@@ -139,7 +140,13 @@ def grid_mesh(rng, cells=10, joints=6):
                 tan.append((1.0, 0.1 * x, 0.0, 1.0))
                 wgt.append(rng.integers(0, joints, size=4) + rng.uniform(0.05, 0.95, size=4))
     arrays = {0: pos, 1: nrm, 2: uv0, 3: uv1, 6: col, 7: col, 8: tan, 10: wgt}
-    return {k: np.array(v, 'f4') for k, v in arrays.items()}, len(pos)
+    attributes = {slot: np.array(values, 'f4') for slot, values in arrays.items()}
+    if indexed_texture_channels > 1:
+        # Every triangle in a cell has one flat index. The first out-of-range index exercises the fallback color.
+        row, column = np.indices((cells, cells), dtype=np.int32)
+        indices = (row + 2 * column) % (indexed_texture_channels + 1)
+        attributes[13] = np.repeat(indices, 6).reshape(-1, 1)
+    return attributes, len(pos)
 
 
 def texture_for(gl, kind, name, levels=(), point=False):
@@ -229,11 +236,17 @@ class MRT:
             vbo = C.c_uint()
             g('glGenBuffers', None, C.c_int, C.POINTER(C.c_uint))(1, C.byref(vbo))
             g('glBindBuffer', None, C.c_uint, C.c_uint)(H.GL_ARRAY_BUFFER, vbo.value)
-            data = np.ascontiguousarray(array, dtype='<f4').tobytes()
+            is_integer = array.dtype == np.int32
+            data = np.ascontiguousarray(array, dtype='<i4' if is_integer else '<f4').tobytes()
             g('glBufferData', None, C.c_uint, C.c_ssize_t, C.c_void_p, C.c_uint)(H.GL_ARRAY_BUFFER, len(data), data, H.GL_STATIC_DRAW)
             g('glEnableVertexAttribArray', None, C.c_uint)(slot)
-            g('glVertexAttribPointer', None, C.c_uint, C.c_int, C.c_uint, C.c_ubyte, C.c_int, C.c_void_p)(
-                slot, array.shape[1], H.GL_FLOAT, 0, 4 * array.shape[1], None)
+            components = array.shape[1]
+            if is_integer:
+                g('glVertexAttribIPointer', None, C.c_uint, C.c_int, C.c_uint, C.c_int, C.c_void_p)(
+                    slot, components, INT_T, 0, None)
+            else:
+                g('glVertexAttribPointer', None, C.c_uint, C.c_int, C.c_uint, C.c_ubyte, C.c_int, C.c_void_p)(
+                    slot, components, H.GL_FLOAT, 0, 0, None)
             vbos.append(vbo)
         g('glUseProgram', None, C.c_uint)(prog)
         bind_textures()
@@ -260,15 +273,36 @@ class MRT:
         return images, depth
 
 
+def legacy_indexed_texture_code(channels):
+    """The NVIDIA path in LLShaderMgr::loadShaderFile builds one named sampler per texture."""
+    lines = [f'uniform sampler2D tex{index};' for index in range(channels)]
+    if channels == 1:
+        lines.append('vec4 diffuseLookup(vec2 texcoord) { return texture(tex0, texcoord); }')
+    else:
+        lines += ['flat in int vary_texture_index;', 'vec4 diffuseLookup(vec2 texcoord)', '{']
+        for index in range(channels):
+            prefix = 'else ' if index else ''
+            lines.append(f'    {prefix}if (vary_texture_index == {index}) {{ return texture(tex{index}, texcoord); }}')
+        lines += ['    return vec4(1,0,1,1);', '}']
+    return '\n'.join(lines) + '\n'
+
+
 def legacy_source(path, defines, stage, case):
     text = H.read_legacy(path, defines, stage)
     helpers = ''
     if stage == 'fragment':
-        text = text.replace('#version 420\n', '#version 420\n' + GBUFFER_DEFS, 1)
+        extra = GBUFFER_DEFS
+        if case.indexed_texture_channels:
+            extra += legacy_indexed_texture_code(case.indexed_texture_channels)
+        text = text.replace('#version 420\n', '#version 420\n' + extra, 1)
         if 'mirrorClip' in text or 'encodeNormal' in text:
             helpers = '\n' + (common.LEGACY_SHADERS / 'class1/deferred/globalF.glsl').read_text(encoding='utf-8')
-    elif case.skin:
-        helpers = '\n' + (common.LEGACY_SHADERS / 'class1/avatar/objectSkinV.glsl').read_text(encoding='utf-8')
+    else:
+        if case.skin:
+            helpers += '\n' + (common.LEGACY_SHADERS / 'class1/avatar/objectSkinV.glsl').read_text(encoding='utf-8')
+        if 'passTextureIndex()' in text:
+            index_helper = 'indexedTextureV.glsl' if case.indexed_texture_channels > 1 else 'nonindexedTextureV.glsl'
+            helpers += '\n' + (common.LEGACY_SHADERS / 'class1/objects' / index_helper).read_text(encoding='utf-8')
     return text + helpers
 
 
@@ -308,7 +342,10 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
     runs = [(clip, i, v) for clip in ([False, True] if case.clip else [False]) for i, v in enumerate(case.variants or ({},))]
     for clip, variant_index, variant in runs:
         rng = np.random.default_rng(rng_seed)
-        attribs, count = ({0: SCREEN_TRIANGLE}, len(SCREEN_TRIANGLE)) if case.fullscreen else grid_mesh(rng)
+        if case.fullscreen:
+            attribs, count = {0: SCREEN_TRIANGLE}, len(SCREEN_TRIANGLE)
+        else:
+            attribs, count = grid_mesh(rng, indexed_texture_channels=case.indexed_texture_channels)
         values = fill_uniforms(gl, ref, {**case.uniforms, **variant}, clip)
         if case.skin:
             values['matrixPalette'] = palette_values(np.random.default_rng(rng_seed + 1))
@@ -479,6 +516,25 @@ def render_diagnostics_cases():
                    uniforms={'color': [1.0] * 4, 'texture_matrix0': tex_matrix}, texture_levels={'diffuseMap': (parcels,)})
 
 
+def deferred_diffuse_cases():
+    vertex = 'deferred/diffuseV.glsl'
+    for emissive in (0, 1):
+        defines = {'HAS_EMISSIVE': '1'} if emissive else {}
+        for skin in (0, 1):
+            for mask in (0, 1):
+                fragment = 'diffuseAlphaMaskIndexedF.glsl' if mask else 'diffuseIndexedF.glsl'
+                yield Case(f'deferred-diffuse-indexed-e{emissive}-s{skin}-m{mask}', vertex, f'deferred/{fragment}',
+                           f'ddiffuseIndexed__HAS_EMISSIVE{emissive}__HAS_SKIN{skin}__MASK{mask}',
+                           defines=defines, outputs=3 + emissive, depth=True, skin=bool(skin), clip=True,
+                           indexed_texture_channels=4, flat_ok=(1,) if mask else ())
+        for no_color in (0, 1):
+            vertex_file = 'deferred/diffuseNoColorV.glsl' if no_color else vertex
+            fragment = 'diffuseAlphaMaskNoColorF.glsl' if no_color else 'diffuseAlphaMaskF.glsl'
+            yield Case(f'deferred-diffuse-single-e{emissive}-nc{no_color}', vertex_file, f'deferred/{fragment}',
+                       f'ddiffuseSingle__HAS_EMISSIVE{emissive}__INDEXED0__NO_COLOR{no_color}',
+                       defines=defines, outputs=3 + emissive, depth=True, clip=not no_color, flat_ok=(1,))
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -537,6 +593,7 @@ def cases():
     c.extend(deferred_post_cases())
     c.extend(depth_of_field_cases())
     c.extend(render_diagnostics_cases())
+    c.extend(deferred_diffuse_cases())
     return c
 
 
