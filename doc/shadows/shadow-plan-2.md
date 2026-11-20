@@ -27,6 +27,26 @@ Replacing its scheduling and lookup together lets the coverage, update, and filt
 Keep a full fresh render as a correctness oracle and as a timed fallback candidate for a lamp whose live
 footprint covers most of its map.
 
+## Local light anchors
+
+Use the emitting prim's UUID and current world transform as the local light's anchor. For a scripted light, the script
+selects the emitter by setting light properties on that prim. When a root script sets a child's light properties, the
+child supplies the anchor. The viewer gets the per-prim light state in object updates. Lights set in the Build tools use
+the same rule.
+
+Build the projector's optical origin and axis from the emitting prim's transform and projector parameters. Center a
+point light's faces on its emitter. Use the same emitter state in lighting and shadows. Once the viewer applies a
+scripted move or projection change, publish the new light transform and affected maps together. A scripted off/on
+cycle can reuse cached maps if their projection and caster inputs are still valid.
+
+Select casters by overlap with the light's volume. The emitter's own geometry is excluded from its shadow pass.
+Other members of the fixture, including a glass shade, can still cast or transmit, as can unlinked objects and avatars.
+
+[LSL linked-prim updates](https://create.secondlife.com/script/lsl-reference/functions/llsetlinkprimitiveparamsfast/),
+[viewer object light parameters](../../indra/newview/llviewerobject.cpp#L6881),
+[projector geometry](../../indra/newview/llprojectorshadows.cpp#L81),
+[point-light emitter and fixture rule](../../indra/newview/llpointshadows.cpp#L1150).
+
 ## 1. Fixed receiver density and coverage
 
 Choose one minimum density `T` in texels per metre for the qualified receivers at the default tier. Measure the
@@ -168,6 +188,10 @@ the same in-world fixtures after conversion.
 | **No stepping at the seam** | Measure the 50% visibility contour's excess displacement in millimetres against the independent raster across subtexel motion. Compare to the unsplit map at the same resolution and record the 10–90% edge width. Repeat with a thin bar and glazed frame so added blur and a missed blocker are distinguishable. |
 | **Fine detail and tint** | Use preselected, reference-resolved lamp features at more than one qualified receiver distance and angle. Report hole retention, feature contrast, mean RGB transmission, and spatial/temporal variation before and after filtering. Inspect the alpha mip and raw map to localize loss. |
 | **Frame rate and capacity** | Each implementation PR reports its own CPU preparation, GL submission and GPU raster/copy/filter cost in milliseconds, plus whole-frame ms and fps at the default tier. Use paired captures on the same settings, loaded scene and motion path. The owner gate is about 60 fps standing in a crowded room with about 60 avatars and never below 25 fps moving, corresponding to about 16.7 ms and at most 40 ms. Report tails and sustained drops along with warm and cold state. Record allocation, guards, static/live maps, transmission storage, scratch reservations, and fragmentation. |
+
+After the fixed-lamp comparison, use a root script to toggle and move a child emitter while a sibling shade and an
+unlinked caster remain in its volume. Check that lighting and shadows follow the child in the first frame that uses
+the update, that off/on preserves the emitter identity, and that both the shade and the independent caster participate.
 
 Lock numeric tolerances with the Stage 0 reference and keep them fixed in later comparisons. Report both peak
 and 95th-percentile contour errors and both sides of each seam. Report any changed tolerance with a new baseline
