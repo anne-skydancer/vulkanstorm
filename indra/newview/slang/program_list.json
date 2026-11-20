@@ -50,6 +50,15 @@
       }
     },
     {
+      "name": "bufferVisual",
+      "family": "render-diagnostics",
+      "source": "bufferVisual.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "clip",
       "source": "clip.slang",
       "entries": {
@@ -339,6 +348,21 @@
       "entries": {
         "vertex": "vsMain",
         "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "parcelHighlight",
+      "family": "render-diagnostics",
+      "source": "parcelHighlight.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
       }
     },
     {

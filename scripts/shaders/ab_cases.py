@@ -448,6 +448,37 @@ def depth_of_field_cases():
                    texture_levels=scene)
 
 
+def render_diagnostics_cases():
+    vertex = 'deferred/postDeferredNoTCV.glsl'
+    fragment = 'deferred/postDeferredVisualizeBuffers.glsl'
+    yield Case('buffer-visualization-mip0', vertex, fragment, 'bufferVisual',
+               fullscreen=True, depth=True, uniforms={'mipLevel': 0.0})
+
+    # The luminance target is 256x256. Distinct red values detect selection of any other mip.
+    mips = []
+    for level in range(9):
+        size = 256 >> level
+        pixels = np.zeros((size, size, 4), dtype='<f4')
+        pixels[..., 0] = (level + 1) / 16
+        pixels[..., 3] = 1.0
+        mips.append(pixels)
+    yield Case('buffer-visualization-mip8', vertex, fragment, 'bufferVisual', fullscreen=True, depth=True,
+               uniforms={'mipLevel': 8.0}, texture_levels={'diffuseRect': tuple(mips)}, flat_ok=(0,))
+
+    # Parcel ownership is a nearest-filtered grid of RGBA colors with exact, sharp edges.
+    row, column = np.indices((SIZE, SIZE))
+    parcel_colors = np.array([[0, 0, 0, 0], [255, 0, 0, 128], [0, 220, 110, 180],
+                              [0, 100, 255, 215], [235, 210, 15, 255]], dtype='<f4') / 255
+    parcels = parcel_colors[(row // 8 + 2 * (column // 8)) % len(parcel_colors)]
+    scale = 257 / 256
+    tex_matrix = np.diag([scale, scale, 1.0, 1.0]).reshape(-1).tolist()
+    for emissive in (0, 1):
+        yield Case(f'parcel-highlight-emissive{emissive}', 'interface/highlightV.glsl', 'deferred/highlightF.glsl',
+                   f'parcelHighlight__HAS_EMISSIVE{emissive}', defines={'HAS_EMISSIVE': '1'} if emissive else {},
+                   outputs=3 + emissive, depth=True, flat_ok=(1, 2, 3), point_textures=('diffuseMap',),
+                   uniforms={'color': [1.0] * 4, 'texture_matrix0': tex_matrix}, texture_levels={'diffuseMap': (parcels,)})
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -505,6 +536,7 @@ def cases():
         add('avatar-eyes' + tag, D + 'avatarEyesV.glsl', D + 'diffuseF.glsl', f'avatareyes__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True)
     c.extend(deferred_post_cases())
     c.extend(depth_of_field_cases())
+    c.extend(render_diagnostics_cases())
     return c
 
 

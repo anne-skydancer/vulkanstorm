@@ -1626,8 +1626,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     {
         gDeferredHighlightProgram.mName = "Deferred Highlight Shader";
         gDeferredHighlightProgram.mShaderFiles.clear();
-        gDeferredHighlightProgram.mShaderFiles.push_back(make_pair("interface/highlightV.glsl", GL_VERTEX_SHADER));
-        gDeferredHighlightProgram.mShaderFiles.push_back(make_pair("deferred/highlightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredHighlightProgram, emissiveId("parcelHighlight").c_str(),
+                        "interface/highlightV.glsl", "deferred/highlightF.glsl");
         gDeferredHighlightProgram.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
         add_common_permutations(&gDeferredHighlightProgram);
         success = gDeferredHighlightProgram.createShader();
@@ -3673,8 +3673,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
     if (success) {
         gDeferredBufferVisualProgram.mName = "Deferred Buffer Visualization Shader";
         gDeferredBufferVisualProgram.mShaderFiles.clear();
-        gDeferredBufferVisualProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredBufferVisualProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredVisualizeBuffers.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredBufferVisualProgram, "bufferVisual",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/postDeferredVisualizeBuffers.glsl");
         gDeferredBufferVisualProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredBufferVisualProgram);

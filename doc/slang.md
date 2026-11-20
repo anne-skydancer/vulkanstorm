@@ -209,6 +209,10 @@ through matrix synchronization. The blur and bypass import the deferred HDR clam
 NaN and infinity. The bypass copies sampled depth exactly with or without the final display noise.
 Run `ab_harness.py programs --family depth-of-field --strict-depth` to compare the five variants.
 
+The buffer visualizer samples mip 0 or mip 8, including the 1×1 luminance image. The parcel ownership overlay
+writes its original G-buffer values with three or four color attachments and keeps the overlay texture on unit 0.
+Run `ab_harness.py programs --family render-diagnostics --strict-depth` for both diagnostics.
+
 ## The test gaps of the pilot, closed
 
 - **std140 packing** (`LLGeneratedShader::putArray` and `putMatrix` in `llgeneratedshader.h`, used by `LLGLSLShader::blockPutArray` and
