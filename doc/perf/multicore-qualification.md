@@ -63,8 +63,43 @@ The guarded Windows viewer `1.0.1.82791` ran at the stationary Rooftops Ultra vi
   mismatches in 6 minutes 8 seconds. It shut down during the clean compare, before fault injection or timing.
   [5c capture](https://github.com/anne-skydancer/vulkanstorm/pull/579#issuecomment-7028993600)
 
-These captures establish main-thread block savings for C8 and C6. Summed CPU use, frame-time tails, and streaming
-settle remain open.
+These captures establish main-thread block savings for C8 and C6. The follow-up below measures the active-sun checks and
+the main thread's time per sun pass for matched workloads. Whole-process CPU (the helpers' time included) was not
+measured, so it shows main-thread headroom only, not CPU efficiency.
+
+## November 20 active-sun follow-up
+
+The Windows `RelWithDebInfoFS_open` viewer `1.0.1.82791` used the tree merged as `5da54d3ab6`, with LTO, AVX2, frame-job
+guards, comparison and GL statistics enabled. It precedes D6 (#578). Tracy was unavailable in this build. The session used
+a fresh profile with a manual sign-in, five frame-job helpers, off-focus yield at 0 ms, VSync disabled, and the limiter off
+during measurements.
+
+The owner reported that Rooftops is now permanently at night and chose their current sunlit region for both comparisons.
+The viewer used Stochastic mode (`RenderShadowMethod=2`) with local shadows enabled (`RenderShadowDetail=2`). The first
+600-second window included a 60-second camera sweep and movement in the region. The two windows sample one region.
+
+| Check | Time (s) | Sun passes | Cull comparisons | Map comparisons | Cull mismatches | Map mismatches |
+|---|---:|---:|---:|---:|---:|---:|
+| First, split setting 3 | 600.01 | 48,752 | 292,480 | 146,241 | 0 | 0 |
+| First, split setting 1 | 8.02 | 1,157 | 4,734 | 1,263 | 0 | 0 |
+| First, split setting 2 | 8.02 | 1,078 | 5,321 | 2,087 | 0 | 0 |
+
+The timing comparison reused a stationary view with split setting 3, held comparison off, and alternated the job switch
+in three pairs. The main-thread cells are the `SunCascadeJobs` log's `cull_ms` and `map_ms`, the main thread's elapsed
+time (`pipeline.h`), as medians of the per-second rows in 30-second windows, in milliseconds per sun pass.
+The GPU cells sum `sun cascade 0` through `sun cascade 3` in each separate 600-frame timer-query window, in milliseconds
+per measured frame.
+
+| Pair | Main thread cull + map off | Main thread cull + map on | Main thread map off | Main thread map on | Cascade GPU off | Cascade GPU on |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 0.547 | 0.227 | 0.244 | 0.108 | 3.375 | 3.482 |
+| 2 | 0.319 | 0.173 | 0.132 | 0.096 | 1.891 | 2.212 |
+| 3 | 0.319 | 0.171 | 0.131 | 0.094 | 1.880 | 1.885 |
+
+The median paired main-thread reduction was 0.148 ms for cull plus map and 0.037 ms for map alone. The reductions in this region
+fell short of the plan's 0.4 ms target and PR #576's 0.1 ms map retention target at Rooftops. The cascade GPU deltas were
++0.107, +0.321 and +0.005 ms. The variation across windows leaves GPU parity unqualified. The job toggle covers 5c-1 and
+5c-2. The serial restructure in 5c-0 is in both arms. [PR #576](https://github.com/anne-skydancer/vulkanstorm/pull/576)
 
 ## In-world qualification
 
