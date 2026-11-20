@@ -3,6 +3,2817 @@
  "slang": "2026.22",
  "programs": [
   {
+   "id": "alphaImpostor__HAS_SKIN0__IS_IMPOSTOR1",
+   "program": "alphaImpostor",
+   "permutation": {
+    "HAS_SKIN": "0",
+    "IS_IMPOSTOR": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaImpostor__HAS_SKIN0__IS_IMPOSTOR1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "34fb7e67de8627c4b4fa900694e64ddf3ce427c1943ca0a9700af0fc56f7cf29",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "classic_mode",
+        "offset": 228,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 232,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaImpostor__HAS_SKIN0__IS_IMPOSTOR1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "d9700c5d73cf7b8ab88234b5dbdad68991c5ca021c728dcf4e0f4a3026c8e2ac",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "classic_mode",
+        "offset": 228,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 232,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaImpostor__HAS_SKIN1__IS_IMPOSTOR1",
+   "program": "alphaImpostor",
+   "permutation": {
+    "HAS_SKIN": "1",
+    "IS_IMPOSTOR": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaImpostor__HAS_SKIN1__IS_IMPOSTOR1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "8b6b3f57c3337cb3ee41bdfb58c05427ba376725fffe468f40232ce9aadbefae",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "classic_mode",
+        "offset": 5508,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5512,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaImpostor__HAS_SKIN1__IS_IMPOSTOR1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "c0b341e043c76d787d1c26e7f3708a28a2a323f8c185654cc4dc135194b10b9b",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "classic_mode",
+        "offset": 5508,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5512,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE0",
+   "program": "alphaIndexedCoverage",
+   "permutation": {
+    "HAS_SKIN": "0",
+    "MASK_TEXTURE": "0"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "4755989e29f8c64965a7c41a2cb6d50395d4ace772557c6c7b4cb9991601dae8",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 228,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "de19cfe6e4dc15d03d2b42763bdfb80d9d32628650773abc688241e9066c0190",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 228,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE1",
+   "program": "alphaIndexedCoverage",
+   "permutation": {
+    "HAS_SKIN": "0",
+    "MASK_TEXTURE": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "27f7ed67411b7134dcc508d302c1a3bed38ae25a9f7efdeb38538263e2ec1789",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 228,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "8342bc5e4fd8f5524bf942196d62924aa1907e190955ef73751fb744533c33d1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 228,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE0",
+   "program": "alphaIndexedCoverage",
+   "permutation": {
+    "HAS_SKIN": "1",
+    "MASK_TEXTURE": "0"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "951f8d94196f81c7e9b6dd2a1917e898f1bc3b7de832d4c4b49fb5aac0218fe9",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5508,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "41c18992af7ada5651415634be4fd19d186079e20cecab5ed5cf600cb1734c67",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5508,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE1",
+   "program": "alphaIndexedCoverage",
+   "permutation": {
+    "HAS_SKIN": "1",
+    "MASK_TEXTURE": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "4782a5316c975a332786873b555aeacbe25615c7e54fba893da79fb5b0492819",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 13,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5508,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "1203cafc79dde71055d7348848831ad54daf7798cd880126e8c2f32ddef79226",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "texture_index",
+        "location": 3,
+        "type": "int32"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "minimum_alpha",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5508,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "tex0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "tex3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaMaterialCoverage__HAS_SKIN0__MATERIAL1",
+   "program": "alphaMaterialCoverage",
+   "permutation": {
+    "HAS_SKIN": "0",
+    "MATERIAL": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaMaterialCoverage__HAS_SKIN0__MATERIAL1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "649a55dba12213809439416667c860d0dd609459e9876db51904991ecd912191",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaMaterialCoverage__HAS_SKIN0__MATERIAL1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "3ae2ef9942749a2d03ac71abea1a5fb644787f7f7c797b9918cc1ca95d3ce4a3",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 224,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 256,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 260,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 264,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 268,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 272,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 276,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaMaterialCoverage__HAS_SKIN1__MATERIAL1",
+   "program": "alphaMaterialCoverage",
+   "permutation": {
+    "HAS_SKIN": "1",
+    "MATERIAL": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaMaterialCoverage__HAS_SKIN1__MATERIAL1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "6f83efc593884138ad592768436c433755e1fa05ae30f51c906ddb87fcff0644",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaMaterialCoverage__HAS_SKIN1__MATERIAL1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "87c0e68b85bb56fc961a9389859124d9bd6d6cb02ff1e05f23a4317cda304508",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5504,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5520,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5536,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5540,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5544,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5548,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5552,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5556,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaPBRCoverage__HAS_SKIN0__PBR1",
+   "program": "alphaPBRCoverage",
+   "permutation": {
+    "HAS_SKIN": "0",
+    "PBR": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaPBRCoverage__HAS_SKIN0__PBR1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "1fcc6be2e859386ed4d68792d070f68513d9e661c03e8d670e923c482062cc9f",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_base_color_transform",
+        "offset": 224,
+        "size": 32,
+        "type": "float32x4[2]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 256,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 272,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 288,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 292,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 296,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 300,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 304,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 308,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaPBRCoverage__HAS_SKIN0__PBR1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "a91f2c70a316fcae5afe3ce3b4d8aef5198a70f28cc3bc2a31515df22f626859",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_base_color_transform",
+        "offset": 224,
+        "size": 32,
+        "type": "float32x4[2]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 256,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 272,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 288,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 292,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 296,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 300,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 304,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 308,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaPBRCoverage__HAS_SKIN1__PBR1",
+   "program": "alphaPBRCoverage",
+   "permutation": {
+    "HAS_SKIN": "1",
+    "PBR": "1"
+   },
+   "source": "slang/alphaCoverage.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaPBRCoverage__HAS_SKIN1__PBR1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "41a1ac056c401e8d160357041b46414a61627375d0a1cb52e560194ec5233d49",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord0",
+        "location": 2,
+        "type": "float32x2"
+       },
+       {
+        "name": "diffuse_color",
+        "location": 6,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "texture_base_color_transform",
+        "offset": 5504,
+        "size": 32,
+        "type": "float32x4[2]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5536,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5552,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5568,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5572,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5576,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5580,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5584,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5588,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaPBRCoverage__HAS_SKIN1__PBR1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "f04ce96819e86ab9389bdc3e51c025662d519c8c3a66971325ed15c374ff479d",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "uv",
+        "location": 1,
+        "type": "float32x2"
+       },
+       {
+        "name": "vertex_color",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "waterPlane",
+        "offset": 128,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "waterSign",
+        "offset": 144,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "projection_matrix",
+        "offset": 160,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 224,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       },
+       {
+        "name": "texture_base_color_transform",
+        "offset": 5504,
+        "size": 32,
+        "type": "float32x4[2]"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 5536,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 5552,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "st_mode",
+        "offset": 5568,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_min_alpha",
+        "offset": 5572,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "st_samples_hw",
+        "offset": 5576,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 5580,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_seed",
+        "offset": 5584,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_frame",
+        "offset": 5588,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseMap",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "stoch_masks",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "alphaStochasticComposite",
    "program": "alphaStochasticComposite",
    "permutation": {},

@@ -224,6 +224,7 @@ extern LLGLSLShader         gAlphaStochasticCompositeProgram;
 extern LLGLSLShader         gAlphaStochasticResolveProgram; // the temporal accumulation: fragment resolve (default); compute is A/B only (VKSTORM_STOCH_COMPUTE_RESOLVE=1)
 extern LLGLSLShader         gAlphaStochasticCurrentProgram; // the measuring pass: the samples averaged, the grain and the depths
 extern bool                 gAlphaStochasticShadersReady;
+extern LLGLSLShader         gDeferredMaterialCoverageProgram[2];
 // </Vulkanstorm>
 // <Vulkanstorm> the Stochastic shadow method's temporal resolve and the light map made of it; built with the method
 extern LLGLSLShader         gShadowStochasticResolveProgram;

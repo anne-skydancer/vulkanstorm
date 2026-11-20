@@ -208,6 +208,13 @@ void LLDrawPoolAlpha::renderPostDeferred(S32 pass)
     {
         prepare_alpha_shader(&materialShader[i], true, water_sign);
     }
+    for (auto& coverage : gDeferredMaterialCoverageProgram)
+    {
+        if (coverage.mProgramObject)
+        {
+            prepare_alpha_shader(&coverage, true, water_sign);
+        }
+    }
 
     pbr_shader =
         (LLPipeline::sRenderingHUDs) ? &gHUDPBRAlphaProgram :
@@ -498,6 +505,20 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
     // shaded discards (minimum_alpha) already apply). The GLTF scene sets its own (drawGLTFSceneDepth).
     const bool restore = mode == 3;
 
+    auto apply_program = [&](LLGLSLShader* program)
+    {
+        if (program && program->mProgramObject)
+        {
+            program->bind();
+            program->uniform1i(sMode, mode);
+            if (!restore)
+            {
+                program->uniform1i(sSamplesHW, samples_hw);
+                program->uniform1i(sSamples, samples);
+                program->uniform1i(sFrame, frame);
+            }
+        }
+    };
     auto apply = [&](LLGLSLShader* shader)
     {
         if (!shader)
@@ -507,23 +528,18 @@ void LLDrawPoolAlpha::setStochasticUniforms(S32 mode)
         for (LLGLSLShader* program : { restore ? nullptr : shader->mStochasticVariant,
                                        shader->mRiggedVariant ? shader->mRiggedVariant->mStochasticVariant : nullptr })
         {
-            if (program && program->mProgramObject)
-            {
-                program->bind();
-                program->uniform1i(sMode, mode);
-                if (!restore)
-                {
-                    program->uniform1i(sSamplesHW, samples_hw);
-                    program->uniform1i(sSamples, samples);
-                    program->uniform1i(sFrame, frame);
-                }
-            }
+            apply_program(program);
         }
     };
 
     apply(simple_shader);
     apply(fullbright_shader);
     apply(pbr_shader);
+    if (!restore)
+    {
+        apply_program(&gDeferredMaterialCoverageProgram[0]);
+    }
+    apply_program(&gDeferredMaterialCoverageProgram[1]);
     // the GLTF scene's blended variants (their base variants point at their alpha-only ones)
     for (LLGLSLShader& base : gGLTFPBRMetallicRoughnessProgram.mGLTFVariants)
     {
@@ -1202,7 +1218,12 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged, EAlpha
                     // <Vulkanstorm> stochastic transparency's alpha-only passes
                     if (alpha_only_pass && target_shader->mStochasticVariant)
                     {
-                        target_shader = target_shader->mStochasticVariant;
+                        LLGLSLShader& coverage = gDeferredMaterialCoverageProgram[params.mAvatar ? 1 : 0];
+                        // Match materialF's early-out predicate, including unordered values.
+                        const bool diffuse_only = restore_alpha_only ||
+                            (params.mEnvIntensity <= 0.f && params.mSpecColor.mV[VALPHA] <= 0.f);
+                        target_shader = mat && diffuse_only && coverage.mProgramObject
+                            ? &coverage : target_shader->mStochasticVariant;
                     }
                     // </Vulkanstorm>
 

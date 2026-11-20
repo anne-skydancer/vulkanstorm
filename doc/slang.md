@@ -228,8 +228,8 @@ emissive-buffer layouts.
 The opaque, cutout, and emissive material modes use the shared position, mirror-clip, and G-buffer modules.
 The fragment inputs keep centroid interpolation and the tangent sign stays flat. The materials draw pool
 uses the shader setters for environment intensity, emissive brightness, the alpha cutoff, and specular color.
-The GLSL blend and stochastic paths continue to use their current registration. The A/B fixtures cover the 48
-generated permutations and exercise centroid sampling with partially covered pixels in a multisample target.
+The A/B fixtures cover the 48 generated G-buffer permutations and exercise centroid sampling with partially
+covered pixels in a multisample target. The blended materials share the coverage path described below.
 
 ## Fullbright surfaces and emissive glow
 
@@ -238,7 +238,7 @@ interpolation. The world draw converts the texture and vertex color product to l
 draw keeps sRGB output. The cutout compares sampled alpha with the per-draw cutoff and keeps
 the texture and vertex alpha product as output. The A/B cases cover opaque draws and the cutoffs used by depth of field
 and impostors. Legacy emissive glow keeps its green and alpha outputs for the two existing blend paths.
-The blended fullbright shaders with fog and stochastic coverage follow the alpha family.
+World fullbright blending still uses the GLSL fog and exposure code. Its stochastic coverage uses the alpha family.
 
 ## PBR opaque, HUD, and glow
 
@@ -374,6 +374,23 @@ depths and masks exactly, and uses the colour tolerance for the resolved targets
 
 ```powershell
 python scripts/shaders/ab_stochastic_transparency.py --expect-renderer 'RTX 5070 Ti' --report stochastic.json
+```
+
+### Transparency coverage and impostor blending
+
+Indexed alpha, fullbright alpha masks, and per-prim PBR materials use generated stages for total alpha,
+stochastic depth, and rigged depth restore. Indexed alpha applies its cutoff to the texture and vertex alpha
+product. Fullbright masks apply the cutoff to the texture alpha. PBR keeps the base-color texture transform.
+Legacy blended materials use the generated coverage program when environment intensity and specular alpha
+are both nonpositive, and in the rigged depth restore. When reflections can raise opacity, coverage still
+comes from the shaded GLSL material. Sorted indexed alpha impostors use generated color and alpha.
+
+The A/B cases compare exact per-sample depth and coverage on static and rigged draws, including both water
+clip sides, mirror clipping, two stochastic seeds, and the depth restore threshold. They also compare resolved
+color and alpha using the standard color tolerance.
+
+```powershell
+python scripts/shaders/ab_harness.py programs --family transparency-coverage --strict-depth --expect-renderer 'RTX 5070 Ti' --report coverage.json
 ```
 
 Run the shader pipeline tests, strict generation drift check and `slang_check.py all` for each conversion. Use the local

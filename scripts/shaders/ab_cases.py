@@ -36,6 +36,7 @@ GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_DEPTH_ATTACHMENT = 0x8CAC, 0x1902,
 GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X = 0x8513, 0x8515
 GL_DEPTH_TEST, GL_ALWAYS, GL_REPEAT = 0x0B71, 0x0207, 0x2901
 GL_NEAREST = 0x2600
+GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT = 0x8236, 0x8D94, 0x1405
 GL_TEXTURE_2D_MULTISAMPLE, GL_MULTISAMPLE = 0x9100, 0x809D
 GL_SAMPLE_SHADING, GL_SAMPLE_ALPHA_TO_COVERAGE = 0x8C36, 0x809E
 GL_READ_FRAMEBUFFER, GL_DRAW_FRAMEBUFFER = 0x8CA8, 0x8CA9
@@ -179,7 +180,17 @@ def texture_for(gl, kind, name, levels=(), point=False, repeat=False):
                         0.5 + 0.45 * np.sin((a + b) * (u - v) + p), 0.1 + 0.9 * (0.5 + 0.5 * np.sin(a * 2 * u + b * 2 * v + p + salt))], -1)
         return img.astype('<f4')
 
-    if kind == SAMPLER2D:
+    if kind == H.GL_UNSIGNED_INT_SAMPLER_2D:
+        if len(levels) != 1:
+            raise RuntimeError(f'unsigned sampler {name} requires a single integer input image')
+        data = np.ascontiguousarray(levels[0], dtype='<u4')
+        height, width = data.shape
+        target = H.GL_TEXTURE_2D
+        g('glBindTexture', None, C.c_uint, C.c_uint)(target, tex.value)
+        g('glTexImage2D', None, C.c_uint, C.c_int, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint, C.c_uint, C.c_void_p)(
+            target, 0, GL_R32UI, width, height, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, data.ctypes.data)
+        point = True
+    elif kind == SAMPLER2D:
         g('glBindTexture', None, C.c_uint, C.c_uint)(H.GL_TEXTURE_2D, tex.value)
         for level, data in enumerate(levels or (face(SIZE, 0),)):
             height, width = data.shape[:2]
@@ -204,11 +215,11 @@ def texture_for(gl, kind, name, levels=(), point=False, repeat=False):
 
 
 class MRT:
-    """`n` RGBA32F colour attachments and a 32 bit float depth, cleared to -1 and 1."""
+    """`n` RGBA32F colour attachments and a 32 bit float depth, cleared to 1."""
 
     def __init__(self, gl, w, h, n, samples=1):
-        if samples not in (1, 4):
-            raise ValueError('MRT supports single-sample and 4× MSAA cases')
+        if samples not in (1, 4, 8):
+            raise ValueError('MRT supports single-sample, 4× and 8× MSAA cases')
         self.gl, self.w, self.h, self.n, self.samples = gl, w, h, n, samples
         self.framebuffers, self.textures = [], []
         self.depth_reader = None
@@ -218,7 +229,7 @@ class MRT:
                 self._attach(H.GL_COLOR_ATTACHMENT0 + i, H.GL_RGBA32F, H.GL_RGBA, samples)
             self.depth = self._attach(GL_DEPTH_ATTACHMENT, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, samples)
             self._complete_framebuffer(n)
-            if samples == 4:
+            if samples > 1:
                 self.resolve_fbo = self._new_framebuffer()
                 self._attach(H.GL_COLOR_ATTACHMENT0, H.GL_RGBA32F, H.GL_RGBA, 1)
                 self._complete_framebuffer(1)
@@ -230,12 +241,13 @@ void main()
 }
 ''', '''#version 460 core
 layout(binding = 0) uniform sampler2DMS depth_samples;
+uniform int first_sample;
 layout(location = 0) out vec4 depth_by_sample;
 void main()
 {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     for (int sample_idx = 0; sample_idx < 4; ++sample_idx)
-        depth_by_sample[sample_idx] = texelFetch(depth_samples, pixel, sample_idx).r;
+        depth_by_sample[sample_idx] = texelFetch(depth_samples, pixel, first_sample + sample_idx).r;
 }
 ''', attribs=())
         except Exception:
@@ -321,8 +333,13 @@ void main()
         g('glUseProgram', None, C.c_uint)(self.depth_reader)
         g('glActiveTexture', None, C.c_uint)(H.GL_TEXTURE0)
         g('glBindTexture', None, C.c_uint, C.c_uint)(GL_TEXTURE_2D_MULTISAMPLE, self.depth)
-        g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, 3)
-        return images, self._read_pixels(H.GL_RGBA, 4)
+        loc = g('glGetUniformLocation', C.c_int, C.c_uint, C.c_char_p)(self.depth_reader, b'first_sample')
+        depths = []
+        for first in range(0, self.samples, 4):
+            g('glUniform1i', None, C.c_int, C.c_int)(loc, first)
+            g('glDrawArrays', None, C.c_uint, C.c_int, C.c_int)(H.GL_TRIANGLES, 0, 3)
+            depths.append(self._read_pixels(H.GL_RGBA, 4))
+        return images, np.concatenate(depths, axis=-1)
 
     def draw(self, prog, attribs, count, bind_textures):
         g = self.gl.fn
@@ -353,11 +370,14 @@ void main()
             vbos.append(vbo)
         g('glUseProgram', None, C.c_uint)(prog)
         bind_textures()
-        g('glClearColor', None, C.c_float, C.c_float, C.c_float, C.c_float)(-1.0, -1.0, -1.0, -1.0)
+        # Depth identifies covered MSAA samples. A zero clear keeps the colour resolve
+        # proportional to the written values, without a negative bias at triangle edges.
+        clear = 0.0 if self.samples > 1 else -1.0
+        g('glClearColor', None, C.c_float, C.c_float, C.c_float, C.c_float)(clear, clear, clear, clear)
         g('glClearDepth', None, C.c_double)(1.0)
         g('glClear', None, C.c_uint)(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         restore = []
-        if self.samples == 4:
+        if self.samples > 1:
             is_enabled = g('glIsEnabled', C.c_ubyte, C.c_uint)
             for capability, enabled in ((GL_MULTISAMPLE, True), (GL_SAMPLE_SHADING, False),
                                         (GL_SAMPLE_ALPHA_TO_COVERAGE, False)):
@@ -1163,6 +1183,79 @@ def pbr_terrain_cases():
                                    texture_levels=textures, repeat_textures=repeats, mesh_builder=pbr_terrain_mesh)
 
 
+def transparency_coverage_cases():
+    # The real table dimensions and valid r-of-eight rows, including the two
+    # rows used as blue-noise ranks. Rotate each column's subset deterministically.
+    columns = np.arange(2048, dtype=np.uint32)
+    rotation = columns & 7
+    rows = [(1 << count) - 1 for count in range(9)]
+    table = np.vstack([((row << rotation) | (row >> (8 - rotation))) & 255 for row in rows] +
+                      [columns, columns + 2048])
+    texture_levels = {'stoch_masks': (table,)}
+    water = {'waterPlane': [0.0, 0.0, 0.0, 1.0], 'waterSign': 1.0}
+    coverage = {'st_samples': 8, 'st_samples_hw': 8, 'st_seed': 1051, 'st_frame': 3,
+                'st_mode': 2, 'st_min_alpha': 0.0, **water}
+    modes = ({'st_mode': 1}, {},
+             {'st_frame': 9, 'st_seed': -1487, 'waterPlane': [0.82, 0.18, 0.0, -0.12], 'waterSign': -1.0},
+             {'st_mode': 3, 'st_min_alpha': 0.38})
+    shader_objects = ('deferred/deferredUtil.glsl', 'environment/srgbF.glsl')
+    shading_objects = ('windlight/atmosphericsFuncs.glsl', 'windlight/atmosphericsF.glsl',
+                       'windlight/atmosphericsVarsF.glsl', 'environment/waterFogF.glsl',
+                       '../class2/deferred/reflectionProbeF.glsl')
+    masks = ('deferred/alphaStochasticF.glsl', 'deferred/stochasticSampleF.glsl')
+    atmos_vertex = ('windlight/atmosphericsVarsV.glsl', 'windlight/atmosphericsHelpersV.glsl',
+                    'environment/srgbF.glsl', 'windlight/atmosphericsFuncs.glsl', 'windlight/atmosphericsV.glsl')
+    unused_atmosphere = ('max_y', 'moon_glow_factor', 'primary_light_dir')
+    unused_material_lighting = ('cloud_shadow_params', 'emissive_brightness', 'env_intensity', 'env_mat',
+                                'light_attenuation', 'light_diffuse', 'light_direction', 'light_position',
+                                'normal_matrix', 'specular_color')
+    transform = H.Vec4Array([(0.86, 1.10, 0.24, 0.0), (0.10, -0.06, 0.0, 0.0)])
+
+    for skin in (0, 1):
+        for mask_texture in (0, 1):
+            fullbright = bool(mask_texture)
+            name = 'fullbright' if fullbright else 'indexed'
+            vertex = 'deferred/fullbrightV.glsl' if fullbright else 'deferred/alphaV.glsl'
+            fragment = 'deferred/fullbrightF.glsl' if fullbright else '../class2/deferred/alphaF.glsl'
+            defines = {'HAS_ALPHA_MASK': '1', 'ALPHA_STOCHASTIC': '1'}
+            defines.update({'IS_ALPHA': '1', 'HAS_DIFFUSE_LOOKUP': '1'} if fullbright else
+                           {'USE_INDEXED_TEX': '1', 'USE_VERTEX_COLOR': '1'})
+            yield Case(f'transparency-{name}-s{skin}', vertex, fragment,
+                       f'alphaIndexedCoverage__HAS_SKIN{skin}__MASK_TEXTURE{mask_texture}',
+                       defines=defines, skin=bool(skin), indexed_texture_channels=4, samples=8,
+                       coverage=True, clip=True, flat_ok=(0,), uniforms={**coverage, 'minimum_alpha': 0.17},
+                       variants=modes, texture_levels=texture_levels,
+                       fragment_helpers=(*shader_objects, *shading_objects, *masks),
+                       vertex_helpers=atmos_vertex if fullbright else (), optional=unused_atmosphere)
+
+        yield Case(f'transparency-pbr-s{skin}', 'deferred/pbralphaV.glsl', '../class2/deferred/pbralphaF.glsl',
+                   f'alphaPBRCoverage__HAS_SKIN{skin}__PBR1', defines={'ALPHA_STOCHASTIC': '1'},
+                   skin=bool(skin), samples=8, coverage=True, clip=True, flat_ok=(0,),
+                   uniforms={**coverage, 'texture_base_color_transform': transform}, variants=modes,
+                   texture_levels=texture_levels, vertex_helpers=('deferred/textureUtilV.glsl',),
+                   fragment_helpers=(*shader_objects, *shading_objects, *masks))
+
+        for mapped in (0, 1):
+            defines = {'DIFFUSE_ALPHA_MODE': '1', 'ALPHA_STOCHASTIC': '1'}
+            if mapped:
+                defines.update(HAS_NORMAL_MAP='1', HAS_SPECULAR_MAP='1')
+            material_modes = (*modes[:3],
+                              {**modes[3], 'env_intensity': 0.8, 'specular_color': [1.0, 0.7, 0.6, 0.55]})
+            yield Case(f'transparency-material-s{skin}-maps{mapped}', 'deferred/materialV.glsl',
+                       '../class3/deferred/materialF.glsl', f'alphaMaterialCoverage__HAS_SKIN{skin}__MATERIAL1',
+                       defines=defines, skin=bool(skin), samples=8, coverage=True, clip=True, flat_ok=(0,),
+                       uniforms={**coverage, 'env_intensity': 0.0, 'specular_color': [1.0, 0.7, 0.6, 0.0]},
+                       variants=material_modes, texture_levels=texture_levels,
+                       optional=unused_material_lighting,
+                       fragment_helpers=(*shader_objects, *shading_objects, 'windlight/gammaF.glsl', *masks))
+
+        yield Case(f'transparency-impostor-s{skin}', 'deferred/alphaV.glsl', '../class2/deferred/alphaF.glsl',
+                   f'alphaImpostor__HAS_SKIN{skin}__IS_IMPOSTOR1', skin=bool(skin), indexed_texture_channels=4,
+                   defines={'FOR_IMPOSTOR': '1', 'USE_INDEXED_TEX': '1', 'USE_VERTEX_COLOR': '1', 'HAS_ALPHA_MASK': '1'},
+                   samples=4, coverage=True, clip=True, uniforms={**water, 'minimum_alpha': 0.17},
+                   variants=({'classic_mode': 0}, {'classic_mode': 1}), fragment_helpers=shader_objects)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -1232,6 +1325,7 @@ def cases():
     c.extend(hud_material_cases())
     c.extend(deferred_avatar_cases())
     c.extend(pbr_terrain_cases())
+    c.extend(transparency_coverage_cases())
     return c
 
 

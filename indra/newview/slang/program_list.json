@@ -9,6 +9,79 @@
   },
   "programs": [
     {
+      "name": "alphaImpostor",
+      "family": "transparency-coverage",
+      "source": "alphaCoverage.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "IS_IMPOSTOR": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "alphaIndexedCoverage",
+      "family": "transparency-coverage",
+      "source": "alphaCoverage.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "MASK_TEXTURE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "alphaMaterialCoverage",
+      "family": "transparency-coverage",
+      "source": "alphaCoverage.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "MATERIAL": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "alphaPBRCoverage",
+      "family": "transparency-coverage",
+      "source": "alphaCoverage.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "PBR": [
+          1
+        ]
+      }
+    },
+    {
       "name": "alphamask",
       "source": "alphamask.slang",
       "entries": {

@@ -152,6 +152,7 @@ LLGLSLShader            gDeferredAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredFullbrightAlphaMaskAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredPBRAlphaStochasticProgram[2];
 LLGLSLShader            gDeferredMaterialStochasticProgram[LLMaterial::SHADER_COUNT*2];
+LLGLSLShader            gDeferredMaterialCoverageProgram[2];
 LLGLSLShader            gGLTFAlphaStochasticProgram[LLGLSLShader::NUM_GLTF_VARIANTS]; // the alpha-only variants of the GLTF scene's blended variants (by variant bits)
 LLGLSLShader            gAlphaStochasticExpandProgram;
 LLGLSLShader            gAlphaStochasticCompositeProgram;
@@ -408,12 +409,13 @@ static bool stochastic_transparency_shaders()
 // logged, and the next shader reload tries again).
 // Returns false only when a variant was due and did not build; true when it was built or is not due
 // (an unsupported device, or the helper objects missing, which loadBasicShaders logged).
-static bool make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
+static bool make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant, const char* generated_id = nullptr)
 {
     shader.mStochasticVariant = nullptr;
+    const bool generated = generated_id && pilotGenerated();
     if (!stochastic_transparency_shaders() ||
-        !LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER) ||
-        !LLShaderMgr::instance()->mFragmentShaderObjects.count(STOCH_SAMPLE_HELPER))
+        (!generated && (!LLShaderMgr::instance()->mFragmentShaderObjects.count(ALPHA_STOCHASTIC_HELPER) ||
+                        !LLShaderMgr::instance()->mFragmentShaderObjects.count(STOCH_SAMPLE_HELPER))))
     {
         return true;   // no variant: the method is not ready (an unsupported device, or an error logged by loadBasicShaders)
     }
@@ -421,7 +423,15 @@ static bool make_stochastic_variant(LLGLSLShader& shader, LLGLSLShader& variant)
     variant.mFeatures = shader.mFeatures;
     variant.mDefines = shader.mDefines;    // NOTE: Must come before addPermutation
     variant.addPermutation("ALPHA_STOCHASTIC", "1");
-    variant.mShaderFiles = shader.mShaderFiles;
+    if (generated)
+    {
+        variant.mShaderFiles.clear();
+        addGeneratedStages(variant, generated_id, false);
+    }
+    else
+    {
+        variant.mShaderFiles = shader.mShaderFiles;
+    }
     variant.mShaderLevel = shader.mShaderLevel;
     variant.mShaderGroup = shader.mShaderGroup;
     // createShader() can fall back to a lower shader class (the class1 stubs of the PBR and material
@@ -451,6 +461,10 @@ static void sync_stochastic_variant(LLGLSLShader& shader)
 
 static void unload_stochastic_shaders()
 {
+    for (auto& program : gDeferredMaterialCoverageProgram)
+    {
+        program.unload();
+    }
     gShadowStochasticResolveProgram.unload();
     gShadowStochasticComposeProgram.unload();
     gAlphaStochasticShadersReady = false;
@@ -1964,8 +1978,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         // <Vulkanstorm> stochastic transparency's alpha-only variants
         if (success)
         {
-            make_stochastic_variant(*shader, gDeferredPBRAlphaStochasticProgram[0]);
-            make_stochastic_variant(gDeferredSkinnedPBRAlphaProgram, gDeferredPBRAlphaStochasticProgram[1]);
+            make_stochastic_variant(*shader, gDeferredPBRAlphaStochasticProgram[0], "alphaPBRCoverage__HAS_SKIN0__PBR1");
+            make_stochastic_variant(gDeferredSkinnedPBRAlphaProgram, gDeferredPBRAlphaStochasticProgram[1],
+                                    "alphaPBRCoverage__HAS_SKIN1__PBR1");
         }
         // </Vulkanstorm>
 
@@ -2336,7 +2351,9 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             // <Vulkanstorm> stochastic transparency's alpha-only variant
             if (success && !hud)
             {
-                make_stochastic_variant(*shader, gDeferredAlphaStochasticProgram[rigged ? 1 : 0]);
+                make_stochastic_variant(*shader, gDeferredAlphaStochasticProgram[rigged ? 1 : 0],
+                                        rigged ? "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE0"
+                                               : "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE0");
             }
             // </Vulkanstorm>
 
@@ -2372,8 +2389,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             shader->mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
 
             shader->mShaderFiles.clear();
-            shader->mShaderFiles.push_back(make_pair("deferred/alphaV.glsl", GL_VERTEX_SHADER));
-            shader->mShaderFiles.push_back(make_pair("deferred/alphaF.glsl", GL_FRAGMENT_SHADER));
+            generatedStages(*shader, rigged ? "alphaImpostor__HAS_SKIN1__IS_IMPOSTOR1" : "alphaImpostor__HAS_SKIN0__IS_IMPOSTOR1",
+                            "deferred/alphaV.glsl", "deferred/alphaF.glsl");
 
             shader->clearPermutations();
             shader->addPermutation("USE_INDEXED_TEX", "1");
@@ -2540,8 +2557,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         // <Vulkanstorm> stochastic transparency's alpha-only variants
         if (success)
         {
-            make_stochastic_variant(gDeferredFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0]);
-            make_stochastic_variant(gDeferredSkinnedFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1]);
+            make_stochastic_variant(gDeferredFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[0],
+                                    "alphaIndexedCoverage__HAS_SKIN0__MASK_TEXTURE1");
+            make_stochastic_variant(gDeferredSkinnedFullbrightAlphaMaskAlphaProgram, gDeferredFullbrightAlphaMaskAlphaStochasticProgram[1],
+                                    "alphaIndexedCoverage__HAS_SKIN1__MASK_TEXTURE1");
         }
         // </Vulkanstorm>
     }
@@ -3776,6 +3795,32 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             if ((i & 0x3) == LLMaterial::DIFFUSE_ALPHA_MODE_BLEND)
             {
                 ready = ready && gDeferredMaterialProgram[i].mStochasticVariant;
+            }
+        }
+        if (pilotGenerated())
+        {
+            for (U32 skin = 0; skin < 2; ++skin)
+            {
+                LLGLSLShader& coverage = gDeferredMaterialCoverageProgram[skin];
+                coverage.mName = skin ? "Skinned Material Alpha Coverage" : "Material Alpha Coverage";
+                coverage.mFeatures.hasObjectSkinning = skin != 0;
+                coverage.mShaderFiles.clear();
+                coverage.clearPermutations();
+                addGeneratedStages(coverage, skin ? "alphaMaterialCoverage__HAS_SKIN1__MATERIAL1"
+                                                  : "alphaMaterialCoverage__HAS_SKIN0__MATERIAL1", false);
+                coverage.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
+                const bool built = coverage.createShader() && coverage.mTexture.size() > LLShaderMgr::STOCH_MASKS &&
+                                   coverage.mTexture[LLShaderMgr::STOCH_MASKS] >= 0;
+                if (built)
+                {
+                    mShaderList.push_back(&coverage);
+                }
+                else
+                {
+                    LL_WARNS("Shader") << coverage.mName << " failed to build with its coverage mask; using the shaded material variant"
+                                       << LL_ENDL;
+                    coverage.unload();
+                }
             }
         }
         // (the GLTF scene's alpha-only variants do not gate the prims' transparency: a GLTF variant
