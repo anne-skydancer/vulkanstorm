@@ -93,8 +93,7 @@
     <key>graphicslevel</key>
     <map>
       <key>desc</key>
-      <string>Set the detail level. 
-0 - low, 1 - medium, 2 - high, 3 - ultra</string>
+      <string>Apply a graphics preset: 1 = Low, 3 = Medium, 6 = High. Use 0 for renderer recovery.</string>
       <key>count</key>
       <integer>1</integer>
       <key>map-to</key>

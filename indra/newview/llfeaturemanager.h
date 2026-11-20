@@ -128,7 +128,12 @@ public:
     LLFeatureList *findMask(const std::string& name);
     bool maskFeatures(const std::string& name);
 
-    // set the graphics to low, medium, high, or ultra.
+    // User-facing presets keep their historical IDs. The other IDs still
+    // identify masks for existing settings and renderer recovery.
+    enum : U32 { GRAPHICS_LOW = 1, GRAPHICS_MEDIUM = 3, GRAPHICS_HIGH = 6 };
+    static U32 canonicalGraphicsLevel(U32 level);
+
+    // Apply a feature-table mask.
     // skipFeatures forces skipping of mostly hardware settings
     // that we don't want to change when we change graphics
     // settings
@@ -136,8 +141,8 @@ public:
 
     // What 'level' values are valid to pass to setGraphicsLevel()?
     // 0 is the low end...
-    U32 getMaxGraphicsLevel() const;
-    bool isValidGraphicsLevel(U32 level) const;
+    static U32 getMaxGraphicsLevel();
+    static bool isValidGraphicsLevel(U32 level);
 
     // setGraphicsLevel() levels have names.
     std::string getNameForGraphicsLevel(U32 level) const;

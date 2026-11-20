@@ -29,6 +29,32 @@ class ShadowMethodTables(unittest.TestCase):
                 self.assertEqual(3, len(row), (table.name, row))
                 self.assertIn(row[2], ('0', '2'), (table.name, row))
 
+    def test_builtin_graphics_presets_select_sun_shadow_quality(self):
+        for table in sorted(NEWVIEW.glob('featuretable*.txt')):
+            masks = {}
+            for line in table.read_text().splitlines():
+                row = line.split()
+                if row and row[0] == 'list':
+                    mask = masks.setdefault(row[1], {})
+                elif row and row[0].startswith('Render'):
+                    feature, available, value = row
+                    mask[feature] = (int(available), float(value))
+
+            scale = 'RenderShadowResolutionScale'
+            self.assertEqual((1, 1.0), masks['all'][scale], table.name)
+            common = ('RenderFarClip', 'RenderShadowMethod', 'RenderShadowDetail', scale)
+            cases = (
+                ('LowMid', common, (96, 0, 1, 1.0)),
+                ('MidHigh', common + ('RenderShadowDistance',), (256, 2, 1, 0.95, 256)),
+                ('Ultra', common + ('RenderShadowDistance',), (256, 2, 2, 1.0, 256)),
+            )
+            for name, settings, values in cases:
+                with self.subTest(table=table.name, mask=name):
+                    for setting, value in zip(settings, values):
+                        base = masks['all'][setting]
+                        preset = masks[name].get(setting, base)
+                        self.assertEqual((1, value), (base[0] & preset[0], min(base[1], preset[1])), setting)
+
     def test_no_gl3_lists(self):
         """The viewer needs OpenGL 4.6: no table has a GL3, OpenGLPre30 or TexUnit8orLess list any more."""
         for table in sorted(NEWVIEW.glob('featuretable*.txt')):

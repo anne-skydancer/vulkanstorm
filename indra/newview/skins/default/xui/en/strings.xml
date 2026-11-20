@@ -796,7 +796,7 @@ https://www.firestormviewer.org/support for help fixing this problem.
 
 	<!-- slider -->
 	<string name="GraphicsQualityLow">Low</string>
-	<string name="GraphicsQualityMid">Mid</string>
+	<string name="GraphicsQualityMid">Medium</string>
 	<string name="GraphicsQualityHigh">High</string>
 
 	<!-- mouselook -->

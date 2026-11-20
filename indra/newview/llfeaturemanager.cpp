@@ -28,8 +28,10 @@
 
 #include <iostream>
 #include <fstream>
+#include <iterator>
 
 #include <boost/regex.hpp>
+#include <boost/scope/scope_exit.hpp>
 
 #include "llfeaturemanager.h"
 #include "llgraphicsidentity.h"
@@ -199,12 +201,22 @@ static const std::vector<std::string> sGraphicsLevelNames = {
     "Ultra"
 };
 
-U32 LLFeatureManager::getMaxGraphicsLevel() const
+U32 LLFeatureManager::canonicalGraphicsLevel(U32 level)
+{
+    static constexpr U32 presets[] = {
+        GRAPHICS_LOW, GRAPHICS_LOW, GRAPHICS_LOW,
+        GRAPHICS_MEDIUM, GRAPHICS_MEDIUM,
+        GRAPHICS_HIGH, GRAPHICS_HIGH,
+    };
+    return level < std::size(presets) ? presets[level] : GRAPHICS_LOW;
+}
+
+U32 LLFeatureManager::getMaxGraphicsLevel()
 {
     return static_cast<U32>(sGraphicsLevelNames.size()) - 1;
 }
 
-bool LLFeatureManager::isValidGraphicsLevel(U32 level) const
+bool LLFeatureManager::isValidGraphicsLevel(U32 level)
 {
     return (level <= getMaxGraphicsLevel());
 }
@@ -574,9 +586,8 @@ void LLFeatureManager::initSingleton()
 
 void LLFeatureManager::applyRecommendedSettings()
 {
-    // apply saved settings
-    // cap the level at 2 (high)
-    U32 level = llmax(GPU_CLASS_0, llmin(mGPUClass, GPU_CLASS_5));
+    const U32 gpu_level = llmax(GPU_CLASS_0, llmin(mGPUClass, GPU_CLASS_5));
+    const U32 level = isSafe() ? 0 : canonicalGraphicsLevel(gpu_level);
 
     LL_INFOS("RenderInit") << "Applying Recommended Features for level " << level << LL_ENDL;
 
@@ -772,12 +783,16 @@ LLSD LLFeatureManager::getRecommendedSettingsMap()
 
     LLSD map(LLSD::emptyMap());
 
-    U32 level = llmax(GPU_CLASS_0, llmin(mGPUClass, GPU_CLASS_5));
+    const U32 gpu_level = llmax(GPU_CLASS_0, llmin(mGPUClass, GPU_CLASS_5));
+    const U32 level = isSafe() ? 0 : canonicalGraphicsLevel(gpu_level);
     LL_INFOS("RenderInit") << "Getting the map of recommended settings for level " << level << LL_ENDL;
 
-    std::string features(isValidGraphicsLevel(level) ? getNameForGraphicsLevel(level) : "Low");
-
-    maskFeatures(features);
+    auto restore_features = boost::scope::scope_exit([this, active = std::move(mFeatures)]() mutable
+    {
+        mFeatures = std::move(active);
+    });
+    applyBaseMasks();
+    maskFeatures(getNameForGraphicsLevel(level));
 
     LLControlVariable* ctrl = gSavedSettings.getControl("RenderQualityPerformance"); // include the quality value for correct preset loading
     map["RenderQualityPerformance"]["Value"] = (LLSD::Integer)level;

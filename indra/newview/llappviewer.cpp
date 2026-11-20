@@ -3961,10 +3961,12 @@ bool LLAppViewer::initWindow()
     // Initialize GL stuff
     //
 
-    if (mForceGraphicsLevel && (LLFeatureManager::instance().isValidGraphicsLevel(*mForceGraphicsLevel)))
+    if (mForceGraphicsLevel && LLFeatureManager::isValidGraphicsLevel(*mForceGraphicsLevel))
     {
-        LLFeatureManager::getInstance()->setGraphicsLevel(*mForceGraphicsLevel, false);
-        gSavedSettings.setU32("RenderQualityPerformance", *mForceGraphicsLevel);
+        // Keep level 0 available as the renderer recovery mask.
+        const U32 level = *mForceGraphicsLevel == 0 ? 0 : LLFeatureManager::canonicalGraphicsLevel(*mForceGraphicsLevel);
+        LLFeatureManager::getInstance()->setGraphicsLevel(level, false);
+        gSavedSettings.setU32("RenderQualityPerformance", level);
     }
 
     // Set this flag in case we crash while initializing GL
@@ -4379,35 +4381,23 @@ LLSD LLAppViewer::getViewerInfo() const
     // </FS:Beq>
 
     // <FS:PP> FIRE-4785: Current render quality setting in sysinfo / about floater
-    switch (gSavedSettings.getU32("RenderQualityPerformance"))
+    const U32 saved_graphics_level = gSavedSettings.getU32("RenderQualityPerformance");
+    const U32 graphics_level = LLFeatureManager::isValidGraphicsLevel(saved_graphics_level)
+        ? LLFeatureManager::canonicalGraphicsLevel(saved_graphics_level)
+        : saved_graphics_level;
+    switch (graphics_level)
     {
-        case 0:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_low");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Low (1/7)";
+        case LLFeatureManager::GRAPHICS_LOW:
+            info["RENDERQUALITY"] = LLTrans::getString("GraphicsQualityLow");
+            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Low";
             break;
-        case 1:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_mediumlow");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Medium-Low (2/7)";
+        case LLFeatureManager::GRAPHICS_MEDIUM:
+            info["RENDERQUALITY"] = LLTrans::getString("GraphicsQualityMid");
+            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Medium";
             break;
-        case 2:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_medium");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Medium (3/7)";
-            break;
-        case 3:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_mediumhigh");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Medium-High (4/7)";
-            break;
-        case 4:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_high");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "High (5/7)";
-            break;
-        case 5:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_highultra");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "High-Ultra (6/7)";
-            break;
-        case 6:
-            info["RENDERQUALITY"] = LLTrans::getString("render_quality_ultra");
-            info["RENDERQUALITY_FSDATA_ENGLISH"] = "Ultra (7/7)";
+        case LLFeatureManager::GRAPHICS_HIGH:
+            info["RENDERQUALITY"] = LLTrans::getString("GraphicsQualityHigh");
+            info["RENDERQUALITY_FSDATA_ENGLISH"] = "High";
             break;
         default:
             info["RENDERQUALITY"] = LLTrans::getString("render_quality_unknown");

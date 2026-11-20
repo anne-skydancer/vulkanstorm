@@ -194,6 +194,41 @@ static const S32 COLUMN_POPUP_CHECKBOX = 1;
 static const S32 COLUMN_POPUP_LABEL = 2;
 // </FS:Zi>
 
+namespace
+{
+// A stored legacy level can select a radio button without changing the saved preset.
+class LLGraphicsQualityGroup final : public LLRadioGroup
+{
+public:
+    struct Params : public LLInitParam::Block<Params, LLRadioGroup::Params> {};
+
+    void setValue(const LLSD& value) override
+    {
+        const U32 level = LLFeatureManager::canonicalGraphicsLevel(value.asInteger());
+        const S32 index = level == LLFeatureManager::GRAPHICS_HIGH ? 2 :
+            level == LLFeatureManager::GRAPHICS_MEDIUM ? 1 : 0;
+        setSelectedIndex(index, true);
+    }
+
+    bool postBuild() override
+    {
+        const bool built = LLRadioGroup::postBuild();
+        auto* low = getChild<LLCheckBoxCtrl>(std::to_string(LLFeatureManager::GRAPHICS_LOW));
+        low->setLabel(LLTrans::getString("GraphicsQualityLow"));
+        low->setTabStop(getSelectedIndex() <= 0);
+        getChild<LLCheckBoxCtrl>(std::to_string(LLFeatureManager::GRAPHICS_MEDIUM))->setLabel(LLTrans::getString("GraphicsQualityMid"));
+        getChild<LLCheckBoxCtrl>(std::to_string(LLFeatureManager::GRAPHICS_HIGH))->setLabel(LLTrans::getString("GraphicsQualityHigh"));
+        return built;
+    }
+
+private:
+    explicit LLGraphicsQualityGroup(const Params& params) : LLRadioGroup(params) {}
+    friend class LLUICtrlFactory;
+};
+
+LLDefaultChildRegistry::Register<LLGraphicsQualityGroup> register_graphics_quality_group("graphics_quality_group");
+}
+
 struct LabelDef : public LLInitParam::Block<LabelDef>
 {
     Mandatory<std::string> name;
@@ -666,6 +701,7 @@ void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bo
 
 bool LLFloaterPreference::postBuild()
 {
+    mLastQualityLevel = LLFeatureManager::canonicalGraphicsLevel(gSavedSettings.getU32("RenderQualityPerformance"));
     mDeleteTranscriptsBtn = getChild<LLButton>("delete_transcripts");
 
     // <FS:Ansariel> We don't have these buttons
@@ -1096,6 +1132,9 @@ void LLFloaterPreference::cancel(const std::vector<std::string> settings_to_skip
         if (panel)
             panel->cancel(settings_to_skip);
     }
+    const U32 restored_level = gSavedSettings.getU32("RenderQualityPerformance");
+    mLastQualityLevel = LLFeatureManager::canonicalGraphicsLevel(restored_level);
+    gSavedSettings.setU32("DebugQualityPerformance", restored_level);
     // hide joystick pref floater
     LLFloaterReg::hideInstance("pref_joystick");
 
@@ -1216,7 +1255,7 @@ void LLFloaterPreference::onOpen(const LLSD& key)
 
     // Forget previous language changes.
     mLanguageChanged = false;
-    mLastQualityLevel = gSavedSettings.getU32("RenderQualityPerformance");
+    mLastQualityLevel = LLFeatureManager::canonicalGraphicsLevel(gSavedSettings.getU32("RenderQualityPerformance"));
 
     // Display selected maturity icons.
     onChangeMaturity();
@@ -2406,6 +2445,7 @@ void LLFloaterPreference::disableUnavailableSettings()
 void LLFloaterPreference::refresh()
 {
     LLPanel::refresh();
+    mLastQualityLevel = LLFeatureManager::canonicalGraphicsLevel(gSavedSettings.getU32("RenderQualityPerformance"));
 
     // <FS:Ansariel> Improved graphics preferences
     getChild<LLUICtrl>("fsaa")->setValue((LLSD::Integer)  gSavedSettings.getU32("RenderFSAAType"));
@@ -2444,9 +2484,8 @@ void LLFloaterPreference::onCommitWindowedMode()
 
 void LLFloaterPreference::onChangeQuality(const LLSD& data)
 {
-    U32 level = (U32)(data.asReal());
-    constexpr U32 LVL_HIGH = 4;
-    if (level >= LVL_HIGH && mLastQualityLevel < level)
+    const U32 level = LLFeatureManager::canonicalGraphicsLevel(data.asInteger());
+    if (level == LLFeatureManager::GRAPHICS_HIGH && mLastQualityLevel < level)
     {
         constexpr U32 LOW_MEM_THRESHOLD = 4097;
         U32 total_mem = (U32Megabytes)LLMemory::getMaxMemKB();
@@ -2460,10 +2499,11 @@ void LLFloaterPreference::onChangeQuality(const LLSD& data)
                 // If cancel pressed
                 if (option == 1)
                 {
-                    constexpr U32 LVL_MED_PLUS = 3;
-                    gSavedSettings.setU32("RenderQualityPerformance", LVL_MED_PLUS);
-                    mLastQualityLevel = LVL_MED_PLUS;
-                    LLFeatureManager::getInstance()->setGraphicsLevel(LVL_MED_PLUS, true);
+                    constexpr U32 medium = LLFeatureManager::GRAPHICS_MEDIUM;
+                    gSavedSettings.setU32("RenderQualityPerformance", medium);
+                    gSavedSettings.setU32("DebugQualityPerformance", medium);
+                    mLastQualityLevel = medium;
+                    LLFeatureManager::getInstance()->setGraphicsLevel(medium, true);
                     refreshEnabledGraphics();
                     refresh();
                 }
@@ -2472,6 +2512,7 @@ void LLFloaterPreference::onChangeQuality(const LLSD& data)
         }
     }
     mLastQualityLevel = level;
+    gSavedSettings.setU32("RenderQualityPerformance", level);
     LLFeatureManager::getInstance()->setGraphicsLevel(level, true);
     gSavedSettings.setU32("DebugQualityPerformance", level);
     refreshEnabledGraphics();
@@ -4393,6 +4434,12 @@ void LLPanelPreferenceGraphics::saveSettings()
     //}
     // </FS:Ansariel>
     LLPanelPreference::saveSettings();
+
+    // Graphics presets change the sun range without a control in Preferences.
+    if (LLControlVariable* shadow_distance = gSavedSettings.getControl("RenderShadowDistance"))
+    {
+        mSavedValues[shadow_distance] = shadow_distance->getValue();
+    }
 }
 void LLPanelPreferenceGraphics::setHardwareDefaults()
 {

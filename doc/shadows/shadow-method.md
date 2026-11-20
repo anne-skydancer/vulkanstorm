@@ -238,11 +238,23 @@ an upstream ref (run it, and update the excerpts and the allow-list, in canary u
 
 ## Defaults, presets, migration
 
-- Feature table (`featuretable*.txt`, all three, no version bump): Stochastic (2) at High, HighUltra and
-  Ultra; Legacy (0) at Low, LowMid, Mid, MidHigh and Unknown; 0 in safe mode. The method follows
-  the quality slider and the recommended-settings re-applies like every graphics setting, and the
-  user can change it afterwards. The combo is disabled (the value is kept) when shadows or the
-  feature are unavailable, and the Shadow softness slider (Rendering 2, below the
+- The built-in graphics presets use the same policy on all supported platforms. Selecting a preset
+  applies its defaults. Saved custom presets retain their stored render settings.
+
+| Preset | Graphics baseline | Sun shadows | Main-view range | Map scale |
+|---|---|---|---|---:|
+| Low | Medium-Low | Legacy | Adaptive to visible geometry at the existing 96 m draw distance | 1.00 |
+| Medium | Medium-High | Stochastic | 256 m with the preset draw distance | 0.95 |
+| High | Ultra | Stochastic | 256 m with the preset draw distance | 1.00 |
+
+Medium and High use the same cascade split and filtering settings. The scale is linear and the
+buffer allocation rounds the dimensions to a multiple of 16 pixels. Stochastic coverage is capped
+by the camera draw distance. With the previous Ultra map size, extending coverage from 192 m to 256 m
+spreads the texels over more ground. Safe and unsupported hardware masks still gate availability.
+
+- The method follows the built-in preset and the hardware recommendation, and the user can change it
+  afterwards. The combo is disabled (the value is kept) when shadows or the feature are unavailable,
+  and the Shadow softness slider (Rendering 2, below the
   combo) is enabled with Stochastic. `RenderShadowLightSize` (0 to 1.0, 0 the sharpest) defaults to 0.23, the slider's
   centre, and sets how sharp the edges of the sun's, the moon's and every projector lamp's shadows are (it scales only their
   penumbra: a lamp's is that of a 4.5 cm emitter times it, so 1.035 cm at the default); see `projector-shadow-pool.md`.
