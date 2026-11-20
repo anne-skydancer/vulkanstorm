@@ -126,6 +126,48 @@
       }
     },
     {
+      "name": "dofBlur",
+      "family": "depth-of-field",
+      "source": "dofBlur.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "dofBypass",
+      "family": "depth-of-field",
+      "source": "dofBypass.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_NOISE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "dofCoF",
+      "family": "depth-of-field",
+      "source": "dofCoF.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "dofCombine",
+      "family": "depth-of-field",
+      "source": "dofCombine.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "dtree",
       "source": "dtree.slang",
       "entries": {

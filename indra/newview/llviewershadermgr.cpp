@@ -3461,8 +3461,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredPostProgram.mName = "Deferred Post Shader";
         gDeferredPostProgram.mFeatures.isDeferred = true;
         gDeferredPostProgram.mShaderFiles.clear();
-        gDeferredPostProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredPostProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredPostProgram, "dofBlur",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/postDeferredF.glsl");
         gDeferredPostProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredPostProgram.createShader();
         llassert(success);
@@ -3473,8 +3473,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredCoFProgram.mName = "Deferred CoF Shader";
         gDeferredCoFProgram.mShaderFiles.clear();
         gDeferredCoFProgram.mFeatures.isDeferred = true;
-        gDeferredCoFProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredCoFProgram.mShaderFiles.push_back(make_pair("deferred/cofF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredCoFProgram, "dofCoF",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/cofF.glsl");
         gDeferredCoFProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredCoFProgram.createShader();
         llassert(success);
@@ -3485,8 +3485,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredDoFCombineProgram.mName = "Deferred DoFCombine Shader";
         gDeferredDoFCombineProgram.mFeatures.isDeferred = true;
         gDeferredDoFCombineProgram.mShaderFiles.clear();
-        gDeferredDoFCombineProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredDoFCombineProgram.mShaderFiles.push_back(make_pair("deferred/dofCombineF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredDoFCombineProgram, "dofCombine",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/dofCombineF.glsl");
         gDeferredDoFCombineProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredDoFCombineProgram.createShader();
         llassert(success);
@@ -3497,8 +3497,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredPostNoDoFProgram.mName = "Deferred Post NoDoF Shader";
         gDeferredPostNoDoFProgram.mFeatures.isDeferred = true;
         gDeferredPostNoDoFProgram.mShaderFiles.clear();
-        gDeferredPostNoDoFProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredPostNoDoFProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoDoFF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredPostNoDoFProgram, "dofBypass__HAS_NOISE0",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/postDeferredNoDoFF.glsl");
         gDeferredPostNoDoFProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         success = gDeferredPostNoDoFProgram.createShader();
         llassert(success);
@@ -3509,8 +3509,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredPostNoDoFNoiseProgram.mName = "Deferred Post NoDoF Noise Shader";
         gDeferredPostNoDoFNoiseProgram.mFeatures.isDeferred = true;
         gDeferredPostNoDoFNoiseProgram.mShaderFiles.clear();
-        gDeferredPostNoDoFNoiseProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gDeferredPostNoDoFNoiseProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoDoFF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredPostNoDoFNoiseProgram, "dofBypass__HAS_NOISE1",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/postDeferredNoDoFF.glsl");
 
         gDeferredPostNoDoFNoiseProgram.clearPermutations();
         gDeferredPostNoDoFNoiseProgram.addPermutation("HAS_NOISE", "1");

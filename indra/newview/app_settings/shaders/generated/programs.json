@@ -2550,6 +2550,516 @@
    }
   },
   {
+   "id": "dofBlur",
+   "program": "dofBlur",
+   "permutation": {},
+   "source": "slang/dofBlur.slang",
+   "stages": {
+    "vertex": {
+     "file": "dofBlur.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "d8e996ad557a66bc40842bbb93ac61b4cf7b00dacf7ace2854c06c18b7f8a4f1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "max_cof",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dofBlur.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "86a0ed006f2a4ad6aa8fd2c5e605540861fccbb25d1946a546226ddaf0c3db22",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "max_cof",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dofBypass__HAS_NOISE0",
+   "program": "dofBypass",
+   "permutation": {
+    "HAS_NOISE": "0"
+   },
+   "source": "slang/dofBypass.slang",
+   "stages": {
+    "vertex": {
+     "file": "dofBypass__HAS_NOISE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "ea5c000829d612205834a4682b32bea2177ca7e36d5f8effc49538f5691489cc",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dofBypass__HAS_NOISE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "9805f10066b30a05cc7827350c44fdc77c6dcf55211c553f4d8cd320910a122f",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "depthMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dofBypass__HAS_NOISE1",
+   "program": "dofBypass",
+   "permutation": {
+    "HAS_NOISE": "1"
+   },
+   "source": "slang/dofBypass.slang",
+   "stages": {
+    "vertex": {
+     "file": "dofBypass__HAS_NOISE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "cfa9b2a3bc9b75b0dbc1604eb5081ab3ada3c1b5613f8bb91045e65a65bbb31d",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dofBypass__HAS_NOISE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "e7fcdc9ec9a483667c592138c6771ca205d35a2d598008da3e41c4c1e1edb1a9",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "depthMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dofCoF",
+   "program": "dofCoF",
+   "permutation": {},
+   "source": "slang/dofCoF.slang",
+   "stages": {
+    "vertex": {
+     "file": "dofCoF.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "f602b74a158b5a2b4b4579f2b8d8a3e06725a2e655d603b2c3e841d175dd7c04",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "inv_proj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "focal_distance",
+        "offset": 64,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "blur_constant",
+        "offset": 68,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tan_pixel_angle",
+        "offset": 72,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "magnification",
+        "offset": 76,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "max_cof",
+        "offset": 80,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dofCoF.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "2774aa7a52cafd0fe79600353b63cfbc40afdbdce93ee41e2c8ea64b86f9afc9",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "inv_proj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "focal_distance",
+        "offset": 64,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "blur_constant",
+        "offset": 68,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "tan_pixel_angle",
+        "offset": 72,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "magnification",
+        "offset": 76,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "max_cof",
+        "offset": 80,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "depthMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dofCombine",
+   "program": "dofCombine",
+   "permutation": {},
+   "source": "slang/dofCombine.slang",
+   "stages": {
+    "vertex": {
+     "file": "dofCombine.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "c00da7769413d7c7c31c0aa908de3c49cb9485f27234f92bef322bd93929d76d",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "max_cof",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "res_scale",
+        "offset": 12,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dof_width",
+        "offset": 16,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dof_height",
+        "offset": 20,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "dofCombine.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "df79a65977f2a927cc1917eb181fbe1338ad4042cc5fb95551894955efd30b56",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "screen_res",
+        "offset": 0,
+        "size": 8,
+        "type": "float32x2"
+       },
+       {
+        "name": "max_cof",
+        "offset": 8,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "res_scale",
+        "offset": 12,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dof_width",
+        "offset": 16,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "dof_height",
+        "offset": 20,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "diffuseRect",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "lightMap",
+        "binding": 1,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "drawcolor",
    "program": "drawcolor",
    "permutation": {},

@@ -406,6 +406,48 @@ def deferred_post_cases():
                        variants=() if no_post else tonemap_variants, **display)
 
 
+def depth_of_field_cases():
+    vertex = 'deferred/postDeferredNoTCV.glsl'
+    hdr_clamp = ('deferred/deferredUtil.glsl',)
+    axis = np.linspace(0.0, 1.0, SIZE, dtype='f4')
+    u, v = np.meshgrid(axis, axis)
+    hdr = np.stack((12.5 * u - 0.125, 0.15 + 2.0 * v**2, 0.05 + 4.0 * u * v, 0.15 + 0.7 * v), axis=-1)
+
+    # A perspective depth buffer with a near ramp, an in-focus band and a far ramp.
+    projection = H._perspective(55.0, 1.0, 0.1, 100.0)
+    distance = np.where(u < 0.4, 0.5 + 3.5 * u / 0.4, 4.0 + 72.0 * np.maximum(u - 0.6, 0.0) / 0.4)
+    ndc_z = (-distance * projection[2, 2] + projection[2, 3]) / distance
+    depth = np.repeat((ndc_z * 0.5 + 0.5)[..., None], 4, axis=-1).astype('<f4')
+    inv_proj = np.linalg.inv(projection).T.reshape(-1).tolist()
+    # The LLRenderTarget bind overload defaults to bilinear for these color and depth inputs.
+    scene = {'diffuseRect': (hdr,), 'depthMap': (depth,)}
+    yield Case('dof-circle-of-confusion', vertex, 'deferred/cofF.glsl', 'dofCoF', fullscreen=True, depth=True,
+               uniforms={'inv_proj': inv_proj, 'focal_distance': -4.0, 'blur_constant': 0.0006,
+                         'tan_pixel_angle': 0.001, 'magnification': 0.025, 'max_cof': 8.0},
+               texture_levels=scene)
+
+    # The blur pass samples packed CoF values below, within and above the focus band.
+    packed = hdr.copy()
+    packed[..., 3] = 0.05 + 0.9 * u
+    yield Case('dof-half-resolution-blur', vertex, 'deferred/postDeferredF.glsl', 'dofBlur',
+               fullscreen=True, depth=True, size=SIZE // 2, fragment_helpers=hdr_clamp,
+               uniforms={'max_cof': 7.25}, texture_levels={'diffuseRect': (packed,)})
+
+    # Distinct targets expose both the transition taps and the clamping at the blurred subrectangle's edges.
+    blurred = packed[::-1, ::-1].copy()
+    combine = {'diffuseRect': (blurred,), 'lightMap': (packed,)}
+    variants = tuple({'res_scale': scale, 'dof_width': (int(SIZE * scale) - 1) / SIZE,
+                      'dof_height': (int(SIZE * scale) - 1) / SIZE} for scale in (0.5, 0.6))
+    yield Case('dof-combine', vertex, 'deferred/dofCombineF.glsl', 'dofCombine', fullscreen=True, depth=True,
+               uniforms={'max_cof': 7.25}, variants=variants, texture_levels=combine)
+
+    for noise in (0, 1):
+        yield Case('dof-bypass-noise' if noise else 'dof-bypass', vertex, 'deferred/postDeferredNoDoFF.glsl',
+                   f'dofBypass__HAS_NOISE{noise}', fullscreen=True, depth=True,
+                   defines={'HAS_NOISE': '1'} if noise else {}, fragment_helpers=hdr_clamp,
+                   texture_levels=scene)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -462,6 +504,7 @@ def cases():
         add('deferred-tree' + tag, D + 'treeV.glsl', D + 'treeF.glsl', f'dtree__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True, flat_ok=(1, 3))
         add('avatar-eyes' + tag, D + 'avatarEyesV.glsl', D + 'diffuseF.glsl', f'avatareyes__HAS_EMISSIVE{emissive}', defines=e, outputs=n, clip=True)
     c.extend(deferred_post_cases())
+    c.extend(depth_of_field_cases())
     return c
 
 

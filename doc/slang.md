@@ -204,6 +204,11 @@ The A/B harness exercises luminance across G-buffer flags, exposure from a mip c
 and both tone-mapping curves on HDR inputs. The hand-written full-screen vertex and fragment helpers still serve the
 GLSL comparison path and other passes that link them.
 
+The depth-of-field passes also use the shared full-screen stage. The circle-of-confusion pass receives `inv_proj`
+through matrix synchronization. The blur and bypass import the deferred HDR clamp, including its treatment of
+NaN and infinity. The bypass copies sampled depth exactly with or without the final display noise.
+Run `ab_harness.py programs --family depth-of-field --strict-depth` to compare the five variants.
+
 ## The test gaps of the pilot, closed
 
 - **std140 packing** (`LLGeneratedShader::putArray` and `putMatrix` in `llgeneratedshader.h`, used by `LLGLSLShader::blockPutArray` and
