@@ -15,10 +15,6 @@ option(USE_NEOJ2K "Decode and encode JPEG 2000 with neo-j2k (3p-neoj2k) instead 
 add_library(ll::neoj2k INTERFACE IMPORTED GLOBAL)
 
 if (USE_NEOJ2K)
-  if (USE_KDU)
-    message(FATAL_ERROR "USE_NEOJ2K and USE_KDU are both on: one J2C codec per binary")
-  endif ()
-
   use_prebuilt_binary(neoj2k)
 
   # The import library on Windows (neoj2k.lib, for neoj2k.dll), libneoj2k.so on Linux.

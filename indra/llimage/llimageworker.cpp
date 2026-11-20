@@ -121,6 +121,7 @@ LLImageDecodeThread::LLImageDecodeThread(bool /*threaded*/)
 {
     mThreadPool = std::make_unique<LL::ThreadPool>("ImageDecode", 8);
     mThreadPool->start();
+    mWorkers = (U32)mThreadPool->getWidth(); // the threads it started; fixed from here on
 }
 
 //virtual
@@ -153,20 +154,28 @@ LLImageDecodeThread::handle_t LLImageDecodeThread::decodeImage(
         decode_id = ++mDecodeCount;
 
     // Instantiate the ImageRequest right in the lambda, why not?
-    mWaiting.fetch_add(1, std::memory_order_relaxed);
+    mInFlight.fetch_add(1, std::memory_order_relaxed);
     bool posted = mThreadPool->getQueue().post(
         [this, req = ImageRequest(image, discard, needs_aux, responder, decode_id)]
         () mutable
         {
-            mWaiting.fetch_sub(1, std::memory_order_relaxed); // started: no longer waiting
+            // in flight from the post to the end of the request, whatever the request does
+            struct Finished
+            {
+                std::atomic<U32>& count;
+                ~Finished()
+                {
+                    count.fetch_sub(1, std::memory_order_relaxed);
+                    sCurrentPool = nullptr;
+                }
+            } finished{mInFlight};
             sCurrentPool = this;
             auto done = req.processRequest();
             req.finishRequest(done);
-            sCurrentPool = nullptr;
         });
     if (! posted)
     {
-        mWaiting.fetch_sub(1, std::memory_order_relaxed);
+        mInFlight.fetch_sub(1, std::memory_order_relaxed);
         LL_DEBUGS() << "Tried to start decoding on shutdown" << LL_ENDL;
         return 0;
     }
@@ -187,12 +196,12 @@ LLImageDecodeThread* LLImageDecodeThread::getCurrent()
 
 bool LLImageDecodeThread::isIdle() const
 {
-    return mWaiting.load(std::memory_order_relaxed) < getWorkerCount();
+    return mInFlight.load(std::memory_order_relaxed) < mWorkers;
 }
 
 U32 LLImageDecodeThread::getWorkerCount() const
 {
-    return (U32)mThreadPool->getWidth();
+    return mWorkers;
 }
 
 void LLImageDecodeThread::parallelFor(U32 count, job_fn job, void* job_ctx)
@@ -202,10 +211,13 @@ void LLImageDecodeThread::parallelFor(U32 count, job_fn job, void* job_ctx)
         return;
     }
     auto state = std::make_shared<ForkJoin>(count, job, job_ctx);
-    // One helper task for each job the calling thread cannot take, and at most one for each other worker. A task
-    // that the closed queue refuses, or that no worker gets to, costs nothing: the caller claims what is left.
-    const U32 workers = getWorkerCount();
-    const U32 helpers = std::min<U32>(count - 1, workers > 0 ? workers - 1 : 0);
+    // One helper task for each job the calling thread cannot take, and at most one for each free worker: the
+    // workers minus the requests in flight (the caller's own, when it is a pool thread, among them). A busy pool
+    // gets none, so its queue is not filled with tasks that find nothing to do. A task that the closed queue
+    // refuses, or that no worker gets to, costs nothing: the caller claims what is left.
+    const U32 in_flight = mInFlight.load(std::memory_order_relaxed);
+    const U32 free_workers = mWorkers > in_flight ? mWorkers - in_flight : 0;
+    const U32 helpers = std::min<U32>(count - 1, free_workers);
     for (U32 i = 0; i < helpers; ++i)
     {
         if (!mThreadPool->getQueue().post([state]() { state->run(); }))

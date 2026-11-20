@@ -36,6 +36,8 @@ runs:
       shell: bash
     - run: python3 scripts/tests/test_licence_files.py
       shell: bash
+    - run: python3 scripts/tests/test_neoj2k_pin.py
+      shell: bash
     - name: Check the Slang shader tooling (the pin, the generator's post steps, the loader format; the slangc tests run in Check PR)
       shell: bash
       run: |

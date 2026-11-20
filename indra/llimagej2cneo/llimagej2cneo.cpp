@@ -1,9 +1,37 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-//
-// The viewer's J2C decoder and encoder on neo-j2k (https://github.com/anne-skydancer/neo-j2k, BSD-2-Clause), for
-// builds with USE_NEOJ2K. It does what llimagej2coj does, with the same rules (the SL decoder limits, the reduce
-// factor, the decode guard, the comment scan), on neo-j2k's memory API:
+/**
+ * @file llimagej2cneo.cpp
+ * @brief The viewer's J2C decoder and encoder on neo-j2k (https://github.com/anne-skydancer/neo-j2k, BSD-2-Clause), for
+ * builds with USE_NEOJ2K.
+ *
+ * Derived from llimagej2coj.cpp (Linden Research, Inc., with the Phoenix Firestorm Project's and Catznip's changes,
+ * marked <FS:...> and [SL:KB] where they are kept): the same rules (the SL decoder limits, the reduce factor, the
+ * decode guard, the comment scan, the encoder's settings), on neo-j2k's memory API. It keeps the licence of the file
+ * it derives from; the additions are Vulkanstorm's, under the same licence as the rest of the viewer,
+ * GPL-3.0-or-later.
+ *
+ * $LicenseInfo:firstyear=2006&license=viewerlgpl$
+ * Second Life Viewer Source Code
+ * Copyright (C) 2010, Linden Research, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation;
+ * version 2.1 of the License only.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * Linden Research, Inc., 945 Battery Street, San Francisco, CA  94111  USA
+ * $/LicenseInfo$
+ */
+
+// What it does differently from llimagej2coj:
 //
 // - One decoder for each thread that decodes (the ImageDecode pool, the main thread for local files and the bake
 //   integrity checks), created on first use and destroyed at thread exit. It keeps its working memory for the
@@ -11,7 +39,7 @@
 //   the parse.
 // - The decode writes the samples straight into the LLImageRaw (8 bits, interleaved, bottom-up): no int32 planes
 //   and no copy loop.
-// - A pool thread decoding while the pool is idle lends neo-j2k the pool as its executor (see lendPool below);
+// - A pool thread decoding while the pool is idle lends neo-j2k the pool as its executor (PoolLoan below);
 //   every other decode runs on its own thread.
 // - Encoding makes a codec for each call: uploads and bakes are rare, and the encoder keeps nothing between images.
 //
@@ -22,6 +50,7 @@
 #include "llimagej2cneo.h"
 #include "llj2creduce.h"        // llimagej2coj/: header-only, shared with it
 #include "llj2cdecodeguard.h"
+#include "llj2ccommon.h"
 #include "llimagefpstate.h"
 #include "llimageworker.h"
 
@@ -116,8 +145,9 @@ namespace
             return usable && nj2k_read_header_memory(codec, data, size, &image);
         }
 
-        // Every request ends with the factor back at 0, so that the next header, another image's, is read at
-        // the full size whatever this one asked for. It is always accepted: 0 is below every resolution count.
+        // Every request ends with the factor back at 0, so that the next header, another image's, is read at the
+        // full size whatever this one asked for. Whatever state the decoder is in, 0 is taken: with a held header it
+        // is below every resolution count, and after a failure the factor is only kept for the next header.
         void resetReduce()
         {
             nj2k_set_decoded_resolution_factor(codec, 0);
@@ -185,33 +215,6 @@ namespace
         ThreadDecoder& decoder;
     };
 
-    /**
-     * Estimates the number of layers necessary depending on the image surface (w x h)
-     */
-    U32 estimate_num_layers(U32 surface)
-    {
-        if      (surface <= 1024)    return 2;  // Tiny (<=32x32)
-        else if (surface <= 16384)   return 3;  // Small (<=128x128)
-        else if (surface <= 262144)  return 4;  // Medium (<=512x512)
-        else if (surface <= 1048576) return 5;  // Up to ~1MP
-        else                         return 6;  // Up to ~1.5-2MP
-    }
-
-    /**
-     * Sets the parameters.tcp_rates according to the number of layers and a last tcp_rate value (which equals to the final compression ratio).
-     *
-     * Example for 6 layers: the rates are 8, 32, 128, 512, 2048 and 8192, the last layer being the lowest quality.
-     */
-    void set_tcp_rates(nj2k_cparameters_t* parameters, U32 num_layers = 1, F32 last_tcp_rate = LAST_TCP_RATE)
-    {
-        parameters->tcp_numlayers = num_layers;
-
-        for (int i = num_layers - 1; i >= 0; i--)
-        {
-            parameters->tcp_rates[num_layers - 1 - i] = last_tcp_rate * static_cast<F32>(1 << (i << 1));
-        }
-    }
-
     // The output stream of one encode: the codestream, in memory.
     struct EncodeSink
     {
@@ -227,7 +230,14 @@ namespace
             return 0;
         }
         const U8* src = static_cast<const U8*>(buffer);
-        sink->bytes.insert(sink->bytes.end(), src, src + count);
+        try
+        {
+            sink->bytes.insert(sink->bytes.end(), src, src + count);
+        }
+        catch (...) // out of memory: no exception crosses neo-j2k's C boundary; the write fails, as OpenJPEG's did
+        {
+            return 0;
+        }
         return count;
     }
 
@@ -265,48 +275,11 @@ bool LLImageJ2CNeo::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 deco
 
     // <FS:Techwolf Lupindo> texture comment metadata reader
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;    // <FS:Beq> instrument image decodes
-    U8* c_data = base.getData();
-    S32 c_size = base.getDataSize();
-    S32 position = 0;
-
-    while (position < 1024 && position < (c_size - 7)) // the comment field should be in the first 1024 bytes.
+    // the scan itself is llj2ccommon.h's, shared with llimagej2coj
+    std::string comment;
+    if (LLJ2CCommon::scanComment(base.getData(), base.getDataSize(), comment))
     {
-        if (c_data[position] == 0xff && c_data[position + 1] == 0x64)
-        {
-            U8 high_byte = c_data[position + 2];
-            U8 low_byte = c_data[position + 3];
-            S32 c_length = (high_byte * 256) + low_byte; // This size also counts the markers, 00 01 and itself
-            if (c_length > 200) // sanity check
-            {
-                // While comments can be very long, anything longer then 200 is suspect.
-                break;
-            }
-
-            if (c_length < 4)
-            {
-                // too short to hold the length field and the 00 01 marker; c_length - 4 below would wrap.
-                break;
-            }
-
-            if (position + 2 + c_length > c_size)
-            {
-                // comment extends past end of data, corruption, or all data not retrived yet.
-                break;
-            }
-
-            // if the comment block does not end at the end of data, check to see if the next
-            // block starts with 0xFF
-            if (position + 2 + c_length < c_size && c_data[position + 2 + c_length] != 0xff)
-            {
-                // invalied comment block
-                break;
-            }
-
-            // extract the comment minus the markers, 00 01
-            raw_image.mComment.assign((char*)(c_data + position + 6), c_length - 4);
-            break;
-        }
-        position++;
+        raw_image.mComment = comment;
     }
     // </FS:Techwolf Lupindo>
 
@@ -321,6 +294,7 @@ bool LLImageJ2CNeo::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 deco
     // The header, from the parse getMetadata made of the same bytes when this thread made it.
     nj2k_image_t image = {};
     bool decoded = decoder.readHeader(data, (size_t)max_bytes, image);
+    const bool header_read = decoded;
     S32 image_channels = decoded ? (S32)image.numcomps : 0;
 
     // Never ask for a coarser level than the codestream has (llj2creduce.h): the decoder refuses a reduce
@@ -399,8 +373,17 @@ bool LLImageJ2CNeo::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 deco
             raw_image.resize(raw_image.getWidth(), raw_image.getHeight(), S8(channels));
         }
 
-        LL_WARNS("Texture") << "J2C decode failed (" << max_bytes << " bytes): "
-                            << (decoder.last_error.empty() ? "no neo-j2k message" : decoder.last_error.c_str()) << LL_ENDL;
+        if (header_read)
+        {
+            LL_WARNS("Texture") << "J2C decode failed (" << max_bytes << " bytes): "
+                                << (decoder.last_error.empty() ? "no neo-j2k message" : decoder.last_error.c_str()) << LL_ENDL;
+        }
+        else
+        {
+            // debug level, as OpenJPEG's: a partial download routinely fails its first header pass
+            LL_DEBUGS("Texture") << "J2C decode: header refused or unreadable (" << max_bytes << " bytes): "
+                                 << (decoder.last_error.empty() ? "no neo-j2k message" : decoder.last_error.c_str()) << LL_ENDL;
+        }
         LL_DEBUGS("Texture") << "ERROR -> decodeImpl: failed to decode image!" << LL_ENDL;
         // [SL:KB] - Patch: Viewer-OpenJPEG2 | Checked: Catznip-5.3
         base.decodeFailed();
@@ -553,31 +536,17 @@ bool LLImageJ2CNeo::encodeImpl(LLImageJ2C &base, const LLImageRaw &raw_image, co
         U32 surface = raw_image.getWidth() * raw_image.getHeight();
 
         // gets the necessary number of layers
-        U32 nb_layers = estimate_num_layers(surface);
+        U32 nb_layers = LLJ2CCommon::estimate_num_layers(surface);
 
         // fills parameters.tcp_rates and updates parameters.tcp_numlayers
-        set_tcp_rates(&parameters, nb_layers, LAST_TCP_RATE);
+        LLJ2CCommon::set_tcp_rates(&parameters, nb_layers, LAST_TCP_RATE);
     }
 
-    U32 width_tiles = (raw_image.getWidth() >> 6);
-    U32 height_tiles = (raw_image.getHeight() >> 6);
-
-    // Allow images with a width or height that are MIN_IMAGE_SIZE <= x < 64
-    if (width_tiles == 0 && (raw_image.getWidth() >= MIN_IMAGE_SIZE))
+    // the tile counts and the resolutions of a small image (llj2ccommon.h)
+    const LLJ2CCommon::Tiling tiling = LLJ2CCommon::tiling(raw_image.getWidth(), raw_image.getHeight());
+    if (tiling.numresolution)
     {
-        width_tiles = 1;
-    }
-    if (height_tiles == 0 && (raw_image.getHeight() >= MIN_IMAGE_SIZE))
-    {
-        height_tiles = 1;
-    }
-
-    if (width_tiles == 1 || height_tiles == 1)
-    {
-        // Images with either dimension less than 32 need less number of resolutions otherwise they error
-        int min_dim = raw_image.getWidth() < raw_image.getHeight() ? raw_image.getWidth() : raw_image.getHeight();
-        int max_res = 1 + (int)floor(log2(min_dim));
-        parameters.numresolution = max_res;
+        parameters.numresolution = tiling.numresolution;
     }
 
     std::unique_ptr<nj2k_codec_t, CodecDeleter> encoder(nj2k_create_compress(NJ2K_CODEC_J2K));
@@ -589,7 +558,7 @@ bool LLImageJ2CNeo::encodeImpl(LLImageJ2C &base, const LLImageRaw &raw_image, co
 
     // the stream's buffer, sized as the old guess; the codestream itself grows in the sink
     const size_t TILE_SIZE = 64 * 64 * 3;
-    const size_t data_size_guess = std::max<size_t>((size_t)width_tiles * height_tiles * TILE_SIZE, 4096);
+    const size_t data_size_guess = std::max<size_t>((size_t)tiling.width_tiles * tiling.height_tiles * TILE_SIZE, 4096);
     EncodeSink sink;
     std::unique_ptr<nj2k_stream_t, StreamDeleter> stream(nj2k_stream_create(data_size_guess, NJ2K_FALSE));
     if (!stream)
@@ -644,12 +613,29 @@ bool LLImageJ2CNeo::getMetadata(LLImageJ2C &base)
     {
         return false;
     }
+    // OpenJPEG's header read checked the SL limits at the full size (a side of 2048 at reduce 0), so a larger image
+    // never got a size; nj2k_read_header_memory leaves that check to the host, which runs it here
+    if (!nj2k_get_decoded_dimensions(decoder.codec, &image))
+    {
+        LL_DEBUGS("Texture") << "J2C header refused at the full size (" << base.getDataSize() << " bytes): "
+                             << (decoder.last_error.empty() ? "no neo-j2k message" : decoder.last_error.c_str()) << LL_ENDL;
+        return false;
+    }
 
     // The size is the image area (x1 - x0), not the tile grid (tw * tdx): they differ for a multi-tile codestream
     // whose last tile is partial or that has an offset (the old size would be too large).
-    const S32 width = S32(image.x1 - image.x0);
-    const S32 height = S32(image.y1 - image.y0);
+    const U32 area_width = image.x1 - image.x0;
+    const U32 area_height = image.y1 - image.y0;
     const S32 components = (S32)image.numcomps;
+    if (area_width == 0 || area_height == 0 || area_width > 0xffff || area_height > 0xffff)
+    {
+        // LLImageBase keeps the size in 16 bits
+        LL_WARNS("Texture") << "J2C header declares " << area_width << "x" << area_height << ", refusing it" << LL_ENDL;
+        base.setLastError("Unsupported image size");
+        return false;
+    }
+    const S32 width = (S32)area_width;
+    const S32 height = (S32)area_height;
 
     // LLImageBase keeps the component count in a signed byte, where 260 components read as 4: refuse
     // a count the viewer does not take (1 to MAX_IMAGE_COMPONENTS, llj2cdecodeguard.h) before anything is stored,

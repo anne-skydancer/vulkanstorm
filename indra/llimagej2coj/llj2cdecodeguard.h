@@ -5,7 +5,8 @@
  * @brief The J2C codestreams the OpenJPEG wrapper refuses before OpenJPEG allocates for them.
  *
  * Free of viewer headers: JPEG2KDecode::decode (llimagej2coj.cpp) applies it between opj_read_header and
- * opj_decode, LLImageJ2COJ::getMetadata applies its component rule to the header read, and
+ * opj_decode, LLImageJ2COJ::getMetadata applies its component rule to the header read (LLImageJ2CNeo, USE_NEOJ2K,
+ * applies both to neo-j2k's header read), and
  * indra/llimagej2coj/tests/llj2cdecodeguard_openjpeg_test.cpp checks it against OpenJPEG.
  *
  * Why: opj_decode allocates a 4-byte sample for every pixel of every component at the decoded size before it
