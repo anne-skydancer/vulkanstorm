@@ -360,6 +360,26 @@
       }
     },
     {
+      "name": "normaldebug",
+      "family": "normal-debug",
+      "source": "normaldebug.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "geometry": "gsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_ATTRIBUTE_TANGENT": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "normgen",
       "source": "normgen.slang",
       "entries": {

@@ -77,6 +77,13 @@ class PostprocessTest(unittest.TestCase):
         with self.assertRaises(gen.GenError):
             gen.split_stages('#version 460\na\n', 2)
 
+    def test_stage_identity_distinguishes_the_position_writers(self):
+        position = 'void main() { gl_Position = vec4(0); }'
+        self.assertEqual(gen.emitted_stage(position), 'vertex')
+        self.assertEqual(gen.emitted_stage('layout(max_vertices = 2) out;\n' + position), 'geometry')
+        self.assertEqual(gen.emitted_stage('layout(local_size_x = 1) in;'), 'compute')
+        self.assertEqual(gen.emitted_stage('void main() {}'), 'fragment')
+
 
 class LoaderFormatTest(unittest.TestCase):
     """The loader's text (llgeneratedshader.h) and assemble_source() are one format; both test this literal."""
@@ -158,6 +165,47 @@ class GeneratorTest(unittest.TestCase):
         if glslang is None:
             self.skipTest('glslangValidator not installed')
         self.assertEqual(check.check_compile(self.out, glslang), [])
+
+    def test_geometry_stream_keeps_linked_interfaces_and_positions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            src.mkdir()
+            shutil.copy2(FIXTURES / 'position_mod.slang', src)
+            shutil.copy2(FIXTURES.parent / 'geometry.slang', src)
+            programs = {
+                'position': {'module': 'position_mod', 'prefix': 'vkPosition'},
+                'programs': [{'name': 'lines', 'source': 'geometry.slang',
+                              'entries': {'geometry': 'gsMain', 'fragment': 'fsMain', 'vertex': 'vsMain'}}],
+            }
+            (src / 'program_list.json').write_text(json.dumps(programs), encoding='utf-8')
+            out = Path(tmp) / 'generated'
+            manifest = gen.generate(out, src, strict=True)
+            stages = manifest['programs'][0]['stages']
+            self.assertEqual(list(stages), ['vertex', 'geometry', 'fragment'])
+            geom = stages['geometry']['interface']
+            self.assertEqual([(i['location'], i['type']) for i in geom['inputs']], [(2, 'float32x4'), (5, 'float32x2[2]')])
+            self.assertEqual([(i['location'], i['type']) for i in geom['outputs']], [(7, 'float32x4')])
+            self.assertEqual(check.check_manifest(out), [])
+            self.assertEqual(check.check_interface(out), [])
+            self.assertEqual(check.check_position(src, out), [])
+            if glslang := check.find_glslang():
+                self.assertEqual(check.check_compile(out, glslang), [])
+
+            geom['inputs'][0]['type'] = 'float32x3'
+            stages['fragment']['interface']['inputs'][0]['location'] = 8
+            (out / 'programs.json').write_text(json.dumps(manifest), encoding='utf-8')
+            errors = check.check_interface(out)
+            self.assertEqual(len(errors), 2, errors)
+            self.assertTrue(any('vertex writes' in e and 'geometry reads' in e for e in errors), errors)
+            self.assertTrue(any('fragment input' in e and 'no geometry output' in e for e in errors), errors)
+
+            geometry_file = out / stages['geometry']['file']
+            text = geometry_file.read_text(encoding='utf-8')
+            text, removed = re.subn(r'\bgl_Position\s*=\s*[^;]+;', '', text, count=1)
+            self.assertEqual(removed, 1)
+            geometry_file.write_text(text, encoding='utf-8')
+            errors = check.check_position(src, out)
+            self.assertTrue(any('lines.geom.glsl' in e and 'before each emitted vertex' in e for e in errors), errors)
 
     def test_glslang_catches_a_broken_stage(self):
         glslang = check.find_glslang()

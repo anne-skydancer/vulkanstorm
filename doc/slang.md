@@ -57,7 +57,7 @@ python scripts/shaders/slang_check.py all    manifest, interface, position gate,
 
 Edit the `.slang` files only. A conflict in a generated file is resolved by regenerating, never by hand.
 
-`program_list.json` names each program: its `source`, its `entries` (stage to entry point; vertex, fragment or compute),
+`program_list.json` names each program: its `source`, its `entries` (vertex, geometry, fragment or compute stage to entry point),
 an optional qualification `family`, and optional `permutations`, an object of axes to value lists. Every combination is one program id
 (`name__AXIS0__OTHER1`) compiled with `-DAXIS=0 -DOTHER=1`. Permutations are for inputs that change a declaration. Settings
 and device values are **hooks**.
@@ -235,6 +235,13 @@ from sampled depth. The five runtime modes keep their existing parameters. The g
 two distance-extension flags as floats to match the viewer's uploader, then interprets nonzero values as true.
 The A/B cases exercise both blur directions, the kernel cap, and samples inside and outside the effect range.
 
+## Normal and tangent diagnostics
+
+The normal visualizer compiles vertex, geometry, and fragment stages together. It preserves each projected
+line endpoint, including its clip-space `w`, and the geometry stage emits the original yellow normal and cyan tangent
+lines. The generator checks the vertex-to-geometry and geometry-to-fragment interfaces. The A/B cases compare
+color and exact depth for normal-only and tangent modes with static and rigged inputs.
+
 ## The test gaps of the pilot, closed
 
 - **std140 packing** (`LLGeneratedShader::putArray` and `putMatrix` in `llgeneratedshader.h`, used by `LLGLSLShader::blockPutArray` and
@@ -362,11 +369,10 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
 | `emissive`, `fullbright*`, `terrain` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
-| `normaldebug` (geometry stage) | debug | stays hand-written unless Slang geometry output is accepted |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
 
-At the end `scripts/shaders/glsl_position_baseline.txt` is exactly the permanent exemptions (the SMAA vertex stages, `errorV`
-and, if kept, `normaldebug`), and `slang_check.py position` fails any other hand-written GLSL that writes `gl_Position`. "Invariant on
+At the end `scripts/shaders/glsl_position_baseline.txt` contains the permanent position-writing exemptions (the SMAA vertex
+stages and `errorV`), and `slang_check.py position` fails any other hand-written GLSL that writes `gl_Position`. "Invariant on
 for every program" means every generated program (`VK_POSITION_INVARIANT 1`); an exempted program keeps its own declaration,
 and SMAA and FXAA are post-process passes with no depth contract. The hand-written loader path is removed for every program that
 has a generated twin; the exempted programs keep loading their GLSL.

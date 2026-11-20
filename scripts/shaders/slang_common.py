@@ -14,8 +14,9 @@ SLANG_SRC = ROOT / 'indra/newview/slang'
 GENERATED = ROOT / 'indra/newview/app_settings/shaders/generated'
 LEGACY_SHADERS = ROOT / 'indra/newview/app_settings/shaders'
 
-STAGE_EXT = {'vertex': 'vert', 'fragment': 'frag', 'compute': 'comp'}
+STAGE_EXT = {'vertex': 'vert', 'geometry': 'geom', 'fragment': 'frag', 'compute': 'comp'}
 EXT_STAGE = {v: k for k, v in STAGE_EXT.items()}
+GLSL_POSITION_WRITE = re.compile(r'\bgl_Position\b\s*(?:\.\w+)?\s*[-+*/]?=(?!=)')
 
 
 def read_pin(path=PIN_FILE):

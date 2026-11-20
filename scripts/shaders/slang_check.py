@@ -2,8 +2,8 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """CI checks on the generated shaders (they need no GPU).
 
-  interface   the manifest's interface, from slangc's reflection: every fragment input matches a vertex output by
-              location and type (names are informational); locations and texture bindings are unique; both stages declare
+  interface   the manifest's interface, from slangc's reflection: every linked graphics stage input matches the preceding
+              stage's output by location and type (names are informational); locations and texture bindings are unique; stages declare
               the same uniform block members (parsed from the generated text), above the viewer's own UBO bindings;
               a program's texture units are 0..n-1 in a row, and diffuseMap is unit 0;
               every vertex input sits at the slot and name of the viewer's reserved attribute table
@@ -150,15 +150,16 @@ def check_interface(generated):
                 for t in i['interface']['textures']:
                     if tex.setdefault(t['binding'], t['name']) != t['name']:
                         errors.append(f'{pid}: texture binding {t["binding"]} is two different samplers in two stages')
-        if 'vertex' in stages and 'fragment' in stages:
-            outs = {o['location']: o for o in stages['vertex']['interface']['outputs']}
-            for i in stages['fragment']['interface']['inputs']:
+        graphics = [s for s in common.STAGE_EXT if s in stages and s != 'compute']
+        for producer, consumer in zip(graphics, graphics[1:]):
+            outs = {o['location']: o for o in stages[producer]['interface']['outputs']}
+            for i in stages[consumer]['interface']['inputs']:
                 o = outs.get(i['location'])
                 if o is None:
-                    errors.append(f'{pid}: fragment input {i["name"]} (location {i["location"]}) has no vertex output')
+                    errors.append(f'{pid}: {consumer} input {i["name"]} (location {i["location"]}) has no {producer} output')
                 elif o['type'] != i['type']:
-                    errors.append(f'{pid}: location {i["location"]}: vertex writes {o["name"]} {o["type"]}, '
-                                  f'fragment reads {i["name"]} {i["type"]}')  # names may differ: GL links by location
+                    errors.append(f'{pid}: location {i["location"]}: {producer} writes {o["name"]} {o["type"]}, '
+                                  f'{consumer} reads {i["name"]} {i["type"]}')  # names may differ: GL links by location
     return errors
 
 
@@ -232,7 +233,17 @@ def _strip_comments(text):
     return re.sub(r'//[^\n]*', '', text)
 
 
-GLSL_POSITION = re.compile(r'\bgl_Position\b\s*(?:\.\w+)?\s*[-+*/]?=(?!=)')
+GLSL_EMIT_VERTEX = re.compile(r'\bEmit(?:Stream)?Vertex\s*\(')
+
+
+def _geometry_writes_positions(text):
+    """Slang assigns gl_Position before each emitted vertex in the GLSL geometry stage."""
+    previous_emit = 0
+    for emit in GLSL_EMIT_VERTEX.finditer(text):
+        if not common.GLSL_POSITION_WRITE.search(text, previous_emit, emit.start()):
+            return False
+        previous_emit = emit.end()
+    return previous_emit > 0
 
 
 def check_glsl_baseline(glsl_root, baseline):
@@ -248,7 +259,7 @@ def check_glsl_baseline(glsl_root, baseline):
         rel = path.relative_to(root).as_posix()
         if rel.startswith('generated/'):
             continue
-        if GLSL_POSITION.search(_strip_comments(path.read_text(encoding='utf-8', errors='replace'))):
+        if common.GLSL_POSITION_WRITE.search(_strip_comments(path.read_text(encoding='utf-8', errors='replace'))):
             found.add(rel)
     errors = [f'{rel}: hand-written GLSL writes gl_Position; write the program in Slang, through the position module'
               for rel in sorted(found - listed)]
@@ -304,19 +315,22 @@ def check_position(src_dir, generated, glsl_root=None, baseline=None):
         elif not any(call.search(_strip_comments(p.read_text(encoding='utf-8')))
                      for p in files if p.resolve() != module.resolve()):
             errors.append(f'{prog["name"]}: imports {position["module"]} but never calls {prefix}*()')
-    # the module's default for `invariant gl_Position` (VK_POSITION_INVARIANT): when on, every vertex stage declares it
+    # The module controls the invariant declaration on both position-writing stages.
     default = re.search(r'(?m)^#define\s+VK_POSITION_INVARIANT\s+(\d)', module.read_text(encoding='utf-8'))
     invariant = bool(default and default.group(1) == '1')
     manifest = load_manifest(generated)
     for prog in manifest['programs']:
-        info = prog['stages'].get('vertex')
-        if not info:
-            continue
-        text = (Path(generated) / info['file']).read_text(encoding='utf-8')
-        if len(re.findall(r'\bgl_Position(?:\.\w+)?\s*[-+*/]?=(?!=)', text)) != 1:
-            errors.append(f'{info["file"]}: gl_Position must be written exactly once')
-        if invariant and not re.search(r'(?m)^invariant gl_Position;', text):
-            errors.append(f'{info["file"]}: the position module makes gl_Position invariant, but the stage does not declare it')
+        for stage in ('vertex', 'geometry'):
+            info = prog['stages'].get(stage)
+            if not info:
+                continue
+            text = _strip_comments((Path(generated) / info['file']).read_text(encoding='utf-8'))
+            if stage == 'vertex' and len(common.GLSL_POSITION_WRITE.findall(text)) != 1:
+                errors.append(f'{info["file"]}: gl_Position must be written exactly once')
+            if stage == 'geometry' and not _geometry_writes_positions(text):
+                errors.append(f'{info["file"]}: gl_Position must be written before each emitted vertex')
+            if invariant and not re.search(r'(?m)^invariant gl_Position;', text):
+                errors.append(f'{info["file"]}: the position module makes gl_Position invariant, but the stage does not declare it')
     return errors
 
 

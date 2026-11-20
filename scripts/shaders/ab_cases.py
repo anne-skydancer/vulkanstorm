@@ -67,6 +67,8 @@ class Case:
     hooks: dict = field(default_factory=dict)  # candidate loader defines for this A/B
     indexed_texture_channels: int = 0
     texcoord1_s_scale: float = 1.0
+    geometry: str = ''           # optional legacy geometry shader under class1/
+    required_colours: tuple = ()  # RGBA values that must appear in attachment zero in both paths
 
 
 def _hash01(name, salt=0):
@@ -314,11 +316,13 @@ def build_reference(gl, case):
     vs = legacy_source(case.vs, defines, 'vertex', case)
     fs = legacy_source(case.fs, defines, 'fragment', case)
     helpers = tuple(H.read_legacy(path, defines, 'fragment') for path in case.fragment_helpers)
-    return gl.program(vs, fs, attribs=H.ATTRIB_SLOTS, fragment_helpers=helpers)
+    geometry = H.read_legacy(case.geometry, defines, 'geometry') if case.geometry else None
+    return gl.program(vs, fs, attribs=H.ATTRIB_SLOTS, fragment_helpers=helpers, geometry_source=geometry)
 
 
 def build_candidate(gl, generated, entry, hook_values):
-    stage_types = {'vertex': H.GL_VERTEX_SHADER, 'fragment': H.GL_FRAGMENT_SHADER, 'compute': H.GL_COMPUTE_SHADER}
+    stage_types = {'vertex': H.GL_VERTEX_SHADER, 'geometry': H.GL_GEOMETRY_SHADER,
+                   'fragment': H.GL_FRAGMENT_SHADER, 'compute': H.GL_COMPUTE_SHADER}
     declared_hooks = {hook for info in entry['stages'].values() for hook in info.get('hooks', ())}
     unknown_hooks = sorted(hook_values.keys() - declared_hooks)
     if unknown_hooks:
@@ -379,6 +383,12 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
             # program of these writes anything into) may be flat
             if r['flat'] and i not in case.flat_ok and not (i == 3 and case.outputs == 4):
                 r['pass'] = False
+            if i == 0 and case.required_colours:
+                counts = [dict(rgba=rgba, ref=int(np.all(images['ref'][0][i] == rgba, axis=-1).sum()),
+                               cand=int(np.all(images['cand'][0][i] == rgba, axis=-1).sum()))
+                          for rgba in case.required_colours]
+                r['colour_counts'] = counts
+                r['pass'] &= all(count['ref'] > 0 and count['cand'] > 0 for count in counts)
             results.append(r)
         if case.depth or case.depth_info:
             advisory = case.depth_info and not case.depth and not strict_depth
@@ -603,6 +613,20 @@ def rlv_sphere_cases():
                        point_textures=point_textures)
 
 
+def normal_debug_cases():
+    normal = (1.0, 1.0, 0.0, 1.0)
+    tangent = (0.0, 1.0, 1.0, 1.0)
+    for tangents in (0, 1):
+        for skin in (0, 1):
+            yield Case(f'normal-debug-tangent{tangents}-skin{skin}',
+                       'interface/normaldebugV.glsl', 'interface/normaldebugF.glsl',
+                       f'normaldebug__HAS_ATTRIBUTE_TANGENT{tangents}__HAS_SKIN{skin}',
+                       defines={'HAS_ATTRIBUTE_TANGENT': '1'} if tangents else {},
+                       depth=True, skin=bool(skin), flat_ok=(0,), geometry='interface/normaldebugG.glsl',
+                       variants=({'debug_normal_draw_length': 0.1}, {'debug_normal_draw_length': 0.35}),
+                       required_colours=(normal, tangent) if tangents else (normal,))
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -664,6 +688,7 @@ def cases():
     c.extend(deferred_diffuse_cases())
     c.extend(terrain_bake_cases())
     c.extend(rlv_sphere_cases())
+    c.extend(normal_debug_cases())
     return c
 
 

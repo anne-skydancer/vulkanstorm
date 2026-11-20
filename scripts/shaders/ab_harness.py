@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import slang_check as check  # noqa: E402
 import slang_common as common  # noqa: E402
 
-GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COMPUTE_SHADER = 0x8B31, 0x8B30, 0x91B9
+GL_VERTEX_SHADER, GL_GEOMETRY_SHADER, GL_FRAGMENT_SHADER, GL_COMPUTE_SHADER = 0x8B31, 0x8DD9, 0x8B30, 0x91B9
 GL_COMPILE_STATUS, GL_LINK_STATUS = 0x8B81, 0x8B82
 GL_UNIFORM, GL_UNIFORM_BLOCK = 0x92E1, 0x92E2
 GL_ACTIVE_RESOURCES = 0x92F5
@@ -135,8 +135,11 @@ class GL:
             raise RuntimeError('compile failed:\n' + log.value.decode(errors='replace'))
         return sh
 
-    def program(self, vs_source, fs_source, attribs=('position',), fragment_helpers=()):
-        stages = [(GL_VERTEX_SHADER, vs_source), (GL_FRAGMENT_SHADER, fs_source)]
+    def program(self, vs_source, fs_source, attribs=('position',), fragment_helpers=(), geometry_source=None):
+        stages = [(GL_VERTEX_SHADER, vs_source)]
+        if geometry_source is not None:
+            stages.append((GL_GEOMETRY_SHADER, geometry_source))
+        stages.append((GL_FRAGMENT_SHADER, fs_source))
         stages.extend((GL_FRAGMENT_SHADER, text) for text in fragment_helpers)
         return self.link(stages, attribs)
 

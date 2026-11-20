@@ -7880,6 +7880,662 @@
    }
   },
   {
+   "id": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN0",
+   "program": "normaldebug",
+   "permutation": {
+    "HAS_ATTRIBUTE_TANGENT": "0",
+    "HAS_SKIN": "0"
+   },
+   "source": "slang/normaldebug.slang",
+   "stages": {
+    "vertex": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "f454d847302bfb09a4906621088c89f8eef11fd7894899dcfabf37b956834a6d",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "geometry": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN0.geom.glsl",
+     "entry": "gsMain",
+     "sha256": "2f7eca1256e3d974901904bf5e98b1fa2e1f5e8a5cb82751ab13d3ec1f502fba",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "452809906f4ea04f1f986f29140a8252367da1d619aca57b0a74f1dfaf59e8c1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN1",
+   "program": "normaldebug",
+   "permutation": {
+    "HAS_ATTRIBUTE_TANGENT": "0",
+    "HAS_SKIN": "1"
+   },
+   "source": "slang/normaldebug.slang",
+   "stages": {
+    "vertex": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "6c6b403e55bd593edd76bf09f44a5d791bc4c0dfbc0e02b79cb14e4faa4ea960",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "geometry": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN1.geom.glsl",
+     "entry": "gsMain",
+     "sha256": "4bd8fd700e366f0038e05e6b66b1023d8feba4505e78afffd64a65b6f50ff9eb",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "4573477bde010d0d256040a21d7966ee7f05f8d1ad2dd0bc8ac018c5432f1d31",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN0",
+   "program": "normaldebug",
+   "permutation": {
+    "HAS_ATTRIBUTE_TANGENT": "1",
+    "HAS_SKIN": "0"
+   },
+   "source": "slang/normaldebug.slang",
+   "stages": {
+    "vertex": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "273f7e70efc05afbdb2e3ac85ba575c7434094d5f94c1c2dd303c1e1e129bf16",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent_clip",
+        "location": 1,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "geometry": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN0.geom.glsl",
+     "entry": "gsMain",
+     "sha256": "ca677c502285d8da139f44f1b3e40bb7ed212e8c830d081ac95709478a2ff59f",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent_clip",
+        "location": 1,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "66af8b5a4aa062dfd48bf4dff6df278fd17b3bdc0ba49cbc709990268d2675df",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    }
+   }
+  },
+  {
+   "id": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN1",
+   "program": "normaldebug",
+   "permutation": {
+    "HAS_ATTRIBUTE_TANGENT": "1",
+    "HAS_SKIN": "1"
+   },
+   "source": "slang/normaldebug.slang",
+   "stages": {
+    "vertex": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "423b727431e93ff0f8f41c3ea0c97d944734e2fb88c011dfac6e54f02dcc2372",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "tangent",
+        "location": 8,
+        "type": "float32x4"
+       },
+       {
+        "name": "weight4",
+        "location": 10,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent_clip",
+        "location": 1,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "geometry": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN1.geom.glsl",
+     "entry": "gsMain",
+     "sha256": "fbffde385033e5310f34a8d11142bdbb31201f352ddfb039222259860f4b856e",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "normal_clip",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "tangent_clip",
+        "location": 1,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "1f16b03dd219b1e061294a7ed29fad0d20bf91f50e77c2c9dd68be401ab8b776",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "color",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "debug_normal_draw_length",
+        "offset": 128,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "matrixPalette",
+        "offset": 144,
+        "size": 5280,
+        "type": "float32x3x4[110]"
+       }
+      ],
+      "textures": []
+     }
+    }
+   }
+  },
+  {
    "id": "normgen",
    "program": "normgen",
    "permutation": {},

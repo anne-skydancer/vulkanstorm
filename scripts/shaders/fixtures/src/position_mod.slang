@@ -8,3 +8,8 @@ public vec4 vkPositionClip(mat4 mvp, vec3 p)
 {
     return mvp * vec4(p, 1.0);
 }
+
+public vec4 vkPositionPassthrough(vec4 clip)
+{
+    return clip;
+}

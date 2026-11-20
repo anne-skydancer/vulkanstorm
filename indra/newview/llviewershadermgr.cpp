@@ -300,18 +300,32 @@ static bool pilotGenerated()
     return generated;
 }
 
-// Registers one generated program (interface, effects, post and G-buffer families). test_slang_pipeline.py checks that each
-// id the loader names exists in programs.json.
-static void generatedStages(LLGLSLShader& shader, const char* generated_id, const char* legacy_vertex, const char* legacy_fragment)
+static void addGeneratedStages(LLGLSLShader& shader, const char* generated_id, bool has_geometry)
+{
+    const std::string path = std::string("generated/") + generated_id;
+    shader.mShaderFiles.push_back(make_pair(path + ".vert.glsl", GL_VERTEX_SHADER));
+    if (has_geometry)
+    {
+        shader.mShaderFiles.push_back(make_pair(path + ".geom.glsl", GL_GEOMETRY_SHADER));
+    }
+    shader.mShaderFiles.push_back(make_pair(path + ".frag.glsl", GL_FRAGMENT_SHADER));
+}
+
+// Registers one generated graphics program and its legacy A/B counterpart.
+static void generatedStages(LLGLSLShader& shader, const char* generated_id, const char* legacy_vertex,
+                            const char* legacy_fragment, const char* legacy_geometry = nullptr)
 {
     if (pilotGenerated())
     {
-        shader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".vert.glsl", GL_VERTEX_SHADER));
-        shader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".frag.glsl", GL_FRAGMENT_SHADER));
+        addGeneratedStages(shader, generated_id, legacy_geometry != nullptr);
     }
     else
     {
         shader.mShaderFiles.push_back(make_pair(std::string(legacy_vertex), GL_VERTEX_SHADER));
+        if (legacy_geometry)
+        {
+            shader.mShaderFiles.push_back(make_pair(std::string(legacy_geometry), GL_GEOMETRY_SHADER));
+        }
         shader.mShaderFiles.push_back(make_pair(std::string(legacy_fragment), GL_FRAGMENT_SHADER));
     }
 }
@@ -342,8 +356,9 @@ static bool make_rigged_variant(LLGLSLShader& shader, LLGLSLShader& riggedShader
     if (generated_id && pilotGenerated())
     {
         riggedShader.mShaderFiles.clear();
-        riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".vert.glsl", GL_VERTEX_SHADER));
-        riggedShader.mShaderFiles.push_back(make_pair(std::string("generated/") + generated_id + ".frag.glsl", GL_FRAGMENT_SHADER));
+        const bool has_geometry = std::any_of(shader.mShaderFiles.begin(), shader.mShaderFiles.end(),
+                                              [](const auto& stage) { return stage.second == GL_GEOMETRY_SHADER; });
+        addGeneratedStages(riggedShader, generated_id, has_geometry);
         riggedShader.mRiggedVariant = &riggedShader; // attachShaderFeatures does this for hand-written programs, and is skipped here
     }
     else
@@ -4139,21 +4154,19 @@ bool LLViewerShaderMgr::loadShadersInterface()
             LLGLSLShader& skinned_shader = gSkinnedNormalDebugProgram[variant];
             shader.mName = "Normal Debug Shader";
             shader.mShaderFiles.clear();
-            shader.mShaderFiles.push_back(make_pair("interface/normaldebugV.glsl", GL_VERTEX_SHADER));
-            // *NOTE: Geometry shaders have a reputation for being slow.
-            // Consider using compute shaders instead, which have a reputation
-            // for being fast. This geometry shader in particular seems to run
-            // fine on my machine, but I won't vouch for this in
-            // performance-critical areas.  -Cosmic,2023-09-28
-            shader.mShaderFiles.push_back(make_pair("interface/normaldebugG.glsl", GL_GEOMETRY_SHADER));
-            shader.mShaderFiles.push_back(make_pair("interface/normaldebugF.glsl", GL_FRAGMENT_SHADER));
+            const bool has_tangent = variant == NORMAL_DEBUG_SHADER_WITH_TANGENTS;
+            generatedStages(shader, has_tangent ? "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN0"
+                                                : "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN0",
+                            "interface/normaldebugV.glsl", "interface/normaldebugF.glsl", "interface/normaldebugG.glsl");
             shader.mRiggedVariant = &skinned_shader;
             shader.mShaderLevel = mShaderLevel[SHADER_INTERFACE];
-            if (variant == NORMAL_DEBUG_SHADER_WITH_TANGENTS)
+            if (has_tangent)
             {
                 shader.addPermutation("HAS_ATTRIBUTE_TANGENT", "1");
             }
-            success = make_rigged_variant(shader, skinned_shader);
+            success = make_rigged_variant(shader, skinned_shader,
+                                          has_tangent ? "normaldebug__HAS_ATTRIBUTE_TANGENT1__HAS_SKIN1"
+                                                      : "normaldebug__HAS_ATTRIBUTE_TANGENT0__HAS_SKIN1");
             success = success && shader.createShader();
         }
     }

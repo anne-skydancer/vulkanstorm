@@ -58,6 +58,20 @@ public vec4 vkPositionNdc(vec3 p)
     return vec4(p, 1.0);
 }
 
+// The diagnostic line endpoints are already in homogeneous eye space.
+public vec4 vkPositionProject(mat4 projection, vec4 eye)
+{
+    vkInvariantPosition();
+    return projection * eye;
+}
+
+// A geometry stage emits the clip-space points computed by its vertex stage.
+public vec4 vkPositionPassthrough(vec4 clip)
+{
+    vkInvariantPosition();
+    return clip;
+}
+
 // The skin of a rigged object: up to four joints of the 110-matrix palette (3x4, the translation in the last row of
 // each column) blended by weight4 (joint index in the integer part, weight in the fraction).
 public mat4 vkSkinObject(mat3x4 palette[VK_MAX_JOINTS], vec4 weight4)
