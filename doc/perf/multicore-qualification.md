@@ -64,17 +64,20 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
    smallest width within noise of the best and calls for a 4-core affinity run. [C8 procedure](https://github.com/anne-skydancer/vulkanstorm/pull/575), [Stage 2 design](multicore-simd-study.md#62-stage-2-llframejobs-and-the-width-rule)
 2. **5c core.** Enable `RenderSunCascadeJobsStats` and compare mode `1` for ten minutes each at Risk and Rooftops.
    Exercise both Stochastic and PCSS. Check cull and map comparisons are nonzero and mismatch totals are zero through
-   standing, movement, a teleport and reduced split counts. With cascade 1 enabled, mode `2` must raise both mismatch
-   counters. Start a fresh process for a later clean run because the totals are cumulative.
+   standing, movement, a teleport and reduced split counts. For mode `2`, enable cascade 1 and aim at enough geometry
+   that the cascade contains two distinct visible groups and two distinct draw infos of one render type. Both mismatch
+   counters must rise on that view. Start a fresh process for a later clean run because the totals are cumulative.
    With compare off, alternate `RenderSunCascadeJobs` off/on. Require active helpers, compare combined `cull_ms` and
-   `map_ms` on the same scene, and verify cascade GPU ms and the moving 1% low do not regress. The 5a plan targets at
-   least 0.4 ms less main-thread time per sun pass at Rooftops. The PR sets a separate retention gate for 5c-2 of at
-   least 0.1 ms less `map_ms` per sun pass. Compare bytes in a still scene. Test 5c-0 against the pre-5c build because
-   `RenderSunCascadeJobs` switches only 5c-1 and 5c-2. [5c procedure](https://github.com/anne-skydancer/vulkanstorm/pull/576)
+   `map_ms` on the same scene across three paired windows, and verify cascade GPU ms and the moving 1% low do not regress.
+   The 5a plan targets at least 0.4 ms less main-thread time per sun pass at Rooftops. The PR sets a separate retention
+   gate for 5c-2 of at least 0.1 ms less `map_ms` per sun pass. Compare bytes in a still scene. With `FrameJobsSerial`
+   on, the 5a plan allows about 0.05 ms overhead against the pre-5c build. This also compares the 5c-0 restructure,
+   since `RenderSunCascadeJobs` switches only 5c-1 and 5c-2. [5c procedure](https://github.com/anne-skydancer/vulkanstorm/pull/576)
 3. **C6.** Enable `AvatarAnimationJobsStats` and compare mode `1` in a crowd. Require active job frames and nonzero joint
    and isolation checks with zero mismatches. Walk, teleport, and inspect seated avatars, attachments and animesh.
-   Mode `2` must raise the joint mismatch count. With compare off, alternate `AvatarAnimationJobs` on/off/on at the same
-   camera and read `loop_ms`, `cores_ms`, `job_batches` and `early_flushes`. The live compare checks recomputed joint
+   With joint comparisons still nonzero, mode `2` must raise the joint mismatch count. With compare off, alternate
+   `AvatarAnimationJobs` on/off/on at the same camera and read `loop_ms`, `cores_ms`, `job_batches` and `early_flushes`.
+   The live compare checks recomputed joint
    transforms and batch isolation. The fixture supplies the serial whole-motion comparison. [C6 procedure](https://github.com/anne-skydancer/vulkanstorm/pull/577)
 
 ## Follow-up order from 5a
@@ -97,8 +100,8 @@ time and settle. The standalone bit-exact tests and the in-viewer timing answer 
   the prerequisite for C1-3's sort comparison. Its test results are recorded in the PR. Verify the pump count through
   mesh arrivals, compare mesh-heavy teleport settle with the base build, and run the owner-assisted Release world check.
   [D6 draft PR #578](https://github.com/anne-skydancer/vulkanstorm/pull/578)
-- **OpenGL and later frame jobs.** The G-series targets GL submission. C1-3 then records cascade `stateSort` effects
-  for ordered main-thread application. C2/C5 takes the pure parts of world culling and sorting, keeping GL occlusion
+- **OpenGL and later frame jobs.** The G-series targets GL submission. After D6, C1-3 records cascade `stateSort`
+  effects for ordered main-thread application. C2/C5 takes the pure parts of world culling and sorting, keeping GL occlusion
   queries on the main thread and applying recorded changes in order. C8b covers the idle pixel-area caller. Geometry
   fill 5b waits for G5 arenas and is gated on load and streaming settle. The 5a synthesis leaves projector-tile culls
   (C3) out of the implementation queue. [Stage 5 design](multicore-simd-study.md#64-stage-5a-the-audit-the-multi-core-trio)
