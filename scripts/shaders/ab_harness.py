@@ -49,7 +49,7 @@ GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR
 GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE = 0x2802, 0x2803, 0x812F
 GL_FLOAT_VEC3, GL_FLOAT_VEC4 = 0x8B51, 0x8B52
 GL_SAMPLER_CUBE_MAP_ARRAY = 0x900C
-SAMPLER_TYPES = {0x8B5E, 0x8B60, 0x900C, 0x8DC1, 0x8DC5, 0x8B62, 0x904D, 0x8DC8}
+SAMPLER_TYPES = {0x8B5E, 0x8B60, 0x900C, 0x8DC1, 0x8DC5, 0x8B62, 0x904D, 0x8DC8, 0x9108}
 
 
 class Mat3x4Array:
@@ -83,7 +83,17 @@ class Vec4Array(_VectorArray):
 class GL:
     """A hidden window with an OpenGL 4.6 core context, and the few entry points the cases need."""
 
-    def __init__(self):
+    def __init__(self, *, get_function=None):
+        self.ubos = {}
+        if get_function is None:
+            self._create_context()
+        else:
+            self.fn = get_function
+        gs = self.fn('glGetString', C.c_char_p, C.c_uint)
+        self.info = {'vendor': gs(0x1F00).decode(), 'renderer': gs(0x1F01).decode(),
+                     'version': gs(0x1F02).decode(), 'glsl': gs(0x8B8C).decode()}
+
+    def _create_context(self):
         user = C.WinDLL('user32', use_last_error=True)
         gdi = C.WinDLL('gdi32', use_last_error=True)
         self.gl = C.WinDLL('opengl32.dll', use_last_error=True)
@@ -123,10 +133,6 @@ class GL:
             raise RuntimeError('no OpenGL 4.6 core context')
         g.wglMakeCurrent(hdc, ctx)
         self.f = {}
-        self.ubos = {}
-        gs = self.fn('glGetString', C.c_char_p, C.c_uint)
-        self.info = {'vendor': gs(0x1F00).decode(), 'renderer': gs(0x1F01).decode(),
-                     'version': gs(0x1F02).decode(), 'glsl': gs(0x8B8C).decode()}
 
     def fn(self, name, restype, *argtypes):
         if name in self.f:

@@ -364,6 +364,18 @@ The RTX 5070 Ti is the qualification GPU for every hot-family conversion. Save t
 results with the feature revision. Conclusions apply to the measured GPU and driver. The RX 9070 XT decal behavior remains
 a separate cross-vendor check.
 
+### Stochastic transparency depth and resolve
+
+Opaque depth spread, sample measurement, temporal resolve, and the colour and glow composite use generated stages.
+The draw pool keeps its existing masks, accumulation and material inputs. The Offscreen A/B runs the viewer's pass
+order and target formats at four and eight samples, including occluded geometry, moving transparency, independent
+ping-pong histories, and camera reprojection. It compares each depth lane, the sample coverage and the measured
+depths and masks exactly, and uses the colour tolerance for the resolved targets.
+
+```powershell
+python scripts/shaders/ab_stochastic_transparency.py --expect-renderer 'RTX 5070 Ti' --report stochastic.json
+```
+
 Run the shader pipeline tests, strict generation drift check and `slang_check.py all` for each conversion. Use the local
 driver to check the linked manifest and run the shared position and upload tests before the first hot family:
 

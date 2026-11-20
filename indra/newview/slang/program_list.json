@@ -32,6 +32,42 @@
       }
     },
     {
+      "name": "alphaStochasticComposite",
+      "family": "stochastic-transparency-resolve",
+      "source": "alphaStochasticComposite.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "alphaStochasticCurrent",
+      "family": "stochastic-transparency-resolve",
+      "source": "alphaStochasticCurrent.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "alphaStochasticExpand",
+      "family": "stochastic-transparency-resolve",
+      "source": "alphaStochasticExpand.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
+      "name": "alphaStochasticResolve",
+      "family": "stochastic-transparency-resolve",
+      "source": "alphaStochasticResolve.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      }
+    },
+    {
       "name": "avatareyes",
       "source": "avatareyes.slang",
       "entries": {

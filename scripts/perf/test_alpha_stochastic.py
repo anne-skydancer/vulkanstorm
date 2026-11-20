@@ -316,6 +316,19 @@ def spread(n,prog):
     use(prog);bind_unit(0,TEX2D,opaque_depth);uniform1i(loc(prog,b'depthMap'),0);draw(4,0,3)
     depthfunc(LEQUAL)
 
+def draw_post(prog, **uniforms):
+    """Set the pass's nonsampler uniforms and submit its full-screen draw."""
+    for name, value in uniforms.items():
+        location = loc(prog, name.encode())
+        if isinstance(value, (list, tuple)):
+            matrix4 = fn('glUniformMatrix4fv', None, I, I, C.c_ubyte, C.POINTER(C.c_float))
+            matrix4(location, 1, 0, (C.c_float * 16)(*value))
+        elif isinstance(value, int):
+            uniform1i(location, value)
+        else:
+            uniform1f(location, value)
+    draw(4, 0, 3)
+
 def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits=None,before=False,temporal=None,pipe='new',readback=True):
     """LLDrawPoolAlpha::renderStochastic over `layers` [(z, alpha, rgb, seed, glow, slope)], then
     the composite over a scene of `scene_rgba`; returns the scene's pixels (RGBA float). pipe 'old': the passes of the viewer
@@ -389,8 +402,7 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         bindfbo(FB,temporal['curfbo']);drawbuffers(2 if ref else 3,(U*3)(COLOR0,COLOR1,COLOR2));disable(BLEND);disable(DEPTH_TEST)
         use(CUR);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans);bind_unit(6,TEXMS,depth);bind_unit(11,TEX2D,opaque_depth);uniform1i(loc(CUR,b'depthMap'),11)
         uniform1i(loc(CUR,b'alpha_st_accum'),4);uniform1i(loc(CUR,b'alpha_st_trans'),5);uniform1i(loc(CUR,b'alpha_st_depth'),6)
-        uniform1i(loc(CUR,b'st_samples_hw'),n);uniform1i(loc(CUR,b'st_samples'),total)
-        draw(4,0,3)
+        draw_post(CUR, st_samples_hw=n, st_samples=total)
         _t.__exit__();_t=timed('blend');_t.__enter__()
         bindfbo(FB,temporal['fbo'][nxt]);drawbuffers(2,(U*2)(COLOR0,COLOR1))
         use(RES);bind_unit(7,TEX2D,temporal['tex'][temporal['idx']]);bind_unit(8,TEX2D,temporal['cur']);bind_unit(9,TEX2D,temporal['aux'])
@@ -398,9 +410,8 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
         uniform1i(loc(RES,b'alpha_st_current'),8);uniform1i(loc(RES,b'alpha_st_aux'),9);uniform1i(loc(RES,b'alpha_st_history'),7)
         uniform1i(loc(RES,b'alpha_st_extra'),10)
         if not ref: bind_unit(20,TEX2D,temporal['mask']);uniform1i(loc(RES,b'alpha_st_mask'),20)
-        fn('glUniformMatrix4fv',None,I,I,C.c_ubyte,C.POINTER(C.c_float))(loc(RES,b'stoch_reproj'),1,0,(C.c_float*16)(*temporal['reproj']))
-        uniform1f(loc(RES,b'stoch_weight'),temporal.get('weight',1/8));uniform1i(loc(RES,b'stoch_history_valid'),1 if temporal['valid'] else 0)
-        draw(4,0,3)
+        draw_post(RES, stoch_reproj=temporal['reproj'], stoch_weight=temporal.get('weight',1/8),
+                  stoch_history_valid=int(temporal['valid']))
         _t.__exit__()
         temporal['idx']=nxt;temporal['valid']=True
         if ref:
@@ -416,7 +427,6 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
     disable(DEPTH_TEST);enable(BLEND);blendsep(ONE,ONE_MINUS_SRC_ALPHA,ZERO,ONE_MINUS_SRC_ALPHA)
     use(CMP);bind_unit(4,TEXMS,accum);bind_unit(5,TEXMS,trans)
     uniform1i(loc(CMP,b'alpha_st_accum'),4);uniform1i(loc(CMP,b'alpha_st_trans'),5)
-    uniform1i(loc(CMP,b'st_temporal'),1 if temporal is not None else 0)
     if old or ref:
         resolved=(temporal['tex'][temporal['idx']] if old else temporal['cur']) if temporal is not None else opaque_depth   # 'ref': the smooth's colour drawn
         bind_unit(7,TEX2D,resolved);uniform1i(loc(CMP,b'alpha_st_resolved'),7)
@@ -429,12 +439,13 @@ def stochastic(layers,total,n,scene_rgba=(0.,0.,0.,0.),use_offset=True,read_bits
             elif key=='extra': t=temporal['extra'][temporal['idx']]
             else: t=temporal[key]
             bind_unit(unit,TEX2D,t);uniform1i(loc(CMP,name),unit)
-        uniform1f(loc(CMP,b'stoch_weight'),(temporal or {}).get('weight',1/8))
-    uniform1i(loc(CMP,b'st_samples_hw'),n);uniform1i(loc(CMP,b'st_samples'),total);uniform1i(loc(CMP,b'st_glow'),0)
+    composite_uniforms = dict(st_samples_hw=n, st_samples=total, st_temporal=int(temporal is not None))
+    if not (old or ref):
+        composite_uniforms['stoch_weight'] = (temporal or {}).get('weight', 1/8)
     with timed('composite'):
-        draw(4,0,3)
-        blendsep(ZERO,ONE,ONE,ONE);uniform1i(loc(CMP,b'st_glow'),1)
-        draw(4,0,3)
+        draw_post(CMP, st_glow=0, **composite_uniforms)
+        blendsep(ZERO,ONE,ONE,ONE)
+        draw_post(CMP, st_glow=1, **composite_uniforms)
     enable(DEPTH_TEST);assert geterror()==0
     if not readback: return None
     out=(C.c_float*(W*H*4))();readbuffer(COLOR0);readpixels(0,0,W,H,RGBA,FLOAT,out)

@@ -3724,19 +3724,20 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticExpandProgram.mName = "Alpha Stochastic Depth Spread";
         gAlphaStochasticExpandProgram.mShaderFiles.clear();
         gAlphaStochasticExpandProgram.clearPermutations();
-        gAlphaStochasticExpandProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaStochasticExpandProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticExpandF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gAlphaStochasticExpandProgram, "alphaStochasticExpand",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/alphaStochasticExpandF.glsl");
         gAlphaStochasticExpandProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         gAlphaStochasticCompositeProgram.mName = "Alpha Stochastic Composite";
         gAlphaStochasticCompositeProgram.mShaderFiles.clear();
         gAlphaStochasticCompositeProgram.clearPermutations();
         gAlphaStochasticCompositeProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object (the smooth's frame weight)
-        gAlphaStochasticCompositeProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaStochasticCompositeProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCompositeF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gAlphaStochasticCompositeProgram, "alphaStochasticComposite",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/alphaStochasticCompositeF.glsl");
         gAlphaStochasticCompositeProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
-        bool ready = mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) && gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
+        const bool resolve_helpers_ready = pilotGenerated() || mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER);
+        bool ready = resolve_helpers_ready && gAlphaStochasticExpandProgram.createShader() && gAlphaStochasticCompositeProgram.createShader();
         // The temporal resolve is only the accumulation across frames: a build failure turns that
         // accumulation off (the frames keep their 8 samples; alphaStochasticResolveReady gates the
         // history), never the transparency and never another method. Two fragment programs: the measuring pass (this
@@ -3748,15 +3749,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gAlphaStochasticCurrentProgram.mName = "Alpha Stochastic Current";
         gAlphaStochasticCurrentProgram.mShaderFiles.clear();
         gAlphaStochasticCurrentProgram.clearPermutations();
-        gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaStochasticCurrentProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticCurrentF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gAlphaStochasticCurrentProgram, "alphaStochasticCurrent",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/alphaStochasticCurrentF.glsl");
         gAlphaStochasticCurrentProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gAlphaStochasticResolveProgram.addPermutation("STOCH_RESOLVE", "1"); // the engine's resolve object
-        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/postDeferredNoTCV.glsl", GL_VERTEX_SHADER));
-        gAlphaStochasticResolveProgram.mShaderFiles.push_back(make_pair("deferred/alphaStochasticResolveF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gAlphaStochasticResolveProgram, "alphaStochasticResolve",
+                        "deferred/postDeferredNoTCV.glsl", "deferred/alphaStochasticResolveF.glsl");
         gAlphaStochasticResolveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
-        const bool resolve_built = ready && mFragmentShaderObjects.count(STOCH_RESOLVE_HELPER) &&
-                                   gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader();
+        const bool resolve_built = ready && gAlphaStochasticCurrentProgram.createShader() && gAlphaStochasticResolveProgram.createShader();
         if (ready && !resolve_built)
         {
             LL_WARNS("Shader") << "Stochastic transparency: its temporal resolve failed to build; the temporal accumulation is off and each frame keeps its "

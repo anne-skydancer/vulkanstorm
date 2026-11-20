@@ -1,0 +1,122 @@
+/**
+ * @file alphaStochasticCurrent.slang
+ * @brief Stochastic transparency: this frame's accumulation, its grain and its depths, measured once per pixel
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Vulkanstorm Viewer Source Code
+ * Copyright (C) 2026, Anne Skydancer
+ * Portions adapted from Aurora Viewer PR 3663 (oit_stochastic.wgsl), Gaalrauch / Rohacan Hirons,
+ * GPL-3.0-or-later (the grain measure, the frame weight, the smooth, the non-finite guards)
+ *
+ * This program is free software: you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the
+ * Free Software Foundation, version 3 of the License or (at your option)
+ * any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See LICENSE and
+ * NOTICE.md in the source tree.
+ */
+import glsl;
+import postfullscreen;
+import stochasticAlphaSamples;
+
+// Two RGBA16F targets (16 B/px, as the RGBA32F target they replace) and a mask:
+//   0: the accumulation (alpha x colour, alpha) averaged over the samples, as the resolve blends it;
+//   1: the pixel's grain and total alpha, and its depths: (grain, total alpha, 1 - nearest stochastic depth,
+//      1 - farthest depth of a transparent layer that covers a sample), the depths as one minus the window depth because a 16-bit float is fine near 0 (a window depth
+//      near 1, which a distant surface has, is not);
+//   2: (R8, 1 B/px) the mask: 1 where anything transparent was drawn (a sample of the accumulation, a transparency under 1,
+//      the glow, a grain), 0 where every lane is empty. The blend and the composite run only under it: at a pixel with 0 the
+//      accumulation, the total alpha and the glow are 0, which is all they would have written or drawn (the passes' rules
+//      are in alphaStochasticResolveF.glsl and alphaStochasticCompositeF.glsl), so the result is the unmasked one, exactly.
+// The grain is the standard error of the pixel's colour: the samples of this pixel (the S = 8 samples of its
+// accumulation) each hold the colour of the layers that cover it, and their spread, over the root of their effective
+// count, is how far this frame's colour is from the colour a pixel of infinitely many samples would show. Where one
+// layer covers the pixel every sample holds its colour, the spread is 0 and the colour is exact: the resolve then
+// takes no history (sharp). The measure is Aurora Viewer PR 3663's (oit_stochastic.wgsl cs_resolve, Gaalrauch,
+// GPL-3.0-or-later), in the accumulation's own domain (alpha x colour: the alpha correction is made at the
+// composite, and the history keeps the uncorrected four-vector).
+// A sample that is not a number counts for nothing, one that is infinite is clamped to what the targets hold, and a
+// transparency that is not a number hides nothing: nothing non-finite leaves this pass.
+// The pass holds all S samples (8 per pass: the GL 4.6 base takes them); the lanes are never summed across passes.
+
+uniform sampler2DMS alpha_st_accum;  // alpha x colour, alpha, additive, over the samples
+uniform sampler2DMS alpha_st_depth;  // the stochastic depth: the nearest transparent surface, or the opaque one
+uniform sampler2D depthMap;          // the scene depth (DEFERRED_DEPTH)
+uniform sampler2DMS alpha_st_trans;  // red prod(1 - alpha), green the glow (additive)
+uniform int st_samples_hw;           // samples of the targets
+uniform int st_samples;              // samples in all
+
+
+
+[shader("vertex")]
+PostVaryings vsMain(PostVertexIn v)
+{
+    return postFullscreenVertex(v);
+}
+
+struct CurrentOut
+{
+    vec4 accumulation : SV_Target0;
+    vec4 grainAndDepth : SV_Target1;
+    vec4 mask : SV_Target2;
+};
+
+[shader("fragment")]
+CurrentOut fsMain(PostVaryings input)
+{
+    ivec2 px = ivec2(input.pos.xy);
+    vec4 sum = vec4(0.0);
+    vec3 squares = vec3(0.0);   // the sum of (alpha x colour)^2 / alpha: the weighted second moment of the samples' colours
+    float alphas = 0.0;         // the sum of alpha^2: the effective count's divisor
+    float z_near = 1.0;
+    float z_far = 0.0;
+    float opaque = texelFetch(depthMap, px, 0).r;   // the scene depth the samples start from
+    float trans = 0.0;
+    float glow = 0.0;
+    for (int s = 0; s < st_samples_hw; ++s)
+    {
+        vec4 a = st_sample(texelFetch(alpha_st_accum, px, s));
+        sum += a;
+        if (a.a > 1e-5)
+        {
+            squares += a.rgb * a.rgb / a.a;
+            alphas += a.a * a.a;
+        }
+        float d = texelFetch(alpha_st_depth, px, s).r;
+        z_near = min(z_near, d);
+        // the farthest transparent surface: a sample no layer covers still holds the opaque depth (the spread), which is no layer
+        // of the pixel (a pane in front of a wall would else slide against the wall under any camera motion and lose its history)
+        if (d < opaque - 1e-5)
+        {
+            z_far = max(z_far, d);
+        }
+    }
+    for (int s = 0; s < st_samples_hw; ++s)
+    {
+        vec2 tg = texelFetch(alpha_st_trans, px, s).rg;
+        trans += st_through(tg.r);
+        glow += st_amount(tg.g);
+    }
+    float total = clamp(1.0 - trans / float(max(st_samples_hw, 1)), 0.0, 1.0);
+
+    // The pixel's colour, grain and depths from the moments of all S samples
+    z_far = max(z_far, z_near);
+    vec4 cur = sum / float(max(st_samples, 1));
+    float grain = 0.0;
+    if (sum.a > 1e-5)
+    {
+        vec3 mean = sum.rgb / sum.a;
+        vec3 spread = max(squares / sum.a - mean * mean, vec3(0.0));
+        float count = sum.a * sum.a / max(alphas, 1e-10);
+        grain = cur.a * sqrt(max(spread.r, max(spread.g, spread.b)) / max(count - 1.0, 1.0));
+    }
+    CurrentOut result;
+    result.accumulation = vec4(min(cur.rgb, vec3(HDR_MAX)), min(cur.a, HDR_MAX));
+    result.grainAndDepth = vec4(min(grain, HDR_MAX), total, 1.0 - z_near, 1.0 - z_far);
+    bool drawn = any(notEqual(sum, vec4(0.0))) || total != 0.0 || glow > 0.0 || grain != 0.0;
+    result.mask = vec4(drawn ? 1.0 : 0.0, 0.0, 0.0, 0.0);
+    return result;
+}

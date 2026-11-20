@@ -3,6 +3,449 @@
  "slang": "2026.22",
  "programs": [
   {
+   "id": "alphaStochasticComposite",
+   "program": "alphaStochasticComposite",
+   "permutation": {},
+   "source": "slang/alphaStochasticComposite.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaStochasticComposite.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "0a0d21c41578fd102bc5f4a508ce43dff07418a2fdfe6586dc93eb2e847e36f3",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "st_samples_hw",
+        "offset": 0,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 4,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_glow",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_temporal",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "stoch_weight",
+        "offset": 16,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaStochasticComposite.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "5c6eeb99f45070232b9802bc7ee1cb025b1ee625097db9027c2a8124657d1ab2",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "sv_target",
+        "location": 0,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "st_samples_hw",
+        "offset": 0,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 4,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_glow",
+        "offset": 8,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_temporal",
+        "offset": 12,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "stoch_weight",
+        "offset": 16,
+        "size": 4,
+        "type": "float32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "alpha_st_accum",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_trans",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_history",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_aux",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_extra",
+        "binding": 4,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_mask",
+        "binding": 5,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaStochasticCurrent",
+   "program": "alphaStochasticCurrent",
+   "permutation": {},
+   "source": "slang/alphaStochasticCurrent.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaStochasticCurrent.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "6a76e53460ad2bba33e440ca858fc581fdc58716c6398ca3e0c68bb0d76d2b43",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "st_samples_hw",
+        "offset": 0,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 4,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaStochasticCurrent.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "3b89a72fb174e2c56fe7e4c387c0b20743cf8e1b3559f8f13331fd973d93d98c",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "accumulation",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "grainAndDepth",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "mask",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "st_samples_hw",
+        "offset": 0,
+        "size": 4,
+        "type": "int32"
+       },
+       {
+        "name": "st_samples",
+        "offset": 4,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "alpha_st_accum",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_depth",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "depthMap",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_trans",
+        "binding": 3,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaStochasticExpand",
+   "program": "alphaStochasticExpand",
+   "permutation": {},
+   "source": "slang/alphaStochasticExpand.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaStochasticExpand.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "1c4875d4d38c095098b70fe8672a36100558e300f6ca7a24708c79a0fbf2f6d5",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaStochasticExpand.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "e9f8348d6d3f5a2eebd110038718d049c7045c8cf806ef6d702b9e0b67a5a39a",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [],
+      "uniforms": [],
+      "textures": [
+       {
+        "name": "depthMap",
+        "binding": 0,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "alphaStochasticResolve",
+   "program": "alphaStochasticResolve",
+   "permutation": {},
+   "source": "slang/alphaStochasticResolve.slang",
+   "stages": {
+    "vertex": {
+     "file": "alphaStochasticResolve.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "9cb0a45722adfdf7eb23d9aa55f3ea340a79a13fcfdf388280adece0ef4afc92",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "stoch_reproj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "stoch_weight",
+        "offset": 64,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "stoch_history_valid",
+        "offset": 68,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "alphaStochasticResolve.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "1a473ad4decf9cc677baacfed9a2fab7a2ee4f51cdcbc660347c936b5f7a03a1",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "tc",
+        "location": 0,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "colour",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "extra",
+        "location": 1,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "stoch_reproj",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "stoch_weight",
+        "offset": 64,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "stoch_history_valid",
+        "offset": 68,
+        "size": 4,
+        "type": "int32"
+       }
+      ],
+      "textures": [
+       {
+        "name": "alpha_st_current",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_aux",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_history",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_extra",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_st_mask",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "alphamask",
    "program": "alphamask",
    "permutation": {},
