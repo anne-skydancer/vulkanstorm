@@ -64,7 +64,8 @@ The guarded Windows viewer `1.0.1.82791` ran at the stationary Rooftops Ultra vi
   [5c capture](https://github.com/anne-skydancer/vulkanstorm/pull/579#issuecomment-7028993600)
 
 These captures establish main-thread block savings for C8 and C6. The follow-up below measures the active-sun checks and
-uses whole-process CPU for the matched workloads.
+the main thread's time per sun pass for matched workloads. Whole-process CPU (the helpers' time included) was not
+measured, so it shows main-thread headroom only, not CPU efficiency.
 
 ## November 20 active-sun follow-up
 
@@ -84,17 +85,18 @@ The viewer used Stochastic mode (`RenderShadowMethod=2`) with local shadows enab
 | First, split setting 2 | 8.02 | 1,078 | 5,321 | 2,087 | 0 | 0 |
 
 The timing comparison reused a stationary view with split setting 3, held comparison off, and alternated the job switch
-in three pairs. The CPU cells are medians of the per-second log rows in 30-second windows, in milliseconds per sun pass.
+in three pairs. The main-thread cells are the `SunCascadeJobs` log's `cull_ms` and `map_ms`, the main thread's elapsed
+time (`pipeline.h`), as medians of the per-second rows in 30-second windows, in milliseconds per sun pass.
 The GPU cells sum `sun cascade 0` through `sun cascade 3` in each separate 600-frame timer-query window, in milliseconds
 per measured frame.
 
-| Pair | CPU cull + map off | CPU cull + map on | CPU map off | CPU map on | Cascade GPU off | Cascade GPU on |
+| Pair | Main thread cull + map off | Main thread cull + map on | Main thread map off | Main thread map on | Cascade GPU off | Cascade GPU on |
 |---|---:|---:|---:|---:|---:|---:|
 | 1 | 0.547 | 0.227 | 0.244 | 0.108 | 3.375 | 3.482 |
 | 2 | 0.319 | 0.173 | 0.132 | 0.096 | 1.891 | 2.212 |
 | 3 | 0.319 | 0.171 | 0.131 | 0.094 | 1.880 | 1.885 |
 
-The median paired reduction was 0.148 ms for cull plus map and 0.037 ms for map alone. The reductions in this region
+The median paired main-thread reduction was 0.148 ms for cull plus map and 0.037 ms for map alone. The reductions in this region
 fell short of the plan's 0.4 ms target and PR #576's 0.1 ms map retention target at Rooftops. The cascade GPU deltas were
 +0.107, +0.321 and +0.005 ms. The variation across windows leaves GPU parity unqualified. The job toggle covers 5c-1 and
 5c-2. The serial restructure in 5c-0 is in both arms. [PR #576](https://github.com/anne-skydancer/vulkanstorm/pull/576)
