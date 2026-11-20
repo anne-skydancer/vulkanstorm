@@ -181,7 +181,7 @@ Not converted, and why:
 | Programs | Reason |
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
-| deferred world programs that call `calcAtmospherics` (fullbright, emissive, terrain, alpha) | atmosphere and `deferredUtil` are hot |
+| deferred world programs that call `calcAtmospherics` (fullbright, emissive, alpha) | atmosphere and `deferredUtil` are hot |
 | `pbrterrain` | terrain texture transforms, terrain mixing, and the world terrain shading path |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
@@ -237,12 +237,18 @@ cutout and back-face normal behavior and the optional emissive attachment. The H
 and glow keeps its green and alpha outputs. The glTF scene and PBR terrain have separate dependencies
 and remain on their respective conversion paths.
 
-## Terrain paint-map baking
+## Terrain paint-map baking and legacy terrain
 
 The terrain bake uses the ramp-weight calculation independently of terrain lighting. It preserves the original
 three ramp coordinates, weight threshold, and RGB weight encoding. The `TERRAIN_PAINT_PRECISION` hook receives
 the existing value from `TerrainPaintBitDepth` on shader reload. One generated program covers all eight
 precisions. Run `ab_harness.py programs --family terrain-bake --strict-depth` to compare them.
+
+Legacy texture terrain computes its own object-plane texture coordinates and blends four detail maps
+using three samples from the alpha ramp. The generated shader keeps detail texture 0 on unit 0, preserves
+the specular sentinel and normal flag, and writes a zero emissive attachment when enabled.
+Both layouts use the same draw-pool bindings. Run `ab_harness.py programs --family legacy-terrain --strict-depth`
+for the packed color, mirror-clip coverage, and depth comparisons.
 
 ## RLVa sphere effect
 
@@ -383,7 +389,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
 | glTF (`pbrmetallicroughness`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
-| `emissive`, `fullbright*`, `terrain` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
+| `emissive`, `fullbright*` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
 

@@ -70,6 +70,7 @@ class Case:
     size: int = SIZE
     texture_levels: dict = field(default_factory=dict)  # RGBA arrays per sampler, from level zero up
     point_textures: tuple = ()
+    repeat_textures: tuple = ()
     hooks: dict = field(default_factory=dict)  # candidate loader defines for this A/B
     indexed_texture_channels: int = 0
     texcoord1_s_scale: float = 1.0
@@ -161,7 +162,7 @@ def grid_mesh(rng, cells=10, joints=6, indexed_texture_channels=0, texcoord1_s_s
     return attributes, len(pos)
 
 
-def texture_for(gl, kind, name, levels=(), point=False):
+def texture_for(gl, kind, name, levels=(), point=False, repeat=False):
     """A smooth procedural texture, deterministic per sampler name; alpha runs 0.1..1 so alpha tests discard some."""
     g = gl.fn
     if kind == SAMPLERCUBEARRAY:   # the environment the probe filters run on (two layers, mips)
@@ -195,8 +196,9 @@ def texture_for(gl, kind, name, levels=(), point=False):
         raise RuntimeError(f'sampler type {kind:#x} of {name} has no procedural texture')
     mag = GL_NEAREST if point else H.GL_LINEAR
     min_filter = H.GL_LINEAR_MIPMAP_LINEAR if len(levels) > 1 else mag
+    wrap = GL_REPEAT if repeat else H.GL_CLAMP_TO_EDGE
     for p_, v in ((H.GL_TEXTURE_MIN_FILTER, min_filter), (H.GL_TEXTURE_MAG_FILTER, mag),
-                  (H.GL_TEXTURE_WRAP_S, H.GL_CLAMP_TO_EDGE), (H.GL_TEXTURE_WRAP_T, H.GL_CLAMP_TO_EDGE)):
+                  (H.GL_TEXTURE_WRAP_S, wrap), (H.GL_TEXTURE_WRAP_T, wrap)):
         g('glTexParameteri', None, C.c_uint, C.c_uint, C.c_int)(target, p_, v)
     return tex.value, target
 
@@ -442,7 +444,8 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
     ref = build_reference(gl, case)
     samplers = [(re.sub(r'\[0\]$', '', u['name']), u['type']) for u in gl.uniforms(ref) if u['type'] in H.SAMPLER_TYPES]
     names = [n for n, _ in samplers]
-    textures = {n: texture_for(gl, t, n, case.texture_levels.get(n, ()), n in case.point_textures)
+    textures = {n: texture_for(gl, t, n, case.texture_levels.get(n, ()),
+                               point=n in case.point_textures, repeat=n in case.repeat_textures)
                 for n, t in samplers}
     results = []
     runs = [(clip, i, v) for clip in ([False, True] if case.clip else [False]) for i, v in enumerate(case.variants or ({},))]
@@ -481,9 +484,16 @@ def run_case(gl, case, generated, entry, strict_depth=False, rng_seed=7):
         # These fixtures keep their geometry inside the far plane, so depth 1 is the clear value.
         ref_coverage = images['ref'][1] < 1.0
         for i in range(case.outputs):
-            r = H.compare(images['ref'][0][i], images['cand'][0][i])
-            drawn_pixels = ref_coverage.any(axis=-1) if multisample else images['ref'][0][i][..., 3] >= 0
-            drawn = images['ref'][0][i][drawn_pixels][:, :3]
+            reference_colour = images['ref'][0][i]
+            r = H.compare(reference_colour, images['cand'][0][i])
+            if multisample:
+                drawn_pixels = ref_coverage.any(axis=-1)
+            elif case.coverage:
+                # A written target can have negative alpha, as in the legacy terrain specular buffer.
+                drawn_pixels = ref_coverage & np.any(reference_colour != -1.0, axis=-1)
+            else:
+                drawn_pixels = reference_colour[..., 3] >= 0
+            drawn = reference_colour[drawn_pixels][:, :3]
             r.update(case=f'{case.name} colour {i}{suffix}', nonblack=int(len(drawn)), unset_uniforms=unset,
                      flat=bool(len(drawn) and float(np.ptp(drawn)) == 0.0))
             if unset or r['nonblack'] == 0:
@@ -671,7 +681,7 @@ def deferred_diffuse_cases():
                        defines=defines, outputs=3 + emissive, depth=True, clip=not no_color, flat_ok=(1,))
 
 
-def terrain_bake_cases():
+def terrain_alpha_ramp():
     # The viewer's alpha-only texture descends in S, with a noisy transition in T.
     axis = (np.arange(256, dtype='f4') + 0.5) / 256
     s, t = np.meshgrid(axis, axis)
@@ -685,7 +695,11 @@ def terrain_bake_cases():
         if size > 1:
             half = size // 2
             noisy_ramp = alpha.reshape(half, 2, half, 2).mean(axis=(1, 3))
-    texture = {'alpha_ramp': tuple(mips)}
+    return tuple(mips)
+
+
+def terrain_bake_cases():
+    texture = {'alpha_ramp': terrain_alpha_ramp()}
 
     # Draw an orthographic terrain patch and cover all three composition transitions in texcoord1.s.
     mvp = [0.96, 0, 0, 0, 0, 0.91, 0, 0, 0, 0, 0.45, 0, 0.03, -0.02, 0, 1]
@@ -869,6 +883,21 @@ def pbr_opaque_glow_cases():
                    uniforms={**base, **emission}, texture_levels=textures, mesh_builder=pbr_mesh, **feature_helpers)
 
 
+def legacy_terrain_cases():
+    # Match the viewer's repeated detail textures and clamped, noisy alpha ramp.
+    texture = {'alpha_ramp': terrain_alpha_ramp()}
+    detail_maps = tuple(f'detail_{index}' for index in range(4))
+    # The object planes have two distinct region offsets and generate UVs outside [0, 1].
+    planes = tuple({'object_plane_s': [scale, 0, 0, offset_s],
+                    'object_plane_t': [0, scale, 0, offset_t]}
+                   for scale, offset_s, offset_t in ((0.79, 0.23, 0.31), (1.25, 0.37, 0.16)))
+    for emissive in (0, 1):
+        yield Case(f'legacy-terrain-e{emissive}', 'deferred/terrainV.glsl', 'deferred/terrainF.glsl',
+                   f'terrainLegacy__HAS_EMISSIVE{emissive}', defines={'HAS_EMISSIVE': '1'} if emissive else {},
+                   outputs=3 + emissive, depth=True, coverage=True, clip=True, flat_ok=(1, 3),
+                   variants=planes, texture_levels=texture, texcoord1_s_scale=3.0, repeat_textures=detail_maps)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -933,6 +962,7 @@ def cases():
     c.extend(normal_debug_cases())
     c.extend(material_gbuffer_cases())
     c.extend(pbr_opaque_glow_cases())
+    c.extend(legacy_terrain_cases())
     return c
 
 

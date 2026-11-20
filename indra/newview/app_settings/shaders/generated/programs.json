@@ -26545,6 +26545,475 @@
    }
   },
   {
+   "id": "terrainLegacy__HAS_EMISSIVE0",
+   "program": "terrainLegacy",
+   "permutation": {
+    "HAS_EMISSIVE": "0"
+   },
+   "source": "slang/terrainLegacy.slang",
+   "stages": {
+    "vertex": {
+     "file": "terrainLegacy__HAS_EMISSIVE0.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "57625d8a0a92b6013f4b2d214daae2cb54cc5070bbfc0a96c294002ac4a473ab",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord1",
+        "location": 3,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "pos",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "object_plane_s",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "object_plane_t",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 272,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 288,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "terrainLegacy__HAS_EMISSIVE0.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "708df04ac2e7c3e05f583046a0d796886453bbb8a7fa4252032767d12061aec4",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "pos",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "object_plane_s",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "object_plane_t",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 272,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 288,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "detail_0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_ramp",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "terrainLegacy__HAS_EMISSIVE1",
+   "program": "terrainLegacy",
+   "permutation": {
+    "HAS_EMISSIVE": "1"
+   },
+   "source": "slang/terrainLegacy.slang",
+   "stages": {
+    "vertex": {
+     "file": "terrainLegacy__HAS_EMISSIVE1.vert.glsl",
+     "entry": "vsMain",
+     "sha256": "5de535c2af5af2ee364579337fd2bc62eac910fc704bb1e6fcb37aa966f6cea3",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "position",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "texcoord1",
+        "location": 3,
+        "type": "float32x2"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "pos",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "object_plane_s",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "object_plane_t",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 272,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 288,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": []
+     }
+    },
+    "fragment": {
+     "file": "terrainLegacy__HAS_EMISSIVE1.frag.glsl",
+     "entry": "fsMain",
+     "sha256": "37a4a473cfd49037743c27ac3d1aa6dd7017a1d363a0aa67ab3ccd346624f810",
+     "hooks": [],
+     "interface": {
+      "inputs": [
+       {
+        "name": "pos",
+        "location": 0,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_normal",
+        "location": 1,
+        "type": "float32x3"
+       },
+       {
+        "name": "vary_texcoord0",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "vary_texcoord1",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "outputs": [
+       {
+        "name": "data0",
+        "location": 0,
+        "type": "float32x4"
+       },
+       {
+        "name": "data1",
+        "location": 1,
+        "type": "float32x4"
+       },
+       {
+        "name": "data2",
+        "location": 2,
+        "type": "float32x4"
+       },
+       {
+        "name": "data3",
+        "location": 3,
+        "type": "float32x4"
+       }
+      ],
+      "uniforms": [
+       {
+        "name": "modelview_projection_matrix",
+        "offset": 0,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "modelview_matrix",
+        "offset": 64,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "normal_matrix",
+        "offset": 128,
+        "size": 48,
+        "type": "float32x3x3"
+       },
+       {
+        "name": "texture_matrix0",
+        "offset": 176,
+        "size": 64,
+        "type": "float32x4x4"
+       },
+       {
+        "name": "object_plane_s",
+        "offset": 240,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "object_plane_t",
+        "offset": 256,
+        "size": 16,
+        "type": "float32x4"
+       },
+       {
+        "name": "mirror_flag",
+        "offset": 272,
+        "size": 4,
+        "type": "float32"
+       },
+       {
+        "name": "clipPlane",
+        "offset": 288,
+        "size": 16,
+        "type": "float32x4"
+       }
+      ],
+      "textures": [
+       {
+        "name": "detail_0",
+        "binding": 0,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_1",
+        "binding": 1,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_2",
+        "binding": 2,
+        "type": "texture2D"
+       },
+       {
+        "name": "detail_3",
+        "binding": 3,
+        "type": "texture2D"
+       },
+       {
+        "name": "alpha_ramp",
+        "binding": 4,
+        "type": "texture2D"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "twotexturecompare",
    "program": "twotexturecompare",
    "permutation": {},

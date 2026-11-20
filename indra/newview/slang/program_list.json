@@ -640,6 +640,21 @@
       }
     },
     {
+      "name": "terrainLegacy",
+      "family": "legacy-terrain",
+      "source": "terrainLegacy.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "twotexturecompare",
       "source": "twotexturecompare.slang",
       "entries": {

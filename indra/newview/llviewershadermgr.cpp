@@ -2932,8 +2932,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredTerrainProgram.mFeatures.hasGamma = true;
 
         gDeferredTerrainProgram.mShaderFiles.clear();
-        gDeferredTerrainProgram.mShaderFiles.push_back(make_pair("deferred/terrainV.glsl", GL_VERTEX_SHADER));
-        gDeferredTerrainProgram.mShaderFiles.push_back(make_pair("deferred/terrainF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredTerrainProgram, emissiveId("terrainLegacy").c_str(),
+                        "deferred/terrainV.glsl", "deferred/terrainF.glsl");
 
         add_common_permutations(&gDeferredTerrainProgram);
 
