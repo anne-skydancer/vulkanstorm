@@ -479,6 +479,54 @@
       }
     },
     {
+      "name": "pbrGlow",
+      "family": "pbr-opaque-glow",
+      "source": "pbrGlow.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "pbrHud",
+      "family": "pbr-opaque-glow",
+      "source": "pbrOpaque.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "IS_HUD": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "pbrOpaque",
+      "family": "pbr-opaque-glow",
+      "source": "pbrOpaque.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "HAS_SKIN": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "postGammaCorrect",
       "family": "deferred-post",
       "source": "postGammaCorrect.slang",

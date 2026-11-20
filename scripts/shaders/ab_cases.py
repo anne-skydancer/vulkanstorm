@@ -65,6 +65,7 @@ class Case:
     flat_ok: tuple = ()          # colour targets the program legitimately writes as one constant (colour writes off, zero specular)
     variants: tuple = ()         # extra override dicts: the case is drawn once per variant (a cube face, a source layer)
     fragment_helpers: tuple = ()  # additional legacy fragment shader objects, as attached by the viewer
+    vertex_helpers: tuple = ()    # additional legacy vertex shader objects
     fullscreen: bool = False
     size: int = SIZE
     texture_levels: dict = field(default_factory=dict)  # RGBA arrays per sampler, from level zero up
@@ -396,7 +397,7 @@ def legacy_source(path, defines, stage, case):
         if case.indexed_texture_channels:
             extra += legacy_indexed_texture_code(case.indexed_texture_channels)
         text = text.replace('#version 420\n', '#version 420\n' + extra, 1)
-        if 'mirrorClip' in text or 'encodeNormal' in text:
+        if 'deferred/globalF.glsl' not in case.fragment_helpers and ('mirrorClip' in text or 'encodeNormal' in text):
             helpers = '\n' + (common.LEGACY_SHADERS / 'class1/deferred/globalF.glsl').read_text(encoding='utf-8')
     else:
         if case.skin:
@@ -414,8 +415,10 @@ def build_reference(gl, case):
     vs = legacy_source(case.vs, defines, 'vertex', case)
     fs = legacy_source(case.fs, defines, 'fragment', case)
     helpers = tuple(H.read_legacy(path, defines, 'fragment') for path in case.fragment_helpers)
+    vertex_helpers = tuple(H.read_legacy(path, defines, 'vertex') for path in case.vertex_helpers)
     geometry = H.read_legacy(case.geometry, defines, 'geometry') if case.geometry else None
-    return gl.program(vs, fs, attribs=H.ATTRIB_SLOTS, fragment_helpers=helpers, geometry_source=geometry)
+    return gl.program(vs, fs, attribs=H.ATTRIB_SLOTS, fragment_helpers=helpers,
+                      geometry_source=geometry, vertex_helpers=vertex_helpers)
 
 
 def build_candidate(gl, generated, entry, hook_values):
@@ -803,6 +806,69 @@ def material_gbuffer_cases():
         yield material_case(skin, 1, skin, 1, 2, samples=4)
 
 
+def pbr_mesh(rng):
+    attributes, count = grid_mesh(rng)
+    attributes[0][:, :2] += (0.014, -0.017)
+    # Independently vary winding and tangent handedness by cell without changing the surface.
+    cell = np.arange(count) // 6
+    attributes[8][:, 3] = np.where((cell // 2) % 2, -1.0, 1.0)
+    attributes[7][:, 3] = 0.18 + 0.72 * attributes[2][:, 1]
+    back_faces = (np.arange(count // 3) // 2) % 2 == 1
+    for array in attributes.values():
+        triangles = array.reshape(-1, 3, array.shape[1])
+        triangles[back_faces] = triangles[back_faces][:, [0, 2, 1]]
+    return attributes, count
+
+
+def pbr_opaque_glow_cases():
+    axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
+    s, t = np.meshgrid(axis, axis)
+    albedo = np.stack((0.008 + 0.87 * s**2, 0.017 + 0.69 * t, 0.02 + 0.74 * s * t,
+                       0.17 + 0.77 * (0.5 + 0.5 * np.sin(2 * np.pi * (1.4 * s + 0.6 * t)))), axis=-1)
+    normals = np.stack((0.31 + 0.12 * np.sin(3 * np.pi * s), 0.58 + 0.14 * np.cos(2 * np.pi * t),
+                        0.72 + 0.23 * t, np.ones_like(s)), axis=-1)
+    orm = np.stack((0.18 + 0.72 * s * t, 0.13 + 0.76 * t, 0.85 - 0.68 * s, np.ones_like(s)), axis=-1)
+    glow = np.stack((0.013 + 0.80 * t**2, 0.03 + 0.72 * s, 0.04 + 0.75 * (1 - s) * t, np.ones_like(s)), axis=-1)
+    textures = {'diffuseMap': (albedo,), 'bumpMap': (normals,), 'specularMap': (orm,), 'emissiveMap': (glow,)}
+
+    base_transform = H.Vec4Array(((0.92, 0.85, 0.17, 0.0), (0.07, 0.08, 0.0, 0.0)))
+    normal_transform = H.Vec4Array(((-0.79, 0.64, -0.29, 0.0), (0.81, 0.11, 0.0, 0.0)))
+    orm_transform = H.Vec4Array(((0.61, 0.91, 0.43, 0.0), (0.08, 0.21, 0.0, 0.0)))
+    emissive_transform = H.Vec4Array(((0.64, 0.72, -0.39, 0.0), (0.30, 0.12, 0.0, 0.0)))
+    # Column-major texture animation with rotation, nonuniform scale and offset.
+    angle = 0.27
+    animated = [0.82 * np.cos(angle), 0.82 * np.sin(angle), 0, 0,
+                -0.74 * np.sin(angle), 0.74 * np.cos(angle), 0, 0,
+                0, 0, 1, 0,
+                0.11, 0.08, 0, 1]
+    identity = np.eye(4, dtype='f4').reshape(-1).tolist()
+    variants = ({'minimum_alpha': 0.0}, {'minimum_alpha': 0.36},
+                {'minimum_alpha': 0.36, 'texture_matrix0': identity})
+    base = {'texture_base_color_transform': base_transform, 'texture_matrix0': animated}
+    emission = {'texture_emissive_transform': emissive_transform, 'emissiveColor': [0.74, 1.15, 0.42]}
+    feature_helpers = dict(vertex_helpers=('deferred/textureUtilV.glsl',),
+                           fragment_helpers=('deferred/globalF.glsl', 'environment/srgbF.glsl'))
+    for emissive in (0, 1):
+        for skin in (0, 1):
+            uniforms = {**base, 'texture_normal_transform': normal_transform,
+                        'texture_metallic_roughness_transform': orm_transform,
+                        'metallicFactor': 0.54, 'roughnessFactor': 0.68}
+            if emissive:
+                uniforms.update(emission)
+            yield Case(f'pbr-opaque-e{emissive}-s{skin}', 'deferred/pbropaqueV.glsl', 'deferred/pbropaqueF.glsl',
+                       f'pbrOpaque__HAS_EMISSIVE{emissive}__HAS_SKIN{skin}',
+                       defines={'HAS_EMISSIVE': '1'} if emissive else {}, outputs=3 + emissive,
+                       depth=True, coverage=True, skin=bool(skin), clip=True, variants=variants,
+                       uniforms=uniforms, texture_levels=textures, mesh_builder=pbr_mesh, **feature_helpers)
+    yield Case('pbr-hud', 'deferred/pbropaqueV.glsl', 'deferred/pbropaqueF.glsl', 'pbrHud__IS_HUD1',
+               defines={'IS_HUD': '1'}, depth=True, coverage=True, variants=variants,
+               uniforms={**base, **emission}, texture_levels=textures, mesh_builder=pbr_mesh, **feature_helpers)
+    for skin in (0, 1):
+        yield Case(f'pbr-glow-s{skin}', 'deferred/pbrglowV.glsl', 'deferred/pbrglowF.glsl',
+                   f'pbrGlow__HAS_SKIN{skin}', depth=True, coverage=True, skin=bool(skin), variants=variants,
+                   uniforms={**base, **emission}, texture_levels=textures, mesh_builder=pbr_mesh, **feature_helpers)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -866,6 +932,7 @@ def cases():
     c.extend(rlv_sphere_cases())
     c.extend(normal_debug_cases())
     c.extend(material_gbuffer_cases())
+    c.extend(pbr_opaque_glow_cases())
     return c
 
 

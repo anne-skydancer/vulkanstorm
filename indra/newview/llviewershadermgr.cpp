@@ -1838,14 +1838,15 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredPBROpaqueProgram.mFeatures.hasSrgb = true;
 
         gDeferredPBROpaqueProgram.mShaderFiles.clear();
-        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
-        gDeferredPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredPBROpaqueProgram, emissiveId("pbrOpaque", "__HAS_SKIN0").c_str(),
+                        "deferred/pbropaqueV.glsl", "deferred/pbropaqueF.glsl");
         gDeferredPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gDeferredPBROpaqueProgram.clearPermutations();
 
         add_common_permutations(&gDeferredPBROpaqueProgram);
 
-        success = make_rigged_variant(gDeferredPBROpaqueProgram, gDeferredSkinnedPBROpaqueProgram);
+        success = make_rigged_variant(gDeferredPBROpaqueProgram, gDeferredSkinnedPBROpaqueProgram,
+                                      emissiveId("pbrOpaque", "__HAS_SKIN1").c_str());
         if (success)
         {
             success = gDeferredPBROpaqueProgram.createShader();
@@ -1886,13 +1887,12 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gPBRGlowProgram.mName = " PBR Glow Shader";
         gPBRGlowProgram.mFeatures.hasSrgb = true;
         gPBRGlowProgram.mShaderFiles.clear();
-        gPBRGlowProgram.mShaderFiles.push_back(make_pair("deferred/pbrglowV.glsl", GL_VERTEX_SHADER));
-        gPBRGlowProgram.mShaderFiles.push_back(make_pair("deferred/pbrglowF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gPBRGlowProgram, "pbrGlow__HAS_SKIN0", "deferred/pbrglowV.glsl", "deferred/pbrglowF.glsl");
         gPBRGlowProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gPBRGlowProgram);
 
-        success = make_rigged_variant(gPBRGlowProgram, gPBRGlowSkinnedProgram);
+        success = make_rigged_variant(gPBRGlowProgram, gPBRGlowSkinnedProgram, "pbrGlow__HAS_SKIN1");
         if (success)
         {
             success = gPBRGlowProgram.createShader();
@@ -1905,8 +1905,7 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDPBROpaqueProgram.mName = "HUD PBR Opaque Shader";
         gHUDPBROpaqueProgram.mFeatures.hasSrgb = true;
         gHUDPBROpaqueProgram.mShaderFiles.clear();
-        gHUDPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueV.glsl", GL_VERTEX_SHADER));
-        gHUDPBROpaqueProgram.mShaderFiles.push_back(make_pair("deferred/pbropaqueF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gHUDPBROpaqueProgram, "pbrHud__IS_HUD1", "deferred/pbropaqueV.glsl", "deferred/pbropaqueF.glsl");
         gHUDPBROpaqueProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gHUDPBROpaqueProgram.clearPermutations();
         gHUDPBROpaqueProgram.addPermutation("IS_HUD", "1");

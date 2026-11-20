@@ -47,6 +47,7 @@ GL_TEXTURE_2D, GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE0 = 0x0DE1, 0x9009, 0x84C0
 GL_RGBA, GL_RGBA32F, GL_FLOAT, GL_TRIANGLES = 0x1908, 0x8814, 0x1406, 0x0004
 GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR = 0x2801, 0x2800, 0x2601, 0x2703
 GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE = 0x2802, 0x2803, 0x812F
+GL_FLOAT_VEC4 = 0x8B52
 GL_SAMPLER_CUBE_MAP_ARRAY = 0x900C
 SAMPLER_TYPES = {0x8B5E, 0x8B60, 0x900C, 0x8DC1, 0x8DC5, 0x8B62, 0x904D, 0x8DC8}
 
@@ -58,6 +59,15 @@ class Mat3x4Array:
     def __init__(self, rows):
         self.rows = [float(x) for x in rows]
         self.count = len(self.rows) // 12
+
+
+class Vec4Array:
+    """A uniform array of GLSL vec4 values, with one four-component row per element."""
+
+    def __init__(self, rows):
+        self.rows = [tuple(float(value) for value in row) for row in rows]
+        if not self.rows or any(len(row) != 4 for row in self.rows):
+            raise ValueError('Vec4Array requires one or more rows of four values')
 
 
 class GL:
@@ -135,8 +145,9 @@ class GL:
             raise RuntimeError('compile failed:\n' + log.value.decode(errors='replace'))
         return sh
 
-    def program(self, vs_source, fs_source, attribs=('position',), fragment_helpers=(), geometry_source=None):
+    def program(self, vs_source, fs_source, attribs=('position',), fragment_helpers=(), geometry_source=None, vertex_helpers=()):
         stages = [(GL_VERTEX_SHADER, vs_source)]
+        stages.extend((GL_VERTEX_SHADER, text) for text in vertex_helpers)
         if geometry_source is not None:
             stages.append((GL_GEOMETRY_SHADER, geometry_source))
         stages.append((GL_FRAGMENT_SHADER, fs_source))
@@ -188,8 +199,8 @@ class GL:
 
     def set_uniforms(self, prog, values):
         """Set uniforms by name, in the default block or in a uniform block (std140, offsets from introspection).
-        A value is a float, an int, a list of floats (vecN, or a column-major matrix) or a list of ints. Unknown names are
-        skipped (the optimiser drops unused uniforms); the names that were set are returned."""
+        Values include floats, ints, lists for vectors or column-major matrices, and typed uniform arrays.
+        Unknown names are skipped (the optimiser drops unused uniforms); the names that were set are returned."""
         g = self.fn
         g('glUseProgram', None, C.c_uint)(prog)
         uni = self.uniforms(prog)
@@ -203,6 +214,21 @@ class GL:
             if key is None or u['type'] in SAMPLER_TYPES:
                 continue
             v = values[key]
+            if isinstance(v, Vec4Array):
+                if u['type'] != GL_FLOAT_VEC4 or not u['name'].endswith('[0]'):
+                    raise TypeError(f"{u['name']} is not a vec4 array")
+                # The compiler can trim trailing unused elements from a reflected array.
+                rows = v.rows[:u['array_size']]
+                if u['block'] < 0:
+                    data = struct.pack(f'{len(rows) * 4}f', *(value for row in rows for value in row))
+                    g('glUniform4fv', None, C.c_int, C.c_int, C.c_void_p)(u['location'], len(rows), data)
+                else:
+                    buf = buffers.setdefault(u['block'], bytearray(blocks[u['block']]['size']))
+                    for i, row in enumerate(rows):
+                        at = u['offset'] + i * u['array_stride']
+                        struct.pack_into('4f', buf, at, *row)
+                done.add(key)
+                continue
             if isinstance(v, Mat3x4Array):  # GLSL mat3x4 array: v.rows holds 4 rows of 3 values per matrix (row-major)
                 if u['block'] < 0:
                     data = struct.pack(f'{len(v.rows)}f', *v.rows)

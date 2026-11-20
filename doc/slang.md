@@ -182,7 +182,7 @@ Not converted, and why:
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
 | deferred world programs that call `calcAtmospherics` (fullbright, emissive, terrain, alpha) | atmosphere and `deferredUtil` are hot |
-| `pbropaque`, `pbrglow`, `pbrterrain` | the glTF texture-transform and terrain-mix utilities; one module for the glTF family, with glTF |
+| `pbrterrain` | terrain texture transforms, terrain mixing, and the world terrain shading path |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
 | `normaldebug` | has a geometry stage |
@@ -228,6 +228,14 @@ The fragment inputs keep centroid interpolation and the tangent sign stays flat.
 uses the shader setters for environment intensity, emissive brightness, the alpha cutoff, and specular color.
 The GLSL blend and stochastic paths continue to use their current registration. The A/B fixtures cover the 48
 generated permutations and exercise centroid sampling with partially covered pixels in a multisample target.
+
+## PBR opaque, HUD, and glow
+
+These per-draw material programs share the texture and tangent transforms in `pbrTexture.slang`. The
+existing shader setters upload each transform as two `vec4` values. The world opaque path preserves
+cutout and back-face normal behavior and the optional emissive attachment. The HUD path keeps sRGB output,
+and glow keeps its green and alpha outputs. The glTF scene and PBR terrain have separate dependencies
+and remain on their respective conversion paths.
 
 ## Terrain paint-map baking
 
@@ -374,7 +382,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `cloudsV`, `cloudsVolComposite`, `moonV`, sky and atmosphere helpers | sky / atmosphere | the sky PR |
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
-| glTF (`pbrmetallicroughness`, `pbropaque`, `pbrglow`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
+| glTF (`pbrmetallicroughness`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
 | `emissive`, `fullbright*`, `terrain` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
