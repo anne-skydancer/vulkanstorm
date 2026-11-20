@@ -49,10 +49,31 @@ Other members of the fixture, including a glass shade, can still cast or transmi
 [projector geometry](../../indra/newview/llprojectorshadows.cpp#L81),
 [point-light emitter and fixture rule](../../indra/newview/llpointshadows.cpp#L1150).
 
+## Graphics quality presets
+
+| Preset | Default shadow method and definition |
+|---|---|
+| **High-Ultra and Ultra** | Use the redesigned method at its sharpest qualified definition. Both presets share the highest shadow quality profile. |
+| **High** | Use the redesigned method at about 95% of Ultra's edge sharpness for the same light and receiver. |
+| **Below High** | Select Legacy by default. The preset's shadow enablement and an explicit choice of method continue to follow the existing settings rules. |
+
+Use fixed receiver-space parameters for each profile. Qualify the sharpest profile against the seam and fine-detail
+gates. Hold the light size, caster, receiver and softness setting constant for the tier comparison. Measure
+sharpness as the reciprocal of the 10–90% linear visibility transition width across an opaque near-contact edge
+in receiver metres. High's target therefore corresponds to an edge about 5.3% wider than Ultra's. Check the same
+physical penumbra and lamp features independently so the tier change preserves authored softness and fine detail.
+
+The current High preset enables directional shadows, and High-Ultra and Ultra enable local shadows as well. Compare
+directional shadows across the shipping presets and enable local shadows explicitly at High for the controlled
+projector comparison. Apply the method defaults through the existing feature tables.
+
+[Current feature-table presets](../../indra/newview/featuretable.txt#L233),
+[shadow method settings and preset precedence](shadow-method.md#defaults-presets-migration).
+
 ## 1. Fixed receiver density and coverage
 
-Choose one minimum density `T` in texels per metre for the qualified receivers at the default tier. Measure the
-lamp's preselected fine features and receiver geometry in the baseline before locking the value. Declare the
+Choose a fixed minimum density `T` in texels per metre for the qualified receivers in each redesigned profile.
+Measure the lamp's preselected fine features and receiver geometry in the baseline before locking the value. Declare the
 supported lamp reach, receiver distance and incidence range, loaded caster set, and alpha asset availability. A
 light-space perspective grid can over-sample nearer receivers. The density guarantee is a floor over the
 declared range, and the same physical feature and filter-width checks apply throughout that range. The footprint
@@ -189,7 +210,8 @@ the same in-world fixtures after conversion.
 | **Camera independence** | Replay two camera paths including zoom at the same scene ticks. Compare linear RGB shadow visibility before BRDF, cookie and post-processing at shared world points within the declared numerical tolerance. Compare admission, layout size, physical footprint, caster LOD, alpha mip and stochastic sample identity under normal and forced pressure. Include streaming arrivals and light or atlas address changes in separate, repeatable cases. |
 | **No stepping at the seam** | Measure the 50% visibility contour's excess displacement in millimetres against the independent raster across subtexel motion. Compare to the unsplit map at the same resolution and record the 10–90% edge width. Repeat with a thin bar and glazed frame so added blur and a missed blocker are distinguishable. |
 | **Fine detail and tint** | Use preselected, reference-resolved lamp features at more than one qualified receiver distance and angle. Report hole retention, feature contrast, mean RGB transmission, and spatial/temporal variation before and after filtering. Inspect the alpha mip and raw map to localize loss. |
-| **Frame rate and capacity** | Each implementation PR reports its own CPU preparation, GL submission and GPU raster/copy/filter cost in milliseconds, plus whole-frame ms and fps at the default tier. Use paired captures on the same settings, loaded scene and motion path. The owner gate is about 60 fps standing in a crowded room with about 60 avatars and never below 25 fps moving, corresponding to about 16.7 ms and at most 40 ms. Report tails and sustained drops along with warm and cold state. Record allocation, guards, static/live maps, transmission storage, scratch reservations, and fragmentation. |
+| **Quality presets** | Verify the method and shadow enablement on preset application. Compare High-Ultra and Ultra against the same sharpest reference, and High against the 95% sharpness target. Repeat the fixed-world-point and lamp-detail checks at each redesigned tier. Verify Legacy as the default below High. |
+| **Frame rate and capacity** | Each implementation PR reports its own CPU preparation, GL submission and GPU raster/copy/filter cost in milliseconds, plus whole-frame ms and fps at the default tier. Report the graphics preset, shadow method and enabled shadow types for each capture. Use paired captures on the same settings, loaded scene and motion path. The owner gate is about 60 fps standing in a crowded room with about 60 avatars and never below 25 fps moving, corresponding to about 16.7 ms and at most 40 ms. Report tails and sustained drops along with warm and cold state. Record allocation, guards, static/live maps, transmission storage, scratch reservations, and fragmentation. |
 
 After the fixed-lamp comparison, use a root script to toggle and move a child emitter while a sibling shade and an
 unlinked caster remain in its volume. Check that lighting and shadows follow the child in the first frame that uses
