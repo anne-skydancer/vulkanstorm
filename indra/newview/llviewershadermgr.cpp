@@ -2434,13 +2434,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredFullbrightProgram.mFeatures.hasSrgb = true;
         gDeferredFullbrightProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gDeferredFullbrightProgram.mShaderFiles.clear();
-        gDeferredFullbrightProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightV.glsl", GL_VERTEX_SHADER));
-        gDeferredFullbrightProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredFullbrightProgram, "fullbrightSurface__HAS_SKIN0__MASK0",
+                        "deferred/fullbrightV.glsl", "deferred/fullbrightF.glsl");
         gDeferredFullbrightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredFullbrightProgram);
 
-        success = make_rigged_variant(gDeferredFullbrightProgram, gDeferredSkinnedFullbrightProgram);
+        success = make_rigged_variant(gDeferredFullbrightProgram, gDeferredSkinnedFullbrightProgram,
+                                      "fullbrightSurface__HAS_SKIN1__MASK0");
         success = gDeferredFullbrightProgram.createShader();
         llassert(success);
     }
@@ -2454,8 +2455,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDFullbrightProgram.mFeatures.hasSrgb = true;
         gHUDFullbrightProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gHUDFullbrightProgram.mShaderFiles.clear();
-        gHUDFullbrightProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightV.glsl", GL_VERTEX_SHADER));
-        gHUDFullbrightProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gHUDFullbrightProgram, "fullbrightHud__IS_HUD1__MASK0",
+                        "deferred/fullbrightV.glsl", "deferred/fullbrightF.glsl");
         gHUDFullbrightProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
         gHUDFullbrightProgram.clearPermutations();
         gHUDFullbrightProgram.addPermutation("IS_HUD", "1");
@@ -2475,15 +2476,16 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredFullbrightAlphaMaskProgram.mFeatures.hasSrgb = true;
         gDeferredFullbrightAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gDeferredFullbrightAlphaMaskProgram.mShaderFiles.clear();
-        gDeferredFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightV.glsl", GL_VERTEX_SHADER));
-        gDeferredFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredFullbrightAlphaMaskProgram, "fullbrightSurface__HAS_SKIN0__MASK1",
+                        "deferred/fullbrightV.glsl", "deferred/fullbrightF.glsl");
         gDeferredFullbrightAlphaMaskProgram.clearPermutations();
         gDeferredFullbrightAlphaMaskProgram.addPermutation("HAS_ALPHA_MASK","1");
         gDeferredFullbrightAlphaMaskProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredFullbrightAlphaMaskProgram);
 
-        success = make_rigged_variant(gDeferredFullbrightAlphaMaskProgram, gDeferredSkinnedFullbrightAlphaMaskProgram);
+        success = make_rigged_variant(gDeferredFullbrightAlphaMaskProgram, gDeferredSkinnedFullbrightAlphaMaskProgram,
+                                      "fullbrightSurface__HAS_SKIN1__MASK1");
         success = success && gDeferredFullbrightAlphaMaskProgram.createShader();
         llassert(success);
     }
@@ -2497,8 +2499,8 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gHUDFullbrightAlphaMaskProgram.mFeatures.hasSrgb = true;
         gHUDFullbrightAlphaMaskProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gHUDFullbrightAlphaMaskProgram.mShaderFiles.clear();
-        gHUDFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightV.glsl", GL_VERTEX_SHADER));
-        gHUDFullbrightAlphaMaskProgram.mShaderFiles.push_back(make_pair("deferred/fullbrightF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gHUDFullbrightAlphaMaskProgram, "fullbrightHud__IS_HUD1__MASK1",
+                        "deferred/fullbrightV.glsl", "deferred/fullbrightF.glsl");
         gHUDFullbrightAlphaMaskProgram.clearPermutations();
         gHUDFullbrightAlphaMaskProgram.addPermutation("HAS_ALPHA_MASK", "1");
         gHUDFullbrightAlphaMaskProgram.addPermutation("IS_HUD", "1");
@@ -2617,13 +2619,14 @@ bool LLViewerShaderMgr::loadShadersDeferred()
         gDeferredEmissiveProgram.mFeatures.hasAtmospherics = true;
         gDeferredEmissiveProgram.mFeatures.mIndexedTextureChannels = LLGLSLShader::sIndexedTextureChannels;
         gDeferredEmissiveProgram.mShaderFiles.clear();
-        gDeferredEmissiveProgram.mShaderFiles.push_back(make_pair("deferred/emissiveV.glsl", GL_VERTEX_SHADER));
-        gDeferredEmissiveProgram.mShaderFiles.push_back(make_pair("deferred/emissiveF.glsl", GL_FRAGMENT_SHADER));
+        generatedStages(gDeferredEmissiveProgram, "fullbrightEmissive__HAS_SKIN0__IS_EMISSIVE1",
+                        "deferred/emissiveV.glsl", "deferred/emissiveF.glsl");
         gDeferredEmissiveProgram.mShaderLevel = mShaderLevel[SHADER_DEFERRED];
 
         add_common_permutations(&gDeferredEmissiveProgram);
 
-        success = make_rigged_variant(gDeferredEmissiveProgram, gDeferredSkinnedEmissiveProgram);
+        success = make_rigged_variant(gDeferredEmissiveProgram, gDeferredSkinnedEmissiveProgram,
+                                      "fullbrightEmissive__HAS_SKIN1__IS_EMISSIVE1");
         success = success && gDeferredEmissiveProgram.createShader();
         llassert(success);
     }

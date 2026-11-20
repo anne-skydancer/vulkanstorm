@@ -253,6 +253,61 @@
       }
     },
     {
+      "name": "fullbrightEmissive",
+      "family": "fullbright-emissive",
+      "source": "fullbrightSurface.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "IS_EMISSIVE": [
+          1
+        ]
+      }
+    },
+    {
+      "name": "fullbrightHud",
+      "family": "fullbright-emissive",
+      "source": "fullbrightSurface.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "IS_HUD": [
+          1
+        ],
+        "MASK": [
+          0,
+          1
+        ]
+      }
+    },
+    {
+      "name": "fullbrightSurface",
+      "family": "fullbright-emissive",
+      "source": "fullbrightSurface.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_SKIN": [
+          0,
+          1
+        ],
+        "MASK": [
+          0,
+          1
+        ]
+      }
+    },
+    {
       "name": "gaussian",
       "source": "gaussian.slang",
       "entries": {

@@ -476,12 +476,18 @@ class CommittedTreeTest(unittest.TestCase):
         self.assertIn('sqrt(8 * n.z + 8)', module)
         self.assertIn('sqrt(8 * n.z + 8)', glsl)
 
-    def test_deferred_diffuse_texture_bindings_match_the_viewer(self):
+    def test_batch_texture_bindings_match_the_viewer(self):
         source = (ROOT / 'indra/newview/llviewershadermgr.cpp').read_text(encoding='utf-8')
         assignment = re.findall(r'^\s*LLGLSLShader::sIndexedTextureChannels\s*=\s*(\d+)\s*;', source, re.M)
         self.assertEqual(len(assignment), 1)
         indexed_units = [(f'tex{i}', i) for i in range(int(assignment[0]))]
-        bindings = {'ddiffuseIndexed': indexed_units, 'ddiffuseSingle': [('diffuseMap', 0)]}
+        bindings = {
+            'ddiffuseIndexed': indexed_units,
+            'ddiffuseSingle': [('diffuseMap', 0)],
+            'fullbrightEmissive': indexed_units,
+            'fullbrightHud': indexed_units,
+            'fullbrightSurface': indexed_units,
+        }
         manifest = check.load_manifest(common.GENERATED)
         seen = set()
         for program in manifest['programs']:

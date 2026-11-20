@@ -181,7 +181,7 @@ Not converted, and why:
 | Programs | Reason |
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
-| deferred world programs that call `calcAtmospherics` (fullbright, emissive, alpha) | atmosphere and `deferredUtil` are hot |
+| deferred world programs that use atmosphere and fog (blended fullbright and alpha) | atmosphere and `deferredUtil` are hot |
 | `pbrterrain` | terrain texture transforms, terrain mixing, and the world terrain shading path |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
@@ -228,6 +228,15 @@ The fragment inputs keep centroid interpolation and the tangent sign stays flat.
 uses the shader setters for environment intensity, emissive brightness, the alpha cutoff, and specular color.
 The GLSL blend and stochastic paths continue to use their current registration. The A/B fixtures cover the 48
 generated permutations and exercise centroid sampling with partially covered pixels in a multisample target.
+
+## Fullbright surfaces and emissive glow
+
+The ordinary fullbright and cutout programs keep the four numbered texture units and centroid
+interpolation. The world draw converts the texture and vertex color product to linear RGB. The HUD
+draw keeps sRGB output. The cutout compares sampled alpha with the per-draw cutoff and keeps
+the texture and vertex alpha product as output. The A/B cases cover opaque draws and the cutoffs used by depth of field
+and impostors. Legacy emissive glow keeps its green and alpha outputs for the two existing blend paths.
+The blended fullbright shaders with fog and stochastic coverage follow the alpha family.
 
 ## PBR opaque, HUD, and glow
 
@@ -389,7 +398,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
 | glTF (`pbrmetallicroughness`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
-| `emissive`, `fullbright*` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
+| blended fullbright, `fullbrightShiny*` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred `avatarV`, `avatarEyesV`, `impostorV` | avatar | the avatar PR |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |
 

@@ -898,6 +898,72 @@ def legacy_terrain_cases():
                    variants=planes, texture_levels=texture, texcoord1_s_scale=3.0, repeat_textures=detail_maps)
 
 
+def fullbright_emissive_mesh(rng):
+    attributes, count = grid_mesh(rng, indexed_texture_channels=4)
+    attributes[0][:, :2] += (0.014, -0.017)
+    s, t = attributes[2].T
+    # The threshold uses sampled alpha, while the output uses sampled alpha times vertex alpha.
+    attributes[6][:, 3] = 0.08 + 0.79 * t
+    attributes[7][:] = np.column_stack((0.48 * t, 0.33 + 0.21 * s, 0.73 * t, 0.88 - 0.72 * s))
+    return attributes, count
+
+
+def fullbright_emissive_cases():
+    axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
+    s, t = np.meshgrid(axis, axis)
+    # Broad alpha bands cross the legacy cutoffs even with bilinear filtering.
+    alpha = np.array([0, 0.003, 0.07, 0.23, 0.65, 0.92], dtype='f4')
+    textures = {}
+    for index in range(4):
+        bands = np.floor(12 * (s + 0.29 * t) + index).astype(np.int32) % len(alpha)
+        image = np.stack((0.005 + (0.86 - 0.16 * index) * s**2,
+                          0.016 + (0.57 + 0.09 * index) * t,
+                          0.023 + 0.66 * (1 - s) * t + 0.04 * index,
+                          alpha[bands]), axis=-1)
+        textures[f'tex{index}'] = (image,)
+    # The vertex helpers assign atmospheric varyings that neither fragment reads.
+    unused_atmosphere = ('max_y', 'moon_glow_factor', 'primary_light_dir')
+    feature_inputs = dict(
+        indexed_texture_channels=4, texture_levels=textures, depth=True, coverage=True,
+        mesh_builder=fullbright_emissive_mesh,
+        vertex_helpers=('windlight/atmosphericsVarsV.glsl', 'windlight/atmosphericsHelpersV.glsl',
+                        'environment/srgbF.glsl', 'windlight/atmosphericsFuncs.glsl',
+                        'windlight/atmosphericsV.glsl'))
+    plane = [0.75, -0.25, 0.30, 0.92]
+    mirrors = ({}, {'mirror_flag': 1.0, 'clipPlane': plane},
+               {'mirror_flag': 1.0, 'clipPlane': [-component for component in plane]})
+
+    def fullbright_case(hud, skin, mask, samples):
+        defines = {'HAS_DIFFUSE_LOOKUP': '1'}
+        if hud:
+            defines['IS_HUD'] = '1'
+        if mask:
+            defines['HAS_ALPHA_MASK'] = '1'
+        if hud:
+            name, program = f'fullbright-hud-m{mask}', f'fullbrightHud__IS_HUD1__MASK{mask}'
+        else:
+            name, program = f'fullbright-world-s{skin}-m{mask}', f'fullbrightSurface__HAS_SKIN{skin}__MASK{mask}'
+        # Include the alpha floor, impostor, and DoF cutoffs along with a zero cutoff.
+        draws = mirrors if samples == 1 else mirrors[:2]
+        if mask:
+            cuts = (0.0, 0.004, 0.10, 0.33) if samples == 1 else (0.33,)
+            draws = tuple({**mirror, 'minimum_alpha': cutoff} for mirror in draws for cutoff in cuts)
+        return Case(name, 'deferred/fullbrightV.glsl', 'deferred/fullbrightF.glsl', program,
+                    defines=defines, skin=bool(skin), samples=samples, variants=draws, optional=unused_atmosphere,
+                    fragment_helpers=('environment/srgbF.glsl',), **feature_inputs)
+
+    for samples in (1, 4):
+        for mask in (0, 1):
+            yield fullbright_case(True, 0, mask, samples)
+            for skin in (0, 1):
+                yield fullbright_case(False, skin, mask, samples)
+        for skin in (0, 1):
+            yield Case(f'fullbright-emissive-s{skin}', 'deferred/emissiveV.glsl', 'deferred/emissiveF.glsl',
+                       f'fullbrightEmissive__HAS_SKIN{skin}__IS_EMISSIVE1', skin=bool(skin), samples=samples,
+                       optional=unused_atmosphere if skin else (*unused_atmosphere, 'modelview_matrix'),
+                       **feature_inputs)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -963,6 +1029,7 @@ def cases():
     c.extend(material_gbuffer_cases())
     c.extend(pbr_opaque_glow_cases())
     c.extend(legacy_terrain_cases())
+    c.extend(fullbright_emissive_cases())
     return c
 
 
