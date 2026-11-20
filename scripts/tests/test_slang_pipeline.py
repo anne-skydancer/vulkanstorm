@@ -291,6 +291,24 @@ class GeneratorTest(unittest.TestCase):
                 (src / 'tint.slang').write_text(text.replace(line, rogue), encoding='utf-8')
                 self.assertTrue(any('SV_Position field' in e for e in check.check_position(src, self.out)), rogue)
 
+    def test_gate_checks_vertex_code_in_relative_include(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / 'src'
+            shutil.copytree(FIXTURES, src)
+            main = src / 'tint.slang'
+            text = main.read_text(encoding='utf-8')
+            start, end = text.index('struct VertexIn'), text.index('[shader("fragment")]')
+            vertex_text = text[start:end]
+            vertex = src / 'parts' / 'vertex.slang'
+            vertex.parent.mkdir()
+            main.write_text(text[:start] + '#include "parts/vertex.slang"\n\n' + text[end:], encoding='utf-8')
+            vertex.write_text(vertex_text, encoding='utf-8')
+            self.assertEqual(check.check_position(src, self.out), [])
+
+            vertex.write_text(vertex_text.replace('return o;', 'o.pos.z = 0.0; return o;'), encoding='utf-8')
+            self.assertTrue(any('vertex.slang' in error and 'SV_Position field' in error
+                                for error in check.check_position(src, self.out)))
+
     def test_gate_catches_a_position_built_by_an_initialiser_list(self):
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / 'src'

@@ -1070,6 +1070,99 @@ def deferred_avatar_cases():
                        texture_levels=textures)
 
 
+def pbr_terrain_mesh(rng):
+    attributes, count = grid_mesh(rng, texcoord1_s_scale=3.0)
+    # A region starts at positive XY in the paint map. Place the grid at the region's center.
+    attributes[0][:, :2] += 1.0
+    directions = np.array([(0.93, 0.18, 0.36), (-0.92, 0.20, 0.37), (0.19, 0.91, 0.37),
+                           (0.22, -0.90, 0.38), (0.11, 0.25, 0.96), (0.66, 0.61, 0.47)], dtype='f4')
+    directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+    cell = np.arange(count) // 6
+    attributes[1] = directions[cell % len(directions)]
+    tangent = np.cross([0, 1, 0], attributes[1])
+    tangent /= np.linalg.norm(tangent, axis=1, keepdims=True)
+    attributes[8] = np.column_stack((tangent, np.where(cell % 4 < 2, -1.0, 1.0)))
+    # Exercise front/back-facing normals independently of each swatch's tangent handedness.
+    back_faces = (np.arange(count // 3) // 2) % 3 == 1
+    selected = {slot: attributes[slot] for slot in (0, 1, 3, 8)}
+    for attribute in selected.values():
+        triangles = attribute.reshape(-1, 3, attribute.shape[1])
+        triangles[back_faces] = triangles[back_faces][:, [0, 2, 1]]
+    return selected, count
+
+
+def pbr_terrain_textures():
+    axis = (np.arange(SIZE, dtype='f4') + 0.5) / SIZE
+    s, t = np.meshgrid(axis, axis)
+    x = np.clip((s - 0.35) / 0.3, 0, 1)
+    y = np.clip((t - 0.35) / 0.3, 0, 1)
+    # Four swatches with broad single-material areas, transitions, and slightly overfull weights.
+    extra = np.where((s > 0.49) & (s < 0.56) & (t > 0.48) & (t < 0.62), 0.18, 0).astype('f4')
+    paint_map = np.stack((x * (1 - y) + extra, (1 - x) * y + extra, x * y + extra, np.ones_like(s)), axis=-1)
+    textures = {'paint_map': (paint_map,), 'alpha_ramp': terrain_alpha_ramp()}
+    for index in range(4):
+        phase = 0.73 * index
+        wave = np.sin(2 * np.pi * (s + 0.61 * t) + phase)
+        ripple = np.cos(2 * np.pi * (0.37 * s - 1.13 * t) - phase)
+        maps = {
+            'base_color': (0.20 + 0.15 * index + 0.13 * s, 0.45 + 0.24 * ripple - 0.07 * index,
+                           0.16 + 0.29 * t + 0.08 * index, 0.59 + 0.37 * wave),
+            'normal': (0.50 + 0.15 * wave, 0.50 + 0.17 * ripple, 0.79 + 0.15 * s, np.ones_like(s)),
+            'metallic_roughness': (0.58 + 0.31 * ripple, 0.16 + 0.65 * t, 0.13 + 0.71 * s, np.ones_like(s)),
+            'emissive': (0.021 + 0.71 * s**2, 0.038 + 0.56 * t**2, 0.024 + 0.14 * index + 0.33 * s * t,
+                         np.ones_like(s)),
+        }
+        for name, channels in maps.items():
+            textures[f'detail_{index}_{name}'] = (np.stack(channels, axis=-1),)
+    return textures
+
+
+def pbr_terrain_cases():
+    textures = pbr_terrain_textures()
+    repeats = tuple(name for name in textures if name.startswith('detail_'))
+    view, projection, _, _ = _matrices()
+    view[:3, 3] -= view[:3, 0] + view[:3, 1]
+    # The viewer's PackTight upload contains four records of scale X/Y, rotation, offset X/Y.
+    transforms = np.array([(1.26, 0.82, 0.21, 0.11, 0.22), (-0.96, 1.19, -0.38, 0.47, -0.31),
+                           (1.41, -0.63, 0.43, -0.37, 0.25), (-0.86, -1.31, -0.24, 0.32, 0.51)], dtype='f4')
+    shared = {'modelview_matrix': view.T.ravel().tolist(),
+              'modelview_projection_matrix': (projection @ view).T.ravel().tolist(),
+              'clipPlane': [0.79, 0.18, 0.28, 0.84],
+              'terrain_texture_transforms': H.Vec4Array(transforms.reshape(5, 4)),
+              'baseColorFactors': H.Vec4Array(((0.86, 0.61, 0.35, 0.87), (0.45, 0.83, 0.62, 0.78),
+                                               (0.64, 0.51, 0.91, 0.69), (0.75, 0.96, 0.71, 0.92))),
+              'minimum_alphas': [0.26, 0.37, 0.03, 0.29]}
+    for emissive in (0, 1):
+        for paint in (0, 1):
+            for detail in range(-4, 1):
+                uniforms = dict(shared)
+                if paint == 1:
+                    uniforms['region_scale'] = 2.0
+                if detail >= -3:
+                    uniforms.update(metallicFactors=[0.34, 0.81, 0.23, 0.64], roughnessFactors=[0.88, 0.62, 0.95, 0.42])
+                if detail == 0 and emissive:
+                    uniforms['emissiveColors'] = H.Vec3Array(((0.16, 0.92, 0.47), (1.10, 0.69, 0.28),
+                                                               (0.57, 0.17, 0.77), (0.31, 1.18, 0.62)))
+                for mapping in (1, 3):
+                    defines = {'TERRAIN_PAINT_TYPE': str(paint), 'TERRAIN_PBR_DETAIL': str(detail),
+                               'TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT': str(mapping)}
+                    if emissive:
+                        defines['HAS_EMISSIVE'] = '1'
+                    name = f'pbr-terrain-e{emissive}-p{paint}-d{detail}-m{mapping}'
+                    program = (f'pbrTerrain__HAS_EMISSIVE{emissive}__TERRAIN_PAINT_TYPE{paint}'
+                               f'__TERRAIN_PBR_DETAIL{detail}__TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT{mapping}')
+                    factors = ('2.25', '8.00') if mapping == 3 and (emissive, detail) in ((0, -4), (1, 0)) else ('8.00',)
+                    for factor in factors:
+                        hooks = {'TERRAIN_TRIPLANAR_BLEND_FACTOR': factor} if mapping == 3 else {}
+                        suffix = '-blend-2.25' if factor != '8.00' else ''
+                        yield Case(name + suffix, 'deferred/pbrterrainV.glsl', 'deferred/pbrterrainF.glsl', program,
+                                   defines={**defines, **hooks}, hooks=hooks, outputs=3 + emissive,
+                                   depth=True, coverage=True, clip=True, uniforms=uniforms,
+                                   vertex_helpers=('deferred/textureUtilV.glsl',),
+                                   fragment_helpers=('deferred/pbrterrainUtilF.glsl', 'environment/srgbF.glsl'),
+                                   texture_levels=textures, repeat_textures=repeats, mesh_builder=pbr_terrain_mesh)
+
+
 def cases():
     I, O, D = 'interface/', 'objects/', 'deferred/'
     c = []
@@ -1138,6 +1231,7 @@ def cases():
     c.extend(fullbright_emissive_cases())
     c.extend(hud_material_cases())
     c.extend(deferred_avatar_cases())
+    c.extend(pbr_terrain_cases())
     return c
 
 

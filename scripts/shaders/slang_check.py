@@ -203,6 +203,7 @@ def check_compile(generated, glslang):
 
 
 IMPORT = re.compile(r'(?m)^\s*(?:__)?(?:import|include|implementing)\s+([A-Za-z0-9_.]+)\s*;')
+TEXT_INCLUDE = re.compile(r'(?m)^[ \t]*#[ \t]*include[ \t]+"([^"\r\n]+)"')
 
 
 def _module_file(src_dir, name):
@@ -215,16 +216,22 @@ def _module_file(src_dir, name):
 
 
 def _closure(src_dir, start):
-    seen, todo = set(), [start]
+    src_dir = src_dir.resolve()
+    seen, todo = set(), [start.resolve()]
     while todo:
         p = todo.pop()
         if p in seen:
             continue
         seen.add(p)
-        for name in IMPORT.findall(p.read_text(encoding='utf-8')):
+        text = _strip_comments(p.read_text(encoding='utf-8'))
+        for name in IMPORT.findall(text):
             m = _module_file(src_dir, name)
             if m:
-                todo.append(m)
+                todo.append(m.resolve())
+        for name in TEXT_INCLUDE.findall(text):
+            included = (p.parent / name).resolve()
+            if included.is_relative_to(src_dir) and included.is_file():
+                todo.append(included)
     return seen
 
 

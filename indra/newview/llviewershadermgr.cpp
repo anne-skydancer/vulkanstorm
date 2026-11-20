@@ -2023,8 +2023,10 @@ bool LLViewerShaderMgr::loadShadersDeferred()
             shader->mFeatures.isPBRTerrain = true;
 
             shader->mShaderFiles.clear();
-            shader->mShaderFiles.push_back(make_pair("deferred/pbrterrainV.glsl", GL_VERTEX_SHADER));
-            shader->mShaderFiles.push_back(make_pair("deferred/pbrterrainF.glsl", GL_FRAGMENT_SHADER));
+            const std::string axes = llformat("__TERRAIN_PAINT_TYPE%d__TERRAIN_PBR_DETAIL%d__TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT%d",
+                                              paint_type, detail, mapping);
+            generatedStages(*shader, emissiveId("pbrTerrain", axes.c_str()).c_str(),
+                            "deferred/pbrterrainV.glsl", "deferred/pbrterrainF.glsl");
             shader->mShaderLevel = mShaderLevel[SHADER_DEFERRED];
             shader->addPermutation("TERRAIN_PBR_DETAIL", llformat("%d", detail));
             shader->addPermutation("TERRAIN_PAINT_TYPE", llformat("%d", paint_type));

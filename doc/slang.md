@@ -185,7 +185,6 @@ Not converted, and why:
 |---|---|
 | forward lighting (`avatarV/F`, `simpleNoColorV`, `class1/lighting`) | the forward avatar and no-colour alpha-mask programs (`gAvatarProgram`, `gObjectAlphaMaskNoColorProgram`) call `calcAtmospherics` (windlight, atmosphere is a hot family); nothing else uses the forward lighting |
 | deferred world programs that use atmosphere and fog (blended fullbright and alpha) | atmosphere and `deferredUtil` are hot |
-| `pbrterrain` | terrain texture transforms, terrain mixing, and the world terrain shading path |
 | glTF (`pbrmetallicroughness`) | uses the lighting, shadows and probes (hot) and was changed by hotfixes on 2026-11-17 and 2026-11-18 |
 | environment (`water*`, `underWater`, `srgbF`) | water and atmosphere are hot; `srgbF` is a helper object |
 | SMAA, FXAA, CAS | third-party code, stays hand-written (planner) |
@@ -245,8 +244,7 @@ The blended fullbright shaders with fog and stochastic coverage follow the alpha
 These per-draw material programs share the texture and tangent transforms in `pbrTexture.slang`. The
 existing shader setters upload each transform as two `vec4` values. The world opaque path preserves
 cutout and back-face normal behavior and the optional emissive attachment. The HUD path keeps sRGB output,
-and glow keeps its green and alpha outputs. The glTF scene and PBR terrain have separate dependencies
-and remain on their respective conversion paths.
+and glow keeps its green and alpha outputs. The glTF scene uses its own shader families.
 
 The shiny HUD draw uses the indexed fullbright textures, smooth interpolation, and opaque output
 alpha. PBR HUD blend uses the base and emissive texture transforms with centroid interpolation and
@@ -254,7 +252,7 @@ keeps the texture and vertex alpha product for blending. The blended fullbright 
 sampled alpha cutoff and the eye-space near clip plane set by the HUD draw pool. The A/B cases use
 the viewer's class 3 shiny and class 2 PBR blend fragments.
 
-## Terrain paint-map baking and legacy terrain
+## Terrain paint-map baking and draws
 
 The terrain bake uses the ramp-weight calculation independently of terrain lighting. It preserves the original
 three ramp coordinates, weight threshold, and RGB weight encoding. The `TERRAIN_PAINT_PRECISION` hook receives
@@ -266,6 +264,13 @@ using three samples from the alpha ramp. The generated shader keeps detail textu
 the specular sentinel and normal flag, and writes a zero emissive attachment when enabled.
 Both layouts use the same draw-pool bindings. Run `ab_harness.py programs --family legacy-terrain --strict-depth`
 for the packed color, mirror-clip coverage, and depth comparisons.
+
+PBR terrain has 40 generated programs across the height and paint maps, flat and triplanar mapping,
+five detail tiers, and the two emissive target layouts. It uses the terrain draw pool's existing
+layer transforms and material factor arrays, and writes the G-buffer for deferred lighting.
+The active samplers occupy consecutive texture units at each detail tier.
+Triplanar variants receive the blend factor from `RenderTerrainPBRTriplanarBlendFactor` at shader reload.
+Run `ab_harness.py programs --family pbr-terrain --strict-depth` to compare their color and depth outputs.
 
 ## RLVa sphere effect
 
@@ -405,7 +410,7 @@ the pass cost and frame rate against the standing and moving floors in `AGENTS.m
 | `cloudsV`, `cloudsVolComposite`, `moonV`, sky and atmosphere helpers | sky / atmosphere | the sky PR |
 | `water*`, `underWater`, `srgbF` | water | the water PR |
 | probes, SSR | probes | the probes PR |
-| glTF (`pbrmetallicroughness`, `pbrterrain`) | glTF | the glTF PR (needs lighting, shadows and probes) |
+| glTF (`pbrmetallicroughness`) | glTF | the glTF PR (needs lighting, shadows and probes) |
 | blended fullbright, `fullbrightShiny*` | world surfaces | the surface PRs (atmosphere, reflection, and deferred depth helpers) |
 | forward `avatarV/F`, `simpleNoColor`, `class1/lighting`, deferred avatar blend | avatar | the avatar PR |
 | SMAA, FXAA, CAS vertex and fragment stages, `errorV` | third-party or fallback | **permanent exemptions** |

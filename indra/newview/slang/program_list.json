@@ -1,6 +1,7 @@
 {
   "hooks": {
-    "TERRAIN_PAINT_PRECISION": "Maximum channel value for the selected TerrainPaintBitDepth (1 to 8 bits)"
+    "TERRAIN_PAINT_PRECISION": "Maximum channel value for the selected TerrainPaintBitDepth (1 to 8 bits)",
+    "TERRAIN_TRIPLANAR_BLEND_FACTOR": "Triplanar blend exponent from RenderTerrainPBRTriplanarBlendFactor"
   },
   "position": {
     "module": "position",
@@ -718,6 +719,36 @@
         "PROBE_FILTER_SAMPLES": [
           32,
           4
+        ]
+      }
+    },
+    {
+      "name": "pbrTerrain",
+      "family": "pbr-terrain",
+      "source": "pbrTerrain.slang",
+      "entries": {
+        "vertex": "vsMain",
+        "fragment": "fsMain"
+      },
+      "permutations": {
+        "HAS_EMISSIVE": [
+          0,
+          1
+        ],
+        "TERRAIN_PAINT_TYPE": [
+          0,
+          1
+        ],
+        "TERRAIN_PBR_DETAIL": [
+          -4,
+          -3,
+          -2,
+          -1,
+          0
+        ],
+        "TERRAIN_PLANAR_TEXTURE_SAMPLE_COUNT": [
+          1,
+          3
         ]
       }
     },

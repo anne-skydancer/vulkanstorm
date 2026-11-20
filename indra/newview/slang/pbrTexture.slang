@@ -26,7 +26,7 @@ module pbrTexture;
 import glsl;
 
 // Keep the transform order of the KHR_texture_transform helper.
-vec2 khr_texture_transform(vec2 texcoord, vec2 scale, float rotation, vec2 offset)
+public vec2 khr_texture_transform(vec2 texcoord, vec2 scale, float rotation, vec2 offset)
 {
     mat3 scale_mat = mat3(scale.x, 0, 0, 0, scale.y, 0, 0, 0, 1);
     mat3 offset_mat = mat3(1, 0, 0, 0, 1, 0, offset.x, offset.y, 1);
