@@ -11,6 +11,7 @@
 #include "../test/lltut.h"
 #include "../llimage.h"
 #include "../llimagej2c.h"
+#include "../../llimagej2coj/llj2ccommon.h" // LL_J2C_CACHE_KEY
 
 #include <cstdio>
 #include <cstdlib>
@@ -421,6 +422,16 @@ namespace tut
         read->setDiscardLevel(0);
         ensure("decodes the colour", read->decodeChannels(colour, 0.f, 0, 4));
         ensure_equals("four channels", colour->getComponents(), 4);
+    }
+
+    template<> template<>
+    void llimagej2c_decode_test_object_t::test<14>()
+    {
+        set_test_name("both codecs give the texture cache the same key, so that switching never purges it");
+        // The OpenJPEG build computes it from the library, so the constant is checked against the real value there;
+        // the neo-j2k build returns the constant.
+        ensure_equals("texture cache key", LLImageJ2C::getEngineInfo(), std::string(LL_J2C_CACHE_KEY));
+        ensure("the codec's name is given apart", !LLImageJ2C::getEngineName().empty());
     }
 
     template<> template<>

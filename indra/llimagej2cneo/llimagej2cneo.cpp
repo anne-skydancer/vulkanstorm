@@ -69,13 +69,19 @@ LLImageJ2CImpl* fallbackCreateLLImageJ2CImpl()
     return new LLImageJ2CNeo();
 }
 
-// What the texture cache keys on (lltexturecache.cpp reads it during static initialisation: pure, at most 31
-// characters). It names the viewer's decoder output, not neo-j2k's release (owner decision D13: neo-j2k's engine
-// string changes with every release, which would purge every user's cache). Bump the number when the decoded
-// pixels can change.
+// What the texture cache keys on (LastJ2CVersion, LLAppViewer::initCache; lltexturecache.cpp reads it during static
+// initialisation: pure, at most 31 characters). It is the string the OpenJPEG build gives, on purpose: the two codecs
+// decode a texture to the same pixels (the A/B in doc/neoj2k.md), so switching between the builds must not purge the
+// user's texture cache. This supersedes the earlier "neo-j2k output 1". Change it, in both implementations, only when
+// the decoded pixels can change. The codec's name for the log and the About box is getEngineName().
 std::string LLImageJ2CNeo::getEngineInfo() const
 {
-    return "neo-j2k output 1";
+    return LL_J2C_CACHE_KEY;
+}
+
+std::string LLImageJ2CNeo::getEngineName() const
+{
+    return std::string(nj2k_engine_string()) + " (" + nj2k_version() + ")";
 }
 
 namespace

@@ -14,7 +14,7 @@ licence files in `packages/LICENSES/` of a local build.
 ## This line: `vkstorm-devel`
 
 The CI builds configure `OPENSIM=OFF INSTALL_PROPRIETARY=OFF USE_KDU=OFF
-USE_FMODSTUDIO=OFF USE_OPENAL=OFF USE_DISCORD=OFF USE_BUGSPLAT=OFF USE_TRACY=OFF
+USE_NEOJ2K=ON USE_FMODSTUDIO=OFF USE_OPENAL=OFF USE_DISCORD=OFF USE_BUGSPLAT=OFF USE_TRACY=OFF
 USE_VELOPACK=OFF USE_SOLOUD=ON` (checked by `scripts/ci_release_config.py`),
 and Inno Setup on Windows. `HAVOK` and `HAVOK_TPV` are not set, so the Havok
 physics extensions are not linked; the `llphysicsextensions_source` package
@@ -50,7 +50,7 @@ OpenAL, Tracy, Velopack). SoLoud and the Zink notices are staged by their
 options. `licenses.txt` (`licenses-win32.txt`, `licenses-linux.txt`) carries
 the notices that need a full text beside the binary, among them OpenJPEG
 (BSD-2-Clause, clause 2; it also covers the code neo-j2k ports, and a `USE_NEOJ2K`
-build adds neo-j2k's own notice in `licenses/neoj2k.txt`) and libjpeg-turbo with the IJG credit line; the Windows
+build, the default, adds neo-j2k's own notice in `licenses/neoj2k.txt`) and libjpeg-turbo with the IJG credit line; the Windows
 and Linux `licenses.txt` hold no text of a component we do not ship (the macOS
 file is not built or tested). `scripts/tests/test_licence_notices.py`
 (run by `ci-checks`) guards both.
@@ -85,7 +85,7 @@ code.
 | NVAPI (Windows) | MIT | OK | |
 | Ogg, Vorbis | BSD-3-Clause | OK | |
 | OpenJPEG 2.5.4 | BSD-2-Clause | OK | [3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg) |
-| neo-j2k (JPEG 2000 codec, `USE_NEOJ2K` builds; shipped as `neoj2k.dll` / `libneoj2k.so`) | BSD-2-Clause, with code ported from OpenJPEG (BSD-2-Clause) | OK | [3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), built from [neo-j2k](https://github.com/anne-skydancer/neo-j2k); its licence and OpenJPEG's notices (the code it ports) ship in `licenses/neoj2k.txt` and `licenses/openjpeg.txt` of such a build, from the package's `LICENSES/`; `licenses.txt` keeps OpenJPEG's |
+| neo-j2k 0.1.0 (JPEG 2000 codec, the default `USE_NEOJ2K=ON`; shipped as `neoj2k.dll` / `libneoj2k.so`) | BSD-2-Clause, with code ported from OpenJPEG (BSD-2-Clause) | OK | [3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), built from [neo-j2k](https://github.com/anne-skydancer/neo-j2k); its licence and OpenJPEG's notices (the code it ports) ship in `licenses/neoj2k.txt` and `licenses/openjpeg.txt` of such a build, from the package's `LICENSES/`; `licenses.txt` keeps OpenJPEG's |
 | OpenXR loader | Apache-2.0 | OK | GPL-3 only |
 | SoLoud 202002 (miniaudio backend), miniaudio | Zlib; public domain or MIT-0 | OK | [3p-soloud](https://github.com/anne-skydancer/3p-soloud); built with `WITH_MINIAUDIO=1 WITH_NOSOUND=1 WITH_NULL=1` only |
 | WebRTC (voice) m144 | BSD-3-Clause, with bundled abseil, BoringSSL, perfetto, libc++ (Apache-2.0, Apache-2.0 WITH LLVM-exception), opus, libvpx, libaom, dav1d, libyuv, protobuf (BSD) | OK | the package licence file lists no FFmpeg, OpenH264 or GPL component |
