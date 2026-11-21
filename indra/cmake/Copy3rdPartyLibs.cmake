@@ -12,9 +12,7 @@ endif ()
 include(OPENAL)
 include(FMODSTUDIO)
 include(MesaZink) # <VulkanStorm>
-# <Vulkanstorm> USE_NEOJ2K: installs the neoj2k package (use_prebuilt_binary) before the lists below look for its files;
-# llcommon includes this file first, so the package must not wait for llimage to include NeoJ2K.cmake
-include(NeoJ2K)
+include(NeoJ2K) # <Vulkanstorm> the USE_NEOJ2K option, and its package, as MesaZink's
 
 # When we copy our dependent libraries, we almost always want to copy them to
 # both the Release and the RelWithDebInfo staging directories. This has
@@ -44,9 +42,6 @@ if(WINDOWS)
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
     # <Vulkanstorm> neither with USE_NEOJ2K, whose own shared library goes in its place (cmake/NeoJ2K.cmake)
     if (USE_NEOJ2K)
-        if (NOT EXISTS "${ARCH_PREBUILT_DIRS_RELEASE}/neoj2k.dll")
-            message(FATAL_ERROR "USE_NEOJ2K: no neoj2k.dll in ${ARCH_PREBUILT_DIRS_RELEASE} (the neoj2k package)")
-        endif ()
         set(release_files ${release_files} neoj2k.dll)
     elseif (NOT USE_KDU)
         set(release_files ${release_files} openjp2.dll)
@@ -236,16 +231,10 @@ elseif(LINUX)
       set(release_files)
     endif (NOT USESYSTEMLIBS)
 
-    # <Vulkanstorm> neo-j2k's shared library: the file and its soname link (the version is in the file's name)
+    # <Vulkanstorm> neo-j2k's shared library, by name as libuuid's: the file and its soname link (the 3p-neoj2k release
+    # names them after its version; change both with the package)
     if (USE_NEOJ2K)
-      file(GLOB neoj2k_so "${ARCH_PREBUILT_DIRS_RELEASE}/libneoj2k.so.*")
-      if (NOT neoj2k_so)
-        message(FATAL_ERROR "USE_NEOJ2K: no libneoj2k.so.* in ${ARCH_PREBUILT_DIRS_RELEASE} (the neoj2k package)")
-      endif ()
-      foreach(neoj2k_file IN LISTS neoj2k_so)
-        get_filename_component(neoj2k_name "${neoj2k_file}" NAME)
-        list(APPEND release_files "${neoj2k_name}")
-      endforeach()
+      list(APPEND release_files libneoj2k.so.0.1 libneoj2k.so.0.1.0)
     endif ()
 
      if( USE_AUTOBUILD_3P )
