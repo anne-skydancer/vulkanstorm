@@ -61,9 +61,15 @@ neo-j2k, and the `<platform>-openjpeg` jobs of `build-windows.yaml`, `build-linu
   last tile or an image offset (neo-j2k plan finding F1: a 1000-wide image in 512-wide tiles read as 1024). The image
   area is the correct one. Second Life textures are one tile with no offset, so the two agree on every texture in the
   1,200-texture corpus (0 differences).
-- **The texture cache key** (`getEngineInfo()`) is `neo-j2k output 1`, the viewer's own decoder-output version, not
-  neo-j2k's release: a library update does not purge every user's cache. Bump the number when decoded pixels change.
-  Switching codec changes the string, so a viewer that switches purges its cache once.
+- **The texture cache key** (`getEngineInfo()`, compared with `LastJ2CVersion` in `LLAppViewer::initCache`, which
+  schedules a texture purge on a mismatch) is, in the neo-j2k build, the string the OpenJPEG build gives:
+  `OpenJPEG: 2.5.4, Runtime: 2.5.4` (`LL_J2C_CACHE_KEY` in `llj2ccommon.h`). The two codecs decode a texture to the same
+  pixels (whole files and cut downloads: the A/B above), so **switching between the two builds never purges the user's
+  texture cache**, and a neo-j2k release does not either. **This supersedes the earlier key `neo-j2k output 1`**, which
+  purged the cache on every switch. Change the constant, in both implementations (a test checks the OpenJPEG build
+  computes it), only when the decoded pixels can change. The codec's name stays visible, separately, in the log
+  (`J2C Engine is: neo-j2k 0.1 (0.1.0) (texture cache key: OpenJPEG: 2.5.4, Runtime: 2.5.4)`) and the About box
+  (`getEngineName()`).
 - **Not in this change**: `TRUNCATED` and `NEED_DATA` statuses are not passed to the texture fetcher (a decode of a
   cut download succeeds as OpenJPEG's does), and the bake mask is not decoded with the colour in one pass.
 - **Floating point**: every decode and encode runs with round-to-nearest-even and no flush-to-zero or

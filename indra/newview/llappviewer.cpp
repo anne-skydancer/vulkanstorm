@@ -1090,7 +1090,7 @@ bool LLAppViewer::init()
     // Various introspection concerning the libs we're using - particularly
     // the libs involved in getting to a full login screen.
     //
-    LL_INFOS("InitInfo") << "J2C Engine is: " << LLImageJ2C::getEngineInfo() << LL_ENDL;
+    LL_INFOS("InitInfo") << "J2C Engine is: " << LLImageJ2C::getEngineName() << " (texture cache key: " << LLImageJ2C::getEngineInfo() << ")" << LL_ENDL;
     LL_INFOS("InitInfo") << "libcurl version is: " << LLCore::LLHttp::getCURLVersion() << LL_ENDL;
 
     /////////////////////////////////////////////////
@@ -4274,7 +4274,7 @@ LLSD LLAppViewer::getViewerInfo() const
 
     // Libraries
 
-    info["J2C_VERSION"] = LLImageJ2C::getEngineInfo();
+    info["J2C_VERSION"] = LLImageJ2C::getEngineName();
     bool want_fullname = true;
     info["AUDIO_DRIVER_VERSION"] = gAudiop ? LLSD(gAudiop->getDriverName(want_fullname)) : "Undefined";
     if(LLStartUp::getStartupState() == STATE_STARTED && LLVoiceClient::getInstance()->voiceEnabled()) // <FS:Beq/> Calling this too earli leads to a nasty crash loop
