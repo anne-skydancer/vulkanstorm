@@ -83,7 +83,6 @@ jobs:
       entry: ${{ steps.plan.outputs.entry }}
       release: ${{ steps.plan.outputs.release }}
       tag: ${{ steps.plan.outputs.tag }}
-      neoj2k_ready: ${{ steps.neoj2k.outputs.neoj2k_ready }}
     steps:
       - name: Refuse publish combined with tracy
         # A Tracy build is never published and never moves a tag.
@@ -134,14 +133,9 @@ jobs:
             core.setOutput('release', String(result.release));
             core.setOutput('tag', result.tag);
             core.info(JSON.stringify(result, null, 2));
-      # The USE_NEOJ2K build below needs the released 3p-neoj2k package (scripts/ci_neoj2k_pin.py): until
-      # autobuild.xml names one, it is skipped with a notice.
-      - id: neoj2k
-        run: |
-          python scripts/ci_neoj2k_pin.py --output
-          if ! grep -qx 'neoj2k_ready=true' "$GITHUB_OUTPUT"; then
-            echo "::notice title=USE_NEOJ2K build skipped::autobuild.xml has no released neoj2k package yet (placeholder entry)"
-          fi
+      # The builds use neo-j2k (USE_NEOJ2K, on by default) and need the released 3p-neoj2k package named in
+      # autobuild.xml (and scripts/linux_lts_packages.json): stop here when it is still the placeholder.
+      - run: python scripts/ci_neoj2k_pin.py --require
 
   linux:
     name: linux
@@ -180,12 +174,12 @@ jobs:
           package_suffix: ${{ fromJSON(needs.checks.outputs.entry).package_suffix }}
           tracy: ${{ github.event_name == 'workflow_dispatch' && inputs.tracy == true && 'true' || 'false' }}
 
-  linux-neoj2k:
-    name: linux (neo-j2k)
+  linux-openjpeg:
+    name: linux (OpenJPEG)
     needs: checks
-    # The same build with USE_NEOJ2K=ON (neo-j2k as the J2C codec, cmake/NeoJ2K.cmake): the two codec options are
-    # both built on every pull request and every qualification build. Never a release.
-    if: needs.checks.outputs.neoj2k_ready == 'true' && needs.checks.outputs.release != 'true'
+    # The same build with USE_NEOJ2K=OFF (OpenJPEG as the J2C codec, until llimagej2coj is retired): both codec
+    # options are built on every pull request and every qualification build. Never a release.
+    if: needs.checks.outputs.release != 'true'
     runs-on: ${{ fromJSON(needs.checks.outputs.entry).os }}
     env:
       VIEWER_BUILD_TYPE: ${{ needs.checks.outputs.release == 'true' && 'Release' || 'RelWithDebInfo' }}
@@ -214,7 +208,7 @@ jobs:
           fi
       - uses: ./.github/actions/viewer-build
         with:
-          neoj2k: 'true'
+          neoj2k: 'false'
           platform: linux
           directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
           linux_flavor: ${{ fromJSON(needs.checks.outputs.entry).linux_flavor }}

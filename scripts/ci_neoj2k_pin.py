@@ -2,19 +2,19 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Says whether autobuild.xml and the linux-lts list name a released neoj2k package yet.
 
-usage: ci_neoj2k_pin.py [--output]
+usage: ci_neoj2k_pin.py [--output] [--require]
 
-The USE_NEOJ2K build jobs of the build-*.yaml workflows need the 3p-neoj2k package
-(https://github.com/anne-skydancer/3p-neoj2k). Until a release exists, autobuild.xml (linux64 and windows64) and
-scripts/linux_lts_packages.json (linux64-lts) carry a placeholder entry: version 0.0.0.0 and zero hashes. Those jobs
-are then skipped with a notice instead of failing on a download that cannot work, and CI says so (it is no green
-build of the neo-j2k option). Once a release is pinned (the real version, URLs and hashes in both files), the jobs
-run on every pull request and every build that is not a release.
+The viewer builds with neo-j2k (USE_NEOJ2K, on by default), which needs the 3p-neoj2k package
+(https://github.com/anne-skydancer/3p-neoj2k): its release is pinned in autobuild.xml (linux64 and windows64) and in
+scripts/linux_lts_packages.json (linux64-lts). A placeholder entry (version 0.0.0.0, zero hashes) means the package
+has no release yet. With --require the script fails on a placeholder, so that a build stops at once with the reason
+instead of on a download that cannot work.
 
 The linux64-lts placeholder hash ends in 1, not 0: scripts/tests/test_linux_lts_packages.py refuses a linux-lts
 archive that repeats the linux64 one, and a placeholder is the only case where both would be the zero hash.
 
-Prints `ready=true` or `ready=false`; with --output also appends it to $GITHUB_OUTPUT. Exits 1 when an entry is
+Prints `ready=true` or `ready=false`; with --output also appends it to $GITHUB_OUTPUT; with --require exits 1 when it
+is false. Exits 1 when an entry is
 missing or inconsistent: a real version with a placeholder hash, a placeholder version with a real hash, or the two
 files disagreeing.
 """
@@ -80,6 +80,9 @@ def main():
     if problems:
         return 1
     print(f"ready={'true' if ready else 'false'}")
+    if "--require" in sys.argv and not ready:
+        print("the neoj2k package is still the placeholder: no 3p-neoj2k release is pinned", file=sys.stderr)
+        return 1
     if "--output" in sys.argv and os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
             out.write(f"neoj2k_ready={'true' if ready else 'false'}\n")
