@@ -35,6 +35,7 @@ namespace
         const OPJ_UINT32 size = 32;
         opj_cparameters_t params;
         opj_set_default_encoder_parameters(&params);
+        params.prog_order = OPJ_RLCP; // the viewer's setting (neo-j2k's encoder takes no other)
         params.tcp_numlayers = 1;
         params.cp_disto_alloc = 1;
         params.tcp_rates[0] = 0; // lossless
@@ -108,9 +109,15 @@ int main(int argc, char** argv)
     const std::string j2c = dir + "/jp2test.j2c";
     const std::string jp2 = dir + "/jp2test.jp2";
     check(encode(j2c, OPJ_CODEC_J2K), "encode a raw J2C codestream");
+#ifndef LL_J2C_NEOJ2K
     check(encode(jp2, OPJ_CODEC_JP2), "encode a real JP2 box file");
+#endif
     check(decode_as_j2k(j2c), "the J2K decoder reads the raw codestream");
+#ifndef LL_J2C_NEOJ2K
+    // neo-j2k writes no JP2 box file (its encoder is the J2K one: nj2k_create_compress(NJ2K_CODEC_JP2) is NULL), so
+    // the refusal of a JP2 file by the J2K decoder is not tested through it
     check(!decode_as_j2k(jp2), "the J2K decoder refuses the JP2 file");
+#endif
     std::remove(j2c.c_str());
     std::remove(jp2.c_str());
     if (failures)

@@ -46,8 +46,13 @@ target_link_libraries(llui_libtest
         llrender
         llimage
         llkdu
-        llimagej2coj
         )
+# <Vulkanstorm> the J2C codec of the build: neo-j2k with USE_NEOJ2K
+if (USE_NEOJ2K)
+    target_link_libraries(llui_libtest llimagej2cneo)
+else ()
+    target_link_libraries(llui_libtest llimagej2coj)
+endif ()
 
 if (WINDOWS)
     set_target_properties(llui_libtest
@@ -55,17 +60,22 @@ if (WINDOWS)
         LINK_FLAGS "/NODEFAULTLIB:LIBCMT"
         )
 
-    # Copy over OpenJPEG.dll
+    # Copy over the J2C codec's DLL (openjp2.dll, or neoj2k.dll with USE_NEOJ2K)
     # *NOTE: On Windows with VS2005, only the first comment prints
+    if (USE_NEOJ2K)
+        set(J2C_CODEC_DLL neoj2k.dll)
+    else ()
+        set(J2C_CODEC_DLL openjp2.dll)
+    endif ()
     set(OPENJPEG_RELEASE
-        "${ARCH_PREBUILT_DIRS_RELEASE}/openjp2.dll")
+        "${ARCH_PREBUILT_DIRS_RELEASE}/${J2C_CODEC_DLL}")
     add_custom_command( TARGET llui_libtest POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${OPENJPEG_RELEASE} ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Copying OpenJPEG DLLs to binary directory"
         )
     set(OPENJPEG_DEBUG
-        "${ARCH_PREBUILT_DIRS_DEBUG}/openjp2.dll")
+        "${ARCH_PREBUILT_DIRS_DEBUG}/${J2C_CODEC_DLL}")
     add_custom_command( TARGET llui_libtest POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different 
             ${OPENJPEG_DEBUG} ${CMAKE_CURRENT_BINARY_DIR}

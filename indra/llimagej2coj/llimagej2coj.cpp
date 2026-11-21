@@ -242,41 +242,6 @@ static void opj_free_user_data_write(void * user_data)
     jpeg_codec->offset = 0;
 }
 
-/**
- * Estimates the number of layers necessary depending on the image surface (w x h)
- */
-static U32 estimate_num_layers(U32 surface)
-{
-    if      (surface <= 1024)    return 2;  // Tiny (≤32×32)
-    else if (surface <= 16384)   return 3;  // Small (≤128×128)
-    else if (surface <= 262144)  return 4;  // Medium (≤512×512)
-    else if (surface <= 1048576) return 5;  // Up to ~1MP
-    else                         return 6;  // Up to ~1.5–2MP
-}
-
-/**
- * Sets the parameters.tcp_rates according to the number of layers and a last tcp_rate value (which equals to the final compression ratio).
- *
- * Example for 6 layers:
- *
- *  i = 5, parameters.tcp_rates[6 - 1 - 5] = 8.0f * (1 << (5 << 1)) = 8192  // Layer 5 (lowest quality)
- *  i = 4, parameters.tcp_rates[6 - 1 - 4] = 8.0f * (1 << (4 << 1)) = 2048  // Layer 4
- *  i = 3, parameters.tcp_rates[6 - 1 - 3] = 8.0f * (1 << (3 << 1)) =  512  // Layer 3
- *  i = 2, parameters.tcp_rates[6 - 1 - 2] = 8.0f * (1 << (2 << 1)) =  128  // Layer 2
- *  i = 1, parameters.tcp_rates[6 - 1 - 1] = 8.0f * (1 << (1 << 1)) =   32  // Layer 1
- *  i = 0, parameters.tcp_rates[6 - 1 - 0] = 8.0f * (1 << (0 << 1)) =    8  // Layer 0 (highest quality)
- *
- */
-static void set_tcp_rates(opj_cparameters_t* parameters, U32 num_layers = 1, F32 last_tcp_rate = LAST_TCP_RATE)
-{
-    parameters->tcp_numlayers = num_layers;
-
-    for (int i = num_layers - 1; i >= 0; i--)
-    {
-        parameters->tcp_rates[num_layers - 1 - i] = last_tcp_rate * static_cast<F32>(1 << (i << 1));
-    }
-}
-
 class JPEG2KDecode : public JPEG2KBase
 {
 public:
@@ -625,32 +590,20 @@ public:
             U32 surface = rawImageIn.getWidth() * rawImageIn.getHeight();
 
             // gets the necessary number of layers
-            U32 nb_layers = estimate_num_layers(surface);
+            U32 nb_layers = LLJ2CCommon::estimate_num_layers(surface);
 
             // fills parameters.tcp_rates and updates parameters.tcp_numlayers
-            set_tcp_rates(&parameters, nb_layers, LAST_TCP_RATE);
+            LLJ2CCommon::set_tcp_rates(&parameters, nb_layers, LAST_TCP_RATE);
 
         }
 
-        U32 width_tiles = (rawImageIn.getWidth() >> 6);
-        U32 height_tiles = (rawImageIn.getHeight() >> 6);
-
-        // Allow images with a width or height that are MIN_IMAGE_SIZE <= x < 64
-        if (width_tiles == 0 && (rawImageIn.getWidth() >= MIN_IMAGE_SIZE))
+        // <Vulkanstorm> the tile counts and the resolutions of a small image: llj2ccommon.h
+        const LLJ2CCommon::Tiling tiling = LLJ2CCommon::tiling(rawImageIn.getWidth(), rawImageIn.getHeight());
+        const U32 width_tiles = tiling.width_tiles;
+        const U32 height_tiles = tiling.height_tiles;
+        if (tiling.numresolution)
         {
-            width_tiles = 1;
-        }
-        if (height_tiles == 0 && (rawImageIn.getHeight() >= MIN_IMAGE_SIZE))
-        {
-            height_tiles = 1;
-        }
-
-        if (width_tiles == 1 || height_tiles == 1)
-        {
-            // Images with either dimension less than 32 need less number of resolutions otherwise they error
-            int min_dim = rawImageIn.getWidth() < rawImageIn.getHeight() ? rawImageIn.getWidth() : rawImageIn.getHeight();
-            int max_res = 1 + (int)floor(log2(min_dim));
-            parameters.numresolution = max_res;
+            parameters.numresolution = tiling.numresolution;
         }
 
         if (!opj_setup_encoder(encoder, &parameters, image))
@@ -888,48 +841,11 @@ bool LLImageJ2COJ::decodeImpl(LLImageJ2C &base, LLImageRaw &raw_image, F32 decod
 
     // <FS:Techwolf Lupindo> texture comment metadata reader
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;    // <FS:Beq> instrument image decodes
-    U8* c_data = base.getData();
-    S32 c_size = base.getDataSize();
-    S32 position = 0;
-
-    while (position < 1024 && position < (c_size - 7)) // the comment field should be in the first 1024 bytes.
+    // <Vulkanstorm> the scan itself is shared with llimagej2cneo (llj2ccommon.h)
+    std::string comment;
+    if (LLJ2CCommon::scanComment(base.getData(), base.getDataSize(), comment))
     {
-        if (c_data[position] == 0xff && c_data[position + 1] == 0x64)
-        {
-            U8 high_byte = c_data[position + 2];
-            U8 low_byte = c_data[position + 3];
-            S32 c_length = (high_byte * 256) + low_byte; // This size also counts the markers, 00 01 and itself
-            if (c_length > 200) // sanity check
-            {
-                // While comments can be very long, anything longer then 200 is suspect.
-                break;
-            }
-
-            if (c_length < 4)
-            {
-                // too short to hold the length field and the 00 01 marker; c_length - 4 below would wrap.
-                break;
-            }
-
-            if (position + 2 + c_length > c_size)
-            {
-                // comment extends past end of data, corruption, or all data not retrived yet.
-                break;
-            }
-
-            // if the comment block does not end at the end of data, check to see if the next
-            // block starts with 0xFF
-            if (position + 2 + c_length < c_size && c_data[position + 2 + c_length] != 0xff)
-            {
-                // invalied comment block
-                break;
-            }
-
-            // extract the comment minus the markers, 00 01
-            raw_image.mComment.assign((char*)(c_data + position + 6), c_length - 4);
-            break;
-        }
-        position++;
+        raw_image.mComment = comment;
     }
     // </FS:Techwolf Lupindo>
 

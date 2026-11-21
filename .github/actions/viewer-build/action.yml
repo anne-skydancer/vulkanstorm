@@ -32,6 +32,10 @@ inputs:
     description: "Linux only: fail if anything needs a newer GLIBCXX; empty to report only."
     required: false
     default: ""
+  neoj2k:
+    description: "'true' for the build with USE_NEOJ2K on (neo-j2k as the J2C codec, cmake/NeoJ2K.cmake): RelWithDebInfo, its artifacts named <platform>-neoj2k-...; 'false' for OpenJPEG."
+    required: false
+    default: "false"
   package_override:
     description: "The checked-in package override to apply (linux-lts); empty for none."
     required: false
@@ -194,6 +198,7 @@ runs:
       env:
         BUILD_DIRECTORY: ${{ inputs.directory }}
         VKSTORM_TRACY: ${{ inputs.tracy }}
+        VKSTORM_NEOJ2K: ${{ inputs.neoj2k }}
       run: |
         set -euo pipefail
         eval "$(autobuild source_environment -c ReleaseFS_open)"
@@ -209,6 +214,15 @@ runs:
             exit 1
           fi
           tracy_options=(-DUSE_TRACY:BOOL=ON -DUSE_TRACY_ON_DEMAND:BOOL=ON -DUSE_TRACY_LOCAL_ONLY:BOOL=ON)
+        fi
+        # The J2C codec, chosen when CMake configures (indra/cmake/NeoJ2K.cmake): neo-j2k never in a release build, which
+        # keeps OpenJPEG until USE_NEOJ2K is on by default.
+        if [[ "$VKSTORM_NEOJ2K" == true ]]; then
+          if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
+            echo "::error::a USE_NEOJ2K build must be RelWithDebInfo without a package"
+            exit 1
+          fi
+          tracy_options+=(-DUSE_NEOJ2K:BOOL=ON)
         fi
         if [[ "$RUNNER_OS" == Windows ]]; then
           # The flags used by the successful local Release build.
@@ -427,7 +441,24 @@ runs:
         cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
           llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
-          INTEGRATION_TEST_llcorehttp INTEGRATION_TEST_llsimdkernels
+          INTEGRATION_TEST_llcorehttp INTEGRATION_TEST_llsimdkernels \
+          PROJECT_llimage_TEST_llimageworker INTEGRATION_TEST_llimagej2c_decode
+        # Building a unit or integration test target runs it (LL_ADD_PROJECT_UNIT_TESTS, LL_ADD_INTEGRATION_TEST: a
+        # post-build step that fails the build): llimageworker_test (the decode pool and its parallelFor) and
+        # llimagej2c_decode_test (the viewer's J2C interface through this build's codec, OpenJPEG or neo-j2k).
+        # The USE_NEOJ2K build also checks the codec-independent rules (reduce factor, decode guard, SL decoder limits,
+        # the J2K-only decoder) against neo-j2k itself, through its OpenJPEG-compatible headers
+        # (indra/llimagej2cneo/CMakeLists.txt).
+        if [ "${{ inputs.neoj2k }}" = true ]; then
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+            --target llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test \
+            llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test llimagej2c_corpus_tool
+          for test in llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test; do
+            exe="$(find "${{ inputs.directory }}" -name "$test" -o -name "$test.exe" | head -n 1)"
+            [ -n "$exe" ] || { echo "::error::$test was not built"; exit 1; }
+            "$exe"
+          done
+        fi
         # The credential-store tests stub LLControlGroup and link llui,
         # which only MSVC's linker resolves; they have never linked on Linux.
         if [ "$RUNNER_OS" = Windows ]; then
@@ -470,7 +501,7 @@ runs:
       if: env.VIEWER_PACKAGE != 'ON' && inputs.tracy != 'true'
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ inputs.platform }}-qualification-viewer
+        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '-neoj2k' || '' }}-qualification-viewer
         if-no-files-found: error
         path: |
           ${{ inputs.directory }}/newview/RelWithDebInfo/
@@ -480,7 +511,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ inputs.platform }}-build-evidence
+        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '-neoj2k' || '' }}-build-evidence
         path: |
           ${{ inputs.directory }}/CMakeCache.txt
           ${{ inputs.directory }}/CMakeFiles/CMakeConfigureLog.yaml

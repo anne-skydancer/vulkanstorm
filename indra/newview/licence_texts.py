@@ -42,6 +42,7 @@ PACKAGE_LICENCES_NOT_SHIPPED = frozenset({
     "velopack.txt",              # USE_VELOPACK, off
     "soloud.txt",                # staged by the manifest when SoLoud is built
     "soloud-miniaudio.txt",
+    "neoj2k.txt",                # staged by the manifest when USE_NEOJ2K is on (a stale copy must not ship in another build)
 })
 
 
