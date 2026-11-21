@@ -3455,7 +3455,6 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
-                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -3502,7 +3501,6 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
-                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
