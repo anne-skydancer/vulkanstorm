@@ -17,20 +17,11 @@ add_library(ll::neoj2k INTERFACE IMPORTED GLOBAL)
 if (USE_NEOJ2K)
   use_prebuilt_binary(neoj2k)
 
-  # The import library on Windows (neoj2k.lib, for neoj2k.dll), libneoj2k.so on Linux.
-  find_library(NEOJ2K_LIBRARY
-      NAMES neoj2k
-      PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" NO_DEFAULT_PATH)
-  if (NOT NEOJ2K_LIBRARY)
-    # say what the package left, so that a layout problem is seen at once
-    if (UNIX)
-      execute_process(COMMAND ls -la "${ARCH_PREBUILT_DIRS_RELEASE}" OUTPUT_VARIABLE neoj2k_listing ERROR_VARIABLE neoj2k_listing)
-    else ()
-      file(GLOB neoj2k_listing "${ARCH_PREBUILT_DIRS_RELEASE}/*")
-    endif ()
-    message(FATAL_ERROR "USE_NEOJ2K: no neoj2k library in ${ARCH_PREBUILT_DIRS_RELEASE}; it holds:
-${neoj2k_listing}")
-  endif ()
+  # The import library on Windows (neoj2k.lib, for neoj2k.dll), libneoj2k.so on Linux. Exact file names, as for SoLoud and
+  # OpenJPEG: a bare `neoj2k` is looked up in a listing of the directory that CMake may have cached before this package
+  # was extracted (an earlier find_library in the same run), and then is not found.
+  find_library(NEOJ2K_LIBRARY NAMES neoj2k.lib libneoj2k.so
+      PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
 
   target_link_libraries(ll::neoj2k INTERFACE ${NEOJ2K_LIBRARY})
   target_include_directories(ll::neoj2k SYSTEM INTERFACE ${LIBS_PREBUILT_DIR}/include)
