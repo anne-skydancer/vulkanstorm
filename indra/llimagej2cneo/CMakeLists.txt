@@ -55,6 +55,10 @@ if (LL_TESTS)
     if (WINDOWS)
       add_custom_command(TARGET llj2c_${name}_neoj2k_test POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ARCH_PREBUILT_DIRS_RELEASE}/neoj2k.dll" "$<TARGET_FILE_DIR:llj2c_${name}_neoj2k_test>")
+    elseif (LINUX)
+      # CMAKE_SKIP_RPATH (00-Common.cmake) leaves the executable no path to libneoj2k.so.0.1; these tests run
+      # directly, not through LL_TEST_COMMAND's LD_LIBRARY_PATH, so they carry the prebuilt directory themselves.
+      target_link_options(llj2c_${name}_neoj2k_test PRIVATE "LINKER:-rpath,${ARCH_PREBUILT_DIRS_RELEASE}")
     endif ()
   endforeach()
   # the rule alone, with no codec
