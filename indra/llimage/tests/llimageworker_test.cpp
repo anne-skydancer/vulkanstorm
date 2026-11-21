@@ -35,6 +35,16 @@
 #include "../llcommon/lltrace.h"
 // Tut header
 #include "../test/lltut.h"
+// <Vulkanstorm> the pool's own parallelFor (USE_NEOJ2K's executor)
+#include "../llcommon/workqueue.h"
+#include <atomic>
+#include <chrono>
+#include <thread>
+#include <vector>
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE__)
+#include <xmmintrin.h>
+#define LL_TEST_HAS_MXCSR 1
+#endif
 
 // -------------------------------------------------------------------------------------------
 // Stubbing: Declarations required to link and run the class being tested
@@ -165,5 +175,213 @@ namespace tut
         }
         // Verifies that the responder has now been called
         ensure("LLImageDecodeThread: threaded work unit not processed", done == true);
+    }
+
+    // <Vulkanstorm> parallelFor: the executor the J2C codec borrows (llimagej2cneo, USE_NEOJ2K).
+    struct parallel_ctx
+    {
+        std::vector<std::atomic<U32>> hits;
+        std::vector<U32> csr;
+        explicit parallel_ctx(U32 n) : hits(n), csr(n, 0) {}
+    };
+    static void count_job(void* c, U32 i)
+    {
+        parallel_ctx* ctx = static_cast<parallel_ctx*>(c);
+        ctx->hits[i].fetch_add(1);
+#ifdef LL_TEST_HAS_MXCSR
+        ctx->csr[i] = _mm_getcsr();
+#endif
+    }
+
+    template<> template<>
+    void imagedecodethread_object_t::test<2>()
+    {
+        set_test_name("parallelFor runs every job exactly once, with C code's floating-point state");
+        mThread = new LLImageDecodeThread(true);
+        ensure("the pool has workers", mThread->getWorkerCount() >= 1);
+        ensure("an idle pool is idle", mThread->isIdle());
+        ensure("the main thread is no pool request", LLImageDecodeThread::getCurrent() == nullptr);
+#ifdef LL_TEST_HAS_MXCSR
+        // the viewer's main thread runs with flush-to-zero on (LLVector4a::initClass): jobs must not see it
+        const unsigned int saved = _mm_getcsr();
+        _mm_setcsr(saved | 0x8000u | 0x0040u);
+#endif
+        for (U32 count : { 1u, 2u, 7u, 1000u })
+        {
+            parallel_ctx ctx(count);
+            mThread->parallelFor(count, count_job, &ctx);
+            for (U32 i = 0; i < count; ++i)
+            {
+                ensure_equals("job ran once", ctx.hits[i].load(), 1u);
+#ifdef LL_TEST_HAS_MXCSR
+                ensure("round to nearest, no flush-to-zero, no denormals-are-zero", (ctx.csr[i] & (0x6000u | 0x8000u | 0x0040u)) == 0);
+#endif
+            }
+        }
+#ifdef LL_TEST_HAS_MXCSR
+        ensure("the caller's state is back", (_mm_getcsr() & (0x8000u | 0x0040u)) == (0x8000u | 0x0040u));
+        _mm_setcsr(saved);
+#endif
+        mThread->parallelFor(0, count_job, nullptr); // no job, no call
+    }
+
+    template<> template<>
+    void imagedecodethread_object_t::test<3>()
+    {
+        set_test_name("parallelFor from every worker at once cannot deadlock, and the closed pool still finishes");
+        mThread = new LLImageDecodeThread(true);
+        LL::WorkQueue::ptr_t queue = LL::WorkQueue::getInstance("ImageDecode");
+        ensure("the pool's queue", queue != nullptr);
+        const U32 workers = mThread->getWorkerCount();
+        const U32 requests = workers * 3; // more than the workers: each one holds a worker while it loops
+        std::atomic<U32> finished{0};
+        std::atomic<U32> wrong{0};
+        LLImageDecodeThread* pool = mThread;
+        for (U32 r = 0; r < requests; ++r)
+        {
+            queue->post([pool, &finished, &wrong]()
+            {
+                parallel_ctx ctx(64);
+                pool->parallelFor(64, count_job, &ctx);
+                for (U32 i = 0; i < 64; ++i)
+                {
+                    if (ctx.hits[i].load() != 1u) { wrong.fetch_add(1); }
+                }
+                finished.fetch_add(1);
+            });
+        }
+        const U32 INCREMENT_TIME = 100;
+        U32 total_time = 0;
+        while (finished.load() < requests && total_time < 20000)
+        {
+            ms_sleep(INCREMENT_TIME);
+            total_time += INCREMENT_TIME;
+        }
+        ensure_equals("every request finished", finished.load(), requests);
+        ensure_equals("no job ran twice or not at all", wrong.load(), 0u);
+        // after shutdown the queue is closed: the caller runs every job itself
+        mThread->shutdown();
+        parallel_ctx ctx(10);
+        mThread->parallelFor(10, count_job, &ctx);
+        for (U32 i = 0; i < 10; ++i)
+        {
+            ensure_equals("job ran once after shutdown", ctx.hits[i].load(), 1u);
+        }
+    }
+
+    // Two jobs that each wait for the other to have started: they can only finish when two threads run them. A
+    // timeout turns a pool that never gives a second thread into a failure and not a hang.
+    struct rendezvous_ctx
+    {
+        std::atomic<U32> entered{0};
+        std::atomic<U32> timed_out{0};
+        std::thread::id ids[2];
+    };
+    static void rendezvous_job(void* c, U32 i)
+    {
+        rendezvous_ctx* ctx = static_cast<rendezvous_ctx*>(c);
+        ctx->ids[i] = std::this_thread::get_id();
+        ctx->entered.fetch_add(1);
+        const auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (ctx->entered.load() < 2)
+        {
+            if (std::chrono::steady_clock::now() > limit)
+            {
+                ctx->timed_out.fetch_add(1);
+                return;
+            }
+            std::this_thread::yield();
+        }
+    }
+
+    template<> template<>
+    void imagedecodethread_object_t::test<4>()
+    {
+        set_test_name("parallelFor runs jobs on two threads at once when the pool is idle");
+        mThread = new LLImageDecodeThread(true);
+        ensure("a pool of at least two workers", mThread->getWorkerCount() >= 2);
+        rendezvous_ctx ctx;
+        mThread->parallelFor(2, rendezvous_job, &ctx);
+        ensure_equals("both jobs started while the other ran", ctx.timed_out.load(), 0u);
+        ensure("on two different threads", ctx.ids[0] != ctx.ids[1]);
+    }
+
+    // A responder that holds its worker until released: a decode request that stays in flight
+    class responder_blocking : public LLImageDecodeThread::Responder
+    {
+    public:
+        responder_blocking(std::atomic<U32>* started, std::atomic<U32>* finished, std::atomic<bool>* release)
+            : mStarted(started), mFinished(finished), mRelease(release) {}
+        virtual void completed(bool, const std::string&, LLImageRaw*, LLImageRaw*, U32)
+        {
+            mStarted->fetch_add(1);
+            const auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+            while (!mRelease->load() && std::chrono::steady_clock::now() < limit)
+            {
+                std::this_thread::yield();
+            }
+            mFinished->fetch_add(1);
+        }
+    private:
+        std::atomic<U32>* mStarted;
+        std::atomic<U32>* mFinished;
+        std::atomic<bool>* mRelease;
+    };
+
+    template<> template<>
+    void imagedecodethread_object_t::test<5>()
+    {
+        set_test_name("isIdle counts the requests in flight, and a busy pool gets no helper tasks");
+        mThread = new LLImageDecodeThread(true);
+        const U32 workers = mThread->getWorkerCount();
+        ensure("idle at the start", mThread->isIdle());
+        std::atomic<U32> started{0}, finished{0};
+        std::atomic<bool> release{false};
+        // one request fewer than workers: still idle (a worker is free)
+        for (U32 i = 0; i + 1 < workers; ++i)
+        {
+            mThread->decodeImage(NULL, 0, false, new responder_blocking(&started, &finished, &release));
+        }
+        U32 waited = 0;
+        while (started.load() + 1 < workers && waited < 10000)
+        {
+            ms_sleep(10);
+            waited += 10;
+        }
+        ensure_equals("the requests run", started.load() + 1, workers);
+        ensure("a free worker left: idle", mThread->isIdle());
+        // the last worker: busy
+        mThread->decodeImage(NULL, 0, false, new responder_blocking(&started, &finished, &release));
+        waited = 0;
+        while (started.load() < workers && waited < 10000)
+        {
+            ms_sleep(10);
+            waited += 10;
+        }
+        ensure_equals("every worker is held", started.load(), workers);
+        ensure("every worker busy: not idle", !mThread->isIdle());
+        // a loop on the busy pool is the caller's alone: no helper task waits in the queue
+        parallel_ctx ctx(100);
+        mThread->parallelFor(100, count_job, &ctx);
+        for (U32 i = 0; i < 100; ++i)
+        {
+            ensure_equals("job ran once", ctx.hits[i].load(), 1u);
+        }
+        ensure_equals("no helper task queued", mThread->getPending(), (size_t)0);
+        release.store(true);
+        waited = 0;
+        while (finished.load() < workers && waited < 20000)
+        {
+            ms_sleep(10);
+            waited += 10;
+        }
+        ensure_equals("every request finished", finished.load(), workers);
+        waited = 0;
+        while (!mThread->isIdle() && waited < 5000)
+        {
+            ms_sleep(10);
+            waited += 10;
+        }
+        ensure("idle again", mThread->isIdle());
     }
 }

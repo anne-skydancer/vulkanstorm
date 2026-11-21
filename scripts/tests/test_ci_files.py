@@ -156,7 +156,7 @@ def main():
         text = path.read_text(encoding="utf-8")
         if "matrix." in text:
             errors.append(f"{rel}: a composite action has no matrix context")
-        for used in sorted(set(re.findall(r"inputs\.([A-Za-z_]+)", text)) - declared):
+        for used in sorted(set(re.findall(r"inputs\.([A-Za-z0-9_]+)", text)) - declared):
             errors.append(f"{rel}: uses undeclared input {used}")
     for path, workflow in documents.items():
         if path.parent.name != "workflows" or not isinstance(workflow, dict):

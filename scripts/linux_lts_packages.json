@@ -9,6 +9,14 @@
         "hash_algorithm": "sha1"
       }
     },
+    "neoj2k": {
+      "version": "0.1.0",
+      "linux64": {
+        "url": "https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.1.0/neoj2k-0.1.0-linux64-lts-44841637446.tar.zst",
+        "hash": "cd9f5082e665220c626caad8d16fb20e9293bdd66e0173e565d200b481cd6f0d",
+        "hash_algorithm": "sha256"
+      }
+    },
     "openjpeg": {
       "version": "2.5.4.44499299587",
       "linux64": {

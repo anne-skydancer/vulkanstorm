@@ -12,6 +12,7 @@ endif ()
 include(OPENAL)
 include(FMODSTUDIO)
 include(MesaZink) # <VulkanStorm>
+include(NeoJ2K) # <Vulkanstorm> the USE_NEOJ2K option, and its package, as MesaZink's
 
 # When we copy our dependent libraries, we almost always want to copy them to
 # both the Release and the RelWithDebInfo staging directories. This has
@@ -39,9 +40,12 @@ if(WINDOWS)
         )
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
-    if (NOT USE_KDU)
+    # <Vulkanstorm> neither with USE_NEOJ2K, whose own shared library goes in its place (cmake/NeoJ2K.cmake)
+    if (USE_NEOJ2K)
+        set(release_files ${release_files} neoj2k.dll)
+    elseif (NOT USE_KDU)
         set(release_files ${release_files} openjp2.dll)
-    endif (NOT USE_KDU)
+    endif ()
     # </FS:Ansariel>
 
     # Filenames are different for 32/64 bit BugSplat file and we don't
@@ -226,6 +230,12 @@ elseif(LINUX)
     else (NOT USESYSTEMLIBS)
       set(release_files)
     endif (NOT USESYSTEMLIBS)
+
+    # <Vulkanstorm> neo-j2k's shared library, by name as libuuid's: the file and its soname link (the 3p-neoj2k release
+    # names them after its version; change both with the package)
+    if (USE_NEOJ2K)
+      list(APPEND release_files libneoj2k.so.0.1 libneoj2k.so.0.1.0)
+    endif ()
 
      if( USE_AUTOBUILD_3P )
          list( APPEND release_files

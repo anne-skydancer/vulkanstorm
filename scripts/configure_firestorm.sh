@@ -34,6 +34,8 @@ WANTS_PACKAGE=$FALSE
 WANTS_VELOPACK=$FALSE
 WANTS_VERSION=$FALSE
 WANTS_KDU=$FALSE
+# <Vulkanstorm> neo-j2k is the J2C codec (USE_NEOJ2K, doc/neoj2k.md); --no-neoj2k builds with OpenJPEG. macOS has no neo-j2k package.
+WANTS_NEOJ2K=$TRUE
 WANTS_FMODSTUDIO=$FALSE
 WANTS_OPENAL=$FALSE
 WANTS_SOLOUD=$TRUE
@@ -90,6 +92,8 @@ showUsage()
     echo "  --no-opensim             : Build without OpenSim support (Overrides --opensim)"
     echo "  --singlegrid <login_uri> : Build for single grid usage (Requires --opensim)"
     echo "  --havok                  : Build with Havok support (Disables OpenSim support)"
+    echo "  --neoj2k                 : J2C codec neo-j2k (default; not on macOS)"
+    echo "  --no-neoj2k              : J2C codec OpenJPEG instead of neo-j2k"
     echo "  --avx                    : Build with Advanced Vector Extensions"
     echo "  --avx2                   : Build with Advanced Vector Extensions 2 (default on Linux)"
     echo "  --no-avx2                : Build without Advanced Vector Extensions 2"
@@ -113,7 +117,7 @@ getArgs()
 # $* = the options passed in from main
 {
     if [ $# -gt 0 ]; then
-            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
+            while getoptex "clean build config version package velopack no-package fmodstudio openal soloud ninja vscode compiler-cache jobs: platform: kdu neoj2k no-neoj2k opensim no-opensim singlegrid: havok avx avx2 no-avx2 tracy zink lto no-lto crashreporting testbuild: help chan: btype:" "$@" ; do
 
           #ensure options are valid
           if [  -z "$OPTOPT"  ] ; then
@@ -131,6 +135,8 @@ getArgs()
                           fi
                           ;;
           kdu)            WANTS_KDU=$TRUE;;
+          neoj2k)         WANTS_NEOJ2K=$TRUE;;
+          no-neoj2k)      WANTS_NEOJ2K=$FALSE;;
           fmodstudio)     WANTS_FMODSTUDIO=$TRUE
                           WANTS_OPENAL=$FALSE
                           WANTS_SOLOUD=$FALSE;;
@@ -349,6 +355,10 @@ DEFAULT_AUTOBUILD_VSVER=180
 echo -e "configure_firestorm.sh" > "$LOG"
 echo -e "       PLATFORM: $TARGET_PLATFORM"                                    | tee -a "$LOG"
 echo -e "            KDU: `b2a $WANTS_KDU`"                                    | tee -a "$LOG"
+if [ "$TARGET_PLATFORM" == "darwin" ] ; then
+    WANTS_NEOJ2K=$FALSE
+fi
+echo -e "        NEO-J2K: `b2a $WANTS_NEOJ2K`"                                 | tee -a "$LOG"
 echo -e "     FMODSTUDIO: `b2a $WANTS_FMODSTUDIO`"                             | tee -a "$LOG"
 echo -e "         OPENAL: `b2a $WANTS_OPENAL`"                                 | tee -a "$LOG"
 echo -e "         SOLOUD: `b2a $WANTS_SOLOUD`"                                 | tee -a "$LOG"
@@ -496,6 +506,11 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         KDU="-DUSE_KDU:BOOL=ON"
     else
         KDU="-DUSE_KDU:BOOL=OFF"
+    fi
+    if [ $WANTS_NEOJ2K -eq $TRUE ] ; then
+        NEOJ2K="-DUSE_NEOJ2K:BOOL=ON"
+    else
+        NEOJ2K="-DUSE_NEOJ2K:BOOL=OFF"
     fi
     if [ $WANTS_FMODSTUDIO -eq $TRUE ] ; then
         FMODSTUDIO="-DFMODSTUDIO:BOOL=OFF -DUSE_FMODSTUDIO:BOOL=ON"
@@ -658,7 +673,7 @@ if [ $WANTS_CONFIG -eq $TRUE ] ; then
         fi
     fi
 
-    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
+    cmake -G "$TARGET" $CMAKE_ARCH ../indra $CHANNEL ${GITHASH} $FMODSTUDIO $OPENAL $SOLOUD $KDU $NEOJ2K $OPENSIM $SINGLEGRID $HAVOK $AVX_OPTIMIZATION $AVX2_OPTIMIZATION $TRACY_PROFILER $MESAZINK $LTO $TESTBUILD $PACKAGE $INNO $VELOPACK \
           $UNATTENDED -DLL_TESTS:BOOL=OFF -DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE -DCMAKE_BUILD_TYPE:STRING=$BTYPE $CACHE_OPT \
           $CRASH_REPORTING -DVIEWER_SYMBOL_FILE:STRING="${VIEWER_SYMBOL_FILE:-}" $LL_ARGS_PASSTHRU ${VSCODE_FLAGS:-} | tee "$LOG"
     configure_status=${PIPESTATUS[0]}

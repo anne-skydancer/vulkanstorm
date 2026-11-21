@@ -115,6 +115,9 @@ jobs:
             core.setOutput('release', String(result.release));
             core.setOutput('tag', result.tag);
             core.info(JSON.stringify(result, null, 2));
+      # The builds use neo-j2k (USE_NEOJ2K, on by default) and need the released 3p-neoj2k package named in
+      # autobuild.xml (and scripts/linux_lts_packages.json): stop here when it is still the placeholder.
+      - run: python scripts/ci_neoj2k_pin.py --require
 
   linux:
     name: linux
@@ -147,6 +150,46 @@ jobs:
           fi
       - uses: ./.github/actions/viewer-build
         with:
+          platform: linux
+          directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
+          linux_flavor: ${{ fromJSON(needs.checks.outputs.entry).linux_flavor }}
+          package_suffix: ${{ fromJSON(needs.checks.outputs.entry).package_suffix }}
+
+  linux-openjpeg:
+    name: linux (OpenJPEG)
+    needs: checks
+    # The same build with USE_NEOJ2K=OFF (OpenJPEG as the J2C codec, until llimagej2coj is retired): both codec
+    # options are built on every pull request and every qualification build. Never a release.
+    if: needs.checks.outputs.release != 'true'
+    runs-on: ${{ fromJSON(needs.checks.outputs.entry).os }}
+    env:
+      VIEWER_BUILD_TYPE: ${{ needs.checks.outputs.release == 'true' && 'Release' || 'RelWithDebInfo' }}
+      VIEWER_PACKAGE: ${{ needs.checks.outputs.release == 'true' && 'ON' || 'OFF' }}
+      AUTOBUILD_ADDRSIZE: 64
+      AUTOBUILD_CONFIGURATION: ReleaseFS_open
+      AUTOBUILD_VSVER: "180"
+      LL_SKIP_REQUIRE_SYSROOT: 1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Merge the pull request into its base
+        # The same base commit the checks job merged.
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.base_ref }}
+          BASE_SHA: ${{ needs.checks.outputs.base_sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_SHA"
+          if ! git -c user.name=ci -c user.email=ci@invalid merge --no-edit --no-ff "$BASE_SHA"; then
+            echo "::error::this pull request conflicts with $BASE; resolve the conflict first"
+            exit 1
+          fi
+      - uses: ./.github/actions/viewer-build
+        with:
+          neoj2k: 'false'
           platform: linux
           directory: ${{ fromJSON(needs.checks.outputs.entry).directory }}
           linux_flavor: ${{ fromJSON(needs.checks.outputs.entry).linux_flavor }}
