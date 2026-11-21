@@ -10,7 +10,16 @@
 include_guard(GLOBAL)
 include(Prebuilt)
 
-option(USE_NEOJ2K "Decode and encode JPEG 2000 with neo-j2k (3p-neoj2k) instead of OpenJPEG" ON)
+# 3p-neoj2k ships windows64, linux64 and linux64-lts packages only: neo-j2k is the default there, OpenJPEG elsewhere.
+if (WINDOWS OR LINUX)
+  set(_neoj2k_default ON)
+else ()
+  set(_neoj2k_default OFF)
+endif ()
+option(USE_NEOJ2K "Decode and encode JPEG 2000 with neo-j2k (3p-neoj2k) instead of OpenJPEG" ${_neoj2k_default})
+if (USE_NEOJ2K AND NOT (WINDOWS OR LINUX))
+  message(FATAL_ERROR "USE_NEOJ2K: the 3p-neoj2k package exists for Windows and Linux only; configure with -DUSE_NEOJ2K:BOOL=OFF")
+endif ()
 
 add_library(ll::neoj2k INTERFACE IMPORTED GLOBAL)
 
