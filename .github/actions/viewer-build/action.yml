@@ -33,9 +33,9 @@ inputs:
     required: false
     default: ""
   neoj2k:
-    description: "'true' for the build with USE_NEOJ2K on (neo-j2k as the J2C codec, cmake/NeoJ2K.cmake): RelWithDebInfo, its artifacts named <platform>-neoj2k-...; 'false' for OpenJPEG."
+    description: "'true' (the default) for USE_NEOJ2K on, neo-j2k as the J2C codec (cmake/NeoJ2K.cmake); 'false' for the OpenJPEG build (USE_NEOJ2K off), whose artifacts are named <platform>-openjpeg-..."
     required: false
-    default: "false"
+    default: "true"
   package_override:
     description: "The checked-in package override to apply (linux-lts); empty for none."
     required: false
@@ -199,14 +199,12 @@ runs:
         eval "$(autobuild source_environment -c ReleaseFS_open)"
         export LL_BUILD
         options=()
-        # The J2C codec, chosen when CMake configures (indra/cmake/NeoJ2K.cmake): neo-j2k never in a release build, which
-        # keeps OpenJPEG until USE_NEOJ2K is on by default.
+        # The J2C codec, chosen when CMake configures (indra/cmake/NeoJ2K.cmake): neo-j2k, or OpenJPEG for the job that
+        # builds the other option. Always explicit, so that the line does not depend on the CMake default.
         if [[ "$VKSTORM_NEOJ2K" == true ]]; then
-          if [[ "$VIEWER_BUILD_TYPE" == Release || "$VIEWER_PACKAGE" == ON ]]; then
-            echo "::error::a USE_NEOJ2K build must be RelWithDebInfo without a package"
-            exit 1
-          fi
           options+=(-DUSE_NEOJ2K:BOOL=ON)
+        else
+          options+=(-DUSE_NEOJ2K:BOOL=OFF)
         fi
         if [[ "$RUNNER_OS" == Windows ]]; then
           # The flags used by the successful local Release build.
@@ -445,7 +443,7 @@ runs:
       if: env.VIEWER_PACKAGE != 'ON'
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '-neoj2k' || '' }}-qualification-viewer
+        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '' || '-openjpeg' }}-qualification-viewer
         if-no-files-found: error
         path: |
           ${{ inputs.directory }}/newview/RelWithDebInfo/
@@ -455,7 +453,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '-neoj2k' || '' }}-build-evidence
+        name: ${{ inputs.platform }}${{ inputs.neoj2k == 'true' && '' || '-openjpeg' }}-build-evidence
         path: |
           ${{ inputs.directory }}/CMakeCache.txt
           ${{ inputs.directory }}/CMakeFiles/CMakeConfigureLog.yaml

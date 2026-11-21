@@ -2,31 +2,45 @@
 # neo-j2k as the J2C codec (`USE_NEOJ2K`)
 
 [neo-j2k](https://github.com/anne-skydancer/neo-j2k) (BSD-2-Clause) is a JPEG 2000 Part 1 codec written for
-texture-sized images. The viewer can use it instead of OpenJPEG; the choice is made when CMake configures.
+texture-sized images. **The viewer uses it by default**; OpenJPEG stays available as the other option until
+`llimagej2coj` is retired. The choice is made when CMake configures.
 
 ## The option
 
-`USE_NEOJ2K` (default **OFF**) picks the codec package:
+`USE_NEOJ2K` (default **ON**) picks the codec package:
 
-| | `USE_NEOJ2K=OFF` | `USE_NEOJ2K=ON` |
+| | `USE_NEOJ2K=ON` (default) | `USE_NEOJ2K=OFF` |
 |---|---|---|
-| Package | `openjpeg` ([3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg)) | `neoj2k` ([3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k)) |
-| Library | `openjp2.dll` (delay-loaded) | `neoj2k.dll` (delay-loaded, exports `nj2k_*` only), `libneoj2k.so` on Linux |
-| Implementation | `indra/llimagej2coj` | `indra/llimagej2cneo` |
-| Decode | OpenJPEG | neo-j2k |
-| Encode (uploads, bakes, snapshots) | OpenJPEG | neo-j2k (byte-identical to OpenJPEG's for the viewer's settings) |
+| Package | `neoj2k` ([3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), release v0.1.0) | `openjpeg` ([3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg)) |
+| Library | `neoj2k.dll` (delay-loaded, exports `nj2k_*` only), `libneoj2k.so` on Linux | `openjp2.dll` (delay-loaded) |
+| Implementation | `indra/llimagej2cneo` | `indra/llimagej2coj` |
+| Decode | neo-j2k | OpenJPEG |
+| Encode (uploads, bakes, snapshots) | neo-j2k (byte-identical to OpenJPEG's for the viewer's settings) | OpenJPEG |
 
 One codec per binary: the implementation is the one `fallbackCreateLLImageJ2CImpl()` (`llimage/llimagej2c.cpp`)
 finds at link time. There is no runtime routing and no per-file fallback, and OpenJPEG is neither installed nor
 linked when the option is on. `indra/cmake/NeoJ2K.cmake` carries the option; `USE_NEOJ2K` with `USE_KDU` is an error.
 
-Local configure: add `-DUSE_NEOJ2K:BOOL=ON` to the CI configure line (`.github/actions/viewer-build/action.yml`).
-CI builds both options on every pull request and qualification build (the `<platform>-neoj2k` jobs of
-`build-windows.yaml`, `build-linux.yaml` and `build-linux-lts.yaml`); a release build never uses neo-j2k yet.
-**Those jobs are skipped, with a notice, while `autobuild.xml` and `scripts/linux_lts_packages.json` carry the
-placeholder entry** (version `0.0.0.0`, zero hashes): a green PR then says nothing about the neo-j2k option.
-`scripts/ci_neoj2k_pin.py` decides (`scripts/tests/test_neoj2k_pin.py` tests it); a release of the package (see
-[3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k)) replaces the placeholder, and the jobs run from then on.
+Where it is set, so that every way of configuring builds neo-j2k:
+
+- `indra/cmake/NeoJ2K.cmake`: the CMake default is ON.
+- `autobuild.xml`: `-DUSE_NEOJ2K:BOOL=ON` in the `configure` options of every configuration that lists CMake options, on Windows and
+  Linux (the configurations `ReleaseFS`, `ReleaseFS_open`, `RelWithDebInfoFS` and the others go through
+  `scripts/configure_firestorm.sh`, which passes the option: ON by default, `--no-neoj2k` for OpenJPEG, always OFF
+  on macOS, which has no neo-j2k package). The two configurations that set `INSTALL_PROPRIETARY=TRUE` (Kakadu) are
+  left alone: with `USE_KDU` on, `USE_NEOJ2K` is an error.
+- The CI configure step passes it explicitly, ON or OFF, and a release build uses it as any other
+  (`scripts/ci_release_config.py` checks it).
+- `fs-build-variables` carries no codec option.
+
+Local configure: `autobuild configure -A 64 -c ReleaseFS_open` builds neo-j2k; add `-- --no-neoj2k` (or
+`-DUSE_NEOJ2K:BOOL=OFF`, which wins) for the OpenJPEG build.
+
+CI builds both options on every pull request and qualification build: the `windows`, `linux` and `linux-lts` jobs are
+neo-j2k, and the `<platform>-openjpeg` jobs of `build-windows.yaml`, `build-linux.yaml` and `build-linux-lts.yaml` pass
+`-DUSE_NEOJ2K:BOOL=OFF`. The builds need the released package named in `autobuild.xml` and
+`scripts/linux_lts_packages.json`: a placeholder entry (version `0.0.0.0`, zero hashes) stops them at once
+(`scripts/ci_neoj2k_pin.py --require`, tested by `scripts/tests/test_neoj2k_pin.py`).
 
 ## What the viewer does with it (`llimagej2cneo.cpp`)
 

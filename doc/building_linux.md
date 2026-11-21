@@ -192,6 +192,7 @@ There are a number of switches you can use to modify the configuration process. 
 - **--clean** will cause autobuild to remove any previously compiled objects and fetched packages. It can be useful if you need to force a reload of all packages
 - **--fmodstudio** will tell autobuiild to use the FmodStudio package when compiling.
 - **--kdu** will tell autobuiild to use the KDU (Kakadu) package when compiling.
+- **--no-neoj2k** builds with OpenJPEG instead of neo-j2k, the default JPEG 2000 codec (`USE_NEOJ2K`, see [neoj2k.md](neoj2k.md)). Passing `-DUSE_NEOJ2K:BOOL=OFF` does the same.
 - **--package** makes sure all files are copied into viewers output directory. It will also result in a bzip2 archive of the completed viewer. Enabled by default, you would have to use **-DPACKAGE:BOOL=Off** to disable it
 - **--chan \<channel name\>** will set a unique channel (and the name) for the viewer, appending whatever is defined to "Firestorm-". By default, the channel is "private" followed by your computer's name.
 - **-LL_TESTS:BOOL=\<bool\>** controls if the tests are compiled and run. There are quite a lot of them so excluding them is recommended unless you have some reason to need one or more of them.
