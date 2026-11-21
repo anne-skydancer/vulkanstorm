@@ -2081,11 +2081,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0000000000000000000000000000000000000000000000000000000000000000</string>
+              <string>44333b7fbcd4a65d3a62a80048ce11972930ae810a46ebc5d431950d32c95584</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.0.0-0/neoj2k-0.0.0.0-linux64-0.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.1.0/neoj2k-0.1.0-linux64-44841637446.tar.zst</string>
             </map>
             <key>name</key>
             <string>linux64</string>
@@ -2095,11 +2095,11 @@
             <key>archive</key>
             <map>
               <key>hash</key>
-              <string>0000000000000000000000000000000000000000000000000000000000000000</string>
+              <string>1b904681bf7252cdfde77924c57f7aa5b7edf426d45d83ee18ab97ae41035fa4</string>
               <key>hash_algorithm</key>
               <string>sha256</string>
               <key>url</key>
-              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.0.0-0/neoj2k-0.0.0.0-windows64-0.tar.zst</string>
+              <string>https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.1.0/neoj2k-0.1.0-windows64-44841637446.tar.zst</string>
             </map>
             <key>name</key>
             <string>windows64</string>
@@ -2112,13 +2112,13 @@
         <key>copyright</key>
         <string>Copyright (c) 2026, Anne Skydancer (neo-j2k); portions Copyright (c) 2001-2017 the OpenJPEG authors: Universite catholique de Louvain (UCL), Belgium; Professor Benoit Macq; Antonin Descampe; Francois-Olivier Devaux; Herve Drolon, FreeImage Team; Yannick Verschueren; David Janssens; Centre National d'Etudes Spatiales (CNES), France; CS Systemes d'Information, France; Parvatha Elangovan; Jerome Fimes, Communications &amp; Systemes; Kaori Hagihara; IntoPIX SA; Callum Lerwick; Jonathan Ballard; Carl Hetherington (see LICENSES/neoj2k.txt)</string>
         <key>version</key>
-        <string>0.0.0.0</string>
+        <string>0.1.0</string>
         <key>name</key>
         <string>neoj2k</string>
         <key>canonical_repo</key>
         <string>https://github.com/anne-skydancer/3p-neoj2k</string>
         <key>description</key>
-        <string>neo-j2k: a JPEG 2000 Part 1 codec for texture-sized images (decoder, and the encoder of the viewer's uploads, bakes and snapshots), as a shared library (neoj2k.dll, libneoj2k.so) with an nj2k_* C API; starts no threads (the host lends an executor). Contains code ported from OpenJPEG. NOT RELEASED YET: version 0.0.0.0 and the zero hashes mark this entry as a placeholder (scripts/ci_neoj2k_pin.py); the release fills version (the neo-j2k tag), URLs and hashes.</string>
+        <string>neo-j2k 0.1.0: a JPEG 2000 Part 1 codec for texture-sized images (decoder, and the encoder of the viewer's uploads, bakes and snapshots, byte-identical to OpenJPEG's for the viewer's settings), as a shared library (neoj2k.dll, libneoj2k.so) with an nj2k_* C API; starts no threads (the host lends an executor). Contains code ported from OpenJPEG.</string>
       </map>
       <key>nghttp2</key>
       <map>
