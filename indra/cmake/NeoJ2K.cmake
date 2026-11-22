@@ -3,23 +3,24 @@
 #
 # The J2C codec of the viewer, chosen when CMake configures: USE_NEOJ2K=ON links neo-j2k (the `neoj2k`
 # package, https://github.com/anne-skydancer/3p-neoj2k, BSD-2-Clause) as its own shared library, neoj2k.dll
-# or libneoj2k.so; OFF (the default) keeps OpenJPEG (the `openjpeg` package). One codec per binary: the
+# or libneoj2k.so; OFF keeps OpenJPEG (the `openjpeg` package), which stays available until llimagej2coj is retired. One codec per binary: the
 # choice is the implementation behind fallbackCreateLLImageJ2CImpl() (llimage/llimagej2c.cpp), with no
 # runtime routing and no per-file fallback. neo-j2k decodes and encodes (uploads, bakes, snapshots), so the
 # OpenJPEG package is neither installed nor linked when it is ON.
 include_guard(GLOBAL)
 include(Prebuilt)
 
-option(USE_NEOJ2K "Decode and encode JPEG 2000 with neo-j2k (3p-neoj2k) instead of OpenJPEG" OFF)
+option(USE_NEOJ2K "Decode and encode JPEG 2000 with neo-j2k (3p-neoj2k) instead of OpenJPEG" ON)
 
 add_library(ll::neoj2k INTERFACE IMPORTED GLOBAL)
 
 if (USE_NEOJ2K)
   use_prebuilt_binary(neoj2k)
 
-  # The import library on Windows (neoj2k.lib, for neoj2k.dll), libneoj2k.so on Linux.
-  find_library(NEOJ2K_LIBRARY
-      NAMES neoj2k
+  # The import library on Windows (neoj2k.lib, for neoj2k.dll), libneoj2k.so on Linux. Exact file names, as for SoLoud and
+  # OpenJPEG: a bare `neoj2k` is looked up in a listing of the directory that CMake may have cached before this package
+  # was extracted (an earlier find_library in the same run), and then is not found.
+  find_library(NEOJ2K_LIBRARY NAMES neoj2k.lib libneoj2k.so
       PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
 
   target_link_libraries(ll::neoj2k INTERFACE ${NEOJ2K_LIBRARY})

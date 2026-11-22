@@ -14,7 +14,7 @@ for line in cache.read_text(encoding="utf-8").splitlines():
         values[key.split(":", 1)[0]] = value
 
 enabled = {"PACKAGE", "USE_SOLOUD", "USE_AVX2_OPTIMIZATION", "USE_LTO",
-           "USE_PRECOMPILED_HEADERS"}
+           "USE_PRECOMPILED_HEADERS", "USE_NEOJ2K"}
 disabled = {"OPENSIM", "USE_KDU", "INSTALL_PROPRIETARY", "USE_OPENAL",
             "USE_FMODSTUDIO", "USE_DISCORD", "USE_BUGSPLAT", "USE_TRACY",
             "USE_AVX_OPTIMIZATION", "USE_VELOPACK", "LL_TESTS",

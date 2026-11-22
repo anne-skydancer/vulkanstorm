@@ -76,7 +76,10 @@ public:
     static S32 calcHeaderSizeJ2C();
     static S32 calcDataSizeJ2C(S32 w, S32 h, S32 comp, S32 discard_level, F32 rate = DEFAULT_COMPRESSION_RATE);
 
+    // The key the texture cache is purged on (LastJ2CVersion, LLAppViewer::initCache): it changes when decoded pixels can.
     static std::string getEngineInfo();
+    // The codec's name for the log and the About box; not a cache key.
+    static std::string getEngineName();
 
 protected:
     friend class LLImageJ2CImpl;
@@ -127,6 +130,8 @@ protected:
     virtual bool initEncode(LLImageJ2C &base, LLImageRaw &raw_image, int blocks_size = -1, int precincts_size = -1, int levels = 0) = 0;
 
     virtual std::string getEngineInfo() const = 0;
+    // <Vulkanstorm> the codec's name for logs and the About box; by default the cache key
+    virtual std::string getEngineName() const { return getEngineInfo(); }
 
     friend class LLImageJ2C;
 };

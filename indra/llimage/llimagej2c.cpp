@@ -51,6 +51,13 @@ std::string LLImageJ2C::getEngineInfo()
     return impl->getEngineInfo();
 }
 
+//static
+std::string LLImageJ2C::getEngineName()
+{
+    std::unique_ptr<LLImageJ2CImpl> impl(fallbackCreateLLImageJ2CImpl());
+    return impl->getEngineName();
+}
+
 LLImageJ2C::LLImageJ2C() :  LLImageFormatted(IMG_CODEC_J2C),
                             mMaxBytes(0),
                             mRawDiscardLevel(-1),

@@ -76,6 +76,25 @@ class PinTest(unittest.TestCase):
         self.assertFalse(ready)
         self.assertTrue(any("no neoj2k entry" in p for p in problems))
 
+    def test_require_fails_on_the_placeholder_only(self):
+        import contextlib
+        import io
+        import sys
+        for autobuild, lts_json, expected in ((xml("0.0.0.0", ZERO, ZERO), lts("0.0.0.0", "0" * 63 + "1"), 1),
+                                              (xml("0.1.0.0", REAL, REAL), lts("0.1.0.0", "cd" * 32), 0)):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                (root / "autobuild.xml").write_text(autobuild, encoding="utf-8")
+                (root / "scripts").mkdir()
+                (root / "scripts" / "linux_lts_packages.json").write_text(lts_json, encoding="utf-8")
+                saved = (pin.ROOT, sys.argv)
+                pin.ROOT, sys.argv = root, ["ci_neoj2k_pin.py", "--require"]
+                try:
+                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(pin.main(), expected)
+                finally:
+                    pin.ROOT, sys.argv = saved
+
 
 if __name__ == "__main__":
     unittest.main()

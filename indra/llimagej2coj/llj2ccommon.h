@@ -36,6 +36,12 @@
 #include <cmath>
 #include <string>
 
+// The texture cache key of the J2C codec (LLImageJ2C::getEngineInfo, LastJ2CVersion): what the OpenJPEG build has always
+// given ("OpenJPEG: 2.5.4, Runtime: 2.5.4"), also given by the neo-j2k build, so that switching between them never purges
+// the texture cache. The OpenJPEG build computes it from the library; llimage/tests/llimagej2c_decode_test.cpp checks
+// that it equals this constant in both builds.
+#define LL_J2C_CACHE_KEY "OpenJPEG: 2.5.4, Runtime: 2.5.4"
+
 const F32 LAST_TCP_RATE = 1.f/DEFAULT_COMPRESSION_RATE; // should be 8, giving a 1:8 ratio
 
 namespace LLJ2CCommon

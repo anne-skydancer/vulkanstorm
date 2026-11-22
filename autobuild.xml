@@ -3489,6 +3489,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -3535,6 +3536,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DADDRESS_SIZE:STRING=$AUTOBUILD_ADDRSIZE</string>
                   <string>-DROOT_PROJECT_NAME:STRING=SecondLife</string>
                   <string>-DINSTALL_PROPRIETARY=FALSE</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -3967,6 +3969,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-G</string>
                   <string>Ninja</string>
                   <string>-DLL_TESTS=Off</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -3994,6 +3997,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-G</string>
                   <string>Ninja</string>
                   <string>-DLL_TESTS=Off</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
               </map>
               <key>build</key>
@@ -4124,6 +4128,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>${AUTOBUILD_WIN_CMAKE_GEN|NOTWIN}</string>
                   <string>-A</string>
                   <string>${AUTOBUILD_WIN_VSPLATFORM|NOTWIN}</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -4168,6 +4173,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
                   <string>-DFMODSTUDIO:BOOL=OFF</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -4205,6 +4211,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>${AUTOBUILD_WIN_CMAKE_GEN|NOTWIN}</string>
                   <string>-A</string>
                   <string>${AUTOBUILD_WIN_VSPLATFORM|NOTWIN}</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
@@ -4246,6 +4253,7 @@ Copyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors</string>
                   <string>-DUSE_FMODSTUDIO:BOOL=OFF</string>
                   <string>-DOPENAL:BOOL=OFF</string>
                   <string>-DFMODSTUDIO:BOOL=OFF</string>
+                  <string>-DUSE_NEOJ2K:BOOL=ON</string>
                 </array>
                 <key>arguments</key>
                 <array>
