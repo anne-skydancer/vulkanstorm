@@ -7,7 +7,7 @@ texture-sized images. **The viewer uses it by default**; OpenJPEG stays availabl
 
 ## The option
 
-`USE_NEOJ2K` (default **ON**) picks the codec package:
+`USE_NEOJ2K` (default **ON** on Windows and Linux, OFF elsewhere: 3p-neoj2k has packages for those two only) picks the codec package:
 
 | | `USE_NEOJ2K=ON` (default) | `USE_NEOJ2K=OFF` |
 |---|---|---|
@@ -23,9 +23,9 @@ linked when the option is on. `indra/cmake/NeoJ2K.cmake` carries the option; `US
 
 Where it is set, so that every way of configuring builds neo-j2k:
 
-- `indra/cmake/NeoJ2K.cmake`: the CMake default is ON.
-- `autobuild.xml`: `-DUSE_NEOJ2K:BOOL=ON` in the `configure` options of every configuration that lists CMake options, on Windows and
-  Linux (the configurations `ReleaseFS`, `ReleaseFS_open`, `RelWithDebInfoFS` and the others go through
+- `indra/cmake/NeoJ2K.cmake`: the CMake default is ON on Windows and Linux and OFF elsewhere; ON on another platform stops the configure.
+- `autobuild.xml`: `-DUSE_NEOJ2K:BOOL=ON` in the `configure` options of every Windows and Linux configuration that lists CMake options (never in the `common` block, which macOS
+  inherits) (the configurations `ReleaseFS`, `ReleaseFS_open`, `RelWithDebInfoFS` and the others go through
   `scripts/configure_firestorm.sh`, which passes the option: ON by default, `--no-neoj2k` for OpenJPEG, always OFF
   on macOS, which has no neo-j2k package). The two configurations that set `INSTALL_PROPRIETARY=TRUE` (Kakadu) are
   left alone: with `USE_KDU` on, `USE_NEOJ2K` is an error.
