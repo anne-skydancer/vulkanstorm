@@ -11,7 +11,7 @@ texture-sized images. **The viewer uses it by default**; OpenJPEG stays availabl
 
 | | `USE_NEOJ2K=ON` (default) | `USE_NEOJ2K=OFF` |
 |---|---|---|
-| Package | `neoj2k` ([3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), release v0.1.0) | `openjpeg` ([3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg)) |
+| Package | `neoj2k` ([3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), release v0.1.3) | `openjpeg` ([3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg)) |
 | Library | a static library built from the neo-j2k v0.1.3 source and linked into the executable (`NEOJ2K_STATIC`, default ON: no `neoj2k.dll` or `libneoj2k.so` ships); with `NEOJ2K_STATIC=OFF`, the package's `neoj2k.dll` (delay-loaded, exports `nj2k_*` only) or `libneoj2k.so` | `openjp2.dll` (delay-loaded) |
 | Implementation | `indra/llimagej2cneo` | `indra/llimagej2coj` |
 | Decode | neo-j2k | OpenJPEG |

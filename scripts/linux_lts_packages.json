@@ -10,10 +10,10 @@
       }
     },
     "neoj2k": {
-      "version": "0.1.0",
+      "version": "0.1.3",
       "linux64": {
-        "url": "https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.1.0/neoj2k-0.1.0-linux64-lts-44841637446.tar.zst",
-        "hash": "cd9f5082e665220c626caad8d16fb20e9293bdd66e0173e565d200b481cd6f0d",
+        "url": "https://github.com/anne-skydancer/3p-neoj2k/releases/download/v0.1.3/neoj2k-0.1.3-linux64-lts-45176195663.tar.zst",
+        "hash": "dfc0f9b95d0e8d132b202daf60838552fb677691a4fd860381c5c5239ad025be",
         "hash_algorithm": "sha256"
       }
     },
