@@ -122,10 +122,11 @@ runs:
         sudo apt-get -o Acquire::Retries=3 update
         # linux-lts pins GCC 14 (Ubuntu 24.04's libstdc++). The host build
         # takes the newest GCC its runner's Ubuntu ships: GCC 14 on 24.04,
-        # GCC 15 on 26.04.
+        # GCC 16 (a snapshot of the
+        # 16 branch, universe) on 26.04.
         gcc=$VKSTORM_GCC
         if [ -z "$gcc" ]; then
-          for v in 15 14; do
+          for v in 16 15 14; do
             if apt-get install -s "gcc-$v" "g++-$v" > /dev/null 2>&1; then gcc=$v; break; fi
           done
         fi
