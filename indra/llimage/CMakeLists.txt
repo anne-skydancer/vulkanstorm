@@ -100,7 +100,9 @@ if (LL_TESTS)
     else ()
       set(j2c_codec_dll openjp2.dll)
     endif ()
+    if (NOT (USE_NEOJ2K AND NEOJ2K_STATIC)) # a static neo-j2k has no DLL
     add_custom_command(TARGET llimagej2c_corpus_tool POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ARCH_PREBUILT_DIRS_RELEASE}/${j2c_codec_dll}" "$<TARGET_FILE_DIR:llimagej2c_corpus_tool>")
+    endif ()
   endif ()
 endif (LL_TESTS)

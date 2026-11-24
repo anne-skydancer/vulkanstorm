@@ -67,6 +67,7 @@ if (WINDOWS)
     else ()
         set(J2C_CODEC_DLL openjp2.dll)
     endif ()
+    if (NOT (USE_NEOJ2K AND NEOJ2K_STATIC)) # <Vulkanstorm> a static neo-j2k has no DLL
     set(OPENJPEG_RELEASE
         "${ARCH_PREBUILT_DIRS_RELEASE}/${J2C_CODEC_DLL}")
     add_custom_command( TARGET llui_libtest POST_BUILD
@@ -80,6 +81,7 @@ if (WINDOWS)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different 
             ${OPENJPEG_DEBUG} ${CMAKE_CURRENT_BINARY_DIR}
         )
+    endif ()
   
 endif (WINDOWS)
 
