@@ -12,7 +12,7 @@ texture-sized images. **The viewer uses it by default**; OpenJPEG stays availabl
 | | `USE_NEOJ2K=ON` (default) | `USE_NEOJ2K=OFF` |
 |---|---|---|
 | Package | `neoj2k` ([3p-neoj2k](https://github.com/anne-skydancer/3p-neoj2k), release v0.1.0) | `openjpeg` ([3p-openjpeg](https://github.com/anne-skydancer/3p-openjpeg)) |
-| Library | `neoj2k.dll` (delay-loaded, exports `nj2k_*` only), `libneoj2k.so` on Linux | `openjp2.dll` (delay-loaded) |
+| Library | a static library built from the neo-j2k v0.1.3 source and linked into the executable (`NEOJ2K_STATIC`, default ON: no `neoj2k.dll` or `libneoj2k.so` ships); with `NEOJ2K_STATIC=OFF`, the package's `neoj2k.dll` (delay-loaded, exports `nj2k_*` only) or `libneoj2k.so` | `openjp2.dll` (delay-loaded) |
 | Implementation | `indra/llimagej2cneo` | `indra/llimagej2coj` |
 | Decode | neo-j2k | OpenJPEG |
 | Encode (uploads, bakes, snapshots) | neo-j2k (byte-identical to OpenJPEG's for the viewer's settings) | OpenJPEG |
@@ -33,12 +33,17 @@ Where it is set, so that every way of configuring builds neo-j2k:
   (`scripts/ci_release_config.py` checks it).
 - `fs-build-variables` carries no codec option.
 
+`NEOJ2K_STATIC` (default ON, a CMake option of `indra/cmake/NeoJ2K.cmake`) makes the default build fetch the neo-j2k v0.1.3 release source (URL and SHA-256 in that file) and build its static
+library with the package's options (AVX2, no OpenSim profile), so the build needs no `neoj2k` package and the viewer ships no neo-j2k DLL; the licence files `licenses/neoj2k.txt` and
+`licenses/openjpeg.txt` are written from that source. Configure with `-DNEOJ2K_STATIC:BOOL=OFF` for the shared library of the package (the CI action `viewer-build` has the input `neoj2k_static`, default `true`,
+for it). The `<platform>-openjpeg` jobs are unaffected.
+
 Local configure: `autobuild configure -A 64 -c ReleaseFS_open` builds neo-j2k; add `-- --no-neoj2k` (or
 `-DUSE_NEOJ2K:BOOL=OFF`, which wins) for the OpenJPEG build.
 
 CI builds both options on every pull request and qualification build: the `windows`, `linux` and `linux-lts` jobs are
 neo-j2k, and the `<platform>-openjpeg` jobs of `build-windows.yaml`, `build-linux.yaml` and `build-linux-lts.yaml` pass
-`-DUSE_NEOJ2K:BOOL=OFF`. The builds need the released package named in `autobuild.xml` and
+`-DUSE_NEOJ2K:BOOL=OFF`. The shared-library builds (`NEOJ2K_STATIC=OFF`) need the released package named in `autobuild.xml` and
 `scripts/linux_lts_packages.json`: a placeholder entry (version `0.0.0.0`, zero hashes) stops them at once
 (`scripts/ci_neoj2k_pin.py --require`, tested by `scripts/tests/test_neoj2k_pin.py`).
 
@@ -121,4 +126,4 @@ are one thread whatever the pool does (neo-j2k `doc/api.md`, "Threads in one ima
 ## Licence
 
 neo-j2k is BSD-2-Clause and ports code from OpenJPEG (BSD-2-Clause). A `USE_NEOJ2K` build ships `licenses/neoj2k.txt`
-and `licenses/openjpeg.txt` from the package. See `doc/licensing.md`.
+and `licenses/openjpeg.txt` (from the package, or written from the release source in a static build). See `doc/licensing.md`.
