@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# The clang-tidy checks of the analysis workflow (doc/clean/analysis.md), passed with --config-file so that no
+# .clang-tidy sits in the tree (it would change every IDE's behaviour). C++20 is the project standard: the
+# modernize checks that need C++23 (std::print) are off, as are the ones that only rewrite style.
+Checks: >-
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-reserved-identifier,
+  -bugprone-branch-clone,
+  performance-*,
+  concurrency-*,
+  -concurrency-mt-unsafe,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-std-print,
+  -modernize-use-nodiscard,
+  cppcoreguidelines-pro-type-member-init,
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-virtual-class-destructor,
+  cppcoreguidelines-prefer-member-initializer,
+  cppcoreguidelines-missing-std-forward,
+  cppcoreguidelines-rvalue-reference-param-not-moved
+WarningsAsErrors: ''

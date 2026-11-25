@@ -1,0 +1,7 @@
+# The llcommon integration tests that run under ThreadSanitizer: threaded, and without coroutines.
+# Boost.Fiber is prebuilt without TSan fibre annotations, so a test that switches fibres (lleventcoro, llcond,
+# workqueue, llleap, llprocess, llcoproc*) would report races that are not there; leave those out.
+llmainthreadtask
+threadsafeschedule
+llsingleton
+lltrace

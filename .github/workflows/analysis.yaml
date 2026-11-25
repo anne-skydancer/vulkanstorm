@@ -1,0 +1,237 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
+#
+# Static analysis and sanitizers for the C++ cleanup (doc/clean/plan.md, doc/clean/analysis.md): tools, not
+# agents, find the mechanical issues first. A branch clean/<lib> analyses indra/<lib> and its own tests;
+# clean/newview-<area> runs clang-tidy over the newview sources the branch changed. Any other pull request into
+# release-clean (this workflow's own, for one) analyses llcommon as a self-test; a clean/<name> that names no
+# library runs nothing and says so. The first run on a library only reports and creates its baseline; after that
+# the report job is red on findings the committed baseline (.github/analysis/baseline/<lib>.json) does not hold.
+# Not a build workflow (it publishes nothing and is not named build-*); no compile cache.
+name: Analysis
+
+on:
+  push:
+    branches: ["clean/**"]
+  pull_request:
+    branches: ["release-clean"]
+    paths-ignore:
+      - 'doc/**'
+      - '**/*.md'
+  # Dispatchable only once the file is on the default branch; kept for that day.
+  workflow_dispatch:
+    inputs:
+      lib:
+        description: "The library to analyse (llcommon, llmath, ...), or newview-<area>."
+        type: string
+        default: llcommon
+
+permissions:
+  contents: read
+
+# One run per branch: a push and its pull request, or a newer push, replace the one before.
+concurrency:
+  group: analysis-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  AUTOBUILD_ADDRSIZE: 64
+  AUTOBUILD_CONFIGURATION: ReleaseFS_open
+  AUTOBUILD_VSVER: "180"
+  LL_SKIP_REQUIRE_SYSROOT: 1
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      lib: ${{ steps.plan.outputs.lib }}
+      scope: ${{ steps.plan.outputs.scope }}
+      targets: ${{ steps.plan.outputs.targets }}
+      tsan_targets: ${{ steps.plan.outputs.tsan_targets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: plan
+        env:
+          HEAD_REF: ${{ github.head_ref || github.ref_name }}
+          EVENT: ${{ github.event_name }}
+          LIB_INPUT: ${{ inputs.lib }}
+        run: python3 scripts/ci_analysis.py plan
+
+  clang-tidy:
+    name: clang-tidy
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+      SCOPE: ${{ needs.plan.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/analysis-setup
+        with:
+          mode: tidy
+          directory: build-tidy
+      - name: clang-tidy
+        run: |
+          mkdir -p analysis-out
+          python3 scripts/ci_analysis.py tidy --dir build-tidy --lib "$LIB" --scope "$SCOPE" --out analysis-out/clang-tidy.log
+      - name: Findings
+        if: always()
+        run: python3 scripts/ci_analysis.py collect --job clang-tidy --lib "$LIB" --out analysis-out --log analysis-out/clang-tidy.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: analysis-clang-tidy
+          path: analysis-out
+          retention-days: 14
+
+  asan:
+    name: ASan + UBSan + LSan
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.scope == 'lib'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+      TARGETS: ${{ needs.plan.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/analysis-setup
+        with:
+          mode: asan
+          directory: build-asan
+      # The tests run as part of this build (POST_BUILD steps), so a plain failed test or a compile error
+      # shows up in the make log; sanitizer reports go to the log files and never change a test's exit code
+      # (exitcode=0), so that the report, not the first failing test, tells what is wrong. The build keeps going.
+      - name: Build the library and run its tests
+        run: |
+          mkdir -p analysis-out san
+          san="$PWD/san"
+          export ASAN_OPTIONS="detect_leaks=1:detect_stack_use_after_return=0:allow_user_segv_handler=0:exitcode=0:log_path=$san/report"
+          export LSAN_OPTIONS="exitcode=0:log_path=$san/report"
+          export UBSAN_OPTIONS="print_stacktrace=1:log_path=$san/report"
+          set +e
+          # shellcheck disable=SC2086
+          cmake --build build-asan --target "$LIB" $TARGETS --parallel 4 -- -k 2>&1 | tee analysis-out/build.log
+          echo "build exit status ${PIPESTATUS[0]}"
+      - name: Findings
+        if: always()
+        run: python3 scripts/ci_analysis.py collect --job asan --lib "$LIB" --out analysis-out --log analysis-out/build.log --san-dir san
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: analysis-asan
+          path: |
+            analysis-out
+            san
+          retention-days: 14
+
+  tsan:
+    name: TSan
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.scope == 'lib' && needs.plan.outputs.tsan_targets != ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 180
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+      TARGETS: ${{ needs.plan.outputs.tsan_targets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/analysis-setup
+        with:
+          mode: tsan
+          directory: build-tsan
+      # Only the threaded tests without coroutines (.github/analysis/tsan/<lib>.txt).
+      - name: Build the library and run its threaded tests
+        run: |
+          mkdir -p analysis-out san
+          export TSAN_OPTIONS="halt_on_error=0:second_deadlock_stack=1:exitcode=0:log_path=$PWD/san/report"
+          set +e
+          # shellcheck disable=SC2086
+          cmake --build build-tsan --target "$LIB" $TARGETS --parallel 4 -- -k 2>&1 | tee analysis-out/build.log
+          echo "build exit status ${PIPESTATUS[0]}"
+      - name: Findings
+        if: always()
+        run: python3 scripts/ci_analysis.py collect --job tsan --lib "$LIB" --out analysis-out --log analysis-out/build.log --san-dir san
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: analysis-tsan
+          path: |
+            analysis-out
+            san
+          retention-days: 14
+
+  msvc:
+    name: MSVC /analyze
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.scope == 'lib'
+    runs-on: windows-2025
+    timeout-minutes: 180
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/analysis-setup
+        with:
+          mode: msvc
+          directory: build-msvc
+      - name: Analyse the library
+        shell: bash
+        run: |
+          mkdir -p analysis-out
+          set +e
+          cmake --build build-msvc --config RelWithDebInfo --target "$LIB" --parallel 3 2>&1 | tee analysis-out/build.log
+          echo "build exit status ${PIPESTATUS[0]}"
+      - name: Findings
+        if: always()
+        shell: bash
+        run: python scripts/ci_analysis.py collect --job msvc --lib "$LIB" --out analysis-out --log analysis-out/build.log --dir build-msvc
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: analysis-msvc
+          path: analysis-out
+          retention-days: 14
+
+  # The verdict: red when a job failed to run or found something the baseline does not hold. Also writes
+  # the baseline of this run (baseline-<lib>.json in the artifact) for the update procedure of doc/clean/analysis.md.
+  report:
+    name: report
+    needs: [plan, clang-tidy, asan, tsan, msvc]
+    if: always() && needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+      RESULTS: '{"clang-tidy":"${{ needs.clang-tidy.result }}","asan":"${{ needs.asan.result }}","tsan":"${{ needs.tsan.result }}","msvc":"${{ needs.msvc.result }}"}'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: analysis-*
+          path: collected
+      - name: Report
+        run: python3 scripts/ci_analysis.py report --lib "$LIB" --dir collected --out report-out --needs "$RESULTS"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: analysis-report-${{ needs.plan.outputs.lib }}
+          path: report-out
+          retention-days: 14
