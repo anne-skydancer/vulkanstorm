@@ -64,7 +64,7 @@ LLSD ll_sd_from_U32(const U32 val)
     v.resize(4);
     memcpy(&(v[0]), &net_order, 4);     /* Flawfinder: ignore */
 
-    return LLSD(v);
+    return {v};
 }
 
 U32 ll_U32_from_sd(const LLSD& sd)
@@ -95,7 +95,7 @@ LLSD ll_sd_from_U64(const U64 val)
     memcpy(&(v[0]), &high, 4);      /* Flawfinder: ignore */
     memcpy(&(v[4]), &low, 4);       /* Flawfinder: ignore */
 
-    return LLSD(v);
+    return {v};
 }
 
 U64 ll_U64_from_sd(const LLSD& sd)
@@ -124,7 +124,7 @@ LLSD ll_sd_from_ipaddr(const U32 val)
     v.resize(4);
     memcpy(&(v[0]), &val, 4);       /* Flawfinder: ignore */
 
-    return LLSD(v);
+    return {v};
 }
 
 U32 ll_ipaddr_from_sd(const LLSD& sd)

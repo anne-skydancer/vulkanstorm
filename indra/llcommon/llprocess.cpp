@@ -529,7 +529,7 @@ public:
         // Since we've already clamped 'readlen', we can think of no reason
         // why mStream.read() should read fewer than 'readlen' bytes.
         // Nonetheless, use the actual retrieved length.
-        return std::string(&buffer[0], mStream.gcount());
+        return {&buffer[0], static_cast<std::string::size_type>(mStream.gcount())};
     }
 
     std::string peek(size_type offset=0, size_type len=npos) const override
@@ -539,8 +539,8 @@ public:
         size_type   want_end    = (len == npos)? npos : (real_offset + len);
         std::size_t real_end    = (std::min)(mStreambuf.size(), std::size_t(want_end));
         boost::asio::streambuf::const_buffers_type cbufs = mStreambuf.data();
-        return std::string(boost::asio::buffers_begin(cbufs) + real_offset,
-                           boost::asio::buffers_begin(cbufs) + real_end);
+        return {boost::asio::buffers_begin(cbufs) + real_offset,
+                           boost::asio::buffers_begin(cbufs) + real_end};
     }
 
     size_type find(const std::string& seek, size_type offset=0) const override

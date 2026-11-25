@@ -502,7 +502,7 @@ inline std::string chop_tail_copy(
     const std::string& in,
     std::string::size_type count)
 {
-    return std::string(in, 0, in.length() - count);
+    return {in, 0, in.length() - count};
 }
 
 /**

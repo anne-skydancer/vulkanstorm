@@ -633,7 +633,7 @@ private:
 
     static NameDesc makeNameDesc(const DispatchMap::value_type& item)
     {
-        return NameDesc(item.first, item.second->mDesc);
+        return {item.first, item.second->mDesc};
     }
 
     class LLSDArgsMapper;

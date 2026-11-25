@@ -1464,7 +1464,7 @@ namespace LLError
             return s;
         }
 
-        return std::string(s, where + p.size());
+        return {s, where + p.size()};
     }
 
     void replaceChar(std::string& s, char old, char replacement)

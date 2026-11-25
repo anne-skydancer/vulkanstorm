@@ -319,8 +319,8 @@ namespace
         LLSD::Real      asReal() const override;
         LLSD::String    asString() const override    { return mValue; }
         LLSD::UUID      asUUID() const override  { return LLUUID(mValue); }
-        LLSD::Date      asDate() const override  { return LLDate(mValue); }
-        LLSD::URI       asURI() const override   { return LLURI(mValue); }
+        LLSD::Date      asDate() const override  { return {mValue}; }
+        LLSD::URI       asURI() const override   { return {mValue}; }
         size_t          size() const override    { return mValue.size(); }
         const LLSD::String& asStringRef() const override { return mValue; }
 

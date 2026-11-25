@@ -230,7 +230,7 @@ public:
 // which would break the invariants of the timing hierarchy logic
 LL_FORCE_INLINE class BlockTimer timeThisBlock(class BlockTimerStatHandle& timer)
 {
-    return BlockTimer(timer);
+    return {timer};
 }
 
 // stores a "named" timer instance to be reused via multiple BlockTimer stack instances

@@ -418,7 +418,7 @@ std::string LLFile::getContents(const std::string& filename)
         size_t nread = fread(buffer.data(), 1, length, fp);
         fclose(fp);
 
-        return std::string(buffer.data(), nread);
+        return {buffer.data(), nread};
     }
 
     return LLStringUtil::null;

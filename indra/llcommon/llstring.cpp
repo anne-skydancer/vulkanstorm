@@ -38,13 +38,13 @@
 
 std::string ll_safe_string(const char* in)
 {
-    if(in) return std::string(in);
+    if(in) return {in};
     return {};
 }
 
 std::string ll_safe_string(const char* in, S32 maxlen)
 {
-    if(in && maxlen > 0 ) return std::string(in, maxlen);
+    if(in && maxlen > 0 ) return {in, static_cast<std::string::size_type>(maxlen)};
 
     return {};
 }
@@ -1205,7 +1205,7 @@ std::string LLStringOps::getDatetimeCode (const std::string& key)
     }
     else
     {
-        return std::string("");
+        return {""};
     }
 }
 
