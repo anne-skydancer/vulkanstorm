@@ -110,6 +110,15 @@ to `.github/analysis/baseline/<lib>.json`. **Each cleanup pull request commits i
 lives in the pull request and the owner reviews it with the code: shrink it when the cleanup fixes findings; add to it
 only for a finding the owner accepts. newview has one baseline per area (`baseline/newview-<area>.json`).
 
+## Suppressions
+A finding that is proven not to be a bug is suppressed, with the reason written beside the entry, never in a list nobody
+reads:
+- Sanitizers: `.github/analysis/suppressions/<lib>-lsan.txt` (LeakSanitizer) and `<lib>-tsan.txt` (ThreadSanitizer). The
+  `asan` and `tsan` jobs add `suppressions=<file>` to `LSAN_OPTIONS` / `TSAN_OPTIONS` when the file exists and say so in
+  the job summary. Every entry has a comment with its reason; a suppression without one is not accepted in review.
+- clang-tidy: `// NOLINTNEXTLINE(check): reason` (or `NOLINTBEGIN`/`NOLINTEND` around a macro) in the source, next to the
+  code. A check that does not fit the code base is disabled in `.github/analysis/clang-tidy.yaml` with the reason there.
+- MSVC `/analyze`: `#pragma warning(suppress : Cnnnn)` or `push`/`disable`/`pop` with the reason in the comment above.
 ## Triage
 
 The `triage` job runs after the analysis jobs and turns their findings into cases a person can act on. No AI and no API

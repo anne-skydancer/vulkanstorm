@@ -4,6 +4,10 @@
 `release-clean` was cut from the tip of `vkstorm-release` (537be74479) on 2026-11-25. It is a work branch: the base of
 the clean C++ code that the later Rust rewrite starts from. Pushes to it build and publish nothing; pull requests into it
 get the full CI.
+No `<Vulkanstorm>` markers and no upstream merges. `release-clean` is the clean base of the Rust port, not a product line:
+cleanup commits do not carry per-line `<Vulkanstorm>` markers (the commit messages say what changed and why), and the branch
+takes no merges from upstream Firestorm or Linden Lab. Linden Lab and Firestorm licence headers stay unchanged. Markers
+that earlier hotfixes left in the code are kept as they are.
 
 ## One branch per subsystem, one at a time
 
