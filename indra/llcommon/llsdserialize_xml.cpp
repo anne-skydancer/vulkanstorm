@@ -354,7 +354,7 @@ private:
     bool mInLLSDElement;            // true if we're on LLSD
     bool mGracefullStop;            // true if we found the </llsd
 
-    typedef std::deque<LLSD*> LLSDRefStack;
+    using LLSDRefStack = std::deque<LLSD*>;
     LLSDRefStack mStack;
     std::stack< Element> mStackElements;
 

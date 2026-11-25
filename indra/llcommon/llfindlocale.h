@@ -27,9 +27,9 @@
 #ifndef __findlocale_h_
 #define __findlocale_h_
 
-typedef const char* FL_Lang;
-typedef const char* FL_Country;
-typedef const char* FL_Variant;
+using FL_Lang = char*;
+using FL_Country = char*;
+using FL_Variant = char*;
 
 struct FL_Locale {
   FL_Lang    lang;
@@ -37,18 +37,18 @@ struct FL_Locale {
   FL_Variant variant;
 };
 
-typedef enum {
+using FL_Success = enum {
   /* for some reason we failed to even guess: this should never happen */
   FL_FAILED        = 0,
   /* couldn't query locale -- returning a guess (almost always English) */
   FL_DEFAULT_GUESS = 1,
   /* the returned locale type was found by successfully asking the system */
   FL_CONFIDENT     = 2
-} FL_Success;
+};
 
-typedef enum {
+using FL_Domain = enum {
   FL_MESSAGES = 0
-} FL_Domain;
+};
 
 /* This allocates/fills in a FL_Locale structure with pointers to
    strings (which should be treated as static), or NULL for inappropriate /

@@ -91,7 +91,7 @@ namespace LLError
         Control functions.
     */
 
-    typedef std::function<void(const std::string&)> FatalFunction;
+    using FatalFunction = std::function<void(const std::string&)>;
 
     LL_COMMON_API void setFatalFunction(const FatalFunction&);
         // The fatal function will be called after an message of LEVEL_ERROR
@@ -128,7 +128,7 @@ namespace LLError
         FatalFunction mPrev;
     };
 
-    typedef std::string (*TimeFunction)();
+    using TimeFunction = std::string (*)();
     LL_COMMON_API std::string utcTime();
 
     LL_COMMON_API void setTimeFunction(TimeFunction);
@@ -172,7 +172,7 @@ namespace LLError
         bool mWantsMultiline;
     };
 
-    typedef std::shared_ptr<Recorder> RecorderPtr;
+    using RecorderPtr = std::shared_ptr<Recorder>;
 
     /**
      * Instantiate GenericRecorder with a callable(level, message) to get
@@ -231,7 +231,7 @@ namespace LLError
         Utilities for use by the unit tests of LLError itself.
     */
 
-    typedef LLPointer<LLRefCount> SettingsStoragePtr;
+    using SettingsStoragePtr = LLPointer<LLRefCount>;
     LL_COMMON_API SettingsStoragePtr saveAndResetSettings();
     LL_COMMON_API void restoreSettings(SettingsStoragePtr pSettingsStorage);
 

@@ -45,7 +45,7 @@
 template <typename T>
 struct compare_pointer_contents
 {
-    typedef const T* Tptr;
+    using Tptr = T*;
     bool operator()(const Tptr& a, const Tptr& b) const
     {
         return *a < *b;

@@ -35,7 +35,7 @@
  * Attempts to mostly mirror the POSIX style IO functions.
  */
 
-typedef FILE    LLFILE;
+using LLFILE = FILE;
 
 #include <fstream>
 #include <sys/stat.h>
@@ -43,7 +43,7 @@ typedef FILE    LLFILE;
 #if LL_WINDOWS
 // The Windows version of stat function and stat data structure are called _stat64
 // We use _stat64 here to support 64-bit st_size and time_t values
-typedef struct _stat64  llstat;
+using llstat = struct _stat64;
 #else
 typedef struct stat     llstat;
 #include <sys/types.h>

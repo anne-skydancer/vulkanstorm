@@ -61,7 +61,7 @@ public:
         FLAG_ABORT = 4
     };
 
-    typedef U32 handle_t;
+    using handle_t = U32;
 
     //------------------------------------------------------------------------
 public:
@@ -174,7 +174,7 @@ protected:
     LL::WorkQueue::weak_t mMainQueue;
 
     enum { REQUEST_HASH_SIZE = 512 }; // must be power of 2
-    typedef LLSimpleHash<handle_t, REQUEST_HASH_SIZE> request_hash_t;
+    using request_hash_t = LLSimpleHash<handle_t, REQUEST_HASH_SIZE>;
     request_hash_t mRequestHash;
 
     handle_t mNextHandle;

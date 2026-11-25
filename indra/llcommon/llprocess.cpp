@@ -593,7 +593,7 @@ public:
         if (mEOF)
             return false;
 
-        typedef boost::asio::streambuf::mutable_buffers_type mutable_buffer_sequence;
+        using mutable_buffer_sequence = boost::asio::streambuf::mutable_buffers_type;
         // Try, every time, to read into our streambuf. In fact, we have no
         // idea how much data the child might be trying to send: keep trying
         // until we're convinced we've temporarily exhausted the pipe.
@@ -959,7 +959,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
 
     // Instantiate the proper pipe I/O machinery
     // want to be able to point to apr_proc_t::in, out, err by index
-    typedef apr_file_t* apr_proc_t::*apr_proc_file_ptr;
+    using apr_proc_file_ptr = apr_file_t* apr_proc_t::*;
     static apr_proc_file_ptr members[] =
         { &apr_proc_t::in, &apr_proc_t::out, &apr_proc_t::err };
     for (size_t i = 0; i < NSLOTS; ++i)

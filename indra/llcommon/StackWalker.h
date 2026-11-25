@@ -59,7 +59,7 @@ class StackWalkerInternal;  // forward
 class StackWalker
 {
 public:
-  typedef enum StackWalkOptions
+  using StackWalkOptions = enum StackWalkOptions
   {
     // No addition info will be retrived
     // (only the address is available)
@@ -91,7 +91,7 @@ public:
 
     // Contains all options (default)
     OptionsAll = 0x3F
-  } StackWalkOptions;
+  };
 
   StackWalker(
     bool verbose = true,
@@ -103,7 +103,7 @@ public:
   StackWalker(DWORD dwProcessId, HANDLE hProcess);
   virtual ~StackWalker();
 
-  typedef BOOL (__stdcall *PReadProcessMemoryRoutine)(
+  using PReadProcessMemoryRoutine = BOOL (__stdcall *)(
     HANDLE      hProcess,
     DWORD64     qwBaseAddress,
     PVOID       lpBuffer,
@@ -131,7 +131,7 @@ protected:
 
 protected:
   // Entry for each Callstack-Entry
-  typedef struct CallstackEntry
+  using CallstackEntry = struct CallstackEntry
   {
     DWORD64 offset;  // if 0, we have no valid entry
     CHAR name[STACKWALK_MAX_NAMELEN];
@@ -146,7 +146,7 @@ protected:
     CHAR moduleName[STACKWALK_MAX_NAMELEN];
     DWORD64 baseOfImage;
     CHAR loadedImageName[STACKWALK_MAX_NAMELEN];
-  } CallstackEntry;
+  };
 
   enum CallstackEntryType {firstEntry, nextEntry, lastEntry};
 

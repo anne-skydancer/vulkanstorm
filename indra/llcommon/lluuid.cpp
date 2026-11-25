@@ -448,11 +448,12 @@ static void get_random_bytes(void* buf, int nbytes)
 
 #if LL_WINDOWS
 
-typedef struct _ASTAT_
+using ASTAT = struct _ASTAT_
 {
     ADAPTER_STATUS adapt;
     NAME_BUFFER    NameBuff[30];
-}ASTAT, * PASTAT;
+};
+using PASTAT = ASTAT*;
 
 // static
 S32 LLUUID::getNodeID(unsigned char* node_id)

@@ -47,7 +47,7 @@ class LLEventPump;
 class LLProcess;
 /// LLProcess instances are created on the heap by static factory methods and
 /// managed by ref-counted pointers.
-typedef std::shared_ptr<LLProcess> LLProcessPtr;
+using LLProcessPtr = std::shared_ptr<LLProcess>;
 
 /**
  * LLProcess handles launching an external process with specified command line
@@ -247,7 +247,7 @@ public:
          */
         Optional<std::string> desc;
     };
-    typedef LLSDParamAdapter<Params> LLSDOrParams;
+    using LLSDOrParams = LLSDParamAdapter<Params>;
 
     /**
      * Factory accepting either plain LLSD::Map or Params block.
@@ -310,8 +310,8 @@ public:
     static bool kill(const LLProcessPtr& p, const std::string& who="");
 
 #if LL_WINDOWS
-    typedef int id;                 ///< as returned by getProcessID()
-    typedef HANDLE handle;          ///< as returned by getProcessHandle()
+    using id = int;                 ///< as returned by getProcessID()
+    using handle = HANDLE;          ///< as returned by getProcessHandle()
 #else
     typedef pid_t id;
     typedef pid_t handle;
@@ -364,7 +364,7 @@ public:
     public:
         virtual ~BasePipe() = 0;
 
-        typedef std::size_t size_type;
+        using size_type = std::size_t;
         static const size_type npos;
 
         /**
@@ -566,7 +566,7 @@ private:
     bool mAutokill, mAttached;
     Status mStatus;
     // explicitly want this ptr_vector to be able to store NULLs
-    typedef std::vector<std::unique_ptr<BasePipe>> PipeVector;
+    using PipeVector = std::vector<std::unique_ptr<BasePipe>>;
     PipeVector mPipes;
     apr_pool_t* mPool;
 };

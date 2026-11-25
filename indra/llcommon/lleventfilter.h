@@ -94,7 +94,7 @@ public:
     LLEventTimeoutBase(LLEventPump& source);
 
     /// Callable, can be constructed with std::bind()
-    typedef std::function<void()> Action;
+    using Action = std::function<void()>;
 
     /**
      * Start countdown timer for the specified number of @a seconds. Forward
@@ -509,7 +509,7 @@ public:
  */
 class LLEventLogProxy: public LLEventFilter
 {
-    typedef LLEventFilter super;
+    using super = LLEventFilter;
 public:
     /**
      * Construct LLEventLogProxy, wrapping the specified LLEventPump.
@@ -572,8 +572,8 @@ class LLEventLogProxyFor: private LLEventPumpHolder<T>, public LLEventLogProxy
     // implementation detail of LLEventLogProxyFor. The only reason it's a
     // base class at all is to guarantee that it's constructed first so we can
     // pass it to our LLEventLogProxy base class constructor.
-    typedef LLEventPumpHolder<T> holder;
-    typedef LLEventLogProxy super;
+    using holder = LLEventPumpHolder<T>;
+    using super = LLEventLogProxy;
 
 public:
     LLEventLogProxyFor(const std::string& name, bool tweak=false):

@@ -484,12 +484,12 @@ public:
     /**
      * Options for output
      */
-    typedef enum e_formatter_options_type
+    using EFormatterOptions = enum e_formatter_options_type
     {
         OPTIONS_NONE = 0,
         OPTIONS_PRETTY = 1,
         OPTIONS_PRETTY_BINARY = 2
-    } EFormatterOptions;
+    };
 
     /**
      * @brief Constructor
@@ -775,8 +775,8 @@ protected:
     LLSDFormatter::EFormatterOptions mOptions;
 };
 
-typedef LLSDOStreamer<LLSDNotationFormatter>    LLSDNotationStreamer;
-typedef LLSDOStreamer<LLSDXMLFormatter>         LLSDXMLStreamer;
+using LLSDNotationStreamer = LLSDOStreamer<LLSDNotationFormatter>;
+using LLSDXMLStreamer = LLSDOStreamer<LLSDXMLFormatter>;
 
 /**
  * @class LLSDSerialize
@@ -933,7 +933,7 @@ constexpr size_t UNZIP_NAVMESH_MAX_OUT = 256u * 1024 * 1024;
 class LL_COMMON_API LLUZipHelper : public LLRefCount
 {
 public:
-    typedef enum e_zip_result
+    using EZipRresult = enum e_zip_result
     {
         ZR_OK = 0,
         ZR_MEM_ERROR,
@@ -942,7 +942,7 @@ public:
         ZR_PARSE_ERROR,
         ZR_BUFFER_ERROR,
         ZR_VERSION_ERROR
-    } EZipRresult;
+    };
     // return OK or reason for failure; max_out is required so every caller chooses its cap
     static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out);
     static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out);

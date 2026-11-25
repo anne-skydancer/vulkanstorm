@@ -87,8 +87,8 @@ public:
 #endif
     string_hash_t mStringHash;
 #else
-    typedef std::list<LLStringTableEntry *> string_list_t;
-    typedef string_list_t * string_list_ptr_t;
+    using string_list_t = std::list<LLStringTableEntry *>;
+    using string_list_ptr_t = string_list_t *;
     string_list_ptr_t   *mStringList;
 #endif
 };
@@ -101,7 +101,7 @@ extern LL_COMMON_API LLStringTable gStringTable;
 // e.g. as a member of an LLXmlTree
 // Strings can be inserted only, then quickly looked up
 
-typedef const std::string* LLStdStringHandle;
+using LLStdStringHandle = std::string*;
 
 class LL_COMMON_API LLStdStringTable
 {
@@ -205,7 +205,7 @@ private:
 
 private:
     S32 mTableSize;
-    typedef std::set<LLStdStringHandle, compare_pointer_contents<std::string> > string_set_t;
+    using string_set_t = std::set<LLStdStringHandle, compare_pointer_contents<std::string> >;
     string_set_t* mStringList; // [mTableSize]
 };
 
