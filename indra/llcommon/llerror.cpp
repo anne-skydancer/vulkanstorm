@@ -892,6 +892,7 @@ namespace LLError
             level_names["NONE"]     = LLError::LEVEL_NONE;
         }
 
+        // NOLINTNEXTLINE(modernize-use-ranges): toupper is an overload set, which a range algorithm cannot deduce
         std::transform(name.begin(), name.end(), name.begin(), toupper);
 
         LevelMap::const_iterator i = level_names.find(name);

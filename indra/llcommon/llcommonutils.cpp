@@ -36,7 +36,9 @@ void LLCommonUtils::computeDifference(
     uuid_vec_t vnew_copy(vnew);
     uuid_vec_t vcur_copy(vcur);
 
+    // NOLINTNEXTLINE(modernize-use-ranges): LLUUID has operator< but is not std::totally_ordered, which std::ranges::sort requires
     std::sort(vnew_copy.begin(), vnew_copy.end());
+    // NOLINTNEXTLINE(modernize-use-ranges): same: LLUUID is not std::totally_ordered
     std::sort(vcur_copy.begin(), vcur_copy.end());
 
     size_t maxsize = llmax(vnew_copy.size(), vcur_copy.size());
@@ -45,10 +47,12 @@ void LLCommonUtils::computeDifference(
 
     uuid_vec_t::iterator it;
     // what was removed
+    // NOLINTNEXTLINE(modernize-use-ranges): the ranges version returns a result struct, not the output iterator that erase() takes below
     it = set_difference(vcur_copy.begin(), vcur_copy.end(), vnew_copy.begin(), vnew_copy.end(), vremoved.begin());
     vremoved.erase(it, vremoved.end());
 
     // what was added
+    // NOLINTNEXTLINE(modernize-use-ranges): same as above
     it = set_difference(vnew_copy.begin(), vnew_copy.end(), vcur_copy.begin(), vcur_copy.end(), vadded.begin());
     vadded.erase(it, vadded.end());
 }

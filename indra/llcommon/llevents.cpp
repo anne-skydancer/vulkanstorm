@@ -506,7 +506,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
                         sortnames.emplace_back(cdmi->second, cdmi->first);
                     }
                 }
-                std::sort(sortnames.begin(), sortnames.end());
+                std::ranges::sort(sortnames);
                 std::ostringstream out;
                 out << "New listener '" << name << "' on " << typeid(*this).name() << " '" << getName()
                     << "' would move previous listener '" << dmi->first << "'\nwas: ";

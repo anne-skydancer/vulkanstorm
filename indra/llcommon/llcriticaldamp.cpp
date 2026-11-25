@@ -90,6 +90,7 @@ F32 LLSmoothInterpolation::getInterpolant(F32SecondsImplicit time_constant, bool
 
     if (use_cache)
     {
+        // NOLINTNEXTLINE(modernize-use-ranges): CompareTimeConstants compares an Interpolant with an F32 only, which std::ranges::lower_bound does not accept
         auto find_it = std::lower_bound(sInterpolants.begin(), sInterpolants.end(), time_constant.value(), CompareTimeConstants());
         if (find_it != sInterpolants.end() && find_it->mTimeScale == time_constant)
         {

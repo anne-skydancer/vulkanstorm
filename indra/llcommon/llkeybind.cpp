@@ -211,6 +211,7 @@ LLKeyBind::data_vector_t::const_iterator LLKeyBind::endNonEmpty() const
 {
     // search backwards for last non-empty entry, then turn back into forwards
     // iterator (.base() call)
+    // NOLINTNEXTLINE(modernize-use-ranges): the result is converted back with .base(), which a reverse view does not offer
     return std::find_if_not(mData.rbegin(), mData.rend(),
                             [](const auto& kdata){ return kdata.empty(); }).base();
 }

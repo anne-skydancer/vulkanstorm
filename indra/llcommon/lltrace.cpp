@@ -64,7 +64,7 @@ void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )
     if (mParent)
     {
         std::vector<BlockTimerStatHandle*>& children = mParent->getChildren();
-        auto found_it = std::find(children.begin(), children.end(), mBlock);
+        auto found_it = std::ranges::find(children, mBlock);
         if (found_it != children.end())
         {
             children.erase(found_it);

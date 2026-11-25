@@ -256,8 +256,7 @@ void LLWatchdog::run()
     else
     {
         auto result =
-            std::find_if(mSuspects.begin(),
-                mSuspects.end(),
+            std::ranges::find_if(mSuspects,
                 [](const LLWatchdogEntry* suspect){ return ! suspect->isAlive(); });
         if (result != mSuspects.end())
         {
