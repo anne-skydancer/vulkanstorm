@@ -169,13 +169,11 @@ public:
     constexpr narrow(FROM value): mValue(value) {}
 
     /*---------------------- Narrowing unsigned to signed ----------------------*/
-    template <typename TO,
-              std::enable_if_t<std::is_unsigned_v<FROM> &&
-                                      std::is_signed_v<TO>,
-                                      bool> = true>
+    template <typename TO>
     constexpr
     operator TO() const
-    {
+    requires (std::is_unsigned_v<FROM> &&
+                                      std::is_signed_v<TO>) {
         // The reason we skip the
         // assert(value >= std::numeric_limits<TO>::lowest());
         // like the overload below is that to perform the above comparison,
@@ -187,13 +185,11 @@ public:
     }
 
     /*----------------------- Narrowing all other cases ------------------------*/
-    template <typename TO,
-              std::enable_if_t<! (std::is_unsigned_v<FROM> &&
-                                         std::is_signed_v<TO>),
-                                      bool> = true>
+    template <typename TO>
     constexpr
     operator TO() const
-    {
+    requires (! (std::is_unsigned_v<FROM> &&
+                                         std::is_signed_v<TO>)) {
         // two different assert()s so we can tell which condition failed
         assert(mValue <= std::numeric_limits<TO>::max());
         // Funny, with floating point types min() is "positive epsilon" rather

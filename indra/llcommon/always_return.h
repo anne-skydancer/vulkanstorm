@@ -47,32 +47,24 @@ namespace LL
         AlwaysReturn(DESIRED dft=DESIRED()): mDefault(std::move(dft)) {}
 
         // callable returns a type not convertible to DESIRED, return default
-        template <typename CALLABLE, typename... ARGS,
-                  std::enable_if_t<
-                      ! std::is_convertible_v<
+        template <typename CALLABLE, typename... ARGS>
+        DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
+        requires (! std::is_convertible_v<
                           typename invoke_result<CALLABLE, ARGS...>::type,
                           DESIRED
-                      >,
-                      bool
-                  > =true>
-        DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
-        {
+                      >) {
             // discard whatever callable(args) returns
             std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...);
             return mDefault;
         }
 
         // callable returns a type convertible to DESIRED
-        template <typename CALLABLE, typename... ARGS,
-                  std::enable_if_t<
-                      std::is_convertible_v<
+        template <typename CALLABLE, typename... ARGS>
+        DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
+        requires (std::is_convertible_v<
                           typename invoke_result<CALLABLE, ARGS...>::type,
                           DESIRED
-                      >,
-                      bool
-                  > =true>
-        DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
-        {
+                      >) {
             return { std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...) };
         }
 
