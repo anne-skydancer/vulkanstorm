@@ -124,7 +124,7 @@ namespace LL
                         bool auto_shutdown = true):
             ThreadPoolBase(name, threads, new queue_t(name, capacity, false), auto_shutdown)
         {}
-        ~ThreadPoolUsing() override {}
+        ~ThreadPoolUsing() override = default;
 
         /**
          * obtain a non-const reference to the specific WorkQueue subclass to

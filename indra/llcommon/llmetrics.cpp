@@ -36,7 +36,7 @@
 class LLMetricsImpl
 {
 public:
-    LLMetricsImpl() { }
+    LLMetricsImpl() = default;
     ~LLMetricsImpl();
 
     void recordEvent(const std::string& location, const std::string& mesg, bool success);
@@ -51,8 +51,7 @@ private:
 };
 
 LLMetricsImpl::~LLMetricsImpl()
-{
-}
+= default;
 
 void LLMetricsImpl::recordEventDetails(const std::string& location,
                                     const std::string& mesg,

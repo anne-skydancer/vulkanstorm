@@ -317,8 +317,7 @@ std::string LLURI::escapeQueryVariable(const std::string& s)
 }
 
 LLURI::LLURI()
-{
-}
+= default;
 
 LLURI::LLURI(const std::string& escaped_str)
 {
@@ -445,8 +444,7 @@ LLURI::LLURI(const std::string& scheme,
 }
 
 LLURI::~LLURI()
-{
-}
+= default;
 
 // static
 LLURI LLURI::buildHTTP(const std::string& prefix,

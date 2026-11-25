@@ -359,8 +359,7 @@ LLEventDispatcher::LLEventDispatcher(const std::string& desc, const std::string&
 {}
 
 LLEventDispatcher::~LLEventDispatcher()
-{
-}
+= default;
 
 LLEventDispatcher::DispatchEntry::DispatchEntry(LLEventDispatcher* parent, const std::string& desc):
     mParent(parent),

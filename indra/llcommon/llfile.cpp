@@ -646,7 +646,7 @@ const char *LLFile::tmpdir()
 
 /************** input file stream ********************************/
 
-llifstream::llifstream() {}
+llifstream::llifstream() = default;
 
 // explicit
 llifstream::llifstream(const std::string& _Filename, ios_base::openmode _Mode):
@@ -665,7 +665,7 @@ void llifstream::open(const std::string& _Filename, ios_base::openmode _Mode)
 /************** output file stream ********************************/
 
 
-llofstream::llofstream() {}
+llofstream::llofstream() = default;
 
 // explicit
 llofstream::llofstream(const std::string& _Filename, ios_base::openmode _Mode):

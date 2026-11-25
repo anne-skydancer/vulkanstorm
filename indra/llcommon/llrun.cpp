@@ -167,8 +167,8 @@ LLRunner::LLRunInfo::LLRunInfo(
 }
 
 LLRunnable::LLRunnable()
-{ }
+= default;
 
 // virtual
 LLRunnable::~LLRunnable()
-{ }
+= default;

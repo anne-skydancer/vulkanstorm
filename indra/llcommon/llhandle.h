@@ -152,7 +152,7 @@ public:
     using base_t = LLHandle<T>;
 
     LLRootHandle(T* object) { bind(object); }
-    LLRootHandle() {};
+    LLRootHandle() = default;
     ~LLRootHandle() { unbind(); }
 
     // this is redundant, since an LLRootHandle *is* an LLHandle
@@ -229,7 +229,7 @@ public:
     };
 
 protected:
-    LLCheckedHandleBase() { }
+    LLCheckedHandleBase() = default;
 
 };
 

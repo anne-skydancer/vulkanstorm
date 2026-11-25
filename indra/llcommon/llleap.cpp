@@ -36,8 +36,8 @@
 #pragma warning (disable : 4355) // 'this' used in initializer list: yes, intentionally
 #endif
 
-LLLeap::LLLeap() {}
-LLLeap::~LLLeap() {}
+LLLeap::LLLeap() = default;
+LLLeap::~LLLeap() = default;
 
 class LLLeapImpl: public LLLeap
 {

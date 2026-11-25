@@ -42,8 +42,7 @@ LLCallbackList::LLCallbackList()
 }
 
 LLCallbackList::~LLCallbackList()
-{
-}
+= default;
 
 
 void LLCallbackList::addFunction( callback_t func, void *data)

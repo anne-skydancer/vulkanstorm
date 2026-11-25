@@ -137,7 +137,7 @@ namespace LLPredicate
         {}
 
         Rule()
-        {}
+        = default;
 
         void mandate(ENUM e, bool match)
         {

@@ -980,8 +980,7 @@ namespace LLError
     }
 
     Recorder::~Recorder()
-    {
-    }
+    = default;
 
     bool Recorder::wantsTime()
     {

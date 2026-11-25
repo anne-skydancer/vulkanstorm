@@ -35,8 +35,7 @@ LLMemoryStreamBuf::LLMemoryStreamBuf(const U8* start, S32 length)
 }
 
 LLMemoryStreamBuf::~LLMemoryStreamBuf()
-{
-}
+= default;
 
 void LLMemoryStreamBuf::reset(const U8* start, S32 length)
 {
@@ -64,7 +63,6 @@ LLMemoryStream::LLMemoryStream(const U8* start, S32 length) :
 }
 
 LLMemoryStream::~LLMemoryStream()
-{
-}
+= default;
 
 

@@ -41,8 +41,7 @@ LLMutex::LLMutex() :
 }
 
 LLMutex::~LLMutex()
-{
-}
+= default;
 
 void LLMutex::lock()
 {
@@ -333,8 +332,7 @@ LLCondition::LLCondition() :
 }
 
 LLCondition::~LLCondition()
-{
-}
+= default;
 
 void LLCondition::wait()
 {

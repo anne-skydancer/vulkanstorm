@@ -41,8 +41,7 @@ public:
     {
     }
     virtual ~LLSimpleHashEntry()
-    {
-    }
+    = default;
     HASH_KEY_TYPE getHashKey() const
     {
         return mHashKey;
@@ -68,8 +67,7 @@ public:
         memset(mEntryTable, 0, sizeof(mEntryTable));
     }
     virtual ~LLSimpleHash()
-    {
-    }
+    = default;
 
     virtual int getIndex(HASH_KEY_TYPE key)
     {

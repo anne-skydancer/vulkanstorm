@@ -309,7 +309,7 @@ LLSD map(Ts&&... vs)
 *****************************************************************************/
 struct LLSDParamBase
 {
-    virtual ~LLSDParamBase() {}
+    virtual ~LLSDParamBase() = default;
 };
 
 /**

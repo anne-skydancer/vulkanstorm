@@ -178,7 +178,7 @@ bool LLEventTimeoutBase::running() const
 /*****************************************************************************
 *   LLEventTimeout
 *****************************************************************************/
-LLEventTimeout::LLEventTimeout() {}
+LLEventTimeout::LLEventTimeout() = default;
 
 LLEventTimeout::LLEventTimeout(LLEventPump& source):
     LLEventTimeoutBase(source)

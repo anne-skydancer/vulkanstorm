@@ -434,7 +434,7 @@ namespace
         ImplMap(const DataMap& data) : mData(data) { }
 
     public:
-        ImplMap() { }
+        ImplMap() = default;
 
         ImplMap& makeMap(LLSD::Impl*&) override;
 

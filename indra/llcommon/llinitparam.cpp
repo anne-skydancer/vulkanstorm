@@ -95,7 +95,7 @@ namespace LLInitParam
     // Parser
     //
     Parser::~Parser()
-    {}
+    = default;
 
     void Parser::parserWarning(const std::string& message)
     {

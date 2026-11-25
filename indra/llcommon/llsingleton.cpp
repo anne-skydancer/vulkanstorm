@@ -193,7 +193,7 @@ LLSingletonBase::list_t::size_type LLSingletonBase::get_initializing_size()
     return MasterList::LockedInitializing().get().size();
 }
 
-LLSingletonBase::~LLSingletonBase() {}
+LLSingletonBase::~LLSingletonBase() = default;
 
 void LLSingletonBase::push_initializing(const char* name)
 {

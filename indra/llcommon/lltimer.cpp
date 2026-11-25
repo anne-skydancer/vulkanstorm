@@ -329,7 +329,7 @@ LLTimer::LLTimer()
 }
 
 LLTimer::~LLTimer()
-{}
+= default;
 
 // static
 void LLTimer::initClass()

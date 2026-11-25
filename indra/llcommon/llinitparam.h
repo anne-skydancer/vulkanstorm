@@ -2614,7 +2614,7 @@ namespace LLInitParam
         using default_value_t = LLSD;
 
         ParamValue()
-        {}
+        = default;
 
         ParamValue(const default_value_t& other)
         :   mValue(other)

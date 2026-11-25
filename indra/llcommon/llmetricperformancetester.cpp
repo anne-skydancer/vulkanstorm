@@ -182,8 +182,7 @@ LLMetricPerformanceTesterBasic::LLMetricPerformanceTesterBasic(std::string name)
 }
 
 LLMetricPerformanceTesterBasic::~LLMetricPerformanceTesterBasic()
-{
-}
+= default;
 
 void LLMetricPerformanceTesterBasic::preOutputTestResults(LLSD* sd)
 {
@@ -328,6 +327,5 @@ void LLMetricPerformanceTesterWithSession::analyzePerformance(llofstream* os, LL
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterWithSession::LLTestSession::~LLTestSession()
-{
-}
+= default;
 

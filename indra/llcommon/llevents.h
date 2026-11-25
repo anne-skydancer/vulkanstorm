@@ -182,7 +182,7 @@ public:
     LLListenerOrPumpName(const T& listener): mListener(listener) {}
 
     /// for omitted method parameter: uninitialized mListener
-    LLListenerOrPumpName() {}
+    LLListenerOrPumpName() = default;
 
     /// test for validity
     operator bool() const { return bool(mListener); }
@@ -630,7 +630,7 @@ class LL_COMMON_API LLEventStream: public LLEventPump
 {
 public:
     LLEventStream(const std::string& name, bool tweak=false): LLEventPump(name, tweak) {}
-    ~LLEventStream() override {}
+    ~LLEventStream() override = default;
 
     /// Post an event to all listeners
     bool post(const LLSD& event) override;
@@ -661,7 +661,7 @@ class LL_COMMON_API LLEventMailDrop : public LLEventStream
 {
 public:
     LLEventMailDrop(const std::string& name, bool tweak = false) : LLEventStream(name, tweak) {}
-    ~LLEventMailDrop() override {}
+    ~LLEventMailDrop() override = default;
 
     /// Post an event to all listeners
     bool post(const LLSD& event) override;
@@ -734,7 +734,7 @@ public:
         mReqid(request["reqid"])
     {}
     /// If you don't yet have the request, use setFrom() later.
-    LLReqID() {}
+    LLReqID() = default;
 
     /// Extract and store the ["reqid"] value from an incoming request.
     void setFrom(const LLSD& request)

@@ -115,13 +115,7 @@ void LLKeyData::reset()
 }
 
 LLKeyData& LLKeyData::operator=(const LLKeyData& rhs)
-{
-    mMouse = rhs.mMouse;
-    mKey = rhs.mKey;
-    mMask = rhs.mMask;
-    mIgnoreMasks = rhs.mIgnoreMasks;
-    return *this;
-}
+= default;
 
 bool LLKeyData::operator==(const LLKeyData& rhs)
 {

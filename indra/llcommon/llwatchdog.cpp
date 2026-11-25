@@ -44,7 +44,7 @@ public:
     {
     }
 
-    ~LLWatchdogTimerThread() override {}
+    ~LLWatchdogTimerThread() override = default;
 
     void setSleepTime(long ms) { mSleepMsecs = ms; }
     void stop()
@@ -109,8 +109,7 @@ LLWatchdogTimeout::LLWatchdogTimeout(const std::string& thread_name) :
 }
 
 LLWatchdogTimeout::~LLWatchdogTimeout()
-{
-}
+= default;
 
 bool LLWatchdogTimeout::isAlive() const
 {
@@ -172,8 +171,7 @@ LLWatchdog::LLWatchdog()
 }
 
 LLWatchdog::~LLWatchdog()
-{
-}
+= default;
 
 void LLWatchdog::add(LLWatchdogEntry* e)
 {

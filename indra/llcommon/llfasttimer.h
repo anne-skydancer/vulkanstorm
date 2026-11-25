@@ -207,8 +207,8 @@ private:
     BlockTimer(BlockTimerStatHandle& timer);
 
     // no-copy
-    BlockTimer(const BlockTimer& other);
-    BlockTimer& operator=(const BlockTimer& other);
+    BlockTimer(const BlockTimer& other) = delete;
+    BlockTimer& operator=(const BlockTimer& other) = delete;
 
 private:
     U64                     mStartTime;
