@@ -422,7 +422,7 @@ void LLThread::unpause()
 }
 
 // virtual predicate function -- returns true if the thread should wake up, false if it should sleep.
-bool LLThread::runCondition(void)
+bool LLThread::runCondition()
 {
     // by default, always run.  Handling of pause/unpause is done regardless of this function's result.
     return true;

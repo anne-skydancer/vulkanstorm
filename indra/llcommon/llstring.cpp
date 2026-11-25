@@ -1495,7 +1495,7 @@ void LLStringUtil::setLocale(std::string inLocale)
 
 //static
 template<>
-std::string LLStringUtil::getLocale(void)
+std::string LLStringUtil::getLocale()
 {
     return sLocale;
 };

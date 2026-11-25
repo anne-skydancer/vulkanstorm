@@ -216,11 +216,11 @@ public:
     static void setupDayFormat(const std::string& data);
 
 
-    static long getPacificTimeOffset(void) { return sPacificTimeOffset;}
-    static long getLocalTimeOffset(void) { return sLocalTimeOffset;}
+    static long getPacificTimeOffset() { return sPacificTimeOffset;}
+    static long getLocalTimeOffset() { return sLocalTimeOffset;}
     // Is the Pacific time zone (aka server time zone)
     // currently in daylight savings time?
-    static bool getPacificDaylightTime(void) { return sPacificDaylightTime;}
+    static bool getPacificDaylightTime() { return sPacificDaylightTime;}
     // <FS:TJ> [FIRE-34775] Use PST/PDT when logged into OpenSim
     static bool getUsingPacificTime() { return sUsingPacificTime; }
     // </FS:TJ>
@@ -311,7 +311,7 @@ public:
     LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const format_map_t& substitutions);
     LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const LLSD& substitutions);
     LL_COMMON_API static void setLocale (std::string inLocale);
-    LL_COMMON_API static std::string getLocale (void);
+    LL_COMMON_API static std::string getLocale ();
 
     static bool isValidIndex(const string_type& string, size_type i)
     {
