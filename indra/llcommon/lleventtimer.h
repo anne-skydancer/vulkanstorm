@@ -26,6 +26,7 @@
 
 #ifndef LL_EVENTTIMER_H
 #define LL_EVENTTIMER_H
+#include <utility>
 
 #include "stdtypes.h"
 #include "lldate.h"
@@ -81,10 +82,10 @@ class LLEventTimer::Generic: public LLEventTimer
 public:
     // making TIME generic allows engaging either LLEventTimer constructor
     template <typename TIME>
-    Generic(const TIME& time, bool once, const CALLABLE& callable):
+    Generic(const TIME& time, bool once, CALLABLE callable):
         LLEventTimer(time),
         mOnce(once),
-        mCallable(callable)
+        mCallable(std::move(callable))
     {}
     bool tick() override
     {

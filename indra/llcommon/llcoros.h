@@ -41,6 +41,7 @@
 #include <string>
 #include <exception>
 #include <queue>
+#include <utility>
 
 // e.g. #include LLCOROS_MUTEX_HEADER
 #define LLCOROS_MUTEX_HEADER   <boost/fiber/mutex.hpp>
@@ -296,8 +297,8 @@ private:
 
     struct ExceptionData
     {
-        ExceptionData(const std::string& nm, std::exception_ptr exc):
-            name(nm),
+        ExceptionData(std::string nm, std::exception_ptr exc):
+            name(std::move(nm)),
             exception(exc)
         {}
         // name of coroutine that originally threw this exception

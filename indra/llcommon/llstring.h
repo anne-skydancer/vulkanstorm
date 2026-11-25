@@ -36,6 +36,7 @@
 //#include <locale>
 #include <iomanip>
 #include <algorithm>
+#include <utility>
 #include <vector>
 #include <map>
 #include "llformat.h"
@@ -246,7 +247,7 @@ class LLFormatMapString
 public:
     LLFormatMapString() = default;
     LLFormatMapString(const char* s) : mString(ll_safe_string(s)) {};
-    LLFormatMapString(const std::string& s) : mString(s) {};
+    LLFormatMapString(std::string s) : mString(std::move(s)) {};
     operator std::string() const { return mString; }
     bool operator<(const LLFormatMapString& rhs) const { return mString < rhs.mString; }
     std::size_t length() const { return mString.length(); }
@@ -1064,9 +1065,9 @@ public:
     using super::mIter;
     using super::mEnd;
 
-    InEscString(const_iterator b, const_iterator e, const string_type& escapes):
+    InEscString(const_iterator b, const_iterator e, string_type escapes):
         super(b, e),
-        mEscapes(escapes)
+        mEscapes(std::move(escapes))
     {
         // Even though we've already initialized 'mIter' via our base-class
         // constructor, set it again to check for initial escape char.

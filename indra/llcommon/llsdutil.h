@@ -36,6 +36,7 @@
 #include <cassert>
 #include <memory>                   // std::shared_ptr
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 // U32
@@ -379,7 +380,7 @@ private:
     mutable std::vector<std::shared_ptr<LLSDParamBase>> converters_;
 
 public:
-    LLSDParam(const LLSD& value): value_(value) {}
+    LLSDParam(LLSD value): value_(std::move(value)) {}
 
     /// if we're literally being asked for an LLSD parameter, avoid infinite
     /// recursion
@@ -487,8 +488,8 @@ namespace llsd
 class inArray
 {
 public:
-    inArray(const LLSD& array):
-        _array(array)
+    inArray(LLSD array):
+        _array(std::move(array))
     {}
 
     using const_iterator = LLSD::array_const_iterator;
@@ -510,8 +511,8 @@ using MapEntry = std::map<LLSD::String, LLSD>::value_type;
 class inMap
 {
 public:
-    inMap(const LLSD& map):
-        _map(map)
+    inMap(LLSD map):
+        _map(std::move(map))
     {}
 
     using const_iterator = LLSD::map_const_iterator;

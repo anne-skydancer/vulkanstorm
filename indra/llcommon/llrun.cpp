@@ -28,6 +28,7 @@
 
 #include "linden_common.h"
 #include "llrun.h"
+#include <utility>
 
 #include "llframetimer.h"
 
@@ -158,7 +159,7 @@ LLRunner::LLRunInfo::LLRunInfo(
     F64 next_run_after,
     F64 increment) :
     mHandle(handle),
-    mRunnable(runnable),
+    mRunnable(std::move(runnable)),
     mSchedule(schedule),
     mNextRunAt(next_run_after),
     mIncrement(increment)

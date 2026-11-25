@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llwatchdog.h"
+#include <utility>
 #include "llmutex.h"
 #include "llthread.h"
 
@@ -66,8 +67,8 @@ private:
 };
 
 // LLWatchdogEntry
-LLWatchdogEntry::LLWatchdogEntry(const std::string& thread_name)
-    : mThreadName(thread_name)
+LLWatchdogEntry::LLWatchdogEntry(std::string thread_name)
+    : mThreadName(std::move(thread_name))
     , mThreadID(LLThread::currentID())
 {
 }

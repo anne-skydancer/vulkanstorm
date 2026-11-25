@@ -30,6 +30,7 @@
 
 #include <functional>
 #include <type_traits>
+#include <utility>
 #include <vector>
 #include <list>
 #include <unordered_map>
@@ -200,7 +201,7 @@ namespace LLInitParam
         using value_t = T;
 
         ParamValue(): mValue() {}
-        ParamValue(const default_value_t& other) : mValue(other) {}
+        ParamValue(default_value_t other) : mValue(std::move(other)) {}
 
         void setValue(const value_t& val)
         {
@@ -2613,8 +2614,8 @@ namespace LLInitParam
         ParamValue()
         = default;
 
-        ParamValue(const default_value_t& other)
-        :   mValue(other)
+        ParamValue(default_value_t other)
+        :   mValue(std::move(other))
         {}
 
         void setValue(const value_t& val) { mValue = val; }

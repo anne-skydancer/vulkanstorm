@@ -30,6 +30,7 @@
 
 #include "llapp.h"
 #include "llthread.h"
+#include <utility>
 #include "llmutex.h"
 
 #include "lltimer.h"
@@ -275,8 +276,8 @@ void LLThread::sehHandle()
 }
 #endif
 
-LLThread::LLThread(const std::string& name, apr_pool_t *poolp) :
-    mName(name)
+LLThread::LLThread(std::string name, apr_pool_t *poolp) :
+    mName(std::move(name))
 {
     mRunCondition = new LLCondition();
     mDataLock = new LLMutex();

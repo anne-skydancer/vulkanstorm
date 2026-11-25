@@ -32,6 +32,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 #include <set>
 #include <map>
@@ -201,10 +202,10 @@ class LLDependencies: public LLDependenciesBase
     struct DepNode
     {
         using dep_set = std::set<KEY>;
-        DepNode(const NODE& node_, const dep_set& after_, const dep_set& before_):
+        DepNode(const NODE& node_, dep_set after_, dep_set before_):
             node(node_),
-            after(after_),
-            before(before_)
+            after(std::move(after_)),
+            before(std::move(before_))
         {}
         NODE node;
         dep_set after, before;

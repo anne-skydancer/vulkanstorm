@@ -35,6 +35,7 @@
 #include "llsdutil.h"
 
 #include <functional>
+#include <utility>
 
 class LLEventTimer;
 class LLDate;
@@ -66,9 +67,9 @@ class LLEventMatching: public LLEventFilter
 {
 public:
     /// Pass an LLSD map with keys and values the incoming event must match
-    LLEventMatching(const LLSD& pattern);
+    LLEventMatching(LLSD pattern);
     /// instantiate and connect
-    LLEventMatching(LLEventPump& source, const LLSD& pattern);
+    LLEventMatching(LLEventPump& source, LLSD pattern);
 
     /// Only pass through events matching the pattern
     bool post(const LLSD& event) override;
@@ -412,17 +413,17 @@ class LLStoreListener: public LLEventFilter
 {
 public:
     // pass target and optional path to element
-    LLStoreListener(T& target, const LLSD& path=LLSD(), bool consume=false):
+    LLStoreListener(T& target, LLSD path=LLSD(), bool consume=false):
         LLEventFilter("store"),
         mTarget(target),
-        mPath(path),
+        mPath(std::move(path)),
         mConsume(consume)
     {}
     // construct and connect
-    LLStoreListener(LLEventPump& source, T& target, const LLSD& path=LLSD(), bool consume=false):
+    LLStoreListener(LLEventPump& source, T& target, LLSD path=LLSD(), bool consume=false):
         LLEventFilter(source, "store"),
         mTarget(target),
-        mPath(path),
+        mPath(std::move(path)),
         mConsume(consume)
     {}
 

@@ -61,6 +61,7 @@
 
 #include "llptrto.h"
 #include <functional>
+#include <utility>
 #include <vector>
 #include <deque>
 #include <boost/iterator/iterator_facade.hpp>
@@ -352,9 +353,9 @@ public:
     /// Instantiate an LLTreeDFSIter to start a depth-first walk. Pass
     /// functors to extract the 'child begin' and 'child end' iterators from
     /// each node.
-    LLTreeDFSIter(const ptr_type& node, const func_type& beginfunc, const func_type& endfunc)
-        : mBeginFunc(beginfunc),
-        mEndFunc(endfunc),
+    LLTreeDFSIter(const ptr_type& node, func_type beginfunc, func_type endfunc)
+        : mBeginFunc(std::move(beginfunc)),
+        mEndFunc(std::move(endfunc)),
         mSkipChildren(false)
     {
         // Only push back this node if it's non-NULL!
@@ -475,9 +476,9 @@ public:
     /// Instantiate an LLTreeDFSPostIter to start a depth-first walk. Pass
     /// functors to extract the 'child begin' and 'child end' iterators from
     /// each node.
-    LLTreeDFSPostIter(const ptr_type& node, const func_type& beginfunc, const func_type& endfunc)
-        : mBeginFunc(beginfunc),
-        mEndFunc(endfunc),
+    LLTreeDFSPostIter(const ptr_type& node, func_type beginfunc, func_type endfunc)
+        : mBeginFunc(std::move(beginfunc)),
+        mEndFunc(std::move(endfunc)),
         mSkipAncestors(false)
         {
         if (! node)
@@ -628,9 +629,9 @@ public:
     /// Instantiate an LLTreeBFSIter to start a depth-first walk. Pass
     /// functors to extract the 'child begin' and 'child end' iterators from
     /// each node.
-    LLTreeBFSIter(const ptr_type& node, const func_type& beginfunc, const func_type& endfunc):
-        mBeginFunc(beginfunc),
-        mEndFunc(endfunc)
+    LLTreeBFSIter(const ptr_type& node, func_type beginfunc, func_type endfunc):
+        mBeginFunc(std::move(beginfunc)),
+        mEndFunc(std::move(endfunc))
     {
         if (node)
             mPending.push_back(node);

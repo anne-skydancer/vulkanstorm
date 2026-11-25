@@ -14,6 +14,7 @@
 #define LL_ALWAYS_RETURN_H
 
 #include <type_traits>              // std::enable_if, std::is_convertible
+#include <utility>
 
 namespace LL
 {
@@ -43,7 +44,7 @@ namespace LL
     {
     public:
         /// pass explicit default value if other than default-constructed type
-        AlwaysReturn(const DESIRED& dft=DESIRED()): mDefault(dft) {}
+        AlwaysReturn(DESIRED dft=DESIRED()): mDefault(std::move(dft)) {}
 
         // callable returns a type not convertible to DESIRED, return default
         template <typename CALLABLE, typename... ARGS,

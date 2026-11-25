@@ -22,6 +22,7 @@
 #include <exception>                // std::current_exception
 #include <functional>               // std::function
 #include <string>
+#include <utility>
 
 class LLEventPumps;
 
@@ -384,7 +385,7 @@ namespace LL
                  const TimePoint& start,
                  const std::chrono::duration<Rep, Period>& interval,
                  CALLABLE&& callable):
-            mTarget(target),
+            mTarget(std::move(target)),
             mStart(start),
             mInterval(interval),
             mCallable(std::move(callable))
