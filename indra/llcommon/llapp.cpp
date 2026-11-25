@@ -302,7 +302,7 @@ LLSD LLApp::getOptionData(OptionPriority level)
 {
     if((level < 0) || (level >= PRIORITY_COUNT))
     {
-        return LLSD();
+        return {};
     }
     return mOptions[level];
 }

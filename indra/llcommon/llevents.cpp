@@ -414,7 +414,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
     {
         LL_WARNS() << "Can't connect listener" << LL_ENDL;
         // connect will fail, return dummy
-        return LLBoundListener();
+        return {};
     }
 
     LLCoros::LockType lock(mConnectionListMutex);
@@ -587,7 +587,7 @@ LLBoundListener LLEventPump::getListener(const std::string& name)
         return found->second;
     }
     // not found, return dummy LLBoundListener
-    return LLBoundListener();
+    return {};
 }
 
 void LLEventPump::stopListening(const std::string& name)

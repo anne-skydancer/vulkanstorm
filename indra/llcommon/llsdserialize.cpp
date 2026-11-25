@@ -2195,7 +2195,7 @@ std::string zip_llsd(LLSD& data)
     if (ret != Z_OK)
     {
         LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-        return std::string();
+        return {};
     }
 
     std::string source = std::move(llsd_strm).str();
@@ -2224,7 +2224,7 @@ std::string zip_llsd(LLSD& data)
                 if(output)
                     free(output);
                 LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-                return std::string();
+                return {};
             }
 
             have = CHUNK-strm.avail_out;
@@ -2237,7 +2237,7 @@ std::string zip_llsd(LLSD& data)
                 {
                     free(output);
                 }
-                return std::string();
+                return {};
             }
             output = new_output;
             memcpy(output+cur_size, out, have);
@@ -2249,7 +2249,7 @@ std::string zip_llsd(LLSD& data)
             if(output)
                 free(output);
             LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-            return std::string();
+            return {};
         }
     }
     while (ret == Z_OK);

@@ -82,7 +82,7 @@ block_timer_tree_df_iterator_t begin_block_timer_tree_df(BlockTimerStatHandle& i
 
 block_timer_tree_df_iterator_t end_block_timer_tree_df()
 {
-    return block_timer_tree_df_iterator_t();
+    return {};
 }
 
 block_timer_tree_df_post_iterator_t begin_block_timer_tree_df_post(BlockTimerStatHandle& id)
@@ -94,7 +94,7 @@ block_timer_tree_df_post_iterator_t begin_block_timer_tree_df_post(BlockTimerSta
 
 block_timer_tree_df_post_iterator_t end_block_timer_tree_df_post()
 {
-    return block_timer_tree_df_post_iterator_t();
+    return {};
 }
 
 block_timer_tree_bf_iterator_t begin_block_timer_tree_bf(BlockTimerStatHandle& id)
@@ -106,7 +106,7 @@ block_timer_tree_bf_iterator_t begin_block_timer_tree_bf(BlockTimerStatHandle& i
 
 block_timer_tree_bf_iterator_t end_block_timer_tree_bf()
     {
-    return block_timer_tree_bf_iterator_t();
+    return {};
     }
 
 block_timer_tree_df_iterator_t begin_timer_tree(BlockTimerStatHandle& id)
@@ -118,7 +118,7 @@ block_timer_tree_df_iterator_t begin_timer_tree(BlockTimerStatHandle& id)
 
 block_timer_tree_df_iterator_t end_timer_tree()
     {
-    return block_timer_tree_df_iterator_t();
+    return {};
 }
 
 

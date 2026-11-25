@@ -113,7 +113,7 @@ LLSD LlsdFromJson(const boost::json::value& val, size_t max_nodes)
     if (!llsdFromJson(val, nodes_left, max_nodes != LLSDParser::MAX_NODES_UNLIMITED, result))
     {
         LL_WARNS() << "JSON conversion stopped: more than " << max_nodes << " values" << LL_ENDL;
-        return LLSD();
+        return {};
     }
     return result;
 }

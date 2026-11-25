@@ -39,14 +39,14 @@
 std::string ll_safe_string(const char* in)
 {
     if(in) return std::string(in);
-    return std::string();
+    return {};
 }
 
 std::string ll_safe_string(const char* in, S32 maxlen)
 {
     if(in && maxlen > 0 ) return std::string(in, maxlen);
 
-    return std::string();
+    return {};
 }
 
 bool is_char_hex(char hex)
@@ -532,7 +532,7 @@ std::string utf8str_truncate(const std::string& utf8str, const S32 max_len)
 {
     if (0 == max_len)
     {
-        return std::string();
+        return {};
     }
     if ((S32)utf8str.length() <= max_len)
     {
@@ -568,7 +568,7 @@ std::string utf8str_substr(const std::string& utf8str, const size_t index, const
 {
     if (0 == max_len)
     {
-        return std::string();
+        return {};
     }
     if (utf8str.length() - index  <= max_len)
     {
@@ -639,7 +639,7 @@ std::string utf8str_symbol_truncate(const std::string& utf8str, const S32 symbol
 {
     if (0 == symbol_len)
     {
-        return std::string();
+        return {};
     }
     if ((S32)utf8str.length() <= symbol_len)
     {
@@ -698,7 +698,7 @@ std::string utf8str_removeCRLF(const std::string& utf8str)
 {
     if (0 == utf8str.length())
     {
-        return std::string();
+        return {};
     }
     const char CR = 13;
 

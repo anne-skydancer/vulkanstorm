@@ -51,7 +51,7 @@ public:
     LLEvent(LLObservable* source, std::string desc = "") : mSource(source), mDesc(std::move(desc)) { }
 
     LLObservable* getSource() { return mSource; }
-    virtual LLSD        getValue() { return LLSD(); }
+    virtual LLSD        getValue() { return {}; }
     // Determines whether this particular listener
     //   should be notified of this event.
     // If this function returns true, handleEvent is

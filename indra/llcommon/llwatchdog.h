@@ -51,7 +51,7 @@ public:
     virtual void reset() = 0;
     virtual void start();
     virtual void stop();
-    virtual std::string getLastState() const { return std::string(); }
+    virtual std::string getLastState() const { return {}; }
     using id_t = std::thread::id;
     std::string getThreadName() const;
 
