@@ -163,7 +163,7 @@ FRAME = re.compile(r"^\s*#\d+ (?:0x[0-9a-fA-F]+ in )?(.+?) (\S*/\S+?):(\d+)(?::\
 BLOCK_START = re.compile(
     r"ERROR: AddressSanitizer: ([\w-]+)"
     r"|(Direct|Indirect) leak of"
-    r"|WARNING: ThreadSanitizer: ([^()\n]+?)(?: \(pid=\d+\))?\s*$"
+    r"|WARNING: ThreadSanitizer: ([A-Za-z -]+?)\s*(?:\(|$)"
     r"|^(\S[^\n]*?):(\d+):(\d+): runtime error: ([^\n]*)", re.M)
 
 
@@ -201,7 +201,7 @@ def parse_sanitizer(text):
     return found
 
 
-MAKE_FAIL = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[[^\]]*build\.make:\d+: ([^\]]+)\] Error \d+")
+MAKE_FAIL = re.compile(r"^g?make(?:\[\d+\])?: \*\*\* \[[^\]]*build\.make:\d+: ([^\]]+)\] Error \d+")
 
 
 def parse_build_log(text):

@@ -44,7 +44,7 @@ TSAN = """WARNING: ThreadSanitizer: data race (pid=7)
 SUMMARY: ThreadSanitizer: data race
 """
 
-MAKE = """make[2]: *** [llcommon/CMakeFiles/llcommon.dir/build.make:75: llcommon/CMakeFiles/llcommon.dir/llx.cpp.o] Error 1
+MAKE = """gmake[2]: *** [llcommon/CMakeFiles/llcommon.dir/build.make:75: llcommon/CMakeFiles/llcommon.dir/llx.cpp.o] Error 1
 make[1]: *** [CMakeFiles/Makefile2:900: llcommon/CMakeFiles/llcommon.dir/all] Error 2
 """
 
@@ -107,6 +107,12 @@ class ParserTest(unittest.TestCase):
         tsan = ca.parse_sanitizer(TSAN)
         self.assertEqual((tsan[0]["tool"], tsan[0]["check"], tsan[0]["file"]),
                          ("tsan", "data-race", "indra/llcommon/llq.cpp"))
+
+    def test_tsan_lock_order_inversion(self):
+        text = ("WARNING: ThreadSanitizer: lock-order-inversion (potential deadlock) (pid=4628)\n"
+                "    #1 f() /home/runner/work/v/v/indra/llcommon/lockstatic.h:31 (T+0x4d4e1) (BuildId: 9e)\n")
+        found = ca.parse_sanitizer(text)
+        self.assertEqual((found[0]["check"], found[0]["file"]), ("lock-order-inversion", "indra/llcommon/lockstatic.h"))
 
     def test_make_failures_are_leaf_rules_only(self):
         found = ca.parse_build_log(MAKE)
