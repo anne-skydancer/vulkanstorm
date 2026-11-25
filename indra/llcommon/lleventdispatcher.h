@@ -525,16 +525,22 @@ private:
         // for nullptr. The trouble is that it doesn't work for LazyEventAPI
         // deferred registration: we get nullptr even for a method of an
         // LLEventAPI subclass.
-        CLASS* downcast = static_cast<CLASS*>(this);
+        // <Vulkanstorm>
+        // This can run during base construction (LazyEventAPI), while CLASS
+        // is not yet constructed: converting this to CLASS* here is undefined.
+        // Capture the base pointer and convert when the callable runs.
+        LLEventDispatcher* base = this;
         add(name,
             desc,
             Callable(LL::make_always_return<LLSD>(
-                         [downcast, method]
+                         [base, method]
                          (const LLSD& args)
                          {
+                             CLASS* downcast = static_cast<CLASS*>(base);
                              return (downcast->*method)(args);
                          })),
             required);
+        // </Vulkanstorm>
     }
 
     template <class CLASS, typename METHOD,
