@@ -1229,7 +1229,7 @@ public:
         // Hooking onto the "mainloop" event pump gets us one call per frame.
         mConnection(LLEventPumps::instance()
                     .obtain("mainloop")
-                    .listen("FrameWatcher", boost::bind(&FrameWatcher::tick, this, _1))),
+                    .listen("FrameWatcher", [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); })),
         // Both MEM_INFO_WINDOW and MEM_INFO_THROTTLE are in seconds. We need
         // the number of integer MEM_INFO_THROTTLE sample slots that will fit
         // in MEM_INFO_WINDOW. Round up.

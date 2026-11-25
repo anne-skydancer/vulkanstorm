@@ -686,17 +686,13 @@ void LLEventMailDrop::discard()
 *****************************************************************************/
 LLListenerOrPumpName::LLListenerOrPumpName(const std::string& pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener(boost::bind(&LLEventPump::post,
-                          boost::ref(LLEventPumps::instance().obtain(pumpname)),
-                          _1))
+    mListener([&pump = LLEventPumps::instance().obtain(pumpname)](const LLSD& data) { return pump.post(data); })
 {
 }
 
 LLListenerOrPumpName::LLListenerOrPumpName(const char* pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener(boost::bind(&LLEventPump::post,
-                          boost::ref(LLEventPumps::instance().obtain(pumpname)),
-                          _1))
+    mListener([&pump = LLEventPumps::instance().obtain(pumpname)](const LLSD& data) { return pump.post(data); })
 {
 }
 

@@ -165,7 +165,7 @@ void LLLeapListener::listen(const LLSD& request)
                 LLEventPump & dest = LLEventPumps::instance().obtain(dest_name);
                 saveListener(source_name, listener_name,
                              source.listen(listener_name,
-                                           boost::bind(&LLEventPump::post, &dest, _1)));
+                                           [ObjectPtr = &dest](auto && PH1) { return ObjectPtr->post(std::forward<decltype(PH1)>(PH1)); }));
             }
             else
             {
