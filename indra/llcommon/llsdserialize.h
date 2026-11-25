@@ -559,7 +559,7 @@ protected:
      */
     void formatReal(LLSD::Real real, std::ostream& ostr) const;
 
-    bool mBoolAlpha;
+    bool mBoolAlpha{};
     std::string mRealFormat;
     EFormatterOptions mOptions;
 };

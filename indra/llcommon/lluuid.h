@@ -186,7 +186,7 @@ public:
 
     static bool parseUUID(const std::string& buf, LLUUID* value);
 
-    U8 mData[UUID_BYTES];
+    U8 mData[UUID_BYTES]{};
 };
 static_assert(std::is_trivially_copyable_v<LLUUID>, "LLUUID must be trivial copy");
 static_assert(std::is_trivially_move_assignable_v<LLUUID>, "LLUUID must be trivial move");

@@ -97,7 +97,7 @@ F32 LLSmoothInterpolation::getInterpolant(F32SecondsImplicit time_constant, bool
         }
         else
         {
-            Interpolant interp;
+            Interpolant interp{};
             interp.mTimeScale = time_constant.value();
             interp.mInterpolant = calcInterpolant(time_constant.value());
             sInterpolants.insert(find_it, interp);

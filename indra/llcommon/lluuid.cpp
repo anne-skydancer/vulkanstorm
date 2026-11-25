@@ -770,7 +770,7 @@ void LLUUID::getCurrentTime(uuid_time_t* timestamp)
 void LLUUID::generate()
 {
     // Create a UUID.
-    uuid_time_t timestamp;
+    uuid_time_t timestamp{};
 
     static unsigned char node_id[6];    /* Flawfinder: ignore */
     static int has_init = 0;
@@ -871,7 +871,7 @@ U32 LLUUID::getRandomSeed()
 
     seed[6] = (unsigned char)(pid >> 8);
     seed[7] = (unsigned char)(pid);
-    uuid_time_t timestamp;
+    uuid_time_t timestamp{};
     getSystemTime(&timestamp);
     std::memcpy(&seed[8], &timestamp.high, sizeof(timestamp.high));
     std::memcpy(&seed[12], &timestamp.low, sizeof(timestamp.low));

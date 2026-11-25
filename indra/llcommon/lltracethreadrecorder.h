@@ -78,9 +78,9 @@ namespace LLTrace
         BlockTimerStackRecord           mBlockTimerStackRecord;
         active_recording_list_t         mActiveRecordings;
 
-        class BlockTimer*               mRootTimer;
-        TimeBlockTreeNode*              mTimeBlockTreeNodes;
-        size_t                          mNumTimeBlockTreeNodes;
+        class BlockTimer*               mRootTimer{};
+        TimeBlockTreeNode*              mTimeBlockTreeNodes{};
+        size_t                          mNumTimeBlockTreeNodes{};
         using child_thread_recorder_list_t = std::list<class ThreadRecorder*>;
 
         child_thread_recorder_list_t    mChildThreadRecorders;  // list of child thread recorders associated with this master

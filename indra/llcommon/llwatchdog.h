@@ -119,7 +119,7 @@ private:
     LLMutex* mSuspectsAccessMutex{};
     LLWatchdogTimerThread* mTimer{nullptr};
     U64 mLastClockCount{0};
-    bool mCrashOnFreeze;
+    bool mCrashOnFreeze{};
 
     // At the moment watchdog expects app to set markers in mCreateMarkerFnc,
     // but technically can be used to set any error states or do some cleanup

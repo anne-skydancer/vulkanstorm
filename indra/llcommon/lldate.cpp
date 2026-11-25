@@ -193,7 +193,7 @@ bool LLDate::fromString(const std::string& iso8601_date)
 
 bool LLDate::fromStream(std::istream& s)
 {
-    struct apr_time_exp_t exp_time;
+    struct apr_time_exp_t exp_time{};
     apr_int32_t tm_part;
     int c;
 
@@ -274,7 +274,7 @@ bool LLDate::fromStream(std::istream& s)
 
 bool LLDate::fromYMDHMS(S32 year, S32 month, S32 day, S32 hour, S32 min, S32 sec)
 {
-    struct apr_time_exp_t exp_time;
+    struct apr_time_exp_t exp_time{};
 
     exp_time.tm_year = year - 1900;
     exp_time.tm_mon = month - 1;

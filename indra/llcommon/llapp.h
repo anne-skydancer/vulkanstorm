@@ -310,7 +310,7 @@ protected:
 
 private:
     // Contains the filename of the minidump file after a crash.
-    char mMinidumpPath[MAX_MINDUMP_PATH_LENGTH];
+    char mMinidumpPath[MAX_MINDUMP_PATH_LENGTH]{};
 
     std::string mStaticDebugFileName;
     std::string mDynamicDebugFileName;

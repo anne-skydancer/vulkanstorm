@@ -348,28 +348,28 @@ private:
     XML_Parser  mParser;
 
     LLSD mResult;
-    S32 mParseCount;
+    S32 mParseCount{};
 
-    bool mInLLSDElement;            // true if we're on LLSD
-    bool mGracefullStop;            // true if we found the </llsd
+    bool mInLLSDElement{};            // true if we're on LLSD
+    bool mGracefullStop{};            // true if we found the </llsd
 
     using LLSDRefStack = std::deque<LLSD*>;
     LLSDRefStack mStack;
     std::stack< Element> mStackElements;
 
-    int mDepth;
-    bool mSkipping;
-    int mSkipThrough;
+    int mDepth{};
+    bool mSkipping{};
+    int mSkipThrough{};
 
     // <Vulkanstorm> The depth limit: mMaxDepth as LLSDParser's max_depth
     // (-1 unlimited); mDepthExceeded once a value reached it, which stops
     // expat and fails the parse before the deep tree is built.
-    S32 mMaxDepth;
-    bool mDepthExceeded;
+    S32 mMaxDepth{};
+    bool mDepthExceeded{};
     // The node budget: values left, 0 limit meaning unlimited; mNodesExceeded once spent, as mDepthExceeded.
     size_t mMaxNodes = LLSDParser::MAX_NODES_DEFAULT;
     size_t mNodesLeft = LLSDParser::MAX_NODES_DEFAULT;
-    bool mNodesExceeded;
+    bool mNodesExceeded{};
     // </Vulkanstorm>
 
     std::string mCurrentKey;        // Current XML <tag>

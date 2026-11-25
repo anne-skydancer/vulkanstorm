@@ -753,7 +753,7 @@ using LPMODULEINFO = MODULEINFO*;
       }
 
       // Retrive some additional-infos about the module
-      IMAGEHLP_MODULE64_V3 Module;
+      IMAGEHLP_MODULE64_V3 Module{};
       const char *szSymType = "-unknown-";
       if (this->GetModuleInfo(hProcess, baseAddr, &Module) != FALSE)
       {
@@ -1024,7 +1024,7 @@ bool StackWalker::ShowCallstack(bool verbose, HANDLE hThread, const CONTEXT *con
   CONTEXT c;
   CallstackEntry csEntry;
   IMAGEHLP_SYMBOL64 *pSym = nullptr;
-  StackWalkerInternal::IMAGEHLP_MODULE64_V3 Module;
+  StackWalkerInternal::IMAGEHLP_MODULE64_V3 Module{};
   IMAGEHLP_LINE64 Line;
   int frameNum;
   bool bLastEntryCalled = true;

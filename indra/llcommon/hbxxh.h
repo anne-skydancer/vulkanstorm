@@ -135,8 +135,8 @@ private:
     // We use a void pointer to avoid including xxhash.h here for XXH3_state_t
     // (which cannot either be trivially forward-declared, due to complex API
     // related pre-processor macros in xxhash.h).
-    void*   mState;
-    U64     mDigest;
+    void*   mState{};
+    U64     mDigest{};
 };
 
 inline bool operator==(const HBXXH64& a, const HBXXH64& b)
@@ -260,7 +260,7 @@ private:
     // We use a void pointer to avoid including xxhash.h here for XXH3_state_t
     // (which cannot either be trivially forward-declared, due to complex API
     // related pre-processor macros in xxhash.h).
-    void*   mState;
+    void*   mState{};
     LLUUID  mDigest;
 };
 

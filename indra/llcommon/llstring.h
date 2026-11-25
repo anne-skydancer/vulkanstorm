@@ -1160,7 +1160,7 @@ private:
     }
 
     const string_type mEscapes;
-    bool mIsEsc;
+    bool mIsEsc{};
 };
 
 /// getTokens() implementation based on InString concept

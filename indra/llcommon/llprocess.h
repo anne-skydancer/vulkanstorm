@@ -560,7 +560,7 @@ private:
 
     std::string mDesc;
     std::string mPostend;
-    apr_proc_t mProcess;
+    apr_proc_t mProcess{};
     bool mAutokill, mAttached;
     Status mStatus;
     // explicitly want this ptr_vector to be able to store NULLs

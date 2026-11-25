@@ -54,8 +54,8 @@ public:
     static LLTimer *sTimer;             // global timer
 
 protected:
-    U64 mLastClockCount;
-    U64 mExpirationTicks;
+    U64 mLastClockCount{};
+    U64 mExpirationTicks{};
     bool mStarted;
 
 public:

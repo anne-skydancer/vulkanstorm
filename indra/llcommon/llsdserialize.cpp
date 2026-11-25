@@ -284,14 +284,14 @@ union LLEndianSwapper
 };
 F64 ll_htond(F64 hostdouble)
 {
-    LLEndianSwapper tmp;
+    LLEndianSwapper tmp{};
     tmp.d = hostdouble;
     tmp.i = ll_htonll(tmp.i);
     return tmp.d;
 }
 F64 ll_ntohd(F64 netdouble)
 {
-    LLEndianSwapper tmp;
+    LLEndianSwapper tmp{};
     tmp.d = netdouble;
     tmp.i = ll_ntohll(tmp.i);
     return tmp.d;

@@ -261,7 +261,7 @@ public:
         return static_cast<StatType<TimeBlockAccumulator::SelfTimeFacet>&>(*(StatType<TimeBlockAccumulator>*)this);
     }
 
-    bool                        mCollapsed;             // don't show children
+    bool                        mCollapsed{};             // don't show children
 };
 
 // iterators and helper functions for walking the call hierarchy of block timers in different ways

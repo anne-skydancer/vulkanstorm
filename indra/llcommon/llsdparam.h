@@ -105,8 +105,8 @@ private:
     static bool readSD(Parser& parser, void* val_ptr);
 
     Parser::name_stack_t    mNameStack;
-    const LLSD*             mCurReadSD;
-    LLSD*                   mWriteRootSD;
+    const LLSD*             mCurReadSD{};
+    LLSD*                   mWriteRootSD{};
 };
 
 

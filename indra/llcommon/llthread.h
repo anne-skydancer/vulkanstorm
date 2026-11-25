@@ -94,7 +94,7 @@ public:
 
 private:
     bool                mPaused{false};
-    std::thread::native_handle_type mNativeHandle; // for termination in case of issues
+    std::thread::native_handle_type mNativeHandle{}; // for termination in case of issues
 
     // static function passed to APR thread creation routine
     void threadRun();

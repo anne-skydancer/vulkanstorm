@@ -308,7 +308,7 @@ private:
         }
     }
 
-    LLVolatileAPRPool *pPool;
+    LLVolatileAPRPool *pPool{};
     bool mInitialized;
 };
 

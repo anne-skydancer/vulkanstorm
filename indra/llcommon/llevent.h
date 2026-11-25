@@ -104,7 +104,7 @@ class LLObservable; // defined below
 // A structure which stores a Listener and its metadata
 struct LLListenerEntry
 {
-    LLEventListener* listener;
+    LLEventListener* listener{};
     LLSD filter;
     LLSD userdata;
 };
