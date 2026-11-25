@@ -156,11 +156,13 @@ std::basic_string<CHARTYPE> stringize_f(Functor const & f)
  * return out.str();
  * @endcode
  */
+// NOLINTNEXTLINE(bugprone-macro-parentheses): EXPRESSION is a stream expression (a << b), parentheses would change its meaning
 #define STRINGIZE(EXPRESSION) (stringize_f<char>([&](std::ostream& out){ out << EXPRESSION; }))
 
 /**
  * WSTRINGIZE() is the wstring equivalent of STRINGIZE()
  */
+// NOLINTNEXTLINE(bugprone-macro-parentheses): EXPRESSION is a stream expression (a << b), parentheses would change its meaning
 #define WSTRINGIZE(EXPRESSION) (stringize_f<wchar_t>([&](std::wostream& out){ out << EXPRESSION; }))
 
 /**
@@ -198,6 +200,7 @@ void destringize_f(std::basic_string<CHARTYPE> const & str, Functor const & f)
  * in >> item1 >> item2 >> item3 ... ;
  * @endcode
  */
+// NOLINTNEXTLINE(bugprone-macro-parentheses): EXPRESSION is a stream expression (a >> b), parentheses would change its meaning
 #define DESTRINGIZE(STR, EXPRESSION) (destringize_f((STR), [&](auto& in){in >> EXPRESSION;}))
 // legacy name, just use DESTRINGIZE() going forward
 #define DEWSTRINGIZE(STR, EXPRESSION) DESTRINGIZE(STR, EXPRESSION)

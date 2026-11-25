@@ -89,6 +89,7 @@ const int LL_ERR_NOERR = 0;
 
 #endif // !_DEBUG
 
+// NOLINTNEXTLINE(bugprone-macro-parentheses): msg is a stream expression (a << b), parentheses would change its meaning
 #define llassert_always_msg(func, msg) if (LL_UNLIKELY(!(func))) { LL_ERRS() << "ASSERT (" << msg << ")" << LL_ENDL; /*<FS:ND> call abort, this will not be reached but signaled GCC after this line the program exists*/ std::abort(); }
 
 #define llassert_always(func)   llassert_always_msg(func, #func)
@@ -229,6 +230,7 @@ namespace LLError
         template <typename T>
         static std::string classname(const T& obj) { return demangle(typeid(obj).name()); }
     };
+// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the logging macros brace-initialise CallSite positionally, reordering the fields would break them
 
     struct LL_COMMON_API CallSite
     {
@@ -409,7 +411,7 @@ using _LL_CLASS_TO_LOG = LLError::NoClassInfo;
 
 #define lllog_site_args_(level, once, tags)                 \
     level, __FILE__, __LINE__, typeid(_LL_CLASS_TO_LOG),    \
-    __FUNCTION__, once, &tags[1], LL_ARRAY_SIZE(tags)-1
+    __FUNCTION__, once, &(tags)[1], LL_ARRAY_SIZE(tags)-1
 
 //Use this construct if you need to do computation in the middle of a
 //message:

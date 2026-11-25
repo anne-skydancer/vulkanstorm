@@ -846,7 +846,7 @@ void LLDispatchListener::call_map(const LLSD& reqmap, const LLSD& event) const
         {
             // in case of errors, tell user the dispatch key, the fact that
             // we're processing a request map and the current key in that map
-            SetState(this, '[', key, '[', name, "]]");
+            SetState state_guard(this, '[', key, '[', name, "]]");
             // With this form, capture return value even if undefined:
             // presence of the key in the response map can be used to detect
             // which request keys succeeded.
@@ -923,7 +923,7 @@ void LLDispatchListener::call_array(const LLSD& reqarray, const LLSD& event) con
             // in case of errors, tell user the dispatch key, the fact that
             // we're processing a request array, the current entry in that
             // array and the corresponding callable name
-            SetState(this, '[', key, '[', i, "]=", name, ']');
+            SetState state_guard(this, '[', key, '[', i, "]=", name, ']');
             // With this form, capture return value even if undefined
             results.append((*this)(name, args));
         }

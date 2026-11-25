@@ -83,6 +83,7 @@ namespace LLTreeIter
  * of equal(), dereference() and increment() methods.
  */
 template <class SELFTYPE, class NODE>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): an iterator_facade base: the iterator types derive from it and are constructed everywhere
 class LLBaseIter: public boost::iterator_facade<SELFTYPE,
                                                 // use pointer type as the
                                                 // reference type

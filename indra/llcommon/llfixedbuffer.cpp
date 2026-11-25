@@ -38,7 +38,7 @@ LLFixedBuffer::LLFixedBuffer(const U32 max_lines)
 
 LLFixedBuffer::~LLFixedBuffer()
 {
-    clear();
+    LLFixedBuffer::clear();
 }
 
 void LLFixedBuffer::clear()

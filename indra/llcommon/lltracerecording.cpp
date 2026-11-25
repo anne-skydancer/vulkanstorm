@@ -52,6 +52,7 @@ Recording::Recording(EPlayState state)
     setPlayState(state);
 }
 
+// NOLINTNEXTLINE(bugprone-copy-constructor-init): *this = other copies the state; the base keeps its own identity
 Recording::Recording( const Recording& other )
 :   mActiveBuffers(nullptr)
 {
@@ -62,6 +63,10 @@ Recording::Recording( const Recording& other )
 Recording& Recording::operator = (const Recording& other)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
+    if (this == &other)
+    {
+        return *this;
+    }
     // this will allow us to seamlessly start without affecting any data we've acquired from other
     setPlayState(PAUSED);
 

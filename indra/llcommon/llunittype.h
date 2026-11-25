@@ -804,6 +804,7 @@ struct base_unit_name                                                           
 }
 
 
+// NOLINTBEGIN(bugprone-macro-parentheses): conversion_operation is an operator and operand (e.g. "* 1000"), parentheses would change its meaning
 #define LL_DECLARE_DERIVED_UNIT(unit_name, unit_label, base_unit_name, conversion_operation)     \
 struct unit_name                                                                                 \
 {                                                                                                \
@@ -836,6 +837,7 @@ LL_FORCE_INLINE S2 ll_convert_units(LLUnit<S1, base_unit_name> in, LLUnit<S2, un
     out = LLUnit<S2, unit_name>((S2)result.mValue);                                              \
     return result.mDivisor;                                                                      \
 }
+// NOLINTEND(bugprone-macro-parentheses)
 
 #define LL_DECLARE_UNIT_TYPEDEFS(ns, unit_name)                         \
     typedef LLUnit<F32, ns::unit_name> F32##unit_name;                  \

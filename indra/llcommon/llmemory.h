@@ -106,6 +106,7 @@ template <typename T> T* LL_NEXT_ALIGNED_ADDRESS_64(T* address)
 
 #define LL_ALIGN_16(var) LL_ALIGN_PREFIX(16) var LL_ALIGN_POSTFIX(16)
 
+// NOLINTBEGIN(bugprone-macro-parentheses): the macro body declares class members, it is not an expression
 #define LL_ALIGN_NEW                        \
 public:                                     \
     void* operator new(size_t size)         \
@@ -127,6 +128,7 @@ public:                                     \
     {                                       \
         ll_aligned_free_16(ptr);            \
     }
+// NOLINTEND(bugprone-macro-parentheses)
 
 
 //------------------------------------------------------------------------------------------------

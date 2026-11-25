@@ -705,7 +705,7 @@ using LPMODULEINFO = MODULEINFO*;
     if (hPsapi != nullptr) FreeLibrary(hPsapi);
     if (tt2 != nullptr) free(tt2);
     if (tt != nullptr) free(tt);
-    if (hMods != nullptr) free(hMods);
+    if (hMods != nullptr) free(static_cast<void*>(hMods));
 
     return cnt != 0;
   }  // GetModuleListPSAPI

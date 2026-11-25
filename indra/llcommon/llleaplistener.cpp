@@ -175,6 +175,7 @@ void LLLeapListener::listen(const LLSD& request)
             }
             reply["status"] = true;
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): the reply status is already false, nothing else to do
         catch (const LLEventPump::DupListenerName &)
         {
             // pass - status already set to false

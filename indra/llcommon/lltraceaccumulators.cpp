@@ -41,6 +41,7 @@ AccumulatorBufferGroup::AccumulatorBufferGroup()
     LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
 }
 
+// NOLINTNEXTLINE(bugprone-copy-constructor-init): the buffers are copied member by member below; the base keeps its own reference count
 AccumulatorBufferGroup::AccumulatorBufferGroup(const AccumulatorBufferGroup& other)
 :   mCounts(other.mCounts),
     mSamples(other.mSamples),

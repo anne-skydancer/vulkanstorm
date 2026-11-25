@@ -62,6 +62,7 @@ size_t LLMortician::logClass(std::stringstream &str)
                 str << " Is dead: " << (dead->isDead() ? "True" : "False");
                 str << " Name: " << typeid(*dead).name();
             }
+            // NOLINTNEXTLINE(bugprone-empty-catch): diagnostic text only, a failing query of a half-dead object must not escape
             catch (...)
             {
 

@@ -218,6 +218,7 @@ void doOnIdleRepeating(bool_func_t callable)
 {
     auto* cb_functor = new OnIdleCallbackRepeating(std::move(callable));
     gIdleCallbacks.addFunction(&OnIdleCallbackRepeating::onIdle,cb_functor);
+// NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): the idle list owns the functor; onIdle() deletes it
 }
 
 class NullaryFuncEventTimer: public LLEventTimer
@@ -243,6 +244,7 @@ private:
 void doAfterInterval(nullary_func_t callable, F32 seconds)
 {
     new NullaryFuncEventTimer(std::move(callable), seconds);
+// NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): the LLEventTimer base registers the timer and deletes it when tick() returns true
 }
 
 class BoolFuncEventTimer: public LLEventTimer
@@ -266,4 +268,5 @@ private:
 void doPeriodically(bool_func_t callable, F32 seconds)
 {
     new BoolFuncEventTimer(std::move(callable), seconds);
+// NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks): the LLEventTimer base registers the timer and deletes it when tick() returns true
 }

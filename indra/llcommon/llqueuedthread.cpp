@@ -60,9 +60,9 @@ LLQueuedThread::~LLQueuedThread()
 {
     if (!mThreaded)
     {
-        endThread();
+        LLQueuedThread::endThread();
     }
-    shutdown();
+    LLQueuedThread::shutdown();
     // ~LLThread() will be called here
 }
 

@@ -86,6 +86,7 @@ private:
 };
 
 template<typename DERIVED>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): a mixin: DERIVED builds it, a friend declaration would have to be repeated in every user
 class LLStopWatchControlsMixin
 :   public LLStopWatchControlsMixinCommon
 {

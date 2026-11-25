@@ -694,6 +694,10 @@ namespace LLInitParam
 
         LazyValue& operator=(const LazyValue& other)
         {
+            if (this == &other)
+            {
+                return *this;
+            }
             if (!other.mPtr)
             {
                 delete mPtr;
@@ -2015,6 +2019,7 @@ namespace LLInitParam
         const BlockDescriptor& mostDerivedBlockDescriptor() const override { return getBlockDescriptor(); }
         BlockDescriptor& mostDerivedBlockDescriptor() override { return getBlockDescriptor(); }
 
+    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): Block is a base of generated parameter blocks that are constructed by classes outside this header
     protected:
         Block()
         {

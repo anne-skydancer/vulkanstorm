@@ -73,6 +73,7 @@ bool LLEventMatching::post(const LLSD& event)
     if (! llsd_matches(mPattern, event).empty())
         return false;
 
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     return LLEventStream::post(event);
 }
 
@@ -151,6 +152,7 @@ void LLEventTimeoutBase::eventAfter(F32 seconds, const LLSD& event)
 bool LLEventTimeoutBase::post(const LLSD& event)
 {
     cancel();
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     return LLEventStream::post(event);
 }
 
@@ -239,6 +241,7 @@ void LLEventBatch::flush()
     // copy and clear mBatch BEFORE posting to avoid weird circularity effects
     LLSD batch(mBatch);
     mBatch.clear();
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     LLEventStream::post(batch);
 }
 
@@ -296,6 +299,7 @@ void LLEventThrottleBase::flush()
         // effects
         LLSD pending = mPending;
         mPending.clear();
+        // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
         LLEventStream::post(pending);
     }
 }

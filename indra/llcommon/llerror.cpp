@@ -247,13 +247,14 @@ namespace {
             // The list of color codes can be found in many places but I used this page:
             // https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#256-colors
             // (Note: you may need to restart Visual Studio to pick environment changes)
-            char* val = nullptr;
-            std::string s_ansi_error_code = "160";
-            if ((val = getenv("LL_ANSI_ERROR_COLOR_CODE")) != nullptr) s_ansi_error_code = std::string(val);
-            std::string s_ansi_warn_code = "33";
-            if ((val = getenv("LL_ANSI_WARN_COLOR_CODE")) != nullptr) s_ansi_warn_code = std::string(val);
-            std::string s_ansi_debug_code = "177";
-            if ((val = getenv("LL_ANSI_DEBUG_COLOR_CODE")) != nullptr) s_ansi_debug_code = std::string(val);
+            auto env_or = [](const char* name, const char* fallback)
+            {
+                const char* val = getenv(name);
+                return std::string(val ? val : fallback);
+            };
+            std::string s_ansi_error_code = env_or("LL_ANSI_ERROR_COLOR_CODE", "160");
+            std::string s_ansi_warn_code = env_or("LL_ANSI_WARN_COLOR_CODE", "33");
+            std::string s_ansi_debug_code = env_or("LL_ANSI_DEBUG_COLOR_CODE", "177");
 
             static std::string s_ansi_error = createANSI(s_ansi_error_code); // default is red
             static std::string s_ansi_warn  = createANSI(s_ansi_warn_code); // default is blue
@@ -1199,6 +1200,8 @@ namespace
             case '\r':
                 out << 'r';
                 break;
+            default:
+                break;
             }
         }
 
@@ -1299,15 +1302,14 @@ namespace {
     bool checkLevelMap(const LevelMap& map, const std::string& key,
                         LLError::ELevel& level)
     {
-        bool stop_checking;
         auto i = map.find(key);
         if (i == map.end())
         {
-            return stop_checking = false;
+            return false;
         }
 
             level = i->second;
-        return stop_checking = true;
+        return true;
     }
 
     bool checkLevelMap( const LevelMap& map,

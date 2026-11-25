@@ -158,7 +158,7 @@ public:
     //@{
         LLSD(const LLSD&);
         void assign(const LLSD& other);
-        LLSD& operator=(const LLSD& other)  { assign(other); return *this; }
+        LLSD& operator=(const LLSD& other)  { if (this != &other) { assign(other); } return *this; }
 
     //@}
 

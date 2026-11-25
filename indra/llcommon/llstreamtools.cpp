@@ -229,7 +229,7 @@ bool get_word(std::string& output_string, std::istream& input_stream)
             && '\r' != c
             && input_stream.good() )
     {
-        output_string += c;
+        output_string += static_cast<char>(c);
         input_stream.get();
         c = input_stream.peek();
     }
@@ -248,7 +248,7 @@ bool get_word(std::string& output_string, std::istream& input_stream, int n)
             && char_count < n)
     {
         char_count++;
-        output_string += c;
+        output_string += static_cast<char>(c);
         input_stream.get();
         c = input_stream.peek();
     }
@@ -262,7 +262,7 @@ bool get_line(std::string& output_string, std::istream& input_stream)
     int c = input_stream.get();
     while (input_stream.good())
     {
-        output_string += c;
+        output_string += static_cast<char>(c);
         if ('\n' == c)
         {
             break;
@@ -283,7 +283,7 @@ bool get_line(std::string& output_string, std::istream& input_stream, int n)
     while (input_stream.good() && char_count < n)
     {
         char_count++;
-        output_string += c;
+        output_string += static_cast<char>(c);
         if ('\n' == c)
         {
             break;

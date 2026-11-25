@@ -898,6 +898,7 @@ void LLSDXMLParser::Impl::endElementHandler(const XML_Char* name)
             {
                 S32 i;
                 // sscanf okay here with different locales - ints don't change for different locale settings like floats do.
+                // NOLINTNEXTLINE(bugprone-unchecked-string-to-number-conversion): the result is checked, the else branch falls back to the LLSD parser
                 if ( sscanf(mCurrentContent.c_str(), "%d", &i ) == 1 )
                 {   // See if sscanf works - it's faster
                     value = i;
@@ -1074,6 +1075,8 @@ LLSDXMLParser::Impl::Element LLSDXMLParser::Impl::readElement(const XML_Char* na
             break;
         case 'd':
             if (strcmp(name, "date") == 0) { return ELEMENT_DATE; }
+            break;
+        default:
             break;
     }
     return ELEMENT_UNKNOWN;

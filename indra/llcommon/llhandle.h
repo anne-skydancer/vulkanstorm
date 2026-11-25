@@ -206,12 +206,14 @@ public:
 
 protected:
     using handle_type_t = LLHandle<T>;
+
+private:
+    friend T;
     LLHandleProvider()
     {
         // provided here to enforce T deriving from LLHandleProvider<T>
     }
 
-private:
     mutable LLRootHandle<T> mHandle;
 };
 

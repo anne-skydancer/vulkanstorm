@@ -564,7 +564,7 @@ template<>                                                  \
 struct ll_convert_impl<TO, FROM>                            \
 {                                                           \
     /* param_type optimally passes both char* and string */ \
-    TO operator()(typename boost::call_traits<FROM>::param_type in) const { return EXPR; } \
+    TO operator()(typename boost::call_traits<FROM>::param_type in) const { return (EXPR); } \
 }
 
 // If all we're doing is copying characters, pass this to ll_convert_alias as

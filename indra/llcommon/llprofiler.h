@@ -241,12 +241,12 @@ namespace LLProfiler
 #define LL_PROFILER_GPU_CONTEXT_NS(name, size)           TracyGpuContext;TracyGpuContextName(name,size);
 #define LL_PROFILER_GPU_CONTEXT_NAMED     TracyGpuContextName
 #else
-#define LL_PROFILE_GPU_ZONE(name)           (void)name;
-#define LL_PROFILE_GPU_ZONEC(name,color)    (void)name;(void)color;
+#define LL_PROFILE_GPU_ZONE(name)           (void)(name);
+#define LL_PROFILE_GPU_ZONEC(name,color)    (void)(name);(void)(color);
 #define LL_PROFILER_GPU_COLLECT
 #define LL_PROFILER_GPU_CONTEXT
-#define LL_PROFILER_GPU_CONTEXT_NAMED(name) (void)name;
-#define LL_PROFILER_GPU_CONTEXT_NS(name, size)           (void)name;(void)size;
+#define LL_PROFILER_GPU_CONTEXT_NAMED(name) (void)(name);
+#define LL_PROFILER_GPU_CONTEXT_NS(name, size)           (void)(name);(void)(size);
 #endif // LL_PROFILER_ENABLE_TRACY_OPENGL
 
 #if LL_PROFILER_CONFIGURATION >= LL_PROFILER_CONFIG_TRACY

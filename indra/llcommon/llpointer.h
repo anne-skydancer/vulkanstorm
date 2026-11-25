@@ -112,6 +112,7 @@ public:
 
     Type*   get() const                         { return mPointer; }
     const Type* operator->() const              { return mPointer; }
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): reference counting by design, the pointee is alive while this holds it
     Type*   operator->()                        { return mPointer; }
     const Type& operator*() const               { return *mPointer; }
     Type&   operator*()                         { return *mPointer; }
@@ -206,6 +207,7 @@ protected:
     {
         if (mPointer)
         {
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): reference counting by design, the pointee outlives this call
             mPointer->ref();
         }
     }
@@ -216,6 +218,7 @@ protected:
         {
             Type *temp = mPointer;
             mPointer = nullptr;
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): temp->unref() may delete the pointee, not this; this is only read afterwards
             temp->unref();
             if (mPointer != nullptr)
             {

@@ -91,7 +91,7 @@ protected:
     apr_pool_t*  mPool{nullptr} ;              //pointing to an apr_pool
     apr_pool_t*  mParent ;            //parent pool
     apr_size_t   mMaxSize ;           //max size of mPool, mPool should return memory to system if allocated memory beyond this limit. However it seems not to work.
-    apr_status_t mStatus ;            //status when creating the pool
+    apr_status_t mStatus{APR_SUCCESS} ;            //status when creating the pool
     bool         mReleasePoolFlag ;   //if set, mPool is destroyed when LLAPRPool is deleted. default value is true.
 };
 

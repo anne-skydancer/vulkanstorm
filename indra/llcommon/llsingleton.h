@@ -406,6 +406,7 @@ protected:
     // Pass DERIVED_TYPE explicitly to LLSingletonBase's constructor because,
     // until our subclass constructor completes, *this isn't yet a
     // full-fledged DERIVED_TYPE.
+    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the derived singleton's private constructor must reach this one; see the friend declaration the singleton macro/LLSingleton users make
     LLSingleton(): LLSingletonBase(LLSingletonBase::tag<DERIVED_TYPE>())
     {
         // populate base-class function pointer with the static
@@ -838,6 +839,7 @@ private:                                                                \
 // or inherent thread safety and requires manual invocation of
 // createInstance before first use.
 template<class T>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): LLSimpleton has no constructor of its own; its instance is created through createInstance()
 class LLSimpleton
 {
 public:

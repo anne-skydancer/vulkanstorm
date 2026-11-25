@@ -108,7 +108,7 @@ public:
     void toCompressedString(std::string& out) const;
 
     // last 4 chars for quick ref - Very lightweight, no nul-term added - provide your own, ensure min 4 bytes.
-# define hexnybl(N) (N)>9?((N)-10)+'a':(N)+'0'
+# define hexnybl(N) (((N)>9)?((N)-10)+'a':(N)+'0')
     inline char * toShortString(char *out) const
     {
         // LL_PROFILE_ZONE_SCOPED;

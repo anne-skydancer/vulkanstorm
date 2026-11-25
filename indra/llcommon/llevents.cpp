@@ -286,6 +286,7 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
         {
             suffixes.insert(boost::lexical_cast<int>(pmi->first.substr(name.length())));
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): a suffix that is not a number is not an error, it is skipped
         catch (const boost::bad_lexical_cast&)
         {
             // If the rest of pmi->first isn't an int, just ignore it.

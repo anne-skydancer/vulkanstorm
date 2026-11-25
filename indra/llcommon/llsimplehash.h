@@ -64,7 +64,7 @@ public:
     {
         llassert(TABLE_SIZE);
         llassert((TABLE_SIZE ^ (TABLE_SIZE-1)) == (TABLE_SIZE | (TABLE_SIZE-1))); // power of 2
-        memset(mEntryTable, 0, sizeof(mEntryTable));
+        memset(static_cast<void*>(mEntryTable), 0, sizeof(mEntryTable));
     }
     virtual ~LLSimpleHash()
     = default;

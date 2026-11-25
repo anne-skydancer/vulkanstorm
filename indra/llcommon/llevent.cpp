@@ -169,7 +169,7 @@ LLSimpleDispatcher::~LLSimpleDispatcher()
 {
     while (mListeners.size() > 0)
     {
-        removeListener(mListeners.begin()->listener);
+        LLSimpleDispatcher::removeListener(mListeners.begin()->listener);
     }
 }
 

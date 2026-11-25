@@ -469,7 +469,7 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
     Ncb.ncb_command = NCBENUM;
     Ncb.ncb_buffer = (UCHAR*)&lenum;
     Ncb.ncb_length = sizeof(lenum);
-    uRetCode = Netbios(&Ncb);
+    Netbios(&Ncb);
 
     for (i = 0; i < lenum.length; i++)
     {
@@ -477,13 +477,13 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
         Ncb.ncb_command = NCBRESET;
         Ncb.ncb_lana_num = lenum.lana[i];
 
-        uRetCode = Netbios(&Ncb);
+        Netbios(&Ncb);
 
         memset(&Ncb, 0, sizeof(Ncb));
         Ncb.ncb_command = NCBASTAT;
         Ncb.ncb_lana_num = lenum.lana[i];
 
-        strcpy((char*)Ncb.ncb_callname, "*              ");     /* Flawfinder: ignore */
+        memcpy(Ncb.ncb_callname, "*              ", sizeof("*              ")); // same bytes strcpy copied, including the NUL
         Ncb.ncb_buffer = (unsigned char*)&Adapter;
         Ncb.ncb_length = sizeof(Adapter);
 

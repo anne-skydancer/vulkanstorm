@@ -274,6 +274,10 @@ public:
         {
             setFilePool(poolp);
         }
+        if (!pPool)
+        {
+            LL_ERRS() << "LLAPRFilePoolScope has no pool: LLAPRFile is not initialized" << LL_ENDL;
+        }
         if (mInitialized)
         {
             // We need one clear per one get

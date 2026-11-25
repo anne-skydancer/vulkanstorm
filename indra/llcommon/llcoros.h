@@ -44,7 +44,9 @@
 #include <utility>
 
 // e.g. #include LLCOROS_MUTEX_HEADER
+// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
 #define LLCOROS_MUTEX_HEADER   <boost/fiber/mutex.hpp>
+// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
 #define LLCOROS_CONDVAR_HEADER <boost/fiber/condition_variable.hpp>
 
 

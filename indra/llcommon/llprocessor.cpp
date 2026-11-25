@@ -183,6 +183,8 @@ namespace
         case 7: return "Intel Itanium (IA-64)";
         case 0xF: return "Intel Pentium 4";
         case 0x10: return "Intel Itanium 2 (IA-64)";
+        default:
+            break;
         }
         return STRINGIZE("Intel <unknown 0x" << std::hex << composed_family << ">");
     }
@@ -205,6 +207,8 @@ namespace
         case 0x17: return "AMD Zen/Zen+/Zen2";
         case 0x18: return "AMD Hygon Dhyana";
         case 0x19: return "AMD Zen 3";
+        default:
+            break;
         }
         return STRINGIZE("AMD <unknown 0x" << std::hex << composed_family << ">");
     }

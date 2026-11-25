@@ -121,7 +121,7 @@ using TPACKETID = U32;
 
 using LLPCode = U8;
 
-#define LL_ARRAY_SIZE( _kArray ) ( sizeof( (_kArray) ) / sizeof( _kArray[0] ) )
+#define LL_ARRAY_SIZE( _kArray ) ( sizeof( (_kArray) ) / sizeof( (_kArray)[0] ) )
 
 #if LL_LINUX && __GNUC__ <= 2
 typedef int intptr_t;

@@ -323,7 +323,6 @@ LLURI::LLURI(const std::string& escaped_str)
 {
     std::string::size_type delim_pos;
     delim_pos = escaped_str.find(':');
-    std::string temp;
     if (delim_pos == std::string::npos)
     {
         mScheme = "";
@@ -669,7 +668,7 @@ U16 LLURI::hostPort() const
             return 21;
         return 0;
     }
-    return atoi(port.c_str());
+    return static_cast<U16>(std::strtol(port.c_str(), nullptr, 10));
 }
 
 std::string LLURI::path() const

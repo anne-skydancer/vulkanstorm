@@ -452,7 +452,7 @@ namespace LL
         // callable.
         return post(
             BackJack<Rep, Period, CALLABLE>(
-                 getWeak(), TimePoint::clock::now(), interval, std::move(callable)));
+                 getWeak(), TimePoint::clock::now(), interval, std::forward<CALLABLE>(callable)));
     }
 
     /// general case: arbitrary C++ return type
@@ -494,7 +494,7 @@ namespace LL
     {
         return MakeReplyLambda<CALLABLE, FOLLOWUP,
                                decltype(std::forward<CALLABLE>(callable)())>()
-            (std::move(callable), std::move(callback));
+            (std::forward<CALLABLE>(callable), std::forward<FOLLOWUP>(callback));
     }
 
     template <typename CALLABLE, typename FOLLOWUP, typename... ARGS>
@@ -514,8 +514,8 @@ namespace LL
         // to this originating WorkQueue.
         return tptr->post(
             [reply = super::getWeak(),
-             callable = std::move(callable),
-             callback = std::move(callback)]
+             callable = std::forward<CALLABLE>(callable),
+             callback = std::forward<FOLLOWUP>(callback)]
             () mutable
             {
                 // Use postMaybe() below in case this originating WorkQueue

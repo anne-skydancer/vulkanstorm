@@ -828,6 +828,7 @@ LLSD::Impl::~Impl()
 
 void LLSD::Impl::destruct(Impl*& var)
 {
+    // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions): && sequences the operands, the decrement happens once and before the compare
     if (var && var->mUseCount != STATIC_USAGE_COUNT && --var->mUseCount == 0)
     {
         delete var;
@@ -840,6 +841,7 @@ void LLSD::Impl::reset(Impl*& var, Impl* impl)
     {
         ++impl->mUseCount;
     }
+    // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions): && sequences the operands, the decrement happens once and before the compare
     if (var  &&  var->mUseCount != STATIC_USAGE_COUNT && --var->mUseCount == 0)
     {
         delete var;
@@ -849,6 +851,7 @@ void LLSD::Impl::reset(Impl*& var, Impl* impl)
 
 void LLSD::Impl::move(Impl*& var, Impl*& impl)
 {
+    // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions): && sequences the operands, the decrement happens once and before the compare
     if (var && var->mUseCount != STATIC_USAGE_COUNT && --var->mUseCount == 0)
     {
         delete var; // destroy var if usage falls to 0 and not static

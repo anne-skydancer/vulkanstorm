@@ -75,7 +75,7 @@ LLWatchdogEntry::LLWatchdogEntry(std::string thread_name)
 
 LLWatchdogEntry::~LLWatchdogEntry()
 {
-    stop();
+    LLWatchdogEntry::stop();
 }
 
 void LLWatchdogEntry::start()

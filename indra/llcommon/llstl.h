@@ -671,6 +671,7 @@ struct ll_template_cast_impl<T, T>
  * (Naturally we omit <tt>LL_TEMPLATE_CONVERTIBLE(Base*, const Subclass*)</tt>
  * because that's not permitted by normal C++ assignment anyway.)
  */
+// NOLINTBEGIN(bugprone-macro-parentheses): the macro body defines a template specialization, it is not an expression
 #define LL_TEMPLATE_CONVERTIBLE(DEST, SOURCE)   \
 template <>                                     \
 struct ll_template_cast_impl<DEST, SOURCE>      \
@@ -680,6 +681,7 @@ struct ll_template_cast_impl<DEST, SOURCE>      \
         return wrapper;                         \
     }                                           \
 }
+// NOLINTEND(bugprone-macro-parentheses)
 
 // Transparent string hashing helper for use with std::unordered_*
 // std::unordered_map<std::string, val, ll::string_hash, std::equal_to<>>

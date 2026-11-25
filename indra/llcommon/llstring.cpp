@@ -195,7 +195,7 @@ auto utf16chars_to_wchar(const U16* inchars, llwchar* outchar)
 {
     const U16* base = inchars;
     U16 cur_char = *inchars++;
-    llwchar char32 = cur_char;
+    llwchar char32;
     if ((cur_char >= 0xD800) && (cur_char <= 0xDFFF))
     {
         // Surrogates
@@ -221,12 +221,12 @@ llutf16string wstring_to_utf16str(const llwchar* utf32str, size_t len)
         U32 cur_char = utf32str[i];
         if (cur_char > 0xFFFF)
         {
-            out += (0xD7C0 + (cur_char >> 10));
-            out += (0xDC00 | (cur_char & 0x3FF));
+            out += static_cast<llutf16string::value_type>(0xD7C0 + (cur_char >> 10));
+            out += static_cast<llutf16string::value_type>(0xDC00 | (cur_char & 0x3FF));
         }
         else
         {
-            out += cur_char;
+            out += static_cast<llutf16string::value_type>(cur_char);
         }
         i++;
     }
@@ -751,6 +751,8 @@ llwchar utf8str_to_wchar(const std::string& utf8str, size_t offset, size_t lengt
                 ((utf8str[offset + 4] & 0x3F) << 12) +
                 ((utf8str[offset + 5] & 0x3F) << 6) +
                 (utf8str[offset + 6] & 0x3F);
+    default:
+        break;
     }
     return LL_UNKNOWN_CHAR;
 }

@@ -73,6 +73,7 @@ enum EInstanceTrackerAllowKeyCollisions
 /// @NOTE: see explicit specialization below for default KEY==void case
 template<typename T, typename KEY = void,
          EInstanceTrackerAllowKeyCollisions KEY_COLLISION_BEHAVIOR = LLInstanceTrackerErrorOnCollision>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the tracked class T constructs the tracker; not all of them are known to be friends here
 class LLInstanceTracker
 {
     // <Vulkanstorm>
@@ -258,6 +259,7 @@ public:
     }
 
 protected:
+    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the tracked class T and every class derived from it calls this constructor; they are not known here
     LLInstanceTracker(const KEY& key)
     {
         // We do not intend to manage the lifespan of this object with

@@ -140,6 +140,7 @@ namespace LL
     template <typename T>
     T* get_ptr(T* ptr) { return ptr; }
 
+    // NOLINTBEGIN(bugprone-return-const-ref-from-parameter): these overloads hand back their argument on purpose (callers pass lvalues)
     template <typename T>
     const std::shared_ptr<T>& get_ptr(const std::shared_ptr<T>& ptr) { return ptr; }
 
@@ -154,6 +155,7 @@ namespace LL
 
     template <typename T>
     const LLPointer<T>& get_ptr(const LLPointer<T>& ptr) { return ptr; }
+    // NOLINTEND(bugprone-return-const-ref-from-parameter)
 
     // T is not any pointer type we recognize, take a pointer to the parameter
     template <typename T>

@@ -312,6 +312,7 @@ LL_FORCE_INLINE BlockTimer::~BlockTimer()
 #if LL_FAST_TIMER_ON
     U64 total_time = getCPUClockCount64() - mStartTime;
     BlockTimerStackRecord* cur_timer_data = LLThreadLocalSingletonPointer<BlockTimerStackRecord>::getInstance();
+    // NOLINTNEXTLINE(clang-analyzer-core.StackAddressEscape): by design, the thread-local stack record is overwritten with the parent below
     if (!cur_timer_data) return;
 
     TimeBlockAccumulator& accumulator = cur_timer_data->mTimeBlock->getCurrentAccumulator();
@@ -329,6 +330,7 @@ LL_FORCE_INLINE BlockTimer::~BlockTimer()
     mParentTimerData.mChildTime += total_time;
 
     //pop stack
+    // NOLINTNEXTLINE(clang-analyzer-core.StackAddressEscape): the BlockTimer links itself into a thread-local stack and unlinks here
     *cur_timer_data = mParentTimerData;
 #endif
 }
