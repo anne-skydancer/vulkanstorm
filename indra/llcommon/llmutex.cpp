@@ -159,7 +159,7 @@ LLSharedMutex::LLSharedMutex()
 bool LLSharedMutex::isLocked() const
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     return !mLockingThreads.empty();
 }
@@ -168,7 +168,7 @@ bool LLSharedMutex::isThreadLocked() const
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     const_iterator it = mLockingThreads.find(current_thread);
     return it != mLockingThreads.end();
@@ -236,7 +236,7 @@ bool LLSharedMutex::trylockShared()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     iterator it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
@@ -259,7 +259,7 @@ bool LLSharedMutex::trylockExclusive()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     if (mLockingThreads.size() == 1 && mLockingThreads.begin()->first == current_thread)
     {
@@ -281,7 +281,7 @@ void LLSharedMutex::unlockShared()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     iterator it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
@@ -302,7 +302,7 @@ void LLSharedMutex::unlockExclusive()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     iterator it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
