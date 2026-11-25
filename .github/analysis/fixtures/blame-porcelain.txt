@@ -1,0 +1,65 @@
+d0d4670f4941dcf7430fb1269c6613140ecf3ff7 48 74 5
+author Mark Lentczner
+author-mail <markl@lindenlab.com>
+author-time 1170723453
+author-tz +0000
+committer Mark Lentczner
+committer-mail <markl@lindenlab.com>
+committer-time 1170723453
+committer-tz +0000
+summary merge in of error-refactor-3
+previous 77f04c74eb1603bf2fadc30127d05378bfc7a48a indra/llcommon/lllivefile.cpp
+filename indra/llcommon/lllivefile.cpp
+	
+d0d4670f4941dcf7430fb1269c6613140ecf3ff7 49 75
+author Mark Lentczner
+author-mail <markl@lindenlab.com>
+author-time 1170723453
+author-tz +0000
+committer Mark Lentczner
+committer-mail <markl@lindenlab.com>
+committer-time 1170723453
+committer-tz +0000
+summary merge in of error-refactor-3
+previous 77f04c74eb1603bf2fadc30127d05378bfc7a48a indra/llcommon/lllivefile.cpp
+filename indra/llcommon/lllivefile.cpp
+	LLLiveFile::LLLiveFile(const std::string& filename, const F32 refresh_period)
+d0d4670f4941dcf7430fb1269c6613140ecf3ff7 50 76
+author Mark Lentczner
+author-mail <markl@lindenlab.com>
+author-time 1170723453
+author-tz +0000
+committer Mark Lentczner
+committer-mail <markl@lindenlab.com>
+committer-time 1170723453
+committer-tz +0000
+summary merge in of error-refactor-3
+previous 77f04c74eb1603bf2fadc30127d05378bfc7a48a indra/llcommon/lllivefile.cpp
+filename indra/llcommon/lllivefile.cpp
+	    : impl(* new Impl(filename, refresh_period))
+d0d4670f4941dcf7430fb1269c6613140ecf3ff7 51 77
+author Mark Lentczner
+author-mail <markl@lindenlab.com>
+author-time 1170723453
+author-tz +0000
+committer Mark Lentczner
+committer-mail <markl@lindenlab.com>
+committer-time 1170723453
+committer-tz +0000
+summary merge in of error-refactor-3
+previous 77f04c74eb1603bf2fadc30127d05378bfc7a48a indra/llcommon/lllivefile.cpp
+filename indra/llcommon/lllivefile.cpp
+	{
+d0d4670f4941dcf7430fb1269c6613140ecf3ff7 52 78
+author Mark Lentczner
+author-mail <markl@lindenlab.com>
+author-time 1170723453
+author-tz +0000
+committer Mark Lentczner
+committer-mail <markl@lindenlab.com>
+committer-time 1170723453
+committer-tz +0000
+summary merge in of error-refactor-3
+previous 77f04c74eb1603bf2fadc30127d05378bfc7a48a indra/llcommon/lllivefile.cpp
+filename indra/llcommon/lllivefile.cpp
+	}
