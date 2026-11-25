@@ -6,7 +6,8 @@
 # clean/newview-<area> runs clang-tidy over the newview sources the branch changed. A clean/ branch that names
 # no library fails the plan job. Any other pull request into release-clean runs the llcommon self-test only when
 # it changes the analysis files. Report-only until .github/analysis/baseline/<lib>.json is committed; after
-# that the report job is red on findings the baseline does not hold. Not a build workflow (it publishes
+# that the report job is red on findings the baseline does not hold. A triage job (report only) explains the real
+# bug findings. Not a build workflow (it publishes
 # nothing and is not named build-*); no compile cache (the autobuild package cache is restored, never saved).
 name: Analysis
 
@@ -158,6 +159,14 @@ jobs:
           python scripts/ci_analysis.py collect --job asan --lib "$LIB" --out analysis-out --log analysis-out/build.log \
             --status analysis-out/status.txt --retry-log analysis-out/retry.log --canary analysis-out/canary-asan.json \
             --expect-tests "$(echo $TARGETS | wc -w)" --san-dir san
+      # Report only: each test binary that failed or reported runs once more, alone, with extra sanitizer detail
+      # (scripts/ci_triage.py rerun); at most 5 minutes per binary, 25 minutes in all. The triage job reads the output.
+      - name: Focused re-run for the triage
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          python scripts/ci_triage.py rerun --job asan --lib "$LIB" --dir build-asan --log analysis-out/build.log             --san-dir san --findings analysis-out/findings-asan.json --out analysis-out/rerun
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -211,6 +220,14 @@ jobs:
           python scripts/ci_analysis.py collect --job tsan --lib "$LIB" --out analysis-out --log analysis-out/build.log \
             --status analysis-out/status.txt --retry-log analysis-out/retry.log --canary analysis-out/canary-tsan.json \
             --expect-tests "$(echo $TARGETS | wc -w)" --san-dir san
+      # Report only: each test binary that failed or reported runs once more, alone, with extra sanitizer detail
+      # (scripts/ci_triage.py rerun); at most 5 minutes per binary, 25 minutes in all. The triage job reads the output.
+      - name: Focused re-run for the triage
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          python scripts/ci_triage.py rerun --job tsan --lib "$LIB" --dir build-tsan --log analysis-out/build.log             --san-dir san --findings analysis-out/findings-tsan.json --out analysis-out/rerun
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -287,4 +304,41 @@ jobs:
         with:
           name: analysis-report-${{ needs.plan.outputs.lib }}
           path: report-out
+          retention-days: 14
+
+  # The triage (scripts/ci_triage.py, doc/clean/analysis.md): for every real bug finding of the run, who wrote the code
+  # (git blame), whether upstream Firestorm and Linden Lab have it too, the stack and source around it, the triggering
+  # test, grouped by root cause, with the focused re-run of the sanitizer jobs. No AI, no key. Report only: it never
+  # fails the run and commits nothing. It reads the artifacts of the analysis jobs, so it runs after them.
+  triage:
+    name: triage
+    needs: [plan, clang-tidy, asan, tsan, msvc]
+    if: always() && needs.plan.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+    steps:
+      # Full history: git blame, and the Firestorm and Linden Lab histories are fetched into it by the script.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: analysis-*
+          path: collected
+      - id: triage
+        run: python scripts/ci_triage.py triage --lib "$LIB" --dir collected --out triage-out
+      - uses: actions/upload-artifact@v7
+        if: always() && steps.triage.outputs.cases != '' && steps.triage.outputs.cases != '0'
+        with:
+          name: analysis-triage-${{ needs.plan.outputs.lib }}
+          path: triage-out
           retention-days: 14

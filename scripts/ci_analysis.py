@@ -39,7 +39,9 @@ ANALYSIS_FILES = (
     ".github/actions/analysis-setup/",
     ".github/analysis/",
     "scripts/ci_analysis.py",
+    "scripts/ci_triage.py",
     "scripts/tests/ci_analysis_test.py",
+    "scripts/tests/ci_triage_test.py",
     "scripts/tests/ci_analysis_setup_test.py",
 )
 CXX_SUFFIXES = (".cpp", ".cc", ".c", ".h", ".hpp", ".inl")

@@ -12,7 +12,7 @@ names, so that an agent reads code only after the tools have had their say.
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
 | push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
 | pull request into `release-clean` | the library named by the head branch, the same way |
-| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/tests/ci_analysis_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
+| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
 | a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
 
@@ -34,6 +34,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | `asan` (Linux) | the library and all its tests built with ASan + UBSan + LSan (`-O1`, no LTO), after a canary | same, per sanitizer kind; test counts |
 | `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
+| `triage` (Linux, report only) | explains the real bug findings of the run, see [Triage](#triage) | `analysis-triage-<lib>` artifact, job summary |
 | `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
 
 Every job uploads its artifact (`analysis-<job>`: `findings-<job>.json`, `summary-<job>.md`, the raw logs, the sanitizer
@@ -108,6 +109,52 @@ To create or update a baseline: download the `analysis-report-<lib>` artifact of
 to `.github/analysis/baseline/<lib>.json`. **Each cleanup pull request commits its own baseline update**, so the baseline
 lives in the pull request and the owner reviews it with the code: shrink it when the cleanup fixes findings; add to it
 only for a finding the owner accepts. newview has one baseline per area (`baseline/newview-<area>.json`).
+
+## Triage
+
+The `triage` job runs after the analysis jobs and turns their findings into cases a person can act on. No AI and no API
+key: git, the public raw file URLs of the two upstream repositories, and text parsing (`scripts/ci_triage.py`). It is
+report only: it never fails the run (`continue-on-error`), commits nothing, and has `contents: read` only. It writes the
+artifact `analysis-triage-<lib>` (`triage.json`, machine readable; `triage.md`, one section per case) and a job summary
+with the cases per tool, per origin and inherited or ours. With no real finding it writes an empty triage and uploads no
+artifact.
+
+**Which findings.** Real bug findings only: ASan, UBSan, LSan and TSan reports, test failures and every `build` finding,
+`clang-analyzer-*` (not the dead-code and performance groups), `bugprone-*` (not `easily-swappable-parameters` and
+`reserved-identifier`), `concurrency-*`, and MSVC `C6xxx` and `C28xxx`. Never `modernize-*`, `performance-*`,
+`cppcoreguidelines-*` or other style items.
+
+**Per case:**
+
+1. *Origin.* `git blame -w -M` of the finding's line and of the first project frames of its stack (whitespace changes
+   ignored: the 2024 tab and line-ending clean-up of Linden Lab would otherwise own every line): commit, date, author,
+   class. Vulkanstorm: a commit after the 2026-10-02 reset by the owner's noreply address, or one that carries a
+   `<Vulkanstorm>` marker (line or commit subject), or (after the reset) one that is in neither upstream history.
+   Firestorm: an `FS:` marker on the line, or a commit in upstream Firestorm's history and not in Linden Lab's. Everything
+   else is Linden Lab. The job fetches the commit graphs (no file contents) of `FirestormViewer/phoenix-firestorm`
+   (`master`, `Firestorm_7.2.5`) and `secondlife/viewer` (default branch) into the checkout and tells which commits are
+   in which; if that fails, the classes use the markers and the dates only, and the job summary says so.
+2. *Inherited or ours.* The same file is fetched from the raw URLs of upstream Firestorm `master`, `Firestorm_7.2.5` and
+   Linden Lab's default branch, nothing is cloned. Per upstream: `line-present` (the exact line text, whitespace
+   squeezed; a line of only braces or a bare keyword is never matched), `function-present` (only the function name
+   followed by `(`), `absent`, `file-missing` or `unavailable`. Verdict: `inherited` (the exact line is upstream),
+   `function-only`, `ours` (absent everywhere), `unknown` (an upstream could not be read), `n/a` (no source line). The
+   function of a finding is found by a text heuristic, not a parser; a sanitizer names its own function.
+3. *Context.* The symbolised stacks with the source around each of the first four project frames (8 lines before and
+   after), and the triggering test (binary, test group, test number) read from the stack; for a failed test, the build log
+   after the binary was linked.
+4. *Grouping.* One case per root: sanitizer reports by their stable key (the top project frame of each access stack: the
+   allocation site of a leak, the lock pair of a lock-order report), UBSan, clang-tidy and MSVC findings by checker, file
+   and enclosing function, `build` findings by check and target. The members of a case are listed in it.
+5. *Focused re-run* (sanitizer jobs only). The `asan` and `tsan` jobs end with a step that runs each test binary that
+   failed or reported once more, alone, with `ASAN_OPTIONS` `fast_unwind_on_malloc=0:malloc_context_size=30:detect_leaks=1`,
+   `UBSAN_OPTIONS` `print_stacktrace=1`, `TSAN_OPTIONS` `history_size=7:second_deadlock_stack=1` added to the job's own
+   options, at most 5 minutes per binary and 25 minutes in all (the process group is killed on a timeout). The output is
+   in the job's artifact (`analysis-out/rerun/`); the triage attaches the matching report to the case, or says that the
+   re-run reported nothing like it.
+
+The triage is a pointer, not a verdict: a `function-only` or `unknown` result and the heuristic function names need a
+person's eye.
 
 ## newview
 
