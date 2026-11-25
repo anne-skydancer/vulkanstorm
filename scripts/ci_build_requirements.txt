@@ -1,4 +1,4 @@
-autobuild==3.10.2
+autobuild @ git+https://github.com/secondlife/autobuild@d8c6236eac000eb301748ec6a1df3d0894309b4b
 llsd==1.2.4
 cmake==4.4.4
 ninja==1.13.0
