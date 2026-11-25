@@ -253,23 +253,23 @@ protected:
     /**
      * @brief boolean to set if byte counts should be checked during parsing.
      */
-    bool mCheckLimits;
+    bool mCheckLimits{true};
 
     /**
      * @brief The maximum number of bytes left to be parsed.
      */
-    mutable llssize mMaxBytesLeft;
+    mutable llssize mMaxBytesLeft{0};
 
     /** @brief The node budget (see setMaxNodes()) and what is left of it in the current parse. */
-    size_t mMaxNodes;
-    mutable size_t mNodesLeft;
+    size_t mMaxNodes{MAX_NODES_DEFAULT};
+    mutable size_t mNodesLeft{0};
     /** @brief The current parse stopped on the node budget: its partial result is discarded. */
-    mutable bool mNodesSpent;
+    mutable bool mNodesSpent{false};
 
     /**
      * @brief Use line-based reading to get text
      */
-    bool mParseLines;
+    bool mParseLines{false};
 };
 
 /**

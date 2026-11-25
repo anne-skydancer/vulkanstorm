@@ -41,29 +41,24 @@ public:
     bool check();
     void changed();
 
-    bool mForceCheck;
+    bool mForceCheck{true};
     F32 mRefreshPeriod;
     LLFrameTimer mRefreshTimer;
 
     std::string mFilename;
-    time_t mLastModTime;
-    time_t mLastStatTime;
-    bool mLastExists;
+    time_t mLastModTime{0};
+    time_t mLastStatTime{0};
+    bool mLastExists{false};
 
-    LLEventTimer* mEventTimer;
+    LLEventTimer* mEventTimer{nullptr};
 private:
     LOG_CLASS(LLLiveFile);
 };
 
 LLLiveFile::Impl::Impl(const std::string& filename, const F32 refresh_period)
     :
-    mForceCheck(true),
     mRefreshPeriod(refresh_period),
-    mFilename(filename),
-    mLastModTime(0),
-    mLastStatTime(0),
-    mLastExists(false),
-    mEventTimer(nullptr)
+    mFilename(filename)
 {
 }
 

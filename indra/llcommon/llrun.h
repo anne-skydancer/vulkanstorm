@@ -129,7 +129,7 @@ protected:
     using run_list_t = std::vector<LLRunInfo>;
     run_list_t mRunOnce;
     run_list_t mRunEvery;
-    run_handle_t mNextHandle;
+    run_handle_t mNextHandle{1};
 };
 
 

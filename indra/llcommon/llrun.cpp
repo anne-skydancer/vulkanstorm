@@ -36,8 +36,7 @@ static const LLRunner::run_handle_t INVALID_RUN_HANDLE = 0;
 /**
  * LLRunner
  */
-LLRunner::LLRunner() :
-    mNextHandle(1)
+LLRunner::LLRunner()
 {
 }
 

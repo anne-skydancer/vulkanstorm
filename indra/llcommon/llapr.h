@@ -88,7 +88,7 @@ protected:
     void createAPRPool() ;
 
 protected:
-    apr_pool_t*  mPool ;              //pointing to an apr_pool
+    apr_pool_t*  mPool{nullptr} ;              //pointing to an apr_pool
     apr_pool_t*  mParent ;            //parent pool
     apr_size_t   mMaxSize ;           //max size of mPool, mPool should return memory to system if allocated memory beyond this limit. However it seems not to work.
     apr_status_t mStatus ;            //status when creating the pool
@@ -113,8 +113,8 @@ public:
     bool        isFull() ;
 
 private:
-    S32 mNumActiveRef ; //number of active pointers pointing to the apr_pool.
-    S32 mNumTotalRef ;  //number of total pointers pointing to the apr_pool since last creating.
+    S32 mNumActiveRef{0} ; //number of active pointers pointing to the apr_pool.
+    S32 mNumTotalRef{0} ;  //number of total pointers pointing to the apr_pool since last creating.
 
     std::unique_ptr<std::mutex> mMutexp;
 } ;

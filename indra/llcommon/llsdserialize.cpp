@@ -380,7 +380,6 @@ static const char BINARY_FALSE_SERIAL = '0';
  * LLSDParser
  */
 LLSDParser::LLSDParser()
-    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mNodesSpent(false), mParseLines(false)
 {
 }
 

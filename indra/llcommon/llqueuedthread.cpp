@@ -38,8 +38,6 @@
 LLQueuedThread::LLQueuedThread(const std::string& name, bool threaded, bool should_pause) :
     LLThread(name),
     mIdleThread(true),
-    mNextHandle(0),
-    mStarted(false),
     mThreaded(threaded),
     mRequestQueue(name, 1024 * 1024)
 {

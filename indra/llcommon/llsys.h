@@ -54,9 +54,9 @@ public:
 
     const S32 getOSBitness() const;
 
-    S32 mMajorVer;
-    S32 mMinorVer;
-    S32 mBuild;
+    S32 mMajorVer{0};
+    S32 mMinorVer{0};
+    S32 mBuild{0};
 
 #ifndef LL_WINDOWS
     static long getMaxOpenFiles();

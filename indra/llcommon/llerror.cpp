@@ -496,11 +496,11 @@ namespace
     public:
         ~SettingsConfig() override;
 
-        LLError::ELevel                     mDefaultLevel;
+        LLError::ELevel                     mDefaultLevel{LLError::LEVEL_DEBUG};
 
-        bool                                mLogAlwaysFlush;
+        bool                                mLogAlwaysFlush{true};
 
-        U32                                 mEnabledLogTypesMask;
+        U32                                 mEnabledLogTypesMask{255};
 
         LevelMap                            mFunctionLevelMap;
         LevelMap                            mClassLevelMap;
@@ -509,12 +509,12 @@ namespace
         std::unordered_map<std::string, unsigned int> mUniqueLogMessages;
 
         LLError::FatalFunction              mCrashFunction;
-        LLError::TimeFunction               mTimeFunction;
+        LLError::TimeFunction               mTimeFunction{nullptr};
 
         Recorders                           mRecorders;
         LL_PROFILE_MUTEX_NAMED(LLCoros::RMutex, mRecorderMutex, "Log Recorders");
 
-        int                                 mShouldLogCallCounter;
+        int                                 mShouldLogCallCounter{0};
 
     private:
         SettingsConfig();
@@ -524,18 +524,13 @@ namespace
 
     SettingsConfig::SettingsConfig()
         : LLRefCount(),
-        mDefaultLevel(LLError::LEVEL_DEBUG),
-        mLogAlwaysFlush(true),
-        mEnabledLogTypesMask(255),
         mFunctionLevelMap(),
         mClassLevelMap(),
         mFileLevelMap(),
         mTagLevelMap(),
         mUniqueLogMessages(),
         mCrashFunction(nullptr),
-        mTimeFunction(nullptr),
-        mRecorders(),
-        mShouldLogCallCounter(0)
+        mRecorders()
     {
     }
 
@@ -640,8 +635,6 @@ namespace LLError
         mLine(line),
         mClassInfo(class_info),
         mFunction(function),
-        mCached(false),
-        mShouldLog(false),
         mPrintOnce(printOnce),
         mTags(new const char* [tag_count]),
         mTagCount(tag_count)
@@ -970,12 +963,6 @@ namespace LLError
 namespace LLError
 {
     Recorder::Recorder()
-        : mWantsTime(true)
-        , mWantsTags(true)
-        , mWantsLevel(true)
-        , mWantsLocation(true)
-        , mWantsFunctionName(true)
-        , mWantsMultiline(false)
     {
     }
 

@@ -41,7 +41,6 @@ static ThreadRecorder* sMasterThreadRecorder = nullptr;
 ///////////////////////////////////////////////////////////////////////
 
 ThreadRecorder::ThreadRecorder()
-:   mParentRecorder(nullptr)
 {
     init();
 }

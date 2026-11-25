@@ -59,7 +59,7 @@ private:
     F32 mSecsBetweenHeartbeat;
     F32 mAggressiveHeartbeatPanicSecs;
     F32 mAggressiveHeartbeatMaxBlockingSecs;
-    bool mSuppressed;
+    bool mSuppressed{false};
     LLTimer mBeatTimer;
     LLTimer mPanicTimer;
     LLTimer mTimeoutTimer;

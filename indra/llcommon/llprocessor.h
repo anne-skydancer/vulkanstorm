@@ -51,7 +51,7 @@ public:
     std::string getCPUBrandName() const;
     std::string getCPUFeatureDescription() const;
 private:
-    LLProcessorInfoImpl* mImpl;
+    LLProcessorInfoImpl* mImpl{nullptr};
 };
 
 #endif // LLPROCESSOR_H

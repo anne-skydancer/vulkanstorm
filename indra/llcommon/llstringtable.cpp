@@ -33,7 +33,6 @@
 LLStringTable gStringTable(32768);
 
 LLStringTableEntry::LLStringTableEntry(const char *str)
-: mString(nullptr), mCount(1)
 {
     // Copy string
     U32 length = (U32)strlen(str) + 1;   /*Flawfinder: ignore*/
@@ -50,7 +49,6 @@ LLStringTableEntry::~LLStringTableEntry()
 }
 
 LLStringTable::LLStringTable(int tablesize)
-: mUniqueEntries(0)
 {
     S32 i;
     if (!tablesize)

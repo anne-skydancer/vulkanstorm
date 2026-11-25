@@ -45,8 +45,7 @@ namespace LLTrace
 ///////////////////////////////////////////////////////////////////////
 
 Recording::Recording(EPlayState state)
-:   mElapsedSeconds(0),
-    mActiveBuffers(nullptr)
+:   mElapsedSeconds(0)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
     mBuffers = new AccumulatorBufferGroup();
@@ -435,8 +434,6 @@ S32 Recording::getSampleCount( const StatType<EventAccumulator>& stat )
 
 PeriodicRecording::PeriodicRecording( size_t num_periods, EPlayState state)
 :   mAutoResize(num_periods == 0),
-    mCurPeriod(0),
-    mNumRecordedPeriods(0),
     // This guarantee that mRecordingPeriods cannot be empty is essential for
     // code in several methods.
     mRecordingPeriods(num_periods ? num_periods : 1)

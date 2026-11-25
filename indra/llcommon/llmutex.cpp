@@ -35,8 +35,7 @@
 //
 // LLMutex
 //
-LLMutex::LLMutex() :
- mCount(0)
+LLMutex::LLMutex()
 {
 }
 
@@ -154,7 +153,6 @@ bool LLMutex::trylock()
 //
 LLSharedMutex::LLSharedMutex()
 : mLockingThreads(2) // Reserve 2 slots in the map hash table
-, mIsShared(false)
 {
 }
 

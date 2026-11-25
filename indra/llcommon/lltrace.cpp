@@ -51,10 +51,6 @@ const char* StatBase::getUnitLabel() const
 }
 
 TimeBlockTreeNode::TimeBlockTreeNode()
-:   mBlock(nullptr),
-    mParent(nullptr),
-    mNeedsSorting(false),
-    mCollapsed(true)
 {}
 
 void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )

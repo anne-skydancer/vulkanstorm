@@ -38,9 +38,7 @@ class LLWatchdogTimerThread : public LLThread
 {
 public:
     LLWatchdogTimerThread() :
-        LLThread("Watchdog"),
-        mSleepMsecs(0),
-        mStopping(false)
+        LLThread("Watchdog")
     {
     }
 
@@ -63,8 +61,8 @@ public:
     }
 
 private:
-    long mSleepMsecs;
-    bool mStopping;
+    long mSleepMsecs{0};
+    bool mStopping{false};
 };
 
 // LLWatchdogEntry
@@ -103,7 +101,6 @@ const char *UNINIT_STRING = "uninitialized";
 
 LLWatchdogTimeout::LLWatchdogTimeout(const std::string& thread_name) :
     LLWatchdogEntry(thread_name),
-    mTimeout(0.0f),
     mPingState(UNINIT_STRING)
 {
 }
@@ -164,9 +161,6 @@ void LLWatchdogTimeout::ping(std::string_view state)
 
 // LLWatchdog
 LLWatchdog::LLWatchdog()
-    :mSuspectsAccessMutex()
-    ,mTimer(nullptr)
-    ,mLastClockCount(0)
 {
 }
 

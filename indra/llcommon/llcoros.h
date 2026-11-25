@@ -307,7 +307,11 @@ private:
     };
     std::queue<ExceptionData> mExceptionQueue;
 
-    S32 mStackSize;
+    // MAINT-2724: default coroutine stack size too small on Windows.
+    // Previously we used
+    // boost::context::guarded_stack_allocator::default_stacksize();
+    // empirically this is insufficient.
+    S32 mStackSize{1024*1024};
 
     // coroutine-local storage, as it were: one per coro we track
     struct CoroData: public LLInstanceTracker<CoroData, std::string>

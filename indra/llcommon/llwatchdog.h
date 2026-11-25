@@ -80,7 +80,7 @@ public:
 
 private:
     LLTimer mTimer;
-    F32 mTimeout;
+    F32 mTimeout{0.0f};
     std::string mPingState;
 };
 
@@ -116,9 +116,9 @@ private:
     using SuspectsRegistry = std::set<LLWatchdogEntry*>;
     SuspectsRegistry mSuspects;
     SuspectsRegistry mFrozeList;
-    LLMutex* mSuspectsAccessMutex;
-    LLWatchdogTimerThread* mTimer;
-    U64 mLastClockCount;
+    LLMutex* mSuspectsAccessMutex{};
+    LLWatchdogTimerThread* mTimer{nullptr};
+    U64 mLastClockCount{0};
     bool mCrashOnFreeze;
 
     // At the moment watchdog expects app to set markers in mCreateMarkerFnc,

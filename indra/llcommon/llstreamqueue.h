@@ -52,9 +52,7 @@ template <typename Ch>
 class LLGenericStreamQueue
 {
 public:
-    LLGenericStreamQueue():
-        mSize(0),
-        mClosed(false)
+    LLGenericStreamQueue()
     {}
 
     /**
@@ -179,8 +177,8 @@ private:
     using string = std::basic_string<Ch>;
     using BufferList = std::list<string>;
     BufferList mBuffer;
-    std::streamsize mSize;
-    bool mClosed;
+    std::streamsize mSize{0};
+    bool mClosed{false};
 };
 
 template <typename Ch>

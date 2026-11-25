@@ -181,8 +181,8 @@ public:
 
     CountStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
-    , mTotalSamplesCount(0)
-    , mTotalSamples()
+    ,
+     mTotalSamples()
     {}
 
     /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
@@ -198,7 +198,7 @@ public:
     U64 getTotalSampleCount() const { return mTotalSamplesCount; }
 
 private:
-    U64 mTotalSamplesCount;
+    U64 mTotalSamplesCount{0};
     T mTotalSamples;
     // </FS:ND>
 };

@@ -503,7 +503,7 @@ namespace LLInitParam
     public:
 
         Parser(parser_read_func_map_t& read_map, parser_write_func_map_t& write_map, parser_inspect_func_map_t& inspect_map)
-        :   mParseSilently(false),
+        :
             mParserReadFuncs(&read_map),
             mParserWriteFuncs(&write_map),
             mParserInspectFuncs(&inspect_map)
@@ -585,7 +585,7 @@ namespace LLInitParam
             mParserInspectFuncs->emplace(typeid(T), inspect_func);
         }
 
-        bool                mParseSilently;
+        bool                mParseSilently{false};
 
     private:
         parser_read_func_map_t*     mParserReadFuncs;
@@ -673,9 +673,9 @@ namespace LLInitParam
         param_list_t                    mUnnamedParams;         // parameters with_out_ associated names
         param_validation_list_t         mValidationList;        // parameters that must be validated
         all_params_list_t               mAllParams;             // all parameters, owns descriptors
-        size_t                          mMaxParamOffset;
-        EInitializationState            mInitializationState;   // whether or not static block data has been initialized
-        class BaseBlock*                mCurrentBlockPtr;       // pointer to block currently being constructed
+        size_t                          mMaxParamOffset{0};
+        EInitializationState            mInitializationState{UNINITIALIZED};   // whether or not static block data has been initialized
+        class BaseBlock*                mCurrentBlockPtr{nullptr};       // pointer to block currently being constructed
     };
 
     // TODO: implement in terms of owned_ptr
@@ -835,8 +835,6 @@ namespace LLInitParam
         friend class Param;
 
         BaseBlock()
-        :   mValidated(false),
-            mParamProvided(false)
         {}
 
         virtual ~BaseBlock() = default;
@@ -923,8 +921,8 @@ namespace LLInitParam
             return mergeBlock(block_data, source, overwrite);
         }
 
-        mutable bool    mValidated; // lazy validation flag
-        bool            mParamProvided;
+        mutable bool    mValidated{false}; // lazy validation flag
+        bool            mParamProvided{false};
 
     private:
         const std::string& getParamName(const BlockDescriptor& block_data, const Param* paramp) const;
@@ -972,7 +970,7 @@ namespace LLInitParam
         //24 bits for member offset field and 1 bit for provided flag
         U16     mEnclosingBlockOffsetLow;
         U8      mEnclosingBlockOffsetHigh:7;
-        U8      mIsProvided:1;
+        U8      mIsProvided:1{false};
 
     };
 
@@ -1896,7 +1894,6 @@ namespace LLInitParam
 
     protected:
         ChoiceBlock()
-        :   mCurChoice(0)
         {
             BaseBlock::init(getBlockDescriptor(), base_block_t::getBlockDescriptor(), sizeof(DERIVED_BLOCK));
         }
@@ -1982,7 +1979,7 @@ namespace LLInitParam
         }
 
     private:
-        param_handle_t  mCurChoice;
+        param_handle_t  mCurChoice{0};
 
         const Param* getCurrentChoice() const
         {

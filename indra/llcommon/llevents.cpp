@@ -351,8 +351,7 @@ LLEventPump::LLEventPump(const std::string& name, bool tweak):
     // Register every new instance with LLEventPumps
     mRegistry(LLEventPumps::instance().getHandle()),
     mName(mRegistry.get()->registerNew(*this, name, tweak)),
-    mSignal(std::make_shared<LLStandardSignal>()),
-    mEnabled(true)
+    mSignal(std::make_shared<LLStandardSignal>())
 {}
 
 #if LL_WINDOWS

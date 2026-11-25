@@ -121,7 +121,7 @@ private:
     static LLSD analyzeMetricPerformanceLog(std::istream& is) ;
 
     std::string mName ;                         // Name of this tester instance
-    S32 mCount ;                                // Current record count
+    S32 mCount{0} ;                                // Current record count
     bool mValidInstance;                        // true if the instance is managed by the map
     std::vector< std::string > mMetricStrings ; // Metrics strings
 
@@ -207,8 +207,8 @@ protected:
      */
     virtual void compareTestSessions(llofstream* os) = 0;
 
-    LLTestSession* mBaseSessionp;
-    LLTestSession* mCurrentSessionp;
+    LLTestSession* mBaseSessionp{nullptr};
+    LLTestSession* mCurrentSessionp{nullptr};
 };
 
 #endif

@@ -438,13 +438,6 @@ void BlockTimer::writeLog(std::ostream& os)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 TimeBlockAccumulator::TimeBlockAccumulator()
-:   mTotalTimeCounter(0),
-    mSelfTimeCounter(0),
-    mCalls(0),
-    mLastCaller(nullptr),
-    mActiveCount(0),
-    mMoveUpTree(false),
-    mParent(nullptr)
 {}
 
 void TimeBlockAccumulator::addSamples( const TimeBlockAccumulator& other, EBufferAppendType append_type )

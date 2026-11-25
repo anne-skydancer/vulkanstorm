@@ -43,7 +43,6 @@ namespace LLInitParam
     // Param
     //
     Param::Param(BaseBlock* enclosing_block)
-    :   mIsProvided(false)
     {
         const U8* my_addr = reinterpret_cast<const U8*>(this);
         const U8* block_addr = reinterpret_cast<const U8*>(enclosing_block);
@@ -151,9 +150,6 @@ namespace LLInitParam
     }
 
     BlockDescriptor::BlockDescriptor()
-    :   mMaxParamOffset(0),
-        mInitializationState(UNINITIALIZED),
-        mCurrentBlockPtr(nullptr)
     {}
 
     // called by each derived class in least to most derived order

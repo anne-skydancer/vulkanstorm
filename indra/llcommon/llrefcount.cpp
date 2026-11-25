@@ -33,7 +33,6 @@
 const S32 gMaxRefCount = LL_REFCOUNT_FREE;
 
 LLRefCount::LLRefCount(const LLRefCount& other)
-:   mRef(0)
 {
 }
 

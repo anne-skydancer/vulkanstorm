@@ -87,7 +87,7 @@ namespace LLTrace
         LLMutex                         mChildListMutex;        // protects access to child list
         LLMutex                         mSharedRecordingMutex;
         AccumulatorBufferGroup          mSharedRecordingBuffers;
-        ThreadRecorder*                 mParentRecorder;
+        ThreadRecorder*                 mParentRecorder{nullptr};
 
     };
 

@@ -273,8 +273,8 @@ namespace LLError
         std::string             mLocationString,
                                 mFunctionString,
                                 mTagString;
-        bool                    mCached,
-                                mShouldLog;
+        bool                    mCached{false},
+                                mShouldLog{false};
 
         friend class Log;
     };

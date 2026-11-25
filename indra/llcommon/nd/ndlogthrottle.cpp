@@ -43,22 +43,18 @@
         {
             char const *mFile;
             int mLine;
-            mutable U64 mLastCall;
-            mutable U64 mAverage;
-            mutable U64 mCalls;
-            mutable U64 mThrottledCalls;
-            mutable U64 mLastUnthrottled;
+            mutable U64 mLastCall{ 0 };
+            mutable U64 mAverage{ 0 };
+            mutable U64 mCalls{ 0 };
+            mutable U64 mThrottledCalls{ 0 };
+            mutable U64 mLastUnthrottled{ 0 };
             mutable U32 mThrottle;
 
             CallSiteCall( char const *aFile, int aLine )
                 : mFile( aFile )
                 , mLine( aLine )
-                , mLastCall( 0 )
-                , mAverage( 0 )
-                , mCalls( 0 )
-                , mThrottledCalls( 0 )
-                , mLastUnthrottled( 0 )
-                , mThrottle( initialThrottle )
+                ,
+                 mThrottle( initialThrottle )
             {
             }
 

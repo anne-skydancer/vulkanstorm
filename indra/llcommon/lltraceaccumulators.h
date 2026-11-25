@@ -250,13 +250,6 @@ namespace LLTrace
         static F64 getDefaultValue() { return NaN; }
 
         EventAccumulator()
-        :   mSum(0),
-            mMin(NaN),
-            mMax(NaN),
-            mMean(NaN),
-            mSumOfSquares(0),
-            mNumSamples(0),
-            mLastValue(NaN)
         {}
 
         void record(F64 value)
@@ -301,16 +294,16 @@ namespace LLTrace
         static F64 mergeSumsOfSquares(const EventAccumulator& a, const EventAccumulator& b);
 
     private:
-        F64 mSum,
-            mLastValue;
+        F64 mSum{0},
+            mLastValue{NaN};
 
-        F64 mMean,
-            mSumOfSquares;
+        F64 mMean{NaN},
+            mSumOfSquares{0};
 
-        F64 mMin,
-            mMax;
+        F64 mMin{NaN},
+            mMax{NaN};
 
-        S32 mNumSamples;
+        S32 mNumSamples{0};
     };
 
 
@@ -321,16 +314,9 @@ namespace LLTrace
         static F64 getDefaultValue() { return NaN; }
 
         SampleAccumulator()
-        :   mSum(0),
-            mMin(NaN),
-            mMax(NaN),
-            mMean(NaN),
-            mSumOfSquares(0),
+        :
             mLastSampleTimeStamp(0),
-            mTotalSamplingTime(0),
-            mNumSamples(0),
-            mLastValue(NaN),
-            mHasValue(false)
+            mTotalSamplingTime(0)
         {}
 
         void sample(F64 value)
@@ -392,23 +378,23 @@ namespace LLTrace
         static F64 mergeSumsOfSquares(const SampleAccumulator& a, const SampleAccumulator& b);
 
     private:
-        F64     mSum,
-                mLastValue;
+        F64     mSum{0},
+                mLastValue{NaN};
 
-        F64     mMean,
-                mSumOfSquares;
+        F64     mMean{NaN},
+                mSumOfSquares{0};
 
         F64SecondsImplicit
                 mLastSampleTimeStamp,
                 mTotalSamplingTime;
 
-        F64     mMin,
-                mMax;
+        F64     mMin{NaN},
+                mMax{NaN};
 
-        S32     mNumSamples;
+        S32     mNumSamples{0};
         // distinct from mNumSamples, since we might have inherited a last value from
         // a previous sampling period
-        bool    mHasValue;
+        bool    mHasValue{false};
     };
 
     class CountAccumulator
@@ -418,8 +404,6 @@ namespace LLTrace
         static F64 getDefaultValue() { return 0; }
 
         CountAccumulator()
-        :   mSum(0),
-            mNumSamples(0)
         {}
 
         void add(F64 value)
@@ -449,9 +433,9 @@ namespace LLTrace
         bool hasValue() const            { return true; }
 
     private:
-        F64 mSum;
+        F64 mSum{0};
 
-        S32 mNumSamples;
+        S32 mNumSamples{0};
     };
 
     class alignas(32) TimeBlockAccumulator
@@ -493,13 +477,13 @@ namespace LLTrace
         //
         // members
         //
-        U64                         mTotalTimeCounter,
-                                    mSelfTimeCounter;
-        S32                         mCalls;
-        class BlockTimerStatHandle* mParent;        // last acknowledged parent of this time block
-        class BlockTimerStatHandle* mLastCaller;    // used to bootstrap tree construction
-        U16                         mActiveCount;   // number of timers with this ID active on stack
-        bool                        mMoveUpTree;    // needs to be moved up the tree of timers at the end of frame
+        U64                         mTotalTimeCounter{0},
+                                    mSelfTimeCounter{0};
+        S32                         mCalls{0};
+        class BlockTimerStatHandle* mParent{nullptr};        // last acknowledged parent of this time block
+        class BlockTimerStatHandle* mLastCaller{nullptr};    // used to bootstrap tree construction
+        U16                         mActiveCount{0};   // number of timers with this ID active on stack
+        bool                        mMoveUpTree{false};    // needs to be moved up the tree of timers at the end of frame
 
     };
 
@@ -513,11 +497,11 @@ namespace LLTrace
         void setParent(BlockTimerStatHandle* parent);
         BlockTimerStatHandle* getParent() { return mParent; }
 
-        BlockTimerStatHandle*                   mBlock;
-        BlockTimerStatHandle*                   mParent;
+        BlockTimerStatHandle*                   mBlock{nullptr};
+        BlockTimerStatHandle*                   mParent{nullptr};
         std::vector<BlockTimerStatHandle*>      mChildren;
-        bool                        mCollapsed;
-        bool                        mNeedsSorting;
+        bool                        mCollapsed{true};
+        bool                        mNeedsSorting{false};
     };
 
     struct BlockTimerStackRecord

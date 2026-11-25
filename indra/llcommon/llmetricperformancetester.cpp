@@ -170,8 +170,7 @@ void LLMetricPerformanceTesterBasic::doAnalysisMetrics(std::string baseline, std
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterBasic::LLMetricPerformanceTesterBasic(std::string name) :
-    mName(name),
-    mCount(0)
+    mName(name)
 {
     if (mName == std::string())
     {
@@ -269,9 +268,7 @@ void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::str
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterWithSession::LLMetricPerformanceTesterWithSession(std::string name) :
-    LLMetricPerformanceTesterBasic(name),
-    mBaseSessionp(nullptr),
-    mCurrentSessionp(nullptr)
+    LLMetricPerformanceTesterBasic(name)
 {
 }
 

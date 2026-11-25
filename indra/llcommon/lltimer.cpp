@@ -251,9 +251,7 @@ U64 get_clock_count()
 
 
 TimerInfo::TimerInfo()
-:   mClockFrequency(0.0),
-    mTotalTimeClockCount(0),
-    mLastTotalTimeClockCount(0)
+:   mClockFrequency(0.0)
 {}
 
 void TimerInfo::update()

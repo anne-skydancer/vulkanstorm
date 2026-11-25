@@ -148,7 +148,7 @@ protected:
     // able to reach Foo::deleteSingleton(). Make LLSingleton (which declares
     // deleteSingleton()) store a pointer here. Since we know it's a static
     // class method, a classic-C function pointer will do.
-    void (*mDeleteSingleton)();
+    void (*mDeleteSingleton)(){nullptr};
 
 public:
     /**
@@ -218,8 +218,7 @@ struct LLSingleton_manage_master<LLSingletonBase::MasterList>
 
 // Now we can implement LLSingletonBase's template constructor.
 template <typename DERIVED_TYPE>
-LLSingletonBase::LLSingletonBase(tag<DERIVED_TYPE>):
-    mDeleteSingleton(nullptr)
+LLSingletonBase::LLSingletonBase(tag<DERIVED_TYPE>)
 {
     // This is the earliest possible point at which we can push this new
     // instance onto the init stack. LLSingleton::constructSingleton() can't

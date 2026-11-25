@@ -165,7 +165,7 @@ public:
 
 protected:
     bool mThreaded;  // if false, run on main thread and do updates during update()
-    bool mStarted;  // required when mThreaded is false to call startThread() from update()
+    bool mStarted{false};  // required when mThreaded is false to call startThread() from update()
     LLAtomicBool mIdleThread; // request queue is empty (or we are quitting) and the thread is idle
 
     //typedef std::set<QueuedRequest*, queued_request_less> request_queue_t;
@@ -177,7 +177,7 @@ protected:
     using request_hash_t = LLSimpleHash<handle_t, REQUEST_HASH_SIZE>;
     request_hash_t mRequestHash;
 
-    handle_t mNextHandle;
+    handle_t mNextHandle{0};
 };
 
 #endif // LL_LLQUEUEDTHREAD_H

@@ -78,7 +78,7 @@ public:
     }
 
 private:
-    mutable S32 mRef;
+    mutable S32 mRef{0};
 };
 
 

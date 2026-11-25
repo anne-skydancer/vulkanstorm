@@ -279,18 +279,16 @@ public:
      */
     struct Status
     {
-        Status():
-            mState(UNSTARTED),
-            mData(0)
+        Status()
         {}
 
-        state mState;               ///< @see state
+        state mState{UNSTARTED};               ///< @see state
         /**
          * - for mState == EXITED: mData is exit() code
          * - for mState == KILLED: mData is signal number (Posix)
          * - otherwise: mData is undefined
          */
-        int mData;
+        int mData{0};
     };
 
     /// Status query
@@ -568,7 +566,7 @@ private:
     // explicitly want this ptr_vector to be able to store NULLs
     using PipeVector = std::vector<std::unique_ptr<BasePipe>>;
     PipeVector mPipes;
-    apr_pool_t* mPool;
+    apr_pool_t* mPool{nullptr};
 };
 
 /// for logging

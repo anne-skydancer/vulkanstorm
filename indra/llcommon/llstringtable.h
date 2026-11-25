@@ -55,8 +55,8 @@ public:
     void incCount()     { mCount++; }
     bool decCount()     { return --mCount != 0; }
 
-    char *mString;
-    S32  mCount;
+    char *mString{nullptr};
+    S32  mCount{1};
 };
 
 class LL_COMMON_API LLStringTable
@@ -77,7 +77,7 @@ public:
     void  removeString(const char *str);
 
     S32 mMaxEntries;
-    S32 mUniqueEntries;
+    S32 mUniqueEntries{0};
 
 #if STRING_TABLE_HASH_MAP
 #if LL_WINDOWS

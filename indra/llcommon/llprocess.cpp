@@ -74,8 +74,7 @@ class LLProcessListener
 {
     LOG_CLASS(LLProcessListener);
 public:
-    LLProcessListener():
-        mCount(0)
+    LLProcessListener()
     {}
 
     void addPoll(const LLProcess&)
@@ -129,7 +128,7 @@ private:
     /// If this object is destroyed before mCount goes to zero, stop
     /// listening on "mainloop" anyway.
     LLTempBoundListener mConnection;
-    unsigned mCount;
+    unsigned mCount{0};
 };
 static LLProcessListener sProcessListener;
 
@@ -492,9 +491,7 @@ public:
         mIndex(index),
         // Essential to initialize our std::istream with our special streambuf!
         mStream(&mStreambuf),
-        mPump("ReadPipe", true),    // tweak name as needed to avoid collisions
-        mLimit(0),
-        mEOF(false)
+        mPump("ReadPipe", true)    // tweak name as needed to avoid collisions
     {
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("ReadPipe"),
@@ -702,8 +699,8 @@ private:
     boost::asio::streambuf mStreambuf;
     std::istream mStream;
     LLEventStream mPump;
-    size_type mLimit;
-    bool mEOF;
+    size_type mLimit{0};
+    bool mEOF{false};
 };
 
 /*****************************************************************************
@@ -758,8 +755,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     // Because 'autokill' originally meant both 'autokill' and 'attached', to
     // preserve existing semantics, we promise that mAttached defaults to the
     // same setting as mAutokill.
-    mAttached(params.attached.isProvided()? params.attached : params.autokill),
-    mPool(nullptr)
+    mAttached(params.attached.isProvided()? params.attached : params.autokill)
 {
     mPipes.resize(NSLOTS);
 

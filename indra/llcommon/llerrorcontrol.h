@@ -164,12 +164,12 @@ namespace LLError
         void showMultiline(bool show);
 
     protected:
-        bool mWantsTime;
-        bool mWantsTags;
-        bool mWantsLevel;
-        bool mWantsLocation;
-        bool mWantsFunctionName;
-        bool mWantsMultiline;
+        bool mWantsTime{true};
+        bool mWantsTags{true};
+        bool mWantsLevel{true};
+        bool mWantsLocation{true};
+        bool mWantsFunctionName{true};
+        bool mWantsMultiline{false};
     };
 
     using RecorderPtr = std::shared_ptr<Recorder>;

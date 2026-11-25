@@ -136,11 +136,6 @@ std::string LLCoros::getStatus()
 }
 
 LLCoros::LLCoros():
-    // MAINT-2724: default coroutine stack size too small on Windows.
-    // Previously we used
-    // boost::context::guarded_stack_allocator::default_stacksize();
-    // empirically this is insufficient.
-    mStackSize(1024*1024),
     // mCurrent does NOT own the current CoroData instance -- it simply
     // points to it. So initialize it with a no-op deleter.
     mCurrent{ [](CoroData*){} }

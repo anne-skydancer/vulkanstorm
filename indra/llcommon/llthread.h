@@ -93,7 +93,7 @@ public:
     static void registerThreadID();
 
 private:
-    bool                mPaused;
+    bool                mPaused{false};
     std::thread::native_handle_type mNativeHandle; // for termination in case of issues
 
     // static function passed to APR thread creation routine
@@ -109,10 +109,10 @@ protected:
     class LLCondition*  mRunCondition;
     LLMutex*            mDataLock;
 
-    std::thread        *mThreadp;
-    EThreadStatus       mStatus;
+    std::thread        *mThreadp{nullptr};
+    EThreadStatus       mStatus{STOPPED};
     id_t                mID;
-    LLTrace::ThreadRecorder* mRecorder;
+    LLTrace::ThreadRecorder* mRecorder{nullptr};
 
     //a local apr_pool for APRFile operations in this thread. If it exists, LLAPRFile::sAPRFilePoolp should not be used.
     //Note: this pool is used by APRFile ONLY, do NOT use it for any other purposes.

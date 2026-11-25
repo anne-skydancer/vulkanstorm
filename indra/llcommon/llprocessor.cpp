@@ -947,7 +947,7 @@ private:
 
 //////////////////////////////////////////////////////
 // Interface definition
-LLProcessorInfo::LLProcessorInfo() : mImpl(nullptr)
+LLProcessorInfo::LLProcessorInfo()
 {
     // *NOTE:Mani - not thread safe.
     if(!mImpl)

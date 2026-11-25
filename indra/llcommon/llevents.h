@@ -603,7 +603,7 @@ protected:
     std::shared_ptr<LLStandardSignal> mSignal;
 
     /// valve open?
-    bool mEnabled;
+    bool mEnabled{true};
     /// Map of named listeners. This tracks the listeners that actually exist
     /// at this moment. When we stopListening(), we discard the entry from
     /// this map.

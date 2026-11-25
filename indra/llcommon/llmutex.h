@@ -59,7 +59,7 @@ public:
 
 protected:
     std::mutex          mMutex;
-    mutable U32         mCount;
+    mutable U32         mCount{0};
     mutable LLThread::id_t  mLockingThread;
 
 #if MUTEX_DEBUG
@@ -94,7 +94,7 @@ private:
     std::shared_mutex mSharedMutex;
     mutable std::mutex mLockMutex;
     std::unordered_map<LLThread::id_t, U32> mLockingThreads;
-    bool mIsShared;
+    bool mIsShared{false};
 
     using iterator = std::unordered_map<LLThread::id_t, U32>::iterator;
     using const_iterator = std::unordered_map<LLThread::id_t, U32>::const_iterator;

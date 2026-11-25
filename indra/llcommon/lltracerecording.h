@@ -70,7 +70,6 @@ public:
 
 protected:
     LLStopWatchControlsMixinCommon()
-    :   mPlayState(STOPPED)
     {}
 
 private:
@@ -83,7 +82,7 @@ private:
     // clear accumulated state, may be called while started
     virtual void handleReset() = 0;
 
-    EPlayState mPlayState;
+    EPlayState mPlayState{STOPPED};
 };
 
 template<typename DERIVED>
@@ -307,7 +306,7 @@ namespace LLTrace
         LLTimer                                         mSamplingTimer;
         F64Seconds                                      mElapsedSeconds;
         LLCopyOnWritePointer<AccumulatorBufferGroup>    mBuffers;
-        AccumulatorBufferGroup*                         mActiveBuffers;
+        AccumulatorBufferGroup*                         mActiveBuffers{nullptr};
 
     };
 
@@ -676,8 +675,8 @@ namespace LLTrace
     private:
         std::vector<Recording>  mRecordingPeriods;
         const bool              mAutoResize;
-        size_t                  mCurPeriod;
-        size_t                  mNumRecordedPeriods;
+        size_t                  mCurPeriod{0};
+        size_t                  mNumRecordedPeriods{0};
     };
 
     PeriodicRecording& get_frame_recording();

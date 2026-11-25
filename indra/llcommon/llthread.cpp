@@ -276,11 +276,7 @@ void LLThread::sehHandle()
 #endif
 
 LLThread::LLThread(const std::string& name, apr_pool_t *poolp) :
-    mPaused(false),
-    mName(name),
-    mThreadp(nullptr),
-    mStatus(STOPPED),
-    mRecorder(nullptr)
+    mName(name)
 {
     mRunCondition = new LLCondition();
     mDataLock = new LLMutex();

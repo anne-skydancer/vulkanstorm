@@ -95,8 +95,7 @@ void ll_cleanup_apr()
 LLAPRPool::LLAPRPool(apr_pool_t *parent, apr_size_t size, bool releasePoolFlag)
     : mParent(parent),
     mReleasePoolFlag(releasePoolFlag),
-    mMaxSize(size),
-    mPool(nullptr)
+    mMaxSize(size)
 {
     createAPRPool() ;
 }
@@ -147,9 +146,7 @@ apr_pool_t* LLAPRPool::getAPRPool()
 }
 
 LLVolatileAPRPool::LLVolatileAPRPool(bool is_local, apr_pool_t *parent, apr_size_t size, bool releasePoolFlag)
-                  : LLAPRPool(parent, size, releasePoolFlag),
-                  mNumActiveRef(0),
-                  mNumTotalRef(0)
+                  : LLAPRPool(parent, size, releasePoolFlag)
 {
     //create mutex
 

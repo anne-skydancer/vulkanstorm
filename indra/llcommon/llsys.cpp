@@ -97,7 +97,7 @@ static const F32 MEM_INFO_THROTTLE = 20;
 static const F32 MEM_INFO_WINDOW = 10*60;
 
 LLOSInfo::LLOSInfo() :
-    mMajorVer(0), mMinorVer(0), mBuild(0), mOSVersionString("")
+    mOSVersionString("")
 {
 
 #if LL_WINDOWS
@@ -1231,20 +1231,10 @@ public:
         mConnection(LLEventPumps::instance()
                     .obtain("mainloop")
                     .listen("FrameWatcher", boost::bind(&FrameWatcher::tick, this, _1))),
-        // Initializing mSampleStart to an invalid timestamp alerts us to skip
-        // trying to compute framerate on the first call.
-        mSampleStart(-1),
-        // Initializing mSampleEnd to 0 ensures that we treat the first call
-        // as the completion of a sample window.
-        mSampleEnd(0),
-        mFrames(0),
         // Both MEM_INFO_WINDOW and MEM_INFO_THROTTLE are in seconds. We need
         // the number of integer MEM_INFO_THROTTLE sample slots that will fit
         // in MEM_INFO_WINDOW. Round up.
-        mSamples(int((MEM_INFO_WINDOW / MEM_INFO_THROTTLE) + 0.7)),
-        // Initializing to F32_MAX means that the first real frame will become
-        // the slowest ever, which sounds like a good idea.
-        mSlowest(F32_MAX)
+        mSamples(int((MEM_INFO_WINDOW / MEM_INFO_THROTTLE) + 0.7))
     {}
 
     bool tick(const LLSD&)
@@ -1353,13 +1343,19 @@ private:
     // feature we need: has at least the stated interval elapsed, and if so,
     // exactly how long has passed? So we have to do it by hand, sigh.
     // Time at start, end of sample window
-    F32 mSampleStart, mSampleEnd;
+    // Initializing mSampleStart to an invalid timestamp alerts us to skip
+    // trying to compute framerate on the first call.
+    // Initializing mSampleEnd to 0 ensures that we treat the first call
+    // as the completion of a sample window.
+    F32 mSampleStart{-1}, mSampleEnd{0};
     // Frames this sample window
-    U32 mFrames;
+    U32 mFrames{0};
     // Sliding window of framerate samples
     boost::circular_buffer<F32> mSamples;
     // Slowest framerate in mSamples
-    F32 mSlowest;
+    // Initializing to F32_MAX means that the first real frame will become
+    // the slowest ever, which sounds like a good idea.
+    F32 mSlowest{F32_MAX};
 };
 
 // Need an instance of FrameWatcher before it does any good
