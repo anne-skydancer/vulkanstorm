@@ -963,7 +963,7 @@ LLProcessorInfo::LLProcessorInfo()
         static LLProcessorInfoDarwinImpl the_impl;
         mImpl = &the_impl;
 #else
-        static LLProcessorInfoImpl the_impl;
+        static LLProcessorInfoLinuxImpl the_impl;
         mImpl = &the_impl;
 #endif // LL_MSVC
     }
