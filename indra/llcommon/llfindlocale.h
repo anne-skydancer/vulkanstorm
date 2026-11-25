@@ -27,9 +27,9 @@
 #ifndef __findlocale_h_
 #define __findlocale_h_
 
-using FL_Lang = char*;
-using FL_Country = char*;
-using FL_Variant = char*;
+using FL_Lang = const char*;
+using FL_Country = const char*;
+using FL_Variant = const char*;
 
 struct FL_Locale {
   FL_Lang    lang;

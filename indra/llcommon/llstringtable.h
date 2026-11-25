@@ -101,7 +101,7 @@ extern LL_COMMON_API LLStringTable gStringTable;
 // e.g. as a member of an LLXmlTree
 // Strings can be inserted only, then quickly looked up
 
-using LLStdStringHandle = std::string*;
+using LLStdStringHandle = const std::string*;
 
 class LL_COMMON_API LLStdStringTable
 {
