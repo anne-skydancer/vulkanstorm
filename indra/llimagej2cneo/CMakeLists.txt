@@ -52,7 +52,8 @@ if (LL_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../llimagej2coj ${NEOJ2K_COMPAT_INCLUDE_DIR})
     target_compile_definitions(llj2c_${name}_neoj2k_test PRIVATE LL_J2C_NEOJ2K)
     target_link_libraries(llj2c_${name}_neoj2k_test ll::neoj2k)
-    if (WINDOWS)
+    if (NEOJ2K_STATIC) # <Vulkanstorm> linked statically: no DLL, no RPATH
+    elseif (WINDOWS)
       add_custom_command(TARGET llj2c_${name}_neoj2k_test POST_BUILD
           COMMAND ${CMAKE_COMMAND} -E copy_if_different "${ARCH_PREBUILT_DIRS_RELEASE}/neoj2k.dll" "$<TARGET_FILE_DIR:llj2c_${name}_neoj2k_test>")
     elseif (LINUX)

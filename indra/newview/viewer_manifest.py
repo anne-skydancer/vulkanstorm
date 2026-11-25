@@ -801,6 +801,8 @@ class Windows_x86_64_Manifest(ViewerManifest):
             # (a build directory shared between the two options may still hold the other's file); openjp2.dll otherwise
             if self.args.get('neoj2k', 'OFF').lower() == 'on':
                 self.path("neoj2k.dll")
+            elif self.args.get('neoj2k', 'OFF').lower() == 'static':
+                pass  # statically linked into the executable
             else:
                 self.path_optional("openjp2.dll")
 
@@ -846,7 +848,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
                 self.path('soloud.txt')
                 self.path('soloud-miniaudio.txt')
         # <Vulkanstorm> neo-j2k's licence file (with OpenJPEG's notices) only in a USE_NEOJ2K build
-        if self.args.get('neoj2k', 'OFF').lower() == 'on':
+        if self.args.get('neoj2k', 'OFF').lower() in ('on', 'static'):
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('neoj2k.txt')
         self.path("featuretable.txt")
@@ -2381,7 +2383,7 @@ class LinuxManifest(ViewerManifest):
         self.path("licenses-linux.txt","licenses.txt")
         self.path_licence_texts()
         # <Vulkanstorm> neo-j2k's licence file (with OpenJPEG's notices) only in a USE_NEOJ2K build
-        if self.args.get('neoj2k', 'OFF').lower() == 'on':
+        if self.args.get('neoj2k', 'OFF').lower() in ('on', 'static'):
             with self.prefix(src=os.path.join(pkgdir, 'LICENSES'), dst='licenses'):
                 self.path('neoj2k.txt')
         self.path(os.path.join(self.icon_path(), "firestorm_512.png"), "firestorm_icon.png")
@@ -2488,6 +2490,8 @@ class LinuxManifest(ViewerManifest):
             # <Vulkanstorm> the J2C codec's shared library: libneoj2k.so* is required in a USE_NEOJ2K build and staged in no other
             if self.args.get('neoj2k', 'OFF').lower() == 'on':
                 self.path("libneoj2k.so*")
+            elif self.args.get('neoj2k', 'OFF').lower() == 'static':
+                pass  # statically linked into the executable
             else:
                 self.path_optional("libopenjpeg.so*")
             self.path("libalut.so*")
@@ -2737,7 +2741,7 @@ if __name__ == "__main__":
         dict(name='mesazink', description="""Indication the Mesa Zink GL-over-Vulkan runtime is bundled""", default='OFF'),
         dict(name='openal', description="""Indication openal libraries are needed""", default='OFF'),
         dict(name='soloud', description="""Include SoLoud package licenses""", default='OFF'),
-        dict(name='neoj2k', description="""Indication neo-j2k (USE_NEOJ2K) is the J2C codec: its library and licence are bundled""", default='OFF'),
+        dict(name='neoj2k', description="""Indication neo-j2k (USE_NEOJ2K) is the J2C codec: 'on' bundles its shared library and licence, 'static' its licence only""", default='OFF'),
         dict(name='tracy', description="""Indication tracy profiler is enabled""", default='OFF'),
         dict(name='inno', description="Use Inno Setup for Windows installers", default='OFF'),
         dict(name='velopack', description="""Use Velopack installer instead of NSIS""", default='OFF'),
