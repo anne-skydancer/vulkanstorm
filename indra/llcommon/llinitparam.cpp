@@ -145,7 +145,7 @@ namespace LLInitParam
 
         if (param->mValidationFunc)
         {
-            mValidationList.push_back(std::make_pair(param->mParamHandle, param->mValidationFunc));
+            mValidationList.emplace_back(param->mParamHandle, param->mValidationFunc);
         }
     }
 
@@ -269,7 +269,7 @@ namespace LLInitParam
                     continue;
                 }
 
-                name_stack.push_back(std::make_pair(pair.first, !duplicate));
+                name_stack.emplace_back(pair.first, !duplicate);
                 const Param* diff_param = diff_block ? diff_block->getParamFromHandle(param_handle) : nullptr;
                 serialized |= serialize_func(*param, parser, name_stack, predicate_rule, diff_param);
                 name_stack.pop_back();
@@ -297,7 +297,7 @@ namespace LLInitParam
             ParamDescriptor::inspect_func_t inspect_func = ptr->mInspectFunc;
             if (inspect_func)
             {
-                name_stack.push_back(std::make_pair("", true));
+                name_stack.emplace_back("", true);
                 inspect_func(*param, parser, name_stack, ptr->mMinCount, ptr->mMaxCount);
                 name_stack.pop_back();
             }
@@ -321,7 +321,7 @@ namespace LLInitParam
                     }
                 }
 
-                name_stack.push_back(std::make_pair(pair.first, !duplicate));
+                name_stack.emplace_back(pair.first, !duplicate);
                 inspect_func(*param, parser, name_stack, pair.second->mMinCount, pair.second->mMaxCount);
                 name_stack.pop_back();
             }

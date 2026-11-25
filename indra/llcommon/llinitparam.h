@@ -1437,7 +1437,7 @@ namespace LLInitParam
                 ++it)
             {
                 std::string key = it->getValueName();
-                name_stack.push_back(std::make_pair(std::string(), true));
+                name_stack.emplace_back(std::string(), true);
 
                 if(key.empty())
                 // not parsed via name values, write out value directly
@@ -1691,7 +1691,7 @@ namespace LLInitParam
                 it != end_it;
                 ++it)
             {
-                name_stack.push_back(std::make_pair(std::string(), true));
+                name_stack.emplace_back(std::string(), true);
 
                 std::string key = it->getValueName();
                 if (!key.empty())

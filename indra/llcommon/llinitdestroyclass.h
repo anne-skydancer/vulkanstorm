@@ -54,7 +54,7 @@ public:
 
     void registerCallback(const std::string& name, const func_t& func)
     {
-        mCallbacks.push_back(FuncList::value_type(name, func));
+        mCallbacks.emplace_back(name, func);
     }
 
     void fireCallbacks() const;
