@@ -44,7 +44,7 @@
 # include <io.h>
 #endif // !LL_WINDOWS
 #include <vector>
-#include "string.h"
+#include <cstring>
 
 #include "llapp.h"
 #include "llapr.h"

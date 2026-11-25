@@ -31,8 +31,8 @@
 
 #include "apr_time.h"
 
-#include <time.h>
-#include <locale.h>
+#include <ctime>
+#include <clocale>
 #include <string>
 #include <iomanip>
 #include <sstream>
