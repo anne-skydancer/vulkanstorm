@@ -349,7 +349,7 @@ public:
     static handle isRunning(handle, const std::string& desc="");
 
     /// Provide symbolic access to child's file slots
-    enum FILESLOT { STDIN=0, STDOUT=1, STDERR=2, NSLOTS=3 };
+    enum FILESLOT : int { STDIN=0, STDOUT=1, STDERR=2, NSLOTS=3 }; // <Vulkanstorm> fixed type: out-of-range values are valid ints
 
     /**
      * For a pipe constructed with @a type "npipe", obtain the generated OS
