@@ -157,7 +157,7 @@ namespace {
         bool enabled() override
         {
 #ifdef LL_RELEASE_FOR_DOWNLOAD
-            return 1;
+            return true;
 #else
             return LLError::getEnabledLogTypesMask() & 0x02;
 #endif

@@ -1069,7 +1069,7 @@ std::optional<std::string> llstring_getoptenv(const std::string& key)
 
 long LLStringOps::sPacificTimeOffset = 0;
 long LLStringOps::sLocalTimeOffset = 0;
-bool LLStringOps::sPacificDaylightTime = 0;
+bool LLStringOps::sPacificDaylightTime = false;
 bool LLStringOps::sUsingPacificTime = false; // <FS:TJ/> [FIRE-34775] Use PST/PDT when logged into OpenSim
 std::map<std::string, std::string> LLStringOps::datetimeToCodes;
 
