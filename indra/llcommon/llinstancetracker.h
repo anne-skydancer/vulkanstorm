@@ -75,7 +75,15 @@ template<typename T, typename KEY = void,
          EInstanceTrackerAllowKeyCollisions KEY_COLLISION_BEHAVIOR = LLInstanceTrackerErrorOnCollision>
 class LLInstanceTracker
 {
-    typedef std::map<KEY, std::shared_ptr<T>> InstanceMap;
+    // <Vulkanstorm>
+    // The map stores the tracker base, not T: converting this to T* inside
+    // the base constructor, while T is not yet constructed, is undefined.
+    // The conversion to T happens when an instance is looked up, when it is
+    // complete.
+    typedef std::shared_ptr<LLInstanceTracker> base_ptr_t;
+    typedef std::weak_ptr<LLInstanceTracker> base_weak_t;
+    // </Vulkanstorm>
+    typedef std::map<KEY, base_ptr_t> InstanceMap;
     struct StaticData: public LLInstanceTrackerPrivate::StaticBase
     {
         InstanceMap mMap;
@@ -96,7 +104,9 @@ public:
      */
     weak_t getWeak()
     {
-        return mSelf;
+        // <Vulkanstorm> convert at call time, not at construction
+        return weak_t(ptr_t(mSelf.lock(), static_cast<T*>(this)));
+        // </Vulkanstorm>
     }
 
     static size_t instanceCount()
@@ -113,7 +123,7 @@ public:
         // It's very important that what we store in this snapshot are
         // weak_ptrs, NOT shared_ptrs. That's how we discover whether any
         // instance has been deleted during the lifespan of a snapshot.
-        typedef std::vector<std::pair<const KEY, weak_t>> VectorType;
+        typedef std::vector<std::pair<const KEY, base_weak_t>> VectorType;
         // Dereferencing the iterator we publish produces a
         // std::shared_ptr<SUBCLASS> for each instance that still exists.
         // Since we store weak_ptr<T>, that involves two chained
@@ -240,7 +250,11 @@ public:
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
         const InstanceMap& map(lock->mMap);
         typename InstanceMap::const_iterator found = map.find(k);
-        return (found == map.end()) ? NULL : found->second;
+        // <Vulkanstorm> convert the stored base pointer to T now that the
+        // instance is complete; shares ownership (and use count) with the map
+        return (found == map.end()) ? ptr_t() :
+            ptr_t(found->second, static_cast<T*>(found->second.get()));
+        // </Vulkanstorm>
     }
 
 protected:
@@ -250,7 +264,8 @@ protected:
         // shared_ptr, so give it a no-op deleter. We store shared_ptrs in our
         // InstanceMap specifically so snapshot can store weak_ptrs so we can
         // detect deletions during traversals.
-        ptr_t ptr(static_cast<T*>(this), [](T*){});
+        // <Vulkanstorm> store the base pointer: no cast to T* while T is unconstructed
+        base_ptr_t ptr(this, [](LLInstanceTracker*){});
         // save corresponding weak_ptr for future reference
         mSelf = ptr;
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
@@ -287,7 +302,7 @@ private:
     static std::string report(const char* key) { return report(std::string(key)); }
 
     // caller must instantiate LockStatic
-    void add_(LockStatic& lock, const KEY& key, const ptr_t& ptr)
+    void add_(LockStatic& lock, const KEY& key, const base_ptr_t& ptr)
     {
         mInstanceKey = key;
         InstanceMap& map = lock->mMap;
@@ -311,7 +326,7 @@ private:
             break;
         }
     }
-    ptr_t remove_(LockStatic& lock)
+    base_ptr_t remove_(LockStatic& lock)
     {
         InstanceMap& map = lock->mMap;
         typename InstanceMap::iterator iter = map.find(mInstanceKey);
@@ -327,7 +342,7 @@ private:
 private:
     // Storing a weak_ptr to self is a bit like deriving from
     // std::enable_shared_from_this(), except more explicit.
-    weak_t mSelf;
+    base_weak_t mSelf;
     KEY mInstanceKey;
 };
 
@@ -351,7 +366,11 @@ private:
 template<typename T, EInstanceTrackerAllowKeyCollisions KEY_COLLISION_BEHAVIOR>
 class LLInstanceTracker<T, void, KEY_COLLISION_BEHAVIOR>
 {
-    typedef std::set<std::shared_ptr<T>> InstanceSet;
+    // <Vulkanstorm> stores the tracker base; see the keyed class
+    typedef std::shared_ptr<LLInstanceTracker> base_ptr_t;
+    typedef std::weak_ptr<LLInstanceTracker> base_weak_t;
+    // </Vulkanstorm>
+    typedef std::set<base_ptr_t> InstanceSet;
     struct StaticData: public LLInstanceTrackerPrivate::StaticBase
     {
         InstanceSet mSet;
@@ -372,7 +391,9 @@ public:
      */
     weak_t getWeak()
     {
-        return mSelf;
+        // <Vulkanstorm> convert at call time, not at construction
+        return weak_t(ptr_t(mSelf.lock(), static_cast<T*>(this)));
+        // </Vulkanstorm>
     }
 
     static size_t instanceCount()
@@ -388,7 +409,7 @@ public:
         // It's very important that what we store in this snapshot are
         // weak_ptrs, NOT shared_ptrs. That's how we discover whether any
         // instance has been deleted during the lifespan of a snapshot.
-        typedef std::vector<weak_t> VectorType;
+        typedef std::vector<base_weak_t> VectorType;
         // Dereferencing the iterator we publish produces a
         // std::shared_ptr<SUBCLASS> for each instance that still exists.
         // Since we store weak_ptrs, that involves two chained
@@ -486,7 +507,8 @@ protected:
     {
         // Since we do not intend for this shared_ptr to manage lifespan, give
         // it a no-op deleter.
-        std::shared_ptr<T> ptr(static_cast<T*>(this), [](T*){});
+        // <Vulkanstorm> store the base pointer: no cast to T* while T is unconstructed
+        base_ptr_t ptr(this, [](LLInstanceTracker*){});
         // save corresponding weak_ptr for future reference
         mSelf = ptr;
         // Also store it in our class-static set to track this instance.
@@ -509,7 +531,7 @@ protected:
 private:
     // Storing a weak_ptr to self is a bit like deriving from
     // std::enable_shared_from_this(), except more explicit.
-    weak_t mSelf;
+    base_weak_t mSelf;
 };
 
 #endif
