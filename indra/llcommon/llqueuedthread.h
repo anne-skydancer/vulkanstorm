@@ -71,7 +71,7 @@ public:
         friend class LLQueuedThread;
 
     protected:
-        virtual ~QueuedRequest(); // use deleteRequest()
+        ~QueuedRequest() override; // use deleteRequest()
 
     public:
         QueuedRequest(handle_t handle, U32 flags = 0);
@@ -119,16 +119,16 @@ public:
 
 public:
     LLQueuedThread(const std::string& name, bool threaded = true, bool should_pause = false);
-    virtual ~LLQueuedThread();
-    virtual void shutdown();
+    ~LLQueuedThread() override;
+    void shutdown() override;
 
     // No copy constructor or copy assignment
     LLQueuedThread(const LLQueuedThread&) = delete;
     LLQueuedThread& operator=(const LLQueuedThread&) = delete;
 
 private:
-    virtual bool runCondition(void);
-    virtual void run(void);
+    bool runCondition(void) override;
+    void run(void) override;
     virtual void startThread(void);
     virtual void endThread(void);
     virtual void threadedUpdate(void);

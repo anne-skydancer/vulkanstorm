@@ -54,7 +54,7 @@ namespace LL
     public:
         LazyEventAPIBase(const std::string& name, const std::string& desc,
                          const std::string& field);
-        virtual ~LazyEventAPIBase();
+        ~LazyEventAPIBase() override;
 
         // Do not copy or move: once constructed, LazyEventAPIBase must stay
         // put: we bind its instance pointer into a callback.

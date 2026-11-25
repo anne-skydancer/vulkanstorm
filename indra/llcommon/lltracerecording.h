@@ -161,7 +161,7 @@ namespace LLTrace
         Recording(EPlayState state = LLStopWatchControlsMixinCommon::STOPPED);
 
         Recording(const Recording& other);
-        ~Recording();
+        ~Recording() override;
 
         Recording& operator = (const Recording& other);
 
@@ -296,10 +296,10 @@ namespace LLTrace
         friend class ThreadRecorder;
 
         // implementation for LLStopWatchControlsMixin
-        /*virtual*/ void handleStart();
-        /*virtual*/ void handleStop();
-        /*virtual*/ void handleReset();
-        /*virtual*/ void handleSplitTo(Recording& other);
+        /*virtual*/ void handleStart() override;
+        /*virtual*/ void handleStop() override;
+        /*virtual*/ void handleReset() override;
+        /*virtual*/ void handleSplitTo(Recording& other) override;
 
         // returns data for current thread
         class ThreadRecorder* getThreadRecorder();
@@ -316,7 +316,7 @@ namespace LLTrace
     {
     public:
         PeriodicRecording(size_t num_periods, EPlayState state = STOPPED);
-        ~PeriodicRecording();
+        ~PeriodicRecording() override;
 
         void nextPeriod();
         auto getNumRecordedPeriods()
@@ -639,10 +639,10 @@ namespace LLTrace
 
     private:
         // implementation for LLStopWatchControlsMixin
-        /*virtual*/ void handleStart();
-        /*virtual*/ void handleStop();
-        /*virtual*/ void handleReset();
-        /*virtual*/ void handleSplitTo(PeriodicRecording& other);
+        /*virtual*/ void handleStart() override;
+        /*virtual*/ void handleStop() override;
+        /*virtual*/ void handleReset() override;
+        /*virtual*/ void handleSplitTo(PeriodicRecording& other) override;
 
         // helper methods for wraparound ring-buffer arithmetic
         inline
@@ -696,10 +696,10 @@ namespace LLTrace
 
     private:
         // implementation for LLStopWatchControlsMixin
-        /*virtual*/ void handleStart();
-        /*virtual*/ void handleStop();
-        /*virtual*/ void handleReset();
-        /*virtual*/ void handleSplitTo(ExtendableRecording& other);
+        /*virtual*/ void handleStart() override;
+        /*virtual*/ void handleStop() override;
+        /*virtual*/ void handleReset() override;
+        /*virtual*/ void handleSplitTo(ExtendableRecording& other) override;
 
     private:
         Recording mAcceptedRecording;
@@ -720,10 +720,10 @@ namespace LLTrace
 
     private:
         // implementation for LLStopWatchControlsMixin
-        /*virtual*/ void handleStart();
-        /*virtual*/ void handleStop();
-        /*virtual*/ void handleReset();
-        /*virtual*/ void handleSplitTo(ExtendablePeriodicRecording& other);
+        /*virtual*/ void handleStart() override;
+        /*virtual*/ void handleStop() override;
+        /*virtual*/ void handleReset() override;
+        /*virtual*/ void handleSplitTo(ExtendablePeriodicRecording& other) override;
 
     private:
         PeriodicRecording mAcceptedRecording;

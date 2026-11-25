@@ -41,7 +41,7 @@ namespace LL
          */
         ThreadPoolBase(const std::string& name, size_t threads,
                        WorkQueueBase* queue, bool auto_shutdown = true);
-        virtual ~ThreadPoolBase();
+        ~ThreadPoolBase() override;
 
         /**
          * Launch the ThreadPool. Until this call, a constructed ThreadPool

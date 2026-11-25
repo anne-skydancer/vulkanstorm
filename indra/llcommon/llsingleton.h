@@ -418,7 +418,7 @@ protected:
     }
 
 protected:
-    virtual ~LLSingleton()
+    ~LLSingleton() override
     {
         // This phase of cleanup is performed in the destructor rather than in
         // deleteSingleton() to defend against manual deletion. When we moved

@@ -44,7 +44,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDParser();
+    ~LLSDParser() override;
 
 public:
     /**
@@ -282,7 +282,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDNotationParser();
+    ~LLSDNotationParser() override;
 
 public:
     /**
@@ -307,7 +307,7 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
 private:
     /**
@@ -359,7 +359,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDXMLParser();
+    ~LLSDXMLParser() override;
 
 public:
     /**
@@ -384,12 +384,12 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
     /**
      * @brief Virtual default function for resetting the parser
      */
-    virtual void doReset();
+    void doReset() override;
 
 private:
     class Impl;
@@ -409,7 +409,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDBinaryParser();
+    ~LLSDBinaryParser() override;
 
 public:
     /**
@@ -434,7 +434,7 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns -1 on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
 private:
     /**
@@ -478,7 +478,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDFormatter();
+    ~LLSDFormatter() override;
 
 public:
     /**
@@ -574,7 +574,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDNotationFormatter();
+    ~LLSDNotationFormatter() override;
 
 public:
     /**
@@ -618,7 +618,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDXMLFormatter();
+    ~LLSDXMLFormatter() override;
 
 public:
     /**
@@ -690,7 +690,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDBinaryFormatter();
+    ~LLSDBinaryFormatter() override;
 
 public:
     /**

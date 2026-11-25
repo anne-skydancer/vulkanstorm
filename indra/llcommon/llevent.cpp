@@ -154,11 +154,11 @@ class LLSimpleDispatcher : public LLEventDispatcher::Impl
 {
 public:
     LLSimpleDispatcher(LLEventDispatcher *parent) : mParent(parent) { }
-    virtual ~LLSimpleDispatcher();
-    virtual void addListener(LLEventListener* listener, LLSD filter, const LLSD& userdata);
-    virtual void removeListener(LLEventListener* listener);
-    virtual std::vector<LLListenerEntry> getListeners() const;
-    virtual bool fireEvent(LLPointer<LLEvent> event, LLSD filter);
+    ~LLSimpleDispatcher() override;
+    void addListener(LLEventListener* listener, LLSD filter, const LLSD& userdata) override;
+    void removeListener(LLEventListener* listener) override;
+    std::vector<LLListenerEntry> getListeners() const override;
+    bool fireEvent(LLPointer<LLEvent> event, LLSD filter) override;
 
 protected:
     std::vector<LLListenerEntry> mListeners;

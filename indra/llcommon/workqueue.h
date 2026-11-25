@@ -57,7 +57,7 @@ namespace LL
          */
         WorkQueueBase(const std::string& name, bool auto_shutdown);
 
-        virtual ~WorkQueueBase();
+        ~WorkQueueBase() override;
 
         /**
          * Since the point of WorkQueue is to pass work to some other worker

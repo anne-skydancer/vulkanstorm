@@ -141,7 +141,7 @@ class LL_COMMON_API LLCondition : public LLMutex
 {
 public:
     LLCondition();
-    ~LLCondition();
+    ~LLCondition() override;
 
     void wait();        // blocks
     void signal();

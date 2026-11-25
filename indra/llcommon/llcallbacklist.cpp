@@ -230,7 +230,7 @@ public:
     }
 
 private:
-    bool tick()
+    bool tick() override
     {
         mCallable();
         return true;
@@ -254,7 +254,7 @@ public:
     {
     }
 private:
-    bool tick()
+    bool tick() override
     {
         return mCallable();
     }

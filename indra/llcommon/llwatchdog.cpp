@@ -44,7 +44,7 @@ public:
     {
     }
 
-    ~LLWatchdogTimerThread() {}
+    ~LLWatchdogTimerThread() override {}
 
     void setSleepTime(long ms) { mSleepMsecs = ms; }
     void stop()

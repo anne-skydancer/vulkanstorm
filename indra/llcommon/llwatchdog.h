@@ -64,7 +64,7 @@ class LLWatchdogTimeout : public LLWatchdogEntry
 {
 public:
     LLWatchdogTimeout(const std::string& thread_name);
-    virtual ~LLWatchdogTimeout();
+    ~LLWatchdogTimeout() override;
 
     bool isAlive() const override;
     bool started() const override;

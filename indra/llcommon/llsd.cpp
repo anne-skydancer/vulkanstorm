@@ -215,10 +215,10 @@ namespace
         ImplBase(DataRef value) : mValue(value) { }
         ImplBase(DataMove value) : mValue(std::move(value)) { }
 
-        virtual LLSD::Type type() const { return T; }
+        LLSD::Type type() const override { return T; }
 
         using LLSD::Impl::assign; // Unhiding base class virtuals...
-        virtual void assign(LLSD::Impl*& var, DataRef value) {
+        void assign(LLSD::Impl*& var, DataRef value) override {
             if (shared())
             {
                 Impl::assign(var, value);
@@ -228,7 +228,7 @@ namespace
                 mValue = value;
             }
         }
-        virtual void assign(LLSD::Impl*& var, DataMove value) {
+        void assign(LLSD::Impl*& var, DataMove value) override {
             if (shared())
             {
                 Impl::assign(var, std::move(value));
@@ -247,12 +247,12 @@ namespace
     public:
         ImplBoolean(LLSD::Boolean v) : Base(v) { }
 
-        virtual LLSD::Boolean   asBoolean() const   { return mValue; }
-        virtual LLSD::Integer   asInteger() const   { return mValue ? 1 : 0; }
-        virtual LLSD::Real      asReal() const      { return mValue ? 1 : 0; }
-        virtual LLSD::String    asString() const;
+        LLSD::Boolean   asBoolean() const override   { return mValue; }
+        LLSD::Integer   asInteger() const override   { return mValue ? 1 : 0; }
+        LLSD::Real      asReal() const override      { return mValue ? 1 : 0; }
+        LLSD::String    asString() const override;
 
-        virtual LLSD::String asXMLRPCValue() const { return mValue ? "<boolean>1</boolean>" : "<boolean>0</boolean>"; }
+        LLSD::String asXMLRPCValue() const override { return mValue ? "<boolean>1</boolean>" : "<boolean>0</boolean>"; }
     };
 
     LLSD::String ImplBoolean::asString() const
@@ -270,12 +270,12 @@ namespace
     public:
         ImplInteger(LLSD::Integer v) : Base(v) { }
 
-        virtual LLSD::Boolean   asBoolean() const   { return mValue != 0; }
-        virtual LLSD::Integer   asInteger() const   { return mValue; }
-        virtual LLSD::Real      asReal() const      { return mValue; }
-        virtual LLSD::String    asString() const;
+        LLSD::Boolean   asBoolean() const override   { return mValue != 0; }
+        LLSD::Integer   asInteger() const override   { return mValue; }
+        LLSD::Real      asReal() const override      { return mValue; }
+        LLSD::String    asString() const override;
 
-        virtual LLSD::String asXMLRPCValue() const { return "<int>" + std::to_string(mValue) + "</int>"; }
+        LLSD::String asXMLRPCValue() const override { return "<int>" + std::to_string(mValue) + "</int>"; }
     };
 
     LLSD::String ImplInteger::asString() const
@@ -288,12 +288,12 @@ namespace
     public:
         ImplReal(LLSD::Real v) : Base(v) { }
 
-        virtual LLSD::Boolean   asBoolean() const;
-        virtual LLSD::Integer   asInteger() const;
-        virtual LLSD::Real      asReal() const      { return mValue; }
-        virtual LLSD::String    asString() const;
+        LLSD::Boolean   asBoolean() const override;
+        LLSD::Integer   asInteger() const override;
+        LLSD::Real      asReal() const override      { return mValue; }
+        LLSD::String    asString() const override;
 
-        virtual LLSD::String asXMLRPCValue() const { return "<double>" + std::to_string(mValue) + "</double>"; }
+        LLSD::String asXMLRPCValue() const override { return "<double>" + std::to_string(mValue) + "</double>"; }
     };
 
     LLSD::Boolean ImplReal::asBoolean() const
@@ -313,20 +313,20 @@ namespace
         ImplString(const LLSD::String& v) : Base(v) { }
         ImplString(LLSD::String&& v) : Base(std::move(v)) {}
 
-        virtual LLSD::Boolean   asBoolean() const   { return !mValue.empty(); }
-        virtual LLSD::Integer   asInteger() const;
-        virtual LLSD::Real      asReal() const;
-        virtual LLSD::String    asString() const    { return mValue; }
-        virtual LLSD::UUID      asUUID() const  { return LLUUID(mValue); }
-        virtual LLSD::Date      asDate() const  { return LLDate(mValue); }
-        virtual LLSD::URI       asURI() const   { return LLURI(mValue); }
-        virtual size_t          size() const    { return mValue.size(); }
-        virtual const LLSD::String& asStringRef() const { return mValue; }
+        LLSD::Boolean   asBoolean() const override   { return !mValue.empty(); }
+        LLSD::Integer   asInteger() const override;
+        LLSD::Real      asReal() const override;
+        LLSD::String    asString() const override    { return mValue; }
+        LLSD::UUID      asUUID() const override  { return LLUUID(mValue); }
+        LLSD::Date      asDate() const override  { return LLDate(mValue); }
+        LLSD::URI       asURI() const override   { return LLURI(mValue); }
+        size_t          size() const override    { return mValue.size(); }
+        const LLSD::String& asStringRef() const override { return mValue; }
 
-        virtual LLSD::String asXMLRPCValue() const { return "<string>" + LLStringFn::xml_encode(mValue) + "</string>"; }
+        LLSD::String asXMLRPCValue() const override { return "<string>" + LLStringFn::xml_encode(mValue) + "</string>"; }
 
         using LLSD::Impl::assign; // Unhiding base class virtuals...
-        virtual void assign(LLSD::Impl*& var, const char* value)
+        void assign(LLSD::Impl*& var, const char* value) override
         {
             if (shared())
             {
@@ -362,10 +362,10 @@ namespace
         ImplUUID(const LLSD::UUID& v) : Base(v) { }
         ImplUUID(LLSD::UUID&& v) : Base(std::move(v)) { }
 
-        virtual LLSD::String    asString() const{ return mValue.asString(); }
-        virtual LLSD::UUID      asUUID() const  { return mValue; }
+        LLSD::String    asString() const override{ return mValue.asString(); }
+        LLSD::UUID      asUUID() const override  { return mValue; }
 
-        virtual LLSD::String asXMLRPCValue() const { return "<string>" + mValue.asString() + "</string>"; }
+        LLSD::String asXMLRPCValue() const override { return "<string>" + mValue.asString() + "</string>"; }
     };
 
 
@@ -381,18 +381,18 @@ namespace
             : ImplBase(std::move(v))
         { }
 
-        virtual LLSD::Integer asInteger() const
+        LLSD::Integer asInteger() const override
         {
             return (LLSD::Integer)(mValue.secondsSinceEpoch());
         }
-        virtual LLSD::Real asReal() const
+        LLSD::Real asReal() const override
         {
             return mValue.secondsSinceEpoch();
         }
-        virtual LLSD::String    asString() const{ return mValue.asString(); }
-        virtual LLSD::Date      asDate() const  { return mValue; }
+        LLSD::String    asString() const override{ return mValue.asString(); }
+        LLSD::Date      asDate() const override  { return mValue; }
 
-        virtual LLSD::String asXMLRPCValue() const { return "<dateTime.iso8601>" + mValue.toHTTPDateString("%FT%T") + "</dateTime.iso8601>"; }
+        LLSD::String asXMLRPCValue() const override { return "<dateTime.iso8601>" + mValue.toHTTPDateString("%FT%T") + "</dateTime.iso8601>"; }
     };
 
 
@@ -403,10 +403,10 @@ namespace
         ImplURI(const LLSD::URI& v) : Base(v) { }
         ImplURI(LLSD::URI&& v) : Base(std::move(v)) { }
 
-        virtual LLSD::String    asString() const{ return mValue.asString(); }
-        virtual LLSD::URI       asURI() const   { return mValue; }
+        LLSD::String    asString() const override{ return mValue.asString(); }
+        LLSD::URI       asURI() const override   { return mValue; }
 
-        virtual LLSD::String asXMLRPCValue() const { return "<string>" + LLStringFn::xml_encode(mValue.asString()) + "</string>"; }
+        LLSD::String asXMLRPCValue() const override { return "<string>" + LLStringFn::xml_encode(mValue.asString()) + "</string>"; }
     };
 
 
@@ -417,9 +417,9 @@ namespace
         ImplBinary(const LLSD::Binary& v) : Base(v) { }
         ImplBinary(LLSD::Binary&& v) : Base(std::move(v)) { }
 
-        virtual const LLSD::Binary& asBinary() const{ return mValue; }
+        const LLSD::Binary& asBinary() const override{ return mValue; }
 
-        virtual LLSD::String asXMLRPCValue() const { return "<base64>" + LLBase64::encode(mValue.data(), mValue.size()) + "</base64>"; }
+        LLSD::String asXMLRPCValue() const override { return "<base64>" + LLBase64::encode(mValue.data(), mValue.size()) + "</base64>"; }
     };
 
 
@@ -436,13 +436,13 @@ namespace
     public:
         ImplMap() { }
 
-        virtual ImplMap& makeMap(LLSD::Impl*&);
+        ImplMap& makeMap(LLSD::Impl*&) override;
 
-        virtual LLSD::Type type() const { return LLSD::TypeMap; }
+        LLSD::Type type() const override { return LLSD::TypeMap; }
 
-        virtual LLSD::Boolean asBoolean() const { return !mData.empty(); }
+        LLSD::Boolean asBoolean() const override { return !mData.empty(); }
 
-        virtual LLSD::String asXMLRPCValue() const
+        LLSD::String asXMLRPCValue() const override
         {
             std::ostringstream os;
             os << "<struct>";
@@ -455,32 +455,32 @@ namespace
             return std::move(os).str();
         }
 
-        virtual bool has(std::string_view) const;
+        bool has(std::string_view) const override;
 
         using LLSD::Impl::get; // Unhiding get(size_t)
         using LLSD::Impl::erase; // Unhiding erase(size_t)
         using LLSD::Impl::ref; // Unhiding ref(size_t)
-        virtual LLSD get(std::string_view) const;
-        virtual LLSD getKeys() const;
+        LLSD get(std::string_view) const override;
+        LLSD getKeys() const override;
         void insert(std::string&& k, const LLSD& v);
         void insert(std::string&& k, LLSD&& v);
         void insert(std::string_view k, const LLSD& v);
         void insert(std::string_view k, LLSD&& v);
-        virtual void erase(const LLSD::String&);
+        void erase(const LLSD::String&) override;
                       LLSD& ref(std::string&&);
         virtual const LLSD& ref(std::string&&) const;
                       LLSD& ref(std::string_view);
-        virtual const LLSD& ref(std::string_view) const;
+        const LLSD& ref(std::string_view) const override;
 
-        virtual size_t size() const { return mData.size(); }
+        size_t size() const override { return mData.size(); }
 
         LLSD::map_iterator beginMap() { return mData.begin(); }
         LLSD::map_iterator endMap() { return mData.end(); }
-        virtual LLSD::map_const_iterator beginMap() const { return mData.begin(); }
-        virtual LLSD::map_const_iterator endMap() const { return mData.end(); }
+        LLSD::map_const_iterator beginMap() const override { return mData.begin(); }
+        LLSD::map_const_iterator endMap() const override { return mData.end(); }
 
-        virtual void dumpStats() const;
-        virtual void calcStats(S32 type_counts[], S32 share_counts[]) const;
+        void dumpStats() const override;
+        void calcStats(S32 type_counts[], S32 share_counts[]) const override;
     };
 
     ImplMap& ImplMap::makeMap(LLSD::Impl*& var)
@@ -640,13 +640,13 @@ namespace
     public:
         ImplArray() = default;
 
-        virtual ImplArray& makeArray(Impl*&);
+        ImplArray& makeArray(Impl*&) override;
 
-        virtual LLSD::Type type() const { return LLSD::TypeArray; }
+        LLSD::Type type() const override { return LLSD::TypeArray; }
 
-        virtual LLSD::Boolean asBoolean() const { return !mData.empty(); }
+        LLSD::Boolean asBoolean() const override { return !mData.empty(); }
 
-        virtual LLSD::String asXMLRPCValue() const
+        LLSD::String asXMLRPCValue() const override
         {
             std::ostringstream os;
             os << "<array><data>";
@@ -661,26 +661,26 @@ namespace
         using LLSD::Impl::get; // Unhiding get(LLSD::String)
         using LLSD::Impl::erase; // Unhiding erase(LLSD::String)
         using LLSD::Impl::ref; // Unhiding ref(LLSD::String)
-        virtual size_t size() const;
-        virtual LLSD get(size_t) const;
+        size_t size() const override;
+        LLSD get(size_t) const override;
                 void set(size_t, const LLSD&);
                 void insert(size_t, const LLSD&);
                 void insert(size_t, LLSD&&);
                 LLSD& append(const LLSD&);
                 LLSD& append(LLSD&&);
-        virtual void erase(size_t);
+        void erase(size_t) override;
                       LLSD& ref(size_t);
-        virtual const LLSD& ref(size_t) const;
+        const LLSD& ref(size_t) const override;
         void reserve(size_t size) { mData.reserve(size); }
 
         LLSD::array_iterator beginArray() { return mData.begin(); }
         LLSD::array_iterator endArray() { return mData.end(); }
         LLSD::reverse_array_iterator rbeginArray() { return mData.rbegin(); }
         LLSD::reverse_array_iterator rendArray() { return mData.rend(); }
-        virtual LLSD::array_const_iterator beginArray() const { return mData.begin(); }
-        virtual LLSD::array_const_iterator endArray() const { return mData.end(); }
+        LLSD::array_const_iterator beginArray() const override { return mData.begin(); }
+        LLSD::array_const_iterator endArray() const override { return mData.end(); }
 
-        virtual void calcStats(S32 type_counts[], S32 share_counts[]) const;
+        void calcStats(S32 type_counts[], S32 share_counts[]) const override;
     };
 
     ImplArray& ImplArray::makeArray(Impl*& var)

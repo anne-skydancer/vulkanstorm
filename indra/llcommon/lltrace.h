@@ -130,7 +130,7 @@ public:
     :   stat_t(name, description)
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 
 };
 
@@ -157,7 +157,7 @@ public:
     :   stat_t(name, description)
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 };
 
 template<typename T, typename VALUE_T>
@@ -185,7 +185,7 @@ public:
     , mTotalSamples()
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 
     // <FS:ND> Add a stats global count. Which will accumulate all samples over the applicaton lifetime.
     void add( T const &samples )

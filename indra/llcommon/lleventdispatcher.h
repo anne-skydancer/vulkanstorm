@@ -852,7 +852,7 @@ public:
     template <typename... ARGS>
     LLDispatchListener(const std::string& pumpname, const std::string& key,
                        ARGS&&... args);
-    virtual ~LLDispatchListener() {}
+    ~LLDispatchListener() override {}
 
 private:
     bool process(const LLSD& event) const;

@@ -65,8 +65,8 @@ public:
         writeSDImpl(sd, block, rules, diff_block);
     }
 
-    /*virtual*/ std::string getCurrentElementName();
-    /*virtual*/ std::string getCurrentFileName(){ return LLStringUtil::null; }
+    /*virtual*/ std::string getCurrentElementName() override;
+    /*virtual*/ std::string getCurrentFileName() override{ return LLStringUtil::null; }
 
 private:
     void writeSDImpl(LLSD& sd,

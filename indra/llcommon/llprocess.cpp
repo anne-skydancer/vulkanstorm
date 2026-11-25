@@ -186,10 +186,10 @@ public:
 #endif
     }
 
-    virtual std::ostream& get_ostream() { return mStream; }
+    std::ostream& get_ostream() override { return mStream; }
     // <Vulkanstorm>
 #if LL_WINDOWS
-    ~WritePipeImpl()
+    ~WritePipeImpl() override
     {
         // LLProcess destroys its pipes before the APR pool that owns the
         // handle. A pending write refers to mChunk and mOverlapped, which must
@@ -221,7 +221,7 @@ public:
     }
 
     // bytes not yet accepted by the pipe, including those in flight
-    virtual size_type size() const { return mStreambuf.size() + mChunkLen; }
+    size_type size() const override { return mStreambuf.size() + mChunkLen; }
 
     bool tick(const LLSD&)
     {
@@ -501,7 +501,7 @@ public:
                     boost::bind(&ReadPipeImpl::tick, this, _1));
     }
 
-    ~ReadPipeImpl()
+    ~ReadPipeImpl() override
     {
         if (mConnection.connected())
         {
@@ -511,14 +511,14 @@ public:
 
     // Much of the implementation is simply connecting the abstract virtual
     // methods with implementation data concealed from the base class.
-    virtual std::istream& get_istream() { return mStream; }
-    virtual std::string getline() { return LLProcess::getline(mStream); }
-    virtual LLEventPump& getPump() { return mPump; }
-    virtual void setLimit(size_type limit) { mLimit = limit; }
-    virtual size_type getLimit() const { return mLimit; }
-    virtual size_type size() const { return mStreambuf.size(); }
+    std::istream& get_istream() override { return mStream; }
+    std::string getline() override { return LLProcess::getline(mStream); }
+    LLEventPump& getPump() override { return mPump; }
+    void setLimit(size_type limit) override { mLimit = limit; }
+    size_type getLimit() const override { return mLimit; }
+    size_type size() const override { return mStreambuf.size(); }
 
-    virtual std::string read(size_type len)
+    std::string read(size_type len) override
     {
         // Read specified number of bytes into a buffer.
         size_type readlen((std::min)(size(), len));
@@ -535,7 +535,7 @@ public:
         return std::string(&buffer[0], mStream.gcount());
     }
 
-    virtual std::string peek(size_type offset=0, size_type len=npos) const
+    std::string peek(size_type offset=0, size_type len=npos) const override
     {
         // Constrain caller's offset and len to overlap actual buffer content.
         std::size_t real_offset = (std::min)(mStreambuf.size(), std::size_t(offset));
@@ -546,7 +546,7 @@ public:
                            boost::asio::buffers_begin(cbufs) + real_end);
     }
 
-    virtual size_type find(const std::string& seek, size_type offset=0) const
+    size_type find(const std::string& seek, size_type offset=0) const override
     {
         // If we're passing a string of length 1, use find(char), which can
         // use an O(n) std::find() rather than the O(n^2) std::search().
@@ -570,7 +570,7 @@ public:
         return (found == end)? npos : (found - begin);
     }
 
-    virtual size_type find(char seek, size_type offset=0) const
+    size_type find(char seek, size_type offset=0) const override
     {
         // If offset is beyond the whole buffer, can't even construct a valid
         // iterator range; can't possibly find the char we seek.

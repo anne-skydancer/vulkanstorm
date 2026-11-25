@@ -74,7 +74,7 @@ namespace LLTrace
             }
         }
 
-        ~AccumulatorBuffer()
+        ~AccumulatorBuffer() override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             if (isCurrent())
@@ -531,7 +531,7 @@ namespace LLTrace
     {
         AccumulatorBufferGroup();
         AccumulatorBufferGroup(const AccumulatorBufferGroup&);
-        ~AccumulatorBufferGroup();
+        ~AccumulatorBufferGroup() override;
 
         void handOffTo(AccumulatorBufferGroup& other);
         void makeCurrent();

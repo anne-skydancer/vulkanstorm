@@ -155,7 +155,7 @@ public:
     }
 
     // Normally we'd expect to arrive here only via done()
-    virtual ~LLLeapImpl()
+    ~LLLeapImpl() override
     {
         LL_DEBUGS("LLLeap") << "destroying LLLeap(\"" << mDesc << "\")" << LL_ENDL;
         LLError::removeRecorder(mRecorder);

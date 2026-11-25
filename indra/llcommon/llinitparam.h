@@ -2014,8 +2014,8 @@ namespace LLInitParam
             return static_cast<DERIVED_BLOCK*>(this)->mergeBlock(getBlockDescriptor(), other, false);
         }
 
-        virtual const BlockDescriptor& mostDerivedBlockDescriptor() const { return getBlockDescriptor(); }
-        virtual BlockDescriptor& mostDerivedBlockDescriptor() { return getBlockDescriptor(); }
+        const BlockDescriptor& mostDerivedBlockDescriptor() const override { return getBlockDescriptor(); }
+        BlockDescriptor& mostDerivedBlockDescriptor() override { return getBlockDescriptor(); }
 
     protected:
         Block()

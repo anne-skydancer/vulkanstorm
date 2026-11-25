@@ -149,12 +149,12 @@ namespace {
             }
         }
 
-        ~RecordToFile()
+        ~RecordToFile() override
         {
             mFile.close();
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
 #ifdef LL_RELEASE_FOR_DOWNLOAD
             return 1;
@@ -167,7 +167,7 @@ namespace {
 
         std::string getFilename() const { return mName; }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                     const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -195,7 +195,7 @@ namespace {
             this->showMultiline(true);
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x04;
         }
@@ -234,7 +234,7 @@ namespace {
             return ansi_code;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                        const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -309,12 +309,12 @@ namespace {
                 this->showLocation(false);
             }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x08;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                    const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -336,12 +336,12 @@ namespace {
             this->showLocation(false);
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x10;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                    const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -425,7 +425,7 @@ namespace
     public:
         static LogControlFile& fromDirectory(const std::string& user_dir, const std::string& app_dir);
 
-        virtual bool loadFile();
+        bool loadFile() override;
 
     private:
         LogControlFile(const std::string &filename)
@@ -494,7 +494,7 @@ namespace
         friend class Globals;
 
     public:
-        virtual ~SettingsConfig();
+        ~SettingsConfig() override;
 
         LLError::ELevel                     mDefaultLevel;
 

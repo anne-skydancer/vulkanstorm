@@ -151,7 +151,7 @@ protected:
 class LL_COMMON_API LLResponder : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLResponder();
+    ~LLResponder() override;
 public:
     virtual void completed(bool success) = 0;
 };

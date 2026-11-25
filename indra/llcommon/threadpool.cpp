@@ -35,7 +35,7 @@
 // implement that.
 struct sleepy_robin: public boost::fibers::algo::round_robin
 {
-    virtual void suspend_until( std::chrono::steady_clock::time_point const&) noexcept
+    void suspend_until( std::chrono::steady_clock::time_point const&) noexcept override
     {
 #if LL_WINDOWS
         // round_robin holds a std::condition_variable, and
@@ -50,7 +50,7 @@ struct sleepy_robin: public boost::fibers::algo::round_robin
 #endif
     }
 
-    virtual void notify() noexcept
+    void notify() noexcept override
     {
         // Since our Sleep() call above will wake up on its own, we need not
         // take any special action to wake it.

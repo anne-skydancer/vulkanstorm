@@ -44,7 +44,7 @@ class LLObservable;
 class LL_COMMON_API LLEvent : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEvent();
+    ~LLEvent() override;
 
 public:
     LLEvent(LLObservable* source, const std::string& desc = "") : mSource(source), mDesc(desc) { }
@@ -72,7 +72,7 @@ private:
 class LL_COMMON_API LLEventListener : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEventListener();
+    ~LLEventListener() override;
 
 public:
 
@@ -90,11 +90,11 @@ class LL_COMMON_API LLSimpleListener : public LLEventListener
 {
 public:
     void clearDispatchers();
-    virtual bool handleAttach(LLEventDispatcher *dispatcher);
-    virtual bool handleDetach(LLEventDispatcher *dispatcher);
+    bool handleAttach(LLEventDispatcher *dispatcher) override;
+    bool handleDetach(LLEventDispatcher *dispatcher) override;
 
 protected:
-    ~LLSimpleListener();
+    ~LLSimpleListener() override;
     std::vector<LLEventDispatcher *> mDispatchers;
 };
 
@@ -114,7 +114,7 @@ struct LLListenerEntry
 class LL_COMMON_API LLEventDispatcher : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEventDispatcher();
+    ~LLEventDispatcher() override;
 
 public:
     // The default constructor creates a default simple dispatcher implementation.
@@ -187,7 +187,7 @@ class LLValueChangedEvent : public LLEvent
 {
 public:
     LLValueChangedEvent(LLObservable* source, LLSD value) : LLEvent(source, "value_changed"), mValue(value) { }
-    LLSD getValue() { return mValue; }
+    LLSD getValue() override { return mValue; }
     LLSD mValue;
 };
 

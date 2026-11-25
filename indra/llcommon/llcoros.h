@@ -91,7 +91,7 @@ namespace boost {
 class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 {
     LLSINGLETON(LLCoros);
-    ~LLCoros();
+    ~LLCoros() override;
 
     void cleanupSingleton() override;
 public:
