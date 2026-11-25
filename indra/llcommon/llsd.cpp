@@ -602,13 +602,13 @@ namespace
 
     void ImplMap::dumpStats() const
     {
-        std::cout << "Map size: " << mData.size() << std::endl;
+        std::cout << "Map size: " << mData.size() << '\n';
 
-        std::cout << "LLSD Net Objects: " << llsd::sLLSDNetObjects << std::endl;
-        std::cout << "LLSD allocations: " << llsd::sLLSDAllocationCount << std::endl;
+        std::cout << "LLSD Net Objects: " << llsd::sLLSDNetObjects << '\n';
+        std::cout << "LLSD allocations: " << llsd::sLLSDAllocationCount << '\n';
 
-        std::cout << "LLSD::Impl Net Objects: " << sOutstandingCount << std::endl;
-        std::cout << "LLSD::Impl allocations: " << sAllocationCount << std::endl;
+        std::cout << "LLSD::Impl Net Objects: " << sOutstandingCount << '\n';
+        std::cout << "LLSD::Impl allocations: " << sAllocationCount << '\n';
 
         Impl::dumpStats();
     }
@@ -992,7 +992,7 @@ void LLSD::Impl::dumpStats() const
         std::cout << LLSD::typeString((LLSD::Type)type_index) << " type "
             << type_counts[type_index] << " objects, "
             << share_counts[type_index] << " shared"
-            << std::endl;
+            << '\n';
         type_index++;
     }
 }

@@ -702,16 +702,16 @@ void LLCPUInfo::stream(std::ostream& s) const
 
     // These are interesting as they reflect our internal view of the
     // CPU's attributes regardless of platform
-    s << "->mHasSSE:     " << (U32)mHasSSE << std::endl;
-    s << "->mHasSSE2:    " << (U32)mHasSSE2 << std::endl;
-    s << "->mHasSSE3:    " << (U32)mHasSSE3 << std::endl;
-    s << "->mHasSSE3S:    " << (U32)mHasSSE3S << std::endl;
-    s << "->mHasSSE41:    " << (U32)mHasSSE41 << std::endl;
-    s << "->mHasSSE42:    " << (U32)mHasSSE42 << std::endl;
-    s << "->mHasSSE4a:    " << (U32)mHasSSE4a << std::endl;
-    s << "->mHasAltivec: " << (U32)mHasAltivec << std::endl;
-    s << "->mCPUMHz:     " << mCPUMHz << std::endl;
-    s << "->mCPUString:  " << mCPUString << std::endl;
+    s << "->mHasSSE:     " << (U32)mHasSSE << '\n';
+    s << "->mHasSSE2:    " << (U32)mHasSSE2 << '\n';
+    s << "->mHasSSE3:    " << (U32)mHasSSE3 << '\n';
+    s << "->mHasSSE3S:    " << (U32)mHasSSE3S << '\n';
+    s << "->mHasSSE41:    " << (U32)mHasSSE41 << '\n';
+    s << "->mHasSSE42:    " << (U32)mHasSSE42 << '\n';
+    s << "->mHasSSE4a:    " << (U32)mHasSSE4a << '\n';
+    s << "->mHasAltivec: " << (U32)mHasAltivec << '\n';
+    s << "->mCPUMHz:     " << mCPUMHz << '\n';
+    s << "->mCPUString:  " << mCPUString << '\n';
 }
 
 // Helper class for LLMemoryInfo: accumulate stats in the form we store for
@@ -925,7 +925,7 @@ void LLMemoryInfo::stream(std::ostream& s) const
             value.asDate().toStream(s);
         else
             s << value;           // just use default LLSD formatting
-        s << std::endl;
+        s << '\n';
     }
 }
 

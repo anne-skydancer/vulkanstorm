@@ -173,6 +173,7 @@ namespace {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
             if (LLError::getAlwaysFlush())
             {
+                // NOLINTNEXTLINE(performance-avoid-endl): the flush is the point of getAlwaysFlush()
                 mFile << message << std::endl;
             }
             else
