@@ -9,3 +9,10 @@ leak:LogControlFile
 leak:LiveFileEventTimer
 # commonInit() is the logging start-up that calls fromDirectory() and LLLiveFile::addToEventTimer().
 leak:LLError::commonInit
+#
+# The lazyeventapi test (test 3) registers a LazyEventAPI, whose constructor is the first getInstance() on the running
+# coroutine in that process; the process ends without destroying the LLSingleton master list, so the one 24-byte
+# 'initializing' list of the running coroutine is still allocated at exit (every other test binary frees it in
+# ~MasterList(), and llsingleton test 16 runs 200 coroutines to show that finished coroutines free theirs). The pattern
+# names this test's allocation path only, so a list leaked per coroutine anywhere else is still reported.
+leak:LL::LazyEventAPIBase::LazyEventAPIBase
