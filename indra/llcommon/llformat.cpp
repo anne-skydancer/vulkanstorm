@@ -35,13 +35,32 @@
 // wrapper for vsnprintf to be called from llformatXXX functions.
 static void va_format(std::string& out, const char *fmt, va_list va)
 {
+    // <Vulkanstorm>
+    // Standard vsnprintf always NUL-terminates and returns the full length;
+    // Windows' _vsnprintf did neither when the output reached the buffer size,
+    // so out.assign(tstr) read past the buffer.
     char tstr[1024];    /* Flawfinder: ignore */
-#if LL_WINDOWS
-    _vsnprintf(tstr, 1024, fmt, va);
-#else
-    vsnprintf(tstr, 1024, fmt, va); /* Flawfinder: ignore */
-#endif
-    out.assign(tstr);
+    va_list va2;
+    va_copy(va2, va);
+    int len = vsnprintf(tstr, sizeof(tstr), fmt, va); /* Flawfinder: ignore */
+    if (len < 0)
+    {
+        // format error: no output
+        out.clear();
+    }
+    else if (std::size_t(len) < sizeof(tstr))
+    {
+        out.assign(tstr, std::size_t(len));
+    }
+    else
+    {
+        // truncated: format again at the exact size
+        out.resize(std::size_t(len) + 1);
+        vsnprintf(&out[0], out.size(), fmt, va2); /* Flawfinder: ignore */
+        out.resize(std::size_t(len));
+    }
+    va_end(va2);
+    // </Vulkanstorm>
 }
 
 std::string llformat(const char *fmt, ...)
