@@ -75,7 +75,10 @@ runs:
 
     - name: Install autobuild
       shell: bash
-      run: python -m pip install autobuild==3.10.2 llsd
+      run: |
+        python -m pip install autobuild==3.10.2 llsd
+        # The Visual Studio 2026 toolset entry autobuild 3.10.2 lacks, as viewer-build adds it (scripts/ci_autobuild_vs2026.py)
+        python scripts/ci_autobuild_vs2026.py
 
     # Restore only: the build workflows own this cache, and the repository's cache budget is full.
     - uses: actions/cache/restore@v6
