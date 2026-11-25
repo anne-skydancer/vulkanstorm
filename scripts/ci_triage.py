@@ -424,15 +424,21 @@ def collect_items(directory):
             if not is_real(found):
                 continue
             key = (job, found["fp"], found["line"] if found["tool"] in ("ubsan", "clang-tidy", "msvc") else 0)
-            if key in by_fp:
-                by_fp[key]["count"] += 1
-                continue
             binary, group, number = test_of(block)
             if found["tool"] == "build":
                 target = BINARY.search(found["message"])
                 binary = binary or (target.group(0) if target else "")
+            if key in by_fp:
+                # the same finding from another occurrence: count it, and keep a triggering test not seen yet, so the
+                # case lists every test that hit it and picks up each of their focused re-runs
+                seen = by_fp[key]
+                seen["count"] += 1
+                if binary and (binary, group, number) not in seen["triggers"]:
+                    seen["triggers"].append((binary, group, number))
+                continue
             item = {"finding": found, "job": job, "block": block, "binary": binary, "group": group,
-                    "test": number, "count": 1, "log": data["log"]}
+                    "test": number, "count": 1, "log": data["log"],
+                    "triggers": [(binary, group, number)] if binary else []}
             by_fp[key] = item
             items.append(item)
     return items, notes
@@ -472,7 +478,7 @@ def frames_of(block):
 
 def rerun_blocks(rerun, case_items):
     """The re-run report text that matches a case (same stable key), or a note."""
-    binaries = {item["binary"] for item in case_items if item["binary"]}
+    binaries = {binary for item in case_items for binary, _, _ in item.get("triggers", []) if binary}
     wanted = {item["finding"]["fp"] for item in case_items}
     tool = case_items[0]["finding"]["tool"]
     matches, seen = [], False
@@ -518,8 +524,8 @@ def make_case(number, case_items, blamer, upstreams, rerun, root=ROOT):
         primary = project[0].get("origin")
     line_text = (lines[line - 1] if lines and 0 < line <= len(lines) else "")
     upstream = upstreams.check(path, line_text, function) if path and line and path.startswith("indra/") else {}
-    binaries = sorted({item["binary"] for item in case_items if item["binary"]})
-    tests = sorted({(item["binary"], item["group"], item["test"]) for item in case_items if item["binary"]})
+    binaries = sorted({b for item in case_items for b, _, _ in item.get("triggers", []) if b})
+    tests = sorted({trigger for item in case_items for trigger in item.get("triggers", []) if trigger[0]})
     excerpt = ""
     if found["tool"] == "build":
         target = BINARY.search(found["message"] + " " + found["fp"])
@@ -705,6 +711,23 @@ def rerun_env(job, base):
     return env
 
 
+def test_command(build, name):
+    """The shell command CMake generated to run integration test `name` (LL_ADD_INTEGRATION_TEST's POST_BUILD step:
+    run_build_test.py with the library path, any wrapper such as llcorehttp's HTTP peer, and the test executable), so
+    the re-run reproduces the original run; '' when the build tree holds no such command."""
+    for rules in sorted(build.glob(f"**/CMakeFiles/{name}.dir/build.make")):
+        for line in read(rules).splitlines():
+            stripped = line.strip()
+            if "run_build_test.py" in stripped and name in stripped:
+                return stripped
+    for rules in sorted(build.glob("**/build.ninja")):
+        for line in read(rules).splitlines():
+            stripped = line.strip()
+            if stripped.startswith("COMMAND =") and "run_build_test.py" in stripped and name in stripped:
+                return stripped.split("=", 1)[1].strip()
+    return ""
+
+
 def run_bounded(command, env, cwd, timeout):
     """(exit code, output, timed out): run in its own process group and kill the group on a timeout."""
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, cwd=cwd,
@@ -733,6 +756,12 @@ def cmd_rerun(args):
     if not names:
         print("triage re-run: no failing or reporting test binary")
     env_base = dict(os.environ)
+    if not env_base.get("TMPDIR"):
+        # AGENTS.md: compiled fixture and integration tests use the repository's .fixture-tmp folder
+        fixture_tmp = ROOT / ".fixture-tmp"
+        fixture_tmp.mkdir(exist_ok=True)
+        for variable in ("TMPDIR", "TEMP", "TMP"):
+            env_base[variable] = str(fixture_tmp.resolve())
     staging = build / "sharedlibs"
     env_base["LD_LIBRARY_PATH"] = ":".join(p for p in (str(staging), str(staging / "lib"),
                                                        env_base.get("LD_LIBRARY_PATH", "")) if p)
@@ -749,11 +778,15 @@ def cmd_rerun(args):
             continue
         started = time.time()
         cwd = build / args.lib if (build / args.lib).is_dir() else build
-        code, output, timed_out = run_bounded([str(binary)], rerun_env(args.job, env_base), cwd, args.timeout)
+        command_line = test_command(build, name)
+        # the test's own command (wrapper and environment included); the bare binary only when none is generated
+        command = ["bash", "-c", command_line] if command_line else [str(binary)]
+        code, output, timed_out = run_bounded(command, rerun_env(args.job, env_base), cwd, args.timeout)
         text = output if len(output) <= RERUN_OUTPUT_LIMIT else output[:RERUN_OUTPUT_LIMIT] + "\n[output cut]\n"
         (out / f"{name}.rerun.txt").write_text(text, encoding="utf-8")
         entries.append({"binary": name, "file": f"{name}.rerun.txt", "exit": code, "timed_out": timed_out,
-                        "seconds": round(time.time() - started, 1), "note": ""})
+                        "seconds": round(time.time() - started, 1),
+                        "note": "" if command_line else "no generated test command found: ran the binary directly"})
         print(f"triage re-run: {name} exit {code} in {entries[-1]['seconds']}s" + (" (timed out)" if timed_out else ""))
         (out / "rerun.json").write_text(json.dumps(entries, indent=1), encoding="utf-8")
     (out / "rerun.json").write_text(json.dumps(entries, indent=1), encoding="utf-8")

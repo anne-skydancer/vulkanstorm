@@ -212,6 +212,24 @@ class Triage(unittest.TestCase):
             tools = {c[0]["finding"]["tool"] for c in cases}
             self.assertTrue({"ubsan", "lsan", "tsan", "build", "clang-tidy"} <= tools)
 
+    def test_dedup_keeps_every_triggering_test(self):
+        """One fingerprint hit by two test binaries keeps both triggering tests, so the case lists both."""
+        with tempfile.TemporaryDirectory() as work:
+            work = pathlib.Path(work)
+            make_artifacts(work)
+            san = work / "analysis-asan" / "san"
+            text = fixture("lsan-leak.txt")
+            first = ct.test_of(ct.parse_blocks(text)[0][1])[0] or "INTEGRATION_TEST_lllivefile"
+            other = text.replace(first, "INTEGRATION_TEST_copy") if first in text else text
+            (san / "report.9").write_text(other, encoding="utf-8")
+            items, _notes = ct.collect_items(work)
+            leaks = [i for i in items if i["finding"]["tool"] == "lsan"]
+            self.assertTrue(leaks)
+            self.assertTrue(all(i["count"] >= 2 for i in leaks))
+            if first in text:
+                binaries = {b for i in leaks for b, _g, _n in i["triggers"]}
+                self.assertIn("INTEGRATION_TEST_copy", binaries)
+
     def test_whole_run(self):
         with tempfile.TemporaryDirectory() as work:
             work = pathlib.Path(work)
@@ -271,6 +289,20 @@ class Rerun(unittest.TestCase):
     def test_binaries_to_rerun(self):
         names = ct.binaries_to_rerun(fixture("asan-build-excerpt.log"), [fixture("lsan-leak.txt")], [])
         self.assertEqual(names, ["INTEGRATION_TEST_apply", "INTEGRATION_TEST_llprocess", "INTEGRATION_TEST_llprocessstdin"])
+
+    def test_rerun_uses_the_generated_test_command(self):
+        """The re-run runs CMake's own POST_BUILD command (run_build_test.py with any wrapper), not the bare binary."""
+        with tempfile.TemporaryDirectory() as work:
+            build = pathlib.Path(work) / "build-asan"
+            rules = build / "llcorehttp" / "CMakeFiles" / "INTEGRATION_TEST_llcorehttp.dir"
+            rules.mkdir(parents=True)
+            command = ("cd /b/llcorehttp && /usr/bin/python3 /s/cmake/run_build_test.py -l/b/sharedlibs/lib "
+                       "-DPYTHON=/usr/bin/python3 /usr/bin/python3 /s/llcorehttp/tests/test_llcorehttp_peer.py "
+                       "/b/sharedlibs/bin/INTEGRATION_TEST_llcorehttp")
+            (rules / "build.make").write_text("all:\n\t$(CMAKE_COMMAND) -E echo link\n\t" + command + "\n",
+                                              encoding="utf-8")
+            self.assertEqual(ct.test_command(build, "INTEGRATION_TEST_llcorehttp"), command)
+            self.assertEqual(ct.test_command(build, "INTEGRATION_TEST_other"), "")
 
     @unittest.skipUnless(os.name == "posix", "runs a shell script as the test binary")
     def test_rerun_runs_a_binary_alone_and_bounds_it(self):

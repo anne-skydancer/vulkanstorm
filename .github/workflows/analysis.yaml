@@ -125,6 +125,10 @@ jobs:
       ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=0:halt_on_error=0:allow_user_segv_handler=0:exitcode=0:log_path=${{ github.workspace }}/san/report
       LSAN_OPTIONS: exitcode=0:log_path=${{ github.workspace }}/san/report
       UBSAN_OPTIONS: print_stacktrace=1:log_path=${{ github.workspace }}/san/report
+      # AGENTS.md: compiled fixture and integration tests use the repository's .fixture-tmp folder
+      TMPDIR: ${{ github.workspace }}/.fixture-tmp
+      TEMP: ${{ github.workspace }}/.fixture-tmp
+      TMP: ${{ github.workspace }}/.fixture-tmp
     steps:
       - uses: actions/checkout@v7
         with:
@@ -136,7 +140,7 @@ jobs:
           directory: build-asan
       - name: Canary (the sanitizers must report in a deliberately faulty program)
         run: |
-          mkdir -p analysis-out san
+          mkdir -p analysis-out san "$TMPDIR"
           python scripts/ci_analysis.py canary --mode asan --dir build-asan --out analysis-out
       # The tests run as part of this build (POST_BUILD steps), so a plain failed test or a compile error shows up in
       # the make log; the build keeps going (-k). Each failed test target runs once more, and is reported as failed
@@ -186,6 +190,10 @@ jobs:
       LIB: ${{ needs.plan.outputs.lib }}
       TARGETS: ${{ needs.plan.outputs.tsan_targets }}
       TSAN_OPTIONS: halt_on_error=0:second_deadlock_stack=1:exitcode=0:log_path=${{ github.workspace }}/san/report
+      # AGENTS.md: compiled fixture and integration tests use the repository's .fixture-tmp folder
+      TMPDIR: ${{ github.workspace }}/.fixture-tmp
+      TEMP: ${{ github.workspace }}/.fixture-tmp
+      TMP: ${{ github.workspace }}/.fixture-tmp
     steps:
       - uses: actions/checkout@v7
         with:
@@ -197,7 +205,7 @@ jobs:
           directory: build-tsan
       - name: Canary (TSan must report in a deliberately racy program)
         run: |
-          mkdir -p analysis-out san
+          mkdir -p analysis-out san "$TMPDIR"
           python scripts/ci_analysis.py canary --mode tsan --dir build-tsan --out analysis-out
       # Every test of the library except the deny list (.github/analysis/tsan/<lib>-deny.txt): Boost.Fiber is
       # prebuilt without TSan fibre annotations, so coroutine tests would report races that are not there.
