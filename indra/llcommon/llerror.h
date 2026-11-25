@@ -323,7 +323,7 @@ namespace LLError
     {
     public:
         // error codes, tranlates to last_exec states like LAST_EXEC_OTHER_CRASH
-        using eLastExecEvent = enum
+        enum eLastExecEvent
         {
             ERROR_OTHER = 0,
             ERROR_BAD_ALLOC = 1,
