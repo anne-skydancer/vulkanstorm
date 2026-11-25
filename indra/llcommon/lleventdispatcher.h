@@ -536,7 +536,7 @@ private:
                          [base, method]
                          (const LLSD& args)
                          {
-                             CLASS* downcast = static_cast<CLASS*>(base);
+                             auto* downcast = static_cast<CLASS*>(base);
                              return (downcast->*method)(args);
                          })),
             required);
@@ -558,7 +558,7 @@ private:
     void addVMethod(const std::string& name, const std::string& desc,
                     const METHOD& method)
     {
-        CLASS* downcast = dynamic_cast<CLASS*>(this);
+        auto* downcast = dynamic_cast<CLASS*>(this);
         if (! downcast)
         {
             addFail(name, typeid(CLASS).name());

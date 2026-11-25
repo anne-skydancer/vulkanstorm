@@ -61,7 +61,7 @@ LLParamSDParser::LLParamSDParser()
 // special case handling of U32 due to ambiguous LLSD::assign overload
 bool LLParamSDParser::writeU32Param(LLParamSDParser::parser_t& parser, const void* val_ptr, parser_t::name_stack_t& name_stack)
 {
-    LLParamSDParser& sdparser = static_cast<LLParamSDParser&>(parser);
+    auto& sdparser = static_cast<LLParamSDParser&>(parser);
     if (!sdparser.mWriteRootSD) return false;
 
     parser_t::name_stack_range_t range(name_stack.begin(), name_stack.end());
@@ -73,7 +73,7 @@ bool LLParamSDParser::writeU32Param(LLParamSDParser::parser_t& parser, const voi
 
 bool LLParamSDParser::writeFlag(LLParamSDParser::parser_t& parser, const void* val_ptr, parser_t::name_stack_t& name_stack)
 {
-    LLParamSDParser& sdparser = static_cast<LLParamSDParser&>(parser);
+    auto& sdparser = static_cast<LLParamSDParser&>(parser);
     if (!sdparser.mWriteRootSD) return false;
 
     parser_t::name_stack_range_t range(name_stack.begin(), name_stack.end());
@@ -121,14 +121,14 @@ void LLParamSDParser::writeSDImpl(LLSD& sd, const LLInitParam::BaseBlock& block,
 
 bool LLParamSDParser::readFlag(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
     return self.mCurReadSD == &NO_VALUE_MARKER;
 }
 
 
 bool LLParamSDParser::readS32(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((S32*)val_ptr) = self.mCurReadSD->asInteger();
     return true;
@@ -136,7 +136,7 @@ bool LLParamSDParser::readS32(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readU32(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((U32*)val_ptr) = self.mCurReadSD->asInteger();
     return true;
@@ -144,7 +144,7 @@ bool LLParamSDParser::readU32(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readF32(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((F32*)val_ptr) = (F32)self.mCurReadSD->asReal();
     return true;
@@ -152,7 +152,7 @@ bool LLParamSDParser::readF32(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readF64(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((F64*)val_ptr) = self.mCurReadSD->asReal();
     return true;
@@ -160,7 +160,7 @@ bool LLParamSDParser::readF64(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readBool(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((bool*)val_ptr) = self.mCurReadSD->asBoolean();
     return true;
@@ -168,7 +168,7 @@ bool LLParamSDParser::readBool(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readString(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((std::string*)val_ptr) = self.mCurReadSD->asString();
     return true;
@@ -176,7 +176,7 @@ bool LLParamSDParser::readString(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readUUID(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((LLUUID*)val_ptr) = self.mCurReadSD->asUUID();
     return true;
@@ -184,7 +184,7 @@ bool LLParamSDParser::readUUID(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readDate(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((LLDate*)val_ptr) = self.mCurReadSD->asDate();
     return true;
@@ -192,7 +192,7 @@ bool LLParamSDParser::readDate(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readURI(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((LLURI*)val_ptr) = self.mCurReadSD->asURI();
     return true;
@@ -200,7 +200,7 @@ bool LLParamSDParser::readURI(Parser& parser, void* val_ptr)
 
 bool LLParamSDParser::readSD(Parser& parser, void* val_ptr)
 {
-    LLParamSDParser& self = static_cast<LLParamSDParser&>(parser);
+    auto& self = static_cast<LLParamSDParser&>(parser);
 
     *((LLSD*)val_ptr) = *self.mCurReadSD;
     return true;
@@ -211,7 +211,7 @@ LLSD& LLParamSDParserUtilities::getSDWriteNode(LLSD& input, LLInitParam::Parser:
 {
     LLSD* sd_to_write = &input;
 
-    for (LLInitParam::Parser::name_stack_t::iterator it = name_stack_range.first;
+    for (auto it = name_stack_range.first;
         it != name_stack_range.second;
         ++it)
     {
@@ -251,7 +251,7 @@ void LLParamSDParserUtilities::readSDValues(read_sd_cb_t cb, const LLSD& sd, LLI
 {
     if (sd.isMap())
     {
-        for (LLSD::map_const_iterator it = sd.beginMap();
+        for (auto it = sd.beginMap();
             it != sd.endMap();
             ++it)
         {
@@ -262,7 +262,7 @@ void LLParamSDParserUtilities::readSDValues(read_sd_cb_t cb, const LLSD& sd, LLI
     }
     else if (sd.isArray())
     {
-        for (LLSD::array_const_iterator it = sd.beginArray();
+        for (auto it = sd.beginArray();
             it != sd.endArray();
             ++it)
         {

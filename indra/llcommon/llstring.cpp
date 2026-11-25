@@ -1272,7 +1272,7 @@ namespace LLStringFn
         {
             // Must compare as unsigned for >=
             // Test most likely match first
-            const unsigned char c = (unsigned char)*it;
+            const auto c = (unsigned char)*it;
             if (   c >= (unsigned char)0x20   // SPACE
                 || c == (unsigned char)0x09   // TAB
                 || c == (unsigned char)0x0a   // LINE_FEED
@@ -1364,7 +1364,7 @@ namespace LLStringFn
         std::basic_string<char>::size_type len = string.size();
         for(std::basic_string<char>::size_type ii = 0; ii < len; ++ii)
         {
-            const unsigned char c = (unsigned char) string[ii];
+            const auto c = (unsigned char) string[ii];
             if(c < MIN)
             {
                 string[ii] = replacement;
@@ -1438,7 +1438,7 @@ bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token
     // test first using has() because if we just look up with operator[] we get back an
     // empty string even if the value is missing. We want to distinguish between
     // missing replacements and deliberately empty replacement strings.
-    format_map_t::const_iterator iter = substitutions.find(token);
+    auto iter = substitutions.find(token);
     if (iter != substitutions.end())
     {
         replacement = iter->second;
@@ -1518,8 +1518,8 @@ void LLStringUtil::formatNumber(std::string& numStr, std::string decimals)
     std::wstringstream strStream;
     S32 intDecimals = 0;
 
-    std::wstring wDecimals = ll_convert<std::wstring>(decimals);
-    std::wstring wNumStr = ll_convert<std::wstring>(numStr);
+    auto wDecimals = ll_convert<std::wstring>(decimals);
+    auto wNumStr = ll_convert<std::wstring>(numStr);
     LLStringUtilBase<wchar_t>::convertToS32 (wDecimals, intDecimals);
     if (!sLocale.empty())
     {
@@ -1659,7 +1659,7 @@ bool LLStringUtil::formatDatetime(std::string& replacement, std::string token,
 
     //if sWeekDayList is not empty than current locale doesn't support
         //weekday name.
-    time_t loc_seconds = (time_t) secFromEpoch;
+    auto loc_seconds = (time_t) secFromEpoch;
     if(LLStringOps::sWeekDayList.size() == 7 && code == "%A")
     {
         struct tm * gmt = gmtime (&loc_seconds);
@@ -1766,7 +1766,7 @@ S32 LLStringUtil::format(std::string& s, const format_map_t& substitutions)
             std::string param;
             if (tokens.size() > 2) param = tokens[2];
 
-            format_map_t::const_iterator iter = substitutions.find("datetime");
+            auto iter = substitutions.find("datetime");
             if (iter != substitutions.end())
             {
                 S32 secFromEpoch = 0;

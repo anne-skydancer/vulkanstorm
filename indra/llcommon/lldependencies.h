@@ -450,7 +450,7 @@ public:
      */
     bool remove(const KEY& key)
     {
-        typename DepNodeMap::iterator found = mNodes.find(key);
+        auto found = mNodes.find(key);
         if (found != mNodes.end())
         {
             mNodes.erase(found);
@@ -513,17 +513,17 @@ public:
             // former broken behavior has finally been fixed -- and our builds
             // treat warnings as errors.
             {
-                for (typename DepNodeMap::const_iterator nmi = mNodes.begin(), nmend = mNodes.end();
+                for (auto nmi = mNodes.begin(), nmend = mNodes.end();
                      nmi != nmend; ++nmi)
                 {
                     vmap.insert(typename VertexMap::value_type(nmi->first, vmap.size()));
-                    for (typename DepNode::dep_set::const_iterator ai = nmi->second.after.begin(),
+                    for (auto ai = nmi->second.after.begin(),
                                                                    aend = nmi->second.after.end();
                          ai != aend; ++ai)
                     {
                         vmap.insert(typename VertexMap::value_type(*ai, vmap.size()));
                     }
-                    for (typename DepNode::dep_set::const_iterator bi = nmi->second.before.begin(),
+                    for (auto bi = nmi->second.before.begin(),
                                                                    bend = nmi->second.before.end();
                          bi != bend; ++bi)
                     {
@@ -535,12 +535,12 @@ public:
             // all the known key dependencies to integer pairs.
             EdgeList edges;
             {
-                for (typename DepNodeMap::const_iterator nmi = mNodes.begin(), nmend = mNodes.end();
+                for (auto nmi = mNodes.begin(), nmend = mNodes.end();
                      nmi != nmend; ++nmi)
                 {
                     auto thisnode = vmap[nmi->first];
                     // after dependencies: build edges from the named node to this one
-                    for (typename DepNode::dep_set::const_iterator ai = nmi->second.after.begin(),
+                    for (auto ai = nmi->second.after.begin(),
                                                                    aend = nmi->second.after.end();
                          ai != aend; ++ai)
                     {
@@ -548,7 +548,7 @@ public:
                     }
                     // before dependencies: build edges from this node to the
                     // named one
-                    for (typename DepNode::dep_set::const_iterator bi = nmi->second.before.begin(),
+                    for (auto bi = nmi->second.before.begin(),
                                                                    bend = nmi->second.before.end();
                          bi != bend; ++bi)
                     {
@@ -577,8 +577,8 @@ public:
             {
                 // We're certain that vkeys[*svi] exists. However, there might not
                 // yet be a corresponding entry in mNodes.
-                self_type* non_const_this(const_cast<self_type*>(this));
-                typename DepNodeMap::iterator found = non_const_this->mNodes.find(vkeys[*svi]);
+                auto* non_const_this(const_cast<self_type*>(this));
+                auto found = non_const_this->mNodes.find(vkeys[*svi]);
                 if (found != non_const_this->mNodes.end())
                 {
                     // Make an iterator of appropriate type.
@@ -602,7 +602,7 @@ public:
     /// Override base-class describe() with actual implementation
     std::ostream& describe(std::ostream& out, bool full=true) const override
     {
-        typename DepNodeMap::const_iterator dmi(mNodes.begin()), dmend(mNodes.end());
+        auto dmi(mNodes.begin()), dmend(mNodes.end());
         if (dmi != dmend)
         {
             std::string sep;
@@ -648,7 +648,7 @@ public:
     static std::ostream& describe(std::ostream& out, const typename DepNode::dep_set& keys)
     {
         out << '(';
-        typename DepNode::dep_set::const_iterator ki(keys.begin()), kend(keys.end());
+        auto ki(keys.begin()), kend(keys.end());
         if (ki != kend)
         {
             LLDependencies_describe(out, *ki);

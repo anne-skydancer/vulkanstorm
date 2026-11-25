@@ -91,7 +91,7 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
             std::stringstream stack_line;
             bool ret;
 
-            DWORD64 addr = (DWORD64)frames[i];
+            auto addr = (DWORD64)frames[i];
             ret = SymGetSymFromAddr64(hProc, addr, nullptr, pSym);
             if(ret)
             {
@@ -136,7 +136,7 @@ void ll_get_stack_trace_internal(std::vector<std::string>& lines)
     void *stack[MAX_STACK_DEPTH];
 
     unsigned short frames = RtlCaptureStackBackTrace_fn( 0, MAX_STACK_DEPTH, stack, nullptr );
-    SYMBOL_INFO *symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + STRING_NAME_LENGTH * sizeof(char), 1);
+    auto *symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + STRING_NAME_LENGTH * sizeof(char), 1);
     symbol->MaxNameLen = STRING_NAME_LENGTH-1;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 

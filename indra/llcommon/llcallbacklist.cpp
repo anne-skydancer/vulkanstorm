@@ -67,7 +67,7 @@ void LLCallbackList::addFunction( callback_t func, void *data)
 bool LLCallbackList::containsFunction( callback_t func, void *data)
 {
     callback_pair_t t(func, data);
-    callback_list_t::iterator iter = find(func,data);
+    auto iter = find(func,data);
     if (iter != mCallbackList.end())
     {
         return true;
@@ -81,7 +81,7 @@ bool LLCallbackList::containsFunction( callback_t func, void *data)
 
 bool LLCallbackList::deleteFunction( callback_t func, void *data)
 {
-    callback_list_t::iterator iter = find(func,data);
+    auto iter = find(func,data);
     if (iter != mCallbackList.end())
     {
         // <FS:TJ> [FIRE-36314] Fix crash caused by possible callback erasure during callFunctions()
@@ -132,9 +132,9 @@ void LLCallbackList::deleteAllFunctions()
 void LLCallbackList::callFunctions()
 {
     ++mCallbackDepth; // <FS:TJ/> [FIRE-36314] Fix crash caused by possible callback erasure during callFunctions()
-    for (callback_list_t::iterator iter = mCallbackList.begin(); iter != mCallbackList.end(); )
+    for (auto iter = mCallbackList.begin(); iter != mCallbackList.end(); )
     {
-        callback_list_t::iterator curiter = iter++;
+        auto curiter = iter++;
         // <FS:TJ> [FIRE-36314] Fix crash caused by possible callback erasure during callFunctions()
         //curiter->first(curiter->second);
         if (curiter->first)
@@ -167,7 +167,7 @@ public:
     static void onIdle(void *data)
     {
         gIdleCallbacks.deleteFunction(onIdle, data);
-        OnIdleCallbackOneTime* self = reinterpret_cast<OnIdleCallbackOneTime*>(data);
+        auto* self = reinterpret_cast<OnIdleCallbackOneTime*>(data);
         self->call();
         delete self;
     }
@@ -181,7 +181,7 @@ private:
 
 void doOnIdleOneTime(nullary_func_t callable)
 {
-    OnIdleCallbackOneTime* cb_functor = new OnIdleCallbackOneTime(callable);
+    auto* cb_functor = new OnIdleCallbackOneTime(callable);
     gIdleCallbacks.addFunction(&OnIdleCallbackOneTime::onIdle,cb_functor);
 }
 
@@ -198,7 +198,7 @@ public:
     // Will keep getting called until the callable returns true.
     static void onIdle(void *data)
     {
-        OnIdleCallbackRepeating* self = reinterpret_cast<OnIdleCallbackRepeating*>(data);
+        auto* self = reinterpret_cast<OnIdleCallbackRepeating*>(data);
         bool done = self->call();
         if (done)
         {
@@ -216,7 +216,7 @@ private:
 
 void doOnIdleRepeating(bool_func_t callable)
 {
-    OnIdleCallbackRepeating* cb_functor = new OnIdleCallbackRepeating(callable);
+    auto* cb_functor = new OnIdleCallbackRepeating(callable);
     gIdleCallbacks.addFunction(&OnIdleCallbackRepeating::onIdle,cb_functor);
 }
 

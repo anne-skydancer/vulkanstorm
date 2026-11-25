@@ -47,8 +47,8 @@ size_t LLMortician::logClass(std::stringstream &str)
         return size;
     }
     str << " Output:\n";
-    std::list<LLMortician*>::iterator iter = sGraveyard.begin();
-    std::list<LLMortician*>::iterator end = sGraveyard.end();
+    auto iter = sGraveyard.begin();
+    auto end = sGraveyard.end();
     while (iter!=end)
     {
         LLMortician* dead = *iter;

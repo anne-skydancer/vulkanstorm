@@ -51,7 +51,7 @@
             hETW = ::LoadLibrary( L"c:\\xperf\\fs_etw.dll" );
             if( hETW )
             {
-                tpInitialize pInitialize = reinterpret_cast< tpInitialize>( ::GetProcAddress( hETW, "initialize" ) );
+                auto pInitialize = reinterpret_cast< tpInitialize>( ::GetProcAddress( hETW, "initialize" ) );
                 if( pInitialize && (*pInitialize)() )
                 {
                     pLogFrame = reinterpret_cast< tpLogFrame >( ::GetProcAddress( hETW, "log_beginFrame" ) );

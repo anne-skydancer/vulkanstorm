@@ -46,7 +46,7 @@ template <typename FTYPE>
 inline bool is_approx_equal_fraction_impl(FTYPE x, FTYPE y, U32 frac_bits)
 {
     bool ret = true;
-    FTYPE diff = (FTYPE) fabs(x - y);
+    auto diff = (FTYPE) fabs(x - y);
 
     S32 diffInt = (S32) diff;
     S32 diffFracTolerance = (S32) ((diff - (FTYPE) diffInt) * (1 << frac_bits));

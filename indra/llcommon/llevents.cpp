@@ -141,7 +141,7 @@ void LLEventPumps::unregisterPumpFactory(const std::string& name)
 
 LLEventPump& LLEventPumps::obtain(const std::string& name)
 {
-    PumpMap::iterator found = mPumpMap.find(name);
+    auto found = mPumpMap.find(name);
     if (found != mPumpMap.end())
     {
         // Here we already have an LLEventPump instance with the requested
@@ -182,7 +182,7 @@ LLEventPump& LLEventPumps::make(const std::string& name, bool tweak,
 
 bool LLEventPumps::post(const std::string&name, const LLSD&message)
 {
-    PumpMap::iterator found = mPumpMap.find(name);
+    auto found = mPumpMap.find(name);
 
     if (found == mPumpMap.end())
         return false;
@@ -252,7 +252,7 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
     // name10, name11, name2, ... Walking those possibilities in that order
     // isn't convenient to detect the first available "hole."
     std::set<int> suffixes;
-    PumpMap::iterator pmi(inserted.first), pmend(mPumpMap.end());
+    auto pmi(inserted.first), pmend(mPumpMap.end());
     // We already know inserted.first references the existing entry with
     // 'name' as the key; skip that one and start with the next.
     while (++pmi != pmend)
@@ -306,14 +306,14 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
 void LLEventPumps::unregister(const LLEventPump& pump)
 {
     // Remove this instance from mPumpMap
-    PumpMap::iterator found = mPumpMap.find(pump.getName());
+    auto found = mPumpMap.find(pump.getName());
     if (found != mPumpMap.end())
     {
         mPumpMap.erase(found);
     }
     // If this instance is one we created, also remove it from mOurPumps so we
     // won't try again to delete it later!
-    PumpSet::iterator psfound = mOurPumps.find(const_cast<LLEventPump*>(&pump));
+    auto psfound = mOurPumps.find(const_cast<LLEventPump*>(&pump));
     if (psfound != mOurPumps.end())
     {
         mOurPumps.erase(psfound);
@@ -593,7 +593,7 @@ LLBoundListener LLEventPump::getListener(const std::string& name)
 void LLEventPump::stopListening(const std::string& name)
 {
     LLCoros::LockType lock(mConnectionListMutex);
-    ConnectionMap::iterator found = mConnections.find(name);
+    auto found = mConnections.find(name);
     if (found != mConnections.end())
     {
         found->second.disconnect();

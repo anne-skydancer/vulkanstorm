@@ -1300,7 +1300,7 @@ namespace {
                         LLError::ELevel& level)
     {
         bool stop_checking;
-        LevelMap::const_iterator i = map.find(key);
+        auto i = map.find(key);
         if (i == map.end())
         {
             return stop_checking = false;
@@ -1326,7 +1326,7 @@ namespace {
                 continue;
             // </FS:ND>
 
-            LevelMap::const_iterator it = map.find(keys[i]);
+            auto it = map.find(keys[i]);
             if (it != map.end())
             {
                 found_level = true;

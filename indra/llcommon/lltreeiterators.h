@@ -574,7 +574,7 @@ private:
         // Reverse-copy the children into the newly-expanded space. We can't
         // just use std::copy() because the source is a ptr_type, whereas the
         // dest is a pair of (ptr_type, bool).
-        for (typename list_type::reverse_iterator pi = mPending.rbegin(); chi != chend; ++chi, ++pi)
+        for (auto pi = mPending.rbegin(); chi != chend; ++chi, ++pi)
         {
             pi->first = *chi;       // copy the child pointer
             pi->second = false;     // we haven't yet pushed this child's chldren

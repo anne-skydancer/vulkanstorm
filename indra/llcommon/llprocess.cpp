@@ -1224,7 +1224,7 @@ void LLProcess::handle_status(int reason, int status)
     for (size_t i = 0; i < mPipes.size(); ++i)
     {
         std::string error;
-        ReadPipeImpl* ppipe = getPipePtr<ReadPipeImpl>(error, FILESLOT(i));
+        auto* ppipe = getPipePtr<ReadPipeImpl>(error, FILESLOT(i));
         if (ppipe)
         {
             static LLSD trivial;
@@ -1291,7 +1291,7 @@ PIPETYPE* LLProcess::getPipePtr(std::string& error, FILESLOT slot)
     }
     // Make sure we dynamic_cast in pointer domain so we can test, rather than
     // accepting runtime's exception.
-    PIPETYPE* ppipe = dynamic_cast<PIPETYPE*>(mPipes[slot].get());
+    auto* ppipe = dynamic_cast<PIPETYPE*>(mPipes[slot].get());
     if (! ppipe)
     {
         error = STRINGIZE(mDesc << ' ' << whichfile(slot) << " not a " << typeid(PIPETYPE).name());
@@ -1306,7 +1306,7 @@ template <class PIPETYPE>
 PIPETYPE& LLProcess::getPipe(FILESLOT slot)
 {
     std::string error;
-    PIPETYPE* wp = getPipePtr<PIPETYPE>(error, slot);
+    auto* wp = getPipePtr<PIPETYPE>(error, slot);
     if (! wp)
     {
         LLTHROW(NoPipe(error));
@@ -1318,7 +1318,7 @@ template <class PIPETYPE>
 boost::optional<PIPETYPE&> LLProcess::getOptPipe(FILESLOT slot)
 {
     std::string error;
-    PIPETYPE* wp = getPipePtr<PIPETYPE>(error, slot);
+    auto* wp = getPipePtr<PIPETYPE>(error, slot);
     if (! wp)
     {
         LL_DEBUGS("LLProcess") << error << LL_ENDL;

@@ -259,7 +259,7 @@ void LLWatchdog::run()
     }
     else
     {
-        SuspectsRegistry::iterator result =
+        auto result =
             std::find_if(mSuspects.begin(),
                 mSuspects.end(),
                 [](const LLWatchdogEntry* suspect){ return ! suspect->isAlive(); });

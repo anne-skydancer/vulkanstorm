@@ -163,7 +163,7 @@ LLKeyBind::LLKeyBind(const LLSD &key_bind)
 {
     if (key_bind.isArray())
     {
-        for (LLSD::array_const_iterator data = key_bind.beginArray(), endLists = key_bind.endArray();
+        for (auto data = key_bind.beginArray(), endLists = key_bind.endArray();
             data != endLists;
             data++
             )

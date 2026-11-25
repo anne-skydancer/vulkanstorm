@@ -51,19 +51,19 @@ public:
     LLDictionary() = default;
     virtual ~LLDictionary()
     {
-        for (iterator_t iter = map_t::begin(); iter != map_t::end(); ++iter)
+        for (auto iter = map_t::begin(); iter != map_t::end(); ++iter)
             delete (iter->second);
     }
 
     const Entry *lookup(Index index) const
     {
-        const_iterator_t dictionary_iter = map_t::find(index);
+        auto dictionary_iter = map_t::find(index);
         if (dictionary_iter == map_t::end()) return nullptr;
         return dictionary_iter->second;
     }
     const Index lookup(const std::string &name) const
     {
-        for (const_iterator_t dictionary_iter = map_t::begin();
+        for (auto dictionary_iter = map_t::begin();
              dictionary_iter != map_t::end();
              dictionary_iter++)
         {

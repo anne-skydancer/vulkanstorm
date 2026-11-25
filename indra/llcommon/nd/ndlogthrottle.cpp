@@ -82,7 +82,7 @@
             oCall.mLastCall = LLTimer::getTotalTime();
             oCall.mLastUnthrottled = oCall.mLastCall;
 
-            std::set< CallSiteCall >::iterator itr = stCalls.find( oCall );
+            auto itr = stCalls.find( oCall );
 
             if( stCalls.end() == itr )
             {

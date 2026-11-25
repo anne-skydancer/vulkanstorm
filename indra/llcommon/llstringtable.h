@@ -192,7 +192,7 @@ private:
     {
         string_set_t& stringset = mStringList[hashval];
         LLStdStringHandle handle = &s;
-        string_set_t::iterator iter = stringset.find(handle); // compares actual strings
+        auto iter = stringset.find(handle); // compares actual strings
         if (iter != stringset.end())
         {
             return *iter;

@@ -148,8 +148,8 @@ LLApp* LLApp::instance()
 LLSD LLApp::getOption(const std::string& name) const
 {
     LLSD rv;
-    LLSD::array_const_iterator iter = mOptions.beginArray();
-    LLSD::array_const_iterator end = mOptions.endArray();
+    auto iter = mOptions.beginArray();
+    auto end = mOptions.endArray();
     for(; iter != end; ++iter)
     {
         rv = (*iter)[name];
@@ -486,7 +486,7 @@ int LLApp::getPid()
 void LLApp::notifyOutOfDiskSpace()
 {
     static const U32Seconds min_interval = U32Seconds(60);
-    static U32Seconds min_time_to_send = U32Seconds(0);
+    static auto min_time_to_send = U32Seconds(0);
     U32Seconds now = LLTimer::getTotalTime();
     if (now < min_time_to_send)
         return;

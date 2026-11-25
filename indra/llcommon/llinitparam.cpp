@@ -343,7 +343,7 @@ namespace LLInitParam
         {
             const std::string& top_name = name_stack_range.first->first;
 
-            BlockDescriptor::param_map_t::iterator found_it = block_data.mNamedParams.find(top_name);
+            auto found_it = block_data.mNamedParams.find(top_name);
             if (found_it != block_data.mNamedParams.end())
             {
                 // find pointer to member parameter from offset table
@@ -420,7 +420,7 @@ namespace LLInitParam
     const std::string& BaseBlock::getParamName(const BlockDescriptor& block_data, const Param* paramp) const
     {
         param_handle_t handle = getHandleFromParam(paramp);
-        for (BlockDescriptor::param_map_t::const_iterator it = block_data.mNamedParams.begin(); it != block_data.mNamedParams.end(); ++it)
+        for (auto it = block_data.mNamedParams.begin(); it != block_data.mNamedParams.end(); ++it)
         {
             if (it->second->mParamHandle == handle)
             {

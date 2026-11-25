@@ -84,7 +84,7 @@ std::string LLDate::toLocalDateString (std::string fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    time_t locSeconds = (time_t) mSecondsSinceEpoch;
+    auto locSeconds = (time_t) mSecondsSinceEpoch;
     struct tm * lt = localtime (&locSeconds);
     return toHTTPDateString(lt, fmt);
 }
@@ -93,7 +93,7 @@ std::string LLDate::toHTTPDateString (std::string fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    time_t locSeconds = (time_t) mSecondsSinceEpoch;
+    auto locSeconds = (time_t) mSecondsSinceEpoch;
     struct tm * gmt = gmtime (&locSeconds);
     return toHTTPDateString(gmt, fmt);
 }
@@ -124,7 +124,7 @@ std::string LLDate::toHTTPDateString (tm * gmt, std::string fmt)
 
 void LLDate::toStream(std::ostream& s) const
 {
-    apr_time_t time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
+    auto time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
 
     apr_time_exp_t exp_time;
     if (apr_time_exp_gmt(&exp_time, time) != APR_SUCCESS)
@@ -156,7 +156,7 @@ void LLDate::toStream(std::ostream& s) const
 
 bool LLDate::split(S32 *year, S32 *month, S32 *day, S32 *hour, S32 *min, S32 *sec) const
 {
-    apr_time_t time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
+    auto time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
 
     apr_time_exp_t exp_time;
     if (apr_time_exp_gmt(&exp_time, time) != APR_SUCCESS)

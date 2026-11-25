@@ -249,7 +249,7 @@ public:
     {
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
         const InstanceMap& map(lock->mMap);
-        typename InstanceMap::const_iterator found = map.find(k);
+        auto found = map.find(k);
         // <Vulkanstorm> convert the stored base pointer to T now that the
         // instance is complete; shares ownership (and use count) with the map
         return (found == map.end()) ? ptr_t() :
@@ -329,7 +329,7 @@ private:
     base_ptr_t remove_(LockStatic& lock)
     {
         InstanceMap& map = lock->mMap;
-        typename InstanceMap::iterator iter = map.find(mInstanceKey);
+        auto iter = map.find(mInstanceKey);
         if (iter != map.end())
         {
             auto ret = iter->second;

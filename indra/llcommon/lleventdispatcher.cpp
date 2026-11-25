@@ -189,7 +189,7 @@ LLEventDispatcher::LLSDArgsMapper::LLSDArgsMapper(LLEventDispatcher* parent,
     {
         // defaults is a map. Use it to populate the _defaults array.
         LLSD bogus;
-        for (LLSD::map_const_iterator mi(defaults.beginMap()), mend(defaults.endMap());
+        for (auto mi(defaults.beginMap()), mend(defaults.endMap());
              mi != mend; ++mi)
         {
             IndexMap::const_iterator ixit(_indexes.find(mi->first));
@@ -271,12 +271,12 @@ LLSD LLEventDispatcher::LLSDArgsMapper::map(const LLSD& argsmap) const
     else
     {
         // argsmap is in fact a map. Walk the map.
-        for (LLSD::map_const_iterator mi(argsmap.beginMap()), mend(argsmap.endMap());
+        for (auto mi(argsmap.beginMap()), mend(argsmap.endMap());
              mi != mend; ++mi)
         {
             // mi->first is a parameter-name string, with mi->second its
             // value. Look up the name's position index in _indexes.
-            IndexMap::const_iterator ixit(_indexes.find(mi->first));
+            auto ixit(_indexes.find(mi->first));
             if (ixit == _indexes.end())
             {
                 // Allow for a map containing more params than were passed in
@@ -329,7 +329,7 @@ std::string LLEventDispatcher::LLSDArgsMapper::formatlist(const LLSD& list)
 {
     std::ostringstream out;
     const char* delim = "";
-    for (LLSD::array_const_iterator li(list.beginArray()), lend(list.endArray());
+    for (auto li(list.beginArray()), lend(list.endArray());
          li != lend; ++li)
     {
         out << delim << li->asString();
@@ -510,7 +510,7 @@ struct LLEventDispatcher::MapParamsDispatchEntry: public LLEventDispatcher::Para
     {
         // Build the set of all param keys, then delete the ones that are
         // optional. What's left are the ones that are required.
-        for (LLSD::array_const_iterator pi(params.beginArray()), pend(params.endArray());
+        for (auto pi(params.beginArray()), pend(params.endArray());
              pi != pend; ++pi)
         {
             mRequired[pi->asString()] = LLSD();
@@ -612,7 +612,7 @@ void LLEventDispatcher::addFail(const std::string& name, const char* classname) 
 /// Unregister a callable
 bool LLEventDispatcher::remove(const std::string& name)
 {
-    DispatchMap::iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
         return false;
@@ -680,7 +680,7 @@ LLSD LLEventDispatcher::try_call(const std::string& key, const std::string& name
         }
     }
 
-    DispatchMap::const_iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
         // Here we were passed a non-empty name, but there's no registered
@@ -724,7 +724,7 @@ template <typename EXCEPTION, typename... ARGS>
 
 LLSD LLEventDispatcher::getMetadata(const std::string& name) const
 {
-    DispatchMap::const_iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
         return {};

@@ -376,7 +376,7 @@ LLFILE* LLFile::fopen(const std::string& filename, const char* mode)
 {
 #if LL_WINDOWS
     std::wstring utf16filename = utf8path_to_wstring(filename);
-    std::wstring utf16mode = ll_convert<std::wstring>(std::string(mode));
+    auto utf16mode = ll_convert<std::wstring>(std::string(mode));
     return _wfopen(utf16filename.c_str(), utf16mode.c_str());
 #else
     return ::fopen(filename.c_str(),mode);
@@ -388,7 +388,7 @@ LLFILE* LLFile::fopen(const std::string& filename, const char* mode)
 LLFILE* LLFile::fsopen(const std::string& filename, const char* mode, int sharingFlag)
 {
     std::wstring utf16filename = utf8path_to_wstring(filename);
-    std::wstring utf16mode = ll_convert<std::wstring>(std::string(mode));
+    auto utf16mode = ll_convert<std::wstring>(std::string(mode));
     return _wfsopen(utf16filename.c_str(), utf16mode.c_str(), sharingFlag);
 }
 #endif

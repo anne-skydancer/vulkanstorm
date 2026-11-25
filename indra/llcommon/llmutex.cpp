@@ -170,7 +170,7 @@ bool LLSharedMutex::isThreadLocked() const
     LLThread::id_t current_thread = LLThread::currentID();
     std::scoped_lock lock(mLockMutex);
 
-    const_iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     return it != mLockingThreads.end();
 }
 
@@ -180,7 +180,7 @@ void LLSharedMutex::lockShared()
     LLThread::id_t current_thread = LLThread::currentID();
 
     mLockMutex.lock();
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         it->second++;
@@ -205,7 +205,7 @@ void LLSharedMutex::lockExclusive()
     LLThread::id_t current_thread = LLThread::currentID();
 
     mLockMutex.lock();
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (mIsShared)
@@ -238,7 +238,7 @@ bool LLSharedMutex::trylockShared()
     LLThread::id_t current_thread = LLThread::currentID();
     std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         it->second++;
@@ -283,7 +283,7 @@ void LLSharedMutex::unlockShared()
     LLThread::id_t current_thread = LLThread::currentID();
     std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (it->second > 1)
@@ -304,7 +304,7 @@ void LLSharedMutex::unlockExclusive()
     LLThread::id_t current_thread = LLThread::currentID();
     std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (it->second > 1)

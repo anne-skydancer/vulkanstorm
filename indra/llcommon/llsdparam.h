@@ -79,7 +79,7 @@ private:
     template<typename T>
     static bool writeTypedValue(Parser& parser, const void* val_ptr, parser_t::name_stack_t& name_stack)
     {
-        LLParamSDParser& sdparser = static_cast<LLParamSDParser&>(parser);
+        auto& sdparser = static_cast<LLParamSDParser&>(parser);
         if (!sdparser.mWriteRootSD) return false;
 
         LLInitParam::Parser::name_stack_range_t range(name_stack.begin(), name_stack.end());

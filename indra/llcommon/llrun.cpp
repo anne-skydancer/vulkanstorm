@@ -59,7 +59,7 @@ size_t LLRunner::run()
     // Collect the run once. We erase the matching ones now because
     // it's easier. If we find a reason to keep them around for a
     // while, we can restructure this method.
-    LLRunner::run_list_t::iterator iter = mRunOnce.begin();
+    auto iter = mRunOnce.begin();
     for( ; iter != mRunOnce.end(); )
     {
         if(now > (*iter).mNextRunAt)
@@ -75,7 +75,7 @@ size_t LLRunner::run()
 
     // Collect the ones that repeat.
     iter = mRunEvery.begin();
-    LLRunner::run_list_t::iterator end = mRunEvery.end();
+    auto end = mRunEvery.end();
     for( ; iter != end; ++iter )
     {
         if(now > (*iter).mNextRunAt)
@@ -123,8 +123,8 @@ LLRunner::run_handle_t LLRunner::addRunnable(
 LLRunner::run_ptr_t LLRunner::removeRunnable(LLRunner::run_handle_t handle)
 {
     LLRunner::run_ptr_t rv;
-    LLRunner::run_list_t::iterator iter = mRunOnce.begin();
-    LLRunner::run_list_t::iterator end = mRunOnce.end();
+    auto iter = mRunOnce.begin();
+    auto end = mRunOnce.end();
     for( ; iter != end; ++iter)
     {
         if((*iter).mHandle == handle)

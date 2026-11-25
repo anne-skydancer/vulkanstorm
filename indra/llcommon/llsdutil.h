@@ -695,7 +695,7 @@ struct hash<LLSD>
         }
         case LLSD::TypeMap:
         {
-            for (LLSD::map_const_iterator itm = s.beginMap(); itm != s.endMap(); ++itm)
+            for (auto itm = s.beginMap(); itm != s.endMap(); ++itm)
             {
                 boost::hash_combine(seed, (*itm).first);
                 boost::hash_combine(seed, (*itm).second);
@@ -703,7 +703,7 @@ struct hash<LLSD>
             break;
         }
         case LLSD::TypeArray:
-            for (LLSD::array_const_iterator ita = s.beginArray(); ita != s.endArray(); ++ita)
+            for (auto ita = s.beginArray(); ita != s.endArray(); ++ita)
             {
                 boost::hash_combine(seed, (*ita));
             }

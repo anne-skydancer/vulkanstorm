@@ -276,7 +276,7 @@ bool LLQueuedThread::waitForResult(LLQueuedThread::handle_t handle, bool auto_co
     {
         update(0); // unpauses
         lockData();
-        QueuedRequest* req = (QueuedRequest*)mRequestHash.find(handle);
+        auto* req = (QueuedRequest*)mRequestHash.find(handle);
         if (!req)
         {
             done = true; // request does not exist
@@ -314,7 +314,7 @@ LLQueuedThread::QueuedRequest* LLQueuedThread::getRequest(handle_t handle)
         return nullptr;
     }
     lockData();
-    QueuedRequest* res = (QueuedRequest*)mRequestHash.find(handle);
+    auto* res = (QueuedRequest*)mRequestHash.find(handle);
     unlockData();
     return res;
 }
@@ -323,7 +323,7 @@ LLQueuedThread::status_t LLQueuedThread::getRequestStatus(handle_t handle)
 {
     status_t res = STATUS_EXPIRED;
     lockData();
-    QueuedRequest* req = (QueuedRequest*)mRequestHash.find(handle);
+    auto* req = (QueuedRequest*)mRequestHash.find(handle);
     if (req)
     {
         res = req->getStatus();
@@ -336,7 +336,7 @@ void LLQueuedThread::abortRequest(handle_t handle, bool autocomplete)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     lockData();
-    QueuedRequest* req = (QueuedRequest*)mRequestHash.find(handle);
+    auto* req = (QueuedRequest*)mRequestHash.find(handle);
     if (req)
     {
         req->setFlags(FLAG_ABORT | (autocomplete ? FLAG_AUTO_COMPLETE : 0));
@@ -348,7 +348,7 @@ void LLQueuedThread::abortRequest(handle_t handle, bool autocomplete)
 void LLQueuedThread::setFlags(handle_t handle, U32 flags)
 {
     lockData();
-    QueuedRequest* req = (QueuedRequest*)mRequestHash.find(handle);
+    auto* req = (QueuedRequest*)mRequestHash.find(handle);
     if (req)
     {
         req->setFlags(flags);
@@ -361,7 +361,7 @@ bool LLQueuedThread::completeRequest(handle_t handle)
     LL_PROFILE_ZONE_SCOPED;
     bool res = false;
     lockData();
-    QueuedRequest* req = (QueuedRequest*)mRequestHash.find(handle);
+    auto* req = (QueuedRequest*)mRequestHash.find(handle);
     if (req)
     {
         llassert_always(req->getStatus() != STATUS_QUEUED);

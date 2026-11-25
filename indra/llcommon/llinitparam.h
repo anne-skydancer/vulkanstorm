@@ -514,7 +514,7 @@ namespace LLInitParam
 
         template <typename T> bool readValue(T& param, typename std::enable_if_t<!std::is_enum_v<T>>* dummy = nullptr)
         {
-            parser_read_func_map_t::iterator found_it = mParserReadFuncs->find(typeid(T));
+            auto found_it = mParserReadFuncs->find(typeid(T));
             if (found_it != mParserReadFuncs->end())
             {
                 return found_it->second(*this, (void*)&param);
@@ -525,7 +525,7 @@ namespace LLInitParam
 
         template <typename T> bool readValue(T& param, typename std::enable_if_t<std::is_enum_v<T> >* dummy = 0)
         {
-            parser_read_func_map_t::iterator found_it = mParserReadFuncs->find(typeid(T));
+            auto found_it = mParserReadFuncs->find(typeid(T));
             if (found_it != mParserReadFuncs->end())
             {
                 return found_it->second(*this, (void*)&param);
@@ -546,7 +546,7 @@ namespace LLInitParam
 
         template <typename T> bool writeValue(const T& param, name_stack_t& name_stack)
         {
-            parser_write_func_map_t::iterator found_it = mParserWriteFuncs->find(typeid(T));
+            auto found_it = mParserWriteFuncs->find(typeid(T));
             if (found_it != mParserWriteFuncs->end())
             {
                 return found_it->second(*this, (const void*)&param, name_stack);
@@ -557,7 +557,7 @@ namespace LLInitParam
         // dispatch inspection to registered inspection functions, for each parameter in a param block
         template <typename T> bool inspectValue(name_stack_t& name_stack, S32 min_count, S32 max_count, const possible_values_t* possible_values)
         {
-            parser_inspect_func_map_t::iterator found_it = mParserInspectFuncs->find(typeid(T));
+            auto found_it = mParserInspectFuncs->find(typeid(T));
             if (found_it != mParserInspectFuncs->end())
             {
                 found_it->second(name_stack, min_count, max_count, possible_values);
@@ -1022,7 +1022,7 @@ namespace LLInitParam
 
         static bool deserializeParam(Param& param, Parser& parser, Parser::name_stack_range_t& name_stack_range, bool new_name)
         {
-            self_t& typed_param = static_cast<self_t&>(param);
+            auto& typed_param = static_cast<self_t&>(param);
             // no further names in stack, attempt to parse value now
             if (name_stack_range.first == name_stack_range.second)
             {
@@ -1051,8 +1051,8 @@ namespace LLInitParam
         static bool serializeParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const Param* diff_param)
         {
             bool serialized = false;
-            const self_t& typed_param = static_cast<const self_t&>(param);
-            const self_t* diff_typed_param = static_cast<const self_t*>(diff_param);
+            const auto& typed_param = static_cast<const self_t&>(param);
+            const auto* diff_typed_param = static_cast<const self_t*>(diff_param);
 
             LLPredicate::Value<ESerializePredicates> predicate;
             if (diff_typed_param && ParamCompare<T>::equals(typed_param.getValue(), diff_typed_param->getValue()))
@@ -1135,8 +1135,8 @@ namespace LLInitParam
 
         static bool mergeWith(Param& dst, const Param& src, bool overwrite)
         {
-            const self_t& src_typed_param = static_cast<const self_t&>(src);
-            self_t& dst_typed_param = static_cast<self_t&>(dst);
+            const auto& src_typed_param = static_cast<const self_t&>(src);
+            auto& dst_typed_param = static_cast<self_t&>(dst);
 
             if (src_typed_param.isProvided()
                 && (overwrite || !dst_typed_param.isProvided()))
@@ -1149,7 +1149,7 @@ namespace LLInitParam
     private:
         void init( BlockDescriptor &block_descriptor, ParamDescriptor::validation_func_t validate_func, S32 min_count, S32 max_count, const char* name )
         {
-            ParamDescriptorPtr param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
+            auto param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
                 block_descriptor.mCurrentBlockPtr->getHandleFromParam(this),
                 &mergeWith,
                 &deserializeParam,
@@ -1188,7 +1188,7 @@ namespace LLInitParam
 
         static bool deserializeParam(Param& param, Parser& parser, Parser::name_stack_range_t& name_stack_range, bool new_name)
         {
-            self_t& typed_param = static_cast<self_t&>(param);
+            auto& typed_param = static_cast<self_t&>(param);
 
             if (name_stack_range.first == name_stack_range.second)
             {   // try to parse a known named value
@@ -1217,7 +1217,7 @@ namespace LLInitParam
 
         static bool serializeParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const Param* diff_param)
         {
-            const self_t& typed_param = static_cast<const self_t&>(param);
+            const auto& typed_param = static_cast<const self_t&>(param);
 
             LLPredicate::Value<ESerializePredicates> predicate;
 
@@ -1250,7 +1250,7 @@ namespace LLInitParam
 
         static void inspectParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, S32 min_count, S32 max_count)
         {
-            const self_t& typed_param = static_cast<const self_t&>(param);
+            const auto& typed_param = static_cast<const self_t&>(param);
 
             // tell parser about our actual type
             parser.inspectValue<value_t>(name_stack, min_count, max_count, NULL);
@@ -1316,8 +1316,8 @@ namespace LLInitParam
 
         static bool mergeWith(Param& dst, const Param& src, bool overwrite)
         {
-            const self_t& src_typed_param = static_cast<const self_t&>(src);
-            self_t& dst_typed_param = static_cast<self_t&>(dst);
+            const auto& src_typed_param = static_cast<const self_t&>(src);
+            auto& dst_typed_param = static_cast<self_t&>(dst);
 
             if (src_typed_param.anyProvided())
             {
@@ -1334,7 +1334,7 @@ namespace LLInitParam
     private:
         void init( BlockDescriptor &block_descriptor, ParamDescriptor::validation_func_t validate_func, S32 min_count, S32 max_count, const char* name )
         {
-            ParamDescriptorPtr param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
+            auto param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
                 block_descriptor.mCurrentBlockPtr->getHandleFromParam(this),
                 &mergeWith,
                 &deserializeParam,
@@ -1386,7 +1386,7 @@ namespace LLInitParam
         static bool deserializeParam(Param& param, Parser& parser, Parser::name_stack_range_t& name_stack_range, bool new_name)
         {
             Parser::name_stack_range_t new_name_stack_range(name_stack_range);
-            self_t& typed_param = static_cast<self_t&>(param);
+            auto& typed_param = static_cast<self_t&>(param);
             value_t value;
 
             // pop first element if empty string
@@ -1421,7 +1421,7 @@ namespace LLInitParam
         static bool serializeParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const Param* diff_param)
         {
             bool serialized = false;
-            const self_t& typed_param = static_cast<const self_t&>(param);
+            const auto& typed_param = static_cast<const self_t&>(param);
 
             LLPredicate::Value<ESerializePredicates> predicate;
 
@@ -1432,7 +1432,7 @@ namespace LLInitParam
 
             if (!predicate_rule.check(predicate)) return false;
 
-            for (const_iterator it = typed_param.mValues.begin(), end_it = typed_param.mValues.end();
+            for (auto it = typed_param.mValues.begin(), end_it = typed_param.mValues.end();
                 it != end_it;
                 ++it)
             {
@@ -1537,8 +1537,8 @@ namespace LLInitParam
     protected:
         static bool mergeWith(Param& dst, const Param& src, bool overwrite)
         {
-            const self_t& src_typed_param = static_cast<const self_t&>(src);
-            self_t& dst_typed_param = static_cast<self_t&>(dst);
+            const auto& src_typed_param = static_cast<const self_t&>(src);
+            auto& dst_typed_param = static_cast<self_t&>(dst);
 
             if (overwrite)
             {
@@ -1565,7 +1565,7 @@ namespace LLInitParam
     private:
         void init( BlockDescriptor &block_descriptor, ParamDescriptor::validation_func_t validate_func, S32 min_count, S32 max_count, const char* name )
         {
-            ParamDescriptorPtr param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
+            auto param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
                 block_descriptor.mCurrentBlockPtr->getHandleFromParam(this),
                 &mergeWith,
                 &deserializeParam,
@@ -1618,7 +1618,7 @@ namespace LLInitParam
         static bool deserializeParam(Param& param, Parser& parser, Parser::name_stack_range_t& name_stack_range, bool new_name)
         {
             Parser::name_stack_range_t new_name_stack_range(name_stack_range);
-            self_t& typed_param = static_cast<self_t&>(param);
+            auto& typed_param = static_cast<self_t&>(param);
             bool new_value = false;
             bool new_array_value = false;
 
@@ -1677,7 +1677,7 @@ namespace LLInitParam
         static bool serializeParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const Param* diff_param)
         {
             bool serialized = false;
-            const self_t& typed_param = static_cast<const self_t&>(param);
+            const auto& typed_param = static_cast<const self_t&>(param);
             LLPredicate::Value<ESerializePredicates> predicate;
 
             predicate.set(REQUIRED, typed_param.mMinCount > 0);
@@ -1687,7 +1687,7 @@ namespace LLInitParam
 
             if (!predicate_rule.check(predicate)) return false;
 
-            for (const_iterator it = typed_param.mValues.begin(), end_it = typed_param.mValues.end();
+            for (auto it = typed_param.mValues.begin(), end_it = typed_param.mValues.end();
                 it != end_it;
                 ++it)
             {
@@ -1779,7 +1779,7 @@ namespace LLInitParam
         size_t numValidElements() const
         {
             size_t count = 0;
-            for (const_iterator it = mValues.begin(), end_it = mValues.end();
+            for (auto it = mValues.begin(), end_it = mValues.end();
                 it != end_it;
                 ++it)
             {
@@ -1792,8 +1792,8 @@ namespace LLInitParam
 
         static bool mergeWith(Param& dst, const Param& src, bool overwrite)
         {
-            const self_t& src_typed_param = static_cast<const self_t&>(src);
-            self_t& dst_typed_param = static_cast<self_t&>(dst);
+            const auto& src_typed_param = static_cast<const self_t&>(src);
+            auto& dst_typed_param = static_cast<self_t&>(dst);
 
             if (overwrite)
             {
@@ -1821,7 +1821,7 @@ namespace LLInitParam
     private:
         void init( BlockDescriptor &block_descriptor, ParamDescriptor::validation_func_t validate_func, S32 min_count, S32 max_count, const char* name )
         {
-            ParamDescriptorPtr param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
+            auto param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
                 block_descriptor.mCurrentBlockPtr->getHandleFromParam(this),
                 &mergeWith,
                 &deserializeParam,
@@ -2141,7 +2141,7 @@ namespace LLInitParam
                 BlockDescriptor& block_descriptor = DERIVED_BLOCK::getBlockDescriptor();
                 if (LL_UNLIKELY(block_descriptor.mInitializationState == BlockDescriptor::INITIALIZING))
                 {
-                    ParamDescriptorPtr param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
+                    auto param_descriptor = ParamDescriptorPtr(new ParamDescriptor(
                                                     block_descriptor.mCurrentBlockPtr->getHandleFromParam(this),
                                                     NULL,
                                                     &deserializeParam,
@@ -2665,7 +2665,7 @@ namespace LLInitParam
 
         bool deserializeBlock(Parser& parser, Parser::name_stack_range_t& name_stack_range, bool new_name)
         {
-            derived_t& typed_param = static_cast<derived_t&>(*this);
+            auto& typed_param = static_cast<derived_t&>(*this);
             // try to parse direct value T
             if (name_stack_range.first == name_stack_range.second)
             {
@@ -2684,8 +2684,8 @@ namespace LLInitParam
 
         bool serializeBlock(Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = nullptr) const
         {
-            const derived_t& typed_param = static_cast<const derived_t&>(*this);
-            const derived_t* diff_param = static_cast<const derived_t*>(diff_block);
+            const auto& typed_param = static_cast<const derived_t&>(*this);
+            const auto* diff_param = static_cast<const derived_t*>(diff_block);
 
             //std::string key = typed_param.getValueName();
 
@@ -2801,7 +2801,7 @@ namespace LLInitParam
         {
             bool source_override = source_provided && (overwrite || !dst_provided);
 
-            const derived_t& src_typed_param = static_cast<const derived_t&>(source);
+            const auto& src_typed_param = static_cast<const derived_t&>(source);
 
             if (source_override && src_typed_param.mValueAge == VALUE_AUTHORITATIVE)
             {

@@ -67,7 +67,7 @@ void ThreadRecorder::init()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& time_block = static_cast<BlockTimerStatHandle&>(base);
+        auto& time_block = static_cast<BlockTimerStatHandle&>(base);
         TimeBlockTreeNode& tree_node = mTimeBlockTreeNodes[time_block.getIndex()];
         tree_node.mBlock = &time_block;
         tree_node.mParent = &root_time_block;
@@ -138,7 +138,7 @@ TimeBlockTreeNode* ThreadRecorder::getTimeBlockTreeNode( size_t index )
 AccumulatorBufferGroup* ThreadRecorder::activate( AccumulatorBufferGroup* recording)
 {
 #if LL_TRACE_ENABLED
-    ActiveRecording* active_recording = new ActiveRecording(recording);
+    auto* active_recording = new ActiveRecording(recording);
     if (!mActiveRecordings.empty())
     {
         AccumulatorBufferGroup& prev_active_recording = mActiveRecordings.back()->mPartialRecording;
@@ -171,7 +171,7 @@ ThreadRecorder::active_recording_list_t::iterator ThreadRecorder::bringUpToDate(
     {
         ActiveRecording* cur_recording = *it;
 
-        active_recording_list_t::reverse_iterator next_it = it;
+        auto next_it = it;
         ++next_it;
 
         // if we have another recording further down in the stack...
@@ -205,7 +205,7 @@ ThreadRecorder::active_recording_list_t::iterator ThreadRecorder::bringUpToDate(
 void ThreadRecorder::deactivate(AccumulatorBufferGroup* recording)
 {
 #if LL_TRACE_ENABLED
-    active_recording_list_t::iterator recording_it = bringUpToDate(recording);
+    auto recording_it = bringUpToDate(recording);
     // this method should only be called on a thread where the recorder is active
     llassert_always(recording_it != mActiveRecordings.end());
 

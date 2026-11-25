@@ -186,8 +186,8 @@ void LLSimpleDispatcher::addListener(LLEventListener* listener, LLSD filter, con
 
 void LLSimpleDispatcher::removeListener(LLEventListener* listener)
 {
-    std::vector<LLListenerEntry>::iterator itor = mListeners.begin();
-    std::vector<LLListenerEntry>::iterator end = mListeners.end();
+    auto itor = mListeners.begin();
+    auto end = mListeners.end();
     for (; itor != end; ++itor)
     {
         if ((*itor).listener == listener)

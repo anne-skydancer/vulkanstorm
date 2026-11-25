@@ -489,7 +489,7 @@ namespace
         LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
         if (shared())
         {
-            ImplMap* i = new ImplMap(mData);
+            auto* i = new ImplMap(mData);
             Impl::assign(var, i);
             return *i;
         }
@@ -502,14 +502,14 @@ namespace
     bool ImplMap::has(const std::string_view k) const
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
-        DataMap::const_iterator i = mData.find(k);
+        auto i = mData.find(k);
         return i != mData.end();
     }
 
     LLSD ImplMap::get(const std::string_view k) const
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
-        DataMap::const_iterator i = mData.find(k);
+        auto i = mData.find(k);
         return (i != mData.end()) ? i->second : LLSD();
     }
 
@@ -517,7 +517,7 @@ namespace
     {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
         LLSD keys = LLSD::emptyArray();
-        DataMap::const_iterator iter = mData.begin();
+        auto iter = mData.begin();
         while (iter != mData.end())
         {
             keys.append((*iter).first);
@@ -558,7 +558,7 @@ namespace
 
     LLSD& ImplMap::ref(std::string&& k)
     {
-        DataMap::iterator i = mData.lower_bound(k);
+        auto i = mData.lower_bound(k);
         if (i == mData.end() || mData.key_comp()(k, i->first))
         {
             return mData.emplace_hint(i, std::make_pair(std::move(k), LLSD()))->second;
@@ -569,7 +569,7 @@ namespace
 
     const LLSD& ImplMap::ref(std::string&& k) const
     {
-        DataMap::const_iterator i = mData.lower_bound(k);
+        auto i = mData.lower_bound(k);
         if (i == mData.end() || mData.key_comp()(k, i->first))
         {
             return undef();
@@ -580,7 +580,7 @@ namespace
 
     LLSD& ImplMap::ref(std::string_view k)
     {
-        DataMap::iterator i = mData.lower_bound(k);
+        auto i = mData.lower_bound(k);
         if (i == mData.end() || mData.key_comp()(k, i->first))
         {
             return mData.emplace_hint(i, std::make_pair(k, LLSD()))->second;
@@ -591,7 +591,7 @@ namespace
 
     const LLSD& ImplMap::ref(std::string_view k) const
     {
-        DataMap::const_iterator i = mData.lower_bound(k);
+        auto i = mData.lower_bound(k);
         if (i == mData.end() || mData.key_comp()(k, i->first))
         {
             return undef();
@@ -615,7 +615,7 @@ namespace
 
     void ImplMap::calcStats(S32 type_counts[], S32 share_counts[]) const
     {
-        LLSD::map_const_iterator iter = beginMap();
+        auto iter = beginMap();
         while (iter != endMap())
         {
             //std::cout << "  " << (*iter).first << ": " << (*iter).second << std::endl;
@@ -688,7 +688,7 @@ namespace
     {
         if (shared())
         {
-            ImplArray* i = new ImplArray(mData);
+            auto* i = new ImplArray(mData);
             Impl::assign(var, i);
             return *i;
         }
@@ -797,7 +797,7 @@ namespace
 
     void ImplArray::calcStats(S32 type_counts[], S32 share_counts[]) const
     {
-        LLSD::array_const_iterator iter = beginArray();
+        auto iter = beginArray();
         while (iter != endArray())
         {   // Add values for all items held in the array
             Impl::calcStats((*iter), type_counts, share_counts);
@@ -872,14 +872,14 @@ const LLSD::Impl& LLSD::Impl::safe(const Impl* impl)
 ImplMap& LLSD::Impl::makeMap(Impl*& var)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_LLSD;
-    ImplMap* im = new ImplMap;
+    auto* im = new ImplMap;
     reset(var, im);
     return *im;
 }
 
 ImplArray& LLSD::Impl::makeArray(Impl*& var)
 {
-    ImplArray* ia = new ImplArray;
+    auto* ia = new ImplArray;
     reset(var, ia);
     return *ia;
 }

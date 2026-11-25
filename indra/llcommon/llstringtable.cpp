@@ -269,7 +269,7 @@ LLStringTableEntry* LLStringTable::addStringEntry(const char *str)
         }
 
         // not found, so add!
-        LLStringTableEntry *newentry = new LLStringTableEntry(str);
+        auto *newentry = new LLStringTableEntry(str);
         //ret_val = newentry->mString;
         strlist->push_front(newentry);
 #endif

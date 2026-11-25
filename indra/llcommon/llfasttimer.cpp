@@ -197,7 +197,7 @@ void BlockTimer::bootstrapTimerTree()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+        auto& timer = static_cast<BlockTimerStatHandle&>(base);
         if (&timer == &BlockTimer::getRootTimeBlock()) continue;
 
         // bootstrap tree construction by attaching to last timer to be on stack
@@ -311,7 +311,7 @@ void BlockTimer::processTimes()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+        auto& timer = static_cast<BlockTimerStatHandle&>(base);
         TimeBlockAccumulator& accumulator = timer.getCurrentAccumulator();
 
         accumulator.mLastCaller = nullptr;
@@ -365,7 +365,7 @@ void BlockTimer::logStats()
             for (auto& base : BlockTimerStatHandle::instance_snapshot())
             {
                 // because of indirect derivation from LLInstanceTracker, have to downcast
-                BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+                auto& timer = static_cast<BlockTimerStatHandle&>(base);
                 LLTrace::PeriodicRecording& frame_recording = LLTrace::get_frame_recording();
                 sd[timer.getName()]["Time"] = (LLSD::Real) (frame_recording.getLastRecording().getSum(timer).value());
                 sd[timer.getName()]["Calls"] = (LLSD::Integer) (frame_recording.getLastRecording().getSum(timer.callCount()));

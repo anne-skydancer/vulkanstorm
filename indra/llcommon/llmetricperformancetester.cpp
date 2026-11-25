@@ -68,7 +68,7 @@ bool LLMetricPerformanceTesterBasic::addTester(LLMetricPerformanceTesterBasic* t
 /*static*/
 void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
 {
-    name_tester_map_t::iterator tester = sTesterMap.find(name);
+    auto tester = sTesterMap.find(name);
     if (tester != sTesterMap.end())
     {
         delete tester->second;
@@ -80,7 +80,7 @@ void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
 LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(std::string name)
 {
     // Check for the requested metric name
-    name_tester_map_t::iterator found_it = sTesterMap.find(name) ;
+    auto found_it = sTesterMap.find(name) ;
     if (found_it != sTesterMap.end())
     {
         return found_it->second ;
@@ -103,7 +103,7 @@ LLSD LLMetricPerformanceTesterBasic::analyzeMetricPerformanceLog(std::istream& i
 
     while (!is.eof() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(cur, is))
     {
-        for (LLSD::map_iterator iter = cur.beginMap(); iter != cur.endMap(); ++iter)
+        for (auto iter = cur.beginMap(); iter != cur.endMap(); ++iter)
         {
             std::string label = iter->first;
 
