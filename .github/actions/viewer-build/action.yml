@@ -148,12 +148,10 @@ runs:
 
     - name: Install build dependencies
       shell: bash
-      run: |
-        python -m pip install autobuild==3.10.2 llsd
-        # <Vulkanstorm> autobuild 3.10.2, its newest release, has no toolset entry for Visual Studio 2026 (vsver 180),
-        # so every autobuild command logged "Unable to determine a suggested AUTOBUILD_WIN_VSTOOLSET". Add the entry it
-        # lacks (v145, the VS 2026 toolset), as on the development machines. Idempotent; a no-op once autobuild has it.
-        python scripts/ci_autobuild_vs2026.py
+      # autobuild 3.10.2 (the latest release) has no VS 2026 entries and logs "Unable to determine a suggested
+      # AUTOBUILD_WIN_VSTOOLSET for vsver 180" on every command; setting the variable cannot silence it. Upstream main
+      # d8c6236eac is 3.10.2 plus those entries (secondlife/autobuild #61): install it until a release carries them.
+      run: python -m pip install "autobuild @ git+https://github.com/secondlife/autobuild@d8c6236eac000eb301748ec6a1df3d0894309b4b" llsd
 
     # The container's own CMake is 3.28; use the version of the hosted runners.
     - name: Install CMake in the Linux container
