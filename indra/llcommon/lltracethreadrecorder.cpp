@@ -286,7 +286,7 @@ void ThreadRecorder::pullFromChildren()
         target_recording_buffers.sync();
         for (LLTrace::ThreadRecorder* rec : mChildThreadRecorders)
         {
-            LLMutexLock lock(&(rec->mSharedRecordingMutex));
+            LLMutexLock child_lock(&(rec->mSharedRecordingMutex));
             target_recording_buffers.merge(rec->mSharedRecordingBuffers);
             rec->mSharedRecordingBuffers.reset();
         }

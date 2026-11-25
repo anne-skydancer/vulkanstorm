@@ -79,8 +79,11 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
 
         // create something to hold address info
         PIMAGEHLP_SYMBOL64 pSym;
-        pSym = (PIMAGEHLP_SYMBOL64)malloc(sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
-        memset(pSym, 0, sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
+        pSym = (PIMAGEHLP_SYMBOL64)calloc(1, sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
+        if (!pSym)
+        {
+            return false;
+        }
         pSym->MaxNameLength = STRING_NAME_LENGTH;
         pSym->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
 
@@ -137,6 +140,10 @@ void ll_get_stack_trace_internal(std::vector<std::string>& lines)
 
     unsigned short frames = RtlCaptureStackBackTrace_fn( 0, MAX_STACK_DEPTH, stack, nullptr );
     auto *symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + STRING_NAME_LENGTH * sizeof(char), 1);
+    if (!symbol)
+    {
+        return;
+    }
     symbol->MaxNameLen = STRING_NAME_LENGTH-1;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 

@@ -2203,7 +2203,7 @@ std::string zip_llsd(LLSD& data)
 
     std::string source = std::move(llsd_strm).str();
 
-    U8 out[CHUNK];
+    std::unique_ptr<U8[]> out(new U8[CHUNK]);  // heap: a 64 KB buffer does not belong on the stack (C6262)
 
     strm.avail_in = narrow<size_t>(source.size());
     strm.next_in = (U8*) source.data();
@@ -2216,7 +2216,7 @@ std::string zip_llsd(LLSD& data)
     do
     {
         strm.avail_out = CHUNK;
-        strm.next_out = out;
+        strm.next_out = out.get();
 
         ret = deflate(&strm, Z_FINISH);
         if (ret == Z_OK || ret == Z_STREAM_END)
@@ -2243,7 +2243,7 @@ std::string zip_llsd(LLSD& data)
                 return {};
             }
             output = new_output;
-            memcpy(output+cur_size, out, have);
+            memcpy(output+cur_size, out.get(), have);
             cur_size += have;
         }
         else
@@ -2428,7 +2428,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
     }
     is.read((char*) in, size);
 
-    U8 out[CHUNK];
+    std::unique_ptr<U8[]> out(new U8[CHUNK]);  // heap, see unzip_llsd (C6262)
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -2448,7 +2448,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
     do
     {
         strm.avail_out = CHUNK;
-        strm.next_out = out;
+        strm.next_out = out.get();
         ret = inflate(&strm, Z_NO_FLUSH);
 
         // Every error return frees each buffer exactly once and ends the stream.
@@ -2518,7 +2518,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             result = new_result;
             capacity = new_capacity;
         }
-        memcpy(result+cur_size, out, have);
+        memcpy(result+cur_size, out.get(), have);
         cur_size += have;
 
     } while (ret == Z_OK);

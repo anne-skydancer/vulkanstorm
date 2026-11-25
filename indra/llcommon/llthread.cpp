@@ -66,6 +66,10 @@ void set_thread_name( DWORD dwThreadID, const char* threadName)
     info.dwThreadID = dwThreadID;
     info.dwFlags = 0;
 
+    // The debugger handles this exception and the thread resumes, which is the
+    // documented way to name a thread; the empty handler and the restart are intended.
+#pragma warning(push)
+#pragma warning(disable : 6312 6322)
     __try
     {
         ::RaiseException( MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(DWORD), (ULONG_PTR*)&info );
@@ -73,6 +77,7 @@ void set_thread_name( DWORD dwThreadID, const char* threadName)
     __except(EXCEPTION_CONTINUE_EXECUTION)
     {
     }
+#pragma warning(pop)
 }
 #endif
 
@@ -343,6 +348,8 @@ void LLThread::shutdown()
             //LL_WARNS() << "LLThread::~LLThread() exiting thread before clean exit!" << LL_ENDL;
             // Put a stake in its heart. (A very hostile method to force a thread to quit)
 #if     LL_WINDOWS
+            // Last resort inherited from Linden Lab for a thread that ignored its stop request.
+#pragma warning(suppress : 6258)
             TerminateThread(mNativeHandle, 0);
 #else
             pthread_cancel(mNativeHandle);

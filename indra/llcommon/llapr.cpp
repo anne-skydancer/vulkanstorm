@@ -709,11 +709,11 @@ S32 LLAPRFile::size(const std::string& filename, LLVolatileAPRPool* pool)
     }
     else
     {
-        apr_status_t s = apr_file_info_get(&info, APR_FINFO_SIZE, apr_file);
+        apr_status_t info_status = apr_file_info_get(&info, APR_FINFO_SIZE, apr_file);
 
         apr_file_close(apr_file) ;
 
-        if (s == APR_SUCCESS)
+        if (info_status == APR_SUCCESS)
         {
             return (S32)info.size;
         }
