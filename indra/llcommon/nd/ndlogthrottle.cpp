@@ -28,9 +28,8 @@
 #include "llpreprocessor.h"
 #include "lltimer.h"
 
-namespace nd
-{
-    namespace logging
+
+    namespace nd::logging
     {
         const U64 spamAvgInterval = 3 * 1000 * 1000; // 3 seconds
         const U64 maxThrottle = 60 * 1000 * 1000; // 1 minute
@@ -142,5 +141,5 @@ namespace nd
             logThrottleEnabled = enabled;
         }
     }
-}
+
 

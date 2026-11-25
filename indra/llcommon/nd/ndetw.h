@@ -28,9 +28,8 @@
 #include "llpreprocessor.h"
 #include "lltimer.h"
 
-namespace nd
-{
-    namespace etw
+
+    namespace nd::etw
     {
 #ifdef LL_WINDOWS
         using tpInitialize = bool (_cdecl *)(void);
@@ -89,5 +88,5 @@ namespace nd
         { }
 #endif
     }
-}
+
 #endif

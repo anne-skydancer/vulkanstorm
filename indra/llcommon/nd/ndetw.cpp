@@ -27,9 +27,8 @@
 #ifdef LL_WINDOWS
 #include <Windows.h>
 
-namespace nd
-{
-    namespace etw
+
+    namespace nd::etw
     {
         HMODULE hETW;
         tpLogFrame pLogFrame;
@@ -64,5 +63,5 @@ namespace nd
             }
         }
     }
-}
+
 #endif

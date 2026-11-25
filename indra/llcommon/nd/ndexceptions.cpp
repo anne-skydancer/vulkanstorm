@@ -24,9 +24,8 @@
 
 #include "ndexceptions.h"
 
-namespace nd
-{
-    namespace exceptions
+
+    namespace nd::exceptions
     {
         xran::xran( std::string const &aReason )
         {
@@ -38,4 +37,4 @@ namespace nd
             return mReason;
         }
     }
-}
+

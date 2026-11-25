@@ -46,48 +46,13 @@
 #define LLCOROS_MUTEX_HEADER   <boost/fiber/mutex.hpp>
 #define LLCOROS_CONDVAR_HEADER <boost/fiber/condition_variable.hpp>
 
-namespace boost {
-    namespace fibers {
+
+    namespace boost::fibers {
         class mutex;
         enum class cv_status;
         class condition_variable;
     }
-}
 
-/**
- * Registry of named Boost.Coroutine instances
- *
- * The Boost.Coroutine library supports the general case of a coroutine
- * accepting arbitrary parameters and yielding multiple (sets of) results. For
- * such use cases, it's natural for the invoking code to retain the coroutine
- * instance: the consumer repeatedly calls into the coroutine, perhaps passing
- * new parameter values, prompting it to yield its next result.
- *
- * Our typical coroutine usage is different, though. For us, coroutines
- * provide an alternative to the @c Responder pattern. Our typical coroutine
- * has @c void return, invoked in fire-and-forget mode: the handler for some
- * user gesture launches the coroutine and promptly returns to the main loop.
- * The coroutine initiates some action that will take multiple frames (e.g. a
- * capability request), waits for its result, processes it and silently steals
- * away.
- *
- * This usage poses two (related) problems:
- *
- * # Who should own the coroutine instance? If it's simply local to the
- *   handler code that launches it, return from the handler will destroy the
- *   coroutine object, terminating the coroutine.
- * # Once the coroutine terminates, in whatever way, who's responsible for
- *   cleaning up the coroutine object?
- *
- * LLCoros is a Singleton collection of currently-active coroutine instances.
- * Each has a name. You ask LLCoros to launch a new coroutine with a suggested
- * name prefix; from your prefix it generates a distinct name, registers the
- * new coroutine and returns the actual name.
- *
- * The name
- * can provide diagnostic info: we can look up the name of the
- * currently-running coroutine.
- */
 class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 {
     LLSINGLETON(LLCoros);

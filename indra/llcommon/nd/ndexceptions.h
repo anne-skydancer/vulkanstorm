@@ -33,9 +33,8 @@
    That would mean a lot of #ifdef for no real benefit of having the inheritance right now.
 */
 
-namespace nd
-{
-    namespace exceptions
+
+    namespace nd::exceptions
     {
         class xran
         {
@@ -46,6 +45,6 @@ namespace nd
             std::string const& what() const;
         };
     }
-}
+
 
 #endif
