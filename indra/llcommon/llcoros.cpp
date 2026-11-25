@@ -222,7 +222,7 @@ std::string LLCoros::logname()
     return data.mName.empty()? data.getKey() : data.mName;
 }
 
-void LLCoros::saveException(const std::string& name, std::exception_ptr exc)
+void LLCoros::saveException(const std::string& name, const std::exception_ptr& exc)
 {
     mExceptionQueue.emplace(name, exc);
 }

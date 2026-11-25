@@ -106,7 +106,7 @@ namespace LL
          * able to post.
          */
         template <typename... ARGS>
-        static bool postMaybe(weak_t target, ARGS&&... args);
+        static bool postMaybe(const weak_t& target, ARGS&&... args);
 
         /*------------------------- handshake API --------------------------*/
 
@@ -119,7 +119,7 @@ namespace LL
          * inaccessible.
          */
         template <typename CALLABLE, typename FOLLOWUP, typename... ARGS>
-        bool postTo(weak_t target, CALLABLE&& callable, FOLLOWUP&& callback,
+        bool postTo(const weak_t& target, CALLABLE&& callable, FOLLOWUP&& callback,
                     ARGS&&... args);
 
         /**
@@ -498,7 +498,7 @@ namespace LL
     }
 
     template <typename CALLABLE, typename FOLLOWUP, typename... ARGS>
-    bool WorkQueueBase::postTo(weak_t target, CALLABLE&& callable, FOLLOWUP&& callback,
+    bool WorkQueueBase::postTo(const weak_t& target, CALLABLE&& callable, FOLLOWUP&& callback,
                                ARGS&&... args)
     {
         LL_PROFILE_ZONE_SCOPED;
@@ -550,7 +550,7 @@ namespace LL
     }
 
     template <typename... ARGS>
-    bool WorkQueueBase::postMaybe(weak_t target, ARGS&&... args)
+    bool WorkQueueBase::postMaybe(const weak_t& target, ARGS&&... args)
     {
         LL_PROFILE_ZONE_SCOPED;
         // target is a weak_ptr: have to lock it to check it

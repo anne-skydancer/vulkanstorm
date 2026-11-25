@@ -66,7 +66,7 @@ bool LLMetricPerformanceTesterBasic::addTester(LLMetricPerformanceTesterBasic* t
 }
 
 /*static*/
-void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
+void LLMetricPerformanceTesterBasic::deleteTester(const std::string& name)
 {
     auto tester = sTesterMap.find(name);
     if (tester != sTesterMap.end())
@@ -77,7 +77,7 @@ void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
 }
 
 /*static*/
-LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(std::string name)
+LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(const std::string& name)
 {
     // Check for the requested metric name
     auto found_it = sTesterMap.find(name) ;
@@ -90,7 +90,7 @@ LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(std::s
 
 /*static*/
 // Return true if this metric is requested or if the general default "catch all" metric is requested
-bool LLMetricPerformanceTesterBasic::isMetricLogRequested(std::string name)
+bool LLMetricPerformanceTesterBasic::isMetricLogRequested(const std::string& name)
 {
     return (LLTrace::BlockTimer::sMetricLog && ((LLTrace::BlockTimer::sLogName == name) || (LLTrace::BlockTimer::sLogName == DEFAULT_METRIC_NAME)));
 }
@@ -125,7 +125,7 @@ LLSD LLMetricPerformanceTesterBasic::analyzeMetricPerformanceLog(std::istream& i
 }
 
 /*static*/
-void LLMetricPerformanceTesterBasic::doAnalysisMetrics(std::string baseline, std::string target, std::string output)
+void LLMetricPerformanceTesterBasic::doAnalysisMetrics(const std::string& baseline, const std::string& target, const std::string& output)
 {
     if(!LLMetricPerformanceTesterBasic::hasMetricPerformanceTesters())
     {
@@ -203,7 +203,7 @@ void LLMetricPerformanceTesterBasic::outputTestResults()
     postOutputTestResults(&sd) ;
 }
 
-void LLMetricPerformanceTesterBasic::addMetric(std::string str)
+void LLMetricPerformanceTesterBasic::addMetric(const std::string& str)
 {
     mMetricStrings.push_back(str) ;
 }
@@ -269,7 +269,7 @@ void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::str
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterWithSession::LLMetricPerformanceTesterWithSession(std::string name) :
-    LLMetricPerformanceTesterBasic(name)
+    LLMetricPerformanceTesterBasic(std::move(name))
 {
 }
 

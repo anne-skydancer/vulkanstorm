@@ -62,7 +62,7 @@ public:
      */
     virtual void analyzePerformance(llofstream* os, LLSD* base, LLSD* current) ;
 
-    static void doAnalysisMetrics(std::string baseline, std::string target, std::string output) ;
+    static void doAnalysisMetrics(const std::string& baseline, const std::string& target, const std::string& output) ;
 
     /**
      * @return Returns the number of the test metrics in this tester instance.
@@ -84,7 +84,7 @@ protected:
      * @brief Insert a new metric to be managed by this tester instance.
      * @param[in] str - Unique string identifying the new metric.
      */
-    void addMetric(std::string str) ;
+    void addMetric(const std::string& str) ;
 
     /**
      * @brief Compare test results, provided in 2 flavors: compare integers and compare floats.
@@ -135,19 +135,19 @@ public:
      * @return Returns a pointer to the tester
      * @param[in] name - Name of the tester instance queried.
      */
-    static LLMetricPerformanceTesterBasic* getTester(std::string name) ;
+    static LLMetricPerformanceTesterBasic* getTester(const std::string& name) ;
 
     /**
      * @return Delete the named tester from the list
      * @param[in] name - Name of the tester instance to delete.
      */
-    static void deleteTester(std::string name);
+    static void deleteTester(const std::string& name);
 
     /**
      * @return Returns true if that metric *or* the default catch all metric has been requested to be logged
      * @param[in] name - Name of the tester queried.
      */
-    static bool isMetricLogRequested(std::string name);
+    static bool isMetricLogRequested(const std::string& name);
 
     /**
      * @return Returns true if there's a tester defined, false otherwise.

@@ -212,10 +212,10 @@ void LLWatchdog::init(
         // start needs to use the mSuspectsAccessMutex
         mTimer->start();
     }
-    mCreateMarkerFnc = error_state_callback;
-    mClearMarkerFnc  = clear_marker_callback;
-    mCrashReportFnc = report_callback;
-    mNotifyFnc = notify_callback;
+    mCreateMarkerFnc = std::move(error_state_callback);
+    mClearMarkerFnc  = std::move(clear_marker_callback);
+    mCrashReportFnc = std::move(report_callback);
+    mNotifyFnc = std::move(notify_callback);
     mCrashOnFreeze = crash_on_freeze;
 }
 

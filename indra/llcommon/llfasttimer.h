@@ -176,7 +176,7 @@ public:
 #endif
 
     static BlockTimerStatHandle& getRootTimeBlock();
-    static void pushLog(LLSD sd);
+    static void pushLog(const LLSD& sd);
     static void setLogLock(class LLMutex* mutex);
     static void writeLog(std::ostream& os);
     static void updateTimes();

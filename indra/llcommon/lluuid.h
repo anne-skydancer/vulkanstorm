@@ -64,7 +64,7 @@ public:
     void    generate();                 // Generate a new UUID
     void    generate(const std::string& stream); //Generate a new UUID based on hash of input stream
 
-    static LLUUID generateNewID(std::string stream = "");   //static version of above for use in initializer expressions such as constructor params, etc.
+    static LLUUID generateNewID(const std::string& stream = "");   //static version of above for use in initializer expressions such as constructor params, etc.
 
     bool    set(const char *in_string, bool emit = true);   // Convert from string, if emit is false, do not emit warnings
     bool    set(const std::string& in_string, bool emit = true);    // Convert from string, if emit is false, do not emit warnings

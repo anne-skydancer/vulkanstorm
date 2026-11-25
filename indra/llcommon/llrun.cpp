@@ -96,7 +96,7 @@ size_t LLRunner::run()
 }
 
 LLRunner::run_handle_t LLRunner::addRunnable(
-    run_ptr_t runnable,
+    const run_ptr_t& runnable,
     ERunSchedule schedule,
     F64 seconds)
 {

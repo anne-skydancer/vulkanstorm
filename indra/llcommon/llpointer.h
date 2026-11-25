@@ -157,7 +157,7 @@ public:
         return *this;
     }
 
-    LLPointer<Type>& operator =(LLPointer<Type>&& ptr)
+    LLPointer<Type>& operator =(LLPointer<Type>&& ptr) noexcept
     {
         LLPointer temp(std::move(ptr));
         using std::swap;            // per Swappable convention
@@ -192,7 +192,7 @@ public:
     }
 
     // Put swap() overload in the global namespace, per Swappable convention
-    friend void swap(LLPointer<Type>& a, LLPointer<Type>& b)
+    friend void swap(LLPointer<Type>& a, LLPointer<Type>& b) noexcept
     {
         LLPointer<Type>::swap(a, b);
     }

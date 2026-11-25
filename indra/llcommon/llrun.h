@@ -98,7 +98,7 @@ public:
      * @return Returns the handle to the runnable. handle == 0 means failure.
      */
     run_handle_t addRunnable(
-        run_ptr_t runnable,
+        const run_ptr_t& runnable,
         ERunSchedule schedule,
         F64 seconds);
 

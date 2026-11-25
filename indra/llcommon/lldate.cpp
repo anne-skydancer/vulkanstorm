@@ -98,7 +98,7 @@ std::string LLDate::toHTTPDateString (std::string fmt) const
     return toHTTPDateString(gmt, fmt);
 }
 
-std::string LLDate::toHTTPDateString (tm * gmt, std::string fmt)
+std::string LLDate::toHTTPDateString (tm * gmt, const std::string& fmt)
 {
     LL_PROFILE_ZONE_SCOPED;
 

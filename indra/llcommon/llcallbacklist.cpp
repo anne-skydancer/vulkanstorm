@@ -181,7 +181,7 @@ private:
 
 void doOnIdleOneTime(nullary_func_t callable)
 {
-    auto* cb_functor = new OnIdleCallbackOneTime(callable);
+    auto* cb_functor = new OnIdleCallbackOneTime(std::move(callable));
     gIdleCallbacks.addFunction(&OnIdleCallbackOneTime::onIdle,cb_functor);
 }
 
@@ -216,7 +216,7 @@ private:
 
 void doOnIdleRepeating(bool_func_t callable)
 {
-    auto* cb_functor = new OnIdleCallbackRepeating(callable);
+    auto* cb_functor = new OnIdleCallbackRepeating(std::move(callable));
     gIdleCallbacks.addFunction(&OnIdleCallbackRepeating::onIdle,cb_functor);
 }
 
@@ -242,7 +242,7 @@ private:
 // Call a given callable once after specified interval.
 void doAfterInterval(nullary_func_t callable, F32 seconds)
 {
-    new NullaryFuncEventTimer(callable, seconds);
+    new NullaryFuncEventTimer(std::move(callable), seconds);
 }
 
 class BoolFuncEventTimer: public LLEventTimer
@@ -265,5 +265,5 @@ private:
 // Call a given callable every specified number of seconds, until it returns true.
 void doPeriodically(bool_func_t callable, F32 seconds)
 {
-    new BoolFuncEventTimer(callable, seconds);
+    new BoolFuncEventTimer(std::move(callable), seconds);
 }

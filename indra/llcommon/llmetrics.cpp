@@ -28,6 +28,7 @@
 
 #include "linden_common.h"
 #include "llmetrics.h"
+#include <utility>
 
 #include "llsd.h"
 #include "llsdserialize.h"
@@ -62,7 +63,7 @@ void LLMetricsImpl::recordEventDetails(const std::string& location,
 
     LLSD metrics = LLSD::emptyMap();
     metrics["location"] = location;
-    metrics["stats"]  = stats;
+    metrics["stats"]  = std::move(stats);
 
     LL_INFOS() << "LLMETRICS: " << (LLSDNotationStreamer(metrics)) << LL_ENDL;
 }
@@ -148,7 +149,7 @@ void LLMetrics::recordEvent(const std::string& location, const std::string& mesg
 
 void LLMetrics::printTotals(LLSD meta)
 {
-    if (mImpl) mImpl->printTotals(meta);
+    if (mImpl) mImpl->printTotals(std::move(meta));
 }
 
 
@@ -157,6 +158,6 @@ void LLMetrics::recordEventDetails(const std::string& location,
                                     bool success,
                                     LLSD stats)
 {
-    if (mImpl) mImpl->recordEventDetails(location,mesg,success,stats);
+    if (mImpl) mImpl->recordEventDetails(location,mesg,success,std::move(stats));
 }
 

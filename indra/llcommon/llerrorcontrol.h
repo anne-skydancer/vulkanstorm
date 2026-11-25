@@ -199,8 +199,8 @@ namespace LLError
      * @NOTE: addRecorder() and removeRecorder() uses the std::shared_ptr to allow for shared ownership
      * while still ensuring that the allocated memory is eventually freed
      */
-    LL_COMMON_API void addRecorder(RecorderPtr);
-    LL_COMMON_API void removeRecorder(RecorderPtr);
+    LL_COMMON_API void addRecorder(const RecorderPtr&);
+    LL_COMMON_API void removeRecorder(const RecorderPtr&);
         // each error message is passed to each recorder via recordMessage()
     /**
      * Call addGenericRecorder() with a callable(level, message) to get

@@ -286,7 +286,7 @@ void LLApp::manageLiveFile(LLLiveFile* livefile)
     mLiveFiles.push_back(livefile);
 }
 
-bool LLApp::setOptionData(OptionPriority level, LLSD data)
+bool LLApp::setOptionData(OptionPriority level, const LLSD& data)
 {
     if((level < 0)
        || (level >= PRIORITY_COUNT)

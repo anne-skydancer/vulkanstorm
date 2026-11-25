@@ -120,7 +120,7 @@ namespace LLInitParam
         std::copy(src_block_data.mAllParams.begin(), src_block_data.mAllParams.end(), std::back_inserter(mAllParams));
     }
 
-    void BlockDescriptor::addParam(const ParamDescriptorPtr in_param, const char* char_name)
+    void BlockDescriptor::addParam(const ParamDescriptorPtr& in_param, const char* char_name)
     {
         // create a copy of the param descriptor in mAllParams
         // so other data structures can store a pointer to it

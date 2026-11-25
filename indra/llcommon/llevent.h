@@ -171,7 +171,7 @@ public:
 
     void addListener(LLEventListener *listener, LLSD filter = "", const LLSD& userdata = "")
     {
-        if (mDispatcher.notNull()) mDispatcher->addListener(listener, filter, userdata);
+        if (mDispatcher.notNull()) mDispatcher->addListener(listener, std::move(filter), userdata);
     }
     void removeListener(LLEventListener *listener)
     {

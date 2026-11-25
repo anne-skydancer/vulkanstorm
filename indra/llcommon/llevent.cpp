@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llevent.h"
+#include <utility>
 
 using namespace LLOldEvents;
 
@@ -97,7 +98,7 @@ void LLObservable::fireEvent(LLPointer<LLEvent> event, LLSD filter)
 {
     if (mDispatcher.notNull())
     {
-        mDispatcher->fireEvent(event, filter);
+        mDispatcher->fireEvent(std::move(event), std::move(filter));
     }
 }
 
@@ -130,7 +131,7 @@ void LLEventDispatcher::disengage(LLObservable* observable)
 
 void LLEventDispatcher::addListener(LLEventListener *listener, LLSD filter, const LLSD& userdata)
 {
-    impl->addListener(listener, filter, userdata);
+    impl->addListener(listener, std::move(filter), userdata);
 }
 
 void LLEventDispatcher::removeListener(LLEventListener *listener)
@@ -146,7 +147,7 @@ std::vector<LLListenerEntry> LLEventDispatcher::getListeners() const
 
 bool LLEventDispatcher::fireEvent(LLPointer<LLEvent> event, LLSD filter)
 {
-    return impl->fireEvent(event, filter);
+    return impl->fireEvent(std::move(event), std::move(filter));
 }
 
 class LLSimpleDispatcher : public LLEventDispatcher::Impl
@@ -202,6 +203,7 @@ void LLSimpleDispatcher::removeListener(LLEventListener* listener)
 std::vector<LLListenerEntry> LLSimpleDispatcher::getListeners() const
 {
     std::vector<LLListenerEntry> ret;
+    ret.reserve(mListeners.size());
     for (const LLListenerEntry& entry : mListeners)
     {
         ret.push_back(entry);

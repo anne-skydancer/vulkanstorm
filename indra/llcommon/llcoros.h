@@ -293,11 +293,11 @@ private:
     void toplevel(std::string name, callable_t callable);
     struct CoroData;
     static CoroData& get_CoroData(const std::string& caller);
-    void saveException(const std::string& name, std::exception_ptr exc);
+    void saveException(const std::string& name, const std::exception_ptr& exc);
 
     struct ExceptionData
     {
-        ExceptionData(std::string nm, std::exception_ptr exc):
+        ExceptionData(std::string nm, const std::exception_ptr& exc):
             name(std::move(nm)),
             exception(exc)
         {}

@@ -551,9 +551,9 @@ namespace llsd
 
 // llsd namespace aliases
 inline
-LLSD clone  (LLSD value, LLSD filter=LLSD()) { return llsd_clone  (value, filter); }
+LLSD clone  (LLSD value, LLSD filter=LLSD()) { return llsd_clone  (std::move(value), std::move(filter)); }
 inline
-LLSD shallow(LLSD value, LLSD filter=LLSD()) { return llsd_shallow(value, filter); }
+LLSD shallow(LLSD value, LLSD filter=LLSD()) { return llsd_shallow(std::move(value), std::move(filter)); }
 
 } // namespace llsd
 

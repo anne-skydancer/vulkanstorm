@@ -555,7 +555,7 @@ namespace
 
         void resetSettingsConfig();
         LLError::SettingsStoragePtr saveAndResetSettingsConfig();
-        void restore(LLError::SettingsStoragePtr pSettingsStorage);
+        void restore(const LLError::SettingsStoragePtr& pSettingsStorage);
     private:
         CallSiteVector callSites;
         SettingsConfigPtr mSettingsConfig;
@@ -612,7 +612,7 @@ namespace
         return oldSettingsConfig;
     }
 
-    void Globals::restore(LLError::SettingsStoragePtr pSettingsStorage)
+    void Globals::restore(const LLError::SettingsStoragePtr& pSettingsStorage)
     {
         invalidateCallSites();
         SettingsConfigPtr newSettingsConfig(dynamic_cast<SettingsConfig *>(pSettingsStorage.get()));
@@ -1034,7 +1034,7 @@ namespace LLError
         mWantsMultiline = show;
     }
 
-    void addRecorder(RecorderPtr recorder)
+    void addRecorder(const RecorderPtr& recorder)
     {
         if (!recorder)
         {
@@ -1045,7 +1045,7 @@ namespace LLError
         s->mRecorders.push_back(recorder);
     }
 
-    void removeRecorder(RecorderPtr recorder)
+    void removeRecorder(const RecorderPtr& recorder)
     {
         if (!recorder)
         {

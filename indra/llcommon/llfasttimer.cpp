@@ -137,7 +137,7 @@ BlockTimerStatHandle& BlockTimer::getRootTimeBlock()
     return sRootTimer;
     }
 
-void BlockTimer::pushLog(LLSD log)
+void BlockTimer::pushLog(const LLSD& log)
 {
     LLMutexLock lock(sLogLock);
 

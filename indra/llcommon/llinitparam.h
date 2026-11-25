@@ -663,7 +663,7 @@ namespace LLInitParam
         };
 
         void aggregateBlockData(BlockDescriptor& src_block_data);
-        void addParam(ParamDescriptorPtr param, const char* name);
+        void addParam(const ParamDescriptorPtr& param, const char* name);
 
         using param_map_t = std::unordered_map<std::string, ParamDescriptorPtr, ll::string_hash, std::equal_to<>>;
         using param_list_t = std::vector<ParamDescriptorPtr>;
@@ -2626,7 +2626,7 @@ namespace LLInitParam
         // block param interface
         LL_COMMON_API bool deserializeBlock(Parser& p, Parser::name_stack_range_t& name_stack_range, bool new_name);
         LL_COMMON_API bool serializeBlock(Parser& p, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = nullptr) const;
-        bool inspectBlock(Parser& p, Parser::name_stack_t name_stack = Parser::name_stack_t(), S32 min_count = 0, S32 max_count = S32_MAX) const
+        bool inspectBlock(Parser& p, const Parser::name_stack_t& name_stack = Parser::name_stack_t(), S32 min_count = 0, S32 max_count = S32_MAX) const
         {
             //TODO: implement LLSD params as schema type Any
             return true;

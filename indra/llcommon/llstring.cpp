@@ -1192,7 +1192,7 @@ void LLStringOps::setupDayFormat(const std::string& data)
 }
 
 
-std::string LLStringOps::getDatetimeCode (std::string key)
+std::string LLStringOps::getDatetimeCode (const std::string& key)
 {
     std::map<std::string, std::string>::iterator iter;
 
