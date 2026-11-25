@@ -358,6 +358,14 @@ public:
     {
         typedef boost::asio::streambuf::const_buffers_type const_buffer_sequence;
         // If there's anything to send, try to send it.
+        // <Vulkanstorm>
+        if (mBroken)
+        {
+            // dead pipe: nothing can be delivered
+            mStreambuf.consume(mStreambuf.size());
+            return false;
+        }
+        // </Vulkanstorm>
         std::size_t total(mStreambuf.size()), consumed(0);
         if (total)
         {
@@ -390,6 +398,20 @@ public:
                     apr_status_t err = apr_file_write(mPipe, remainptr, &written);
                     // EAGAIN is exactly what we want from a nonblocking pipe.
                     // Rather than waiting for data, it should return immediately.
+                    // <Vulkanstorm>
+                    // A dead pipe (the child exited) never recovers: drop the
+                    // queue and later writes, and warn once, as the Windows
+                    // tick() does.
+                    if (APR_STATUS_IS_EPIPE(err) || APR_STATUS_IS_EBADF(err))
+                    {
+                        LL_WARNS("LLProcess") << "apr_file_write(" << towrite << ") on " << mDesc
+                                              << " got " << err << ": dropping "
+                                              << size() << " bytes and any later writes" << LL_ENDL;
+                        mBroken = true;
+                        mStreambuf.consume(mStreambuf.size());
+                        return false;
+                    }
+                    // </Vulkanstorm>
                     if (! (err == APR_SUCCESS || APR_STATUS_IS_EAGAIN(err)))
                     {
                         LL_WARNS("LLProcess") << "apr_file_write(" << towrite << ") on " << mDesc
@@ -451,6 +473,8 @@ private:
     bool mPending = false;          // a WriteFile() on mChunk is in flight
     bool mBroken = false;           // dead pipe or failed setup: drop writes
     bool mWarned = false;
+#else
+    bool mBroken = false;           // dead pipe: drop the queue and later writes
 #endif
     // </Vulkanstorm>
     LLTempBoundListener mConnection;
