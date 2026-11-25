@@ -104,7 +104,10 @@ runs:
           asan | tsan)
             tests=ON
             if [[ "$MODE" == asan ]]; then
-              flags='-fsanitize=address,undefined -fno-sanitize=vptr -fno-omit-frame-pointer -U_FORTIFY_SOURCE'
+              # -fsanitize-recover=address: an ASan error does not abort (with halt_on_error=0 the test goes on, so one
+              # run lists every error); UBSan recovers by default. -fno-omit-frame-pointer: readable stacks.
+              # -U_FORTIFY_SOURCE: fortified libc calls and ASan's own checks of the same calls do not mix.
+              flags='-fsanitize=address,undefined -fsanitize-recover=address -fno-omit-frame-pointer -U_FORTIFY_SOURCE'
             else
               flags='-fsanitize=thread -fno-omit-frame-pointer'
             fi

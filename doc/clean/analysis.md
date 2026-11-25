@@ -3,56 +3,121 @@
 
 Tools, not agents, find the mechanical issues first (`doc/clean/plan.md`). The workflow
 `.github/workflows/analysis.yaml` ("Analysis") runs static analysis and sanitizers over the library a cleanup branch
-touches, so that an agent reads code only after the tools have had their say.
+names, so that an agent reads code only after the tools have had their say.
 
 ## What a run analyses
 
 | Trigger | Analyses |
 |---|---|
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
-| push to `clean/newview-<area>` | the newview sources the branch changed (clang-tidy only) |
+| push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
 | pull request into `release-clean` | the library named by the head branch, the same way |
-| pull request from any other branch | `llcommon` as a self-test (this is how the workflow tests itself) |
-| `clean/<name>` that is no library | nothing; the plan job says why in its summary |
+| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_analysis_setup_test.py` or the fixtures in `scripts/tests/fixtures/analysis/`; otherwise nothing runs |
+| a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
 
-A push and its pull request share one run (the newer replaces the older). Documentation-only pull requests are skipped.
+A library is a directory `indra/<lib>` whose `CMakeLists.txt` has `add_library(<lib>`, except `cmake`, `llkdu`,
+`llphysicsextensionsos` and `llimagej2cneo` (the configure does not build them). `clean/newview-<area>` needs an area
+(`clean/newview` alone fails).
+
+A push and its pull request do not cancel each other: the concurrency group has the event name and the dispatch input
+in it, a newer run of the same event replaces the older, and the plan job skips the push run when an open pull request
+into `release-clean` has that branch as its head (the pull request run analyses it). Only the pull request event skips
+documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 
 ## Jobs
 
 | Job | Runs | Output |
 |---|---|---|
-| `clang-tidy` (Linux) | clang-tidy over the library's translation units from a `compile_commands.json` written by a GCC configure (no build). Checks: `clang-analyzer-*`, `bugprone-*`, `performance-*`, `concurrency-*`, `modernize-*` (C++20 only), and a short low-noise `cppcoreguidelines-*` list; see `.github/analysis/clang-tidy.yaml` | SARIF, JSON, text, counts per checker |
-| `asan` (Linux) | the library and its tests built with ASan + UBSan + LSan (`-O1`, no LTO) | same, per sanitizer kind |
-| `tsan` (Linux) | the library's threaded tests that use no coroutines, built with TSan; the list is `.github/analysis/tsan/<lib>.txt`; no list, no job | same |
-| `msvc` (Windows) | `/analyze` on the library target (PREfast, `C6xxx`), logs as SARIF | same, per rule |
-| `report` | merges the jobs, compares them with the baseline, decides red or green, and writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
+| `plan` | the branch to library mapping, the test list, the TSan list, and why TSan has no job when it has none (always printed in the job summary) | outputs, job summary |
+| `clang-tidy` (Linux) | clang-tidy (C++20) over the library's **sources** (not its tests) from a `compile_commands.json` written by a GCC configure, no build. Checks: `clang-analyzer-*`, `bugprone-*`, `performance-*`, `concurrency-*`, `modernize-*` (C++20 only), and a short low-noise `cppcoreguidelines-*` list; see `.github/analysis/clang-tidy.yaml`. The number of translation units processed is printed; a unit that makes clang-tidy exit non-zero is a finding | JSON, text, counts per checker and per family |
+| `asan` (Linux) | the library and all its tests built with ASan + UBSan + LSan (`-O1`, no LTO), after a canary | same, per sanitizer kind; test counts |
+| `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes), after a canary | same |
+| `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
+| `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
 
-Every job uploads its artifact (`analysis-<job>`: `findings-<job>.sarif`, `findings-<job>.json`, `summary-<job>.md`, the
-raw log) and writes a job summary with the counts per checker. The flags are in the workflow and in
-`.github/actions/analysis-setup`; no CMake file changes, and the viewer is never built. Nothing is cached.
+Every job uploads its artifact (`analysis-<job>`: `findings-<job>.json`, `summary-<job>.md`, the raw logs, the sanitizer
+reports) and writes a job summary with the counts per checker (clang-tidy also per family: `bugprone`, `modernize`, ...).
+The flags are in the workflow and in `.github/actions/analysis-setup`; no CMake file changes, and the viewer is never
+built. There is no compile cache; the autobuild package cache is restored (never saved by this workflow).
+`scripts/tests/ci_analysis_setup_test.py` keeps the configure options and the Windows `LL_BUILD` flags of
+`analysis-setup` equal to those of `.github/actions/viewer-build`, except the listed differences (LTO, precompiled
+headers, tests, packaging).
 
-Why GCC for the sanitizers: the Linux build is GCC only, and GCC 15 has all of ASan, UBSan, LSan and TSan, so no clang
-port is needed. TSan skips coroutine tests because Boost.Fiber is prebuilt without TSan fibre annotations and would
-report races that are not there. Sanitizer reports never change a test's exit code (`exitcode=0`); they are read from the
-log files, so one failing test does not hide the rest. A plain failed test or compile error is a finding of the
-tool `build`.
+clang-tidy and MSVC `/analyze` cover the library's sources and headers, not its tests (`tests/` directories are skipped
+by clang-tidy, and the MSVC job builds the library target only). The tests are covered by ASan, UBSan, LSan and TSan.
 
-## The baseline
+## Sanitizers
 
-`.github/analysis/baseline/<lib>.json` holds, per job, the findings that are known: a fingerprint (tool, checker, file and
-message with the numbers removed; sanitizers use the first three project frames) and how many times it occurs.
-Line numbers are not part of a fingerprint, so an edit above a finding does not make it new.
+Why GCC: the Linux build is GCC only, and GCC 15 has all of ASan, UBSan, LSan and TSan, so no clang port is needed.
 
-- **The first run on a library** (no baseline, or none for that job) is report-only and green. The `report` artifact
-  holds `baseline-<lib>.json`, the baseline that run would create.
-- **After that** the `report` job is red when a job finds more of any fingerprint than the baseline holds, and when a job
-  did not finish. Fixed findings never turn it red.
+| Flag or option | Why |
+|---|---|
+| `-fsanitize=address,undefined` | ASan, UBSan (and LSan, with ASan) |
+| `-fsanitize-recover=address` and `halt_on_error=0` | an ASan error does not abort the test: one run lists every error. UBSan recovers by default |
+| `exitcode=0` | sanitizer reports never change a test's exit code; the report, not the first failing test, says what is wrong |
+| `log_path=san/report` | one report file per process |
+| `detect_stack_use_after_return=0` | Boost.Fiber and ucontext switch stacks, which this check reports as false use-after-return |
+| `-U_FORTIFY_SOURCE` | fortified libc calls and ASan's own checks of the same calls do not mix |
+| `-fno-omit-frame-pointer`, `-O1` | readable stacks at a bearable cost |
+| TSan: only tests off the deny list | Boost.Fiber is prebuilt without TSan fibre annotations; a coroutine test would report races that are not there. A deny-list entry that is no test is a warning in the plan summary |
 
-To create or update the baseline: download the `analysis-report-<lib>` artifact of the run, copy `baseline-<lib>.json`
-to `.github/analysis/baseline/<lib>.json` (or run `python scripts/ci_analysis.py baseline <file>`), and commit it in a
-reviewed pull request. Shrink it when a cleanup fixes findings; add to it only for a finding the reviewers accept. A job
-the run did not execute keeps its old entry.
+UBSan prints to the test's stderr, so it is in `build.log`, not in `san/`: the collector parses sanitizer text from both
+and counts one report once. A **canary** (a deliberately faulty program compiled with the build's own `CMAKE_CXX_FLAGS`
+and run with the job's options) must produce a UBSan and an LSan report (ASan job) or a TSan report; if it does not, the
+job has a `build` finding `canary-silent`, because the build would otherwise look clean while uninstrumented.
+
+A test target that fails is run once more; it is reported only if it fails again (a pass is listed as flaky in the
+summary). The TSan job runs two build jobs at a time because TSan makes timing-based tests flaky under load. Build and
+test steps time out after 90 minutes, so the Findings step still runs; jobs time out after 120.
+
+## Nothing fails silently
+
+A job that builds or runs nothing is a finding, not green. Each build step writes its exit status (`status.txt`); a
+non-zero status with no failed make rule becomes a `build` finding from the first error line (`error:`, `No rule to make
+target`, `CMake Error`, MSBuild `error C...`/`LNK...`), or `step-failed`. Also `build` findings: the library target was
+not built, no test binary ran (or fewer than planned), a test binary crashed without a summary, a test group passed
+fewer tests than it ran (skipped known failures count as skipped), clang-tidy processed fewer units than planned or exited
+non-zero on one, the MSVC job produced no analysis output. The job summary shows the test binaries run, the tests, the
+passed and skipped counts, and the exit status.
+
+## The baseline and the gate
+
+`.github/analysis/baseline/<lib>.json` holds, per job, the known findings as counts per `tool|checker|file` (for `build`
+findings the failing target or test). The gate compares **counts per (tool, checker, file)**, never message text,
+fingerprints or line numbers: a rename inside a file, a reworded message or an edit above a finding does not make it new
+(a cleanup branch edits and moves code all the time). A file rename does show up as new in the new file and gone in the
+old one until the baseline is updated. The detailed findings (message, line, the sanitizer stack key) stay in the
+`findings-<job>.json` report. `modernize-*` stays in the gate: the cleanup ratchets modernisation too; the summary shows
+the counts per checker family.
+
+Sanitizer and MSVC findings use a stable key so that one issue counts once: the sorted set of the top project frame of
+each stack (ASan and LSan: the first, access stack only; TSan: the access stacks, not thread-creation stacks), with the
+workspace prefix (`D:\a\...`, `/home/runner/work/...`, `/__w/...`) removed from every message; MSVC messages are cut
+before `For additional information` so the SARIF and the build-log fallback give the same key. A report with no project
+frame keeps its kind and top frame, so unrelated third-party reports are not merged.
+
+- **No baseline committed** (the first runs on a library): the report says "no baseline committed: report-only" and is
+  green. The `report` artifact holds `baseline-<lib>.json`, the proposal of that run (jobs that failed or were cancelled
+  are left out; a job the run did not execute keeps its old entry).
+- **A baseline exists**: the `report` job is red when a job finds more of any group than the baseline holds, or did not
+  finish. Fixed findings never turn it red; the summary says "N baseline entries are gone: shrink the baseline" (a note,
+  not a failure).
+
+To create or update a baseline: download the `analysis-report-<lib>` artifact of the run and copy `baseline-<lib>.json`
+to `.github/analysis/baseline/<lib>.json`. **Each cleanup pull request commits its own baseline update**, so the baseline
+lives in the pull request and the owner reviews it with the code: shrink it when the cleanup fixes findings; add to it
+only for a finding the owner accepts. newview has one baseline per area (`baseline/newview-<area>.json`).
+
+## newview
+
+`clean/newview-<area>` runs clang-tidy over the translation units the branch's changed C++ files affect: a changed `.cpp`
+is itself a unit; a changed header maps to every unit that includes it, directly or through other headers (found by the
+`#include` names in `indra/newview`, so the set may be larger than strictly needed). Only findings in the changed files
+are reported. If the changed files map to **zero** translation units (or no C++ file changed), the job says so and
+fails. The generated headers of newview come from `configure_file` at configure time, so the compile database needs no
+build; a header that is missing anyway shows up as a `clang-diagnostic-error` finding and a clang-tidy non-zero exit.
+The baseline is per area.
 
 ## Files and the SPDX header
 

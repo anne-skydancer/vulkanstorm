@@ -1,0 +1,87 @@
+==================
+WARNING: ThreadSanitizer: lock-order-inversion (potential deadlock) (pid=4628)
+  Cycle in lock order graph: M0 (0x55a5b95ad1a0) => M1 (0x55a5b95ad160) => M0
+
+  Mutex M1 acquired here while holding mutex M0 in main thread:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1424 (libtsan.so.2+0x5c08a) (BuildId: 9e0607059cf161d47cb01a61f812a341ee4785b2)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:795 (INTEGRATION_TEST_llsingleton+0x4d4e1) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #2 __gthread_recursive_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:857 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #3 std::recursive_mutex::lock() /usr/include/c++/15/mutex:127 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #4 std::unique_lock<std::recursive_mutex>::lock() /usr/include/c++/15/bits/unique_lock.h:144 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #5 std::unique_lock<std::recursive_mutex>::unique_lock(std::recursive_mutex&) /usr/include/c++/15/bits/unique_lock.h:75 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #6 llthread::LockStatic<LLSingleton<B>::SingletonData>::LockStatic() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lockstatic.h:31 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #7 LLSingleton<B>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:512 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #8 LLSingleton<B>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x2f9b9) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #9 A::A() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:88 (INTEGRATION_TEST_llsingleton+0x2f9b9)
+    #10 void LLSingleton<A>::constructSingleton<>(llthread::LockStatic<LLSingleton<A>::SingletonData>&) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:330 (INTEGRATION_TEST_llsingleton+0x4dadb) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #11 LLSingleton<A>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:555 (INTEGRATION_TEST_llsingleton+0x4cda0) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #12 LLSingleton<A>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x30301) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #13 void tut::test_object<tut::singleton>::test<5>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:192 (INTEGRATION_TEST_llsingleton+0x30301)
+    #14 tut::test_group<tut::singleton, 50>::run_test_seh_(void (tut::test_object<tut::singleton>::*)(), tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) /home/runner/work/vulkansto
+    #15 tut::test_group<tut::singleton, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::singleton>::*)()> > const&, tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&) /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packag
+    #16 tut::test_group<tut::singleton, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut.hpp:324 (INTEGRATION_TEST_llsingleton+0x571a9) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #17 tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:272 (INT
+    #18 tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:176 (INTEGRATION_TEST_llsingleton+0x5ec8a) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #19 main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644 (INTEGRATION_TEST_llsingleton+0x5a719) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+
+  Mutex M0 previously acquired by the same thread here:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1424 (libtsan.so.2+0x5c08a) (BuildId: 9e0607059cf161d47cb01a61f812a341ee4785b2)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:795 (INTEGRATION_TEST_llsingleton+0x4ca4d) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #2 __gthread_recursive_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:857 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #3 std::recursive_mutex::lock() /usr/include/c++/15/mutex:127 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #4 std::unique_lock<std::recursive_mutex>::lock() /usr/include/c++/15/bits/unique_lock.h:144 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #5 std::unique_lock<std::recursive_mutex>::unique_lock(std::recursive_mutex&) /usr/include/c++/15/bits/unique_lock.h:75 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #6 llthread::LockStatic<LLSingleton<A>::SingletonData>::LockStatic() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lockstatic.h:31 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #7 LLSingleton<A>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:512 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #8 LLSingleton<A>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x30301) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #9 void tut::test_object<tut::singleton>::test<5>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:192 (INTEGRATION_TEST_llsingleton+0x30301)
+    #10 tut::test_group<tut::singleton, 50>::run_test_seh_(void (tut::test_object<tut::singleton>::*)(), tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) /home/runner/work/vulkansto
+    #11 tut::test_group<tut::singleton, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::singleton>::*)()> > const&, tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&) /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packag
+    #12 tut::test_group<tut::singleton, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut.hpp:324 (INTEGRATION_TEST_llsingleton+0x571a9) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #13 tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:272 (INT
+    #14 tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:176 (INTEGRATION_TEST_llsingleton+0x5ec8a) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #15 main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644 (INTEGRATION_TEST_llsingleton+0x5a719) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+
+  Mutex M0 acquired here while holding mutex M1 in main thread:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1424 (libtsan.so.2+0x5c08a) (BuildId: 9e0607059cf161d47cb01a61f812a341ee4785b2)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:795 (INTEGRATION_TEST_llsingleton+0x4ca4d) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #2 __gthread_recursive_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:857 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #3 std::recursive_mutex::lock() /usr/include/c++/15/mutex:127 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #4 std::unique_lock<std::recursive_mutex>::lock() /usr/include/c++/15/bits/unique_lock.h:144 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #5 std::unique_lock<std::recursive_mutex>::unique_lock(std::recursive_mutex&) /usr/include/c++/15/bits/unique_lock.h:75 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #6 llthread::LockStatic<LLSingleton<A>::SingletonData>::LockStatic() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lockstatic.h:31 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #7 LLSingleton<A>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:512 (INTEGRATION_TEST_llsingleton+0x4ca4d)
+    #8 LLSingleton<A>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x2f751) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #9 B::B() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:89 (INTEGRATION_TEST_llsingleton+0x2f751)
+    #10 void LLSingleton<B>::constructSingleton<>(llthread::LockStatic<LLSingleton<B>::SingletonData>&) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:330 (INTEGRATION_TEST_llsingleton+0x4d047) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #11 LLSingleton<B>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:555 (INTEGRATION_TEST_llsingleton+0x4d834) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #12 LLSingleton<B>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x2fcf3) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #13 void tut::test_object<tut::singleton>::test<9>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:193 (INTEGRATION_TEST_llsingleton+0x2fcf3)
+    #14 tut::test_group<tut::singleton, 50>::run_test_seh_(void (tut::test_object<tut::singleton>::*)(), tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) /home/runner/work/vulkansto
+    #15 tut::test_group<tut::singleton, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::singleton>::*)()> > const&, tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&) /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packag
+    #16 tut::test_group<tut::singleton, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut.hpp:324 (INTEGRATION_TEST_llsingleton+0x571a9) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #17 tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:272 (INT
+    #18 tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:176 (INTEGRATION_TEST_llsingleton+0x5ec8a) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #19 main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644 (INTEGRATION_TEST_llsingleton+0x5a719) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+
+  Mutex M1 previously acquired by the same thread here:
+    #0 pthread_mutex_lock ../../../../src/libsanitizer/tsan/tsan_interceptors_posix.cpp:1424 (libtsan.so.2+0x5c08a) (BuildId: 9e0607059cf161d47cb01a61f812a341ee4785b2)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:795 (INTEGRATION_TEST_llsingleton+0x4d4e1) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #2 __gthread_recursive_mutex_lock(pthread_mutex_t*) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:857 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #3 std::recursive_mutex::lock() /usr/include/c++/15/mutex:127 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #4 std::unique_lock<std::recursive_mutex>::lock() /usr/include/c++/15/bits/unique_lock.h:144 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #5 std::unique_lock<std::recursive_mutex>::unique_lock(std::recursive_mutex&) /usr/include/c++/15/bits/unique_lock.h:75 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #6 llthread::LockStatic<LLSingleton<B>::SingletonData>::LockStatic() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lockstatic.h:31 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #7 LLSingleton<B>::getInstance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:512 (INTEGRATION_TEST_llsingleton+0x4d4e1)
+    #8 LLSingleton<B>::instance() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llsingleton.h:594 (INTEGRATION_TEST_llsingleton+0x2fcf3) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #9 void tut::test_object<tut::singleton>::test<9>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llsingleton_test.cpp:193 (INTEGRATION_TEST_llsingleton+0x2fcf3)
+    #10 tut::test_group<tut::singleton, 50>::run_test_seh_(void (tut::test_object<tut::singleton>::*)(), tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&) /home/runner/work/vulkansto
+    #11 tut::test_group<tut::singleton, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::singleton>::*)()> > const&, tut::test_group<tut::singleton, 50>::safe_holder<tut::test_object<tut::singleton> >&) /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packag
+    #12 tut::test_group<tut::singleton, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut.hpp:324 (INTEGRATION_TEST_llsingleton+0x571a9) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #13 tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:272 (INT
+    #14 tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-tsan/packages/include/tut/tut_runner.hpp:176 (INTEGRATION_TEST_llsingleton+0x5ec8a) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+    #15 main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644 (INTEGRATION_TEST_llsingleton+0x5a719) (BuildId: 24ceefbaeff8d13264bc4a587f0272ecda00f82c)
+
+SUMMARY: ThreadSanitizer: lock-order-inversion (potential deadlock) /usr/include/x86_64-linux-gnu/c++/15/bits/gthr-default.h:795 in __gthread_mutex_lock(pthread_mutex_t*)
+==================
+ThreadSanitizer: reported 1 warnings

@@ -1,0 +1,121 @@
+[ 87%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_commonmisc.dir/__/test/test.cpp.o
+[ 87%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_commonmisc.dir/tests/commonmisc_test.cpp.o
+[100%] Linking CXX executable ../sharedlibs/bin/INTEGRATION_TEST_commonmisc
+Unit test group_started name=LLHash
+Unit test group_completed name=LLHash
+Unit test group_started name=LLMemoryStream
+Unit test group_completed name=LLMemoryStream
+Unit test group_started name=LLSD
+Unit test group_completed name=LLSD
+Unit test group_started name=U64_conversion
+Unit test group_completed name=U64_conversion
+	Total Tests:	21
+	Passed Tests:	21	YAY!! \o/
+[100%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_llmainthreadtask.dir/__/test/lltut.cpp.o
+[100%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_llmainthreadtask.dir/__/test/test.cpp.o
+[100%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_llmainthreadtask.dir/tests/llmainthreadtask_test.cpp.o
+[100%] Linking CXX executable ../sharedlibs/bin/INTEGRATION_TEST_llmainthreadtask
+Unit test group_started name=llmainthreadtask
+[llmainthreadtask, 2: cross-thread] skipped known failure: 'This test is prone to build-time hangs'
+Unit test group_completed name=llmainthreadtask
+	Total Tests:	2
+	Passed Tests:	1
+	Skipped known failures:	1
+[100%] Built target INTEGRATION_TEST_llmainthreadtask
+[100%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_llprocess.dir/tests/llprocess_test.cpp.o
+gmake[3]: *** Deleting file 'sharedlibs/bin/INTEGRATION_TEST_llprocess'
+[100%] Linking CXX executable ../sharedlibs/bin/INTEGRATION_TEST_llprocess
+Unit test group_started name=llprocess
+this output is expected
+/home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1261:9: runtime error: load of value 4, which is not a valid value for type 'FILESLOT'
+    #0 0x55f7023fb9c8 in LLProcess::WritePipe* LLProcess::getPipePtr<LLProcess::WritePipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1261
+    #1 0x55f7023fd5f5 in LLProcess::WritePipe& LLProcess::getPipe<LLProcess::WritePipe>(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1288
+    #2 0x55f7023cd672 in LLProcess::getWritePipe(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1311
+    #3 0x55f70209c20f in operator() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1057
+    #4 0x55f70209c20f in catch_what<LLProcess::NoPipe, tut::test_object<tut::llprocess_data>::test<16>()::<lambda()> > /home/runner/work/vulkanstorm/vulkanstorm/indra/test/../test/catch_and_store_what_in.h:30
+    #5 0x55f70209c20f in void tut::test_object<tut::llprocess_data>::test<16>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1057
+    #6 0x55f7021b4161 in tut::test_group<tut::llprocess_data, 50>::run_test_seh_(void (tut::test_object<tut::llprocess_data>::*)(), tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+    #7 0x55f7021b4c78 in tut::test_group<tut::llprocess_data, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::llprocess_data>::*)()> > const&, tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&) /home/runner/work/vulk
+    #8 0x55f7021b7dee in tut::test_group<tut::llprocess_data, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut.hpp:324
+    #9 0x55f7021c9873 in tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_ru
+    #10 0x55f7021ca264 in tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_runner.hpp:176
+    #11 0x55f7021bb7b6 in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644
+    #12 0x7fbde402a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #13 0x7fbde402a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #14 0x55f702090964 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_llprocess+0x1411964) (BuildId: a3dc3ed1cb3f6d3b4f6a0816f00e3fea22db938b)
+
+/home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1263:17: runtime error: load of value 4, which is not a valid value for type 'FILESLOT'
+    #0 0x55f7023fa006 in LLProcess::getPipePtr<LLProcess::WritePipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT)::{lambda(std::ostream&)#1}::operator()(std::ostream&) const /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.c
+    #1 0x55f7023fa006 in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > stringize_f<char, LLProcess::getPipePtr<LLProcess::WritePipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT)::{lambda(std::ostream&)#1}>(LL
+    #2 0x55f7023fba20 in LLProcess::WritePipe* LLProcess::getPipePtr<LLProcess::WritePipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1263
+    #3 0x55f7023fd5f5 in LLProcess::WritePipe& LLProcess::getPipe<LLProcess::WritePipe>(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1288
+    #4 0x55f7023cd672 in LLProcess::getWritePipe(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1311
+    #5 0x55f70209c20f in operator() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1057
+    #6 0x55f70209c20f in catch_what<LLProcess::NoPipe, tut::test_object<tut::llprocess_data>::test<16>()::<lambda()> > /home/runner/work/vulkanstorm/vulkanstorm/indra/test/../test/catch_and_store_what_in.h:30
+    #7 0x55f70209c20f in void tut::test_object<tut::llprocess_data>::test<16>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1057
+    #8 0x55f7021b4161 in tut::test_group<tut::llprocess_data, 50>::run_test_seh_(void (tut::test_object<tut::llprocess_data>::*)(), tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+    #9 0x55f7021b4c78 in tut::test_group<tut::llprocess_data, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::llprocess_data>::*)()> > const&, tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&) /home/runner/work/vulk
+    #10 0x55f7021b7dee in tut::test_group<tut::llprocess_data, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut.hpp:324
+    #11 0x55f7021c9873 in tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_r
+    #12 0x55f7021ca264 in tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_runner.hpp:176
+    #13 0x55f7021bb7b6 in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644
+    #14 0x7fbde402a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #15 0x7fbde402a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #16 0x55f702090964 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_llprocess+0x1411964) (BuildId: a3dc3ed1cb3f6d3b4f6a0816f00e3fea22db938b)
+
+/home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1261:9: runtime error: load of value 4, which is not a valid value for type 'FILESLOT'
+    #0 0x55f7023ff532 in LLProcess::ReadPipe* LLProcess::getPipePtr<LLProcess::ReadPipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1261
+    #1 0x55f7023ffca5 in LLProcess::ReadPipe& LLProcess::getPipe<LLProcess::ReadPipe>(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1288
+    #2 0x55f7023cd6b0 in LLProcess::getReadPipe(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1321
+    #3 0x55f70209d6e5 in operator() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1061
+    #4 0x55f70209d6e5 in catch_what<LLProcess::NoPipe, tut::test_object<tut::llprocess_data>::test<16>()::<lambda()> > /home/runner/work/vulkanstorm/vulkanstorm/indra/test/../test/catch_and_store_what_in.h:30
+    #5 0x55f70209d6e5 in void tut::test_object<tut::llprocess_data>::test<16>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1061
+    #6 0x55f7021b4161 in tut::test_group<tut::llprocess_data, 50>::run_test_seh_(void (tut::test_object<tut::llprocess_data>::*)(), tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+    #7 0x55f7021b4c78 in tut::test_group<tut::llprocess_data, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::llprocess_data>::*)()> > const&, tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&) /home/runner/work/vulk
+    #8 0x55f7021b7dee in tut::test_group<tut::llprocess_data, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut.hpp:324
+    #9 0x55f7021c9873 in tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_ru
+    #10 0x55f7021ca264 in tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_runner.hpp:176
+    #11 0x55f7021bb7b6 in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644
+    #12 0x7fbde402a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #13 0x7fbde402a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #14 0x55f702090964 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_llprocess+0x1411964) (BuildId: a3dc3ed1cb3f6d3b4f6a0816f00e3fea22db938b)
+
+/home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1263:17: runtime error: load of value 4, which is not a valid value for type 'FILESLOT'
+    #0 0x55f7023fdb70 in LLProcess::getPipePtr<LLProcess::ReadPipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT)::{lambda(std::ostream&)#1}::operator()(std::ostream&) const /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cp
+    #1 0x55f7023fdb70 in std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > stringize_f<char, LLProcess::getPipePtr<LLProcess::ReadPipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT)::{lambda(std::ostream&)#1}>(LLP
+    #2 0x55f7023ff58a in LLProcess::ReadPipe* LLProcess::getPipePtr<LLProcess::ReadPipe>(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1263
+    #3 0x55f7023ffca5 in LLProcess::ReadPipe& LLProcess::getPipe<LLProcess::ReadPipe>(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1288
+    #4 0x55f7023cd6b0 in LLProcess::getReadPipe(LLProcess::FILESLOT) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llprocess.cpp:1321
+    #5 0x55f70209d6e5 in operator() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1061
+    #6 0x55f70209d6e5 in catch_what<LLProcess::NoPipe, tut::test_object<tut::llprocess_data>::test<16>()::<lambda()> > /home/runner/work/vulkanstorm/vulkanstorm/indra/test/../test/catch_and_store_what_in.h:30
+    #7 0x55f70209d6e5 in void tut::test_object<tut::llprocess_data>::test<16>() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/tests/llprocess_test.cpp:1061
+    #8 0x55f7021b4161 in tut::test_group<tut::llprocess_data, 50>::run_test_seh_(void (tut::test_object<tut::llprocess_data>::*)(), tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<
+    #9 0x55f7021b4c78 in tut::test_group<tut::llprocess_data, 50>::run_test_(std::_Rb_tree_iterator<std::pair<int const, void (tut::test_object<tut::llprocess_data>::*)()> > const&, tut::test_group<tut::llprocess_data, 50>::safe_holder<tut::test_object<tut::llprocess_data> >&) /home/runner/work/vulk
+    #10 0x55f7021b7dee in tut::test_group<tut::llprocess_data, 50>::run_next() /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut.hpp:324
+    #11 0x55f7021c9873 in tut::test_runner::run_all_tests_in_group_(std::_Rb_tree_const_iterator<std::pair<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const, tut::group_base*> >) const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_r
+    #12 0x55f7021ca264 in tut::test_runner::run_tests() const /home/runner/work/vulkanstorm/vulkanstorm/build-asan/packages/include/tut/tut_runner.hpp:176
+    #13 0x55f7021bb7b6 in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:644
+    #14 0x7fbde402a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #15 0x7fbde402a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #16 0x55f702090964 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_llprocess+0x1411964) (BuildId: a3dc3ed1cb3f6d3b4f6a0816f00e3fea22db938b)
+
+[llprocess, 27: WritePipe drops its queue when the child exits] fail: 'data still queued for an exited child: expected '0' actual '983040''
+Unit test group_completed name=llprocess
+	Total Tests:	28
+	Passed Tests:	27
+*********************************
+Failed Tests:	1
+Please report or fix the problem.
+*********************************
+Failure running: /home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_llprocess
+Error 1: terminated with rc 1
+gmake[3]: *** [llcommon/CMakeFiles/INTEGRATION_TEST_llprocess.dir/build.make:149: sharedlibs/bin/INTEGRATION_TEST_llprocess] Error 1
+gmake[3]: Target 'llcommon/CMakeFiles/INTEGRATION_TEST_llprocess.dir/build' not remade because of errors.
+gmake[2]: *** [CMakeFiles/Makefile2:2226: llcommon/CMakeFiles/INTEGRATION_TEST_llprocess.dir/all] Error 2
+gmake[1]: *** [CMakeFiles/Makefile2:2233: llcommon/CMakeFiles/INTEGRATION_TEST_llprocess.dir/rule] Error 2
+gmake[1]: Target 'INTEGRATION_TEST_llprocess' not remade because of errors.
+gmake: *** [Makefile:504: INTEGRATION_TEST_llprocess] Error 2
+[  0%] Built target llcommon_tests
+[ 14%] Built target stage_third_party_libs
+[100%] Built target llcommon
+[100%] Building CXX object llcommon/CMakeFiles/INTEGRATION_TEST_llprocessstdin.dir/__/test/lltut.cpp.o

@@ -1,0 +1,30 @@
+
+=================================================================
+==4485==ERROR: LeakSanitizer: detected memory leaks
+
+Indirect leak of 96 byte(s) in 1 object(s) allocated from:
+    #0 0x7f767d32af1f in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:109
+    #1 0x561158cdfd1e in LLLiveFile::LLLiveFile(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, float) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lllivefile.cpp:76
+    #2 0x561158c858af in LogControlFile /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.cpp:432
+    #3 0x561158c858af in fromDirectory /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.cpp:451
+    #4 0x561158c858af in commonInit /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.cpp:773
+    #5 0x561158c858af in LLError::initForApplication(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.
+    #6 0x561158beb14d in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:603
+    #7 0x7f767c22a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #8 0x7f767c22a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #9 0x561158b7a824 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_apply+0x10f0824) (BuildId: a533da4abc5da155843280f4702084cb944b01f3)
+
+Indirect leak of 64 byte(s) in 1 object(s) allocated from:
+    #0 0x7f767d32af1f in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:109
+    #1 0x561158cdf379 in LLLiveFile::addToEventTimer() /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/lllivefile.cpp:187
+    #2 0x561158c859de in commonInit /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.cpp:783
+    #3 0x561158c859de in LLError::initForApplication(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool) /home/runner/work/vulkanstorm/vulkanstorm/indra/llcommon/llerror.
+    #4 0x561158beb14d in main /home/runner/work/vulkanstorm/vulkanstorm/indra/test/test.cpp:603
+    #5 0x7f767c22a8c0  (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a8c0) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #6 0x7f767c22a9d7 in __libc_start_main (/usr/lib/x86_64-linux-gnu/libc.so.6+0x2a9d7) (BuildId: 86304dcc94791043688c314c38955023b3ccc64a)
+    #7 0x561158b7a824 in _start (/home/runner/work/vulkanstorm/vulkanstorm/build-asan/sharedlibs/bin/INTEGRATION_TEST_apply+0x10f0824) (BuildId: a533da4abc5da155843280f4702084cb944b01f3)
+
+Indirect leak of 24 byte(s) in 1 object(s) allocated from:
+    #0 0x7f767d32af1f in operator new(unsigned long) ../../../../src/libsanitizer/asan/asan_new_delete.cpp:109
+    #1 0x5611591052f9 in std::__new_allocator<std::_Sp_counted_deleter<LLEventTimer*, LLInstanceTracker<LLEventTimer, void, (EInstanceTrackerAllowKeyCollisions)0>::LLInstanceTracker()::{lambda(LLEventTimer*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2> >::allocate(unsigned long, void const*
+    #2 0x5611591052f9 in std::allocator<std::_Sp_counted_deleter<LLEventTimer*, LLInstanceTracker<LLEventTimer, void, (EInstanceTrackerAllowKeyCollisions)0>::LLInstanceTracker()::{lambda(LLEventTimer*)#1}, std::allocator<void>, (__gnu_cxx::_Lock_policy)2> >::allocate(unsigned long) /usr/include/c++/
