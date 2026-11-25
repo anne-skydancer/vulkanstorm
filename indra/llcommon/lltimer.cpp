@@ -244,7 +244,7 @@ U64 get_clock_count()
 {
     // Linux clocks are in microseconds
     struct timeval tv;
-    gettimeofday(&tv, NULL);
+    gettimeofday(&tv, nullptr);
     return tv.tv_sec*SEC_TO_MICROSEC_U64 + tv.tv_usec;
 }
 #endif

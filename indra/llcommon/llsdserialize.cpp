@@ -2357,7 +2357,10 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
             return ZR_MEM_ERROR;
         }
         result = new_result;
-        memcpy(result+cur_size, out.get(), have);
+        if (have > 0)
+        {
+            memcpy(result+cur_size, out.get(), have);
+        }
         cur_size += have;
 
     } while (ret == Z_OK && ret != Z_STREAM_END);
@@ -2508,7 +2511,10 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             result = new_result;
             capacity = new_capacity;
         }
-        memcpy(result+cur_size, out.get(), have);
+        if (have > 0)
+        {
+            memcpy(result+cur_size, out.get(), have);
+        }
         cur_size += have;
 
     } while (ret == Z_OK);

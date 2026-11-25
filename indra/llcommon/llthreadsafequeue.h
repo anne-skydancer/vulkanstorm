@@ -338,6 +338,7 @@ bool LLThreadSafeQueue<ElementT, QueueT>::pushIfOpen(T&& element)
         if (mClosed)
             return false;
 
+        // NOLINTNEXTLINE(bugprone-use-after-move): push_() consumes element only when it returns true, which ends the loop
         if (push_(lock1, std::forward<T>(element)))
             return true;
 

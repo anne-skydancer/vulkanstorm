@@ -472,7 +472,8 @@ long LLOSInfo::getMaxOpenFiles()
     {
         // First time through.
         errno = 0;
-        if ( (open_max = sysconf(_SC_OPEN_MAX)) < 0)
+        open_max = sysconf(_SC_OPEN_MAX);
+        if (open_max < 0)
         {
             if (0 == errno)
             {
@@ -523,7 +524,6 @@ U32 LLOSInfo::getProcessVirtualSizeKB()
     LLFILE* status_filep = LLFile::fopen("/proc/self/status", "rb");
     if (status_filep)
     {
-        S32 numRead = 0;
         char buff[STATUS_SIZE];     /* Flawfinder: ignore */
 
         size_t nbytes = fread(buff, 1, STATUS_SIZE-1, status_filep);
@@ -533,7 +533,7 @@ U32 LLOSInfo::getProcessVirtualSizeKB()
         char *memp = strstr(buff, "VmSize:");
         if (memp)
         {
-            numRead += sscanf(memp, "%*s %u", &virtual_size);
+            sscanf(memp, "%*s %u", &virtual_size);
         }
         fclose(status_filep);
     }
@@ -547,9 +547,8 @@ U32 LLOSInfo::getProcessResidentSizeKB()
     U32 resident_size = 0;
 #if LL_LINUX
     LLFILE* status_filep = LLFile::fopen("/proc/self/status", "rb");
-    if (status_filep != NULL)
+    if (status_filep != nullptr)
     {
-        S32 numRead = 0;
         char buff[STATUS_SIZE];     /* Flawfinder: ignore */
 
         size_t nbytes = fread(buff, 1, STATUS_SIZE-1, status_filep);
@@ -559,7 +558,7 @@ U32 LLOSInfo::getProcessResidentSizeKB()
         char *memp = strstr(buff, "VmRSS:");
         if (memp)
         {
-            numRead += sscanf(memp, "%*s %u", &resident_size);
+            sscanf(memp, "%*s %u", &resident_size);
         }
         fclose(status_filep);
     }

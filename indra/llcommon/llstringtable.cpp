@@ -56,12 +56,12 @@ LLStringTable::LLStringTable(int tablesize)
     // Make sure tablesize is power of 2
     for (i = 31; i>0; i--)
     {
-        if (tablesize & (1<<i))
+        if (tablesize & (1u<<i))
         {
-            if (tablesize >= (3<<(i-1)))
-                tablesize = (1<<(i+1));
+            if (tablesize >= (3u<<(i-1)))
+                tablesize = (1u<<(i+1));
             else
-                tablesize = (1<<i);
+                tablesize = (1u<<i);
             break;
         }
     }

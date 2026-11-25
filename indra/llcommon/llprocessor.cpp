@@ -797,7 +797,7 @@ public:
         get_proc_cpuinfo();
     }
 
-    virtual ~LLProcessorInfoLinuxImpl() {}
+    ~LLProcessorInfoLinuxImpl() override = default;
 private:
 
     void get_proc_cpuinfo()
@@ -813,16 +813,16 @@ private:
                 // /proc/cpuinfo on Linux looks like:
                 // name\t*: value\n
                 char* tabspot = strchr( line, '\t' );
-                if (tabspot == NULL)
+                if (tabspot == nullptr)
                     continue;
                 char* colspot = strchr( tabspot, ':' );
-                if (colspot == NULL)
+                if (colspot == nullptr)
                     continue;
                 char* spacespot = strchr( colspot, ' ' );
-                if (spacespot == NULL)
+                if (spacespot == nullptr)
                     continue;
                 char* nlspot = strchr( line, '\n' );
-                if (nlspot == NULL)
+                if (nlspot == nullptr)
                     nlspot = line + strlen( line ); // Fallback to terminating NUL
                 std::string linename( line, tabspot );
                 std::string llinename(linename);

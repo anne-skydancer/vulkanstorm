@@ -147,7 +147,7 @@ public:                                     \
     #if defined(LL_WINDOWS)
         void* ret = (_aligned_malloc)(size, align);
     #else
-        char* aligned = NULL;
+        char* aligned = nullptr;
         void* mem = malloc( size + (align - 1) + sizeof(void*) );
         if (mem)
         {

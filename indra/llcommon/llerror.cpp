@@ -97,17 +97,17 @@ namespace {
                 // valid even after it returns (presumably until closelog)
         }
 
-        ~RecordToSyslog()
+        ~RecordToSyslog() override
         {
             closelog();
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x01;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                     const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;

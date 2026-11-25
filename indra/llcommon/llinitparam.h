@@ -2018,8 +2018,8 @@ namespace LLInitParam
         const BlockDescriptor& mostDerivedBlockDescriptor() const override { return getBlockDescriptor(); }
         BlockDescriptor& mostDerivedBlockDescriptor() override { return getBlockDescriptor(); }
 
-    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): Block is a base of generated parameter blocks that are constructed by classes outside this header
     protected:
+        // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): Block is a base of generated parameter blocks that are constructed by classes outside this header
         Block()
         {
             //#pragma message("Parsing LLInitParam::Block")

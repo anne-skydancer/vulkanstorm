@@ -351,7 +351,7 @@ public:
     }
 #else // ! LL_WINDOWS
     // </Vulkanstorm>
-    virtual size_type size() const { return mStreambuf.size(); }
+    size_type size() const override { return mStreambuf.size(); }
 
     bool tick(const LLSD&)
     {
@@ -904,7 +904,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     }
 
     // terminate with a null pointer
-    argv.push_back(NULL);
+    argv.push_back(nullptr);
 
     // Launch! The NULL would be the environment block, if we were passing
     // one. Hand-expand chkapr() macro so we can fill in the actual command
@@ -1476,7 +1476,7 @@ void LLProcess::autokill()
 }
 
 // Attempt to reap a process ID -- returns true if the process has exited and been reaped, false otherwise.
-static bool reap_pid(pid_t pid, LLProcess::Status* pstatus=NULL)
+static bool reap_pid(pid_t pid, LLProcess::Status* pstatus=nullptr)
 {
     LLProcess::Status dummy;
     if (! pstatus)

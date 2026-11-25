@@ -702,7 +702,7 @@ void LLUUID::getSystemTime(uuid_time_t* timestamp)
     timestamp->low = time.LowPart;
 #else
     struct timeval tp;
-    gettimeofday(&tp, 0);
+    gettimeofday(&tp, nullptr);
 
     // Offset between UUID formatted times and Unix formatted times.
     // UUID UTC base time is October 15, 1582.
