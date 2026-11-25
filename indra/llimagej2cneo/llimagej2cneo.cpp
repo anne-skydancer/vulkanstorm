@@ -69,13 +69,11 @@ LLImageJ2CImpl* fallbackCreateLLImageJ2CImpl()
     return new LLImageJ2CNeo();
 }
 
-// What the texture cache keys on (lltexturecache.cpp reads it during static initialisation: pure, at most 31
-// characters). It names the viewer's decoder output, not neo-j2k's release (owner decision D13: neo-j2k's engine
-// string changes with every release, which would purge every user's cache). Bump the number when the decoded
-// pixels can change.
+// The decoder and its version, as the OpenJPEG and KDU decoders report theirs: the About box shows it and the
+// texture cache keys on it (lltexturecache.cpp, at most 31 characters), so a new neo-j2k version refreshes the cache.
 std::string LLImageJ2CNeo::getEngineInfo() const
 {
-    return "neo-j2k output 1";
+    return std::string("Neo-J2K ") + nj2k_version();
 }
 
 namespace
