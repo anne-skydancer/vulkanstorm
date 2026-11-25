@@ -511,7 +511,7 @@ namespace LLInitParam
 
         virtual ~Parser();
 
-        template <typename T> bool readValue(T& param, typename std::enable_if_t<!std::is_enum_v<T>>* dummy = 0)
+        template <typename T> bool readValue(T& param, typename std::enable_if_t<!std::is_enum_v<T>>* dummy = nullptr)
         {
             parser_read_func_map_t::iterator found_it = mParserReadFuncs->find(typeid(T));
             if (found_it != mParserReadFuncs->end())
@@ -858,7 +858,7 @@ namespace LLInitParam
 
         Param* getParamFromHandle(const param_handle_t param_handle)
         {
-            if (param_handle == 0) return NULL;
+            if (param_handle == 0) return nullptr;
 
             U8* baseblock_address = reinterpret_cast<U8*>(this);
             return reinterpret_cast<Param*>(baseblock_address + param_handle);
@@ -885,7 +885,7 @@ namespace LLInitParam
         }
 
         bool deserializeBlock(Parser& p, Parser::name_stack_range_t& name_stack_range, bool new_name);
-        bool serializeBlock(Parser& p, Parser::name_stack_t& name_stack, const predicate_rule_t rule, const BaseBlock* diff_block = NULL) const;
+        bool serializeBlock(Parser& p, Parser::name_stack_t& name_stack, const predicate_rule_t rule, const BaseBlock* diff_block = nullptr) const;
         bool inspectBlock(Parser& p, Parser::name_stack_t name_stack = Parser::name_stack_t(), S32 min_count = 0, S32 max_count = S32_MAX) const;
 
         virtual const BlockDescriptor& mostDerivedBlockDescriptor() const { return getBlockDescriptor(); }
@@ -1104,7 +1104,7 @@ namespace LLInitParam
         static void inspectParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, S32 min_count, S32 max_count)
         {
             // tell parser about our actual type
-            parser.inspectValue<T>(name_stack, min_count, max_count, NULL);
+            parser.inspectValue<T>(name_stack, min_count, max_count, nullptr);
             // then tell it about string-based alternatives ("red", "blue", etc. for LLColor4)
             if (named_value_t::getPossibleValues())
             {
@@ -1475,7 +1475,7 @@ namespace LLInitParam
 
         static void inspectParam(const Param& param, Parser& parser, Parser::name_stack_t& name_stack, S32 min_count, S32 max_count)
         {
-            parser.inspectValue<MULTI_VALUE_T>(name_stack, min_count, max_count, NULL);
+            parser.inspectValue<MULTI_VALUE_T>(name_stack, min_count, max_count, nullptr);
             if (named_value_t::getPossibleValues())
             {
                 parser.inspectValue<std::string>(name_stack, min_count, max_count, named_value_t::getPossibleValues());
@@ -1703,7 +1703,7 @@ namespace LLInitParam
                 // NOTE: currently we don't do diffing of Multiples
                 else
                 {
-                    serialized = it->serializeBlock(parser, name_stack, predicate_rule, NULL);
+                    serialized = it->serializeBlock(parser, name_stack, predicate_rule, nullptr);
                 }
 
                 name_stack.pop_back();
@@ -1722,7 +1722,7 @@ namespace LLInitParam
             const param_value_t& value_param = param_value_t(value_t());
 
             // tell parser about our actual type
-            parser.inspectValue<value_t>(name_stack, min_count, max_count, NULL);
+            parser.inspectValue<value_t>(name_stack, min_count, max_count, nullptr);
             // then tell it about string-based alternatives ("red", "blue", etc. for LLColor4)
             if (named_value_t::getPossibleValues())
             {
@@ -2039,7 +2039,7 @@ namespace LLInitParam
             using super_t::operator =;
 
             explicit Optional(const char* name = "", const default_value_t& val = defaultValue<default_value_t>())
-            :   super_t(DERIVED_BLOCK::getBlockDescriptor(), name, val, NULL, 0, 1)
+            :   super_t(DERIVED_BLOCK::getBlockDescriptor(), name, val, nullptr, 0, 1)
             {
                 //#pragma message("Parsing LLInitParam::Block::Optional")
             }
@@ -2627,7 +2627,7 @@ namespace LLInitParam
 
         // block param interface
         LL_COMMON_API bool deserializeBlock(Parser& p, Parser::name_stack_range_t& name_stack_range, bool new_name);
-        LL_COMMON_API bool serializeBlock(Parser& p, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = NULL) const;
+        LL_COMMON_API bool serializeBlock(Parser& p, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = nullptr) const;
         bool inspectBlock(Parser& p, Parser::name_stack_t name_stack = Parser::name_stack_t(), S32 min_count = 0, S32 max_count = S32_MAX) const
         {
             //TODO: implement LLSD params as schema type Any
@@ -2684,7 +2684,7 @@ namespace LLInitParam
             return typed_param.BaseBlock::deserializeBlock(parser, name_stack_range, new_name);
         }
 
-        bool serializeBlock(Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = NULL) const
+        bool serializeBlock(Parser& parser, Parser::name_stack_t& name_stack, const predicate_rule_t predicate_rule, const BaseBlock* diff_block = nullptr) const
         {
             const derived_t& typed_param = static_cast<const derived_t&>(*this);
             const derived_t* diff_param = static_cast<const derived_t*>(diff_block);

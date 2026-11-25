@@ -51,8 +51,8 @@ const char* StatBase::getUnitLabel() const
 }
 
 TimeBlockTreeNode::TimeBlockTreeNode()
-:   mBlock(NULL),
-    mParent(NULL),
+:   mBlock(nullptr),
+    mParent(nullptr),
     mNeedsSorting(false),
     mCollapsed(true)
 {}
@@ -61,7 +61,7 @@ void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )
 {
     LL_PROFILE_ZONE_SCOPED;
     llassert_always(parent != mBlock);
-    llassert_always(parent != NULL);
+    llassert_always(parent != nullptr);
 
     TimeBlockTreeNode* parent_tree_node = get_thread_recorder()->getTimeBlockTreeNode(narrow<size_t>(parent->getIndex()));
     if (!parent_tree_node) return;

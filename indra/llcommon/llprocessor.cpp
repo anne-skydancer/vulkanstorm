@@ -947,7 +947,7 @@ private:
 
 //////////////////////////////////////////////////////
 // Interface definition
-LLProcessorInfo::LLProcessorInfo() : mImpl(NULL)
+LLProcessorInfo::LLProcessorInfo() : mImpl(nullptr)
 {
     // *NOTE:Mani - not thread safe.
     if(!mImpl)
@@ -959,7 +959,7 @@ LLProcessorInfo::LLProcessorInfo() : mImpl(NULL)
         static LLProcessorInfoDarwinImpl the_impl;
         mImpl = &the_impl;
 #else
-        static LLProcessorInfoLinuxImpl the_impl;
+        static LLProcessorInfoImpl the_impl;
         mImpl = &the_impl;
 #endif // LL_MSVC
     }

@@ -52,7 +52,7 @@ const LLUUID LLUUID::null;
 const LLTransactionID LLTransactionID::tnull;
 
 // static
-LLMutex* LLUUID::mMutex = NULL;
+LLMutex* LLUUID::mMutex = nullptr;
 
 // <FS> Fix for misaligned unsigned ints in LLUUID; by Sovereign Engineer / Shyotl Kuhr
 static const U8 nullUUID[UUID_BYTES] = {};
@@ -881,7 +881,7 @@ U32 LLUUID::getRandomSeed()
 
 bool LLUUID::parseUUID(const std::string& buf, LLUUID* value)
 {
-    if (buf.empty() || value == NULL)
+    if (buf.empty() || value == nullptr)
     {
         return false;
     }

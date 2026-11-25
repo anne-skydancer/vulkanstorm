@@ -41,10 +41,10 @@ namespace nd
 
         void init()
         {
-            pLogFrame = NULL;
-            pLogStartTask = NULL;
-            pLogEndTask = NULL;
-            pLogTickTask = NULL;
+            pLogFrame = nullptr;
+            pLogStartTask = nullptr;
+            pLogEndTask = nullptr;
+            pLogTickTask = nullptr;
 
             // This is okay for now. We'll only need that for measuring under well defined circumstances.
             // Maybe create an installer for this one day (very low prio) that copies and registers the provider.

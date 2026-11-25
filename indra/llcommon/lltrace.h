@@ -126,7 +126,7 @@ public:
     typedef StatType<EventAccumulator> stat_t;
     typedef EventStatHandle<T> self_t;
 
-    EventStatHandle(const char* name, const char* description = NULL)
+    EventStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
     {}
 
@@ -153,7 +153,7 @@ public:
     typedef StatType<SampleAccumulator> stat_t;
     typedef SampleStatHandle<T> self_t;
 
-    SampleStatHandle(const char* name, const char* description = NULL)
+    SampleStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
     {}
 
@@ -179,7 +179,7 @@ public:
     typedef StatType<CountAccumulator> stat_t;
     typedef CountStatHandle<T> self_t;
 
-    CountStatHandle(const char* name, const char* description = NULL)
+    CountStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
     , mTotalSamplesCount(0)
     , mTotalSamples()

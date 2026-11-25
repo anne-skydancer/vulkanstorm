@@ -164,7 +164,7 @@ public:
     {
         U32 hashval = makehash(s);
         LLStdStringHandle result = lookup(hashval, s);
-        if (result == NULL)
+        if (result == nullptr)
         {
             result = new std::string(s);
             mStringList[hashval].insert(result);
@@ -199,7 +199,7 @@ private:
         }
         else
         {
-            return NULL;
+            return nullptr;
         }
     }
 

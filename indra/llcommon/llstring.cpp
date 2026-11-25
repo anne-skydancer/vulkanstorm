@@ -881,10 +881,10 @@ std::string ll_convert_wide_to_string(const wchar_t* in, size_t len_in, unsigned
             0,
             in,
             static_cast<int>(len_in),
-            NULL,
+            nullptr,
             0,
-            0,
-            0);
+            nullptr,
+            nullptr);
         // We will need two more bytes for the double NULL ending
         // created in WideCharToMultiByte().
         char* pout = new char [len_out + 2];
@@ -898,8 +898,8 @@ std::string ll_convert_wide_to_string(const wchar_t* in, size_t len_in, unsigned
                 static_cast<int>(len_in),
                 pout,
                 len_out,
-                0,
-                0);
+                nullptr,
+                nullptr);
             out.assign(pout);
             delete[] pout;
         }
@@ -990,12 +990,12 @@ std::wstring windows_message<std::wstring>(DWORD error)
         FORMAT_MESSAGE_IGNORE_INSERTS |
         // ignore line breaks in message definition text
         FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        NULL,                       // lpSource, unused with FORMAT_MESSAGE_FROM_SYSTEM
+        nullptr,                       // lpSource, unused with FORMAT_MESSAGE_FROM_SYSTEM
         error,                      // dwMessageId
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // dwLanguageId
         (LPWSTR)&rawptr,         // lpBuffer: force-cast wchar_t** to wchar_t*
         0,                // nSize, unused with FORMAT_MESSAGE_ALLOCATE_BUFFER
-        NULL);            // Arguments, unused
+        nullptr);            // Arguments, unused
 
     // make a unique_ptr from rawptr so it gets cleaned up properly
     std::unique_ptr<wchar_t, void(*)(void*)> bufferptr(rawptr, HeapFree_deleter);
@@ -1112,7 +1112,7 @@ void LLStringOps::setupDatetimeInfo (bool daylight)
     time_t nowT, localT, gmtT;
     struct tm * tmpT;
 
-    nowT = time (NULL);
+    nowT = time (nullptr);
 
     tmpT = gmtime (&nowT);
     gmtT = mktime (tmpT);

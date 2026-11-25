@@ -40,7 +40,7 @@
 class LLTombStone : public LLRefCount
 {
 public:
-    LLTombStone(void* target = NULL) : mTarget(target) {}
+    LLTombStone(void* target = nullptr) : mTarget(target) {}
 
     void setTarget(void* target) { mTarget = target; }
     void* getTarget() const { return mTarget; }
@@ -94,7 +94,7 @@ public:
 
     bool isDead() const
     {
-        return mTombStone->getTarget() == NULL;
+        return mTombStone->getTarget() == nullptr;
     }
 
     void markDead()
@@ -164,7 +164,7 @@ public:
         if (LLHandle<T>::mTombStone.notNull())
         {
             if (LLHandle<T>::mTombStone->getTarget() == (void*)object) return;
-            LLHandle<T>::mTombStone->setTarget(NULL);
+            LLHandle<T>::mTombStone->setTarget(nullptr);
         }
         // tombstone reference counted, so no paired delete
         LLHandle<T>::mTombStone = new LLTombStone((void*)object);
@@ -172,7 +172,7 @@ public:
 
     void unbind()
     {
-        LLHandle<T>::mTombStone->setTarget(NULL);
+        LLHandle<T>::mTombStone->setTarget(nullptr);
     }
 
     //don't allow copying of root handles, since there should only be one

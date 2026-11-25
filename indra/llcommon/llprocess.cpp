@@ -157,7 +157,7 @@ public:
         apr_status_t status = apr_os_file_get(&mHandle, mPipe);
         if (status == APR_SUCCESS)
         {
-            mEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+            mEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
             if (! mEvent)
             {
                 status = APR_FROM_OS_ERROR(GetLastError());
@@ -466,7 +466,7 @@ private:
     // capacity of the pipe: nInBufferSize in apr/file_io/win32/pipe.c:173
     static const std::size_t sPipeCapacity = 65536;
     HANDLE mHandle = INVALID_HANDLE_VALUE;
-    HANDLE mEvent = NULL;
+    HANDLE mEvent = nullptr;
     OVERLAPPED mOverlapped = {};
     std::vector<char> mChunk;       // data of the write in flight, or to retry
     std::size_t mChunkLen = 0;      // bytes of mChunk not yet accepted
@@ -759,7 +759,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     // preserve existing semantics, we promise that mAttached defaults to the
     // same setting as mAutokill.
     mAttached(params.attached.isProvided()? params.attached : params.autokill),
-    mPool(NULL)
+    mPool(nullptr)
 {
     mPipes.resize(NSLOTS);
 
@@ -777,7 +777,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
         LLTHROW(LLProcessError(STRINGIZE("failed to create apr pool")));
     }
 
-    apr_procattr_t *procattr = NULL;
+    apr_procattr_t *procattr = nullptr;
     chkapr(apr_procattr_create(&procattr, mPool));
 
     // IQA-490, CHOP-900: On Windows, ask APR to jump through hoops to
@@ -913,7 +913,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     // Launch! The NULL would be the environment block, if we were passing
     // one. Hand-expand chkapr() macro so we can fill in the actual command
     // string instead of the variable names.
-    if (ll_apr_warn_status(apr_proc_create(&mProcess, argv[0], &argv[0], NULL, procattr,
+    if (ll_apr_warn_status(apr_proc_create(&mProcess, argv[0], &argv[0], nullptr, procattr,
                                            mPool)))
     {
         LLTHROW(LLProcessError(STRINGIZE(params << " failed")));
@@ -1049,7 +1049,7 @@ LLProcess::~LLProcess()
     if (mPool)
     {
         apr_pool_destroy(mPool);
-        mPool = NULL;
+        mPool = nullptr;
     }
 }
 
@@ -1285,12 +1285,12 @@ PIPETYPE* LLProcess::getPipePtr(std::string& error, FILESLOT slot)
     if (slot >= NSLOTS)
     {
         error = STRINGIZE(mDesc << " has no slot " << slot);
-        return NULL;
+        return nullptr;
     }
     if (!mPipes[slot])
     {
         error = STRINGIZE(mDesc << ' ' << whichfile(slot) << " not a monitored pipe");
-        return NULL;
+        return nullptr;
     }
     // Make sure we dynamic_cast in pointer domain so we can test, rather than
     // accepting runtime's exception.
@@ -1298,7 +1298,7 @@ PIPETYPE* LLProcess::getPipePtr(std::string& error, FILESLOT slot)
     if (! ppipe)
     {
         error = STRINGIZE(mDesc << ' ' << whichfile(slot) << " not a " << typeid(PIPETYPE).name());
-        return NULL;
+        return nullptr;
     }
 
     error.clear();
@@ -1398,7 +1398,7 @@ LLProcess::handle LLProcess::isRunning(handle h, const std::string& desc)
     // This direct Windows implementation is because we have no access to the
     // apr_proc_t struct: we expect it's been destroyed.
     if (! h)
-        return 0;
+        return nullptr;
 
     DWORD waitresult = WaitForSingleObject(h, 0);
     if(waitresult == WAIT_OBJECT_0)
@@ -1418,7 +1418,7 @@ LLProcess::handle LLProcess::isRunning(handle h, const std::string& desc)
             }
         }
         CloseHandle(h);
-        return 0;
+        return nullptr;
     }
 
     return h;
