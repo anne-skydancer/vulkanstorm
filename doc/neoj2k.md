@@ -66,9 +66,9 @@ neo-j2k, and the `<platform>-openjpeg` jobs of `build-windows.yaml`, `build-linu
   last tile or an image offset (neo-j2k plan finding F1: a 1000-wide image in 512-wide tiles read as 1024). The image
   area is the correct one. Second Life textures are one tile with no offset, so the two agree on every texture in the
   1,200-texture corpus (0 differences).
-- **The texture cache key** (`getEngineInfo()`) is `neo-j2k output 1`, the viewer's own decoder-output version, not
-  neo-j2k's release: a library update does not purge every user's cache. Bump the number when decoded pixels change.
-  Switching codec changes the string, so a viewer that switches purges its cache once.
+- **The decoder string** (`getEngineInfo()`) is `Neo-J2K <version>` (`Neo-J2K 0.1.3`), as the OpenJPEG and KDU
+  decoders report theirs. The About box shows it and the texture cache keys on it, so a new neo-j2k version purges the
+  cache once, as a new OpenJPEG or KDU version does. Switching codec changes the string too.
 - **Not in this change**: `TRUNCATED` and `NEED_DATA` statuses are not passed to the texture fetcher (a decode of a
   cut download succeeds as OpenJPEG's does), and the bake mask is not decoded with the colour in one pass.
 - **Floating point**: every decode and encode runs with round-to-nearest-even and no flush-to-zero or
