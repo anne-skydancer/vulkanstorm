@@ -257,7 +257,7 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
     // 'name' as the key; skip that one and start with the next.
     while (++pmi != pmend)
     {
-        if (pmi->first.substr(0, name.length()) != name)
+        if (!pmi->first.starts_with(name))
         {
             // Found the first entry beyond the entries starting with 'name':
             // stop looping.
