@@ -14,6 +14,8 @@ name: Build Linux LTS
 
 on:
   pull_request:
+    # <release-clean> not run for pull requests into release-clean (the C++ cleanup branch): the owner keeps only the CI its task needs
+    branches-ignore: [release-clean]
     # A pull request that changes only CI files or documentation builds no
     # viewer: ci-lint.yaml validates it. The package list and autobuild.xml
     # are build inputs and are never ignored.

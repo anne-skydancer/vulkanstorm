@@ -157,7 +157,8 @@ jobs:
     needs: checks
     # The same build with USE_NEOJ2K=OFF (OpenJPEG as the J2C codec, until llimagej2coj is retired): both codec
     # options are built on every pull request and every qualification build. Never a release.
-    if: needs.checks.outputs.release != 'true'
+    # <release-clean> not for pull requests into release-clean: the C++ cleanup builds with neo-j2k only
+    if: needs.checks.outputs.release != 'true' && github.base_ref != 'release-clean'
     runs-on: ${{ fromJSON(needs.checks.outputs.entry).os }}
     env:
       VIEWER_BUILD_TYPE: ${{ needs.checks.outputs.release == 'true' && 'Release' || 'RelWithDebInfo' }}

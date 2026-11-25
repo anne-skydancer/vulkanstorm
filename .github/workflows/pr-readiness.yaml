@@ -13,6 +13,8 @@ name: PR readiness
 
 on:
   pull_request:
+    # <release-clean> not run for pull requests into release-clean (the C++ cleanup branch): the owner keeps only the CI its task needs
+    branches-ignore: [release-clean]
     types: [opened, synchronize, reopened, ready_for_review, edited]
   pull_request_review:
     types: [submitted, dismissed]
@@ -55,8 +57,9 @@ jobs:
     # PR's own events and PR review event covers its reviews, both with a write token. A skipped
     # run may still queue briefly in the concurrency group; it does nothing there.
     if: >-
-      !startsWith(github.event_name, 'pull_request')
+      (!startsWith(github.event_name, 'pull_request')
       || github.event.pull_request.head.repo.full_name == github.repository
+      ) && github.event.pull_request.base.ref != 'release-clean'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

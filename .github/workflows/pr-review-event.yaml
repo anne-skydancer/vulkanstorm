@@ -19,6 +19,8 @@ permissions: {}
 
 jobs:
   noop:
+    # <release-clean> no review events for pull requests into release-clean
+    if: github.event.pull_request.base.ref != 'release-clean'
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:

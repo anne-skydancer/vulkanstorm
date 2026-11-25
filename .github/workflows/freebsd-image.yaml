@@ -6,6 +6,8 @@ on:
     branches: ['codex/freebsd-runner-image']
     paths: ['scripts/ci/freebsd/**', '.github/workflows/freebsd-image.yaml']
   pull_request:
+    # <release-clean> not run for pull requests into release-clean (the C++ cleanup branch): the owner keeps only the CI its task needs
+    branches-ignore: [release-clean]
     paths: ['scripts/ci/freebsd/**', '.github/workflows/freebsd-image.yaml']
 
 permissions:
