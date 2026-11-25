@@ -50,6 +50,16 @@ class LLSingletonBase::MasterList:
 private:
     LLSINGLETON_EMPTY_CTOR(MasterList);
 
+    // The coroutine-local 'initializing' lists of finished coroutines are
+    // freed with their coroutine. The running coroutine's list is not (the
+    // main thread's default coroutine never ends before the process does),
+    // so free it here: this is the one list per process that LeakSanitizer
+    // used to report.
+    ~MasterList() override
+    {
+        mInitializing.reset(nullptr);
+    }
+
     // Independently of the LLSingleton locks governing construction,
     // destruction and other state changes of the MasterList instance itself,
     // we must also defend each of the data structures owned by the

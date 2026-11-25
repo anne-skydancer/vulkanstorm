@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llsingleton.h"
+#include "llcoros.h"
 #include "../test/lltut.h"
 #include "wrapllerrs.h"
 #include "llsd.h"
@@ -320,5 +321,32 @@ namespace tut
                 CircularPInit::initParamSingleton();
             });
         ensure("initSingleton() circularity threw", threw.empty());
+    }
+    class CoroTouched: public LLSingleton<CoroTouched>
+    {
+        LLSINGLETON_EMPTY_CTOR(CoroTouched);
+    };
+
+    template<> template<>
+    void singleton_object_t::test<16>()
+    {
+        set_test_name("getInstance() from many coroutines keeps one bounded initializing list per coroutine");
+        // Every coroutine that calls getInstance() gets a coroutine-local
+        // 'initializing' list in the master list; it is freed when the
+        // coroutine ends. Run many of them: if the lists were not freed, the
+        // LeakSanitizer job of the analysis would report one leak per
+        // coroutine instead of at most one for the running (main) coroutine,
+        // which ~MasterList() frees.
+        int done = 0;
+        const int count = 200;
+        for (int i = 0; i < count; ++i)
+        {
+            LLCoros::instance().launch("initializing_list", [&done]()
+            {
+                CoroTouched::getInstance();
+                ++done;
+            });
+        }
+        ensure_equals("coroutines that ran", done, count);
     }
 }

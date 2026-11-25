@@ -1,0 +1,11 @@
+# LeakSanitizer suppressions for llcommon (the analysis workflow passes this file when it exists:
+# .github/analysis/suppressions/<lib>-lsan.txt; see doc/clean/analysis.md). One reason per entry.
+#
+# The logging configuration watcher is allocated once, on purpose, and never freed: LLError::LogControlFile::
+# fromDirectory() makes it with `new` (llerror.cpp, see the comment there). Logging runs during shutdown; freeing the
+# watcher (an LLLiveFile with its Impl and its LiveFileEventTimer, which also owns a LLInstanceTracker entry) brings
+# back destruction-order crashes. Every allocation of that chain has one of these frames.
+leak:LogControlFile
+leak:LiveFileEventTimer
+# commonInit() is the logging start-up that calls fromDirectory() and LLLiveFile::addToEventTimer().
+leak:LLError::commonInit

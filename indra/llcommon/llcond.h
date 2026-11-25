@@ -137,7 +137,7 @@ public:
      * wait() on the condition_variable.
      */
     template <typename Pred>
-    void wait(Pred&& pred)
+    void wait(const Pred& pred)
     {
         LockType lk(mMutex);
         // We must iterate explicitly since the predicate accepted by
@@ -147,8 +147,10 @@ public:
         // We advise the caller to pass a predicate accepting (const DATA&).
         // But what if they instead pass a predicate accepting non-const
         // (DATA&)? Such a predicate could modify mData, which would be Bad.
-        // Forbid that.
-        while (! pred(const_data())) // <Vulkanstorm> no forward: pred is called repeatedly
+        // Forbid that. pred is taken by const& because it is called
+        // repeatedly: forwarding it into every call would be wrong for an
+        // rvalue predicate.
+        while (! pred(const_data()))
         {
             mCond.wait(lk);
         }
@@ -165,7 +167,7 @@ public:
      * returning true.
      */
     template <typename Rep, typename Period, typename Pred>
-    bool wait_for(const std::chrono::duration<Rep, Period>& timeout_duration, Pred&& pred)
+    bool wait_for(const std::chrono::duration<Rep, Period>& timeout_duration, const Pred& pred)
     {
         // Instead of replicating wait_until() logic, convert duration to
         // time_point and just call wait_until().
@@ -175,7 +177,7 @@ public:
         // the future. This way, we establish a definite timeout time and
         // stick to it.
         return wait_until(std::chrono::steady_clock::now() + timeout_duration,
-                          std::forward<Pred>(pred));
+                          pred);
     }
 
     /**
@@ -185,9 +187,9 @@ public:
      * generic wait_for() method.
      */
     template <typename Pred>
-    bool wait_for(F32Milliseconds timeout_duration, Pred&& pred)
+    bool wait_for(F32Milliseconds timeout_duration, const Pred& pred)
     {
-        return wait_for(convert(timeout_duration), std::forward<Pred>(pred));
+        return wait_for(convert(timeout_duration), pred);
     }
 
 protected:
@@ -229,14 +231,16 @@ private:
      * honoring a fixed timeout.
      */
     template <typename Clock, typename Duration, typename Pred>
-    bool wait_until(const std::chrono::time_point<Clock, Duration>& timeout_time, Pred&& pred)
+    bool wait_until(const std::chrono::time_point<Clock, Duration>& timeout_time, const Pred& pred)
     {
         LockType lk(mMutex);
         // We advise the caller to pass a predicate accepting (const DATA&).
         // But what if they instead pass a predicate accepting non-const
         // (DATA&)? Such a predicate could modify mData, which would be Bad.
-        // Forbid that.
-        while (! pred(const_data())) // <Vulkanstorm> no forward: pred is called repeatedly
+        // Forbid that. pred is taken by const& because it is called
+        // repeatedly: forwarding it into every call would be wrong for an
+        // rvalue predicate.
+        while (! pred(const_data()))
         {
             if (cv_status::timeout == mCond.wait_until(lk, timeout_time))
             {
