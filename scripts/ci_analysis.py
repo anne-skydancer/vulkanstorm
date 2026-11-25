@@ -41,7 +41,6 @@ ANALYSIS_FILES = (
     "scripts/ci_analysis.py",
     "scripts/tests/ci_analysis_test.py",
     "scripts/tests/ci_analysis_setup_test.py",
-    "scripts/tests/fixtures/analysis/",
 )
 CXX_SUFFIXES = (".cpp", ".cc", ".c", ".h", ".hpp", ".inl")
 

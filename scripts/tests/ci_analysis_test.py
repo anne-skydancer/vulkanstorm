@@ -2,7 +2,7 @@
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 """Tests of scripts/ci_analysis.py: the branch-to-library plan, the log parsers, the gate and the commands.
 
-The fixtures in scripts/tests/fixtures/analysis are excerpts of the real artifacts of the first llcommon run
+The fixtures in .github/analysis/fixtures are excerpts of the real artifacts of the first llcommon run
 (Actions run 45545911963): an ASan build log with the UBSan errors and the failing llprocess test, a TSan
 lock-order report and an LSan leak report."""
 import argparse
@@ -15,7 +15,7 @@ import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-FIXTURES = ROOT / "scripts" / "tests" / "fixtures" / "analysis"
+FIXTURES = ROOT / ".github" / "analysis" / "fixtures"
 sys.path.insert(0, str(ROOT / "scripts"))
 import ci_analysis as ca  # noqa: E402
 

@@ -12,7 +12,7 @@ names, so that an agent reads code only after the tools have had their say.
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
 | push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
 | pull request into `release-clean` | the library named by the head branch, the same way |
-| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_analysis_setup_test.py` or the fixtures in `scripts/tests/fixtures/analysis/`; otherwise nothing runs |
+| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/tests/ci_analysis_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
 | a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
 
