@@ -148,7 +148,7 @@ public:
         // But what if they instead pass a predicate accepting non-const
         // (DATA&)? Such a predicate could modify mData, which would be Bad.
         // Forbid that.
-        while (! std::forward<Pred>(pred)(const_data()))
+        while (! pred(const_data())) // <Vulkanstorm> no forward: pred is called repeatedly
         {
             mCond.wait(lk);
         }
@@ -236,14 +236,14 @@ private:
         // But what if they instead pass a predicate accepting non-const
         // (DATA&)? Such a predicate could modify mData, which would be Bad.
         // Forbid that.
-        while (! std::forward<Pred>(pred)(const_data()))
+        while (! pred(const_data())) // <Vulkanstorm> no forward: pred is called repeatedly
         {
             if (cv_status::timeout == mCond.wait_until(lk, timeout_time))
             {
                 // It's possible that wait_until() timed out AND the predicate
                 // became true more or less simultaneously. Even though
                 // wait_until() timed out, check the predicate one more time.
-                return std::forward<Pred>(pred)(const_data());
+                return pred(const_data()); // <Vulkanstorm>
             }
         }
         return true;
