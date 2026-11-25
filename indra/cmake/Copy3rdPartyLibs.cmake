@@ -41,8 +41,9 @@ if(WINDOWS)
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
     # <Vulkanstorm> neither with USE_NEOJ2K, whose own shared library goes in its place (cmake/NeoJ2K.cmake)
-    if (USE_NEOJ2K)
+    if (USE_NEOJ2K AND NOT NEOJ2K_STATIC)
         set(release_files ${release_files} neoj2k.dll)
+    elseif (USE_NEOJ2K) # static: nothing to copy
     elseif (NOT USE_KDU)
         set(release_files ${release_files} openjp2.dll)
     endif ()
@@ -233,8 +234,8 @@ elseif(LINUX)
 
     # <Vulkanstorm> neo-j2k's shared library, by name as libuuid's: the file and its soname link (the 3p-neoj2k release
     # names them after its version; change both with the package)
-    if (USE_NEOJ2K)
-      list(APPEND release_files libneoj2k.so.0.1 libneoj2k.so.0.1.0)
+    if (USE_NEOJ2K AND NOT NEOJ2K_STATIC)
+      list(APPEND release_files libneoj2k.so.0.1 libneoj2k.so.0.1.3)
     endif ()
 
      if( USE_AUTOBUILD_3P )

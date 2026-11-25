@@ -36,6 +36,10 @@ inputs:
     description: "'true' (the default) for USE_NEOJ2K on, neo-j2k as the J2C codec (cmake/NeoJ2K.cmake); 'false' for the OpenJPEG build (USE_NEOJ2K off), whose artifacts are named <platform>-openjpeg-..."
     required: false
     default: "true"
+  neoj2k_static:
+    description: "'true' (the default) links neo-j2k statically (NEOJ2K_STATIC on: built from the neo-j2k release source, no neoj2k.dll or libneoj2k.so, none of the 3p-neoj2k package's library used); 'false' links the package's shared library. Ignored when neoj2k is 'false'."
+    required: false
+    default: "true"
   package_override:
     description: "The checked-in package override to apply (linux-lts); empty for none."
     required: false
@@ -199,6 +203,7 @@ runs:
         BUILD_DIRECTORY: ${{ inputs.directory }}
         VKSTORM_TRACY: ${{ inputs.tracy }}
         VKSTORM_NEOJ2K: ${{ inputs.neoj2k }}
+        VKSTORM_NEOJ2K_STATIC: ${{ inputs.neoj2k_static }}
       run: |
         set -euo pipefail
         eval "$(autobuild source_environment -c ReleaseFS_open)"
@@ -219,6 +224,11 @@ runs:
         # builds the other option. Always explicit, so that the line does not depend on the CMake default.
         if [[ "$VKSTORM_NEOJ2K" == true ]]; then
           tracy_options+=(-DUSE_NEOJ2K:BOOL=ON)
+          if [[ "$VKSTORM_NEOJ2K_STATIC" == true ]]; then
+            tracy_options+=(-DNEOJ2K_STATIC:BOOL=ON)
+          else
+            tracy_options+=(-DNEOJ2K_STATIC:BOOL=OFF)
+          fi
         else
           tracy_options+=(-DUSE_NEOJ2K:BOOL=OFF)
         fi

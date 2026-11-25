@@ -2381,12 +2381,27 @@ else (OPENSIM)
   set(ND_VIEWER_FLAVOR "hvk")
 endif (OPENSIM)
 
+# <Vulkanstorm> what the viewer manifest bundles of the J2C codec (--neoj2k): "on" is neo-j2k's shared library and
+# licence, "static" its licence alone (the code is in the executable), "off" OpenJPEG
+include(NeoJ2K) # NEOJ2K_STATIC (a no-op after the first include)
+if (USE_NEOJ2K AND NEOJ2K_STATIC)
+    set(NEOJ2K_MANIFEST static)
+elseif (USE_NEOJ2K)
+    set(NEOJ2K_MANIFEST on)
+else ()
+    set(NEOJ2K_MANIFEST off)
+endif ()
+
 if (WINDOWS)
     # <Vulkanstorm> the J2C codec's DLL, delay-loaded like openjp2.dll (neoj2k.dll with USE_NEOJ2K; see below)
-    if (USE_NEOJ2K)
+    if (USE_NEOJ2K AND NEOJ2K_STATIC)
+        set(J2C_CODEC_DELAYLOAD) # linked statically: no DLL to delay-load
+    elseif (USE_NEOJ2K)
         set(J2C_CODEC_DLL neoj2k.dll)
+        set(J2C_CODEC_DELAYLOAD "/DELAYLOAD:neoj2k.dll")
     else ()
         set(J2C_CODEC_DLL openjp2.dll)
+        set(J2C_CODEC_DELAYLOAD "/DELAYLOAD:openjp2.dll")
     endif ()
     set_target_properties(${VIEWER_BINARY_NAME}
         PROPERTIES
@@ -2398,7 +2413,7 @@ if (WINDOWS)
         # /ENTRY:vkstormEntry is that CPU check (llcpucheck_win.cpp), which runs
         # before the C runtime starts. A failed delay-load is reported by the
         # hook in llappviewerwin32.cpp.
-        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll /DELAYLOAD:${J2C_CODEC_DLL} /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
+        LINK_FLAGS "/debug /NODEFAULTLIB:LIBCMT /SUBSYSTEM:WINDOWS /LARGEADDRESSAWARE /NOEXP /NOIMPLIB /DELAYLOAD:opengl32.dll /DELAYLOAD:glu32.dll /DELAYLOAD:llwebrtc.dll ${J2C_CODEC_DELAYLOAD} /ENTRY:vkstormEntry delayimp.lib" # <VulkanStorm> delay-load GL so selectGLBackend() can redirect opengl32 to Mesa Zink before first import
         LINK_FLAGS_DEBUG "/NODEFAULTLIB:\"LIBCMT;LIBCMTD;MSVCRT\" /INCREMENTAL:NO /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         LINK_FLAGS_RELEASE "/FORCE:MULTIPLE /MAP\"secondlife-bin.MAP\" /OPT:REF /LARGEADDRESSAWARE /NOEXP /NOIMPLIB"
         )
@@ -2439,7 +2454,9 @@ if (WINDOWS)
 
     # <FS:Ansariel> Only copy OpenJPEG dll if needed
     # <Vulkanstorm> neo-j2k's DLL instead with USE_NEOJ2K
-    if (USE_NEOJ2K)
+    if (USE_NEOJ2K AND NEOJ2K_STATIC)
+        # linked statically: no DLL
+    elseif (USE_NEOJ2K)
         list(APPEND COPY_INPUT_DEPENDENCIES
             ${SHARED_LIB_STAGING_DIR}/neoj2k.dll
             )
@@ -2500,7 +2517,7 @@ if (WINDOWS)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
-        "--neoj2k=${USE_NEOJ2K}"
+        "--neoj2k=${NEOJ2K_MANIFEST}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"
@@ -2546,7 +2563,7 @@ if (WINDOWS)
             "--fmodstudio=${USE_FMODSTUDIO}"
             "--openal=${USE_OPENAL}"
             "--soloud=${USE_SOLOUD}"
-            "--neoj2k=${USE_NEOJ2K}"
+            "--neoj2k=${NEOJ2K_MANIFEST}"
             "--tracy=${USE_TRACY}"
             "--avx2=${USE_AVX2_OPTIMIZATION}"
             --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -2617,7 +2634,7 @@ if (WINDOWS)
               "--fmodstudio=${USE_FMODSTUDIO}"
               "--openal=${USE_OPENAL}"
               "--soloud=${USE_SOLOUD}"
-              "--neoj2k=${USE_NEOJ2K}"
+              "--neoj2k=${NEOJ2K_MANIFEST}"
               "--mesazink=${USE_MESAZINK}"
               "--tracy=${USE_TRACY}"
               "--inno=${USE_INNOSETUP}"
@@ -2859,7 +2876,7 @@ if (LINUX)
         "--fmodstudio=${USE_FMODSTUDIO}"
         "--openal=${USE_OPENAL}"
         "--soloud=${USE_SOLOUD}"
-        "--neoj2k=${USE_NEOJ2K}"
+        "--neoj2k=${NEOJ2K_MANIFEST}"
         "--mesazink=${USE_MESAZINK}"
         "--tracy=${USE_TRACY}"
         "--avx2=${USE_AVX2_OPTIMIZATION}"        
@@ -2892,7 +2909,7 @@ if (LINUX)
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
-      "--neoj2k=${USE_NEOJ2K}"
+      "--neoj2k=${NEOJ2K_MANIFEST}"
         "--mesazink=${USE_MESAZINK}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
@@ -2997,7 +3014,7 @@ if (DARWIN)
       "--fmodstudio=${USE_FMODSTUDIO}"
       "--openal=${USE_OPENAL}"
       "--soloud=${USE_SOLOUD}"
-      "--neoj2k=${USE_NEOJ2K}"
+      "--neoj2k=${NEOJ2K_MANIFEST}"
       "--tracy=${USE_TRACY}"
       "--avx2=${USE_AVX2_OPTIMIZATION}"      
       --build=${CMAKE_CURRENT_BINARY_DIR}
@@ -3036,7 +3053,7 @@ if (DARWIN)
           "--fmodstudio=${USE_FMODSTUDIO}"
           "--openal=${USE_OPENAL}"
           "--soloud=${USE_SOLOUD}"
-          "--neoj2k=${USE_NEOJ2K}"
+          "--neoj2k=${NEOJ2K_MANIFEST}"
           "--tracy=${USE_TRACY}"
           "--avx2=${USE_AVX2_OPTIMIZATION}"          
           --build=${CMAKE_CURRENT_BINARY_DIR}
