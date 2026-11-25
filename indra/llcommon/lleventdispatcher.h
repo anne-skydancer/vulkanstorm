@@ -96,9 +96,9 @@ public:
     }
 
     template <typename CALLABLE,
-              typename=typename std::enable_if<
-                  std::is_invocable<CALLABLE, LLSD>::value
-             >::type>
+              typename=std::enable_if_t<
+                  std::is_invocable_v<CALLABLE, LLSD>
+             >>
     void add(const std::string& name,
              const std::string& desc,
              CALLABLE&& callable,
@@ -197,9 +197,9 @@ public:
     // non-const unary method (but method accepting LLSD should use the other add())
     // enable_if usage per https://stackoverflow.com/a/39913395/5533635
     template <typename R, class CLASS, typename ARG,
-              typename = typename std::enable_if<
-                  ! std::is_same<typename std::decay<ARG>::type, LLSD>::value
-             >::type>
+              typename = std::enable_if_t<
+                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
+             >>
     void add(const std::string& name,
              const std::string& desc,
              R (CLASS::*method)(ARG))
@@ -209,9 +209,9 @@ public:
 
     // const unary method (but method accepting LLSD should use the other add())
     template <typename R, class CLASS, typename ARG,
-              typename = typename std::enable_if<
-                  ! std::is_same<typename std::decay<ARG>::type, LLSD>::value
-             >::type>
+              typename = std::enable_if_t<
+                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
+             >>
     void add(const std::string& name,
              const std::string& desc,
              R (CLASS::*method)(ARG) const)
@@ -222,9 +222,9 @@ public:
     // non-const unary method returning void
     // enable_if usage per https://stackoverflow.com/a/39913395/5533635
     template <class CLASS, typename ARG,
-              typename = typename std::enable_if<
-                  ! std::is_same<typename std::decay<ARG>::type, LLSD>::value
-             >::type>
+              typename = std::enable_if_t<
+                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
+             >>
     void add(const std::string& name,
              const std::string& desc,
              void (CLASS::*method)(ARG))
@@ -234,9 +234,9 @@ public:
 
     // const unary method returning void
     template <class CLASS, typename ARG,
-              typename = typename std::enable_if<
-                  ! std::is_same<typename std::decay<ARG>::type, LLSD>::value
-             >::type>
+              typename = std::enable_if_t<
+                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
+             >>
     void add(const std::string& name,
              const std::string& desc,
              void (CLASS::*method)(ARG) const)
@@ -314,10 +314,10 @@ public:
      * converted to the corresponding parameter type using LLSDParam.
      */
     template<typename Method, typename InstanceGetter,
-             typename = typename std::enable_if<
-                 std::is_member_function_pointer<Method>::value &&
-                 ! std::is_convertible<InstanceGetter, LLSD>::value
-             >::type>
+             typename = std::enable_if_t<
+                 std::is_member_function_pointer_v<Method> &&
+                 ! std::is_convertible_v<InstanceGetter, LLSD>
+             >>
     void add(const std::string& name, const std::string& desc, Method f,
              const InstanceGetter& getter);
 
@@ -333,10 +333,10 @@ public:
      * to the corresponding parameter type using LLSDParam.
      */
     template<typename Function,
-             typename = typename std::enable_if<
+             typename = std::enable_if_t<
                  boost::function_types::is_nonmember_callable_builtin<Function>::value &&
-                 ! std::is_invocable<Function, LLSD>::value
-             >::type>
+                 ! std::is_invocable_v<Function, LLSD>
+             >>
     void add(const std::string& name, const std::string& desc, Function f,
              const LLSD& params, const LLSD& defaults=LLSD());
 
@@ -360,10 +360,10 @@ public:
      * to the corresponding parameter type using LLSDParam.
      */
     template<typename Method, typename InstanceGetter,
-             typename = typename std::enable_if<
-                 std::is_member_function_pointer<Method>::value &&
-                 ! std::is_convertible<InstanceGetter, LLSD>::value
-             >::type>
+             typename = std::enable_if_t<
+                 std::is_member_function_pointer_v<Method> &&
+                 ! std::is_convertible_v<InstanceGetter, LLSD>
+             >>
     void add(const std::string& name, const std::string& desc, Method f,
              const InstanceGetter& getter, const LLSD& params,
              const LLSD& defaults=LLSD());
@@ -513,10 +513,10 @@ private:
                  const LLSD& required);
 
     template <class CLASS, typename METHOD,
-              typename std::enable_if<
-                  std::is_base_of<LLEventDispatcher, CLASS>::value,
+              std::enable_if_t<
+                  std::is_base_of_v<LLEventDispatcher, CLASS>,
                   bool
-              >::type=true>
+              > =true>
     void addMethod(const std::string& name, const std::string& desc,
                    const METHOD& method, const LLSD& required)
     {
@@ -544,10 +544,10 @@ private:
     }
 
     template <class CLASS, typename METHOD,
-              typename std::enable_if<
-                  ! std::is_base_of<LLEventDispatcher, CLASS>::value,
+              std::enable_if_t<
+                  ! std::is_base_of_v<LLEventDispatcher, CLASS>,
                   bool
-              >::type=true>
+              > =true>
     void addMethod(const std::string& name, const std::string& desc,
                    const METHOD&, const LLSD&)
     {
@@ -733,7 +733,7 @@ LLEventDispatcher::make_invoker(Method f, const InstanceGetter& getter)
             {
                 // function_arity<member function> includes its implicit 'this' pointer
                 constexpr auto arity = LL::function_arity<
-                    typename std::remove_reference<Method>::type>::value - 1;
+                    std::remove_reference_t<Method>>::value - 1;
 
                 // Use bind_front() to bind the method to (a pointer to) the object
                 // returned by getter(). It's okay to capture and bind a pointer

@@ -41,7 +41,7 @@ using U32 = unsigned int;
 
 // to express an index that might go negative
 // (ssize_t is provided by SOME compilers, don't collide)
-using llssize = typename std::make_signed<std::size_t>::type;
+using llssize = std::make_signed_t<std::size_t>;
 
 #if LL_WINDOWS
 // https://docs.microsoft.com/en-us/cpp/build/reference/zc-wchar-t-wchar-t-is-native-type
@@ -170,9 +170,9 @@ public:
 
     /*---------------------- Narrowing unsigned to signed ----------------------*/
     template <typename TO,
-              typename std::enable_if<std::is_unsigned<FROM>::value &&
-                                      std::is_signed<TO>::value,
-                                      bool>::type = true>
+              std::enable_if_t<std::is_unsigned_v<FROM> &&
+                                      std::is_signed_v<TO>,
+                                      bool> = true>
     constexpr
     operator TO() const
     {
@@ -188,9 +188,9 @@ public:
 
     /*----------------------- Narrowing all other cases ------------------------*/
     template <typename TO,
-              typename std::enable_if<! (std::is_unsigned<FROM>::value &&
-                                         std::is_signed<TO>::value),
-                                      bool>::type = true>
+              std::enable_if_t<! (std::is_unsigned_v<FROM> &&
+                                         std::is_signed_v<TO>),
+                                      bool> = true>
     constexpr
     operator TO() const
     {

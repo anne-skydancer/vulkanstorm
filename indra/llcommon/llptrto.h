@@ -56,14 +56,14 @@ struct LLPtrTo
 
 /// specialize for subclasses of LLRefCount
 template <class T>
-struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLRefCount, T>::value >::type>
+struct LLPtrTo<T, std::enable_if_t< std::is_base_of_v<LLRefCount, T> >>
 {
     using type = LLPointer<T>;
 };
 
 /// specialize for subclasses of LLThreadSafeRefCount
 template <class T>
-struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLThreadSafeRefCount, T>::value >::type>
+struct LLPtrTo<T, std::enable_if_t< std::is_base_of_v<LLThreadSafeRefCount, T> >>
 {
     using type = LLPointer<T>;
 };
@@ -74,7 +74,7 @@ struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLThreadSafeRefCount,
 template <typename PTRTYPE>
 struct LLRemovePointer
 {
-    using type = typename std::remove_pointer<PTRTYPE>::type;
+    using type = std::remove_pointer_t<PTRTYPE>;
 };
 
 /// specialize for LLPointer<SOMECLASS>
@@ -121,13 +121,13 @@ namespace LL
     template <typename T>
     auto& get_ref(T& ptr_or_ref)
     {
-        return GetRef<typename std::decay<T>::type>()(ptr_or_ref);
+        return GetRef<std::decay_t<T>>()(ptr_or_ref);
     }
 
     template <typename T>
     const auto& get_ref(const T& ptr_or_ref)
     {
-        return GetRef<typename std::decay<T>::type>()(ptr_or_ref);
+        return GetRef<std::decay_t<T>>()(ptr_or_ref);
     }
 
 /*****************************************************************************

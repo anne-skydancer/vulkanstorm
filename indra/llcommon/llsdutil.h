@@ -762,7 +762,7 @@ auto apply(CALLABLE&& func, const LLSD& args)
 {
     // infer arity from the definition of func
     constexpr auto arity = function_arity<
-        typename std::remove_reference<CALLABLE>::type>::value;
+        std::remove_reference_t<CALLABLE>>::value;
     // now that we have a compile-time arity, apply_n() works
     return apply_n<arity>(std::forward<CALLABLE>(func), args);
 }

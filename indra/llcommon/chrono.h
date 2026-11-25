@@ -25,9 +25,9 @@ namespace LL
 // This variant is for the optimal case when the source and dest use the same
 // clock: that case is handled by std::chrono.
 template <typename DestTimePoint, typename SrcTimePoint,
-          typename std::enable_if<std::is_same<typename DestTimePoint::clock,
-                                               typename SrcTimePoint::clock>::value,
-                                  bool>::type = true>
+          std::enable_if_t<std::is_same_v<typename DestTimePoint::clock,
+                                               typename SrcTimePoint::clock>,
+                                  bool> = true>
 DestTimePoint time_point_cast(const SrcTimePoint& time)
 {
     return std::chrono::time_point_cast<typename DestTimePoint::duration>(time);
@@ -36,9 +36,9 @@ DestTimePoint time_point_cast(const SrcTimePoint& time)
 // This variant is for when the source and dest use different clocks -- see
 // the linked StackOverflow answer, also Howard Hinnant's, for more context.
 template <typename DestTimePoint, typename SrcTimePoint,
-          typename std::enable_if<! std::is_same<typename DestTimePoint::clock,
-                                                 typename SrcTimePoint::clock>::value,
-                                  bool>::type = true>
+          std::enable_if_t<! std::is_same_v<typename DestTimePoint::clock,
+                                                 typename SrcTimePoint::clock>,
+                                  bool> = true>
 DestTimePoint time_point_cast(const SrcTimePoint& time)
 {
     // The basic idea is that we must adjust the passed time_point by the

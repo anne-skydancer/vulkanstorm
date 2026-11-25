@@ -48,13 +48,13 @@ namespace LL
 
         // callable returns a type not convertible to DESIRED, return default
         template <typename CALLABLE, typename... ARGS,
-                  typename std::enable_if<
-                      ! std::is_convertible<
+                  std::enable_if_t<
+                      ! std::is_convertible_v<
                           typename invoke_result<CALLABLE, ARGS...>::type,
                           DESIRED
-                      >::value,
+                      >,
                       bool
-                  >::type=true>
+                  > =true>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
         {
             // discard whatever callable(args) returns
@@ -64,13 +64,13 @@ namespace LL
 
         // callable returns a type convertible to DESIRED
         template <typename CALLABLE, typename... ARGS,
-                  typename std::enable_if<
-                      std::is_convertible<
+                  std::enable_if_t<
+                      std::is_convertible_v<
                           typename invoke_result<CALLABLE, ARGS...>::type,
                           DESIRED
-                      >::value,
+                      >,
                       bool
-                  >::type=true>
+                  > =true>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
         {
             return { std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...) };

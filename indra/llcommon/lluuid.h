@@ -188,9 +188,9 @@ public:
 
     U8 mData[UUID_BYTES];
 };
-static_assert(std::is_trivially_copyable<LLUUID>::value, "LLUUID must be trivial copy");
-static_assert(std::is_trivially_move_assignable<LLUUID>::value, "LLUUID must be trivial move");
-static_assert(std::is_standard_layout<LLUUID>::value, "LLUUID must be a standard layout type");
+static_assert(std::is_trivially_copyable_v<LLUUID>, "LLUUID must be trivial copy");
+static_assert(std::is_trivially_move_assignable_v<LLUUID>, "LLUUID must be trivial move");
+static_assert(std::is_standard_layout_v<LLUUID>, "LLUUID must be a standard layout type");
 
 using uuid_vec_t = std::vector<LLUUID>;
 using uuid_set_t = std::set<LLUUID>;

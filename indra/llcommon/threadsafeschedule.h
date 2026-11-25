@@ -277,7 +277,7 @@ namespace LL
         }
 
         /// for when Args has exactly one type
-        bool tryPop(typename std::tuple_element<1, TimeTuple>::type& value)
+        bool tryPop(std::tuple_element_t<1, TimeTuple>& value)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
             TimeTuple tt;
@@ -361,7 +361,7 @@ namespace LL
         /// for when Args has exactly one type
         template <typename Clock, typename Duration>
         bool tryPopUntil(const std::chrono::time_point<Clock, Duration>& until,
-                         typename std::tuple_element<1, TimeTuple>::type& value)
+                         std::tuple_element_t<1, TimeTuple>& value)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
             TimeTuple tt;
