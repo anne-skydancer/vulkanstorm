@@ -41,57 +41,25 @@
 #include <string>
 #include <exception>
 #include <queue>
+#include <utility>
 
 // e.g. #include LLCOROS_MUTEX_HEADER
+// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
 #define LLCOROS_MUTEX_HEADER   <boost/fiber/mutex.hpp>
+// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
 #define LLCOROS_CONDVAR_HEADER <boost/fiber/condition_variable.hpp>
 
-namespace boost {
-    namespace fibers {
+
+    namespace boost::fibers {
         class mutex;
         enum class cv_status;
         class condition_variable;
     }
-}
 
-/**
- * Registry of named Boost.Coroutine instances
- *
- * The Boost.Coroutine library supports the general case of a coroutine
- * accepting arbitrary parameters and yielding multiple (sets of) results. For
- * such use cases, it's natural for the invoking code to retain the coroutine
- * instance: the consumer repeatedly calls into the coroutine, perhaps passing
- * new parameter values, prompting it to yield its next result.
- *
- * Our typical coroutine usage is different, though. For us, coroutines
- * provide an alternative to the @c Responder pattern. Our typical coroutine
- * has @c void return, invoked in fire-and-forget mode: the handler for some
- * user gesture launches the coroutine and promptly returns to the main loop.
- * The coroutine initiates some action that will take multiple frames (e.g. a
- * capability request), waits for its result, processes it and silently steals
- * away.
- *
- * This usage poses two (related) problems:
- *
- * # Who should own the coroutine instance? If it's simply local to the
- *   handler code that launches it, return from the handler will destroy the
- *   coroutine object, terminating the coroutine.
- * # Once the coroutine terminates, in whatever way, who's responsible for
- *   cleaning up the coroutine object?
- *
- * LLCoros is a Singleton collection of currently-active coroutine instances.
- * Each has a name. You ask LLCoros to launch a new coroutine with a suggested
- * name prefix; from your prefix it generates a distinct name, registers the
- * new coroutine and returns the actual name.
- *
- * The name
- * can provide diagnostic info: we can look up the name of the
- * currently-running coroutine.
- */
 class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 {
     LLSINGLETON(LLCoros);
-    ~LLCoros();
+    ~LLCoros() override;
 
     void cleanupSingleton() override;
 public:
@@ -110,9 +78,9 @@ public:
     /// simpler, more transient kinds of coroutines. Semantically they've
     /// always been fibers. But at this point in history, we're pretty much
     /// stuck with the term "coroutine."
-    typedef boost::fibers::fiber coro;
+    using coro = boost::fibers::fiber;
     /// Canonical callable type
-    typedef std::function<void()> callable_t;
+    using callable_t = std::function<void()>;
 
     /**
      * Create and start running a new coroutine with specified name. The name
@@ -327,12 +295,12 @@ private:
     void toplevel(std::string name, callable_t callable);
     struct CoroData;
     static CoroData& get_CoroData(const std::string& caller);
-    void saveException(const std::string& name, std::exception_ptr exc);
+    void saveException(const std::string& name, const std::exception_ptr& exc);
 
     struct ExceptionData
     {
-        ExceptionData(const std::string& nm, std::exception_ptr exc):
-            name(nm),
+        ExceptionData(std::string nm, const std::exception_ptr& exc):
+            name(std::move(nm)),
             exception(exc)
         {}
         // name of coroutine that originally threw this exception
@@ -342,7 +310,11 @@ private:
     };
     std::queue<ExceptionData> mExceptionQueue;
 
-    S32 mStackSize;
+    // MAINT-2724: default coroutine stack size too small on Windows.
+    // Previously we used
+    // boost::context::guarded_stack_allocator::default_stacksize();
+    // empirically this is insufficient.
+    S32 mStackSize{1024*1024};
 
     // coroutine-local storage, as it were: one per coro we track
     struct CoroData: public LLInstanceTracker<CoroData, std::string>

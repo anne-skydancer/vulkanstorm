@@ -47,8 +47,8 @@ size_t LLMortician::logClass(std::stringstream &str)
         return size;
     }
     str << " Output:\n";
-    std::list<LLMortician*>::iterator iter = sGraveyard.begin();
-    std::list<LLMortician*>::iterator end = sGraveyard.end();
+    auto iter = sGraveyard.begin();
+    auto end = sGraveyard.end();
     while (iter!=end)
     {
         LLMortician* dead = *iter;
@@ -62,6 +62,7 @@ size_t LLMortician::logClass(std::stringstream &str)
                 str << " Is dead: " << (dead->isDead() ? "True" : "False");
                 str << " Name: " << typeid(*dead).name();
             }
+            // NOLINTNEXTLINE(bugprone-empty-catch): diagnostic text only, a failing query of a half-dead object must not escape
             catch (...)
             {
 

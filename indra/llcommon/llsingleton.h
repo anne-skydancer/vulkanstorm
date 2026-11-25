@@ -52,20 +52,20 @@ public:
 
 private:
     // All existing LLSingleton instances are tracked in this master list.
-    typedef std::list<LLSingletonBase*> list_t;
+    using list_t = std::list<LLSingletonBase*>;
     // Size of stack whose top indicates the LLSingleton currently being
     // initialized.
     static list_t::size_type get_initializing_size();
     // Produce a vector<LLSingletonBase*> of master list, in dependency order.
-    typedef std::vector<LLSingletonBase*> vec_t;
+    using vec_t = std::vector<LLSingletonBase*>;
     static vec_t dep_sort();
 
     // we directly depend on these other LLSingletons
-    typedef std::unordered_set<LLSingletonBase*> set_t;
+    using set_t = std::unordered_set<LLSingletonBase*>;
     set_t mDepends;
 
 protected:
-    typedef enum e_init_state
+    using EInitState = enum e_init_state
     {
         UNINITIALIZED = 0,          // must be default-initialized state
         QUEUED,                     // construction queued, not yet executing
@@ -73,7 +73,7 @@ protected:
         INITIALIZING,               // within DERIVED_TYPE::initSingleton()
         INITIALIZED,                // normal case
         DELETED                     // deleteSingleton() or deleteAll() called
-    } EInitState;
+    };
 
     // Define tag<T> to pass to our template constructor. You can't explicitly
     // invoke a template constructor with ordinary template syntax:
@@ -81,7 +81,7 @@ protected:
     template <typename T>
     struct tag
     {
-        typedef T type;
+        using type = T;
     };
 
     // Base-class constructor should only be invoked by the DERIVED_TYPE
@@ -122,7 +122,7 @@ protected:
 
     // delegate logging calls to llsingleton.cpp
 public:
-    typedef std::initializer_list<const std::string> string_params;
+    using string_params = std::initializer_list<const std::string>;
 protected:
     static void logerrs  (const string_params&);
     static void logwarns (const string_params&);
@@ -148,7 +148,7 @@ protected:
     // able to reach Foo::deleteSingleton(). Make LLSingleton (which declares
     // deleteSingleton()) store a pointer here. Since we know it's a static
     // class method, a classic-C function pointer will do.
-    void (*mDeleteSingleton)();
+    void (*mDeleteSingleton)(){nullptr};
 
 public:
     /**
@@ -218,8 +218,7 @@ struct LLSingleton_manage_master<LLSingletonBase::MasterList>
 
 // Now we can implement LLSingletonBase's template constructor.
 template <typename DERIVED_TYPE>
-LLSingletonBase::LLSingletonBase(tag<DERIVED_TYPE>):
-    mDeleteSingleton(nullptr)
+LLSingletonBase::LLSingletonBase(tag<DERIVED_TYPE>)
 {
     // This is the earliest possible point at which we can push this new
     // instance onto the init stack. LLSingleton::constructSingleton() can't
@@ -301,13 +300,13 @@ private:
     {
         // Use a recursive_mutex in case of constructor circularity. With a
         // non-recursive mutex, that would result in deadlock.
-        typedef std::recursive_mutex mutex_t;
+        using mutex_t = std::recursive_mutex;
         LL_PROFILE_MUTEX_NAMED(mutex_t, mMutex, "Singleton Data"); // LockStatic looks for mMutex
 
         EInitState      mInitState{UNINITIALIZED};
         DERIVED_TYPE*   mInstance{nullptr};
     };
-    typedef llthread::LockStatic<SingletonData> LockStatic;
+    using LockStatic = llthread::LockStatic<SingletonData>;
 
     // Allow LLParamSingleton subclass -- but NOT DERIVED_TYPE itself -- to
     // access our private members.
@@ -407,6 +406,7 @@ protected:
     // Pass DERIVED_TYPE explicitly to LLSingletonBase's constructor because,
     // until our subclass constructor completes, *this isn't yet a
     // full-fledged DERIVED_TYPE.
+    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the derived singleton's private constructor must reach this one; see the friend declaration the singleton macro/LLSingleton users make
     LLSingleton(): LLSingletonBase(LLSingletonBase::tag<DERIVED_TYPE>())
     {
         // populate base-class function pointer with the static
@@ -418,7 +418,7 @@ protected:
     }
 
 protected:
-    virtual ~LLSingleton()
+    ~LLSingleton() override
     {
         // This phase of cleanup is performed in the destructor rather than in
         // deleteSingleton() to defend against manual deletion. When we moved
@@ -637,7 +637,7 @@ template <typename DERIVED_TYPE>
 class LLParamSingleton : public LLSingleton<DERIVED_TYPE>
 {
 private:
-    typedef LLSingleton<DERIVED_TYPE> super;
+    using super = LLSingleton<DERIVED_TYPE>;
     using typename super::LockStatic;
 
     // Passes arguments to DERIVED_TYPE's constructor and sets appropriate
@@ -769,7 +769,7 @@ public:
 template <typename DT>
 class LLLockedSingleton : public LLParamSingleton<DT>
 {
-    typedef LLParamSingleton<DT> super;
+    using super = LLParamSingleton<DT>;
 
 public:
     using super::deleteSingleton;
@@ -839,6 +839,7 @@ private:                                                                \
 // or inherent thread safety and requires manual invocation of
 // createInstance before first use.
 template<class T>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): LLSimpleton has no constructor of its own; its instance is created through createInstance()
 class LLSimpleton
 {
 public:

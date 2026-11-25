@@ -68,12 +68,12 @@ public:
      */
     LLTempRedirect(int target,   int reference);
     LLTempRedirect(const LLTempRedirect&) = delete;
-    LLTempRedirect(LLTempRedirect&& other);
+    LLTempRedirect(LLTempRedirect&& other) noexcept;
 
     ~LLTempRedirect();
 
     LLTempRedirect& operator=(const LLTempRedirect&) = delete;
-    LLTempRedirect& operator=(LLTempRedirect&& other);
+    LLTempRedirect& operator=(LLTempRedirect&& other) noexcept;
 
     /// returns (duplicate file descriptor for) the original target of the
     /// 'reference' file descriptor passed to our constructor

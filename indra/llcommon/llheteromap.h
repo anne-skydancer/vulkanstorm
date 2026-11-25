@@ -44,7 +44,7 @@ public:
         // Look up map entry by typeid(T). We don't simply use mMap[typeid(T)]
         // because that requires default-constructing T on every lookup. For
         // some kinds of T, that could be expensive.
-        TypeMap::iterator found = mMap.find(typeid(T));
+        auto found = mMap.find(typeid(T));
         if (found == mMap.end())
         {
             // Didn't find typeid(T). Create an entry. Because we're storing
@@ -74,8 +74,7 @@ private:
 
     // What we actually store is a map from std::type_index (permitting lookup
     // by object type) to a void* pointer to the object PLUS its deleter.
-    typedef std::unordered_map<std::type_index, std::pair<void*, void (*)(void*)>>
-    TypeMap;
+    using TypeMap = std::unordered_map<std::type_index, std::pair<void*, void (*)(void*)>>;
     TypeMap mMap;
 };
 

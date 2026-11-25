@@ -77,7 +77,7 @@
  */
 struct LLStopWhenHandled
 {
-    typedef bool result_type;
+    using result_type = bool;
 
     template<typename InputIterator>
     result_type operator()(InputIterator first, InputIterator last) const
@@ -138,16 +138,16 @@ struct LLStopWhenHandled
  * specify a numeric key to establish order means that the caller must know
  * the universe of possible values. We use LLDependencies for that instead.
  */
-typedef boost::signals2::signal<bool(const LLSD&), LLStopWhenHandled, float>  LLStandardSignal;
+using LLStandardSignal = boost::signals2::signal<bool(const LLSD&), LLStopWhenHandled, float>;
 /// Methods that forward listeners (e.g. constructed with
 /// <tt>boost::bind()</tt>) should accept (const LLEventListener&)
-typedef LLStandardSignal::slot_type LLEventListener;
+using LLEventListener = LLStandardSignal::slot_type;
 /// Result of registering a listener, supports <tt>connected()</tt>,
 /// <tt>disconnect()</tt> and <tt>blocked()</tt>
-typedef boost::signals2::connection LLBoundListener;
+using LLBoundListener = boost::signals2::connection;
 /// Storing an LLBoundListener in LLTempBoundListener will disconnect the
 /// referenced listener when the LLTempBoundListener instance is destroyed.
-typedef boost::signals2::scoped_connection LLTempBoundListener;
+using LLTempBoundListener = boost::signals2::scoped_connection;
 
 /**
  * A common idiom for event-based code is to accept either a callable --
@@ -182,7 +182,7 @@ public:
     LLListenerOrPumpName(const T& listener): mListener(listener) {}
 
     /// for omitted method parameter: uninitialized mListener
-    LLListenerOrPumpName() {}
+    LLListenerOrPumpName() = default;
 
     /// test for validity
     operator bool() const { return bool(mListener); }
@@ -260,7 +260,7 @@ public:
                       const std::string& type=std::string());
 
     /// function passed to registerTypeFactory()
-    typedef std::function<LLEventPump*(const std::string& name, bool tweak, const std::string& type)> TypeFactory;
+    using TypeFactory = std::function<LLEventPump*(const std::string& name, bool tweak, const std::string& type)>;
 
     /**
      * Register a TypeFactory for use with make(). When make() is called with
@@ -274,7 +274,7 @@ public:
     void unregisterTypeFactory(const std::string& type);
 
     /// function passed to registerPumpFactory()
-    typedef std::function<LLEventPump*(const std::string&)> PumpFactory;
+    using PumpFactory = std::function<LLEventPump*(const std::string&)>;
 
     /**
      * Register a PumpFactory for use with obtain(). When obtain() is called
@@ -337,7 +337,7 @@ private:
     void unregister(const LLEventPump&);
 
 private:
-    ~LLEventPumps();
+    ~LLEventPumps() override;
 
 testable:
     // Map of all known LLEventPump instances, whether or not we instantiated
@@ -347,15 +347,15 @@ testable:
     // LLEventPump subclass statically, as a class member, on the stack or on
     // the heap. In such cases, the instantiating party is responsible for its
     // lifespan.
-    typedef std::map<std::string, LLEventPump*> PumpMap;
+    using PumpMap = std::map<std::string, LLEventPump*>;
     PumpMap mPumpMap;
     // Set of all LLEventPumps we instantiated. Membership in this set means
     // we claim ownership, and will delete them when this LLEventPumps is
     // destroyed.
-    typedef std::set<LLEventPump*> PumpSet;
+    using PumpSet = std::set<LLEventPump*>;
     PumpSet mOurPumps;
     // for make(), map string type name to LLEventPump subclass factory function
-    typedef std::map<std::string, TypeFactory> TypeFactories;
+    using TypeFactories = std::map<std::string, TypeFactory>;
     // Data used by make().
     // One might think mFactories and mTypes could reasonably be static. So
     // they could -- if not for the fact that make() or obtain() might be
@@ -365,7 +365,7 @@ testable:
 
     // for obtain(), map desired string instance name to string type when
     // obtain() must create the instance
-    typedef std::map<std::string, std::string> InstanceTypes;
+    using InstanceTypes = std::map<std::string, std::string>;
     InstanceTypes mTypes;
 };
 
@@ -404,7 +404,7 @@ testable:
  *     <tt>delete</tt>d but not zeroed.)
  *   - Undefined behavior results.
  */
-typedef boost::signals2::trackable LLEventTrackable;
+using LLEventTrackable = boost::signals2::trackable;
 
 /*****************************************************************************
 *   LLEventPump
@@ -505,7 +505,7 @@ public:
     };
 
     /// used by listen()
-    typedef std::vector<std::string> NameList;
+    using NameList = std::vector<std::string>;
     /// convenience placeholder for when you explicitly want to pass an empty
     /// NameList
     const static NameList empty;
@@ -559,7 +559,7 @@ public:
      * } // unblock the connection again
      * @endcode
      */
-    typedef boost::signals2::shared_connection_block Blocker;
+    using Blocker = boost::signals2::shared_connection_block;
     /// Unregister a listener by name. Prefer this to
     /// <tt>getListener(name).disconnect()</tt> because stopListening() also
     /// forgets this name.
@@ -603,13 +603,13 @@ protected:
     std::shared_ptr<LLStandardSignal> mSignal;
 
     /// valve open?
-    bool mEnabled;
+    bool mEnabled{true};
     /// Map of named listeners. This tracks the listeners that actually exist
     /// at this moment. When we stopListening(), we discard the entry from
     /// this map.
-    typedef std::map<std::string, boost::signals2::connection> ConnectionMap;
+    using ConnectionMap = std::map<std::string, boost::signals2::connection>;
     ConnectionMap mConnections;
-    typedef LLDependencies<std::string, float> DependencyMap;
+    using DependencyMap = LLDependencies<std::string, float>;
     /// Dependencies between listeners. For each listener, track the float
     /// used to establish its place in mSignal's order. This caches all the
     /// listeners that have ever registered; stopListening() does not discard
@@ -630,10 +630,10 @@ class LL_COMMON_API LLEventStream: public LLEventPump
 {
 public:
     LLEventStream(const std::string& name, bool tweak=false): LLEventPump(name, tweak) {}
-    virtual ~LLEventStream() {}
+    ~LLEventStream() override = default;
 
     /// Post an event to all listeners
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 };
 
 /*****************************************************************************
@@ -661,21 +661,21 @@ class LL_COMMON_API LLEventMailDrop : public LLEventStream
 {
 public:
     LLEventMailDrop(const std::string& name, bool tweak = false) : LLEventStream(name, tweak) {}
-    virtual ~LLEventMailDrop() {}
+    ~LLEventMailDrop() override = default;
 
     /// Post an event to all listeners
-    virtual bool post(const LLSD& event) override;
+    bool post(const LLSD& event) override;
 
     /// Remove any history stored in the mail drop.
     void discard();
 
 protected:
-    virtual LLBoundListener listen_impl(const std::string& name, const LLEventListener&,
+    LLBoundListener listen_impl(const std::string& name, const LLEventListener&,
                                         const NameList& after,
                                         const NameList& before) override;
 
 private:
-    typedef std::list<LLSD> EventList;
+    using EventList = std::list<LLSD>;
     EventList mEventHistory;
 };
 
@@ -734,7 +734,7 @@ public:
         mReqid(request["reqid"])
     {}
     /// If you don't yet have the request, use setFrom() later.
-    LLReqID() {}
+    LLReqID() = default;
 
     /// Extract and store the ["reqid"] value from an incoming request.
     void setFrom(const LLSD& request)

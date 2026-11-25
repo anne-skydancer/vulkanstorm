@@ -62,7 +62,7 @@ class LL_COMMON_API LLThreadSafeQueueInterrupt:
     public LLThreadSafeQueueError
 {
 public:
-    LLThreadSafeQueueInterrupt(void):
+    LLThreadSafeQueueInterrupt():
         LLThreadSafeQueueError("queue operation interrupted")
     {
         ; // No op.
@@ -78,12 +78,12 @@ template<typename ElementT, typename QueueT=std::queue<ElementT>>
 class LLThreadSafeQueue
 {
 public:
-    typedef ElementT value_type;
+    using value_type = ElementT;
 
     // Limiting the number of pending items prevents unbounded growth of the
     // underlying queue.
     LLThreadSafeQueue(size_t capacity = 1024);
-    virtual ~LLThreadSafeQueue() {}
+    virtual ~LLThreadSafeQueue() = default;
 
     // Add an element to the queue (will block if the queue has reached
     // capacity).
@@ -133,9 +133,9 @@ public:
     //
     // This call will raise an interrupt error if the queue is closed while
     // the caller is blocked.
-    ElementT pop(void);
+    ElementT pop();
     // legacy name
-    ElementT popBack(void) { return pop(); }
+    ElementT popBack() { return pop(); }
 
     // Pop an element from the head of the queue if there is one available.
     // Returns true only if an element was popped.
@@ -177,13 +177,13 @@ public:
     bool done();
 
 protected:
-    typedef QueueT queue_type;
+    using queue_type = QueueT;
     QueueT mStorage;
     size_t mCapacity;
     std::atomic<bool> mClosed; // <FS:Beq/> Try harder to stop the compiler optimising the mClosed state inside the loops
 
     boost::fibers::timed_mutex mLock;
-    typedef std::unique_lock<decltype(mLock)> lock_t;
+    using lock_t = std::unique_lock<decltype(mLock)>;
     boost::fibers::condition_variable_any mCapacityCond;
     boost::fibers::condition_variable_any mEmptyCond;
 
@@ -228,13 +228,13 @@ namespace LL
     {
     public:
         // publish all the same types
-        typedef std::priority_queue<T, Container, Compare> queue_type;
-        typedef typename queue_type::container_type  container_type;
-        typedef typename queue_type::value_compare   value_compare;
-        typedef typename queue_type::value_type      value_type;
-        typedef typename queue_type::size_type       size_type;
-        typedef typename queue_type::reference       reference;
-        typedef typename queue_type::const_reference const_reference;
+        using queue_type = std::priority_queue<T, Container, Compare>;
+        using container_type = typename queue_type::container_type;
+        using value_compare = typename queue_type::value_compare;
+        using value_type = typename queue_type::value_type;
+        using size_type = typename queue_type::size_type;
+        using reference = typename queue_type::reference;
+        using const_reference = typename queue_type::const_reference;
 
         // Although std::queue defines both const and non-const front()
         // methods, std::priority_queue defines only const top().
@@ -365,7 +365,7 @@ bool LLThreadSafeQueue<ElementT, QueueT>::tryPush(T&& element)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     return tryLock(
-        [this, element=std::move(element)](lock_t& lock)
+        [this, element=std::forward<T>(element)](lock_t& lock)
         {
             if (mClosed)
                 return false;
@@ -397,7 +397,7 @@ bool LLThreadSafeQueue<ElementT, QueueT>::tryPushUntil(
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     return tryLockUntil(
         until,
-        [this, until, element=std::move(element)](lock_t& lock)
+        [this, until, element=std::forward<T>(element)](lock_t& lock)
         {
             while (true)
             {
@@ -447,7 +447,7 @@ LLThreadSafeQueue<ElementT, QueueT>::pop_(lock_t& lock, ElementT& element)
 
 
 template<typename ElementT, typename QueueT>
-ElementT LLThreadSafeQueue<ElementT, QueueT>::pop(void)
+ElementT LLThreadSafeQueue<ElementT, QueueT>::pop()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     lock_t lock1(mLock);
@@ -556,7 +556,7 @@ LLThreadSafeQueue<ElementT, QueueT>::tryPopUntil_(
 
 
 template<typename ElementT, typename QueueT>
-size_t LLThreadSafeQueue<ElementT, QueueT>::size(void)
+size_t LLThreadSafeQueue<ElementT, QueueT>::size()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     lock_t lock(mLock);

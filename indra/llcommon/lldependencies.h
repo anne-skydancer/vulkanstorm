@@ -32,6 +32,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 #include <set>
 #include <map>
@@ -58,8 +59,7 @@ boost::iterator_range<boost::transform_iterator<FUNCTION,
 make_transform_range(const RANGE& range, FUNCTION function)
 {
     // shorthand for the iterator type embedded in our return type
-    typedef boost::transform_iterator<FUNCTION, typename boost::range_const_iterator<RANGE>::type>
-        transform_iterator;
+    using transform_iterator = boost::transform_iterator<FUNCTION, typename boost::range_const_iterator<RANGE>::type>;
     return boost::make_iterator_range(transform_iterator(boost::begin(range), function),
                                       transform_iterator(boost::end(range),   function));
 }
@@ -72,8 +72,7 @@ boost::iterator_range<boost::transform_iterator<FUNCTION,
 make_transform_range(RANGE& range, FUNCTION function)
 {
     // shorthand for the iterator type embedded in our return type
-    typedef boost::transform_iterator<FUNCTION, typename boost::range_iterator<RANGE>::type>
-        transform_iterator;
+    using transform_iterator = boost::transform_iterator<FUNCTION, typename boost::range_iterator<RANGE>::type>;
     return boost::make_iterator_range(transform_iterator(boost::begin(range), function),
                                       transform_iterator(boost::end(range),   function));
 }
@@ -101,7 +100,7 @@ struct instance_from_range: public TYPE
 class LL_COMMON_API LLDependenciesBase
 {
 public:
-    virtual ~LLDependenciesBase() {}
+    virtual ~LLDependenciesBase() = default;
 
     /**
      * Exception thrown by sort() if there's a cycle
@@ -124,8 +123,8 @@ public:
     virtual std::string describe(bool full=true) const;
 
 protected:
-    typedef std::vector< std::pair<std::size_t, std::size_t> > EdgeList;
-    typedef std::vector<std::size_t> VertexList;
+    using EdgeList = std::vector< std::pair<std::size_t, std::size_t> >;
+    using VertexList = std::vector<std::size_t>;
     VertexList topo_sort(size_t vertices, const EdgeList& edges) const;
 
     /**
@@ -171,7 +170,7 @@ std::ostream& LLDependencies_describe(std::ostream& out, const std::string& key)
  */
 struct LLDependenciesEmpty
 {
-    LLDependenciesEmpty() {}
+    LLDependenciesEmpty() = default;
     /**
      * Give it a constructor accepting void* so caller can pass placeholder
      * values such as NULL or 0 rather than having to write
@@ -195,39 +194,39 @@ template<typename KEY = std::string,
          typename NODE = LLDependenciesEmpty>
 class LLDependencies: public LLDependenciesBase
 {
-    typedef LLDependencies<KEY, NODE> self_type;
+    using self_type = LLDependencies<KEY, NODE>;
 
     /**
      * Internally, we bundle the client's NODE with its before/after keys.
      */
     struct DepNode
     {
-        typedef std::set<KEY> dep_set;
-        DepNode(const NODE& node_, const dep_set& after_, const dep_set& before_):
+        using dep_set = std::set<KEY>;
+        DepNode(const NODE& node_, dep_set after_, dep_set before_):
             node(node_),
-            after(after_),
-            before(before_)
+            after(std::move(after_)),
+            before(std::move(before_))
         {}
         NODE node;
         dep_set after, before;
     };
-    typedef std::map<KEY, DepNode> DepNodeMap;
-    typedef typename DepNodeMap::value_type DepNodeMapEntry;
+    using DepNodeMap = std::map<KEY, DepNode>;
+    using DepNodeMapEntry = typename DepNodeMap::value_type;
 
     /// We have various ways to get the dependencies for a given DepNode.
     /// Rather than having to restate each one for 'after' and 'before'
     /// separately, pass a dep_selector so we can apply each to either.
-    typedef std::function<const typename DepNode::dep_set&(const DepNode&)> dep_selector;
+    using dep_selector = std::function<const typename DepNode::dep_set&(const DepNode&)>;
 
 public:
-    LLDependencies() {}
+    LLDependencies() = default;
 
-    typedef KEY key_type;
-    typedef NODE node_type;
+    using key_type = KEY;
+    using node_type = NODE;
 
     /// param type used to express lists of other node keys -- note that such
     /// lists can be initialized with boost::assign::list_of()
-    typedef std::vector<KEY> KeyList;
+    using KeyList = std::vector<KEY>;
 
     /**
      * Add a new node. State its dependencies on other nodes (which may not
@@ -305,9 +304,9 @@ public:
     }
 
     /// the value of an iterator, showing both KEY and its NODE
-    typedef refpair<const KEY&, NODE&> value_type;
+    using value_type = refpair<const KEY&, NODE&>;
     /// the value of a const_iterator
-    typedef refpair<const KEY&, const NODE&> const_value_type;
+    using const_value_type = refpair<const KEY&, const NODE&>;
 
 private:
     // Extract functors
@@ -340,10 +339,10 @@ private:
 
 public:
     /// iterator over value_type entries
-    typedef boost::transform_iterator<std::function<value_type(DepNodeMapEntry&)>,
-                                      typename DepNodeMap::iterator> iterator;
+    using iterator = boost::transform_iterator<std::function<value_type(DepNodeMapEntry&)>,
+                                      typename DepNodeMap::iterator>;
     /// range over value_type entries
-    typedef boost::iterator_range<iterator> range;
+    using range = boost::iterator_range<iterator>;
 
     /// iterate over value_type <i>in @c KEY order</i> rather than dependency order
     range get_range()
@@ -352,10 +351,10 @@ public:
     }
 
     /// iterator over const_value_type entries
-    typedef boost::transform_iterator<std::function<const_value_type(const DepNodeMapEntry&)>,
-                                      typename DepNodeMap::const_iterator> const_iterator;
+    using const_iterator = boost::transform_iterator<std::function<const_value_type(const DepNodeMapEntry&)>,
+                                      typename DepNodeMap::const_iterator>;
     /// range over const_value_type entries
-    typedef boost::iterator_range<const_iterator> const_range;
+    using const_range = boost::iterator_range<const_iterator>;
 
     /// iterate over const_value_type <i>in @c KEY order</i> rather than dependency order
     const_range get_range() const
@@ -364,10 +363,10 @@ public:
     }
 
     /// iterator over stored NODEs
-    typedef boost::transform_iterator<std::function<NODE&(DepNodeMapEntry&)>,
-                                      typename DepNodeMap::iterator> node_iterator;
+    using node_iterator = boost::transform_iterator<std::function<NODE&(DepNodeMapEntry&)>,
+                                      typename DepNodeMap::iterator>;
     /// range over stored NODEs
-    typedef boost::iterator_range<node_iterator> node_range;
+    using node_range = boost::iterator_range<node_iterator>;
 
     /// iterate over NODE <i>in @c KEY order</i> rather than dependency order
     node_range get_node_range()
@@ -380,10 +379,10 @@ public:
     }
 
     /// const iterator over stored NODEs
-    typedef boost::transform_iterator<std::function<const NODE&(const DepNodeMapEntry&)>,
-                                      typename DepNodeMap::const_iterator> const_node_iterator;
+    using const_node_iterator = boost::transform_iterator<std::function<const NODE&(const DepNodeMapEntry&)>,
+                                      typename DepNodeMap::const_iterator>;
     /// const range over stored NODEs
-    typedef boost::iterator_range<const_node_iterator> const_node_range;
+    using const_node_range = boost::iterator_range<const_node_iterator>;
 
     /// iterate over const NODE <i>in @c KEY order</i> rather than dependency order
     const_node_range get_node_range() const
@@ -396,10 +395,10 @@ public:
     }
 
     /// const iterator over stored KEYs
-    typedef boost::transform_iterator<std::function<const KEY&(const DepNodeMapEntry&)>,
-                                      typename DepNodeMap::const_iterator> const_key_iterator;
+    using const_key_iterator = boost::transform_iterator<std::function<const KEY&(const DepNodeMapEntry&)>,
+                                      typename DepNodeMap::const_iterator>;
     /// const range over stored KEYs
-    typedef boost::iterator_range<const_key_iterator> const_key_range;
+    using const_key_range = boost::iterator_range<const_key_iterator>;
     // We don't provide a non-const iterator over KEYs because they should be
     // immutable, and in fact our underlying std::map won't give us non-const
     // references.
@@ -451,7 +450,7 @@ public:
      */
     bool remove(const KEY& key)
     {
-        typename DepNodeMap::iterator found = mNodes.find(key);
+        auto found = mNodes.find(key);
         if (found != mNodes.end())
         {
             mNodes.erase(found);
@@ -462,8 +461,8 @@ public:
 
 private:
     /// cached list of iterators
-    typedef std::vector<iterator> iterator_list;
-    typedef typename iterator_list::iterator iterator_list_iterator;
+    using iterator_list = std::vector<iterator>;
+    using iterator_list_iterator = typename iterator_list::iterator;
 
 public:
     /**
@@ -484,9 +483,9 @@ public:
      * dereferencing one of our returned iterators will also dereference the
      * iterator contained in mCache.
      */
-    typedef boost::iterator_range<boost::indirect_iterator<iterator_list_iterator> > sorted_range;
+    using sorted_range = boost::iterator_range<boost::indirect_iterator<iterator_list_iterator> >;
     /// for convenience in looping over a sorted_range
-    typedef typename sorted_range::iterator sorted_iterator;
+    using sorted_iterator = typename sorted_range::iterator;
 
     /**
      * Once we've loaded in the dependencies of interest, arrange them into an
@@ -508,23 +507,23 @@ public:
             // been explicitly added. Rely on std::map rejecting a second attempt
             // to insert the same key. Use the map's size() as the vertex number
             // to get a distinct value for each successful insertion.
-            typedef std::map<KEY, std::size_t> VertexMap;
+            using VertexMap = std::map<KEY, std::size_t>;
             VertexMap vmap;
             // Nest each of these loops because !@#$%? MSVC warns us that its
             // former broken behavior has finally been fixed -- and our builds
             // treat warnings as errors.
             {
-                for (typename DepNodeMap::const_iterator nmi = mNodes.begin(), nmend = mNodes.end();
+                for (auto nmi = mNodes.begin(), nmend = mNodes.end();
                      nmi != nmend; ++nmi)
                 {
                     vmap.insert(typename VertexMap::value_type(nmi->first, vmap.size()));
-                    for (typename DepNode::dep_set::const_iterator ai = nmi->second.after.begin(),
+                    for (auto ai = nmi->second.after.begin(),
                                                                    aend = nmi->second.after.end();
                          ai != aend; ++ai)
                     {
                         vmap.insert(typename VertexMap::value_type(*ai, vmap.size()));
                     }
-                    for (typename DepNode::dep_set::const_iterator bi = nmi->second.before.begin(),
+                    for (auto bi = nmi->second.before.begin(),
                                                                    bend = nmi->second.before.end();
                          bi != bend; ++bi)
                     {
@@ -536,12 +535,12 @@ public:
             // all the known key dependencies to integer pairs.
             EdgeList edges;
             {
-                for (typename DepNodeMap::const_iterator nmi = mNodes.begin(), nmend = mNodes.end();
+                for (auto nmi = mNodes.begin(), nmend = mNodes.end();
                      nmi != nmend; ++nmi)
                 {
                     auto thisnode = vmap[nmi->first];
                     // after dependencies: build edges from the named node to this one
-                    for (typename DepNode::dep_set::const_iterator ai = nmi->second.after.begin(),
+                    for (auto ai = nmi->second.after.begin(),
                                                                    aend = nmi->second.after.end();
                          ai != aend; ++ai)
                     {
@@ -549,7 +548,7 @@ public:
                     }
                     // before dependencies: build edges from this node to the
                     // named one
-                    for (typename DepNode::dep_set::const_iterator bi = nmi->second.before.begin(),
+                    for (auto bi = nmi->second.before.begin(),
                                                                    bend = nmi->second.before.end();
                          bi != bend; ++bi)
                     {
@@ -578,8 +577,8 @@ public:
             {
                 // We're certain that vkeys[*svi] exists. However, there might not
                 // yet be a corresponding entry in mNodes.
-                self_type* non_const_this(const_cast<self_type*>(this));
-                typename DepNodeMap::iterator found = non_const_this->mNodes.find(vkeys[*svi]);
+                auto* non_const_this(const_cast<self_type*>(this));
+                auto found = non_const_this->mNodes.find(vkeys[*svi]);
                 if (found != non_const_this->mNodes.end())
                 {
                     // Make an iterator of appropriate type.
@@ -601,9 +600,9 @@ public:
     using LLDependenciesBase::describe; // unhide virtual std::string describe(bool full=true) const;
 
     /// Override base-class describe() with actual implementation
-    virtual std::ostream& describe(std::ostream& out, bool full=true) const
+    std::ostream& describe(std::ostream& out, bool full=true) const override
     {
-        typename DepNodeMap::const_iterator dmi(mNodes.begin()), dmend(mNodes.end());
+        auto dmi(mNodes.begin()), dmend(mNodes.end());
         if (dmi != dmend)
         {
             std::string sep;
@@ -649,7 +648,7 @@ public:
     static std::ostream& describe(std::ostream& out, const typename DepNode::dep_set& keys)
     {
         out << '(';
-        typename DepNode::dep_set::const_iterator ki(keys.begin()), kend(keys.end());
+        auto ki(keys.begin()), kend(keys.end());
         if (ki != kend)
         {
             LLDependencies_describe(out, *ki);
@@ -664,9 +663,9 @@ public:
     }
 
     /// Iterator over the before/after KEYs on which a given NODE depends
-    typedef typename DepNode::dep_set::const_iterator dep_iterator;
+    using dep_iterator = typename DepNode::dep_set::const_iterator;
     /// range over the before/after KEYs on which a given NODE depends
-    typedef boost::iterator_range<dep_iterator> dep_range;
+    using dep_range = boost::iterator_range<dep_iterator>;
 
     /// dependencies access from key
     dep_range get_dep_range_from_key(const KEY& key, const dep_selector& selector) const

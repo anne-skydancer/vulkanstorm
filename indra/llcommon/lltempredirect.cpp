@@ -95,7 +95,7 @@ LLTempRedirect::LLTempRedirect(int target, int reference):
     }
 }
 
-LLTempRedirect::LLTempRedirect(LLTempRedirect&& other)
+LLTempRedirect::LLTempRedirect(LLTempRedirect&& other) noexcept
 {
     mOrigTarget = other.mOrigTarget;
     mReference  = other.mReference;
@@ -129,7 +129,7 @@ void LLTempRedirect::reset()
     mReference  = -1;
 }
 
-LLTempRedirect& LLTempRedirect::operator=(LLTempRedirect&& other)
+LLTempRedirect& LLTempRedirect::operator=(LLTempRedirect&& other) noexcept
 {
     reset();
     std::swap(mOrigTarget, other.mOrigTarget);

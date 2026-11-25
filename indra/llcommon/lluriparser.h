@@ -80,9 +80,9 @@ private:
 
     boost::url mUri;
 
-    bool mRes;
-    bool mTmpScheme;
-    bool mNormalizedTmp;
+    bool mRes{false};
+    bool mTmpScheme{false};
+    bool mNormalizedTmp{false};
 };
 
 #endif // LL_LLURIPARSER_H

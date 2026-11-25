@@ -33,7 +33,6 @@
 LLStringTable gStringTable(32768);
 
 LLStringTableEntry::LLStringTableEntry(const char *str)
-: mString(NULL), mCount(1)
 {
     // Copy string
     U32 length = (U32)strlen(str) + 1;   /*Flawfinder: ignore*/
@@ -50,7 +49,6 @@ LLStringTableEntry::~LLStringTableEntry()
 }
 
 LLStringTable::LLStringTable(int tablesize)
-: mUniqueEntries(0)
 {
     S32 i;
     if (!tablesize)
@@ -75,7 +73,7 @@ LLStringTable::LLStringTable(int tablesize)
     // Clear strings
     for (i = 0; i < mMaxEntries; i++)
     {
-        mStringList[i] = NULL;
+        mStringList[i] = nullptr;
     }
 #endif
 }
@@ -95,7 +93,7 @@ LLStringTable::~LLStringTable()
             delete mStringList[i];
         }
         delete [] mStringList;
-        mStringList = NULL;
+        mStringList = nullptr;
     }
 #else
     // Need to clean up the string hash
@@ -141,7 +139,7 @@ char* LLStringTable::checkString(const char *str)
     }
     else
     {
-    return NULL;
+    return nullptr;
     }
 }
 
@@ -190,7 +188,7 @@ LLStringTableEntry* LLStringTable::checkStringEntry(const char *str)
         }
 #endif
     }
-    return NULL;
+    return nullptr;
 }
 
 char* LLStringTable::addString(const std::string& str)
@@ -209,7 +207,7 @@ char* LLStringTable::addString(const char *str)
     }
     else
     {
-    return NULL;
+    return nullptr;
     }
 }
 
@@ -222,7 +220,7 @@ LLStringTableEntry* LLStringTable::addStringEntry(const char *str)
 {
     if (str)
     {
-        char *ret_val = NULL;
+        char *ret_val = nullptr;
         U32                 hash_value = hash_my_string(str, mMaxEntries);
 #if STRING_TABLE_HASH_MAP
         LLStringTableEntry  *entry;
@@ -271,7 +269,7 @@ LLStringTableEntry* LLStringTable::addStringEntry(const char *str)
         }
 
         // not found, so add!
-        LLStringTableEntry *newentry = new LLStringTableEntry(str);
+        auto *newentry = new LLStringTableEntry(str);
         //ret_val = newentry->mString;
         strlist->push_front(newentry);
 #endif
@@ -280,7 +278,7 @@ LLStringTableEntry* LLStringTable::addStringEntry(const char *str)
     }
     else
     {
-        return NULL;
+        return nullptr;
     }
 }
 

@@ -34,6 +34,7 @@
 // std headers
 // external library headers
 #include <boost/bind.hpp>
+#include <utility>
 // other Linden headers
 #include "llerror.h"                // LL_ERRS
 #include "llsdutil.h"               // llsd_matches()
@@ -53,15 +54,15 @@ LLEventFilter::LLEventFilter(LLEventPump& source, const std::string& name, bool 
 /*****************************************************************************
 *   LLEventMatching
 *****************************************************************************/
-LLEventMatching::LLEventMatching(const LLSD& pattern):
+LLEventMatching::LLEventMatching(LLSD pattern):
     LLEventFilter("matching"),
-    mPattern(pattern)
+    mPattern(std::move(pattern))
 {
 }
 
-LLEventMatching::LLEventMatching(LLEventPump& source, const LLSD& pattern):
+LLEventMatching::LLEventMatching(LLEventPump& source, LLSD pattern):
     LLEventFilter(source, "matching"),
-    mPattern(pattern)
+    mPattern(std::move(pattern))
 {
 }
 
@@ -72,6 +73,7 @@ bool LLEventMatching::post(const LLSD& event)
     if (! llsd_matches(mPattern, event).empty())
         return false;
 
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     return LLEventStream::post(event);
 }
 
@@ -104,7 +106,7 @@ void LLEventTimeoutBase::actionAfter(F32 seconds, const Action& action)
 class ErrorAfter
 {
 public:
-    ErrorAfter(const std::string& message): mMessage(message) {}
+    ErrorAfter(std::string message): mMessage(std::move(message)) {}
 
     void operator()()
     {
@@ -123,9 +125,9 @@ void LLEventTimeoutBase::errorAfter(F32 seconds, const std::string& message)
 class EventAfter
 {
 public:
-    EventAfter(LLEventPump& pump, const LLSD& event):
+    EventAfter(LLEventPump& pump, LLSD event):
         mPump(pump),
-        mEvent(event)
+        mEvent(std::move(event))
     {}
 
     void operator()()
@@ -150,6 +152,7 @@ void LLEventTimeoutBase::eventAfter(F32 seconds, const LLSD& event)
 bool LLEventTimeoutBase::post(const LLSD& event)
 {
     cancel();
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     return LLEventStream::post(event);
 }
 
@@ -178,7 +181,7 @@ bool LLEventTimeoutBase::running() const
 /*****************************************************************************
 *   LLEventTimeout
 *****************************************************************************/
-LLEventTimeout::LLEventTimeout() {}
+LLEventTimeout::LLEventTimeout() = default;
 
 LLEventTimeout::LLEventTimeout(LLEventPump& source):
     LLEventTimeoutBase(source)
@@ -238,6 +241,7 @@ void LLEventBatch::flush()
     // copy and clear mBatch BEFORE posting to avoid weird circularity effects
     LLSD batch(mBatch);
     mBatch.clear();
+    // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
     LLEventStream::post(batch);
 }
 
@@ -295,6 +299,7 @@ void LLEventThrottleBase::flush()
         // effects
         LLSD pending = mPending;
         mPending.clear();
+        // NOLINTNEXTLINE(bugprone-parent-virtual-call): LLEventFilter::post() is pure virtual; the filter forwards to the stream underneath
         LLEventStream::post(pending);
     }
 }

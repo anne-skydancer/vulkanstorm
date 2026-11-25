@@ -54,7 +54,7 @@ namespace LL
     public:
         LazyEventAPIBase(const std::string& name, const std::string& desc,
                          const std::string& field);
-        virtual ~LazyEventAPIBase();
+        ~LazyEventAPIBase() override;
 
         // Do not copy or move: once constructed, LazyEventAPIBase must stay
         // put: we bind its instance pointer into a callback.
@@ -68,7 +68,7 @@ namespace LL
         void add(const std::string& name, const std::string& desc, ARGS&&... rest)
         {
             // capture the metadata separately
-            mOperations.push_back(std::make_pair(name, desc));
+            mOperations.emplace_back(name, desc);
             // Use connect_extended() so the lambda is passed its own
             // connection.
 

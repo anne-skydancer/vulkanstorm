@@ -44,7 +44,7 @@
 # include <io.h>
 #endif // !LL_WINDOWS
 #include <vector>
-#include "string.h"
+#include <cstring>
 
 #include "llapp.h"
 #include "llapr.h"
@@ -149,15 +149,15 @@ namespace {
             }
         }
 
-        ~RecordToFile()
+        ~RecordToFile() override
         {
             mFile.close();
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
 #ifdef LL_RELEASE_FOR_DOWNLOAD
-            return 1;
+            return true;
 #else
             return LLError::getEnabledLogTypesMask() & 0x02;
 #endif
@@ -167,7 +167,7 @@ namespace {
 
         std::string getFilename() const { return mName; }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                     const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -195,7 +195,7 @@ namespace {
             this->showMultiline(true);
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x04;
         }
@@ -234,7 +234,7 @@ namespace {
             return ansi_code;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                        const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -247,13 +247,14 @@ namespace {
             // The list of color codes can be found in many places but I used this page:
             // https://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html#256-colors
             // (Note: you may need to restart Visual Studio to pick environment changes)
-            char* val = nullptr;
-            std::string s_ansi_error_code = "160";
-            if ((val = getenv("LL_ANSI_ERROR_COLOR_CODE")) != nullptr) s_ansi_error_code = std::string(val);
-            std::string s_ansi_warn_code = "33";
-            if ((val = getenv("LL_ANSI_WARN_COLOR_CODE")) != nullptr) s_ansi_warn_code = std::string(val);
-            std::string s_ansi_debug_code = "177";
-            if ((val = getenv("LL_ANSI_DEBUG_COLOR_CODE")) != nullptr) s_ansi_debug_code = std::string(val);
+            auto env_or = [](const char* name, const char* fallback)
+            {
+                const char* val = getenv(name);
+                return std::string(val ? val : fallback);
+            };
+            std::string s_ansi_error_code = env_or("LL_ANSI_ERROR_COLOR_CODE", "160");
+            std::string s_ansi_warn_code = env_or("LL_ANSI_WARN_COLOR_CODE", "33");
+            std::string s_ansi_debug_code = env_or("LL_ANSI_DEBUG_COLOR_CODE", "177");
 
             static std::string s_ansi_error = createANSI(s_ansi_error_code); // default is red
             static std::string s_ansi_warn  = createANSI(s_ansi_warn_code); // default is blue
@@ -288,13 +289,13 @@ namespace {
             fprintf(stderr, "%s%s\n%s", ansi_code.c_str(), message.c_str(), s_ansi_reset.c_str() );
         }
 
-        static bool checkANSI(void)
+        static bool checkANSI()
         {
             // Check whether it's okay to use ANSI; if stderr is
             // a tty then we assume yes.  Can be turned off with
             // the LL_NO_ANSI_COLOR env var.
             return (0 != isatty(2)) &&
-                (NULL == getenv("LL_NO_ANSI_COLOR"));
+                (nullptr == getenv("LL_NO_ANSI_COLOR"));
         }
     };
 
@@ -309,12 +310,12 @@ namespace {
                 this->showLocation(false);
             }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x08;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                    const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -336,12 +337,12 @@ namespace {
             this->showLocation(false);
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x10;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                    const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -379,7 +380,7 @@ namespace LLError
         std::string name = mangled;
         for (const auto& prefix : std::vector<std::string>{ "class ", "struct " })
         {
-            if (0 == name.compare(0, prefix.length(), prefix))
+            if (name.starts_with(prefix))
             {
                 return name.substr(prefix.length());
             }
@@ -425,7 +426,7 @@ namespace
     public:
         static LogControlFile& fromDirectory(const std::string& user_dir, const std::string& app_dir);
 
-        virtual bool loadFile();
+        bool loadFile() override;
 
     private:
         LogControlFile(const std::string &filename)
@@ -485,22 +486,22 @@ namespace
     }
 
 
-    typedef std::unordered_map<std::string, LLError::ELevel> LevelMap;
-    typedef std::vector<LLError::RecorderPtr> Recorders;
-    typedef std::vector<LLError::CallSite*> CallSiteVector;
+    using LevelMap = std::unordered_map<std::string, LLError::ELevel>;
+    using Recorders = std::vector<LLError::RecorderPtr>;
+    using CallSiteVector = std::vector<LLError::CallSite*>;
 
     class SettingsConfig : public LLRefCount
     {
         friend class Globals;
 
     public:
-        virtual ~SettingsConfig();
+        ~SettingsConfig() override;
 
-        LLError::ELevel                     mDefaultLevel;
+        LLError::ELevel                     mDefaultLevel{LLError::LEVEL_DEBUG};
 
-        bool                                mLogAlwaysFlush;
+        bool                                mLogAlwaysFlush{true};
 
-        U32                                 mEnabledLogTypesMask;
+        U32                                 mEnabledLogTypesMask{255};
 
         LevelMap                            mFunctionLevelMap;
         LevelMap                            mClassLevelMap;
@@ -509,33 +510,28 @@ namespace
         std::unordered_map<std::string, unsigned int> mUniqueLogMessages;
 
         LLError::FatalFunction              mCrashFunction;
-        LLError::TimeFunction               mTimeFunction;
+        LLError::TimeFunction               mTimeFunction{nullptr};
 
         Recorders                           mRecorders;
         LL_PROFILE_MUTEX_NAMED(LLCoros::RMutex, mRecorderMutex, "Log Recorders");
 
-        int                                 mShouldLogCallCounter;
+        int                                 mShouldLogCallCounter{0};
 
     private:
         SettingsConfig();
     };
 
-    typedef LLPointer<SettingsConfig> SettingsConfigPtr;
+    using SettingsConfigPtr = LLPointer<SettingsConfig>;
 
     SettingsConfig::SettingsConfig()
         : LLRefCount(),
-        mDefaultLevel(LLError::LEVEL_DEBUG),
-        mLogAlwaysFlush(true),
-        mEnabledLogTypesMask(255),
         mFunctionLevelMap(),
         mClassLevelMap(),
         mFileLevelMap(),
         mTagLevelMap(),
         mUniqueLogMessages(),
         mCrashFunction(nullptr),
-        mTimeFunction(nullptr),
-        mRecorders(),
-        mShouldLogCallCounter(0)
+        mRecorders()
     {
     }
 
@@ -560,7 +556,7 @@ namespace
 
         void resetSettingsConfig();
         LLError::SettingsStoragePtr saveAndResetSettingsConfig();
-        void restore(LLError::SettingsStoragePtr pSettingsStorage);
+        void restore(const LLError::SettingsStoragePtr& pSettingsStorage);
     private:
         CallSiteVector callSites;
         SettingsConfigPtr mSettingsConfig;
@@ -617,7 +613,7 @@ namespace
         return oldSettingsConfig;
     }
 
-    void Globals::restore(LLError::SettingsStoragePtr pSettingsStorage)
+    void Globals::restore(const LLError::SettingsStoragePtr& pSettingsStorage)
     {
         invalidateCallSites();
         SettingsConfigPtr newSettingsConfig(dynamic_cast<SettingsConfig *>(pSettingsStorage.get()));
@@ -640,8 +636,6 @@ namespace LLError
         mLine(line),
         mClassInfo(class_info),
         mFunction(function),
-        mCached(false),
-        mShouldLog(false),
         mPrintOnce(printOnce),
         mTags(new const char* [tag_count]),
         mTagCount(tag_count)
@@ -969,19 +963,9 @@ namespace LLError
 
 namespace LLError
 {
-    Recorder::Recorder()
-        : mWantsTime(true)
-        , mWantsTags(true)
-        , mWantsLevel(true)
-        , mWantsLocation(true)
-        , mWantsFunctionName(true)
-        , mWantsMultiline(false)
-    {
-    }
+    Recorder::Recorder() = default;
 
-    Recorder::~Recorder()
-    {
-    }
+    Recorder::~Recorder() = default;
 
     bool Recorder::wantsTime()
     {
@@ -1048,7 +1032,7 @@ namespace LLError
         mWantsMultiline = show;
     }
 
-    void addRecorder(RecorderPtr recorder)
+    void addRecorder(const RecorderPtr& recorder)
     {
         if (!recorder)
         {
@@ -1059,7 +1043,7 @@ namespace LLError
         s->mRecorders.push_back(recorder);
     }
 
-    void removeRecorder(RecorderPtr recorder)
+    void removeRecorder(const RecorderPtr& recorder)
     {
         if (!recorder)
         {
@@ -1213,6 +1197,8 @@ namespace
             case '\r':
                 out << 'r';
                 break;
+            default:
+                break;
             }
         }
 
@@ -1313,15 +1299,14 @@ namespace {
     bool checkLevelMap(const LevelMap& map, const std::string& key,
                         LLError::ELevel& level)
     {
-        bool stop_checking;
-        LevelMap::const_iterator i = map.find(key);
+        auto i = map.find(key);
         if (i == map.end())
         {
-            return stop_checking = false;
+            return false;
         }
 
             level = i->second;
-        return stop_checking = true;
+        return true;
     }
 
     bool checkLevelMap( const LevelMap& map,
@@ -1340,7 +1325,7 @@ namespace {
                 continue;
             // </FS:ND>
 
-            LevelMap::const_iterator it = map.find(keys[i]);
+            auto it = map.find(keys[i]);
             if (it != map.end())
             {
                 found_level = true;
@@ -1519,7 +1504,7 @@ namespace LLError
 
     std::string utcTime()
     {
-        time_t now = time(NULL);
+        time_t now = time(nullptr);
         const size_t BUF_SIZE = 64;
         char time_str[BUF_SIZE];    /* Flawfinder: ignore */
 

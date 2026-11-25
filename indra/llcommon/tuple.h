@@ -58,10 +58,10 @@ auto tuple_cdr(Tuple&& tuple)
         std::forward<Tuple>(tuple),
         // Pass helper function an index sequence one item shorter than tuple
         std::make_index_sequence<
-            std::tuple_size<
+            std::tuple_size_v<
                 // tuple_size doesn't like reference types
-                typename std::remove_reference<Tuple>::type
-            >::value - 1u>
+                std::remove_reference_t<Tuple>
+            > - 1u>
         ());
 }
 

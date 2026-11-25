@@ -30,6 +30,7 @@
 #define LL_LLSDSERIALIZE_H
 
 #include <iosfwd>
+#include <utility>
 #include "llpointer.h"
 #include "llrefcount.h"
 #include "llsd.h"
@@ -44,7 +45,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDParser();
+    ~LLSDParser() override;
 
 public:
     /**
@@ -253,23 +254,23 @@ protected:
     /**
      * @brief boolean to set if byte counts should be checked during parsing.
      */
-    bool mCheckLimits;
+    bool mCheckLimits{true};
 
     /**
      * @brief The maximum number of bytes left to be parsed.
      */
-    mutable llssize mMaxBytesLeft;
+    mutable llssize mMaxBytesLeft{0};
 
     /** @brief The node budget (see setMaxNodes()) and what is left of it in the current parse. */
-    size_t mMaxNodes;
-    mutable size_t mNodesLeft;
+    size_t mMaxNodes{MAX_NODES_DEFAULT};
+    mutable size_t mNodesLeft{0};
     /** @brief The current parse stopped on the node budget: its partial result is discarded. */
-    mutable bool mNodesSpent;
+    mutable bool mNodesSpent{false};
 
     /**
      * @brief Use line-based reading to get text
      */
-    bool mParseLines;
+    bool mParseLines{false};
 };
 
 /**
@@ -282,7 +283,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDNotationParser();
+    ~LLSDNotationParser() override;
 
 public:
     /**
@@ -307,7 +308,7 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
 private:
     /**
@@ -359,7 +360,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDXMLParser();
+    ~LLSDXMLParser() override;
 
 public:
     /**
@@ -384,12 +385,12 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns PARSE_FAILURE (-1) on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
     /**
      * @brief Virtual default function for resetting the parser
      */
-    virtual void doReset();
+    void doReset() override;
 
 private:
     class Impl;
@@ -409,7 +410,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDBinaryParser();
+    ~LLSDBinaryParser() override;
 
 public:
     /**
@@ -434,7 +435,7 @@ protected:
      * @return Returns the number of LLSD objects parsed into
      * data. Returns -1 on parse failure.
      */
-    virtual S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const;
+    S32 doParse(std::istream& istr, LLSD& data, S32 max_depth = -1) const override;
 
 private:
     /**
@@ -478,18 +479,18 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDFormatter();
+    ~LLSDFormatter() override;
 
 public:
     /**
      * Options for output
      */
-    typedef enum e_formatter_options_type
+    using EFormatterOptions = enum e_formatter_options_type
     {
         OPTIONS_NONE = 0,
         OPTIONS_PRETTY = 1,
         OPTIONS_PRETTY_BINARY = 2
-    } EFormatterOptions;
+    };
 
     /**
      * @brief Constructor
@@ -558,7 +559,7 @@ protected:
      */
     void formatReal(LLSD::Real real, std::ostream& ostr) const;
 
-    bool mBoolAlpha;
+    bool mBoolAlpha{};
     std::string mRealFormat;
     EFormatterOptions mOptions;
 };
@@ -574,7 +575,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDNotationFormatter();
+    ~LLSDNotationFormatter() override;
 
 public:
     /**
@@ -618,7 +619,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDXMLFormatter();
+    ~LLSDXMLFormatter() override;
 
 public:
     /**
@@ -690,7 +691,7 @@ protected:
     /**
      * @brief Destructor
      */
-    virtual ~LLSDBinaryFormatter();
+    ~LLSDBinaryFormatter() override;
 
 public:
     /**
@@ -749,9 +750,9 @@ public:
     /**
      * @brief Constructor
      */
-    LLSDOStreamer(const LLSD& data,
+    LLSDOStreamer(LLSD data,
                   LLSDFormatter::EFormatterOptions options=LLSDFormatter::OPTIONS_PRETTY_BINARY) :
-        mSD(data), mOptions(options) {}
+        mSD(std::move(data)), mOptions(options) {}
 
     /**
      * @brief Stream operator.
@@ -775,8 +776,8 @@ protected:
     LLSDFormatter::EFormatterOptions mOptions;
 };
 
-typedef LLSDOStreamer<LLSDNotationFormatter>    LLSDNotationStreamer;
-typedef LLSDOStreamer<LLSDXMLFormatter>         LLSDXMLStreamer;
+using LLSDNotationStreamer = LLSDOStreamer<LLSDNotationFormatter>;
+using LLSDXMLStreamer = LLSDOStreamer<LLSDXMLFormatter>;
 
 /**
  * @class LLSDSerialize
@@ -933,7 +934,7 @@ constexpr size_t UNZIP_NAVMESH_MAX_OUT = 256u * 1024 * 1024;
 class LL_COMMON_API LLUZipHelper : public LLRefCount
 {
 public:
-    typedef enum e_zip_result
+    using EZipRresult = enum e_zip_result
     {
         ZR_OK = 0,
         ZR_MEM_ERROR,
@@ -942,7 +943,7 @@ public:
         ZR_PARSE_ERROR,
         ZR_BUFFER_ERROR,
         ZR_VERSION_ERROR
-    } EZipRresult;
+    };
     // return OK or reason for failure; max_out is required so every caller chooses its cap
     static EZipRresult unzip_llsd(LLSD& data, std::istream& is, S32 size, size_t max_out);
     static EZipRresult unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out);

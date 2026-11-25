@@ -36,8 +36,8 @@
 #pragma warning (disable : 4355) // 'this' used in initializer list: yes, intentionally
 #endif
 
-LLLeap::LLLeap() {}
-LLLeap::~LLLeap() {}
+LLLeap::LLLeap() = default;
+LLLeap::~LLLeap() = default;
 
 class LLLeapImpl: public LLLeap
 {
@@ -55,7 +55,6 @@ public:
         // Try to make that more difficult by generating a UUID for the reply-
         // pump name -- so it should NOT need tweaking for uniqueness.
         mReplyPump(LLUUID::generateNewID().asString()),
-        mExpect(0),
         // Instantiate a distinct LLLeapListener for this plugin. (Every
         // plugin will want its own collection of managed listeners, etc.)
         // Pass it a callback to our connect() method, so it can send events
@@ -155,7 +154,7 @@ public:
     }
 
     // Normally we'd expect to arrive here only via done()
-    virtual ~LLLeapImpl()
+    ~LLLeapImpl() override
     {
         LL_DEBUGS("LLLeap") << "destroying LLLeap(\"" << mDesc << "\")" << LL_ENDL;
         LLError::removeRecorder(mRecorder);
@@ -469,7 +468,7 @@ private:
     LLProcessPtr mChild;
     LLTempBoundListener
         mStdinConnection, mStdoutConnection, mStderrConnection;
-    LLProcess::ReadPipe::size_type mExpect;
+    LLProcess::ReadPipe::size_type mExpect{0};
     LLError::RecorderPtr mRecorder;
     std::unique_ptr<LLLeapListener> mListener;
     bool mReadPrefix;
@@ -489,7 +488,7 @@ LLLeap* LLLeap::create(const LLProcess::Params& params, bool exc)
     }
     catch (const LLLeap::Error&)
     {
-        return NULL;
+        return nullptr;
     }
 }
 
@@ -497,7 +496,7 @@ LLLeap* LLLeap::create(const std::string& desc, const std::vector<std::string>& 
 {
     LLProcess::Params params;
     params.desc = desc;
-    std::vector<std::string>::const_iterator pi(plugin.begin()), pend(plugin.end());
+    auto pi(plugin.begin()), pend(plugin.end());
     // could validate here, but let's rely on LLLeapImpl's constructor
     if (pi != pend)
     {

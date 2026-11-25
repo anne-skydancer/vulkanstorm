@@ -22,6 +22,7 @@
 #include <exception>                // std::current_exception
 #include <functional>               // std::function
 #include <string>
+#include <utility>
 
 class LLEventPumps;
 
@@ -57,7 +58,7 @@ namespace LL
          */
         WorkQueueBase(const std::string& name, bool auto_shutdown);
 
-        virtual ~WorkQueueBase();
+        ~WorkQueueBase() override;
 
         /**
          * Since the point of WorkQueue is to pass work to some other worker
@@ -105,7 +106,7 @@ namespace LL
          * able to post.
          */
         template <typename... ARGS>
-        static bool postMaybe(weak_t target, ARGS&&... args);
+        static bool postMaybe(const weak_t& target, ARGS&&... args);
 
         /*------------------------- handshake API --------------------------*/
 
@@ -118,7 +119,7 @@ namespace LL
          * inaccessible.
          */
         template <typename CALLABLE, typename FOLLOWUP, typename... ARGS>
-        bool postTo(weak_t target, CALLABLE&& callable, FOLLOWUP&& callback,
+        bool postTo(const weak_t& target, CALLABLE&& callable, FOLLOWUP&& callback,
                     ARGS&&... args);
 
         /**
@@ -384,7 +385,7 @@ namespace LL
                  const TimePoint& start,
                  const std::chrono::duration<Rep, Period>& interval,
                  CALLABLE&& callable):
-            mTarget(target),
+            mTarget(std::move(target)),
             mStart(start),
             mInterval(interval),
             mCallable(std::move(callable))
@@ -451,7 +452,7 @@ namespace LL
         // callable.
         return post(
             BackJack<Rep, Period, CALLABLE>(
-                 getWeak(), TimePoint::clock::now(), interval, std::move(callable)));
+                 getWeak(), TimePoint::clock::now(), interval, std::forward<CALLABLE>(callable)));
     }
 
     /// general case: arbitrary C++ return type
@@ -493,11 +494,11 @@ namespace LL
     {
         return MakeReplyLambda<CALLABLE, FOLLOWUP,
                                decltype(std::forward<CALLABLE>(callable)())>()
-            (std::move(callable), std::move(callback));
+            (std::forward<CALLABLE>(callable), std::forward<FOLLOWUP>(callback));
     }
 
     template <typename CALLABLE, typename FOLLOWUP, typename... ARGS>
-    bool WorkQueueBase::postTo(weak_t target, CALLABLE&& callable, FOLLOWUP&& callback,
+    bool WorkQueueBase::postTo(const weak_t& target, CALLABLE&& callable, FOLLOWUP&& callback,
                                ARGS&&... args)
     {
         LL_PROFILE_ZONE_SCOPED;
@@ -513,8 +514,8 @@ namespace LL
         // to this originating WorkQueue.
         return tptr->post(
             [reply = super::getWeak(),
-             callable = std::move(callable),
-             callback = std::move(callback)]
+             callable = std::forward<CALLABLE>(callable),
+             callback = std::forward<FOLLOWUP>(callback)]
             () mutable
             {
                 // Use postMaybe() below in case this originating WorkQueue
@@ -549,7 +550,7 @@ namespace LL
     }
 
     template <typename... ARGS>
-    bool WorkQueueBase::postMaybe(weak_t target, ARGS&&... args)
+    bool WorkQueueBase::postMaybe(const weak_t& target, ARGS&&... args)
     {
         LL_PROFILE_ZONE_SCOPED;
         // target is a weak_ptr: have to lock it to check it

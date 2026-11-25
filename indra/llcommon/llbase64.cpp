@@ -49,7 +49,7 @@ std::string LLBase64::encode(const U8* input, size_t input_size)
         // you're not on an EBCDIC machine.  Also, the output is
         // null terminated, even though the documentation doesn't
         // specify.  See apr_base64.c for details. JC
-        b64_buffer_length = apr_base64_encode_binary(
+        apr_base64_encode_binary(
             b64_buffer,
             input,
             narrow<size_t>(input_size));
@@ -68,7 +68,7 @@ std::string LLBase64::decodeAsString(const std::string &input)
         // you're not on an EBCDIC machine.  Also, the output is
         // null terminated, even though the documentation doesn't
         // specify.  See apr_base64.c for details. JC
-    b64_buffer_length = apr_base64_decode(b64_buffer, input.c_str());
+    apr_base64_decode(b64_buffer, input.c_str());
     std::string res;
     res.assign(b64_buffer);
     delete[] b64_buffer;

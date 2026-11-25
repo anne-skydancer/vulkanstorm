@@ -46,6 +46,7 @@
 #include <stdexcept>
 #include <limits>
 #include <algorithm>
+#include <utility>
 #include <vector>
 #include <typeinfo>
 #include <utility>
@@ -74,9 +75,7 @@ class LLProcessListener
 {
     LOG_CLASS(LLProcessListener);
 public:
-    LLProcessListener():
-        mCount(0)
-    {}
+    LLProcessListener() = default;
 
     void addPoll(const LLProcess&)
     {
@@ -129,14 +128,14 @@ private:
     /// If this object is destroyed before mCount goes to zero, stop
     /// listening on "mainloop" anyway.
     LLTempBoundListener mConnection;
-    unsigned mCount;
+    unsigned mCount{0};
 };
 static LLProcessListener sProcessListener;
 
 /*****************************************************************************
 *   WritePipe and ReadPipe
 *****************************************************************************/
-LLProcess::BasePipe::~BasePipe() {}
+LLProcess::BasePipe::~BasePipe() = default;
 const LLProcess::BasePipe::size_type
       // use funky syntax to call max() to avoid blighted max() macros
       LLProcess::BasePipe::npos((std::numeric_limits<LLProcess::BasePipe::size_type>::max)());
@@ -145,8 +144,8 @@ class WritePipeImpl: public LLProcess::WritePipe
 {
     LOG_CLASS(WritePipeImpl);
 public:
-    WritePipeImpl(const std::string& desc, apr_file_t* pipe):
-        mDesc(desc),
+    WritePipeImpl(std::string desc, apr_file_t* pipe):
+        mDesc(std::move(desc)),
         mPipe(pipe),
         // Essential to initialize our std::ostream with our special streambuf!
         mStream(&mStreambuf)
@@ -157,7 +156,7 @@ public:
         apr_status_t status = apr_os_file_get(&mHandle, mPipe);
         if (status == APR_SUCCESS)
         {
-            mEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+            mEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
             if (! mEvent)
             {
                 status = APR_FROM_OS_ERROR(GetLastError());
@@ -186,10 +185,10 @@ public:
 #endif
     }
 
-    virtual std::ostream& get_ostream() { return mStream; }
+    std::ostream& get_ostream() override { return mStream; }
     // <Vulkanstorm>
 #if LL_WINDOWS
-    ~WritePipeImpl()
+    ~WritePipeImpl() override
     {
         // LLProcess destroys its pipes before the APR pool that owns the
         // handle. A pending write refers to mChunk and mOverlapped, which must
@@ -221,7 +220,7 @@ public:
     }
 
     // bytes not yet accepted by the pipe, including those in flight
-    virtual size_type size() const { return mStreambuf.size() + mChunkLen; }
+    size_type size() const override { return mStreambuf.size() + mChunkLen; }
 
     bool tick(const LLSD&)
     {
@@ -466,7 +465,7 @@ private:
     // capacity of the pipe: nInBufferSize in apr/file_io/win32/pipe.c:173
     static const std::size_t sPipeCapacity = 65536;
     HANDLE mHandle = INVALID_HANDLE_VALUE;
-    HANDLE mEvent = NULL;
+    HANDLE mEvent = nullptr;
     OVERLAPPED mOverlapped = {};
     std::vector<char> mChunk;       // data of the write in flight, or to retry
     std::size_t mChunkLen = 0;      // bytes of mChunk not yet accepted
@@ -486,22 +485,20 @@ class ReadPipeImpl: public LLProcess::ReadPipe
 {
     LOG_CLASS(ReadPipeImpl);
 public:
-    ReadPipeImpl(const std::string& desc, apr_file_t* pipe, LLProcess::FILESLOT index):
-        mDesc(desc),
+    ReadPipeImpl(std::string desc, apr_file_t* pipe, LLProcess::FILESLOT index):
+        mDesc(std::move(desc)),
         mPipe(pipe),
         mIndex(index),
         // Essential to initialize our std::istream with our special streambuf!
         mStream(&mStreambuf),
-        mPump("ReadPipe", true),    // tweak name as needed to avoid collisions
-        mLimit(0),
-        mEOF(false)
+        mPump("ReadPipe", true)    // tweak name as needed to avoid collisions
     {
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("ReadPipe"),
                     boost::bind(&ReadPipeImpl::tick, this, _1));
     }
 
-    ~ReadPipeImpl()
+    ~ReadPipeImpl() override
     {
         if (mConnection.connected())
         {
@@ -511,14 +508,14 @@ public:
 
     // Much of the implementation is simply connecting the abstract virtual
     // methods with implementation data concealed from the base class.
-    virtual std::istream& get_istream() { return mStream; }
-    virtual std::string getline() { return LLProcess::getline(mStream); }
-    virtual LLEventPump& getPump() { return mPump; }
-    virtual void setLimit(size_type limit) { mLimit = limit; }
-    virtual size_type getLimit() const { return mLimit; }
-    virtual size_type size() const { return mStreambuf.size(); }
+    std::istream& get_istream() override { return mStream; }
+    std::string getline() override { return LLProcess::getline(mStream); }
+    LLEventPump& getPump() override { return mPump; }
+    void setLimit(size_type limit) override { mLimit = limit; }
+    size_type getLimit() const override { return mLimit; }
+    size_type size() const override { return mStreambuf.size(); }
 
-    virtual std::string read(size_type len)
+    std::string read(size_type len) override
     {
         // Read specified number of bytes into a buffer.
         size_type readlen((std::min)(size(), len));
@@ -535,7 +532,7 @@ public:
         return std::string(&buffer[0], mStream.gcount());
     }
 
-    virtual std::string peek(size_type offset=0, size_type len=npos) const
+    std::string peek(size_type offset=0, size_type len=npos) const override
     {
         // Constrain caller's offset and len to overlap actual buffer content.
         std::size_t real_offset = (std::min)(mStreambuf.size(), std::size_t(offset));
@@ -546,7 +543,7 @@ public:
                            boost::asio::buffers_begin(cbufs) + real_end);
     }
 
-    virtual size_type find(const std::string& seek, size_type offset=0) const
+    size_type find(const std::string& seek, size_type offset=0) const override
     {
         // If we're passing a string of length 1, use find(char), which can
         // use an O(n) std::find() rather than the O(n^2) std::search().
@@ -570,7 +567,7 @@ public:
         return (found == end)? npos : (found - begin);
     }
 
-    virtual size_type find(char seek, size_type offset=0) const
+    size_type find(char seek, size_type offset=0) const override
     {
         // If offset is beyond the whole buffer, can't even construct a valid
         // iterator range; can't possibly find the char we seek.
@@ -593,7 +590,7 @@ public:
         if (mEOF)
             return false;
 
-        typedef boost::asio::streambuf::mutable_buffers_type mutable_buffer_sequence;
+        using mutable_buffer_sequence = boost::asio::streambuf::mutable_buffers_type;
         // Try, every time, to read into our streambuf. In fact, we have no
         // idea how much data the child might be trying to send: keep trying
         // until we're convinced we've temporarily exhausted the pipe.
@@ -702,8 +699,8 @@ private:
     boost::asio::streambuf mStreambuf;
     std::istream mStream;
     LLEventStream mPump;
-    size_type mLimit;
-    bool mEOF;
+    size_type mLimit{0};
+    bool mEOF{false};
 };
 
 /*****************************************************************************
@@ -742,7 +739,7 @@ LLProcessPtr LLProcess::create(const LLSDOrParams& params)
                      );
         }
 
-        return LLProcessPtr();
+        return {};
     }
 }
 
@@ -758,8 +755,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     // Because 'autokill' originally meant both 'autokill' and 'attached', to
     // preserve existing semantics, we promise that mAttached defaults to the
     // same setting as mAutokill.
-    mAttached(params.attached.isProvided()? params.attached : params.autokill),
-    mPool(NULL)
+    mAttached(params.attached.isProvided()? params.attached : params.autokill)
 {
     mPipes.resize(NSLOTS);
 
@@ -777,7 +773,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
         LLTHROW(LLProcessError(STRINGIZE("failed to create apr pool")));
     }
 
-    apr_procattr_t *procattr = NULL;
+    apr_procattr_t *procattr = nullptr;
     chkapr(apr_procattr_create(&procattr, mPool));
 
     // IQA-490, CHOP-900: On Windows, ask APR to jump through hoops to
@@ -913,7 +909,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     // Launch! The NULL would be the environment block, if we were passing
     // one. Hand-expand chkapr() macro so we can fill in the actual command
     // string instead of the variable names.
-    if (ll_apr_warn_status(apr_proc_create(&mProcess, argv[0], &argv[0], NULL, procattr,
+    if (ll_apr_warn_status(apr_proc_create(&mProcess, argv[0], &argv[0], nullptr, procattr,
                                            mPool)))
     {
         LLTHROW(LLProcessError(STRINGIZE(params << " failed")));
@@ -959,7 +955,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
 
     // Instantiate the proper pipe I/O machinery
     // want to be able to point to apr_proc_t::in, out, err by index
-    typedef apr_file_t* apr_proc_t::*apr_proc_file_ptr;
+    using apr_proc_file_ptr = apr_file_t* apr_proc_t::*;
     static apr_proc_file_ptr members[] =
         { &apr_proc_t::in, &apr_proc_t::out, &apr_proc_t::err };
     for (size_t i = 0; i < NSLOTS; ++i)
@@ -1049,7 +1045,7 @@ LLProcess::~LLProcess()
     if (mPool)
     {
         apr_pool_destroy(mPool);
-        mPool = NULL;
+        mPool = nullptr;
     }
 }
 
@@ -1103,7 +1099,7 @@ LLProcess::Status LLProcess::getStatus(const LLProcessPtr& p)
     if (! p)
     {
         // default-constructed Status has mState == UNSTARTED
-        return Status();
+        return {};
     }
     return p->getStatus();
 }
@@ -1227,7 +1223,7 @@ void LLProcess::handle_status(int reason, int status)
     for (size_t i = 0; i < mPipes.size(); ++i)
     {
         std::string error;
-        ReadPipeImpl* ppipe = getPipePtr<ReadPipeImpl>(error, FILESLOT(i));
+        auto* ppipe = getPipePtr<ReadPipeImpl>(error, FILESLOT(i));
         if (ppipe)
         {
             static LLSD trivial;
@@ -1285,20 +1281,20 @@ PIPETYPE* LLProcess::getPipePtr(std::string& error, FILESLOT slot)
     if (slot >= NSLOTS)
     {
         error = STRINGIZE(mDesc << " has no slot " << slot);
-        return NULL;
+        return nullptr;
     }
     if (!mPipes[slot])
     {
         error = STRINGIZE(mDesc << ' ' << whichfile(slot) << " not a monitored pipe");
-        return NULL;
+        return nullptr;
     }
     // Make sure we dynamic_cast in pointer domain so we can test, rather than
     // accepting runtime's exception.
-    PIPETYPE* ppipe = dynamic_cast<PIPETYPE*>(mPipes[slot].get());
+    auto* ppipe = dynamic_cast<PIPETYPE*>(mPipes[slot].get());
     if (! ppipe)
     {
         error = STRINGIZE(mDesc << ' ' << whichfile(slot) << " not a " << typeid(PIPETYPE).name());
-        return NULL;
+        return nullptr;
     }
 
     error.clear();
@@ -1309,7 +1305,7 @@ template <class PIPETYPE>
 PIPETYPE& LLProcess::getPipe(FILESLOT slot)
 {
     std::string error;
-    PIPETYPE* wp = getPipePtr<PIPETYPE>(error, slot);
+    auto* wp = getPipePtr<PIPETYPE>(error, slot);
     if (! wp)
     {
         LLTHROW(NoPipe(error));
@@ -1321,7 +1317,7 @@ template <class PIPETYPE>
 boost::optional<PIPETYPE&> LLProcess::getOptPipe(FILESLOT slot)
 {
     std::string error;
-    PIPETYPE* wp = getPipePtr<PIPETYPE>(error, slot);
+    auto* wp = getPipePtr<PIPETYPE>(error, slot);
     if (! wp)
     {
         LL_DEBUGS("LLProcess") << error << LL_ENDL;
@@ -1357,7 +1353,7 @@ std::string LLProcess::getline(std::istream& in)
     std::getline(in, line);
     // Blur the distinction between "\r\n" and plain "\n". std::getline() will
     // have eaten the "\n", but we could still end up with a trailing "\r".
-    std::string::size_type lastpos = line.find_last_not_of("\r");
+    std::string::size_type lastpos = line.find_last_not_of('\r');
     if (lastpos != std::string::npos)
     {
         // Found at least one character that's not a trailing '\r'. SKIP OVER
@@ -1398,7 +1394,7 @@ LLProcess::handle LLProcess::isRunning(handle h, const std::string& desc)
     // This direct Windows implementation is because we have no access to the
     // apr_proc_t struct: we expect it's been destroyed.
     if (! h)
-        return 0;
+        return nullptr;
 
     DWORD waitresult = WaitForSingleObject(h, 0);
     if(waitresult == WAIT_OBJECT_0)
@@ -1418,7 +1414,7 @@ LLProcess::handle LLProcess::isRunning(handle h, const std::string& desc)
             }
         }
         CloseHandle(h);
-        return 0;
+        return nullptr;
     }
 
     return h;

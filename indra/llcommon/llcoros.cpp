@@ -136,20 +136,13 @@ std::string LLCoros::getStatus()
 }
 
 LLCoros::LLCoros():
-    // MAINT-2724: default coroutine stack size too small on Windows.
-    // Previously we used
-    // boost::context::guarded_stack_allocator::default_stacksize();
-    // empirically this is insufficient.
-    mStackSize(1024*1024),
     // mCurrent does NOT own the current CoroData instance -- it simply
     // points to it. So initialize it with a no-op deleter.
     mCurrent{ [](CoroData*){} }
 {
 }
 
-LLCoros::~LLCoros()
-{
-}
+LLCoros::~LLCoros() = default;
 
 void LLCoros::cleanupSingleton()
 {
@@ -228,7 +221,7 @@ std::string LLCoros::logname()
     return data.mName.empty()? data.getKey() : data.mName;
 }
 
-void LLCoros::saveException(const std::string& name, std::exception_ptr exc)
+void LLCoros::saveException(const std::string& name, const std::exception_ptr& exc)
 {
     mExceptionQueue.emplace(name, exc);
 }

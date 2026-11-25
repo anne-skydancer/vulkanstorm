@@ -45,6 +45,7 @@
 #include "stringize.h"
 #include <iomanip>                  // std::quoted()
 #include <memory>                   // std::auto_ptr
+#include <utility>
 
 /*****************************************************************************
 *   LLSDArgsMapper
@@ -103,7 +104,7 @@ class LL_COMMON_API LLEventDispatcher::LLSDArgsMapper
 public:
     /// Accept description of function: function name, param names, param
     /// default values
-    LLSDArgsMapper(LLEventDispatcher* parent, const std::string& function,
+    LLSDArgsMapper(LLEventDispatcher* parent, std::string function,
                    const LLSD& names, const LLSD& defaults);
 
     /// Given arguments map, return LLSD::Array of parameter values, or
@@ -127,21 +128,21 @@ private:
     // store it as a map from name string to position index. Of course that's
     // easy to generate from the incoming names array, but why do it more than
     // once?
-    typedef std::map<LLSD::String, size_t> IndexMap;
+    using IndexMap = std::map<LLSD::String, size_t>;
     IndexMap _indexes;
     // Generated array of default values, aligned with the array of param names.
     LLSD _defaults;
     // Indicate whether we have a default value for each param.
-    typedef std::vector<char> FilledVector;
+    using FilledVector = std::vector<char>;
     FilledVector _has_dft;
 };
 
 LLEventDispatcher::LLSDArgsMapper::LLSDArgsMapper(LLEventDispatcher* parent,
-                                                  const std::string& function,
+                                                  std::string function,
                                                   const LLSD& names,
                                                   const LLSD& defaults):
     _parent(parent),
-    _function(function),
+    _function(std::move(function)),
     _names(names),
     _has_dft(names.size())
 {
@@ -188,7 +189,7 @@ LLEventDispatcher::LLSDArgsMapper::LLSDArgsMapper(LLEventDispatcher* parent,
     {
         // defaults is a map. Use it to populate the _defaults array.
         LLSD bogus;
-        for (LLSD::map_const_iterator mi(defaults.beginMap()), mend(defaults.endMap());
+        for (auto mi(defaults.beginMap()), mend(defaults.endMap());
              mi != mend; ++mi)
         {
             IndexMap::const_iterator ixit(_indexes.find(mi->first));
@@ -270,12 +271,12 @@ LLSD LLEventDispatcher::LLSDArgsMapper::map(const LLSD& argsmap) const
     else
     {
         // argsmap is in fact a map. Walk the map.
-        for (LLSD::map_const_iterator mi(argsmap.beginMap()), mend(argsmap.endMap());
+        for (auto mi(argsmap.beginMap()), mend(argsmap.endMap());
              mi != mend; ++mi)
         {
             // mi->first is a parameter-name string, with mi->second its
             // value. Look up the name's position index in _indexes.
-            IndexMap::const_iterator ixit(_indexes.find(mi->first));
+            auto ixit(_indexes.find(mi->first));
             if (ixit == _indexes.end())
             {
                 // Allow for a map containing more params than were passed in
@@ -328,7 +329,7 @@ std::string LLEventDispatcher::LLSDArgsMapper::formatlist(const LLSD& list)
 {
     std::ostringstream out;
     const char* delim = "";
-    for (LLSD::array_const_iterator li(list.beginArray()), lend(list.endArray());
+    for (auto li(list.beginArray()), lend(list.endArray());
          li != lend; ++li)
     {
         out << delim << li->asString();
@@ -351,20 +352,18 @@ LLEventDispatcher::LLEventDispatcher(const std::string& desc, const std::string&
     LLEventDispatcher(desc, key, "args")
 {}
 
-LLEventDispatcher::LLEventDispatcher(const std::string& desc, const std::string& key,
-                                     const std::string& argskey):
-    mDesc(desc),
-    mKey(key),
-    mArgskey(argskey)
+LLEventDispatcher::LLEventDispatcher(std::string desc, std::string key,
+                                     std::string argskey):
+    mDesc(std::move(desc)),
+    mKey(std::move(key)),
+    mArgskey(std::move(argskey))
 {}
 
-LLEventDispatcher::~LLEventDispatcher()
-{
-}
+LLEventDispatcher::~LLEventDispatcher() = default;
 
-LLEventDispatcher::DispatchEntry::DispatchEntry(LLEventDispatcher* parent, const std::string& desc):
+LLEventDispatcher::DispatchEntry::DispatchEntry(LLEventDispatcher* parent, std::string desc):
     mParent(parent),
-    mDesc(desc)
+    mDesc(std::move(desc))
 {}
 
 /**
@@ -373,10 +372,10 @@ LLEventDispatcher::DispatchEntry::DispatchEntry(LLEventDispatcher* parent, const
 struct LLEventDispatcher::LLSDDispatchEntry: public LLEventDispatcher::DispatchEntry
 {
     LLSDDispatchEntry(LLEventDispatcher* parent, const std::string& desc,
-                      const Callable& func, const LLSD& required):
+                      Callable func, LLSD required):
         DispatchEntry(parent, desc),
-        mFunc(func),
-        mRequired(required)
+        mFunc(std::move(func)),
+        mRequired(std::move(required))
     {}
 
     Callable mFunc;
@@ -406,11 +405,11 @@ struct LLEventDispatcher::LLSDDispatchEntry: public LLEventDispatcher::DispatchE
  */
 struct LLEventDispatcher::ParamsDispatchEntry: public LLEventDispatcher::DispatchEntry
 {
-    ParamsDispatchEntry(LLEventDispatcher* parent, const std::string& name,
-                        const std::string& desc, const invoker_function& func):
+    ParamsDispatchEntry(LLEventDispatcher* parent, std::string name,
+                        const std::string& desc, invoker_function func):
         DispatchEntry(parent, desc),
-        mName(name),
-        mInvoker(func)
+        mName(std::move(name)),
+        mInvoker(std::move(func))
     {}
 
     std::string mName;
@@ -510,7 +509,7 @@ struct LLEventDispatcher::MapParamsDispatchEntry: public LLEventDispatcher::Para
     {
         // Build the set of all param keys, then delete the ones that are
         // optional. What's left are the ones that are required.
-        for (LLSD::array_const_iterator pi(params.beginArray()), pend(params.endArray());
+        for (auto pi(params.beginArray()), pend(params.endArray());
              pi != pend; ++pi)
         {
             mRequired[pi->asString()] = LLSD();
@@ -612,7 +611,7 @@ void LLEventDispatcher::addFail(const std::string& name, const char* classname) 
 /// Unregister a callable
 bool LLEventDispatcher::remove(const std::string& name)
 {
-    DispatchMap::iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
         return false;
@@ -680,7 +679,7 @@ LLSD LLEventDispatcher::try_call(const std::string& key, const std::string& name
         }
     }
 
-    DispatchMap::const_iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
         // Here we were passed a non-empty name, but there's no registered
@@ -724,10 +723,10 @@ template <typename EXCEPTION, typename... ARGS>
 
 LLSD LLEventDispatcher::getMetadata(const std::string& name) const
 {
-    DispatchMap::const_iterator found = mDispatch.find(name);
+    auto found = mDispatch.find(name);
     if (found == mDispatch.end())
     {
-        return LLSD();
+        return {};
     }
     LLSD meta{ found->second->getMetadata() };
     meta["name"] = name;
@@ -846,7 +845,7 @@ void LLDispatchListener::call_map(const LLSD& reqmap, const LLSD& event) const
         {
             // in case of errors, tell user the dispatch key, the fact that
             // we're processing a request map and the current key in that map
-            SetState(this, '[', key, '[', name, "]]");
+            SetState state_guard(this, '[', key, '[', name, "]]");
             // With this form, capture return value even if undefined:
             // presence of the key in the response map can be used to detect
             // which request keys succeeded.
@@ -923,7 +922,7 @@ void LLDispatchListener::call_array(const LLSD& reqarray, const LLSD& event) con
             // in case of errors, tell user the dispatch key, the fact that
             // we're processing a request array, the current entry in that
             // array and the corresponding callable name
-            SetState(this, '[', key, '[', i, "]=", name, ']');
+            SetState state_guard(this, '[', key, '[', i, "]=", name, ']');
             // With this form, capture return value even if undefined
             results.append((*this)(name, args));
         }

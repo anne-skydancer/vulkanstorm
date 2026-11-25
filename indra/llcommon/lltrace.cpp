@@ -50,18 +50,13 @@ const char* StatBase::getUnitLabel() const
     return "";
 }
 
-TimeBlockTreeNode::TimeBlockTreeNode()
-:   mBlock(NULL),
-    mParent(NULL),
-    mNeedsSorting(false),
-    mCollapsed(true)
-{}
+TimeBlockTreeNode::TimeBlockTreeNode() = default;
 
 void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )
 {
     LL_PROFILE_ZONE_SCOPED;
     llassert_always(parent != mBlock);
-    llassert_always(parent != NULL);
+    llassert_always(parent != nullptr);
 
     TimeBlockTreeNode* parent_tree_node = get_thread_recorder()->getTimeBlockTreeNode(narrow<size_t>(parent->getIndex()));
     if (!parent_tree_node) return;
@@ -69,7 +64,7 @@ void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )
     if (mParent)
     {
         std::vector<BlockTimerStatHandle*>& children = mParent->getChildren();
-        std::vector<BlockTimerStatHandle*>::iterator found_it = std::find(children.begin(), children.end(), mBlock);
+        auto found_it = std::find(children.begin(), children.end(), mBlock);
         if (found_it != children.end())
         {
             children.erase(found_it);

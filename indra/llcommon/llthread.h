@@ -43,16 +43,16 @@ private:
     friend class LLMutex;
 
 public:
-    typedef enum e_thread_status
+    using EThreadStatus = enum e_thread_status
     {
         STOPPED = 0,    // The thread is not running.  Not started, or has exited its run function
         RUNNING = 1,    // The thread is currently running
         QUITTING= 2,    // Someone wants this thread to quit
         CRASHED = -1    // An uncaught exception was thrown by the thread
-    } EThreadStatus;
-    typedef std::thread::id id_t;
+    };
+    using id_t = std::thread::id;
 
-    LLThread(const std::string& name, apr_pool_t *poolp = NULL);
+    LLThread(std::string name, apr_pool_t *poolp = nullptr);
     virtual ~LLThread(); // Warning!  You almost NEVER want to destroy a thread unless it's in the STOPPED state.
     virtual void shutdown(); // stops the thread
 
@@ -81,7 +81,7 @@ public:
     void checkPause();
 
     // this kicks off the apr thread
-    void start(void);
+    void start();
 
     LLVolatileAPRPool* getLocalAPRFilePool() { return mLocalAPRFilePoolp ; }
 
@@ -93,8 +93,8 @@ public:
     static void registerThreadID();
 
 private:
-    bool                mPaused;
-    std::thread::native_handle_type mNativeHandle; // for termination in case of issues
+    bool                mPaused{false};
+    std::thread::native_handle_type mNativeHandle{}; // for termination in case of issues
 
     // static function passed to APR thread creation routine
     void threadRun();
@@ -109,10 +109,10 @@ protected:
     class LLCondition*  mRunCondition;
     LLMutex*            mDataLock;
 
-    std::thread        *mThreadp;
-    EThreadStatus       mStatus;
+    std::thread        *mThreadp{nullptr};
+    EThreadStatus       mStatus{STOPPED};
     id_t                mID;
-    LLTrace::ThreadRecorder* mRecorder;
+    LLTrace::ThreadRecorder* mRecorder{nullptr};
 
     //a local apr_pool for APRFile operations in this thread. If it exists, LLAPRFile::sAPRFilePoolp should not be used.
     //Note: this pool is used by APRFile ONLY, do NOT use it for any other purposes.
@@ -122,10 +122,10 @@ protected:
     void setQuitting();
 
     // virtual function overridden by subclass -- this will be called when the thread runs
-    virtual void run(void) = 0;
+    virtual void run() = 0;
 
     // virtual predicate function -- returns true if the thread should wake up, false if it should sleep.
-    virtual bool runCondition(void);
+    virtual bool runCondition();
 
     // Lock/Unlock Run Condition -- use around modification of any variable used in runCondition()
     void lockData();
@@ -134,7 +134,7 @@ protected:
     // This is the predicate that decides whether the thread should sleep.
     // It should only be called with mDataLock locked, since the virtual runCondition() function may need to access
     // data structures that are thread-unsafe.
-    bool shouldSleep(void) { return (mStatus == RUNNING) && (isPaused() || (!runCondition())); }
+    bool shouldSleep() { return (mStatus == RUNNING) && (isPaused() || (!runCondition())); }
 
     // To avoid spurious signals (and the associated context switches) when the condition may or may not have changed, you can do the following:
     // mDataLock->lock();
@@ -151,7 +151,7 @@ protected:
 class LL_COMMON_API LLResponder : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLResponder();
+    ~LLResponder() override;
 public:
     virtual void completed(bool success) = 0;
 };

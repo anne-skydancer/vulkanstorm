@@ -44,17 +44,7 @@
 //
 LLDeadmanTimer::LLDeadmanTimer(F64 horizon, bool inc_cpu)
     : mHorizon(time_type(llmax(horizon, F64(0.0)) * get_timer_info().mClockFrequency)),
-      mActive(false),           // If true, a timer is running.
-      mDone(false),             // If true, timer has completed and can be read (once)
-      mStarted(U64L(0)),
-      mExpires(U64L(0)),
-      mStopped(U64L(0)),
-      mCount(U64L(0)),
-      mIncCPU(inc_cpu),
-      mUStartCPU(LLProcInfo::time_type(U64L(0))),
-      mUEndCPU(LLProcInfo::time_type(U64L(0))),
-      mSStartCPU(LLProcInfo::time_type(U64L(0))),
-      mSEndCPU(LLProcInfo::time_type(U64L(0)))
+      mIncCPU(inc_cpu)
 {}
 
 

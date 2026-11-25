@@ -158,7 +158,7 @@ public:
     //@{
         LLSD(const LLSD&);
         void assign(const LLSD& other);
-        LLSD& operator=(const LLSD& other)  { assign(other); return *this; }
+        LLSD& operator=(const LLSD& other)  { if (this != &other) { assign(other); } return *this; }
 
     //@}
 
@@ -176,14 +176,14 @@ public:
         The scalar types, and how they map onto C++
     */
     //@{
-        typedef bool            Boolean;
-        typedef S32             Integer;
-        typedef F64             Real;
-        typedef std::string     String;
-        typedef LLUUID          UUID;
-        typedef LLDate          Date;
-        typedef LLURI           URI;
-        typedef std::vector<U8> Binary;
+        using Boolean = bool;
+        using Integer = S32;
+        using Real = F64;
+        using String = std::string;
+        using UUID = LLUUID;
+        using Date = LLDate;
+        using URI = LLURI;
+        using Binary = std::vector<U8>;
     //@}
 
     /** @name Scalar Constructors */
@@ -207,14 +207,14 @@ public:
     //@{
         // support construction from size_t et al.
         template <typename VALUE,
-                  typename std::enable_if<std::is_integral<VALUE>::value &&
-                                          ! std::is_same<VALUE, Boolean>::value,
-                                          bool>::type = true>
+                  std::enable_if_t<std::is_integral_v<VALUE> &&
+                                          ! std::is_same_v<VALUE, Boolean>,
+                                          bool> = true>
         LLSD(VALUE v): LLSD(Integer(narrow<VALUE>(v))) {}
         // support construction from F32 et al.
         template <typename VALUE,
-                  typename std::enable_if<std::is_floating_point<VALUE>::value,
-                                          bool>::type = true>
+                  std::enable_if_t<std::is_floating_point_v<VALUE>,
+                                          bool> = true>
         LLSD(VALUE v): LLSD(Real(narrow<VALUE>(v))) {}
     //@}
 
@@ -385,12 +385,12 @@ public:
         LLSD& operator[](size_t);
         // template overloads to support int literals, U32 et al.
         template <typename IDX,
-                  typename std::enable_if<std::is_convertible<IDX, size_t>::value,
-                                          bool>::type = true>
+                  std::enable_if_t<std::is_convertible_v<IDX, size_t>,
+                                          bool> = true>
         const LLSD& operator[](IDX i) const { return (*this)[size_t(i)]; }
         template <typename IDX,
-                  typename std::enable_if<std::is_convertible<IDX, size_t>::value,
-                                          bool>::type = true>
+                  std::enable_if_t<std::is_convertible_v<IDX, size_t>,
+                                          bool> = true>
         LLSD& operator[](IDX i) { return (*this)[size_t(i)]; }
     //@}
 
@@ -399,17 +399,17 @@ public:
         size_t size() const;
 
         using llsd_map_t = std::map<String, LLSD, std::less<>>;
-        typedef llsd_map_t::iterator       map_iterator;
-        typedef llsd_map_t::const_iterator map_const_iterator;
+        using map_iterator = llsd_map_t::iterator;
+        using map_const_iterator = llsd_map_t::const_iterator;
 
         map_iterator        beginMap();
         map_iterator        endMap();
         map_const_iterator  beginMap() const;
         map_const_iterator  endMap() const;
 
-        typedef std::vector<LLSD>::iterator         array_iterator;
-        typedef std::vector<LLSD>::const_iterator   array_const_iterator;
-        typedef std::vector<LLSD>::reverse_iterator reverse_array_iterator;
+        using array_iterator = std::vector<LLSD>::iterator;
+        using array_const_iterator = std::vector<LLSD>::const_iterator;
+        using reverse_array_iterator = std::vector<LLSD>::reverse_iterator;
 
         array_iterator          beginArray();
         array_iterator          endArray();

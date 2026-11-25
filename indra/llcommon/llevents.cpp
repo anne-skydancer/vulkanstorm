@@ -141,7 +141,7 @@ void LLEventPumps::unregisterPumpFactory(const std::string& name)
 
 LLEventPump& LLEventPumps::obtain(const std::string& name)
 {
-    PumpMap::iterator found = mPumpMap.find(name);
+    auto found = mPumpMap.find(name);
     if (found != mPumpMap.end())
     {
         // Here we already have an LLEventPump instance with the requested
@@ -182,7 +182,7 @@ LLEventPump& LLEventPumps::make(const std::string& name, bool tweak,
 
 bool LLEventPumps::post(const std::string&name, const LLSD&message)
 {
-    PumpMap::iterator found = mPumpMap.find(name);
+    auto found = mPumpMap.find(name);
 
     if (found == mPumpMap.end())
         return false;
@@ -252,12 +252,12 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
     // name10, name11, name2, ... Walking those possibilities in that order
     // isn't convenient to detect the first available "hole."
     std::set<int> suffixes;
-    PumpMap::iterator pmi(inserted.first), pmend(mPumpMap.end());
+    auto pmi(inserted.first), pmend(mPumpMap.end());
     // We already know inserted.first references the existing entry with
     // 'name' as the key; skip that one and start with the next.
     while (++pmi != pmend)
     {
-        if (pmi->first.substr(0, name.length()) != name)
+        if (!pmi->first.starts_with(name))
         {
             // Found the first entry beyond the entries starting with 'name':
             // stop looping.
@@ -286,6 +286,7 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
         {
             suffixes.insert(boost::lexical_cast<int>(pmi->first.substr(name.length())));
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): a suffix that is not a number is not an error, it is skipped
         catch (const boost::bad_lexical_cast&)
         {
             // If the rest of pmi->first isn't an int, just ignore it.
@@ -306,14 +307,14 @@ std::string LLEventPumps::registerNew(const LLEventPump& pump, const std::string
 void LLEventPumps::unregister(const LLEventPump& pump)
 {
     // Remove this instance from mPumpMap
-    PumpMap::iterator found = mPumpMap.find(pump.getName());
+    auto found = mPumpMap.find(pump.getName());
     if (found != mPumpMap.end())
     {
         mPumpMap.erase(found);
     }
     // If this instance is one we created, also remove it from mOurPumps so we
     // won't try again to delete it later!
-    PumpSet::iterator psfound = mOurPumps.find(const_cast<LLEventPump*>(&pump));
+    auto psfound = mOurPumps.find(const_cast<LLEventPump*>(&pump));
     if (psfound != mOurPumps.end())
     {
         mOurPumps.erase(psfound);
@@ -351,8 +352,7 @@ LLEventPump::LLEventPump(const std::string& name, bool tweak):
     // Register every new instance with LLEventPumps
     mRegistry(LLEventPumps::instance().getHandle()),
     mName(mRegistry.get()->registerNew(*this, name, tweak)),
-    mSignal(std::make_shared<LLStandardSignal>()),
-    mEnabled(true)
+    mSignal(std::make_shared<LLStandardSignal>())
 {}
 
 #if LL_WINDOWS
@@ -415,7 +415,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
     {
         LL_WARNS() << "Can't connect listener" << LL_ENDL;
         // connect will fail, return dummy
-        return LLBoundListener();
+        return {};
     }
 
     LLCoros::LockType lock(mConnectionListMutex);
@@ -496,14 +496,14 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
                 // Describe the change to the order of our listeners. Copy
                 // everything but the newest listener to a vector we can sort to
                 // obtain the old order.
-                typedef std::vector< std::pair<float, std::string> > SortNameList;
+                using SortNameList = std::vector< std::pair<float, std::string> >;
                 SortNameList sortnames;
                 for (DependencyMap::sorted_iterator cdmi(sorted_range.begin()), cdmend(sorted_range.end());
                     cdmi != cdmend; ++cdmi)
                 {
                     if (cdmi->first != name)
                     {
-                        sortnames.push_back(SortNameList::value_type(cdmi->second, cdmi->first));
+                        sortnames.emplace_back(cdmi->second, cdmi->first);
                     }
                 }
                 std::sort(sortnames.begin(), sortnames.end());
@@ -588,13 +588,13 @@ LLBoundListener LLEventPump::getListener(const std::string& name)
         return found->second;
     }
     // not found, return dummy LLBoundListener
-    return LLBoundListener();
+    return {};
 }
 
 void LLEventPump::stopListening(const std::string& name)
 {
     LLCoros::LockType lock(mConnectionListMutex);
-    ConnectionMap::iterator found = mConnections.find(name);
+    auto found = mConnections.find(name);
     if (found != mConnections.end())
     {
         found->second.disconnect();

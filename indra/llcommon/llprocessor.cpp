@@ -183,6 +183,8 @@ namespace
         case 7: return "Intel Itanium (IA-64)";
         case 0xF: return "Intel Pentium 4";
         case 0x10: return "Intel Itanium 2 (IA-64)";
+        default:
+            break;
         }
         return STRINGIZE("Intel <unknown 0x" << std::hex << composed_family << ">");
     }
@@ -205,6 +207,8 @@ namespace
         case 0x17: return "AMD Zen/Zen+/Zen2";
         case 0x18: return "AMD Hygon Dhyana";
         case 0x19: return "AMD Zen 3";
+        default:
+            break;
         }
         return STRINGIZE("AMD <unknown 0x" << std::hex << composed_family << ">");
     }
@@ -241,7 +245,7 @@ public:
         mProcessorInfo["config"] = LLSD::emptyMap();
         mProcessorInfo["extension"] = LLSD::emptyMap();
     }
-    virtual ~LLProcessorInfoImpl() {}
+    virtual ~LLProcessorInfoImpl() = default;
 
     F64 getCPUFrequency() const
     {
@@ -323,7 +327,7 @@ public:
         out << "// CPU Extensions" << std::endl;
         out << "//////////////////////////" << std::endl;
 
-        for(LLSD::map_const_iterator itr = mProcessorInfo["extension"].beginMap(); itr != mProcessorInfo["extension"].endMap(); ++itr)
+        for(auto itr = mProcessorInfo["extension"].beginMap(); itr != mProcessorInfo["extension"].endMap(); ++itr)
         {
             out << "  " << itr->first << std::endl;
         }
@@ -947,7 +951,7 @@ private:
 
 //////////////////////////////////////////////////////
 // Interface definition
-LLProcessorInfo::LLProcessorInfo() : mImpl(NULL)
+LLProcessorInfo::LLProcessorInfo()
 {
     // *NOTE:Mani - not thread safe.
     if(!mImpl)
@@ -966,7 +970,7 @@ LLProcessorInfo::LLProcessorInfo() : mImpl(NULL)
 }
 
 
-LLProcessorInfo::~LLProcessorInfo() {}
+LLProcessorInfo::~LLProcessorInfo() = default;
 F64MegahertzImplicit LLProcessorInfo::getCPUFrequency() const { return mImpl->getCPUFrequency(); }
 bool LLProcessorInfo::hasSSE() const { return mImpl->hasSSE(); }
 bool LLProcessorInfo::hasSSE2() const { return mImpl->hasSSE2(); }

@@ -29,7 +29,7 @@
 #include "linden_common.h"
 #include "lluriparser.h"
 
-LLUriParser::LLUriParser(const std::string& u) : mTmpScheme(false), mNormalizedTmp(false), mRes(false)
+LLUriParser::LLUriParser(const std::string& u)
 {
     if (u.find("://") == std::string::npos)
     {
@@ -42,9 +42,7 @@ LLUriParser::LLUriParser(const std::string& u) : mTmpScheme(false), mNormalizedT
     mRes = parse();
 }
 
-LLUriParser::~LLUriParser()
-{
-}
+LLUriParser::~LLUriParser() = default;
 
 bool LLUriParser::parse()
 {

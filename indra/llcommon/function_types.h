@@ -41,7 +41,7 @@ namespace LL
     template <typename F>
     struct function_arity
     {
-        static constexpr auto value = function_arity_impl<typename std::decay<F>::type>::value;
+        static constexpr auto value = function_arity_impl<std::decay_t<F>>::value;
     };
 
 } // namespace LL

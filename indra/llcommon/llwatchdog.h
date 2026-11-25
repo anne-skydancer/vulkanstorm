@@ -40,7 +40,7 @@
 class LLWatchdogEntry
 {
 public:
-    LLWatchdogEntry(const std::string &thread_name);
+    LLWatchdogEntry(std::string thread_name);
     virtual ~LLWatchdogEntry();
 
     // isAlive is accessed by the watchdog thread.
@@ -51,8 +51,8 @@ public:
     virtual void reset() = 0;
     virtual void start();
     virtual void stop();
-    virtual std::string getLastState() const { return std::string(); }
-    typedef std::thread::id id_t;
+    virtual std::string getLastState() const { return {}; }
+    using id_t = std::thread::id;
     std::string getThreadName() const;
 
 private:
@@ -64,7 +64,7 @@ class LLWatchdogTimeout : public LLWatchdogEntry
 {
 public:
     LLWatchdogTimeout(const std::string& thread_name);
-    virtual ~LLWatchdogTimeout();
+    ~LLWatchdogTimeout() override;
 
     bool isAlive() const override;
     bool started() const override;
@@ -80,7 +80,7 @@ public:
 
 private:
     LLTimer mTimer;
-    F32 mTimeout;
+    F32 mTimeout{0.0f};
     std::string mPingState;
 };
 
@@ -95,10 +95,10 @@ public:
     void add(LLWatchdogEntry* e);
     void remove(LLWatchdogEntry* e);
 
-    typedef std::function<void(bool)> create_marker_func_t;
-    typedef std::function<void()> clear_marker_func_t;
-    typedef std::function<bool(std::string&)> report_func_t;
-    typedef std::function<void()> notify_func_t;
+    using create_marker_func_t = std::function<void(bool)>;
+    using clear_marker_func_t = std::function<void()>;
+    using report_func_t = std::function<bool(std::string&)>;
+    using notify_func_t = std::function<void()>;
     void init(
         create_marker_func_t error_state_callback,
         clear_marker_func_t clear_marker_callback,
@@ -113,13 +113,13 @@ private:
     void lockThread();
     void unlockThread();
 
-    typedef std::set<LLWatchdogEntry*> SuspectsRegistry;
+    using SuspectsRegistry = std::set<LLWatchdogEntry*>;
     SuspectsRegistry mSuspects;
     SuspectsRegistry mFrozeList;
-    LLMutex* mSuspectsAccessMutex;
-    LLWatchdogTimerThread* mTimer;
-    U64 mLastClockCount;
-    bool mCrashOnFreeze;
+    LLMutex* mSuspectsAccessMutex{};
+    LLWatchdogTimerThread* mTimer{nullptr};
+    U64 mLastClockCount{0};
+    bool mCrashOnFreeze{};
 
     // At the moment watchdog expects app to set markers in mCreateMarkerFnc,
     // but technically can be used to set any error states or do some cleanup

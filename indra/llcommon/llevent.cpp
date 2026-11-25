@@ -27,6 +27,7 @@
 #include "linden_common.h"
 
 #include "llevent.h"
+#include <utility>
 
 using namespace LLOldEvents;
 
@@ -35,9 +36,7 @@ using namespace LLOldEvents;
 ************************************************/
 
 // virtual
-LLEvent::~LLEvent()
-{
-}
+LLEvent::~LLEvent() = default;
 
 // virtual
 bool LLEvent::accept(LLEventListener* listener)
@@ -66,7 +65,7 @@ LLObservable::~LLObservable()
     if (mDispatcher.notNull())
     {
         mDispatcher->disengage(this);
-        mDispatcher = NULL;
+        mDispatcher = nullptr;
     }
 }
 
@@ -76,7 +75,7 @@ bool LLObservable::setDispatcher(LLPointer<LLEventDispatcher> dispatcher)
     if (mDispatcher.notNull())
     {
         mDispatcher->disengage(this);
-        mDispatcher = NULL;
+        mDispatcher = nullptr;
     }
     if (dispatcher.notNull() || dispatcher->engage(this))
     {
@@ -98,7 +97,7 @@ void LLObservable::fireEvent(LLPointer<LLEvent> event, LLSD filter)
 {
     if (mDispatcher.notNull())
     {
-        mDispatcher->fireEvent(event, filter);
+        mDispatcher->fireEvent(std::move(event), std::move(filter));
     }
 }
 
@@ -109,7 +108,7 @@ void LLObservable::fireEvent(LLPointer<LLEvent> event, LLSD filter)
 class LLEventDispatcher::Impl
 {
 public:
-    virtual ~Impl()                                             {               }
+    virtual ~Impl() = default;
     virtual bool engage(LLObservable* observable)               { return true;  }
     virtual void disengage(LLObservable* observable)            {               }
 
@@ -131,7 +130,7 @@ void LLEventDispatcher::disengage(LLObservable* observable)
 
 void LLEventDispatcher::addListener(LLEventListener *listener, LLSD filter, const LLSD& userdata)
 {
-    impl->addListener(listener, filter, userdata);
+    impl->addListener(listener, std::move(filter), userdata);
 }
 
 void LLEventDispatcher::removeListener(LLEventListener *listener)
@@ -147,18 +146,18 @@ std::vector<LLListenerEntry> LLEventDispatcher::getListeners() const
 
 bool LLEventDispatcher::fireEvent(LLPointer<LLEvent> event, LLSD filter)
 {
-    return impl->fireEvent(event, filter);
+    return impl->fireEvent(std::move(event), std::move(filter));
 }
 
 class LLSimpleDispatcher : public LLEventDispatcher::Impl
 {
 public:
     LLSimpleDispatcher(LLEventDispatcher *parent) : mParent(parent) { }
-    virtual ~LLSimpleDispatcher();
-    virtual void addListener(LLEventListener* listener, LLSD filter, const LLSD& userdata);
-    virtual void removeListener(LLEventListener* listener);
-    virtual std::vector<LLListenerEntry> getListeners() const;
-    virtual bool fireEvent(LLPointer<LLEvent> event, LLSD filter);
+    ~LLSimpleDispatcher() override;
+    void addListener(LLEventListener* listener, LLSD filter, const LLSD& userdata) override;
+    void removeListener(LLEventListener* listener) override;
+    std::vector<LLListenerEntry> getListeners() const override;
+    bool fireEvent(LLPointer<LLEvent> event, LLSD filter) override;
 
 protected:
     std::vector<LLListenerEntry> mListeners;
@@ -169,13 +168,13 @@ LLSimpleDispatcher::~LLSimpleDispatcher()
 {
     while (mListeners.size() > 0)
     {
-        removeListener(mListeners.begin()->listener);
+        LLSimpleDispatcher::removeListener(mListeners.begin()->listener);
     }
 }
 
 void LLSimpleDispatcher::addListener(LLEventListener* listener, LLSD filter, const LLSD& userdata)
 {
-    if (listener == NULL) return;
+    if (listener == nullptr) return;
     removeListener(listener);
     LLListenerEntry new_entry;
     new_entry.listener = listener;
@@ -187,8 +186,8 @@ void LLSimpleDispatcher::addListener(LLEventListener* listener, LLSD filter, con
 
 void LLSimpleDispatcher::removeListener(LLEventListener* listener)
 {
-    std::vector<LLListenerEntry>::iterator itor = mListeners.begin();
-    std::vector<LLListenerEntry>::iterator end = mListeners.end();
+    auto itor = mListeners.begin();
+    auto end = mListeners.end();
     for (; itor != end; ++itor)
     {
         if ((*itor).listener == listener)
@@ -203,6 +202,7 @@ void LLSimpleDispatcher::removeListener(LLEventListener* listener)
 std::vector<LLListenerEntry> LLSimpleDispatcher::getListeners() const
 {
     std::vector<LLListenerEntry> ret;
+    ret.reserve(mListeners.size());
     for (const LLListenerEntry& entry : mListeners)
     {
         ret.push_back(entry);
@@ -235,7 +235,7 @@ LLEventDispatcher::~LLEventDispatcher()
     if (impl)
     {
         delete impl;
-        impl = NULL;
+        impl = nullptr;
     }
 }
 
@@ -243,9 +243,7 @@ LLEventDispatcher::~LLEventDispatcher()
     Listeners
 ************************************************/
 
-LLEventListener::~LLEventListener()
-{
-}
+LLEventListener::~LLEventListener() = default;
 
 LLSimpleListener::~LLSimpleListener()
 {

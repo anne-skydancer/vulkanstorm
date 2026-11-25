@@ -53,39 +53,39 @@ struct LLIsSameType<T, T>
 template<typename S, typename T>
 struct LLResultTypeAdd
 {
-    typedef LL_TYPEOF(S() + T()) type_t;
+    using type_t = LL_TYPEOF(S() + T());
 };
 
 template<typename S, typename T>
 struct LLResultTypeSubtract
 {
-    typedef LL_TYPEOF(S() - T()) type_t;
+    using type_t = LL_TYPEOF(S() - T());
 };
 
 template<typename S, typename T>
 struct LLResultTypeMultiply
 {
-    typedef LL_TYPEOF(S() * T()) type_t;
+    using type_t = LL_TYPEOF(S() * T());
 };
 
 template<typename S, typename T>
 struct LLResultTypeDivide
 {
-    typedef LL_TYPEOF(S() / T(1)) type_t;
+    using type_t = LL_TYPEOF(S() / T(1));
 };
 
 template<typename S, typename T>
 struct LLResultTypePromote
 {
-    typedef LL_TYPEOF((true) ? S() : T()) type_t;
+    using type_t = LL_TYPEOF((true) ? S() : T());
 };
 
 template<typename STORAGE_TYPE, typename UNITS>
 struct LLUnit
 {
-    typedef LLUnit<STORAGE_TYPE, UNITS> self_t;
-    typedef STORAGE_TYPE storage_t;
-    typedef void is_unit_t;
+    using self_t = LLUnit<STORAGE_TYPE, UNITS>;
+    using storage_t = STORAGE_TYPE;
+    using is_unit_t = void;
 
     // value initialization
     LL_FORCE_INLINE explicit LLUnit(storage_t value = storage_t())
@@ -118,7 +118,7 @@ struct LLUnit
     template<typename FROM_STORAGE_TYPE, typename FROM_UNITS>
     LL_FORCE_INLINE static self_t convert(LLUnit<FROM_STORAGE_TYPE, FROM_UNITS> v)
     {
-        typedef typename LLResultTypePromote<FROM_STORAGE_TYPE, STORAGE_TYPE>::type_t result_storage_t;
+        using result_storage_t = typename LLResultTypePromote<FROM_STORAGE_TYPE, STORAGE_TYPE>::type_t;
         LLUnit<result_storage_t, UNITS> result;
         result_storage_t divisor = ll_convert_units(v, result);
         result.value(result.value() / divisor);
@@ -256,9 +256,9 @@ std::istream& operator >>(std::istream& s, LLUnit<STORAGE_TYPE, UNITS>& unit)
 template<typename STORAGE_TYPE, typename UNITS>
 struct LLUnitImplicit : public LLUnit<STORAGE_TYPE, UNITS>
 {
-    typedef LLUnitImplicit<STORAGE_TYPE, UNITS> self_t;
-    typedef typename LLUnit<STORAGE_TYPE, UNITS>::storage_t storage_t;
-    typedef LLUnit<STORAGE_TYPE, UNITS> base_t;
+    using self_t = LLUnitImplicit<STORAGE_TYPE, UNITS>;
+    using storage_t = typename LLUnit<STORAGE_TYPE, UNITS>::storage_t;
+    using base_t = LLUnit<STORAGE_TYPE, UNITS>;
 
     LL_FORCE_INLINE LLUnitImplicit(storage_t value = storage_t())
     :   base_t(value)
@@ -464,13 +464,13 @@ LL_FORCE_INLINE S2 ll_convert_units(LLUnit<S1, T1> in, LLUnit<S2, T2>& out)
 template<typename T>
 struct LLStorageType
 {
-    typedef T type_t;
+    using type_t = T;
 };
 
 template<typename STORAGE_TYPE, typename UNITS>
 struct LLStorageType<LLUnit<STORAGE_TYPE, UNITS> >
 {
-    typedef STORAGE_TYPE type_t;
+    using type_t = STORAGE_TYPE;
 };
 
 // all of these operators need to perform type promotion on the storage type of the units, so they
@@ -707,7 +707,7 @@ struct LLGetUnitLabel<LLUnit<STORAGE_T, T> >
 template<typename T>
 struct LLUnitLinearOps
 {
-    typedef LLUnitLinearOps<T> self_t;
+    using self_t = LLUnitLinearOps<T>;
 
     LLUnitLinearOps(T val)
     :   mValue(val),
@@ -748,7 +748,7 @@ struct LLUnitLinearOps
 template<typename T>
 struct LLUnitInverseLinearOps
 {
-    typedef LLUnitInverseLinearOps<T> self_t;
+    using self_t = LLUnitInverseLinearOps<T>;
 
     LLUnitInverseLinearOps(T val)
     :   mValue(val),
@@ -804,6 +804,7 @@ struct base_unit_name                                                           
 }
 
 
+// NOLINTBEGIN(bugprone-macro-parentheses): conversion_operation is an operator and operand (e.g. "* 1000"), parentheses would change its meaning
 #define LL_DECLARE_DERIVED_UNIT(unit_name, unit_label, base_unit_name, conversion_operation)     \
 struct unit_name                                                                                 \
 {                                                                                                \
@@ -836,6 +837,7 @@ LL_FORCE_INLINE S2 ll_convert_units(LLUnit<S1, base_unit_name> in, LLUnit<S2, un
     out = LLUnit<S2, unit_name>((S2)result.mValue);                                              \
     return result.mDivisor;                                                                      \
 }
+// NOLINTEND(bugprone-macro-parentheses)
 
 #define LL_DECLARE_UNIT_TYPEDEFS(ns, unit_name)                         \
     typedef LLUnit<F32, ns::unit_name> F32##unit_name;                  \

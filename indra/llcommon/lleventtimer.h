@@ -26,6 +26,7 @@
 
 #ifndef LL_EVENTTIMER_H
 #define LL_EVENTTIMER_H
+#include <utility>
 
 #include "stdtypes.h"
 #include "lldate.h"
@@ -39,7 +40,7 @@ public:
 
     LLEventTimer(F32 period);   // period is the amount of time between each call to tick() in seconds
     LLEventTimer(const LLDate& time);
-    virtual ~LLEventTimer();
+    ~LLEventTimer() override;
 
     //function to be called at the supplied frequency
     // Normally return FALSE; TRUE will delete the timer after the function returns.
@@ -81,10 +82,10 @@ class LLEventTimer::Generic: public LLEventTimer
 public:
     // making TIME generic allows engaging either LLEventTimer constructor
     template <typename TIME>
-    Generic(const TIME& time, bool once, const CALLABLE& callable):
+    Generic(const TIME& time, bool once, CALLABLE callable):
         LLEventTimer(time),
         mOnce(once),
-        mCallable(callable)
+        mCallable(std::move(callable))
     {}
     bool tick() override
     {

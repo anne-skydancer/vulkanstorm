@@ -61,7 +61,7 @@ public:
 class LLKeyBind
 {
 public:
-    LLKeyBind() {}
+    LLKeyBind() = default;
     LLKeyBind(const LLSD &key_bind);
 
     bool operator==(const LLKeyBind& rhs);
@@ -98,7 +98,7 @@ public:
     size_t getDataCount();
 
 private:
-    typedef std::vector<LLKeyData> data_vector_t;
+    using data_vector_t = std::vector<LLKeyData>;
     data_vector_t mData;
 
     data_vector_t::const_iterator endNonEmpty() const;

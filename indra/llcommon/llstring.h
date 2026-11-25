@@ -36,6 +36,7 @@
 //#include <locale>
 #include <iomanip>
 #include <algorithm>
+#include <utility>
 #include <vector>
 #include <map>
 #include "llformat.h"
@@ -216,16 +217,16 @@ public:
     static void setupDayFormat(const std::string& data);
 
 
-    static long getPacificTimeOffset(void) { return sPacificTimeOffset;}
-    static long getLocalTimeOffset(void) { return sLocalTimeOffset;}
+    static long getPacificTimeOffset() { return sPacificTimeOffset;}
+    static long getLocalTimeOffset() { return sLocalTimeOffset;}
     // Is the Pacific time zone (aka server time zone)
     // currently in daylight savings time?
-    static bool getPacificDaylightTime(void) { return sPacificDaylightTime;}
+    static bool getPacificDaylightTime() { return sPacificDaylightTime;}
     // <FS:TJ> [FIRE-34775] Use PST/PDT when logged into OpenSim
     static bool getUsingPacificTime() { return sUsingPacificTime; }
     // </FS:TJ>
 
-    static std::string getDatetimeCode (std::string key);
+    static std::string getDatetimeCode (const std::string& key);
 
     // Express a value like 1234567 as "1.23M"
     static std::string getReadableNumber(F64 num);
@@ -244,9 +245,9 @@ LL_COMMON_API std::string ll_safe_string(const char* in, S32 maxlen);
 class LLFormatMapString
 {
 public:
-    LLFormatMapString() {};
+    LLFormatMapString() = default;
     LLFormatMapString(const char* s) : mString(ll_safe_string(s)) {};
-    LLFormatMapString(const std::string& s) : mString(s) {};
+    LLFormatMapString(std::string s) : mString(std::move(s)) {};
     operator std::string() const { return mString; }
     bool operator<(const LLFormatMapString& rhs) const { return mString < rhs.mString; }
     std::size_t length() const { return mString.length(); }
@@ -262,8 +263,8 @@ private:
     static std::string sLocale;
 
 public:
-    typedef std::basic_string<T> string_type;
-    typedef typename string_type::size_type size_type;
+    using string_type = std::basic_string<T>;
+    using size_type = typename string_type::size_type;
 
 public:
     /////////////////////////////////////////////////////////////////////////////////////////
@@ -271,7 +272,7 @@ public:
 
     static const string_type null;
 
-    typedef std::map<LLFormatMapString, LLFormatMapString> format_map_t;
+    using format_map_t = std::map<LLFormatMapString, LLFormatMapString>;
     /// considers any sequence of delims as a single field separator
     LL_COMMON_API static void getTokens(const string_type& instr,
                                         std::vector<string_type >& tokens,
@@ -311,7 +312,7 @@ public:
     LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const format_map_t& substitutions);
     LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const LLSD& substitutions);
     LL_COMMON_API static void setLocale (std::string inLocale);
-    LL_COMMON_API static std::string getLocale (void);
+    LL_COMMON_API static std::string getLocale ();
 
     static bool isValidIndex(const string_type& string, size_type i)
     {
@@ -459,10 +460,10 @@ private:
 template<class T> const std::basic_string<T> LLStringUtilBase<T>::null;
 template<class T> std::string LLStringUtilBase<T>::sLocale;
 
-typedef LLStringUtilBase<char> LLStringUtil;
-typedef LLStringUtilBase<llwchar> LLWStringUtil;
-typedef std::basic_string<llwchar> LLWString;
-typedef std::basic_string_view<llwchar> LLWStringView;
+using LLStringUtil = LLStringUtilBase<char>;
+using LLWStringUtil = LLStringUtilBase<llwchar>;
+using LLWString = std::basic_string<llwchar>;
+using LLWStringView = std::basic_string_view<llwchar>;
 
 //@ Use this where we want to disallow input in the form of "foo"
 //  This is used to catch places where english text is embedded in the code
@@ -563,7 +564,7 @@ template<>                                                  \
 struct ll_convert_impl<TO, FROM>                            \
 {                                                           \
     /* param_type optimally passes both char* and string */ \
-    TO operator()(typename boost::call_traits<FROM>::param_type in) const { return EXPR; } \
+    TO operator()(typename boost::call_traits<FROM>::param_type in) const { return (EXPR); } \
 }
 
 // If all we're doing is copying characters, pass this to ll_convert_alias as
@@ -649,7 +650,7 @@ LL_COMMON_API std::string rawstr_to_utf8(const std::string& raw);
 //
 // This typedef may or may not be identical to std::wstring, depending on
 // LL_WCHAR_T_NATIVE.
-typedef std::basic_string<U16> llutf16string;
+using llutf16string = std::basic_string<U16>;
 
 // Considering wchar_t, llwchar and U16, there are three relevant cases:
 #if LLWCHAR_IS_WCHAR_T         // every which way but Windows
@@ -994,14 +995,14 @@ namespace LLStringUtilBaseImpl
 template <class T>
 struct InString
 {
-    typedef std::basic_string<T> string_type;
-    typedef typename string_type::const_iterator const_iterator;
+    using string_type = std::basic_string<T>;
+    using const_iterator = typename string_type::const_iterator;
 
     InString(const_iterator b, const_iterator e):
         mIter(b),
         mEnd(e)
     {}
-    virtual ~InString() {}
+    virtual ~InString() = default;
 
     bool done() const { return mIter == mEnd; }
     /// Is the current character (*mIter) escaped? This implementation can
@@ -1057,16 +1058,16 @@ template <class T>
 class InEscString: public InString<T>
 {
 public:
-    typedef InString<T> super;
-    typedef typename super::string_type string_type;
-    typedef typename super::const_iterator const_iterator;
+    using super = InString<T>;
+    using string_type = typename super::string_type;
+    using const_iterator = typename super::const_iterator;
     using super::done;
     using super::mIter;
     using super::mEnd;
 
-    InEscString(const_iterator b, const_iterator e, const string_type& escapes):
+    InEscString(const_iterator b, const_iterator e, string_type escapes):
         super(b, e),
-        mEscapes(escapes)
+        mEscapes(std::move(escapes))
     {
         // Even though we've already initialized 'mIter' via our base-class
         // constructor, set it again to check for initial escape char.
@@ -1074,8 +1075,8 @@ public:
     }
 
     /// This implementation uses the answer cached by setiter().
-    virtual bool escaped() const { return mIsEsc; }
-    virtual T next()
+    bool escaped() const override { return mIsEsc; }
+    T next() override
     {
         // If we're looking at the escape character of an escape sequence,
         // skip that character. This is the one time we can modify 'mIter'
@@ -1091,21 +1092,21 @@ public:
         return result;
     }
 
-    virtual bool is(T ch) const
+    bool is(T ch) const override
     {
         // Like base-class is(), except that an escaped character matches
         // nothing.
         return (! done()) && (! mIsEsc) && *mIter == ch;
     }
 
-    virtual bool oneof(const string_type& delims) const
+    bool oneof(const string_type& delims) const override
     {
         // Like base-class oneof(), except that an escaped character matches
         // nothing.
         return (! done()) && (! mIsEsc) && LLStringUtilBase<T>::contains(delims, *mIter);
     }
 
-    virtual bool collect_until(string_type& into, const_iterator from, T delim)
+    bool collect_until(string_type& into, const_iterator from, T delim) override
     {
         // Deal with escapes in the characters we collect; that is, an escaped
         // character must become just that character without the preceding
@@ -1159,7 +1160,7 @@ private:
     }
 
     const string_type mEscapes;
-    bool mIsEsc;
+    bool mIsEsc{};
 };
 
 /// getTokens() implementation based on InString concept
@@ -1699,7 +1700,7 @@ void LLStringUtilBase<T>::stripNonprintable(string_type& string)
     }
     size_t src_size = string.size();
     char* c_string = new char[src_size + 1];
-    if(c_string == NULL)
+    if(c_string == nullptr)
     {
         return;
     }

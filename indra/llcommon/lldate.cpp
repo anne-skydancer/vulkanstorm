@@ -31,8 +31,8 @@
 
 #include "apr_time.h"
 
-#include <time.h>
-#include <locale.h>
+#include <ctime>
+#include <clocale>
 #include <string>
 #include <iomanip>
 #include <sstream>
@@ -84,7 +84,7 @@ std::string LLDate::toLocalDateString (std::string fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    time_t locSeconds = (time_t) mSecondsSinceEpoch;
+    auto locSeconds = (time_t) mSecondsSinceEpoch;
     struct tm * lt = localtime (&locSeconds);
     return toHTTPDateString(lt, fmt);
 }
@@ -93,12 +93,12 @@ std::string LLDate::toHTTPDateString (std::string fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 
-    time_t locSeconds = (time_t) mSecondsSinceEpoch;
+    auto locSeconds = (time_t) mSecondsSinceEpoch;
     struct tm * gmt = gmtime (&locSeconds);
     return toHTTPDateString(gmt, fmt);
 }
 
-std::string LLDate::toHTTPDateString (tm * gmt, std::string fmt)
+std::string LLDate::toHTTPDateString (tm * gmt, const std::string& fmt)
 {
     LL_PROFILE_ZONE_SCOPED;
 
@@ -124,7 +124,7 @@ std::string LLDate::toHTTPDateString (tm * gmt, std::string fmt)
 
 void LLDate::toStream(std::ostream& s) const
 {
-    apr_time_t time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
+    auto time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
 
     apr_time_exp_t exp_time;
     if (apr_time_exp_gmt(&exp_time, time) != APR_SUCCESS)
@@ -156,7 +156,7 @@ void LLDate::toStream(std::ostream& s) const
 
 bool LLDate::split(S32 *year, S32 *month, S32 *day, S32 *hour, S32 *min, S32 *sec) const
 {
-    apr_time_t time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
+    auto time = (apr_time_t)(mSecondsSinceEpoch * LL_APR_USEC_PER_SEC);
 
     apr_time_exp_t exp_time;
     if (apr_time_exp_gmt(&exp_time, time) != APR_SUCCESS)
@@ -193,7 +193,7 @@ bool LLDate::fromString(const std::string& iso8601_date)
 
 bool LLDate::fromStream(std::istream& s)
 {
-    struct apr_time_exp_t exp_time;
+    struct apr_time_exp_t exp_time{};
     apr_int32_t tm_part;
     int c;
 
@@ -274,7 +274,7 @@ bool LLDate::fromStream(std::istream& s)
 
 bool LLDate::fromYMDHMS(S32 year, S32 month, S32 day, S32 hour, S32 min, S32 sec)
 {
-    struct apr_time_exp_t exp_time;
+    struct apr_time_exp_t exp_time{};
 
     exp_time.tm_year = year - 1900;
     exp_time.tm_mon = month - 1;
@@ -315,7 +315,7 @@ void LLDate::secondsSinceEpoch(F64 seconds)
 /* static */ LLDate LLDate::now()
 {
     // time() returns seconds, we want fractions of a second, which LLTimer provides --RN
-    return LLDate(LLTimer::getTotalSeconds());
+    return {LLTimer::getTotalSeconds()};
 }
 
 bool LLDate::operator<(const LLDate& rhs) const

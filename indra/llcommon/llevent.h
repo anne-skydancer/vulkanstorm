@@ -28,6 +28,7 @@
 #ifndef LL_EVENT_H
 #define LL_EVENT_H
 
+#include <utility>
 #include "llsd.h"
 #include "llrefcount.h"
 #include "llpointer.h"
@@ -44,13 +45,13 @@ class LLObservable;
 class LL_COMMON_API LLEvent : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEvent();
+    ~LLEvent() override;
 
 public:
-    LLEvent(LLObservable* source, const std::string& desc = "") : mSource(source), mDesc(desc) { }
+    LLEvent(LLObservable* source, std::string desc = "") : mSource(source), mDesc(std::move(desc)) { }
 
     LLObservable* getSource() { return mSource; }
-    virtual LLSD        getValue() { return LLSD(); }
+    virtual LLSD        getValue() { return {}; }
     // Determines whether this particular listener
     //   should be notified of this event.
     // If this function returns true, handleEvent is
@@ -72,7 +73,7 @@ private:
 class LL_COMMON_API LLEventListener : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEventListener();
+    ~LLEventListener() override;
 
 public:
 
@@ -90,11 +91,11 @@ class LL_COMMON_API LLSimpleListener : public LLEventListener
 {
 public:
     void clearDispatchers();
-    virtual bool handleAttach(LLEventDispatcher *dispatcher);
-    virtual bool handleDetach(LLEventDispatcher *dispatcher);
+    bool handleAttach(LLEventDispatcher *dispatcher) override;
+    bool handleDetach(LLEventDispatcher *dispatcher) override;
 
 protected:
-    ~LLSimpleListener();
+    ~LLSimpleListener() override;
     std::vector<LLEventDispatcher *> mDispatchers;
 };
 
@@ -103,7 +104,7 @@ class LLObservable; // defined below
 // A structure which stores a Listener and its metadata
 struct LLListenerEntry
 {
-    LLEventListener* listener;
+    LLEventListener* listener{};
     LLSD filter;
     LLSD userdata;
 };
@@ -114,7 +115,7 @@ struct LLListenerEntry
 class LL_COMMON_API LLEventDispatcher : public LLThreadSafeRefCount
 {
 protected:
-    virtual ~LLEventDispatcher();
+    ~LLEventDispatcher() override;
 
 public:
     // The default constructor creates a default simple dispatcher implementation.
@@ -170,7 +171,7 @@ public:
 
     void addListener(LLEventListener *listener, LLSD filter = "", const LLSD& userdata = "")
     {
-        if (mDispatcher.notNull()) mDispatcher->addListener(listener, filter, userdata);
+        if (mDispatcher.notNull()) mDispatcher->addListener(listener, std::move(filter), userdata);
     }
     void removeListener(LLEventListener *listener)
     {
@@ -186,8 +187,8 @@ protected:
 class LLValueChangedEvent : public LLEvent
 {
 public:
-    LLValueChangedEvent(LLObservable* source, LLSD value) : LLEvent(source, "value_changed"), mValue(value) { }
-    LLSD getValue() { return mValue; }
+    LLValueChangedEvent(LLObservable* source, LLSD value) : LLEvent(source, "value_changed"), mValue(std::move(value)) { }
+    LLSD getValue() override { return mValue; }
     LLSD mValue;
 };
 

@@ -48,8 +48,8 @@ class LLSD;
 class LLLineBuffer
 {
 public:
-    LLLineBuffer() {};
-    virtual ~LLLineBuffer() {};
+    LLLineBuffer() = default;
+    virtual ~LLLineBuffer() = default;
 
     virtual void clear() = 0; // Clear the buffer, and reset it.
 
@@ -91,7 +91,7 @@ namespace LLError
         Control functions.
     */
 
-    typedef std::function<void(const std::string&)> FatalFunction;
+    using FatalFunction = std::function<void(const std::string&)>;
 
     LL_COMMON_API void setFatalFunction(const FatalFunction&);
         // The fatal function will be called after an message of LEVEL_ERROR
@@ -128,7 +128,7 @@ namespace LLError
         FatalFunction mPrev;
     };
 
-    typedef std::string (*TimeFunction)();
+    using TimeFunction = std::string (*)();
     LL_COMMON_API std::string utcTime();
 
     LL_COMMON_API void setTimeFunction(TimeFunction);
@@ -164,15 +164,15 @@ namespace LLError
         void showMultiline(bool show);
 
     protected:
-        bool mWantsTime;
-        bool mWantsTags;
-        bool mWantsLevel;
-        bool mWantsLocation;
-        bool mWantsFunctionName;
-        bool mWantsMultiline;
+        bool mWantsTime{true};
+        bool mWantsTags{true};
+        bool mWantsLevel{true};
+        bool mWantsLocation{true};
+        bool mWantsFunctionName{true};
+        bool mWantsMultiline{false};
     };
 
-    typedef std::shared_ptr<Recorder> RecorderPtr;
+    using RecorderPtr = std::shared_ptr<Recorder>;
 
     /**
      * Instantiate GenericRecorder with a callable(level, message) to get
@@ -199,8 +199,8 @@ namespace LLError
      * @NOTE: addRecorder() and removeRecorder() uses the std::shared_ptr to allow for shared ownership
      * while still ensuring that the allocated memory is eventually freed
      */
-    LL_COMMON_API void addRecorder(RecorderPtr);
-    LL_COMMON_API void removeRecorder(RecorderPtr);
+    LL_COMMON_API void addRecorder(const RecorderPtr&);
+    LL_COMMON_API void removeRecorder(const RecorderPtr&);
         // each error message is passed to each recorder via recordMessage()
     /**
      * Call addGenericRecorder() with a callable(level, message) to get
@@ -231,7 +231,7 @@ namespace LLError
         Utilities for use by the unit tests of LLError itself.
     */
 
-    typedef LLPointer<LLRefCount> SettingsStoragePtr;
+    using SettingsStoragePtr = LLPointer<LLRefCount>;
     LL_COMMON_API SettingsStoragePtr saveAndResetSettings();
     LL_COMMON_API void restoreSettings(SettingsStoragePtr pSettingsStorage);
 

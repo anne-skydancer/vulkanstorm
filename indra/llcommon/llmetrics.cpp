@@ -28,6 +28,7 @@
 
 #include "linden_common.h"
 #include "llmetrics.h"
+#include <utility>
 
 #include "llsd.h"
 #include "llsdserialize.h"
@@ -36,7 +37,7 @@
 class LLMetricsImpl
 {
 public:
-    LLMetricsImpl() { }
+    LLMetricsImpl() = default;
     ~LLMetricsImpl();
 
     void recordEvent(const std::string& location, const std::string& mesg, bool success);
@@ -50,9 +51,7 @@ private:
     LLSD mMetricsMap;
 };
 
-LLMetricsImpl::~LLMetricsImpl()
-{
-}
+LLMetricsImpl::~LLMetricsImpl() = default;
 
 void LLMetricsImpl::recordEventDetails(const std::string& location,
                                     const std::string& mesg,
@@ -63,7 +62,7 @@ void LLMetricsImpl::recordEventDetails(const std::string& location,
 
     LLSD metrics = LLSD::emptyMap();
     metrics["location"] = location;
-    metrics["stats"]  = stats;
+    metrics["stats"]  = std::move(stats);
 
     LL_INFOS() << "LLMETRICS: " << (LLSDNotationStreamer(metrics)) << LL_ENDL;
 }
@@ -109,8 +108,8 @@ void LLMetricsImpl::printTotals(LLSD metadata)
         const std::string& location = (*loc_it).first;
 
         const LLSD& loc_map = (*loc_it).second;
-        LLSD::map_const_iterator mesg_it = loc_map.beginMap();
-        LLSD::map_const_iterator mesg_end = loc_map.endMap();
+        auto mesg_it = loc_map.beginMap();
+        auto mesg_end = loc_map.endMap();
         for ( ; mesg_it != mesg_end; ++mesg_it)
         {
             const std::string& mesg = (*mesg_it).first;
@@ -139,7 +138,7 @@ LLMetrics::LLMetrics()
 LLMetrics::~LLMetrics()
 {
     delete mImpl;
-    mImpl = NULL;
+    mImpl = nullptr;
 }
 
 void LLMetrics::recordEvent(const std::string& location, const std::string& mesg, bool success)
@@ -149,7 +148,7 @@ void LLMetrics::recordEvent(const std::string& location, const std::string& mesg
 
 void LLMetrics::printTotals(LLSD meta)
 {
-    if (mImpl) mImpl->printTotals(meta);
+    if (mImpl) mImpl->printTotals(std::move(meta));
 }
 
 
@@ -158,6 +157,6 @@ void LLMetrics::recordEventDetails(const std::string& location,
                                     bool success,
                                     LLSD stats)
 {
-    if (mImpl) mImpl->recordEventDetails(location,mesg,success,stats);
+    if (mImpl) mImpl->recordEventDetails(location,mesg,success,std::move(stats));
 }
 

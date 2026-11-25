@@ -48,8 +48,8 @@ namespace LL
 class LL_COMMON_API LLEventAPI: public LLDispatchListener,
                   public LLInstanceTracker<LLEventAPI, std::string>
 {
-    typedef LLDispatchListener lbase;
-    typedef LLInstanceTracker<LLEventAPI, std::string> ibase;
+    using lbase = LLDispatchListener;
+    using ibase = LLInstanceTracker<LLEventAPI, std::string>;
 
 public:
 
@@ -61,8 +61,8 @@ public:
      * @param field LLSD::Map key used by LLDispatchListener to look up the
      * subclass method to invoke [default "op"].
      */
-    LLEventAPI(const std::string& name, const std::string& desc, const std::string& field="op");
-    virtual ~LLEventAPI();
+    LLEventAPI(const std::string& name, std::string desc, const std::string& field="op");
+    ~LLEventAPI() override;
 
     /// Get the string name of this LLEventAPI
     std::string getName() const { return ibase::getKey(); }
@@ -105,7 +105,7 @@ public:
          * on which the caller wants a reply. If <tt>(!
          * request.has(replyKey))</tt>, no reply will be sent.
          */
-        Response(const LLSD& seed, const LLSD& request, const LLSD::String& replyKey="reply");
+        Response(LLSD seed, LLSD request, LLSD::String replyKey="reply");
         ~Response();
 
         /**

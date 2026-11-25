@@ -89,10 +89,10 @@ size_t LLWorkerThread::update(F32 max_time_ms)
     std::vector<LLWorkerClass*> delete_list;
     std::vector<LLWorkerClass*> abort_list;
     mDeleteMutex->lock();
-    for (delete_list_t::iterator iter = mDeleteList.begin();
+    for (auto iter = mDeleteList.begin();
          iter != mDeleteList.end(); )
     {
-        delete_list_t::iterator curiter = iter++;
+        auto curiter = iter++;
         LLWorkerClass* worker = *curiter;
         if (worker->deleteOK())
         {
@@ -136,7 +136,7 @@ LLWorkerThread::handle_t LLWorkerThread::addWorkRequest(LLWorkerClass* workercla
 {
     handle_t handle = generateHandle();
 
-    WorkRequest* req = new WorkRequest(handle, workerclass, param);
+    auto* req = new WorkRequest(handle, workerclass, param);
 
     bool res = addRequest(req);
     if (!res)
@@ -166,9 +166,7 @@ LLWorkerThread::WorkRequest::WorkRequest(handle_t handle, LLWorkerClass* workerc
 {
 }
 
-LLWorkerThread::WorkRequest::~WorkRequest()
-{
-}
+LLWorkerThread::WorkRequest::~WorkRequest() = default;
 
 // virtual (required for access by LLWorkerThread)
 void LLWorkerThread::WorkRequest::deleteRequest()
@@ -220,7 +218,7 @@ LLWorkerClass::~LLWorkerClass()
     llassert_always(!mMutex.isLocked());
     if (mRequestHandle != LLWorkerThread::nullHandle())
     {
-        LLWorkerThread::WorkRequest* workreq = (LLWorkerThread::WorkRequest*)mWorkerThread->getRequest(mRequestHandle);
+        auto* workreq = (LLWorkerThread::WorkRequest*)mWorkerThread->getRequest(mRequestHandle);
         if (!workreq)
         {
             LL_ERRS() << "LLWorkerClass destroyed with stale work handle" << LL_ENDL;
@@ -333,7 +331,7 @@ bool LLWorkerClass::checkWork(bool aborting)
     bool complete = false, abort = false;
     if (mRequestHandle != LLWorkerThread::nullHandle())
     {
-        LLWorkerThread::WorkRequest* workreq = (LLWorkerThread::WorkRequest*)mWorkerThread->getRequest(mRequestHandle);
+        auto* workreq = (LLWorkerThread::WorkRequest*)mWorkerThread->getRequest(mRequestHandle);
         if(!workreq)
         {
             if(mWorkerThread->isQuitting() || mWorkerThread->isStopped()) //the mWorkerThread is not running

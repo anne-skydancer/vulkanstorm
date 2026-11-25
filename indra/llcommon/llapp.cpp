@@ -82,7 +82,7 @@ S32 LL_HEARTBEAT_SIGNAL = (SIGRTMAX >= 0) ? (SIGRTMAX-0) : SIGUSR2;
 #endif // !LL_WINDOWS
 
 // the static application instance
-LLApp* LLApp::sApplication = NULL;
+LLApp* LLApp::sApplication = nullptr;
 
 // Allows the generation of core files for post mortem under gdb
 // and disables crashlogger
@@ -91,7 +91,7 @@ bool LLApp::sDisableCrashlogger = false;
 // static
 // Keeps track of application status
 LLScalarCond<LLApp::EAppStatus> LLApp::sStatus{LLApp::APP_STATUS_STOPPED};
-LLAppErrorHandler LLApp::sErrorHandler = NULL;
+LLAppErrorHandler LLApp::sErrorHandler = nullptr;
 
 bool gDisconnected = false;
 
@@ -148,8 +148,8 @@ LLApp* LLApp::instance()
 LLSD LLApp::getOption(const std::string& name) const
 {
     LLSD rv;
-    LLSD::array_const_iterator iter = mOptions.beginArray();
-    LLSD::array_const_iterator end = mOptions.endArray();
+    auto iter = mOptions.beginArray();
+    auto end = mOptions.endArray();
     for(; iter != end; ++iter)
     {
         rv = (*iter)[name];
@@ -286,7 +286,7 @@ void LLApp::manageLiveFile(LLLiveFile* livefile)
     mLiveFiles.push_back(livefile);
 }
 
-bool LLApp::setOptionData(OptionPriority level, LLSD data)
+bool LLApp::setOptionData(OptionPriority level, const LLSD& data)
 {
     if((level < 0)
        || (level >= PRIORITY_COUNT)
@@ -302,7 +302,7 @@ LLSD LLApp::getOptionData(OptionPriority level)
 {
     if((level < 0) || (level >= PRIORITY_COUNT))
     {
-        return LLSD();
+        return {};
     }
     return mOptions[level];
 }
@@ -486,7 +486,7 @@ int LLApp::getPid()
 void LLApp::notifyOutOfDiskSpace()
 {
     static const U32Seconds min_interval = U32Seconds(60);
-    static U32Seconds min_time_to_send = U32Seconds(0);
+    static auto min_time_to_send = U32Seconds(0);
     U32Seconds now = LLTimer::getTotalTime();
     if (now < min_time_to_send)
         return;

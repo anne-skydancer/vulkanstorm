@@ -28,9 +28,9 @@
 
 #include "linden_common.h"
 
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
 
 #ifdef WIN32
 #include "llwin32headers.h"
@@ -67,7 +67,7 @@ lang_country_variant_from_envstring(const char *str,
     s[i] = '\0';
     *lang = s;
   } else {
-    *lang = NULL;
+    *lang = nullptr;
   }
 
   if (str[end] && str[end]!=':') { /* not at end of str */
@@ -89,7 +89,7 @@ lang_country_variant_from_envstring(const char *str,
     s[i] = '\0';
     *country = s;
   } else {
-    *country = NULL;
+    *country = nullptr;
   }
 
   if (str[end] && str[end]!=':') { /* not at end of str */
@@ -111,16 +111,16 @@ lang_country_variant_from_envstring(const char *str,
     s[i] = '\0';
     *variant = s;
   } else {
-    *variant = NULL;
+    *variant = nullptr;
   }
 }
 
 
 static int
 accumulate_locstring(const char *str, FL_Locale *l) {
-  char *lang = NULL;
-  char *country = NULL;
-  char *variant = NULL;
+  char *lang = nullptr;
+  char *country = nullptr;
+  char *variant = nullptr;
   if (str) {
     lang_country_variant_from_envstring(str, &lang, &country, &variant);
     if (lang) {
@@ -138,9 +138,9 @@ accumulate_locstring(const char *str, FL_Locale *l) {
 static int
 accumulate_env(const char *name, FL_Locale *l) {
   char *env;
-  char *lang = NULL;
-  char *country = NULL;
-  char *variant = NULL;
+  char *lang = nullptr;
+  char *country = nullptr;
+  char *variant = nullptr;
   env = getenv(name);
   if (env) {
     return accumulate_locstring(env, l);
@@ -179,7 +179,7 @@ canonise_fl(FL_Locale *l) {
 
 
 #ifdef WIN32
-#include <stdio.h>
+#include <cstdio>
 #define ML(pn,sn) MAKELANGID(LANG_##pn, SUBLANG_##pn##_##sn)
 #define MLN(pn) MAKELANGID(LANG_##pn, SUBLANG_DEFAULT)
 #define RML(pn,sn) MAKELANGID(LANG_##pn, SUBLANG_##sn)
@@ -451,10 +451,10 @@ lcid_to_fl(LCID lcid,
 FL_Success
 FL_FindLocale(FL_Locale **locale, FL_Domain domain) {
   FL_Success success = FL_FAILED;
-  FL_Locale *rtn = (FL_Locale*)malloc(sizeof(FL_Locale));
-  rtn->lang = NULL;
-  rtn->country = NULL;
-  rtn->variant = NULL;
+  auto *rtn = (FL_Locale*)malloc(sizeof(FL_Locale));
+  rtn->lang = nullptr;
+  rtn->country = nullptr;
+  rtn->variant = nullptr;
 
 #ifdef WIN32
   /* win32 >= mswindows95 */
@@ -520,7 +520,7 @@ FL_FreeLocale(FL_Locale **locale) {
         free((void*)l->variant);
       }
       free(l);
-      *locale = NULL;
+      *locale = nullptr;
     }
   }
 }

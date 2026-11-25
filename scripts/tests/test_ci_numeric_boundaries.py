@@ -85,6 +85,8 @@ using SampleAccumulator=Accumulator;
 using CountAccumulator=Accumulator;
 template<typename A> struct StatType {
  StatType(const char*, const char*) {}
+ virtual ~StatType() = default;
+ virtual const char* getUnitLabel() const { return ""; }
  A data; A& getCurrentAccumulator() { return data; }
 };
 template<typename T> struct LLGetUnitLabel { static const char* getUnitLabel() { return ""; } };

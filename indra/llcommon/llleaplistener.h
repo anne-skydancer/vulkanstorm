@@ -30,10 +30,9 @@ public:
      * define the signature for a function that will perform that, and make
      * our constructor accept such a function.
      */
-    typedef std::function<LLBoundListener(LLEventPump&, const std::string& listener)>
-            ConnectFunc;
-    LLLeapListener(const ConnectFunc& connect);
-    ~LLLeapListener();
+    using ConnectFunc = std::function<LLBoundListener(LLEventPump&, const std::string& listener)>;
+    LLLeapListener(ConnectFunc connect);
+    ~LLLeapListener() override;
 
     static LLSD getFeatures();
 
@@ -60,7 +59,7 @@ private:
     // name? Merely collecting LLBoundListeners wouldn't adequately track
     // that. So capture the latest LLBoundListener for this LLEventPump name
     // and listener name.
-    typedef std::map<std::pair<std::string, std::string>, LLBoundListener> ListenersMap;
+    using ListenersMap = std::map<std::pair<std::string, std::string>, LLBoundListener>;
     ListenersMap mListeners;
 };
 

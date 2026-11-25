@@ -51,21 +51,21 @@
 template <class T, class ENABLE=void>
 struct LLPtrTo
 {
-    typedef T* type;
+    using type = T*;
 };
 
 /// specialize for subclasses of LLRefCount
 template <class T>
-struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLRefCount, T>::value >::type>
+struct LLPtrTo<T, std::enable_if_t< std::is_base_of_v<LLRefCount, T> >>
 {
-    typedef LLPointer<T> type;
+    using type = LLPointer<T>;
 };
 
 /// specialize for subclasses of LLThreadSafeRefCount
 template <class T>
-struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLThreadSafeRefCount, T>::value >::type>
+struct LLPtrTo<T, std::enable_if_t< std::is_base_of_v<LLThreadSafeRefCount, T> >>
 {
-    typedef LLPointer<T> type;
+    using type = LLPointer<T>;
 };
 
 /**
@@ -74,14 +74,14 @@ struct LLPtrTo<T, typename std::enable_if< std::is_base_of<LLThreadSafeRefCount,
 template <typename PTRTYPE>
 struct LLRemovePointer
 {
-    typedef typename std::remove_pointer<PTRTYPE>::type type;
+    using type = std::remove_pointer_t<PTRTYPE>;
 };
 
 /// specialize for LLPointer<SOMECLASS>
 template <typename SOMECLASS>
 struct LLRemovePointer< LLPointer<SOMECLASS> >
 {
-    typedef SOMECLASS type;
+    using type = SOMECLASS;
 };
 
 namespace LL
@@ -121,13 +121,13 @@ namespace LL
     template <typename T>
     auto& get_ref(T& ptr_or_ref)
     {
-        return GetRef<typename std::decay<T>::type>()(ptr_or_ref);
+        return GetRef<std::decay_t<T>>()(ptr_or_ref);
     }
 
     template <typename T>
     const auto& get_ref(const T& ptr_or_ref)
     {
-        return GetRef<typename std::decay<T>::type>()(ptr_or_ref);
+        return GetRef<std::decay_t<T>>()(ptr_or_ref);
     }
 
 /*****************************************************************************
@@ -140,6 +140,7 @@ namespace LL
     template <typename T>
     T* get_ptr(T* ptr) { return ptr; }
 
+    // NOLINTBEGIN(bugprone-return-const-ref-from-parameter): these overloads hand back their argument on purpose (callers pass lvalues)
     template <typename T>
     const std::shared_ptr<T>& get_ptr(const std::shared_ptr<T>& ptr) { return ptr; }
 
@@ -154,6 +155,7 @@ namespace LL
 
     template <typename T>
     const LLPointer<T>& get_ptr(const LLPointer<T>& ptr) { return ptr; }
+    // NOLINTEND(bugprone-return-const-ref-from-parameter)
 
     // T is not any pointer type we recognize, take a pointer to the parameter
     template <typename T>

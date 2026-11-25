@@ -61,7 +61,7 @@ public:
         FLAG_ABORT = 4
     };
 
-    typedef U32 handle_t;
+    using handle_t = U32;
 
     //------------------------------------------------------------------------
 public:
@@ -71,7 +71,7 @@ public:
         friend class LLQueuedThread;
 
     protected:
-        virtual ~QueuedRequest(); // use deleteRequest()
+        ~QueuedRequest() override; // use deleteRequest()
 
     public:
         QueuedRequest(handle_t handle, U32 flags = 0);
@@ -119,19 +119,19 @@ public:
 
 public:
     LLQueuedThread(const std::string& name, bool threaded = true, bool should_pause = false);
-    virtual ~LLQueuedThread();
-    virtual void shutdown();
+    ~LLQueuedThread() override;
+    void shutdown() override;
 
     // No copy constructor or copy assignment
     LLQueuedThread(const LLQueuedThread&) = delete;
     LLQueuedThread& operator=(const LLQueuedThread&) = delete;
 
 private:
-    virtual bool runCondition(void);
-    virtual void run(void);
-    virtual void startThread(void);
-    virtual void endThread(void);
-    virtual void threadedUpdate(void);
+    bool runCondition() override;
+    void run() override;
+    virtual void startThread();
+    virtual void endThread();
+    virtual void threadedUpdate();
 
 protected:
     handle_t generateHandle();
@@ -165,7 +165,7 @@ public:
 
 protected:
     bool mThreaded;  // if false, run on main thread and do updates during update()
-    bool mStarted;  // required when mThreaded is false to call startThread() from update()
+    bool mStarted{false};  // required when mThreaded is false to call startThread() from update()
     LLAtomicBool mIdleThread; // request queue is empty (or we are quitting) and the thread is idle
 
     //typedef std::set<QueuedRequest*, queued_request_less> request_queue_t;
@@ -174,10 +174,10 @@ protected:
     LL::WorkQueue::weak_t mMainQueue;
 
     enum { REQUEST_HASH_SIZE = 512 }; // must be power of 2
-    typedef LLSimpleHash<handle_t, REQUEST_HASH_SIZE> request_hash_t;
+    using request_hash_t = LLSimpleHash<handle_t, REQUEST_HASH_SIZE>;
     request_hash_t mRequestHash;
 
-    handle_t mNextHandle;
+    handle_t mNextHandle{0};
 };
 
 #endif // LL_LLQUEUEDTHREAD_H

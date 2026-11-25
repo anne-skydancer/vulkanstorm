@@ -24,8 +24,8 @@
  * $/LicenseInfo$
  */
 
-#include <errno.h>
-#include <signal.h>
+#include <cerrno>
+#include <csignal>
 
 #include "linden_common.h"
 #include "llapp.h"
@@ -37,8 +37,7 @@ LLHeartbeat::LLHeartbeat(F32 secs_between_heartbeat,
              F32 aggressive_heartbeat_max_blocking_secs)
     : mSecsBetweenHeartbeat(secs_between_heartbeat),
       mAggressiveHeartbeatPanicSecs(aggressive_heartbeat_panic_secs),
-      mAggressiveHeartbeatMaxBlockingSecs(aggressive_heartbeat_max_blocking_secs),
-      mSuppressed(false)
+      mAggressiveHeartbeatMaxBlockingSecs(aggressive_heartbeat_max_blocking_secs)
 {
     mBeatTimer.reset();
     mBeatTimer.setTimerExpirySec(mSecsBetweenHeartbeat);

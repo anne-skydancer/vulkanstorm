@@ -30,6 +30,7 @@
 
 #include "llapp.h"
 #include "llthread.h"
+#include <utility>
 #include "llmutex.h"
 
 #include "lltimer.h"
@@ -48,13 +49,13 @@
 const DWORD MS_VC_EXCEPTION=0x406D1388;
 
 #pragma pack(push,8)
-typedef struct tagTHREADNAME_INFO
+using THREADNAME_INFO = struct tagTHREADNAME_INFO
 {
     DWORD dwType; // Must be 0x1000.
     LPCSTR szName; // Pointer to name (in user addr space).
     DWORD dwThreadID; // Thread ID (-1=caller thread).
     DWORD dwFlags; // Reserved for future use, must be zero.
-} THREADNAME_INFO;
+};
 #pragma pack(pop)
 
 void set_thread_name( DWORD dwThreadID, const char* threadName)
@@ -65,6 +66,10 @@ void set_thread_name( DWORD dwThreadID, const char* threadName)
     info.dwThreadID = dwThreadID;
     info.dwFlags = 0;
 
+    // The debugger handles this exception and the thread resumes, which is the
+    // documented way to name a thread; the empty handler and the restart are intended.
+#pragma warning(push)
+#pragma warning(disable : 6312 6322)
     __try
     {
         ::RaiseException( MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(DWORD), (ULONG_PTR*)&info );
@@ -72,6 +77,7 @@ void set_thread_name( DWORD dwThreadID, const char* threadName)
     __except(EXCEPTION_CONTINUE_EXECUTION)
     {
     }
+#pragma warning(pop)
 }
 #endif
 
@@ -196,7 +202,7 @@ void LLThread::threadRun()
 
 
     delete mRecorder;
-    mRecorder = NULL;
+    mRecorder = nullptr;
 
     // We're done with the run function, this thread is done executing now.
     //NB: we are using this flag to sync across threads...we really need memory barriers here
@@ -275,22 +281,18 @@ void LLThread::sehHandle()
 }
 #endif
 
-LLThread::LLThread(const std::string& name, apr_pool_t *poolp) :
-    mPaused(false),
-    mName(name),
-    mThreadp(NULL),
-    mStatus(STOPPED),
-    mRecorder(NULL)
+LLThread::LLThread(std::string name, apr_pool_t *poolp) :
+    mName(std::move(name))
 {
     mRunCondition = new LLCondition();
     mDataLock = new LLMutex();
-    mLocalAPRFilePoolp = NULL ;
+    mLocalAPRFilePoolp = nullptr ;
 }
 
 
 LLThread::~LLThread()
 {
-    shutdown();
+    LLThread::shutdown();
 
     if (isCrashed())
     {
@@ -300,7 +302,7 @@ LLThread::~LLThread()
     if(mLocalAPRFilePoolp)
     {
         delete mLocalAPRFilePoolp ;
-        mLocalAPRFilePoolp = NULL ;
+        mLocalAPRFilePoolp = nullptr ;
     }
 }
 
@@ -346,25 +348,27 @@ void LLThread::shutdown()
             //LL_WARNS() << "LLThread::~LLThread() exiting thread before clean exit!" << LL_ENDL;
             // Put a stake in its heart. (A very hostile method to force a thread to quit)
 #if     LL_WINDOWS
+            // Last resort inherited from Linden Lab for a thread that ignored its stop request.
+#pragma warning(suppress : 6258)
             TerminateThread(mNativeHandle, 0);
 #else
             pthread_cancel(mNativeHandle);
 #endif
 
             delete mRecorder;
-            mRecorder = NULL;
+            mRecorder = nullptr;
             mStatus = STOPPED;
             return;
         }
         delete mThreadp;
-        mThreadp = NULL;
+        mThreadp = nullptr;
     }
 
     delete mRunCondition;
-    mRunCondition = NULL;
+    mRunCondition = nullptr;
 
     delete mDataLock;
-    mDataLock = NULL;
+    mDataLock = nullptr;
 
     if (mRecorder)
     {
@@ -407,7 +411,7 @@ void LLThread::pause()
     if (!mPaused)
     {
         // this will cause the thread to stop execution as soon as checkPause() is called
-        mPaused = 1;        // Does not need to be atomic since this is only set/unset from the main thread
+        mPaused = true;        // Does not need to be atomic since this is only set/unset from the main thread
     }
 }
 
@@ -415,14 +419,14 @@ void LLThread::unpause()
 {
     if (mPaused)
     {
-        mPaused = 0;
+        mPaused = false;
     }
 
     wake(); // wake up the thread if necessary
 }
 
 // virtual predicate function -- returns true if the thread should wake up, false if it should sleep.
-bool LLThread::runCondition(void)
+bool LLThread::runCondition()
 {
     // by default, always run.  Handling of pause/unpause is done regardless of this function's result.
     return true;
@@ -537,8 +541,6 @@ LLThreadSafeRefCount::~LLThreadSafeRefCount()
 
 //============================================================================
 
-LLResponder::~LLResponder()
-{
-}
+LLResponder::~LLResponder() = default;
 
 //============================================================================

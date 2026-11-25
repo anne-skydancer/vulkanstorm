@@ -34,14 +34,13 @@ namespace LLTrace
 {
 //extern MemStatHandle gTraceMemStat;
 
-static ThreadRecorder* sMasterThreadRecorder = NULL;
+static ThreadRecorder* sMasterThreadRecorder = nullptr;
 
 ///////////////////////////////////////////////////////////////////////
 // ThreadRecorder
 ///////////////////////////////////////////////////////////////////////
 
 ThreadRecorder::ThreadRecorder()
-:   mParentRecorder(NULL)
 {
     init();
 }
@@ -56,7 +55,7 @@ void ThreadRecorder::init()
 
     BlockTimerStackRecord* timer_stack = LLThreadLocalSingletonPointer<BlockTimerStackRecord>::getInstance();
     timer_stack->mTimeBlock = &root_time_block;
-    timer_stack->mActiveTimer = NULL;
+    timer_stack->mActiveTimer = nullptr;
 
     mNumTimeBlockTreeNodes = AccumulatorBuffer<TimeBlockAccumulator>::getDefaultBuffer()->size();
 
@@ -68,7 +67,7 @@ void ThreadRecorder::init()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& time_block = static_cast<BlockTimerStatHandle&>(base);
+        auto& time_block = static_cast<BlockTimerStatHandle&>(base);
         TimeBlockTreeNode& tree_node = mTimeBlockTreeNodes[time_block.getIndex()];
         tree_node.mBlock = &time_block;
         tree_node.mParent = &root_time_block;
@@ -99,7 +98,7 @@ ThreadRecorder::ThreadRecorder( ThreadRecorder& parent )
 ThreadRecorder::~ThreadRecorder()
 {
 #if LL_TRACE_ENABLED
-    LLThreadLocalSingletonPointer<BlockTimerStackRecord>::setInstance(NULL);
+    LLThreadLocalSingletonPointer<BlockTimerStackRecord>::setInstance(nullptr);
 
     //disclaim_alloc(gTraceMemStat, this);
     //disclaim_alloc(gTraceMemStat, sizeof(BlockTimer));
@@ -115,7 +114,7 @@ ThreadRecorder::~ThreadRecorder()
         mActiveRecordings.clear();
     }
 
-    set_thread_recorder(NULL);
+    set_thread_recorder(nullptr);
     delete[] mTimeBlockTreeNodes;
 
     if (mParentRecorder)
@@ -133,13 +132,13 @@ TimeBlockTreeNode* ThreadRecorder::getTimeBlockTreeNode( size_t index )
         return &mTimeBlockTreeNodes[index];
     }
 #endif
-    return NULL;
+    return nullptr;
 }
 
 AccumulatorBufferGroup* ThreadRecorder::activate( AccumulatorBufferGroup* recording)
 {
 #if LL_TRACE_ENABLED
-    ActiveRecording* active_recording = new ActiveRecording(recording);
+    auto* active_recording = new ActiveRecording(recording);
     if (!mActiveRecordings.empty())
     {
         AccumulatorBufferGroup& prev_active_recording = mActiveRecordings.back()->mPartialRecording;
@@ -172,7 +171,7 @@ ThreadRecorder::active_recording_list_t::iterator ThreadRecorder::bringUpToDate(
     {
         ActiveRecording* cur_recording = *it;
 
-        active_recording_list_t::reverse_iterator next_it = it;
+        auto next_it = it;
         ++next_it;
 
         // if we have another recording further down in the stack...
@@ -206,7 +205,7 @@ ThreadRecorder::active_recording_list_t::iterator ThreadRecorder::bringUpToDate(
 void ThreadRecorder::deactivate(AccumulatorBufferGroup* recording)
 {
 #if LL_TRACE_ENABLED
-    active_recording_list_t::iterator recording_it = bringUpToDate(recording);
+    auto recording_it = bringUpToDate(recording);
     // this method should only be called on a thread where the recorder is active
     llassert_always(recording_it != mActiveRecordings.end());
 
@@ -287,7 +286,7 @@ void ThreadRecorder::pullFromChildren()
         target_recording_buffers.sync();
         for (LLTrace::ThreadRecorder* rec : mChildThreadRecorders)
         {
-            LLMutexLock lock(&(rec->mSharedRecordingMutex));
+            LLMutexLock child_lock(&(rec->mSharedRecordingMutex));
             target_recording_buffers.merge(rec->mSharedRecordingBuffers);
             rec->mSharedRecordingBuffers.reset();
         }

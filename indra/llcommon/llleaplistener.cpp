@@ -18,6 +18,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <utility>
 // std headers
 // external library headers
 // other Linden headers
@@ -54,12 +55,12 @@
     return features;
 }
 
-LLLeapListener::LLLeapListener(const ConnectFunc& connect):
+LLLeapListener::LLLeapListener(ConnectFunc connect):
     // Each LEAP plugin has an instance of this listener. Make the command
     // pump name difficult for other such plugins to guess.
     LLEventAPI(LLUUID::generateNewID().asString(),
                "Operations relating to the LLSD Event API Plugin (LEAP) protocol"),
-    mConnect(connect)
+    mConnect(std::move(connect))
 {
     LLSD need_name(LLSDMap("name", LLSD()));
     add("newpump",
@@ -174,6 +175,7 @@ void LLLeapListener::listen(const LLSD& request)
             }
             reply["status"] = true;
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): the reply status is already false, nothing else to do
         catch (const LLEventPump::DupListenerName &)
         {
             // pass - status already set to false
@@ -188,7 +190,7 @@ void LLLeapListener::stoplistening(const LLSD& request)
     std::string source_name = request["source"];
     std::string listener_name = request["listener"];
 
-    ListenersMap::iterator finder =
+    auto finder =
         mListeners.find(ListenersMap::key_type(source_name, listener_name));
 
     reply["status"] = false;

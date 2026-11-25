@@ -55,9 +55,7 @@ LLSDXMLFormatter::LLSDXMLFormatter(bool boolAlpha, const std::string& realFormat
 }
 
 // virtual
-LLSDXMLFormatter::~LLSDXMLFormatter()
-{
-}
+LLSDXMLFormatter::~LLSDXMLFormatter() = default;
 
 // virtual
 S32 LLSDXMLFormatter::format(const LLSD& data, std::ostream& ostr,
@@ -104,8 +102,8 @@ S32 LLSDXMLFormatter::format_impl(const LLSD& data, std::ostream& ostr,
         else
         {
             ostr << pre << "<map>" << post;
-            LLSD::map_const_iterator iter = data.beginMap();
-            LLSD::map_const_iterator end = data.endMap();
+            auto iter = data.beginMap();
+            auto end = data.endMap();
             for(; iter != end; ++iter)
             {
                 ostr << pre << "<key>" << escapeString((*iter).first) << "</key>" << post;
@@ -123,8 +121,8 @@ S32 LLSDXMLFormatter::format_impl(const LLSD& data, std::ostream& ostr,
         else
         {
             ostr << pre << "<array>" << post;
-            LLSD::array_const_iterator iter = data.beginArray();
-            LLSD::array_const_iterator end = data.endArray();
+            auto iter = data.beginArray();
+            auto end = data.endArray();
             for(; iter != end; ++iter)
             {
                 format_count += format_impl(*iter, ostr, options, level + 1);
@@ -349,28 +347,28 @@ private:
     XML_Parser  mParser;
 
     LLSD mResult;
-    S32 mParseCount;
+    S32 mParseCount{};
 
-    bool mInLLSDElement;            // true if we're on LLSD
-    bool mGracefullStop;            // true if we found the </llsd
+    bool mInLLSDElement{};            // true if we're on LLSD
+    bool mGracefullStop{};            // true if we found the </llsd
 
-    typedef std::deque<LLSD*> LLSDRefStack;
+    using LLSDRefStack = std::deque<LLSD*>;
     LLSDRefStack mStack;
     std::stack< Element> mStackElements;
 
-    int mDepth;
-    bool mSkipping;
-    int mSkipThrough;
+    int mDepth{};
+    bool mSkipping{};
+    int mSkipThrough{};
 
     // <Vulkanstorm> The depth limit: mMaxDepth as LLSDParser's max_depth
     // (-1 unlimited); mDepthExceeded once a value reached it, which stops
     // expat and fails the parse before the deep tree is built.
-    S32 mMaxDepth;
-    bool mDepthExceeded;
+    S32 mMaxDepth{};
+    bool mDepthExceeded{};
     // The node budget: values left, 0 limit meaning unlimited; mNodesExceeded once spent, as mDepthExceeded.
     size_t mMaxNodes = LLSDParser::MAX_NODES_DEFAULT;
     size_t mNodesLeft = LLSDParser::MAX_NODES_DEFAULT;
-    bool mNodesExceeded;
+    bool mNodesExceeded{};
     // </Vulkanstorm>
 
     std::string mCurrentKey;        // Current XML <tag>
@@ -381,7 +379,7 @@ private:
 LLSDXMLParser::Impl::Impl(bool emit_errors)
     : mEmitErrors(emit_errors)
 {
-    mParser = XML_ParserCreate(NULL);
+    mParser = XML_ParserCreate(nullptr);
     reset();
 }
 
@@ -423,7 +421,7 @@ S32 LLSDXMLParser::Impl::parse(std::istream& input, LLSD& data)
     XML_Status status;
 
     static const int BUFFER_SIZE = 1024;
-    void* buffer = NULL;
+    void* buffer = nullptr;
     int count = 0;
     while (input.good() && !input.eof())
     {
@@ -643,7 +641,7 @@ void LLSDXMLParser::Impl::startSkipping()
 const XML_Char*
 LLSDXMLParser::Impl::findAttribute(const XML_Char* name, const XML_Char** pairs)
 {
-    while (NULL != pairs && NULL != *pairs)
+    while (nullptr != pairs && nullptr != *pairs)
     {
         if(0 == strcmp(name, *pairs))
         {
@@ -651,12 +649,12 @@ LLSDXMLParser::Impl::findAttribute(const XML_Char* name, const XML_Char** pairs)
         }
         pairs += 2;
     }
-    return NULL;
+    return nullptr;
 }
 
 void LLSDXMLParser::Impl::parsePart(const char* buf, llssize len)
 {
-    if ( buf != NULL
+    if ( buf != nullptr
         && len > 0 )
     {
         XML_Status status = XML_Parse(mParser, buf, (int)len, 0);
@@ -899,6 +897,7 @@ void LLSDXMLParser::Impl::endElementHandler(const XML_Char* name)
             {
                 S32 i;
                 // sscanf okay here with different locales - ints don't change for different locale settings like floats do.
+                // NOLINTNEXTLINE(bugprone-unchecked-string-to-number-conversion): the result is checked, the else branch falls back to the LLSD parser
                 if ( sscanf(mCurrentContent.c_str(), "%d", &i ) == 1 )
                 {   // See if sscanf works - it's faster
                     value = i;
@@ -1075,6 +1074,8 @@ LLSDXMLParser::Impl::Element LLSDXMLParser::Impl::readElement(const XML_Char* na
             break;
         case 'd':
             if (strcmp(name, "date") == 0) { return ELEMENT_DATE; }
+            break;
+        default:
             break;
     }
     return ELEMENT_UNKNOWN;

@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llwatchdog.h"
+#include <utility>
 #include "llmutex.h"
 #include "llthread.h"
 
@@ -38,13 +39,11 @@ class LLWatchdogTimerThread : public LLThread
 {
 public:
     LLWatchdogTimerThread() :
-        LLThread("Watchdog"),
-        mSleepMsecs(0),
-        mStopping(false)
+        LLThread("Watchdog")
     {
     }
 
-    ~LLWatchdogTimerThread() {}
+    ~LLWatchdogTimerThread() override = default;
 
     void setSleepTime(long ms) { mSleepMsecs = ms; }
     void stop()
@@ -63,20 +62,20 @@ public:
     }
 
 private:
-    long mSleepMsecs;
-    bool mStopping;
+    long mSleepMsecs{0};
+    bool mStopping{false};
 };
 
 // LLWatchdogEntry
-LLWatchdogEntry::LLWatchdogEntry(const std::string& thread_name)
-    : mThreadName(thread_name)
+LLWatchdogEntry::LLWatchdogEntry(std::string thread_name)
+    : mThreadName(std::move(thread_name))
     , mThreadID(LLThread::currentID())
 {
 }
 
 LLWatchdogEntry::~LLWatchdogEntry()
 {
-    stop();
+    LLWatchdogEntry::stop();
 }
 
 void LLWatchdogEntry::start()
@@ -103,14 +102,11 @@ const char *UNINIT_STRING = "uninitialized";
 
 LLWatchdogTimeout::LLWatchdogTimeout(const std::string& thread_name) :
     LLWatchdogEntry(thread_name),
-    mTimeout(0.0f),
     mPingState(UNINIT_STRING)
 {
 }
 
-LLWatchdogTimeout::~LLWatchdogTimeout()
-{
-}
+LLWatchdogTimeout::~LLWatchdogTimeout() = default;
 
 bool LLWatchdogTimeout::isAlive() const
 {
@@ -164,16 +160,9 @@ void LLWatchdogTimeout::ping(std::string_view state)
 }
 
 // LLWatchdog
-LLWatchdog::LLWatchdog()
-    :mSuspectsAccessMutex()
-    ,mTimer(nullptr)
-    ,mLastClockCount(0)
-{
-}
+LLWatchdog::LLWatchdog() = default;
 
-LLWatchdog::~LLWatchdog()
-{
-}
+LLWatchdog::~LLWatchdog() = default;
 
 void LLWatchdog::add(LLWatchdogEntry* e)
 {
@@ -219,10 +208,10 @@ void LLWatchdog::init(
         // start needs to use the mSuspectsAccessMutex
         mTimer->start();
     }
-    mCreateMarkerFnc = error_state_callback;
-    mClearMarkerFnc  = clear_marker_callback;
-    mCrashReportFnc = report_callback;
-    mNotifyFnc = notify_callback;
+    mCreateMarkerFnc = std::move(error_state_callback);
+    mClearMarkerFnc  = std::move(clear_marker_callback);
+    mCrashReportFnc = std::move(report_callback);
+    mNotifyFnc = std::move(notify_callback);
     mCrashOnFreeze = crash_on_freeze;
 }
 
@@ -266,7 +255,7 @@ void LLWatchdog::run()
     }
     else
     {
-        SuspectsRegistry::iterator result =
+        auto result =
             std::find_if(mSuspects.begin(),
                 mSuspects.end(),
                 [](const LLWatchdogEntry* suspect){ return ! suspect->isAlive(); });

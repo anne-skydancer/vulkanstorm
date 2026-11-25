@@ -27,13 +27,12 @@
 
 #include <iostream>
 
-namespace nd
-{
-    namespace logging
+
+    namespace nd::logging
     {
         bool throttle( char const *aFile, int aLine, std::ostream *aOut );
         void setThrottleEnabled(bool enabled);
     }
-}
+
 
 #endif

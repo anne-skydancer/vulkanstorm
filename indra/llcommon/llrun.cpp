@@ -28,6 +28,7 @@
 
 #include "linden_common.h"
 #include "llrun.h"
+#include <utility>
 
 #include "llframetimer.h"
 
@@ -36,10 +37,7 @@ static const LLRunner::run_handle_t INVALID_RUN_HANDLE = 0;
 /**
  * LLRunner
  */
-LLRunner::LLRunner() :
-    mNextHandle(1)
-{
-}
+LLRunner::LLRunner() = default;
 
 LLRunner::~LLRunner()
 {
@@ -59,7 +57,7 @@ size_t LLRunner::run()
     // Collect the run once. We erase the matching ones now because
     // it's easier. If we find a reason to keep them around for a
     // while, we can restructure this method.
-    LLRunner::run_list_t::iterator iter = mRunOnce.begin();
+    auto iter = mRunOnce.begin();
     for( ; iter != mRunOnce.end(); )
     {
         if(now > (*iter).mNextRunAt)
@@ -75,7 +73,7 @@ size_t LLRunner::run()
 
     // Collect the ones that repeat.
     iter = mRunEvery.begin();
-    LLRunner::run_list_t::iterator end = mRunEvery.end();
+    auto end = mRunEvery.end();
     for( ; iter != end; ++iter )
     {
         if(now > (*iter).mNextRunAt)
@@ -96,7 +94,7 @@ size_t LLRunner::run()
 }
 
 LLRunner::run_handle_t LLRunner::addRunnable(
-    run_ptr_t runnable,
+    const run_ptr_t& runnable,
     ERunSchedule schedule,
     F64 seconds)
 {
@@ -123,8 +121,8 @@ LLRunner::run_handle_t LLRunner::addRunnable(
 LLRunner::run_ptr_t LLRunner::removeRunnable(LLRunner::run_handle_t handle)
 {
     LLRunner::run_ptr_t rv;
-    LLRunner::run_list_t::iterator iter = mRunOnce.begin();
-    LLRunner::run_list_t::iterator end = mRunOnce.end();
+    auto iter = mRunOnce.begin();
+    auto end = mRunOnce.end();
     for( ; iter != end; ++iter)
     {
         if((*iter).mHandle == handle)
@@ -159,16 +157,14 @@ LLRunner::LLRunInfo::LLRunInfo(
     F64 next_run_after,
     F64 increment) :
     mHandle(handle),
-    mRunnable(runnable),
+    mRunnable(std::move(runnable)),
     mSchedule(schedule),
     mNextRunAt(next_run_after),
     mIncrement(increment)
 {
 }
 
-LLRunnable::LLRunnable()
-{ }
+LLRunnable::LLRunnable() = default;
 
 // virtual
-LLRunnable::~LLRunnable()
-{ }
+LLRunnable::~LLRunnable() = default;

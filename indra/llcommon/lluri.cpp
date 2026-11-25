@@ -231,7 +231,7 @@ std::string LLURI::escapePathAndData(const std::string &str)
     std::string result;
 
     const std::string data_marker = "data:";
-    if (str.compare(0, data_marker.length(), data_marker) == 0)
+    if (str.starts_with(data_marker))
     {
         // This is not url, but data, data part needs to be properly escaped
         // data part is separated by ',' from header. Minimal data uri is "data:,"
@@ -316,15 +316,12 @@ std::string LLURI::escapeQueryVariable(const std::string& s)
     return ::escapeQueryVariable(s);
 }
 
-LLURI::LLURI()
-{
-}
+LLURI::LLURI() = default;
 
 LLURI::LLURI(const std::string& escaped_str)
 {
     std::string::size_type delim_pos;
     delim_pos = escaped_str.find(':');
-    std::string temp;
     if (delim_pos == std::string::npos)
     {
         mScheme = "";
@@ -364,7 +361,7 @@ void LLURI::parseAuthorityAndPathUsingOpaque()
         mScheme == "ftp" || mScheme == "secondlife" ||
         mScheme == "x-grid-location-info")
     {
-        if (mEscapedOpaque.substr(0,2) != "//")
+        if (!mEscapedOpaque.starts_with("//"))
         {
             return;
         }
@@ -444,9 +441,7 @@ LLURI::LLURI(const std::string& scheme,
     mEscapedOpaque = opaque.str();
 }
 
-LLURI::~LLURI()
-{
-}
+LLURI::~LLURI() = default;
 
 // static
 LLURI LLURI::buildHTTP(const std::string& prefix,
@@ -470,7 +465,7 @@ LLURI LLURI::buildHTTP(const std::string& prefix,
     if (path.isArray())
     {
         // break out and escape each path component
-        for (LLSD::array_const_iterator it = path.beginArray();
+        for (auto it = path.beginArray();
              it != path.endArray();
              ++it)
         {
@@ -671,7 +666,7 @@ U16 LLURI::hostPort() const
             return 21;
         return 0;
     }
-    return atoi(port.c_str());
+    return static_cast<U16>(std::strtol(port.c_str(), nullptr, 10));
 }
 
 std::string LLURI::path() const
@@ -681,7 +676,7 @@ std::string LLURI::path() const
 
 LLSD LLURI::pathArray() const
 {
-    typedef boost::tokenizer<boost::char_separator<char> > tokenizer;
+    using tokenizer = boost::tokenizer<boost::char_separator<char> >;
     boost::char_separator<char> sep("/", "", boost::drop_empty_tokens);
     tokenizer tokens(mEscapedPath, sep);
     tokenizer::iterator it = tokens.begin();
@@ -752,8 +747,8 @@ std::string LLURI::mapToQueryString(const LLSD& queryMap)
     if (queryMap.isMap())
     {
         bool first_element = true;
-        LLSD::map_const_iterator iter = queryMap.beginMap();
-        LLSD::map_const_iterator end = queryMap.endMap();
+        auto iter = queryMap.beginMap();
+        auto end = queryMap.endMap();
         std::ostringstream ostr;
         for (; iter != end; ++iter)
         {

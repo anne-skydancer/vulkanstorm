@@ -34,8 +34,8 @@
 
 struct LL_COMMON_API LLDictionaryEntry
 {
-    LLDictionaryEntry(const std::string &name);
-    virtual ~LLDictionaryEntry() {}
+    LLDictionaryEntry(std::string name);
+    virtual ~LLDictionaryEntry() = default;
     const std::string mName;
     std::string mNameCapitalized;
 };
@@ -44,26 +44,26 @@ template <class Index, class Entry>
 class LLDictionary : public std::map<Index, Entry *>
 {
 public:
-    typedef std::map<Index, Entry *> map_t;
-    typedef typename map_t::iterator iterator_t;
-    typedef typename map_t::const_iterator const_iterator_t;
+    using map_t = std::map<Index, Entry *>;
+    using iterator_t = typename map_t::iterator;
+    using const_iterator_t = typename map_t::const_iterator;
 
-    LLDictionary() {}
+    LLDictionary() = default;
     virtual ~LLDictionary()
     {
-        for (iterator_t iter = map_t::begin(); iter != map_t::end(); ++iter)
+        for (auto iter = map_t::begin(); iter != map_t::end(); ++iter)
             delete (iter->second);
     }
 
     const Entry *lookup(Index index) const
     {
-        const_iterator_t dictionary_iter = map_t::find(index);
-        if (dictionary_iter == map_t::end()) return NULL;
+        auto dictionary_iter = map_t::find(index);
+        if (dictionary_iter == map_t::end()) return nullptr;
         return dictionary_iter->second;
     }
     const Index lookup(const std::string &name) const
     {
-        for (const_iterator_t dictionary_iter = map_t::begin();
+        for (auto dictionary_iter = map_t::begin();
              dictionary_iter != map_t::end();
              dictionary_iter++)
         {

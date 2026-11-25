@@ -52,7 +52,7 @@ const LLUUID LLUUID::null;
 const LLTransactionID LLTransactionID::tnull;
 
 // static
-LLMutex* LLUUID::mMutex = NULL;
+LLMutex* LLUUID::mMutex = nullptr;
 
 // <FS> Fix for misaligned unsigned ints in LLUUID; by Sovereign Engineer / Shyotl Kuhr
 static const U8 nullUUID[UUID_BYTES] = {};
@@ -448,11 +448,12 @@ static void get_random_bytes(void* buf, int nbytes)
 
 #if LL_WINDOWS
 
-typedef struct _ASTAT_
+using ASTAT = struct _ASTAT_
 {
     ADAPTER_STATUS adapt;
     NAME_BUFFER    NameBuff[30];
-}ASTAT, * PASTAT;
+};
+using PASTAT = ASTAT*;
 
 // static
 S32 LLUUID::getNodeID(unsigned char* node_id)
@@ -468,7 +469,7 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
     Ncb.ncb_command = NCBENUM;
     Ncb.ncb_buffer = (UCHAR*)&lenum;
     Ncb.ncb_length = sizeof(lenum);
-    uRetCode = Netbios(&Ncb);
+    Netbios(&Ncb);
 
     for (i = 0; i < lenum.length; i++)
     {
@@ -476,13 +477,13 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
         Ncb.ncb_command = NCBRESET;
         Ncb.ncb_lana_num = lenum.lana[i];
 
-        uRetCode = Netbios(&Ncb);
+        Netbios(&Ncb);
 
         memset(&Ncb, 0, sizeof(Ncb));
         Ncb.ncb_command = NCBASTAT;
         Ncb.ncb_lana_num = lenum.lana[i];
 
-        strcpy((char*)Ncb.ncb_callname, "*              ");     /* Flawfinder: ignore */
+        memcpy(Ncb.ncb_callname, "*              ", sizeof("*              ")); // same bytes strcpy copied, including the NUL
         Ncb.ncb_buffer = (unsigned char*)&Adapter;
         Ncb.ncb_length = sizeof(Adapter);
 
@@ -734,7 +735,7 @@ void LLUUID::getCurrentTime(uuid_time_t* timestamp)
 
     uuid_time_t time_now = { 0,0 };
 
-    while (1) {
+    while (true) {
         getSystemTime(&time_now);
 
         // if clock reading changed since last UUID generated
@@ -769,7 +770,7 @@ void LLUUID::getCurrentTime(uuid_time_t* timestamp)
 void LLUUID::generate()
 {
     // Create a UUID.
-    uuid_time_t timestamp;
+    uuid_time_t timestamp{};
 
     static unsigned char node_id[6];    /* Flawfinder: ignore */
     static int has_init = 0;
@@ -870,7 +871,7 @@ U32 LLUUID::getRandomSeed()
 
     seed[6] = (unsigned char)(pid >> 8);
     seed[7] = (unsigned char)(pid);
-    uuid_time_t timestamp;
+    uuid_time_t timestamp{};
     getSystemTime(&timestamp);
     std::memcpy(&seed[8], &timestamp.high, sizeof(timestamp.high));
     std::memcpy(&seed[12], &timestamp.low, sizeof(timestamp.low));
@@ -881,7 +882,7 @@ U32 LLUUID::getRandomSeed()
 
 bool LLUUID::parseUUID(const std::string& buf, LLUUID* value)
 {
-    if (buf.empty() || value == NULL)
+    if (buf.empty() || value == nullptr)
     {
         return false;
     }
@@ -897,7 +898,7 @@ bool LLUUID::parseUUID(const std::string& buf, LLUUID* value)
 }
 
 //static
-LLUUID LLUUID::generateNewID(std::string hash_string)
+LLUUID LLUUID::generateNewID(const std::string& hash_string)
 {
     LLUUID new_id;
     if (hash_string.empty())

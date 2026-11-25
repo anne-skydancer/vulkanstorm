@@ -55,8 +55,8 @@ public:
     void incCount()     { mCount++; }
     bool decCount()     { return --mCount != 0; }
 
-    char *mString;
-    S32  mCount;
+    char *mString{nullptr};
+    S32  mCount{1};
 };
 
 class LL_COMMON_API LLStringTable
@@ -77,7 +77,7 @@ public:
     void  removeString(const char *str);
 
     S32 mMaxEntries;
-    S32 mUniqueEntries;
+    S32 mUniqueEntries{0};
 
 #if STRING_TABLE_HASH_MAP
 #if LL_WINDOWS
@@ -87,8 +87,8 @@ public:
 #endif
     string_hash_t mStringHash;
 #else
-    typedef std::list<LLStringTableEntry *> string_list_t;
-    typedef string_list_t * string_list_ptr_t;
+    using string_list_t = std::list<LLStringTableEntry *>;
+    using string_list_ptr_t = string_list_t *;
     string_list_ptr_t   *mStringList;
 #endif
 };
@@ -101,7 +101,7 @@ extern LL_COMMON_API LLStringTable gStringTable;
 // e.g. as a member of an LLXmlTree
 // Strings can be inserted only, then quickly looked up
 
-typedef const std::string* LLStdStringHandle;
+using LLStdStringHandle = const std::string*;
 
 class LL_COMMON_API LLStdStringTable
 {
@@ -164,7 +164,7 @@ public:
     {
         U32 hashval = makehash(s);
         LLStdStringHandle result = lookup(hashval, s);
-        if (result == NULL)
+        if (result == nullptr)
         {
             result = new std::string(s);
             mStringList[hashval].insert(result);
@@ -192,20 +192,20 @@ private:
     {
         string_set_t& stringset = mStringList[hashval];
         LLStdStringHandle handle = &s;
-        string_set_t::iterator iter = stringset.find(handle); // compares actual strings
+        auto iter = stringset.find(handle); // compares actual strings
         if (iter != stringset.end())
         {
             return *iter;
         }
         else
         {
-            return NULL;
+            return nullptr;
         }
     }
 
 private:
     S32 mTableSize;
-    typedef std::set<LLStdStringHandle, compare_pointer_contents<std::string> > string_set_t;
+    using string_set_t = std::set<LLStdStringHandle, compare_pointer_contents<std::string> >;
     string_set_t* mStringList; // [mTableSize]
 };
 

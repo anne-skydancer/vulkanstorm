@@ -47,7 +47,7 @@
 class LL_COMMON_API LLCRC
 {
 protected:
-    U32 mCurrent;
+    U32 mCurrent{0xffffffff};
 
 public:
     LLCRC();

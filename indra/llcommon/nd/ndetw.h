@@ -28,17 +28,16 @@
 #include "llpreprocessor.h"
 #include "lltimer.h"
 
-namespace nd
-{
-    namespace etw
+
+    namespace nd::etw
     {
 #ifdef LL_WINDOWS
-        typedef bool (_cdecl *tpInitialize)(void);
+        using tpInitialize = bool (_cdecl *)(void);
 
-        typedef void (_cdecl *tpLogFrame)(double);
-        typedef void (_cdecl *tpLogStartTask)(wchar_t const*);
-        typedef void (_cdecl *tpLogEndTask)(wchar_t const*);
-        typedef void (_cdecl *tpLogTickTask)(wchar_t const*);
+        using tpLogFrame = void (_cdecl *)(double);
+        using tpLogStartTask = void (_cdecl *)(wchar_t const*);
+        using tpLogEndTask = void (_cdecl *)(wchar_t const*);
+        using tpLogTickTask = void (_cdecl *)(wchar_t const*);
 
         extern tpLogFrame pLogFrame;
         extern tpLogStartTask pLogStartTask;
@@ -89,5 +88,5 @@ namespace nd
         { }
 #endif
     }
-}
+
 #endif

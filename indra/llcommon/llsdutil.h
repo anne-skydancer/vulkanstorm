@@ -36,6 +36,7 @@
 #include <cassert>
 #include <memory>                   // std::shared_ptr
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 // U32
@@ -309,7 +310,7 @@ LLSD map(Ts&&... vs)
 *****************************************************************************/
 struct LLSDParamBase
 {
-    virtual ~LLSDParamBase() {}
+    virtual ~LLSDParamBase() = default;
 };
 
 /**
@@ -379,7 +380,7 @@ private:
     mutable std::vector<std::shared_ptr<LLSDParamBase>> converters_;
 
 public:
-    LLSDParam(const LLSD& value): value_(value) {}
+    LLSDParam(LLSD value): value_(std::move(value)) {}
 
     /// if we're literally being asked for an LLSD parameter, avoid infinite
     /// recursion
@@ -471,7 +472,7 @@ public:
             // isUndefined() seems like the best way. If you want to pass an
             // empty string, you can still pass LLSD(""). Without this special
             // case, though, no LLSD value could pass NULL.
-            return NULL;
+            return nullptr;
         }
         return value_.c_str();
     }
@@ -487,12 +488,12 @@ namespace llsd
 class inArray
 {
 public:
-    inArray(const LLSD& array):
-        _array(array)
+    inArray(LLSD array):
+        _array(std::move(array))
     {}
 
-    typedef LLSD::array_const_iterator const_iterator;
-    typedef LLSD::array_iterator iterator;
+    using const_iterator = LLSD::array_const_iterator;
+    using iterator = LLSD::array_iterator;
 
     iterator begin() { return _array.beginArray(); }
     iterator end()   { return _array.endArray(); }
@@ -504,18 +505,18 @@ private:
 };
 
 /// MapEntry is what you get from dereferencing an LLSD::map_[const_]iterator.
-typedef std::map<LLSD::String, LLSD>::value_type MapEntry;
+using MapEntry = std::map<LLSD::String, LLSD>::value_type;
 
 /// Usage: for([const] MapEntry& e : inMap(someLLSDmap)) { ... }
 class inMap
 {
 public:
-    inMap(const LLSD& map):
-        _map(map)
+    inMap(LLSD map):
+        _map(std::move(map))
     {}
 
-    typedef LLSD::map_const_iterator const_iterator;
-    typedef LLSD::map_iterator iterator;
+    using const_iterator = LLSD::map_const_iterator;
+    using iterator = LLSD::map_iterator;
 
     iterator begin() { return _map.beginMap(); }
     iterator end()   { return _map.endMap(); }
@@ -550,9 +551,9 @@ namespace llsd
 
 // llsd namespace aliases
 inline
-LLSD clone  (LLSD value, LLSD filter=LLSD()) { return llsd_clone  (value, filter); }
+LLSD clone  (LLSD value, LLSD filter=LLSD()) { return llsd_clone  (std::move(value), std::move(filter)); }
 inline
-LLSD shallow(LLSD value, LLSD filter=LLSD()) { return llsd_shallow(value, filter); }
+LLSD shallow(LLSD value, LLSD filter=LLSD()) { return llsd_shallow(std::move(value), std::move(filter)); }
 
 } // namespace llsd
 
@@ -656,8 +657,8 @@ namespace boost
 template <>
 struct hash<LLSD>
 {
-    typedef LLSD argument_type;
-    typedef std::size_t result_type;
+    using argument_type = LLSD;
+    using result_type = std::size_t;
     result_type operator()(argument_type const& s) const
     {
         result_type seed(0);
@@ -694,7 +695,7 @@ struct hash<LLSD>
         }
         case LLSD::TypeMap:
         {
-            for (LLSD::map_const_iterator itm = s.beginMap(); itm != s.endMap(); ++itm)
+            for (auto itm = s.beginMap(); itm != s.endMap(); ++itm)
             {
                 boost::hash_combine(seed, (*itm).first);
                 boost::hash_combine(seed, (*itm).second);
@@ -702,7 +703,7 @@ struct hash<LLSD>
             break;
         }
         case LLSD::TypeArray:
-            for (LLSD::array_const_iterator ita = s.beginArray(); ita != s.endArray(); ++ita)
+            for (auto ita = s.beginArray(); ita != s.endArray(); ++ita)
             {
                 boost::hash_combine(seed, (*ita));
             }
@@ -761,7 +762,7 @@ auto apply(CALLABLE&& func, const LLSD& args)
 {
     // infer arity from the definition of func
     constexpr auto arity = function_arity<
-        typename std::remove_reference<CALLABLE>::type>::value;
+        std::remove_reference_t<CALLABLE>>::value;
     // now that we have a compile-time arity, apply_n() works
     return apply_n<arity>(std::forward<CALLABLE>(func), args);
 }

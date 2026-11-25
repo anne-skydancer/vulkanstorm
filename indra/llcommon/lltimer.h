@@ -54,8 +54,8 @@ public:
     static LLTimer *sTimer;             // global timer
 
 protected:
-    U64 mLastClockCount;
-    U64 mExpirationTicks;
+    U64 mLastClockCount{};
+    U64 mExpirationTicks{};
     bool mStarted;
 
 public:
@@ -122,8 +122,8 @@ struct TimerInfo
     F64HertzImplicit        mClockFrequency;
     F64SecondsImplicit      mClockFrequencyInv;
     F64MicrosecondsImplicit mClocksToMicroseconds;
-    U64                     mTotalTimeClockCount;
-    U64                     mLastTotalTimeClockCount;
+    U64                     mTotalTimeClockCount{0};
+    U64                     mLastTotalTimeClockCount{0};
 };
 
 TimerInfo& get_timer_info();

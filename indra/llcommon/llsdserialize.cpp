@@ -90,7 +90,7 @@ S32 parse_using(std::istream& istr, LLSD& data, size_t max_bytes, S32 max_depth=
 void LLSDSerialize::serialize(const LLSD& sd, std::ostream& str, ELLSD_Serialize type,
                               LLSDFormatter::EFormatterOptions options)
 {
-    LLPointer<LLSDFormatter> f = NULL;
+    LLPointer<LLSDFormatter> f = nullptr;
 
     switch (type)
     {
@@ -145,7 +145,7 @@ bool LLSDSerialize::deserialize(LLSD& sd, std::istream& str, llssize max_bytes)
     // without pulling it from the stream. If it turns out that the stream
     // does NOT contain a header, and the content includes meaningful '\n',
     // it's important to pull that into hdr_buf too.
-    if (inbuf < max_bytes && str.get(hdr_buf[inbuf]))
+    if (inbuf >= 0 && inbuf < max_bytes && str.get(hdr_buf[inbuf]))
     {
         // got the delimiting '\n'
         ++inbuf;
@@ -284,14 +284,14 @@ union LLEndianSwapper
 };
 F64 ll_htond(F64 hostdouble)
 {
-    LLEndianSwapper tmp;
+    LLEndianSwapper tmp{};
     tmp.d = hostdouble;
     tmp.i = ll_htonll(tmp.i);
     return tmp.d;
 }
 F64 ll_ntohd(F64 netdouble)
 {
-    LLEndianSwapper tmp;
+    LLEndianSwapper tmp{};
     tmp.d = netdouble;
     tmp.i = ll_ntohll(tmp.i);
     return tmp.d;
@@ -379,14 +379,10 @@ static const char BINARY_FALSE_SERIAL = '0';
 /**
  * LLSDParser
  */
-LLSDParser::LLSDParser()
-    : mCheckLimits(true), mMaxBytesLeft(0), mMaxNodes(MAX_NODES_DEFAULT), mNodesLeft(0), mNodesSpent(false), mParseLines(false)
-{
-}
+LLSDParser::LLSDParser() = default;
 
 // virtual
-LLSDParser::~LLSDParser()
-{ }
+LLSDParser::~LLSDParser() = default;
 
 S32 LLSDParser::parse(std::istream& istr, LLSD& data, llssize max_bytes, S32 max_depth)
 {
@@ -487,13 +483,10 @@ bool LLSDParser::nodeBudgetSpent() const
 /**
  * LLSDNotationParser
  */
-LLSDNotationParser::LLSDNotationParser()
-{
-}
+LLSDNotationParser::LLSDNotationParser() = default;
 
 // virtual
-LLSDNotationParser::~LLSDNotationParser()
-{ }
+LLSDNotationParser::~LLSDNotationParser() = default;
 
 // virtual
 S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) const
@@ -519,7 +512,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
     while(isspace(c))
     {
         // pop the whitespace.
-        c = get(istr);
+        get(istr);
         c = istr.peek();
         continue;
     }
@@ -573,12 +566,12 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
     }
 
     case '!':
-        c = get(istr);
+        get(istr);
         data.clear();
         break;
 
     case '0':
-        c = get(istr);
+        get(istr);
         data = false;
         break;
 
@@ -608,7 +601,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
         break;
 
     case '1':
-        c = get(istr);
+        get(istr);
         data = true;
         break;
 
@@ -635,7 +628,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
 
     case 'i':
     {
-        c = get(istr);
+        get(istr);
         S32 integer = 0;
         istr >> integer;
         data = integer;
@@ -649,7 +642,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
 
     case 'r':
     {
-        c = get(istr);
+        get(istr);
         F64 real = 0.0;
         istr >> real;
         data = real;
@@ -663,7 +656,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
 
     case 'u':
     {
-        c = get(istr);
+        get(istr);
         LLUUID id;
         istr >> id;
         data = id;
@@ -691,7 +684,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
 
     case 'l':
     {
-        c = get(istr); // pop the 'l'
+        get(istr); // pop the 'l'
         c = get(istr); // pop the delimiter
         std::string str;
         auto cnt = deserialize_string_delim(istr, str, c);
@@ -714,7 +707,7 @@ S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) c
 
     case 'd':
     {
-        c = get(istr); // pop the 'd'
+        get(istr); // pop the 'd'
         c = get(istr); // pop the delimiter
         std::string str;
         auto cnt = deserialize_string_delim(istr, str, c);
@@ -894,7 +887,7 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
     {
         // We probably have a valid raw binary stream. determine
         // the size, and read it.
-        auto len = strtol(buf + 2, NULL, 0);
+        auto len = strtol(buf + 2, nullptr, 0);
         if(len < 0) return false;
         if(mCheckLimits && (len > mMaxBytesLeft)) return false;
         std::vector<U8> value;
@@ -903,7 +896,7 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
             value.resize(len);
             account(fullread(istr, (char*)value.data(), len));
         }
-        c = get(istr); // strip off the trailing double-quote
+        get(istr); // strip off the trailing double-quote
         data = std::move(value);
     }
     else if(0 == strncmp("b64", buf, 3))
@@ -913,7 +906,7 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
         // serialization format that indicated how long it was.
         std::stringstream coded_stream;
         get(istr, *(coded_stream.rdbuf()), '\"');
-        c = get(istr);
+        get(istr);
         std::string encoded(std::move(coded_stream).str());
         S32 len = apr_base64_decode_len(encoded.c_str());
         std::vector<U8> value;
@@ -967,14 +960,10 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
 /**
  * LLSDBinaryParser
  */
-LLSDBinaryParser::LLSDBinaryParser()
-{
-}
+LLSDBinaryParser::LLSDBinaryParser() = default;
 
 // virtual
-LLSDBinaryParser::~LLSDBinaryParser()
-{
-}
+LLSDBinaryParser::~LLSDBinaryParser() = default;
 
 // virtual
 S32 LLSDBinaryParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) const
@@ -1239,6 +1228,8 @@ S32 LLSDBinaryParser::parseMap(std::istream& istr, LLSD& map, S32 max_depth) con
             account(cnt);
             break;
         }
+        default:
+            break;
         }
         LLSD child;
         S32 child_count = doParse(istr, child, max_depth);
@@ -1341,8 +1332,7 @@ LLSDFormatter::LLSDFormatter(bool boolAlpha, const std::string& realFmt, EFormat
 }
 
 // virtual
-LLSDFormatter::~LLSDFormatter()
-{ }
+LLSDFormatter::~LLSDFormatter() = default;
 
 void LLSDFormatter::boolalpha(bool alpha)
 {
@@ -1381,8 +1371,7 @@ LLSDNotationFormatter::LLSDNotationFormatter(bool boolAlpha, const std::string& 
 }
 
 // virtual
-LLSDNotationFormatter::~LLSDNotationFormatter()
-{ }
+LLSDNotationFormatter::~LLSDNotationFormatter() = default;
 
 // static
 std::string LLSDNotationFormatter::escapeString(const std::string& in)
@@ -1421,8 +1410,8 @@ S32 LLSDNotationFormatter::format_impl(const LLSD& data, std::ostream& ostr,
         }
 
         bool need_comma = false;
-        LLSD::map_const_iterator iter = data.beginMap();
-        LLSD::map_const_iterator end = data.endMap();
+        auto iter = data.beginMap();
+        auto end = data.endMap();
         for(; iter != end; ++iter)
         {
             if(need_comma) ostr << ",";
@@ -1440,8 +1429,8 @@ S32 LLSDNotationFormatter::format_impl(const LLSD& data, std::ostream& ostr,
     {
         ostr << post << pre << "[";
         bool need_comma = false;
-        LLSD::array_const_iterator iter = data.beginArray();
-        LLSD::array_const_iterator end = data.endArray();
+        auto iter = data.beginArray();
+        auto end = data.endArray();
         for(; iter != end; ++iter)
         {
             if(need_comma) ostr << ",";
@@ -1567,8 +1556,7 @@ LLSDBinaryFormatter::LLSDBinaryFormatter(bool boolAlpha, const std::string& real
 }
 
 // virtual
-LLSDBinaryFormatter::~LLSDBinaryFormatter()
-{ }
+LLSDBinaryFormatter::~LLSDBinaryFormatter() = default;
 
 // virtual
 S32 LLSDBinaryFormatter::format_impl(const LLSD& data, std::ostream& ostr,
@@ -1582,8 +1570,8 @@ S32 LLSDBinaryFormatter::format_impl(const LLSD& data, std::ostream& ostr,
         ostr.put('{');
         U32 size_nbo = htonl(static_cast<u_long>(data.size()));
         ostr.write((const char*)(&size_nbo), sizeof(U32));
-        LLSD::map_const_iterator iter = data.beginMap();
-        LLSD::map_const_iterator end = data.endMap();
+        auto iter = data.beginMap();
+        auto end = data.endMap();
         for(; iter != end; ++iter)
         {
             ostr.put('k');
@@ -1599,8 +1587,8 @@ S32 LLSDBinaryFormatter::format_impl(const LLSD& data, std::ostream& ostr,
         ostr.put('[');
         U32 size_nbo = htonl(static_cast<u_long>(data.size()));
         ostr.write((const char*)(&size_nbo), sizeof(U32));
-        LLSD::array_const_iterator iter = data.beginArray();
-        LLSD::array_const_iterator end = data.endArray();
+        auto iter = data.beginArray();
+        auto end = data.endArray();
         for(; iter != end; ++iter)
         {
             format_count += format_impl(*iter, ostr, options, level+1);
@@ -1758,7 +1746,7 @@ llssize deserialize_string_delim(
                     found_escape = false;
                     byte = byte << 4;
                     byte |= hex_as_nybble(next_char);
-                    write_buffer << byte;
+                    write_buffer << static_cast<char>(byte);
                     byte = 0;
                 }
                 else
@@ -1833,8 +1821,8 @@ llssize deserialize_string_raw(
     char buf[BUF_LEN];      /* Flawfinder: ignore */
     istr.get(buf, BUF_LEN - 1, ')');
     count += istr.gcount();
+    istr.get();
     int c = istr.get();
-    c = istr.get();
     count += 2;
     if(((c == '"') || (c == '\'')) && (buf[0] == '('))
     {
@@ -2154,6 +2142,7 @@ llssize deserialize_boolean(
     llssize bytes_read = 0;
     std::string::size_type ii = 0;
     char c = istr.peek();
+    // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions): && sequences the operands, ii is incremented once and before it is used
     while((++ii < compare.size())
           && (tolower(c) == (int)compare[ii])
           && istr.good())
@@ -2199,16 +2188,16 @@ std::string zip_llsd(LLSD& data)
     if (ret != Z_OK)
     {
         LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-        return std::string();
+        return {};
     }
 
     std::string source = std::move(llsd_strm).str();
 
-    U8 out[CHUNK];
+    std::unique_ptr<U8[]> out(new U8[CHUNK]);  // heap: a 64 KB buffer does not belong on the stack (C6262)
 
     strm.avail_in = narrow<size_t>(source.size());
     strm.next_in = (U8*) source.data();
-    U8* output = NULL;
+    U8* output = nullptr;
 
     U32 cur_size = 0;
 
@@ -2217,7 +2206,7 @@ std::string zip_llsd(LLSD& data)
     do
     {
         strm.avail_out = CHUNK;
-        strm.next_out = out;
+        strm.next_out = out.get();
 
         ret = deflate(&strm, Z_FINISH);
         if (ret == Z_OK || ret == Z_STREAM_END)
@@ -2228,12 +2217,12 @@ std::string zip_llsd(LLSD& data)
                 if(output)
                     free(output);
                 LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-                return std::string();
+                return {};
             }
 
             have = CHUNK-strm.avail_out;
             U8* new_output = (U8*) realloc(output, cur_size+have);
-            if (new_output == NULL)
+            if (new_output == nullptr)
             {
                 LL_WARNS() << "Failed to compress LLSD block: can't reallocate memory, current size: " << cur_size << " bytes; requested " << cur_size + have << " bytes." << LL_ENDL;
                 deflateEnd(&strm);
@@ -2241,10 +2230,10 @@ std::string zip_llsd(LLSD& data)
                 {
                     free(output);
                 }
-                return std::string();
+                return {};
             }
             output = new_output;
-            memcpy(output+cur_size, out, have);
+            memcpy(output+cur_size, out.get(), have);
             cur_size += have;
         }
         else
@@ -2253,7 +2242,7 @@ std::string zip_llsd(LLSD& data)
             if(output)
                 free(output);
             LL_WARNS() << "Failed to compress LLSD block." << LL_ENDL;
-            return std::string();
+            return {};
         }
     }
     while (ret == Z_OK);
@@ -2285,7 +2274,7 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, std::istream& is,
 
 LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32 size, size_t max_out)
 {
-    U8* result = NULL;
+    U8* result = nullptr;
     llssize cur_size = 0;
     z_stream strm;
 
@@ -2304,6 +2293,11 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
     strm.next_in = const_cast<U8*>(in);
 
     S32 ret = inflateInit(&strm);
+    if (ret != Z_OK)
+    {
+        // nothing allocated yet: report instead of inflating with an unusable stream
+        return ZR_MEM_ERROR;
+    }
 
     do
     {
@@ -2337,6 +2331,8 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
                 free(result);
             return ZR_MEM_ERROR;
         }
+        default:
+            break;
         }
 
         U32 have = CHUNK-strm.avail_out;
@@ -2351,7 +2347,7 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
         }
 
         U8* new_result = (U8*)realloc(result, cur_size + have);
-        if (new_result == NULL)
+        if (new_result == nullptr)
         {
             inflateEnd(&strm);
             if (result)
@@ -2403,10 +2399,10 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
     {
         LL_WARNS() << "No data to unzip." << LL_ENDL;
         valid = false;
-        return NULL;
+        return nullptr;
     }
 
-    U8* result = NULL;
+    U8* result = nullptr;
     size_t cur_size = 0;
     size_t capacity = 0;
     z_stream strm;
@@ -2414,15 +2410,15 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
     const U32 CHUNK = 0x4000;
 
     U8 *in = new(std::nothrow) U8[size];
-    if (in == NULL)
+    if (in == nullptr)
     {
         LL_WARNS() << "Memory allocation failure." << LL_ENDL;
         valid = false;
-        return NULL;
+        return nullptr;
     }
     is.read((char*) in, size);
 
-    U8 out[CHUNK];
+    std::unique_ptr<U8[]> out(new U8[CHUNK]);  // heap, see unzip_llsd (C6262)
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -2437,12 +2433,12 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
         LL_WARNS() << "Failed to initialise the NavMesh unzip stream, zlib error: " << ret << LL_ENDL;
         delete [] in;
         valid = false;
-        return NULL;
+        return nullptr;
     }
     do
     {
         strm.avail_out = CHUNK;
-        strm.next_out = out;
+        strm.next_out = out.get();
         ret = inflate(&strm, Z_NO_FLUSH);
 
         // Every error return frees each buffer exactly once and ends the stream.
@@ -2452,7 +2448,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             free(result);
             delete [] in;
             valid = false;
-            return NULL;
+            return nullptr;
         }
 
         const size_t have = CHUNK - strm.avail_out;
@@ -2466,7 +2462,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             free(result);
             delete[] in;
             valid = false;
-            return NULL;
+            return nullptr;
         }
 
         if (needed < cur_size)
@@ -2477,7 +2473,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             free(result);
             delete[] in;
             valid = false;
-            return NULL;
+            return nullptr;
         }
 
         if (needed > capacity)
@@ -2497,7 +2493,7 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
                 new_capacity = max_out;   // needed <= max_out here, so the buffer never exceeds the cap
             }
             U8* new_result = (U8*) realloc(result, new_capacity);
-            if (new_result == NULL)
+            if (new_result == nullptr)
             {
                 LL_WARNS() << "Failed to unzip LLSD NavMesh block: can't reallocate memory, current size: " << cur_size
                     << " bytes; requested " << new_capacity
@@ -2507,12 +2503,12 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
                 free(result);
                 delete[] in;
                 valid = false;
-                return NULL;
+                return nullptr;
             }
             result = new_result;
             capacity = new_capacity;
         }
-        memcpy(result+cur_size, out, have);
+        memcpy(result+cur_size, out.get(), have);
         cur_size += have;
 
     } while (ret == Z_OK);
@@ -2524,17 +2520,17 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
     {
         free(result);
         valid = false;
-        return NULL;
+        return nullptr;
     }
 
-    if (result == NULL)
+    if (result == nullptr)
     {
         // an empty payload never allocated; callers expect a non-NULL block when valid
         result = (U8*) malloc(1);
-        if (result == NULL)
+        if (result == nullptr)
         {
             valid = false;
-            return NULL;
+            return nullptr;
         }
     }
 

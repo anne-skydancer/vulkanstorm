@@ -40,7 +40,7 @@
 class LLTombStone : public LLRefCount
 {
 public:
-    LLTombStone(void* target = NULL) : mTarget(target) {}
+    LLTombStone(void* target = nullptr) : mTarget(target) {}
 
     void setTarget(void* target) { mTarget = target; }
     void* getTarget() const { return mTarget; }
@@ -94,7 +94,7 @@ public:
 
     bool isDead() const
     {
-        return mTombStone->getTarget() == NULL;
+        return mTombStone->getTarget() == nullptr;
     }
 
     void markDead()
@@ -128,7 +128,7 @@ protected:
     LLPointer<LLTombStone> mTombStone;
 
 private:
-    typedef T* pointer_t;
+    using pointer_t = T*;
     static LLPointer<LLTombStone>& getDefaultTombStone()
     {
         static LLPointer<LLTombStone> sDefaultTombStone = new LLTombStone;
@@ -148,11 +148,11 @@ template <typename T>
 class LLRootHandle : public LLHandle<T>
 {
 public:
-    typedef LLRootHandle<T> self_t;
-    typedef LLHandle<T> base_t;
+    using self_t = LLRootHandle<T>;
+    using base_t = LLHandle<T>;
 
     LLRootHandle(T* object) { bind(object); }
-    LLRootHandle() {};
+    LLRootHandle() = default;
     ~LLRootHandle() { unbind(); }
 
     // this is redundant, since an LLRootHandle *is* an LLHandle
@@ -164,7 +164,7 @@ public:
         if (LLHandle<T>::mTombStone.notNull())
         {
             if (LLHandle<T>::mTombStone->getTarget() == (void*)object) return;
-            LLHandle<T>::mTombStone->setTarget(NULL);
+            LLHandle<T>::mTombStone->setTarget(nullptr);
         }
         // tombstone reference counted, so no paired delete
         LLHandle<T>::mTombStone = new LLTombStone((void*)object);
@@ -172,7 +172,7 @@ public:
 
     void unbind()
     {
-        LLHandle<T>::mTombStone->setTarget(NULL);
+        LLHandle<T>::mTombStone->setTarget(nullptr);
     }
 
     //don't allow copying of root handles, since there should only be one
@@ -205,13 +205,15 @@ public:
     }
 
 protected:
-    typedef LLHandle<T> handle_type_t;
+    using handle_type_t = LLHandle<T>;
+
+private:
+    friend T;
     LLHandleProvider()
     {
         // provided here to enforce T deriving from LLHandleProvider<T>
     }
 
-private:
     mutable LLRootHandle<T> mHandle;
 };
 
@@ -229,7 +231,7 @@ public:
     };
 
 protected:
-    LLCheckedHandleBase() { }
+    LLCheckedHandleBase() = default;
 
 };
 

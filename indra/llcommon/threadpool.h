@@ -41,7 +41,7 @@ namespace LL
          */
         ThreadPoolBase(const std::string& name, size_t threads,
                        WorkQueueBase* queue, bool auto_shutdown = true);
-        virtual ~ThreadPoolBase();
+        ~ThreadPoolBase() override;
 
         /**
          * Launch the ThreadPool. Until this call, a constructed ThreadPool
@@ -124,7 +124,7 @@ namespace LL
                         bool auto_shutdown = true):
             ThreadPoolBase(name, threads, new queue_t(name, capacity, false), auto_shutdown)
         {}
-        ~ThreadPoolUsing() override {}
+        ~ThreadPoolUsing() override = default;
 
         /**
          * obtain a non-const reference to the specific WorkQueue subclass to

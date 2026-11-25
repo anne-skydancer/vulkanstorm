@@ -27,9 +27,8 @@
 #ifdef LL_WINDOWS
 #include <Windows.h>
 
-namespace nd
-{
-    namespace etw
+
+    namespace nd::etw
     {
         HMODULE hETW;
         tpLogFrame pLogFrame;
@@ -41,10 +40,10 @@ namespace nd
 
         void init()
         {
-            pLogFrame = NULL;
-            pLogStartTask = NULL;
-            pLogEndTask = NULL;
-            pLogTickTask = NULL;
+            pLogFrame = nullptr;
+            pLogStartTask = nullptr;
+            pLogEndTask = nullptr;
+            pLogTickTask = nullptr;
 
             // This is okay for now. We'll only need that for measuring under well defined circumstances.
             // Maybe create an installer for this one day (very low prio) that copies and registers the provider.
@@ -52,7 +51,7 @@ namespace nd
             hETW = ::LoadLibrary( L"c:\\xperf\\fs_etw.dll" );
             if( hETW )
             {
-                tpInitialize pInitialize = reinterpret_cast< tpInitialize>( ::GetProcAddress( hETW, "initialize" ) );
+                auto pInitialize = reinterpret_cast< tpInitialize>( ::GetProcAddress( hETW, "initialize" ) );
                 if( pInitialize && (*pInitialize)() )
                 {
                     pLogFrame = reinterpret_cast< tpLogFrame >( ::GetProcAddress( hETW, "log_beginFrame" ) );
@@ -64,5 +63,5 @@ namespace nd
             }
         }
     }
-}
+
 #endif

@@ -114,14 +114,7 @@ void LLKeyData::reset()
     mIgnoreMasks = false;
 }
 
-LLKeyData& LLKeyData::operator=(const LLKeyData& rhs)
-{
-    mMouse = rhs.mMouse;
-    mKey = rhs.mKey;
-    mMask = rhs.mMask;
-    mIgnoreMasks = rhs.mIgnoreMasks;
-    return *this;
-}
+LLKeyData& LLKeyData::operator=(const LLKeyData& rhs) = default;
 
 bool LLKeyData::operator==(const LLKeyData& rhs)
 {
@@ -169,12 +162,12 @@ LLKeyBind::LLKeyBind(const LLSD &key_bind)
 {
     if (key_bind.isArray())
     {
-        for (LLSD::array_const_iterator data = key_bind.beginArray(), endLists = key_bind.endArray();
+        for (auto data = key_bind.beginArray(), endLists = key_bind.endArray();
             data != endLists;
             data++
             )
         {
-            mData.push_back(LLKeyData(*data));
+            mData.emplace_back(*data);
         }
     }
 }
@@ -319,14 +312,14 @@ LLKeyData LLKeyBind::getKeyData(U32 index) const
     {
         return mData[index];
     }
-    return LLKeyData();
+    return {};
 }
 
 bool LLKeyBind::addKeyData(EMouseClickType mouse, KEY key, MASK mask, bool ignore)
 {
     if (!hasKeyData(mouse, key, mask, ignore))
     {
-        mData.push_back(LLKeyData(mouse, key, mask, ignore));
+        mData.emplace_back(mouse, key, mask, ignore);
         return true;
     }
     return false;

@@ -134,6 +134,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Sanitizer suppressions
+        run: |
+          # .github/analysis/suppressions/<lib>-lsan.txt, if the library has one: every entry carries its reason
+          f=".github/analysis/suppressions/$LIB-lsan.txt"
+          if [[ -f "$f" ]]; then
+            echo "LSAN_OPTIONS=$LSAN_OPTIONS:suppressions=$GITHUB_WORKSPACE/$f" >> "$GITHUB_ENV"
+            echo "suppressions: $f" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: ./.github/actions/analysis-setup
         with:
           mode: asan
@@ -199,6 +207,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Sanitizer suppressions
+        run: |
+          # .github/analysis/suppressions/<lib>-tsan.txt, if the library has one: every entry carries its reason
+          f=".github/analysis/suppressions/$LIB-tsan.txt"
+          if [[ -f "$f" ]]; then
+            echo "TSAN_OPTIONS=$TSAN_OPTIONS:suppressions=$GITHUB_WORKSPACE/$f" >> "$GITHUB_ENV"
+            echo "suppressions: $f" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: ./.github/actions/analysis-setup
         with:
           mode: tsan

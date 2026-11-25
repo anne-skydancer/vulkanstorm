@@ -70,7 +70,7 @@ U64         BlockTimer::sClockResolution = 1000000000; // Nanosecond resolution
 U64         BlockTimer::sClockResolution = 1000000; // Microsecond resolution
 #endif
 
-static LLMutex*         sLogLock = NULL;
+static LLMutex*         sLogLock = nullptr;
 static std::queue<LLSD> sLogQueue;
 
 block_timer_tree_df_iterator_t begin_block_timer_tree_df(BlockTimerStatHandle& id)
@@ -82,7 +82,7 @@ block_timer_tree_df_iterator_t begin_block_timer_tree_df(BlockTimerStatHandle& i
 
 block_timer_tree_df_iterator_t end_block_timer_tree_df()
 {
-    return block_timer_tree_df_iterator_t();
+    return {};
 }
 
 block_timer_tree_df_post_iterator_t begin_block_timer_tree_df_post(BlockTimerStatHandle& id)
@@ -94,7 +94,7 @@ block_timer_tree_df_post_iterator_t begin_block_timer_tree_df_post(BlockTimerSta
 
 block_timer_tree_df_post_iterator_t end_block_timer_tree_df_post()
 {
-    return block_timer_tree_df_post_iterator_t();
+    return {};
 }
 
 block_timer_tree_bf_iterator_t begin_block_timer_tree_bf(BlockTimerStatHandle& id)
@@ -106,7 +106,7 @@ block_timer_tree_bf_iterator_t begin_block_timer_tree_bf(BlockTimerStatHandle& i
 
 block_timer_tree_bf_iterator_t end_block_timer_tree_bf()
     {
-    return block_timer_tree_bf_iterator_t();
+    return {};
     }
 
 block_timer_tree_df_iterator_t begin_timer_tree(BlockTimerStatHandle& id)
@@ -118,7 +118,7 @@ block_timer_tree_df_iterator_t begin_timer_tree(BlockTimerStatHandle& id)
 
 block_timer_tree_df_iterator_t end_timer_tree()
     {
-    return block_timer_tree_df_iterator_t();
+    return {};
 }
 
 
@@ -131,13 +131,13 @@ struct SortTimerByName
         }
 };
 
-static BlockTimerStatHandle sRootTimer("root", NULL);
+static BlockTimerStatHandle sRootTimer("root", nullptr);
 BlockTimerStatHandle& BlockTimer::getRootTimeBlock()
 {
     return sRootTimer;
     }
 
-void BlockTimer::pushLog(LLSD log)
+void BlockTimer::pushLog(const LLSD& log)
 {
     LLMutexLock lock(sLogLock);
 
@@ -197,7 +197,7 @@ void BlockTimer::bootstrapTimerTree()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+        auto& timer = static_cast<BlockTimerStatHandle&>(base);
         if (&timer == &BlockTimer::getRootTimeBlock()) continue;
 
         // bootstrap tree construction by attaching to last timer to be on stack
@@ -311,10 +311,10 @@ void BlockTimer::processTimes()
     for (auto& base : BlockTimerStatHandle::instance_snapshot())
     {
         // because of indirect derivation from LLInstanceTracker, have to downcast
-        BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+        auto& timer = static_cast<BlockTimerStatHandle&>(base);
         TimeBlockAccumulator& accumulator = timer.getCurrentAccumulator();
 
-        accumulator.mLastCaller = NULL;
+        accumulator.mLastCaller = nullptr;
         accumulator.mMoveUpTree = false;
     }
 #endif
@@ -365,7 +365,7 @@ void BlockTimer::logStats()
             for (auto& base : BlockTimerStatHandle::instance_snapshot())
             {
                 // because of indirect derivation from LLInstanceTracker, have to downcast
-                BlockTimerStatHandle& timer = static_cast<BlockTimerStatHandle&>(base);
+                auto& timer = static_cast<BlockTimerStatHandle&>(base);
                 LLTrace::PeriodicRecording& frame_recording = LLTrace::get_frame_recording();
                 sd[timer.getName()]["Time"] = (LLSD::Real) (frame_recording.getLastRecording().getSum(timer).value());
                 sd[timer.getName()]["Calls"] = (LLSD::Integer) (frame_recording.getLastRecording().getSum(timer.callCount()));
@@ -437,15 +437,7 @@ void BlockTimer::writeLog(std::ostream& os)
 // TimeBlockAccumulator
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TimeBlockAccumulator::TimeBlockAccumulator()
-:   mTotalTimeCounter(0),
-    mSelfTimeCounter(0),
-    mCalls(0),
-    mLastCaller(NULL),
-    mActiveCount(0),
-    mMoveUpTree(false),
-    mParent(NULL)
-{}
+TimeBlockAccumulator::TimeBlockAccumulator() = default;
 
 void TimeBlockAccumulator::addSamples( const TimeBlockAccumulator& other, EBufferAppendType append_type )
 {

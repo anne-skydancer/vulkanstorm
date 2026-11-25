@@ -52,7 +52,7 @@ const U64 SEC_TO_MICROSEC_U64 = 1000000;
 //---------------------------------------------------------------------------
 
 S32 gUTCOffset = 0; // viewer's offset from server UTC, in seconds
-LLTimer* LLTimer::sTimer = NULL;
+LLTimer* LLTimer::sTimer = nullptr;
 
 
 //
@@ -251,9 +251,7 @@ U64 get_clock_count()
 
 
 TimerInfo::TimerInfo()
-:   mClockFrequency(0.0),
-    mTotalTimeClockCount(0),
-    mLastTotalTimeClockCount(0)
+:   mClockFrequency(0.0)
 {}
 
 void TimerInfo::update()
@@ -286,7 +284,7 @@ U64MicrosecondsImplicit totalTime()
         // Unix platforms use gettimeofday so they are synced, although this probably isn't a good assumption to
         // make in the future.
 
-        get_timer_info().mTotalTimeClockCount = (U64)(time(NULL) * get_timer_info().mClockFrequency);
+        get_timer_info().mTotalTimeClockCount = (U64)(time(nullptr) * get_timer_info().mClockFrequency);
 #endif
 
         // Update the last clock count
@@ -328,8 +326,7 @@ LLTimer::LLTimer()
     reset();
 }
 
-LLTimer::~LLTimer()
-{}
+LLTimer::~LLTimer() = default;
 
 // static
 void LLTimer::initClass()
@@ -340,7 +337,7 @@ void LLTimer::initClass()
 // static
 void LLTimer::cleanupClass()
 {
-    delete sTimer; sTimer = NULL;
+    delete sTimer; sTimer = nullptr;
 }
 
 // static
@@ -479,7 +476,7 @@ bool LLTimer::knownBadTimer()
                                 L"\0"
     };
 
-    HKEY hKey = NULL;
+    HKEY hKey = nullptr;
     LONG nResult = ::RegOpenKeyEx(HKEY_LOCAL_MACHINE,L"SYSTEM\\CurrentControlSet\\Enum\\PCI", 0,
                                   KEY_EXECUTE | KEY_QUERY_VALUE | KEY_ENUMERATE_SUB_KEYS, &hKey);
 
@@ -494,7 +491,7 @@ bool LLTimer::knownBadTimer()
 
     while (nResult == ERROR_SUCCESS)
     {
-        nResult = ::RegEnumKeyEx(hKey, key_num++, name, &name_len, NULL, NULL, NULL, &scrap);
+        nResult = ::RegEnumKeyEx(hKey, key_num++, name, &name_len, nullptr, nullptr, nullptr, &scrap);
 
         if (nResult == ERROR_SUCCESS)
         {
@@ -526,7 +523,7 @@ bool LLTimer::knownBadTimer()
 
 time_t time_corrected()
 {
-    return time(NULL) + gUTCOffset;
+    return time(nullptr) + gUTCOffset;
 }
 
 
@@ -534,7 +531,7 @@ time_t time_corrected()
 // observing daylight savings time?
 bool is_daylight_savings()
 {
-    time_t now = time(NULL);
+    time_t now = time(nullptr);
 
     // Internal buffer to local server time
     struct tm* internal_time = localtime(&now);

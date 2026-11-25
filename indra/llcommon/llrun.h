@@ -47,12 +47,12 @@ public:
     /**
      * @brief The pointer to a runnable.
      */
-    typedef std::shared_ptr<LLRunnable> run_ptr_t;
+    using run_ptr_t = std::shared_ptr<LLRunnable>;
 
     /**
      * @brief The handle for use in the API.
      */
-    typedef S64 run_handle_t;
+    using run_handle_t = S64;
 
     /**
      * @brief Constructor.
@@ -98,7 +98,7 @@ public:
      * @return Returns the handle to the runnable. handle == 0 means failure.
      */
     run_handle_t addRunnable(
-        run_ptr_t runnable,
+        const run_ptr_t& runnable,
         ERunSchedule schedule,
         F64 seconds);
 
@@ -126,10 +126,10 @@ protected:
             F64 next_run_at,
             F64 increment);
     };
-    typedef std::vector<LLRunInfo> run_list_t;
+    using run_list_t = std::vector<LLRunInfo>;
     run_list_t mRunOnce;
     run_list_t mRunEvery;
-    run_handle_t mNextHandle;
+    run_handle_t mNextHandle{1};
 };
 
 

@@ -64,7 +64,7 @@ public:
     void    generate();                 // Generate a new UUID
     void    generate(const std::string& stream); //Generate a new UUID based on hash of input stream
 
-    static LLUUID generateNewID(std::string stream = "");   //static version of above for use in initializer expressions such as constructor params, etc.
+    static LLUUID generateNewID(const std::string& stream = "");   //static version of above for use in initializer expressions such as constructor params, etc.
 
     bool    set(const char *in_string, bool emit = true);   // Convert from string, if emit is false, do not emit warnings
     bool    set(const std::string& in_string, bool emit = true);    // Convert from string, if emit is false, do not emit warnings
@@ -108,7 +108,7 @@ public:
     void toCompressedString(std::string& out) const;
 
     // last 4 chars for quick ref - Very lightweight, no nul-term added - provide your own, ensure min 4 bytes.
-# define hexnybl(N) (N)>9?((N)-10)+'a':(N)+'0'
+# define hexnybl(N) (((N)>9)?((N)-10)+'a':(N)+'0')
     inline char * toShortString(char *out) const
     {
         // LL_PROFILE_ZONE_SCOPED;
@@ -186,16 +186,16 @@ public:
 
     static bool parseUUID(const std::string& buf, LLUUID* value);
 
-    U8 mData[UUID_BYTES];
+    U8 mData[UUID_BYTES]{};
 };
-static_assert(std::is_trivially_copyable<LLUUID>::value, "LLUUID must be trivial copy");
-static_assert(std::is_trivially_move_assignable<LLUUID>::value, "LLUUID must be trivial move");
-static_assert(std::is_standard_layout<LLUUID>::value, "LLUUID must be a standard layout type");
+static_assert(std::is_trivially_copyable_v<LLUUID>, "LLUUID must be trivial copy");
+static_assert(std::is_trivially_move_assignable_v<LLUUID>, "LLUUID must be trivial move");
+static_assert(std::is_standard_layout_v<LLUUID>, "LLUUID must be a standard layout type");
 
-typedef std::vector<LLUUID> uuid_vec_t;
-typedef std::set<LLUUID> uuid_set_t;
+using uuid_vec_t = std::vector<LLUUID>;
+using uuid_set_t = std::set<LLUUID>;
 // <FS:Beq> cleanupDeadObject spam avoidance
-typedef std::multiset<LLUUID> uuid_multiset_t;
+using uuid_multiset_t = std::multiset<LLUUID>;
 
 // Helper structure for ordering lluuids in stl containers.  eg:
 // std::map<LLUUID, LLWidget*, lluuid_less> widget_map;
@@ -211,12 +211,12 @@ struct lluuid_less
     }
 };
 
-typedef std::set<LLUUID, lluuid_less> uuid_list_t;
+using uuid_list_t = std::set<LLUUID, lluuid_less>;
 /*
  * Sub-classes for keeping transaction IDs and asset IDs
  * straight.
  */
-typedef LLUUID LLAssetID;
+using LLAssetID = LLUUID;
 
 class LL_COMMON_API LLTransactionID : public LLUUID
 {

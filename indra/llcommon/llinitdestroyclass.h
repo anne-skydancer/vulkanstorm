@@ -50,11 +50,11 @@
 class LLCallbackRegistry
 {
 public:
-    typedef std::function<void()> func_t;
+    using func_t = std::function<void()>;
 
     void registerCallback(const std::string& name, const func_t& func)
     {
-        mCallbacks.push_back(FuncList::value_type(name, func));
+        mCallbacks.emplace_back(name, func);
     }
 
     void fireCallbacks() const;
@@ -63,7 +63,7 @@ private:
     // Arguably this should be a boost::signals2::signal, which is, after all,
     // a sequence of callables. We manage it by hand so we can log a name for
     // each registered function we call.
-    typedef std::vector< std::pair<std::string, func_t> > FuncList;
+    using FuncList = std::vector< std::pair<std::string, func_t> >;
     FuncList mCallbacks;
 };
 

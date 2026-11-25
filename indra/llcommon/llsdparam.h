@@ -36,8 +36,8 @@ struct LL_COMMON_API LLParamSDParserUtilities
 {
     static LLSD& getSDWriteNode(LLSD& input, LLInitParam::Parser::name_stack_range_t& name_stack_range);
 
-    typedef std::function<void (const LLSD&, LLInitParam::Parser::name_stack_t&)> read_sd_cb_t;
-    static void readSDValues(read_sd_cb_t cb, const LLSD& sd, LLInitParam::Parser::name_stack_t& stack);
+    using read_sd_cb_t = std::function<void (const LLSD&, LLInitParam::Parser::name_stack_t&)>;
+    static void readSDValues(const read_sd_cb_t& cb, const LLSD& sd, LLInitParam::Parser::name_stack_t& stack);
     static void readSDValues(read_sd_cb_t cb, const LLSD& sd);
 };
 
@@ -46,7 +46,7 @@ class LL_COMMON_API LLParamSDParser
 {
 LOG_CLASS(LLParamSDParser);
 
-typedef LLInitParam::Parser parser_t;
+using parser_t = LLInitParam::Parser;
 
 public:
     LLParamSDParser();
@@ -55,7 +55,7 @@ public:
     void writeSD(LLSD& sd,
         const BLOCK& block,
         const LLInitParam::predicate_rule_t rules = LLInitParam::default_parse_rules(),
-        const LLInitParam::BaseBlock* diff_block = NULL)
+        const LLInitParam::BaseBlock* diff_block = nullptr)
     {
         if (!diff_block
             && !rules.isAmbivalent(LLInitParam::HAS_DEFAULT_VALUE))
@@ -65,8 +65,8 @@ public:
         writeSDImpl(sd, block, rules, diff_block);
     }
 
-    /*virtual*/ std::string getCurrentElementName();
-    /*virtual*/ std::string getCurrentFileName(){ return LLStringUtil::null; }
+    /*virtual*/ std::string getCurrentElementName() override;
+    /*virtual*/ std::string getCurrentFileName() override{ return LLStringUtil::null; }
 
 private:
     void writeSDImpl(LLSD& sd,
@@ -79,7 +79,7 @@ private:
     template<typename T>
     static bool writeTypedValue(Parser& parser, const void* val_ptr, parser_t::name_stack_t& name_stack)
     {
-        LLParamSDParser& sdparser = static_cast<LLParamSDParser&>(parser);
+        auto& sdparser = static_cast<LLParamSDParser&>(parser);
         if (!sdparser.mWriteRootSD) return false;
 
         LLInitParam::Parser::name_stack_range_t range(name_stack.begin(), name_stack.end());
@@ -105,8 +105,8 @@ private:
     static bool readSD(Parser& parser, void* val_ptr);
 
     Parser::name_stack_t    mNameStack;
-    const LLSD*             mCurReadSD;
-    LLSD*                   mWriteRootSD;
+    const LLSD*             mCurReadSD{};
+    LLSD*                   mWriteRootSD{};
 };
 
 
@@ -114,7 +114,7 @@ template<typename T>
 class LLSDParamAdapter : public T
 {
 public:
-    LLSDParamAdapter() {}
+    LLSDParamAdapter() = default;
     LLSDParamAdapter(const LLSD& sd)
     {
         LL_PROFILE_ZONE_SCOPED;

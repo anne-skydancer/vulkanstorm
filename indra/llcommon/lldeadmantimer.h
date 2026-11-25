@@ -85,7 +85,7 @@ public:
     /// of time operations in this class.  This is likely
     /// to change in a future version in a move to TSC-based
     /// timing.
-    typedef U64 time_type;
+    using time_type = U64;
 
 public:
     /// Construct and initialize an LLDeadmanTimer
@@ -193,18 +193,18 @@ public:
 
 protected:
     time_type                   mHorizon;
-    bool                        mActive;
-    bool                        mDone;
-    time_type                   mStarted;
-    time_type                   mExpires;
-    time_type                   mStopped;
-    time_type                   mCount;
+    bool                        mActive{false};     // If true, a timer is running.
+    bool                        mDone{false};       // If true, timer has completed and can be read (once)
+    time_type                   mStarted{U64L(0)};
+    time_type                   mExpires{U64L(0)};
+    time_type                   mStopped{U64L(0)};
+    time_type                   mCount{U64L(0)};
 
     const bool                  mIncCPU;        // Include CPU metrics in timer
-    LLProcInfo::time_type       mUStartCPU;
-    LLProcInfo::time_type       mUEndCPU;
-    LLProcInfo::time_type       mSStartCPU;
-    LLProcInfo::time_type       mSEndCPU;
+    LLProcInfo::time_type       mUStartCPU{LLProcInfo::time_type(U64L(0))};
+    LLProcInfo::time_type       mUEndCPU{LLProcInfo::time_type(U64L(0))};
+    LLProcInfo::time_type       mSStartCPU{LLProcInfo::time_type(U64L(0))};
+    LLProcInfo::time_type       mSEndCPU{LLProcInfo::time_type(U64L(0))};
 };
 
 

@@ -112,6 +112,7 @@ public:
 
     Type*   get() const                         { return mPointer; }
     const Type* operator->() const              { return mPointer; }
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): reference counting by design, the pointee is alive while this holds it
     Type*   operator->()                        { return mPointer; }
     const Type& operator*() const               { return *mPointer; }
     Type&   operator*()                         { return *mPointer; }
@@ -157,7 +158,7 @@ public:
         return *this;
     }
 
-    LLPointer<Type>& operator =(LLPointer<Type>&& ptr)
+    LLPointer<Type>& operator =(LLPointer<Type>&& ptr) noexcept
     {
         LLPointer temp(std::move(ptr));
         using std::swap;            // per Swappable convention
@@ -192,7 +193,7 @@ public:
     }
 
     // Put swap() overload in the global namespace, per Swappable convention
-    friend void swap(LLPointer<Type>& a, LLPointer<Type>& b)
+    friend void swap(LLPointer<Type>& a, LLPointer<Type>& b) noexcept
     {
         LLPointer<Type>::swap(a, b);
     }
@@ -206,6 +207,7 @@ protected:
     {
         if (mPointer)
         {
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): reference counting by design, the pointee outlives this call
             mPointer->ref();
         }
     }
@@ -216,6 +218,7 @@ protected:
         {
             Type *temp = mPointer;
             mPointer = nullptr;
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDelete): temp->unref() may delete the pointee, not this; this is only read afterwards
             temp->unref();
             if (mPointer != nullptr)
             {
@@ -237,8 +240,8 @@ template<typename Type>
 class LLCopyOnWritePointer : public LLPointer<Type>
 {
 public:
-    typedef LLCopyOnWritePointer<Type> self_t;
-    typedef LLPointer<Type> pointer_t;
+    using self_t = LLCopyOnWritePointer<Type>;
+    using pointer_t = LLPointer<Type>;
 
     LLCopyOnWritePointer()
     :   mStayUnique(false)

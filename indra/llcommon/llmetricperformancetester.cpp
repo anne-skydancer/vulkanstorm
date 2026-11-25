@@ -31,6 +31,7 @@
 #include "llsdserialize.h"
 #include "lltreeiterators.h"
 #include "llmetricperformancetester.h"
+#include <utility>
 #include "llfasttimer.h"
 
 //----------------------------------------------------------------------------------------------
@@ -52,7 +53,7 @@ void LLMetricPerformanceTesterBasic::cleanupClass()
 /*static*/
 bool LLMetricPerformanceTesterBasic::addTester(LLMetricPerformanceTesterBasic* tester)
 {
-    llassert_always(tester != NULL);
+    llassert_always(tester != nullptr);
     std::string name = tester->getTesterName() ;
     if (getTester(name))
     {
@@ -65,9 +66,9 @@ bool LLMetricPerformanceTesterBasic::addTester(LLMetricPerformanceTesterBasic* t
 }
 
 /*static*/
-void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
+void LLMetricPerformanceTesterBasic::deleteTester(const std::string& name)
 {
-    name_tester_map_t::iterator tester = sTesterMap.find(name);
+    auto tester = sTesterMap.find(name);
     if (tester != sTesterMap.end())
     {
         delete tester->second;
@@ -76,20 +77,20 @@ void LLMetricPerformanceTesterBasic::deleteTester(std::string name)
 }
 
 /*static*/
-LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(std::string name)
+LLMetricPerformanceTesterBasic* LLMetricPerformanceTesterBasic::getTester(const std::string& name)
 {
     // Check for the requested metric name
-    name_tester_map_t::iterator found_it = sTesterMap.find(name) ;
+    auto found_it = sTesterMap.find(name) ;
     if (found_it != sTesterMap.end())
     {
         return found_it->second ;
     }
-    return NULL ;
+    return nullptr ;
 }
 
 /*static*/
 // Return true if this metric is requested or if the general default "catch all" metric is requested
-bool LLMetricPerformanceTesterBasic::isMetricLogRequested(std::string name)
+bool LLMetricPerformanceTesterBasic::isMetricLogRequested(const std::string& name)
 {
     return (LLTrace::BlockTimer::sMetricLog && ((LLTrace::BlockTimer::sLogName == name) || (LLTrace::BlockTimer::sLogName == DEFAULT_METRIC_NAME)));
 }
@@ -102,7 +103,7 @@ LLSD LLMetricPerformanceTesterBasic::analyzeMetricPerformanceLog(std::istream& i
 
     while (!is.eof() && LLSDParser::PARSE_FAILURE != LLSDSerialize::fromXML(cur, is))
     {
-        for (LLSD::map_iterator iter = cur.beginMap(); iter != cur.endMap(); ++iter)
+        for (auto iter = cur.beginMap(); iter != cur.endMap(); ++iter)
         {
             std::string label = iter->first;
 
@@ -124,7 +125,7 @@ LLSD LLMetricPerformanceTesterBasic::analyzeMetricPerformanceLog(std::istream& i
 }
 
 /*static*/
-void LLMetricPerformanceTesterBasic::doAnalysisMetrics(std::string baseline, std::string target, std::string output)
+void LLMetricPerformanceTesterBasic::doAnalysisMetrics(const std::string& baseline, const std::string& target, const std::string& output)
 {
     if(!LLMetricPerformanceTesterBasic::hasMetricPerformanceTesters())
     {
@@ -170,8 +171,7 @@ void LLMetricPerformanceTesterBasic::doAnalysisMetrics(std::string baseline, std
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterBasic::LLMetricPerformanceTesterBasic(std::string name) :
-    mName(name),
-    mCount(0)
+    mName(std::move(name))
 {
     if (mName == std::string())
     {
@@ -181,9 +181,7 @@ LLMetricPerformanceTesterBasic::LLMetricPerformanceTesterBasic(std::string name)
     mValidInstance = LLMetricPerformanceTesterBasic::addTester(this) ;
 }
 
-LLMetricPerformanceTesterBasic::~LLMetricPerformanceTesterBasic()
-{
-}
+LLMetricPerformanceTesterBasic::~LLMetricPerformanceTesterBasic() = default;
 
 void LLMetricPerformanceTesterBasic::preOutputTestResults(LLSD* sd)
 {
@@ -204,7 +202,7 @@ void LLMetricPerformanceTesterBasic::outputTestResults()
     postOutputTestResults(&sd) ;
 }
 
-void LLMetricPerformanceTesterBasic::addMetric(std::string str)
+void LLMetricPerformanceTesterBasic::addMetric(const std::string& str)
 {
     mMetricStrings.push_back(str) ;
 }
@@ -270,9 +268,7 @@ void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::str
 //----------------------------------------------------------------------------------------------
 
 LLMetricPerformanceTesterWithSession::LLMetricPerformanceTesterWithSession(std::string name) :
-    LLMetricPerformanceTesterBasic(name),
-    mBaseSessionp(NULL),
-    mCurrentSessionp(NULL)
+    LLMetricPerformanceTesterBasic(std::move(name))
 {
 }
 
@@ -281,12 +277,12 @@ LLMetricPerformanceTesterWithSession::~LLMetricPerformanceTesterWithSession()
     if (mBaseSessionp)
     {
         delete mBaseSessionp ;
-        mBaseSessionp = NULL ;
+        mBaseSessionp = nullptr ;
     }
     if (mCurrentSessionp)
     {
         delete mCurrentSessionp ;
-        mCurrentSessionp = NULL ;
+        mCurrentSessionp = nullptr ;
     }
 }
 
@@ -313,12 +309,12 @@ void LLMetricPerformanceTesterWithSession::analyzePerformance(llofstream* os, LL
     if (mBaseSessionp)
     {
         delete mBaseSessionp ;
-        mBaseSessionp = NULL ;
+        mBaseSessionp = nullptr ;
     }
     if (mCurrentSessionp)
     {
         delete mCurrentSessionp ;
-        mCurrentSessionp = NULL ;
+        mCurrentSessionp = nullptr ;
     }
 }
 
@@ -327,7 +323,5 @@ void LLMetricPerformanceTesterWithSession::analyzePerformance(llofstream* os, LL
 // LLTestSession
 //----------------------------------------------------------------------------------------------
 
-LLMetricPerformanceTesterWithSession::LLTestSession::~LLTestSession()
-{
-}
+LLMetricPerformanceTesterWithSession::LLTestSession::~LLTestSession() = default;
 

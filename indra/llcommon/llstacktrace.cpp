@@ -35,7 +35,7 @@
 #include "llwin32headers.h"
 #include <dbghelp.h>
 
-typedef USHORT NTAPI RtlCaptureStackBackTrace_Function(
+using RtlCaptureStackBackTrace_Function = USHORT NTAPI (
     IN ULONG frames_to_skip,
     IN ULONG frames_to_capture,
     OUT PVOID *backtrace,
@@ -58,7 +58,7 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
     // load the symbols if they're not loaded
     if(!symbolsLoaded && firstCall)
     {
-        symbolsLoaded = SymInitialize(hProc, NULL, true);
+        symbolsLoaded = SymInitialize(hProc, nullptr, true);
         firstCall = false;
     }
 
@@ -67,11 +67,11 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
     {
         // create the frames to hold the addresses
         void* frames[MAX_STACK_DEPTH];
-        memset(frames, 0, sizeof(void*)*MAX_STACK_DEPTH);
+        memset(static_cast<void*>(frames), 0, sizeof(void*)*MAX_STACK_DEPTH);
         S32 depth = 0;
 
         // get the addresses
-        depth = RtlCaptureStackBackTrace_fn(FRAME_SKIP, MAX_STACK_DEPTH, frames, NULL);
+        depth = RtlCaptureStackBackTrace_fn(FRAME_SKIP, MAX_STACK_DEPTH, frames, nullptr);
 
         IMAGEHLP_LINE64 line;
         memset(&line, 0, sizeof(IMAGEHLP_LINE64));
@@ -79,8 +79,11 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
 
         // create something to hold address info
         PIMAGEHLP_SYMBOL64 pSym;
-        pSym = (PIMAGEHLP_SYMBOL64)malloc(sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
-        memset(pSym, 0, sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
+        pSym = (PIMAGEHLP_SYMBOL64)calloc(1, sizeof(IMAGEHLP_SYMBOL64) + STRING_NAME_LENGTH);
+        if (!pSym)
+        {
+            return false;
+        }
         pSym->MaxNameLength = STRING_NAME_LENGTH;
         pSym->SizeOfStruct = sizeof(IMAGEHLP_SYMBOL64);
 
@@ -91,8 +94,8 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
             std::stringstream stack_line;
             bool ret;
 
-            DWORD64 addr = (DWORD64)frames[i];
-            ret = SymGetSymFromAddr64(hProc, addr, 0, pSym);
+            auto addr = (DWORD64)frames[i];
+            ret = SymGetSymFromAddr64(hProc, addr, nullptr, pSym);
             if(ret)
             {
                 stack_line << pSym->Name << " ";
@@ -103,7 +106,7 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
             if(ret)
             {
                 std::string file_name = line.FileName;
-                std::string::size_type index = file_name.rfind("\\");
+                std::string::size_type index = file_name.rfind('\\');
                 stack_line << file_name.substr(index + 1, file_name.size()) << ":" << line.LineNumber;
             }
 
@@ -119,7 +122,7 @@ bool ll_get_stack_trace(std::vector<std::string>& lines)
     }
     else
     {
-        lines.push_back("Stack Trace Failed.  PDB symbol info not loaded");
+        lines.emplace_back("Stack Trace Failed.  PDB symbol info not loaded");
     }
 
     return false;
@@ -131,19 +134,23 @@ void ll_get_stack_trace_internal(std::vector<std::string>& lines)
     const S32 STRING_NAME_LENGTH = 256;
 
     HANDLE process = GetCurrentProcess();
-    SymInitialize( process, NULL, true );
+    SymInitialize( process, nullptr, true );
 
     void *stack[MAX_STACK_DEPTH];
 
-    unsigned short frames = RtlCaptureStackBackTrace_fn( 0, MAX_STACK_DEPTH, stack, NULL );
-    SYMBOL_INFO *symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + STRING_NAME_LENGTH * sizeof(char), 1);
+    unsigned short frames = RtlCaptureStackBackTrace_fn( 0, MAX_STACK_DEPTH, stack, nullptr );
+    auto *symbol = (SYMBOL_INFO*)calloc(sizeof(SYMBOL_INFO) + STRING_NAME_LENGTH * sizeof(char), 1);
+    if (!symbol)
+    {
+        return;
+    }
     symbol->MaxNameLen = STRING_NAME_LENGTH-1;
     symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 
     for(unsigned int i = 0; i < frames; i++)
     {
-        SymFromAddr(process, (DWORD64)(stack[i]), 0, symbol);
-        lines.push_back(symbol->Name);
+        SymFromAddr(process, (DWORD64)(stack[i]), nullptr, symbol);
+        lines.emplace_back(symbol->Name);
     }
 
     free( symbol );

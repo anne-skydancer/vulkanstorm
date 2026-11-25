@@ -59,7 +59,7 @@ class StackWalkerInternal;  // forward
 class StackWalker
 {
 public:
-  typedef enum StackWalkOptions
+  using StackWalkOptions = enum StackWalkOptions
   {
     // No addition info will be retrived
     // (only the address is available)
@@ -91,19 +91,19 @@ public:
 
     // Contains all options (default)
     OptionsAll = 0x3F
-  } StackWalkOptions;
+  };
 
   StackWalker(
     bool verbose = true,
     int options = OptionsAll, // 'int' is by design, to combine the enum-flags
-    LPCSTR szSymPath = NULL,
+    LPCSTR szSymPath = nullptr,
     DWORD dwProcessId = GetCurrentProcessId(),
     HANDLE hProcess = GetCurrentProcess()
     );
   StackWalker(DWORD dwProcessId, HANDLE hProcess);
   virtual ~StackWalker();
 
-  typedef BOOL (__stdcall *PReadProcessMemoryRoutine)(
+  using PReadProcessMemoryRoutine = BOOL (__stdcall *)(
     HANDLE      hProcess,
     DWORD64     qwBaseAddress,
     PVOID       lpBuffer,
@@ -117,9 +117,9 @@ public:
   bool ShowCallstack(
     bool verbose,
     HANDLE hThread = GetCurrentThread(),
-    const CONTEXT *context = NULL,
-    PReadProcessMemoryRoutine readMemoryFunction = NULL,
-    LPVOID pUserData = NULL  // optional to identify some data in the 'readMemoryFunction'-callback
+    const CONTEXT *context = nullptr,
+    PReadProcessMemoryRoutine readMemoryFunction = nullptr,
+    LPVOID pUserData = nullptr  // optional to identify some data in the 'readMemoryFunction'-callback
     );
 
 #if _MSC_VER >= 1300
@@ -131,7 +131,7 @@ protected:
 
 protected:
   // Entry for each Callstack-Entry
-  typedef struct CallstackEntry
+  using CallstackEntry = struct CallstackEntry
   {
     DWORD64 offset;  // if 0, we have no valid entry
     CHAR name[STACKWALK_MAX_NAMELEN];
@@ -146,7 +146,7 @@ protected:
     CHAR moduleName[STACKWALK_MAX_NAMELEN];
     DWORD64 baseOfImage;
     CHAR loadedImageName[STACKWALK_MAX_NAMELEN];
-  } CallstackEntry;
+  };
 
   enum CallstackEntryType {firstEntry, nextEntry, lastEntry};
 
@@ -217,9 +217,9 @@ protected:
 // The following is defined for x86 (XP and higher), x64 and IA64:
 #define GET_CURRENT_CONTEXT_STACKWALKER_CODEPLEX(c, contextFlags) \
   do { \
-    memset(&c, 0, sizeof(CONTEXT)); \
-    c.ContextFlags = contextFlags; \
-    RtlCaptureContext(&c); \
+    memset(&(c), 0, sizeof(CONTEXT)); \
+    (c).ContextFlags = (contextFlags); \
+    RtlCaptureContext(&(c)); \
 } while(0);
 #endif
 

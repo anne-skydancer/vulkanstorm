@@ -57,7 +57,7 @@ class StatBase
 {
 public:
     StatBase(const char* name, const char* description);
-    virtual ~StatBase() {}
+    virtual ~StatBase() = default;
     virtual const char* getUnitLabel() const;
 
     const std::string& getName() const { return mName; }
@@ -74,7 +74,7 @@ class StatType
     public LLInstanceTracker<StatType<ACCUMULATOR>, std::string>
 {
 public:
-    typedef LLInstanceTracker<StatType<ACCUMULATOR>, std::string> instance_tracker_t;
+    using instance_tracker_t = LLInstanceTracker<StatType<ACCUMULATOR>, std::string>;
     StatType(const char* name, const char* description)
     :   instance_tracker_t(name),
         StatBase(name, description),
@@ -122,15 +122,15 @@ class EventStatHandle
 :   public StatType<EventAccumulator>
 {
 public:
-    typedef F64 storage_t;
-    typedef StatType<EventAccumulator> stat_t;
-    typedef EventStatHandle<T> self_t;
+    using storage_t = F64;
+    using stat_t = StatType<EventAccumulator>;
+    using self_t = EventStatHandle<T>;
 
-    EventStatHandle(const char* name, const char* description = NULL)
+    EventStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 
 };
 
@@ -149,15 +149,15 @@ class SampleStatHandle
 :   public StatType<SampleAccumulator>
 {
 public:
-    typedef F64 storage_t;
-    typedef StatType<SampleAccumulator> stat_t;
-    typedef SampleStatHandle<T> self_t;
+    using storage_t = F64;
+    using stat_t = StatType<SampleAccumulator>;
+    using self_t = SampleStatHandle<T>;
 
-    SampleStatHandle(const char* name, const char* description = NULL)
+    SampleStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 };
 
 template<typename T, typename VALUE_T>
@@ -175,17 +175,17 @@ class CountStatHandle
 :   public StatType<CountAccumulator>
 {
 public:
-    typedef F64 storage_t;
-    typedef StatType<CountAccumulator> stat_t;
-    typedef CountStatHandle<T> self_t;
+    using storage_t = F64;
+    using stat_t = StatType<CountAccumulator>;
+    using self_t = CountStatHandle<T>;
 
-    CountStatHandle(const char* name, const char* description = NULL)
+    CountStatHandle(const char* name, const char* description = nullptr)
     :   stat_t(name, description)
-    , mTotalSamplesCount(0)
-    , mTotalSamples()
+    ,
+     mTotalSamples()
     {}
 
-    /*virtual*/ const char* getUnitLabel() const { return LLGetUnitLabel<T>::getUnitLabel(); }
+    /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }
 
     // <FS:ND> Add a stats global count. Which will accumulate all samples over the applicaton lifetime.
     void add( T const &samples )
@@ -198,7 +198,7 @@ public:
     U64 getTotalSampleCount() const { return mTotalSamplesCount; }
 
 private:
-    U64 mTotalSamplesCount;
+    U64 mTotalSamplesCount{0};
     T mTotalSamples;
     // </FS:ND>
 };

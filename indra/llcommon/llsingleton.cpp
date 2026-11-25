@@ -50,6 +50,16 @@ class LLSingletonBase::MasterList:
 private:
     LLSINGLETON_EMPTY_CTOR(MasterList);
 
+    // The coroutine-local 'initializing' lists of finished coroutines are
+    // freed with their coroutine. The running coroutine's list is not (the
+    // main thread's default coroutine never ends before the process does),
+    // so free it here: this is the one list per process that LeakSanitizer
+    // used to report.
+    ~MasterList() override
+    {
+        mInitializing.reset(nullptr);
+    }
+
     // Independently of the LLSingleton locks governing construction,
     // destruction and other state changes of the MasterList instance itself,
     // we must also defend each of the data structures owned by the
@@ -58,9 +68,9 @@ private:
     // manipulating some data in the master list, we must also check whether
     // it's safe to log -- which involves querying a different LLSingleton --
     // which requires accessing the master list.
-    typedef std::recursive_mutex mutex_t;
+    using mutex_t = std::recursive_mutex;
     LL_PROFILE_MUTEX_NAMED(mutex_t, mMutex, "Singleton MasterList");
-    typedef std::unique_lock<decltype(mMutex)> lock_t;
+    using lock_t = std::unique_lock<decltype(mMutex)>;
 
 public:
     // Instantiate this to both obtain a reference to MasterList::instance()
@@ -193,7 +203,7 @@ LLSingletonBase::list_t::size_type LLSingletonBase::get_initializing_size()
     return MasterList::LockedInitializing().get().size();
 }
 
-LLSingletonBase::~LLSingletonBase() {}
+LLSingletonBase::~LLSingletonBase() = default;
 
 void LLSingletonBase::push_initializing(const char* name)
 {
@@ -302,7 +312,7 @@ void LLSingletonBase::capture_dependency()
             std::find(initializing.begin(), initializing.end(), this);
         if (found != initializing.end())
         {
-            list_t::const_iterator it_next = found;
+            auto it_next = found;
             it_next++;
 
             // Report the circularity. Requiring the coder to dig through the
@@ -360,7 +370,7 @@ LLSingletonBase::vec_t LLSingletonBase::dep_sort()
     // removing LLSingletons as they are created and destroyed, in practice
     // it's less messy to construct it on demand. The overhead of doing so
     // should happen basically once: for deleteAll().
-    typedef LLDependencies<LLSingletonBase*> SingletonDeps;
+    using SingletonDeps = LLDependencies<LLSingletonBase*>;
     SingletonDeps sdeps;
     // Lock while traversing the master list
     MasterList::LockedMaster master;
@@ -371,7 +381,7 @@ LLSingletonBase::vec_t LLSingletonBase::dep_sort()
         // associated value type in our SingletonDeps, hence the 0. We don't
         // record the LLSingletons it must follow; rather, we record the ones
         // it must precede. Copy its mDepends to a KeyList to express that.
-        sdeps.add(sp, 0,
+        sdeps.add(sp, nullptr,
                   SingletonDeps::KeyList(),
                   SingletonDeps::KeyList(sp->mDepends.begin(), sp->mDepends.end()));
     }
@@ -447,7 +457,7 @@ namespace {
 std::ostream& operator<<(std::ostream& out, const LLSingletonBase::string_params& args)
 {
     // However many args there are in args, stream each of them to 'out'.
-    for (auto arg : args)
+    for (const auto& arg : args)
     {
         out << arg;
     }

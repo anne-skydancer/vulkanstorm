@@ -365,7 +365,7 @@ constexpr U32 AGENT_ATTACH_MASK                 = 0xf << AGENT_ATTACH_OFFSET;
 
 // RN: this method swaps the upper and lower nibbles to maintain backward
 // compatibility with old objects that only used the upper nibble
-#define ATTACHMENT_ID_FROM_STATE(state) ((S32)((((U8)state & AGENT_ATTACH_MASK) >> 4) | (((U8)state & ~AGENT_ATTACH_MASK) << 4)))
+#define ATTACHMENT_ID_FROM_STATE(state) ((S32)((((U8)(state) & AGENT_ATTACH_MASK) >> 4) | (((U8)(state) & ~AGENT_ATTACH_MASK) << 4)))
 
 // DO NOT CHANGE THE SEQUENCE OF THIS LIST!!
 constexpr U8 CLICK_ACTION_NONE = 0;

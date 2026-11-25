@@ -50,20 +50,20 @@ namespace LLTrace
     template<typename ACCUMULATOR>
     class AccumulatorBuffer : public LLRefCount
     {
-        typedef AccumulatorBuffer<ACCUMULATOR> self_t;
+        using self_t = AccumulatorBuffer<ACCUMULATOR>;
         static const S32 DEFAULT_ACCUMULATOR_BUFFER_SIZE = 32;
     private:
         struct StaticAllocationMarker { };
 
         AccumulatorBuffer(StaticAllocationMarker m)
         :   mStorageSize(0),
-            mStorage(NULL)
+            mStorage(nullptr)
         {}
 
     public:
         AccumulatorBuffer()
             : mStorageSize(0),
-            mStorage(NULL)
+            mStorage(nullptr)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             const AccumulatorBuffer& other = *getDefaultBuffer();
@@ -74,12 +74,12 @@ namespace LLTrace
             }
         }
 
-        ~AccumulatorBuffer()
+        ~AccumulatorBuffer() override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             if (isCurrent())
             {
-                LLThreadLocalSingletonPointer<ACCUMULATOR>::setInstance(NULL);
+                LLThreadLocalSingletonPointer<ACCUMULATOR>::setInstance(nullptr);
             }
             delete[] mStorage;
         }
@@ -97,7 +97,7 @@ namespace LLTrace
 
         AccumulatorBuffer(const AccumulatorBuffer& other)
             : mStorageSize(0),
-            mStorage(NULL)
+            mStorage(nullptr)
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
             resize(sNextStorageSlot);
@@ -133,7 +133,7 @@ namespace LLTrace
             llassert(mStorageSize >= sNextStorageSlot);
             for (size_t i = 0; i < sNextStorageSlot; i++)
             {
-                mStorage[i].reset(other ? &other->mStorage[i] : NULL);
+                mStorage[i].reset(other ? &other->mStorage[i] : nullptr);
             }
         }
 
@@ -159,7 +159,7 @@ namespace LLTrace
 
         static void clearCurrent()
         {
-            LLThreadLocalSingletonPointer<ACCUMULATOR>::setInstance(NULL);
+            LLThreadLocalSingletonPointer<ACCUMULATOR>::setInstance(nullptr);
         }
 
         // NOTE: this is not thread-safe.  We assume that slots are reserved in the main thread before any child threads are spawned
@@ -241,23 +241,15 @@ namespace LLTrace
     };
 
     template<typename ACCUMULATOR> size_t AccumulatorBuffer<ACCUMULATOR>::sNextStorageSlot = 0;
-    template<typename ACCUMULATOR> AccumulatorBuffer<ACCUMULATOR>* AccumulatorBuffer<ACCUMULATOR>::sDefaultBuffer = NULL;
+    template<typename ACCUMULATOR> AccumulatorBuffer<ACCUMULATOR>* AccumulatorBuffer<ACCUMULATOR>::sDefaultBuffer = nullptr;
 
     class EventAccumulator
     {
     public:
-        typedef F64 value_t;
+        using value_t = F64;
         static F64 getDefaultValue() { return NaN; }
 
-        EventAccumulator()
-        :   mSum(0),
-            mMin(NaN),
-            mMax(NaN),
-            mMean(NaN),
-            mSumOfSquares(0),
-            mNumSamples(0),
-            mLastValue(NaN)
-        {}
+        EventAccumulator() = default;
 
         void record(F64 value)
         {
@@ -301,36 +293,29 @@ namespace LLTrace
         static F64 mergeSumsOfSquares(const EventAccumulator& a, const EventAccumulator& b);
 
     private:
-        F64 mSum,
-            mLastValue;
+        F64 mSum{0},
+            mLastValue{NaN};
 
-        F64 mMean,
-            mSumOfSquares;
+        F64 mMean{NaN},
+            mSumOfSquares{0};
 
-        F64 mMin,
-            mMax;
+        F64 mMin{NaN},
+            mMax{NaN};
 
-        S32 mNumSamples;
+        S32 mNumSamples{0};
     };
 
 
     class SampleAccumulator
     {
     public:
-        typedef F64 value_t;
+        using value_t = F64;
         static F64 getDefaultValue() { return NaN; }
 
         SampleAccumulator()
-        :   mSum(0),
-            mMin(NaN),
-            mMax(NaN),
-            mMean(NaN),
-            mSumOfSquares(0),
+        :
             mLastSampleTimeStamp(0),
-            mTotalSamplingTime(0),
-            mNumSamples(0),
-            mLastValue(NaN),
-            mHasValue(false)
+            mTotalSamplingTime(0)
         {}
 
         void sample(F64 value)
@@ -392,35 +377,32 @@ namespace LLTrace
         static F64 mergeSumsOfSquares(const SampleAccumulator& a, const SampleAccumulator& b);
 
     private:
-        F64     mSum,
-                mLastValue;
+        F64     mSum{0},
+                mLastValue{NaN};
 
-        F64     mMean,
-                mSumOfSquares;
+        F64     mMean{NaN},
+                mSumOfSquares{0};
 
         F64SecondsImplicit
                 mLastSampleTimeStamp,
                 mTotalSamplingTime;
 
-        F64     mMin,
-                mMax;
+        F64     mMin{NaN},
+                mMax{NaN};
 
-        S32     mNumSamples;
+        S32     mNumSamples{0};
         // distinct from mNumSamples, since we might have inherited a last value from
         // a previous sampling period
-        bool    mHasValue;
+        bool    mHasValue{false};
     };
 
     class CountAccumulator
     {
     public:
-        typedef F64 value_t;
+        using value_t = F64;
         static F64 getDefaultValue() { return 0; }
 
-        CountAccumulator()
-        :   mSum(0),
-            mNumSamples(0)
-        {}
+        CountAccumulator() = default;
 
         void add(F64 value)
         {
@@ -449,28 +431,28 @@ namespace LLTrace
         bool hasValue() const            { return true; }
 
     private:
-        F64 mSum;
+        F64 mSum{0};
 
-        S32 mNumSamples;
+        S32 mNumSamples{0};
     };
 
     class alignas(32) TimeBlockAccumulator
     {
     public:
-        typedef F64Seconds value_t;
+        using value_t = F64Seconds;
         static F64Seconds getDefaultValue() { return F64Seconds(0); }
 
-        typedef TimeBlockAccumulator self_t;
+        using self_t = TimeBlockAccumulator;
 
         // fake classes that allows us to view different facets of underlying statistic
         struct CallCountFacet
         {
-            typedef S32 value_t;
+            using value_t = S32;
         };
 
         struct SelfTimeFacet
         {
-            typedef F64Seconds value_t;
+            using value_t = F64Seconds;
         };
 
         // arrays are allocated with 32 byte alignment
@@ -493,13 +475,13 @@ namespace LLTrace
         //
         // members
         //
-        U64                         mTotalTimeCounter,
-                                    mSelfTimeCounter;
-        S32                         mCalls;
-        class BlockTimerStatHandle* mParent;        // last acknowledged parent of this time block
-        class BlockTimerStatHandle* mLastCaller;    // used to bootstrap tree construction
-        U16                         mActiveCount;   // number of timers with this ID active on stack
-        bool                        mMoveUpTree;    // needs to be moved up the tree of timers at the end of frame
+        U64                         mTotalTimeCounter{0},
+                                    mSelfTimeCounter{0};
+        S32                         mCalls{0};
+        class BlockTimerStatHandle* mParent{nullptr};        // last acknowledged parent of this time block
+        class BlockTimerStatHandle* mLastCaller{nullptr};    // used to bootstrap tree construction
+        U16                         mActiveCount{0};   // number of timers with this ID active on stack
+        bool                        mMoveUpTree{false};    // needs to be moved up the tree of timers at the end of frame
 
     };
 
@@ -513,11 +495,11 @@ namespace LLTrace
         void setParent(BlockTimerStatHandle* parent);
         BlockTimerStatHandle* getParent() { return mParent; }
 
-        BlockTimerStatHandle*                   mBlock;
-        BlockTimerStatHandle*                   mParent;
+        BlockTimerStatHandle*                   mBlock{nullptr};
+        BlockTimerStatHandle*                   mParent{nullptr};
         std::vector<BlockTimerStatHandle*>      mChildren;
-        bool                        mCollapsed;
-        bool                        mNeedsSorting;
+        bool                        mCollapsed{true};
+        bool                        mNeedsSorting{false};
     };
 
     struct BlockTimerStackRecord
@@ -531,7 +513,7 @@ namespace LLTrace
     {
         AccumulatorBufferGroup();
         AccumulatorBufferGroup(const AccumulatorBufferGroup&);
-        ~AccumulatorBufferGroup();
+        ~AccumulatorBufferGroup() override;
 
         void handOffTo(AccumulatorBufferGroup& other);
         void makeCurrent();
@@ -540,7 +522,7 @@ namespace LLTrace
 
         void append(const AccumulatorBufferGroup& other);
         void merge(const AccumulatorBufferGroup& other);
-        void reset(AccumulatorBufferGroup* other = NULL);
+        void reset(AccumulatorBufferGroup* other = nullptr);
         void sync();
 
         AccumulatorBuffer<CountAccumulator>     mCounts;

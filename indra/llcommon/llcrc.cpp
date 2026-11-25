@@ -80,7 +80,7 @@
 ///----------------------------------------------------------------------------
 
 #define UPDC32(octet,crc) (crc_32_tab[((crc) \
- ^ ((U8)octet)) & 0xff] ^ ((crc) >> 8))
+ ^ ((U8)(octet))) & 0xff] ^ ((crc) >> 8))
 
 
 static U32 crc_32_tab[] = { /* CRC polynomial 0xedb88320 */
@@ -135,9 +135,7 @@ static U32 crc_32_tab[] = { /* CRC polynomial 0xedb88320 */
 ///----------------------------------------------------------------------------
 
 // Default constructor
-LLCRC::LLCRC() : mCurrent(0xffffffff)
-{
-}
+LLCRC::LLCRC() = default;
 
 
 U32 LLCRC::getCRC() const

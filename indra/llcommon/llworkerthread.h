@@ -53,7 +53,7 @@ public:
     class WorkRequest : public LLQueuedThread::QueuedRequest
     {
     protected:
-        virtual ~WorkRequest(); // use deleteRequest()
+        ~WorkRequest() override; // use deleteRequest()
 
     public:
         WorkRequest(handle_t handle, LLWorkerClass* workerclass, S32 param);
@@ -67,9 +67,9 @@ public:
             return mWorkerClass;
         }
 
-        /*virtual*/ bool processRequest();
-        /*virtual*/ void finishRequest(bool completed);
-        /*virtual*/ void deleteRequest();
+        /*virtual*/ bool processRequest() override;
+        /*virtual*/ void finishRequest(bool completed) override;
+        /*virtual*/ void deleteRequest() override;
 
     private:
         LLWorkerClass* mWorkerClass;
@@ -80,15 +80,15 @@ protected:
     void clearDeleteList() ;
 
 private:
-    typedef std::list<LLWorkerClass*> delete_list_t;
+    using delete_list_t = std::list<LLWorkerClass*>;
     delete_list_t mDeleteList;
     LLMutex* mDeleteMutex;
 
 public:
     LLWorkerThread(const std::string& name, bool threaded = true, bool should_pause = false);
-    ~LLWorkerThread();
+    ~LLWorkerThread() override;
 
-    /*virtual*/ size_t update(F32 max_time_ms);
+    /*virtual*/ size_t update(F32 max_time_ms) override;
 
     handle_t addWorkRequest(LLWorkerClass* workerclass, S32 param);
 
@@ -122,7 +122,7 @@ class LL_COMMON_API LLWorkerClass
     friend class LLWorkerThread::WorkRequest;
 
 public:
-    typedef LLWorkerThread::handle_t handle_t;
+    using handle_t = LLWorkerThread::handle_t;
     enum FLAGS
     {
         WCF_HAVE_WORK = 0x01,

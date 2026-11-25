@@ -97,7 +97,7 @@ static const F32 MEM_INFO_THROTTLE = 20;
 static const F32 MEM_INFO_WINDOW = 10*60;
 
 LLOSInfo::LLOSInfo() :
-    mMajorVer(0), mMinorVer(0), mBuild(0), mOSVersionString("")
+    mOSVersionString("")
 {
 
 #if LL_WINDOWS
@@ -186,12 +186,12 @@ LLOSInfo::LLOSInfo() :
     }
 
     ///get native system info if available..
-    typedef void (WINAPI *PGNSI)(LPSYSTEM_INFO); ///function pointer for loading GetNativeSystemInfo
+    using PGNSI = void (WINAPI *)(LPSYSTEM_INFO); ///function pointer for loading GetNativeSystemInfo
     SYSTEM_INFO si; //System Info object file contains architecture info
     PGNSI pGNSI; //pointer object
     ZeroMemory(&si, sizeof(SYSTEM_INFO)); //zero out the memory in information
     pGNSI = (PGNSI)GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "GetNativeSystemInfo"); //load kernel32 get function
-    if (NULL != pGNSI) //check if it has failed
+    if (nullptr != pGNSI) //check if it has failed
         pGNSI(&si); //success
     else
         GetSystemInfo(&si); //if it fails get regular system info
@@ -229,7 +229,7 @@ LLOSInfo::LLOSInfo() :
         LSTATUS ret_code = RegOpenKeyExW(HKEY_LOCAL_MACHINE, TEXT("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), 0, KEY_READ, &key);
         if (ERROR_SUCCESS == ret_code)
         {
-            ret_code = RegQueryValueExW(key, L"UBR", 0, NULL, reinterpret_cast<LPBYTE>(&data), &cbData);
+            ret_code = RegQueryValueExW(key, L"UBR", nullptr, nullptr, reinterpret_cast<LPBYTE>(&data), &cbData);
             if (ERROR_SUCCESS == ret_code)
             {
                 ubr = data;
@@ -727,7 +727,7 @@ public:
     // Store every integer type as LLSD::Integer.
     template <class T>
     void add(const LLSD::String& name, const T& value,
-             typename std::enable_if_t<std::is_integral_v<T> >* = 0)
+             typename std::enable_if_t<std::is_integral_v<T> >* = nullptr)
     {
         mStats[name] = LLSD::Integer(value);
     }
@@ -1231,20 +1231,10 @@ public:
         mConnection(LLEventPumps::instance()
                     .obtain("mainloop")
                     .listen("FrameWatcher", boost::bind(&FrameWatcher::tick, this, _1))),
-        // Initializing mSampleStart to an invalid timestamp alerts us to skip
-        // trying to compute framerate on the first call.
-        mSampleStart(-1),
-        // Initializing mSampleEnd to 0 ensures that we treat the first call
-        // as the completion of a sample window.
-        mSampleEnd(0),
-        mFrames(0),
         // Both MEM_INFO_WINDOW and MEM_INFO_THROTTLE are in seconds. We need
         // the number of integer MEM_INFO_THROTTLE sample slots that will fit
         // in MEM_INFO_WINDOW. Round up.
-        mSamples(int((MEM_INFO_WINDOW / MEM_INFO_THROTTLE) + 0.7)),
-        // Initializing to F32_MAX means that the first real frame will become
-        // the slowest ever, which sounds like a good idea.
-        mSlowest(F32_MAX)
+        mSamples(int((MEM_INFO_WINDOW / MEM_INFO_THROTTLE) + 0.7))
     {}
 
     bool tick(const LLSD&)
@@ -1353,13 +1343,19 @@ private:
     // feature we need: has at least the stated interval elapsed, and if so,
     // exactly how long has passed? So we have to do it by hand, sigh.
     // Time at start, end of sample window
-    F32 mSampleStart, mSampleEnd;
+    // Initializing mSampleStart to an invalid timestamp alerts us to skip
+    // trying to compute framerate on the first call.
+    // Initializing mSampleEnd to 0 ensures that we treat the first call
+    // as the completion of a sample window.
+    F32 mSampleStart{-1}, mSampleEnd{0};
     // Frames this sample window
-    U32 mFrames;
+    U32 mFrames{0};
     // Sliding window of framerate samples
     boost::circular_buffer<F32> mSamples;
     // Slowest framerate in mSamples
-    F32 mSlowest;
+    // Initializing to F32_MAX means that the first real frame will become
+    // the slowest ever, which sounds like a good idea.
+    F32 mSlowest{F32_MAX};
 };
 
 // Need an instance of FrameWatcher before it does any good
@@ -1370,14 +1366,14 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     std::string tmpfile;
     const S32 UNCOMPRESS_BUFFER_SIZE = 32768;
     bool retval = false;
-    gzFile src = NULL;
+    gzFile src = nullptr;
     U8 buffer[UNCOMPRESS_BUFFER_SIZE];
-    LLFILE *dst = NULL;
+    LLFILE *dst = nullptr;
     S32 bytes = 0;
     int gzerrnum = Z_OK;
     tmpfile = dstfile + ".t";
 #ifdef LL_WINDOWS
-    std::wstring utf16filename = ll_convert<std::wstring>(srcfile);
+    auto utf16filename = ll_convert<std::wstring>(srcfile);
     src = gzopen_w(utf16filename.c_str(), "rb");
 #else
     src = gzopen(srcfile.c_str(), "rb");
@@ -1393,9 +1389,9 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
         gzerror(src, &gzerrnum);
         if (bytes < 0 || gzerrnum != Z_OK)
         {
-            LL_WARNS() << "gzread failed: " << gzerror(src, NULL) << LL_ENDL;
+            LL_WARNS() << "gzread failed: " << gzerror(src, nullptr) << LL_ENDL;
             fclose(dst);
-            dst = NULL;
+            dst = nullptr;
             LLFile::remove(tmpfile);
             goto err;
         }
@@ -1407,12 +1403,12 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
         }
     } while(gzeof(src) == 0);
     fclose(dst);
-    dst = NULL;
+    dst = nullptr;
     if (LLFile::rename(tmpfile, dstfile) == -1) goto err;       /* Flawfinder: ignore */
     retval = true;
 err:
-    if (src != NULL) gzclose(src);
-    if (dst != NULL) fclose(dst);
+    if (src != nullptr) gzclose(src);
+    if (dst != nullptr) fclose(dst);
     return retval;
 }
 
@@ -1422,14 +1418,14 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     std::string tmpfile;
     bool retval = false;
     U8 buffer[COMPRESS_BUFFER_SIZE];
-    gzFile dst = NULL;
-    LLFILE *src = NULL;
+    gzFile dst = nullptr;
+    LLFILE *src = nullptr;
     S32 bytes = 0;
     int gzerrnum = Z_OK;
     tmpfile = dstfile + ".t";
 
 #ifdef LL_WINDOWS
-    std::wstring utf16filename = ll_convert<std::wstring>(tmpfile);
+    auto utf16filename = ll_convert<std::wstring>(tmpfile);
     dst = gzopen_w(utf16filename.c_str(), "wb");
 #else
     dst = gzopen(tmpfile.c_str(), "wb");
@@ -1443,7 +1439,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     {
         if (gzwrite(dst, buffer, bytes) <= 0)
         {
-            LL_WARNS() << "gzwrite failed: " << gzerror(dst, NULL) << LL_ENDL;
+            LL_WARNS() << "gzwrite failed: " << gzerror(dst, nullptr) << LL_ENDL;
             goto err;
         }
     }
@@ -1457,7 +1453,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     // gzclose() writes the rest of the compressed stream, so it can fail
     // (for example when the disk is full) and leave an incomplete file.
     gzerrnum = gzclose(dst);
-    dst = NULL;
+    dst = nullptr;
     if (gzerrnum != Z_OK)
     {
         LL_WARNS() << "gzclose failed on " << tmpfile << ": " << gzerrnum << LL_ENDL;
@@ -1467,7 +1463,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     if (LLFile::rename(tmpfile, dstfile) == -1) goto err;       /* Flawfinder: ignore */
     retval = true;
  err:
-    if (src != NULL) fclose(src);
-    if (dst != NULL) gzclose(dst);
+    if (src != nullptr) fclose(src);
+    if (dst != nullptr) gzclose(dst);
     return retval;
 }

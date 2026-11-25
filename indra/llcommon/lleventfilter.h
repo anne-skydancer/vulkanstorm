@@ -35,6 +35,7 @@
 #include "llsdutil.h"
 
 #include <functional>
+#include <utility>
 
 class LLEventTimer;
 class LLDate;
@@ -53,7 +54,7 @@ public:
     LLEventFilter(LLEventPump& source, const std::string& name="filter", bool tweak=true);
 
     /// Post an event to all listeners
-    virtual bool post(const LLSD& event) = 0;
+    bool post(const LLSD& event) override = 0;
 
 private:
     LLTempBoundListener mSource;
@@ -66,12 +67,12 @@ class LLEventMatching: public LLEventFilter
 {
 public:
     /// Pass an LLSD map with keys and values the incoming event must match
-    LLEventMatching(const LLSD& pattern);
+    LLEventMatching(LLSD pattern);
     /// instantiate and connect
-    LLEventMatching(LLEventPump& source, const LLSD& pattern);
+    LLEventMatching(LLEventPump& source, LLSD pattern);
 
     /// Only pass through events matching the pattern
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 
 private:
     LLSD mPattern;
@@ -94,7 +95,7 @@ public:
     LLEventTimeoutBase(LLEventPump& source);
 
     /// Callable, can be constructed with std::bind()
-    typedef std::function<void()> Action;
+    using Action = std::function<void()>;
 
     /**
      * Start countdown timer for the specified number of @a seconds. Forward
@@ -177,7 +178,7 @@ public:
     void eventAfter(F32 seconds, const LLSD& event);
 
     /// Pass event through, canceling the countdown timer
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 
     /// Cancel timer without event
     void cancel();
@@ -229,8 +230,8 @@ public:
     static LLEventTimer* post_after(F32 interval, const std::string& pump, const LLSD& data);
 
 protected:
-    virtual void setCountdown(F32 seconds);
-    virtual bool countdownElapsed() const;
+    void setCountdown(F32 seconds) override;
+    bool countdownElapsed() const override;
 
 private:
     LLTimer mTimer;
@@ -250,10 +251,10 @@ public:
     LLEventBatch(LLEventPump& source, std::size_t size);
 
     // force out the pending batch
-    void flush();
+    void flush() override;
 
     // accumulate an event and flush() when big enough
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 
     // query or reset batch size
     std::size_t getSize() const { return mBatchSize; }
@@ -307,13 +308,13 @@ public:
     LLEventThrottleBase(LLEventPump& source, F32 interval);
 
     // force out any deferred events
-    void flush();
+    void flush() override;
 
     // retrieve (aggregate) deferred event since last event sent to listeners
     LLSD pending() const;
 
     // register an event, may be either passed through or deferred
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 
     // query or reset interval
     F32 getInterval() const { return mInterval; }
@@ -354,11 +355,11 @@ public:
     LLEventThrottle(LLEventPump& source, F32 interval);
 
 private:
-    virtual void alarmActionAfter(F32 interval, const LLEventTimeoutBase::Action& action) /*override*/;
-    virtual bool alarmRunning() const /*override*/;
-    virtual void alarmCancel() /*override*/;
-    virtual void timerSet(F32 interval) /*override*/;
-    virtual F32  timerGetRemaining() const /*override*/;
+    void alarmActionAfter(F32 interval, const LLEventTimeoutBase::Action& action) override /*override*/;
+    bool alarmRunning() const override /*override*/;
+    void alarmCancel() override /*override*/;
+    void timerSet(F32 interval) override /*override*/;
+    F32  timerGetRemaining() const override /*override*/;
 
     // use this to arrange a deferred flush() call
     LLEventTimeout mAlarm;
@@ -384,7 +385,7 @@ public:
     LLEventBatchThrottle(LLEventPump& source, F32 interval, std::size_t size = 0);
 
     // append a new event to current batch
-    virtual bool post(const LLSD& event);
+    bool post(const LLSD& event) override;
 
     // query or reset batch size
     std::size_t getSize() const { return mBatchSize; }
@@ -412,23 +413,23 @@ class LLStoreListener: public LLEventFilter
 {
 public:
     // pass target and optional path to element
-    LLStoreListener(T& target, const LLSD& path=LLSD(), bool consume=false):
+    LLStoreListener(T& target, LLSD path=LLSD(), bool consume=false):
         LLEventFilter("store"),
         mTarget(target),
-        mPath(path),
+        mPath(std::move(path)),
         mConsume(consume)
     {}
     // construct and connect
-    LLStoreListener(LLEventPump& source, T& target, const LLSD& path=LLSD(), bool consume=false):
+    LLStoreListener(LLEventPump& source, T& target, LLSD path=LLSD(), bool consume=false):
         LLEventFilter(source, "store"),
         mTarget(target),
-        mPath(path),
+        mPath(std::move(path)),
         mConsume(consume)
     {}
 
     // Calling post() with an LLSD event extracts the element indicated by
     // path, then stores it to mTarget.
-    virtual bool post(const LLSD& event)
+    bool post(const LLSD& event) override
     {
         LL_PROFILE_ZONE_SCOPED;
 
@@ -509,7 +510,7 @@ public:
  */
 class LLEventLogProxy: public LLEventFilter
 {
-    typedef LLEventFilter super;
+    using super = LLEventFilter;
 public:
     /**
      * Construct LLEventLogProxy, wrapping the specified LLEventPump.
@@ -523,10 +524,10 @@ public:
 
     /// register a new listener
     LLBoundListener listen_impl(const std::string& name, const LLEventListener& target,
-                                const NameList& after, const NameList& before);
+                                const NameList& after, const NameList& before) override;
 
     /// Post an event to all listeners
-    virtual bool post(const LLSD& event) /* override */;
+    bool post(const LLSD& event) override /* override */;
 
 private:
     /// This method intercepts each call to any target listener. We pass it
@@ -572,8 +573,8 @@ class LLEventLogProxyFor: private LLEventPumpHolder<T>, public LLEventLogProxy
     // implementation detail of LLEventLogProxyFor. The only reason it's a
     // base class at all is to guarantee that it's constructed first so we can
     // pass it to our LLEventLogProxy base class constructor.
-    typedef LLEventPumpHolder<T> holder;
-    typedef LLEventLogProxy super;
+    using holder = LLEventPumpHolder<T>;
+    using super = LLEventLogProxy;
 
 public:
     LLEventLogProxyFor(const std::string& name, bool tweak=false):

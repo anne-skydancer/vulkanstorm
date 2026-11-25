@@ -70,6 +70,7 @@ LL::WorkQueueBase::~WorkQueueBase()
             LLEventPumps* pump = mPumpHandle.get();
             pump->obtain("LLApp").stopListening(mListenerName);
         }
+        // NOLINTNEXTLINE(bugprone-empty-catch): the mutex is already down at shutdown, nothing left to stop
         catch (const boost::fibers::lock_error&)
         {
             // Likely mutex is down, ignore
@@ -87,6 +88,7 @@ void LL::WorkQueueBase::runUntilClose()
             callWork(pop_());
         }
     }
+    // NOLINTNEXTLINE(bugprone-empty-catch): Closed is how runUntilClose() learns the queue is done
     catch (const Closed&)
     {
     }

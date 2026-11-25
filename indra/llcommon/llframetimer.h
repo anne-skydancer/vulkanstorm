@@ -39,7 +39,7 @@
 class LL_COMMON_API LLFrameTimer
 {
 public:
-    LLFrameTimer() : mStartTime( sFrameTime ), mExpiry(0), mStarted(true) {}
+    LLFrameTimer() = default;
 
     // Return the number of seconds since the start of this
     // application instance.
@@ -135,14 +135,14 @@ protected:
 
     // Number of seconds after application start when this timer was
     // started. Set equal to sFrameTime when reset.
-    F64 mStartTime;
+    F64 mStartTime{ sFrameTime };
 
     // Timer expires this many seconds after application start time.
-    F64 mExpiry;
+    F64 mExpiry{0};
 
     // Useful bit of state usually associated with timers, but does
     // not affect actual functionality
-    bool mStarted;
+    bool mStarted{true};
 };
 
 // Glue code for Havok (or anything else that doesn't want the full .h files)

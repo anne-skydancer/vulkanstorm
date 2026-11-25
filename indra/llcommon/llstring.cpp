@@ -39,14 +39,14 @@
 std::string ll_safe_string(const char* in)
 {
     if(in) return std::string(in);
-    return std::string();
+    return {};
 }
 
 std::string ll_safe_string(const char* in, S32 maxlen)
 {
     if(in && maxlen > 0 ) return std::string(in, maxlen);
 
-    return std::string();
+    return {};
 }
 
 bool is_char_hex(char hex)
@@ -195,7 +195,7 @@ auto utf16chars_to_wchar(const U16* inchars, llwchar* outchar)
 {
     const U16* base = inchars;
     U16 cur_char = *inchars++;
-    llwchar char32 = cur_char;
+    llwchar char32;
     if ((cur_char >= 0xD800) && (cur_char <= 0xDFFF))
     {
         // Surrogates
@@ -221,12 +221,12 @@ llutf16string wstring_to_utf16str(const llwchar* utf32str, size_t len)
         U32 cur_char = utf32str[i];
         if (cur_char > 0xFFFF)
         {
-            out += (0xD7C0 + (cur_char >> 10));
-            out += (0xDC00 | (cur_char & 0x3FF));
+            out += static_cast<llutf16string::value_type>(0xD7C0 + (cur_char >> 10));
+            out += static_cast<llutf16string::value_type>(0xDC00 | (cur_char & 0x3FF));
         }
         else
         {
-            out += cur_char;
+            out += static_cast<llutf16string::value_type>(cur_char);
         }
         i++;
     }
@@ -532,7 +532,7 @@ std::string utf8str_truncate(const std::string& utf8str, const S32 max_len)
 {
     if (0 == max_len)
     {
-        return std::string();
+        return {};
     }
     if ((S32)utf8str.length() <= max_len)
     {
@@ -568,7 +568,7 @@ std::string utf8str_substr(const std::string& utf8str, const size_t index, const
 {
     if (0 == max_len)
     {
-        return std::string();
+        return {};
     }
     if (utf8str.length() - index  <= max_len)
     {
@@ -639,7 +639,7 @@ std::string utf8str_symbol_truncate(const std::string& utf8str, const S32 symbol
 {
     if (0 == symbol_len)
     {
-        return std::string();
+        return {};
     }
     if ((S32)utf8str.length() <= symbol_len)
     {
@@ -698,7 +698,7 @@ std::string utf8str_removeCRLF(const std::string& utf8str)
 {
     if (0 == utf8str.length())
     {
-        return std::string();
+        return {};
     }
     const char CR = 13;
 
@@ -751,6 +751,8 @@ llwchar utf8str_to_wchar(const std::string& utf8str, size_t offset, size_t lengt
                 ((utf8str[offset + 4] & 0x3F) << 12) +
                 ((utf8str[offset + 5] & 0x3F) << 6) +
                 (utf8str[offset + 6] & 0x3F);
+    default:
+        break;
     }
     return LL_UNKNOWN_CHAR;
 }
@@ -881,10 +883,10 @@ std::string ll_convert_wide_to_string(const wchar_t* in, size_t len_in, unsigned
             0,
             in,
             static_cast<int>(len_in),
-            NULL,
+            nullptr,
             0,
-            0,
-            0);
+            nullptr,
+            nullptr);
         // We will need two more bytes for the double NULL ending
         // created in WideCharToMultiByte().
         char* pout = new char [len_out + 2];
@@ -898,8 +900,8 @@ std::string ll_convert_wide_to_string(const wchar_t* in, size_t len_in, unsigned
                 static_cast<int>(len_in),
                 pout,
                 len_out,
-                0,
-                0);
+                nullptr,
+                nullptr);
             out.assign(pout);
             delete[] pout;
         }
@@ -990,12 +992,12 @@ std::wstring windows_message<std::wstring>(DWORD error)
         FORMAT_MESSAGE_IGNORE_INSERTS |
         // ignore line breaks in message definition text
         FORMAT_MESSAGE_MAX_WIDTH_MASK,
-        NULL,                       // lpSource, unused with FORMAT_MESSAGE_FROM_SYSTEM
+        nullptr,                       // lpSource, unused with FORMAT_MESSAGE_FROM_SYSTEM
         error,                      // dwMessageId
         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // dwLanguageId
         (LPWSTR)&rawptr,         // lpBuffer: force-cast wchar_t** to wchar_t*
         0,                // nSize, unused with FORMAT_MESSAGE_ALLOCATE_BUFFER
-        NULL);            // Arguments, unused
+        nullptr);            // Arguments, unused
 
     // make a unique_ptr from rawptr so it gets cleaned up properly
     std::unique_ptr<wchar_t, void(*)(void*)> bufferptr(rawptr, HeapFree_deleter);
@@ -1069,7 +1071,7 @@ std::optional<std::string> llstring_getoptenv(const std::string& key)
 
 long LLStringOps::sPacificTimeOffset = 0;
 long LLStringOps::sLocalTimeOffset = 0;
-bool LLStringOps::sPacificDaylightTime = 0;
+bool LLStringOps::sPacificDaylightTime = false;
 bool LLStringOps::sUsingPacificTime = false; // <FS:TJ/> [FIRE-34775] Use PST/PDT when logged into OpenSim
 std::map<std::string, std::string> LLStringOps::datetimeToCodes;
 
@@ -1112,7 +1114,7 @@ void LLStringOps::setupDatetimeInfo (bool daylight)
     time_t nowT, localT, gmtT;
     struct tm * tmpT;
 
-    nowT = time (NULL);
+    nowT = time (nullptr);
 
     tmpT = gmtime (&nowT);
     gmtT = mktime (tmpT);
@@ -1192,7 +1194,7 @@ void LLStringOps::setupDayFormat(const std::string& data)
 }
 
 
-std::string LLStringOps::getDatetimeCode (std::string key)
+std::string LLStringOps::getDatetimeCode (const std::string& key)
 {
     std::map<std::string, std::string>::iterator iter;
 
@@ -1272,7 +1274,7 @@ namespace LLStringFn
         {
             // Must compare as unsigned for >=
             // Test most likely match first
-            const unsigned char c = (unsigned char)*it;
+            const auto c = (unsigned char)*it;
             if (   c >= (unsigned char)0x20   // SPACE
                 || c == (unsigned char)0x09   // TAB
                 || c == (unsigned char)0x0a   // LINE_FEED
@@ -1364,7 +1366,7 @@ namespace LLStringFn
         std::basic_string<char>::size_type len = string.size();
         for(std::basic_string<char>::size_type ii = 0; ii < len; ++ii)
         {
-            const unsigned char c = (unsigned char) string[ii];
+            const auto c = (unsigned char) string[ii];
             if(c < MIN)
             {
                 string[ii] = replacement;
@@ -1438,7 +1440,7 @@ bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token
     // test first using has() because if we just look up with operator[] we get back an
     // empty string even if the value is missing. We want to distinguish between
     // missing replacements and deliberately empty replacement strings.
-    format_map_t::const_iterator iter = substitutions.find(token);
+    auto iter = substitutions.find(token);
     if (iter != substitutions.end())
     {
         replacement = iter->second;
@@ -1495,7 +1497,7 @@ void LLStringUtil::setLocale(std::string inLocale)
 
 //static
 template<>
-std::string LLStringUtil::getLocale(void)
+std::string LLStringUtil::getLocale()
 {
     return sLocale;
 };
@@ -1518,8 +1520,8 @@ void LLStringUtil::formatNumber(std::string& numStr, std::string decimals)
     std::wstringstream strStream;
     S32 intDecimals = 0;
 
-    std::wstring wDecimals = ll_convert<std::wstring>(decimals);
-    std::wstring wNumStr = ll_convert<std::wstring>(numStr);
+    auto wDecimals = ll_convert<std::wstring>(decimals);
+    auto wNumStr = ll_convert<std::wstring>(numStr);
     LLStringUtilBase<wchar_t>::convertToS32 (wDecimals, intDecimals);
     if (!sLocale.empty())
     {
@@ -1659,7 +1661,7 @@ bool LLStringUtil::formatDatetime(std::string& replacement, std::string token,
 
     //if sWeekDayList is not empty than current locale doesn't support
         //weekday name.
-    time_t loc_seconds = (time_t) secFromEpoch;
+    auto loc_seconds = (time_t) secFromEpoch;
     if(LLStringOps::sWeekDayList.size() == 7 && code == "%A")
     {
         struct tm * gmt = gmtime (&loc_seconds);
@@ -1766,7 +1768,7 @@ S32 LLStringUtil::format(std::string& s, const format_map_t& substitutions)
             std::string param;
             if (tokens.size() > 2) param = tokens[2];
 
-            format_map_t::const_iterator iter = substitutions.find("datetime");
+            auto iter = substitutions.find("datetime");
             if (iter != substitutions.end())
             {
                 S32 secFromEpoch = 0;

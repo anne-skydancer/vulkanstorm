@@ -106,7 +106,7 @@ void LLMD5::update(const uint8_t* input, const size_t input_length)
     buffer_space = 64 - buffer_index; // how much space is left in buffer
 
     // now, transform each 64-byte piece of the input, bypassing the buffer
-    if (input == NULL || input_length == 0)
+    if (input == nullptr || input_length == 0)
     {
         std::cerr << "LLMD5::update:  Invalid input!" << std::endl;
         return;
@@ -347,10 +347,10 @@ void LLMD5::init()
 
 /* F, G, H and I are basic MD5 functions.
  */
-#define F(x, y, z) (((x) & (y)) | ((~x) & (z)))
-#define G(x, y, z) (((x) & (z)) | ((y) & (~z)))
+#define F(x, y, z) (((x) & (y)) | ((~(x)) & (z)))
+#define G(x, y, z) (((x) & (z)) | ((y) & (~(z))))
 #define H(x, y, z) ((x) ^ (y) ^ (z))
-#define I(x, y, z) ((y) ^ ((x) | (~z)))
+#define I(x, y, z) ((y) ^ ((x) | (~(z))))
 
 /* ROTATE_LEFT rotates x left n bits.
  */

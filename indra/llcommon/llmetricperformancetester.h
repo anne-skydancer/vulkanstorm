@@ -62,7 +62,7 @@ public:
      */
     virtual void analyzePerformance(llofstream* os, LLSD* base, LLSD* current) ;
 
-    static void doAnalysisMetrics(std::string baseline, std::string target, std::string output) ;
+    static void doAnalysisMetrics(const std::string& baseline, const std::string& target, const std::string& output) ;
 
     /**
      * @return Returns the number of the test metrics in this tester instance.
@@ -84,7 +84,7 @@ protected:
      * @brief Insert a new metric to be managed by this tester instance.
      * @param[in] str - Unique string identifying the new metric.
      */
-    void addMetric(std::string str) ;
+    void addMetric(const std::string& str) ;
 
     /**
      * @brief Compare test results, provided in 2 flavors: compare integers and compare floats.
@@ -121,33 +121,33 @@ private:
     static LLSD analyzeMetricPerformanceLog(std::istream& is) ;
 
     std::string mName ;                         // Name of this tester instance
-    S32 mCount ;                                // Current record count
+    S32 mCount{0} ;                                // Current record count
     bool mValidInstance;                        // true if the instance is managed by the map
     std::vector< std::string > mMetricStrings ; // Metrics strings
 
 // Static members managing the collection of testers
 public:
     // Map of all the tester instances in use
-    typedef std::map< std::string, LLMetricPerformanceTesterBasic* > name_tester_map_t;
+    using name_tester_map_t = std::map< std::string, LLMetricPerformanceTesterBasic* >;
     static name_tester_map_t sTesterMap ;
 
     /**
      * @return Returns a pointer to the tester
      * @param[in] name - Name of the tester instance queried.
      */
-    static LLMetricPerformanceTesterBasic* getTester(std::string name) ;
+    static LLMetricPerformanceTesterBasic* getTester(const std::string& name) ;
 
     /**
      * @return Delete the named tester from the list
      * @param[in] name - Name of the tester instance to delete.
      */
-    static void deleteTester(std::string name);
+    static void deleteTester(const std::string& name);
 
     /**
      * @return Returns true if that metric *or* the default catch all metric has been requested to be logged
      * @param[in] name - Name of the tester queried.
      */
-    static bool isMetricLogRequested(std::string name);
+    static bool isMetricLogRequested(const std::string& name);
 
     /**
      * @return Returns true if there's a tester defined, false otherwise.
@@ -174,14 +174,14 @@ public:
      * @param[in] name - Unique string identifying this tester instance.
      */
     LLMetricPerformanceTesterWithSession(std::string name);
-    virtual ~LLMetricPerformanceTesterWithSession();
+    ~LLMetricPerformanceTesterWithSession() override;
 
     /**
      * @brief Compare the test results.
      * This will be loading the base and current sessions and compare them using the virtual
      * abstract methods loadTestSession() and compareTestSessions()
      */
-    virtual void analyzePerformance(llofstream* os, LLSD* base, LLSD* current) ;
+    void analyzePerformance(llofstream* os, LLSD* base, LLSD* current) override ;
 
 protected:
     /**
@@ -207,8 +207,8 @@ protected:
      */
     virtual void compareTestSessions(llofstream* os) = 0;
 
-    LLTestSession* mBaseSessionp;
-    LLTestSession* mCurrentSessionp;
+    LLTestSession* mBaseSessionp{nullptr};
+    LLTestSession* mCurrentSessionp{nullptr};
 };
 
 #endif

@@ -73,6 +73,7 @@ enum EInstanceTrackerAllowKeyCollisions
 /// @NOTE: see explicit specialization below for default KEY==void case
 template<typename T, typename KEY = void,
          EInstanceTrackerAllowKeyCollisions KEY_COLLISION_BEHAVIOR = LLInstanceTrackerErrorOnCollision>
+// NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the tracked class T constructs the tracker; not all of them are known to be friends here
 class LLInstanceTracker
 {
     // <Vulkanstorm>
@@ -80,15 +81,15 @@ class LLInstanceTracker
     // the base constructor, while T is not yet constructed, is undefined.
     // The conversion to T happens when an instance is looked up, when it is
     // complete.
-    typedef std::shared_ptr<LLInstanceTracker> base_ptr_t;
-    typedef std::weak_ptr<LLInstanceTracker> base_weak_t;
+    using base_ptr_t = std::shared_ptr<LLInstanceTracker>;
+    using base_weak_t = std::weak_ptr<LLInstanceTracker>;
     // </Vulkanstorm>
-    typedef std::map<KEY, base_ptr_t> InstanceMap;
+    using InstanceMap = std::map<KEY, base_ptr_t>;
     struct StaticData: public LLInstanceTrackerPrivate::StaticBase
     {
         InstanceMap mMap;
     };
-    typedef llthread::LockStatic<StaticData> LockStatic;
+    using LockStatic = llthread::LockStatic<StaticData>;
 
 public:
     using ptr_t  = std::shared_ptr<T>;
@@ -123,7 +124,7 @@ public:
         // It's very important that what we store in this snapshot are
         // weak_ptrs, NOT shared_ptrs. That's how we discover whether any
         // instance has been deleted during the lifespan of a snapshot.
-        typedef std::vector<std::pair<const KEY, base_weak_t>> VectorType;
+        using VectorType = std::vector<std::pair<const KEY, base_weak_t>>;
         // Dereferencing the iterator we publish produces a
         // std::shared_ptr<SUBCLASS> for each instance that still exists.
         // Since we store weak_ptr<T>, that involves two chained
@@ -134,7 +135,7 @@ public:
         // It is very important that we filter lazily, that is, during
         // traversal. Any one of our stored weak_ptrs might expire during
         // traversal.
-        typedef std::pair<const KEY, std::shared_ptr<SUBCLASS>> strong_pair;
+        using strong_pair = std::pair<const KEY, std::shared_ptr<SUBCLASS>>;
         // Note for future reference: nat has not yet had any luck (up to
         // Boost 1.67) trying to use boost::transform_iterator with a hand-
         // coded functor, only with actual functions. In my experience, an
@@ -162,9 +163,9 @@ public:
         // You can't make a transform_iterator (or anything else) that
         // literally stores a C++ function (decltype(strengthen)) -- but you
         // can make a transform_iterator based on a _function pointer._
-        typedef boost::transform_iterator<decltype(strengthen)*,
-                                          typename VectorType::iterator> strong_iterator;
-        typedef boost::filter_iterator<decltype(dead_skipper)*, strong_iterator> iterator;
+        using strong_iterator = boost::transform_iterator<decltype(strengthen)*,
+                                          typename VectorType::iterator>;
+        using iterator = boost::filter_iterator<decltype(dead_skipper)*, strong_iterator>;
 
         iterator begin() { return make_iterator(mData.begin()); }
         iterator end()   { return make_iterator(mData.end()); }
@@ -212,8 +213,8 @@ public:
             return *pair.second;
         }
     public:
-        typedef boost::transform_iterator<decltype(instance_getter)*,
-                                          typename super::iterator> iterator;
+        using iterator = boost::transform_iterator<decltype(instance_getter)*,
+                                          typename super::iterator>;
         iterator begin() { return iterator(super::begin(), instance_getter); }
         iterator end()   { return iterator(super::end(),   instance_getter); }
 
@@ -238,8 +239,8 @@ public:
             return pair.first;
         }
     public:
-        typedef boost::transform_iterator<decltype(key_getter)*,
-                                          typename super::iterator> iterator;
+        using iterator = boost::transform_iterator<decltype(key_getter)*,
+                                          typename super::iterator>;
         iterator begin() { return iterator(super::begin(), key_getter); }
         iterator end()   { return iterator(super::end(),   key_getter); }
     };
@@ -249,7 +250,7 @@ public:
     {
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
         const InstanceMap& map(lock->mMap);
-        typename InstanceMap::const_iterator found = map.find(k);
+        auto found = map.find(k);
         // <Vulkanstorm> convert the stored base pointer to T now that the
         // instance is complete; shares ownership (and use count) with the map
         return (found == map.end()) ? ptr_t() :
@@ -258,6 +259,7 @@ public:
     }
 
 protected:
+    // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility): the tracked class T and every class derived from it calls this constructor; they are not known here
     LLInstanceTracker(const KEY& key)
     {
         // We do not intend to manage the lifespan of this object with
@@ -329,7 +331,7 @@ private:
     base_ptr_t remove_(LockStatic& lock)
     {
         InstanceMap& map = lock->mMap;
-        typename InstanceMap::iterator iter = map.find(mInstanceKey);
+        auto iter = map.find(mInstanceKey);
         if (iter != map.end())
         {
             auto ret = iter->second;
@@ -367,15 +369,15 @@ template<typename T, EInstanceTrackerAllowKeyCollisions KEY_COLLISION_BEHAVIOR>
 class LLInstanceTracker<T, void, KEY_COLLISION_BEHAVIOR>
 {
     // <Vulkanstorm> stores the tracker base; see the keyed class
-    typedef std::shared_ptr<LLInstanceTracker> base_ptr_t;
-    typedef std::weak_ptr<LLInstanceTracker> base_weak_t;
+    using base_ptr_t = std::shared_ptr<LLInstanceTracker>;
+    using base_weak_t = std::weak_ptr<LLInstanceTracker>;
     // </Vulkanstorm>
-    typedef std::set<base_ptr_t> InstanceSet;
+    using InstanceSet = std::set<base_ptr_t>;
     struct StaticData: public LLInstanceTrackerPrivate::StaticBase
     {
         InstanceSet mSet;
     };
-    typedef llthread::LockStatic<StaticData> LockStatic;
+    using LockStatic = llthread::LockStatic<StaticData>;
 
 public:
     using ptr_t  = std::shared_ptr<T>;
@@ -409,7 +411,7 @@ public:
         // It's very important that what we store in this snapshot are
         // weak_ptrs, NOT shared_ptrs. That's how we discover whether any
         // instance has been deleted during the lifespan of a snapshot.
-        typedef std::vector<base_weak_t> VectorType;
+        using VectorType = std::vector<base_weak_t>;
         // Dereferencing the iterator we publish produces a
         // std::shared_ptr<SUBCLASS> for each instance that still exists.
         // Since we store weak_ptrs, that involves two chained
@@ -417,7 +419,7 @@ public:
         // - a transform_iterator to lock the weak_ptr and return a shared_ptr
         // - a filter_iterator to skip any shared_ptr that has become invalid
         //   or references any T instance that isn't SUBCLASS.
-        typedef std::shared_ptr<SUBCLASS> strong_ptr;
+        using strong_ptr = std::shared_ptr<SUBCLASS>;
         static strong_ptr strengthen(typename VectorType::value_type& ptr)
         {
             return std::dynamic_pointer_cast<SUBCLASS>(ptr.lock());
@@ -437,9 +439,9 @@ public:
             mLock.unlock();
         }
 
-        typedef boost::transform_iterator<decltype(strengthen)*,
-                                          typename VectorType::iterator> strong_iterator;
-        typedef boost::filter_iterator<decltype(dead_skipper)*, strong_iterator> iterator;
+        using strong_iterator = boost::transform_iterator<decltype(strengthen)*,
+                                          typename VectorType::iterator>;
+        using iterator = boost::filter_iterator<decltype(dead_skipper)*, strong_iterator>;
 
         iterator begin() { return make_iterator(mData.begin()); }
         iterator end()   { return make_iterator(mData.end()); }
@@ -484,7 +486,7 @@ public:
         using super = snapshot_of<SUBCLASS>;
 
     public:
-        typedef boost::indirect_iterator<typename super::iterator> iterator;
+        using iterator = boost::indirect_iterator<typename super::iterator>;
         iterator begin() { return iterator(super::begin()); }
         iterator end()   { return iterator(super::end()); }
 

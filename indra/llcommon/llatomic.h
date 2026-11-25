@@ -34,9 +34,9 @@
 template <typename Type, typename AtomicType = std::atomic< Type > > class LLAtomicBase
 {
 public:
-    LLAtomicBase() {};
+    LLAtomicBase() = default;
     LLAtomicBase(Type x) { mData.store(x); }
-    ~LLAtomicBase() {};
+    ~LLAtomicBase() = default;
 
     operator const Type() { return mData; }
 
@@ -57,13 +57,13 @@ private:
 
 // Typedefs for specialized versions. Using std::atomic_(u)int32_t to get the optimzed implementation.
 #ifdef LL_WINDOWS
-typedef LLAtomicBase<U32, std::atomic_uint32_t> LLAtomicU32;
-typedef LLAtomicBase<S32, std::atomic_int32_t> LLAtomicS32;
+using LLAtomicU32 = LLAtomicBase<U32, std::atomic_uint32_t>;
+using LLAtomicS32 = LLAtomicBase<S32, std::atomic_int32_t>;
 #else
 typedef LLAtomicBase<U32, std::atomic_uint> LLAtomicU32;
 typedef LLAtomicBase<S32, std::atomic_int> LLAtomicS32;
 #endif
 
-typedef LLAtomicBase<bool, std::atomic_bool> LLAtomicBool;
+using LLAtomicBool = LLAtomicBase<bool, std::atomic_bool>;
 
 #endif // LL_LLATOMIC_H

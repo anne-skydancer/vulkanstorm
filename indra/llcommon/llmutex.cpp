@@ -35,14 +35,9 @@
 //
 // LLMutex
 //
-LLMutex::LLMutex() :
- mCount(0)
-{
-}
+LLMutex::LLMutex() = default;
 
-LLMutex::~LLMutex()
-{
-}
+LLMutex::~LLMutex() = default;
 
 void LLMutex::lock()
 {
@@ -155,14 +150,13 @@ bool LLMutex::trylock()
 //
 LLSharedMutex::LLSharedMutex()
 : mLockingThreads(2) // Reserve 2 slots in the map hash table
-, mIsShared(false)
 {
 }
 
 bool LLSharedMutex::isLocked() const
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     return !mLockingThreads.empty();
 }
@@ -171,9 +165,9 @@ bool LLSharedMutex::isThreadLocked() const
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
-    const_iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     return it != mLockingThreads.end();
 }
 
@@ -183,7 +177,7 @@ void LLSharedMutex::lockShared()
     LLThread::id_t current_thread = LLThread::currentID();
 
     mLockMutex.lock();
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         it->second++;
@@ -208,7 +202,7 @@ void LLSharedMutex::lockExclusive()
     LLThread::id_t current_thread = LLThread::currentID();
 
     mLockMutex.lock();
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (mIsShared)
@@ -239,9 +233,9 @@ bool LLSharedMutex::trylockShared()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         it->second++;
@@ -262,7 +256,7 @@ bool LLSharedMutex::trylockExclusive()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
     if (mLockingThreads.size() == 1 && mLockingThreads.begin()->first == current_thread)
     {
@@ -284,9 +278,9 @@ void LLSharedMutex::unlockShared()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (it->second > 1)
@@ -305,9 +299,9 @@ void LLSharedMutex::unlockExclusive()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
     LLThread::id_t current_thread = LLThread::currentID();
-    std::lock_guard<std::mutex> lock(mLockMutex);
+    std::scoped_lock lock(mLockMutex);
 
-    iterator it = mLockingThreads.find(current_thread);
+    auto it = mLockingThreads.find(current_thread);
     if (it != mLockingThreads.end())
     {
         if (it->second > 1)
@@ -332,9 +326,7 @@ LLCondition::LLCondition() :
 {
 }
 
-LLCondition::~LLCondition()
-{
-}
+LLCondition::~LLCondition() = default;
 
 void LLCondition::wait()
 {

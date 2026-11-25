@@ -105,11 +105,11 @@ public:
 
 private:
     // next, the private data:
-    uint32_t state[4];
-    uint64_t count;      // number of *bits*, mod 2^64
-    uint8_t  buffer[64]; // input buffer
-    uint8_t  digest[16];
-    bool     finalized;
+    uint32_t state[4]{};
+    uint64_t count{};      // number of *bits*, mod 2^64
+    uint8_t  buffer[64]{}; // input buffer
+    uint8_t  digest[16]{};
+    bool     finalized{};
 
     // last, the private methods, mostly static:
     void init();                           // called by all constructors
