@@ -41,8 +41,7 @@ LLLiveAppConfig::LLLiveAppConfig(
 { }
 
 
-LLLiveAppConfig::~LLLiveAppConfig()
-= default;
+LLLiveAppConfig::~LLLiveAppConfig() = default;
 
 // virtual
 bool LLLiveAppConfig::loadFile()

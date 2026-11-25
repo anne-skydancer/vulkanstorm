@@ -359,8 +359,7 @@ LLEventDispatcher::LLEventDispatcher(std::string desc, std::string key,
     mArgskey(std::move(argskey))
 {}
 
-LLEventDispatcher::~LLEventDispatcher()
-= default;
+LLEventDispatcher::~LLEventDispatcher() = default;
 
 LLEventDispatcher::DispatchEntry::DispatchEntry(LLEventDispatcher* parent, std::string desc):
     mParent(parent),

@@ -52,8 +52,7 @@ LLEventAPI::LLEventAPI(const LL::LazyEventAPIParams& params):
     params.init(this);
 }
 
-LLEventAPI::~LLEventAPI()
-= default;
+LLEventAPI::~LLEventAPI() = default;
 
 LLEventAPI::Response::Response(LLSD seed, LLSD request, LLSD::String replyKey):
     mResp(std::move(seed)),

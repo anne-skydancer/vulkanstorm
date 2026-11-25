@@ -75,8 +75,7 @@ class LLProcessListener
 {
     LOG_CLASS(LLProcessListener);
 public:
-    LLProcessListener()
-    {}
+    LLProcessListener() = default;
 
     void addPoll(const LLProcess&)
     {

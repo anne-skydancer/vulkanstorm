@@ -142,8 +142,7 @@ LLCoros::LLCoros():
 {
 }
 
-LLCoros::~LLCoros()
-= default;
+LLCoros::~LLCoros() = default;
 
 void LLCoros::cleanupSingleton()
 {

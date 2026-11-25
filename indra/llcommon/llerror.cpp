@@ -963,12 +963,9 @@ namespace LLError
 
 namespace LLError
 {
-    Recorder::Recorder()
-    {
-    }
+    Recorder::Recorder() = default;
 
-    Recorder::~Recorder()
-    = default;
+    Recorder::~Recorder() = default;
 
     bool Recorder::wantsTime()
     {

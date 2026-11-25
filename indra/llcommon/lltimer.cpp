@@ -326,8 +326,7 @@ LLTimer::LLTimer()
     reset();
 }
 
-LLTimer::~LLTimer()
-= default;
+LLTimer::~LLTimer() = default;
 
 // static
 void LLTimer::initClass()

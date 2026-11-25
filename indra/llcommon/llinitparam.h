@@ -839,8 +839,7 @@ namespace LLInitParam
         LOG_CLASS(BaseBlock);
         friend class Param;
 
-        BaseBlock()
-        {}
+        BaseBlock() = default;
 
         virtual ~BaseBlock() = default;
         bool submitValue(Parser::name_stack_t& name_stack, Parser& p, bool silent=false);
@@ -2616,8 +2615,7 @@ namespace LLInitParam
         using value_t = LLSD;
         using default_value_t = LLSD;
 
-        ParamValue()
-        = default;
+        ParamValue() = default;
 
         ParamValue(default_value_t other)
         :   mValue(std::move(other))

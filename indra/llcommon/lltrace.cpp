@@ -50,8 +50,7 @@ const char* StatBase::getUnitLabel() const
     return "";
 }
 
-TimeBlockTreeNode::TimeBlockTreeNode()
-{}
+TimeBlockTreeNode::TimeBlockTreeNode() = default;
 
 void TimeBlockTreeNode::setParent( BlockTimerStatHandle* parent )
 {

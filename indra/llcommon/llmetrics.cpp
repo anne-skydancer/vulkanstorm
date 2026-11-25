@@ -51,8 +51,7 @@ private:
     LLSD mMetricsMap;
 };
 
-LLMetricsImpl::~LLMetricsImpl()
-= default;
+LLMetricsImpl::~LLMetricsImpl() = default;
 
 void LLMetricsImpl::recordEventDetails(const std::string& location,
                                     const std::string& mesg,

@@ -279,8 +279,7 @@ public:
      */
     struct Status
     {
-        Status()
-        {}
+        Status() = default;
 
         state mState{UNSTARTED};               ///< @see state
         /**

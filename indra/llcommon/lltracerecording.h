@@ -69,8 +69,7 @@ public:
     void setPlayState(EPlayState state);
 
 protected:
-    LLStopWatchControlsMixinCommon()
-    {}
+    LLStopWatchControlsMixinCommon() = default;
 
 private:
     // override these methods to provide started/stopped semantics

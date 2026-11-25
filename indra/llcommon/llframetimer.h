@@ -39,7 +39,7 @@
 class LL_COMMON_API LLFrameTimer
 {
 public:
-    LLFrameTimer()  {}
+    LLFrameTimer() = default;
 
     // Return the number of seconds since the start of this
     // application instance.

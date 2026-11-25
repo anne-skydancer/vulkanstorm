@@ -42,8 +42,7 @@ LLUriParser::LLUriParser(const std::string& u)
     mRes = parse();
 }
 
-LLUriParser::~LLUriParser()
-= default;
+LLUriParser::~LLUriParser() = default;
 
 bool LLUriParser::parse()
 {

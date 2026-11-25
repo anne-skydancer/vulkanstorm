@@ -114,8 +114,7 @@ void LLKeyData::reset()
     mIgnoreMasks = false;
 }
 
-LLKeyData& LLKeyData::operator=(const LLKeyData& rhs)
-= default;
+LLKeyData& LLKeyData::operator=(const LLKeyData& rhs) = default;
 
 bool LLKeyData::operator==(const LLKeyData& rhs)
 {

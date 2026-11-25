@@ -37,9 +37,7 @@ static const LLRunner::run_handle_t INVALID_RUN_HANDLE = 0;
 /**
  * LLRunner
  */
-LLRunner::LLRunner()
-{
-}
+LLRunner::LLRunner() = default;
 
 LLRunner::~LLRunner()
 {
@@ -166,9 +164,7 @@ LLRunner::LLRunInfo::LLRunInfo(
 {
 }
 
-LLRunnable::LLRunnable()
-= default;
+LLRunnable::LLRunnable() = default;
 
 // virtual
-LLRunnable::~LLRunnable()
-= default;
+LLRunnable::~LLRunnable() = default;

@@ -93,8 +93,7 @@ namespace LLInitParam
     //
     // Parser
     //
-    Parser::~Parser()
-    = default;
+    Parser::~Parser() = default;
 
     void Parser::parserWarning(const std::string& message)
     {
@@ -149,8 +148,7 @@ namespace LLInitParam
         }
     }
 
-    BlockDescriptor::BlockDescriptor()
-    {}
+    BlockDescriptor::BlockDescriptor() = default;
 
     // called by each derived class in least to most derived order
     void BaseBlock::init(BlockDescriptor& descriptor, BlockDescriptor& base_descriptor, size_t block_size)

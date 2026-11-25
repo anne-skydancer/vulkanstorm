@@ -379,13 +379,10 @@ static const char BINARY_FALSE_SERIAL = '0';
 /**
  * LLSDParser
  */
-LLSDParser::LLSDParser()
-{
-}
+LLSDParser::LLSDParser() = default;
 
 // virtual
-LLSDParser::~LLSDParser()
-= default;
+LLSDParser::~LLSDParser() = default;
 
 S32 LLSDParser::parse(std::istream& istr, LLSD& data, llssize max_bytes, S32 max_depth)
 {
@@ -486,12 +483,10 @@ bool LLSDParser::nodeBudgetSpent() const
 /**
  * LLSDNotationParser
  */
-LLSDNotationParser::LLSDNotationParser()
-= default;
+LLSDNotationParser::LLSDNotationParser() = default;
 
 // virtual
-LLSDNotationParser::~LLSDNotationParser()
-= default;
+LLSDNotationParser::~LLSDNotationParser() = default;
 
 // virtual
 S32 LLSDNotationParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) const
@@ -965,12 +960,10 @@ bool LLSDNotationParser::parseBinary(std::istream& istr, LLSD& data) const
 /**
  * LLSDBinaryParser
  */
-LLSDBinaryParser::LLSDBinaryParser()
-= default;
+LLSDBinaryParser::LLSDBinaryParser() = default;
 
 // virtual
-LLSDBinaryParser::~LLSDBinaryParser()
-= default;
+LLSDBinaryParser::~LLSDBinaryParser() = default;
 
 // virtual
 S32 LLSDBinaryParser::doParse(std::istream& istr, LLSD& data, S32 max_depth) const
@@ -1339,8 +1332,7 @@ LLSDFormatter::LLSDFormatter(bool boolAlpha, const std::string& realFmt, EFormat
 }
 
 // virtual
-LLSDFormatter::~LLSDFormatter()
-= default;
+LLSDFormatter::~LLSDFormatter() = default;
 
 void LLSDFormatter::boolalpha(bool alpha)
 {
@@ -1379,8 +1371,7 @@ LLSDNotationFormatter::LLSDNotationFormatter(bool boolAlpha, const std::string& 
 }
 
 // virtual
-LLSDNotationFormatter::~LLSDNotationFormatter()
-= default;
+LLSDNotationFormatter::~LLSDNotationFormatter() = default;
 
 // static
 std::string LLSDNotationFormatter::escapeString(const std::string& in)
@@ -1565,8 +1556,7 @@ LLSDBinaryFormatter::LLSDBinaryFormatter(bool boolAlpha, const std::string& real
 }
 
 // virtual
-LLSDBinaryFormatter::~LLSDBinaryFormatter()
-= default;
+LLSDBinaryFormatter::~LLSDBinaryFormatter() = default;
 
 // virtual
 S32 LLSDBinaryFormatter::format_impl(const LLSD& data, std::ostream& ostr,

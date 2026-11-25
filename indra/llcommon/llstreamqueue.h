@@ -52,8 +52,7 @@ template <typename Ch>
 class LLGenericStreamQueue
 {
 public:
-    LLGenericStreamQueue()
-    {}
+    LLGenericStreamQueue() = default;
 
     /**
      * Boost.Iostreams Source Device facade for use with other Boost.Iostreams

@@ -249,8 +249,7 @@ namespace LLTrace
         using value_t = F64;
         static F64 getDefaultValue() { return NaN; }
 
-        EventAccumulator()
-        {}
+        EventAccumulator() = default;
 
         void record(F64 value)
         {
@@ -403,8 +402,7 @@ namespace LLTrace
         using value_t = F64;
         static F64 getDefaultValue() { return 0; }
 
-        CountAccumulator()
-        {}
+        CountAccumulator() = default;
 
         void add(F64 value)
         {

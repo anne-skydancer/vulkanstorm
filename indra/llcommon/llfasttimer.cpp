@@ -437,8 +437,7 @@ void BlockTimer::writeLog(std::ostream& os)
 // TimeBlockAccumulator
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TimeBlockAccumulator::TimeBlockAccumulator()
-{}
+TimeBlockAccumulator::TimeBlockAccumulator() = default;
 
 void TimeBlockAccumulator::addSamples( const TimeBlockAccumulator& other, EBufferAppendType append_type )
 {

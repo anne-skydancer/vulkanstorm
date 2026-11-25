@@ -135,9 +135,7 @@ static U32 crc_32_tab[] = { /* CRC polynomial 0xedb88320 */
 ///----------------------------------------------------------------------------
 
 // Default constructor
-LLCRC::LLCRC()
-{
-}
+LLCRC::LLCRC() = default;
 
 
 U32 LLCRC::getCRC() const

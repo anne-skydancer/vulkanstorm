@@ -541,7 +541,6 @@ LLThreadSafeRefCount::~LLThreadSafeRefCount()
 
 //============================================================================
 
-LLResponder::~LLResponder()
-= default;
+LLResponder::~LLResponder() = default;
 
 //============================================================================

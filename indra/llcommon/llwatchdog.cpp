@@ -106,8 +106,7 @@ LLWatchdogTimeout::LLWatchdogTimeout(const std::string& thread_name) :
 {
 }
 
-LLWatchdogTimeout::~LLWatchdogTimeout()
-= default;
+LLWatchdogTimeout::~LLWatchdogTimeout() = default;
 
 bool LLWatchdogTimeout::isAlive() const
 {
@@ -161,12 +160,9 @@ void LLWatchdogTimeout::ping(std::string_view state)
 }
 
 // LLWatchdog
-LLWatchdog::LLWatchdog()
-{
-}
+LLWatchdog::LLWatchdog() = default;
 
-LLWatchdog::~LLWatchdog()
-= default;
+LLWatchdog::~LLWatchdog() = default;
 
 void LLWatchdog::add(LLWatchdogEntry* e)
 {
