@@ -12,8 +12,8 @@ names, so that an agent reads code only after the tools have had their say.
 |---|---|
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
 | push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
-| pull request into `release-clean` | the library named by the head branch, the same way |
-| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
+| pull request into `release-clean` | the library named by the head branch, the same way; the `codegen` job also checks the pull request's `(style)` commits |
+| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py`, `scripts/tests/ci_analysis_setup_test.py`, `.github/actions/codegen-check/**`, `scripts/ci_codegen.py` or `scripts/tests/ci_codegen_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
 | a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
 
@@ -36,6 +36,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes; **TSan has no say on those tests**, see below), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
 | `triage` (Linux, report only) | explains the real bug findings of the run, see [Triage](#triage) | `analysis-triage-<lib>` artifact, job summary |
+| `codegen` (Linux) | the **identical compiled code** check of the pull request's `(style)` commits, see [Identical compiled code](#identical-compiled-code); red when a style commit is not proven identical. It is its own check: it is not part of `report`'s verdict or of the triage | `analysis-codegen-<lib>` artifact, job summary |
 | `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
 
 Every job uploads its artifact (`analysis-<job>`: `findings-<job>.json`, `summary-<job>.md`, the raw logs, the sanitizer
@@ -120,6 +121,85 @@ To create or update a baseline: download the `analysis-report-<lib>` artifact of
 to `.github/analysis/baseline/<lib>.json`. **Each cleanup pull request commits its own baseline update**, so the baseline
 lives in the pull request and the owner reviews it with the code: shrink it when the cleanup fixes findings; add to it
 only for a finding the owner accepts. newview has one baseline per area (`baseline/newview-<area>.json`).
+
+## Identical compiled code
+
+`doc/clean/plan.md` splits a subsystem's cleanup into a bugs-and-safety pull request and a style pull request. The `codegen`
+job proves the second: every commit of the pull request whose subject **ends with the tag `(style)`** (for example
+`llmath: modernize-use-auto (style)`) must compile to the same machine code as its parent. A commit without the tag at the end is
+listed as skipped and not checked; the job summary lists both. A style commit that differs turns the job red and moves to
+the bugs-and-safety pull request.
+
+It runs on a pull request into `release-clean` whose head names a library (`clean/<lib>`, or the `llcommon` self-test),
+over the commits of `base..head`, and does nothing when none has the tag (the plan then prints a `::warning::` if there
+were commits but none was tagged). A `clean/newview-<area>` pull request has no `codegen` job: it runs for a library
+only (`scope == lib`). `workflow_dispatch` takes `codegen_range` (a range
+`A..B` or a list of commits) and `codegen_all_style` (check every commit of it, tagged or not; this is how the check is
+proven on history), and runs the job for the library of the `lib` input.
+
+**How.** The job configures once (`analysis-setup`, mode `codegen`: the shipped options, RelWithDebInfo with `-O2 -g0 -DNDEBUG`:
+the viewer's own flags add `-g` and the shipped build is `-O3` with LTO, so a pass is a proof at `-O2` without LTO, not of
+the shipped output; `-g0` only saves build time), then for each style commit checks out its parent and the commit and builds the library target
+(`cmake --build --target <lib>`). Only the translation units whose sources changed recompile, so a commit that edits two
+files costs two compiles; a changed header recompiles what includes it. `scripts/ci_codegen.py` then reads the library's
+object files (those its link line names) and compares each with the same object at the parent. A commit's parent that is the
+previous checked commit is not built twice. `-ffile-prefix-map` and `-frandom-seed` are belt and braces: the objects carry
+no debug info and no per-build names. The `extra_targets` input of the action adds other CMake targets (for instance a
+library that consumes a changed header) to the build and the comparison.
+
+**What the comparison covers.** The objects are ELF files, read by the script itself (no `objdump`): per section the type,
+flags, alignment, entry size, size, bytes and relocations (offset, type, target symbol name, addend), and per symbol its
+binding, type, visibility, section and size. The build puts every function and variable in its own section
+(`-ffunction-sections -fdata-sections`), so a section is a symbol, its name is its mangled name and its offsets do not move
+when a neighbour changes. A changed, added or removed section or symbol, or an added or removed object, is a difference; the
+summary names the symbols (demangled) per object.
+
+**What the build compiles, and what it does not.** Equal objects prove nothing about code the build never compiled, so
+the verdict has more states than the objects alone:
+
+| Verdict | Meaning |
+|---|---|
+| `identical` | the objects are equal, every changed line is compiled by at least one translation unit of the target, and every changed code file is compiled into them. Worded "identical in the compiled configuration (Linux, GCC, `LL_RELEASE_FOR_DOWNLOAD`)" |
+| `differs` | an object, section or symbol differs; the symbols are listed |
+| `unproven` | a changed line is not compiled by any translation unit of this build (an inactive branch: Windows, macOS, debug-only, `LL_RELEASE_FOR_DOWNLOAD`), or it cannot be probed (below). The summary lists `file:line (old or new text)` and the reason |
+| `not-covered` | a changed `.c .cc .cpp .cxx .h .hpp .inl .mm` file is not in the union of the objects' depfiles (`CMakeFiles/<target>.dir/*.o.d`): tests (`LL_TESTS=OFF`), Windows-only sources, files of another library. Listed |
+| `build-failed` | the library did not build at the commit or at its parent |
+| `error` | the script itself failed on that commit (no link line, no depfile, an LTO or REL object, ...); the message is shown and the other commits still run |
+
+Every state but `identical` turns the job red. When a header changed, the summary adds "headers changed: other libraries'
+objects are not compared". Results are written to the job summary and to `codegen.json` after each commit, so a timeout
+still leaves the earlier ones. `parse_elf` refuses what it cannot read soundly: `.gnu.lto*` sections (LTO objects hold
+intermediate code), `SHT_REL` relocations, machines other than x86-64 and aarch64, and a set of objects with no `.text`
+at all. The link line must name object files (a `@response` file is read); a build whose depfiles are missing fails.
+
+**How a changed line is known to be compiled.** By asking the preprocessor, not by reading `#if`s. For each side of the commit (the parent's text for the old lines, the commit's text for the new lines) the script copies the repository files the affected translation units read into a scratch directory (never the working tree the build uses, so the incremental build and the `__LINE__` handling are untouched), puts a unique token line `__codegen_probe_<n>__` just before each changed line, and runs the real compile command of each translation unit that reads a changed file (`compile_commands.json`, paths moved to the scratch copy, `-E -P -w`, no output or dependency file; a `.cpp` is its own unit, a header goes through every unit whose depfile lists it). A token that appears in the output of at least one unit sits in an active region: the line is compiled, and the object comparison covers it (`#ifdef __GNUC__` on GCC and the `#else` of `#ifdef LL_WINDOWS` are compiled on this build). A token that appears in no unit is in an inactive branch and the line is `unproven`. This needs no knowledge of include guards. Lines that hold only blanks and comments are not probed (they cannot change the code). **Two kinds of line cannot take a probe and are reported `unproven`, chosen for safety over a guess about the macro's uses:** a continuation line (the line before ends with a backslash: a multi-line macro or statement, where a probe line would change the macro) and an `#else`, `#elif` or `#endif` line (a probe before it sits in the branch before it). A changed token inside a macro argument that the macro discards is also reported, since its probe vanishes; that is the conservative direction. The preprocessing runs on the translation units that read a changed file only.
+
+**What it ignores, and why that is safe.**
+
+| Ignored | Why |
+|---|---|
+| debug info (`.debug*`), notes, `.comment`, the symbol table order | they describe the code, they are not code; the build has no `-g` anyway |
+| the unwind tables (`.eh_frame`) | generated from the function's instructions: they differ only if the code does |
+| the build path | `-ffile-prefix-map=<workspace>=.` turns `__FILE__` and the debug paths relative |
+| random names and seeds | `-frandom-seed` is fixed |
+| `__LINE__` in the project's files | a style edit adds or removes lines, and every logging (`LL_INFOS`...) and assert call site bakes `__LINE__` into the code, so a whole file would differ. At each commit it builds, the script replaces the token `__LINE__` by `0` in the files under `indra/` that contain it (and puts the originals back before moving on; the commit under test is not changed). Only the files a commit changes are rewritten, so the build stays incremental. A line number only appears in what the code prints or asserts, which is not what a style commit is about. Not reached: `__LINE__` inside third-party headers (`BOOST_THROW_EXCEPTION`, `std::source_location`, `__builtin_LINE`): a style edit that shifts a line that uses one shows as a difference, never as a false "identical". A macro that builds a unique name from `__LINE__` and is used twice in one scope breaks the build with `0` (`LLREGISTER_STATIC`): the job reports `build-failed` and the commit gets a full read |
+
+What it does not prove: the code of other libraries that include a changed header (only the library's own objects are
+compared), a build with another compiler or flags (a different optimiser may order code differently; a difference found
+there is a reason to read the commit, not proof of a bug), and anything at link time (no LTO here). A commit that differs only
+because the compiler's choices moved (for instance an inlining decision after a signature change) is reported as differing
+and is read; that is the safe direction.
+
+A commit that cannot be proven says why in the summary: `build-failed` when the library does not build at the commit or at its parent on Linux (the
+GCC build; a commit made from a Windows-only fix-it pass may not compile there), or `differs` with the symbols. Two
+things in a `differs` list are not noise: a changed string literal (for example `llassert_always(p != NULL)` becomes
+`p != nullptr`, and the assertion prints its expression) and an `auto` that deduces another type than the one it replaced
+(`iterator` for `const_iterator`). The compiler's numbered local labels (`.LC27`) are compared by the place they point to,
+and the clone suffixes (`.constprop.0`, `.cold`, `.isra.0`) appear in the demangled names.
+
+The artifact `analysis-codegen-<lib>` holds `codegen.json` (the verdict per commit and every differing symbol), `codegen.md`
+(the job summary) and one build log per commit. The script's tests (`scripts/tests/ci_codegen_test.py`) run without a
+compiler.
 
 ## Suppressions
 A finding that is proven not to be a bug is suppressed, with the reason written beside the entry, never in a list nobody

@@ -13,7 +13,7 @@ name: Analysis setup
 description: Toolchain, packages and one configure for an analysis job (doc/clean/analysis.md).
 inputs:
   mode:
-    description: "asan (ASan+UBSan+LSan), tsan, tidy (a compile database for clang-tidy) or msvc (/analyze)."
+    description: "asan (ASan+UBSan+LSan), tsan, tidy (a compile database for clang-tidy), msvc (/analyze) or codegen (objects that compare equal when the code does)."
     required: true
   directory:
     description: "The CMake build directory."
@@ -116,6 +116,17 @@ runs:
             options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
               "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O1 -g -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O1 -g -DNDEBUG"
               -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
+            ;;
+          codegen)
+            # The identical-code check (scripts/ci_codegen.py): -O2 -g0 (the viewer's flags add -g and the shipped build is -O3 with LTO; this is a proof at -O2, and -g0 saves time), one section per
+            # function and variable (stable names and positions), no build path in __FILE__, a fixed random seed. The script
+            # also replaces __LINE__ by 0 in the project's own files at each commit it builds, because a style edit shifts
+            # lines and every logging and assert call site bakes __LINE__ into the code.
+            # The prefix map and the seed are belt and braces: the objects carry no debug info and no per-build names.
+            flags="-ffunction-sections -fdata-sections -frandom-seed=vkstorm-codegen -ffile-prefix-map=$GITHUB_WORKSPACE=."
+            options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
+              "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG"
+              -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
             ;;
           tidy)
             options+=(-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)

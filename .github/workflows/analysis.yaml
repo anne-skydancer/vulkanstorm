@@ -27,6 +27,14 @@ on:
         description: "The library to analyse (llcommon, llmath, ...), or newview-<area>."
         type: string
         default: llcommon
+      codegen_range:
+        description: "Identical-code check only: the commits to check, a range A..B or a list of commits (empty: no check)."
+        type: string
+        default: ""
+      codegen_all_style:
+        description: "Identical-code check: treat every commit of codegen_range as a style commit."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -297,6 +305,28 @@ jobs:
           name: analysis-msvc
           path: analysis-out
           retention-days: 14
+
+  # The identical-code check (scripts/ci_codegen.py, doc/clean/analysis.md): every commit of the pull request whose subject
+  # ends with "(style)" must compile to the same machine code as its parent. Red when one differs.
+  codegen:
+    name: identical compiled code
+    needs: plan
+    if: needs.plan.outputs.run == 'true' && needs.plan.outputs.scope == 'lib' && (github.event_name == 'pull_request' || inputs.codegen_range != '')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    env:
+      LIB: ${{ needs.plan.outputs.lib }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/codegen-check
+        with:
+          lib: ${{ needs.plan.outputs.lib }}
+          spec: ${{ inputs.codegen_range || format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) }}
+          all_style: ${{ inputs.codegen_all_style && 'true' || 'false' }}
 
   # The verdict: report-only until a baseline is committed; then red when a job failed to run or found more of any
   # (tool, checker, file) than the baseline holds. Also writes the baseline proposal of this run

@@ -68,6 +68,7 @@ jobs:
           python3 scripts/tests/ci_analysis_test.py
           python3 scripts/tests/ci_analysis_setup_test.py
           python3 scripts/tests/ci_triage_test.py
+          python3 scripts/tests/ci_codegen_test.py
       - name: CI files parse; composite actions match their callers
         run: |
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --user pyyaml
