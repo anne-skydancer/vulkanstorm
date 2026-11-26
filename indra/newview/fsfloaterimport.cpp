@@ -76,7 +76,11 @@ struct FSResourceData
     LLWearableType::EType wearable_type;
     bool post_asset_upload;
     LLUUID post_asset_upload_id;
-    FSFloaterImport *mFloater;
+    // A handle, not a pointer: the floater can be closed (and destroyed) before the
+    // inventory, asset-storage or upload callbacks that carry this struct run.
+    LLHandle<LLFloater> mFloater;
+
+    FSFloaterImport* getFloater() const { return static_cast<FSFloaterImport*>(mFloater.get()); }
 };
 
 void resourceDeleter( LLResourceData *aData )
@@ -1294,7 +1298,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             // create inventory item first
             FSResourceData* ci_data = new FSResourceData;
             ci_data->uuid = asset_id;
-            ci_data->mFloater = this;
+            ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
             LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
@@ -1318,7 +1322,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             // create inventory item first
             FSResourceData* ci_data = new FSResourceData;
             ci_data->uuid = asset_id;
-            ci_data->mFloater = this;
+            ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
             LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
@@ -1368,7 +1372,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             // create inventory item first
             FSResourceData* ci_data = new FSResourceData;
             ci_data->uuid = asset_id;
-            ci_data->mFloater = this;
+            ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
             LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
@@ -1484,7 +1488,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
     }
     FSResourceData* fs_data = new FSResourceData;
     fs_data->uuid = asset_id;
-    fs_data->mFloater = this;
+    fs_data->mFloater = getHandle();
     fs_data->temporary = temporary;
     fs_data->inventory_item = inventory_item;
     fs_data->wearable_type = wearable_type;
@@ -1536,7 +1540,7 @@ void FSFloaterImport::onAssetUploadComplete(const LLUUID& uuid, void* userdata, 
         LL_WARNS("import")  << "Missing FSResourceData, can not continue." << LL_ENDL;
         return;
     }
-    FSFloaterImport* self = fs_data->mFloater;
+    FSFloaterImport* self = fs_data->getFloater();
     LLUUID asset_id = uuid;
 
     if (result >= 0)
@@ -1639,7 +1643,10 @@ void FSFloaterImport::onAssetUploadComplete(const LLUUID& uuid, void* userdata, 
                 gInventory.updateItem(new_item);
                 gInventory.notifyObservers();
                 LL_DEBUGS("import") << "Asset " << asset_id << " saved into "  << "inventory item " << item->getName() << LL_ENDL;
-                self->mAssetItemMap[asset_id] = fs_data->inventory_item;
+                if (self)
+                {
+                    self->mAssetItemMap[asset_id] = fs_data->inventory_item;
+                }
             }
             else
             {
@@ -1824,7 +1831,7 @@ FSCreateItemCallback::FSCreateItemCallback(FSResourceData* data) :
 
 void FSCreateItemCallback::fire(const LLUUID& inv_item)
 {
-    FSFloaterImport* self = mData->mFloater;
+    FSFloaterImport* self = mData->getFloater();
 
     if (inv_item.isNull())
     {
@@ -1837,6 +1844,12 @@ void FSCreateItemCallback::fire(const LLUUID& inv_item)
         {
             LL_WARNS("import")  << "Unable to upload next asset due to missing self." << LL_ENDL;
         }
+        return;
+    }
+
+    if (!self)
+    {
+        LL_WARNS("import") << "Unable to continue the import, the floater is gone: " << mData->uuid.asString() << LL_ENDL;
         return;
     }
 
@@ -1876,8 +1889,8 @@ public:
 void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter, std::string aURL, LLSD aBody, LLAssetID aAssetId, LLAssetType::EType aAssetType, boost::shared_ptr< LLResourceData > aResourceData )
 {
     FSResourceData* fs_data = (FSResourceData*)aResourceData->mUserData;
-    FSFloaterImport* self = fs_data->mFloater;
-    LLHandle<LLFloater> hfloater = self ? self->getHandle() : LLHandle<LLFloater>();
+    FSFloaterImport* self = fs_data->getFloater();
+    LLHandle<LLFloater> hfloater = fs_data->mFloater;
     UploadFlag uploadDone( self );
 
     LLCore::HttpRequest::ptr_t pRequest( new LLCore::HttpRequest() );
