@@ -50,7 +50,7 @@ namespace LL
         template <typename CALLABLE, typename... ARGS>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
         requires (! std::is_convertible_v<
-                          typename invoke_result<CALLABLE, ARGS...>::type,
+                          std::invoke_result_t<CALLABLE, ARGS...>,
                           DESIRED
                       >) {
             // discard whatever callable(args) returns
@@ -62,7 +62,7 @@ namespace LL
         template <typename CALLABLE, typename... ARGS>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
         requires (std::is_convertible_v<
-                          typename invoke_result<CALLABLE, ARGS...>::type,
+                          std::invoke_result_t<CALLABLE, ARGS...>,
                           DESIRED
                       >) {
             return { std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...) };

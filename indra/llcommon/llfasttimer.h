@@ -197,6 +197,10 @@ public:
     // call nextFrame() to reset timers
     static void dumpCurTimes();
 
+    // no-copy
+    BlockTimer(const BlockTimer& other) = delete;
+    BlockTimer& operator=(const BlockTimer& other) = delete;
+
 private:
     friend class BlockTimerStatHandle;
     // FIXME: this friendship exists so that each thread can instantiate a root timer,
@@ -205,10 +209,6 @@ private:
     friend BlockTimer timeThisBlock(BlockTimerStatHandle&);
 
     BlockTimer(BlockTimerStatHandle& timer);
-
-    // no-copy
-    BlockTimer(const BlockTimer& other) = delete;
-    BlockTimer& operator=(const BlockTimer& other) = delete;
 
 private:
     U64                     mStartTime;

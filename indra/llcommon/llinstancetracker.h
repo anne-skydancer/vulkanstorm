@@ -293,10 +293,10 @@ protected:
 public:
     virtual const KEY& getKey() const { return mInstanceKey; }
 
-private:
     LLInstanceTracker( const LLInstanceTracker& ) = delete;
     LLInstanceTracker& operator=( const LLInstanceTracker& ) = delete;
 
+private:
     // for logging
     template <typename K>
     static std::string report(K key) { return stringize(key); }
