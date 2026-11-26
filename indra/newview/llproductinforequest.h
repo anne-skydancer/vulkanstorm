@@ -31,6 +31,7 @@
 #include "llmemory.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 /**
  * This is a singleton to manage a cache of information about land types.
@@ -48,7 +49,7 @@ public:
 private:
     /* virtual */ void initSingleton() override;
 
-    void getLandDescriptionsCoro(std::string url);
+    LL::Task<void> getLandDescriptionsCoro(std::string url);
     LLSD mSkuDescriptions;
 };
 

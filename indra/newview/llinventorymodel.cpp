@@ -1208,7 +1208,7 @@ void LLInventoryModel::createNewCategory(const LLUUID& parent_id,
     }
 }
 
-void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback)
+LL::Task<void> LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1221,7 +1221,7 @@ void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inv
 
     LL_INFOS("HttpCoroutineAdapter", "genericPostCoro") << "Generic POST for " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1233,7 +1233,7 @@ void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inv
         {
             callback(LLUUID::null);
         }
-        return;
+        co_return;
     }
 
     if (!result.has("folder_id"))
@@ -1243,7 +1243,7 @@ void LLInventoryModel::createNewCategoryCoro(std::string url, LLSD postData, inv
         {
             callback(LLUUID::null);
         }
-        return;
+        co_return;
     }
 
     LLUUID categoryId = result["folder_id"].asUUID();

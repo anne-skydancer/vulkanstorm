@@ -33,6 +33,7 @@
 #include "llsingleton.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include "lltask.h"
 
 class LLMessageSystem;
 class LLRemoteParcelInfoObserver;
@@ -94,7 +95,7 @@ private:
     typedef std::map<LLUUID, LLTimer> requests_map_t;
     requests_map_t mPendingParcelRequests; // Dupplicate request avoidance
 
-    void regionParcelInfoCoro(std::string url, LLUUID regionId, LLVector3 posRegion, LLVector3d posGlobal, LLHandle<LLRemoteParcelInfoObserver> observerHandle);
+    LL::Task<void> regionParcelInfoCoro(std::string url, LLUUID regionId, LLVector3 posRegion, LLVector3d posGlobal, LLHandle<LLRemoteParcelInfoObserver> observerHandle);
 };
 
 #endif // LL_LLREMOTEPARCELREQUEST_H

@@ -620,7 +620,7 @@ void LLVoiceChannelGroup::setState(EState state)
     }
 }
 
-void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
+LL::Task<void> LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -643,7 +643,7 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
 
     LL_INFOS("Voice", "voiceCallCapCoro") << "Generic POST for " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -652,7 +652,7 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
     if (!channelp)
     {
         LL_WARNS("Voice") << "Unable to retrieve channel with Id = " << mSessionID << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (!status)
@@ -671,7 +671,7 @@ void LLVoiceChannelGroup::voiceCallCapCoro(std::string url)
                 channelp->getNotifyArgs());
         }
         channelp->deactivate();
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);

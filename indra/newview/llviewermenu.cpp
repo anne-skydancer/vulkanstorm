@@ -2965,10 +2965,10 @@ class LLAdvancedForceErrorBadMemoryAccessCoro : public view_listener_t
     {
         LLCoros::instance().launch(
             "AdvancedForceErrorBadMemoryAccessCoro",
-            [](){
+            []() -> LL::Task<void> {
                 // Wait for one mainloop() iteration, letting the enclosing
                 // handleEvent() method return.
-                llcoro::suspend();
+                co_await llcoro::co::suspend();
                 force_error_bad_memory_access();
             });
         return true;
@@ -3019,10 +3019,10 @@ class LLAdvancedForceErrorSoftwareExceptionCoro : public view_listener_t
     {
         LLCoros::instance().launch(
             "AdvancedForceErrorSoftwareExceptionCoro",
-            [](){
+            []() -> LL::Task<void> {
                 // Wait for one mainloop() iteration, letting the enclosing
                 // handleEvent() method return.
-                llcoro::suspend();
+                co_await llcoro::co::suspend();
                 force_error_software_exception();
             });
         return true;

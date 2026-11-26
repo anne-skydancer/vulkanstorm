@@ -411,11 +411,11 @@ void LLViewerAssetStorage::queueRequestHttp(
             // <FS:Ansariel> [UDP Assets] Need request for UDP assets
             //[this, uuid, atype, callback, user_data]
             [this, req, uuid, atype, callback, user_data]
-            (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)
+            (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID)
             {
                 // <FS:Ansariel> [UDP Assets] Need request for UDP assets
-                //assetRequestCoro(uuid, atype, callback, user_data);
-                assetRequestCoro(req, uuid, atype, callback, user_data);
+                //return assetRequestCoro(uuid, atype, callback, user_data);
+                return assetRequestCoro(req, uuid, atype, callback, user_data);
             });
     }
 }
@@ -449,7 +449,7 @@ struct LLScopedIncrement
     S32& mCounter;
 };
 
-void LLViewerAssetStorage::assetRequestCoro(
+LL::Task<void> LLViewerAssetStorage::assetRequestCoro(
     LLViewerAssetRequest *req, // <FS:Ansariel> [UDP Assets] Need request for UDP assets
     const LLUUID uuid,
     LLAssetType::EType atype,
@@ -464,7 +464,7 @@ void LLViewerAssetStorage::assetRequestCoro(
     if (!gAssetStorage)
     {
         LL_WARNS_ONCE("ViewerAsset") << "Asset request fails: asset storage no longer exists" << LL_ENDL;
-        return;
+        co_return;
     }
 
     mCountStarted++;
@@ -485,13 +485,13 @@ void LLViewerAssetStorage::assetRequestCoro(
                     LLEventPumps::instance().obtain(pump_name).post(LLSD());
                 });
             F32Seconds timeout_seconds(LL_ASSET_STORAGE_TIMEOUT);
-            llcoro::suspendUntilEventOnWithTimeout(region_init, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
+            co_await llcoro::co::suspendUntilEventOnWithTimeout(region_init, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
             gAgent.removeRegionChangedCallback(region_conn);
             region_conn.disconnect();
 
             if (LLApp::isExiting() || !gAssetStorage)
             {
-                return;
+                co_return;
             }
 
             // recheck region whether suspend ended on timeout or not
@@ -501,7 +501,7 @@ void LLViewerAssetStorage::assetRequestCoro(
                 result_code = LL_ERR_NO_CAP;
                 ext_status = LLExtStat::NONE;
                 removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
-                return;
+                co_return;
             }
         }
         else
@@ -510,7 +510,7 @@ void LLViewerAssetStorage::assetRequestCoro(
             result_code = LL_ERR_NO_CAP;
             ext_status = LLExtStat::NONE;
             removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
-            return;
+            co_return;
         }
     }
 
@@ -525,12 +525,12 @@ void LLViewerAssetStorage::assetRequestCoro(
                 boost::bind(&LLViewerAssetStorage::capsRecvForRegion, this, _1, capsRecv.getName()));
 
         F32Seconds timeout_seconds(LL_ASSET_STORAGE_TIMEOUT); // from minutes to seconds, by default 5 minutes
-        LLSD result = llcoro::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
+        LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
         caps_conn.disconnect();
 
         if (LLApp::isExiting() || !gAssetStorage)
         {
-            return;
+            co_return;
         }
 
         if (result.has("timeout"))
@@ -540,7 +540,7 @@ void LLViewerAssetStorage::assetRequestCoro(
             result_code = LL_ERR_NO_CAP;
             ext_status = LLExtStat::NONE;
             removeAndCallbackPendingDownloads(uuid, atype, uuid, atype, result_code, ext_status, 0);
-            return;
+            co_return;
         }
 
         LL_WARNS_ONCE("ViewerAsset") << "capsRecv got event" << LL_ENDL;
@@ -588,7 +588,7 @@ void LLViewerAssetStorage::assetRequestCoro(
         // <FS:Ansariel> [UDP Assets]
         }
         // </FS:Ansariel> [UDP Assets]
-        return;
+        co_return;
     }
 
     // <FS:Ansariel> [UDP Assets]
@@ -608,12 +608,12 @@ void LLViewerAssetStorage::assetRequestCoro(
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOpts  = std::make_shared<LLCore::HttpOptions>();
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
 
     if (LLApp::isExiting() || !gAssetStorage)
     {
         // Bail out if result arrives after shutdown has been started.
-        return;
+        co_return;
     }
 
     mCountCompleted++;

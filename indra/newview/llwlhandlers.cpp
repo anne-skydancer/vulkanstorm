@@ -87,7 +87,7 @@ bool LLEnvironmentRequest::doRequest(LLEnvironment::environment_apply_fn cb)
 
     std::string coroname =
         LLCoros::instance().launch("LLEnvironmentRequest::environmentRequestCoro",
-        [url, cb]() { LLEnvironmentRequest::environmentRequestCoro(url, cb); });
+        [url, cb]() { return LLEnvironmentRequest::environmentRequestCoro(url, cb); });
 
     LL_INFOS("WindlightCaps") << "Requesting region windlight settings via " << url << LL_ENDL;
     return true;
@@ -96,7 +96,7 @@ bool LLEnvironmentRequest::doRequest(LLEnvironment::environment_apply_fn cb)
 S32 LLEnvironmentRequest::sLastRequest = 0;
 
 //static
-void LLEnvironmentRequest::environmentRequestCoro(std::string url, LLEnvironment::environment_apply_fn cb)
+LL::Task<void> LLEnvironmentRequest::environmentRequestCoro(std::string url, LLEnvironment::environment_apply_fn cb)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     S32 requestId = ++LLEnvironmentRequest::sLastRequest;
@@ -104,14 +104,14 @@ void LLEnvironmentRequest::environmentRequestCoro(std::string url, LLEnvironment
             httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("EnvironmentRequest", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LL_WARNS("WindlightCaps") << "Using legacy Windlight caps." << LL_ENDL;
 
     if (requestId != LLEnvironmentRequest::sLastRequest)
     {
         LL_INFOS("WindlightCaps") << "Got superseded by another responder; ignoring..." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD httpResults = result["http_result"];
@@ -121,7 +121,7 @@ void LLEnvironmentRequest::environmentRequestCoro(std::string url, LLEnvironment
         LL_WARNS("WindlightCaps") << "Got an error, not using region windlight... " << LL_ENDL;
         LLEnvironment::instance().setEnvironment(LLEnvironment::ENV_REGION, LLSettingsDay::GetDefaultAssetId());
 
-        return;
+        co_return;
     }
     result = result["content"];
     LL_INFOS("WindlightCaps") << "Received region legacy  windlight settings" << LL_ENDL;
@@ -137,7 +137,7 @@ void LLEnvironmentRequest::environmentRequestCoro(std::string url, LLEnvironment
         LL_WARNS("WindlightCaps") << "Not in the region from where this data was received (wanting "
             << regionId << " but got " << result[0]["regionID"].asUUID()
             << ") - ignoring..." << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (cb)
@@ -185,18 +185,18 @@ bool LLEnvironmentApply::initiateRequest(const LLSD& content, LLEnvironment::env
 
     std::string coroname =
         LLCoros::instance().launch("LLEnvironmentApply::environmentApplyCoro",
-        [url, content, cb]() { LLEnvironmentApply::environmentApplyCoro(url, content, cb); });
+        [url, content, cb]() { return LLEnvironmentApply::environmentApplyCoro(url, content, cb); });
     return true;
 }
 
-void LLEnvironmentApply::environmentApplyCoro(std::string url, LLSD content, LLEnvironment::environment_apply_fn cb)
+LL::Task<void> LLEnvironmentApply::environmentApplyCoro(std::string url, LLSD content, LLEnvironment::environment_apply_fn cb)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("EnvironmentApply", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, content);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, content);
 
     LLSD notify; // for error reporting.  If there is something to report to user this will be defined.
     /*

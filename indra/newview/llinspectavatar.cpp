@@ -162,7 +162,7 @@ private:
     // Is used to determine if "Add friend" option should be enabled in gear menu
     bool isNotFriend();
 
-    void moderationActionCoro(std::string url, LLSD action);
+    LL::Task<void> moderationActionCoro(std::string url, LLSD action);
 
     // </FS:Ansariel>
 
@@ -657,7 +657,7 @@ void LLInspectAvatar::toggleSelectedVoice(bool enabled)
             // ctrl value represents ability to type, so invert
             data["params"]["mute_info"]["voice"] = !enabled;
 
-            LLCoros::instance().launch("LLIMSpeakerMgr::moderationActionCoro",
+            LLCoros::instance().launch("LLInspectAvatar::moderationActionCoro",
                 boost::bind(&LLInspectAvatar::moderationActionCoro, this, url, data));
         }
     }
@@ -900,7 +900,7 @@ bool LLInspectAvatar::godModeEnabled()
     return gAgent.isGodlike();
 }
 
-void LLInspectAvatar::moderationActionCoro(std::string url, LLSD action)
+LL::Task<void> LLInspectAvatar::moderationActionCoro(std::string url, LLSD action)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter(new LLCoreHttpUtil::HttpCoroutineAdapter("moderationActionCoro", httpPolicy));
@@ -911,7 +911,7 @@ void LLInspectAvatar::moderationActionCoro(std::string url, LLSD action)
 
     LLUUID sessionId = action["session-id"];
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, action, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, action, httpOpts);
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 

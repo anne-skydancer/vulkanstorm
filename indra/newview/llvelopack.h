@@ -31,9 +31,10 @@
 
 #include <string>
 #include <functional>
+#include "lltask.h"
 
 bool velopack_initialize();
-void velopack_check_for_updates(const std::string& required_version, const std::string& relnotes_url);
+LL::Task<void> velopack_check_for_updates(std::string required_version, std::string relnotes_url);
 std::string velopack_get_current_version();
 bool velopack_is_update_pending();
 bool velopack_is_required_update_in_progress();

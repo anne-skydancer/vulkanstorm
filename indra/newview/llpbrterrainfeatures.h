@@ -27,6 +27,7 @@
 #pragma once
 
 #include <string>
+#include "lltask.h"
 
 class LLViewerRegion;
 class LLMessageSystem;
@@ -40,8 +41,8 @@ public:
     static void queueModify(LLViewerRegion& region, const LLModifyRegion& composition);
 
 private:
-    static void queryRegionCoro(std::string cap_url, LLUUID region_id, void(*done_callback)(LLUUID, bool, const LLModifyRegion&) );
-    static void modifyRegionCoro(std::string cap_url, LLSD updates, void(*done_callback)(bool) );
+    static LL::Task<void> queryRegionCoro(std::string cap_url, LLUUID region_id, void(*done_callback)(LLUUID, bool, const LLModifyRegion&) );
+    static LL::Task<void> modifyRegionCoro(std::string cap_url, LLSD updates, void(*done_callback)(bool) );
 };
 
 extern LLPBRTerrainFeatures gPBRTerrainFeatures;

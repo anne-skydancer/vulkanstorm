@@ -29,6 +29,7 @@
 
 #include "llassetstorage.h"
 #include "llcorehttputil.h"
+#include "lltask.h"
 
 class LLFileSystem;
 
@@ -82,7 +83,7 @@ protected:
 
     void capsRecvForRegion(const LLUUID& region_id, std::string pumpname);
 
-    void assetRequestCoro(LLViewerAssetRequest *req, // <FS:Ansariel> [UDP Assets] Need request for UDP assets
+    LL::Task<void> assetRequestCoro(LLViewerAssetRequest *req, // <FS:Ansariel> [UDP Assets] Need request for UDP assets
                           const LLUUID uuid,
                           LLAssetType::EType atype,
                           LLGetAssetCallback callback,

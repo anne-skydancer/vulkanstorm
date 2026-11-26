@@ -354,12 +354,12 @@ void RlvHandler::removeBlockedObject(const LLUUID& idObj)
         }), m_BlockedObjects.end());
 }
 
-void RlvHandler::getAttachmentResourcesCoro(const std::string& strUrl)
+LL::Task<void> RlvHandler::getAttachmentResourcesCoro(std::string strUrl)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("RlvHandler::getAttachmentResourcesCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
-    const LLSD sdResult = httpAdapter->getAndSuspend(httpRequest, strUrl);
+    const LLSD sdResult = co_await httpAdapter->getAndSuspend(httpRequest, strUrl);
 
     const LLCore::HttpStatus httpStatus = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(sdResult[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS]);
     if ( (httpStatus) && (sdResult.has("attachments")) )
@@ -399,7 +399,7 @@ void RlvHandler::getAttachmentResourcesCoro(const std::string& strUrl)
 
                     RLV_INFOS << "Clearing restrictions from blocked object " << idObj.asString() << RLV_ENDL;
                     processCommand(idObj, "clear", true);
-                    return;
+                    co_return;
                 }
             }
         }

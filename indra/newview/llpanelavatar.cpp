@@ -138,7 +138,7 @@ void LLPanelProfileTab::setApplyProgress(bool started)
     }
 }
 
-static void put_avatar_properties_coro(std::string cap_url, LLUUID agent_id, LLSD data, std::function<void(bool)> callback)
+static LL::Task<void> put_avatar_properties_coro(std::string cap_url, LLUUID agent_id, LLSD data, std::function<void(bool)> callback)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -151,7 +151,7 @@ static void put_avatar_properties_coro(std::string cap_url, LLUUID agent_id, LLS
 
     std::string finalUrl = cap_url + "/" + agent_id.asString();
 
-    LLSD result = httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

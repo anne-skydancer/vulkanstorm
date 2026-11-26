@@ -71,7 +71,7 @@ namespace
         return "unknown";
     }
 
-    void query_vvm_coro()
+    LL::Task<void> query_vvm_coro()
     {
         // Get base URL from grid manager
         std::string base_url = LLGridManager::getInstance()->getUpdateServiceURL();
@@ -82,7 +82,7 @@ namespace
         if (base_url.empty())
         {
             LL_WARNS("VVM") << "No update service URL configured" << LL_ENDL;
-            return;
+            co_return;
         }
 
         // Gather parameters for VVM query
@@ -114,7 +114,7 @@ namespace
             std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("VVMQuery", httpPolicy);
         LLCore::HttpRequest::ptr_t request = std::make_shared<LLCore::HttpRequest>();
 
-        LLSD result = adapter->getAndSuspend(request, url);
+        LLSD result = co_await adapter->getAndSuspend(request, url);
 
         // Check HTTP status
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -125,10 +125,10 @@ namespace
             if (status.getType() == 404)
             {
                 LL_INFOS("VVM") << "Unmanaged channel, no updates available" << LL_ENDL;
-                return;
+                co_return;
             }
             LL_WARNS("VVM") << "VVM query failed: " << status.toString() << LL_ENDL;
-            return;
+            co_return;
         }
 
         // Read whether this update is required or optional
@@ -154,7 +154,7 @@ namespace
                 LLCoros::instance().launch("VelopackUpdateCheck",
                     [required_version, relnotes]()
                     {
-                        velopack_check_for_updates(required_version, relnotes);
+                        return velopack_check_for_updates(required_version, relnotes);
                     });
             }
             else if (!velopack_url.empty())

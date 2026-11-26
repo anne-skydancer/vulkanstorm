@@ -35,6 +35,7 @@
 #include "llcoros.h"
 #include "llcorehttputil.h"
 #include "llimage.h"
+#include "lltask.h"
 
 //=========================================================================
 class LLResourceUploadInfo
@@ -279,7 +280,7 @@ class LLViewerAssetUpload
 public:
     static LLUUID EnqueueInventoryUpload(const std::string &url, const LLResourceUploadInfo::ptr_t &uploadInfo);
 
-    static void AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo);
+    static LL::Task<void> AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLUUID id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo);
 
 private:
     static void HandleUploadError(LLCore::HttpStatus status, LLSD &result, LLResourceUploadInfo::ptr_t &uploadInfo);

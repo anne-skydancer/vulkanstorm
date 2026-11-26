@@ -39,6 +39,7 @@
 #include "llsingleton.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include "lltask.h"
 
 class LLPathfindingNavMeshStatus;
 class LLUUID;
@@ -104,12 +105,12 @@ private:
     void handleDeferredGetLinksetsForRegion(const LLUUID &pRegionUUID, request_id_t pRequestId, object_request_callback_t pLinksetsCallback) const;
     void handleDeferredGetCharactersForRegion(const LLUUID &pRegionUUID, request_id_t pRequestId, object_request_callback_t pCharactersCallback) const;
 
-    void navMeshStatusRequestCoro(std::string url, U64 regionHandle, bool isGetStatusOnly);
-    void navAgentStateRequestCoro(std::string url);
-    void navMeshRebakeCoro(std::string url, rebake_navmesh_callback_t rebakeNavMeshCallback);
-    void linksetObjectsCoro(std::string url, std::shared_ptr<LinksetsResponder> linksetsResponsderPtr, LLSD putData) const;
-    void linksetTerrainCoro(std::string url, std::shared_ptr<LinksetsResponder> linksetsResponsderPtr, LLSD putData) const;
-    void charactersCoro(std::string url, request_id_t requestId, object_request_callback_t callback) const;
+    LL::Task<void> navMeshStatusRequestCoro(std::string url, U64 regionHandle, bool isGetStatusOnly);
+    LL::Task<void> navAgentStateRequestCoro(std::string url);
+    LL::Task<void> navMeshRebakeCoro(std::string url, rebake_navmesh_callback_t rebakeNavMeshCallback);
+    LL::Task<void> linksetObjectsCoro(std::string url, std::shared_ptr<LinksetsResponder> linksetsResponsderPtr, LLSD putData) const;
+    LL::Task<void> linksetTerrainCoro(std::string url, std::shared_ptr<LinksetsResponder> linksetsResponsderPtr, LLSD putData) const;
+    LL::Task<void> charactersCoro(std::string url, request_id_t requestId, object_request_callback_t callback) const;
 
     //void handleNavMeshStatusRequest(const LLPathfindingNavMeshStatus &pNavMeshStatus, LLViewerRegion *pRegion, bool pIsGetStatusOnly);
     void handleNavMeshStatusUpdate(const LLPathfindingNavMeshStatus &pNavMeshStatus);

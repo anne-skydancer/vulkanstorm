@@ -251,12 +251,12 @@ public:
     LLVector3   mLastCameraOrigin;
     U32         mLastCameraUpdate;
 
-    static void        requestBaseCapabilitiesCoro(U64 regionHandle);
-    static void        requestBaseCapabilitiesCompleteCoro(U64 regionHandle);
-    static void        requestSimulatorFeatureCoro(std::string url, U64 regionHandle);
+    static LL::Task<void> requestBaseCapabilitiesCoro(U64 regionHandle);
+    static LL::Task<void> requestBaseCapabilitiesCompleteCoro(U64 regionHandle);
+    static LL::Task<void> requestSimulatorFeatureCoro(std::string url, U64 regionHandle);
 };
 
-void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
+LL::Task<void> LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -272,20 +272,20 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
         if (STATE_WORLD_INIT > LLStartUp::getStartupState())
         {
             LL_INFOS("AppInit", "Capabilities") << "Aborting capabilities request, reason: returned to login screen" << LL_ENDL;
-            return;
+            co_return;
         }
 
         if (!LLWorld::instanceExists())
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities for region that no longer exists!" << LL_ENDL;
-            return; // this error condition is not recoverable.
+            co_return; // this error condition is not recoverable.
         }
         LLViewerRegionImpl* impl = regionp->getRegionImplNC();
         LL_DEBUGS("AppInit", "Capabilities") << "requesting seed caps for handle " << regionHandle
@@ -296,7 +296,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
         {
             LL_WARNS("AppInit", "Capabilities") << "Failed to get seed capabilities, and can not determine url!" << LL_ENDL;
             regionp->setCapabilitiesError();
-            return; // this error condition is not recoverable.
+            co_return; // this error condition is not recoverable.
         }
 
         // record that we just entered a new region
@@ -306,7 +306,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
         {
             LL_WARNS("AppInit", "Capabilities") << "Failed to get seed capabilities from '" << url << "' after " << impl->mSeedCapAttempts << " attempts.  Giving up!" << LL_ENDL;
             regionp->setCapabilitiesError();
-            return;  // this error condition is not recoverable.
+            co_return;  // this error condition is not recoverable.
         }
 
         S32 id = ++(impl->mHttpResponderID);
@@ -323,31 +323,31 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
 
         regionp = NULL;
         impl = NULL;
-        result = httpAdapter->postAndSuspend(httpRequest, url, capabilityNames);
+        result = co_await httpAdapter->postAndSuspend(httpRequest, url, capabilityNames);
 
         if (STATE_WORLD_INIT > LLStartUp::getStartupState())
         {
             LL_INFOS("AppInit", "Capabilities") << "Aborting capabilities request, reason: returned to login screen" << LL_ENDL;
-            return;
+            co_return;
         }
 
         if (LLApp::isExiting() || gDisconnected)
         {
             LL_DEBUGS("AppInit", "Capabilities") << "Shutting down" << LL_ENDL;
-            return;
+            co_return;
         }
 
         if (!LLWorld::instanceExists())
         {
             LL_WARNS("AppInit", "Capabilities") << "Received capabilities, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = LLWorld::getInstance()->getRegionFromHandle(regionHandle);
         if (!regionp) //region was removed
         {
             LL_WARNS("AppInit", "Capabilities") << "Received capabilities for region that no longer exists!" << LL_ENDL;
-            return; // this error condition is not recoverable.
+            co_return; // this error condition is not recoverable.
         }
 
         impl = regionp->getRegionImplNC();
@@ -410,7 +410,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCoro(U64 regionHandle)
 }
 
 
-void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
+LL::Task<void> LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -427,7 +427,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
         if (!world_inst)
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to get capabilities, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -459,7 +459,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
 
         regionp = NULL;
         world_inst = NULL;
-        result = httpAdapter->postAndSuspend(httpRequest, url, capabilityNames);
+        result = co_await httpAdapter->postAndSuspend(httpRequest, url, capabilityNames);
 
         LLSD httpResults = result["http_result"];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -478,7 +478,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
         if (!world_inst)
         {
             LL_WARNS("AppInit", "Capabilities") << "Received capabilities, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -544,7 +544,7 @@ void LLViewerRegionImpl::requestBaseCapabilitiesCompleteCoro(U64 regionHandle)
     while (false);
 }
 
-void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 regionHandle)
+LL::Task<void> LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 regionHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -569,7 +569,7 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
         if (!world_inst)
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to request Sim Feature, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -581,7 +581,7 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
 
         regionp = NULL;
         world_inst = NULL;
-        LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+        LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result["http_result"];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -603,7 +603,7 @@ void LLViewerRegionImpl::requestSimulatorFeatureCoro(std::string url, U64 region
         if (!world_inst)
         {
             LL_WARNS("AppInit", "Capabilities") << "Attempting to request Sim Feature, but world no longer exists!" << LL_ENDL;
-            return;
+            co_return;
         }
 
         regionp = world_inst->getRegionFromHandle(regionHandle);

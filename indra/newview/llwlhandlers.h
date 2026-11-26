@@ -30,6 +30,7 @@
 #include "llviewerprecompiledheaders.h"
 #include "llcoros.h"
 #include "llenvironment.h"
+#include "lltask.h"
 
 class LLEnvironmentRequest
 {
@@ -42,7 +43,7 @@ private:
     static void onRegionCapsReceived(const LLUUID& region_id, LLEnvironment::environment_apply_fn cb);
     static bool doRequest(LLEnvironment::environment_apply_fn cb);
 
-    static void environmentRequestCoro(std::string url, LLEnvironment::environment_apply_fn cb);
+    static LL::Task<void> environmentRequestCoro(std::string url, LLEnvironment::environment_apply_fn cb);
 
     static S32 sLastRequest;
 };
@@ -58,7 +59,7 @@ private:
     static clock_t sLastUpdate;
     static clock_t UPDATE_WAIT_SECONDS;
 
-    static void environmentApplyCoro(std::string url, LLSD content, LLEnvironment::environment_apply_fn cb);
+    static LL::Task<void> environmentApplyCoro(std::string url, LLSD content, LLEnvironment::environment_apply_fn cb);
 };
 
 

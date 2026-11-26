@@ -32,6 +32,7 @@
 #include "llsingleton.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLSyntaxDefCache : public LLSingleton<LLSyntaxDefCache>
 {
@@ -126,8 +127,8 @@ private:
     void        loadKeywordsIntoLLSD();
 
     void        fetchKeywords();
-    void        fetchKeywordsFileCoro(std::string url, LLUUID syntax_id);
-    void        fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id);
+    LL::Task<void> fetchKeywordsFileCoro(std::string url, LLUUID syntax_id);
+    LL::Task<void> fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id);
 
     bool        checkLocalCache(const LLUUID& syntax_id) const;
     void        buildDefaultCache() { buildCachePaths(LLUUID::null); }

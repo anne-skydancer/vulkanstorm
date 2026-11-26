@@ -203,7 +203,7 @@ namespace LLMarketplaceImport
 
     // Responders
 
-    void marketplacePostCoro(std::string url)
+    LL::Task<void> marketplacePostCoro(std::string url)
     {
         LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
         LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -221,7 +221,7 @@ namespace LLMarketplaceImport
         httpHeaders->append(HTTP_OUT_HEADER_CONTENT_TYPE, HTTP_CONTENT_XML);
         httpHeaders->append(HTTP_OUT_HEADER_USER_AGENT, LLViewerMedia::getInstance()->getCurrentUserAgent());
 
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, url, LLSD(), httpOpts, httpHeaders);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, LLSD(), httpOpts, httpHeaders);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -264,7 +264,7 @@ namespace LLMarketplaceImport
 
     }
 
-    void marketplaceGetCoro(std::string url, bool buildHeaders)
+    LL::Task<void> marketplaceGetCoro(std::string url, bool buildHeaders)
     {
         LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
         LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -290,7 +290,7 @@ namespace LLMarketplaceImport
             httpHeaders = LLViewerMedia::getInstance()->getHttpHeaders();
         }
 
-        LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts, httpHeaders);
+        LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts, httpHeaders);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -780,7 +780,7 @@ void LLMarketplaceData::initializeSLM(const status_updated_signal_t::slot_type& 
     }
 }
 
-void LLMarketplaceData::getMerchantStatusCoro()
+LL::Task<void> LLMarketplaceData::getMerchantStatusCoro()
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -795,10 +795,10 @@ void LLMarketplaceData::getMerchantStatusCoro()
     {
         LL_WARNS("Marketplace") << "No marketplace capability on Sim" << LL_ENDL;
         setSLMStatus(MarketplaceStatusCodes::MARKET_PLACE_CONNECTION_FAILURE);
-        return;
+        co_return;
     }
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -832,7 +832,7 @@ void LLMarketplaceData::getMerchantStatusCoro()
             // to the user, instead write it down into listings' floater
             LLMarketplaceData::instance().setSLMConnectionFailure(reason);
         }
-        return;
+        co_return;
     }
 
     log_SLM_infos("Get /merchant", status.getType(), std::string("User is a merchant"));
@@ -858,7 +858,7 @@ void LLMarketplaceData::getSLMListings()
         boost::bind(&LLMarketplaceData::getSLMListingsCoro, this, marketplaceFolderId));
 }
 
-void LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
+LL::Task<void> LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -871,7 +871,7 @@ void LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
 
     std::string url = getSLMConnectURL("/listings");
 
-    LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
+    LLSD result = co_await httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
 
     setUpdating(folderId, false);
 
@@ -884,7 +884,7 @@ void LLMarketplaceData::getSLMListingsCoro(LLUUID folderId)
         setSLMDataFetched(MarketplaceFetchCodes::MARKET_FETCH_FAILED);
         update_marketplace_category(folderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Get /listings", static_cast<U32>(status.getType()), result);
@@ -923,7 +923,7 @@ void LLMarketplaceData::getSLMListing(S32 listingId)
         boost::bind(&LLMarketplaceData::getSingleListingCoro, this, listingId, folderId));
 }
 
-void LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
+LL::Task<void> LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -936,7 +936,7 @@ void LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
 
     std::string url = getSLMConnectURL("/listing/") + llformat("%d", listingId);
 
-    LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
+    LLSD result = co_await httpAdapter->getJsonAndSuspend(httpRequest, url, httpHeaders);
 
     setUpdating(folderId, false);
 
@@ -957,7 +957,7 @@ void LLMarketplaceData::getSingleListingCoro(S32 listingId, LLUUID folderId)
 
         update_marketplace_category(folderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Get /listings", static_cast<U32>(status.getType()), result);
@@ -994,7 +994,7 @@ void LLMarketplaceData::createSLMListing(const LLUUID& folder_id, const LLUUID& 
         boost::bind(&LLMarketplaceData::createSLMListingCoro, this, folder_id, version_id, count));
 }
 
-void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, S32 count)
+LL::Task<void> LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, S32 count)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1018,7 +1018,7 @@ void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, 
 
     std::string url = getSLMConnectURL("/listings");
 
-    LLSD result = httpAdapter->postJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    LLSD result = co_await httpAdapter->postJsonAndSuspend(httpRequest, url, postData, httpHeaders);
 
     setUpdating(folderId, false);
 
@@ -1030,7 +1030,7 @@ void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, 
         log_SLM_warning("Post /listings", status.getType(), status.toString(), "", result);
         update_marketplace_category(folderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Post /listings", status.getType(), result);
@@ -1038,7 +1038,7 @@ void LLMarketplaceData::createSLMListingCoro(LLUUID folderId, LLUUID versionId, 
     if (!result.has("listings") || !result["listings"].isArray() || result["listings"].size() == 0)
     {
         LL_INFOS("SLM") << "Received an empty response for folder " << folderId << LL_ENDL;
-        return;
+        co_return;
     }
 
     // Extract the info from the results
@@ -1068,7 +1068,7 @@ void LLMarketplaceData::updateSLMListing(const LLUUID& folder_id, S32 listing_id
         boost::bind(&LLMarketplaceData::updateSLMListingCoro, this, folder_id, listing_id, version_id, is_listed, count));
 }
 
-void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, bool isListed, S32 count)
+LL::Task<void> LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, bool isListed, S32 count)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1091,7 +1091,7 @@ void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLU
     postData["listing"] = listing;
 
     std::string url = getSLMConnectURL("/listing/") + llformat("%d", listingId);
-    LLSD result = httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    LLSD result = co_await httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
 
     setUpdating(folderId, false);
 
@@ -1103,7 +1103,7 @@ void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLU
         log_SLM_warning("Put /listing", status.getType(), status.toString(), "", result);
         update_marketplace_category(folderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Put /listing", status.getType(), result);
@@ -1113,12 +1113,12 @@ void LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 listingId, LLU
         LL_INFOS("SLM") << "Received an empty response for listing " << listingId << " folder " << folderId << LL_ENDL;
         // Try to get listing more directly after a delay
         const float FORCE_UPDATE_TIMEOUT = 5.0;
-        llcoro::suspendUntilTimeout(FORCE_UPDATE_TIMEOUT);
+        co_await llcoro::co::suspendUntilTimeout(FORCE_UPDATE_TIMEOUT);
         if (!LLApp::isExiting() && LLMarketplaceData::instanceExists())
         {
             getSLMListing(listingId);
         }
-        return;
+        co_return;
     }
 
     // Extract the info from the Json string
@@ -1163,7 +1163,7 @@ void LLMarketplaceData::associateSLMListing(const LLUUID& folder_id, S32 listing
         boost::bind(&LLMarketplaceData::associateSLMListingCoro, this, folder_id, listing_id, version_id, source_folder_id));
 }
 
-void LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, LLUUID sourceFolderId)
+LL::Task<void> LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, LLUUID sourceFolderId)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1186,7 +1186,7 @@ void LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, 
     // Send request
     std::string url = getSLMConnectURL("/associate_inventory/") + llformat("%d", listingId);
 
-    LLSD result = httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
+    LLSD result = co_await httpAdapter->putJsonAndSuspend(httpRequest, url, postData, httpHeaders);
 
     setUpdating(folderId, false);
     setUpdating(sourceFolderId, false);
@@ -1200,7 +1200,7 @@ void LLMarketplaceData::associateSLMListingCoro(LLUUID folderId, S32 listingId, 
         update_marketplace_category(folderId, false);
         update_marketplace_category(sourceFolderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Put /associate_inventory", status.getType(), result);
@@ -1244,7 +1244,7 @@ void LLMarketplaceData::deleteSLMListing(S32 listingId)
         boost::bind(&LLMarketplaceData::deleteSLMListingCoro, this, listingId));
 }
 
-void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
+LL::Task<void> LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1260,7 +1260,7 @@ void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
 
     setUpdating(folderId, true);
 
-    LLSD result = httpAdapter->deleteJsonAndSuspend(httpRequest, url, httpHeaders);
+    LLSD result = co_await httpAdapter->deleteJsonAndSuspend(httpRequest, url, httpHeaders);
 
     setUpdating(folderId, false);
 
@@ -1272,7 +1272,7 @@ void LLMarketplaceData::deleteSLMListingCoro(S32 listingId)
         log_SLM_warning("Delete /listing", status.getType(), status.toString(), "", result);
         update_marketplace_category(folderId, false);
         gInventory.notifyObservers();
-        return;
+        co_return;
     }
 
     log_SLM_infos("Delete /listing", status.getType(), result);

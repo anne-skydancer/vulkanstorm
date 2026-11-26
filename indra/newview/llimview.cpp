@@ -124,12 +124,12 @@ enum EMultiAgentChatSessionType
 };
 
 
-void startConferenceCoro(std::string url, LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId, LLSD agents);
+LL::Task<void> startConferenceCoro(std::string url, LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId, LLSD agents);
 
-void startP2PVoiceCoro(std::string url, LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId);
+LL::Task<void> startP2PVoiceCoro(std::string url, LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId);
 
-void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvitationType invitationType, const LLSD& voiceChannelInfo);
-void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp);
+LL::Task<void> chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvitationType invitationType, LLSD voiceChannelInfo);
+LL::Task<void> chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp);
 void start_deprecated_conference_chat(const LLUUID& temp_session_id, const LLUUID& creator_id, const LLUUID& other_participant_id, const LLSD& agents_to_invite);
 
 const LLUUID LLOutgoingCallDialog::OCD_KEY = LLUUID("7CF78E11-0CFE-498D-ADB9-1417BF03DDB4");
@@ -572,7 +572,7 @@ void on_new_message(const LLSD& msg)
     notify_of_message(msg, false);
 }
 
-void startConferenceCoro(std::string url,
+LL::Task<void> startConferenceCoro(std::string url,
     LLUUID tempSessionId, LLUUID creatorId, LLUUID otherParticipantId, LLSD agents)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -595,7 +595,7 @@ void startConferenceCoro(std::string url,
     altParams["voice_server_type"] = voice_server_type;
     postData["alt_params"]         = altParams;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -623,7 +623,7 @@ void startConferenceCoro(std::string url,
     }
 }
 
-void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUUID otherParticipantId)
+LL::Task<void> startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUUID otherParticipantId)
 {
     LLCore::HttpRequest::policy_t               httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("StartP2PVoiceCoro", httpPolicy);
@@ -644,7 +644,7 @@ void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUU
     altParams["voice_server_type"] = voice_server_type;
     postData["alt_params"]         = altParams;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -662,7 +662,7 @@ void startP2PVoiceCoro(std::string url, LLUUID sessionID, LLUUID creatorId, LLUU
     }
 }
 
-void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvitationType invitationType, const LLSD& voiceChannelInfo)
+LL::Task<void> chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvitationType invitationType, LLSD voiceChannelInfo)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -673,7 +673,7 @@ void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvit
     postData["method"] = "accept invitation";
     postData["session-id"] = sessionId;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -681,7 +681,7 @@ void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvit
     if (!gIMMgr)
     {
         LL_WARNS("") << "Global IM Manager is NULL" << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (!status)
@@ -697,7 +697,7 @@ void chatterBoxInvitationCoro(std::string url, LLUUID sessionId, LLIMMgr::EInvit
             static const std::string error_string("session_does_not_exist_error");
             gIMMgr->showSessionStartError(error_string, sessionId);
         }
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
@@ -780,7 +780,7 @@ void translateFailure(const LLUUID& session_id, const std::string& from, const L
     LLIMModel::getInstance()->processAddingMessage(session_id, from, from_id, message_txt, log2file, is_region_msg, time_stamp, false);
 }
 
-void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp)
+LL::Task<void> chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, std::string message, U32 timestamp)
 {   // if parameters from, message and timestamp have values, they are a message that opened chat
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -794,7 +794,7 @@ void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, 
     LL_DEBUGS("ChatHistory") << sessionId << ": Chat history posting " << postData << " to " << url
         << ", from " << from << ", message " << message << ", timestamp " << (S32)timestamp << LL_ENDL;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -803,13 +803,13 @@ void chatterBoxHistoryCoro(std::string url, LLUUID sessionId, std::string from, 
     {
         LL_WARNS("ChatHistory") << sessionId << ": Bad HTTP response in chatterBoxHistoryCoro"
             << ", results: " << httpResults << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (LLApp::isExiting() || gDisconnected)
     {
         LL_DEBUGS("ChatHistory") << "Ignoring chat history response, shutting down" << LL_ENDL;
-        return;
+        co_return;
     }
 
     // Add history to IM session

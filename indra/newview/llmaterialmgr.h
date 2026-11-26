@@ -34,6 +34,7 @@
 #include "httpheaders.h"
 #include "httpoptions.h"
 #include <boost/container_hash/hash.hpp>
+#include "lltask.h"
 
 class LLViewerRegion;
 
@@ -109,7 +110,7 @@ private:
     void processGetQueueCoro();
     void onGetResponse(bool success, const LLSD& content, const LLUUID& region_id);
     void processGetAllQueue();
-    void processGetAllQueueCoro(LLUUID regionId);
+    LL::Task<void> processGetAllQueueCoro(LLUUID regionId);
     void onGetAllResponse(bool success, const LLSD& content, const LLUUID& region_id);
     void processPutQueue();
     void onPutResponse(bool success, const LLSD& content);

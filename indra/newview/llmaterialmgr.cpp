@@ -822,14 +822,14 @@ void LLMaterialMgr::processGetAllQueue()
     }
 }
 
-void LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
+LL::Task<void> LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
 {
     LLViewerRegion* regionp = LLWorld::instance().getRegionFromID(regionId);
     if (regionp == NULL)
     {
         LL_WARNS("Materials") << "Unknown region with id " << regionId.asString() << LL_ENDL;
         clearGetQueues(regionId);       // Invalidates region_id
-        return;
+        co_return;
     }
     else if (!regionp->capabilitiesReceived())
     {
@@ -839,14 +839,14 @@ void LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
             boost::bind(&LLMaterialMgr::CapsRecvForRegion,
             _1, regionId, capsRecv.getName()));
 
-        llcoro::suspendUntilEventOn(capsRecv);
+        co_await llcoro::co::suspendUntilEventOn(capsRecv);
 
         // reget the region from the region ID since it may have gone away while waiting.
         regionp = LLWorld::instance().getRegionFromID(regionId);
         if (!regionp)
         {
             LL_WARNS("Materials") << "Region with ID " << regionId << " is no longer valid." << LL_ENDL;
-            return;
+            co_return;
         }
     }
     else if (regionp->materialsCapThrottled())
@@ -861,7 +861,7 @@ void LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
         LL_WARNS("Materials") << "Capability '" << MATERIALS_CAPABILITY_NAME
             << "' is not defined on the current region '" << regionp->getName() << "'" << LL_ENDL;
         clearGetQueues(regionId);       // Invalidates region_id
-        return;
+        co_return;
     }
 
     LL_DEBUGS("Materials") << "GET all for region " << regionId << "url " << capURL << LL_ENDL;
@@ -870,7 +870,7 @@ void LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("processGetAllQueue", LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, capURL);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, capURL);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -889,7 +889,7 @@ void LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
     if (!regionp)
     {
         LL_WARNS("Materials") << "Region with ID " << regionId << " is no longer valid." << LL_ENDL;
-        return;
+        co_return;
     }
     regionp->resetMaterialsCapThrottle();
 }

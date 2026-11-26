@@ -66,21 +66,21 @@ std::string LLProductInfoRequestManager::getDescriptionForSku(const std::string&
     return LLTrans::getString("land_type_unknown");
 }
 
-void LLProductInfoRequestManager::getLandDescriptionsCoro(std::string url)
+LL::Task<void> LLProductInfoRequestManager::getLandDescriptionsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getLandDescriptionsCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
     if (!status)
     {
-        return;
+        co_return;
     }
 
     if (result.has(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_CONTENT) &&

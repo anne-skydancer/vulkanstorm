@@ -885,7 +885,7 @@ void LLIMSpeakerMgr::moderateVoiceParticipant(const LLUUID& avatar_id, bool unmu
         boost::bind(&LLIMSpeakerMgr::moderationActionCoro, this, url, data));
 }
 
-void LLIMSpeakerMgr::moderationActionCoro(std::string url, LLSD action)
+LL::Task<void> LLIMSpeakerMgr::moderationActionCoro(std::string url, LLSD action)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -897,7 +897,7 @@ void LLIMSpeakerMgr::moderationActionCoro(std::string url, LLSD action)
 
     LLUUID sessionId = action["session-id"];
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, action, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, action, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -923,7 +923,7 @@ void LLIMSpeakerMgr::moderationActionCoro(std::string url, LLSD action)
                     sessionId);
             }
         }
-        return;
+        co_return;
     }
 }
 

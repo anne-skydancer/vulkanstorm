@@ -82,7 +82,7 @@ void LLPBRTerrainFeatures::queueModify(LLViewerRegion& region, const LLModifyReg
 }
 
 // static
-void LLPBRTerrainFeatures::queryRegionCoro(std::string cap_url, LLUUID region_id, void(*done_callback)(LLUUID, bool, const LLModifyRegion&) )
+LL::Task<void> LLPBRTerrainFeatures::queryRegionCoro(std::string cap_url, LLUUID region_id, void(*done_callback)(LLUUID, bool, const LLModifyRegion&) )
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -95,7 +95,7 @@ void LLPBRTerrainFeatures::queryRegionCoro(std::string cap_url, LLUUID region_id
 
     LL_DEBUGS("GLTF") << "Querying features via ModifyRegion endpoint" << LL_ENDL;
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -155,7 +155,7 @@ void LLPBRTerrainFeatures::queryRegionCoro(std::string cap_url, LLUUID region_id
 }
 
 // static
-void LLPBRTerrainFeatures::modifyRegionCoro(std::string cap_url, LLSD updates, void(*done_callback)(bool) )
+LL::Task<void> LLPBRTerrainFeatures::modifyRegionCoro(std::string cap_url, LLSD updates, void(*done_callback)(bool) )
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -168,7 +168,7 @@ void LLPBRTerrainFeatures::modifyRegionCoro(std::string cap_url, LLSD updates, v
 
     LL_DEBUGS("GLTF") << "Applying features via ModifyRegion endpoint: " << updates << LL_ENDL;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, updates, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, cap_url, updates, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

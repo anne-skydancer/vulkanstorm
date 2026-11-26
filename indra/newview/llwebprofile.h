@@ -32,6 +32,7 @@
 #include "llcoros.h"
 #include "httpheaders.h"
 #include "bufferarray.h"
+#include "lltask.h"
 
 namespace LLWebProfileResponders
 {
@@ -62,7 +63,7 @@ public:
 private:
     static LLCore::HttpHeaders::ptr_t buildDefaultHeaders();
 
-    static void uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool add_location);
+    static LL::Task<void> uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool add_location);
     static LLCore::BufferArray::ptr_t buildPostData(const LLSD &data, LLPointer<LLImageFormatted> &image, const std::string &boundary);
 
     static void reportImageUploadStatus(bool ok);

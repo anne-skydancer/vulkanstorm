@@ -638,7 +638,7 @@ void LLWebRTCVoiceClient::removeObserver(LLFriendObserver *observer)
 //   connection to various voice channels.
 // * Sends updates to the voice server when this agent's
 //   voice levels, or positions have changed.
-void LLWebRTCVoiceClient::voiceConnectionCoro()
+LL::Task<void> LLWebRTCVoiceClient::voiceConnectionCoro()
 {
     LL_DEBUGS("Voice") << "starting" << LL_ENDL;
     mIsCoroutineActive = true;
@@ -662,8 +662,8 @@ void LLWebRTCVoiceClient::voiceConnectionCoro()
             // execution time.
             // Could help with voice updates making for smoother
             // voice when we're busy.
-            llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
-            if (sShuttingDown) return; // 'this' migh already be invalid
+            co_await llcoro::co::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+            if (sShuttingDown) co_return; // 'this' migh already be invalid
             bool voiceEnabled = mVoiceEnabled;
 
             if (!isAgentAvatarValid())
@@ -2707,14 +2707,14 @@ void LLVoiceWebRTCConnection::processIceUpdates()
 // This function determines whether candidates are available to send to the Secondlife WebRTC
 // server via the simulator.  If so, and there are no more candidates, this code
 // will make the cap call to the server sending up the ICE candidates.
-void LLVoiceWebRTCConnection::processIceUpdatesCoro(connectionPtr_t connection)
+LL::Task<void> LLVoiceWebRTCConnection::processIceUpdatesCoro(connectionPtr_t connection)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOICE;
 
     if (connection->mShutDown || LLWebRTCVoiceClient::isShuttingDown())
     {
         connection->mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LLSD body;
@@ -2725,14 +2725,14 @@ void LLVoiceWebRTCConnection::processIceUpdatesCoro(connectionPtr_t connection)
         {
             LL_DEBUGS("Voice") << "no capabilities for ice gathering; waiting " << LL_ENDL;
             connection->mOutstandingRequests--;
-            return;
+            co_return;
         }
 
         std::string url = regionp->getCapability("VoiceSignalingRequest");
         if (url.empty())
         {
             connection->mOutstandingRequests--;
-            return;
+            co_return;
         }
 
         LL_DEBUGS("Voice") << "region ready to complete voice signaling; url=" << url << LL_ENDL;
@@ -2769,12 +2769,12 @@ void LLVoiceWebRTCConnection::processIceUpdatesCoro(connectionPtr_t connection)
 
         httpOpts->setWantHeaders(true);
 
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
         if (LLWebRTCVoiceClient::isShuttingDown())
         {
             connection->mOutstandingRequests--;
-            return;
+            co_return;
         }
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -2944,7 +2944,7 @@ const std::string& LLVoiceWebRTCConnection::getVersion() {
 
 // Tell the simulator that we're shutting down a voice connection.
 // The simulator will pass this on to the Secondlife WebRTC server.
-void LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connection)
+LL::Task<void> LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connection)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOICE;
 
@@ -2961,7 +2961,7 @@ void LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connectio
         LL_DEBUGS("Voice") << "no capabilities for voice provisioning; waiting " << LL_ENDL;
         connection->setVoiceConnectionState(VOICE_STATE_SESSION_RETRY);
         connection->mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     std::string url = regionp->getCapability("ProvisionVoiceAccountRequest");
@@ -2969,7 +2969,7 @@ void LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connectio
     {
         connection->setVoiceConnectionState(VOICE_STATE_SESSION_RETRY);
         connection->mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LL_DEBUGS("Voice") << "region ready for voice break; url=" << url << LL_ENDL;
@@ -2991,7 +2991,7 @@ void LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connectio
     // tell the server to shut down the connection as a courtesy.
     // shutdownConnection will drop the WebRTC connection which will
     // also shut things down.
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
     connection->mOutstandingRequests--;
 
@@ -3005,13 +3005,13 @@ void LLVoiceWebRTCConnection::breakVoiceConnectionCoro(connectionPtr_t connectio
 // connection. The SDP is sent up as part of this, and the simulator will respond
 // with an 'answer' which is in the form of another SDP.  The webrtc library
 // will use the offer and answer to negotiate the session.
-void LLVoiceWebRTCSpatialConnection::requestVoiceConnection()
+LL::Task<void> LLVoiceWebRTCSpatialConnection::requestVoiceConnection()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOICE;
     if (LLWebRTCVoiceClient::isShuttingDown())
     {
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LLViewerRegion *regionp = LLWorld::instance().getRegionFromID(mRegionID);
@@ -3024,7 +3024,7 @@ void LLVoiceWebRTCSpatialConnection::requestVoiceConnection()
         // try again.
         setVoiceConnectionState(VOICE_STATE_REQUEST_CONNECTION);
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     std::string url = regionp->getCapability("ProvisionVoiceAccountRequest");
@@ -3032,7 +3032,7 @@ void LLVoiceWebRTCSpatialConnection::requestVoiceConnection()
     {
         setVoiceConnectionState(VOICE_STATE_SESSION_RETRY);
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LL_DEBUGS("Voice") << "region ready for voice provisioning; url=" << url << LL_ENDL;
@@ -3056,7 +3056,7 @@ void LLVoiceWebRTCSpatialConnection::requestVoiceConnection()
     LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
 
     httpOpts->setWantHeaders(true);
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -3821,14 +3821,14 @@ LLVoiceWebRTCAdHocConnection::~LLVoiceWebRTCAdHocConnection()
 // as they go to a different set of Secondlife WebRTC servers.
 // They also require credentials for the given channels.
 // So, we have a separate requestVoiceConnection call.
-void LLVoiceWebRTCAdHocConnection::requestVoiceConnection()
+LL::Task<void> LLVoiceWebRTCAdHocConnection::requestVoiceConnection()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOICE;
 
     if (LLWebRTCVoiceClient::isShuttingDown())
     {
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LLViewerRegion *regionp = LLWorld::instance().getRegionFromID(mRegionID);
@@ -3840,7 +3840,7 @@ void LLVoiceWebRTCAdHocConnection::requestVoiceConnection()
         // try again.
         setVoiceConnectionState(VOICE_STATE_REQUEST_CONNECTION);
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     std::string url = regionp->getCapability("ProvisionVoiceAccountRequest");
@@ -3848,7 +3848,7 @@ void LLVoiceWebRTCAdHocConnection::requestVoiceConnection()
     {
         setVoiceConnectionState(VOICE_STATE_SESSION_RETRY);
         mOutstandingRequests--;
-        return;
+        co_return;
     }
 
     LLVoiceWebRTCStats::getInstance()->provisionAttemptStart();
@@ -3872,7 +3872,7 @@ void LLVoiceWebRTCAdHocConnection::requestVoiceConnection()
 
     httpOpts->setWantHeaders(true);
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

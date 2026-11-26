@@ -3563,11 +3563,11 @@ void login_callback(S32 option, void *userdata)
     }
 }
 
-void release_notes_coro(const std::string url)
+LL::Task<void> release_notes_coro(const std::string url)
 {
     if (url.empty())
     {
-        return;
+        co_return;
     }
 
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -3578,14 +3578,14 @@ void release_notes_coro(const std::string url)
 
     httpOpts->setHeadersOnly(true); // only making sure it isn't 404 or something like that
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
     if (!status)
     {
-        return;
+        co_return;
     }
 
     LLWeb::loadURLInternal(url);
@@ -3653,7 +3653,7 @@ void uninstall_nsis_if_required()
 #endif
 }
 
-void validate_release_notes_coro(const std::string url)
+LL::Task<void> validate_release_notes_coro(const std::string url)
 {
     LLVersionInfo& versionInfo(LLVersionInfo::instance());
     const boost::regex version_regex(R"(\b\d+\.\d+\.\d+\.\d+\b)");
@@ -3666,11 +3666,11 @@ void validate_release_notes_coro(const std::string url)
         // the current one, fall back to the hardcoded URL.
         LLSD info(LLAppViewer::instance()->getViewerInfo());
         std::string alt_url = info["VIEWER_RELEASE_NOTES_URL"].asString();
-        release_notes_coro(alt_url);
+        co_await release_notes_coro(alt_url);
     }
     else
     {
-        release_notes_coro(url);
+        co_await release_notes_coro(url);
     }
 }
 

@@ -43,6 +43,7 @@
 #include "lleventcoro.h"
 #include "llcoros.h"
 #include "llcorehttputil.h"
+#include "lltask.h"
 
 class LLViewerMediaImpl;
 class LLUUID;
@@ -171,8 +172,8 @@ private:
     void setOpenIDCookie(const std::string& url);
     void onTeleportFinished();
 
-    static void openIDSetupCoro(std::string openidUrl, std::string openidToken);
-    static void getOpenIDCookieCoro(std::string url);
+    static LL::Task<void> openIDSetupCoro(std::string openidUrl, std::string openidToken);
+    static LL::Task<void> getOpenIDCookieCoro(std::string url);
     void setMaxInstances(S32 max_instances);
 
     bool mAnyMediaShowing;
@@ -508,7 +509,7 @@ private:
     bool mIsUpdated ;
     std::list< LLVOVolume* > mObjectList ;
 
-    void mimeDiscoveryCoro(std::string url);
+    LL::Task<void> mimeDiscoveryCoro(std::string url);
     LLCoreHttpUtil::HttpCoroutineAdapter::wptr_t mMimeProbe;
     bool mCanceling;
 

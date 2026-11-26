@@ -1301,7 +1301,7 @@ void LLViewerMedia::setOpenIDCookie(const std::string& url)
 }
 
 //static
-void LLViewerMedia::getOpenIDCookieCoro(std::string url)
+LL::Task<void> LLViewerMedia::getOpenIDCookieCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1410,7 +1410,7 @@ void LLViewerMedia::getOpenIDCookieCoro(std::string url)
     LL_DEBUGS("MediaAuth") << "Requesting " << url << LL_ENDL;
     LL_DEBUGS("MediaAuth") << "sOpenIDCookie = [" << inst->mOpenIDCookie << "]" << LL_ENDL;
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1418,14 +1418,14 @@ void LLViewerMedia::getOpenIDCookieCoro(std::string url)
     if (!status)
     {
         LL_WARNS("MediaAuth") << "Error getting web profile." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD resultHeaders = httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_HEADERS];
     if (!resultHeaders.has(HTTP_IN_HEADER_SET_COOKIE))
     {
         LL_WARNS("MediaAuth") << "No cookie in response." << LL_ENDL;
-        return;
+        co_return;
     }
 
     const std::string& cookie = resultHeaders[HTTP_IN_HEADER_SET_COOKIE].asStringRef();
@@ -1445,7 +1445,7 @@ void LLViewerMedia::openIDSetup(const std::string &openidUrl, const std::string 
         boost::bind(&LLViewerMedia::openIDSetupCoro, openidUrl, openidToken));
 }
 
-void LLViewerMedia::openIDSetupCoro(std::string openidUrl, std::string openidToken)
+LL::Task<void> LLViewerMedia::openIDSetupCoro(std::string openidUrl, std::string openidToken)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1472,7 +1472,7 @@ void LLViewerMedia::openIDSetupCoro(std::string openidUrl, std::string openidTok
 
     bas << std::noskipws << openidToken;
 
-    LLSD result = httpAdapter->postRawAndSuspend(httpRequest, openidUrl, rawbody, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->postRawAndSuspend(httpRequest, openidUrl, rawbody, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1480,14 +1480,14 @@ void LLViewerMedia::openIDSetupCoro(std::string openidUrl, std::string openidTok
     if (!status)
     {
         LL_WARNS("MediaAuth") << "Error getting Open ID cookie" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD resultHeaders = httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_HEADERS];
     if (!resultHeaders.has(HTTP_IN_HEADER_SET_COOKIE))
     {
         LL_WARNS("MediaAuth") << "No cookie in response." << LL_ENDL;
-        return;
+        co_return;
     }
 
     // We don't care about the content of the response, only the Set-Cookie header.
@@ -2793,7 +2793,7 @@ void LLViewerMediaImpl::navigateInternal(bool should_log)
     }
 }
 
-void LLViewerMediaImpl::mimeDiscoveryCoro(std::string url)
+LL::Task<void> LLViewerMediaImpl::mimeDiscoveryCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2813,7 +2813,7 @@ void LLViewerMediaImpl::mimeDiscoveryCoro(std::string url)
     httpHeaders->append(HTTP_OUT_HEADER_ACCEPT, "*/*");
     httpHeaders->append(HTTP_OUT_HEADER_COOKIE, "");
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
 
     mMimeProbe.reset();
 
