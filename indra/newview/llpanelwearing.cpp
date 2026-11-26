@@ -523,11 +523,11 @@ void LLPanelWearing::requestAttachmentDetails()
     if (!url.empty())
     {
         LLCoros::instance().launch("LLPanelWearing::getAttachmentLimitsCoro",
-        boost::bind(&LLPanelWearing::getAttachmentLimitsCoro, this, url));
+        boost::bind(&LLPanelWearing::getAttachmentLimitsCoro, this, url, getHandle()));
     }
 }
 
-void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
+void LLPanelWearing::getAttachmentLimitsCoro(std::string url, LLHandle<LLPanel> panel_handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -545,8 +545,14 @@ void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
         return;
     }
 
+    // The panel may have been destroyed while the request was in flight.
+    if (panel_handle.isDead())
+    {
+        return;
+    }
+
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
-    setAttachmentDetails(result);
+    static_cast<LLPanelWearing*>(panel_handle.get())->setAttachmentDetails(result);
 }
 
 

@@ -2804,6 +2804,10 @@ const std::string LLVOAvatarSelf::debugDumpAllLocalTextureDataInfo() const
 
 void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
 {
+    // Keep this avatar alive across the HTTP wait: it is destroyed on relog and the
+    // coroutine writes mInitialMetric after the reply.
+    LLPointer<LLVOAvatarSelf> keep_alive(this);
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("appearanceChangeMetrics", httpPolicy);
