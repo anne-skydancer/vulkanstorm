@@ -395,9 +395,12 @@ namespace Details
                             // convert data to string and pass that string.
                             const LLSD body = (*i)["body"];
                             (*i)["body"].clear();
-                            work = [this, msg_name, body]()
+                            // The queued item keeps the impl alive: after stop() the coroutine
+                            // (which holds the launch reference) can end before the main
+                            // queue runs the item.
+                            work = [self = shared_from_this(), msg_name, body]()
                             {
-                                handleMessage(msg_name, body);
+                                self->handleMessage(msg_name, body);
                             };
                         }
                         main_queue->post(work);
