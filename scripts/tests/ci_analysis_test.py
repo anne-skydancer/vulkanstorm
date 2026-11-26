@@ -53,12 +53,12 @@ def found(tool, check, file="indra/llcommon/x.cpp", line=1, message="m", key="",
 
 class PlanTest(unittest.TestCase):
     def setUp(self):
-        self.root = make_repo(["llcommon", "llmath", "cmake", "llkdu"],
-                              {"llcommon": ["lltrace", "llcond", "llsingleton"], "llmath": []},
+        self.root = make_repo(["llcommon", "llmath", "llmessage", "cmake", "llkdu"],
+                              {"llcommon": ["lltrace", "llcond", "llsingleton"], "llmath": [], "llmessage": []},
                               {"llcommon": ["llcond", "nosuchtest"]})
 
     def test_libraries_need_add_library_and_exclude_unbuilt(self):
-        self.assertEqual(ca.libraries(self.root), ["llcommon", "llmath"])
+        self.assertEqual(ca.libraries(self.root), ["llcommon", "llmath", "llmessage"])
         (self.root / "indra" / "plain").mkdir()
         (self.root / "indra" / "plain" / "CMakeLists.txt").write_text("project(x)", encoding="utf-8")
         self.assertNotIn("plain", ca.libraries(self.root))
@@ -93,6 +93,10 @@ class PlanTest(unittest.TestCase):
         plan = ca.resolve("clean/coroutines", "pull_request", root=self.root)
         self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "llcommon", "lib"))
         self.assertEqual(plan["tsan_tests"], ["lltrace", "llsingleton"])
+
+    def test_coroutines_callers_branch_analyses_llmessage(self):
+        plan = ca.resolve("clean/coroutines-callers", "pull_request", root=self.root)
+        self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "llmessage", "lib"))
 
     def test_newview_area(self):
         plan = ca.resolve("clean/newview-render-pipeline", "pull_request", root=self.root)

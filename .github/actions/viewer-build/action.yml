@@ -419,6 +419,7 @@ runs:
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
           llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
           INTEGRATION_TEST_llcorehttp \
+          INTEGRATION_TEST_lltask_bench PROJECT_lllogin_TEST_lllogin PROJECT_llmessage_TEST_llcoproceduremanager \
           PROJECT_llimage_TEST_llimageworker INTEGRATION_TEST_llimagej2c_decode
         # Building a unit or integration test target runs it (LL_ADD_PROJECT_UNIT_TESTS, LL_ADD_INTEGRATION_TEST: a
         # post-build step that fails the build): llimageworker_test (the decode pool and its parallelFor) and

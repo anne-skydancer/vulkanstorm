@@ -19,9 +19,13 @@ names, so that an agent reads code only after the tools have had their say.
 
 A library is a directory `indra/<lib>` whose `CMakeLists.txt` has `add_library(<lib>`, except `cmake`, `llkdu`,
 `llphysicsextensionsos` and `llimagej2cneo` (the configure does not build them). `clean/newview-<area>` needs an area
-(`clean/newview` alone fails). One branch is named after its work, not a library: `clean/coroutines` (the coroutine migration,
-`doc/clean/plan.md`) analyses `llcommon`, where the new task core and its tests live. The mapping is `BRANCH_LIBRARY` in
-`scripts/ci_analysis.py`; the baseline is `.github/analysis/baseline/llcommon.json`.
+(`clean/newview` alone fails). Two branches are named after their work, not a library: `clean/coroutines` (the coroutine migration,
+`doc/clean/plan.md`) analyses `llcommon`, where the new task core and its tests live, and `clean/coroutines-callers`
+(the callers moved to Task coroutines) analyses `llmessage`, where `HttpCoroutineAdapter`, the coprocedure manager and the
+experience and avatar-name caches are. The mapping is `BRANCH_LIBRARY` in `scripts/ci_analysis.py`; the baselines are
+`.github/analysis/baseline/<lib>.json` (none for `llmessage` yet: its first run is report-only and proposes one). A run
+analyses one library: for the others dispatch the workflow by hand on the branch with that library as `lib`
+(`llcommon`, or `newview-coroutines` for the newview sources the branch changed).
 
 A push and its pull request do not cancel each other: the concurrency group has the event name and the dispatch input
 in it, a newer run of the same event replaces the older, and the plan job skips the push run when an open pull request
