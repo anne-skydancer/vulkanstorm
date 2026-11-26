@@ -918,7 +918,7 @@ private:
         }
     }
 
-    std::string getCPUFeatureDescription() const
+    std::string getCPUFeatureDescription() const override
     {
         std::ostringstream s;
 
