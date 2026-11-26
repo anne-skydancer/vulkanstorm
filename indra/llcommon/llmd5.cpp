@@ -229,6 +229,10 @@ LLMD5::LLMD5(const unsigned char* string, const unsigned int number)
     init();
     update(string, (U32)strlen((const char*)string));        /* Flawfinder: ignore */
     update((const unsigned char*)colon, (U32)strlen(colon)); /* Flawfinder: ignore */
+    // %i of an unsigned prints a negative number above INT_MAX; existing digests depend on that text, so it stays
+#ifdef _MSC_VER
+#pragma warning(suppress : 6340)
+#endif
     snprintf(tbuf, sizeof(tbuf), "%i", number);              /* Flawfinder: ignore */
     update((const unsigned char*)tbuf, (U32)strlen(tbuf));   /* Flawfinder: ignore */
     finalize();

@@ -33,6 +33,7 @@
 #include "llsys.h"
 
 #include <iostream>
+#include <vector>
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
 #else
@@ -190,6 +191,8 @@ LLOSInfo::LLOSInfo() :
     SYSTEM_INFO si; //System Info object file contains architecture info
     PGNSI pGNSI; //pointer object
     ZeroMemory(&si, sizeof(SYSTEM_INFO)); //zero out the memory in information
+    // kernel32 is mapped into every Windows process, so GetModuleHandle cannot return null here
+#pragma warning(suppress : 6387)
     pGNSI = (PGNSI)GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "GetNativeSystemInfo"); //load kernel32 get function
     if (nullptr != pGNSI) //check if it has failed
         pGNSI(&si); //success
@@ -198,7 +201,7 @@ LLOSInfo::LLOSInfo() :
     //(Warning: If GetSystemInfo it may result in incorrect information in a WOW64 machine, if the kernel fails to load)
 
 #pragma warning(push)
-#pragma warning(disable : 4996) // ignore 'deprecated.' GetVersionEx is deprecated
+#pragma warning(disable : 4996 28159) // GetVersionEx is deprecated and lies after Windows 8.1, but only the build number is taken from it
 
     // Try calling GetVersionEx using the OSVERSIONINFOEX structure.
     OSVERSIONINFOEX osvi;
@@ -1365,7 +1368,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     const S32 UNCOMPRESS_BUFFER_SIZE = 32768;
     bool retval = false;
     gzFile src = nullptr;
-    U8 buffer[UNCOMPRESS_BUFFER_SIZE];
+    std::vector<U8> buffer(UNCOMPRESS_BUFFER_SIZE); // on the heap: 32 KB is a lot of stack for a helper
     LLFILE *dst = nullptr;
     S32 bytes = 0;
     int gzerrnum = Z_OK;
@@ -1381,7 +1384,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     if (! dst) goto err;
     do
     {
-        bytes = gzread(src, buffer, UNCOMPRESS_BUFFER_SIZE);
+        bytes = gzread(src, buffer.data(), UNCOMPRESS_BUFFER_SIZE);
         // gzread() returns -1 on corrupt data and records Z_BUF_ERROR
         // when the compressed stream is truncated.
         gzerror(src, &gzerrnum);
@@ -1393,7 +1396,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
             LLFile::remove(tmpfile);
             goto err;
         }
-        size_t nwrit = fwrite(buffer, sizeof(U8), bytes, dst);
+        size_t nwrit = fwrite(buffer.data(), sizeof(U8), bytes, dst);
         if (nwrit < (size_t) bytes)
         {
             LL_WARNS() << "Short write on " << tmpfile << ": Wrote " << nwrit << " of " << bytes << " bytes." << LL_ENDL;
@@ -1415,7 +1418,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     const S32 COMPRESS_BUFFER_SIZE = 32768;
     std::string tmpfile;
     bool retval = false;
-    U8 buffer[COMPRESS_BUFFER_SIZE];
+    std::vector<U8> buffer(COMPRESS_BUFFER_SIZE); // on the heap, like gunzip_file()
     gzFile dst = nullptr;
     LLFILE *src = nullptr;
     S32 bytes = 0;
@@ -1433,9 +1436,9 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     src = LLFile::fopen(srcfile, "rb");     /* Flawfinder: ignore */
     if (! src) goto err;
 
-    while ((bytes = (S32)fread(buffer, sizeof(U8), COMPRESS_BUFFER_SIZE, src)) > 0)
+    while ((bytes = (S32)fread(buffer.data(), sizeof(U8), COMPRESS_BUFFER_SIZE, src)) > 0)
     {
-        if (gzwrite(dst, buffer, bytes) <= 0)
+        if (gzwrite(dst, buffer.data(), bytes) <= 0)
         {
             LL_WARNS() << "gzwrite failed: " << gzerror(dst, nullptr) << LL_ENDL;
             goto err;

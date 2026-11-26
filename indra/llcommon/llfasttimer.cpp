@@ -413,6 +413,10 @@ void BlockTimer::dumpCurTimes()
             parent_timerp = parent_timerp->getParent();
         }
 
+        // the iterator never yields a null timer; the loop above only walks its parents
+#ifdef _MSC_VER
+#pragma warning(suppress : 28182)
+#endif
         out_str << timerp->getName() << " "
             << std::setprecision(3) << total_time.valueInUnits<LLUnits::Milliseconds>() << " ms, "
             << num_calls << " calls";

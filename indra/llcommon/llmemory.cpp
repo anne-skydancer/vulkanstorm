@@ -172,6 +172,8 @@ void LLMemory::updateMemoryInfo()
 void* LLMemory::tryToAlloc(void* address, U32 size)
 {
 #if LL_WINDOWS
+    // 'address' is the caller's hint and VirtualAlloc replaces it; the analysis cannot see that the hint is optional
+#pragma warning(suppress : 6001)
     address = VirtualAlloc(address, size, MEM_RESERVE | MEM_TOP_DOWN, PAGE_NOACCESS) ;
     if(address)
     {

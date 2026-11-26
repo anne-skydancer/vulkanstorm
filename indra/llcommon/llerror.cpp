@@ -632,7 +632,7 @@ namespace LLError
                     const std::type_info& class_info,
                     const char* function,
                     bool printOnce,
-                    const char** tags,
+                    const char** tag_list,
                     size_t tag_count)
     :   mLevel(level),
         mFile(file),
@@ -670,11 +670,11 @@ namespace LLError
 
         for (int i = 0; i < tag_count; i++)
         {
-            if (strchr(tags[i], ' '))
+            if (strchr(tag_list[i], ' '))
             {
                 LL_ERRS() << "Space is not allowed in a log tag at " << mLocationString << LL_ENDL;
             }
-            mTags[i] = tags[i];
+            mTags[i] = tag_list[i];
         }
 
         mTagString.append("#");

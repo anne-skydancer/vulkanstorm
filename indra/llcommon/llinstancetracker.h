@@ -308,6 +308,10 @@ private:
     {
         mInstanceKey = key;
         InstanceMap& map = lock->mMap;
+        // KEY_COLLISION_BEHAVIOR is a template constant: the comparisons of the switch are meant to fold away
+#ifdef _MSC_VER
+#pragma warning(suppress : 6326)
+#endif
         switch(KEY_COLLISION_BEHAVIOR)
         {
         case LLInstanceTrackerErrorOnCollision:
