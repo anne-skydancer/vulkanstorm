@@ -54,8 +54,15 @@ public:
     // Consumers must be gone before the channel: close() it and let them finish, or shut the executor down first.
     ~Channel() = default;
 
-    /// Hand @a value to a waiting consumer or queue it. success, full or closed. Any thread.
-    ChannelStatus try_push(T value)
+    /// Hand @a value to a waiting consumer or queue it: success, full or closed. The value is moved only on success,
+    /// as with Boost's channel. Any thread.
+    ChannelStatus try_push(const T& value)
+    {
+        T copy(value);
+        return try_push(std::move(copy));
+    }
+
+    ChannelStatus try_push(T&& value)
     {
         std::unique_lock lock(mMutex);
         if (mClosed)

@@ -54,24 +54,13 @@ CoroData::~CoroData()
     }
 }
 
-void* CoroData::localGet(const void* key) const
+void* CoroData::localGet(std::uint64_t key) const
 {
     auto found = mLocals.find(key);
     return found == mLocals.end() ? nullptr : found->second.value;
 }
 
-void CoroData::localErase(const void* key) noexcept
-{
-    auto found = mLocals.find(key);
-    if (found != mLocals.end())
-    {
-        const Slot old = found->second;
-        mLocals.erase(found);
-        old.deleter(old.value);
-    }
-}
-
-void CoroData::localSet(const void* key, void* value, void (*deleter)(void*))
+void CoroData::localSet(std::uint64_t key, void* value, void (*deleter)(void*))
 {
     auto found = mLocals.find(key);
     if (found != mLocals.end())
@@ -81,7 +70,7 @@ void CoroData::localSet(const void* key, void* value, void (*deleter)(void*))
             return;
         }
         // move the old slot out first: its deleter may run code that touches this record
-        Slot old = found->second;
+        const Slot old = found->second;
         if (value)
         {
             found->second = Slot{ .value = value, .deleter = deleter };
@@ -97,6 +86,26 @@ void CoroData::localSet(const void* key, void* value, void (*deleter)(void*))
         mLocals.emplace(key, Slot{ .value = value, .deleter = deleter });
     }
 }
+
+std::uint64_t newLocalKey() noexcept
+{
+    static std::atomic<std::uint64_t> sNext{1};
+    return sNext.fetch_add(1, std::memory_order_relaxed);
+}
+
+namespace detail
+{
+const void* currentTaskOwner() noexcept
+{
+    return sRecord;
+}
+
+void checkTaskAwaiter(const void* starter)
+{
+    llassert_always_msg(starter == sRecord,
+                        "a Task was awaited by another task than the one that started it (see lltask.h)");
+}
+} // namespace detail
 
 /*****************************************************************************
 *   Executor
@@ -147,22 +156,19 @@ CoroData* Executor::currentRecord()
     return sRecord;
 }
 
-void Executor::bindOwner()
-{
-    std::thread::id none;
-    mOwner.compare_exchange_strong(none, std::this_thread::get_id());
-}
-
 bool Executor::onOwnerThread() const
 {
-    return mOwner.load() == std::this_thread::get_id();
+    return mOwner == std::this_thread::get_id();
+}
+
+void Executor::track(CoroData* record)
+{
+    llassert_always(onOwnerThread());
+    mLive.push_back(record);
 }
 
 void Executor::start(CoroData* record)
 {
-    bindOwner();
-    llassert_always(onOwnerThread());
-    mLive.push_back(record);
     resume(Entry{ .kind = Entry::Kind::Task, .handle = record->mRoot, .record = record });
 }
 
@@ -179,7 +185,6 @@ void Executor::resume(const Entry& entry)
 
 void Executor::pump()
 {
-    bindOwner();
     llassert_always(onOwnerThread());
     llassert_always(! mPumping);
     mPumping = true;

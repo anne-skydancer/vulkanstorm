@@ -187,6 +187,9 @@ LLSD suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& suspendPumpOrNa
  * "running" on "LLApp" into LLCoros::Stopping. An awaiter is not movable and unlinks every listener, timer and queue
  * entry in its destructor, so a destroyed frame is never resumed.
  *
+ * A task must use these forms, never the blocking ones above: a blocking form blocks the hosting fibre, and a task is
+ * not a fibre but runs on the main loop. The blocking forms abort when a task calls one.
+ *
  * <tt>llcoro::co</tt> is the back end LL_CORO_NATIVE picks (llcoros.h): llcoro::native really suspends the task on
  * the executor, llcoro::bridge blocks the hosting fibre with the function above (nothing suspends at the C++20
  * level). Both are always built and tested. The change that removes the fibres makes llcoro::native the only one and

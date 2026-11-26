@@ -141,25 +141,49 @@ public:
      * Launch a coroutine that is an LL::Task: @a callable returns the Task. Everything said above applies, and so
      * does the rule for parameters: the callable should be a plain function (or a lambda that is NOT itself the
      * coroutine) that returns the Task of a coroutine taking its parameters by value, for example
-     * <tt>[this, url] { return fooCoro(url); }</tt>.
+     * <tt>[this, url] { return fooCoro(url); }</tt>. A lambda that is itself a coroutine and captures is safe only
+     * here, because the launch keeps it alive for the life of the task (see lltask.h).
      *
-     * With LL_CORO_NATIVE the task runs on the executor; without it, in a fibre that blocks at every co_await.
+     * With LL_CORO_NATIVE the task runs on the executor (launchNative), without it in a fibre that blocks at every
+     * co_await (launchBridged). Both are always compiled and tested; the macro only picks which one this calls.
      */
     template<typename F>
         requires LL::TaskFactory<std::decay_t<F>>
     std::string launch(const std::string& prefix, F&& callable)
     {
+        if constexpr (LL_CORO_NATIVE)
+        {
+            return launchNative(prefix, std::forward<F>(callable));
+        }
+        else
+        {
+            return launchBridged(prefix, std::forward<F>(callable));
+        }
+    }
+
+    /// launch() of a Task callable on the executor
+    template<typename F>
+        requires LL::TaskFactory<std::decay_t<F>>
+    std::string launchNative(const std::string& prefix, F&& callable)
+    {
         const std::string name(generateDistinctName(prefix));
-#if LL_CORO_NATIVE
         mExecutor.launch(name, std::decay_t<F>(std::forward<F>(callable)));
-#else
+        return name;
+    }
+
+    /// launch() of a Task callable in a fibre: every co_await of llcoro::bridge blocks the fibre, so the task has
+    /// run to its end when the callable returns
+    template<typename F>
+        requires LL::TaskFactory<std::decay_t<F>>
+    std::string launchBridged(const std::string& prefix, F&& callable)
+    {
+        const std::string name(generateDistinctName(prefix));
         auto shared = std::make_shared<std::decay_t<F>>(std::forward<F>(callable));
         launchFiber(name, [shared]()
         {
             LL::Task<void> task = (*shared)();
             finishBridged(task);
         });
-#endif
         return name;
     }
 

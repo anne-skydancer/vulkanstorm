@@ -38,10 +38,13 @@ struct OrderTestApp: public LLTestApp
 };
 
 // Under ASan, scenarios 3 and 7 (and the bridge test that repeats 7) report stack-use-after-scope and
-// stack-buffer-overflow on variables that are fine, in the first function a resumed fibre calls (the CI run reports one
-// victim each time, the first fibre to hit stale shadow memory). Boost.Fiber is prebuilt without ASan annotations, so
-// ASan cannot judge these fibre switches; the other scenarios run there, and these run in every other build of the test
-// (all pass on Boost.Fiber 1.90 on Windows). The task core has no fibre: lltask_test runs the same scenarios under ASan.
+// stack-buffer-overflow on variables that are fine, in the first function a resumed fibre calls. The cause, as far as
+// we know: ASan says "ignoring requested __asan_handle_no_return" (google/sanitizers issue 189): a throw on a Boost
+// fibre stack cannot clear the stale poison of earlier frames, because ASan does not know the stack is a fibre's and
+// Boost.Fiber is prebuilt without ASan annotations. The report names one victim each time (the first fibre to hit the
+// stale shadow memory), so other tests that throw on a fibre can flip the same way. These tests skip under ASan and run
+// in every other build of the test (all pass on Boost.Fiber 1.90 on Windows). The task core has no fibre: lltask_test
+// runs the same scenarios under ASan.
 #if defined(__SANITIZE_ADDRESS__)
 constexpr bool sAsan = true;
 #elif defined(__has_feature)
@@ -184,8 +187,9 @@ void object::test<4>()
 
 // 5. Only the first event satisfies a waiter; a second event on the same pump before the waiter runs is not
 //    delivered to it and not consumed. A consuming waiter stops the listeners after it from seeing the event.
-//    LLEventPump calls listeners that name no order newest first (observed, on fibres and on the executor alike; it
-//    comes from LLDependencies' topological sort, not from the scheduler): tail, then K, then E.
+//    LLEventPump calls listeners that name no order in reverse alphabetical order of their names (LLDependencies keeps
+//    them in a std::map and its topological sort comes out reversed): order_tail, then order_K, then order_E. The names
+//    pin the order; the scheduler has nothing to do with it, fibres and executor alike.
 template<> template<>
 void object::test<5>()
 {

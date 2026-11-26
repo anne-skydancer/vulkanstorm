@@ -11,9 +11,17 @@
  * A Task owns its frame: destroying a Task that has not finished destroys the suspended frame, and each leaf awaiter
  * unlinks itself from the executor in its destructor, so nothing can resume a dead frame.
  *
- * Parameters of a coroutine returning a Task are taken BY VALUE: a reference would dangle once the caller returns.
- * clang-tidy's cppcoreguidelines-avoid-reference-coroutine-parameters and
- * cppcoreguidelines-avoid-capturing-lambda-coroutines enforce this (.github/analysis/clang-tidy.yaml).
+ * Two rules:
+ * - A Task is awaited by the task that started it. A task runs in the record of the task it was started in (name,
+ *   status, local storage), and that record goes when that task ends: a task that another task awaited later would
+ *   resume in a record that may be gone. The Task remembers its starter's record and the awaiter checks it (the rule
+ *   the fibres had: a call in progress cannot change fibre).
+ * - Parameters of a coroutine returning a Task are taken BY VALUE: a reference would dangle once the caller returns.
+ *   A lambda that is itself a coroutine and captures is safe only through LLCoros::launch() and Executor::launch(),
+ *   which keep the lambda alive in the task's root frame; anywhere else its captures dangle after the first
+ *   suspension. Write a plain function (or a lambda that is not a coroutine) that returns the Task of a by-value
+ *   coroutine. clang-tidy's cppcoreguidelines-avoid-reference-coroutine-parameters and
+ *   cppcoreguidelines-avoid-capturing-lambda-coroutines enforce this (.github/analysis/clang-tidy.yaml).
  */
 
 #if ! defined(LL_LLTASK_H)
@@ -36,12 +44,19 @@ class [[nodiscard]] Task;
 namespace detail
 {
 
+/// the record of the task that is running now (an LL::CoroData), or null: defined in llexecutor.cpp
+const void* currentTaskOwner() noexcept;
+/// aborts when @a starter, the record a Task was started in, is not the record that now awaits it
+void checkTaskAwaiter(const void* starter);
+
 // What every Task promise shares: the awaiting coroutine and a captured exception.
 struct TaskPromiseBase
 {
     // the coroutine awaiting this task; empty for a task nobody awaits
     std::coroutine_handle<> mContinuation;
     std::exception_ptr mException;
+    // the record of the task this task was started in (null when started outside any task)
+    const void* mStarter{currentTaskOwner()};
 
     std::suspend_never initial_suspend() const noexcept { return {}; }
 
@@ -140,9 +155,14 @@ public:
         struct Awaiter
         {
             Task mTask;
-            bool await_ready() const noexcept { return mTask.mHandle.done(); }
-            void await_suspend(std::coroutine_handle<> awaiting) const noexcept
+            bool await_ready() const noexcept
             {
+                assert(mTask.mHandle);
+                return mTask.mHandle.done();
+            }
+            void await_suspend(std::coroutine_handle<> awaiting) const
+            {
+                detail::checkTaskAwaiter(mTask.mHandle.promise().mStarter);
                 mTask.mHandle.promise().mContinuation = awaiting;
             }
             T await_resume() const { return mTask.mHandle.promise().take(); }

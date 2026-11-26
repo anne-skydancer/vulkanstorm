@@ -243,6 +243,9 @@ void object::test<4>()
 
 // 5. Only the first event satisfies a waiter; a second event on the same pump before the waiter runs is not delivered
 //    to it and not consumed. A consuming waiter stops later listeners from seeing the event.
+//    LLEventPump calls listeners that name no order in reverse alphabetical order of their names (LLDependencies keeps
+//    them in a std::map and its topological sort comes out reversed): order_tail, then order_K, then order_E. The names
+//    pin the order.
 template<> template<>
 void object::test<5>()
 {
@@ -584,29 +587,21 @@ void object::test<17>()
     frame();
     ensure_equals(sTrace, "order_NAME status cleared");
 }
-// 18. The awaiting frame is destroyed while it waits for a task that something else started: the awaiter owns the
-//     task, so the task goes with the frame and cannot resume it later.
+// 18. The task that started a child and awaits it is destroyed while it waits: the awaiter owns the child, so the child
+//     goes with it and cannot resume the destroyed frame later.
 template<> template<>
 void object::test<18>()
 {
     set_test_name("destroying a waiting parent destroys the child it awaits");
     settle();
     LLEventStream pg("order_pg18", true);
-    std::optional<LL::Task<int>> holder;
-    exec.launch("order_H", [&holder]() -> LL::Task<void>
-        {
-            // the child starts here and waits for the event; the task object is kept outside
-            holder.emplace(addEvent("order_pg18", 1));
-            co_return;
-        });
-    ensure("child started", holder.has_value() && ! holder->done());
-    exec.launch("order_PARENT", [&holder]() -> LL::Task<void>
+    exec.launch("order_PARENT", []() -> LL::Task<void>
         {
             struct Sentinel
             {
                 ~Sentinel() { mark("parent destroyed"); }
             } sentinel;
-            int value = co_await std::move(*holder);
+            int value = co_await addEvent("order_pg18", 1);
             mark("PARENT resumed with " + std::to_string(value));
         });
     ensure_equals("destroyed", exec.shutdown(0), 1u);
@@ -616,6 +611,23 @@ void object::test<18>()
     frame();
     frame();
     ensure_equals(sTrace, "parent destroyed");
+}
+
+// 18b. The task that started a child awaits it: when the event comes later, it resumes in its own record.
+template<> template<>
+void object::test<21>()
+{
+    set_test_name("the starter resumes in its own record");
+    settle();
+    LLEventStream pg("order_pg21", true);
+    exec.launch("order_STARTER", []() -> LL::Task<void>
+        {
+            int value = co_await addEvent("order_pg21", 1);
+            mark(LLCoros::getName() + " " + std::to_string(value));
+        });
+    pg.post(5);
+    frame();
+    ensure_equals(sTrace, "order_STARTER 6");
 }
 
 // 19. A frame destroyed while it waits in pop_wait_for leaves nothing in the channel or the executor.
@@ -687,5 +699,94 @@ void object::test<20>()
     }
     closer.join();
     ensure_equals("all saw closed", finished, 8);
+}
+// 22. The event and the timer are both ready when the pump comes: the event, posted first, wins.
+template<> template<>
+void object::test<22>()
+{
+    set_test_name("event before the pump beats an expired timer");
+    settle();
+    LLEventStream pw("order_pw22", true);
+    exec.launch("order_W22", [&pw]() -> LL::Task<void>
+        {
+            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
+            mark("W:" + v.asString());
+        });
+    std::this_thread::sleep_for(20ms);
+    pw.post("event");
+    frame();
+    ensure_equals(sTrace, "W:event");
+}
+
+// 23. The timer comes up first in the pump (TIMERS leads the queue), a task that runs after it posts the event: the
+//     event finds the claim taken, is neither delivered nor consumed, and the waiter times out.
+template<> template<>
+void object::test<23>()
+{
+    set_test_name("timer in the pump beats an event posted later in the same pump");
+    settle();
+    LLEventStream pw("order_pw23", true), px("order_px23", true);
+    std::string late;
+    LLTempBoundListener tail(pw.listen("order_zz23", [&late](const LLSD& v) { late += v.asString(); return false; }));
+    exec.launch("order_W23", [&pw]() -> LL::Task<void>
+        {
+            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
+            mark("W:" + v.asString());
+        });
+    exec.launch("order_X23", [&px, &pw]() -> LL::Task<void>
+        {
+            co_await llcoro::native::suspendUntilEventOn(px);
+            mark("X");
+            pw.post("event");
+        });
+    std::this_thread::sleep_for(20ms);
+    px.post(LLSD());
+    frame();
+    frame();
+    ensure_equals(sTrace, "X W:timeout");
+    // not consumed: the listener behind the waiter's still saw it
+    ensure_equals(late, "event");
+}
+
+// 24. A task queued by suspend() when the shutdown comes is destroyed, not resumed.
+template<> template<>
+void object::test<24>()
+{
+    set_test_name("shutdown destroys a task waiting in suspend()");
+    settle();
+    struct Sentinel
+    {
+        ~Sentinel() { mark("destroyed"); }
+    };
+    exec.launch("order_Y24", []() -> LL::Task<void>
+        {
+            Sentinel sentinel;
+            co_await llcoro::native::suspend();
+            mark("resumed");
+        });
+    ensure_equals("destroyed", exec.shutdown(0), 1u);
+    frame();
+    frame();
+    ensure_equals(sTrace, "destroyed");
+}
+
+// 25. LLCoros::launchNative runs a Task callable on LLCoros' executor, under the name it returns.
+template<> template<>
+void object::test<25>()
+{
+    set_test_name("LLCoros::launchNative");
+    settle();
+    LLEventStream pn("order_pn25", true);
+    std::string name = LLCoros::instance().launchNative("order_NATIVE", [&pn]() -> LL::Task<void>
+        {
+            mark("first " + LLCoros::getName());
+            co_await llcoro::native::suspendUntilEventOn(pn);
+            mark("second");
+        });
+    ensure("distinct name", name.rfind("order_NATIVE", 0) == 0);
+    pn.post(LLSD());
+    LLCoros::instance().executor().pump();
+    ensure_equals(sTrace, "first " + name + " second");
+    ensure_equals("tasks left", LLCoros::instance().executor().taskCount(), 0u);
 }
 } // namespace tut

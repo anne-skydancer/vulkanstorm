@@ -77,11 +77,9 @@ public:
     std::coroutine_handle<> mRoot;
 
     // Local storage, see LocalPtr. The record owns the values and deletes them with itself.
-    void* localGet(const void* key) const;
+    void* localGet(std::uint64_t key) const;
     /// replace the value for @a key, deleting the old one; a null @a value forgets the key
-    void localSet(const void* key, void* value, void (*deleter)(void*));
-    /// forget @a key, deleting its value
-    void localErase(const void* key) noexcept;
+    void localSet(std::uint64_t key, void* value, void (*deleter)(void*));
 
 private:
     struct Slot
@@ -89,29 +87,24 @@ private:
         void* value;
         void (*deleter)(void*);
     };
-    std::unordered_map<const void*, Slot> mLocals;
+    std::unordered_map<std::uint64_t, Slot> mLocals;
 };
+
+/// a new key for a LocalPtr: unique for the life of the process, so a LocalPtr built where an old one was never sees
+/// the old one's values
+LL_COMMON_API std::uint64_t newLocalKey() noexcept;
 
 /**
  * Per-coroutine storage. On a task of the executor the value lives in that task's record; on a fibre, and on the
  * default coroutine of a thread, it lives in a fibre-specific pointer (the fibre branch goes with the fibres).
  *
- * A LocalPtr is not copyable or movable: its address is the key.
+ * A LocalPtr is not copyable or movable. A task's value is deleted with its record.
  */
 template<typename T>
 class LocalPtr
 {
 public:
     LocalPtr() = default;
-    ~LocalPtr()
-    {
-        // a task's value is deleted with its record; forget this key so that an object later built at the same
-        // address starts empty. The fibre-specific pointer cleans up after itself.
-        if (CoroData* record = currentTaskRecord())
-        {
-            record->localErase(this);
-        }
-    }
     LocalPtr(const LocalPtr&) = delete;
     LocalPtr& operator=(const LocalPtr&) = delete;
 
@@ -119,7 +112,7 @@ public:
     {
         if (CoroData* record = currentTaskRecord())
         {
-            return static_cast<T*>(record->localGet(this));
+            return static_cast<T*>(record->localGet(mKey));
         }
         return mFibre.get();
     }
@@ -130,7 +123,7 @@ public:
     {
         if (CoroData* record = currentTaskRecord())
         {
-            record->localSet(this, value, [](void* p) { delete static_cast<T*>(p); });
+            record->localSet(mKey, value, [](void* p) { delete static_cast<T*>(p); });
         }
         else
         {
@@ -141,12 +134,14 @@ public:
 private:
     static CoroData* currentTaskRecord();
 
+    const std::uint64_t mKey{newLocalKey()};
     boost::fibers::fiber_specific_ptr<T> mFibre;
 };
 
 /// A claim on the one wake-up a waiter takes. Whoever calls claim() first (the event, the timer, a close) delivers the
 /// result and wakes the task; everyone else sees false and does nothing. That makes "first event wins" and
-/// "the timeout races an event" safe, also across threads.
+/// "the timeout races an event" exactly-once. The claim is thread safe and LL::Channel uses it across threads; the
+/// event awaiters (lleventcoro.h) are not: their listeners run on the executor's thread.
 struct WaitClaim
 {
     std::atomic<bool> mClaimed{false};
@@ -163,6 +158,7 @@ public:
     /// identifies a timer: (deadline, insertion sequence)
     using TimerKey = std::pair<Clock::time_point, std::uint64_t>;
 
+    /// The executor belongs to the thread that builds it: tasks run, and the queue and the timers are used, only there.
     Executor();
     /// destroys the frames of tasks still alive (see shutdown())
     ~Executor();
@@ -173,13 +169,15 @@ public:
     static Executor* current();
     /// the record of the task running on this thread, or nullptr
     static CoroData* currentRecord();
+    /// true on the thread this executor belongs to
+    bool onOwnerThread() const;
 
     /**
      * Start a task: call @a fn under a new record named @a name and run what it returns to its first wait. Returns
      * after that; it does not run other ready tasks. @a name must be distinct (LLCoros::launch makes it so).
      * @a fn is kept alive in the task's root frame until the task ends, so a capturing lambda that is itself the
-     * coroutine is safe; the lambdas the plan prescribes are plain functions that return the Task of a by-value
-     * coroutine.
+     * coroutine is safe here (and only through launch(), see lltask.h); the lambdas the plan prescribes are plain
+     * functions that return the Task of a by-value coroutine.
      */
     template<TaskFactory F>
     void launch(const std::string& name, F fn);
@@ -248,14 +246,12 @@ private:
     template<typename F>
     // NOLINTNEXTLINE(performance-unnecessary-value-param): the frame must own the callable, a reference would dangle
     static RootTask runRoot(Executor* self, std::unique_ptr<CoroData> record, F fn);
+    void track(CoroData* record);
     void start(CoroData* record);
     void retire(CoroData* record);
     void handleUncaught(CoroData& record, const std::exception_ptr& error);
     void resume(const Entry& entry);
-    void bindOwner();
-    bool onOwnerThread() const;
-
-    std::atomic<std::thread::id> mOwner;
+    const std::thread::id mOwner{std::this_thread::get_id()};
     bool mPumping{false};
     std::deque<Entry> mReady;
     std::map<TimerKey, Timer> mTimers;
@@ -307,6 +303,20 @@ void Executor::launch(const std::string& name, F fn)
     CoroData* rec = record.get();
     RootTask root = runRoot(this, std::move(record), std::move(fn));
     rec->mRoot = root.mHandle;
+    // the frame exists but has not started: if registering it throws, destroy it (and with it the record)
+    struct Guard
+    {
+        std::coroutine_handle<> frame;
+        ~Guard()
+        {
+            if (frame)
+            {
+                frame.destroy();
+            }
+        }
+    } guard{ root.mHandle };
+    track(rec);
+    guard.frame = nullptr;
     start(rec);
 }
 

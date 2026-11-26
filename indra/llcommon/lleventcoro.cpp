@@ -104,10 +104,19 @@ void storeToLLSDPath(LLSD& dest, const LLSD& path, const LLSD& value)
     llsd::drill_ref(dest, path) = value;
 }
 
+/// The blocking forms below block the hosting fibre. A task of the executor is not a fibre: it would block the main
+/// loop, so it must co_await the llcoro::co forms instead.
+void forbidInTask(const char* name)
+{
+    llassert_always_msg(! LL::Executor::currentRecord(),
+                        "llcoro::" << name << "() blocks: a task must co_await llcoro::co::" << name << "()");
+}
+
 } // anonymous
 
 void llcoro::suspend()
 {
+    forbidInTask("suspend");
     LLCoros::checkStop();
     LLCoros::TempStatus st("waiting one tick");
     boost::this_fiber::yield();
@@ -257,6 +266,7 @@ postAndSuspendSetup(const std::string& callerName,
 LLSD llcoro::postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
                  const LLEventPumpOrPumpName& replyPump, const LLSD& replyPumpNamePath)
 {
+    forbidInTask("postAndSuspend");
     LLCoros::Promise<LLSD> promise;
     std::string listenerName(listenerNameForCoro());
 
@@ -284,6 +294,7 @@ LLSD llcoro::postAndSuspendWithTimeout(const LLSD& event,
                                        const LLSD& replyPumpNamePath,
                                        F32 timeout, const LLSD& timeoutResult)
 {
+    forbidInTask("postAndSuspendWithTimeout");
     LLCoros::Promise<LLSD> promise;
     std::string listenerName(listenerNameForCoro());
 
@@ -393,6 +404,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this](const LLSD& status)
         {
+            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             // anything except "running" should wake up the waiting coroutine
             const auto& statsd = status["status"];
             if (statsd.asString() != "running")
@@ -417,6 +429,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this, consuming](const LLSD& result)
         {
+            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             if (! mClaim.claim())
             {
                 // the first event won; this one is neither delivered nor consumed
@@ -454,7 +467,7 @@ void EventAwaiter::await_suspend(std::coroutine_handle<> handle)
     if (mTimeout)
     {
         mStatus.emplace(STRINGIZE("waiting for " << mReplyPump.getPump().getName() << " for "
-                                  << mTimeout->count() << "ms"));
+                                  << static_cast<F32>(mTimeout->count()) / 1000.f << "s"));
         mTimer = mExecutor->addTimer(*mTimeout, handle, mRecord, &mClaim);
     }
     else
@@ -493,12 +506,8 @@ LLSD EventAwaiter::await_resume()
 
 void EventAwaiter::completed()
 {
-    // the winner of the claim has stored the outcome: end the timer and make the task ready
-    if (mTimer)
-    {
-        mExecutor->cancelTimer(*mTimer);
-        mTimer.reset();
-    }
+    // The winner of the claim has stored the outcome: make the task ready. The timer, if any, stays until await_resume()
+    // or the destructor cancels it; if it fires first it finds the claim taken and does nothing.
     // no handle yet: the wait ended while await_ready() posted the request, and the task never suspends
     if (mHandle)
     {

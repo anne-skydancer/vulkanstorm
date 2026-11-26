@@ -21,7 +21,7 @@ A library is a directory `indra/<lib>` whose `CMakeLists.txt` has `add_library(<
 `llphysicsextensionsos` and `llimagej2cneo` (the configure does not build them). `clean/newview-<area>` needs an area
 (`clean/newview` alone fails). One branch is named after its work, not a library: `clean/coroutines` (the coroutine migration,
 `doc/clean/plan.md`) analyses `llcommon`, where the new task core and its tests live. The mapping is `BRANCH_LIBRARY` in
-`scripts/ci_analysis.py`; the baseline is `baseline/llcommon.json`.
+`scripts/ci_analysis.py`; the baseline is `.github/analysis/baseline/llcommon.json`.
 
 A push and its pull request do not cancel each other: the concurrency group has the event name and the dispatch input
 in it, a newer run of the same event replaces the older, and the plan job skips the push run when an open pull request
