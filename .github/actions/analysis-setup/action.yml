@@ -126,7 +126,7 @@ runs:
             flags="-ffunction-sections -fdata-sections -frandom-seed=vkstorm-codegen -ffile-prefix-map=$GITHUB_WORKSPACE=."
             options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
               "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG"
-              -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
+              -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
             ;;
           tidy)
             options+=(-DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)

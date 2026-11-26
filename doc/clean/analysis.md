@@ -148,9 +148,9 @@ the verdict has more states than the objects alone:
 
 | Verdict | Meaning |
 |---|---|
-| `identical` | the objects are equal, no changed line is inside a preprocessor conditional, and every changed code file is compiled into them. Worded "identical in the compiled configuration (Linux, GCC, `LL_RELEASE_FOR_DOWNLOAD`)" |
+| `identical` | the objects are equal, every changed line is compiled by at least one translation unit of the target, and every changed code file is compiled into them. Worded "identical in the compiled configuration (Linux, GCC, `LL_RELEASE_FOR_DOWNLOAD`)" |
 | `differs` | an object, section or symbol differs; the symbols are listed |
-| `unproven` | a changed line lies inside an `#if`/`#ifdef`/`#ifndef`/`#elif`/`#else` region that is not an include guard (found by a conservative scan of the old and the new text of every changed file the objects depend on): this build may not compile it (Windows, macOS, debug-only or `LL_RELEASE_FOR_DOWNLOAD` branches). The summary lists `file:line` and the directive chain |
+| `unproven` | a changed line is not compiled by any translation unit of this build (an inactive branch: Windows, macOS, debug-only, `LL_RELEASE_FOR_DOWNLOAD`), or it cannot be probed (below). The summary lists `file:line (old or new text)` and the reason |
 | `not-covered` | a changed `.c .cc .cpp .cxx .h .hpp .inl .mm` file is not in the union of the objects' depfiles (`CMakeFiles/<target>.dir/*.o.d`): tests (`LL_TESTS=OFF`), Windows-only sources, files of another library. Listed |
 | `build-failed` | the library did not build at the commit or at its parent |
 | `error` | the script itself failed on that commit (no link line, no depfile, an LTO or REL object, ...); the message is shown and the other commits still run |
@@ -160,6 +160,8 @@ objects are not compared". Results are written to the job summary and to `codege
 still leaves the earlier ones. `parse_elf` refuses what it cannot read soundly: `.gnu.lto*` sections (LTO objects hold
 intermediate code), `SHT_REL` relocations, machines other than x86-64 and aarch64, and a set of objects with no `.text`
 at all. The link line must name object files (a `@response` file is read); a build whose depfiles are missing fails.
+
+**How a changed line is known to be compiled.** By asking the preprocessor, not by reading `#if`s. For each side of the commit (the parent's text for the old lines, the commit's text for the new lines) the script copies the repository files the affected translation units read into a scratch directory (never the working tree the build uses, so the incremental build and the `__LINE__` handling are untouched), puts a unique token line `__codegen_probe_<n>__` just before each changed line, and runs the real compile command of each translation unit that reads a changed file (`compile_commands.json`, paths moved to the scratch copy, `-E -P -w`, no output or dependency file; a `.cpp` is its own unit, a header goes through every unit whose depfile lists it). A token that appears in the output of at least one unit sits in an active region: the line is compiled, and the object comparison covers it (`#ifdef __GNUC__` on GCC and the `#else` of `#ifdef LL_WINDOWS` are compiled on this build). A token that appears in no unit is in an inactive branch and the line is `unproven`. This needs no knowledge of include guards. Lines that hold only blanks and comments are not probed (they cannot change the code). **Two kinds of line cannot take a probe and are reported `unproven`, chosen for safety over a guess about the macro's uses:** a continuation line (the line before ends with a backslash: a multi-line macro or statement, where a probe line would change the macro) and an `#else`, `#elif` or `#endif` line (a probe before it sits in the branch before it). A changed token inside a macro argument that the macro discards is also reported, since its probe vanishes; that is the conservative direction. The preprocessing runs on the translation units that read a changed file only.
 
 **What it ignores, and why that is safe.**
 

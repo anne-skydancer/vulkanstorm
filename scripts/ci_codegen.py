@@ -19,6 +19,7 @@ into the logging and assert call sites, so the check-only tree has the token __L
 files (indra/), at each commit, before the build; the commit itself is not changed.
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -27,6 +28,7 @@ import re
 import shlex
 import shutil
 import struct
+import tempfile
 import subprocess
 import sys
 
@@ -37,10 +39,12 @@ SKIP_PREFIXES = (".debug", ".note", ".comment", ".eh_frame", ".rela", ".rel.", "
 MACHINES = {62: "x86-64", 183: "aarch64"}
 CODE_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".inl", ".mm")
 HEADER_SUFFIXES = (".h", ".hpp", ".inl")
-DIRECTIVE = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif|else|endif|define)\b\s*(.*)$")
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 CONFIGURATION = "Linux, GCC, LL_RELEASE_FOR_DOWNLOAD"
 MAX_FINDINGS = 15
+PROBE = "__codegen_probe_{}__"
+PROBE_RE = re.compile(r"__codegen_probe_(\d+)__")
+NOT_COMPILED = "not compiled by any translation unit of the target"
 LINE_TOKEN = re.compile(rb"\b__LINE__\b")
 STT_SECTION, STT_FILE = 3, 4
 SPECIAL_SECTIONS = {0: "UND", 0xFFF1: "ABS", 0xFFF2: "COM"}
@@ -248,8 +252,8 @@ def render_commit(result):
             lines.append(f"  - and {len(result['differences']) - MAX_LABELS} more objects (codegen.json has them all)")
     else:
         lines = [f"- `{sha}` {subject}: **{status}** {result.get('note', '')}".rstrip()]
-    for key, text in (("unproven", "changed lines inside a preprocessor conditional (not proven: another configuration "
-                                   "may compile them)"),
+    for key, text in (("unproven", "changed lines no translation unit of this build compiles (an inactive branch, or a line that cannot "
+                                   "be probed): the objects say nothing about them"),
                       ("not_covered", "changed code files the compiled objects do not depend on (not compared)")):
         items = result.get(key) or []
         if items:
@@ -264,39 +268,6 @@ def render_commit(result):
 
 # ---------------------------------------------------------------- what the build does not compile
 
-def conditional_chains(text):
-    """{line number: [directive, ...]} for every line inside a preprocessor conditional that is not the include
-    guard. A conservative scan: block comments and continuation lines are not understood, and #elif and #else keep
-    the chain of their #if. A directive that opens, continues or closes a conditional belongs to its chain."""
-    chains, stack, directives, guard_name = {}, [], 0, None  # stack entries: [line, text, is_guard]
-    for number, line in enumerate(text.splitlines(), 1):
-        match = DIRECTIVE.match(line)
-        if not match:
-            if stack and any(not entry[2] for entry in stack):
-                chains[number] = [f"{n}: {t}" for n, t, guard in stack if not guard]
-            continue
-        kind, rest = match.groups()
-        rest = re.split(r"//|/\*", rest)[0].strip()
-        directives += 1
-        if kind == "define":
-            if directives == 2 and guard_name and rest.split()[:1] == [guard_name] and stack:
-                stack[-1][2] = True
-        elif kind in ("if", "ifdef", "ifndef"):
-            if directives == 1 and kind == "ifndef":
-                guard_name = rest
-            elif directives == 1 and kind == "if":  # #if !defined(NAME), the other way to write a guard
-                named = re.fullmatch(r"!\s*defined\s*\(?\s*(\w+)\s*\)?", rest)
-                guard_name = named.group(1) if named else None
-            stack.append([number, f"#{kind} {rest}".strip(), False])
-        elif kind in ("elif", "else") and stack:
-            stack[-1][1] = f"#{kind} {rest} (of {stack[-1][1]})".replace("  ", " ")
-        if any(not entry[2] for entry in stack):
-            chains[number] = [f"{n}: {t}" for n, t, guard in stack if not guard]
-        if kind == "endif" and stack:
-            stack.pop()
-    return chains
-
-
 def changed_line_numbers(diff_text):
     """(old line numbers, new line numbers) of the lines a `git diff -U0` of one file changes."""
     old, new = [], []
@@ -309,21 +280,159 @@ def changed_line_numbers(diff_text):
     return old, new
 
 
-def conditional_findings(parent, sha, files, cwd=None):
-    """["file:line (old|new text): directive chain"] for each changed line of the files that sits inside a
-    preprocessor conditional: it is compiled only in another configuration (Windows, macOS, debug, tests), so the
-    objects of this build say nothing about it."""
-    found = []
+def code_lines(text):
+    """The line numbers (1-based) that hold anything besides blanks and comments. A conservative reading: strings
+    and character literals are skipped, a comment that starts inside one is not seen."""
+    result, in_block = set(), False
+    for number, line in enumerate(text.split("\n"), 1):
+        i, code = 0, False
+        while i < len(line):
+            if in_block:
+                j = line.find("*/", i)
+                in_block, i = (False, j + 2) if j >= 0 else (True, len(line))
+            elif line.startswith("//", i):
+                break
+            elif line.startswith("/*", i):
+                in_block, i = True, i + 2
+            elif line[i] in "\"'":
+                code, quote, i = True, line[i], i + 1
+                while i < len(line) and line[i] != quote:
+                    i += 2 if line[i] == "\\" else 1
+                i += 1
+            else:
+                code = code or not line[i].isspace()
+                i += 1
+        if code:
+            result.add(number)
+    return result
+
+
+def add_probes(text, wanted, first_id):
+    """(text with a probe line before each wanted line, {id: line}, {line: reason}) for the lines that hold code.
+    A line that continues the one before it (a multi-line macro or statement) or that is an #else, #elif or #endif
+    takes no probe (it would change the macro, or sit in the wrong branch): its reason says so."""
+    lines = text.split("\n")
+    holds = code_lines(text)
+    ids, refused = {}, {}
+    for number in sorted(n for n in wanted if n in holds and n <= len(lines)):
+        if number > 1 and lines[number - 2].rstrip("\r").endswith("\\"):
+            refused[number] = "a continuation line of a multi-line macro or statement"
+        elif re.match(r"\s*#\s*(else|elif|endif)\b", lines[number - 1]):
+            refused[number] = "a conditional directive that closes or switches a branch"
+        else:
+            ids[first_id + len(ids)] = number
+    for probe, number in sorted(ids.items(), key=lambda item: -item[1]):
+        lines.insert(number - 1, PROBE.format(probe))
+    return "\n".join(lines), ids, refused
+
+
+def preprocessor_command(entry, root, scratch, build_rel, source):
+    """The compile command of a compile_commands.json entry as a preprocessing run over the scratch copy: no output
+    file or dependency file, -E, and every path under the repository moved to the scratch tree (the build
+    directory, with its generated headers and packages, stays where it is)."""
+    args = entry["arguments"] if "arguments" in entry else shlex.split(entry["command"])
+    out, skip = [], 0
+    move = re.compile(re.escape(root) + r"/(?!" + re.escape(build_rel) + r"(?:/|$))")
+    for arg in args:
+        if skip:
+            skip -= 1
+        elif arg in ("-o", "-MT", "-MF", "-MQ"):
+            skip = 1
+        elif arg in ("-c", "-MD", "-MMD", "-MP"):
+            continue
+        elif arg == entry["file"] or os.path.normpath(arg) == os.path.normpath(entry["file"]):
+            out.append(str(source))
+        else:
+            out.append(move.sub(scratch + "/", arg))
+    return [*out, "-E", "-P", "-w"]
+
+
+def run_preprocessor(command, cwd):
+    done = subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
+    if done.returncode != 0:
+        raise RuntimeError(f"preprocessing failed ({' '.join(command[:1])}): {done.stderr.strip()[-300:]}")
+    return done.stdout
+
+
+def surviving_probes(side, rev_files, wanted, tus, commands, root, build_rel, cwd=None):
+    """({probe id: (path, line)}, {(path, line): reason}) of one side. rev_files(path) is the text of a file on this
+    side (None when it does not exist); wanted is {path: set of changed lines}; tus {source: set of repository
+    files the translation unit read}; commands {source: compile_commands entry}. A probe is alive when its token is in
+    the preprocessed output of at least one translation unit that reads the file."""
+    needed = {src: deps for src, deps in tus.items() if deps & set(wanted)}
+    probed, refused, ids, texts = {}, {}, {}, {}
+    next_id = 0
+    for path, lines in sorted(wanted.items()):
+        text = rev_files(path)
+        if text is None:
+            continue
+        probed_text, found, bad = add_probes(text, lines, next_id)
+        probed[path] = probed_text
+        next_id += len(found)
+        ids.update({probe: (path, number) for probe, number in found.items()})
+        refused.update({(path, number): reason for number, reason in bad.items()})
+    alive = set()
+    if not needed or not ids:
+        return ids, refused, alive
+    root_text = str(pathlib.Path(root).resolve()).replace("\\", "/")
+    with tempfile.TemporaryDirectory(prefix="codegen-probe-") as scratch:
+        scratch_text = pathlib.Path(scratch).resolve().as_posix()
+        for path in sorted(set().union(*needed.values()) | set(needed)):
+            target = pathlib.Path(scratch) / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if path in probed:
+                target.write_text(probed[path], encoding="utf-8", newline="\n")
+            else:
+                text = rev_files(path)
+                if text is not None:
+                    target.write_text(text, encoding="utf-8", newline="\n")
+
+        def one(source):
+            command = preprocessor_command(commands[source], root_text, scratch_text, build_rel,
+                                           pathlib.Path(scratch) / source)
+            return {int(n) for n in PROBE_RE.findall(run_preprocessor(command, commands[source]["directory"]))}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 2) as pool:
+            for found in pool.map(one, sorted(needed)):
+                alive |= found
+    return ids, refused, alive
+
+
+def probe_findings(parent, sha, files, old, new, root, build_rel, cwd=None):
+    """["file:line (old|new text): reason"] for each changed line of the files that no translation unit of this build
+    compiles: an inactive branch (Windows, macOS, debug, tests), or a line that cannot be probed. A changed line
+    that the preprocessor keeps in at least one translation unit is compiled, and the object comparison covers it."""
+    root_path = pathlib.Path(root).resolve()
+    build_rel = os.path.relpath(pathlib.Path(build_rel).resolve(), root_path).replace(chr(92), "/")
+    wanted_old, wanted_new = {}, {}
     for path in files:
         diff = git("diff", "-U0", "--no-renames", parent, sha, "--", path, cwd=cwd, check=False)
         old_lines, new_lines = changed_line_numbers(diff)
-        for side, rev, lines in (("old", parent, old_lines), ("new", sha, new_lines)):
-            if not lines:
-                continue
-            chains = conditional_chains(git("show", f"{rev}:{path}", cwd=cwd, check=False))
-            for number in lines:
-                if number in chains:
-                    found.append(f"{path}:{number} ({side} text): {' > '.join(chains[number])}")
+        if old_lines:
+            wanted_old[path] = set(old_lines)
+        if new_lines:
+            wanted_new[path] = set(new_lines)
+    changed = set(git("diff", "--no-renames", "--name-only", parent, sha, cwd=cwd).splitlines())
+
+    def at(rev, use_tree):
+        def read(path):
+            if use_tree and path not in changed and (root_path / path).is_file():
+                return (root_path / path).read_bytes().decode("utf-8", "replace")
+            done = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=cwd, capture_output=True, check=False)
+            return done.stdout.decode("utf-8", "replace") if done.returncode == 0 else None
+        return read
+
+    found = []
+    for side, rev, wanted, info in (("old", parent, wanted_old, old), ("new", sha, wanted_new, new)):
+        if not wanted:
+            continue
+        ids, refused, alive = surviving_probes(side, at(rev, True), wanted, info["tus"],
+                                               {**old["commands"], **new["commands"]}, root, build_rel, cwd)
+        for probe, (path, number) in sorted(ids.items()):
+            if probe not in alive:
+                found.append(f"{path}:{number} ({side} text): {NOT_COMPILED}")
+        for (path, number), reason in sorted(refused.items()):
+            found.append(f"{path}:{number} ({side} text): not probed, {reason}")
     return found
 
 
@@ -334,37 +443,66 @@ def parse_depfile(text):
     return [d.replace("\\ ", " ") for d in re.findall(r"(?:\\ |\S)+", deps)]
 
 
-def covered_files(build_dir, targets, root):
-    """The repository files (relative, posix) the targets' objects were compiled from: the union of the depfiles
-    (CMakeFiles/<target>.dir/*.o.d). Fails when there is none: nothing would say what the build covers."""
+def translation_units(build_dir, targets, root):
+    """{source file: the repository files its object was compiled from}, from the depfiles
+    (CMakeFiles/<target>.dir/*.o.d; the first prerequisite is the source). Paths are relative to the repository and
+    posix. Fails when there is no depfile: nothing would say what the build covers."""
     root = pathlib.Path(root).resolve()
-    covered, count = set(), 0
+    units, count = {}, 0
     for target in targets:
         for dep in sorted(pathlib.Path(build_dir).glob(f"**/CMakeFiles/{target}.dir/**/*.o.d")):
             count += 1
             base = next(parent.parent for parent in dep.parents if parent.name == "CMakeFiles")
+            files = []
             for item in parse_depfile(dep.read_text(encoding="utf-8", errors="replace")):
                 try:
-                    covered.add((base / item).resolve().relative_to(root).as_posix())
+                    files.append((base / item).resolve().relative_to(root).as_posix())
                 except ValueError:
                     continue  # outside the repository: packages, the toolchain
+            if files:
+                units[files[0]] = set(files)
     if not count:
         raise RuntimeError(f"no depfile (CMakeFiles/<target>.dir/*.o.d) for {', '.join(targets)}: the build covers an unknown set")
-    return covered
+    return units
 
 
-def assess(parent, sha, covered, cwd=None):
-    """(findings in conditionals, code files changed but not compiled, headers changed) of one commit."""
+def covered_files(build_dir, targets, root):
+    """The union of the repository files of the targets' translation units."""
+    return set().union(*translation_units(build_dir, targets, root).values())
+
+
+def compile_commands(build_dir, root, sources):
+    """{source: compile_commands.json entry} for the translation units; fails on a missing entry."""
+    root = pathlib.Path(root).resolve()
+    path = pathlib.Path(build_dir) / "compile_commands.json"
+    if not path.is_file():
+        raise RuntimeError(f"{path} is missing: the configure must export the compile commands")
+    entries = {}
+    for entry in json.loads(path.read_text(encoding="utf-8")):
+        try:
+            entries[pathlib.Path(entry["file"]).resolve().relative_to(root).as_posix()] = entry
+        except ValueError:
+            continue
+    missing = sorted(source for source in sources if source not in entries)
+    if missing:
+        raise RuntimeError(f"no compile command for {', '.join(missing[:3])}")
+    return {source: entries[source] for source in sources}
+
+
+def assess(parent, sha, old, new, root, build_rel, cwd=None):
+    """(changed lines no translation unit compiles, code files changed but not compiled, headers changed) of one
+    commit. old and new are the {"tus", "commands"} of the parent's and the commit's build."""
+    covered = set().union(*old["tus"].values(), *new["tus"].values())
     changed = git("diff", "--no-renames", "--name-only", parent, sha, cwd=cwd).splitlines()
     code = [name for name in changed if name.lower().endswith(CODE_SUFFIXES)]
     inside = [name for name in code if name in covered]
     not_covered = sorted(name for name in code if name not in covered)
     headers = sorted(name for name in inside if name.lower().endswith(HEADER_SUFFIXES))
-    return conditional_findings(parent, sha, inside, cwd), not_covered, headers
+    return probe_findings(parent, sha, inside, old, new, root, build_rel, cwd), not_covered, headers
 
 
 def verdict(differences, unproven, not_covered):
-    """differs, unproven (changed lines in a conditional), not-covered (changed code the build does not compile), or
+    """differs, unproven (changed lines the build does not compile), not-covered (changed code the build does not compile), or
     identical, in this order of importance."""
     if differences:
         return "differs"
@@ -484,14 +622,16 @@ def build(build_dir, targets, log_path):
 
 
 def state_of(tree, targets, build_dir, sha, out, cache):
-    """Check the commit out, build it and read the objects: (fingerprints, covered files, note); the first two are
-    None when the build failed."""
+    """Check the commit out, build it and read the objects: (fingerprints, {"tus", "commands"}, note); the first
+    two are None when the build failed."""
     tree.goto(sha)
     log = pathlib.Path(out) / f"build-{sha[:11]}.log"
     if not build(build_dir, targets, log):
         print("\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]))
         return None, None, f"the build at {sha[:11]} failed (see {log.name})"
-    return fingerprints(build_dir, targets, cache), covered_files(build_dir, targets, tree.root), ""
+    units = translation_units(build_dir, targets, tree.root)
+    return (fingerprints(build_dir, targets, cache),
+            {"tus": units, "commands": compile_commands(build_dir, tree.root, units)}, "")
 
 
 def write_results(out, results, skipped, final=False):
@@ -509,7 +649,7 @@ def write_results(out, results, skipped, final=False):
 
 
 def check_commit(tree, targets, build_dir, sha, subject, state, out, cache):
-    """(result, new state): state is (commit, fingerprints, covered files) of the last build, or ("", None, None)."""
+    """(result, new state): state is (commit, fingerprints, translation units) of the last build, or ("", None, None)."""
     result = {"sha": sha, "subject": subject, "status": "", "objects": 0, "differences": {}, "unproven": [],
               "not_covered": [], "headers": []}
     parent = git("rev-parse", "--verify", "--end-of-options", f"{sha}^", cwd=tree.root)
@@ -524,7 +664,7 @@ def check_commit(tree, targets, build_dir, sha, subject, state, out, cache):
         result.update(status="build-failed", note=note)
         return result, ("", None, None)
     diffs = compare(state[1], prints)
-    unproven, not_covered, headers = assess(parent, sha, state[2] | covered, cwd=tree.root)
+    unproven, not_covered, headers = assess(parent, sha, state[2], covered, tree.root, build_dir, cwd=tree.root)
     result.update(status=verdict(diffs, unproven, not_covered), objects=len(prints), differences=diffs,
                   unproven=unproven, not_covered=not_covered, headers=headers)
     return result, (sha, prints, covered)

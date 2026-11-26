@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import pathlib
+import shutil
 import struct
 import subprocess
 import sys
@@ -362,30 +363,6 @@ class LinkAndDepfileTest(unittest.TestCase):
 
 
 class CoverageRulesTest(unittest.TestCase):
-    def test_conditional_chains_and_the_include_guard(self):
-        text = "\n".join(["#ifndef GUARD_H", "#define GUARD_H", "int a;", "#ifdef _WIN32", "int win;", "#else",
-                          "int other;", "#endif", "#if LL_DEBUG && X", "int dbg;", "#endif", "int b;", "#endif"])
-        chains = cg.conditional_chains(text)
-        self.assertNotIn(3, chains)    # inside the guard only
-        self.assertNotIn(12, chains)
-        self.assertEqual(chains[5], ["4: #ifdef _WIN32"])
-        self.assertIn("#else", chains[7][0])
-        self.assertEqual(chains[10], ["9: #if LL_DEBUG && X"])
-        self.assertIn(4, chains)       # the directive that opens a conditional belongs to it
-        self.assertIn(8, chains)       # and so does its #endif
-        self.assertNotIn(2, chains)
-
-    def test_the_if_not_defined_guard(self):
-        body = "%s\n#define GUARD_H\nint a;\n#endif\n"
-        for first in ("#if ! defined(GUARD_H)", "#if !defined GUARD_H", "#if !defined( GUARD_H )"):
-            self.assertNotIn(3, cg.conditional_chains(body % first), first)
-        self.assertIn(3, cg.conditional_chains(body % "#if !defined(OTHER)"))
-
-    def test_a_conditional_around_a_file_that_is_not_a_guard_counts(self):
-        chains = cg.conditional_chains("#if LL_WINDOWS\nint a;\n#endif\n")
-        self.assertEqual(chains[2], ["1: #if LL_WINDOWS"])
-        self.assertEqual(cg.conditional_chains("#pragma once\nint a;\n"), {})
-
     def test_changed_line_numbers(self):
         diff = "diff --git a/f b/f\n@@ -3,2 +3,3 @@\n-a\n-b\n+c\n+d\n+e\n@@ -10 +11,0 @@\n-x\n@@ -0,0 +1,2 @@\n"
         self.assertEqual(cg.changed_line_numbers(diff), ([3, 4, 10], [3, 4, 5, 1, 2]))
@@ -397,23 +374,145 @@ class CoverageRulesTest(unittest.TestCase):
         self.assertEqual(cg.verdict({}, [], []), "identical")
 
 
-class AssessTest(unittest.TestCase):
-    setUp, run_git, commit, text = TreeTest.setUp, TreeTest.run_git, TreeTest.commit, TreeTest.text
+class ProbeTextTest(unittest.TestCase):
+    def test_code_lines_skip_blanks_and_comments(self):
+        text = "\n".join(["// one", "", "int a; // two", "/* three", "   four */ int b;", "/* five */", "  * six",
+                          'const char* s = "/* not a comment";', "int c;"])
+        self.assertEqual(sorted(cg.code_lines(text)), [3, 5, 7, 8, 9])  # line 7 is code: no comment is open there
 
-    def test_changes_in_inactive_code_and_outside_the_objects(self):
+    def test_probes_go_before_the_wanted_lines(self):
+        text = "int a;\nint b;\n// c\nint d;"
+        probed, ids, refused = cg.add_probes(text, {2, 3, 4}, 10)
+        self.assertEqual(probed.split("\n"), ["int a;", "__codegen_probe_10__", "int b;", "// c",
+                                              "__codegen_probe_11__", "int d;"])  # the comment line takes none
+        self.assertEqual(ids, {10: 2, 11: 4})
+        self.assertEqual(refused, {})
+
+    def test_continuation_lines_and_branch_switches_are_not_probed(self):
+        text = "#define M(x) \\\n  foo(x) \\\n  bar(x)\nint a;\n#if A\nint b;\n#else\nint c;\n#endif"
+        probed, ids, refused = cg.add_probes(text, {1, 2, 3, 6, 7, 9}, 0)
+        self.assertEqual(sorted(refused), [2, 3, 7, 9])
+        self.assertIn("continuation", refused[2])
+        self.assertIn("conditional directive", refused[7])
+        self.assertEqual(ids, {0: 1, 1: 6})
+        self.assertNotIn("__codegen_probe_0__ ", probed)
+        self.assertEqual(probed.split("\n")[0], "__codegen_probe_0__")
+
+    def test_the_compile_command_becomes_a_preprocessing_run_on_the_scratch_copy(self):
+        entry = {"directory": "/r/build/lib", "file": "/r/indra/lib/a.cpp",
+                 "command": "g++ -DX=1 -I/r/indra/lib -I/r/build/packages/include -isystem /usr/include -O2 "
+                            "-MD -MT a.o -MF a.o.d -o CMakeFiles/lib.dir/a.cpp.o -c /r/indra/lib/a.cpp"}
+        args = cg.preprocessor_command(entry, "/r", "/tmp/s", "build", pathlib.Path("/tmp/s/indra/lib/a.cpp"))
+        self.assertEqual(args[0], "g++")
+        self.assertIn("-I/tmp/s/indra/lib", args)
+        self.assertIn("-I/r/build/packages/include", args)  # the build directory stays where it is
+        self.assertIn("-DX=1", args)
+        self.assertEqual(args[-3:], ["-E", "-P", "-w"])
+        for gone in ("-o", "-c", "-MD", "-MT", "-MF", "a.o", "a.o.d", "/r/indra/lib/a.cpp"):
+            self.assertNotIn(gone, args)
+        self.assertIn(str(pathlib.Path("/tmp/s/indra/lib/a.cpp")), args)
+
+
+@unittest.skipUnless(shutil.which("g++") or shutil.which("gcc"), "no compiler to preprocess with")
+class ProbeRunTest(unittest.TestCase):
+    """The probe against a real preprocessor: only the lines the build compiles survive."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = pathlib.Path(self.tmp.name).resolve()
+        self.compiler = shutil.which("g++") or shutil.which("gcc")
         self.run_git("init", "-q")
         self.run_git("config", "core.autocrlf", "false")
-        first = self.commit({"indra/lib/a.cpp": b"int a() { return 0; }\n#ifndef LL_RELEASE_FOR_DOWNLOAD\nint dbg = 0;\n#endif\n",
-                             "indra/lib/win.cpp": b"int w = 0;\n", "indra/lib/tests/t.cpp": b"int t = 0;\n",
-                             "indra/lib/h.h": b"#pragma once\nint h = 0;\n", "doc.md": b"x\n"}, "one")
-        second = self.commit({"indra/lib/a.cpp": b"int a() { return nullptr == 0; }\n#ifndef LL_RELEASE_FOR_DOWNLOAD\nint dbg = nullptr;\n#endif\n",
-                              "indra/lib/win.cpp": b"int w = 1;\n", "indra/lib/tests/t.cpp": b"int t = 1;\n",
-                              "indra/lib/h.h": b"#pragma once\nint h = 1;\n", "doc.md": b"y\n"}, "two (style)")
-        covered = {"indra/lib/a.cpp", "indra/lib/h.h"}
-        unproven, not_covered, headers = cg.assess(first, second, covered, cwd=self.root)
-        self.assertEqual(len(unproven), 2)  # the old and the new text of the changed line in the conditional
-        self.assertTrue(all(item.startswith("indra/lib/a.cpp:3") for item in unproven))
-        self.assertIn("#ifndef LL_RELEASE_FOR_DOWNLOAD", unproven[0])
+
+    def run_git(self, *cmd):
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *cmd], cwd=self.root,
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def commit(self, files, message):
+        for name, text in files.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8", newline="\n")
+        self.run_git("add", "-A")
+        self.run_git("commit", "-q", "-m", message)
+        return self.run_git("rev-parse", "HEAD")
+
+    def info(self):
+        source = self.root / "indra" / "lib" / "a.cpp"
+        entry = {"directory": str(self.root), "file": str(source),
+                 "arguments": [self.compiler, "-U_WIN32", "-DLL_RELEASE_FOR_DOWNLOAD=1", f"-I{(self.root / 'indra' / 'lib').as_posix()}",
+                               "-c", str(source), "-o", "a.o"]}
+        return {"tus": {"indra/lib/a.cpp": {"indra/lib/a.cpp", "indra/lib/h.h"}},
+                "commands": {"indra/lib/a.cpp": entry}}
+
+    A_OLD = ("#include \"h.h\"\nint a = 0;\n#ifdef __GNUC__\nint gnu = 0;\n#endif\n#ifdef _WIN32\nint win = 0;\n#else\n"
+             "int notwin = 0;\n#endif\n#ifndef LL_RELEASE_FOR_DOWNLOAD\nint dbg = 0;\n#endif\n")
+    H_OLD = "#pragma once\n#if !defined(HH)\n#define HH\nint h = 0;\n#endif\n#ifdef _WIN32\nint hwin = 0;\n#endif\n"
+
+    def test_active_and_inactive_lines_of_a_source_and_a_header(self):
+        first = self.commit({"indra/lib/a.cpp": self.A_OLD, "indra/lib/h.h": self.H_OLD}, "one")
+        second = self.commit({"indra/lib/a.cpp": self.A_OLD.replace("= 0", "= nullptr").replace("int a = nullptr", "int a = 1"),
+                              "indra/lib/h.h": self.H_OLD.replace("= 0", "= 1")}, "two")
+        found = cg.probe_findings(first, second, ["indra/lib/a.cpp", "indra/lib/h.h"], self.info(), self.info(),
+                                  self.root, self.root / "build", cwd=self.root)
+        lines = sorted({item.split(" ")[0] for item in found})
+        # a.cpp: line 2 (plain), 4 (#ifdef __GNUC__) and 9 (#else of _WIN32) are compiled; 7 (_WIN32) and 12
+        # (not LL_RELEASE_FOR_DOWNLOAD) are not. h.h: line 4 (in an #if !defined guard) is compiled, line 7 (_WIN32) not.
+        self.assertEqual(lines, ["indra/lib/a.cpp:12", "indra/lib/a.cpp:7", "indra/lib/h.h:7"])
+        self.assertTrue(all(cg.NOT_COMPILED in item for item in found))
+        self.assertEqual(len([item for item in found if "(old text)" in item]), 3)  # both sides are probed
+        self.assertEqual(len([item for item in found if "(new text)" in item]), 3)
+
+    def test_a_header_no_translation_unit_reads_is_not_compiled(self):
+        first = self.commit({"indra/lib/a.cpp": self.A_OLD, "indra/lib/h.h": self.H_OLD}, "one")
+        second = self.commit({"indra/lib/a.cpp": self.A_OLD, "indra/lib/h.h": self.H_OLD.replace("= 0", "= 1")}, "two")
+        info = self.info()
+        info["tus"] = {"indra/lib/a.cpp": {"indra/lib/a.cpp"}}  # as if the include were gone
+        found = cg.probe_findings(first, second, ["indra/lib/h.h"], info, info, self.root, self.root / "build", cwd=self.root)
+        self.assertEqual(len(found), 4)  # nothing to preprocess: lines 4 and 7 of both sides
+
+
+class ProbePlumbingTest(unittest.TestCase):
+    def test_a_token_that_does_not_come_back_is_unproven(self):
+        texts = {"indra/lib/a.cpp": "int a;\nint b;\nint c;\n"}
+        entry = {"directory": ".", "file": "/r/indra/lib/a.cpp", "arguments": ["cc", "-c", "/r/indra/lib/a.cpp"]}
+        with mock.patch.object(cg, "run_preprocessor", lambda command, cwd: "int a;\n__codegen_probe_1__\nint b;\n"):
+            ids, refused, alive = cg.surviving_probes(
+                "new", texts.get, {"indra/lib/a.cpp": {1, 2, 3}}, {"indra/lib/a.cpp": {"indra/lib/a.cpp"}},
+                {"indra/lib/a.cpp": entry}, "/r", "build")
+        self.assertEqual(ids, {0: ("indra/lib/a.cpp", 1), 1: ("indra/lib/a.cpp", 2), 2: ("indra/lib/a.cpp", 3)})
+        self.assertEqual(alive, {1})
+
+    def test_a_failing_preprocessor_is_an_error(self):
+        with self.assertRaisesRegex(RuntimeError, "preprocessing failed"):
+            cg.run_preprocessor([sys.executable, "-c", "import sys; sys.exit(3)"], None)
+
+
+class AssessTest(unittest.TestCase):
+    def test_code_changed_outside_the_objects_and_headers(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, True)
+        def run(*cmd):
+            return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *cmd], cwd=root,
+                                  capture_output=True, text=True, check=True).stdout.strip()
+        run("init", "-q")
+        run("config", "core.autocrlf", "false")
+        def commit(files):
+            for name, text in files.items():
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(text, encoding="utf-8", newline="\n")
+            run("add", "-A")
+            run("commit", "-q", "-m", "c")
+            return run("rev-parse", "HEAD")
+        first = commit({"indra/lib/a.cpp": "int a;\n", "indra/lib/win.cpp": "int w;\n", "indra/lib/tests/t.cpp": "int t;\n",
+                        "indra/lib/h.h": "int h;\n", "doc.md": "x\n"})
+        second = commit({"indra/lib/a.cpp": "int a = 1;\n", "indra/lib/win.cpp": "int w = 1;\n",
+                         "indra/lib/tests/t.cpp": "int t = 1;\n", "indra/lib/h.h": "int h = 1;\n", "doc.md": "y\n"})
+        info = {"tus": {"indra/lib/a.cpp": {"indra/lib/a.cpp", "indra/lib/h.h"}}, "commands": {}}
+        with mock.patch.object(cg, "probe_findings", lambda *a, **k: ["probed", a[2]]):
+            unproven, not_covered, headers = cg.assess(first, second, info, info, root, root / "build", cwd=root)
+        self.assertEqual(unproven[1], ["indra/lib/a.cpp", "indra/lib/h.h"])  # only what the objects depend on is probed
         self.assertEqual(not_covered, ["indra/lib/tests/t.cpp", "indra/lib/win.cpp"])  # doc.md is no code
         self.assertEqual(headers, ["indra/lib/h.h"])
 
@@ -447,7 +546,7 @@ class CheckCommandTest(unittest.TestCase):
             if sha in self.fail_on:
                 return None, None, f"the build at {sha} failed"
             fp = {"o": {"sections": {".text.f": sha if sha in self.differ_on else "same"}, "symbols": {}}}
-            return fp, {"indra/a.cpp"}, ""
+            return fp, {"tus": {}, "commands": {}}, ""
 
         patches = [mock.patch.object(cg, "Tree", FakeTree), mock.patch.object(cg, "git", fake_git),
                    mock.patch.object(cg, "state_of", fake_state),
