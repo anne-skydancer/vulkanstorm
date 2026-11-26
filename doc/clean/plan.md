@@ -16,6 +16,32 @@ through its pull request before the next branch is cut. The subsystems depend on
 uses `llcommon`, most use `llmath`, `newview` uses all), so a later branch always starts from cleaned foundations and no
 two cleanup branches change the same interfaces at once.
 
+## Two pull requests per subsystem (from `llmath` on, decided 2026-11-26)
+
+Every subsystem gets the same modernisation, style changes included, so the whole tree reads one way. The changes are
+split by what they can do to behaviour, so that review effort goes where behaviour can change:
+
+1. **Bugs and safety.** The defect fixes, the sanitizer and analyser findings, and every fix-it family that can change
+   what the code does: `override`, `= delete`/`= default`, by-value and `const&` parameters, scoped locks, `avoid-bind`,
+   `pass-by-value`, `use-emplace`, `loop-convert`, `use-ranges`, `use-default-member-init`, and hand edits. This pull
+   request is read line by line by the auditor.
+2. **Style.** The families that only change how the code is written: `use-auto`, `use-using`, `use-nullptr`,
+   `return-braced-init-list`, `concat-nested-namespaces`, `use-designated-initializers` and the like, one commit per
+   family. Each commit is proven by identical compiled code: the analysis CI builds the subsystem before and after the
+   commit and compares the machine code. A style commit whose code differs moves to the first pull request and gets a
+   full read; the auditor only samples the style pull request for readability.
+
+Both pull requests come from `clean/<subsystem>`; the second is cut after the first has landed. `llcommon` (#612, #613)
+predates this rule and mixed the two.
+
+## Coroutines (decided 2026-11-26)
+
+Boost.Fiber and Boost.Context leave the C++: an in-house C++20 task type and main-thread executor replace `LLCoros`'
+fibers, every caller is converted, and the fiber-aware locks become `std::` ones. The work has its own branch,
+`clean/coroutines`, cut after `clean/llcommon` lands: the new core sits beside the fibers, the callers move library by
+library (`llmessage`, login, `newview`) in commits that each build and pass CI, and the fibers go at the end. The run
+order stays exactly as it is today, and `HttpCoroutineAdapter` stays with `co_await` calls.
+
 ## Order (bottom-up)
 
 1. Foundations: `llcommon`, then `llmath`.
