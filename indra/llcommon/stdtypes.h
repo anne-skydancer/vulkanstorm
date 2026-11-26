@@ -54,7 +54,7 @@ using llssize = std::make_signed_t<std::size_t>;
 // In any case, llwchar should be a UTF-32 type.
 using llwchar = U32;
 #else
-typedef wchar_t             llwchar;
+using llwchar = wchar_t;
 // What we'd actually want is a simple module-scope 'if constexpr' to test
 // std::is_same<wchar_t, llwchar>::value and use that to define, or not
 // define, string conversion specializations. Since we don't have that, we'll
@@ -69,8 +69,8 @@ using S64 = signed __int64;
 using U64 = unsigned __int64;
 #define U64L(a)                 (a)
 #else
-typedef long long int           S64;
-typedef long long unsigned int      U64;
+using S64 = long long int;
+using U64 = long long unsigned int;
 #if LL_DARWIN || LL_LINUX
 #define S64L(a)             (a##LL)
 #define U64L(a)             (a##ULL)

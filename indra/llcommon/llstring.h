@@ -64,11 +64,11 @@ namespace std
 template<>
 struct char_traits<U16>
 {
-    typedef U16         char_type;
-    typedef int         int_type;
-    typedef streampos   pos_type;
-    typedef streamoff   off_type;
-    typedef mbstate_t   state_type;
+    using char_type = U16;
+    using int_type = int;
+    using pos_type = streampos;
+    using off_type = streamoff;
+    using state_type = mbstate_t;
 
     static void
         assign(char_type& __c1, const char_type& __c2)

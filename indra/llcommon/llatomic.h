@@ -60,8 +60,8 @@ private:
 using LLAtomicU32 = LLAtomicBase<U32, std::atomic_uint32_t>;
 using LLAtomicS32 = LLAtomicBase<S32, std::atomic_int32_t>;
 #else
-typedef LLAtomicBase<U32, std::atomic_uint> LLAtomicU32;
-typedef LLAtomicBase<S32, std::atomic_int> LLAtomicS32;
+using LLAtomicU32 = LLAtomicBase<U32, std::atomic_uint>;
+using LLAtomicS32 = LLAtomicBase<S32, std::atomic_int>;
 #endif
 
 using LLAtomicBool = LLAtomicBase<bool, std::atomic_bool>;

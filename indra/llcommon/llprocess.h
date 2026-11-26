@@ -310,8 +310,8 @@ public:
     using id = int;                 ///< as returned by getProcessID()
     using handle = HANDLE;          ///< as returned by getProcessHandle()
 #else
-    typedef pid_t id;
-    typedef pid_t handle;
+    using id = pid_t;
+    using handle = pid_t;
 #endif
     /**
      * Get an int-like id value. This is primarily intended for a human reader

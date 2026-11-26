@@ -355,7 +355,7 @@ public:
 
     bool tick(const LLSD&)
     {
-        typedef boost::asio::streambuf::const_buffers_type const_buffer_sequence;
+        using const_buffer_sequence = boost::asio::streambuf::const_buffers_type;
         // If there's anything to send, try to send it.
         // <Vulkanstorm>
         if (mBroken)
