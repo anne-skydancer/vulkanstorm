@@ -810,13 +810,15 @@ void LLMaterialMgr::processGetAllQueue()
     {
         getall_queue_t::iterator itRegion = loopRegion++;
 
-        const LLUUID& region_id = *itRegion;
+        // A copy, and the queues updated before the launch: the coroutine runs at once and, for an unknown region or
+        // one without the materials capability, clears the queues (clearGetQueues) before launch() returns, which
+        // erased this entry under the reference and left a pending entry behind that blocked re-requests.
+        const LLUUID region_id = *itRegion;
+        mGetAllQueue.erase(itRegion);
+        mGetAllPending.insert(std::pair<LLUUID, F64>(region_id, LLFrameTimer::getTotalSeconds()));
 
         LLCoros::instance().launch("LLMaterialMgr::processGetAllQueueCoro", boost::bind(&LLMaterialMgr::processGetAllQueueCoro,
             this, region_id));
-
-        mGetAllPending.insert(std::pair<LLUUID, F64>(region_id, LLFrameTimer::getTotalSeconds()));
-        mGetAllQueue.erase(itRegion);   // Invalidates region_id
     }
 }
 
