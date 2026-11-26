@@ -57,8 +57,10 @@ void redirect_fd(int target, int reference)
 {
     if (fhdup2(target, reference) < 0)
     {
+        // copy errno first: formatting the message can change it
+        const int error = errno;
         LL_WARNS("LLTempRedirect") << "dup2(" << target << ", " << reference
-                                   << ") failed, errno " << errno << LL_ENDL;
+                                   << ") failed, errno " << error << LL_ENDL;
     }
 }
 } // anonymous namespace

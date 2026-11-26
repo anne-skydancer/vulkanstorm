@@ -180,9 +180,8 @@ public:
     using self_t = CountStatHandle<T>;
 
     CountStatHandle(const char* name, const char* description = nullptr)
-    :   stat_t(name, description)
-    ,
-     mTotalSamples()
+    :   stat_t(name, description),
+        mTotalSamples()
     {}
 
     /*virtual*/ const char* getUnitLabel() const override { return LLGetUnitLabel<T>::getUnitLabel(); }

@@ -25,6 +25,7 @@
  */
 
 #include "llcallbacklist.h"
+#include <algorithm>
 #include <utility>
 #include "lleventtimer.h"
 #include "llerrorlegacy.h"

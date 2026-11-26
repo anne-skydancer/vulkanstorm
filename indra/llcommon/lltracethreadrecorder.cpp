@@ -26,6 +26,7 @@
 #include "linden_common.h"
 
 #include "lltracethreadrecorder.h"
+#include <algorithm>
 #include "llfasttimer.h"
 #include "lltrace.h"
 #include "llstl.h"

@@ -31,6 +31,7 @@
 #include "llapp.h"
 #include "lluri.h"
 #include "llsd.h"
+#include <algorithm>
 #include <iomanip>
 
 #include "lluuid.h"

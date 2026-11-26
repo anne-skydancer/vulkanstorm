@@ -37,6 +37,7 @@
 #include "lltracerecording.h"
 #include "lltracethreadrecorder.h"
 
+#include <algorithm>
 #include <boost/bind.hpp>
 #include <queue>
 

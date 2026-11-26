@@ -152,10 +152,6 @@ public:
     // the LLPointer<Type> operators.
     LLPointer<Type>& operator =(const LLPointer<Type>& ptr)
     {
-        if (this == &ptr)
-        {
-            return *this;
-        }
         LLPointer temp(ptr);
         using std::swap;            // per Swappable convention
         swap(*this, temp);

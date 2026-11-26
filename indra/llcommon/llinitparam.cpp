@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llinitparam.h"
+#include <algorithm>
 #include "llformat.h"
 
 

@@ -280,8 +280,7 @@ public:
         remove_(lock);
     }
 protected:
-    // NOLINTNEXTLINE(performance-unnecessary-value-param): virtual, and overridden in other libraries; a const reference would silently stop them overriding
-    virtual void setKey(KEY key)
+    virtual void setKey(const KEY& key)
     {
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
         // Even though the shared_ptr we store in our map has a no-op deleter

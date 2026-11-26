@@ -158,7 +158,7 @@ public:
     //@{
         LLSD(const LLSD&);
         void assign(const LLSD& other);
-        LLSD& operator=(const LLSD& other)  { if (this != &other) { assign(other); } return *this; }
+        LLSD& operator=(const LLSD& other)  { assign(other); return *this; }
 
     //@}
 
@@ -207,11 +207,11 @@ public:
     //@{
         // support construction from size_t et al.
         template <typename VALUE>
-        LLSD(VALUE v)requires (std::is_integral_v<VALUE> &&
-                                          ! std::is_same_v<VALUE, Boolean>) : LLSD(Integer(narrow<VALUE>(v))) {}
+        LLSD(VALUE v) requires (std::is_integral_v<VALUE> && ! std::is_same_v<VALUE, Boolean>):
+            LLSD(Integer(narrow<VALUE>(v))) {}
         // support construction from F32 et al.
         template <typename VALUE>
-        LLSD(VALUE v)requires (std::is_floating_point_v<VALUE>) : LLSD(Real(narrow<VALUE>(v))) {}
+        LLSD(VALUE v) requires (std::is_floating_point_v<VALUE>): LLSD(Real(narrow<VALUE>(v))) {}
     //@}
 
     /** @name Scalar Assignment */

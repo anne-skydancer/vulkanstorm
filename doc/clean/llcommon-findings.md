@@ -1,4 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # llcommon: root causes of the analysis findings
 
 Analysis run 45682009355 on `clean/llcommon` (release-clean 6853ccaa45, neo-j2k static), triage artifact
@@ -16,7 +17,7 @@ code that is also in upstream Firestorm (master, 7.2.5) and Linden Lab's viewer,
 | lsan 008-011 | `LogControlFile` chain (`llerror.cpp:451` -> `LLLiveFile`, its `Impl`, its event timer) | `LogControlFile::fromDirectory` allocates the logging-config watcher with `new` and never frees it, by design (comment at `llerror.cpp:451`): logging runs during shutdown, so freeing it brings back destruction-order crashes. | **Deliberate (load-bearing).** LSan suppression with this reason; no free. |
 | lsan 014 | per-coroutine "initializing" list, `llsingleton.cpp:153` | `get_initializing_()` allocates one list per coroutine and stores it in an `LLCoros::local_ptr`; the main thread's default coroutine never resets its own before the leak check. One small list per thread. | **Plausible, bounded.** Prove with a test (count after a singleton build on the main coroutine); if so, reset it in `cleanup_initializing_()` on the main coroutine too or suppress with the reason. |
 | lsan 015 | `lazyeventapi` test's listener (`lleventdispatcher.h:528`) | A test object registered lazily that lives to process exit by design. | **Test-only.** Suppress for that test, with the reason. |
-| tsan 024 | lock-order inversion, `lockstatic.h:31` (`LLSingleton<A>` / `<B>` locks), test `singleton` 5 | Two singletons that build each other nest their locks A->B in one test and B->A in another. LLSingleton nests locks **only on the main thread**: another thread takes a singleton's lock briefly, releases it and hands the construction to the main thread (`llsingleton.h:550-580`). A deadlock needs two threads in opposite orders; only one ever nests. | **False positive.** TSan suppression for this lock pair with this reason. |
+| tsan 024 | lock-order inversion, `lockstatic.h:31` (`LLSingleton<A>` / `<B>` locks), test `singleton` 5 | Two singletons that build each other nest their locks A->B in one test and B->A in another. LLSingleton nests locks **only on the main thread**: another thread takes a singleton's lock briefly, releases it and hands the construction to the main thread (`llsingleton.h:550-580`). A deadlock needs two threads in opposite orders; only one ever nests. | **False positive.** TSan suppression for this lock pair with this reason, limited to `LLSingleton<A>` and `LLSingleton<B>` (the two test classes of `llsingleton_test.cpp`): a lock-order inversion of any other singleton's lock is still reported. |
 
 ## Static analysis: the findings that can be real defects
 
@@ -69,12 +70,33 @@ translation units) before they were kept.
   `cppcoreguidelines-pro-type-member-init`, `performance-unnecessary-value-param`, `-trivially-destructible`,
   `-faster-string-find`, `modernize-use-equals-delete` (deleted members made public), `-use-equals-default`.
 
+**Small behaviour changes**, beyond the real defects above (the first commit that carried some of them,
+`1d30cfa4e2`, says "No behaviour change", which is inaccurate: it also carries the `LLStringTable`, `memcpy` and
+`LLPointer` changes below):
+
+- `std::endl` became a plain newline (performance-avoid-endl): a caller's stream is no longer flushed on each line in
+  `LLCPUInfo::stream`, `LLMemoryInfo::stream` and `dumpStats`. Output order and content are the same; a stream the caller
+  expects flushed after the call must be flushed by the caller.
+- `LLThreadSafeQueue::tryPush` and `tryPushUntil` forward their argument instead of moving it (bugprone-move-forwarding-
+  reference): an lvalue argument is now copied, not moved from.
+- `unzip_llsd` returns `ZR_MEM_ERROR` when `inflateInit` fails; the result used to be stored unread.
+- `LLStringTable` rounds its size in unsigned arithmetic: the result for a requested size of 2^30 entries or more differs
+  from the old undefined shift (the table is far smaller in practice).
+- `LLFile::copy` returns false on a read error (`ferror`), where a truncated copy used to count as done.
+- `LLPointer`'s copy assignment is copy-and-swap with no self-assignment guard (it handles self-assignment), and
+  `LLSD::operator=` has none either (`Impl::reset` takes the new reference first).
+- `LLInstanceTracker::setKey` and `LLMetricPerformanceTesterBasic::compareTestResults` take `const&`
+  (no override of any of them exists anywhere in `indra/`).
+- `LLError::CallSite`'s members are declared widest first (no padding); its constructor is the only way the logging macros
+  build one, so only the initializer list had to follow the new order.
+- `LLFile::copy` allocates its buffer before opening the files, so an allocation failure cannot leave them open.
+
 **Rejected after trying the fix-it**
 
 | Check | What the fix-it did | Decision |
 |---|---|---|
-| `modernize-use-integer-sign-comparison` (26) | `mPredicateFlags == ~0` (a `U32` against all ones, true today) became `std::cmp_equal(flags, ~0)`, false always; the `(S32)` casts it removes are the code's intent | check left out of `.github/analysis/clang-tidy.yaml` |
-| `cppcoreguidelines-prefer-member-initializer` (26) | swapped the order of three allocations in `LLThread`'s constructor and left empty bodies | check left out of the config |
+| `modernize-use-integer-sign-comparison` (23 in the Windows .cpp files, more in headers) | `mPredicateFlags == ~0` (a `U32` against all ones, true today) became `std::cmp_equal(flags, ~0)`, false always; the `(S32)` casts it removes are the code's intent | check left out of `.github/analysis/clang-tidy.yaml` |
+| `cppcoreguidelines-prefer-member-initializer` (41 in the Windows translation units) | moves assignments into the initializer list, which runs in declaration order, not in the order of the assignments; the fix-it's effect on `LLThread` (two allocations in declaration order and a `nullptr`) is harmless, so the earlier claim that it swapped allocations was wrong | check left out of the config because of the count and the per-site order check, not a known bug |
 | `modernize-use-default-member-init` | left an orphan `:` in three constructors (compile error) | written by hand |
 | `modernize-use-ranges` | `,,` garbage in 15 places; `std::ranges::sort`/`lower_bound` do not compile for `LLUUID` and `CompareTimeConstants` | simple cases by script, the rest keep a `NOLINT` with the reason |
 | `performance-avoid-endl` | removed the flush that `getAlwaysFlush()` exists for in the log file | that one line keeps `std::endl` and a `NOLINT` |
@@ -95,9 +117,25 @@ translation units) before they were kept.
   `LLMD5` (`%i` of an unsigned is what existing digests are made from), `C28159`/`C6387` (`GetVersionEx`, kernel32), `C6262`
   in `StackWalker::ShowCallstack` (the crash path must not allocate): `#pragma warning(suppress ...)` with the reason
   above it.
-- LSan: the one 24-byte `initializing` list of the coroutine that is running when a test process ends (the tests do not
-  call `LLSingletonBase::deleteAll()`; the viewer does): suppression `leak:LLSingletonBase::MasterList::get_initializing_`
-  with its reason in `.github/analysis/suppressions/llcommon-lsan.txt`.
+- LSan: the logging watcher chain (`LogControlFile`, `LiveFileEventTimer`) stays suppressed, with its reason. The
+  `get_initializing_` suppression of the first version of this pass is gone: it matched the whole allocation path, so the
+  200-coroutine test (`llsingleton_test.cpp` test 16) could not fail and a per-thread list leak would have been hidden.
+  The shared test `main()` (`indra/test/test.cpp`) now calls `LLSingletonBase::deleteAll()` at the end of the run, as the
+  viewer does on exit, which destroys the `MasterList` and frees the running coroutine's list. Test 16 itself has no
+  assertion of its own: its proof is LeakSanitizer, so outside a LeakSanitizer build it only shows that the coroutines run.
+  (Commit 93211d4398's title says "narrow LSan suppression", but the entry it added covered that whole path.) Dropping
+  `leak:LLError::commonInit` too: the `LogControlFile` and `LiveFileEventTimer` frames cover the chain; if the analysis
+  run shows a leak that needs it, it comes back with its stack.
+- Boost.Signals2 tracking: `LLEventPump` is a `signals2::trackable`. A `boost::bind` that holds a pointer or reference
+  to a trackable disconnects the slot automatically when the object is destroyed; a lambda does not. `modernize-avoid-bind`
+  converted three such sites (`LLLeapListener::listen`, the two `LLListenerOrPumpName` constructors) to lambdas, which
+  would post to a destroyed pump (use after free). They are `boost::bind` again, with a `NOLINT` and this reason. The
+  other converted sites were checked and are safe. Trade-off: those three stay on `boost::bind`, which Boost.Signals2
+  tracks and clang-tidy would otherwise keep reporting.
+- TSan: the deny list (`.github/analysis/tsan/llcommon-deny.txt`) skips the llcommon tests `lleventcoro`, `llcond`,
+  `workqueue`, `llleap`, `llprocess`, `llprocessstdin` and `llsdserialize`, Boost.Fiber being prebuilt without TSan
+  annotations. They include the tests of the threading primitives changed in this pass (`LLCond`, `WorkQueue`,
+  `LLThreadSafeQueue`): **TSan has no say on those tests**; only ASan/UBSan/LSan ran them.
 - The findings that are in the llmath headers (`llquaternion.h`, `llvector4a.*`, `llmatrix3a.*`, `m3math.h`, `llmath.h`,
   ...) reach llcommon through its includes. They belong to the llmath cleanup and stay in the llcommon baseline until
   then; nothing in llmath was edited here.

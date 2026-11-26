@@ -47,7 +47,7 @@
 *****************************************************************************/
 LLEventFilter::LLEventFilter(LLEventPump& source, const std::string& name, bool tweak):
     LLEventStream(name, tweak),
-    mSource(source.listen(getName(), [this](auto && PH1) { return post(std::forward<decltype(PH1)>(PH1)); }))
+    mSource(source.listen(getName(), [this](auto && event) { return post(std::forward<decltype(event)>(event)); }))
 {
 }
 
@@ -99,7 +99,7 @@ void LLEventTimeoutBase::actionAfter(F32 seconds, const Action& action)
     if (! mMainloop.connected())
     {
         LLEventPump& mainloop(LLEventPumps::instance().obtain("mainloop"));
-        mMainloop = mainloop.listen(getName(), [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); });
+        mMainloop = mainloop.listen(getName(), [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
     }
 }
 

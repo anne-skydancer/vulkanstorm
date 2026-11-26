@@ -93,8 +93,8 @@ protected:
      * @param[in] v_base - Base value of the metric.
      * @param[in] v_current - Current value of the metric.
      */
-    virtual void compareTestResults(llofstream* os, std::string metric_string, S32 v_base, S32 v_current) ;
-    virtual void compareTestResults(llofstream* os, std::string metric_string, F32 v_base, F32 v_current) ;
+    virtual void compareTestResults(llofstream* os, const std::string& metric_string, S32 v_base, S32 v_current) ;
+    virtual void compareTestResults(llofstream* os, const std::string& metric_string, F32 v_base, F32 v_current) ;
 
     /**
      * @brief Reset internal record count. Count starts with 1.

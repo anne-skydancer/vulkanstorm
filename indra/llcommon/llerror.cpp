@@ -90,7 +90,7 @@ namespace {
     class RecordToSyslog : public LLError::Recorder
     {
     public:
-        RecordToSyslog(std::string  identity)
+        RecordToSyslog(std::string identity)
             : mIdentity(std::move(identity))
         {
             openlog(mIdentity.c_str(), LOG_CONS|LOG_PID, LOG_LOCAL0);
@@ -634,14 +634,14 @@ namespace LLError
                     bool printOnce,
                     const char** tag_list,
                     size_t tag_count)
-    :   mLevel(level),
-        mFile(file),
-        mLine(line),
+    :   mFile(file),
         mClassInfo(class_info),
         mFunction(function),
-        mPrintOnce(printOnce),
         mTags(new const char* [tag_count]),
-        mTagCount(tag_count)
+        mTagCount(tag_count),
+        mLevel(level),
+        mLine(line),
+        mPrintOnce(printOnce)
     {
         switch (mLevel)
         {
@@ -1578,7 +1578,7 @@ namespace LLError
         if(! sBuffer.empty())
         {
             LL_INFOS() << " ************* PRINT OUT LL CALL STACKS ************* " << LL_ENDL;
-            for (const auto & ri : std::views::reverse(sBuffer))
+            for (const auto& ri : std::views::reverse(sBuffer))
             {
                 LL_INFOS() << ri << LL_ENDL;
             }

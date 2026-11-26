@@ -13,19 +13,11 @@
 #if ! defined(LL_ALWAYS_RETURN_H)
 #define LL_ALWAYS_RETURN_H
 
-#include <type_traits>              // std::enable_if, std::is_convertible
+#include <type_traits>              // std::is_convertible_v, std::invoke_result_t
 #include <utility>
 
 namespace LL
 {
-
-#if __cpp_lib_is_invocable >= 201703L // C++17
-    template <typename CALLABLE, typename... ARGS>
-    using invoke_result = std::invoke_result<CALLABLE, ARGS...>;
-#else  // C++14
-    template <typename CALLABLE, typename... ARGS>
-    using invoke_result = std::result_of<CALLABLE(ARGS...)>;
-#endif // C++14
 
     /**
      * AlwaysReturn<T>()(some_function, some_args...) calls
@@ -49,10 +41,8 @@ namespace LL
         // callable returns a type not convertible to DESIRED, return default
         template <typename CALLABLE, typename... ARGS>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
-        requires (! std::is_convertible_v<
-                          std::invoke_result_t<CALLABLE, ARGS...>,
-                          DESIRED
-                      >) {
+        requires (! std::is_convertible_v<std::invoke_result_t<CALLABLE, ARGS...>, DESIRED>)
+        {
             // discard whatever callable(args) returns
             std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...);
             return mDefault;
@@ -61,10 +51,8 @@ namespace LL
         // callable returns a type convertible to DESIRED
         template <typename CALLABLE, typename... ARGS>
         DESIRED operator()(CALLABLE&& callable, ARGS&&... args)
-        requires (std::is_convertible_v<
-                          std::invoke_result_t<CALLABLE, ARGS...>,
-                          DESIRED
-                      >) {
+        requires (std::is_convertible_v<std::invoke_result_t<CALLABLE, ARGS...>, DESIRED>)
+        {
             return { std::forward<CALLABLE>(callable)(std::forward<ARGS>(args)...) };
         }
 

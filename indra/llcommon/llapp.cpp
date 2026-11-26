@@ -28,6 +28,7 @@
 
 #include "llapp.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #ifdef LL_DARWIN

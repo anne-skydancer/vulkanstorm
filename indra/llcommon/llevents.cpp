@@ -686,13 +686,19 @@ void LLEventMailDrop::discard()
 *****************************************************************************/
 LLListenerOrPumpName::LLListenerOrPumpName(const std::string& pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener([&pump = LLEventPumps::instance().obtain(pumpname)](const LLSD& data) { return pump.post(data); })
+    // The bound pump is a signals2::trackable, so the connection drops when it is destroyed; a lambda would lose
+    // that automatic disconnect.
+    // NOLINTNEXTLINE(modernize-avoid-bind)
+    mListener(boost::bind(&LLEventPump::post, boost::ref(LLEventPumps::instance().obtain(pumpname)), _1))
 {
 }
 
 LLListenerOrPumpName::LLListenerOrPumpName(const char* pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener([&pump = LLEventPumps::instance().obtain(pumpname)](const LLSD& data) { return pump.post(data); })
+    // The bound pump is a signals2::trackable, so the connection drops when it is destroyed; a lambda would lose
+    // that automatic disconnect.
+    // NOLINTNEXTLINE(modernize-avoid-bind)
+    mListener(boost::bind(&LLEventPump::post, boost::ref(LLEventPumps::instance().obtain(pumpname)), _1))
 {
 }
 

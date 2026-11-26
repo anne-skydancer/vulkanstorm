@@ -521,14 +521,15 @@ static constexpr size_t LLFILE_COPY_BUFFER_SIZE = 16384;
 bool LLFile::copy(const std::string& from, const std::string& to)
 {
     bool copied = false;
+    // on the heap: a 16 KB array is more stack than the callers of a file copy should need. Allocated before the
+    // files are opened, so that an allocation failure cannot leave them open.
+    std::vector<char> buf(LLFILE_COPY_BUFFER_SIZE);
     LLFILE* in = LLFile::fopen(from, "rb");
     if (in)
     {
         LLFILE* out = LLFile::fopen(to, "wb");
         if (out)
         {
-            // on the heap: a 16 KB array is more stack than the callers of a file copy should need
-            std::vector<char> buf(LLFILE_COPY_BUFFER_SIZE);
             size_t readbytes;
             bool write_ok = true;
             // NOLINTNEXTLINE(clang-analyzer-unix.Stream): fread() returns 0 at the end of the file, which ends the loop; the analyzer reads the next loop test as a second read

@@ -85,7 +85,7 @@ public:
         {
             LL_DEBUGS("LLProcess") << "listening on \"mainloop\"" << LL_ENDL;
             mConnection = LLEventPumps::instance().obtain("mainloop")
-                .listen("LLProcessListener", [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); });
+                .listen("LLProcessListener", [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
         }
     }
 
@@ -173,7 +173,7 @@ public:
         // </Vulkanstorm>
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("WritePipe"),
-                    [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); });
+                    [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
 
 #if ! LL_WINDOWS
         // We can't count on every child process reading everything we try to
@@ -495,7 +495,7 @@ public:
     {
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("ReadPipe"),
-                    [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); });
+                    [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
     }
 
     ~ReadPipeImpl() override

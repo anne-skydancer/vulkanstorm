@@ -230,7 +230,6 @@ namespace LLError
         template <typename T>
         static std::string classname(const T& obj) { return demangle(typeid(obj).name()); }
     };
-// NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the logging macros brace-initialise CallSite positionally, reordering the fields would break them
     struct LL_COMMON_API CallSite
     {
         // Represents a specific place in the code where a message is logged
@@ -262,18 +261,19 @@ namespace LLError
         void invalidate();
 
         // these describe the call site and never change
-        const ELevel            mLevel;
+        // Declared widest first, so that the struct has no padding between its members.
         const char* const       mFile;
-        const int               mLine;
         const std::type_info&   mClassInfo;
         const char* const       mFunction;
         const char**            mTags;
         size_t                  mTagCount;
-        const bool              mPrintOnce;
         const char*             mLevelString;
         std::string             mLocationString,
                                 mFunctionString,
                                 mTagString;
+        const ELevel            mLevel;
+        const int               mLine;
+        const bool              mPrintOnce;
         bool                    mCached{false},
                                 mShouldLog{false};
 

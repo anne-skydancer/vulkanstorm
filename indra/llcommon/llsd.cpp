@@ -949,7 +949,9 @@ void LLSD::Impl::assign(Impl*& var, LLSD::String&& v)
     reset(var, new ImplString(std::move(v)));
 }
 
-// NOLINTBEGIN(performance-move-const-arg): the rvalue overloads exist for every LLSD scalar type so that callers and templates need no per-type cases; moving a trivially copyable UUID or Date is a copy, by design
+// The rvalue overloads exist for every LLSD scalar type, so that callers and templates need no per-type cases; moving a
+// trivially copyable UUID or Date is a copy, which performance-move-const-arg flags.
+// NOLINTBEGIN(performance-move-const-arg)
 void LLSD::Impl::assign(Impl*& var, LLSD::UUID&& v)
 {
     reset(var, new ImplUUID(std::move(v)));
@@ -1060,13 +1062,13 @@ LLSD::LLSD(const String& v) : impl(nullptr)   { ALLOC_LLSD_OBJECT;    assign(v);
 LLSD::LLSD(const Date& v) : impl(nullptr)     { ALLOC_LLSD_OBJECT;    assign(v); }
 LLSD::LLSD(const URI& v) : impl(nullptr)      { ALLOC_LLSD_OBJECT;    assign(v); }
 LLSD::LLSD(const Binary& v) : impl(nullptr)   { ALLOC_LLSD_OBJECT;    assign(v); }
-// NOLINTBEGIN(performance-move-const-arg): the rvalue overloads exist for every LLSD scalar type so that callers and templates need no per-type cases; moving a trivially copyable UUID or Date is a copy, by design
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 LLSD::LLSD(UUID&& v) : impl(nullptr)          { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(String&& v) : impl(nullptr)        { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 LLSD::LLSD(Date&& v) : impl(nullptr)          { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(URI&& v) : impl(nullptr)           { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(Binary&& v) : impl(nullptr)        { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
-// NOLINTEND(performance-move-const-arg)
 
 // Scalar Assignment
 void LLSD::assign(Boolean v)            { safe(impl).assign(impl, v); }
@@ -1077,13 +1079,13 @@ void LLSD::assign(const UUID& v)        { safe(impl).assign(impl, v); }
 void LLSD::assign(const Date& v)        { safe(impl).assign(impl, v); }
 void LLSD::assign(const URI& v)         { safe(impl).assign(impl, v); }
 void LLSD::assign(const Binary& v)      { safe(impl).assign(impl, v); }
-// NOLINTBEGIN(performance-move-const-arg): the rvalue overloads exist for every LLSD scalar type so that callers and templates need no per-type cases; moving a trivially copyable UUID or Date is a copy, by design
 void LLSD::assign(String&& v)           { safe(impl).assign(impl, std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 void LLSD::assign(UUID&& v)             { safe(impl).assign(impl, std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 void LLSD::assign(Date&& v)             { safe(impl).assign(impl, std::move(v)); }
 void LLSD::assign(URI&& v)              { safe(impl).assign(impl, std::move(v)); }
 void LLSD::assign(Binary&& v)           { safe(impl).assign(impl, std::move(v)); }
-// NOLINTEND(performance-move-const-arg)
 
 // Scalar Accessors
 LLSD::Boolean   LLSD::asBoolean() const { return safe(impl).asBoolean(); }

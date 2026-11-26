@@ -687,9 +687,11 @@ def cmd_collect(args):
             result = json.loads(canary)
             notes.append("canary: " + ("the sanitizer reports" if result["ok"] else f"MISSING {result['missing']}"))
             if not result["ok"]:
-                findings.append(build_finding("canary-silent", f"the sanitizer did not report {result['missing']} in "
-                                              "a deliberately faulty program: the build is not instrumented",
-                                              "canary"))
+                tail = result.get("tail", "").strip()
+                findings.append(build_finding(
+                    "canary-silent", f"the sanitizer did not report {result['missing']} in a deliberately faulty "
+                    "program: the build is not instrumented" + (f". Output tail: {tail}" if tail else ""),
+                    "canary"))
     elif args.job == "msvc":
         sarifs = [p.read_text(encoding="utf-8", errors="replace")
                   for pattern in ("*.sarif", "*.nativecodeanalysis.*") for p in pathlib.Path(args.dir).rglob(pattern)]
@@ -838,16 +840,32 @@ int main(int argc, char **) {
     return sum == 0;
 }
 """, ("runtime error: signed integer overflow", "LeakSanitizer")),
-    "tsan": ("""#include <thread>
+    # Deterministic: the worker's write is in TSan's shadow memory when the main thread's write comes 20 ms later.
+    "tsan": ("""#include <chrono>
+#include <thread>
 int shared_value;
 int main() {
     std::thread worker([] { shared_value = 1; });
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
     shared_value = 2;                // unsynchronised: a data race
     worker.join();
     return 0;
 }
 """, ("ThreadSanitizer: data race",)),
 }
+
+CANARY_FATAL = "FATAL: ThreadSanitizer"
+CANARY_COMPILE_TIMEOUT = 300
+CANARY_RUN_TIMEOUT = 60
+
+
+def canary_missing(wanted, text):
+    """What the canary's output lacks: the wanted reports, and the sanitizer runtime's own fatal error as a cause of
+    its own (it stops the program before any report)."""
+    missing = [marker for marker in wanted if marker not in text]
+    if CANARY_FATAL in text:
+        missing.insert(0, CANARY_FATAL + " (the sanitizer runtime stopped the program)")
+    return missing
 
 
 def cache_value(cache, name):
@@ -869,27 +887,34 @@ def cmd_canary(args):
         work = pathlib.Path(work)
         (work / "canary.cpp").write_text(source, encoding="utf-8")
         compiler = os.environ.get("CXX", "g++")
-        built = subprocess.run([compiler, *flags, "-O1", "-g", "-pthread", str(work / "canary.cpp"), "-o",
-                                str(work / "canary")], capture_output=True, text=True, check=False)
-        text = built.stdout + built.stderr
-        if built.returncode == 0:
+        try:
+            built = subprocess.run([compiler, *flags, "-O1", "-g", "-pthread", str(work / "canary.cpp"), "-o",
+                                    str(work / "canary")], capture_output=True, text=True, check=False,
+                                   timeout=CANARY_COMPILE_TIMEOUT)
+            text = built.stdout + built.stderr
+            compiled = built.returncode == 0
+        except subprocess.TimeoutExpired:
+            text, compiled = "", False
+            missing.append(f"the canary compile finished within {CANARY_COMPILE_TIMEOUT} s")
+        if compiled:
             env = dict(os.environ)
             for name in ("ASAN_OPTIONS", "LSAN_OPTIONS", "UBSAN_OPTIONS", "TSAN_OPTIONS"):
                 env[name] = re.sub(r"log_path=\S+", lambda _m: f"log_path={work}/report", env.get(name, ""))
-            # A data race is reported only when the two accesses are still in TSan's shadow memory, which depends on
-            # the scheduling of the two threads, and some llcommon analysis runs found none.
-            # A canary that is silent three times in a row is the real signal.
-            for _attempt in range(3):
-                ran = subprocess.run([str(work / "canary")], capture_output=True, text=True, env=env, check=False)
+            # One run, no retry: the TSan canary is deterministic, so a canary that is silent means the sanitizer
+            # stopped working, which a retry would hide.
+            try:
+                ran = subprocess.run([str(work / "canary")], capture_output=True, text=True, env=env, check=False,
+                                     timeout=CANARY_RUN_TIMEOUT)
                 text = ran.stdout + ran.stderr + "".join(read_text(p) for p in sorted(work.glob("report*")))
-                if all(marker in text for marker in wanted):
-                    break
-        for marker in wanted:
-            if marker not in text:
-                missing.append(marker)
+                missing += canary_missing(wanted, text)
+            except subprocess.TimeoutExpired:
+                missing.append(f"the canary run finished within {CANARY_RUN_TIMEOUT} s")
+        else:
+            missing += canary_missing(wanted, text)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"canary-{args.mode}.json").write_text(json.dumps({"ok": not missing, "missing": missing, "tail": text[-1500:]}), encoding="utf-8")
+    (out / f"canary-{args.mode}.json").write_text(
+        json.dumps({"ok": not missing, "missing": missing, "tail": text[-1500:]}), encoding="utf-8")
     print("canary:", "ok" if not missing else f"missing {missing}")
     return 0
 

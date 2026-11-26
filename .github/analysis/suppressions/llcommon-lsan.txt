@@ -7,13 +7,3 @@
 # back destruction-order crashes. Every allocation of that chain has one of these frames.
 leak:LogControlFile
 leak:LiveFileEventTimer
-# commonInit() is the logging start-up that calls fromDirectory() and LLLiveFile::addToEventTimer().
-leak:LLError::commonInit
-#
-# MasterList::get_initializing_() allocates the 'initializing' list of the running coroutine on the first getInstance()
-# and keeps it for later calls on purpose: capture_dependency() runs on every getInstance(), and an empty list is the
-# common case, so freeing and reallocating it each time would put a heap allocation on that path. A finished coroutine
-# frees its list (llsingleton test 16 runs 200 coroutines to show it); the one list of the coroutine that is running
-# when a test process ends is still allocated, 24 bytes per process, because the tests exit without
-# LLSingletonBase::deleteAll(). The viewer's own exit runs deleteAll(), so nothing grows over a session.
-leak:LLSingletonBase::MasterList::get_initializing_

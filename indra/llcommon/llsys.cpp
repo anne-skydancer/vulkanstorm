@@ -536,7 +536,10 @@ U32 LLOSInfo::getProcessVirtualSizeKB()
         char *memp = strstr(buff, "VmSize:");
         if (memp)
         {
-            sscanf(memp, "%*s %u", &virtual_size);
+            if (sscanf(memp, "%*s %u", &virtual_size) != 1)
+            {
+                virtual_size = 0;
+            }
         }
         fclose(status_filep);
     }
@@ -561,7 +564,10 @@ U32 LLOSInfo::getProcessResidentSizeKB()
         char *memp = strstr(buff, "VmRSS:");
         if (memp)
         {
-            sscanf(memp, "%*s %u", &resident_size);
+            if (sscanf(memp, "%*s %u", &resident_size) != 1)
+            {
+                resident_size = 0;
+            }
         }
         fclose(status_filep);
     }
@@ -1232,7 +1238,7 @@ public:
         // Hooking onto the "mainloop" event pump gets us one call per frame.
         mConnection(LLEventPumps::instance()
                     .obtain("mainloop")
-                    .listen("FrameWatcher", [this](auto && PH1) { return tick(std::forward<decltype(PH1)>(PH1)); })),
+                    .listen("FrameWatcher", [this](auto && event) { return tick(std::forward<decltype(event)>(event)); })),
         // Both MEM_INFO_WINDOW and MEM_INFO_THROTTLE are in seconds. We need
         // the number of integer MEM_INFO_THROTTLE sample slots that will fit
         // in MEM_INFO_WINDOW. Round up.

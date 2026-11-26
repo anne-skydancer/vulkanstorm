@@ -26,8 +26,8 @@ namespace LL
 // clock: that case is handled by std::chrono.
 template <typename DestTimePoint, typename SrcTimePoint>
 DestTimePoint time_point_cast(const SrcTimePoint& time)
-requires (std::is_same_v<typename DestTimePoint::clock,
-                                               typename SrcTimePoint::clock>) {
+requires (std::is_same_v<typename DestTimePoint::clock, typename SrcTimePoint::clock>)
+{
     return std::chrono::time_point_cast<typename DestTimePoint::duration>(time);
 }
 
@@ -35,8 +35,8 @@ requires (std::is_same_v<typename DestTimePoint::clock,
 // the linked StackOverflow answer, also Howard Hinnant's, for more context.
 template <typename DestTimePoint, typename SrcTimePoint>
 DestTimePoint time_point_cast(const SrcTimePoint& time)
-requires (! std::is_same_v<typename DestTimePoint::clock,
-                                                 typename SrcTimePoint::clock>) {
+requires (! std::is_same_v<typename DestTimePoint::clock, typename SrcTimePoint::clock>)
+{
     // The basic idea is that we must adjust the passed time_point by the
     // difference between the clocks' epochs. But since time_point doesn't
     // expose its epoch, we fall back on what each of them thinks is now().

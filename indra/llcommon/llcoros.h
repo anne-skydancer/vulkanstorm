@@ -299,7 +299,7 @@ private:
 
     struct ExceptionData
     {
-        ExceptionData(std::string nm, std::exception_ptr  exc):
+        ExceptionData(std::string nm, std::exception_ptr exc):
             name(std::move(nm)),
             exception(std::move(exc))
         {}

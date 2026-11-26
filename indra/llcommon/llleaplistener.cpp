@@ -165,7 +165,10 @@ void LLLeapListener::listen(const LLSD& request)
                 LLEventPump & dest = LLEventPumps::instance().obtain(dest_name);
                 saveListener(source_name, listener_name,
                              source.listen(listener_name,
-                                           [ObjectPtr = &dest](auto && PH1) { return ObjectPtr->post(std::forward<decltype(PH1)>(PH1)); }));
+                                           // The bound pump is a signals2::trackable, so the connection drops when
+                                           // it is destroyed; a lambda would lose that automatic disconnect.
+                                           // NOLINTNEXTLINE(modernize-avoid-bind)
+                                           boost::bind(&LLEventPump::post, &dest, _1)));
             }
             else
             {

@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llwatchdog.h"
+#include <algorithm>
 #include <utility>
 #include "llmutex.h"
 #include "llthread.h"

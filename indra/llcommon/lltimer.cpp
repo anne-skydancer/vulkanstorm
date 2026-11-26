@@ -326,8 +326,6 @@ LLTimer::LLTimer()
     reset();
 }
 
-
-
 // static
 void LLTimer::initClass()
 {

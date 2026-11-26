@@ -11,8 +11,10 @@ import io
 import json
 import pathlib
 import sys
+import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / ".github" / "analysis" / "fixtures"
@@ -457,6 +459,50 @@ class CommandTest(unittest.TestCase):
         result = json.loads((self.dir / "out" / "canary-asan.json").read_text(encoding="utf-8"))
         self.assertFalse(result["ok"])
         self.assertIn("-fsanitize in the build's CMAKE_CXX_FLAGS", result["missing"])
+
+    def run_canary(self, mode, run_output, run_error=None):
+        """cmd_canary with the compile succeeding and the canary printing run_output (or raising run_error)."""
+        (self.dir / "CMakeCache.txt").write_text("CMAKE_CXX_FLAGS:STRING=-fsanitize=thread -O1" + chr(10),
+                                                 encoding="utf-8")
+
+        def fake_run(command, **kwargs):
+            self.assertIn("timeout", kwargs)
+            if command[0].endswith("canary"):
+                if run_error:
+                    raise run_error
+                return subprocess.CompletedProcess(command, 0, stdout="", stderr=run_output)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with mock.patch.object(ca.subprocess, "run", fake_run):
+            quiet(ca.cmd_canary, argparse.Namespace(mode=mode, dir=str(self.dir), out=str(self.dir / "out")))
+        return json.loads((self.dir / "out" / f"canary-{mode}.json").read_text(encoding="utf-8"))
+
+    def test_canary_that_reports_is_ok(self):
+        result = self.run_canary("tsan", "WARNING: ThreadSanitizer: data race (pid=1)")
+        self.assertTrue(result["ok"])
+
+    def test_canary_silent_is_not_retried_and_keeps_its_output(self):
+        result = self.run_canary("tsan", "nothing to report here")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["missing"], ["ThreadSanitizer: data race"])
+        self.assertIn("nothing to report here", result["tail"])
+
+    def test_canary_fatal_runtime_error_is_its_own_cause(self):
+        result = self.run_canary("tsan", "FATAL: ThreadSanitizer: unexpected memory mapping")
+        self.assertFalse(result["ok"])
+        self.assertTrue(result["missing"][0].startswith("FATAL: ThreadSanitizer"))
+
+    def test_canary_that_hangs_times_out(self):
+        result = self.run_canary("tsan", "", subprocess.TimeoutExpired("canary", ca.CANARY_RUN_TIMEOUT))
+        self.assertFalse(result["ok"])
+        self.assertIn("finished within", result["missing"][0])
+
+    def test_collect_canary_silent_finding_carries_the_output_tail(self):
+        canary = {"ok": False, "missing": ["ThreadSanitizer: data race"], "tail": "FATAL: ThreadSanitizer: oops"}
+        record = self.collect_asan("", canary=canary)
+        messages = [f["message"] for f in record["findings"] if f["check"] == "canary-silent"]
+        self.assertEqual(len(messages), 1)
+        self.assertIn("Output tail: FATAL: ThreadSanitizer: oops", messages[0])
 
     def test_failed_tests_command_prints_the_targets(self):
         (self.dir / "b.log").write_text(fixture("asan-build-excerpt.log"), encoding="utf-8")
