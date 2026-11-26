@@ -333,12 +333,12 @@ LLOSInfo::LLOSInfo() :
         mOSString.append(un.machine);
 
         // Simplify 'Simple'
-        std::string ostype = mOSStringSimple.substr(0, mOSStringSimple.find_first_of(" ", 0));
+        std::string ostype = mOSStringSimple.substr(0, mOSStringSimple.find(' '));
         if (ostype == "Linux")
         {
             // Only care about major and minor Linux versions, truncate at second '.'
-            std::string::size_type idx1 = mOSStringSimple.find_first_of(".", 0);
-            std::string::size_type idx2 = (idx1 != std::string::npos) ? mOSStringSimple.find_first_of(".", idx1+1) : std::string::npos;
+            std::string::size_type idx1 = mOSStringSimple.find('.');
+            std::string::size_type idx2 = (idx1 != std::string::npos) ? mOSStringSimple.find('.', idx1+1) : std::string::npos;
             std::string simple = mOSStringSimple.substr(0, idx2);
             if (simple.length() > 0)
                 mOSStringSimple = simple;
