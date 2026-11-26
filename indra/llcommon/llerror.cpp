@@ -206,9 +206,9 @@ namespace {
         {
             std::string ansi_code;
             ansi_code += '\033';
-            ansi_code += "[";
-            ansi_code += "1";
-            ansi_code += "m";
+            ansi_code += '[';
+            ansi_code += '1';
+            ansi_code += 'm';
 
             return ansi_code;
         }
@@ -217,9 +217,9 @@ namespace {
         {
             std::string ansi_code;
             ansi_code += '\033';
-            ansi_code += "[";
-            ansi_code += "0";
-            ansi_code += "m";
+            ansi_code += '[';
+            ansi_code += '0';
+            ansi_code += 'm';
 
             return ansi_code;
         }
@@ -228,10 +228,10 @@ namespace {
         {
             std::string ansi_code;
             ansi_code  += '\033';
-            ansi_code  += "[";
+            ansi_code  += '[';
             ansi_code += "38;5;";
             ansi_code  += color;
-            ansi_code += "m";
+            ansi_code += 'm';
 
             return ansi_code;
         }
