@@ -22,7 +22,7 @@
 
 ## Working rules for agents
 
-These complete the rules above for every agent (planner, surveyor, coder, reviewer, auditor, checker) and for anyone else working in this repo.
+These complete the rules above for every agent (planner, surveyor, coder, auditor, checker) and for anyone else working in this repo.
 
 - Git: base lines (`vkstorm-*`) are never force-pushed and never merged into a feature or PR branch. A feature or PR branch may be rebased onto its base and pushed with `--force-with-lease`; cherry-picking (`-x`) and re-cutting the branch (a new branch from the base tip with the PR's commits cherry-picked, and a new PR that supersedes the old one) remain alternatives. GitHub's stacked pull requests are allowed; inside a stack, bring a lower layer's commits up by rebasing the stack, not by cherry-picking. Once a PR is open, add commits only when the owner asks. The review pipeline's own fix commits (reviewer and auditor findings applied by the coder, then the checker) are part of producing the PR and are allowed until it is handed to the owner; after hand-off, add commits only when the owner asks.
 - Worktrees go in `<repo>\work\<name>`, never beside the repository.
