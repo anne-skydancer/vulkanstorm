@@ -43,6 +43,7 @@
 #else
 # include <io.h>
 #endif // !LL_WINDOWS
+#include <utility>
 #include <vector>
 #include <cstring>
 
@@ -88,8 +89,8 @@ namespace {
     class RecordToSyslog : public LLError::Recorder
     {
     public:
-        RecordToSyslog(const std::string& identity)
-            : mIdentity(identity)
+        RecordToSyslog(std::string  identity)
+            : mIdentity(std::move(identity))
         {
             openlog(mIdentity.c_str(), LOG_CONS|LOG_PID, LOG_LOCAL0);
                 // we need to set the string from a local copy of the string
