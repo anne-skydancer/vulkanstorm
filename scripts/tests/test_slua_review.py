@@ -44,6 +44,8 @@ class ReviewTests(unittest.TestCase):
         queue = (ROOT / 'indra/newview/llcompilequeue.cpp').read_text()
         target = queue[queue.index('    if (requested_target == "auto-luau")'):]
         target = target[:target.index('    if (!item->getPermissions()')]
+        # processScript is an LL::Task coroutine (co_return); the harness below runs the snippet in a plain function.
+        target = target.replace('co_return', 'return')
         self.compile(r'''
 #include <cassert>
 #include <map>
